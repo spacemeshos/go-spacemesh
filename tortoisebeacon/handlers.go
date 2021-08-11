@@ -252,36 +252,6 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 	data.ReportValidation(ctx, TBFirstVotingProtocol)
 }
 
-// HandleSerializedFollowingVotingMessage defines method to handle Tortoise Beacon following voting Messages from gossip.
-func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
-	if tb.IsClosed() {
-		return
-	}
-
-	minerID := data.Sender()
-
-	tb.Log.With().Debug("New voting message",
-		log.String("miner_id", minerID.String()))
-
-	var m FollowingVotingMessage
-	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
-		tb.Log.With().Error("Received invalid voting message",
-			log.String("message", string(data.Bytes())),
-			log.Err(err))
-
-		return
-	}
-
-	if err := tb.handleFollowingVotingMessage(m); err != nil {
-		tb.Log.With().Error("Failed to handle following voting message",
-			log.Err(err))
-
-		return
-	}
-
-	data.ReportValidation(ctx, TBFollowingVotingProtocol)
-}
-
 func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) error {
 	currentEpoch := tb.currentEpoch()
 	minerID := message.MinerID
@@ -319,21 +289,13 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	tb.votesMu.Lock()
 	defer tb.votesMu.Unlock()
 
-	if _, ok := tb.incomingVotes[currentEpoch]; !ok {
-		tb.incomingVotes[currentEpoch] = make(map[types.RoundID]votesPerPK)
-	}
-
-	if _, ok := tb.incomingVotes[currentEpoch][currentRound]; !ok {
-		tb.incomingVotes[currentEpoch][currentRound] = make(votesPerPK)
-	}
-
-	if _, ok := tb.firstRoundIncomingVotes[currentEpoch]; !ok {
-		tb.firstRoundIncomingVotes[currentEpoch] = make(firstRoundVotesPerPK)
+	if tb.incomingVotes[currentRound-firstRound] == nil {
+		tb.incomingVotes[currentRound-firstRound] = make(map[nodeID]votesSetPair)
 	}
 
 	// TODO: no need to store each vote separately
 	// have a separate table for an epoch with one bit in it if atx/miner is voted already
-	if _, ok := tb.incomingVotes[currentEpoch][currentRound][minerID.Key]; ok {
+	if _, ok := tb.incomingVotes[currentRound-firstRound][minerID.Key]; ok {
 		tb.Log.With().Warning("Received malformed first voting message, already received a voting message for these PK and round",
 			log.String("miner_id", minerID.Key),
 			log.Uint64("epoch_id", uint64(currentEpoch)),
@@ -371,19 +333,49 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		potentiallyValidVotesList = append(potentiallyValidVotesList, string(vote))
 	}
 
-	tb.incomingVotes[currentEpoch][currentRound][minerID.Key] = votesSetPair{
+	tb.incomingVotes[currentRound-firstRound][minerID.Key] = votesSetPair{
 		ValidVotes:   validVotesMap,
 		InvalidVotes: invalidVotesMap,
 	}
 
 	// this is used for bit vector calculation
 	// TODO: store sorted mixed valid+potentiallyValid
-	tb.firstRoundIncomingVotes[currentEpoch][minerID.Key] = proposals{
+	tb.firstRoundIncomingVotes[minerID.Key] = proposals{
 		ValidProposals:            validVotesList,
 		PotentiallyValidProposals: potentiallyValidVotesList,
 	}
 
 	return nil
+}
+
+// HandleSerializedFollowingVotingMessage defines method to handle Tortoise Beacon following voting Messages from gossip.
+func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
+	if tb.IsClosed() {
+		return
+	}
+
+	minerID := data.Sender()
+
+	tb.Log.With().Debug("New voting message",
+		log.String("miner_id", minerID.String()))
+
+	var m FollowingVotingMessage
+	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
+		tb.Log.With().Error("Received invalid voting message",
+			log.String("message", string(data.Bytes())),
+			log.Err(err))
+
+		return
+	}
+
+	if err := tb.handleFollowingVotingMessage(m); err != nil {
+		tb.Log.With().Error("Failed to handle following voting message",
+			log.Err(err))
+
+		return
+	}
+
+	data.ReportValidation(ctx, TBFollowingVotingProtocol)
 }
 
 func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMessage) error {
@@ -422,15 +414,11 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	tb.votesMu.Lock()
 	defer tb.votesMu.Unlock()
 
-	if _, ok := tb.incomingVotes[currentEpoch]; !ok {
-		tb.incomingVotes[currentEpoch] = make(map[types.RoundID]votesPerPK)
+	if tb.incomingVotes[messageRound-firstRound] == nil {
+		tb.incomingVotes[messageRound-firstRound] = make(map[nodeID]votesSetPair)
 	}
 
-	if _, ok := tb.incomingVotes[currentEpoch][messageRound]; !ok {
-		tb.incomingVotes[currentEpoch][messageRound] = make(votesPerPK)
-	}
-
-	if _, ok := tb.incomingVotes[currentEpoch][messageRound][minerID.Key]; ok {
+	if _, ok := tb.incomingVotes[messageRound-firstRound][minerID.Key]; ok {
 		tb.Log.With().Warning("Received malformed following voting message, already received a voting message for these PK and round",
 			log.String("miner_id", minerID.Key),
 			log.Uint64("epoch_id", uint64(currentEpoch)),
@@ -444,8 +432,8 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 		log.Uint64("epoch_id", uint64(currentEpoch)),
 		log.Uint64("round_id", uint64(messageRound)))
 
-	firstRoundIncomingVotes := tb.firstRoundIncomingVotes[currentEpoch][minerID.Key]
-	tb.incomingVotes[currentEpoch][messageRound][minerID.Key] = tb.decodeVotes(message.VotesBitVector, firstRoundIncomingVotes)
+	firstRoundIncomingVotes := tb.firstRoundIncomingVotes[minerID.Key]
+	tb.incomingVotes[messageRound-firstRound][minerID.Key] = tb.decodeVotes(message.VotesBitVector, firstRoundIncomingVotes)
 
 	return nil
 }

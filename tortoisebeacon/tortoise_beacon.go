@@ -63,13 +63,8 @@ type (
 		ValidProposals            proposalList
 		PotentiallyValidProposals proposalList
 	}
-	firstRoundVotesPerPK    = map[nodeID]proposals
-	votesPerPK              = map[nodeID]votesSetPair
-	firstRoundVotesPerEpoch = map[types.EpochID]firstRoundVotesPerPK
-	votesPerRound           = map[types.EpochID]map[types.RoundID]votesPerPK
-	ownVotes                = map[types.EpochID]map[types.RoundID]votesSetPair
-	votesMarginMap          = map[proposal]int
-	proposalsMap            = hashSet
+	ownVotes       = map[types.EpochID]map[types.RoundID]votesSetPair
+	votesMarginMap = map[proposal]int
 )
 
 type layerClock interface {
@@ -111,8 +106,8 @@ func New(
 		ownVotes:                        make(ownVotes),
 		beacons:                         make(map[types.EpochID]types.Hash32),
 		proposalPhaseFinishedTimestamps: make(map[types.EpochID]time.Time),
-		incomingVotes:                   make(map[types.EpochID]map[types.RoundID]votesPerPK),
-		firstRoundIncomingVotes:         make(map[types.EpochID]firstRoundVotesPerPK),
+		incomingVotes:                   make([]map[nodeID]votesSetPair, conf.RoundsNumber),
+		firstRoundIncomingVotes:         make(map[nodeID]proposals),
 		seenEpochs:                      make(map[types.EpochID]struct{}),
 		proposalChans:                   make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 	}
@@ -146,14 +141,14 @@ type TortoiseBeacon struct {
 	layerMu     sync.RWMutex
 	lastLayer   types.LayerID
 
-	votesMu                 sync.RWMutex
-	firstRoundIncomingVotes firstRoundVotesPerEpoch // all rounds - votes (decoded votes)
+	votesMu sync.RWMutex
 
 	// TODO: have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
-	incomingProposals                 proposals     // all rounds - votes (decoded votes)
-	incomingVotes                     votesPerRound // all rounds - votes (decoded votes)
-	ownVotes                          ownVotes      // all rounds - own votes
+	incomingProposals                 proposals                 // all rounds - votes (decoded votes)
+	firstRoundIncomingVotes           map[nodeID]proposals      // all rounds - votes (decoded votes)
+	incomingVotes                     []map[nodeID]votesSetPair // all rounds - votes (decoded votes)
+	ownVotes                          ownVotes                  // all rounds - own votes
 	proposalPhaseFinishedTimestampsMu sync.RWMutex
 	proposalPhaseFinishedTimestamps   map[types.EpochID]time.Time
 
@@ -265,12 +260,15 @@ func (tb *TortoiseBeacon) cleanupBeacons(epoch types.EpochID) {
 }
 
 func (tb *TortoiseBeacon) cleanupVotes(epoch types.EpochID) {
+	tb.votesMu.Lock()
+	defer tb.votesMu.Unlock()
+
 	tb.incomingProposals = proposals{}
+	tb.incomingVotes = make([]map[nodeID]votesSetPair, tb.config.RoundsNumber)
+	tb.firstRoundIncomingVotes = map[nodeID]proposals{}
 
 	delete(tb.proposalPhaseFinishedTimestamps, epoch)
-	delete(tb.incomingVotes, epoch)
 	delete(tb.ownVotes, epoch)
-	delete(tb.firstRoundIncomingVotes, epoch)
 }
 
 // listens to new layers.
@@ -653,15 +651,15 @@ func (tb *TortoiseBeacon) sendVotesDifference(ctx context.Context, epoch types.E
 	return tb.sendFollowingVote(ctx, epoch, round, ownCurrentRoundVotes)
 }
 
-func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.EpochID, vote proposals) error {
+func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.EpochID, proposals proposals) error {
 	valid := make([][]byte, 0)
 	potentiallyValid := make([][]byte, 0)
 
-	for _, v := range vote.ValidProposals {
+	for _, v := range proposals.ValidProposals {
 		valid = append(valid, []byte(v))
 	}
 
-	for _, v := range vote.PotentiallyValidProposals {
+	for _, v := range proposals.PotentiallyValidProposals {
 		potentiallyValid = append(potentiallyValid, []byte(v))
 	}
 

@@ -28,12 +28,11 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 	types.SetLayersPerEpoch(1)
 
 	tt := []struct {
-		name          string
-		epoch         types.EpochID
-		round         types.RoundID
-		incomingVotes map[types.EpochID]map[types.RoundID]votesPerPK
-		votes         votesSetPair
-		hash          types.Hash32
+		name  string
+		epoch types.EpochID
+		round types.RoundID
+		votes votesSetPair
+		hash  types.Hash32
 	}{
 		{
 			name:  "With Cache",
@@ -64,11 +63,10 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 					RoundsNumber: rounds,
 					Theta:        big.NewRat(1, 1),
 				},
-				lastLayer:     types.NewLayerID(epoch),
-				Log:           logtest.New(t).WithName("TortoiseBeacon"),
-				incomingVotes: tc.incomingVotes,
-				beacons:       make(map[types.EpochID]types.Hash32),
-				atxDB:         mockDB,
+				lastLayer: types.NewLayerID(epoch),
+				Log:       logtest.New(t).WithName("TortoiseBeacon"),
+				beacons:   make(map[types.EpochID]types.Hash32),
+				atxDB:     mockDB,
 			}
 
 			tb.initGenesisBeacons()
@@ -94,12 +92,11 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 	)
 
 	tt := []struct {
-		name          string
-		epoch         types.EpochID
-		round         types.RoundID
-		incomingVotes map[types.EpochID]map[types.RoundID]votesPerPK
-		votes         votesSetPair
-		hashes        proposalList
+		name   string
+		epoch  types.EpochID
+		round  types.RoundID
+		votes  votesSetPair
+		hashes proposalList
 	}{
 		{
 			name:  "With Cache",
@@ -135,9 +132,8 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 					RoundsNumber: rounds,
 					Theta:        big.NewRat(1, 1),
 				},
-				Log:           logtest.New(t).WithName("TortoiseBeacon"),
-				incomingVotes: tc.incomingVotes,
-				atxDB:         mockDB,
+				Log:   logtest.New(t).WithName("TortoiseBeacon"),
+				atxDB: mockDB,
 			}
 
 			hashes, err := tb.calcTortoiseBeaconHashList(epoch, tc.votes)
