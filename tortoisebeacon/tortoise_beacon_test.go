@@ -473,3 +473,25 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 		})
 	}
 }
+
+func TestTortoiseBeacon_signAndExtractVRF(t *testing.T) {
+	r := require.New(t)
+
+	edSgn := signing.NewEdSigner()
+	edPubkey := edSgn.PublicKey()
+
+	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
+	r.NoError(err)
+
+	vrfVerifier := signing.VRFVerifier{}
+	message := []byte{1, 2, 3, 4}
+
+	signature := vrfSigner.Sign(message)
+	extractedPK, err := vrfVerifier.Extract(message, signature)
+	r.NoError(err)
+
+	ok := vrfVerifier.Verify(extractedPK, message, signature)
+
+	r.Equal(vrfSigner.PublicKey().String(), extractedPK.String())
+	r.True(ok)
+}

@@ -57,7 +57,7 @@ type coin interface {
 }
 
 type (
-	nodeID    = string
+	nodeID    = string // TODO(nkryuchkov): change to *signing.PublicKey and remove
 	proposal  = string
 	proposals = struct{ valid, potentiallyValid [][]byte }
 	allVotes  = struct{ valid, invalid proposalSet }
@@ -93,8 +93,8 @@ func New(
 		atxDB:                   atxDB,
 		tortoiseBeaconDB:        tortoiseBeaconDB,
 		edSigner:                edSigner,
-		vrfVerifier:             vrfVerifier,
 		vrfSigner:               vrfSigner,
+		vrfVerifier:             vrfVerifier,
 		weakCoin:                weakCoin,
 		clock:                   clock,
 		beacons:                 make(map[types.EpochID]types.Hash32),

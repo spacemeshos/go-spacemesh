@@ -56,16 +56,15 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
 
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
+	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
 	r.NoError(err)
 
-	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
-
 	tt := []struct {
-		name          string
-		epoch         types.EpochID
-		currentRounds map[types.EpochID]types.RoundID
-		message       ProposalMessage
+		name                     string
+		epoch                    types.EpochID
+		currentRounds            map[types.EpochID]types.RoundID
+		message                  ProposalMessage
+		expectedIncomingProposal proposals
 	}{
 		{
 			name:  "Case 1",
@@ -74,7 +73,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				epoch: round,
 			},
 			message: ProposalMessage{
-				MinerID: minerID,
+				EpochID: epoch,
 			},
 		},
 	}
@@ -101,11 +100,13 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			err = tb.handleProposalMessage(tc.message, time.Now())
 			r.NoError(err)
 
-			expected := proposals{
+			expectedProposals := proposals{
 				valid: [][]byte{sig},
 			}
 
-			r.EqualValues(expected, tb.incomingProposals)
+			tb.consensusMu.RLock()
+			r.EqualValues(expectedProposals, tb.incomingProposals)
+			tb.consensusMu.RUnlock()
 		})
 	}
 }
@@ -153,16 +154,13 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
 
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
+	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
 	r.NoError(err)
-
-	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
 	tt := []struct {
 		name          string
 		epoch         types.EpochID
 		currentRounds map[types.EpochID]types.RoundID
-		from          string
 		message       FirstVotingMessage
 		expected      map[nodeID]proposals
 	}{
@@ -172,7 +170,6 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			currentRounds: map[types.EpochID]types.RoundID{
 				epoch: round,
 			},
-			from: minerID.Key,
 			message: FirstVotingMessage{
 				FirstVotingMessageBody: FirstVotingMessageBody{
 					ValidProposals:            [][]byte{hash.Bytes()},
@@ -180,7 +177,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				},
 			},
 			expected: map[nodeID]proposals{
-				minerID.Key: {
+				string(edSgn.PublicKey().Bytes()): {
 					valid: [][]byte{hash.Bytes()},
 				},
 			},
@@ -191,7 +188,6 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			currentRounds: map[types.EpochID]types.RoundID{
 				epoch: round + 1,
 			},
-			from: minerID.Key,
 			message: FirstVotingMessage{
 				FirstVotingMessageBody: FirstVotingMessageBody{
 					ValidProposals:            [][]byte{hash.Bytes()},
@@ -199,7 +195,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				},
 			},
 			expected: map[nodeID]proposals{
-				minerID.Key: {
+				string(edSgn.PublicKey().Bytes()): {
 					valid: [][]byte{hash.Bytes()},
 				},
 			},
@@ -230,7 +226,9 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			err = tb.handleFirstVotingMessage(tc.message)
 			r.NoError(err)
 
+			tb.consensusMu.RLock()
 			r.EqualValues(tc.expected, tb.firstRoundIncomingVotes)
+			tb.consensusMu.RUnlock()
 		})
 	}
 }
@@ -245,7 +243,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 	hash3 := types.HexToHash32("0x34567890")
 
 	genesisTime := time.Now().Add(time.Second * 10)
-	ld := time.Duration(10) * time.Second
+	ld := 10 * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
@@ -278,10 +276,8 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
 
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
+	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
 	r.NoError(err)
-
-	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
 	tt := []struct {
 		name          string
@@ -344,7 +340,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				edSigner:    edSgn,
 				clock:       clock,
 				firstRoundIncomingVotes: map[nodeID]proposals{
-					minerID.Key: {
+					string(edSgn.PublicKey().Bytes()): {
 						valid:            [][]byte{hash1.Bytes(), hash2.Bytes()},
 						potentiallyValid: [][]byte{hash3.Bytes()},
 					},
