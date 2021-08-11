@@ -110,10 +110,11 @@ func (t *SystemTest) Failf(msg string, a ...interface{}) {
 	t.re.RecordFailure(fmt.Errorf(msg, a...))
 }
 
-// Error signals the test has returned an error
+// Errorf signals the test has returned an error. Errorf can only be called
+// from the main test function. If you need to call it from a go routine please
+// read: https://docs.testground.ai/debugging-test-plans#catching-panics
 func (t *SystemTest) Errorf(msg string, a ...interface{}) {
-
-	t.re.RecordCrash(fmt.Errorf(msg, a...))
+	panic(fmt.Errorf(msg, a...))
 }
 
 // Log adds a log messages
