@@ -11,7 +11,6 @@ import (
 
 	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -679,11 +678,11 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	potentiallyValid := make([][]byte, 0)
 
 	for _, v := range vote.ValidProposals {
-		valid = append(valid, util.Hex2Bytes(v))
+		valid = append(valid, []byte(v))
 	}
 
 	for _, v := range vote.PotentiallyValidProposals {
-		potentiallyValid = append(potentiallyValid, util.Hex2Bytes(v))
+		potentiallyValid = append(potentiallyValid, []byte(v))
 	}
 
 	mb := FirstVotingMessageBody{
