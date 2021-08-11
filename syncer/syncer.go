@@ -369,11 +369,11 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 		return nil, fmt.Errorf("PollLayerHash: %w", hashRes.Err)
 	}
 	// TODO: resolve hash with peers
-	simpleHashes := make(map[types.Hash32][]peers.Peer)
+	hashes := make(map[types.Hash32][]peers.Peer)
 	for lyrHash, peers := range hashRes.Hashes {
-		simpleHashes[lyrHash.SimpleHash] = peers
+		hashes[lyrHash.Hash] = peers
 	}
-	bch := s.fetcher.PollLayerBlocks(ctx, layerID, simpleHashes)
+	bch := s.fetcher.PollLayerBlocks(ctx, layerID, hashes)
 	res := <-bch
 	if res.Err != nil {
 		if res.Err == layerfetcher.ErrZeroLayer {

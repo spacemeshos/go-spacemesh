@@ -2,14 +2,13 @@ package layerfetcher
 
 import "github.com/spacemeshos/go-spacemesh/common/types"
 
-// layerHash is the response for a given layer
 type layerHash struct {
 	// ProcessedLayer is the latest processed layer from peer
 	ProcessedLayer types.LayerID
-	// SimpleHash is the hash of contextually valid blocks (sorted by block ID) in the given layer
-	SimpleHash types.Hash32
-	// AggHash is the aggregated hash of all layers up to the given layer
-	AggHash types.Hash32
+	// Hash is the hash of contextually valid blocks (sorted by block ID) in the given layer
+	Hash types.Hash32
+	// AggregatedHash is the aggregated hash of all layers up to the given layer
+	AggregatedHash types.Hash32
 }
 
 // layerBlocks is the response for a given layer hash

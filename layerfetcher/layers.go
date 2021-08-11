@@ -195,20 +195,20 @@ func (l *Logic) layerHashReqReceiver(ctx context.Context, msg []byte) []byte {
 	lyr := types.NewLayerID(util.BytesToUint32(msg))
 	lyrHash := &layerHash{
 		ProcessedLayer: l.layerDB.ProcessedLayer(),
-		SimpleHash:     l.layerDB.GetLayerHash(lyr),
-		AggHash:        l.layerDB.GetAggregatedLayerHash(lyr),
+		Hash:           l.layerDB.GetLayerHash(lyr),
+		AggregatedHash: l.layerDB.GetAggregatedLayerHash(lyr),
 	}
 	out, err := types.InterfaceToBytes(lyrHash)
 	if err != nil {
-		l.log.WithContext(ctx).With().Error("failed to serialize layer hash",
+		l.log.WithContext(ctx).With().Panic("failed to serialize layer hash",
 			lyr,
-			log.String("simpleHash", lyrHash.SimpleHash.ShortString()),
-			log.String("aggHash", lyrHash.AggHash.ShortString()))
+			log.String("hash", lyrHash.Hash.ShortString()),
+			log.String("aggregatedHash", lyrHash.AggregatedHash.ShortString()))
 	} else {
 		l.log.WithContext(ctx).With().Debug("responded layer hash request",
 			lyr,
-			log.String("simpleHash", lyrHash.SimpleHash.ShortString()),
-			log.String("aggHash", lyrHash.AggHash.ShortString()))
+			log.String("hash", lyrHash.Hash.ShortString()),
+			log.String("aggregatedHash", lyrHash.AggregatedHash.ShortString()))
 	}
 	return out
 }
@@ -364,7 +364,7 @@ func notifyLayerHashResult(layerID types.LayerID, channels []chan LayerHashResul
 			var lyrHash layerHash
 			convertErr := types.BytesToInterface(res.data, &lyrHash)
 			if convertErr != nil {
-				logger.Error("received error converting bytes to layerHash", convertErr)
+				logger.With().Debug("received error converting bytes to layerHash", log.Err(convertErr))
 				numErrors++
 			}
 			hashes[lyrHash] = append(hashes[lyrHash], peer)

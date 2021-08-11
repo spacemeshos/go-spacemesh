@@ -161,16 +161,16 @@ func TestLayerHashReqReceiver(t *testing.T) {
 	db := newLayerDBMock()
 	layerID := types.NewLayerID(1)
 	l := NewMockLogic(newMockNet(), db, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
-	simpleHash := randomHash()
+	hash := randomHash()
 	aggHash := randomHash()
-	db.hashes[layerID] = simpleHash
+	db.hashes[layerID] = hash
 	db.aggHashes[layerID] = aggHash
 	out := l.layerHashReqReceiver(context.TODO(), layerID.Bytes())
 	var lyrHash layerHash
 	assert.NoError(t, types.BytesToInterface(out, &lyrHash))
 	assert.Equal(t, db.processed, lyrHash.ProcessedLayer)
-	assert.Equal(t, simpleHash, lyrHash.SimpleHash)
-	assert.Equal(t, aggHash, lyrHash.AggHash)
+	assert.Equal(t, hash, lyrHash.Hash)
+	assert.Equal(t, aggHash, lyrHash.AggregatedHash)
 }
 
 func TestLayerHashBlocksReqReceiver(t *testing.T) {
@@ -245,7 +245,7 @@ func TestPollLayerHash_SomeError(t *testing.T) {
 	db := newLayerDBMock()
 	net := newMockNet()
 	numPeers := 4
-	lyrHash := layerHash{ProcessedLayer: types.NewLayerID(20), SimpleHash: randomHash(), AggHash: randomHash()}
+	lyrHash := layerHash{ProcessedLayer: types.NewLayerID(20), Hash: randomHash(), AggregatedHash: randomHash()}
 	data, err := types.InterfaceToBytes(&lyrHash)
 	assert.NoError(t, err)
 	for i := 0; i < numPeers; i++ {
@@ -270,7 +270,7 @@ func TestPollLayerHash_SomeTimeout(t *testing.T) {
 	db := newLayerDBMock()
 	net := newMockNet()
 	numPeers := 4
-	lyrHash := layerHash{ProcessedLayer: types.NewLayerID(20), SimpleHash: randomHash(), AggHash: randomHash()}
+	lyrHash := layerHash{ProcessedLayer: types.NewLayerID(20), Hash: randomHash(), AggregatedHash: randomHash()}
 	data, err := types.InterfaceToBytes(&lyrHash)
 	assert.NoError(t, err)
 	for i := 0; i < numPeers; i++ {
@@ -295,10 +295,10 @@ func TestPollLayerHash_Aggregated(t *testing.T) {
 	db := newLayerDBMock()
 	net := newMockNet()
 	numPeers := 4
-	evenHash := layerHash{ProcessedLayer: types.NewLayerID(20), SimpleHash: randomHash(), AggHash: randomHash()}
+	evenHash := layerHash{ProcessedLayer: types.NewLayerID(20), Hash: randomHash(), AggregatedHash: randomHash()}
 	evenData, err := types.InterfaceToBytes(&evenHash)
 	assert.NoError(t, err)
-	oddHash := layerHash{ProcessedLayer: types.NewLayerID(21), SimpleHash: randomHash(), AggHash: randomHash()}
+	oddHash := layerHash{ProcessedLayer: types.NewLayerID(21), Hash: randomHash(), AggregatedHash: randomHash()}
 	oddData, err := types.InterfaceToBytes(&oddHash)
 	assert.NoError(t, err)
 	for i := 0; i < numPeers; i++ {
@@ -327,7 +327,7 @@ func TestPollLayerHash_AllDifferent(t *testing.T) {
 	for i := 0; i < numPeers; i++ {
 		peer := p2pcrypto.NewRandomPubkey()
 		net.peers = append(net.peers, peer)
-		lyrHash := layerHash{ProcessedLayer: types.NewLayerID(20 + uint32(i)), SimpleHash: randomHash(), AggHash: randomHash()}
+		lyrHash := layerHash{ProcessedLayer: types.NewLayerID(20 + uint32(i)), Hash: randomHash(), AggregatedHash: randomHash()}
 		data, err := types.InterfaceToBytes(&lyrHash)
 		assert.NoError(t, err)
 		net.layerHashes[peer] = data

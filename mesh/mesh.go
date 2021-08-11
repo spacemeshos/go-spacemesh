@@ -578,20 +578,23 @@ func (msh *Mesh) GetAggregatedLayerHash(layerID types.LayerID) types.Hash32 {
 }
 
 func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, error) {
-	bts, err := msh.general.Get(msh.getAggregatedLayerHashKey(layerID))
-	if err != nil {
-		return [32]byte{}, err
+	if layerID.Before(types.NewLayerID(1)) {
+		return EmptyLayerHash, nil
 	}
 	var hash types.Hash32
-	hash.SetBytes(bts)
-	return hash, nil
+	bts, err := msh.general.Get(msh.getAggregatedLayerHashKey(layerID))
+	if err == nil {
+		hash.SetBytes(bts)
+		return hash, nil
+	}
+	return hash, err
 }
 
 // GetLayerHashBlocks returns blocks for given hash
 func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
 	layerIDBytes, err := msh.general.Get(h.Bytes())
 	if err != nil {
-		msh.Warning("requested unknown layer hash %v", h.ShortString())
+		msh.With().Warning("requested unknown layer hash", log.String("hash", h.ShortString()))
 		return []types.BlockID{}
 	}
 	l := types.BytesToLayerID(layerIDBytes)
