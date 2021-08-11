@@ -203,7 +203,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 
 	lg.Event().Info("sync done",
 		log.String("node_id", app.BaseApp.Config.P2P.NodeID),
-		log.FieldNamed("verified_layers", msh.ProcessedLayer()),
+		log.FieldNamed("processed", msh.ProcessedLayer()),
 	)
 	app.sync.Close()
 	for {

@@ -182,7 +182,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	if uint32(len(h.outputs)) >= h.bufferSize {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
-	h.outputs[types.LayerID(id)] = blocks
+	h.outputs[id] = blocks
 
 	return nil
 }

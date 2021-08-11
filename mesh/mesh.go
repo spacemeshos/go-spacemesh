@@ -159,8 +159,8 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 	}
 
 	msh.With().Info("recovered mesh from disk",
-		log.FieldNamed("latest_layer", msh.LatestLayer()),
-		log.FieldNamed("validated_layer", msh.ProcessedLayer()),
+		log.FieldNamed("latest", msh.LatestLayer()),
+		log.FieldNamed("processed", msh.ProcessedLayer()),
 		log.String("layer_hash", msh.ProcessedLayerHash().ShortString()),
 		log.String("root_hash", pr.GetStateRoot().String()))
 
@@ -175,7 +175,7 @@ func (msh *Mesh) CacheWarmUp(layerSize int) {
 	}
 
 	if err := msh.cacheWarmUpFromTo(start, msh.ProcessedLayer()); err != nil {
-		msh.Error("cache warm up failed during recovery", err)
+		msh.With().Error("cache warm up failed during recovery", log.Err(err))
 	}
 
 	msh.Info("cache warm up done")
@@ -246,7 +246,9 @@ func (msh *Mesh) setProcessedLayerFromRecoveredData(pLayer *ProcessedLayer) {
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
 	msh.processedLayer = *pLayer
-	msh.Event().Info("processed layer set from recovered data", pLayer.ID, log.String("layer_hash", pLayer.Hash.ShortString()))
+	msh.Event().Info("processed layer set from recovered data",
+		pLayer.ID,
+		log.String("layer_hash", pLayer.Hash.ShortString()))
 }
 
 func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
@@ -254,17 +256,17 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 	defer msh.mutex.Unlock()
 	if !layer.Index().After(msh.processedLayer.ID) {
 		msh.With().Info("trying to set processed layer to an older layer",
-			log.FieldNamed("processed_layer", msh.processedLayer.ID),
+			log.FieldNamed("processed", msh.processedLayer.ID),
 			log.FieldNamed("old_layer", layer.Index()))
 		for i := layer.Index(); !i.After(msh.processedLayer.ID); i = i.Add(1) {
 			lyr, err := msh.GetLayer(i)
 			if err != nil {
-				msh.With().Error("failed to get layer", i)
+				msh.With().Error("failed to get layer", i, log.Err(err))
 				return
 			}
 			prevHash, err := msh.getAggregatedLayerHash(i.Sub(1))
 			if err != nil {
-				msh.With().Error("failed to get previous aggregated hash", i)
+				msh.With().Error("failed to get previous aggregated hash", i, log.Err(err))
 				return
 			}
 			newAggHash := msh.calcAggregatedLayerHash(lyr, prevHash)
@@ -278,7 +280,7 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 		}
 		if err := msh.persistProcessedLayer(&msh.processedLayer); err != nil {
 			msh.With().Error("failed to persist processed layer",
-				log.FieldNamed("processed_layer", msh.processedLayer.ID),
+				log.FieldNamed("processed", msh.processedLayer.ID),
 				log.String("processed_layer_hash", msh.processedLayer.Hash.ShortString()),
 				log.Err(err))
 		}
@@ -291,7 +293,7 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 
 	if layer.Index() != msh.processedLayer.ID.Add(1) {
 		msh.With().Info("trying to set processed layer out of order",
-			log.FieldNamed("processed_layer", msh.processedLayer.ID),
+			log.FieldNamed("processed", msh.processedLayer.ID),
 			log.FieldNamed("new_layer", layer.Index()))
 		msh.nextProcessedLayers[layer.Index()] = layer
 		return
@@ -307,17 +309,21 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 		}
 		aggHash := msh.calcAggregatedLayerHash(lyr, lastProcessed.Hash)
 		msh.persistAggregatedLayerHash(i, aggHash)
-		msh.With().Info("aggregated hash set for layer", i, log.String("layer_hash", aggHash.ShortString()))
+		msh.With().Info("aggregated hash set for layer",
+			i,
+			log.String("layer_hash", aggHash.ShortString()))
 		lastProcessed = ProcessedLayer{ID: i, Hash: aggHash}
 		delete(msh.nextProcessedLayers, i)
 	}
 	msh.processedLayer = lastProcessed
 	events.ReportNodeStatusUpdate()
-	msh.Event().Info("processed layer set", msh.processedLayer.ID, log.String("layer_hash", msh.processedLayer.Hash.ShortString()))
+	msh.Event().Info("processed layer set",
+		msh.processedLayer.ID,
+		log.String("layer_hash", msh.processedLayer.Hash.ShortString()))
 
 	if err := msh.persistProcessedLayer(&lastProcessed); err != nil {
 		msh.With().Error("failed to persist processed layer",
-			log.FieldNamed("processed_layer", lastProcessed.ID),
+			log.FieldNamed("processed", lastProcessed.ID),
 			log.String("processed_layer_hash", lastProcessed.Hash.ShortString()),
 			log.Err(err))
 	}
@@ -326,6 +332,8 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 // ValidateLayer performs fairly heavy lifting: it triggers tortoise to process the full contents of the layer (i.e.,
 // all of its blocks), then to attempt to validate all unvalidated layers up to this layer. It also applies state for
 // newly-validated layers.
+// TODO: rename this. When tortoise passes a layer, we call that "verify." "Validate" sounds too similar and it's
+//   confusing that a layer can be validated without being verified.
 func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 	layerID := lyr.Index()
 	logger := vl.WithContext(ctx).WithFields(layerID)
@@ -414,7 +422,8 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 	layerTwo := types.NewLayerID(2)
 	if oldPbase.Before(layerTwo) {
 		msh.With().Warning("tried to push layer < 2",
-			log.FieldNamed("old_pbase", oldPbase), log.FieldNamed("new_pbase", newPbase))
+			log.FieldNamed("old_pbase", oldPbase),
+			log.FieldNamed("new_pbase", newPbase))
 		if newPbase.Before(types.NewLayerID(3)) {
 			return
 		}
@@ -493,7 +502,7 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		Status:  events.LayerStatusTypeApproved,
 	})
 
-	logger.With().Info("saving input vector for layer", log.Int("valid_blocks", len(blocks)))
+	logger.With().Info("saving input vector for layer", log.Int("count_valid_blocks", len(blocks)))
 
 	if err := msh.SaveLayerInputVectorByID(ctx, validatedLayer, types.BlockIDs(blocks)); err != nil {
 		logger.Error("saving layer input vector failed")
@@ -529,8 +538,8 @@ func (msh *Mesh) updateStateWithLayer(layer *types.Layer) {
 	latest := msh.LatestLayerInState()
 	if !layer.Index().After(latest) {
 		msh.With().Warning("result received after state has advanced",
-			log.FieldNamed("validatedLayer", layer.Index()),
-			log.FieldNamed("latestLayer", latest))
+			log.FieldNamed("validated", layer.Index()),
+			log.FieldNamed("latest", latest))
 		return
 	}
 	if msh.maxValidatedLayer.Before(layer.Index()) {
@@ -538,9 +547,9 @@ func (msh *Mesh) updateStateWithLayer(layer *types.Layer) {
 	}
 	if layer.Index().After(latest.Add(1)) {
 		msh.With().Warning("early layer result received",
-			log.FieldNamed("validatedLayer", layer.Index()),
-			log.FieldNamed("maxValidatedLayer", msh.maxValidatedLayer),
-			log.FieldNamed("latestLayer", latest))
+			log.FieldNamed("validated", layer.Index()),
+			log.FieldNamed("max_validated", msh.maxValidatedLayer),
+			log.FieldNamed("latest", latest))
 		msh.nextValidLayers[layer.Index()] = layer
 		return
 	}
@@ -587,7 +596,9 @@ func (msh *Mesh) calcSimpleLayerHash(layer *types.Layer) types.Hash32 {
 
 func (msh *Mesh) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) {
 	if err := msh.general.Put(msh.getAggregatedLayerHashKey(layerID), hash.Bytes()); err != nil {
-		msh.With().Error("failed to persist running layer hash", log.Err(err), msh.ProcessedLayer(),
+		msh.With().Error("failed to persist running layer hash",
+			log.Err(err),
+			msh.ProcessedLayer(),
 			log.String("layer_hash", hash.ShortString()))
 	}
 }
@@ -804,11 +815,11 @@ func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
 		msh.orphanBlocks[blk.Layer()] = make(map[types.BlockID]struct{})
 	}
 	msh.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
-	msh.Debug("Added block %s to orphans", blk.ID())
+	msh.With().Debug("added block to orphans", blk.ID())
 	for _, b := range append(blk.ForDiff, append(blk.AgainstDiff, blk.NeutralDiff...)...) {
 		for layerID, layermap := range msh.orphanBlocks {
 			if _, has := layermap[b]; has {
-				msh.Log.With().Debug("delete block from orphans", b)
+				msh.With().Debug("delete block from orphans", b)
 				delete(layermap, b)
 				if len(layermap) == 0 {
 					delete(msh.orphanBlocks, layerID)

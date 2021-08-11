@@ -376,7 +376,7 @@ func BlockIDs(blocks []*Block) []BlockID {
 
 // BlockIdsField returns a list of loggable fields for a given list of BlockIDs
 func BlockIdsField(ids []BlockID) log.Field {
-	strs := []string{}
+	var strs []string
 	for _, a := range ids {
 		strs = append(strs, a.String())
 	}
