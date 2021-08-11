@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/nattraversal"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -75,7 +76,8 @@ type Switch struct {
 	cPool cPool
 
 	// protocol used to gossip - disseminate messages.
-	gossip *gossip.Protocol
+	gossip       *gossip.Protocol
+	peersWatcher *peers.Peers
 
 	// discover new peers and bootstrap the node connectivity.
 	discover discovery.PeerStore // peer addresses store
@@ -217,7 +219,10 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	s.network.SubscribeClosingConnections(cpool.OnClosedConnection)
 	s.network.SubscribeClosingConnections(s.onClosedConnection)
 	s.cPool = cpool
-	s.gossip = gossip.NewProtocol(s.shutdownCtx, config.SwarmConfig, s, peers.NewPeers(s, s.logger), s.LocalNode().PublicKey(), s.logger)
+	s.peersWatcher = peers.Start(s, peers.WithLog(s.logger), peers.WithNodeStatesReporter(events.ReportNodeStatusUpdate))
+	s.gossip = gossip.NewProtocol(s.shutdownCtx, config.SwarmConfig, s,
+		s.peersWatcher,
+		s.LocalNode().PublicKey(), s.logger)
 	s.logger.With().Debug("created new swarm", l.PublicKey())
 	return s, nil
 }
@@ -433,6 +438,7 @@ func (s *Switch) Shutdown() {
 		s.network.Shutdown()
 		// udpServer (udpMux) shuts down the udpnet as well
 		s.udpServer.Shutdown()
+		s.peersWatcher.Close()
 
 		for i := range s.directProtocolHandlers {
 			delete(s.directProtocolHandlers, i)

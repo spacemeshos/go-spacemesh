@@ -3,19 +3,17 @@ package cmd
 import (
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 )
 
-var (
-	config = cfg.DefaultConfig()
-)
+var config = cfg.DefaultConfig()
 
 // AddCommands adds cobra commands to the app.
 func AddCommands(cmd *cobra.Command) {
-
 	/** ======================== BaseConfig Flags ========================== **/
 
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.ConfigFile,
@@ -189,25 +187,25 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.Kappa, "tortoise-beacon-kappa",
 		config.TortoiseBeacon.Kappa, "Security parameter (for calculating ATX threshold)")
-	cmd.PersistentFlags().StringVar(&config.TortoiseBeacon.Q, "tortoise-beacon-q",
-		config.TortoiseBeacon.Q, "Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
-	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.RoundsNumber, "tortoise-beacon-rounds-number",
-		config.TortoiseBeacon.RoundsNumber, "Amount of rounds in every epoch")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.GracePeriodDurationMs, "tortoise-beacon-grace-period-duration-ms",
-		config.TortoiseBeacon.GracePeriodDurationMs, "Grace period duration in milliseconds")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.ProposalDurationMs, "tortoise-beacon-proposal-duration-ms",
-		config.TortoiseBeacon.ProposalDurationMs, "Proposal duration in milliseconds")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.FirstVotingRoundDurationMs, "tortoise-beacon-first-voting-round-duration-ms",
-		config.TortoiseBeacon.FirstVotingRoundDurationMs, "First voting round duration in milliseconds")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotingRoundDurationMs, "tortoise-beacon-voting-round-duration-ms",
-		config.TortoiseBeacon.VotingRoundDurationMs, "Voting round duration in milliseconds")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WeakCoinRoundDurationMs, "tortoise-beacon-weak-coin-round-duration-ms",
-		config.TortoiseBeacon.WeakCoinRoundDurationMs, "Weak coin round duration in milliseconds")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.WaitAfterEpochStart, "tortoise-beacon-wait-after-epoch-start-ms",
+	cmd.PersistentFlags().Var((*types.RatVar)(config.TortoiseBeacon.Q), "tortoise-beacon-q",
+		"Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
+	cmd.PersistentFlags().Uint64Var((*uint64)(&config.TortoiseBeacon.RoundsNumber), "tortoise-beacon-rounds-number",
+		uint64(config.TortoiseBeacon.RoundsNumber), "Amount of rounds in every epoch")
+	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.GracePeriodDuration, "tortoise-beacon-grace-period-duration",
+		config.TortoiseBeacon.GracePeriodDuration, "Grace period duration in milliseconds")
+	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.ProposalDuration, "tortoise-beacon-proposal-duration",
+		config.TortoiseBeacon.ProposalDuration, "Proposal duration in milliseconds")
+	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.FirstVotingRoundDuration, "tortoise-beacon-first-voting-round-duration",
+		config.TortoiseBeacon.FirstVotingRoundDuration, "First voting round duration in milliseconds")
+	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.VotingRoundDuration, "tortoise-beacon-voting-round-duration",
+		config.TortoiseBeacon.VotingRoundDuration, "Voting round duration in milliseconds")
+	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.WeakCoinRoundDuration, "tortoise-beacon-weak-coin-round-duration",
+		config.TortoiseBeacon.WeakCoinRoundDuration, "Weak coin round duration in milliseconds")
+	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.WaitAfterEpochStart, "tortoise-beacon-wait-after-epoch-start",
 		config.TortoiseBeacon.WaitAfterEpochStart, "How many milliseconds to wait after a new epoch is started.")
-	cmd.PersistentFlags().Float64Var(&config.TortoiseBeacon.Theta, "tortoise-beacon-theta",
-		config.TortoiseBeacon.Theta, "Ratio of votes for reaching consensus")
-	cmd.PersistentFlags().IntVar(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",
+	cmd.PersistentFlags().Var((*types.RatVar)(config.TortoiseBeacon.Theta), "tortoise-beacon-theta",
+		"Ratio of votes for reaching consensus")
+	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",
 		config.TortoiseBeacon.VotesLimit, "Maximum allowed number of votes to be sent")
 
 	/**======================== Post Flags ========================== **/
@@ -256,5 +254,4 @@ func AddCommands(cmd *cobra.Command) {
 	if err != nil {
 		fmt.Println("an error has occurred while binding flags:", err)
 	}
-
 }

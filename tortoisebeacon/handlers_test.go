@@ -1,7 +1,6 @@
 package tortoisebeacon
 
 import (
-	"math/big"
 	"testing"
 	"time"
 
@@ -95,13 +94,6 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				clock:          clock,
 				lastLayer:      types.NewLayerID(epoch),
 			}
-
-			q, ok := new(big.Rat).SetString(tb.config.Q)
-			if !ok {
-				panic("bad q parameter")
-			}
-
-			tb.q = q
 
 			sig, err := tb.getSignedProposal(epoch)
 			r.NoError(err)

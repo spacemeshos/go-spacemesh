@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/taskgroup"
@@ -123,17 +124,12 @@ func New(network Network, opts ...Option) *Sync {
 		time:    systemTime{},
 		config:  DefaultConfig(),
 		network: network,
-		peersWatcher: peersWatcher{
-			requests: make(chan *waitPeersReq),
-		},
 	}
 	for _, opt := range opts {
 		opt(sync)
 	}
-
 	sync.ctx, sync.cancel = context.WithCancel(sync.ctx)
 	sync.tg = taskgroup.New(taskgroup.WithContext(sync.ctx))
-
 	sync.srv = server.NewMsgServer(sync.ctx,
 		network,
 		protocolName,
@@ -154,7 +150,7 @@ type Sync struct {
 	srv          *server.MessageServer
 	time         Time
 	network      Network
-	peersWatcher peersWatcher
+	peersWatcher *peers.Peers
 
 	once   sync.Once
 	tg     *taskgroup.Group
@@ -182,12 +178,11 @@ func (s *Sync) requestHandler(ctx context.Context, buf []byte) []byte {
 // Start background workers.
 func (s *Sync) Start() {
 	s.once.Do(func() {
+		// NOTE(dshulyal) we can't start listening for peers in New because Simulator
+		// sometimes hangs in that case
+		s.peersWatcher = peers.Start(s.network, peers.WithLog(s.log))
 		s.tg.Go(func(ctx context.Context) error {
 			return s.run(ctx)
-		})
-		s.tg.Go(func(ctx context.Context) error {
-			added, expired := s.network.SubscribePeerEvents()
-			return s.peersWatcher.run(ctx, added, expired)
 		})
 	})
 }
@@ -195,8 +190,11 @@ func (s *Sync) Start() {
 // Stop background workers.
 func (s *Sync) Stop() {
 	s.cancel()
-	s.srv.Close()
+	if s.peersWatcher != nil {
+		s.peersWatcher.Close()
+	}
 	s.Wait()
+	s.srv.Close()
 }
 
 // Wait will return first error that is returned by background workers.
@@ -216,7 +214,7 @@ func (s *Sync) run(ctx context.Context) error {
 	s.log.With().Debug("started sync background worker")
 	defer s.log.With().Debug("exiting sync background worker")
 	for {
-		prs, err := s.peersWatcher.waitPeers(ctx, s.config.RequiredResponses)
+		prs, err := s.peersWatcher.WaitPeers(ctx, s.config.RequiredResponses)
 		if err != nil {
 			return err
 		}
@@ -269,7 +267,7 @@ func (s *Sync) run(ctx context.Context) error {
 }
 
 // GetOffset computes offset from received response. The method is stateless and safe to use concurrently.
-func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2pcrypto.PublicKey) (time.Duration, error) {
+func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []peers.Peer) (time.Duration, error) {
 	var (
 		responses = make(chan Response, len(prs))
 		round     = round{

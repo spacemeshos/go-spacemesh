@@ -9,6 +9,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync/mocks"
 	"github.com/stretchr/testify/assert"
@@ -49,7 +50,7 @@ func TestSyncGetOffset(t *testing.T) {
 		responseReceive = start.Add(40 * time.Second)
 	)
 
-	peers := []p2pcrypto.PublicKey{
+	peers := []peers.Peer{
 		p2pcrypto.NewRandomPubkey(),
 		p2pcrypto.NewRandomPubkey(),
 		p2pcrypto.NewRandomPubkey(),
