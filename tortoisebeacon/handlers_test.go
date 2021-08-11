@@ -263,10 +263,10 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 		mock.AnythingOfType("types.ATXID")).
 		Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				StartTick: 1,
-				EndTick:   3,
+				StartTick: 0,
+				EndTick:   1,
 			},
-			NumUnits: 5,
+			NumUnits: 1,
 		}, nil)
 	mockDB.On("GetAtxTimestamp",
 		mock.AnythingOfType("types.ATXID")).
