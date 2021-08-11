@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -62,9 +62,9 @@ func ConfigTst() Config {
 	}
 }
 
-func getMeshWithMapState(id string, s txProcessor) (*Mesh, *AtxDbMock) {
+func getMeshWithMapState(tb testing.TB, id string, s txProcessor) (*Mesh, *AtxDbMock) {
 	atxDb := NewAtxDbMock()
-	lg := log.AppLog.WithName(id)
+	lg := logtest.New(tb)
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
 	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), s, lg), atxDb
@@ -74,7 +74,6 @@ func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs in
 	var totalFee int64
 	var txs []*types.Transaction
 	for i := 0; i < numOfTxs; i++ {
-		// log.Info("adding tx with fee %v nonce %v", fee, i)
 		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
 		assert.NoError(t, err)
 		bl.TxIDs = append(bl.TxIDs, tx.ID())
@@ -94,7 +93,7 @@ func init() {
 
 func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	layers, atxDB := getMeshWithMapState("t1", s)
+	layers, atxDB := getMeshWithMapState(t, "t1", s)
 	defer layers.Close()
 
 	var totalFee int64
@@ -130,7 +129,6 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	block4.ATXID = atx.ID()
 	totalFee += addTransactionsWithFee(t, layers.DB, block4, 16, rand.Int63n(100))
 
-	log.Info("total fees : %v", totalFee)
 	_ = layers.AddBlock(block1)
 	_ = layers.AddBlock(block2)
 	_ = layers.AddBlock(block3)
@@ -178,7 +176,7 @@ func TestMesh_integration(t *testing.T) {
 	maxTxs := 20
 
 	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	layers, atxDB := getMeshWithMapState("t1", s)
+	layers, atxDB := getMeshWithMapState(t, "t1", s)
 	defer layers.Close()
 
 	var l3Rewards int64
@@ -187,7 +185,6 @@ func TestMesh_integration(t *testing.T) {
 		// rewards are applied to layers in the past according to the reward maturity param
 		if i == 3 {
 			l3Rewards = reward
-			log.Info("reward %v", l3Rewards)
 		}
 
 		l, err := layers.GetLayer(types.NewLayerID(uint32(i)))
@@ -211,7 +208,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	maxTxs := 20
 
 	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	mesh, atxDB := getMeshWithMapState("t1", s)
+	mesh, atxDB := getMeshWithMapState(t, "t1", s)
 	defer mesh.Close()
 
 	for i := 1; i <= numOfLayers; i++ {
@@ -222,7 +219,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	}
 
 	s2 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	mesh2, atxDB2 := getMeshWithMapState("t2", s2)
+	mesh2, atxDB2 := getMeshWithMapState(t, "t2", s2)
 
 	// this should be played until numOfLayers -1 if we want to compare states
 	for i := 1; i <= numOfLayers-1; i++ {
@@ -250,7 +247,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 
 	// test that state does not advance when layer x +2 is received before layer x+1, and then test that all layers are pushed
 	s3 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	mesh3, atxDB3 := getMeshWithMapState("t3", s3)
+	mesh3, atxDB3 := getMeshWithMapState(t, "t3", s3)
 
 	// this should be played until numOfLayers -1 if we want to compare states
 	for i := 1; i <= numOfLayers-3; i++ {
@@ -297,7 +294,7 @@ type meshValidatorBatchMock struct {
 }
 
 func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
-	m.mesh.setProcessedLayer(lyr.Index(), types.Hash32{})
+	m.mesh.setProcessedLayer(lyr)
 	layerID := lyr.Index()
 	if layerID.Uint32() == 0 {
 		return
@@ -319,7 +316,7 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	batchSize := 6
 
 	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	mesh, atxDb := getMeshWithMapState("t1", s)
+	mesh, atxDb := getMeshWithMapState(t, "t1", s)
 	defer mesh.Close()
 
 	mesh.Validator = &meshValidatorBatchMock{mesh: mesh, batchSize: uint32(batchSize)}
@@ -329,7 +326,6 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 		reward, _ := createLayer(t, mesh, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDb)
 		if i == 0 {
 			firstLayerRewards = reward
-			log.Info("reward %v", firstLayerRewards)
 		}
 	}
 

@@ -8,7 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -119,7 +119,7 @@ func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, p
 
 var _ service.Service = (*mockNet)(nil)
 
-func defaultFetch() (*Fetch, *mockNet) {
+func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
 	cfg := Config{
 		2000, // make sure we never hit the batch timeout
 		3,
@@ -132,7 +132,7 @@ func defaultFetch() (*Fetch, *mockNet) {
 		SendCalled: make(map[types.Hash32]int),
 		Responses:  make(map[types.Hash32]responseMessage),
 	}
-	lg := log.NewDefault("fetch")
+	lg := logtest.New(tb)
 	f := NewFetch(context.TODO(), cfg, mckNet, lg)
 	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
@@ -141,12 +141,12 @@ func defaultFetch() (*Fetch, *mockNet) {
 	return f, mckNet
 }
 
-func customFetch(cfg Config) (*Fetch, *mockNet) {
+func customFetch(tb testing.TB, cfg Config) (*Fetch, *mockNet) {
 	mckNet := &mockNet{
 		SendCalled: make(map[types.Hash32]int),
 		Responses:  make(map[types.Hash32]responseMessage),
 	}
-	lg := log.NewDefault("fetch")
+	lg := logtest.New(tb)
 	f := NewFetch(context.TODO(), cfg, mckNet, lg)
 	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
@@ -154,7 +154,7 @@ func customFetch(cfg Config) (*Fetch, *mockNet) {
 }
 
 func TestFetch_GetHash(t *testing.T) {
-	f, _ := defaultFetch()
+	f, _ := defaultFetch(t)
 	defer f.Stop()
 	f.Start()
 	h1 := randomHash()
@@ -176,7 +176,7 @@ func TestFetch_GetHash(t *testing.T) {
 
 func TestFetch_requestHashBatchFromPeers_AggregateAndValidate(t *testing.T) {
 	h1 := randomHash()
-	f, net := defaultFetch()
+	f, net := defaultFetch(t)
 
 	// set response mock
 	res := responseMessage{
@@ -221,7 +221,7 @@ func TestFetch_requestHashBatchFromPeers_AggregateAndValidate(t *testing.T) {
 
 func TestFetch_requestHashBatchFromPeers_NoDuplicates(t *testing.T) {
 	h1 := randomHash()
-	f, net := defaultFetch()
+	f, net := defaultFetch(t)
 
 	// set response mock
 	res := responseMessage{
@@ -248,14 +248,14 @@ func TestFetch_requestHashBatchFromPeers_NoDuplicates(t *testing.T) {
 }
 
 func TestFetch_GetHash_StartStopSanity(t *testing.T) {
-	f, _ := defaultFetch()
+	f, _ := defaultFetch(t)
 	f.Start()
 	f.Stop()
 }
 
 func TestFetch_GetHash_failNetwork(t *testing.T) {
 	h1 := randomHash()
-	f, net := defaultFetch()
+	f, net := defaultFetch(t)
 
 	// set response mock
 	bts := responseMessage{
@@ -286,7 +286,7 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	h1 := randomHash()
 	h2 := randomHash()
 	h3 := randomHash()
-	f, net := customFetch(Config{
+	f, net := customFetch(t, Config{
 		BatchTimeout:      1,
 		MaxRetiresForPeer: 2,
 		BatchSize:         2,
@@ -370,7 +370,7 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 	req3 := makeRequest(hash3, High, hint)
 	req4 := makeRequest(hash3, Low, hint)
 	req5 := makeRequest(hash3, High, hint)
-	f, net := customFetch(Config{
+	f, net := customFetch(t, Config{
 		BatchTimeout:      1,
 		MaxRetiresForPeer: 2,
 		BatchSize:         2,

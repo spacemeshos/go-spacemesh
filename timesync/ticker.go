@@ -61,16 +61,30 @@ type Ticker struct {
 	log             log.Log
 }
 
+// TickerOption to configure Ticker.
+type TickerOption func(*Ticker)
+
+// WithLog configures logger for Ticker.
+func WithLog(lg log.Log) TickerOption {
+	return func(t *Ticker) {
+		t.log = lg
+	}
+}
+
 // NewTicker returns a new instance of ticker
-func NewTicker(c Clock, lc LayerConverter) *Ticker {
-	return &Ticker{
+func NewTicker(c Clock, lc LayerConverter, opts ...TickerOption) *Ticker {
+	t := &Ticker{
 		subs:            newSubs(),
 		lastTickedLayer: lc.TimeToLayer(c.Now()),
 		clock:           c,
 		LayerConverter:  lc,
 		layerChannels:   make(map[types.LayerID]chan struct{}),
-		log:             log.NewDefault("ticker"),
+		log:             log.NewNop(),
 	}
+	for _, opt := range opts {
+		opt(t)
+	}
+	return t
 }
 
 var (
