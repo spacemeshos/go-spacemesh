@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -61,8 +61,6 @@ func (his *HareWrapper) waitForTermination() {
 
 		time.Sleep(300 * time.Millisecond)
 	}
-
-	log.Info("Terminating. Validating outputs")
 
 	for _, p := range his.hare {
 		for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(his.totalCP)); i = i.Add(1) {
@@ -127,7 +125,6 @@ func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.
 func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload []byte) error {
 	msg, _ := MessageFromBuffer(payload)
 	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != -1 {
-		log.Warning("Not broadcasting in manipulator")
 		return m.err
 	}
 
@@ -177,7 +174,7 @@ func Test_consensusIterations(t *testing.T) {
 	creationFunc := func() {
 		s := sim.NewNode()
 		p2pm := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
-		proc := createConsensusProcess(true, cfg, oracle, p2pm, test.initialSets[i], types.NewLayerID(1), t.Name())
+		proc := createConsensusProcess(t, true, cfg, oracle, p2pm, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -232,7 +229,7 @@ func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, err
 func (mbp *mockBlockProvider) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
 }
 
-func createMaatuf(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string) *Hare {
+func createMaatuf(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))
@@ -241,13 +238,16 @@ func createMaatuf(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkSe
 	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, layersCh, log.AppLog.WithName(name+"_"+ed.PublicKey().ShortString()))
+		&MockStateQuerier{true, nil}, layersCh, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare
 }
 
 // Test - run multiple CPs simultaneously
 func Test_multipleCPs(t *testing.T) {
+	// NOTE(dshulyak) spams with overwriting sessionID in context
+	logtest.SetupGlobal(t)
+
 	types.SetLayersPerEpoch(4)
 	r := require.New(t)
 	totalCp := uint32(3)
@@ -261,7 +261,7 @@ func Test_multipleCPs(t *testing.T) {
 		s := sim.NewNode()
 		// p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(cfg, test.lCh[i], s, oracle, t.Name())
+		h := createMaatuf(t, cfg, test.lCh[i], s, oracle, t.Name())
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)
@@ -269,9 +269,7 @@ func Test_multipleCPs(t *testing.T) {
 
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
-			log.Info("sending for layer %v", j)
 			for i := 0; i < len(test.lCh); i++ {
-				log.Info("sending for instance %v", i)
 				test.lCh[i] <- j
 			}
 			time.Sleep(250 * time.Millisecond)
@@ -295,7 +293,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		s := sim.NewNode()
 		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(cfg, test.lCh[i], mp2p, oracle, t.Name())
+		h := createMaatuf(t, cfg, test.lCh[i], mp2p, oracle, t.Name())
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)
@@ -303,9 +301,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
-			log.Info("sending for layer %v", j)
 			for i := 0; i < len(test.lCh); i++ {
-				log.Info("sending for instance %v", i)
 				test.lCh[i] <- j
 			}
 			time.Sleep(500 * time.Millisecond)

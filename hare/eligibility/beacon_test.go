@@ -6,7 +6,7 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,7 +21,7 @@ func (mbp mockBeaconProvider) GetBeacon(types.EpochID) ([]byte, error) {
 func TestBeacon_Value(t *testing.T) {
 	r := require.New(t)
 
-	b := NewBeacon(nil, 0, log.NewDefault(t.Name()))
+	b := NewBeacon(nil, 0, logtest.New(t))
 	c := newMockCacher()
 	b.cache = c
 
@@ -47,7 +47,7 @@ func TestBeacon_Value(t *testing.T) {
 func TestNewBeacon(t *testing.T) {
 	r := require.New(t)
 	p := &mockBeaconProvider{}
-	b := NewBeacon(p, 10, log.NewDefault(t.Name()))
+	b := NewBeacon(p, 10, logtest.New(t))
 	r.Equal(p, b.beaconGetter)
 	r.Equal(10, int(b.confidenceParam))
 	r.NotNil(p, b.cache)

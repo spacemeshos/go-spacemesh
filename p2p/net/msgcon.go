@@ -163,7 +163,7 @@ func (c *MsgConnection) sendListener() {
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
-				log.With().Error("msgconnection: cannot send message to peer",
+				c.logger.With().Error("msgconnection: cannot send message to peer",
 					log.String("peer_id", m.peerID),
 					log.String("requestId", m.reqID),
 					log.Err(err))

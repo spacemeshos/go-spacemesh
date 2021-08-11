@@ -21,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -123,10 +123,8 @@ type ATXDBMock struct {
 }
 
 func (mock *ATXDBMock) CalcMinerWeights(types.EpochID, map[types.BlockID]struct{}) (map[string]uint64, error) {
-	log.Debug("waiting lock")
 	mock.workSymLock.Lock()
 	defer mock.workSymLock.Unlock()
-	log.Debug("done wait")
 
 	mock.counter++
 	return map[string]uint64{"aaaaac": 1, "aaabddb": 2, "aaaccc": 3}, nil
@@ -158,8 +156,8 @@ func ConfigTst() mesh.Config {
 
 const layersPerEpochBig = 1000
 
-func getAtxDb(id string) (*DB, *mesh.Mesh, database.Database) {
-	lg := log.NewDefault(id)
+func getAtxDb(tb testing.TB, id string) (*DB, *mesh.Mesh, database.Database) {
+	lg := logtest.New(tb).WithName(id)
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxStore := database.NewMemDatabase()
 	atxdb := NewDB(atxStore, NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
@@ -183,7 +181,6 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		activeSet := []types.ATXID{}
 		if i < len(atxs) {
 			activeSet = append(activeSet, atxs[i].ID())
-			fmt.Printf("adding i=%v bid=%v atxid=%v", i, block1.ID(), atxs[i].ShortString())
 		}
 		block1.ActiveSet = &activeSet
 	viewLoop:
@@ -209,7 +206,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 }
 
 func TestATX_ActiveSetForLayerView(t *testing.T) {
-	atxdb, layers, _ := getAtxDb(t.Name())
+	atxdb, layers, _ := getAtxDb(t, t.Name())
 	blocksMap := make(map[types.BlockID]struct{})
 	id1 := types.NodeID{Key: rndStr(), VRFPublicKey: []byte("anton")}
 	id2 := types.NodeID{Key: rndStr(), VRFPublicKey: []byte("anton")}
@@ -259,14 +256,14 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	actives, err := atxdb.GetMinerWeightsInEpochFromView(epoch, blocksMap)
 	assert.NoError(t, err)
 	// TODO: check this test failure
-	println(actives) // REMOVE
+	_ = actives
 	//assert.Len(t, actives, 2)
 	//assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
 	//assert.Equal(t, uint64(20000), actives[id2.Key], "actives[id2.Key] (%d) != %d", actives[id2.Key], 20000)
 }
 
 func TestMesh_ActiveSetForLayerView2(t *testing.T) {
-	atxdb, _, _ := getAtxDb(t.Name())
+	atxdb, _, _ := getAtxDb(t, t.Name())
 	actives, err := atxdb.GetMinerWeightsInEpochFromView(0, nil)
 	assert.Error(t, err)
 	assert.Equal(t, errGenesisEpoch, err)
@@ -276,7 +273,7 @@ func TestMesh_ActiveSetForLayerView2(t *testing.T) {
 func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
 	r := require.New(t)
 
-	atxdb, _, _ := getAtxDb("t6")
+	atxdb, _, _ := getAtxDb(t, "t6")
 	id1 := types.NodeID{Key: uuid.New().String()}
 	coinbase1 := types.HexToAddress("aaaa")
 	epoch1 := types.EpochID(2)
@@ -297,7 +294,7 @@ func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
 func Test_DBSanity(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpochBig)
 
-	atxdb, _, _ := getAtxDb("t6")
+	atxdb, _, _ := getAtxDb(t, "t6")
 
 	id1 := types.NodeID{Key: uuid.New().String()}
 	id2 := types.NodeID{Key: uuid.New().String()}
@@ -356,7 +353,7 @@ func Test_DBSanity(t *testing.T) {
 
 func TestMesh_processBlockATXs(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpochBig)
-	atxdb, _, _ := getAtxDb("t6")
+	atxdb, _, _ := getAtxDb(t, "t6")
 
 	id1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	id2 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
@@ -410,7 +407,7 @@ func assertEpochWeight(t *testing.T, atxdb *DB, epochID types.EpochID, expectedW
 }
 
 func TestActivationDB_ValidateAtx(t *testing.T) {
-	atxdb, layers, _ := getAtxDb("t8")
+	atxdb, layers, _ := getAtxDb(t, "t8")
 
 	signer := signing.NewEdSigner()
 	idx1 := types.NodeID{Key: signer.PublicKey().String(), VRFPublicKey: []byte("anton")}
@@ -463,7 +460,7 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpochBig)
 
-	atxdb, layers, _ := getAtxDb("t8")
+	atxdb, layers, _ := getAtxDb(t, "t8")
 	signer := signing.NewEdSigner()
 	idx1 := types.NodeID{Key: signer.PublicKey().String()}
 	idx2 := types.NodeID{Key: uuid.New().String()}
@@ -640,7 +637,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 }
 
 func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
-	atxdb, layers, _ := getAtxDb("t8")
+	atxdb, layers, _ := getAtxDb(t, "t8")
 	signer := signing.NewEdSigner()
 	idx1 := types.NodeID{Key: signer.PublicKey().String(), VRFPublicKey: []byte("12345")}
 	coinbase := types.HexToAddress("aaaa")
@@ -745,7 +742,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 func TestActivationDb_ProcessAtx(t *testing.T) {
 	r := require.New(t)
 
-	atxdb, _, _ := getAtxDb("t8")
+	atxdb, _, _ := getAtxDb(t, "t8")
 	idx1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	coinbase := types.HexToAddress("aaaa")
 	atx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, &types.NIPost{})
@@ -760,11 +757,7 @@ func TestActivationDb_ProcessAtx(t *testing.T) {
 
 func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	r := require.New(b)
-	nopLogger := log.NewDefault("").WithOptions(log.Nop)
-
-	atxdb, layers, _ := getAtxDb("t8")
-	atxdb.log = nopLogger
-	layers.Log = nopLogger
+	atxdb, layers, _ := getAtxDb(b, "t8")
 
 	const (
 		activesetSize         = 300
@@ -806,17 +799,17 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 
 	start := time.Now()
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	fmt.Printf("\nSyntactic validation took %v\n", time.Since(start))
+	b.Logf("\nSyntactic validation took %v\n", time.Since(start))
 	r.NoError(err)
 
 	start = time.Now()
 	err = atxdb.SyntacticallyValidateAtx(atx)
-	fmt.Printf("\nSecond syntactic validation took %v\n", time.Since(start))
+	b.Logf("\nSecond syntactic validation took %v\n", time.Since(start))
 	r.NoError(err)
 
 	start = time.Now()
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
-	fmt.Printf("\nContextual validation took %v\n\n", time.Since(start))
+	b.Logf("\nContextual validation took %v\n\n", time.Since(start))
 	r.NoError(err)
 }
 
@@ -824,7 +817,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	r := require.New(b)
 
 	const tmpPath = "../tmp/atx"
-	lg := log.NewDefault("id").WithOptions(log.Nop)
+	lg := logtest.New(b)
 
 	msh := mesh.NewMemMeshDB(lg)
 	store, err := database.NewLDBDatabase(tmpPath, 0, 0, lg.WithName("atxLDB"))
@@ -851,13 +844,13 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			r.NoError(err)
 			atx = newAtx(challenge, NewNIPostWithChallenge(h, poetBytes))
 			prevAtxs[miner] = atx.ID()
-			storeAtx(r, atxdb, atx, log.NewDefault("storeAtx").WithOptions(log.Nop))
+			storeAtx(r, atxdb, atx, lg.WithName("storeAtx"))
 		}
 		//noinspection GoNilness
 		posAtx = atx.ID()
 		layer = layer.Add(layersPerEpoch)
 		if epoch%batchSize == batchSize-1 {
-			fmt.Printf("epoch %3d-%3d took %v\t", epoch-(batchSize-1), epoch, time.Since(eStart))
+			b.Logf("epoch %3d-%3d took %v\t", epoch-(batchSize-1), epoch, time.Since(eStart))
 			eStart = time.Now()
 
 			for miner := 0; miner < numOfMiners; miner++ {
@@ -868,12 +861,12 @@ func BenchmarkNewActivationDb(b *testing.B) {
 				r.NoError(err)
 				r.NotNil(atx)
 			}
-			fmt.Printf("reading last and previous epoch 100 times took %v\n", time.Since(eStart))
+			b.Logf("reading last and previous epoch 100 times took %v\n", time.Since(eStart))
 			eStart = time.Now()
 		}
 		copy(pPrevAtxs, prevAtxs)
 	}
-	fmt.Printf("\n>>> Total time: %v\n\n", time.Since(start))
+	b.Logf("\n>>> Total time: %v\n\n", time.Since(start))
 	time.Sleep(1 * time.Second)
 
 	// cleanup
@@ -884,7 +877,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 func TestActivationDb_TopAtx(t *testing.T) {
 	r := require.New(t)
 
-	atxdb, _, _ := getAtxDb("t8")
+	atxdb, _, _ := getAtxDb(t, "t8")
 
 	// ATX stored should become top ATX
 	atx, err := createAndStoreAtx(atxdb, types.LayerID{}.Add(1))
@@ -922,7 +915,7 @@ func createAndValidateSignedATX(r *require.Assertions, atxdb *DB, ed *signing.Ed
 
 func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	r := require.New(t)
-	lg := log.NewDefault("sigValidation")
+	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
@@ -968,7 +961,7 @@ func createAndStoreAtx(atxdb *DB, layer types.LayerID) (*types.ActivationTx, err
 func TestActivationDb_AwaitAtx(t *testing.T) {
 	r := require.New(t)
 
-	lg := log.NewDefault("sigValidation")
+	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
@@ -1009,7 +1002,7 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	r := require.New(t)
 
-	lg := log.NewDefault("sigValidation")
+	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
@@ -1026,7 +1019,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 }
 
 func TestActivateDB_HandleAtxNilNipst(t *testing.T) {
-	atxdb, _, _ := getAtxDb(t.Name())
+	atxdb, _, _ := getAtxDb(t, t.Name())
 	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
 	buf, err := types.InterfaceToBytes(atx)
 	require.NoError(t, err)
@@ -1036,7 +1029,7 @@ func TestActivateDB_HandleAtxNilNipst(t *testing.T) {
 func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	path := b.TempDir()
 
-	lg := log.NewNop()
+	lg := logtest.New(b)
 	iddbstore, err := database.NewLDBDatabase(filepath.Join(path, "ids"), 0, 0, lg)
 	require.NoError(b, err)
 	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(path, "mesh"), 20, lg)

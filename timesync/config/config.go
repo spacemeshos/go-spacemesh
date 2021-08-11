@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 )
 
 // ConfigValues specifies  default values for node config params.
@@ -13,11 +14,12 @@ var (
 
 // TimeConfig specifies the timesync params for ntp.
 type TimeConfig struct {
-	MaxAllowedDrift       time.Duration `mapstructure:"max-allowed-time-drift"`
-	NtpQueries            int           `mapstructure:"ntp-queries"`
-	DefaultTimeoutLatency time.Duration `mapstructure:"default-timeout-latency"`
-	RefreshNtpInterval    time.Duration `mapstructure:"refresh-ntp-interval"`
-	NTPServers            []string      `mapstructure:"ntp-servers"`
+	MaxAllowedDrift       time.Duration   `mapstructure:"max-allowed-time-drift"`
+	NtpQueries            int             `mapstructure:"ntp-queries"`
+	DefaultTimeoutLatency time.Duration   `mapstructure:"default-timeout-latency"`
+	RefreshNtpInterval    time.Duration   `mapstructure:"refresh-ntp-interval"`
+	NTPServers            []string        `mapstructure:"ntp-servers"`
+	Peersync              peersync.Config `mapstructure:"peersync"`
 }
 
 //todo: this is a duplicate function found also in p2p config
@@ -49,6 +51,7 @@ func DefaultConfig() TimeConfig {
 			"time.asia.apple.com",
 			"time.americas.apple.com",
 		},
+		Peersync: peersync.DefaultConfig(),
 	}
 
 	return TimeConfigValues

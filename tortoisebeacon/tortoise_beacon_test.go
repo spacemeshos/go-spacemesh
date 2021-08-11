@@ -14,12 +14,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
 type validatorMock struct{}
@@ -41,31 +40,16 @@ func TestTortoiseBeacon(t *testing.T) {
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(10), nil, nil)
 
-	mwc := &weakcoin.MockWeakCoin{}
-	mwc.On("OnRoundStarted",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("OnRoundFinished",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("PublishProposal",
-		mock.Anything,
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(nil)
-	mwc.On("Get",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(true)
+	mwc := coinValueMock(t, true)
 
-	logger := log.NewDefault("TortoiseBeacon")
+	logger := logtest.New(t).WithName("TortoiseBeacon")
 
 	genesisTime := time.Now().Add(100 * time.Millisecond)
 	ld := 100 * time.Millisecond
 
 	types.SetLayersPerEpoch(1)
 
-	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
+	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
 	sim := service.NewSimulator()
@@ -80,7 +64,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	requirer.NoError(err)
 
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
-	lg := log.NewDefault(minerID.Key[:5])
+	lg := logtest.New(t).WithName(minerID.Key[:5])
 	idStore := activation.NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	goldenATXID := types.ATXID(types.HexToHash32("11111"))
@@ -88,7 +72,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	atxdb := activation.NewDB(database.NewMemDatabase(), idStore, memesh, 3, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
 	_ = atxdb
 
-	tb := New(conf, minerID, ld, n1, mockDB, nil, edSgn, signing.VRFVerify, vrfSigner, mwc, clock, logger)
+	tb := New(conf, minerID, ld, n1, mockDB, nil, edSgn, signing.VRFVerifier{}, vrfSigner, mwc, clock, logger)
 	requirer.NotNil(tb)
 
 	err = tb.Start(context.TODO())
@@ -124,25 +108,25 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 
 	tt := []struct {
 		name      string
-		theta     float64
+		theta     *big.Rat
 		weight    uint64
 		threshold int
 	}{
 		{
 			name:      "Case 1",
-			theta:     0.5,
+			theta:     big.NewRat(1, 2),
 			weight:    10,
 			threshold: 5,
 		},
 		{
 			name:      "Case 2",
-			theta:     0.3,
+			theta:     big.NewRat(3, 10),
 			weight:    10,
 			threshold: 3,
 		},
 		{
 			name:      "Case 3",
-			theta:     0.00004,
+			theta:     big.NewRat(1, 25000),
 			weight:    31744,
 			threshold: 1,
 		},
@@ -154,7 +138,7 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
+				Log: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Theta: tc.theta,
 				},
@@ -171,10 +155,16 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 
 	r := require.New(t)
 
+	theta1, ok := new(big.Float).SetString("0.5")
+	r.True(ok)
+
+	theta2, ok := new(big.Float).SetString("0.0")
+	r.True(ok)
+
 	tt := []struct {
 		name      string
 		kappa     uint64
-		q         string
+		q         *big.Rat
 		w         uint64
 		threshold *big.Float
 		err       error
@@ -182,17 +172,17 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 		{
 			name:      "Case 1",
 			kappa:     40,
-			q:         "1/3",
+			q:         big.NewRat(1, 3),
 			w:         60,
-			threshold: big.NewFloat(0.5),
+			threshold: theta1,
 			err:       nil,
 		},
 		{
 			name:      "Case 2",
 			kappa:     40,
-			q:         "1/3",
+			q:         big.NewRat(1, 3),
 			w:         0,
-			threshold: big.NewFloat(0),
+			threshold: theta2,
 			err:       ErrZeroEpochWeight,
 		},
 	}
@@ -202,18 +192,12 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			q, ok := new(big.Rat).SetString(tc.q)
-			if !ok {
-				panic("bad q parameter")
-			}
-
 			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
+				Log: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Kappa: tc.kappa,
 					Q:     tc.q,
 				},
-				q: q,
 			}
 
 			threshold, err := tb.atxThresholdFraction(tc.w)
@@ -237,30 +221,30 @@ func TestTortoiseBeacon_atxThreshold(t *testing.T) {
 	tt := []struct {
 		name      string
 		kappa     uint64
-		q         string
+		q         *big.Rat
 		w         uint64
 		threshold string
 	}{
 		{
 			name:      "Case 1",
 			kappa:     40,
-			q:         "1/3",
+			q:         big.NewRat(1, 3),
 			w:         60,
 			threshold: "0x80000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 		},
 		{
 			name:      "Case 2",
 			kappa:     400000,
-			q:         "1/3",
+			q:         big.NewRat(1, 3),
 			w:         31744,
 			threshold: "0xffffddbb63fcd30f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 		},
 		{
 			name:      "Case 3",
 			kappa:     40,
-			q:         "0.33",
+			q:         new(big.Rat).SetFloat64(0.33),
 			w:         60,
-			threshold: "0x7f8ece00fe541f0b0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+			threshold: "0x7f8ece00fe541f9f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
 		},
 	}
 
@@ -269,18 +253,13 @@ func TestTortoiseBeacon_atxThreshold(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			q, ok := new(big.Rat).SetString(tc.q)
-			if !ok {
-				panic("bad q parameter")
-			}
-
 			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
+				Log: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Kappa: tc.kappa,
+					Q:     tc.q,
 				},
 				vrfSigner: vrfSigner,
-				q:         q,
 			}
 
 			threshold, err := tb.atxThreshold(tc.w)
@@ -304,7 +283,7 @@ func TestTortoiseBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 	tt := []struct {
 		name     string
 		kappa    uint64
-		q        string
+		q        *big.Rat
 		w        uint64
 		proposal []byte
 		passes   bool
@@ -312,7 +291,7 @@ func TestTortoiseBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 		{
 			name:     "Case 1",
 			kappa:    400000,
-			q:        "1/3",
+			q:        big.NewRat(1, 3),
 			w:        31744,
 			proposal: util.Hex2Bytes("cee191e87d83dc4fbd5e2d40679accf68237b1f09f73f16db5b05ae74b522def9d2ffee56eeb02070277be99a80666ffef9fd4514a51dc37419dd30a791e0f05"),
 			passes:   true,
@@ -324,18 +303,13 @@ func TestTortoiseBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			q, ok := new(big.Rat).SetString(tc.q)
-			if !ok {
-				panic("bad q parameter")
-			}
-
 			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
+				Log: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Kappa: tc.kappa,
+					Q:     tc.q,
 				},
 				vrfSigner: vrfSigner,
-				q:         q,
 			}
 
 			passes, err := tb.proposalPassesEligibilityThreshold(tc.proposal, tc.w)
@@ -404,7 +378,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log: log.NewDefault("TortoiseBeacon"),
+				Log: logtest.New(t).WithName("TortoiseBeacon"),
 			}
 
 			result, err := tb.buildProposal(tc.epoch)
@@ -444,7 +418,7 @@ func TestTortoiseBeacon_signMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:      log.NewDefault("TortoiseBeacon"),
+				Log:      logtest.New(t).WithName("TortoiseBeacon"),
 				edSigner: edSgn,
 			}
 
@@ -489,7 +463,7 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:       log.NewDefault("TortoiseBeacon"),
+				Log:       logtest.New(t).WithName("TortoiseBeacon"),
 				vrfSigner: vrfSigner,
 			}
 

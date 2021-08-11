@@ -2,9 +2,10 @@ package hare
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/stretchr/testify/assert"
 )
 
 func buildProposalMsg(signing Signer, s *Set, signature []byte) *Msg {
@@ -25,7 +26,7 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 	verifier := generateSigning(t)
 
 	m1 := BuildProposalMsg(verifier, s)
-	tracker := newProposalTracker(log.NewDefault(verifier.PublicKey().String()))
+	tracker := newProposalTracker(logtest.New(t))
 	tracker.OnProposal(context.TODO(), m1)
 	assert.False(t, tracker.IsConflicting())
 	g := NewSetFromValues(value3)
@@ -37,7 +38,7 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 func TestProposalTracker_IsConflicting(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
-	tracker := newProposalTracker(log.NewDefault("ProposalTracker"))
+	tracker := newProposalTracker(logtest.New(t))
 
 	for i := 0; i < lowThresh10; i++ {
 		tracker.OnProposal(context.TODO(), BuildProposalMsg(generateSigning(t), s))
@@ -49,7 +50,7 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 	s := NewSetFromValues(value1, value2)
 	verifier := generateSigning(t)
 	m1 := BuildProposalMsg(verifier, s)
-	tracker := newProposalTracker(log.NewDefault(verifier.PublicKey().String()))
+	tracker := newProposalTracker(logtest.New(t))
 	tracker.OnProposal(context.TODO(), m1)
 	assert.False(t, tracker.IsConflicting())
 	g := NewSetFromValues(value3)
@@ -59,7 +60,7 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 }
 
 func TestProposalTracker_ProposedSet(t *testing.T) {
-	tracker := newProposalTracker(log.NewDefault("ProposalTracker"))
+	tracker := newProposalTracker(logtest.New(t))
 	proposedSet := tracker.ProposedSet()
 	assert.Nil(t, proposedSet)
 	s1 := NewSetFromValues(value1, value2)

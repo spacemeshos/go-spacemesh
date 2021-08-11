@@ -1,15 +1,36 @@
 package tortoisebeacon
 
 import (
+	"math/big"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
+
+func coinValueMock(tb testing.TB, value bool) coin {
+	ctrl := gomock.NewController(tb)
+	coinMock := mocks.NewMockcoin(ctrl)
+	coinMock.EXPECT().StartEpoch(
+		gomock.AssignableToTypeOf(types.EpochID(0)),
+		gomock.AssignableToTypeOf(weakcoin.UnitAllowances{}),
+	).AnyTimes()
+	coinMock.EXPECT().FinishEpoch().AnyTimes()
+	coinMock.EXPECT().StartRound(gomock.Any(), gomock.AssignableToTypeOf(types.RoundID(0))).
+		AnyTimes().Return(nil)
+	coinMock.EXPECT().FinishRound().AnyTimes()
+	coinMock.EXPECT().Get(
+		gomock.AssignableToTypeOf(types.EpochID(0)),
+		gomock.AssignableToTypeOf(types.RoundID(0)),
+	).AnyTimes().Return(value)
+	return coinMock
+}
 
 func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 	t.Parallel()
@@ -20,6 +41,15 @@ func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 	mockDB.On("GetEpochWeight",
 		mock.AnythingOfType("types.EpochID")).
 		Return(uint64(10), nil, nil)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockATXHeader := types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 1,
+	}
+	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
 
 	const epoch = 1
 
@@ -68,9 +98,9 @@ func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config: Config{
-					Theta: 1,
+					Theta: big.NewRat(1, 1),
 				},
-				Log:                       log.NewDefault("TortoiseBeacon"),
+				Log:                       logtest.New(t).WithName("TortoiseBeacon"),
 				validProposals:            tc.validProposals,
 				potentiallyValidProposals: tc.potentiallyValidProposals,
 				atxDB:                     mockDB,
@@ -99,23 +129,15 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 	mockDB.On("GetEpochWeight",
 		mock.AnythingOfType("types.EpochID")).
 		Return(uint64(1), nil, nil)
-
-	mwc := &weakcoin.MockWeakCoin{}
-	mwc.On("OnRoundStarted",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("OnRoundFinished",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("PublishProposal",
-		mock.Anything,
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(nil)
-	mwc.On("Get",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(false)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockATXHeader := types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 1,
+	}
+	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
 
 	const epoch = 5
 	const round = 3
@@ -207,16 +229,15 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config: Config{
-					Theta: 1,
+					Theta: big.NewRat(1, 1),
 				},
-				Log:           log.NewDefault("TortoiseBeacon"),
+				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes: tc.incomingVotes,
 				ownVotes:      map[epochRoundPair]votesSetPair{},
 				atxDB:         mockDB,
-				weakCoin:      mwc,
 			}
 
-			result, err := tb.calcVotes(tc.epoch, tc.round)
+			result, err := tb.calcVotes(tc.epoch, tc.round, false)
 			r.NoError(err)
 			r.EqualValues(tc.expected, result)
 		})
@@ -227,6 +248,20 @@ func TestTortoiseBeacon_firstRoundVotes(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
+
+	mockDB := &mockActivationDB{}
+	mockDB.On("GetEpochWeight",
+		mock.AnythingOfType("types.EpochID")).
+		Return(uint64(1), nil, nil)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockATXHeader := types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 1,
+	}
+	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
 
 	_, pk1, err := p2pcrypto.GenerateKeyPair()
 	r.NoError(err)
@@ -290,8 +325,9 @@ func TestTortoiseBeacon_firstRoundVotes(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:           log.NewDefault("TortoiseBeacon"),
+				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes: tc.incomingVotes,
+				atxDB:         mockDB,
 			}
 
 			votesMargin, err := tb.firstRoundVotes(tc.epoch)
@@ -318,23 +354,15 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 	mockDB.On("GetEpochWeight",
 		mock.AnythingOfType("types.EpochID")).
 		Return(uint64(threshold), nil, nil)
-
-	mwc := &weakcoin.MockWeakCoin{}
-	mwc.On("OnRoundStarted",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("OnRoundFinished",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID"))
-	mwc.On("PublishProposal",
-		mock.Anything,
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(nil)
-	mwc.On("Get",
-		mock.AnythingOfType("types.EpochID"),
-		mock.AnythingOfType("types.RoundID")).
-		Return(true)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockATXHeader := types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 1,
+	}
+	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
 
 	const epoch = 5
 	const round = 3
@@ -344,7 +372,6 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 		epoch         types.EpochID
 		upToRound     types.RoundID
 		incomingVotes map[epochRoundPair]votesPerPK
-		weakCoin      weakcoin.WeakCoin
 		result        votesSetPair
 	}{
 		{
@@ -375,7 +402,6 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 					},
 				},
 			},
-			weakCoin: weakcoin.ValueMock{Value: false},
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},
@@ -385,48 +411,6 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 					"0x3": {},
 					"0x4": {},
 					"0x5": {},
-					"0x6": {},
-				},
-			},
-		},
-		{
-			name:      "Weak Coin is true",
-			epoch:     epoch,
-			upToRound: round,
-			incomingVotes: map[epochRoundPair]votesPerPK{
-				{EpochID: epoch, Round: 1}: {
-					pk1.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x2": {},
-						},
-						InvalidVotes: hashSet{
-							"0x3": {},
-							"0x6": {},
-						},
-					},
-					pk2.String(): votesSetPair{
-						ValidVotes: hashSet{
-							"0x1": {},
-							"0x4": {},
-							"0x5": {},
-						},
-						InvalidVotes: hashSet{
-							"0x6": {},
-						},
-					},
-				},
-			},
-			weakCoin: weakcoin.ValueMock{Value: true},
-			result: votesSetPair{
-				ValidVotes: hashSet{
-					"0x1": {},
-					"0x2": {},
-					"0x3": {},
-					"0x4": {},
-					"0x5": {},
-				},
-				InvalidVotes: hashSet{
 					"0x6": {},
 				},
 			},
@@ -440,10 +424,9 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config: Config{
-					Theta: 1,
+					Theta: big.NewRat(1, 1),
 				},
-				Log:           log.NewDefault("TortoiseBeacon"),
-				weakCoin:      tc.weakCoin,
+				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes: tc.incomingVotes,
 				ownVotes:      map[epochRoundPair]votesSetPair{},
 				atxDB:         mockDB,
@@ -463,6 +446,20 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
+
+	mockDB := &mockActivationDB{}
+	mockDB.On("GetEpochWeight",
+		mock.AnythingOfType("types.EpochID")).
+		Return(uint64(10), nil, nil)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockATXHeader := types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 1,
+	}
+	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
 
 	_, pk1, err := p2pcrypto.GenerateKeyPair()
 	r.NoError(err)
@@ -552,9 +549,10 @@ func TestTortoiseBeacon_calcVotesMargin(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:                      log.NewDefault("TortoiseBeacon"),
+				Log:                      logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes:            tc.incomingVotes,
 				firstRoundOutcomingVotes: map[types.EpochID]firstRoundVotes{},
+				atxDB:                    mockDB,
 			}
 
 			votesMargin, err := tb.firstRoundVotes(tc.epoch)
@@ -578,6 +576,15 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 	mockDB.On("GetEpochWeight",
 		mock.AnythingOfType("types.EpochID")).
 		Return(uint64(threshold), nil, nil)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockATXHeader := types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 1,
+	}
+	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
 
 	tt := []struct {
 		name               string
@@ -585,7 +592,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 		round              types.RoundID
 		ownFirstRoundVotes votesSetPair
 		votesCount         votesMarginMap
-		weakCoin           weakcoin.WeakCoin
+		weakCoin           bool
 		result             votesSetPair
 	}{
 		{
@@ -606,7 +613,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				"0x2": -threshold * 3,
 				"0x3": threshold / 2,
 			},
-			weakCoin: weakcoin.ValueMock{Value: true},
+			weakCoin: true,
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},
@@ -626,7 +633,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				"0x2": -threshold * 3,
 				"0x3": threshold / 2,
 			},
-			weakCoin: weakcoin.ValueMock{Value: false},
+			weakCoin: false,
 			result: votesSetPair{
 				ValidVotes: hashSet{
 					"0x1": {},
@@ -646,15 +653,14 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config: Config{
-					Theta: 1,
+					Theta: big.NewRat(1, 1),
 				},
-				Log:      log.NewDefault("TortoiseBeacon"),
+				Log:      logtest.New(t).WithName("TortoiseBeacon"),
 				ownVotes: map[epochRoundPair]votesSetPair{},
-				weakCoin: tc.weakCoin,
 				atxDB:    mockDB,
 			}
 
-			result, err := tb.calcOwnCurrentRoundVotes(tc.epoch, tc.round, tc.votesCount)
+			result, err := tb.calcOwnCurrentRoundVotes(tc.epoch, tc.round, tc.votesCount, tc.weakCoin)
 			r.NoError(err)
 			r.EqualValues(tc.result, result)
 		})

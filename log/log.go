@@ -11,10 +11,8 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// mainLoggerName is a name of the global logger.
 const mainLoggerName = "00000.defaultLogger"
-
-// determine the level of messages we show.
-var debugMode = false
 
 // should we format out logs in json
 var jsonLog = false
@@ -27,9 +25,6 @@ var defaultEncoder = zap.NewDevelopmentEncoderConfig()
 
 // Level returns the zapcore level of logging.
 func Level() zapcore.Level {
-	if debugMode {
-		return zapcore.DebugLevel
-	}
 	return zapcore.InfoLevel
 }
 
@@ -54,6 +49,11 @@ func encoder() zapcore.Encoder {
 // AppLog is the local app singleton logger.
 var AppLog Log
 
+// SetupGlobal overwrites global logger.
+func SetupGlobal(logger Log) {
+	AppLog = NewFromLog(logger.logger.Named(mainLoggerName))
+}
+
 func init() {
 	logwriter = os.Stdout
 
@@ -63,11 +63,6 @@ func init() {
 
 func initLogging() {
 	AppLog = NewDefault(mainLoggerName)
-}
-
-// DebugMode sets log debug level
-func DebugMode(mode bool) {
-	debugMode = mode
 }
 
 // JSONLog turns JSON format on or off
@@ -87,10 +82,15 @@ func NewNop() Log {
 func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.Entry) error) Log {
 	consoleSyncer := zapcore.AddSync(logwriter)
 	enc := encoder()
-	consoleCore := zapcore.NewCore(enc, consoleSyncer, level)
-	core := zapcore.RegisterHooks(consoleCore, hooks...)
-	log := zap.New(core).Named(module)
+	core := zapcore.NewCore(enc, consoleSyncer, level)
+	log := zap.New(zapcore.RegisterHooks(core, hooks...)).Named(module)
 	return NewFromLog(log)
+}
+
+// RegisterHooks wraps provided loggers with hooks.
+func RegisterHooks(lg Log, hooks ...func(zapcore.Entry) error) Log {
+	core := zapcore.RegisterHooks(lg.logger.Core(), hooks...)
+	return NewFromLog(zap.New(core))
 }
 
 // NewDefault creates a Log with the default log level
@@ -101,12 +101,6 @@ func NewDefault(module string) Log {
 // NewFromLog creates a Log from an existing zap-compatible log.
 func NewFromLog(l *zap.Logger) Log {
 	return Log{logger: l}
-}
-
-// InitSpacemeshLoggingSystemWithHooks sets up a logging system with one or more
-// registered hooks
-func InitSpacemeshLoggingSystemWithHooks(hooks ...func(zapcore.Entry) error) {
-	AppLog = NewWithLevel(mainLoggerName, zap.NewAtomicLevelAt(Level()), hooks...)
 }
 
 // public wrappers abstracting away logging lib impl

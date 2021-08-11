@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -170,7 +170,7 @@ func (mc *mockCacher) Get(key interface{}) (value interface{}, ok bool) {
 func TestOracle_BuildVRFMessage(t *testing.T) {
 	r := require.New(t)
 	types.SetLayersPerEpoch(defLayersPerEpoch)
-	o := Oracle{vrfMsgCache: newMockCacher(), Log: log.NewDefault(t.Name())}
+	o := Oracle{vrfMsgCache: newMockCacher(), Log: logtest.New(t)}
 	o.beacon = &mockValueProvider{1, errFoo}
 	_, err := o.buildVRFMessage(context.TODO(), types.NewLayerID(1), 1)
 	r.Equal(errFoo, err)
@@ -202,7 +202,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 
 func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	r := require.New(t)
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}}, 5, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{size: 10}, &mockBlocksProvider{}, buildVerifier(true), &mockSigner{[]byte{1, 2, 3}}, 5, cfg, logtest.New(t))
 	mCache := newMockCacher()
 	o.vrfMsgCache = mCache
 
@@ -299,7 +299,6 @@ func Test_SafeLayerRange(t *testing.T) {
 		{types.NewLayerID(105), 2, defLayersPerEpoch, 2, types.NewLayerID(100), types.NewLayerID(102)},
 	}
 	for _, testCase := range testCases {
-		log.Info("testing safeLayerRange input: %v", testCase)
 		sls, sle := safeLayerRange(testCase.targetLayer, testCase.safetyParam, testCase.layersPerEpoch, testCase.epochOffset)
 		assert.Equal(t, testCase.safeLayerStart, sls, "got incorrect safeLayerStart")
 		assert.Equal(t, testCase.safeLayerEnd, sle, "got incorrect safeLayerEnd")
@@ -312,7 +311,7 @@ func defaultOracle(t testing.TB) *Oracle {
 
 func mockOracle(t testing.TB, layersPerEpoch uint32) *Oracle {
 	types.SetLayersPerEpoch(layersPerEpoch)
-	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{}, &mockBlocksProvider{}, buildVerifier(true), nil, layersPerEpoch, cfg, log.NewDefault(t.Name()))
+	o := New(&mockValueProvider{1, nil}, &mockActiveSetProvider{}, &mockBlocksProvider{}, buildVerifier(true), nil, layersPerEpoch, cfg, logtest.New(t))
 	return o
 }
 
@@ -681,7 +680,6 @@ func TestOracle_MultipleLayerBlocks(t *testing.T) {
 	o.cfg = eCfg.Config{ConfidenceParam: confidenceParam, EpochOffset: epochOffset}
 	sls, sle := safeLayerRange(lyr, confidenceParam, defLayersPerEpoch, epochOffset)
 	numLayers := int(sle.Difference(sls) + 1) // +1 because inclusive of endpoints
-	log.With().Info("layer range", log.FieldNamed("start", sls), log.FieldNamed("end", sle), log.Int("count", numLayers))
 	allBlocks := make(map[types.BlockID]bool, numLayers)
 	o.meshdb = &mockBlocksProvider{layerContextuallyValidBlocksFn: func(layerID types.LayerID) (map[types.BlockID]struct{}, error) {
 		mp := make(map[types.BlockID]struct{}, 1)

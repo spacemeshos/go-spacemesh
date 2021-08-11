@@ -93,7 +93,7 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlock(b *types.Block) (types.
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
 	oldVerified, newVerified := trtl.HandleIncomingLayer(l) // block wasn't in input vector for sure.
-	log.With().Info("late block ", b.Layer(), b.ID())
+	trtl.trtl.logger.With().Debug("late block ", b.Layer(), b.ID())
 	return oldVerified, newVerified
 }
 
@@ -101,6 +101,6 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlock(b *types.Block) (types.
 func (trtl *ThreadSafeVerifyingTortoise) Persist() error {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
-	log.Info("persist tortoise ")
+	trtl.trtl.logger.Debug("persist tortoise ")
 	return trtl.trtl.persist()
 }
