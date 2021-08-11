@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -97,7 +98,7 @@ func TestTortoiseBeacon_calcVotesFromProposals(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config: Config{
-					Theta: 1,
+					Theta: big.NewRat(1, 1),
 				},
 				Log:                       logtest.New(t).WithName("TortoiseBeacon"),
 				validProposals:            tc.validProposals,
@@ -228,7 +229,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config: Config{
-					Theta: 1,
+					Theta: big.NewRat(1, 1),
 				},
 				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes: tc.incomingVotes,
@@ -423,7 +424,7 @@ func TestTortoiseBeacon_calcOwnFirstRoundVotes(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config: Config{
-					Theta: 1,
+					Theta: big.NewRat(1, 1),
 				},
 				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes: tc.incomingVotes,
@@ -652,7 +653,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config: Config{
-					Theta: 1,
+					Theta: big.NewRat(1, 1),
 				},
 				Log:      logtest.New(t).WithName("TortoiseBeacon"),
 				ownVotes: map[epochRoundPair]votesSetPair{},

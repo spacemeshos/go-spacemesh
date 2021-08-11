@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -154,7 +155,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 			tb := TortoiseBeacon{
 				config: Config{
 					RoundsNumber: rounds,
-					Theta:        1,
+					Theta:        big.NewRat(1, 1),
 				},
 				Log:                       logtest.New(t).WithName("TortoiseBeacon"),
 				validProposals:            tc.validProposals,
@@ -319,7 +320,7 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 			tb := TortoiseBeacon{
 				config: Config{
 					RoundsNumber: rounds,
-					Theta:        1,
+					Theta:        big.NewRat(1, 1),
 				},
 				Log:                       logtest.New(t).WithName("TortoiseBeacon"),
 				validProposals:            tc.validProposals,
