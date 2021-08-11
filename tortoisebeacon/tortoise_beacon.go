@@ -264,7 +264,7 @@ func (tb *TortoiseBeacon) cleanupVotes() {
 	tb.incomingProposals = proposals{}
 	tb.firstRoundIncomingVotes = map[nodeID]proposalsBytes{}
 	tb.votesMargin = map[proposal]*big.Int{}
-	tb.hasVoted = make([]map[nodeID]struct{}, tb.lastRound())
+	tb.hasVoted = make([]map[nodeID]struct{}, tb.config.RoundsNumber)
 
 	tb.proposalPhaseFinishedTimeMu.Lock()
 	defer tb.proposalPhaseFinishedTimeMu.Unlock()
