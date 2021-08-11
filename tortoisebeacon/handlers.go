@@ -297,20 +297,19 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		tb.hasVoted[currentRound-firstRound] = make(map[nodeID]struct{})
 	}
 
-	// TODO: no need to store each vote separately
-	// have a separate table for an epoch with one bit in it if atx/miner is voted already
+	// TODO(nkryuchkov): consider having a separate table for an epoch with one bit in it if atx/miner is voted already
 	if _, ok := tb.hasVoted[currentRound-firstRound][minerID.Key]; ok {
 		tb.Log.With().Warning("Received malformed first voting message, already received a voting message for these PK and round",
 			log.String("miner_id", minerID.Key),
 			log.Uint32("epoch_id", uint32(currentEpoch)),
 			log.Uint32("round_id", uint32(currentRound)))
 
-		// TODO: report this miner through gossip
-		// TODO: store evidence, generate malfeasance proof: union of two whole voting messages
-		// TODO: handle malfeasance proof: we have a blacklist, on receiving, add to blacklist
-		// TODO: blacklist format: key is epoch when blacklisting started, value is link to proof (union of messages)
-		// TODO: ban id forever globally across packages since this epoch
-		// TODO: (not tortoise beacon) do the same for ATXs
+		// TODO(nkryuchkov): report this miner through gossip
+		// TODO(nkryuchkov): store evidence, generate malfeasance proof: union of two whole voting messages
+		// TODO(nkryuchkov): handle malfeasance proof: we have a blacklist, on receiving, add to blacklist
+		// TODO(nkryuchkov): blacklist format: key is epoch when blacklisting started, value is link to proof (union of messages)
+		// TODO(nkryuchkov): ban id forever globally across packages since this epoch
+		// TODO(nkryuchkov): (not tortoise beacon) do the same for ATXs
 
 		return nil
 	}
@@ -339,7 +338,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	tb.hasVoted[currentRound-firstRound][minerID.Key] = struct{}{}
 
 	// this is used for bit vector calculation
-	// TODO: store sorted mixed valid+potentiallyValid
+	// TODO(nkryuchkov): store sorted mixed valid+potentiallyValid
 	tb.firstRoundIncomingVotes[minerID.Key] = proposalsBytes{
 		ValidProposals:            message.ValidProposals,
 		PotentiallyValidProposals: message.PotentiallyValidProposals,
@@ -466,7 +465,7 @@ func (tb *TortoiseBeacon) verifyEligibilityProof(message interface{}, signature 
 		return false, fmt.Errorf("InterfaceToBytes: %w", err)
 	}
 
-	// TODO: Ensure that epoch is the same.
+	// TODO(nkryuchkov): Ensure that epoch is the same.
 
 	minerPK, err := tb.vrfVerifier.Extract(messageBytes, signature)
 	if err != nil {

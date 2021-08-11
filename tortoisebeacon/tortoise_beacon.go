@@ -140,11 +140,11 @@ type TortoiseBeacon struct {
 
 	votesMu sync.RWMutex
 
-	// TODO: have a mixed list of all sorted proposals
+	// TODO(nkryuchkov): have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
 	incomingProposals       proposals
 	firstRoundIncomingVotes map[nodeID]proposalsBytes // sorted votes for bit vector decoding
-	// TODO: For every round excluding first round consider having a vector of opinions.
+	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin map[proposal]*big.Int
 	hasVoted    []map[nodeID]struct{}
 
@@ -344,7 +344,7 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 }
 
 func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) {
-	// TODO: check when epoch started, adjust waiting time for this timestamp
+	// TODO(nkryuchkov): check when epoch started, adjust waiting time for this timestamp
 	if epoch.IsGenesis() {
 		tb.Log.With().Debug("not starting tortoise beacon since we are in genesis epoch",
 			log.Uint32("epoch_id", uint32(epoch)))
@@ -665,9 +665,9 @@ func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.Epoc
 	// round 1, send hashed proposal
 	// create a voting message that references all seen proposals within δ time frame and send it
 
-	// TODO: also send a bit vector
-	// TODO: initialize margin vector to initial votes
-	// TODO: use weight
+	// TODO(nkryuchkov): also send a bit vector
+	// TODO(nkryuchkov): initialize margin vector to initial votes
+	// TODO(nkryuchkov): use weight
 	return tb.sendFirstRoundVote(ctx, epoch, tb.incomingProposals)
 }
 
@@ -810,7 +810,7 @@ func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) (*big.Float, 
 	return v, nil
 }
 
-// TODO: Consider having a generic function for probabilities.
+// TODO(nkryuchkov): Consider having a generic function for probabilities.
 func (tb *TortoiseBeacon) atxThreshold(epochWeight uint64) (*big.Int, error) {
 	const signatureLength = 64 * 8
 
