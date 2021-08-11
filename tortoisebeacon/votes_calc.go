@@ -18,7 +18,7 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID, co
 	}
 
 	tb.Log.With().Debug("Calculated first round votes",
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.Uint64("round_id", uint64(round)),
 		log.String("votesMargin", fmt.Sprint(votesMargin)))
 
@@ -28,7 +28,7 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID, co
 	}
 
 	tb.Log.With().Debug("Calculated own first round votes",
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.Uint64("round_id", uint64(round)),
 		log.String("votesMargin", fmt.Sprint(votesMargin)),
 		log.String("ownFirstRoundVotes", fmt.Sprint(ownFirstRoundVotes)))
@@ -38,7 +38,7 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID, co
 	}
 
 	tb.Log.With().Debug("Calculated votes count",
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.Uint64("round_id", uint64(round)),
 		log.String("votesMargin", fmt.Sprint(votesMargin)))
 
@@ -48,7 +48,7 @@ func (tb *TortoiseBeacon) calcVotes(epoch types.EpochID, round types.RoundID, co
 	}
 
 	tb.Log.With().Debug("Calculated votes for one round",
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.Uint64("round_id", uint64(round)),
 		log.String("for", fmt.Sprint(ownCurrentRoundVotes.ValidVotes)),
 		log.String("against", fmt.Sprint(ownCurrentRoundVotes.InvalidVotes)))
@@ -65,7 +65,7 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, 
 	firstRoundIncomingVotes := tb.incomingVotes[firstRound]
 
 	tb.Log.With().Debug("First round incoming votes",
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.Uint64("round_id", uint64(1)),
 		log.String("votes", fmt.Sprint(firstRoundIncomingVotes)))
 
@@ -94,7 +94,7 @@ func (tb *TortoiseBeacon) firstRoundVotes(epoch types.EpochID) (votesMarginMap, 
 	}
 
 	tb.Log.With().Debug("First round votes margin",
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.Uint64("round_id", uint64(1)),
 		log.String("votes_margin", fmt.Sprint(firstRoundVotesMargin)))
 

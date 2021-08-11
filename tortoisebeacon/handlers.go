@@ -55,7 +55,7 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 	if message.EpochID < currentEpoch {
 		tb.Log.With().Debug("Received proposal message from previous epoch, ignoring",
 			log.Uint64("message_epoch", uint64(message.EpochID)),
-			log.Uint64("current_epoch", uint64(currentEpoch)))
+			log.Uint32("current_epoch", uint32(currentEpoch)))
 
 		return
 	}
@@ -138,7 +138,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 	switch {
 	case tb.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		tb.Log.With().Debug("Received valid proposal message",
-			log.Uint64("epoch_id", uint64(currentEpoch)),
+			log.Uint32("epoch_id", uint32(currentEpoch)),
 			log.String("message", m.String()),
 			log.String("atx_timestamp", atxTimestamp.String()),
 			log.String("next_epoch_start", nextEpochStart.String()),
@@ -149,7 +149,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 
 	case tb.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		tb.Log.With().Debug("Received potentially valid proposal message",
-			log.Uint64("epoch_id", uint64(currentEpoch)),
+			log.Uint32("epoch_id", uint32(currentEpoch)),
 			log.String("message", m.String()),
 			log.String("atx_timestamp", atxTimestamp.String()),
 			log.String("next_epoch_start", nextEpochStart.String()),
@@ -160,7 +160,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 
 	default:
 		tb.Log.With().Warning("Received invalid proposal message",
-			log.Uint64("epoch_id", uint64(currentEpoch)),
+			log.Uint32("epoch_id", uint32(currentEpoch)),
 			log.String("atx_timestamp", atxTimestamp.String()),
 			log.String("next_epoch_start", nextEpochStart.String()),
 			log.String("received_time", receivedTime.String()),
@@ -276,7 +276,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	if !ok {
 		tb.Log.With().Warning("Received malformed first voting message, bad signature",
 			log.String("miner_id", minerID.Key),
-			log.Uint64("epoch_id", uint64(currentEpoch)))
+			log.Uint32("epoch_id", uint32(currentEpoch)))
 
 		return nil
 	}
@@ -298,7 +298,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	if _, ok := tb.incomingVotes[currentRound-firstRound][minerID.Key]; ok {
 		tb.Log.With().Warning("Received malformed first voting message, already received a voting message for these PK and round",
 			log.String("miner_id", minerID.Key),
-			log.Uint64("epoch_id", uint64(currentEpoch)),
+			log.Uint32("epoch_id", uint32(currentEpoch)),
 			log.Uint64("round_id", uint64(currentRound)))
 
 		// TODO: report this miner through gossip
@@ -313,7 +313,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 
 	tb.Log.With().Debug("Received first voting message, counting it",
 		log.String("miner_id", minerID.Key),
-		log.Uint64("epoch_id", uint64(currentEpoch)),
+		log.Uint32("epoch_id", uint32(currentEpoch)),
 		log.Uint64("round_id", uint64(currentRound)))
 
 	validVotesMap := make(hashSet)
@@ -406,7 +406,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	if !ok {
 		tb.Log.With().Warning("Received malformed following voting message, bad signature",
 			log.String("miner_id", minerID.Key),
-			log.Uint64("epoch_id", uint64(currentEpoch)))
+			log.Uint32("epoch_id", uint32(currentEpoch)))
 
 		return nil
 	}
@@ -421,7 +421,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	if _, ok := tb.incomingVotes[messageRound-firstRound][minerID.Key]; ok {
 		tb.Log.With().Warning("Received malformed following voting message, already received a voting message for these PK and round",
 			log.String("miner_id", minerID.Key),
-			log.Uint64("epoch_id", uint64(currentEpoch)),
+			log.Uint32("epoch_id", uint32(currentEpoch)),
 			log.Uint64("round_id", uint64(messageRound)))
 
 		return nil
@@ -429,7 +429,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 
 	tb.Log.With().Debug("Received following voting message, counting it",
 		log.String("miner_id", minerID.Key),
-		log.Uint64("epoch_id", uint64(currentEpoch)),
+		log.Uint32("epoch_id", uint32(currentEpoch)),
 		log.Uint64("round_id", uint64(messageRound)))
 
 	firstRoundIncomingVotes := tb.firstRoundIncomingVotes[minerID.Key]

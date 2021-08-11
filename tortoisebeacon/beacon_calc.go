@@ -19,7 +19,7 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, v
 	}
 
 	tb.Log.With().Info("Calculating beacon",
-		log.Uint64("epoch_id", uint64(epoch)))
+		log.Uint32("epoch_id", uint32(epoch)))
 
 	allHashes, err := tb.calcTortoiseBeaconHashList(epoch, votes)
 	if err != nil {
@@ -27,13 +27,13 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, v
 	}
 
 	tb.Log.With().Debug("Going to calculate tortoise beacon from this hash list",
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.String("hashes", strings.Join(allHashes, ", ")))
 
 	beacon := allHashes.Hash()
 
 	tb.Log.With().Info("Calculated beacon",
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.String("beacon", beacon.String()))
 
 	events.ReportCalculatedTortoiseBeacon(epoch, beacon.String())
@@ -46,12 +46,12 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, v
 
 	if tb.tortoiseBeaconDB != nil {
 		tb.Log.With().Info("Writing beacon to database",
-			log.Uint64("epoch_id", uint64(epoch)),
+			log.Uint32("epoch_id", uint32(epoch)),
 			log.String("beacon", beacon.String()))
 
 		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epoch, beacon); err != nil {
 			tb.Log.With().Error("Failed to write tortoise beacon to DB",
-				log.Uint64("epoch_id", uint64(epoch)),
+				log.Uint32("epoch_id", uint32(epoch)),
 				log.String("beacon", beacon.String()))
 
 			return fmt.Errorf("write tortoise beacon to DB: %w", err)
@@ -59,7 +59,7 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, v
 	}
 
 	tb.Log.With().Debug("Beacon updated for this epoch",
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.String("beacon", beacon.String()))
 
 	return nil
@@ -75,7 +75,7 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID, votes 
 	}
 
 	tb.Log.With().Debug("Tortoise beacon last round votes",
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.Uint64("round_id", uint64(lastRound)),
 		log.String("votes", fmt.Sprint(votes)))
 
