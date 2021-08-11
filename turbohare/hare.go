@@ -12,8 +12,9 @@ import (
 )
 
 type meshProvider interface {
-	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
-	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
+	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
+	RecordCoinflip(context.Context, types.LayerID, bool)
+	HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID)
 }
 
 // SuperHare is a method to provide fast hare results without consensus based on received blocks from gossip
@@ -58,6 +59,15 @@ func (h *SuperHare) Start(ctx context.Context) error {
 					coinflip := layerID.Bytes()[0]&byte(1) == byte(1)
 					h.mesh.RecordCoinflip(ctx, layerID, coinflip)
 					logger.With().Info("superhare recorded coinflip", layerID, log.Bool("coinflip", coinflip))
+
+					// just pass all blocks in the layer
+					if layerBlocks, err := h.mesh.LayerBlockIds(layerID); err != nil {
+						logger.With().Error("error reading block ids for layer, not sending to mesh",
+							layerID,
+							log.Err(err))
+					} else {
+						h.mesh.HandleValidatedLayer(ctx, layerID, layerBlocks)
+					}
 				}()
 			}
 		}
