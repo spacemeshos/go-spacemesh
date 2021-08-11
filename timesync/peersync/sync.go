@@ -178,7 +178,7 @@ func (s *Sync) requestHandler(ctx context.Context, buf []byte) []byte {
 // Start background workers.
 func (s *Sync) Start() {
 	s.once.Do(func() {
-		// NOTE(dshulyal) we can't start listening for peers in New because Simular
+		// NOTE(dshulyal) we can't start listening for peers in New because Simulator
 		// sometimes hangs in that case
 		s.peersWatcher = peers.Start(s.network, peers.WithLog(s.log))
 		s.tg.Go(func(ctx context.Context) error {
