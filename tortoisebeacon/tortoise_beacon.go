@@ -167,10 +167,14 @@ func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 	tb.initGenesisBeacons()
 	tb.layerTicker = tb.clock.Subscribe()
 
-	tb.tg.Go(func(ctx context.Context) error {
+	err := tb.tg.Go(func(ctx context.Context) error {
 		tb.listenLayers(ctx)
-		return ctx.Err()
+		return fmt.Errorf("context error: %w", ctx.Err())
 	})
+	if err != nil {
+		tb.Log.Warning("taskgroup: Go returned an error",
+			log.Err(err))
+	}
 
 	return nil
 }
@@ -182,7 +186,10 @@ func (tb *TortoiseBeacon) Close() {
 	}
 	tb.Log.Info("Closing %v", protoName)
 	tb.cancel()
-	tb.tg.Wait()
+	if err := tb.tg.Wait(); err != nil {
+		tb.Log.Warning("taskgroup: Wait returned an error",
+			log.Err(err))
+	}
 	tb.clock.Unsubscribe(tb.layerTicker)
 }
 
@@ -248,10 +255,6 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 	}
 }
 
-func (tb *TortoiseBeacon) cleanupBeacons(epoch types.EpochID) {
-	delete(tb.beacons, epoch)
-}
-
 func (tb *TortoiseBeacon) cleanupVotes() {
 	tb.consensusMu.Lock()
 	defer tb.consensusMu.Unlock()
@@ -277,10 +280,14 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 			return
 		case layer := <-tb.layerTicker:
 			tb.Log.With().Info("Received tick", layer)
-			tb.tg.Go(func(ctx context.Context) error {
+			err := tb.tg.Go(func(ctx context.Context) error {
 				tb.handleLayer(ctx, layer)
 				return nil
 			})
+			if err != nil {
+				tb.Log.Warning("taskgroup: Go returned an error",
+					log.Err(err))
+			}
 		}
 	}
 }
@@ -362,10 +369,14 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	ch := tb.getOrCreateProposalChannel(epoch)
 	tb.proposalChansMu.Unlock()
 
-	tb.tg.Go(func(ctx context.Context) error {
+	err := tb.tg.Go(func(ctx context.Context) error {
 		tb.readProposalMessagesLoop(ctx, ch)
 		return nil
 	})
+	if err != nil {
+		tb.Log.Warning("taskgroup: Go returned an error",
+			log.Err(err))
+	}
 
 	tb.runProposalPhase(ctx, epoch)
 	lastRoundOwnVotes := tb.runConsensusPhase(ctx, epoch)
@@ -436,7 +447,7 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 	ctx, cancel = context.WithTimeout(ctx, tb.config.ProposalDuration)
 	defer cancel()
 
-	tb.tg.Go(func(ctx context.Context) error {
+	err := tb.tg.Go(func(ctx context.Context) error {
 		tb.Log.With().Debug("Starting proposal message sender",
 			log.Uint32("epoch_id", uint32(epoch)))
 
@@ -450,14 +461,16 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 			log.Uint32("epoch_id", uint32(epoch)))
 		return nil
 	})
-
-	select {
-	case <-ctx.Done():
-		tb.markProposalPhaseFinished(epoch)
-
-		tb.Log.With().Debug("Proposal phase finished",
-			log.Uint32("epoch_id", uint32(epoch)))
+	if err != nil {
+		tb.Log.Warning("taskgroup: Go returned an error",
+			log.Err(err))
 	}
+
+	<-ctx.Done()
+	tb.markProposalPhaseFinished(epoch)
+
+	tb.Log.With().Debug("Proposal phase finished",
+		log.Uint32("epoch_id", uint32(epoch)))
 }
 
 func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.EpochID) error {
@@ -558,7 +571,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		// always use coinflip from the previous round for current round.
 		// round 1 is running without coinflip (e.g. value is false) intentionally
 		round := round
-		tb.tg.Go(func(ctx context.Context) error {
+		err := tb.tg.Go(func(ctx context.Context) error {
 			if round == firstRound {
 				if err := tb.sendProposalVote(ctx, epoch); err != nil {
 					tb.Log.With().Error("Failed to send proposal vote",
@@ -601,11 +614,20 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 			return nil
 		})
+		if err != nil {
+			tb.Log.Warning("taskgroup: Go returned an error",
+				log.Err(err))
+		}
 
-		tb.tg.Go(func(ctx context.Context) error {
+		err = tb.tg.Go(func(ctx context.Context) error {
 			tb.startWeakCoin(ctx, epoch, round)
 			return nil
 		})
+		if err != nil {
+			tb.Log.Warning("taskgroup: Go returned an error",
+				log.Err(err))
+		}
+
 		select {
 		case <-ticker.C:
 		case <-ctx.Done():
@@ -684,20 +706,9 @@ func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.Epoc
 }
 
 func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.EpochID, proposals proposals) error {
-	valid := make([][]byte, 0)
-	potentiallyValid := make([][]byte, 0)
-
-	for _, v := range proposals.valid {
-		valid = append(valid, v)
-	}
-
-	for _, v := range proposals.potentiallyValid {
-		potentiallyValid = append(potentiallyValid, v)
-	}
-
 	mb := FirstVotingMessageBody{
-		ValidProposals:            valid,
-		PotentiallyValidProposals: potentiallyValid,
+		ValidProposals:            proposals.valid,
+		PotentiallyValidProposals: proposals.potentiallyValid,
 	}
 
 	sig, err := tb.signMessage(mb)

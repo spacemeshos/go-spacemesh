@@ -568,7 +568,7 @@ func (db *DB) addAtxTimestamp(timestamp time.Time, atx *types.ActivationTx) erro
 type ErrAtxNotFound error
 
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID
-func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) { // TODO(nkrychkov): change signature
+func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID.Key))
 	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
 	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX

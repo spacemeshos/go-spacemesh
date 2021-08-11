@@ -128,7 +128,7 @@ type WeakCoin struct {
 	coins           map[types.RoundID]bool
 }
 
-// Get the result of the coinflip in this round. It is only valid inbetween StartEpoch/EndEpoch
+// Get the result of the coin flip in this round. It is only valid in between StartEpoch/EndEpoch
 // and only after CompleteRound was called.
 func (wc *WeakCoin) Get(epoch types.EpochID, round types.RoundID) bool {
 	if epoch.IsGenesis() {
