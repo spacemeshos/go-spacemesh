@@ -557,7 +557,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 			if err := tb.sendVotes(ctx, epoch, round, coinFlip); err != nil {
 				tb.Log.With().Error("Failed to send voting messages",
 					log.Uint32("epoch_id", uint32(epoch)),
-					log.Uint64("round_id", uint64(round)),
+					log.Uint32("round_id", uint32(round)),
 					log.Err(err))
 			}
 			return nil
@@ -617,7 +617,7 @@ func (tb *TortoiseBeacon) startWeakCoin(ctx context.Context, epoch types.EpochID
 	if err := tb.weakCoin.StartRound(ctx, round); err != nil {
 		tb.Log.With().Error("Failed to publish weak coin proposal",
 			log.Uint32("epoch_id", uint32(epoch)),
-			log.Uint64("round_id", uint64(round)),
+			log.Uint32("round_id", uint32(round)),
 			log.Err(err))
 	}
 }
@@ -681,7 +681,7 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 
 	tb.Log.With().Debug("Going to send first round vote",
 		log.Uint32("epoch_id", uint32(epoch)),
-		log.Uint64("round_id", uint64(1)),
+		log.Uint32("round_id", uint32(firstRound)),
 		log.String("message", m.String()))
 
 	if err := tb.sendToGossip(ctx, TBFirstVotingProtocol, m); err != nil {
@@ -713,7 +713,7 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 
 	tb.Log.With().Debug("Going to send following round vote",
 		log.Uint32("epoch_id", uint32(epoch)),
-		log.Uint64("round_id", uint64(round)),
+		log.Uint32("round_id", uint32(round)),
 		log.String("message", m.String()))
 
 	if err := tb.sendToGossip(ctx, TBFollowingVotingProtocol, m); err != nil {

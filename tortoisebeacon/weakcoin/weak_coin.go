@@ -168,7 +168,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	wc.mu.Lock()
 	wc.logger.With().Info("started round",
 		log.Uint32("epoch_id", uint32(wc.epoch)),
-		log.Uint64("round_id", uint64(round)))
+		log.Uint32("round_id", uint32(round)))
 	wc.round = round
 	wc.smallestProposal = nil
 	epoch := wc.epoch
@@ -180,7 +180,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 			wc.logger.With().Debug("received invalid proposal",
 				log.Err(err),
 				log.Uint32("epoch_id", uint32(msg.Epoch)),
-				log.Uint64("round_id", uint64(msg.Round)))
+				log.Uint32("round_id", uint32(msg.Round)))
 		}
 		wc.nextRoundBuffer[i] = Message{}
 	}
@@ -206,7 +206,6 @@ func (wc *WeakCoin) updateProposal(message Message) error {
 }
 
 func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (broadcast, smallest []byte) {
-
 	// TODO(dshulyak) double check that 10 means that 10 units are allowed
 	allowed, exists := wc.allowances[string(wc.signer.PublicKey().Bytes())]
 	if !exists {
@@ -251,7 +250,7 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, ro
 
 	wc.logger.With().Info("published proposal",
 		log.Uint32("epoch_id", uint32(epoch)),
-		log.Uint64("round_id", uint64(round)),
+		log.Uint32("round_id", uint32(round)),
 		log.String("proposal", types.BytesToHash(smallest).ShortString()))
 
 	wc.mu.Lock()
@@ -272,7 +271,7 @@ func (wc *WeakCoin) FinishRound() {
 	if wc.smallestProposal == nil {
 		wc.logger.With().Warning("completed round without valid proposals",
 			log.Uint32("epoch_id", uint32(wc.epoch)),
-			log.Uint64("round_id", uint64(wc.round)),
+			log.Uint32("round_id", uint32(wc.round)),
 		)
 		return
 	}
@@ -284,7 +283,7 @@ func (wc *WeakCoin) FinishRound() {
 	wc.coins[wc.round] = coinflip
 	wc.logger.With().Info("completed round",
 		log.Uint32("epoch_id", uint32(wc.epoch)),
-		log.Uint64("round_id", uint64(wc.round)),
+		log.Uint32("round_id", uint32(wc.round)),
 		log.String("smallest", hex.EncodeToString(wc.smallestProposal)),
 		log.Bool("coinflip", coinflip))
 	wc.smallestProposal = nil
@@ -294,7 +293,7 @@ func (wc *WeakCoin) updateSmallest(proposal []byte) {
 	if len(proposal) > 0 && (bytes.Compare(proposal, wc.smallestProposal) == -1 || wc.smallestProposal == nil) {
 		wc.logger.Debug("saving new proposal",
 			log.Uint32("epoch_id", uint32(wc.epoch)),
-			log.Uint64("round_id", uint64(wc.round)),
+			log.Uint32("round_id", uint32(wc.round)),
 			log.String("proposal", types.BytesToHash(proposal).ShortString()))
 		wc.smallestProposal = proposal
 	}
@@ -311,7 +310,7 @@ func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, uni
 		wc.logger.Panic("can't write epoch to a buffer", log.Err(err))
 	}
 	roundBuf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(roundBuf, uint64(round))
+	binary.LittleEndian.PutUint32(roundBuf, uint32(round))
 	if _, err := proposal.Write(roundBuf); err != nil {
 		wc.logger.Panic("can't write uint64 to a buffer", log.Err(err))
 	}

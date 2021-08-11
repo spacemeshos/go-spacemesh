@@ -299,7 +299,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		tb.Log.With().Warning("Received malformed first voting message, already received a voting message for these PK and round",
 			log.String("miner_id", minerID.Key),
 			log.Uint32("epoch_id", uint32(currentEpoch)),
-			log.Uint64("round_id", uint64(currentRound)))
+			log.Uint32("round_id", uint32(currentRound)))
 
 		// TODO: report this miner through gossip
 		// TODO: store evidence, generate malfeasance proof: union of two whole voting messages
@@ -314,7 +314,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	tb.Log.With().Debug("Received first voting message, counting it",
 		log.String("miner_id", minerID.Key),
 		log.Uint32("epoch_id", uint32(currentEpoch)),
-		log.Uint64("round_id", uint64(currentRound)))
+		log.Uint32("round_id", uint32(currentRound)))
 
 	validVotesMap := make(hashSet)
 	invalidVotesMap := make(hashSet)
@@ -422,7 +422,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 		tb.Log.With().Warning("Received malformed following voting message, already received a voting message for these PK and round",
 			log.String("miner_id", minerID.Key),
 			log.Uint32("epoch_id", uint32(currentEpoch)),
-			log.Uint64("round_id", uint64(messageRound)))
+			log.Uint32("round_id", uint32(messageRound)))
 
 		return nil
 	}
@@ -430,7 +430,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	tb.Log.With().Debug("Received following voting message, counting it",
 		log.String("miner_id", minerID.Key),
 		log.Uint32("epoch_id", uint32(currentEpoch)),
-		log.Uint64("round_id", uint64(messageRound)))
+		log.Uint32("round_id", uint32(messageRound)))
 
 	firstRoundIncomingVotes := tb.firstRoundIncomingVotes[minerID.Key]
 	tb.incomingVotes[messageRound-firstRound][minerID.Key] = tb.decodeVotes(message.VotesBitVector, firstRoundIncomingVotes)

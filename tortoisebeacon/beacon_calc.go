@@ -76,7 +76,7 @@ func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID, votes 
 
 	tb.Log.With().Debug("Tortoise beacon last round votes",
 		log.Uint32("epoch_id", uint32(epoch)),
-		log.Uint64("round_id", uint64(lastRound)),
+		log.Uint32("round_id", uint32(lastRound)),
 		log.String("votes", fmt.Sprint(votes)))
 
 	sort.Slice(allHashes, func(i, j int) bool {

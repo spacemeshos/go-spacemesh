@@ -189,8 +189,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.TortoiseBeacon.Kappa, "Security parameter (for calculating ATX threshold)")
 	cmd.PersistentFlags().Var((*types.RatVar)(config.TortoiseBeacon.Q), "tortoise-beacon-q",
 		"Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
-	cmd.PersistentFlags().Uint64Var((*uint64)(&config.TortoiseBeacon.RoundsNumber), "tortoise-beacon-rounds-number",
-		uint64(config.TortoiseBeacon.RoundsNumber), "Amount of rounds in every epoch")
+	cmd.PersistentFlags().Uint32Var((*uint32)(&config.TortoiseBeacon.RoundsNumber), "tortoise-beacon-rounds-number",
+		uint32(config.TortoiseBeacon.RoundsNumber), "Amount of rounds in every epoch")
 	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.GracePeriodDuration, "tortoise-beacon-grace-period-duration",
 		config.TortoiseBeacon.GracePeriodDuration, "Grace period duration in milliseconds")
 	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.ProposalDuration, "tortoise-beacon-proposal-duration",

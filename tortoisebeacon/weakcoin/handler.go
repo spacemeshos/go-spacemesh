@@ -28,7 +28,7 @@ func (wc *WeakCoin) HandleSerializedMessage(ctx context.Context, data service.Go
 		wc.logger.With().Debug("received invalid proposal",
 			log.Err(err),
 			log.Uint32("epoch_id", uint32(message.Epoch)),
-			log.Uint64("round_id", uint64(message.Round)))
+			log.Uint32("round_id", uint32(message.Round)))
 		return
 	}
 	data.ReportValidation(ctx, GossipProtocol)
