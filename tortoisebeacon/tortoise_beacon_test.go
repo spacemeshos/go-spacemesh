@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/big"
@@ -72,7 +73,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	atxdb := activation.NewDB(database.NewMemDatabase(), idStore, memesh, 3, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
 	_ = atxdb
 
-	tb := New(conf, ld, n1, mockDB, nil, edSgn, vrfSigner, signing.VRFVerifier{}, mwc, clock, logger)
+	tb := New(conf, ld, signing.NewPublicKey(util.Hex2Bytes(minerID.Key)), n1, mockDB, nil, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, clock, logger)
 	requirer.NotNil(tb)
 
 	err = tb.Start(context.TODO())
@@ -474,24 +475,35 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_signAndExtractVRF(t *testing.T) {
+func TestTortoiseBeacon_signAndExtractED(t *testing.T) {
 	r := require.New(t)
 
-	edSgn := signing.NewEdSigner()
-	edPubkey := edSgn.PublicKey()
+	signer := signing.NewEdSigner()
+	verifier := signing.NewEDVerifier()
 
-	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
-	r.NoError(err)
-
-	vrfVerifier := signing.VRFVerifier{}
 	message := []byte{1, 2, 3, 4}
 
-	signature := vrfSigner.Sign(message)
-	extractedPK, err := vrfVerifier.Extract(message, signature)
+	signature := signer.Sign(message)
+	extractedPK, err := verifier.Extract(message, signature)
 	r.NoError(err)
 
-	ok := vrfVerifier.Verify(extractedPK, message, signature)
+	ok := verifier.Verify(extractedPK, message, signature)
 
-	r.Equal(vrfSigner.PublicKey().String(), extractedPK.String())
+	r.Equal(signer.PublicKey().String(), extractedPK.String())
+	r.True(ok)
+}
+
+func TestTortoiseBeacon_signAndVerifyVRF(t *testing.T) {
+	r := require.New(t)
+
+	signer, _, err := signing.NewVRFSigner(bytes.Repeat([]byte{0x01}, 32))
+	r.NoError(err)
+
+	verifier := signing.VRFVerifier{}
+
+	message := []byte{1, 2, 3, 4}
+
+	signature := signer.Sign(message)
+	ok := verifier.Verify(signer.PublicKey(), message, signature)
 	r.True(ok)
 }

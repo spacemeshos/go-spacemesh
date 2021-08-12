@@ -592,6 +592,7 @@ func (app *App) initServices(ctx context.Context,
 	atxDB := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
+	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
 
 	wc := weakcoin.New(swarm,
@@ -601,7 +602,8 @@ func (app *App) initServices(ctx context.Context,
 	)
 
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, swarm, atxDB, tBeaconDB, sgn, vrfSigner, vrfVerifier, wc, clock, app.addLogger(TBeaconLogger, lg))
+	minerPK := signing.NewPublicKey(util.Hex2Bytes(nodeID.Key))
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, minerPK, swarm, atxDB, tBeaconDB, sgn, edVerifier, vrfSigner, vrfVerifier, wc, clock, app.addLogger(TBeaconLogger, lg))
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise

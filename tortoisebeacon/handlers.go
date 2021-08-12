@@ -162,11 +162,7 @@ func (tb *TortoiseBeacon) verifyProposalMessage(m ProposalMessage, currentEpoch 
 		return types.ATXID{}, fmt.Errorf("calculate proposal: %w", err)
 	}
 
-	minerPK, err := tb.vrfVerifier.Extract(currentEpochProposal, m.VRFSignature)
-	if err != nil {
-		return types.ATXID{}, fmt.Errorf("unable to recover ID from signature %x: %w", m.VRFSignature, err)
-	}
-
+	minerPK := signing.NewPublicKey(m.MinerPK)
 	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(minerPK.String(), currentEpoch-1)
 	if errors.Is(err, database.ErrNotFound) {
 		tb.Log.With().Warning("Miner has no ATXs in the previous epoch",
@@ -292,7 +288,7 @@ func (tb *TortoiseBeacon) verifyFirstVotingMessage(message FirstVotingMessage, c
 		return nil, types.ATXID{}, fmt.Errorf("unmarshal first voting message: %w", err)
 	}
 
-	minerPK, err := tb.vrfVerifier.Extract(messageBytes, message.Signature)
+	minerPK, err := tb.edVerifier.Extract(messageBytes, message.Signature)
 	if err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("unable to recover ID from signature %x: %w", message.Signature, err)
 	}
@@ -440,7 +436,7 @@ func (tb *TortoiseBeacon) verifyFollowingVotingMessage(message FollowingVotingMe
 		return nil, types.ATXID{}, fmt.Errorf("unmarshal first voting message: %w", err)
 	}
 
-	minerPK, err := tb.vrfVerifier.Extract(messageBytes, message.Signature)
+	minerPK, err := tb.edVerifier.Extract(messageBytes, message.Signature)
 	if err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("unable to recover ID from signature %x: %w", message.Signature, err)
 	}

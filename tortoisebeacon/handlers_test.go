@@ -73,6 +73,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				epoch: round,
 			},
 			message: ProposalMessage{
+				MinerPK: vrfSigner.PublicKey().Bytes(),
 				EpochID: epoch,
 			},
 		},
@@ -86,6 +87,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			tb := TortoiseBeacon{
 				config:      UnitTestConfig(),
 				Log:         logtest.New(t).WithName("TortoiseBeacon"),
+				minerPK:     vrfSigner.PublicKey(),
 				atxDB:       mockDB,
 				vrfVerifier: signing.VRFVerifier{},
 				vrfSigner:   vrfSigner,
@@ -213,6 +215,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				vrfVerifier:             signing.VRFVerifier{},
 				vrfSigner:               vrfSigner,
 				edSigner:                edSgn,
+				edVerifier:              signing.NewEDVerifier(),
 				clock:                   clock,
 				firstRoundIncomingVotes: map[nodeID]proposals{},
 				votesMargin:             map[proposal]*big.Int{},
@@ -338,6 +341,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				vrfVerifier: signing.VRFVerifier{},
 				vrfSigner:   vrfSigner,
 				edSigner:    edSgn,
+				edVerifier:  signing.NewEDVerifier(),
 				clock:       clock,
 				firstRoundIncomingVotes: map[nodeID]proposals{
 					string(edSgn.PublicKey().Bytes()): {

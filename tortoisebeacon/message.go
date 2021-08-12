@@ -11,6 +11,7 @@ import (
 // ProposalMessage is a message type which is used when sending proposals.
 type ProposalMessage struct {
 	EpochID      types.EpochID
+	MinerPK      []byte
 	VRFSignature []byte
 }
 

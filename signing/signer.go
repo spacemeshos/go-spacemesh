@@ -83,7 +83,6 @@ func NewEdSignerFromBuffer(buff []byte) (*EdSigner, error) {
 // NewEdSigner returns an auto-generated ed signer
 func NewEdSigner() *EdSigner {
 	pub, priv, err := ed25519.GenerateKey(nil)
-
 	if err != nil {
 		log.Panic("Could not generate key pair err=%v", err)
 	}
@@ -94,11 +93,6 @@ func NewEdSigner() *EdSigner {
 // Sign signs the provided message
 func (es *EdSigner) Sign(m []byte) []byte {
 	return ed25519.Sign2(es.privKey, m)
-}
-
-// Verify verifies the provided message
-func Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
-	return ed25519.Verify2(ed25519.PublicKey(pubkey.Bytes()), message, sign)
 }
 
 // PublicKey returns the public key of the signer
@@ -112,4 +106,32 @@ func (es *EdSigner) ToBuffer() []byte {
 	copy(buff, es.privKey)
 
 	return buff
+}
+
+// Verify verifies the provided message
+func Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
+	return ed25519.Verify2(pubkey.Bytes(), message, sign)
+}
+
+// EDVerifier is a verifier for ED purposes.
+type EDVerifier struct{}
+
+func NewEDVerifier() VerifyExtractor {
+	return EDVerifier{}
+}
+
+var _ VerifyExtractor = EDVerifier{}
+
+// Verify that signature matches public key.
+func (EDVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
+	return Verify(pub, msg, sig)
+}
+
+// Extract public key from signature.
+func (EDVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
+	pub, err := ed25519.ExtractPublicKey(msg, sig)
+	if err != nil {
+		return nil, err
+	}
+	return &PublicKey{pub: pub}, nil
 }

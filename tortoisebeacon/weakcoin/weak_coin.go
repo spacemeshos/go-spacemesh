@@ -54,6 +54,7 @@ type Message struct {
 	Epoch     types.EpochID
 	Round     types.RoundID
 	Unit      uint64
+	MinerPK   []byte
 	Signature []byte
 }
 
@@ -191,14 +192,13 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 
 func (wc *WeakCoin) updateProposal(message Message) error {
 	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
-	miner, err := wc.verifier.Extract(buf, message.Signature)
-	if err != nil {
-		return fmt.Errorf("can't recover miner id from signature %x: %w", message.Signature, err)
+	if !wc.verifier.Verify(signing.NewPublicKey(message.MinerPK), buf, message.Signature) {
+		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
 
-	allowed, exists := wc.allowances[string(miner.Bytes())]
+	allowed, exists := wc.allowances[string(message.MinerPK)]
 	if !exists || allowed < message.Unit {
-		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d", miner, message.Unit)
+		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d", message.MinerPK, message.Unit)
 	}
 
 	wc.updateSmallest(message.Signature)

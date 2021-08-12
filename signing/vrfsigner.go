@@ -52,12 +52,3 @@ type VRFVerifier struct{}
 func (VRFVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
 	return VRFVerify(pub.Bytes(), msg, sig)
 }
-
-// Extract public key from signature.
-func (VRFVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
-	pub, err := ed25519.ExtractPublicKey(msg, sig)
-	if err != nil {
-		return nil, err
-	}
-	return &PublicKey{pub: pub}, nil
-}
