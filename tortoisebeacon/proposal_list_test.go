@@ -7,7 +7,40 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_proposalList_Hash(t *testing.T) {
+func Test_proposalList_sort(t *testing.T) {
+	t.Parallel()
+
+	r := require.New(t)
+
+	tt := []struct {
+		name     string
+		hashes   proposalList
+		expected proposalList
+	}{
+		{
+			name:     "Sorted order remains not changed",
+			hashes:   proposalList{"0x1", "0x2", "0x3"},
+			expected: proposalList{"0x1", "0x2", "0x3"},
+		},
+		{
+			name:     "Unsorted order gets sorted",
+			hashes:   proposalList{"0x2", "0x5", "0x3", "0x1", "0x4"},
+			expected: proposalList{"0x1", "0x2", "0x3", "0x4", "0x5"},
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := tc.hashes.sort()
+			r.EqualValues(tc.expected, got)
+		})
+	}
+}
+
+func Test_proposalList_hash(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
