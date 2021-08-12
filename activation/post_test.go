@@ -1,18 +1,18 @@
 package activation
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/post/initialization"
-	"github.com/stretchr/testify/require"
 	"io/ioutil"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/post/initialization"
+	"github.com/stretchr/testify/require"
 )
 
 var (
-	id      = make([]byte, 32)
-	postLog = log.NewDefault("post-test")
+	id = make([]byte, 32)
 
 	cfg             PostConfig
 	opts            PostSetupOpts
@@ -34,7 +34,7 @@ func init() {
 func TestPostSetupManager(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, postLog)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
 	req.NoError(err)
 
 	var lastStatus = &PostSetupStatus{}
@@ -91,7 +91,7 @@ func TestPostSetupManager(t *testing.T) {
 func TestPostSetupManager_InitialStatus(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, postLog)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
 	req.NoError(err)
 
 	// Verify the initial status.
@@ -118,7 +118,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 	//req.Equal(lastStatus, mgr.Status())
 
 	// Re-instantiate `PostSetupManager`.
-	mgr, err = NewPostSetupManager(id, cfg, postLog)
+	mgr, err = NewPostSetupManager(id, cfg, logtest.New(t))
 	req.NoError(err)
 
 	// Verify the initial status.
@@ -133,7 +133,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req := require.New(t)
 	ch := make([]byte, 32)
 
-	mgr, err := NewPostSetupManager(id, cfg, postLog)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
 	req.NoError(err)
 
 	// Attempt to generate proof.
@@ -150,7 +150,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 	req.NoError(err)
 
 	// Re-instantiate `PostSetupManager`.
-	mgr, err = NewPostSetupManager(id, cfg, postLog)
+	mgr, err = NewPostSetupManager(id, cfg, logtest.New(t))
 	req.NoError(err)
 
 	// Attempt to generate proof.
@@ -161,7 +161,7 @@ func TestPostSetupManager_GenerateProof(t *testing.T) {
 func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, postLog)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
 	req.NoError(err)
 
 	// Verify that the status stream works properly when called *before* session started.
@@ -202,7 +202,7 @@ func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, postLog)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
 	req.NoError(err)
 
 	// Verify that the status stream works properly when called *after* session started (yet before it ended).
@@ -244,7 +244,7 @@ func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 func TestPostSetupManager_Stop(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, postLog)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
 	req.NoError(err)
 
 	// Verify state.
@@ -289,7 +289,7 @@ func TestPostSetupManager_Stop(t *testing.T) {
 func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	req := require.New(t)
 
-	mgr, err := NewPostSetupManager(id, cfg, postLog)
+	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
 	req.NoError(err)
 
 	// Create data.

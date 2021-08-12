@@ -1,13 +1,12 @@
 package tortoisebeacon
 
 import (
-	"math/big"
 	"testing"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/mock"
@@ -23,7 +22,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 
 	genesisTime := time.Now().Add(time.Second * 10)
 	ld := time.Duration(10) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
+	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
 	mockDB := &mockActivationDB{}
@@ -87,7 +86,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config:         UnitTestConfig(),
-				Log:            log.NewDefault("TortoiseBeacon"),
+				Log:            logtest.New(t).WithName("TortoiseBeacon"),
 				validProposals: proposalsMap{},
 				atxDB:          mockDB,
 				vrfVerifier:    signing.VRFVerifier{},
@@ -95,13 +94,6 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				clock:          clock,
 				lastLayer:      types.NewLayerID(epoch),
 			}
-
-			q, ok := new(big.Rat).SetString(tb.config.Q)
-			if !ok {
-				panic("bad q parameter")
-			}
-
-			tb.q = q
 
 			sig, err := tb.getSignedProposal(epoch)
 			r.NoError(err)
@@ -130,7 +122,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 
 	genesisTime := time.Now().Add(time.Second * 10)
 	ld := time.Duration(10) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
+	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
 	mockDB := &mockActivationDB{}
@@ -234,7 +226,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:                     log.NewDefault("TortoiseBeacon"),
+				Log:                     logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes:           map[epochRoundPair]votesPerPK{},
 				atxDB:                   mockDB,
 				vrfVerifier:             signing.VRFVerifier{},
@@ -267,7 +259,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 
 	genesisTime := time.Now().Add(time.Second * 10)
 	ld := time.Duration(10) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
+	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
 	mockDB := &mockActivationDB{}
@@ -365,7 +357,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:           log.NewDefault("TortoiseBeacon"),
+				Log:           logtest.New(t).WithName("TortoiseBeacon"),
 				incomingVotes: map[epochRoundPair]votesPerPK{},
 				atxDB:         mockDB,
 				vrfVerifier:   signing.VRFVerifier{},

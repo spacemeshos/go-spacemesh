@@ -1,10 +1,11 @@
 package tortoisebeacon
 
 import (
+	"math/big"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -23,6 +24,15 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockATXHeader := types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 1,
+	}
+	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
 
 	const (
 		epoch  = 5
@@ -145,9 +155,9 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 			tb := TortoiseBeacon{
 				config: Config{
 					RoundsNumber: rounds,
-					Theta:        1,
+					Theta:        big.NewRat(1, 1),
 				},
-				Log:                       log.NewDefault("TortoiseBeacon"),
+				Log:                       logtest.New(t).WithName("TortoiseBeacon"),
 				validProposals:            tc.validProposals,
 				potentiallyValidProposals: tc.potentiallyValidProposals,
 				incomingVotes:             tc.incomingVotes,
@@ -178,6 +188,15 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 
 	mockDB := &mockActivationDB{}
 	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
+	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("types.NodeID"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
+	mockATXHeader := types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 1,
+	}
+	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
 
 	const (
 		epoch  = 5
@@ -301,9 +320,9 @@ func TestTortoiseBeacon_calcTortoiseBeaconHashList(t *testing.T) {
 			tb := TortoiseBeacon{
 				config: Config{
 					RoundsNumber: rounds,
-					Theta:        1,
+					Theta:        big.NewRat(1, 1),
 				},
-				Log:                       log.NewDefault("TortoiseBeacon"),
+				Log:                       logtest.New(t).WithName("TortoiseBeacon"),
 				validProposals:            tc.validProposals,
 				potentiallyValidProposals: tc.potentiallyValidProposals,
 				incomingVotes:             tc.incomingVotes,

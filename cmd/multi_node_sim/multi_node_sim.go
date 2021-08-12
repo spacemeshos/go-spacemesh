@@ -3,10 +3,11 @@
 package main
 
 import (
+	"os"
+
 	"github.com/spacemeshos/go-spacemesh/cmd/node"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spf13/cobra"
-	"os"
 )
 
 var (
@@ -38,7 +39,7 @@ var Cmd = &cobra.Command{
 	Use:   "run_sim",
 	Short: "start simulation",
 	Run: func(cmd *cobra.Command, args []string) {
-		node.StartMultiNode(multiConfig.NumberOfNodes, multiConfig.BlocksPerLayer, multiConfig.RunUntilLayer, multiConfig.DbLocation)
+		node.StartMultiNode(log.AppLog, multiConfig.NumberOfNodes, multiConfig.BlocksPerLayer, multiConfig.RunUntilLayer, multiConfig.DbLocation)
 	},
 }
 

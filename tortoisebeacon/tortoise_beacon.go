@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ALTree/bigfloat"
@@ -15,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/taskgroup"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
@@ -79,68 +81,6 @@ type (
 	proposalsMap            = map[types.EpochID]hashSet
 )
 
-// TortoiseBeacon represents Tortoise Beacon.
-type TortoiseBeacon struct {
-	util.Closer
-	log.Log
-
-	config        Config
-	minerID       types.NodeID
-	layerDuration time.Duration
-
-	net              broadcaster
-	atxDB            activationDB
-	tortoiseBeaconDB tortoiseBeaconDB
-	edSigner         signing.Signer
-	vrfVerifier      signing.Verifier
-	vrfSigner        signing.Signer
-	weakCoin         coin
-
-	seenEpochsMu sync.Mutex
-	seenEpochs   map[types.EpochID]struct{}
-
-	clock                    layerClock
-	layerTicker              chan types.LayerID
-	q                        *big.Rat
-	gracePeriodDuration      time.Duration
-	proposalDuration         time.Duration
-	firstVotingRoundDuration time.Duration
-	votingRoundDuration      time.Duration
-	weakCoinRoundDuration    time.Duration
-	waitAfterEpochStart      time.Duration
-
-	currentRoundsMu sync.RWMutex
-	currentRounds   map[types.EpochID]types.RoundID
-
-	validProposalsMu sync.RWMutex
-	validProposals   proposalsMap
-
-	potentiallyValidProposalsMu sync.RWMutex
-	potentiallyValidProposals   proposalsMap
-
-	votesMu                           sync.RWMutex
-	firstRoundIncomingVotes           firstRoundVotesPerEpoch           // all rounds - votes (decoded votes)
-	firstRoundOutcomingVotes          map[types.EpochID]firstRoundVotes // all rounds - votes (decoded votes)
-	incomingVotes                     votesPerRound                     // all rounds - votes (decoded votes)
-	ownVotes                          ownVotes                          // all rounds - own votes
-	proposalPhaseFinishedTimestampsMu sync.RWMutex
-	proposalPhaseFinishedTimestamps   map[types.EpochID]time.Time
-
-	beaconsMu sync.RWMutex
-	beacons   map[types.EpochID]types.Hash32
-
-	proposalChansMu sync.Mutex
-	proposalChans   map[types.EpochID]chan *proposalMessageWithReceiptData
-
-	backgroundWG sync.WaitGroup
-
-	layerMu   sync.RWMutex
-	lastLayer types.LayerID
-}
-
-// a function to verify the message with the signature and its public key.
-type verifierFunc = func(pub, msg, sig []byte) bool
-
 type layerClock interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timer timesync.LayerTimer)
@@ -164,14 +104,8 @@ func New(
 	clock layerClock,
 	logger log.Log,
 ) *TortoiseBeacon {
-	q, ok := new(big.Rat).SetString(conf.Q)
-	if !ok {
-		panic("bad q parameter")
-	}
-
 	return &TortoiseBeacon{
 		Log:                             logger,
-		Closer:                          util.NewCloser(),
 		config:                          conf,
 		minerID:                         minerID,
 		layerDuration:                   layerDuration,
@@ -183,14 +117,6 @@ func New(
 		vrfSigner:                       vrfSigner,
 		weakCoin:                        weakCoin,
 		clock:                           clock,
-		q:                               q,
-		gracePeriodDuration:             time.Duration(conf.GracePeriodDurationMs) * time.Millisecond,
-		proposalDuration:                time.Duration(conf.ProposalDurationMs) * time.Millisecond,
-		firstVotingRoundDuration:        time.Duration(conf.FirstVotingRoundDurationMs) * time.Millisecond,
-		votingRoundDuration:             time.Duration(conf.VotingRoundDurationMs) * time.Millisecond,
-		weakCoinRoundDuration:           time.Duration(conf.WeakCoinRoundDurationMs) * time.Millisecond,
-		waitAfterEpochStart:             time.Duration(conf.WaitAfterEpochStart) * time.Millisecond,
-		currentRounds:                   make(map[types.EpochID]types.RoundID),
 		validProposals:                  make(map[types.EpochID]hashSet),
 		potentiallyValidProposals:       make(map[types.EpochID]hashSet),
 		ownVotes:                        make(ownVotes),
@@ -204,39 +130,95 @@ func New(
 	}
 }
 
+// TortoiseBeacon represents Tortoise Beacon.
+type TortoiseBeacon struct {
+	closed uint64
+	tg     *taskgroup.Group
+	cancel context.CancelFunc
+
+	log.Log
+
+	config        Config
+	minerID       types.NodeID
+	layerDuration time.Duration
+
+	net              broadcaster
+	atxDB            activationDB
+	tortoiseBeaconDB tortoiseBeaconDB
+	edSigner         signing.Signer
+	vrfSigner        signing.Signer
+	vrfVerifier      signing.Verifier
+	weakCoin         coin
+
+	seenEpochsMu sync.Mutex
+	seenEpochs   map[types.EpochID]struct{}
+
+	clock       layerClock
+	layerTicker chan types.LayerID
+	layerMu     sync.RWMutex
+	lastLayer   types.LayerID
+
+	validProposalsMu sync.RWMutex
+	validProposals   proposalsMap
+
+	potentiallyValidProposalsMu sync.RWMutex
+	potentiallyValidProposals   proposalsMap
+
+	votesMu                           sync.RWMutex
+	firstRoundIncomingVotes           firstRoundVotesPerEpoch           // all rounds - votes (decoded votes)
+	firstRoundOutcomingVotes          map[types.EpochID]firstRoundVotes // all rounds - votes (decoded votes)
+	incomingVotes                     votesPerRound                     // all rounds - votes (decoded votes)
+	ownVotes                          ownVotes                          // all rounds - own votes
+	proposalPhaseFinishedTimestampsMu sync.RWMutex
+	proposalPhaseFinishedTimestamps   map[types.EpochID]time.Time
+
+	beaconsMu sync.RWMutex
+	beacons   map[types.EpochID]types.Hash32
+
+	proposalChansMu sync.Mutex
+	proposalChans   map[types.EpochID]chan *proposalMessageWithReceiptData
+}
+
 // Start starts listening for layers and outputs.
 func (tb *TortoiseBeacon) Start(ctx context.Context) error {
+	if !atomic.CompareAndSwapUint64(&tb.closed, 0, 1) {
+		tb.Log.Warning("attempt to start tortoise beacon more than once")
+		return nil
+	}
 	tb.Log.Info("Starting %v with the following config: %+v", protoName, tb.config)
 
-	tb.initGenesisBeacons()
+	ctx, cancel := context.WithCancel(ctx)
+	tb.tg = taskgroup.New(taskgroup.WithContext(ctx))
+	tb.cancel = cancel
 
+	tb.initGenesisBeacons()
 	tb.layerTicker = tb.clock.Subscribe()
 
-	tb.backgroundWG.Add(1)
-
-	go func() {
-		defer tb.backgroundWG.Done()
-
+	tb.tg.Go(func(ctx context.Context) error {
 		tb.listenLayers(ctx)
-	}()
-
-	tb.backgroundWG.Add(1)
-
-	go func() {
-		defer tb.backgroundWG.Done()
-
-		tb.cleanupLoop()
-	}()
-
+		return ctx.Err()
+	})
+	tb.tg.Go(func(ctx context.Context) error {
+		tb.cleanupLoop(ctx)
+		return ctx.Err()
+	})
 	return nil
 }
 
 // Close closes TortoiseBeacon.
 func (tb *TortoiseBeacon) Close() {
+	if !atomic.CompareAndSwapUint64(&tb.closed, 1, 0) {
+		return
+	}
 	tb.Log.Info("Closing %v", protoName)
-	tb.Closer.Close()
-	tb.backgroundWG.Wait() // Wait until background goroutines finish
+	tb.cancel()
+	tb.tg.Wait()
 	tb.clock.Unsubscribe(tb.layerTicker)
+}
+
+// IsClosed returns true if background workers are not running.
+func (tb *TortoiseBeacon) IsClosed() bool {
+	return atomic.LoadUint64(&tb.closed) == 0
 }
 
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
@@ -277,13 +259,13 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	return beacon.Bytes(), nil
 }
 
-func (tb *TortoiseBeacon) cleanupLoop() {
+func (tb *TortoiseBeacon) cleanupLoop(ctx context.Context) {
 	ticker := time.NewTicker(cleanupInterval)
 	defer ticker.Stop()
 
 	for {
 		select {
-		case <-tb.CloseChannel():
+		case <-ctx.Done():
 			return
 		case <-ticker.C:
 			tb.cleanup()
@@ -295,8 +277,7 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 	closedCh := make(chan struct{})
 	close(closedCh)
 
-	epoch := types.EpochID(0)
-	for ; epoch.IsGenesis(); epoch++ {
+	for epoch := types.EpochID(0); epoch.IsGenesis(); epoch++ {
 		genesis := types.HexToHash32(genesisBeacon)
 		tb.beacons[epoch] = genesis
 
@@ -333,11 +314,14 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 
 	for {
 		select {
-		case <-tb.CloseChannel():
+		case <-ctx.Done():
 			return
 		case layer := <-tb.layerTicker:
 			tb.Log.With().Info("Received tick", layer)
-			go tb.handleLayer(ctx, layer)
+			tb.tg.Go(func(ctx context.Context) error {
+				tb.handleLayer(ctx, layer)
+				return nil
+			})
 		}
 	}
 }
@@ -386,15 +370,12 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 	tb.Log.With().Debug("tortoise beacon got tick, waiting until other nodes have the same epoch",
 		log.Uint32("layer", layer.Uint32()),
 		log.Uint32("epoch_id", uint32(epoch)),
-		log.String("wait_time", tb.waitAfterEpochStart.String()))
+		log.String("wait_time", tb.config.WaitAfterEpochStart.String()))
 
-	epochStartTimer := time.NewTimer(tb.waitAfterEpochStart)
-
+	epochStartTimer := time.NewTimer(tb.config.WaitAfterEpochStart)
+	defer epochStartTimer.Stop()
 	select {
-	case <-tb.CloseChannel():
-		if !epochStartTimer.Stop() {
-			<-epochStartTimer.C
-		}
+	case <-ctx.Done():
 	case <-epochStartTimer.C:
 		tb.handleEpoch(ctx, epoch)
 	}
@@ -420,7 +401,10 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	ch := tb.getOrCreateProposalChannel(epoch)
 	tb.proposalChansMu.Unlock()
 
-	go tb.readProposalMessagesLoop(ctx, ch)
+	tb.tg.Go(func(ctx context.Context) error {
+		tb.readProposalMessagesLoop(ctx, ch)
+		return nil
+	})
 
 	tb.runProposalPhase(ctx, epoch)
 	coinflip := tb.runConsensusPhase(ctx, epoch)
@@ -440,7 +424,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan *proposalMessageWithReceiptData) {
 	for {
 		select {
-		case <-tb.CloseChannel():
+		case <-ctx.Done():
 			return
 
 		case em := <-ch:
@@ -487,10 +471,10 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 		log.Uint64("epoch_id", uint64(epoch)))
 
 	var cancel func()
-	ctx, cancel = context.WithTimeout(ctx, tb.proposalDuration)
+	ctx, cancel = context.WithTimeout(ctx, tb.config.ProposalDuration)
 	defer cancel()
 
-	go func() {
+	tb.tg.Go(func(ctx context.Context) error {
 		tb.Log.With().Debug("Starting proposal message sender",
 			log.Uint64("epoch_id", uint64(epoch)))
 
@@ -502,10 +486,10 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 
 		tb.Log.With().Debug("Proposal message sender finished",
 			log.Uint64("epoch_id", uint64(epoch)))
-	}()
+		return nil
+	})
 
 	select {
-	case <-tb.CloseChannel():
 	case <-ctx.Done():
 		tb.markProposalPhaseFinished(epoch)
 
@@ -605,26 +589,29 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	// For next rounds,
 	// wait for δ time, and construct a message that points to all messages from previous round received by δ.
 	// rounds 1 to K
-	ticker := time.NewTicker(tb.votingRoundDuration + tb.weakCoinRoundDuration)
+	ticker := time.NewTicker(tb.config.VotingRoundDuration + tb.config.WeakCoinRoundDuration)
 	defer ticker.Stop()
 
 	var coinflip bool
-	for round := firstRound; round <= tb.lastPossibleRound(); round++ {
+	for round := firstRound; round <= tb.config.RoundsNumber; round++ {
 		// always use coinflip from the previous round for current round.
 		// round 1 is running without coinflip (e.g. value is false) intentionally
-		go func(epoch types.EpochID, round types.RoundID, coinflip bool) {
+		round := round
+		tb.tg.Go(func(ctx context.Context) error {
 			if err := tb.sendVotes(ctx, epoch, round, coinflip); err != nil {
 				tb.Log.With().Error("Failed to send voting messages",
 					log.Uint32("epoch_id", uint32(epoch)),
 					log.Uint64("round_id", uint64(round)),
 					log.Err(err))
 			}
-		}(epoch, round, coinflip)
-		go tb.startWeakCoin(ctx, epoch, round)
+			return nil
+		})
+		tb.tg.Go(func(ctx context.Context) error {
+			tb.startWeakCoin(ctx, epoch, round)
+			return nil
+		})
 		select {
 		case <-ticker.C:
-		case <-tb.CloseChannel():
-			return false
 		case <-ctx.Done():
 			return false
 		}
@@ -658,14 +645,12 @@ func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochI
 }
 
 func (tb *TortoiseBeacon) startWeakCoin(ctx context.Context, epoch types.EpochID, round types.RoundID) {
-	t := time.NewTimer(tb.votingRoundDuration)
+	t := time.NewTimer(tb.config.VotingRoundDuration)
 	defer t.Stop()
 
 	select {
 	case <-t.C:
 		break
-	case <-tb.CloseChannel():
-		return
 	case <-ctx.Done():
 		return
 	}
@@ -681,8 +666,6 @@ func (tb *TortoiseBeacon) startWeakCoin(ctx context.Context, epoch types.EpochID
 }
 
 func (tb *TortoiseBeacon) sendVotes(ctx context.Context, epoch types.EpochID, round types.RoundID, coinflip bool) error {
-	tb.setCurrentRound(epoch, round)
-
 	if round == firstRound {
 		return tb.sendProposalVote(ctx, epoch)
 	}
@@ -779,26 +762,13 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 	return nil
 }
 
-func (tb *TortoiseBeacon) setCurrentRound(epoch types.EpochID, round types.RoundID) {
-	tb.currentRoundsMu.Lock()
-	defer tb.currentRoundsMu.Unlock()
-
-	tb.currentRounds[epoch] = round
-}
-
 func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (uint64, error) {
-	// TODO(nkryuchkov): enable
-	enabled := false
-	if !enabled {
-		return 1, nil
-	}
-
-	nodeID := types.NodeID{
+	id := types.NodeID{
 		Key:          pk,
 		VRFPublicKey: nil,
 	}
 
-	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(nodeID, epochID-1)
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(id, epochID-1)
 	if err != nil {
 		return 0, fmt.Errorf("atx ID for epoch: %w", err)
 	}
@@ -811,19 +781,13 @@ func (tb *TortoiseBeacon) voteWeight(pk nodeID, epochID types.EpochID) (uint64, 
 	return atx.GetWeight(), nil
 }
 
-// Each smesher partitions the valid proposals received in the previous epoch into three sets:
-// - Timely proposals: received up to δ after the end of the previous epoch.
-// - Delayed proposals: received between δ and 2δ after the end of the previous epoch.
-// - Late proposals: more than 2δ after the end of the previous epoch.
-// Note that honest users cannot disagree on timing by more than δ,
-// so if a proposal is timely for any honest user,
-// it cannot be late for any honest user (and vice versa).
-func (tb *TortoiseBeacon) lastPossibleRound() types.RoundID {
-	return types.RoundID(tb.config.RoundsNumber)
-}
+func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) int64 {
+	v, _ := new(big.Float).Mul(
+		new(big.Float).SetRat(tb.config.Theta),
+		new(big.Float).SetUint64(epochWeight),
+	).Int64()
 
-func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) int {
-	return int(tb.config.Theta * float64(epochWeight))
+	return v
 }
 
 // TODO(nkryuchkov): Consider replacing github.com/ALTree/bigfloat.
@@ -846,7 +810,7 @@ func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) (*big.Float, 
 						new(big.Rat).Mul(
 							new(big.Rat).Sub(
 								new(big.Rat).SetInt64(1.0),
-								tb.q,
+								tb.config.Q,
 							),
 							new(big.Rat).SetUint64(epochWeight),
 						),

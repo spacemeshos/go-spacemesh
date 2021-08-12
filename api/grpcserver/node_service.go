@@ -41,7 +41,7 @@ func NewNodeService(
 	return &NodeService{
 		Mesh:        tx,
 		GenTime:     genTime,
-		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.NodeService")),
+		PeerCounter: peers.Start(net, peers.WithLog(log.NewDefault("grpcserver.NodeService"))),
 		Syncer:      syncer,
 		AtxAPI:      atxapi,
 	}

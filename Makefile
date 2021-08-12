@@ -5,6 +5,7 @@ LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.
 include Makefile.Inc
 
 DOCKER_HUB ?= spacemeshos
+TEST_LOG_LEVEL ?= 
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
@@ -132,19 +133,19 @@ endif
 
 # TODO(nkryuchkov): Add -race flag to the `test` target and remove `test-race` after all data races are fixed.
 test-race: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v -timeout 0 -p 1 -race ./...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -race ./...
 .PHONY: test
 
 test test-all: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -v -timeout 0 -p 1 ./...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 ./...
 .PHONY: test
 
 test-no-app-test: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"  go test -v -timeout 0 -p 1 -tags exclude_app_test ./...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test-no-app-test
 
 test-only-app-test: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" go test -timeout 0 -p 1 -v -tags !exclude_app_test ./cmd/node
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
 .PHONY: test-only-app-test
 
 test-tidy:

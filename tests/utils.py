@@ -47,6 +47,7 @@ def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
             continue
         else:
             break
+
     return res
 
 
@@ -301,8 +302,10 @@ def wait_genesis(genesis_time, genesis_delta):
         time.sleep(delta_from_genesis)
 
 
-def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, kibana_dep_name=KIBANA_DEP_NAME):
-    es_timeout = 240
+def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
+                                                  logstash_ss_name=LOGSTASH_SS_NAME,
+                                                  kibana_dep_name=KIBANA_DEP_NAME):
+    es_timeout = 600
     try:
         print("waiting for ES to be ready")
         es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_ss_name, namespace, time_out=es_timeout)

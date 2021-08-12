@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -65,6 +66,7 @@ func (pm gossipProtocolMessage) ValidationCompletedChan() chan service.MessageVa
 
 func (pm gossipProtocolMessage) ReportValidation(ctx context.Context, protocol string) {
 	if pm.validationChan != nil {
+		// TODO(dshulyak) this definitely should not be logged in message data structure
 		log.AppLog.WithContext(ctx).With().Debug("reporting valid gossip message",
 			log.String("protocol", protocol),
 			log.String("requestId", pm.requestID),
