@@ -19,43 +19,7 @@ enable_go_build_cache = true
 # skip_runtime_image = true
 
 [extra_sources]
-   docker_generic = [ "/home/bennydaon/src/go-spacemesh" ]
-
-[builders."docker:go".dockerfile_extensions]
-pre_mod_download    = "ENV PLAN_DIR /go-spacemesh/plans/AcTivE"
-post_mod_download   = "RUN echo 'at post_mod_download'"
-pre_source_copy     = "RUN echo 'at pre_source_copy'"
-post_source_copy    = "RUN echo 'at post_source_copy'"
-pre_build           = "RUN echo 'at pre_build'"
-post_build          = """RUN echo 'getting api & gripmock'
-RUN mkdir /proto
-RUN mkdir /stubs
-RUN apk -U --no-cache add git protobuf
-RUN go get -u -v github.com/golang/protobuf/protoc-gen-go \
-	google.golang.org/grpc \
-	google.golang.org/grpc/reflection \
-	golang.org/x/net/context \
-	github.com/go-chi/chi \
-	github.com/lithammer/fuzzysearch/fuzzy \
-	golang.org/x/tools/imports
-RUN go get github.com/markbates/pkger/cmd/pkger
-RUN git clone https://github.com/google/protobuf.git /protobuf-repo
-RUN mkdir protobuf
-RUN mv /protobuf-repo/src/ /protobuf/
-RUN rm -rf /protobuf-repo
-RUN mkdir -p /go/src/github.com/tokopedia/gripmock
-RUN git clone https://github.com/daonb/gripmock /go/src/github.com/tokopedia/gripmock
-WORKDIR /go/src/github.com/tokopedia/gripmock/protoc-gen-gripmock
-RUN pkger
-# install generator plugin
-RUN go install -v
-WORKDIR /go/src/github.com/tokopedia/gripmock
-# install gripmock
-RUN go install -v
-EXPOSE 4770 4771
-"""
-pre_runtime_copy    = "RUN echo 'at pre_runtime_copy'"
-post_runtime_copy   = "RUN echo 'at post_runtime_copy'"
+   docker_generic = [ "../.." ]
 
 [runners."local:docker"]
 enabled = true
