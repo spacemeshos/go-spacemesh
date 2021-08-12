@@ -44,13 +44,10 @@ func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *smocks.Mo
 	return signer
 }
 
-func pubkeyFromSigVerifier(tb testing.TB, ctrl *gomock.Controller) *smocks.MockVerifier {
+func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *smocks.MockVerifier {
 	tb.Helper()
 	verifier := smocks.NewMockVerifier(ctrl)
-	verifier.EXPECT().Extract(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(msg, sig []byte) (*signing.PublicKey, error) {
-			return signing.NewPublicKey(sig), nil
-		}).AnyTimes()
+	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 	return verifier
 }
 
@@ -66,7 +63,7 @@ func TestWeakCoin(t *testing.T) {
 		zeroLSB         = []byte{0b0110}
 		higherThreshold = []byte{0xff}
 
-		verifier = pubkeyFromSigVerifier(t, ctrl)
+		verifier = sigVerifier(t, ctrl)
 	)
 
 	tcs := []struct {
@@ -276,7 +273,7 @@ func TestWeakCoinGetPanic(t *testing.T) {
 		ctrl = gomock.NewController(t)
 		wc   = weakcoin.New(
 			noopBroadcaster(t, ctrl),
-			staticSigner(t, ctrl, []byte{1}), pubkeyFromSigVerifier(t, ctrl))
+			staticSigner(t, ctrl, []byte{1}), sigVerifier(t, ctrl))
 		epoch types.EpochID = 10
 		round types.RoundID = 2
 	)
@@ -306,7 +303,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
-		staticSigner(t, ctrl, oneLSB), pubkeyFromSigVerifier(t, ctrl),
+		staticSigner(t, ctrl, oneLSB), sigVerifier(t, ctrl),
 		weakcoin.WithNextRoundBufferSize(bufSize),
 	)
 
