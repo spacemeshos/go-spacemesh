@@ -399,14 +399,17 @@ func (app *App) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) 
 	for id, balance := range app.Config.Genesis.Accounts {
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
-			return fmt.Errorf("cannot read config entry for genesis account %s", id)
+			return fmt.Errorf("cannot decode entry %s for genesis account", id)
 		}
-
+		// just make it explicit that we want address and not a public key
+		if len(bytes) > types.AddressLength {
+			return fmt.Errorf("%s must be an address of size %d", id, types.AddressLength)
+		}
 		addr := types.BytesToAddress(bytes)
 		state.CreateAccount(addr)
 		state.AddBalance(addr, balance)
 		app.log.With().Info("genesis account created",
-			log.String("acct_id", id),
+			log.String("address", addr.Hex()),
 			log.Uint64("balance", balance))
 	}
 
