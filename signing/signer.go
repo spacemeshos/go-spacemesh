@@ -100,6 +100,11 @@ func (es *EdSigner) PublicKey() *PublicKey {
 	return NewPublicKey(es.pubKey)
 }
 
+// LittleEndian indicates whether byte order in a signature is little-endian.
+func (es *EdSigner) LittleEndian() bool {
+	return true
+}
+
 // ToBuffer returns the private key as a byte buffer
 func (es *EdSigner) ToBuffer() []byte {
 	buff := make([]byte, len(es.privKey))

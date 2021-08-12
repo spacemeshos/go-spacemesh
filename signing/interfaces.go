@@ -6,6 +6,7 @@ package signing
 type Signer interface {
 	Sign([]byte) []byte
 	PublicKey() *PublicKey
+	LittleEndian() bool
 }
 
 // Verifier is a common interface for signature verification.

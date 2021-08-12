@@ -278,7 +278,11 @@ func (wc *WeakCoin) FinishRound() {
 	// NOTE(dshulyak) we need to select good bit here. for ed25519 it means select LSB and never MSB.
 	// https://datatracker.ietf.org/doc/html/draft-josefsson-eddsa-ed25519-03#section-5.2
 	// For another signature algorithm this may change
-	coinflip := wc.smallestProposal[0]&1 == 1
+	lsbIndex := 0
+	if !wc.signer.LittleEndian() {
+		lsbIndex = len(wc.smallestProposal) - 1
+	}
+	coinflip := wc.smallestProposal[lsbIndex]&1 == 1
 
 	wc.coins[wc.round] = coinflip
 	wc.logger.With().Info("completed round",
