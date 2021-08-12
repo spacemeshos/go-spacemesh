@@ -554,7 +554,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	defer ticker.Stop()
 
 	var (
-		coinFlip            uint64
+		coinFlip            bool
 		ownLastRoundVotesMu sync.RWMutex
 		ownLastRoundVotes   allVotes
 	)
@@ -563,6 +563,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		// always use coinflip from the previous round for current round.
 		// round 1 is running without coinflip (e.g. value is false) intentionally
 		round := round
+		previousCoinFlip := coinFlip
 		err := tb.tg.Go(func(ctx context.Context) error {
 			if round == firstRound {
 				if err := tb.sendProposalVote(ctx, epoch); err != nil {
@@ -579,7 +580,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 			// next rounds, send vote
 			// construct a message that points to all messages from previous round received by δ
-			ownCurrentRoundVotes, err := tb.calcVotes(epoch, round, atomic.LoadUint64(&coinFlip) != 0)
+			ownCurrentRoundVotes, err := tb.calcVotes(epoch, round, previousCoinFlip)
 			if err != nil {
 				tb.Log.With().Error("Failed to calculate votes",
 					log.Uint32("epoch_id", uint32(epoch)),
@@ -628,12 +629,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 		tb.weakCoin.FinishRound()
 
-		cf := tb.weakCoin.Get(epoch, round+1)
-		if cf {
-			atomic.StoreUint64(&coinFlip, 1)
-		} else {
-			atomic.StoreUint64(&coinFlip, 0)
-		}
+		coinFlip = tb.weakCoin.Get(epoch, round+1)
 	}
 
 	tb.Log.With().Debug("Consensus phase finished",
