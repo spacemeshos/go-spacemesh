@@ -60,8 +60,11 @@ func (h *SuperHare) Start(ctx context.Context) error {
 					h.mesh.RecordCoinflip(ctx, layerID, coinflip)
 					logger.With().Info("superhare recorded coinflip", layerID, log.Bool("coinflip", coinflip))
 
-					// just pass all blocks in the layer
-					if layerBlocks, err := h.mesh.LayerBlockIds(layerID); err != nil {
+					// pass all blocks in the layer to the mesh
+					if layerID.GetEpoch().IsGenesis() {
+						logger.With().Info("not sending blocks to mesh for genesis layer")
+						return
+					} else if layerBlocks, err := h.mesh.LayerBlockIds(layerID); err != nil {
 						logger.With().Error("error reading block ids for layer, not sending to mesh",
 							layerID,
 							log.Err(err))

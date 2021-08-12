@@ -97,15 +97,15 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 	}
 	for _, blk := range GenesisLayer().Blocks() {
 		ll.Log.With().Info("adding genesis block", blk.ID(), blk.LayerIndex)
-		if err := ll.AddBlock(blk); err != nil {
-			ll.Log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+		if err = ll.AddBlock(blk); err != nil {
+			ll.Log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex, log.Err(err))
 		}
-		if err := ll.SaveContextualValidity(blk.ID(), blk.LayerIndex, true); err != nil {
-			ll.Log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+		if err = ll.SaveContextualValidity(blk.ID(), blk.LayerIndex, true); err != nil {
+			ll.Log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex, log.Err(err))
 		}
 	}
-	if err := ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
-		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+	if err = ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+		log.With().Error("error inserting genesis input vector to db", GenesisLayer().Index(), log.Err(err))
 	}
 	return ll, err
 }
@@ -121,9 +121,9 @@ func (m *DB) PersistentData() bool {
 }
 
 // NewMemMeshDB is a mock used for testing
-func NewMemMeshDB(log log.Log) *DB {
+func NewMemMeshDB(logger log.Log) *DB {
 	ll := &DB{
-		Log:                log,
+		Log:                logger,
 		blockCache:         newBlockCache(100 * layerSize),
 		blocks:             database.NewMemDatabase(),
 		layers:             database.NewMemDatabase(),
@@ -144,7 +144,7 @@ func NewMemMeshDB(log log.Log) *DB {
 		_ = ll.SaveContextualValidity(blk.ID(), blk.LayerIndex, true)
 	}
 	if err := ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
-		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+		logger.With().Error("error inserting genesis input vector to db", GenesisLayer().Index(), log.Err(err))
 	}
 	return ll
 }

@@ -427,6 +427,7 @@ func healingTester(dependencies []int) TestScenario {
 			lyrProcessed := app.mesh.ProcessedLayer()
 			lyrVerified := app.mesh.LatestLayerInState()
 			suite.log.With().Info("node latest layers",
+				log.FieldNamed("old_verified", lastVerifiedLayer),
 				log.FieldNamed("processed", lyrProcessed),
 				log.FieldNamed("verified", lyrVerified),
 				log.Int("app", i),

@@ -39,12 +39,11 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 
 	receivedTime := time.Now()
 
-	tb.Log.With().Debug("New proposal message",
-		log.String("from", data.Sender().String()))
+	tb.Log.With().Debug("new proposal message", log.String("from", data.Sender().String()))
 
 	var message ProposalMessage
 	if err := types.BytesToInterface(data.Bytes(), &message); err != nil {
-		tb.Log.With().Error("Received malformed proposal message",
+		tb.Log.With().Error("received malformed proposal message",
 			log.String("message", string(data.Bytes())),
 			log.Err(err))
 
@@ -53,7 +52,7 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 
 	currentEpoch := tb.currentEpoch()
 	if message.EpochID < currentEpoch {
-		tb.Log.With().Debug("Received proposal message from previous epoch, ignoring",
+		tb.Log.With().Debug("received proposal message from previous epoch, ignoring",
 			log.Uint64("message_epoch", uint64(message.EpochID)),
 			log.Uint64("current_epoch", uint64(currentEpoch)))
 
@@ -81,7 +80,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage, receivedTime 
 
 	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(m.MinerID, currentEpoch-1)
 	if errors.Is(err, database.ErrNotFound) {
-		tb.Log.With().Warning("Miner has no ATXs in the previous epoch",
+		tb.Log.With().Warning("miner has no atxs in the previous epoch",
 			log.String("miner_id", m.MinerID.Key))
 
 		return nil
@@ -94,7 +93,7 @@ func (tb *TortoiseBeacon) handleProposalMessage(m ProposalMessage, receivedTime 
 	err = tb.verifyProposalMessage(m, currentEpoch)
 	if errors.Is(err, ErrProposalDoesntPassThreshold) {
 		// not a handling error
-		tb.Log.With().Info("Miner's proposal doesn't pass threshold",
+		tb.Log.With().Info("miner's proposal doesn't pass threshold",
 			log.String("miner_id", m.MinerID.Key))
 
 		return nil
@@ -135,7 +134,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 
 	switch {
 	case tb.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
-		tb.Log.With().Debug("Received valid proposal message",
+		tb.Log.With().Debug("received valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("message", m.String()),
 			log.String("atx_timestamp", atxTimestamp.String()),
@@ -154,7 +153,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 		tb.validProposalsMu.Unlock()
 
 	case tb.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
-		tb.Log.With().Debug("Received potentially valid proposal message",
+		tb.Log.With().Debug("received potentially valid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("message", m.String()),
 			log.String("atx_timestamp", atxTimestamp.String()),
@@ -173,7 +172,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(m ProposalMessage, atxID types
 		tb.potentiallyValidProposalsMu.Unlock()
 
 	default:
-		tb.Log.With().Warning("Received invalid proposal message",
+		tb.Log.With().Warning("received invalid proposal message",
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("atx_timestamp", atxTimestamp.String()),
 			log.String("next_epoch_start", nextEpochStart.String()),
@@ -192,7 +191,7 @@ func (tb *TortoiseBeacon) verifyProposalMessage(m ProposalMessage, currentEpoch 
 
 	if !tb.vrfVerifier.Verify(signing.NewPublicKey(m.MinerID.VRFPublicKey), currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
-		tb.Log.With().Warning("Received malformed proposal message: VRF is not verified",
+		tb.Log.With().Warning("received malformed proposal message: vrf is not verified",
 			log.String("sender", m.MinerID.Key))
 
 		// TODO(nkryuchkov): add a test for this case
@@ -213,7 +212,7 @@ func (tb *TortoiseBeacon) verifyProposalMessage(m ProposalMessage, currentEpoch 
 	}
 
 	if !passes {
-		tb.Log.With().Warning("Rejected proposal message which doesn't pass threshold",
+		tb.Log.With().Warning("rejected proposal message which doesn't pass threshold",
 			log.String("proposal", proposalShortString))
 
 		return ErrProposalDoesntPassThreshold
@@ -244,12 +243,12 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 
 	minerID := data.Sender()
 
-	tb.Log.With().Debug("New voting message",
+	tb.Log.With().Debug("new voting message",
 		log.String("miner_id", minerID.String()))
 
 	var m FirstVotingMessage
 	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
-		tb.Log.With().Error("Received invalid voting message",
+		tb.Log.With().Error("received invalid voting message",
 			log.String("message", string(data.Bytes())),
 			log.Err(err))
 
@@ -257,7 +256,7 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 	}
 
 	if err := tb.handleFirstVotingMessage(m); err != nil {
-		tb.Log.With().Error("Failed to handle first voting message",
+		tb.Log.With().Error("failed to handle first voting message",
 			log.Err(err))
 
 		return
@@ -274,12 +273,12 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 
 	minerID := data.Sender()
 
-	tb.Log.With().Debug("New voting message",
+	tb.Log.With().Debug("new voting message",
 		log.String("miner_id", minerID.String()))
 
 	var m FollowingVotingMessage
 	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
-		tb.Log.With().Error("Received invalid voting message",
+		tb.Log.With().Error("received invalid voting message",
 			log.String("message", string(data.Bytes())),
 			log.Err(err))
 
@@ -287,7 +286,7 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 	}
 
 	if err := tb.handleFollowingVotingMessage(m); err != nil {
-		tb.Log.With().Error("Failed to handle following voting message",
+		tb.Log.With().Error("failed to handle following voting message",
 			log.Err(err))
 
 		return
@@ -302,7 +301,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 
 	_, err := tb.atxDB.GetNodeAtxIDForEpoch(minerID, currentEpoch-1)
 	if errors.Is(err, database.ErrNotFound) {
-		tb.Log.With().Warning("Miner has no ATXs in the previous epoch",
+		tb.Log.With().Warning("miner has no atxs in the previous epoch",
 			log.String("miner_id", minerID.Key))
 
 		return nil
@@ -318,7 +317,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	}
 
 	if !ok {
-		tb.Log.With().Warning("Received malformed first voting message, bad signature",
+		tb.Log.With().Warning("received malformed first voting message, bad signature",
 			log.String("miner_id", minerID.Key),
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("signature", util.Bytes2Hex(message.Signature)))
@@ -326,7 +325,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		return nil
 	}
 
-	tb.Log.With().Debug("Received first round voting message, counting it",
+	tb.Log.With().Debug("received first round voting message, counting it",
 		log.String("message", message.String()))
 
 	thisRound := epochRoundPair{
@@ -348,7 +347,8 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 	// TODO: no need to store each vote separately
 	// have a separate table for an epoch with one bit in it if atx/miner is voted already
 	if _, ok := tb.incomingVotes[thisRound][minerID.Key]; ok {
-		tb.Log.With().Warning("Received malformed first voting message, already received a voting message for these PK and round",
+		tb.Log.With().Warning("received malformed first voting message, already received a voting message "+
+			"for this pk and round",
 			log.String("miner_id", minerID.Key),
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.Uint64("round_id", uint64(firstRound)))
@@ -363,7 +363,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 		return nil
 	}
 
-	tb.Log.With().Debug("Received first voting message, counting it",
+	tb.Log.With().Debug("received first voting message, counting it",
 		log.String("miner_id", minerID.Key),
 		log.Uint64("epoch_id", uint64(currentEpoch)),
 		log.Uint64("round_id", uint64(firstRound)),
@@ -410,7 +410,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 
 	_, err := tb.atxDB.GetNodeAtxIDForEpoch(minerID, currentEpoch-1)
 	if errors.Is(err, database.ErrNotFound) {
-		tb.Log.With().Warning("Miner has no ATXs in the previous epoch",
+		tb.Log.With().Warning("miner has no atxs in the previous epoch",
 			log.String("miner_id", minerID.Key))
 
 		return nil
@@ -427,7 +427,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	}
 
 	if !ok {
-		tb.Log.With().Warning("Received malformed following voting message, bad signature",
+		tb.Log.With().Warning("received malformed following voting message, bad signature",
 			log.String("miner_id", minerID.Key),
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.String("signature", util.Bytes2Hex(message.Signature)))
@@ -448,7 +448,8 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 	}
 
 	if _, ok := tb.incomingVotes[thisRound][minerID.Key]; ok {
-		tb.Log.With().Warning("Received malformed following voting message, already received a voting message for these PK and round",
+		tb.Log.With().Warning("received malformed following voting message, already received a voting "+
+			"message for this pk and round",
 			log.String("miner_id", minerID.Key),
 			log.Uint64("epoch_id", uint64(currentEpoch)),
 			log.Uint64("round_id", uint64(messageRound)))
@@ -456,7 +457,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 		return nil
 	}
 
-	tb.Log.With().Debug("Received following voting message, counting it",
+	tb.Log.With().Debug("received following voting message, counting it",
 		log.String("miner_id", minerID.Key),
 		log.Uint64("epoch_id", uint64(currentEpoch)),
 		log.Uint64("round_id", uint64(messageRound)),
