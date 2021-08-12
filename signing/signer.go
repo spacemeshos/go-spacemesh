@@ -121,7 +121,8 @@ func Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
 // EDVerifier is a verifier for ED purposes.
 type EDVerifier struct{}
 
-func NewEDVerifier() VerifyExtractor {
+// NewEDVerifier returns a new EDVerifier.
+func NewEDVerifier() EDVerifier {
 	return EDVerifier{}
 }
 
