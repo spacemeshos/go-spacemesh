@@ -247,6 +247,17 @@ type BlockHeader struct {
 	NeutralDiff []BlockID
 }
 
+type BlockHeader2 struct {
+	ATXID ATXID
+	Data  []byte
+	Coin  bool
+}
+
+type Simple struct {
+	Data BlockID
+	Item uint64
+}
+
 // Layer returns the block's LayerID.
 func (b BlockHeader) Layer() LayerID {
 	return b.LayerIndex
