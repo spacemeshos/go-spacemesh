@@ -17,7 +17,7 @@ type VRFSigner struct {
 
 // Sign signs a message for VRF purposes
 func (s VRFSigner) Sign(msg []byte) []byte {
-	return ed25519.Sign2(s.privateKey, msg)
+	return ed25519.Sign(s.privateKey, msg)
 }
 
 // PublicKey of the signer.
@@ -40,7 +40,7 @@ func NewVRFSigner(seed []byte) (*VRFSigner, []byte, error) {
 
 // VRFVerify verifies a message and signature, given a public key
 func VRFVerify(pub, msg, sig []byte) bool {
-	return ed25519.Verify2(pub, msg, sig)
+	return ed25519.Verify(pub, msg, sig)
 }
 
 var _ Verifier = VRFVerifier{}
