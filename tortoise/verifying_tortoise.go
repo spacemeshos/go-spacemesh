@@ -1141,21 +1141,21 @@ func (t *turtle) sumVotesForBlock(
 				continue
 			}
 
-			// get vote weight
-			weight, err := t.voteWeightByID(ctx, votingBlockID, blockID)
-			if err != nil {
-				return sum, fmt.Errorf("error getting vote weight for block %v: %w", votingBlockID, err)
-			}
-
-			// check if this block has an opinion on the block to vote on
-			// no opinion (on a block in an older layer) counts as an explicit vote against the block
+			// check if this block has an opinion on the block to vote on.
+			// no opinion (on a block in an older layer) counts as an explicit vote against the block.
+			// note: in this case, the weight is already factored into the vote, so no need to fetch weight.
 			if opinionVote, exists := votingBlockOpinion.BlockOpinions[blockID]; exists {
-				sum = sum.Add(opinionVote.Multiply(weight))
+				sum = sum.Add(opinionVote)
 				logger.With().Debug("added block opinion to vote sum",
 					log.FieldNamed("vote", opinionVote),
-					log.Uint64("weight", weight),
 					sum)
 			} else {
+				// in this case, we still need to fetch the block's voting weight.
+				weight, err := t.voteWeightByID(ctx, votingBlockID, blockID)
+				if err != nil {
+					return sum, fmt.Errorf("error getting vote weight for block %v: %w",
+						votingBlockID, err)
+				}
 				sum = sum.Add(against.Multiply(weight))
 				logger.With().Debug("no opinion on older block, counted vote against",
 					log.Uint64("weight", weight),
