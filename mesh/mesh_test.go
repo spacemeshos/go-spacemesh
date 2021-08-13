@@ -180,7 +180,7 @@ func TestMesh_GetLayerHash(t *testing.T) {
 
 	numBlocks := 10
 	lyr = addLayer(r, lyrID, numBlocks, msh)
-	msh.SaveContextualValidity(lyr.Blocks()[0].ID(), false)
+	msh.SaveContextualValidity(lyr.Blocks()[0].ID(), lyrID, false)
 
 	// before a layer is validated, all blocks count towards its hash, valid or not
 	lyr, err = msh.GetLayer(lyrID)
@@ -189,7 +189,7 @@ func TestMesh_GetLayerHash(t *testing.T) {
 	assert.Equal(t, lyr.Hash(), msh.GetLayerHash(lyrID))
 
 	validBlocks := lyr.Blocks()[1:]
-	msh.ValidateLayer(lyr)
+	msh.ValidateLayer(context.TODO(), lyr)
 	// after a layer is validated, only contextually valid blocks count towards its hash
 	expHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(validBlocks)), nil)
 	assert.Equal(t, expHash, msh.GetLayerHash(lyrID))
@@ -204,12 +204,12 @@ func TestMesh_GetLayerHash(t *testing.T) {
 	lyr, err = msh.GetLayer(lyrID)
 	r.NoError(err)
 	assert.Equal(t, numBlocks+1, len(lyr.Blocks()))
-	msh.ValidateLayer(lyr)
+	msh.ValidateLayer(context.TODO(), lyr)
 	assert.Equal(t, expHash, msh.GetLayerHash(lyrID))
 
 	// now if the late block is determined valid, the hash should be updated
-	msh.SaveContextualValidity(block.ID(), true)
-	msh.ValidateLayer(lyr)
+	msh.SaveContextualValidity(block.ID(), lyrID, true)
+	msh.ValidateLayer(context.TODO(), lyr)
 	newExpectedHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(append(validBlocks, block))), nil)
 	assert.Equal(t, newExpectedHash, msh.GetLayerHash(lyrID))
 }
@@ -231,7 +231,7 @@ func TestMesh_SetZeroBlockLayer(t *testing.T) {
 
 	// it's ok to add to an empty layer
 	lyr = addLayer(r, lyrID, 10, msh)
-	msh.ValidateLayer(lyr)
+	msh.ValidateLayer(context.TODO(), lyr)
 	lyr, err = msh.GetLayer(lyrID)
 	r.NoError(err)
 	assert.Equal(t, 10, len(lyr.Blocks()))
@@ -277,7 +277,7 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 	prevHash := EmptyLayerHash
 	for i := types.NewLayerID(1); i.Before(gLyr); i = i.Add(1) {
 		lyr := addLayer(r, i, 0, msh)
-		msh.ValidateLayer(lyr)
+		msh.ValidateLayer(context.TODO(), lyr)
 		aggHash := types.CalcBlocksHash32([]types.BlockID{}, prevHash.Bytes())
 		assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
 		prevHash = aggHash
@@ -285,7 +285,7 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 	lyr, err := msh.GetLayer(gLyr)
 	r.NoError(err)
 	assert.Equal(t, 1, len(lyr.Blocks()))
-	msh.ValidateLayer(lyr)
+	msh.ValidateLayer(context.TODO(), lyr)
 	aggHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(lyr.Blocks())), prevHash.Bytes())
 	assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
 	prevHash = aggHash
@@ -294,8 +294,8 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 	lyrID := gLyr.Add(1)
 	lyr = addLayer(r, lyrID, 5, msh)
 	r.Equal(5, len(lyr.Blocks()))
-	r.NoError(msh.SaveContextualValidity(lyr.Blocks()[0].ID(), false))
-	msh.ValidateLayer(lyr)
+	r.NoError(msh.SaveContextualValidity(lyr.Blocks()[0].ID(), lyrID, false))
+	msh.ValidateLayer(context.TODO(), lyr)
 	// aggregated layer hash only includes valid blocks
 	aggHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(lyr.Blocks()[1:])), prevHash.Bytes())
 	assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
