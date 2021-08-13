@@ -202,7 +202,7 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 func (bh *BlockHandler) fastValidation(block *types.Block) error {
 	// block eligibility
 	if eligible, err := bh.validator.BlockSignedAndEligible(block); err != nil || !eligible {
-		return fmt.Errorf("block eligibility check failed - err %v", err)
+		return fmt.Errorf("block eligibility check failed: %w", err)
 	}
 
 	// validate unique tx atx
