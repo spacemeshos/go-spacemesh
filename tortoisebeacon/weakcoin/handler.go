@@ -28,7 +28,7 @@ func (wc *WeakCoin) HandleSerializedMessage(ctx context.Context, data service.Go
 		wc.logger.With().Debug("received invalid proposal",
 			log.Err(err),
 			log.Uint32("epoch_id", uint32(message.Epoch)),
-			log.Uint64("round_id", uint64(message.Round)))
+			log.Uint32("round_id", uint32(message.Round)))
 		return
 	}
 	data.ReportValidation(ctx, GossipProtocol)
@@ -41,7 +41,7 @@ func (wc *WeakCoin) receiveMessage(message Message) error {
 
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
-	if wc.epoch != message.Epoch || wc.round != message.Round {
+	if wc.epoch != message.Epoch || wc.round != message.Round || !wc.epochStarted || !wc.roundStarted {
 		if wc.isNextRound(message.Epoch, message.Round) && len(wc.nextRoundBuffer) < cap(wc.nextRoundBuffer) {
 			wc.nextRoundBuffer = append(wc.nextRoundBuffer, message)
 			return nil
@@ -55,12 +55,15 @@ func (wc *WeakCoin) isNextRound(epoch types.EpochID, round types.RoundID) bool {
 	if wc.epoch == epoch && wc.round+1 == round && round <= wc.config.MaxRound {
 		return true
 	}
+	if wc.epoch+1 == epoch && wc.round == wc.config.MaxRound {
+		return true
+	}
 	// after completed epoch but haven't started the new one
-	if wc.epoch+1 == epoch && wc.round == 0 && wc.allowances == nil {
+	if wc.epoch+1 == epoch && !wc.roundStarted && !wc.epochStarted {
 		return true
 	}
 	// after started epoch but didn't start the round
-	if wc.epoch == epoch && wc.round == 0 {
+	if wc.epoch == epoch && !wc.roundStarted && wc.epochStarted {
 		return true
 	}
 	return false

@@ -301,7 +301,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 		layer, err := s.syncLayer(ctx, layerID)
 		if err != nil {
-			logger.With().Error("failed to sync to layer", log.Err(err))
+			logger.With().Error("failed to sync to layer", layerID, log.Err(err))
 			return false
 		}
 
@@ -400,7 +400,11 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 		return nil, fmt.Errorf("PollLayerHash: %w", hashRes.Err)
 	}
 	// TODO: resolve hash with peers
-	bch := s.fetcher.PollLayerBlocks(ctx, layerID, hashRes.Hashes)
+	hashes := make(map[types.Hash32][]peers.Peer)
+	for lyrHash, peers := range hashRes.Hashes {
+		hashes[lyrHash.Hash] = peers
+	}
+	bch := s.fetcher.PollLayerBlocks(ctx, layerID, hashes)
 	res := <-bch
 	if res.Err != nil {
 		if res.Err == layerfetcher.ErrZeroLayer {

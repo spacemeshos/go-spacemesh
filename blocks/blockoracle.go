@@ -13,7 +13,7 @@ import (
 )
 
 type activationDB interface {
-	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
+	GetNodeAtxIDForEpoch(nodePK string, targetEpoch types.EpochID) (types.ATXID, error)
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error)
 }
@@ -118,12 +118,12 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 	// get the previous epoch's total weight
 	totalWeight, activeSet, err := bo.atxDB.GetEpochWeight(epochNumber)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get epoch %v weight: %v", epochNumber, err)
+		return nil, fmt.Errorf("failed to get epoch %v weight: %w", epochNumber, err)
 	}
 	atx, err := bo.getValidAtxForEpoch(epochNumber)
 	if err != nil {
 		if !epochNumber.IsGenesis() {
-			return nil, fmt.Errorf("failed to get latest atx for node in epoch %d: %v", epochNumber, err)
+			return nil, fmt.Errorf("failed to get latest atx for node in epoch %d: %w", epochNumber, err)
 		}
 	} else {
 		weight = atx.GetWeight()
@@ -223,7 +223,7 @@ func getNumberOfEligibleBlocks(weight, totalWeight uint64, committeeSize uint32,
 }
 
 func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {
-	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
+	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID.Key, targetEpoch)
 	if err != nil {
 		bo.log.With().Warning("did not find atx ids for node",
 			log.FieldNamed("atx_node_id", bo.nodeID),
