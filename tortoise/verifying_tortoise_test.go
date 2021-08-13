@@ -590,7 +590,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 type baseBlockProvider func(context.Context) (types.BlockID, [][]types.BlockID, error)
 type inputVectorProvider func(types.LayerID) ([]types.BlockID, error)
 
-func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider, atxdb atxDataWriter) (blocks []*types.Block) {
+func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider, atxdb atxDataWriter, weight uint) (blocks []*types.Block) {
 	logger := logtest.New(t)
 	logger.Debug("======================== choosing base block for layer", l)
 	b, lists, err := bbp(context.TODO())
@@ -600,8 +600,8 @@ func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider,
 	logger.Debug("\tfor\t", lists[1])
 	logger.Debug("\tneutral\t", lists[2])
 
-	// for now just create a single ATX for all of the blocks with a weight of one
-	atxHeader := makeAtxHeaderWithWeight(1)
+	// for now just create a single ATX for all of the blocks with a constant weight
+	atxHeader := makeAtxHeaderWithWeight(weight)
 	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 	atx.CalcAndSetID()
 	require.NoError(t, atxdb.StoreAtx(l.GetEpoch(), atx))
@@ -666,7 +666,7 @@ func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDat
 		panic("database error")
 	}
 	lyr := types.NewLayer(l)
-	for _, block := range generateBlocks(t, l, blocksPerLayer, bbp, atxdb) {
+	for _, block := range generateBlocks(t, l, blocksPerLayer, bbp, atxdb, 1) {
 		lyr.AddBlock(block)
 	}
 
@@ -1042,7 +1042,7 @@ func TestGetLocalBlockOpinion(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	blocks := generateBlocks(t, l1ID, 2, alg.BaseBlock, atxdb)
+	blocks := generateBlocks(t, l1ID, 2, alg.BaseBlock, atxdb, 1)
 
 	// no input vector for recent layer: expect a vote against
 	vec, err := alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID())
@@ -1069,7 +1069,7 @@ func TestCheckBlockAndGetInputVector(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb)
+	blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
 	diffList := []types.BlockID{blocks[0].ID()}
 
 	// missing block
@@ -1230,7 +1230,7 @@ func TestDetermineBlockGoodness(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb)
+	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
 
 	// block marked good
 	r.True(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[0]))
@@ -1262,7 +1262,7 @@ func TestScoreBlocks(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb)
+	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
 
 	// adds a block not already marked good
 	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
@@ -1301,7 +1301,7 @@ func TestProcessBlock(t *testing.T) {
 
 	// blocks in this layer will use the genesis block as their base block
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb)
+	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
 	// add one block from the layer
 	blockWithMissingBaseBlock := l1Blocks[0]
 	r.NoError(mdb.AddBlock(blockWithMissingBaseBlock))
@@ -1316,7 +1316,7 @@ func TestProcessBlock(t *testing.T) {
 		return blockWithMissingBaseBlock.ID(), make([][]types.BlockID, 3), nil
 	}
 	l2ID := l1ID.Add(1)
-	l2Blocks := generateBlocks(t, l2ID, 3, baseBlockProviderFn, atxdb)
+	l2Blocks := generateBlocks(t, l2ID, 3, baseBlockProviderFn, atxdb, 1)
 
 	// base block layer missing
 	alg.trtl.BlockOpinionsByLayer[l2ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
@@ -1353,7 +1353,7 @@ func TestProcessBlock(t *testing.T) {
 		l1Blocks[2].ID(): abstain,
 	}}
 	l3ID := l2ID.Add(1)
-	l3Blocks := generateBlocks(t, l3ID, 3, baseBlockProviderFn, atxdb)
+	l3Blocks := generateBlocks(t, l3ID, 3, baseBlockProviderFn, atxdb, 1)
 	l3Blocks[0].AgainstDiff = []types.BlockID{
 		l1Blocks[1].ID(),
 	}
@@ -1424,7 +1424,7 @@ func TestVoteWeight(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 	totalSpace := 100
 	atxdb.mockAtxHeader = makeAtxHeaderWithWeight(uint(totalSpace))
-	someBlocks := generateBlocks(t, types.GetEffectiveGenesis().Add(1), 1, alg.BaseBlock, atxdb)
+	someBlocks := generateBlocks(t, types.GetEffectiveGenesis().Add(1), 1, alg.BaseBlock, atxdb, 1)
 	weight, err := alg.trtl.voteWeight(context.TODO(), someBlocks[0], randomBlockID())
 	r.NoError(err)
 	r.Equal(totalSpace, int(weight))
@@ -1473,8 +1473,8 @@ func TestProcessNewBlocks(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 	l1ID := types.GetEffectiveGenesis().Add(1)
 	l2ID := l1ID.Add(1)
-	l1Blocks := generateBlocks(t, l1ID, defaultTestLayerSize, alg.BaseBlock, atxdb)
-	l2Blocks := generateBlocks(t, l2ID, defaultTestLayerSize, alg.BaseBlock, atxdb)
+	l1Blocks := generateBlocks(t, l1ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+	l2Blocks := generateBlocks(t, l2ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 
 	for _, block := range l1Blocks {
 		r.NoError(mdb.AddBlock(block))
@@ -1579,15 +1579,15 @@ func TestVerifyLayers(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 	l1ID := types.GetEffectiveGenesis().Add(1)
 	l2ID := l1ID.Add(1)
-	l2Blocks := generateBlocks(t, l2ID, defaultTestLayerSize, alg.BaseBlock, atxdb)
+	l2Blocks := generateBlocks(t, l2ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 	l3ID := l2ID.Add(1)
-	l3Blocks := generateBlocks(t, l3ID, defaultTestLayerSize, alg.BaseBlock, atxdb)
+	l3Blocks := generateBlocks(t, l3ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 	l4ID := l3ID.Add(1)
-	l4Blocks := generateBlocks(t, l4ID, defaultTestLayerSize, alg.BaseBlock, atxdb)
+	l4Blocks := generateBlocks(t, l4ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 	l5ID := l4ID.Add(1)
-	l5Blocks := generateBlocks(t, l5ID, defaultTestLayerSize, alg.BaseBlock, atxdb)
+	l5Blocks := generateBlocks(t, l5ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 	l6ID := l5ID.Add(1)
-	l6Blocks := generateBlocks(t, l6ID, defaultTestLayerSize, alg.BaseBlock, atxdb)
+	l6Blocks := generateBlocks(t, l6ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 
 	// layer missing in database
 	alg.trtl.Last = l2ID
@@ -1835,7 +1835,7 @@ func TestVoteVectorForLayer(t *testing.T) {
 	alg := defaultAlgorithm(t, mdb)
 	alg.trtl.atxdb = atxdb
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb)
+	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
 	var blockIDs []types.BlockID
 	for _, block := range l1Blocks {
 		blockIDs = append(blockIDs, block.ID())
@@ -1883,7 +1883,7 @@ func TestSumVotesForBlock(t *testing.T) {
 
 	// store a bunch of votes against a block
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Blocks := generateBlocks(t, l1ID, 4, alg.BaseBlock, atxdb)
+	l1Blocks := generateBlocks(t, l1ID, 4, alg.BaseBlock, atxdb, 1)
 	for _, block := range l1Blocks {
 		r.NoError(mdb.AddBlock(block))
 	}
@@ -1892,7 +1892,7 @@ func TestSumVotesForBlock(t *testing.T) {
 	blockWeReallyDontCare := l1Blocks[2]
 	blockWeNeverSaw := l1Blocks[3]
 	l2ID := l1ID.Add(1)
-	l2Blocks := generateBlocks(t, l2ID, 9, alg.BaseBlock, atxdb)
+	l2Blocks := generateBlocks(t, l2ID, 9, alg.BaseBlock, atxdb, 1)
 	for _, block := range l2Blocks {
 		r.NoError(mdb.AddBlock(block))
 	}
@@ -2235,7 +2235,7 @@ func TestHealBalanceAttack(t *testing.T) {
 	// opinions will differ about the validity of this block
 	// note: we are NOT adding it to the layer input vector, so this node thinks the block is invalid (late)
 	// this means that later blocks/layers with a base block or vote that supports this block will not be marked good
-	l4lateblock := generateBlocks(t, l4ID, 1, alg.BaseBlock, atxdb)[0]
+	l4lateblock := generateBlocks(t, l4ID, 1, alg.BaseBlock, atxdb, 1)[0]
 	r.NoError(mdb.AddBlock(l4lateblock))
 
 	// this primes the block opinions for these blocks, without attempting to verify the previous layer
@@ -2311,7 +2311,7 @@ func TestHealBalanceAttack(t *testing.T) {
 		// half of blocks use a base block that supports the late block
 		// half use a base block that doesn't support it
 		for j := 0; j < 2; j++ {
-			blocks := generateBlocks(t, layerID, layerSize/2, bbp, atxdb)
+			blocks := generateBlocks(t, layerID, layerSize/2, bbp, atxdb, 1)
 			for _, block := range blocks {
 				r.NoError(mdb.AddBlock(block))
 			}
