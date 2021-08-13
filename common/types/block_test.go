@@ -1,16 +1,12 @@
 package types
 
 import (
-	"bytes"
 	"math"
 	"math/rand"
-	"reflect"
 	"testing"
-	"testing/quick"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/stretchr/testify/require"
-	cbg "github.com/whyrusleeping/cbor-gen"
 )
 
 func genByte32() [32]byte {
@@ -357,26 +353,5 @@ func TestLayerID_FirstInEpoch(t *testing.T) {
 			SetLayersPerEpoch(tc.layersPerEpoch)
 			require.EqualValues(t, tc.isFirst, NewLayerID(tc.layer).FirstInEpoch())
 		})
-	}
-}
-
-func BenchmarkBlock(b *testing.B) {
-	gen, ok := quick.Value(reflect.TypeOf(BlockHeader2{}), rand.New(rand.NewSource(1000)))
-	require.True(b, ok)
-	header := gen.Interface().(BlockHeader2)
-
-	b.ResetTimer()
-
-	for i := 0; i < b.N; i++ {
-		var buf bytes.Buffer
-		header.MarshalCBOR(&buf)
-	}
-}
-
-func TestGen(t *testing.T) {
-	if err := cbg.WriteTupleEncodersToFile("cbor_gen.go", "types",
-		BlockHeader2{},
-	); err != nil {
-		panic(err)
 	}
 }
