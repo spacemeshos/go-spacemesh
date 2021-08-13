@@ -11,7 +11,7 @@ import (
 // ProposalMessage is a message type which is used when sending proposals.
 type ProposalMessage struct {
 	EpochID      types.EpochID
-	MinerID      types.NodeID
+	MinerPK      []byte
 	VRFSignature []byte
 }
 
@@ -33,7 +33,6 @@ type proposalMessageWithReceiptData struct {
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
 type FirstVotingMessageBody struct {
-	MinerID                   types.NodeID
 	ValidProposals            [][]byte
 	PotentiallyValidProposals [][]byte
 }
@@ -41,7 +40,7 @@ type FirstVotingMessageBody struct {
 // FirstVotingMessage is a message type which is used when sending first voting messages.
 type FirstVotingMessage struct {
 	FirstVotingMessageBody
-	Signature []byte // TODO: implement extracting pk from signature
+	Signature []byte
 }
 
 // String returns a string form of FirstVotingMessage.
@@ -57,7 +56,6 @@ func (v FirstVotingMessage) String() string {
 // FollowingVotingMessageBody is FollowingVotingMessage without a signature.
 type FollowingVotingMessageBody struct {
 	MinerID        types.NodeID
-	EpochID        types.EpochID
 	RoundID        types.RoundID
 	VotesBitVector []uint64
 }

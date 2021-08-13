@@ -25,6 +25,11 @@ func (s VRFSigner) PublicKey() *PublicKey {
 	return s.pub
 }
 
+// LittleEndian indicates whether byte order in a signature is little-endian.
+func (s VRFSigner) LittleEndian() bool {
+	return true
+}
+
 // NewVRFSigner creates a new VRFSigner from a 32-byte seed
 func NewVRFSigner(seed []byte) (*VRFSigner, []byte, error) {
 	if len(seed) < ed25519.SeedSize {
@@ -50,14 +55,5 @@ type VRFVerifier struct{}
 
 // Verify that signature matches public key.
 func (VRFVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
-	return VRFVerify(ed25519.PublicKey(pub.Bytes()), msg, sig)
-}
-
-// Extract public key from signature.
-func (VRFVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
-	pub, err := ed25519.ExtractPublicKey(msg, sig)
-	if err != nil {
-		return nil, err
-	}
-	return &PublicKey{pub: pub}, nil
+	return VRFVerify(pub.Bytes(), msg, sig)
 }

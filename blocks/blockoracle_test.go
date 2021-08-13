@@ -13,11 +13,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-var atxID = types.ATXID([32]byte{1, 3, 3, 7})
-var nodeID, vrfsgn = generateNodeIDAndSigner()
-var validateVRF = signing.VRFVerify
-var edSigner = signing.NewEdSigner()
-var activeSetAtxs = []types.ATXID{atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID} // 10 ATXs
+var (
+	atxID          = types.ATXID([32]byte{1, 3, 3, 7})
+	nodeID, vrfsgn = generateNodeIDAndSigner()
+	validateVRF    = signing.VRFVerify
+	edSigner       = signing.NewEdSigner()
+	activeSetAtxs  = []types.ATXID{atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID} // 10 ATXs
+)
 
 const defaultAtxWeight = 1024
 
@@ -50,8 +52,8 @@ func (a mockActivationDB) GetIdentity(edID string) (types.NodeID, error) {
 	return types.NodeID{Key: edID, VRFPublicKey: nodeID.VRFPublicKey}, nil
 }
 
-func (a mockActivationDB) GetNodeAtxIDForEpoch(nID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
-	if nID.Key != nodeID.Key || targetEpoch == 0 {
+func (a mockActivationDB) GetNodeAtxIDForEpoch(nodePK string, targetEpoch types.EpochID) (types.ATXID, error) {
+	if nodePK != nodeID.Key || targetEpoch == 0 {
 		return *types.EmptyATXID, errors.New("not found")
 	}
 	return atxID, nil
@@ -367,5 +369,4 @@ func TestMinerBlockOracle_GetEligibleLayers(t *testing.T) {
 		}
 	}
 	r.Equal(eligibleLayers, len(blockOracle.GetEligibleLayers()))
-
 }

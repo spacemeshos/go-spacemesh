@@ -398,14 +398,17 @@ func (app *App) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) 
 	for id, balance := range app.Config.Genesis.Accounts {
 		bytes := util.FromHex(id)
 		if len(bytes) == 0 {
-			return fmt.Errorf("cannot read config entry for genesis account %s", id)
+			return fmt.Errorf("cannot decode entry %s for genesis account", id)
 		}
-
+		// just make it explicit that we want address and not a public key
+		if len(bytes) != types.AddressLength {
+			return fmt.Errorf("%s must be an address of size %d", id, types.AddressLength)
+		}
 		addr := types.BytesToAddress(bytes)
 		state.CreateAccount(addr)
 		state.AddBalance(addr, balance)
 		app.log.With().Info("genesis account created",
-			log.String("acct_id", id),
+			log.String("address", addr.Hex()),
 			log.Uint64("balance", balance))
 	}
 
@@ -588,26 +591,31 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	atxdb := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	atxDB := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
+	edVerifier := signing.NewEDVerifier()
+	vrfVerifier := signing.VRFVerifier{}
+
 	wc := weakcoin.New(swarm,
-		vrfSigner, signing.VRFVerifier{},
+		vrfSigner, vrfVerifier,
 		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
 		weakcoin.WithMaxRound(app.Config.TortoiseBeacon.RoundsNumber),
 	)
 
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
+	minerPK := signing.NewPublicKey(util.Hex2Bytes(nodeID.Key))
 	tBeacon := tortoisebeacon.New(
 		app.Config.TortoiseBeacon,
-		nodeID,
 		ld,
+		minerPK,
 		swarm,
-		atxdb,
+		atxDB,
 		tBeaconDB,
 		sgn,
-		signing.VRFVerifier{},
+		edVerifier,
 		vrfSigner,
+		vrfVerifier,
 		wc,
 		clock,
 		app.addLogger(TBeaconLogger, lg))
@@ -617,7 +625,7 @@ func (app *App) initServices(ctx context.Context,
 	trtlCfg := tortoise.Config{
 		LayerSize:       int(layerSize),
 		Database:        mdb,
-		ATXDB:           atxdb,
+		ATXDB:           atxDB,
 		Clock:           clock,
 		Hdist:           app.Config.Hdist,
 		Zdist:           app.Config.Zdist,
@@ -633,16 +641,16 @@ func (app *App) initServices(ctx context.Context,
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
 
 	if trtlCfg.Recovered {
-		msh = mesh.NewRecoveredMesh(ctx, mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
-		msh = mesh.NewMesh(mdb, atxdb, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		if err := app.setupGenesis(processor, msh); err != nil {
 			return err
 		}
 	}
 
-	eValidator := blocks.NewBlockEligibilityValidator(layerSize, layersPerEpoch, atxdb, tBeacon,
+	eValidator := blocks.NewBlockEligibilityValidator(layerSize, layersPerEpoch, atxDB, tBeacon,
 		signing.VRFVerify, msh, app.addLogger(BlkEligibilityLogger, lg))
 
 	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
@@ -666,7 +674,7 @@ func (app *App) initServices(ctx context.Context,
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxdb, poetDb, atxdb, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector(), tBeaconDBStore)
 
 	syncerConf := syncer.Configuration{
@@ -674,9 +682,9 @@ func (app *App) initServices(ctx context.Context,
 		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
 		AlwaysListen:    app.Config.AlwaysListen,
 	}
-	syncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
 
-	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxdb, tBeacon, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
+	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxDB, tBeacon, vrfSigner, nodeID, newSyncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
 	var hOracle hare.Rolacle
@@ -686,12 +694,12 @@ func (app *App) initServices(ctx context.Context,
 	} else {
 		// regular oracle, build and use it
 		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxdb, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beacon, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
-	gossipListener := service.NewListener(swarm, layerFetch, syncer.ListenToGossip, app.addLogger(GossipListener, lg))
-	rabbit := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, syncer, msh, hOracle, idStore, clock, lg)
+	gossipListener := service.NewListener(swarm, layerFetch, newSyncer.ListenToGossip, app.addLogger(GossipListener, lg))
+	rabbit := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, newSyncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
@@ -711,7 +719,7 @@ func (app *App) initServices(ctx context.Context,
 		msh,
 		trtl,
 		blockOracle,
-		syncer,
+		newSyncer,
 		stateAndMeshProjector,
 		app.txPool,
 		app.addLogger(BlockBuilderLogger, lg))
@@ -738,10 +746,10 @@ func (app *App) initServices(ctx context.Context,
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxdb, swarm, msh, layersPerEpoch, nipostBuilder, postSetupMgr, clock, syncer, store, app.addLogger("atxBuilder", lg))
+	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxDB, swarm, msh, layersPerEpoch, nipostBuilder, postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg))
 
 	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxGossipData)
-	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxdb.HandleGossipAtx)
+	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxDB.HandleGossipAtx)
 	gossipListener.AddListener(ctx, blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleSerializedProposalMessage)
 	gossipListener.AddListener(ctx, tortoisebeacon.TBFirstVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFirstVotingMessage)
@@ -752,7 +760,7 @@ func (app *App) initServices(ctx context.Context,
 	app.blockListener = blockListener
 	app.gossipListener = gossipListener
 	app.mesh = msh
-	app.syncer = syncer
+	app.syncer = newSyncer
 	app.clock = clock
 	app.state = processor
 	app.hare = rabbit
@@ -762,7 +770,7 @@ func (app *App) initServices(ctx context.Context,
 	app.postSetupMgr = postSetupMgr
 	app.oracle = blockOracle
 	app.txProcessor = processor
-	app.atxDb = atxdb
+	app.atxDb = atxDB
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
 	if !app.Config.TIME.Peersync.Disable {
@@ -1036,7 +1044,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	data, err := ioutil.ReadFile(filename)
 	if err != nil {
 		if !os.IsNotExist(err) {
-			return nil, fmt.Errorf("failed to read identity file: %v", err)
+			return nil, fmt.Errorf("failed to read identity file: %w", err)
 		}
 
 		log.Info("Identity file not found. Creating new identity...")
@@ -1044,11 +1052,11 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 		edSgn := signing.NewEdSigner()
 		err := os.MkdirAll(filepath.Dir(filename), filesystem.OwnerReadWriteExec)
 		if err != nil {
-			return nil, fmt.Errorf("failed to create directory for identity file: %v", err)
+			return nil, fmt.Errorf("failed to create directory for identity file: %w", err)
 		}
 		err = ioutil.WriteFile(filename, edSgn.ToBuffer(), filesystem.OwnerReadWrite)
 		if err != nil {
-			return nil, fmt.Errorf("failed to write identity file: %v", err)
+			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
 
 		log.With().Warning("created new identity", edSgn.PublicKey())
@@ -1057,7 +1065,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 
 	edSgn, err := signing.NewEdSignerFromBuffer(data)
 	if err != nil {
-		return nil, fmt.Errorf("failed to construct identity from data file: %v", err)
+		return nil, fmt.Errorf("failed to construct identity from data file: %w", err)
 	}
 
 	log.Info("Loaded existing identity; public key: %v", edSgn.PublicKey())
@@ -1087,7 +1095,7 @@ func (app *App) getIdentityFile() (string, error) {
 		return f, nil
 	}
 	if err != nil {
-		return "", fmt.Errorf("failed to traverse Post data dir: %v", err)
+		return "", fmt.Errorf("failed to traverse Post data dir: %w", err)
 	}
 	return "", fmt.Errorf("not found")
 }

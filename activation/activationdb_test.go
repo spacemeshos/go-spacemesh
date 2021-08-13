@@ -243,9 +243,9 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	assert.NoError(t, err)
 	// TODO: check this test failure
 	_ = actives
-	//assert.Len(t, actives, 2)
-	//assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
-	//assert.Equal(t, uint64(20000), actives[id2.Key], "actives[id2.Key] (%d) != %d", actives[id2.Key], 20000)
+	// assert.Len(t, actives, 2)
+	// assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
+	// assert.Equal(t, uint64(20000), actives[id2.Key], "actives[id2.Key] (%d) != %d", actives[id2.Key], 20000)
 }
 
 func TestMesh_ActiveSetForLayerView2(t *testing.T) {
@@ -285,6 +285,7 @@ func Test_DBSanity(t *testing.T) {
 	id1 := types.NodeID{Key: uuid.New().String()}
 	id2 := types.NodeID{Key: uuid.New().String()}
 	id3 := types.NodeID{Key: uuid.New().String()}
+
 	coinbase1 := types.HexToAddress("aaaa")
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
@@ -300,27 +301,27 @@ func Test_DBSanity(t *testing.T) {
 	err = atxdb.storeAtxUnlocked(atx3)
 	assert.NoError(t, err)
 
-	err = atxdb.addAtxToNodeID(id1, atx1)
+	err = atxdb.addAtxToNodeID(id1.Key, atx1)
 	assert.NoError(t, err)
 	id, err := atxdb.GetNodeLastAtxID(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, atx1.ID(), id)
 	assert.Equal(t, types.EpochID(1), atx1.TargetEpoch())
-	id, err = atxdb.GetNodeAtxIDForEpoch(id1, atx1.PubLayerID.GetEpoch())
+	id, err = atxdb.GetNodeAtxIDForEpoch(id1.Key, atx1.PubLayerID.GetEpoch())
 	assert.NoError(t, err)
 	assert.Equal(t, atx1.ID(), id)
 
-	err = atxdb.addAtxToNodeID(id2, atx2)
+	err = atxdb.addAtxToNodeID(id2.Key, atx2)
 	assert.NoError(t, err)
 
-	err = atxdb.addAtxToNodeID(id1, atx3)
+	err = atxdb.addAtxToNodeID(id1.Key, atx3)
 	assert.NoError(t, err)
 
 	id, err = atxdb.GetNodeLastAtxID(id2)
 	assert.NoError(t, err)
 	assert.Equal(t, atx2.ID(), id)
 	assert.Equal(t, types.EpochID(2), atx2.TargetEpoch())
-	id, err = atxdb.GetNodeAtxIDForEpoch(id2, atx2.PubLayerID.GetEpoch())
+	id, err = atxdb.GetNodeAtxIDForEpoch(id2.Key, atx2.PubLayerID.GetEpoch())
 	assert.NoError(t, err)
 	assert.Equal(t, atx2.ID(), id)
 
@@ -328,7 +329,7 @@ func Test_DBSanity(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, atx3.ID(), id)
 	assert.Equal(t, types.EpochID(3), atx3.TargetEpoch())
-	id, err = atxdb.GetNodeAtxIDForEpoch(id1, atx3.PubLayerID.GetEpoch())
+	id, err = atxdb.GetNodeAtxIDForEpoch(id1.Key, atx3.PubLayerID.GetEpoch())
 	assert.NoError(t, err)
 	assert.Equal(t, atx3.ID(), id)
 
@@ -553,7 +554,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12), 0, 100, coinbase, 100, &types.NIPost{})
-	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeID))
+	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeID.Key))
 	for iter.Next() {
 		err = atxdb.atxs.Delete(iter.Key())
 		assert.NoError(t, err)
@@ -722,7 +723,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-
 }
 
 func TestActivationDb_ProcessAtx(t *testing.T) {
@@ -832,7 +832,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			prevAtxs[miner] = atx.ID()
 			storeAtx(r, atxdb, atx, lg.WithName("storeAtx"))
 		}
-		//noinspection GoNilness
+		// noinspection GoNilness
 		posAtx = atx.ID()
 		layer = layer.Add(layersPerEpoch)
 		if epoch%batchSize == batchSize-1 {
@@ -931,7 +931,6 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	signedAtx.Sig = []byte("anton")
 	_, err = ExtractPublicKey(signedAtx)
 	r.Error(err)
-
 }
 
 func createAndStoreAtx(atxdb *DB, layer types.LayerID) (*types.ActivationTx, error) {

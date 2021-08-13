@@ -3,19 +3,20 @@ package weakcoin_test
 import (
 	"context"
 	"crypto/ed25519"
+	"fmt"
 	"math/rand"
 	"testing"
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	servicemocks "github.com/spacemeshos/go-spacemesh/p2p/service/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/signing/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin/mocks"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,16 +42,14 @@ func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *smocks.Mo
 	signer := smocks.NewMockSigner(ctrl)
 	signer.EXPECT().Sign(gomock.Any()).Return(sig).AnyTimes()
 	signer.EXPECT().PublicKey().Return(signing.NewPublicKey(sig)).AnyTimes()
+	signer.EXPECT().LittleEndian().Return(true).AnyTimes()
 	return signer
 }
 
-func pubkeyFromSigVerifier(tb testing.TB, ctrl *gomock.Controller) *smocks.MockVerifier {
+func sigVerifier(tb testing.TB, ctrl *gomock.Controller) *smocks.MockVerifier {
 	tb.Helper()
 	verifier := smocks.NewMockVerifier(ctrl)
-	verifier.EXPECT().Extract(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(msg, sig []byte) (*signing.PublicKey, error) {
-			return signing.NewPublicKey(sig), nil
-		}).AnyTimes()
+	verifier.EXPECT().Verify(gomock.Any(), gomock.Any(), gomock.Any()).Return(true).AnyTimes()
 	return verifier
 }
 
@@ -66,7 +65,7 @@ func TestWeakCoin(t *testing.T) {
 		zeroLSB         = []byte{0b0110}
 		higherThreshold = []byte{0xff}
 
-		verifier = pubkeyFromSigVerifier(t, ctrl)
+		verifier = sigVerifier(t, ctrl)
 	)
 
 	tcs := []struct {
@@ -88,6 +87,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      1,
+				MinerPK:   oneLSB,
 				Signature: oneLSB,
 			}},
 			coinflip: true,
@@ -109,6 +109,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      2,
+				MinerPK:   oneLSB,
 				Signature: oneLSB,
 			}},
 		},
@@ -122,6 +123,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      1,
+				MinerPK:   higherThreshold,
 				Signature: higherThreshold,
 			}},
 		},
@@ -135,6 +137,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      1,
+				MinerPK:   zeroLSB,
 				Signature: zeroLSB,
 			}},
 		},
@@ -148,6 +151,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      1,
+				MinerPK:   zeroLSB,
 				Signature: zeroLSB,
 			}},
 		},
@@ -161,6 +165,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:     epoch - 1,
 				Round:     round,
 				Unit:      1,
+				MinerPK:   zeroLSB,
 				Signature: oneLSB,
 			}},
 		},
@@ -174,6 +179,7 @@ func TestWeakCoin(t *testing.T) {
 				Epoch:     epoch,
 				Round:     round - 1,
 				Unit:      1,
+				MinerPK:   zeroLSB,
 				Signature: oneLSB,
 			}},
 		},
@@ -276,7 +282,7 @@ func TestWeakCoinGetPanic(t *testing.T) {
 		ctrl = gomock.NewController(t)
 		wc   = weakcoin.New(
 			noopBroadcaster(t, ctrl),
-			staticSigner(t, ctrl, []byte{1}), pubkeyFromSigVerifier(t, ctrl))
+			staticSigner(t, ctrl, []byte{1}), sigVerifier(t, ctrl))
 		epoch types.EpochID = 10
 		round types.RoundID = 2
 	)
@@ -306,7 +312,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 
 	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
-		staticSigner(t, ctrl, oneLSB), pubkeyFromSigVerifier(t, ctrl),
+		staticSigner(t, ctrl, oneLSB), sigVerifier(t, ctrl),
 		weakcoin.WithNextRoundBufferSize(bufSize),
 	)
 
@@ -317,6 +323,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 			Epoch:     epoch,
 			Round:     nextRound,
 			Unit:      1,
+			MinerPK:   oneLSB,
 			Signature: oneLSB,
 		}), nil)
 	}
@@ -369,45 +376,57 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 	defer ctrl.Finish()
 
 	var (
-		instances                = make([]*weakcoin.WeakCoin, 10)
-		verifier                 = signing.VRFVerifier{}
-		epoch      types.EpochID = 2
-		start, end types.RoundID = 2, 9
-		allowances               = weakcoin.UnitAllowances{}
+		instances                          = make([]*weakcoin.WeakCoin, 10)
+		verifier                           = signing.VRFVerifier{}
+		epochStart, epochEnd types.EpochID = 0, 4
+		start, end           types.RoundID = 0, 9
+		allowances                         = weakcoin.UnitAllowances{}
+		r                                  = rand.New(rand.NewSource(999))
 	)
 
 	for i := range instances {
 		i := i
 		broadcaster := mocks.NewMockbroadcaster(ctrl)
-		broadcaster.EXPECT().Broadcast(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
-			msg := weakcoin.Message{}
-			require.NoError(t, types.BytesToInterface(data, &msg))
-			for j := range instances {
-				if i == j {
-					continue
+		broadcaster.EXPECT().Broadcast(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
+			DoAndReturn(func(_ context.Context, _ string, data []byte) error {
+				msg := weakcoin.Message{}
+				require.NoError(t, types.BytesToInterface(data, &msg))
+				for j := range instances {
+					if i == j {
+						continue
+					}
+					instances[j].HandleSerializedMessage(context.TODO(), broadcastedMessage(t, ctrl, msg), nil)
 				}
-				instances[j].HandleSerializedMessage(context.TODO(), broadcastedMessage(t, ctrl, msg), nil)
-			}
-			return nil
-		}).AnyTimes()
-		signer := signing.NewEdSigner()
+				return nil
+			}).AnyTimes()
+		seed := make([]byte, ed25519.SeedSize)
+
+		r.Read(seed)
+		signer, _, err := signing.NewVRFSigner(seed)
+		require.NoError(t, err)
 		allowances[string(signer.PublicKey().Bytes())] = 1
-		instances[i] = weakcoin.New(broadcaster, signer, verifier)
+		instances[i] = weakcoin.New(broadcaster, signer, verifier,
+			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))))
 	}
 
-	for _, instance := range instances {
-		instance.StartEpoch(epoch, allowances)
-	}
-	for current := start; current <= end; current++ {
+	for epoch := epochStart; epoch <= epochEnd; epoch++ {
 		for _, instance := range instances {
-			require.NoError(t, instance.StartRound(context.TODO(), current))
+			instance.StartEpoch(epoch, allowances)
+		}
+		for current := start; current <= end; current++ {
+			for _, instance := range instances {
+				require.NoError(t, instance.StartRound(context.TODO(), current))
+			}
+			for _, instance := range instances {
+				instance.FinishRound()
+			}
+			rst := instances[0].Get(epoch, current)
+			for _, instance := range instances[1:] {
+				require.Equal(t, rst, instance.Get(epoch, current), "round %d", current)
+			}
 		}
 		for _, instance := range instances {
-			instance.FinishRound()
-		}
-		rst := instances[0].Get(epoch, current)
-		for _, instance := range instances[1:] {
-			assert.Equal(t, rst, instance.Get(epoch, current))
+			instance.FinishEpoch()
 		}
 	}
 }

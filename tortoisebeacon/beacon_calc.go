@@ -2,7 +2,6 @@ package tortoisebeacon
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -10,23 +9,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID, coinflip bool) error {
-	tb.Log.With().Info("calculating beacon",
-		log.Uint64("epoch_id", uint64(epoch)))
+func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID, lastRoundVotes allVotes) error {
+	tb.Log.With().Info("calculating beacon", log.Uint32("epoch_id", uint32(epoch)))
 
-	allHashes, err := tb.calcTortoiseBeaconHashList(epoch, coinflip)
-	if err != nil {
-		return fmt.Errorf("calc tortoise beacon hash list: %w", err)
-	}
+	allHashes := lastRoundVotes.valid.sort()
 
-	tb.Log.With().Debug("going to calculate tortoise beacon from this hash list",
-		log.Uint64("epoch_id", uint64(epoch)),
+	tb.Log.With().Debug("calculating tortoise beacon from this hash list",
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.String("hashes", strings.Join(allHashes, ", ")))
 
-	beacon := allHashes.Hash()
+	beacon := allHashes.hash()
 
-	tb.Log.With().Info("calculated beacon",
-		log.Uint64("epoch_id", uint64(epoch)),
+	tb.Log.With().Info("calculated beacon", log.Uint32("epoch_id", uint32(epoch)),
 		log.String("beacon", beacon.String()))
 
 	events.ReportCalculatedTortoiseBeacon(epoch, beacon.String())
@@ -37,12 +31,12 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID, coinflip bool) error {
 
 	if tb.tortoiseBeaconDB != nil {
 		tb.Log.With().Info("writing beacon to database",
-			log.Uint64("epoch_id", uint64(epoch)),
+			log.Uint32("epoch_id", uint32(epoch)),
 			log.String("beacon", beacon.String()))
 
 		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epoch, beacon); err != nil {
-			tb.Log.With().Error("failed to write tortoise beacon to DB",
-				log.Uint64("epoch_id", uint64(epoch)),
+			tb.Log.With().Error("failed to write tortoise beacon to database",
+				log.Uint32("epoch_id", uint32(epoch)),
 				log.String("beacon", beacon.String()))
 
 			return fmt.Errorf("write tortoise beacon to DB: %w", err)
@@ -50,49 +44,12 @@ func (tb *TortoiseBeacon) calcBeacon(epoch types.EpochID, coinflip bool) error {
 	}
 
 	tb.Log.With().Debug("beacon updated for this epoch",
-		log.Uint64("epoch_id", uint64(epoch)),
+		log.Uint32("epoch_id", uint32(epoch)),
 		log.String("beacon", beacon.String()))
 
 	return nil
 }
 
-func (tb *TortoiseBeacon) calcTortoiseBeaconHashList(epoch types.EpochID, coinflip bool) (proposalList, error) {
-	allHashes := make(proposalList, 0)
-
-	lastRound := epochRoundPair{
-		EpochID: epoch,
-		Round:   tb.config.RoundsNumber,
-	}
-
-	votes, ok := tb.ownVotes[lastRound]
-	if !ok {
-		// re-calculate votes
-		tb.Log.With().Debug("own votes not found, re-calculating",
-			log.Uint64("epoch_id", uint64(epoch)),
-			log.Uint64("round_id", uint64(lastRound.Round)))
-
-		v, err := tb.calcVotes(epoch, lastRound.Round, coinflip)
-		if err != nil {
-			return nil, fmt.Errorf("recalculate votes: %w", err)
-		}
-
-		votes = v
-		tb.ownVotes[lastRound] = v
-	}
-
-	// output from VRF
-	for vote := range votes.ValidVotes {
-		allHashes = append(allHashes, vote)
-	}
-
-	tb.Log.With().Debug("tortoise beacon last round votes",
-		log.Uint64("epoch_id", uint64(epoch)),
-		log.Uint64("round_id", uint64(lastRound.Round)),
-		log.String("votes", fmt.Sprint(votes)))
-
-	sort.Slice(allHashes, func(i, j int) bool {
-		return strings.Compare(allHashes[i], allHashes[j]) == -1
-	})
-
-	return allHashes, nil
+func (tb *TortoiseBeacon) lastRound() types.RoundID {
+	return tb.config.RoundsNumber - 1 + firstRound
 }
