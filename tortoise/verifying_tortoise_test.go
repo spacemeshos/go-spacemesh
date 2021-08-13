@@ -1542,6 +1542,34 @@ func TestProcessNewBlocks(t *testing.T) {
 	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 }
 
+func TestHandleLateBlocks(t *testing.T) {
+	//r := require.New(t)
+	mdb := getInMemMesh(t)
+	atxdb := getAtxDB()
+	alg := defaultAlgorithm(t, mdb)
+	alg.trtl.atxdb = atxdb
+	l1ID := types.GetEffectiveGenesis().Add(1)
+	l2ID := l1ID.Add(1)
+
+	// increase the layer size so a few blocks won't finalize a layer
+	testLayerSize := 10
+	alg.trtl.AvgLayerSize = testLayerSize
+	checkVerifiedLayer(t, alg.trtl, types.GetEffectiveGenesis())
+
+	// one good layer
+	makeAndProcessLayer(t, l1ID, alg.trtl, testLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	checkVerifiedLayer(t, alg.trtl, types.GetEffectiveGenesis())
+
+	// generate and handle a small number of blocks: should not be able to verify layer
+	makeAndProcessLayer(t, l2ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	checkVerifiedLayer(t, alg.trtl, types.GetEffectiveGenesis())
+
+	// after late blocks arrive, verification should succeed
+	lyr := makeLayer(t, l2ID, alg.trtl, testLayerSize-defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	alg.HandleLateBlocks(context.TODO(), lyr.Blocks())
+	checkVerifiedLayer(t, alg.trtl, l1ID)
+}
+
 func TestVerifyLayers(t *testing.T) {
 	r := require.New(t)
 
