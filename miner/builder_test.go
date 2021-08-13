@@ -1,13 +1,11 @@
 package miner
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"testing"
 	"time"
 
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -184,7 +182,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	select {
 	case output := <-gossipMessages:
 		b := types.MiniBlock{}
-		_, _ = xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
+		require.NoError(t, types.BytesToInterface(output.Bytes(), &b))
 
 		assert.Equal(t, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, b.ForDiff)
 

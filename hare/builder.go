@@ -1,11 +1,9 @@
 package hare
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -19,15 +17,9 @@ type Message struct {
 
 // MessageFromBuffer builds an Hare message from the provided bytes buffer.
 // It returns an error if unmarshal of the provided byte slice failed.
-func MessageFromBuffer(buffer []byte) (*Message, error) {
-	rdr := bytes.NewReader(buffer)
-	hareMsg := &Message{}
-	if _, err := xdr.Unmarshal(rdr, hareMsg); err != nil {
-		log.With().Error("could not unmarshal message", log.Err(err))
-		return nil, err
-	}
-
-	return hareMsg, nil
+func MessageFromBuffer(buf []byte) (*Message, error) {
+	msg := &Message{}
+	return msg, types.BytesToInterface(buf, msg)
 }
 
 func (m *Message) String() string {
@@ -71,13 +63,11 @@ type innerMessage struct {
 
 // Bytes returns the message as bytes.
 func (im *innerMessage) Bytes() []byte {
-	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, im)
+	buf, err := types.InterfaceToBytes(im)
 	if err != nil {
-		log.Panic("could not marshal InnerMsg before send")
+		panic("could not marshal InnerMsg before send")
 	}
-
-	return w.Bytes()
+	return buf
 }
 
 func (im *innerMessage) String() string {
