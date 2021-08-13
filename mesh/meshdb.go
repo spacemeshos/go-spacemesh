@@ -300,6 +300,9 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return blockIds, nil
 }
 
+// EmptyLayerHash is the layer hash for an empty layer
+var EmptyLayerHash = types.Hash32{}
+
 // AddZeroBlockLayer tags lyr as a layer without blocks
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
 	blockIds := make([]types.BlockID, 0, 1)
@@ -307,7 +310,11 @@ func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
 	if err != nil {
 		return errors.New("could not encode layer blk ids")
 	}
-	return m.layers.Put(index.Bytes(), w)
+	err = m.layers.Put(index.Bytes(), w)
+	if err == nil {
+		m.persistLayerHash(index, EmptyLayerHash)
+	}
+	return err
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
@@ -419,6 +426,33 @@ func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blk
 	return m.inputVector.Put(hash.Bytes(), ifBytes)
 }
 
+func (m *DB) persistProcessedLayer(lyr *ProcessedLayer) error {
+	data, err := types.InterfaceToBytes(lyr)
+	if err != nil {
+		return err
+	}
+	if err := m.general.Put(constPROCESSED, data); err != nil {
+		return err
+	}
+	m.With().Debug("persisted processed layer",
+		lyr.ID,
+		log.String("layer_hash", lyr.Hash.ShortString()))
+	return nil
+}
+
+func (m *DB) recoverProcessedLayer() (*ProcessedLayer, error) {
+	processed, err := m.general.Get(constPROCESSED)
+	if err != nil {
+		return nil, err
+	}
+	var data ProcessedLayer
+	err = types.BytesToInterface(processed, &data)
+	if err != nil {
+		return nil, err
+	}
+	return &data, nil
+}
+
 func (m *DB) writeBlock(bl *types.Block) error {
 	block := &types.DBBlock{
 		MiniBlock: bl.MiniBlock,
@@ -471,9 +505,6 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 
 	// TODO: unhandled error
 	m.layers.Put(blk.LayerIndex.Bytes(), w)
-	hash := types.CalcBlocksHash32(blockIds, nil)
-	m.persistLayerHash(blk.LayerIndex, hash)
-
 	return nil
 }
 
@@ -481,15 +512,14 @@ func (m *DB) getLayerHashKey(layerID types.LayerID) []byte {
 	return []byte(fmt.Sprintf("layerHash_%v", layerID.Bytes()))
 }
 
-// GetLayerHash returns layer hash for received blocks
-func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
-	h := types.Hash32{}
-	bts, err := msh.general.Get(msh.getLayerHashKey(layerID))
+func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
+	h := EmptyLayerHash
+	bts, err := m.general.Get(m.getLayerHashKey(layerID))
 	if err != nil {
-		return types.Hash32{}
+		return EmptyLayerHash, err
 	}
 	h.SetBytes(bts)
-	return h
+	return h, nil
 }
 
 func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {

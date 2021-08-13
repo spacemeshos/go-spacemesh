@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.uber.org/zap/zapcore"
 )
 
 type ContextualValidityMock struct {
@@ -139,7 +140,7 @@ func (MockTxMemPool) Invalidate(types.TransactionID) {
 }
 
 func getMesh(tb testing.TB, id string) *Mesh {
-	lg := logtest.New(tb)
+	lg := logtest.New(tb, zapcore.DebugLevel).WithName(id)
 	mmdb := NewMemMeshDB(lg)
 	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
 }
@@ -165,11 +166,88 @@ func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh)
 	return l
 }
 
+func TestMesh_GetLayerHash(t *testing.T) {
+	r := require.New(t)
+	msh := getMesh(t, "get layer hash")
+	t.Cleanup(func() {
+		msh.Close()
+	})
+
+	lyrID := types.NewLayerID(1)
+	lyr, err := msh.GetLayer(lyrID)
+	r.Equal(database.ErrNotFound, err)
+	r.Nil(lyr)
+
+	numBlocks := 10
+	lyr = addLayer(r, lyrID, numBlocks, msh)
+	msh.SaveContextualValidity(lyr.Blocks()[0].ID(), false)
+
+	// before a layer is validated, all blocks count towards its hash, valid or not
+	lyr, err = msh.GetLayer(lyrID)
+	r.NoError(err)
+	assert.Equal(t, numBlocks, len(lyr.Blocks()))
+	assert.Equal(t, lyr.Hash(), msh.GetLayerHash(lyrID))
+
+	validBlocks := lyr.Blocks()[1:]
+	msh.ValidateLayer(lyr)
+	// after a layer is validated, only contextually valid blocks count towards its hash
+	expHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(validBlocks)), nil)
+	assert.Equal(t, expHash, msh.GetLayerHash(lyrID))
+	assert.NotEqual(t, expHash, lyr.Hash())
+
+	// if a late block is received and is considered invalid. hash does not change
+	txIDs, _ := addManyTXsToPool(r, msh, 10)
+	block := types.NewExistingBlock(lyrID, []byte(rand.String(8)), txIDs)
+	block.Initialize()
+	err = msh.AddBlockWithTxs(context.TODO(), block)
+	r.NoError(err)
+	lyr, err = msh.GetLayer(lyrID)
+	r.NoError(err)
+	assert.Equal(t, numBlocks+1, len(lyr.Blocks()))
+	msh.ValidateLayer(lyr)
+	assert.Equal(t, expHash, msh.GetLayerHash(lyrID))
+
+	// now if the late block is determined valid, the hash should be updated
+	msh.SaveContextualValidity(block.ID(), true)
+	msh.ValidateLayer(lyr)
+	newExpectedHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(append(validBlocks, block))), nil)
+	assert.Equal(t, newExpectedHash, msh.GetLayerHash(lyrID))
+}
+
+func TestMesh_SetZeroBlockLayer(t *testing.T) {
+	r := require.New(t)
+	msh := getMesh(t, "zero block layer")
+	t.Cleanup(func() {
+		msh.Close()
+	})
+
+	lyrID := types.NewLayerID(1)
+	lyr, err := msh.GetLayer(lyrID)
+	r.Equal(database.ErrNotFound, err)
+	r.Nil(lyr)
+	err = msh.SetZeroBlockLayer(lyrID)
+	assert.NoError(t, err)
+	assert.Equal(t, EmptyLayerHash, msh.GetLayerHash(lyrID))
+
+	// it's ok to add to an empty layer
+	lyr = addLayer(r, lyrID, 10, msh)
+	msh.ValidateLayer(lyr)
+	lyr, err = msh.GetLayer(lyrID)
+	r.NoError(err)
+	assert.Equal(t, 10, len(lyr.Blocks()))
+
+	// but not okay to set a non-empty layer to an empty layer
+	err = msh.SetZeroBlockLayer(lyrID)
+	assert.Equal(t, errLayerHasBlock, err)
+}
+
 func TestMesh_AddLayerGetLayer(t *testing.T) {
 	r := require.New(t)
 
 	msh := getMesh(t, "t2")
-	defer msh.Close()
+	t.Cleanup(func() {
+		msh.Close()
+	})
 
 	id := types.NewLayerID(1)
 	_, err := msh.GetLayer(id)
@@ -188,10 +266,47 @@ func TestMesh_AddLayerGetLayer(t *testing.T) {
 	r.Equal(3, len(lyr.Blocks()))
 }
 
+func TestMesh_GetAggregatedLayerHash(t *testing.T) {
+	r := require.New(t)
+	msh := getMesh(t, "aggregated hash")
+	t.Cleanup(func() {
+		msh.Close()
+	})
+
+	gLyr := types.GetEffectiveGenesis()
+	prevHash := EmptyLayerHash
+	for i := types.NewLayerID(1); i.Before(gLyr); i = i.Add(1) {
+		lyr := addLayer(r, i, 0, msh)
+		msh.ValidateLayer(lyr)
+		aggHash := types.CalcBlocksHash32([]types.BlockID{}, prevHash.Bytes())
+		assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
+		prevHash = aggHash
+	}
+	lyr, err := msh.GetLayer(gLyr)
+	r.NoError(err)
+	assert.Equal(t, 1, len(lyr.Blocks()))
+	msh.ValidateLayer(lyr)
+	aggHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(lyr.Blocks())), prevHash.Bytes())
+	assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
+	prevHash = aggHash
+
+	// add a layer with some invalid blocks
+	lyrID := gLyr.Add(1)
+	lyr = addLayer(r, lyrID, 5, msh)
+	r.Equal(5, len(lyr.Blocks()))
+	r.NoError(msh.SaveContextualValidity(lyr.Blocks()[0].ID(), false))
+	msh.ValidateLayer(lyr)
+	// aggregated layer hash only includes valid blocks
+	aggHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(lyr.Blocks()[1:])), prevHash.Bytes())
+	assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
+}
+
 func TestMesh_ProcessedLayer(t *testing.T) {
 	r := require.New(t)
 	msh := getMesh(t, "processed layer")
-	defer msh.Close()
+	t.Cleanup(func() {
+		msh.Close()
+	})
 
 	// test genesis layers
 	gLyr := types.GetEffectiveGenesis()
@@ -202,6 +317,7 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	}
 	prevHash := types.Hash32{}
 	for _, lyr := range lyrs {
+		assert.Equal(t, EmptyLayerHash, msh.GetLayerHash(lyr.Index()))
 		msh.setProcessedLayer(lyr)
 		expectedHash := types.CalcBlocksHash32([]types.BlockID{}, prevHash.Bytes())
 		assert.Equal(t, lyr.Index(), msh.ProcessedLayer())
@@ -215,15 +331,19 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	}
 
 	// effective genesis layer
+	_, err := msh.recoverLayerHash(gLyr)
+	assert.Equal(t, database.ErrNotFound, err)
 	lyr, err := msh.GetLayer(gLyr)
-	assert.NoError(t, err)
+	r.NoError(err)
 	msh.setProcessedLayer(lyr)
+	h := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(lyr.Blocks())), nil)
+	assert.Equal(t, h, msh.GetLayerHash(lyr.Index()))
 	expectedHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(lyr.Blocks())), prevHash.Bytes())
 	assert.Equal(t, lyr.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
 	// make sure processed layer is persisted
 	pLyr, err := msh.recoverProcessedLayer()
-	assert.NoError(t, err)
+	r.NoError(err)
 	assert.Equal(t, lyr.Index(), pLyr.ID)
 	assert.Equal(t, expectedHash, pLyr.Hash)
 	prevHash = expectedHash
@@ -234,68 +354,92 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	gPlus4 := addLayer(r, gLyr.Add(4), 4, msh)
 	gPlus5 := addLayer(r, gLyr.Add(5), 5, msh)
 
+	_, err = msh.recoverLayerHash(gPlus1.Index())
+	assert.Equal(t, database.ErrNotFound, err)
 	msh.setProcessedLayer(gPlus1)
+	h = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus1.Blocks())), nil)
+	assert.Equal(t, h, msh.GetLayerHash(gPlus1.Index()))
 	expectedHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus1.Blocks())), prevHash.Bytes())
 	assert.Equal(t, gPlus1.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
 	// make sure processed layer is persisted
 	pLyr, err = msh.recoverProcessedLayer()
-	assert.NoError(t, err)
+	r.NoError(err)
 	assert.Equal(t, gPlus1.Index(), pLyr.ID)
 	assert.Equal(t, expectedHash, pLyr.Hash)
 	prevHash = expectedHash
 
 	// set gPlus3 and gPlus5 out of order
+	_, err = msh.recoverLayerHash(gPlus3.Index())
+	assert.Equal(t, database.ErrNotFound, err)
 	msh.setProcessedLayer(gPlus3)
+	h = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus3.Blocks())), nil)
+	assert.Equal(t, h, msh.GetLayerHash(gPlus3.Index()))
 	// processed layer should not advance
 	assert.Equal(t, gPlus1.Index(), msh.ProcessedLayer())
 	assert.Equal(t, prevHash, msh.ProcessedLayerHash())
 	pLyr, err = msh.recoverProcessedLayer()
-	assert.NoError(t, err)
+	r.NoError(err)
 	assert.Equal(t, gPlus1.Index(), pLyr.ID)
 	assert.Equal(t, expectedHash, pLyr.Hash)
+
+	_, err = msh.recoverLayerHash(gPlus5.Index())
+	assert.Equal(t, database.ErrNotFound, err)
 	msh.setProcessedLayer(gPlus5)
+	h = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus5.Blocks())), nil)
+	assert.Equal(t, h, msh.GetLayerHash(gPlus5.Index()))
 	// processed layer should not advance
 	assert.Equal(t, gPlus1.Index(), msh.ProcessedLayer())
 	assert.Equal(t, prevHash, msh.ProcessedLayerHash())
 	pLyr, err = msh.recoverProcessedLayer()
-	assert.NoError(t, err)
+	r.NoError(err)
 	assert.Equal(t, gPlus1.Index(), pLyr.ID)
 	assert.Equal(t, expectedHash, pLyr.Hash)
 
 	// setting gPlus2 will bring the processed layer to gPlus3
+	_, err = msh.recoverLayerHash(gPlus2.Index())
+	assert.Equal(t, database.ErrNotFound, err)
 	msh.setProcessedLayer(gPlus2)
+	h = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus2.Blocks())), nil)
+	assert.Equal(t, h, msh.GetLayerHash(gPlus2.Index()))
 	gPlus2Hash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus2.Blocks())), prevHash.Bytes())
 	expectedHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus3.Blocks())), gPlus2Hash.Bytes())
 	assert.Equal(t, gPlus3.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
 	// make sure processed layer is persisted
 	pLyr, err = msh.recoverProcessedLayer()
-	assert.NoError(t, err)
+	r.NoError(err)
 	assert.Equal(t, gPlus3.Index(), pLyr.ID)
 	assert.Equal(t, expectedHash, pLyr.Hash)
 	prevHash = expectedHash
 
 	// setting gPlus4 will bring the processed layer to gPlus5
+	_, err = msh.recoverLayerHash(gPlus4.Index())
+	assert.Equal(t, database.ErrNotFound, err)
 	msh.setProcessedLayer(gPlus4)
+	h = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus4.Blocks())), nil)
+	assert.Equal(t, h, msh.GetLayerHash(gPlus4.Index()))
 	gPlus4Hash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus4.Blocks())), prevHash.Bytes())
 	expectedHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus5.Blocks())), gPlus4Hash.Bytes())
 	assert.Equal(t, gPlus5.Index(), msh.ProcessedLayer())
 	assert.Equal(t, expectedHash, msh.ProcessedLayerHash())
 	// make sure processed layer is persisted
 	pLyr, err = msh.recoverProcessedLayer()
-	assert.NoError(t, err)
+	r.NoError(err)
 	assert.Equal(t, gPlus5.Index(), pLyr.ID)
 	assert.Equal(t, expectedHash, pLyr.Hash)
 	prevHash = expectedHash
 
 	// setting it to an older layer should have no effect
+	h, err = msh.recoverLayerHash(gPlus2.Index())
+	assert.NoError(t, err)
 	msh.setProcessedLayer(gPlus2)
+	assert.Equal(t, h, msh.GetLayerHash(gPlus2.Index()))
 	assert.Equal(t, gPlus5.Index(), msh.ProcessedLayer())
 	assert.Equal(t, prevHash, msh.ProcessedLayerHash())
 	// make sure processed layer is persisted
 	pLyr, err = msh.recoverProcessedLayer()
-	assert.NoError(t, err)
+	r.NoError(err)
 	assert.Equal(t, gPlus5.Index(), pLyr.ID)
 	assert.Equal(t, expectedHash, pLyr.Hash)
 
@@ -306,7 +450,12 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	aggHash4, _ := msh.getAggregatedLayerHash(gPlus4.Index())
 	aggHash5, _ := msh.getAggregatedLayerHash(gPlus5.Index())
 	gPlus3 = addLayer(r, gLyr.Add(3), 2, msh)
+	oldHash, err := msh.recoverLayerHash(gPlus2.Index())
+	assert.NoError(t, err)
 	msh.setProcessedLayer(gPlus3)
+	h = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(gPlus3.Blocks())), nil)
+	assert.Equal(t, h, msh.GetLayerHash(gPlus3.Index()))
+	assert.NotEqual(t, oldHash, msh.GetLayerHash(gPlus3.Index()))
 	assert.Equal(t, gPlus5.Index(), msh.ProcessedLayer())
 	for i, hash := range []types.Hash32{aggHash1, aggHash2, aggHash3, aggHash4, aggHash5} {
 		lyr := gLyr.Add(uint32(i + 1))
@@ -316,7 +465,7 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 		} else {
 			assert.NotEqual(t, hash, aggHash, i)
 			layer, err := msh.GetLayer(lyr)
-			assert.NoError(t, err)
+			r.NoError(err)
 			expectedHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(layer.Blocks())), prevHash.Bytes())
 			assert.Equal(t, expectedHash, aggHash)
 		}
@@ -329,7 +478,9 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 
 func TestMesh_PersistProcessedLayer(t *testing.T) {
 	msh := getMesh(t, "persist_processed_layer")
-	defer msh.Close()
+	t.Cleanup(func() {
+		msh.Close()
+	})
 	lyr := &ProcessedLayer{
 		ID:   types.NewLayerID(3),
 		Hash: types.CalcHash32([]byte("layer 3 hash")),
@@ -342,7 +493,9 @@ func TestMesh_PersistProcessedLayer(t *testing.T) {
 
 func TestMesh_LatestKnownLayer(t *testing.T) {
 	msh := getMesh(t, "t6")
-	defer msh.Close()
+	t.Cleanup(func() {
+		msh.Close()
+	})
 	msh.setLatestLayer(types.NewLayerID(3))
 	msh.setLatestLayer(types.NewLayerID(7))
 	msh.setLatestLayer(types.NewLayerID(10))
@@ -353,7 +506,9 @@ func TestMesh_LatestKnownLayer(t *testing.T) {
 
 func TestMesh_WakeUp(t *testing.T) {
 	msh := getMesh(t, "t1")
-	defer msh.Close()
+	t.Cleanup(func() {
+		msh.Close()
+	})
 
 	r := require.New(t)
 	txIDs1, _ := addManyTXsToPool(r, msh, 4)
@@ -389,7 +544,9 @@ func TestMesh_WakeUp(t *testing.T) {
 
 func TestMesh_OrphanBlocks(t *testing.T) {
 	msh := getMesh(t, "t6")
-	defer msh.Close()
+	t.Cleanup(func() {
+		msh.Close()
+	})
 	r := require.New(t)
 	txIDs1, _ := addManyTXsToPool(r, msh, 4)
 	txIDs2, _ := addManyTXsToPool(r, msh, 3)
@@ -421,7 +578,9 @@ func TestMesh_OrphanBlocks(t *testing.T) {
 
 func TestMesh_OrphanBlocksClearEmptyLayers(t *testing.T) {
 	msh := getMesh(t, "t6")
-	defer msh.Close()
+	t.Cleanup(func() {
+		msh.Close()
+	})
 	r := require.New(t)
 	txIDs1, _ := addManyTXsToPool(r, msh, 4)
 	txIDs2, _ := addManyTXsToPool(r, msh, 3)
@@ -516,7 +675,9 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	r := require.New(t)
 
 	msh := getMesh(t, "t2")
-	defer msh.Close()
+	t.Cleanup(func() {
+		msh.Close()
+	})
 	layerID := types.NewLayerID(1)
 	signer, _ := newSignerAndAddress(r, "origin")
 	tx1 := addTxToMesh(r, msh, signer, 2468)
@@ -541,7 +702,9 @@ func randomHash() (hash types.Hash32) {
 
 func TestMesh_persistLayerHash(t *testing.T) {
 	msh := getMesh(t, "persistLayerHash")
-	defer msh.Close()
+	t.Cleanup(func() {
+		msh.Close()
+	})
 
 	// persist once
 	lyr := types.NewLayerID(3)

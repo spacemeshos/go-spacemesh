@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -37,9 +38,11 @@ type TxProcessor interface {
 // layerDB is an interface that returns layer data and blocks
 type layerDB interface {
 	GetLayerHash(ID types.LayerID) types.Hash32
+	GetAggregatedLayerHash(ID types.LayerID) types.Hash32
 	GetLayerHashBlocks(hash types.Hash32) []types.BlockID
 	GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error)
 	SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error
+	ProcessedLayer() types.LayerID
 }
 
 type atxIDsDB interface {
@@ -72,8 +75,6 @@ type network interface {
 	Close()
 }
 
-var emptyHash = types.Hash32{}
-
 // ErrZeroLayer is the error returned when an empty hash is received when polling for layer
 var ErrZeroLayer = errors.New("zero layer")
 
@@ -91,7 +92,7 @@ type peerResult struct {
 
 // LayerHashResult is the result of fetching hashes for each layer from peers.
 type LayerHashResult struct {
-	Hashes map[types.Hash32][]peers.Peer
+	Hashes map[layerHash][]peers.Peer
 	Err    error
 }
 
@@ -190,11 +191,24 @@ func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB, tbDB database.Getter)
 // layerHashReqReceiver returns the layer hash for the specified layer.
 func (l *Logic) layerHashReqReceiver(ctx context.Context, msg []byte) []byte {
 	lyr := types.NewLayerID(util.BytesToUint32(msg))
-	h := l.layerDB.GetLayerHash(lyr)
-	l.log.WithContext(ctx).With().Info("responding to layer hash request",
-		lyr,
-		log.String("layer_hash", h.ShortString()))
-	return h.Bytes()
+	lyrHash := &layerHash{
+		ProcessedLayer: l.layerDB.ProcessedLayer(),
+		Hash:           l.layerDB.GetLayerHash(lyr),
+		AggregatedHash: l.layerDB.GetAggregatedLayerHash(lyr),
+	}
+	out, err := types.InterfaceToBytes(lyrHash)
+	if err != nil {
+		l.log.WithContext(ctx).With().Panic("failed to serialize layer hash",
+			lyr,
+			log.String("hash", lyrHash.Hash.ShortString()),
+			log.String("aggregatedHash", lyrHash.AggregatedHash.ShortString()))
+	} else {
+		l.log.WithContext(ctx).With().Debug("responding to layer hash request",
+			lyr,
+			log.String("hash", lyrHash.Hash.ShortString()),
+			log.String("aggregatedHash", lyrHash.AggregatedHash.ShortString()))
+	}
+	return out
 }
 
 // epochATXsReqReceiver returns the ATXs for the specified epoch
@@ -343,13 +357,18 @@ func notifyLayerHashResult(layerID types.LayerID, channels []chan LayerHashResul
 	logger.With().Debug("got layer hashes. now aggregating", layerID)
 	numErrors := 0
 	// aggregate the peerResult by data
-	hashes := make(map[types.Hash32][]peers.Peer)
+	hashes := make(map[layerHash][]peers.Peer)
 	for peer, res := range peerResult {
 		if res.err != nil {
 			numErrors++
 		} else {
-			hash := types.BytesToHash(res.data)
-			hashes[hash] = append(hashes[hash], peer)
+			var lyrHash layerHash
+			convertErr := types.BytesToInterface(res.data, &lyrHash)
+			if convertErr != nil {
+				logger.With().Debug("received error converting bytes to layerHash", log.Err(convertErr))
+				numErrors++
+			}
+			hashes[lyrHash] = append(hashes[lyrHash], peer)
 		}
 	}
 	result := LayerHashResult{Hashes: hashes, Err: nil}
@@ -389,7 +408,7 @@ func (l *Logic) PollLayerBlocks(ctx context.Context, layerID types.LayerID, hash
 	numHashes := len(hashes)
 	for hash, remotePeers := range hashes {
 		peer := remotePeers[0]
-		if hash == emptyHash {
+		if hash == mesh.EmptyLayerHash {
 			l.receiveBlockHashes(ctx, layerID, peer, numHashes, nil, ErrZeroLayer)
 			continue
 		}
@@ -424,8 +443,10 @@ func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blo
 		l.log.WithContext(ctx).With().Error("failed to save input vector", layerID, log.Err(err))
 	}
 
-	if err := l.GetInputVector(ctx, layerID); err != nil {
-		l.log.WithContext(ctx).With().Debug("error getting input vector", layerID, log.Err(err))
+	if !layerID.GetEpoch().IsGenesis() {
+		if err := l.GetInputVector(ctx, layerID); err != nil {
+			l.log.WithContext(ctx).With().Debug("error getting input vector", layerID, log.Err(err))
+		}
 	}
 }
 
@@ -497,7 +518,7 @@ func notifyLayerBlocksResult(layerID types.LayerID, channels []chan LayerPromise
 			result.Err = firstErr
 		}
 	}
-	logger.With().Debug("notifying layer blocks result", log.String("blocks", fmt.Sprintf("%v", result)))
+	logger.With().Debug("notifying layer blocks result", layerID, log.String("blocks", fmt.Sprintf("%+v", result)))
 	for _, ch := range channels {
 		ch <- *result
 	}
