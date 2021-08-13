@@ -147,7 +147,7 @@ func getMesh(tb testing.TB, id string) *Mesh {
 
 func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
 	if layerSize == 0 {
-		msh.SetZeroBlockLayer(id)
+		r.NoError(msh.SetZeroBlockLayer(id))
 	} else {
 		for i := 0; i < layerSize; i++ {
 			log.Info("creating block for layer %v", id)
@@ -180,7 +180,7 @@ func TestMesh_GetLayerHash(t *testing.T) {
 
 	numBlocks := 10
 	lyr = addLayer(r, lyrID, numBlocks, msh)
-	msh.SaveContextualValidity(lyr.Blocks()[0].ID(), lyrID, false)
+	r.NoError(msh.SaveContextualValidity(lyr.Blocks()[0].ID(), lyrID, false))
 
 	// before a layer is validated, all blocks count towards its hash, valid or not
 	lyr, err = msh.GetLayer(lyrID)
@@ -208,7 +208,7 @@ func TestMesh_GetLayerHash(t *testing.T) {
 	assert.Equal(t, expHash, msh.GetLayerHash(lyrID))
 
 	// now if the late block is determined valid, the hash should be updated
-	msh.SaveContextualValidity(block.ID(), lyrID, true)
+	r.NoError(msh.SaveContextualValidity(block.ID(), lyrID, true))
 	msh.ValidateLayer(context.TODO(), lyr)
 	newExpectedHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(append(validBlocks, block))), nil)
 	assert.Equal(t, newExpectedHash, msh.GetLayerHash(lyrID))
