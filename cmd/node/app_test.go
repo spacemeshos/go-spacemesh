@@ -562,21 +562,21 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	}
 
 	for i, d := range datamap {
-		suite.log.Info("node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
+		suite.log.Info("node %v: len(layerstoblocks) %v", i, len(d.layertoblocks))
 		for i2, d2 := range datamap {
 			if i == i2 {
 				continue
 			}
 
-			assert.Equal(suite.T(), len(d.layertoblocks), len(d2.layertoblocks), "%v layer block count mismatch with %v: %v not %v", i, i2, len(d.layertoblocks), len(d2.layertoblocks))
+			suite.Equal(len(d.layertoblocks), len(d2.layertoblocks), "%v layer block count mismatch with %v: %v not %v", i, i2, len(d.layertoblocks), len(d2.layertoblocks))
 
 			for l, bl := range d.layertoblocks {
-				assert.Equal(suite.T(), len(bl), len(d2.layertoblocks[l]),
+				suite.Equal(len(bl), len(d2.layertoblocks[l]),
 					fmt.Sprintf("%v and %v had different block maps for layer: %v: %v: %v \r\n %v: %v", i, i2, l, i, bl, i2, d2.layertoblocks[l]))
 			}
 
 			for e, atx := range d.atxPerEpoch {
-				assert.Equal(suite.T(), atx, d2.atxPerEpoch[e],
+				suite.Equal(atx, d2.atxPerEpoch[e],
 					fmt.Sprintf("%v and %v had different atx counts for epoch: %v: %v: %v \r\n %v: %v", i, i2, e, i, atx, i2, d2.atxPerEpoch[e]))
 			}
 		}
@@ -592,7 +592,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	totalBlocks := 0
 	for id, l := range nodedata.layertoblocks {
 		totalBlocks += len(l)
-		suite.log.Info("node %v layer %v, blocks %v", suite.apps[0].nodeID.ShortString(), id, len(l))
+		suite.log.Info("node %v: layer %v, blocks %v", suite.apps[0].nodeID.ShortString(), id, len(l))
 	}
 
 	genesisBlocks := 0
@@ -618,11 +618,10 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	// note: we expect the number of blocks to be a bit less than the expected number since, after some apps were
 	// killed and before healing kicked in, some blocks should be missing
-
 	expectedTotalBlocks := (totalEpochs - 2) * expectedBlocksPerEpoch
 	actualTotalBlocks := totalBlocks - genesisBlocks
 	suite.Equal(expectedTotalBlocks, actualTotalBlocks,
-		fmt.Sprintf("got unexpected block count! got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
+		fmt.Sprintf("got unexpected block count! got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v, layerAvgSize: %v, totalEpochs: %v, datamap: %v",
 			actualTotalBlocks, expectedTotalBlocks, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
 	totalWeightAllEpochs := calcTotalWeight(suite, suite.apps[0].atxDb, allApps, types.EpochID(totalEpochs))
