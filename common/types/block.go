@@ -40,12 +40,12 @@ func (id BlockID) AsHash32() Hash32 {
 
 var (
 	layersPerEpoch uint32
-	// effectiveGenesis marks when actual blocks would start being created in the network, this will take into account the first
-	// genesis epoch and the following epoch in which ATXs are published
+	// effectiveGenesis marks when actual blocks would start being created in the network. It takes into account
+	// the first genesis epoch and the following epoch in which ATXs are published.
 	effectiveGenesis uint32
 )
 
-// SetLayersPerEpoch sets global parameter of layers per epoch, all conversion from layer to epoch use this param
+// SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param
 func SetLayersPerEpoch(layers uint32) {
 	atomic.StoreUint32(&layersPerEpoch, layers)
 	atomic.StoreUint32(&effectiveGenesis, layers*2-1)
