@@ -2495,8 +2495,6 @@ func TestMultiTortoise(t *testing.T) {
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.AvgLayerSize = layerSize
-		//level := zap.NewAtomicLevelAt(zap.DebugLevel)
-		//alg2.logger = log.NewWithLevel("trtl2", level)
 		alg2.logger = alg2.logger.Named("trtl2")
 		alg2.trtl.logger = alg2.logger
 
@@ -2562,10 +2560,13 @@ func TestMultiTortoise(t *testing.T) {
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
 			checkVerifiedLayer(t, alg2.trtl, lastVerified)
 		}
-		healingDistance := alg1.trtl.ConfidenceParam + alg1.trtl.Zdist + 2
+
+		// these extra layers account for the time needed to generate enough votes to "catch up" and pass
+		// the threshold.
+		healingDistance := 12
 
 		// after a while (we simulate the distance here), minority node eventually begins producing more blocks
-		for i := uint32(0); i < healingDistance; i++ {
+		for i := 0; i < healingDistance; i++ {
 			layerID = layerID.Add(1)
 
 			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
@@ -2618,7 +2619,141 @@ func TestMultiTortoise(t *testing.T) {
 	})
 
 	t.Run("equal partition", func(t *testing.T) {
+		layerSize := 10
 
+		mdb1 := getInMemMesh(t)
+		atxdb1 := getAtxDB()
+		alg1 := defaultAlgorithm(t, mdb1)
+		alg1.trtl.atxdb = atxdb1
+		alg1.trtl.AvgLayerSize = layerSize
+		alg1.logger = alg1.logger.Named("trtl1")
+		alg1.trtl.logger = alg1.logger
+
+		mdb2 := getInMemMesh(t)
+		atxdb2 := getAtxDB()
+		alg2 := defaultAlgorithm(t, mdb2)
+		alg2.trtl.atxdb = atxdb2
+		alg2.trtl.AvgLayerSize = layerSize
+		//level := zap.NewAtomicLevelAt(zap.DebugLevel)
+		//alg2.logger = log.NewWithLevel("trtl2", level)
+		alg2.logger = alg2.logger.Named("trtl2")
+		alg2.trtl.logger = alg2.logger
+
+		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB []*types.Block) {
+			// simulate producing blocks in parallel
+			blocksA = generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB = generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+
+			// 50/50 split
+			blocksA = blocksA[:layerSize/2]
+			blocksB = blocksB[layerSize/2:]
+			return
+		}
+
+		// a bunch of good layers
+		lastVerified := types.GetEffectiveGenesis()
+		layerID := types.GetEffectiveGenesis()
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB := makeBlocks(layerID)
+			var blocks []*types.Block
+			blocks = append(blocksA, blocksB...)
+
+			// add all blocks to both tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// both should make progress
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+			lastVerified = layerID.Sub(1)
+		}
+
+		// simulate a partition
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB := makeBlocks(layerID)
+
+			// add A's blocks to A only, B's to B
+			var blockIDsA, blockIDsB []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// both nodes get stuck
+			checkVerifiedLayer(t, alg1.trtl, lastVerified)
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+		}
+
+		// after a while (we simulate the distance here), both nodes eventually begin producing more blocks
+		// in the case of a 50/50 split, this happens quickly
+		for i := uint32(0); i < 2; i++ {
+			layerID = layerID.Add(1)
+
+			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
+			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
+			// an ongoing partition.
+			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			var blockIDsA, blockIDsB []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// both nodes still stuck
+			checkVerifiedLayer(t, alg1.trtl, lastVerified)
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+		}
+
+		// finally, both nodes heal and get unstuck
+		layerID = layerID.Add(1)
+		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+		var blockIDsA, blockIDsB []types.BlockID
+		for _, block := range blocksA {
+			blockIDsA = append(blockIDsA, block.ID())
+			r.NoError(mdb1.AddBlock(block))
+		}
+		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+		alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+		for _, block := range blocksB {
+			blockIDsB = append(blockIDsB, block.ID())
+			r.NoError(mdb2.AddBlock(block))
+		}
+		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+		alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+		// both nodes are healed
+		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 	})
 
 	t.Run("three-way partition", func(t *testing.T) {
