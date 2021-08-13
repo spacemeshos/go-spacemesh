@@ -11,21 +11,15 @@ import (
 
 type proposalList []proposal
 
-// Sort sorts proposal list.
-func (hl proposalList) Sort() []proposal {
-	hashCopy := make(proposalList, len(hl))
-
-	copy(hashCopy, hl)
-
-	sort.Slice(hashCopy, func(i, j int) bool {
-		return strings.Compare(hashCopy[i], hashCopy[j]) == -1
+func (hl proposalList) sort() []proposal {
+	sort.Slice(hl, func(i, j int) bool {
+		return strings.Compare(hl[i], hl[j]) == -1
 	})
 
-	return hashCopy
+	return hl
 }
 
-// Hash hashes proposal list.
-func (hl proposalList) Hash() types.Hash32 {
+func (hl proposalList) hash() types.Hash32 {
 	hasher := sha256.New()
 
 	for _, hash := range hl {
