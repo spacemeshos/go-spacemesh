@@ -423,11 +423,13 @@ func healingTester(dependencies []int) TestScenario {
 		})
 
 		// now wait for healing to kick in and advance the verified layer
+		success := true
 		for i, app := range suite.apps {
 			lyrProcessed := app.mesh.ProcessedLayer()
 			lyrVerified := app.mesh.LatestLayerInState()
 			suite.log.With().Info("node latest layers",
 				log.FieldNamed("old_verified", lastVerifiedLayer),
+				log.Uint32("confidence_interval", confidenceInterval),
 				log.FieldNamed("processed", lyrProcessed),
 				log.FieldNamed("verified", lyrVerified),
 				log.Int("app", i),
@@ -441,12 +443,9 @@ func healingTester(dependencies []int) TestScenario {
 			//   (verified needs to advance, and to nearly catch up to last received)
 			ok2[i] = ok1[i] && lyrVerified.After(lastVerifiedLayer.Add(confidenceInterval))
 			ok2[i] = ok2[i] && !lyrVerified.Add(confidenceInterval).Before(lyrProcessed)
-			if !ok2[i] {
-				return false
-			}
+			success = success && ok2[i]
 		}
-		suite.log.Info("healing okay")
-		return true
+		return success
 	}
 	return TestScenario{setup, test, dependencies}
 }
