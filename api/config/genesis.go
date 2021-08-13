@@ -25,7 +25,6 @@ func DefaultGenesisConfig() *GenesisConfig {
 	// we default to 10^5 SMH per account which is 10^17 smidge
 	// each genesis account starts off with 10^17 smidge
 	g.Accounts = map[string]uint64{
-		"0x1":           100000000000000000,
 		Account1Address: 100000000000000000,
 		Account2Address: 100000000000000000,
 	}

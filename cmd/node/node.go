@@ -402,7 +402,7 @@ func (app *App) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) 
 			return fmt.Errorf("cannot decode entry %s for genesis account", id)
 		}
 		// just make it explicit that we want address and not a public key
-		if len(bytes) > types.AddressLength {
+		if len(bytes) != types.AddressLength {
 			return fmt.Errorf("%s must be an address of size %d", id, types.AddressLength)
 		}
 		addr := types.BytesToAddress(bytes)
