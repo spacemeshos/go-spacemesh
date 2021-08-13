@@ -2446,52 +2446,33 @@ func TestMultiTortoise(t *testing.T) {
 		// simulate producing blocks in parallel
 		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1)
 		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2)
-		//lyrA := makeLayer(t, layerID, alg1.trtl, layerSize, atxdb1, mdb1, mdb1.LayerBlockIds)
-		//lyrB := makeLayer(t, layerID, alg2.trtl, layerSize, atxdb2, mdb2, mdb2.LayerBlockIds)
 
 		// these will produce identical sets of blocks, so throw away half of each
+		// (we could probably get away with just using, say, A's blocks, but to be more thorough we also want
+		// to test the BaseBlock provider of each tortoise)
 		blocksA = blocksA[:layerSize/2]
 		blocksB = blocksB[len(blocksA):]
 		blocks := append(blocksA, blocksB...)
-		//blocksA := lyrA.Blocks()[:layerSize/2]
-		//blocksB := lyrB.Blocks()[len(blocksA):]
-
-		// simulate hare run: combine the sets of blocks
-		//blocks := append(lyrA.Blocks(), lyrB.Blocks()...)
-		//lyr := types.NewExistingLayer(layerID, blocks)
 
 		// add node A blocks to B and vice-versa
+		var blockIDs []types.BlockID
 		for _, block := range blocks {
+			blockIDs = append(blockIDs, block.ID())
 			r.NoError(mdb1.AddBlock(block))
 			r.NoError(mdb2.AddBlock(block))
 		}
-		//for _, block := range blocksA {
-		//	r.NoError(mdb2.AddBlock(block))
-		//}
-		//for _, block := range blocksB {
-		//	r.NoError(mdb1.AddBlock(block))
-		//}
-
+		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 	}
 
-	// bootstrap one layer
-	//makeAndProcessLayerMultiTortoise(types.GetEffectiveGenesis())
-
-	//l0ID := types.GetEffectiveGenesis()
-	//l1ID := types.GetEffectiveGenesis().Add(1)
-	//l2ID := types.GetEffectiveGenesis().Add(2)
-	//l3ID := types.GetEffectiveGenesis().Add(3)
-	//
 	t.Run("happy path", func(t *testing.T) {
 		// make and process a bunch of layers and make sure both tortoises can verify them
 		for i := 1; i < 5; i++ {
 			layerID := types.GetEffectiveGenesis().Add(uint32(i))
 
 			makeAndProcessLayerMultiTortoise(layerID)
-			//blocks := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1)
-			//blocksB := generateBlocks(t, layerID, layerSize/2, alg2.BaseBlock, atxdb2)
 
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
 			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
