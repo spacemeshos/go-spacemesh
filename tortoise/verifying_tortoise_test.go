@@ -2424,50 +2424,50 @@ func TestCalculateOpinionWithThreshold(t *testing.T) {
 func TestMultiTortoise(t *testing.T) {
 	r := require.New(t)
 
-	layerSize := defaultTestLayerSize * 2
-
-	mdb1 := getInMemMesh(t)
-	atxdb1 := getAtxDB()
-	alg1 := defaultAlgorithm(t, mdb1)
-	alg1.trtl.atxdb = atxdb1
-	alg1.trtl.AvgLayerSize = layerSize
-	alg1.logger = alg1.logger.Named("trtl1")
-	alg1.trtl.logger = alg1.logger
-
-	mdb2 := getInMemMesh(t)
-	atxdb2 := getAtxDB()
-	alg2 := defaultAlgorithm(t, mdb2)
-	alg2.trtl.atxdb = atxdb2
-	alg2.trtl.AvgLayerSize = layerSize
-	alg2.logger = alg2.logger.Named("trtl2")
-	alg2.trtl.logger = alg2.logger
-
-	makeAndProcessLayerMultiTortoise := func(layerID types.LayerID) {
-		// simulate producing blocks in parallel
-		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1)
-		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2)
-
-		// these will produce identical sets of blocks, so throw away half of each
-		// (we could probably get away with just using, say, A's blocks, but to be more thorough we also want
-		// to test the BaseBlock provider of each tortoise)
-		blocksA = blocksA[:layerSize/2]
-		blocksB = blocksB[len(blocksA):]
-		blocks := append(blocksA, blocksB...)
-
-		// add node A blocks to B and vice-versa
-		var blockIDs []types.BlockID
-		for _, block := range blocks {
-			blockIDs = append(blockIDs, block.ID())
-			r.NoError(mdb1.AddBlock(block))
-			r.NoError(mdb2.AddBlock(block))
-		}
-		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-		alg1.HandleIncomingLayer(context.TODO(), layerID)
-		alg2.HandleIncomingLayer(context.TODO(), layerID)
-	}
-
 	t.Run("happy path", func(t *testing.T) {
+		layerSize := defaultTestLayerSize * 2
+
+		mdb1 := getInMemMesh(t)
+		atxdb1 := getAtxDB()
+		alg1 := defaultAlgorithm(t, mdb1)
+		alg1.trtl.atxdb = atxdb1
+		alg1.trtl.AvgLayerSize = layerSize
+		alg1.logger = alg1.logger.Named("trtl1")
+		alg1.trtl.logger = alg1.logger
+
+		mdb2 := getInMemMesh(t)
+		atxdb2 := getAtxDB()
+		alg2 := defaultAlgorithm(t, mdb2)
+		alg2.trtl.atxdb = atxdb2
+		alg2.trtl.AvgLayerSize = layerSize
+		alg2.logger = alg2.logger.Named("trtl2")
+		alg2.trtl.logger = alg2.logger
+
+		makeAndProcessLayerMultiTortoise := func(layerID types.LayerID) {
+			// simulate producing blocks in parallel
+			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+
+			// these will produce identical sets of blocks, so throw away half of each
+			// (we could probably get away with just using, say, A's blocks, but to be more thorough we also want
+			// to test the BaseBlock provider of each tortoise)
+			blocksA = blocksA[:layerSize/2]
+			blocksB = blocksB[len(blocksA):]
+			blocks := append(blocksA, blocksB...)
+
+			// add all blocks to both tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+		}
+
 		// make and process a bunch of layers and make sure both tortoises can verify them
 		for i := 1; i < 5; i++ {
 			layerID := types.GetEffectiveGenesis().Add(uint32(i))
@@ -2477,5 +2477,102 @@ func TestMultiTortoise(t *testing.T) {
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
 			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 		}
+	})
+
+	t.Run("unequal partition", func(t *testing.T) {
+		layerSize := 10
+
+		mdb1 := getInMemMesh(t)
+		atxdb1 := getAtxDB()
+		alg1 := defaultAlgorithm(t, mdb1)
+		alg1.trtl.atxdb = atxdb1
+		alg1.trtl.AvgLayerSize = layerSize
+		alg1.logger = alg1.logger.Named("trtl1")
+		alg1.trtl.logger = alg1.logger
+
+		mdb2 := getInMemMesh(t)
+		atxdb2 := getAtxDB()
+		alg2 := defaultAlgorithm(t, mdb2)
+		alg2.trtl.atxdb = atxdb2
+		alg2.trtl.AvgLayerSize = layerSize
+		alg2.logger = alg2.logger.Named("trtl2")
+		alg2.trtl.logger = alg2.logger
+
+		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB []*types.Block) {
+			// simulate producing blocks in parallel
+			blocksA = generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB = generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+
+			// 90/10 split
+			blocksA = blocksA[:layerSize-1]
+			blocksB = blocksB[layerSize-1:]
+			return
+		}
+
+		// a bunch of good layers
+		lastVerified := types.GetEffectiveGenesis()
+		for i := 1; i < 10; i++ {
+			layerID := types.GetEffectiveGenesis().Add(uint32(i))
+			blocksA, blocksB := makeBlocks(layerID)
+			var blocks []*types.Block
+			blocks = append(blocksA, blocksB...)
+
+			// add all blocks to both tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// both should make progress
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+			lastVerified = layerID.Sub(1)
+		}
+
+		// simulate a partition
+		for i := 10; i < 20; i++ {
+			layerID := types.GetEffectiveGenesis().Add(uint32(i))
+			blocksA, blocksB := makeBlocks(layerID)
+
+			// add A's blocks to A only, B's to B
+			var blockIDsA, blockIDsB []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// majority node is unaffected, minority node gets stuck
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+		}
+
+		// minority node eventually heals
+
+	})
+
+	t.Run("equal partition", func(t *testing.T) {
+
+	})
+
+	t.Run("three-way partition", func(t *testing.T) {
+
+	})
+
+	t.Run("rejoin", func(t *testing.T) {
+
 	})
 }
