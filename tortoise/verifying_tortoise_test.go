@@ -2495,6 +2495,8 @@ func TestMultiTortoise(t *testing.T) {
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.AvgLayerSize = layerSize
+		//level := zap.NewAtomicLevelAt(zap.DebugLevel)
+		//alg2.logger = log.NewWithLevel("trtl2", level)
 		alg2.logger = alg2.logger.Named("trtl2")
 		alg2.trtl.logger = alg2.logger
 
@@ -2511,8 +2513,9 @@ func TestMultiTortoise(t *testing.T) {
 
 		// a bunch of good layers
 		lastVerified := types.GetEffectiveGenesis()
-		for i := 1; i < 10; i++ {
-			layerID := types.GetEffectiveGenesis().Add(uint32(i))
+		layerID := types.GetEffectiveGenesis()
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
 			blocksA, blocksB := makeBlocks(layerID)
 			var blocks []*types.Block
 			blocks = append(blocksA, blocksB...)
@@ -2536,8 +2539,8 @@ func TestMultiTortoise(t *testing.T) {
 		}
 
 		// simulate a partition
-		for i := 10; i < 20; i++ {
-			layerID := types.GetEffectiveGenesis().Add(uint32(i))
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
 			blocksA, blocksB := makeBlocks(layerID)
 
 			// add A's blocks to A only, B's to B
@@ -2559,9 +2562,59 @@ func TestMultiTortoise(t *testing.T) {
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
 			checkVerifiedLayer(t, alg2.trtl, lastVerified)
 		}
+		healingDistance := alg1.trtl.ConfidenceParam + alg1.trtl.Zdist + 2
 
-		// minority node eventually heals
+		// after a while (we simulate the distance here), minority node eventually begins producing more blocks
+		for i := uint32(0); i < healingDistance; i++ {
+			layerID = layerID.Add(1)
 
+			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
+			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
+			// an ongoing partition.
+			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			var blockIDsA, blockIDsB []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// majority node is unaffected, minority node is still stuck
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+		}
+
+		// finally, the minority node heals and regains parity with the majority node
+		layerID = layerID.Add(1)
+		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+		var blockIDsA, blockIDsB []types.BlockID
+		for _, block := range blocksA {
+			blockIDsA = append(blockIDsA, block.ID())
+			r.NoError(mdb1.AddBlock(block))
+		}
+		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+		alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+		for _, block := range blocksB {
+			blockIDsB = append(blockIDsB, block.ID())
+			r.NoError(mdb2.AddBlock(block))
+		}
+		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+		alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+		// minority node is healed
+		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 	})
 
 	t.Run("equal partition", func(t *testing.T) {
