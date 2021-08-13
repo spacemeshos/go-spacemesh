@@ -2634,8 +2634,6 @@ func TestMultiTortoise(t *testing.T) {
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.AvgLayerSize = layerSize
-		//level := zap.NewAtomicLevelAt(zap.DebugLevel)
-		//alg2.logger = log.NewWithLevel("trtl2", level)
 		alg2.logger = alg2.logger.Named("trtl2")
 		alg2.trtl.logger = alg2.logger
 
@@ -2757,7 +2755,182 @@ func TestMultiTortoise(t *testing.T) {
 	})
 
 	t.Run("three-way partition", func(t *testing.T) {
+		layerSize := 12
 
+		mdb1 := getInMemMesh(t)
+		atxdb1 := getAtxDB()
+		alg1 := defaultAlgorithm(t, mdb1)
+		alg1.trtl.atxdb = atxdb1
+		alg1.trtl.AvgLayerSize = layerSize
+		alg1.logger = alg1.logger.Named("trtl1")
+		alg1.trtl.logger = alg1.logger
+
+		mdb2 := getInMemMesh(t)
+		atxdb2 := getAtxDB()
+		alg2 := defaultAlgorithm(t, mdb2)
+		alg2.trtl.atxdb = atxdb2
+		alg2.trtl.AvgLayerSize = layerSize
+		alg2.logger = alg2.logger.Named("trtl2")
+		alg2.trtl.logger = alg2.logger
+
+		mdb3 := getInMemMesh(t)
+		atxdb3 := getAtxDB()
+		alg3 := defaultAlgorithm(t, mdb3)
+		alg3.trtl.atxdb = atxdb3
+		alg3.trtl.AvgLayerSize = layerSize
+		//level := zap.NewAtomicLevelAt(zap.DebugLevel)
+		//alg3.logger = log.NewWithLevel("trtl3", level)
+		alg3.logger = alg3.logger.Named("trtl3")
+		alg3.trtl.logger = alg3.logger
+
+		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB, blocksC []*types.Block) {
+			// simulate producing blocks in parallel
+			blocksA = generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB = generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			blocksC = generateBlocks(t, layerID, layerSize, alg3.BaseBlock, atxdb3, 1)
+
+			// three-way split
+			blocksA = blocksA[:layerSize/3]
+			blocksB = blocksB[layerSize/3 : layerSize*2/3]
+			blocksC = blocksC[layerSize*2/3:]
+			return
+		}
+
+		// a bunch of good layers
+		lastVerified := types.GetEffectiveGenesis()
+		layerID := types.GetEffectiveGenesis()
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB, blocksC := makeBlocks(layerID)
+			var blocks []*types.Block
+			blocks = append(blocksA, blocksB...)
+			blocks = append(blocks, blocksC...)
+
+			// add all blocks to all tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+				r.NoError(mdb3.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			alg3.HandleIncomingLayer(context.TODO(), layerID)
+
+			// all should make progress
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
+			lastVerified = layerID.Sub(1)
+		}
+
+		// simulate a partition
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB, blocksC := makeBlocks(layerID)
+
+			// add each blocks to their own
+			var blockIDsA, blockIDsB, blockIDsC []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			for _, block := range blocksC {
+				blockIDsC = append(blockIDsC, block.ID())
+				r.NoError(mdb3.AddBlock(block))
+			}
+			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
+			alg3.HandleIncomingLayer(context.TODO(), layerID)
+
+			// all nodes get stuck
+			checkVerifiedLayer(t, alg1.trtl, lastVerified)
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+			checkVerifiedLayer(t, alg3.trtl, lastVerified)
+		}
+
+		// after a while (we simulate the distance here), all nodes eventually begin producing more blocks
+		for i := uint32(0); i < 6; i++ {
+			layerID = layerID.Add(1)
+
+			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
+			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
+			// an ongoing partition.
+			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			var blockIDsA, blockIDsB, blockIDsC []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			blocksC := generateBlocks(t, layerID, layerSize, alg3.BaseBlock, atxdb3, 1)
+			for _, block := range blocksC {
+				blockIDsC = append(blockIDsC, block.ID())
+				r.NoError(mdb3.AddBlock(block))
+			}
+			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
+			alg3.HandleIncomingLayer(context.TODO(), layerID)
+
+			// nodes still stuck
+			checkVerifiedLayer(t, alg1.trtl, lastVerified)
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+			checkVerifiedLayer(t, alg3.trtl, lastVerified)
+		}
+
+		// finally, all nodes heal and get unstuck
+		layerID = layerID.Add(1)
+		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+		var blockIDsA, blockIDsB, blockIDsC []types.BlockID
+		for _, block := range blocksA {
+			blockIDsA = append(blockIDsA, block.ID())
+			r.NoError(mdb1.AddBlock(block))
+		}
+		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+		alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+		for _, block := range blocksB {
+			blockIDsB = append(blockIDsB, block.ID())
+			r.NoError(mdb2.AddBlock(block))
+		}
+		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+		alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+		blocksC := generateBlocks(t, layerID, layerSize, alg3.BaseBlock, atxdb3, 1)
+		for _, block := range blocksC {
+			blockIDsC = append(blockIDsC, block.ID())
+			r.NoError(mdb3.AddBlock(block))
+		}
+		r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
+		alg3.HandleIncomingLayer(context.TODO(), layerID)
+
+		// all nodes are healed
+		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
 	})
 
 	t.Run("rejoin", func(t *testing.T) {
