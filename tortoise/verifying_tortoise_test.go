@@ -3,7 +3,6 @@ package tortoise
 import (
 	"context"
 	"errors"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -595,9 +594,7 @@ func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider,
 	logger := logtest.New(t)
 	logger.Debug("======================== choosing base block for layer", l)
 	b, lists, err := bbp(context.TODO())
-	if err != nil {
-		panic(fmt.Sprint("no base block for layer: ", err))
-	}
+	require.NoError(t, err)
 	logger.Debug("the base block for layer", l, "is", b, ". exception lists:")
 	logger.Debug("\tagainst\t", lists[0])
 	logger.Debug("\tfor\t", lists[1])
@@ -625,9 +622,34 @@ func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider,
 		blk.Signature = signing.NewEdSigner().Sign(b.Bytes())
 		blk.Initialize()
 		blocks = append(blocks, blk)
-		fmt.Println("generated block", blk.ID(), "in layer", l)
+		logger.Debug("generated block", blk.ID(), "in layer", l)
 	}
 	return
+}
+
+func generateBlock(t *testing.T, l types.LayerID, bbp baseBlockProvider, atxdb atxDataWriter, weight uint) *types.Block {
+	b, lists, err := bbp(context.TODO())
+	require.NoError(t, err)
+	atxHeader := makeAtxHeaderWithWeight(weight)
+	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
+	atx.CalcAndSetID()
+	require.NoError(t, atxdb.StoreAtx(l.GetEpoch(), atx))
+
+	blk := &types.Block{
+		MiniBlock: types.MiniBlock{
+			BlockHeader: types.BlockHeader{
+				ATXID:      atx.ID(),
+				LayerIndex: l,
+				Data:       []byte{0}},
+			TxIDs: nil,
+		}}
+	blk.BaseBlock = b
+	blk.AgainstDiff = lists[0]
+	blk.ForDiff = lists[1]
+	blk.NeutralDiff = lists[2]
+	blk.Signature = signing.NewEdSigner().Sign(b.Bytes())
+	blk.Initialize()
+	return blk
 }
 
 func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDataWriter, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
@@ -1896,6 +1918,42 @@ func TestSumVotesForBlock(t *testing.T) {
 	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeNeverSaw.ID(), l2ID, filterPassAll)
 	r.NoError(err)
 	r.Equal(against.Multiply(9), sum)
+}
+
+func TestSumWeightedVotesForBlock(t *testing.T) {
+	r := require.New(t)
+	mdb := getInMemMesh(t)
+	atxdb := getAtxDB()
+	alg := defaultAlgorithm(t, mdb)
+	alg.trtl.atxdb = atxdb
+	numBlocks := 5
+	genesisBlockID := mesh.GenesisBlock().ID()
+	l1ID := types.GetEffectiveGenesis().Add(1)
+	filterPassAll := func(types.BlockID) bool { return true }
+
+	// use the same base block for all newly-created blocks
+	b, lists, err := alg.BaseBlock(context.TODO())
+	r.NoError(err)
+	bbp := func(context.Context) (types.BlockID, [][]types.BlockID, error) {
+		return b, lists, nil
+	}
+
+	// create several voting blocks with different weights
+	netWeight := uint(0)
+	for i := 0; i < numBlocks; i++ {
+		thisWeight := uint(1) << i
+		netWeight += thisWeight
+		block := generateBlock(t, l1ID, bbp, atxdb, thisWeight)
+		r.NoError(mdb.AddBlock(block))
+
+		// update t.Last and process block votes
+		r.NoError(alg.trtl.handleLayerBlocks(context.TODO(), l1ID))
+
+		// check
+		sum, err := alg.trtl.sumVotesForBlock(context.TODO(), genesisBlockID, l1ID, filterPassAll)
+		r.NoError(err)
+		r.Equal(int(netWeight), int(sum.netVote()))
+	}
 }
 
 func checkVerifiedLayer(t *testing.T, trtl *turtle, layerID types.LayerID) {
