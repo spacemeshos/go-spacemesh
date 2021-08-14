@@ -469,16 +469,11 @@ func (t *turtle) calculateExceptions(
 			addDiffs(b, "support", support, forDiff)
 		}
 
-		// Next, we need to make sure we vote AGAINST all blocks in the layer that are not in the input vector (and
-		// where we are no longer waiting for Hare results, see above)
-		for _, b := range layerBlockIds {
-			if _, ok := inInputVector[b]; !ok {
-				addDiffs(b, "against", against, againstDiff)
-			}
-		}
-
 		// Finally, we need to consider the case where the base block supports a block in this layer that is not in our
-		// input vector (e.g., one we haven't seen), by adding a diff against the block
+		// input vector (e.g., one we haven't seen), by adding a diff against the block.
+		// We do not explicitly add votes against blocks that the base block does _not_ support, since by not voting to
+		// support a block in an old layer, we are implicitly voting against it. But if the base block does explicitly
+		// support a block and we disagree, we need to add a vote against here.
 		// TODO: this is not currently possible since base block opinions aren't indexed by layer. See
 		// https://github.com/spacemeshos/go-spacemesh/issues/2424
 		//for b, v := range baseBlockOpinion.BlockOpinions {

@@ -196,7 +196,11 @@ func TestHandleIncomingLayer(t *testing.T) {
 		}
 		require.Len(t, abs, 0)
 		require.Equal(t, len(negs), int(lyrsAfterGenesis.Sub(1).Uint32())*voteNegative) // don't count last layer because no one is voting on it
-		requireVote(t, trtl, against, negs...)
+
+		// this test is called VoteNegative, but in fact we just abstain on blocks that we disagree with, unless
+		// the base block explicitly supports them.
+		// TODO: add a test for this, pending https://github.com/spacemeshos/go-spacemesh/issues/2424
+		requireVote(t, trtl, abstain, negs...)
 		requireVote(t, trtl, support, poblkids...)
 	})
 
@@ -1154,7 +1158,9 @@ func TestCalculateExceptions(t *testing.T) {
 	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, []types.BlockID{mesh.GenesisBlock().ID()}))
 	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
 	r.NoError(err)
-	expectVotes(votes, defaultTestLayerSize, len(mesh.GenesisLayer().Blocks()), 0)
+
+	// we don't explicitly vote against blocks in the layer, we implicitly vote against them by not voting for them
+	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), 0)
 
 	// compare opinions: all agree, no exceptions
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
