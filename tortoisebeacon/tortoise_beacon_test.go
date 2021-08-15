@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"math/big"
@@ -72,7 +73,7 @@ func TestTortoiseBeacon(t *testing.T) {
 	atxdb := activation.NewDB(database.NewMemDatabase(), idStore, memesh, 3, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
 	_ = atxdb
 
-	tb := New(conf, minerID, ld, n1, mockDB, nil, edSgn, signing.VRFVerifier{}, vrfSigner, mwc, clock, logger)
+	tb := New(conf, ld, signing.NewPublicKey(util.Hex2Bytes(minerID.Key)), n1, mockDB, nil, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, clock, logger)
 	requirer.NotNil(tb)
 
 	err = tb.Start(context.TODO())
@@ -110,25 +111,25 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 		name      string
 		theta     *big.Rat
 		weight    uint64
-		threshold int
+		threshold *big.Int
 	}{
 		{
 			name:      "Case 1",
 			theta:     big.NewRat(1, 2),
 			weight:    10,
-			threshold: 5,
+			threshold: big.NewInt(5),
 		},
 		{
 			name:      "Case 2",
 			theta:     big.NewRat(3, 10),
 			weight:    10,
-			threshold: 3,
+			threshold: big.NewInt(3),
 		},
 		{
 			name:      "Case 3",
 			theta:     big.NewRat(1, 25000),
 			weight:    31744,
-			threshold: 1,
+			threshold: big.NewInt(1),
 		},
 	}
 
@@ -368,7 +369,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  0x12345678,
-			result: "00000003544250000000000012345678",
+			result: string(util.Hex2Bytes("000000035442500012345678")),
 		},
 	}
 
@@ -383,7 +384,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 
 			result, err := tb.buildProposal(tc.epoch)
 			r.NoError(err)
-			r.Equal(tc.result, util.Bytes2Hex(result))
+			r.Equal(tc.result, string(result))
 		})
 	}
 }
@@ -424,7 +425,7 @@ func TestTortoiseBeacon_signMessage(t *testing.T) {
 
 			result, err := tb.signMessage(tc.message)
 			r.NoError(err)
-			r.Equal(util.Bytes2Hex(tc.result), util.Bytes2Hex(result))
+			r.Equal(string(tc.result), string(result))
 		})
 	}
 }
@@ -448,12 +449,12 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: vrfSigner.Sign([]byte{0, 0, 0, 3, 84, 66, 80, 0, 0, 0, 0, 0, 0, 0, 0, 1}),
+			result: vrfSigner.Sign(util.Hex2Bytes("000000035442500000000001")),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: vrfSigner.Sign([]byte{0, 0, 0, 3, 84, 66, 80, 0, 0, 0, 0, 0, 0, 0, 0, 2}),
+			result: vrfSigner.Sign(util.Hex2Bytes("000000035442500000000002")),
 		},
 	}
 
@@ -469,7 +470,40 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 
 			result, err := tb.getSignedProposal(tc.epoch)
 			r.NoError(err)
-			r.Equal(util.Bytes2Hex(tc.result), util.Bytes2Hex(result))
+			r.Equal(string(tc.result), string(result))
 		})
 	}
+}
+
+func TestTortoiseBeacon_signAndExtractED(t *testing.T) {
+	r := require.New(t)
+
+	signer := signing.NewEdSigner()
+	verifier := signing.NewEDVerifier()
+
+	message := []byte{1, 2, 3, 4}
+
+	signature := signer.Sign(message)
+	extractedPK, err := verifier.Extract(message, signature)
+	r.NoError(err)
+
+	ok := verifier.Verify(extractedPK, message, signature)
+
+	r.Equal(signer.PublicKey().String(), extractedPK.String())
+	r.True(ok)
+}
+
+func TestTortoiseBeacon_signAndVerifyVRF(t *testing.T) {
+	r := require.New(t)
+
+	signer, _, err := signing.NewVRFSigner(bytes.Repeat([]byte{0x01}, 32))
+	r.NoError(err)
+
+	verifier := signing.VRFVerifier{}
+
+	message := []byte{1, 2, 3, 4}
+
+	signature := signer.Sign(message)
+	ok := verifier.Verify(signer.PublicKey(), message, signature)
+	r.True(ok)
 }

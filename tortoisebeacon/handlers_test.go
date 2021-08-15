@@ -1,11 +1,11 @@
 package tortoisebeacon
 
 import (
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -56,16 +56,15 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
 
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
+	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
 	r.NoError(err)
 
-	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
-
 	tt := []struct {
-		name          string
-		epoch         types.EpochID
-		currentRounds map[types.EpochID]types.RoundID
-		message       ProposalMessage
+		name                     string
+		epoch                    types.EpochID
+		currentRounds            map[types.EpochID]types.RoundID
+		message                  ProposalMessage
+		expectedIncomingProposal proposals
 	}{
 		{
 			name:  "Case 1",
@@ -74,7 +73,8 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				epoch: round,
 			},
 			message: ProposalMessage{
-				MinerID: minerID,
+				MinerPK: vrfSigner.PublicKey().Bytes(),
+				EpochID: epoch,
 			},
 		},
 	}
@@ -85,14 +85,14 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				config:         UnitTestConfig(),
-				Log:            logtest.New(t).WithName("TortoiseBeacon"),
-				validProposals: proposalsMap{},
-				atxDB:          mockDB,
-				vrfVerifier:    signing.VRFVerifier{},
-				vrfSigner:      vrfSigner,
-				clock:          clock,
-				lastLayer:      types.NewLayerID(epoch),
+				config:      UnitTestConfig(),
+				Log:         logtest.New(t).WithName("TortoiseBeacon"),
+				minerPK:     vrfSigner.PublicKey(),
+				atxDB:       mockDB,
+				vrfVerifier: signing.VRFVerifier{},
+				vrfSigner:   vrfSigner,
+				clock:       clock,
+				lastLayer:   types.NewLayerID(epoch),
 			}
 
 			sig, err := tb.getSignedProposal(epoch)
@@ -102,13 +102,13 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			err = tb.handleProposalMessage(tc.message, time.Now())
 			r.NoError(err)
 
-			expected := proposalsMap{
-				epoch: hashSet{
-					util.Bytes2Hex(sig): {},
-				},
+			expectedProposals := proposals{
+				valid: [][]byte{sig},
 			}
 
-			r.EqualValues(expected, tb.validProposals)
+			tb.consensusMu.RLock()
+			r.EqualValues(expectedProposals, tb.incomingProposals)
+			tb.consensusMu.RUnlock()
 		})
 	}
 }
@@ -148,7 +148,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 
 	const (
 		epoch = 0
-		round = 1
+		round = 0
 	)
 
 	types.SetLayersPerEpoch(1)
@@ -156,18 +156,15 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
 
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
+	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
 	r.NoError(err)
-
-	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
 	tt := []struct {
 		name          string
 		epoch         types.EpochID
 		currentRounds map[types.EpochID]types.RoundID
-		from          string
 		message       FirstVotingMessage
-		expected      map[epochRoundPair]votesPerPK
+		expected      map[nodeID]proposals
 	}{
 		{
 			name:  "Current round and message round equal",
@@ -175,23 +172,15 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			currentRounds: map[types.EpochID]types.RoundID{
 				epoch: round,
 			},
-			from: minerID.Key,
 			message: FirstVotingMessage{
 				FirstVotingMessageBody: FirstVotingMessageBody{
-					MinerID:                   minerID,
 					ValidProposals:            [][]byte{hash.Bytes()},
 					PotentiallyValidProposals: nil,
 				},
 			},
-			expected: map[epochRoundPair]votesPerPK{
-				{
-					EpochID: epoch,
-					Round:   round,
-				}: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{util.Bytes2Hex(hash[:]): {}},
-						InvalidVotes: hashSet{},
-					},
+			expected: map[nodeID]proposals{
+				string(edSgn.PublicKey().Bytes()): {
+					valid: [][]byte{hash.Bytes()},
 				},
 			},
 		},
@@ -201,20 +190,15 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			currentRounds: map[types.EpochID]types.RoundID{
 				epoch: round + 1,
 			},
-			from: minerID.Key,
 			message: FirstVotingMessage{
 				FirstVotingMessageBody: FirstVotingMessageBody{
-					MinerID:                   minerID,
 					ValidProposals:            [][]byte{hash.Bytes()},
 					PotentiallyValidProposals: nil,
 				},
 			},
-			expected: map[epochRoundPair]votesPerPK{
-				{EpochID: epoch, Round: round}: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{util.Bytes2Hex(hash[:]): {}},
-						InvalidVotes: hashSet{},
-					},
+			expected: map[nodeID]proposals{
+				string(edSgn.PublicKey().Bytes()): {
+					valid: [][]byte{hash.Bytes()},
 				},
 			},
 		},
@@ -227,13 +211,15 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				Log:                     logtest.New(t).WithName("TortoiseBeacon"),
-				incomingVotes:           map[epochRoundPair]votesPerPK{},
 				atxDB:                   mockDB,
 				vrfVerifier:             signing.VRFVerifier{},
 				vrfSigner:               vrfSigner,
 				edSigner:                edSgn,
+				edVerifier:              signing.NewEDVerifier(),
 				clock:                   clock,
-				firstRoundIncomingVotes: map[types.EpochID]firstRoundVotesPerPK{},
+				firstRoundIncomingVotes: map[nodeID]proposals{},
+				votesMargin:             map[proposal]*big.Int{},
+				hasVoted:                make([]map[nodeID]struct{}, round+1),
 			}
 
 			sig, err := tb.signMessage(tc.message.FirstVotingMessageBody)
@@ -243,7 +229,9 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			err = tb.handleFirstVotingMessage(tc.message)
 			r.NoError(err)
 
-			r.EqualValues(tc.expected, tb.incomingVotes)
+			tb.consensusMu.RLock()
+			r.EqualValues(tc.expected, tb.firstRoundIncomingVotes)
+			tb.consensusMu.RUnlock()
 		})
 	}
 }
@@ -258,7 +246,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 	hash3 := types.HexToHash32("0x34567890")
 
 	genesisTime := time.Now().Add(time.Second * 10)
-	ld := time.Duration(10) * time.Second
+	ld := 10 * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
@@ -274,10 +262,10 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 		mock.AnythingOfType("types.ATXID")).
 		Return(&types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
-				StartTick: 1,
-				EndTick:   3,
+				StartTick: 0,
+				EndTick:   1,
 			},
-			NumUnits: 5,
+			NumUnits: 1,
 		}, nil)
 	mockDB.On("GetAtxTimestamp",
 		mock.AnythingOfType("types.ATXID")).
@@ -291,17 +279,15 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
 
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
+	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
 	r.NoError(err)
-
-	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 
 	tt := []struct {
 		name          string
 		epoch         types.EpochID
 		currentRounds map[types.EpochID]types.RoundID
 		message       FollowingVotingMessage
-		expected      map[epochRoundPair]votesPerPK
+		expected      map[proposal]*big.Int
 	}{
 		{
 			name:  "Current round and message round equal",
@@ -311,19 +297,14 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			},
 			message: FollowingVotingMessage{
 				FollowingVotingMessageBody: FollowingVotingMessageBody{
-					MinerID:        minerID,
-					EpochID:        epoch,
 					RoundID:        round,
 					VotesBitVector: []uint64{0b101},
 				},
 			},
-			expected: map[epochRoundPair]votesPerPK{
-				{EpochID: epoch, Round: round}: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{hash1.String(): {}, hash3.String(): {}},
-						InvalidVotes: hashSet{hash2.String(): {}},
-					},
-				},
+			expected: map[proposal]*big.Int{
+				string(hash1.Bytes()): big.NewInt(1),
+				string(hash2.Bytes()): big.NewInt(-1),
+				string(hash3.Bytes()): big.NewInt(1),
 			},
 		},
 		{
@@ -334,19 +315,14 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			},
 			message: FollowingVotingMessage{
 				FollowingVotingMessageBody: FollowingVotingMessageBody{
-					MinerID:        minerID,
-					EpochID:        epoch,
 					RoundID:        round,
 					VotesBitVector: []uint64{0b101},
 				},
 			},
-			expected: map[epochRoundPair]votesPerPK{
-				{EpochID: epoch, Round: round}: {
-					minerID.Key: votesSetPair{
-						ValidVotes:   hashSet{hash1.String(): {}, hash3.String(): {}},
-						InvalidVotes: hashSet{hash2.String(): {}},
-					},
-				},
+			expected: map[proposal]*big.Int{
+				string(hash1.Bytes()): big.NewInt(1),
+				string(hash2.Bytes()): big.NewInt(-1),
+				string(hash3.Bytes()): big.NewInt(1),
 			},
 		},
 	}
@@ -357,22 +333,25 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:           logtest.New(t).WithName("TortoiseBeacon"),
-				incomingVotes: map[epochRoundPair]votesPerPK{},
-				atxDB:         mockDB,
-				vrfVerifier:   signing.VRFVerifier{},
-				vrfSigner:     vrfSigner,
-				edSigner:      edSgn,
-				clock:         clock,
-				firstRoundIncomingVotes: map[types.EpochID]firstRoundVotesPerPK{
-					epoch: {
-						minerID.Key: {
-							ValidVotes:            []proposal{hash1.String(), hash2.String()},
-							PotentiallyValidVotes: []proposal{hash3.String()},
-						},
+				config: Config{
+					RoundsNumber: round + 1,
+				},
+				Log:         logtest.New(t).WithName("TortoiseBeacon"),
+				atxDB:       mockDB,
+				vrfVerifier: signing.VRFVerifier{},
+				vrfSigner:   vrfSigner,
+				edSigner:    edSgn,
+				edVerifier:  signing.NewEDVerifier(),
+				clock:       clock,
+				firstRoundIncomingVotes: map[nodeID]proposals{
+					string(edSgn.PublicKey().Bytes()): {
+						valid:            [][]byte{hash1.Bytes(), hash2.Bytes()},
+						potentiallyValid: [][]byte{hash3.Bytes()},
 					},
 				},
-				lastLayer: types.NewLayerID(epoch),
+				lastLayer:   types.NewLayerID(epoch),
+				hasVoted:    make([]map[nodeID]struct{}, round+1),
+				votesMargin: map[proposal]*big.Int{},
 			}
 
 			sig, err := tb.signMessage(tc.message.FollowingVotingMessageBody)
@@ -382,7 +361,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			err = tb.handleFollowingVotingMessage(tc.message)
 			r.NoError(err)
 
-			r.EqualValues(tc.expected, tb.incomingVotes)
+			r.EqualValues(tc.expected, tb.votesMargin)
 		})
 	}
 }

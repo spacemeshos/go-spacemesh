@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/hex"
 	"fmt"
 	"sync"
 
@@ -54,6 +53,7 @@ type Message struct {
 	Epoch     types.EpochID
 	Round     types.RoundID
 	Unit      uint64
+	MinerPK   []byte
 	Signature []byte
 }
 
@@ -118,17 +118,18 @@ type WeakCoin struct {
 	signer   signing.Signer
 	net      broadcaster
 
-	mu               sync.RWMutex
-	epoch            types.EpochID
-	round            types.RoundID
-	smallestProposal []byte
-	allowances       UnitAllowances
+	mu                         sync.RWMutex
+	epochStarted, roundStarted bool
+	epoch                      types.EpochID
+	round                      types.RoundID
+	smallestProposal           []byte
+	allowances                 UnitAllowances
 	// nextRoundBuffer is used to optimistically buffer messages from the next round.
 	nextRoundBuffer []Message
 	coins           map[types.RoundID]bool
 }
 
-// Get the result of the coinflip in this round. It is only valid inbetween StartEpoch/EndEpoch
+// Get the result of the coin flip in this round. It is only valid in between StartEpoch/EndEpoch
 // and only after CompleteRound was called.
 func (wc *WeakCoin) Get(epoch types.EpochID, round types.RoundID) bool {
 	if epoch.IsGenesis() {
@@ -150,6 +151,7 @@ func (wc *WeakCoin) Get(epoch types.EpochID, round types.RoundID) bool {
 func (wc *WeakCoin) StartEpoch(epoch types.EpochID, allowances UnitAllowances) {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
+	wc.epochStarted = true
 	wc.epoch = epoch
 	wc.allowances = allowances
 }
@@ -158,6 +160,7 @@ func (wc *WeakCoin) StartEpoch(epoch types.EpochID, allowances UnitAllowances) {
 func (wc *WeakCoin) FinishEpoch() {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
+	wc.epochStarted = false
 	wc.allowances = nil
 	wc.coins = map[types.RoundID]bool{}
 	wc.round = 0
@@ -168,7 +171,8 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	wc.mu.Lock()
 	wc.logger.With().Info("started round",
 		log.Uint32("epoch_id", uint32(wc.epoch)),
-		log.Uint64("round_id", uint64(round)))
+		log.Uint32("round_id", uint32(round)))
+	wc.roundStarted = true
 	wc.round = round
 	wc.smallestProposal = nil
 	epoch := wc.epoch
@@ -180,7 +184,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 			wc.logger.With().Debug("received invalid proposal",
 				log.Err(err),
 				log.Uint32("epoch_id", uint32(msg.Epoch)),
-				log.Uint64("round_id", uint64(msg.Round)))
+				log.Uint32("round_id", uint32(msg.Round)))
 		}
 		wc.nextRoundBuffer[i] = Message{}
 	}
@@ -191,14 +195,13 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 
 func (wc *WeakCoin) updateProposal(message Message) error {
 	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
-	miner, err := wc.verifier.Extract(buf, message.Signature)
-	if err != nil {
-		return fmt.Errorf("can't recover miner id from signature %x: %w", message.Signature, err)
+	if !wc.verifier.Verify(signing.NewPublicKey(message.MinerPK), buf, message.Signature) {
+		return fmt.Errorf("signature is invalid signature %x", message.Signature)
 	}
 
-	allowed, exists := wc.allowances[string(miner.Bytes())]
+	allowed, exists := wc.allowances[string(message.MinerPK)]
 	if !exists || allowed < message.Unit {
-		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d", miner, message.Unit)
+		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d", message.MinerPK, message.Unit)
 	}
 
 	wc.updateSmallest(message.Signature)
@@ -206,10 +209,8 @@ func (wc *WeakCoin) updateProposal(message Message) error {
 }
 
 func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (broadcast, smallest []byte) {
-	var (
-		// TODO(dshulyak) double check that 10 means that 10 units are allowed
-		allowed, exists = wc.allowances[string(wc.signer.PublicKey().Bytes())]
-	)
+	// TODO(dshulyak) double check that 10 means that 10 units are allowed
+	allowed, exists := wc.allowances[string(wc.signer.PublicKey().Bytes())]
 	if !exists {
 		return
 	}
@@ -224,6 +225,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (b
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      unit,
+				MinerPK:   wc.signer.PublicKey().Bytes(),
 				Signature: signature,
 			}
 			msg, err := types.InterfaceToBytes(message)
@@ -252,7 +254,7 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, ro
 
 	wc.logger.With().Info("published proposal",
 		log.Uint32("epoch_id", uint32(epoch)),
-		log.Uint64("round_id", uint64(round)),
+		log.Uint32("round_id", uint32(round)),
 		log.String("proposal", types.BytesToHash(smallest).ShortString()))
 
 	wc.mu.Lock()
@@ -270,33 +272,40 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, ro
 func (wc *WeakCoin) FinishRound() {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
+	wc.roundStarted = false
 	if wc.smallestProposal == nil {
 		wc.logger.With().Warning("completed round without valid proposals",
 			log.Uint32("epoch_id", uint32(wc.epoch)),
-			log.Uint64("round_id", uint64(wc.round)),
+			log.Uint32("round_id", uint32(wc.round)),
 		)
 		return
 	}
 	// NOTE(dshulyak) we need to select good bit here. for ed25519 it means select LSB and never MSB.
 	// https://datatracker.ietf.org/doc/html/draft-josefsson-eddsa-ed25519-03#section-5.2
 	// For another signature algorithm this may change
-	coinflip := wc.smallestProposal[0]&1 == 1
+	lsbIndex := 0
+	if !wc.signer.LittleEndian() {
+		lsbIndex = len(wc.smallestProposal) - 1
+	}
+	coinflip := wc.smallestProposal[lsbIndex]&1 == 1
 
 	wc.coins[wc.round] = coinflip
 	wc.logger.With().Info("completed round",
 		log.Uint32("epoch_id", uint32(wc.epoch)),
-		log.Uint64("round_id", uint64(wc.round)),
-		log.String("smallest", hex.EncodeToString(wc.smallestProposal)),
+		log.Uint32("round_id", uint32(wc.round)),
+		log.String("proposal", types.BytesToHash(wc.smallestProposal).ShortString()),
 		log.Bool("coinflip", coinflip))
 	wc.smallestProposal = nil
 }
 
 func (wc *WeakCoin) updateSmallest(proposal []byte) {
 	if len(proposal) > 0 && (bytes.Compare(proposal, wc.smallestProposal) == -1 || wc.smallestProposal == nil) {
-		wc.logger.Debug("saving new proposal",
+		wc.logger.With().Debug("saving new proposal",
 			log.Uint32("epoch_id", uint32(wc.epoch)),
 			log.Uint64("round_id", uint64(wc.round)),
-			log.String("proposal", types.BytesToHash(proposal).ShortString()))
+			log.String("proposal", types.BytesToHash(proposal).ShortString()),
+			log.String("previous", types.BytesToHash(wc.smallestProposal).ShortString()),
+		)
 		wc.smallestProposal = proposal
 	}
 }

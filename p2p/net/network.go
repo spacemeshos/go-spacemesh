@@ -149,7 +149,7 @@ func (n *Net) LocalNode() node.LocalNode {
 func sumByteArray(b []byte) uint {
 	var sumOfChars uint
 
-	//take each byte in the string and add the values
+	// take each byte in the string and add the values
 	for i := 0; i < len(b); i++ {
 		byteVal := b[i]
 		sumOfChars += uint(byteVal)
@@ -265,7 +265,7 @@ func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto
 
 	conn, err := n.createSecuredConnection(ctx, address, remotePubkey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial, err: %v", err)
+		return nil, fmt.Errorf("failed to dial, err: %w", err)
 	}
 
 	// Add session ID to context
@@ -408,13 +408,13 @@ func verifyNetworkIDAndClientVersion(networkID uint32, handshakeData *HandshakeD
 		return errors.New("unsupported client version")
 	}
 	if err != nil {
-		return fmt.Errorf("invalid client version, err: %v", err)
+		return fmt.Errorf("invalid client version, err: %w", err)
 	}
 
 	// make sure we're on the same network
 	if handshakeData.NetworkID != networkID {
 		return fmt.Errorf("request net id (%d) is different than local net id (%d)", handshakeData.NetworkID, networkID)
-		//TODO : drop and blacklist this sender
+		// TODO : drop and blacklist this sender
 	}
 	return nil
 }
@@ -436,7 +436,7 @@ func generateHandshakeMessage(session NetworkSession, networkID uint32, localInc
 func replacePort(addr string, newPort uint16) (string, error) {
 	addrWithoutPort, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		return "", fmt.Errorf("invalid address format, (%v) err: %v", addr, err)
+		return "", fmt.Errorf("invalid address format, (%v) err: %w", addr, err)
 	}
 	return net.JoinHostPort(addrWithoutPort, strconv.Itoa(int(newPort))), nil
 }

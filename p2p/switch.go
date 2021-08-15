@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	inet "net"
 	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -22,15 +26,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-
-	inet "net"
-	"sync"
-	"sync/atomic"
-	"time"
 )
 
 // ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
-const ConnectingTimeout = 20 * time.Second //todo: add to the config
+const ConnectingTimeout = 20 * time.Second // todo: add to the config
 
 // UPNPRetries is the number of times to retry obtaining a port due to a UPnP failure
 const UPNPRetries = 20
@@ -164,7 +163,7 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	n, err := net.NewNet(shutdownCtx, config, l, logger.WithName("tcpnet"))
 	if err != nil {
 		cancel()
-		return nil, fmt.Errorf("can't create switch without a network, err: %v", err)
+		return nil, fmt.Errorf("can't create switch without a network, err: %w", err)
 	}
 
 	udpnet, err := net.NewUDPNet(shutdownCtx, config, l, logger.WithName("udpnet"))
@@ -263,7 +262,7 @@ func (s *Switch) Start(ctx context.Context) error {
 
 	tcpListener, udpListener, err := s.getListeners(getTCPListener, getUDPListener, discoverUPnPGateway)
 	if err != nil {
-		return fmt.Errorf("error getting port: %v", err)
+		return fmt.Errorf("error getting port: %w", err)
 	}
 
 	s.network.Start(log.WithNewSessionID(ctx), tcpListener)
@@ -299,7 +298,6 @@ func (s *Switch) Start(ctx context.Context) error {
 				log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
 				log.Int("size", size),
 				log.Duration("time_elapsed", time.Since(b)))
-
 		}()
 	}
 
@@ -355,12 +353,12 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 
 	if s.discover.IsLocalAddress(&node.Info{ID: peerPubKey.Array()}) {
 		return errors.New("can't send message to self")
-		//TODO: if this is our neighbor it should be removed right now.
+		// TODO: if this is our neighbor it should be removed right now.
 	}
 
 	conn, err = s.cPool.GetConnectionIfExists(peerPubKey)
 	if err != nil {
-		return fmt.Errorf("peer not a neighbor or connection lost: %v", err)
+		return fmt.Errorf("peer not a neighbor or connection lost: %w", err)
 	}
 
 	logger := s.logger.WithContext(ctx).WithFields(
@@ -374,8 +372,10 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 	}
 
 	protomessage := &ProtocolMessage{
-		Metadata: &ProtocolMessageMetadata{NextProtocol: protocol, ClientVersion: config.ClientVersion,
-			Timestamp: time.Now().Unix(), AuthPubkey: s.LocalNode().PublicKey().Bytes()},
+		Metadata: &ProtocolMessageMetadata{
+			NextProtocol: protocol, ClientVersion: config.ClientVersion,
+			Timestamp: time.Now().Unix(), AuthPubkey: s.LocalNode().PublicKey().Bytes(),
+		},
 		Payload: nil,
 	}
 
@@ -388,7 +388,7 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 
 	data, err := types.InterfaceToBytes(protomessage)
 	if err != nil {
-		return fmt.Errorf("failed to encode signed message err: %v", err)
+		return fmt.Errorf("failed to encode signed message err: %w", err)
 	}
 
 	final := session.SealMessage(data)
@@ -442,11 +442,11 @@ func (s *Switch) Shutdown() {
 
 		for i := range s.directProtocolHandlers {
 			delete(s.directProtocolHandlers, i)
-			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
+			// close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 		}
 		for i := range s.gossipProtocolHandlers {
 			delete(s.gossipProtocolHandlers, i)
-			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
+			// close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan. )
 		}
 
 		s.peerLock.Lock()
@@ -590,7 +590,6 @@ func (s *Switch) onRemoteClientMessage(ctx context.Context, msg net.IncomingMess
 	}
 
 	data, err := ExtractData(pm.Payload)
-
 	if err != nil {
 		return err
 	}
@@ -718,7 +717,7 @@ const NoResultsInterval = 1 * time.Second
 
 // startNeighborhood starts the peersLoop and send a request to start connecting peers.
 func (s *Switch) startNeighborhood(ctx context.Context) error {
-	//TODO: Save and load persistent peers ?
+	// TODO: Save and load persistent peers ?
 	s.logger.WithContext(ctx).Info("neighborhood service started")
 
 	// initial request for peers
@@ -738,7 +737,7 @@ func (s *Switch) peersLoop(ctx context.Context) {
 			}
 			s.logger.WithContext(ctx).Debug("loop: got morePeersReq")
 			s.askForMorePeers(ctx)
-		//todo: try getting the connections (heartbeat)
+		// todo: try getting the connections (heartbeat)
 		case <-s.shutdownCtx.Done():
 			return
 		}
@@ -944,13 +943,12 @@ func (s *Switch) Disconnect(peer p2pcrypto.PublicKey) {
 	metrics.OutboundPeers.Add(-1)
 
 	// todo: don't remove if we know this is a valid peer for later
-	//s.discovery.Remove(peer) // address doesn't matter because we only check dhtid
+	// s.discovery.Remove(peer) // address doesn't matter because we only check dhtid
 
 	select {
 	case s.morePeersReq <- struct{}{}:
 	case <-s.shutdownCtx.Done():
 	}
-
 }
 
 // addIncomingPeer inserts a peer to the neighborhood as a remote peer.
@@ -1013,12 +1011,12 @@ func (s *Switch) getListeners(
 	}
 
 	upnpFails := 0
-	var listeningIP = inet.ParseIP(s.config.TCPInterface)
+	listeningIP := inet.ParseIP(s.config.TCPInterface)
 	for {
 		tcpAddr := &inet.TCPAddr{IP: listeningIP, Port: port}
 		tcpListener, err := getTCPListener(tcpAddr)
 		if err != nil {
-			return nil, nil, fmt.Errorf("failed to acquire requested tcp port: %v", err)
+			return nil, nil, fmt.Errorf("failed to acquire requested tcp port: %w", err)
 		}
 
 		addr := tcpListener.Addr()
@@ -1033,7 +1031,7 @@ func (s *Switch) getListeners(
 				port = 0
 				continue
 			}
-			return nil, nil, fmt.Errorf("failed to acquire requested udp port: %v", err)
+			return nil, nil, fmt.Errorf("failed to acquire requested udp port: %w", err)
 		}
 
 		if gateway != nil {

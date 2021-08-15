@@ -3,6 +3,7 @@ package tortoisebeacon
 import (
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/stretchr/testify/require"
 )
@@ -14,29 +15,39 @@ func TestTortoiseBeacon_decodeVotes(t *testing.T) {
 
 	tt := []struct {
 		name       string
-		firstRound firstRoundVotes
+		proposals  proposals
+		firstRound proposals
 		bitVector  []uint64
-		result     votesSetPair
+		result     allVotes
 	}{
 		{
 			name: "Case 1",
-			firstRound: firstRoundVotes{
-				ValidVotes: []proposal{
-					"0x1",
-					"0x2",
+			proposals: proposals{
+				valid: [][]byte{
+					util.Hex2Bytes("11"),
+					util.Hex2Bytes("22"),
 				},
-				PotentiallyValidVotes: []proposal{
-					"0x3",
+				potentiallyValid: [][]byte{
+					util.Hex2Bytes("33"),
+				},
+			},
+			firstRound: proposals{
+				valid: [][]byte{
+					util.Hex2Bytes("11"),
+					util.Hex2Bytes("22"),
+				},
+				potentiallyValid: [][]byte{
+					util.Hex2Bytes("33"),
 				},
 			},
 			bitVector: []uint64{0b101},
-			result: votesSetPair{
-				ValidVotes: hashSet{
-					"0x1": {},
-					"0x3": {},
+			result: allVotes{
+				valid: proposalSet{
+					string(util.Hex2Bytes("11")): {},
+					string(util.Hex2Bytes("33")): {},
 				},
-				InvalidVotes: hashSet{
-					"0x2": {},
+				invalid: proposalSet{
+					string(util.Hex2Bytes("22")): {},
 				},
 			},
 		},
@@ -57,7 +68,7 @@ func TestTortoiseBeacon_decodeVotes(t *testing.T) {
 			result := tb.decodeVotes(tc.bitVector, tc.firstRound)
 			r.EqualValues(tc.result, result)
 
-			original := tb.encodeVotes(result, tc.firstRound)
+			original := tb.encodeVotes(result, tc.proposals)
 			r.EqualValues(tc.bitVector, original)
 		})
 	}
