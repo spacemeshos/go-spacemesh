@@ -6,6 +6,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"go.uber.org/zap"
 	"math"
 	"strconv"
 	"testing"
@@ -2485,7 +2486,7 @@ func TestMultiTortoise(t *testing.T) {
 		}
 	})
 
-	t.Run("unequal partition", func(t *testing.T) {
+	t.Run("unequal partition and rejoin", func(t *testing.T) {
 		layerSize := 10
 
 		mdb1 := getInMemMesh(t)
@@ -2501,7 +2502,9 @@ func TestMultiTortoise(t *testing.T) {
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.AvgLayerSize = layerSize
-		alg2.logger = alg2.logger.Named("trtl2")
+		level := zap.NewAtomicLevelAt(zap.DebugLevel)
+		alg2.logger = log.NewWithLevel("trtl2", level)
+		//alg2.logger = alg2.logger.Named("trtl2")
 		alg2.trtl.logger = alg2.logger
 
 		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB []*types.Block) {
@@ -2542,10 +2545,15 @@ func TestMultiTortoise(t *testing.T) {
 			lastVerified = layerID.Sub(1)
 		}
 
+		// keep track of all blocks on each side of the partition
+		var forkBlocksA, forkBlocksB []*types.Block
+
 		// simulate a partition
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
 			blocksA, blocksB := makeBlocks(layerID)
+			forkBlocksA = append(forkBlocksA, blocksA...)
+			forkBlocksB = append(forkBlocksB, blocksB...)
 
 			// add A's blocks to A only, B's to B
 			var blockIDsA, blockIDsB []types.BlockID
@@ -2562,7 +2570,7 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
-			// majority node is unaffected, minority node gets stuck
+			// majority tortoise is unaffected, minority tortoise gets stuck
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
 			checkVerifiedLayer(t, alg2.trtl, lastVerified)
 		}
@@ -2571,7 +2579,7 @@ func TestMultiTortoise(t *testing.T) {
 		// the threshold.
 		healingDistance := 12
 
-		// after a while (we simulate the distance here), minority node eventually begins producing more blocks
+		// after a while (we simulate the distance here), minority tortoise eventually begins producing more blocks
 		for i := 0; i < healingDistance; i++ {
 			layerID = layerID.Add(1)
 
@@ -2579,6 +2587,7 @@ func TestMultiTortoise(t *testing.T) {
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
 			// an ongoing partition.
 			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			forkBlocksA = append(forkBlocksA, blocksA...)
 			var blockIDsA, blockIDsB []types.BlockID
 			for _, block := range blocksA {
 				blockIDsA = append(blockIDsA, block.ID())
@@ -2588,6 +2597,7 @@ func TestMultiTortoise(t *testing.T) {
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
 			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			forkBlocksB = append(forkBlocksB, blocksB...)
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
@@ -2595,14 +2605,15 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
-			// majority node is unaffected, minority node is still stuck
+			// majority tortoise is unaffected, minority tortoise is still stuck
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
 			checkVerifiedLayer(t, alg2.trtl, lastVerified)
 		}
 
-		// finally, the minority node heals and regains parity with the majority node
+		// finally, the minority tortoise heals and regains parity with the majority tortoise
 		layerID = layerID.Add(1)
 		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+		forkBlocksA = append(forkBlocksA, blocksA...)
 		var blockIDsA, blockIDsB []types.BlockID
 		for _, block := range blocksA {
 			blockIDsA = append(blockIDsA, block.ID())
@@ -2612,6 +2623,7 @@ func TestMultiTortoise(t *testing.T) {
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
 		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+		forkBlocksB = append(forkBlocksB, blocksB...)
 		for _, block := range blocksB {
 			blockIDsB = append(blockIDsB, block.ID())
 			r.NoError(mdb2.AddBlock(block))
@@ -2620,8 +2632,95 @@ func TestMultiTortoise(t *testing.T) {
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 		// minority node is healed
-		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+		lastVerified = layerID.Sub(1)
+		checkVerifiedLayer(t, alg1.trtl, lastVerified)
+		checkVerifiedLayer(t, alg2.trtl, lastVerified)
+
+		// now simulate a rejoin
+		// send each tortoise's blocks to the other (simulated resync)
+		// (of layers 18-40)
+		var forkBlockIDsA, forkBlockIDsB []types.BlockID
+		for _, block := range forkBlocksA {
+			forkBlockIDsA = append(forkBlockIDsA, block.ID())
+			r.NoError(mdb2.AddBlock(block))
+		}
+		alg2.HandleLateBlocks(context.TODO(), forkBlocksA)
+
+		for _, block := range forkBlocksB {
+			forkBlockIDsB = append(forkBlockIDsB, block.ID())
+			r.NoError(mdb1.AddBlock(block))
+		}
+		alg1.HandleLateBlocks(context.TODO(), forkBlocksB)
+
+		// now continue for a few layers after rejoining, during which the minority tortoise will be stuck
+		// because its opinions about which blocks are valid/invalid are wrong and disagree with the majority
+		// opinion. these ten layers represent its healing distance. after it heals, it will converge to the
+		// majority opinion.
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB := makeBlocks(layerID)
+			var blocks []*types.Block
+			blocks = append(blocksA, blocksB...)
+
+			// add all blocks to both tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// majority tortoise is unaffected, minority tortoise remains stuck
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+		}
+
+		for i := 0; i < 1; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB := makeBlocks(layerID)
+			var blocks []*types.Block
+			blocks = append(blocksA, blocksB...)
+
+			// add all blocks to both tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// majority tortoise is unaffected, minority tortoise remains stuck
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, lastVerified.Add(uint32(i+1)))
+		}
+		// finally, minority tortoise heals and both tortoises are able to make progress again
+		//layerID = layerID.Add(1)
+		//blocksA, blocksB = makeBlocks(layerID)
+		//var blocks []*types.Block
+		//blocks = append(blocksA, blocksB...)
+		//
+		//// add all blocks to both tortoises
+		//var blockIDs []types.BlockID
+		//for _, block := range blocks {
+		//	blockIDs = append(blockIDs, block.ID())
+		//	r.NoError(mdb1.AddBlock(block))
+		//	r.NoError(mdb2.AddBlock(block))
+		//}
+		//r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+		//r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+		//alg1.HandleIncomingLayer(context.TODO(), layerID)
+		//alg2.HandleIncomingLayer(context.TODO(), layerID)
+		//
+		//checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+		//checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 	})
 
 	t.Run("equal partition", func(t *testing.T) {
@@ -2784,8 +2883,6 @@ func TestMultiTortoise(t *testing.T) {
 		alg3 := defaultAlgorithm(t, mdb3)
 		alg3.trtl.atxdb = atxdb3
 		alg3.trtl.AvgLayerSize = layerSize
-		//level := zap.NewAtomicLevelAt(zap.DebugLevel)
-		//alg3.logger = log.NewWithLevel("trtl3", level)
 		alg3.logger = alg3.logger.Named("trtl3")
 		alg3.trtl.logger = alg3.logger
 
@@ -2937,9 +3034,5 @@ func TestMultiTortoise(t *testing.T) {
 		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
 		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 		checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
-	})
-
-	t.Run("rejoin", func(t *testing.T) {
-
 	})
 }
