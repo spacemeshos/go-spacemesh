@@ -70,7 +70,7 @@ type tortoiseBeaconDB interface {
 // network defines network capabilities used
 type network interface {
 	GetPeers() []peers.Peer
-	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
+	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(resp server.Response), timeoutHandler func(err error)) error
 	Close()
 }
 
@@ -210,7 +210,7 @@ func (l *Logic) layerHashReqReceiver(ctx context.Context, msg []byte) []byte {
 			log.String("hash", lyrHash.Hash.ShortString()),
 			log.String("aggregatedHash", lyrHash.AggregatedHash.ShortString()))
 	}
-	return out
+	return server.SerializeResponse(l.log, out, nil)
 }
 
 // epochATXsReqReceiver returns the ATXs for the specified epoch.
@@ -222,7 +222,7 @@ func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) []byte {
 	if err != nil {
 		l.log.WithContext(ctx).With().Warning("cannot find epoch atxs", epoch, log.Err(err))
 	}
-	return bts
+	return server.SerializeResponse(l.log, bts, err)
 }
 
 // layerHashBlocksReqReceiver returns the block IDs for the specified layer hash,
@@ -249,7 +249,7 @@ func (l *Logic) layerHashBlocksReqReceiver(ctx context.Context, msg []byte) []by
 		l.log.WithContext(ctx).With().Error("cannot serialize layer blocks response", log.Err(err))
 	}
 
-	return out
+	return server.SerializeResponse(l.log, out, err)
 }
 
 // tortoiseBeaconReqReceiver returns the tortoise beacon for the given layer ID
@@ -260,16 +260,16 @@ func (l *Logic) tortoiseBeaconReqReceiver(ctx context.Context, msg []byte) []byt
 	beacon, err := l.tbDB.GetTortoiseBeacon(epoch)
 	if errors.Is(err, database.ErrNotFound) {
 		l.log.WithContext(ctx).With().Warning("tortoise beacon not found in DB", epoch)
-		return []byte{}
+		return server.SerializeResponse(l.log, nil, err)
 	}
 
 	if err != nil {
 		l.log.WithContext(ctx).With().Error("failed to get tortoise beacon", epoch, log.Err(err))
-		return []byte{}
+		return server.SerializeResponse(l.log, nil, err)
 	}
 
 	l.log.WithContext(ctx).With().Debug("replying to tortoise beacon request", epoch, log.String("beacon", beacon.ShortString()))
-	return beacon.Bytes()
+	return server.SerializeResponse(l.log, beacon.Bytes(), nil)
 }
 
 // PollLayerHash polls peers on the layer hash. it returns a channel for the caller to be notified when
@@ -300,8 +300,8 @@ func (l *Logic) PollLayerHash(ctx context.Context, layerID types.LayerID) chan L
 		// build custom receiver for each peer so that receiver will know which peer the data came from
 		// so that it could request relevant block ids from the same peer
 		peer := p
-		receiveForPeerFunc := func(b []byte) {
-			l.receiveLayerHash(ctx, layerID, peer, numPeers, b, nil)
+		receiveForPeerFunc := func(resp server.Response) {
+			l.receiveLayerHash(ctx, layerID, peer, numPeers, resp.GetData(), resp.GetError())
 		}
 		timeoutFunc := func(err error) {
 			l.receiveLayerHash(ctx, layerID, peer, numPeers, nil, err)
@@ -411,8 +411,8 @@ func (l *Logic) PollLayerBlocks(ctx context.Context, layerID types.LayerID, hash
 			l.receiveBlockHashes(ctx, layerID, peer, numHashes, nil, ErrZeroLayer)
 			continue
 		}
-		receiveForPeerFunc := func(data []byte) {
-			l.receiveBlockHashes(ctx, layerID, peer, numHashes, data, nil)
+		receiveForPeerFunc := func(resp server.Response) {
+			l.receiveBlockHashes(ctx, layerID, peer, numHashes, resp.GetData(), resp.GetError())
 		}
 		errFunc := func(err error) {
 			l.receiveBlockHashes(ctx, layerID, peer, numHashes, nil, err)
@@ -533,9 +533,17 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	resCh := make(chan epochAtxRes, 1)
 
 	// build receiver function
-	receiveForPeerFunc := func(data []byte) {
+	receiveForPeerFunc := func(resp server.Response) {
+		peerErr := resp.GetError()
+		if peerErr != nil {
+			resCh <- epochAtxRes{
+				Error: peerErr,
+				Atxs:  []types.ATXID{},
+			}
+			return
+		}
 		var atxsIDs []types.ATXID
-		err := types.BytesToInterface(data, &atxsIDs)
+		err := types.BytesToInterface(resp.GetData(), &atxsIDs)
 		resCh <- epochAtxRes{
 			Error: err,
 			Atxs:  atxsIDs,
@@ -766,8 +774,17 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 	resCh := make(chan []byte, len(remotePeers))
 
 	// build receiver function
-	makeReceiveFunc := func(peer fmt.Stringer) func([]byte) {
-		return func(data []byte) {
+	makeReceiveFunc := func(peer fmt.Stringer) func(server.Response) {
+		return func(resp server.Response) {
+			peerErr := resp.GetError()
+			if peerErr != nil {
+				l.log.WithContext(ctx).With().Info("peer returns error for tortoise beacon response",
+					id,
+					log.String("peer", peer.String()),
+					log.Err(peerErr))
+				return
+			}
+			data := resp.GetData()
 			if len(data) == 0 {
 				l.log.WithContext(ctx).With().Info("empty tortoise beacon response (peer does not have it)",
 					id,

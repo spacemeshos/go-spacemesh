@@ -4,12 +4,14 @@ package server
 import (
 	"container/list"
 	"context"
+	"errors"
 	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -49,16 +51,66 @@ func extractPayload(m Message) []byte {
 	return data.Payload
 }
 
-// Item is queue entry used to match responds to sent requests.
-type Item struct {
+// item is queue entry used to match responds to sent requests.
+type item struct {
 	id        uint64
 	timestamp time.Time
 }
 
-// ResponseHandlers contains handlers for received response handlers
-type ResponseHandlers struct {
-	okCallback   func(msg []byte)
+type responseHandlers struct {
+	okCallback   func(resp Response)
 	failCallBack func(err error)
+}
+
+// ErrShuttingDown is returned to the peer when the node is shutting down
+var ErrShuttingDown = errors.New("node is shutting down")
+
+// ErrBadRequest is returned to the peer upon failure to parse the request
+var ErrBadRequest = errors.New("unable to parse request")
+
+// Response is the interface type of the peer response returned by SendRequest.
+type Response interface {
+	GetData() []byte
+	GetError() error
+}
+
+type response struct {
+	Data     []byte
+	ErrorStr string
+}
+
+func (r *response) GetData() []byte {
+	return r.Data
+}
+
+func (r *response) GetError() error {
+	if len(r.ErrorStr) > 0 {
+		return errors.New(r.ErrorStr)
+	}
+	return nil
+}
+
+// SerializeResponse serializes the response data returned by SendRequest
+func SerializeResponse(logger log.Log, data []byte, err error) []byte {
+	resp := response{Data: data}
+	if err != nil {
+		resp.ErrorStr = err.Error()
+	}
+	bytes, err := types.InterfaceToBytes(&resp)
+	if err != nil {
+		logger.With().Panic("failed to serialize response", log.Err(err))
+	}
+	return bytes
+}
+
+// DeserializeResponse deserializes the response data returned by SendRequest
+func DeserializeResponse(logger log.Log, data []byte) (Response, error) {
+	var resp response
+	err := types.BytesToInterface(data, &resp)
+	if err != nil {
+		return nil, err
+	}
+	return &resp, nil
 }
 
 // MessageServer is a request-response multiplexer on top of the p2p layer. it provides a way to register
@@ -69,7 +121,7 @@ type MessageServer struct {
 	network            Service
 	pendMutex          sync.RWMutex
 	pendingQueue       *list.List                                            //queue of pending messages
-	resHandlers        map[uint64]ResponseHandlers                           //response handlers by request ReqID
+	resHandlers        map[uint64]responseHandlers                           //response handlers by request ReqID
 	msgRequestHandlers map[MessageType]func(context.Context, Message) []byte //request handlers by request type
 	ingressChannel     chan service.DirectMessage                            //chan to relay messages into the server
 	requestLifetime    time.Duration
@@ -91,7 +143,7 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 	p := &MessageServer{
 		Log:                logger,
 		name:               name,
-		resHandlers:        make(map[uint64]ResponseHandlers),
+		resHandlers:        make(map[uint64]responseHandlers),
 		pendingQueue:       list.New(),
 		network:            network,
 		ingressChannel:     network.RegisterDirectProtocolWithChannel(name, c),
@@ -160,7 +212,7 @@ func (p *MessageServer) cleanStaleMessages() {
 		elem := p.pendingQueue.Front()
 		p.pendMutex.RUnlock()
 		if elem != nil {
-			item := elem.Value.(Item)
+			item := elem.Value.(item)
 			if time.Since(item.timestamp) > p.requestLifetime {
 				p.With().Debug("cleanStaleMessages remove request", log.Uint64("id", item.id))
 				p.pendMutex.RLock()
@@ -186,7 +238,7 @@ func (p *MessageServer) removeFromPending(reqID uint64) {
 	p.pendMutex.Lock()
 	for e := p.pendingQueue.Front(); e != nil; e = next {
 		next = e.Next()
-		if reqID == e.Value.(Item).id {
+		if reqID == e.Value.(item).id {
 			p.pendingQueue.Remove(e)
 			p.With().Debug("removed request", log.Uint64("p2p_request_id", reqID))
 			break
@@ -237,7 +289,12 @@ func (p *MessageServer) handleResponseMessage(ctx context.Context, headers *serv
 	p.pendMutex.RUnlock()
 	p.removeFromPending(headers.ReqID)
 	if okFoo {
-		foo.okCallback(headers.Payload)
+		resp, err := DeserializeResponse(logger, headers.Payload)
+		if err != nil {
+			logger.With().Warning("failed to deserialize response", log.Err(err))
+		} else {
+			foo.okCallback(resp)
+		}
 	} else {
 		logger.With().Error("can't find handler", log.Uint64("p2p_request_id", headers.ReqID))
 	}
@@ -262,7 +319,7 @@ func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler 
 }
 
 // SendRequest sends a request of a specific message.
-func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error {
+func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(resp Response), timeoutHandler func(err error)) error {
 	reqID := p.newReqID()
 
 	// Add requestID to context
@@ -271,8 +328,8 @@ func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, pa
 		log.Uint32("p2p_msg_type", uint32(msgType)),
 		log.FieldNamed("recipient", address))
 	p.pendMutex.Lock()
-	p.resHandlers[reqID] = ResponseHandlers{resHandler, timeoutHandler}
-	p.pendingQueue.PushBack(Item{id: reqID, timestamp: time.Now()})
+	p.resHandlers[reqID] = responseHandlers{resHandler, timeoutHandler}
+	p.pendingQueue.PushBack(item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}
 	if err := p.network.SendWrappedMessage(ctx, address, p.name, msg); err != nil {

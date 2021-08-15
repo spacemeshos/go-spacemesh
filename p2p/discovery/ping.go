@@ -23,24 +23,24 @@ func (p *protocol) newPingRequestHandler() func(context.Context, server.Message)
 		err := types.BytesToInterface(msg.Bytes(), pinged)
 		if err != nil {
 			plogger.With().Error("failed to deserialize ping message", log.Err(err))
-			return nil
+			return server.SerializeResponse(plogger, nil, server.ErrBadRequest)
 		}
 
 		if err := p.verifyPinger(msg.Metadata().FromAddress, pinged); err != nil {
 			plogger.With().Error("msg contents were not valid", log.Err(err))
-			return nil
+			return server.SerializeResponse(plogger, nil, server.ErrBadRequest)
 		}
 
 		//pong
 		payload, err := types.InterfaceToBytes(p.local)
 		// TODO: include the resolved To address
 		if err != nil {
-			plogger.With().Error("error marshaling response message (ping)", log.Err(err))
+			plogger.With().Panic("error marshaling response message (ping)", log.Err(err))
 			return nil
 		}
 
 		plogger.Debug("sending pong message")
-		return payload
+		return server.SerializeResponse(plogger, payload, nil)
 	}
 }
 
@@ -72,11 +72,16 @@ func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 		return err
 	}
 	ch := make(chan []byte)
-	foo := func(msg []byte) {
+	foo := func(resp server.Response) {
 		defer close(ch)
 		plogger.Debug("handle response")
+		peerErr := resp.GetError()
+		if peerErr != nil {
+			plogger.With().Warning("received peer error (pong)", log.Err(peerErr))
+			return
+		}
 		sender := &node.Info{}
-		err := types.BytesToInterface(msg, sender)
+		err := types.BytesToInterface(resp.GetData(), sender)
 
 		if err != nil {
 			plogger.Warning("got unreadable pong. err=%v", err)

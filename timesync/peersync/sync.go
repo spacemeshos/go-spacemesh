@@ -161,8 +161,8 @@ type Sync struct {
 func (s *Sync) requestHandler(ctx context.Context, buf []byte) []byte {
 	var request Request
 	if err := types.BytesToInterface(buf, &request); err != nil {
-		s.log.Debug("can't decode request", log.Binary("request", buf), log.Err(err))
-		return nil
+		s.log.WithContext(ctx).With().Debug("can't decode request", log.Binary("request", buf), log.Err(err))
+		return server.SerializeResponse(s.log, nil, server.ErrBadRequest)
 	}
 	resp := Response{
 		ID:        request.ID,
@@ -170,9 +170,9 @@ func (s *Sync) requestHandler(ctx context.Context, buf []byte) []byte {
 	}
 	buf, err := types.InterfaceToBytes(&resp)
 	if err != nil {
-		s.log.Panic("can't encode response", log.Binary("response", buf), log.Err(err))
+		s.log.With().Panic("can't encode response", log.Binary("response", buf), log.Err(err))
 	}
-	return buf
+	return server.SerializeResponse(s.log, buf, nil)
 }
 
 // Start background workers.
@@ -286,9 +286,14 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []peers.Peer) (time
 		respCount int
 	)
 	for _, peer := range prs {
-		if err := s.srv.SendRequest(ctx, server.RequestTimeSync, buf, peer, func(buf []byte) {
+		if err := s.srv.SendRequest(ctx, server.RequestTimeSync, buf, peer, func(resp server.Response) {
+			peerErr := resp.GetError()
+			if peerErr != nil {
+				s.log.WithContext(ctx).With().Warning("peer returned error for offset", log.Err(peerErr))
+				return
+			}
 			var response Response
-			if err := types.BytesToInterface(buf, &response); err != nil {
+			if err := types.BytesToInterface(resp.GetData(), &response); err != nil {
 				s.log.Debug("can't decode response", log.Binary("response", buf), log.Err(err))
 				return
 			}

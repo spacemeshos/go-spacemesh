@@ -180,7 +180,7 @@ func (f MessageNetwork) GetPeers() []peers.Peer {
 
 type network interface {
 	GetPeers() []peers.Peer
-	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
+	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(resp server.Response), failHandler func(err error)) error
 	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(ctx context.Context, b []byte) []byte)
 	Close()
 }
@@ -335,14 +335,14 @@ func (f *Fetch) loop() {
 // in a response batch
 func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 	if f.stopped() {
-		return nil
+		return server.SerializeResponse(f.log, nil, server.ErrShuttingDown)
 	}
 
 	var requestBatch requestBatch
 	err := types.BytesToInterface(data, &requestBatch)
 	if err != nil {
 		f.log.WithContext(ctx).With().Error("failed to parse request", log.Err(err))
-		return []byte{}
+		return server.SerializeResponse(f.log, nil, server.ErrBadRequest)
 	}
 	resBatch := responseBatch{
 		ID:        requestBatch.ID,
@@ -388,15 +388,21 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 		log.String("batchHash", resBatch.ID.ShortString()),
 		log.Int("numResponse", len(resBatch.Responses)),
 		log.Int("dataSize", len(bts)))
-	return bts
+	return server.SerializeResponse(f.log, bts, nil)
 }
 
 // receive Data from message server and call response handlers accordingly
-func (f *Fetch) receiveResponse(data []byte) {
+func (f *Fetch) receiveResponse(resp server.Response) {
 	if f.stopped() {
 		return
 	}
+	peerErr := resp.GetError()
+	if peerErr != nil {
+		f.log.With().Warning("received fetch error from peer", log.Err(peerErr))
+		return
+	}
 
+	data := resp.GetData()
 	var response responseBatch
 	err := types.BytesToInterface(data, &response)
 	if err != nil {

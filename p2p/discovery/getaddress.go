@@ -39,14 +39,13 @@ func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.
 		resp, err := types.InterfaceToBytes(results)
 
 		if err != nil {
-			plogger.With().Error("error marshaling response message (GetAddress)", log.Err(err))
-			return nil
+			plogger.With().Panic("error marshaling response message (GetAddress)", log.Err(err))
 		}
 
 		plogger.With().Debug("sending response",
 			log.Int("size", len(results)),
 			log.Duration("time_to_make", time.Since(t)))
-		return resp
+		return server.SerializeResponse(plogger, resp, nil)
 	}
 }
 
@@ -62,10 +61,15 @@ func (p *protocol) GetAddresses(ctx context.Context, remoteID p2pcrypto.PublicKe
 
 	// response handler
 	ch := make(chan []*node.Info)
-	resHandler := func(msg []byte) {
+	resHandler := func(resp server.Response) {
 		defer close(ch)
+		peerErr := resp.GetError()
+		if peerErr != nil {
+			plogger.With().Warning("received peer error (GetAddresses)", log.Err(peerErr))
+			return
+		}
 		nodes := make([]*node.Info, 0, getAddrMax)
-		err := types.BytesToInterface(msg, &nodes)
+		err := types.BytesToInterface(resp.GetData(), &nodes)
 		//todo: check that we're not pass max results ?
 		if err != nil {
 			plogger.With().Warning("could not deserialize bytes, skipping packet", log.Err(err))
