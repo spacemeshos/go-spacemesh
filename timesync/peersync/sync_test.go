@@ -8,7 +8,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -62,7 +61,7 @@ func TestSyncGetOffset(t *testing.T) {
 	}
 	respBuf, err := types.InterfaceToBytes(resp)
 	require.NoError(t, err)
-	payload := server.SerializeResponse(logtest.New(t), respBuf, nil)
+	payload := server.SerializeResponse(respBuf, nil)
 	receive := make(chan service.DirectMessage, len(peers))
 
 	t.Run("Success", func(t *testing.T) {
@@ -164,7 +163,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 				}
 				respBuf, err := types.InterfaceToBytes(resp)
 				assert.NoError(t, err)
-				payload := server.SerializeResponse(logtest.New(t), respBuf, nil)
+				payload := server.SerializeResponse(respBuf, nil)
 
 				receive <- (*directMessage)(&service.DataMsgWrapper{
 					ReqID:   msg.ReqID,

@@ -14,8 +14,8 @@ import (
 
 // todo : calculate real udp max message size
 
-func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.Message) []byte {
-	return func(ctx context.Context, msg server.Message) []byte {
+func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.Message) ([]byte, error) {
+	return func(ctx context.Context, msg server.Message) ([]byte, error) {
 		t := time.Now()
 		plogger := p.logger.WithContext(ctx).WithFields(log.String("type", "getaddresses"),
 			log.String("from", msg.Sender().String()))
@@ -45,7 +45,7 @@ func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.
 		plogger.With().Debug("sending response",
 			log.Int("size", len(results)),
 			log.Duration("time_to_make", time.Since(t)))
-		return server.SerializeResponse(plogger, resp, nil)
+		return resp, nil
 	}
 }
 
@@ -61,15 +61,10 @@ func (p *protocol) GetAddresses(ctx context.Context, remoteID p2pcrypto.PublicKe
 
 	// response handler
 	ch := make(chan []*node.Info)
-	resHandler := func(resp server.Response) {
+	resHandler := func(msg []byte) {
 		defer close(ch)
-		peerErr := resp.GetError()
-		if peerErr != nil {
-			plogger.With().Warning("received peer error (GetAddresses)", log.Err(peerErr))
-			return
-		}
 		nodes := make([]*node.Info, 0, getAddrMax)
-		err := types.BytesToInterface(resp.GetData(), &nodes)
+		err := types.BytesToInterface(msg, &nodes)
 		//todo: check that we're not pass max results ?
 		if err != nil {
 			plogger.With().Warning("could not deserialize bytes, skipping packet", log.Err(err))

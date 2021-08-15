@@ -180,8 +180,8 @@ func (f MessageNetwork) GetPeers() []peers.Peer {
 
 type network interface {
 	GetPeers() []peers.Peer
-	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(resp server.Response), failHandler func(err error)) error
-	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(ctx context.Context, b []byte) []byte)
+	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
+	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(ctx context.Context, b []byte) ([]byte, error))
 	Close()
 }
 
@@ -333,16 +333,16 @@ func (f *Fetch) loop() {
 
 // FetchRequestHandler handles requests for sync from peersProvider, and basically reads Data from database and puts it
 // in a response batch
-func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
+func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) ([]byte, error) {
 	if f.stopped() {
-		return server.SerializeResponse(f.log, nil, server.ErrShuttingDown)
+		return nil, server.ErrShuttingDown
 	}
 
 	var requestBatch requestBatch
 	err := types.BytesToInterface(data, &requestBatch)
 	if err != nil {
 		f.log.WithContext(ctx).With().Error("failed to parse request", log.Err(err))
-		return server.SerializeResponse(f.log, nil, server.ErrBadRequest)
+		return nil, server.ErrBadRequest
 	}
 	resBatch := responseBatch{
 		ID:        requestBatch.ID,
@@ -380,29 +380,22 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 
 	bts, err := types.InterfaceToBytes(&resBatch)
 	if err != nil {
-		f.log.WithContext(ctx).With().Error("cannot parse message for batch ID",
+		f.log.WithContext(ctx).With().Panic("failed to serialize batch ID",
 			log.String("batchHash", resBatch.ID.ShortString()))
-		return nil
 	}
 	f.log.WithContext(ctx).With().Debug("returning response for batch",
 		log.String("batchHash", resBatch.ID.ShortString()),
 		log.Int("numResponse", len(resBatch.Responses)),
 		log.Int("dataSize", len(bts)))
-	return server.SerializeResponse(f.log, bts, nil)
+	return bts, nil
 }
 
 // receive Data from message server and call response handlers accordingly
-func (f *Fetch) receiveResponse(resp server.Response) {
+func (f *Fetch) receiveResponse(data []byte) {
 	if f.stopped() {
 		return
 	}
-	peerErr := resp.GetError()
-	if peerErr != nil {
-		f.log.With().Warning("received fetch error from peer", log.Err(peerErr))
-		return
-	}
 
-	data := resp.GetData()
 	var response responseBatch
 	err := types.BytesToInterface(data, &response)
 	if err != nil {
@@ -529,8 +522,8 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	f.activeBatches[batch.ID] = batch
 	f.activeBatchM.Unlock()
 	// timeout function will be called if no response was received for the hashes sent
-	timeoutFunc := func(err error) {
-		f.log.With().Error("request timed out", log.String("batchHash", batch.ID.ShortString()))
+	errorFunc := func(err error) {
+		f.log.With().Error("error occurred for SendBatch", log.String("batchHash", batch.ID.ShortString()), log.Err(err))
 		f.handleHashError(batch.ID, err)
 	}
 
@@ -556,7 +549,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 		f.activeBatchM.Lock()
 		f.activeBatches[batch.ID] = batch
 		f.activeBatchM.Unlock()
-		err := f.net.SendRequest(context.TODO(), server.Fetch, bytes, p, f.receiveResponse, timeoutFunc)
+		err := f.net.SendRequest(context.TODO(), server.Fetch, bytes, p, f.receiveResponse, errorFunc)
 		// if call succeeded, continue to other requests
 		if err != nil {
 			retries++

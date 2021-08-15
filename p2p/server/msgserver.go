@@ -5,7 +5,6 @@ import (
 	"container/list"
 	"context"
 	"errors"
-	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -58,7 +57,7 @@ type item struct {
 }
 
 type responseHandlers struct {
-	okCallback   func(resp Response)
+	okCallback   func(msg []byte)
 	failCallBack func(err error)
 }
 
@@ -68,22 +67,16 @@ var ErrShuttingDown = errors.New("node is shutting down")
 // ErrBadRequest is returned to the peer upon failure to parse the request
 var ErrBadRequest = errors.New("unable to parse request")
 
-// Response is the interface type of the peer response returned by SendRequest.
-type Response interface {
-	GetData() []byte
-	GetError() error
-}
+var errRequestTimeout = errors.New("request timed out")
 
 type response struct {
-	Data     []byte
+	Data []byte
+	// use a string instead of an error because error is an interface and cannot be
+	// serialized as concrete types.
 	ErrorStr string
 }
 
-func (r *response) GetData() []byte {
-	return r.Data
-}
-
-func (r *response) GetError() error {
+func (r *response) getError() error {
 	if len(r.ErrorStr) > 0 {
 		return errors.New(r.ErrorStr)
 	}
@@ -91,20 +84,20 @@ func (r *response) GetError() error {
 }
 
 // SerializeResponse serializes the response data returned by SendRequest
-func SerializeResponse(logger log.Log, data []byte, err error) []byte {
+func SerializeResponse(data []byte, err error) []byte {
 	resp := response{Data: data}
 	if err != nil {
 		resp.ErrorStr = err.Error()
 	}
 	bytes, err := types.InterfaceToBytes(&resp)
 	if err != nil {
-		logger.With().Panic("failed to serialize response", log.Err(err))
+		log.Panic("failed to serialize response", log.Err(err))
 	}
 	return bytes
 }
 
-// DeserializeResponse deserializes the response data returned by SendRequest
-func DeserializeResponse(logger log.Log, data []byte) (Response, error) {
+// deserializeResponse deserializes the response data returned by SendRequest
+func deserializeResponse(data []byte) (*response, error) {
 	var resp response
 	err := types.BytesToInterface(data, &resp)
 	if err != nil {
@@ -120,10 +113,10 @@ type MessageServer struct {
 	name               string //server name
 	network            Service
 	pendMutex          sync.RWMutex
-	pendingQueue       *list.List                                            //queue of pending messages
-	resHandlers        map[uint64]responseHandlers                           //response handlers by request ReqID
-	msgRequestHandlers map[MessageType]func(context.Context, Message) []byte //request handlers by request type
-	ingressChannel     chan service.DirectMessage                            //chan to relay messages into the server
+	pendingQueue       *list.List                                                     //queue of pending messages
+	resHandlers        map[uint64]responseHandlers                                    //response handlers by request ReqID
+	msgRequestHandlers map[MessageType]func(context.Context, Message) ([]byte, error) //request handlers by request type
+	ingressChannel     chan service.DirectMessage                                     //chan to relay messages into the server
 	requestLifetime    time.Duration
 	workerLimiter      chan struct{}
 	tg                 *taskgroup.Group
@@ -147,7 +140,7 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 		pendingQueue:       list.New(),
 		network:            network,
 		ingressChannel:     network.RegisterDirectProtocolWithChannel(name, c),
-		msgRequestHandlers: make(map[MessageType]func(context.Context, Message) []byte),
+		msgRequestHandlers: make(map[MessageType]func(context.Context, Message) ([]byte, error)),
 		requestLifetime:    requestLifetime,
 		tg:                 taskgroup.New(taskgroup.WithContext(ctx)),
 		cancel:             cancel,
@@ -219,7 +212,7 @@ func (p *MessageServer) cleanStaleMessages() {
 				foo, okFoo := p.resHandlers[item.id]
 				p.pendMutex.RUnlock()
 				if okFoo {
-					foo.failCallBack(fmt.Errorf("response timeout"))
+					foo.failCallBack(errRequestTimeout)
 				}
 				p.removeFromPending(item.id)
 			} else {
@@ -258,22 +251,24 @@ func (p *MessageServer) handleMessage(ctx context.Context, msg Message) {
 	}
 }
 
-func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, data *service.DataMsgWrapper) {
+func (p *MessageServer) handleRequestMessage(ctx context.Context, msg Message, req *service.DataMsgWrapper) {
 	logger := p.WithContext(ctx)
 	logger.Debug("handleRequestMessage start")
 
-	foo, okFoo := p.msgRequestHandlers[MessageType(data.MsgType)]
+	foo, okFoo := p.msgRequestHandlers[MessageType(req.MsgType)]
 	if !okFoo {
 		logger.With().Error("handler missing for request",
-			log.Uint64("p2p_request_id", data.ReqID),
+			log.Uint64("p2p_request_id", req.ReqID),
 			log.String("protocol", p.name),
-			log.Uint32("p2p_msg_type", data.MsgType))
+			log.Uint32("p2p_msg_type", req.MsgType))
 		return
 	}
 
-	logger.With().Debug("handle request", log.Uint32("p2p_msg_type", data.MsgType))
-	rmsg := &service.DataMsgWrapper{MsgType: data.MsgType, ReqID: data.ReqID, Payload: foo(ctx, msg)}
-	if sendErr := p.network.SendWrappedMessage(ctx, msg.Sender(), p.name, rmsg); sendErr != nil {
+	logger.With().Debug("handle request", log.Uint32("p2p_msg_type", req.MsgType))
+	data, err := foo(ctx, msg)
+	payload := SerializeResponse(data, err)
+	resp := &service.DataMsgWrapper{MsgType: req.MsgType, ReqID: req.ReqID, Payload: payload}
+	if sendErr := p.network.SendWrappedMessage(ctx, msg.Sender(), p.name, resp); sendErr != nil {
 		logger.With().Error("error sending response message", log.Err(sendErr))
 	}
 	logger.Debug("handleRequestMessage close")
@@ -289,11 +284,17 @@ func (p *MessageServer) handleResponseMessage(ctx context.Context, headers *serv
 	p.pendMutex.RUnlock()
 	p.removeFromPending(headers.ReqID)
 	if okFoo {
-		resp, err := DeserializeResponse(logger, headers.Payload)
+		resp, err := deserializeResponse(headers.Payload)
 		if err != nil {
 			logger.With().Warning("failed to deserialize response", log.Err(err))
+			foo.failCallBack(err)
 		} else {
-			foo.okCallback(resp)
+			peerErr := resp.getError()
+			if peerErr != nil {
+				foo.failCallBack(peerErr)
+			} else {
+				foo.okCallback(resp.Data)
+			}
 		}
 	} else {
 		logger.With().Error("can't find handler", log.Uint64("p2p_request_id", headers.ReqID))
@@ -302,24 +303,24 @@ func (p *MessageServer) handleResponseMessage(ctx context.Context, headers *serv
 }
 
 // RegisterMsgHandler sets the handler to act on a specific message request.
-func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(context.Context, Message) []byte) {
+func (p *MessageServer) RegisterMsgHandler(msgType MessageType, reqHandler func(context.Context, Message) ([]byte, error)) {
 	p.msgRequestHandlers[msgType] = reqHandler
 }
 
-func handlerFromBytesHandler(in func(context.Context, []byte) []byte) func(context.Context, Message) []byte {
-	return func(ctx context.Context, message Message) []byte {
+func handlerFromBytesHandler(in func(context.Context, []byte) ([]byte, error)) func(context.Context, Message) ([]byte, error) {
+	return func(ctx context.Context, message Message) ([]byte, error) {
 		payload := extractPayload(message)
 		return in(ctx, payload)
 	}
 }
 
 // RegisterBytesMsgHandler sets the handler to act on a specific message request.
-func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler func(context.Context, []byte) []byte) {
+func (p *MessageServer) RegisterBytesMsgHandler(msgType MessageType, reqHandler func(context.Context, []byte) ([]byte, error)) {
 	p.RegisterMsgHandler(msgType, handlerFromBytesHandler(reqHandler))
 }
 
 // SendRequest sends a request of a specific message.
-func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(resp Response), timeoutHandler func(err error)) error {
+func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errorHandler func(err error)) error {
 	reqID := p.newReqID()
 
 	// Add requestID to context
@@ -328,7 +329,7 @@ func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, pa
 		log.Uint32("p2p_msg_type", uint32(msgType)),
 		log.FieldNamed("recipient", address))
 	p.pendMutex.Lock()
-	p.resHandlers[reqID] = responseHandlers{resHandler, timeoutHandler}
+	p.resHandlers[reqID] = responseHandlers{resHandler, errorHandler}
 	p.pendingQueue.PushBack(item{id: reqID, timestamp: time.Now()})
 	p.pendMutex.Unlock()
 	msg := &service.DataMsgWrapper{Req: true, ReqID: reqID, MsgType: uint32(msgType), Payload: payload}

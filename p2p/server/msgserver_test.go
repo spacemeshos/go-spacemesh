@@ -16,34 +16,31 @@ import (
 const protocol = "/protocol/test/1.0/"
 
 func TestProtocol_ResponseNoDataNoError(t *testing.T) {
-	l := logtest.New(t).WithName("response_no_data_no_err")
-	data := SerializeResponse(l, nil, nil)
+	data := SerializeResponse(nil, nil)
 	assert.Greater(t, len(data), 0)
-	resp, err := DeserializeResponse(l, data)
+	resp, err := deserializeResponse(data)
 	assert.NoError(t, err)
-	assert.Nil(t, resp.GetData())
-	assert.NoError(t, resp.GetError())
+	assert.Nil(t, resp.Data)
+	assert.NoError(t, resp.getError())
 }
 
 func TestProtocol_ResponseNoError(t *testing.T) {
-	l := logtest.New(t).WithName("response_no_err")
 	bts := []byte("Baa Ram Ewe")
-	data := SerializeResponse(l, bts, nil)
+	data := SerializeResponse(bts, nil)
 	assert.Greater(t, len(data), 0)
-	resp, err := DeserializeResponse(l, data)
+	resp, err := deserializeResponse(data)
 	assert.NoError(t, err)
-	assert.Equal(t, bts, resp.GetData())
-	assert.Equal(t, nil, resp.GetError())
+	assert.Equal(t, bts, resp.Data)
+	assert.Equal(t, nil, resp.getError())
 }
 
 func TestProtocol_ResponseHasError(t *testing.T) {
-	l := logtest.New(t).WithName("response_has_err")
-	data := SerializeResponse(l, nil, ErrShuttingDown)
+	data := SerializeResponse(nil, ErrShuttingDown)
 	assert.Greater(t, len(data), 0)
-	resp, err := DeserializeResponse(l, data)
+	resp, err := deserializeResponse(data)
 	assert.NoError(t, err)
-	assert.Nil(t, resp.GetData())
-	assert.Equal(t, ErrShuttingDown, resp.GetError())
+	assert.Nil(t, resp.Data)
+	assert.Equal(t, ErrShuttingDown, resp.getError())
 }
 
 func TestProtocol_SendRequest(t *testing.T) {
@@ -56,8 +53,8 @@ func TestProtocol_SendRequest(t *testing.T) {
 	//handler that returns some bytes on request
 
 	mockData := "some value to return"
-	handler := func(ctx context.Context, msg []byte) []byte {
-		return SerializeResponse(serv1.Log, []byte(mockData), nil)
+	handler := func(ctx context.Context, msg []byte) ([]byte, error) {
+		return []byte(mockData), nil
 	}
 	// todo test nonbyte handlers
 	serv1.RegisterBytesMsgHandler(1, handler)
@@ -68,17 +65,20 @@ func TestProtocol_SendRequest(t *testing.T) {
 		serv2.Close()
 	})
 	//send request with handler that converts to string and sends via channel
-	respCh := make(chan Response)
-	callback := func(resp Response) {
+	respCh := make(chan []byte)
+	callback := func(resp []byte) {
 		respCh <- resp
 	}
-
-	err := serv2.SendRequest(context.TODO(), 1, nil, n1.PublicKey(), callback, func(err error) {})
+	errCh := make(chan error)
+	errorHandler := func(err error) {
+		errCh <- err
+	}
+	err := serv2.SendRequest(context.TODO(), 1, nil, n1.PublicKey(), callback, errorHandler)
 	require.NoError(t, err, "Should not return error")
 	resp := <-respCh
 
-	assert.EqualValues(t, mockData, resp.GetData(), "value received did not match correct value")
-	assert.NoError(t, resp.GetError(), "should not receive error from peer")
+	assert.EqualValues(t, mockData, resp, "value received did not match correct value")
+	assert.Empty(t, errCh, "should not receive error from peer")
 
 	// Now try sending to a bad address
 	randkey := p2pcrypto.NewRandomPubkey()
@@ -95,8 +95,8 @@ func TestProtocol_SendRequestPeerReturnError(t *testing.T) {
 	})
 
 	// handler returns error
-	handler := func(ctx context.Context, msg []byte) []byte {
-		return SerializeResponse(srv1.Log, nil, ErrBadRequest)
+	handler := func(ctx context.Context, msg []byte) ([]byte, error) {
+		return nil, ErrBadRequest
 	}
 	srv1.RegisterBytesMsgHandler(1, handler)
 
@@ -105,17 +105,20 @@ func TestProtocol_SendRequestPeerReturnError(t *testing.T) {
 	t.Cleanup(func() {
 		srv2.Close()
 	})
-	respCh := make(chan Response)
-	callback := func(resp Response) {
+	respCh := make(chan []byte)
+	callback := func(resp []byte) {
 		respCh <- resp
 	}
-
-	err := srv2.SendRequest(context.TODO(), 1, nil, n1.PublicKey(), callback, func(err error) {})
+	errCh := make(chan error)
+	errorHandler := func(err error) {
+		errCh <- err
+	}
+	err := srv2.SendRequest(context.TODO(), 1, nil, n1.PublicKey(), callback, errorHandler)
 	require.NoError(t, err)
-	resp := <-respCh
 
-	assert.Nil(t, resp.GetData(), "value received did not match correct value")
-	assert.Equal(t, ErrBadRequest, resp.GetError(), "Should not return error")
+	peerErr := <-errCh
+	assert.Empty(t, respCh, "value received did not match correct value")
+	assert.Equal(t, ErrBadRequest, peerErr, "Should return error")
 }
 
 func TestProtocol_CleanOldPendingMessages(t *testing.T) {
@@ -127,9 +130,9 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	})
 	//handler that returns some bytes on request
 
-	handler := func(ctx context.Context, msg []byte) []byte {
+	handler := func(ctx context.Context, msg []byte) ([]byte, error) {
 		time.Sleep(2 * time.Second)
-		return nil
+		return nil, nil
 	}
 
 	serv1.RegisterBytesMsgHandler(1, handler)
@@ -140,8 +143,8 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 		serv2.Close()
 	})
 	//send request with handler that converts to string and sends via channel
-	respCh := make(chan Response)
-	callback := func(resp Response) {
+	respCh := make(chan []byte)
+	callback := func(resp []byte) {
 		respCh <- resp
 	}
 
@@ -174,9 +177,9 @@ func TestProtocol_Close(t *testing.T) {
 	})
 	//handler that returns some bytes on request
 
-	handler := func(ctx context.Context, msg []byte) []byte {
+	handler := func(ctx context.Context, msg []byte) ([]byte, error) {
 		time.Sleep(60 * time.Second)
-		return SerializeResponse(serv1.Log, nil, nil)
+		return nil, nil
 	}
 
 	serv1.RegisterBytesMsgHandler(1, handler)
@@ -187,8 +190,8 @@ func TestProtocol_Close(t *testing.T) {
 		serv2.Close()
 	})
 
-	respCh := make(chan Response)
-	callback := func(resp Response) {
+	respCh := make(chan []byte)
+	callback := func(resp []byte) {
 		respCh <- resp
 	}
 

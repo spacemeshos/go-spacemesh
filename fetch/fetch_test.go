@@ -35,7 +35,7 @@ type mockNet struct {
 func (m mockNet) Close() {
 }
 
-func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) []byte) {
+func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) ([]byte, error)) {
 }
 
 func (m mockNet) Start(ctx context.Context) error {
@@ -79,7 +79,7 @@ func (m mockNet) GetPeers() []peers.Peer {
 	_, pub1, _ := p2pcrypto.GenerateKeyPair()
 	return []peers.Peer{pub1}
 }
-func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(resp server.Response), failHandler func(err error)) error {
+func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
 	m.TotalBatchCalls++
 	if m.ReturnError {
 		if m.AckChannel != nil {
@@ -105,10 +105,10 @@ func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, p
 	if m.AsyncChannel != nil {
 		go func(data []byte) {
 			<-m.AsyncChannel
-			resHandler(&mockResponse{data: data})
+			resHandler(data)
 		}(bts)
 	} else {
-		resHandler(&mockResponse{data: bts})
+		resHandler(bts)
 	}
 
 	if m.AckChannel != nil {
@@ -116,13 +116,6 @@ func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, p
 	}
 	return nil
 }
-
-type mockResponse struct {
-	data []byte
-}
-
-func (r *mockResponse) GetData() []byte { return r.data }
-func (r *mockResponse) GetError() error { return nil }
 
 var _ service.Service = (*mockNet)(nil)
 

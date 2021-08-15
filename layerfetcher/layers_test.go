@@ -59,33 +59,26 @@ func newMockNet() *mockNet {
 }
 func (m *mockNet) GetPeers() []peers.Peer    { return m.peers }
 func (m *mockNet) GetRandomPeer() peers.Peer { return m.peers[0] }
-func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, _ []byte, address p2pcrypto.PublicKey, resHandler func(resp server.Response), timeoutHandler func(err error)) error {
+func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, _ []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errorHandler func(err error)) error {
 	if _, ok := m.timeouts[address]; ok {
-		timeoutHandler(errors.New("peer timeout"))
+		errorHandler(errors.New("peer timeout"))
 		return nil
 	}
 	switch msgType {
 	case server.LayerHashMsg:
 		if data, ok := m.layerHashes[address]; ok {
-			resHandler(&mockResponse{data: data})
+			resHandler(data)
 			return nil
 		}
 	case server.LayerBlocksMsg:
 		if data, ok := m.layerBlocks[address]; ok {
-			resHandler(&mockResponse{data: data})
+			resHandler(data)
 			return nil
 		}
 	}
 	return m.errors[address]
 }
 func (mockNet) Close() {}
-
-type mockResponse struct {
-	data []byte
-}
-
-func (r *mockResponse) GetData() []byte { return r.data }
-func (r *mockResponse) GetError() error { return nil }
 
 type layerDBMock struct {
 	layers    map[types.Hash32][]types.BlockID
@@ -173,12 +166,10 @@ func TestLayerHashReqReceiver(t *testing.T) {
 	aggHash := randomHash()
 	db.hashes[layerID] = hash
 	db.aggHashes[layerID] = aggHash
-	out := l.layerHashReqReceiver(context.TODO(), layerID.Bytes())
-	// out is serialized by server.SerializeResponse()
-	resp, err := server.DeserializeResponse(l.log, out)
+	out, err := l.layerHashReqReceiver(context.TODO(), layerID.Bytes())
 	require.NoError(t, err)
 	var lyrHash layerHash
-	assert.NoError(t, types.BytesToInterface(resp.GetData(), &lyrHash))
+	assert.NoError(t, types.BytesToInterface(out, &lyrHash))
 	assert.Equal(t, db.processed, lyrHash.ProcessedLayer)
 	assert.Equal(t, hash, lyrHash.Hash)
 	assert.Equal(t, aggHash, lyrHash.AggregatedHash)
@@ -191,15 +182,10 @@ func TestLayerHashBlocksReqReceiver(t *testing.T) {
 	db.layers[h] = []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID(), randomBlockID()}
 	db.vectors[h] = []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID()}
 
-	out := l.layerHashBlocksReqReceiver(context.TODO(), h.Bytes())
-	// out is serialized by server.SerializeResponse()
-	resp, err := server.DeserializeResponse(l.log, out)
+	out, err := l.layerHashBlocksReqReceiver(context.TODO(), h.Bytes())
 	require.NoError(t, err)
-	require.NotNil(t, resp)
-	assert.NoError(t, resp.GetError())
-
 	var act layerBlocks
-	err = types.BytesToInterface(resp.GetData(), &act)
+	err = types.BytesToInterface(out, &act)
 	assert.NoError(t, err)
 	assert.Equal(t, act.Blocks, db.layers[h])
 	assert.Equal(t, act.VerifyingVector, db.vectors[h])

@@ -14,8 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-func (p *protocol) newPingRequestHandler() func(context.Context, server.Message) []byte {
-	return func(ctx context.Context, msg server.Message) []byte {
+func (p *protocol) newPingRequestHandler() func(context.Context, server.Message) ([]byte, error) {
+	return func(ctx context.Context, msg server.Message) ([]byte, error) {
 		plogger := p.logger.WithContext(ctx).WithFields(log.String("type", "ping"),
 			log.String("from", msg.Sender().String()))
 		plogger.Debug("handle request")
@@ -23,12 +23,12 @@ func (p *protocol) newPingRequestHandler() func(context.Context, server.Message)
 		err := types.BytesToInterface(msg.Bytes(), pinged)
 		if err != nil {
 			plogger.With().Error("failed to deserialize ping message", log.Err(err))
-			return server.SerializeResponse(plogger, nil, server.ErrBadRequest)
+			return nil, server.ErrBadRequest
 		}
 
 		if err := p.verifyPinger(msg.Metadata().FromAddress, pinged); err != nil {
 			plogger.With().Error("msg contents were not valid", log.Err(err))
-			return server.SerializeResponse(plogger, nil, server.ErrBadRequest)
+			return nil, server.ErrBadRequest
 		}
 
 		//pong
@@ -36,11 +36,10 @@ func (p *protocol) newPingRequestHandler() func(context.Context, server.Message)
 		// TODO: include the resolved To address
 		if err != nil {
 			plogger.With().Panic("error marshaling response message (ping)", log.Err(err))
-			return nil
 		}
 
 		plogger.Debug("sending pong message")
-		return server.SerializeResponse(plogger, payload, nil)
+		return payload, nil
 	}
 }
 
@@ -72,16 +71,11 @@ func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 		return err
 	}
 	ch := make(chan []byte)
-	foo := func(resp server.Response) {
+	foo := func(msg []byte) {
 		defer close(ch)
 		plogger.Debug("handle response")
-		peerErr := resp.GetError()
-		if peerErr != nil {
-			plogger.With().Warning("received peer error (pong)", log.Err(peerErr))
-			return
-		}
 		sender := &node.Info{}
-		err := types.BytesToInterface(resp.GetData(), sender)
+		err := types.BytesToInterface(msg, sender)
 
 		if err != nil {
 			plogger.Warning("got unreadable pong. err=%v", err)
