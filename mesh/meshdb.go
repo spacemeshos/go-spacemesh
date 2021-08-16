@@ -503,9 +503,7 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 		return fmt.Errorf("could not write updated layer index to database for layer %v: %w", blk.LayerIndex, err)
 	}
 
-	// TODO: unhandled error
-	m.layers.Put(blk.LayerIndex.Bytes(), w)
-	return nil
+	return m.layers.Put(blk.LayerIndex.Bytes(), w)
 }
 
 func (m *DB) getLayerHashKey(layerID types.LayerID) []byte {
