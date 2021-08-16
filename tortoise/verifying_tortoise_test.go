@@ -6,7 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"go.uber.org/zap"
 	"math"
 	"strconv"
 	"testing"
@@ -2502,9 +2501,7 @@ func TestMultiTortoise(t *testing.T) {
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.AvgLayerSize = layerSize
-		level := zap.NewAtomicLevelAt(zap.DebugLevel)
-		alg2.logger = log.NewWithLevel("trtl2", level)
-		//alg2.logger = alg2.logger.Named("trtl2")
+		alg2.logger = alg2.logger.Named("trtl2")
 		alg2.trtl.logger = alg2.logger
 
 		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB []*types.Block) {
@@ -2679,7 +2676,8 @@ func TestMultiTortoise(t *testing.T) {
 			checkVerifiedLayer(t, alg2.trtl, lastVerified)
 		}
 
-		for i := 0; i < 1; i++ {
+		// minority tortoise begins healing
+		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
 			blocksA, blocksB := makeBlocks(layerID)
 			var blocks []*types.Block
@@ -2697,30 +2695,14 @@ func TestMultiTortoise(t *testing.T) {
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
-			// majority tortoise is unaffected, minority tortoise remains stuck
+			// majority tortoise is unaffected, minority tortoise begins to heal but its verifying tortoise
+			// is still stuck
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
 			checkVerifiedLayer(t, alg2.trtl, lastVerified.Add(uint32(i+1)))
 		}
-		// finally, minority tortoise heals and both tortoises are able to make progress again
-		//layerID = layerID.Add(1)
-		//blocksA, blocksB = makeBlocks(layerID)
-		//var blocks []*types.Block
-		//blocks = append(blocksA, blocksB...)
-		//
-		//// add all blocks to both tortoises
-		//var blockIDs []types.BlockID
-		//for _, block := range blocks {
-		//	blockIDs = append(blockIDs, block.ID())
-		//	r.NoError(mdb1.AddBlock(block))
-		//	r.NoError(mdb2.AddBlock(block))
-		//}
-		//r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-		//r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-		//alg1.HandleIncomingLayer(context.TODO(), layerID)
-		//alg2.HandleIncomingLayer(context.TODO(), layerID)
-		//
-		//checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-		//checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+
+		// TODO: finish adding support for reorgs. minority tortoise should complete healing and successfully
+		//   hand off back to verifying tortoise.
 	})
 
 	t.Run("equal partition", func(t *testing.T) {
