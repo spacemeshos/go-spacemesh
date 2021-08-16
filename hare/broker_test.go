@@ -1,13 +1,11 @@
 package hare
 
 import (
-	"bytes"
 	"context"
 	"sync"
 	"testing"
 	"time"
 
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -53,17 +51,18 @@ func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(ctx context.Context,
 	return msq.res, msq.err
 }
 
-func createMessage(t *testing.T, instanceID types.LayerID) []byte {
+func createMessage(tb testing.TB, instanceID types.LayerID) []byte {
+	tb.Helper()
+
 	sr := signing.NewEdSigner()
 	b := newMessageBuilder()
 	msg := b.SetPubKey(sr.PublicKey()).SetInstanceID(instanceID).Sign(sr).Build()
 
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, msg.Message); err != nil {
-		assert.Fail(t, "Failed to marshal data")
+	buf, err := types.InterfaceToBytes(msg.Message)
+	if err != nil {
+		require.NoError(tb, err)
 	}
-
-	return w.Bytes()
+	return buf
 }
 
 func TestBroker_Start(t *testing.T) {
@@ -128,12 +127,11 @@ func TestBroker_Priority(t *testing.T) {
 		b := newMessageBuilder()
 		msg := b.SetPubKey(sr.PublicKey()).SetInstanceID(instanceID1).SetRoleProof(roleProof).Sign(sr).Build()
 
-		var w bytes.Buffer
-		if _, err := xdr.Marshal(&w, msg.Message); err != nil {
-			assert.Fail(t, "failed to marshal data")
+		buf, err := types.InterfaceToBytes(msg.Message)
+		if err != nil {
+			require.NoError(t, err)
 		}
-
-		return w.Bytes()
+		return buf
 	}
 	roleProofInbound := []byte{1, 2, 3}
 	roleProofOutbound := []byte{3, 2, 1}
@@ -338,12 +336,11 @@ type mockGossipMessage struct {
 }
 
 func (mgm *mockGossipMessage) Bytes() []byte {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, mgm.msg.Message); err != nil {
+	buf, err := types.InterfaceToBytes(mgm.msg.Message)
+	if err != nil {
 		return nil
 	}
-
-	return w.Bytes()
+	return buf
 }
 
 func (mgm *mockGossipMessage) ValidationCompletedChan() chan service.MessageValidation {
