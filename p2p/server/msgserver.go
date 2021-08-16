@@ -67,12 +67,13 @@ var ErrShuttingDown = errors.New("node is shutting down")
 // ErrBadRequest is returned to the peer upon failure to parse the request
 var ErrBadRequest = errors.New("unable to parse request")
 
-var errRequestTimeout = errors.New("request timed out")
+// ErrRequestTimeout is returned to the caller when the request times out
+var ErrRequestTimeout = errors.New("request timed out")
 
 type response struct {
 	Data []byte
 	// use a string instead of an error because error is an interface and cannot be
-	// serialized as concrete types.
+	// serialized like concrete types.
 	ErrorStr string
 }
 
@@ -212,7 +213,7 @@ func (p *MessageServer) cleanStaleMessages() {
 				foo, okFoo := p.resHandlers[item.id]
 				p.pendMutex.RUnlock()
 				if okFoo {
-					foo.failCallBack(errRequestTimeout)
+					foo.failCallBack(ErrRequestTimeout)
 				}
 				p.removeFromPending(item.id)
 			} else {
