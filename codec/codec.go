@@ -30,9 +30,9 @@ func DecodeFrom(r io.Reader, value Decodable) (int, error) {
 // - use multiple buffers that increase in size (e.g. 16, 32, 64, 128 bytes)
 var encoderPool = sync.Pool{
 	New: func() interface{} {
-		var b bytes.Buffer
+		b := new(bytes.Buffer)
 		b.Grow(64)
-		return &b
+		return b
 	},
 }
 
@@ -50,7 +50,12 @@ func Encode(value Encodable) ([]byte, error) {
 	b := getEncoderBuffer()
 	defer putEncoderBuffer(b)
 	_, err := EncodeTo(b, value)
-	return b.Bytes(), err
+	if err != nil {
+		return nil, err
+	}
+	buf := make([]byte, len(b.Bytes()))
+	copy(buf, b.Bytes())
+	return buf, nil
 }
 
 // Decode value from a byte buffer.
