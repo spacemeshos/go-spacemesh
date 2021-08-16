@@ -1446,12 +1446,7 @@ func TestVoteWeight(t *testing.T) {
 	totalSpace := 100
 	atxdb.mockAtxHeader = makeAtxHeaderWithWeight(uint(totalSpace))
 	someBlocks := generateBlocks(t, types.GetEffectiveGenesis().Add(1), 1, alg.BaseBlock, atxdb, 1)
-	weight, err := alg.trtl.voteWeight(context.TODO(), someBlocks[0], randomBlockID())
-	r.NoError(err)
-	r.Equal(totalSpace, int(weight))
-
-	// voting for a different block should not change the weight
-	weight, err = alg.trtl.voteWeight(context.TODO(), someBlocks[0], randomBlockID())
+	weight, err := alg.trtl.voteWeight(context.TODO(), someBlocks[0])
 	r.NoError(err)
 	r.Equal(totalSpace, int(weight))
 }

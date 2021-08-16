@@ -506,8 +506,7 @@ func (t *turtle) calculateExceptions(
 // whether or not the block's ATX was received on time, and on how old the layer is.
 // TODO: for now it's probably sufficient to adjust weight based on whether the ATX was received on time, or late, for
 //   the current epoch. See https://github.com/spacemeshos/go-spacemesh/issues/2540.
-// TODO: does blockVotedOn ever matter here? can we remove it?
-func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block, blockVotedOn types.BlockID) (uint64, error) {
+func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block) (uint64, error) {
 	logger := t.logger.WithContext(ctx)
 
 	atxHeader, err := t.atxdb.GetAtxHeader(votingBlock.ATXID)
@@ -522,7 +521,7 @@ func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block, block
 	nextEpochStart := t.clock.LayerToTime((atxEpoch + 1).FirstLayer())
 
 	// check if the ATX was received on time
-	// TODO LANE: add an exception for sync, when we expect everything to be received late
+	// TODO: add an exception for sync, when we expect everything to be received late
 	if atxTimestamp.Before(nextEpochStart) {
 		blockWeight := atxHeader.GetWeight()
 		logger.With().Debug("voting block atx was timely",
@@ -548,7 +547,7 @@ func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID, blockVotedOn
 	if err != nil {
 		return 0, err
 	}
-	return t.voteWeight(ctx, block, blockVotedOn)
+	return t.voteWeight(ctx, block)
 }
 
 // Persist saves the current tortoise state to the database
@@ -593,7 +592,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	}
 
 	calcWeightedVote := func(block *types.Block, votedOn types.BlockID, baseVote vec) (vec, error) {
-		weight, err := t.voteWeight(ctx, block, votedOn)
+		weight, err := t.voteWeight(ctx, block)
 		if err != nil {
 			return baseVote, fmt.Errorf("error processing block %v in block %v for diff list: %w", votedOn, block.ID(), err)
 		}
@@ -601,7 +600,9 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	}
 
 	// TODO: this logic would be simpler if For and Against were a single list
+	//   see https://github.com/spacemeshos/go-spacemesh/issues/2369
 	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
+	//   see https://github.com/spacemeshos/go-spacemesh/issues/2673
 	opinion := make(map[types.BlockID]vec)
 
 	for _, bid := range block.ForDiff {
@@ -929,6 +930,7 @@ candidateLayerLoop:
 			// the layer (since the effectiveness of each transaction in the layer depends upon the contents of the
 			// entire layer and transaction ordering). Therefore we have to enter self healing in this case.
 			// TODO: abstain only for entire layer at a time, not for individual blocks (optimization)
+			//   see https://github.com/spacemeshos/go-spacemesh/issues/2674
 			if !globalOpinionDecided {
 				logger.With().Warning("global opinion on block is abstain, cannot verify layer",
 					blockID,
@@ -964,10 +966,11 @@ candidateLayerLoop:
 				if t.Verified.After(lastVerified) {
 					// rescore goodness of blocks in all intervening layers on the basis of new information
 					// TODO: this is inefficient and we can probably do better
-					// see https://github.com/spacemeshos/go-spacemesh/issues/2522
+					//   see https://github.com/spacemeshos/go-spacemesh/issues/2522
 					for layerID := lastVerified.Add(1); !layerID.After(t.Last); layerID = layerID.Add(1) {
 						// TODO LANE: this operation can be very expensive and very slow after a few layers,
 						//   since no caching is currently performed. it needs to be optimized and cached.
+						//   see https://github.com/spacemeshos/go-spacemesh/issues/2672
 						if err := t.scoreBlocksByLayerID(ctx, layerID); err != nil {
 							// if we fail to process a layer, there's probably no point in trying to recore blocks
 							// in later layers, so just print an error and bail
@@ -987,7 +990,7 @@ candidateLayerLoop:
 
 			// give up trying to verify layers and keep waiting
 			// TODO: continue to verify later layers, even after failing to verify a layer.
-			//   See https://github.com/spacemeshos/go-spacemesh/issues/2403.
+			//   See https://github.com/spacemeshos/go-spacemesh/issues/2403
 			logger.With().Info("failed to verify candidate layer, will reattempt later")
 			return nil
 		}
@@ -1030,6 +1033,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			// and see if they pass the local threshold. if not, use the current weak coin instead to determine our vote for
 			// the blocks in the layer.
 			// TODO: do we need to/can we somehow cache this?
+			//   see https://github.com/spacemeshos/go-spacemesh/issues/2675
 			layerBlockIds, err := t.bdp.LayerBlockIds(layerID)
 			logger.With().Debug("counting votes for and against blocks in old, unverified layer",
 				log.Int("num_blocks", len(layerBlockIds)))
@@ -1039,7 +1043,8 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			layerBlocks := make(map[types.BlockID]struct{}, len(layerBlockIds))
 			for _, blockID := range layerBlockIds {
 				logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
-				// TODO LANE: this operation can be expensive, it needs to be cached
+				// TODO: this operation can be expensive, it needs to be cached
+				//   see https://github.com/spacemeshos/go-spacemesh/issues/2676
 				sum, err := t.sumVotesForBlock(ctx, blockID, layerID.Add(1), func(id types.BlockID) bool { return true })
 				if err != nil {
 					return nil, fmt.Errorf("error summing votes for block %v in old layer %v: %w",
@@ -1048,6 +1053,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 
 				// TODO: should delta here represent layer depth, or should it always be 1?
 				//   votes are counted for all layers!
+				//   see https://github.com/spacemeshos/go-spacemesh/issues/2677
 				localOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.LocalThreshold, 1)
 				logger.With().Debug("local opinion on block in old layer",
 					sum,
@@ -1066,6 +1072,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 					//   older than the base blocks, which will cause those blocks not to be marked good. is there
 					//   anything we can do about this? e.g., explicitly pick base blocks that agree with the new
 					//   opinion, or pick older base blocks.
+					//   see https://github.com/spacemeshos/go-spacemesh/issues/2678
 					if coin, exists := t.bdp.GetCoinflip(ctx, t.Last.Sub(1)); exists {
 						logger.With().Info("rescoring all blocks in old layer using weak coin",
 							log.Int("count", len(layerBlockIds)),
@@ -1133,7 +1140,6 @@ func (t *turtle) sumVotesForBlock(
 		log.FieldNamed("end_layer", t.Last),
 		log.FieldNamed("block_voting_on", blockID),
 		log.FieldNamed("layer_voting_on", startLayer.Sub(1)))
-	// TODO LANE: need to factor in theta
 	for voteLayer := startLayer; !voteLayer.After(t.Last); voteLayer = voteLayer.Add(1) {
 		logger := logger.WithFields(voteLayer)
 		logger.With().Debug("summing layer votes",
@@ -1177,8 +1183,6 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 	// These are our starting values
 	pbaseOld := t.Verified
 	pbaseNew := t.Verified
-
-	// TODO: optimize this algorithm using, e.g., a triangular matrix rather than nested loops
 
 	for candidateLayerID := pbaseOld.Add(1); candidateLayerID.Before(targetLayerID); candidateLayerID = candidateLayerID.Add(1) {
 		logger := t.logger.WithContext(ctx).WithFields(
@@ -1242,8 +1246,6 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 				logger.With().Error("error saving block contextual validity", blockID, log.Err(err))
 			}
 		}
-
-		// TODO: do we overwrite the layer input vector in the database here?
 
 		t.Verified = candidateLayerID
 		pbaseNew = candidateLayerID
