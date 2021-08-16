@@ -150,7 +150,7 @@ func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh)
 			block := types.NewExistingBlock(id, []byte(rand.String(8)), txIDs)
 			block.Initialize()
 			err := msh.AddBlockWithTxs(context.TODO(), block)
-			r.NoError(err)
+			r.NoError(err, "cannot add data to test")
 			msh.contextualValidity.Put(block.ID().Bytes(), []byte{1})
 		}
 	}

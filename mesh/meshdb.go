@@ -304,11 +304,11 @@ func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
 	if err == nil {
 		m.persistLayerHash(index, EmptyLayerHash)
 	}
-	return nil
+	return err
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
-	return m.blocks.Get(id.AsHash32().Bytes())
+	return m.blocks.Get(id.Bytes())
 }
 
 // ContextualValidity retrieves opinion on block from the database
