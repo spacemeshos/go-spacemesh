@@ -338,7 +338,7 @@ type mockGossipMessage struct {
 func (mgm *mockGossipMessage) Bytes() []byte {
 	buf, err := types.InterfaceToBytes(mgm.msg.Message)
 	if err != nil {
-		panic(err)
+		return nil
 	}
 	return buf
 }
