@@ -1,14 +1,12 @@
 package eligibility
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
@@ -164,17 +162,13 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	}
 
 	// marshal message
-	var w bytes.Buffer
 	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
-	if _, err := xdr.Marshal(&w, &msg); err != nil {
-		o.WithContext(ctx).With().Error("could not marshal xdr", log.Err(err))
-		return nil, err
+	buf, err := types.InterfaceToBytes(&msg)
+	if err != nil {
+		o.WithContext(ctx).With().Panic("failed to encode", log.Err(err))
 	}
-
-	val := w.Bytes()
-	o.vrfMsgCache.Add(key, val) // update cache
-
-	return val, nil
+	o.vrfMsgCache.Add(key, buf)
+	return buf, nil
 }
 
 func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {

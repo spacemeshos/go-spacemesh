@@ -69,7 +69,7 @@ func NewEventPublisher(eventURL string) (*EventPublisher, error) {
 	return &EventPublisher{p}, nil
 }
 
-// PublishEvent publishes the provided event on pubsub infra. It encodes messages using XDR protocol.
+// PublishEvent publishes the provided event on pubsub infra.
 func (p *EventPublisher) PublishEvent(event Event) error {
 	bytes, err := types.InterfaceToBytes(event)
 	if err != nil {
