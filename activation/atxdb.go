@@ -43,6 +43,8 @@ func getNodeAtxPrefix(nodePK string) *bytes.Buffer {
 
 func getNodeAtxEpochKey(epoch types.EpochID, nodeID types.NodeID) []byte {
 	b := getEpochPrefix(epoch)
+	b.WriteString(nodeID.Key)
+	b.Write(nodeID.VRFPublicKey)
 	return b.Bytes()
 }
 
