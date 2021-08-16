@@ -102,6 +102,10 @@ func (mf *mockFetcher) GetTortoiseBeacon(_ context.Context, epoch types.EpochID)
 	return mf.tbError[epoch]
 }
 
+func (mf *mockFetcher) SetTortoiseBeacon(_ context.Context, epoch types.EpochID, beacon types.Hash32) error {
+	return nil
+}
+
 func (mf *mockFetcher) getLayerPollChan(layerID types.LayerID) chan struct{} {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
