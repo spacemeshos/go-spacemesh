@@ -24,8 +24,16 @@ func init() {
 	types.SetLayersPerEpoch(4)
 }
 
-type meshWrapper struct {
+type blockDataWriter interface {
 	blockDataProvider
+	AddBlock(*types.Block) error
+	SaveLayerInputVectorByID(context.Context, types.LayerID, []types.BlockID) error
+	SetInputVectorBackupFunc(mesh.InputVectorBackupFunc)
+	GetInputVectorBackupFunc() mesh.InputVectorBackupFunc
+}
+
+type meshWrapper struct {
+	blockDataWriter
 	inputVectorBackupFn      func(types.LayerID) ([]types.BlockID, error)
 	saveContextualValidityFn func(types.BlockID, types.LayerID, bool) error
 }
@@ -34,14 +42,18 @@ func (mw meshWrapper) SaveContextualValidity(bid types.BlockID, lid types.LayerI
 	if mw.saveContextualValidityFn != nil {
 		return mw.saveContextualValidityFn(bid, lid, valid)
 	}
-	return mw.blockDataProvider.SaveContextualValidity(bid, lid, valid)
+	return mw.blockDataWriter.SaveContextualValidity(bid, lid, valid)
 }
 
 func (mw meshWrapper) GetLayerInputVectorByID(lid types.LayerID) ([]types.BlockID, error) {
 	if mw.inputVectorBackupFn != nil {
 		return mw.inputVectorBackupFn(lid)
 	}
-	return mw.blockDataProvider.GetLayerInputVectorByID(lid)
+	return mw.blockDataWriter.GetLayerInputVectorByID(lid)
+}
+
+func (mw meshWrapper) GetCoinflip(context.Context, types.LayerID) (bool, bool) {
+	return true, true
 }
 
 type atxDataWriter interface {
@@ -298,7 +310,7 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 	return
 }
 
-func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
+func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
 	lyr := makeLayer(t, l, trtl, blocksPerLayer, atxdb, msh, inputVectorFn)
 	logger := logtest.New(t)
 
@@ -321,15 +333,15 @@ var (
 	atx       = &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 )
 
-func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh *mesh.DB, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
+func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
 	logger := logtest.New(t)
 	logger.Debug("======================== choosing base block for layer", layerID)
 	if inputVectorFn != nil {
-		oldInputVectorFn := msh.InputVectorBackupFunc
+		oldInputVectorFn := msh.GetInputVectorBackupFunc()
 		defer func() {
-			msh.InputVectorBackupFunc = oldInputVectorFn
+			msh.SetInputVectorBackupFunc(oldInputVectorFn)
 		}()
-		msh.InputVectorBackupFunc = inputVectorFn
+		msh.SetInputVectorBackupFunc(inputVectorFn)
 	}
 	baseBlockID, lists, err := trtl.BaseBlock(context.TODO())
 	require.NoError(t, err)
@@ -364,7 +376,7 @@ func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer
 	return lyr
 }
 
-func testLayerPattern(t *testing.T, atxdb atxDataWriter, db *mesh.DB, trtl *turtle, blocksPerLayer int, successPattern []bool) {
+func testLayerPattern(t *testing.T, atxdb atxDataWriter, db blockDataWriter, trtl *turtle, blocksPerLayer int, successPattern []bool) {
 	logger := logtest.New(t)
 	badLayerFn := func(layerID types.LayerID) ([]types.BlockID, error) {
 		logger.Debug("giving bad results for layer", layerID)
@@ -401,9 +413,12 @@ func TestLayerPatterns(t *testing.T) {
 	})
 
 	t.Run("heal after bad layers", func(t *testing.T) {
-		msh := getInMemMesh(t)
+		// use a mesh wrapper to simulate weakcoin, needed for healing
+		msh := &meshWrapper{blockDataWriter: getInMemMesh(t)}
 		atxdb := getAtxDB()
 		trtl := defaultTurtle(t)
+		//level := zap.NewAtomicLevelAt(zap.DebugLevel)
+		//trtl.logger = log.NewWithLevel("trtl", level)
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
 		trtl.atxdb = atxdb
@@ -418,7 +433,7 @@ func TestLayerPatterns(t *testing.T) {
 		for i := 0; vote == abstain; i++ {
 			// fast-forward to the point where Zdist is past, we've stopped waiting for hare results for the bad
 			// layers and started voting against them, and we've accumulated votes for ConfidenceParam layers
-			netVote := vec{0, uint64((i + int(trtl.ConfidenceParam)) * blocksPerLayer)}
+			netVote := vec{0, uint64(i * blocksPerLayer)}
 			// Zdist + ConfidenceParam (+ a margin of one due to the math) layers have already passed, so that's our
 			// delta
 			vote = calculateOpinionWithThreshold(trtl.logger, netVote, blocksPerLayer, trtl.GlobalThreshold, float64(uint32(i+1)+trtl.Zdist+trtl.ConfidenceParam))
@@ -1607,7 +1622,7 @@ func TestVerifyLayers(t *testing.T) {
 	r.NoError(mdb.AddZeroBlockLayer(l1ID))
 
 	mdbWrapper := meshWrapper{
-		blockDataProvider: mdb,
+		blockDataWriter: mdb,
 		saveContextualValidityFn: func(types.BlockID, types.LayerID, bool) error {
 			r.Fail("should not save contextual validity")
 			return nil

@@ -370,7 +370,7 @@ func (m *DB) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip
 }
 
 // GetCoinflip returns the weak coinflip result for the given layer
-func (m *DB) GetCoinflip(ctx context.Context, layerID types.LayerID) (bool, bool) {
+func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) {
 	coin, exists := m.coinflips[layerID]
 	return coin, exists
 }
@@ -403,12 +403,22 @@ func (m *DB) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
 	return v, err
 }
 
+type InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
+
 // GetLayerInputVectorByID gets the input vote vector for a layer (hare results)
 func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
 	if m.InputVectorBackupFunc != nil {
 		return m.InputVectorBackupFunc(id)
 	}
 	return m.defaultGetLayerInputVectorByID(id)
+}
+
+func (m *DB) SetInputVectorBackupFunc(fn InputVectorBackupFunc) {
+	m.InputVectorBackupFunc = fn
+}
+
+func (m *DB) GetInputVectorBackupFunc() InputVectorBackupFunc {
+	return m.InputVectorBackupFunc
 }
 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)

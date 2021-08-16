@@ -254,8 +254,13 @@ func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID
 	}
 
 	input, err := t.layerOpinionVector(ctx, layerID)
+	// an error here signifies a real database failure
 	if err != nil {
 		return abstain, err
+	}
+	// otherwise, nil means we should abstain
+	if input == nil {
+		return abstain, nil
 	}
 
 	t.logger.WithContext(ctx).With().Debug("got layer opinion vector",
@@ -265,6 +270,8 @@ func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID
 
 	for _, bl := range input {
 		if bl == blockid {
+			// note: we never abstain on individual blocks, only on a whole layer, which would have been captured
+			// above.
 			return support, nil
 		}
 	}
@@ -447,7 +454,7 @@ func (t *turtle) calculateExceptions(
 		layerInputVector, err := t.layerOpinionVector(ctx, layerID)
 		if err != nil {
 			// an error here signifies a real database failure
-			logger.With().Error("unable to calculate local opinion for layer", log.Err(err))
+			logger.With().Error(errstrUnableToCalculateLocalOpinion, log.Err(err))
 			return nil, err
 		}
 
