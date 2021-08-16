@@ -1,6 +1,5 @@
 <component name="ProjectRunConfigurationManager">
   <configuration default="true" type="GoTestRunConfiguration" factoryName="Go Test">
-    <output_file path="/tmp/testlog.txt" is_save="true" />
     <module name="go-spacemesh" />
     <working_directory value="$PROJECT_DIR$" />
     <go_parameters value="-i" />
