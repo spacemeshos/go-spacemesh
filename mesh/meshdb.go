@@ -275,22 +275,24 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 
 // LayerBlockIds retrieves all block ids from a layer by layer index
 func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
-	idsBytes, err := m.layers.Get(index.Bytes())
-	if err != nil {
-		return nil, err
+	layerBuf := index.Bytes()
+	zero := false
+	ids := []types.BlockID{}
+	it := m.layers.Find(layerBuf)
+	// TODO(dshulyak) iterator must be able to return an error
+	for it.Next() {
+		if len(it.Key()) == len(layerBuf) {
+			zero = true
+			continue
+		}
+		var id types.BlockID
+		copy(id[:], it.Key()[len(layerBuf):])
+		ids = append(ids, id)
 	}
-
-	if len(idsBytes) == 0 {
-		// zero block layer
-		return []types.BlockID{}, nil
+	if zero || len(ids) > 0 {
+		return ids, nil
 	}
-
-	blockIds, err := types.BytesToBlockIds(idsBytes)
-	if err != nil {
-		return nil, errors.New("could not get all blocks from database")
-	}
-
-	return blockIds, nil
+	return nil, database.ErrNotFound
 }
 
 // EmptyLayerHash is the layer hash for an empty layer
@@ -298,16 +300,11 @@ var EmptyLayerHash = types.Hash32{}
 
 // AddZeroBlockLayer tags lyr as a layer without blocks
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
-	blockIds := make([]types.BlockID, 0, 1)
-	w, err := types.BlockIdsToBytes(blockIds)
-	if err != nil {
-		return errors.New("could not encode layer blk ids")
-	}
-	err = m.layers.Put(index.Bytes(), w)
+	err := m.layers.Put(index.Bytes(), nil)
 	if err == nil {
 		m.persistLayerHash(index, EmptyLayerHash)
 	}
-	return err
+	return nil
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
@@ -349,25 +346,16 @@ func (m *DB) GetCoinflip(ctx context.Context, layerID types.LayerID) (bool, bool
 	return coin, exists
 }
 
-func (m *DB) defaulGetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
-	by, err := m.inputVector.Get(types.CalcHash32(id.Bytes()).Bytes())
-	if err != nil {
-		return nil, err
-	}
-	var v []types.BlockID
-	err = types.BytesToInterface(by, &v)
-	return v, err
-}
-
 // GetLayerInputVector gets the input vote vector for a layer (hare results)
 func (m *DB) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
-	by, err := m.inputVector.Get(hash.Bytes())
-	if err != nil {
-		return nil, err
+	it := m.inputVector.Find(hash.Bytes())
+	var ids []types.BlockID
+	for it.Next() {
+		var id types.BlockID
+		copy(id[:], it.Key()[len(hash.Bytes()):])
+		ids = append(ids, id)
 	}
-	var v []types.BlockID
-	err = types.BytesToInterface(by, &v)
-	return v, err
+	return ids, nil
 }
 
 // GetLayerInputVectorByID gets the input vote vector for a layer (hare results)
@@ -375,7 +363,7 @@ func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) 
 	if m.InputVectorBackupFunc != nil {
 		return m.InputVectorBackupFunc(id)
 	}
-	return m.defaulGetLayerInputVectorByID(id)
+	return m.GetLayerInputVector(types.CalcHash32(id.Bytes()))
 }
 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
@@ -384,13 +372,13 @@ func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blk
 	m.WithContext(ctx).With().Info("saving input vector",
 		id,
 		log.String("iv_hash", hash.ShortString()))
-
-	bytes, err := types.InterfaceToBytes(blks)
-	if err != nil {
-		return err
+	batch := m.inputVector.NewBatch()
+	for _, id := range blks {
+		if err := batch.Put(append(hash.Bytes(), id.Bytes()...), nil); err != nil {
+			return err
+		}
 	}
-
-	return m.inputVector.Put(hash.Bytes(), bytes)
+	return batch.Write()
 }
 
 func (m *DB) persistProcessedLayer(lyr *ProcessedLayer) error {
@@ -429,7 +417,7 @@ func (m *DB) writeBlock(bl *types.Block) error {
 	}
 	if bytes, err := types.InterfaceToBytes(block); err != nil {
 		return fmt.Errorf("could not encode block: %w", err)
-	} else if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
+	} else if err := m.blocks.Put(bl.ID().Bytes(), bytes); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)
 	} else if err := m.updateLayerWithBlock(bl); err != nil {
 		return fmt.Errorf("could not update layer %v with new block %v: %w", bl.Layer(), bl.ID(), err)
@@ -440,43 +428,15 @@ func (m *DB) writeBlock(bl *types.Block) error {
 }
 
 func (m *DB) updateLayerWithBlock(blk *types.Block) error {
-	lm := m.getLayerMutex(blk.LayerIndex)
-	defer m.endLayerWorker(blk.LayerIndex)
-
-	lm.m.Lock()
-	defer lm.m.Unlock()
-
-	ids, err := m.layers.Get(blk.LayerIndex.Bytes())
-	var blockIds []types.BlockID
-	if err != nil {
-		// layer doesn't exist, need to insert new layer
-		blockIds = make([]types.BlockID, 0, 1)
-	} else {
-		blockIds, err = types.BytesToBlockIds(ids)
-		if err != nil {
-			return errors.New("could not get all blocks from database")
-		}
-	}
-	m.Debug("added block %v to layer %v", blk.ID(), blk.LayerIndex)
-
-	blockIds = append(blockIds, blk.ID())
-	types.SortBlockIDs(blockIds)
-	w, err := types.BlockIdsToBytes(blockIds)
-	if err != nil {
-		return errors.New("could not encode layer blk ids")
-	}
-
-	m.layers.Put(blk.LayerIndex.Bytes(), w)
-	return nil
-}
-
-func (m *DB) getLayerHashKey(layerID types.LayerID) []byte {
-	return []byte(fmt.Sprintf("layerHash_%v", layerID.Bytes()))
+	var b bytes.Buffer
+	b.Write(blk.LayerIndex.Bytes())
+	b.Write(blk.ID().Bytes())
+	return m.layers.Put(b.Bytes(), nil)
 }
 
 func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
 	h := EmptyLayerHash
-	bts, err := m.general.Get(m.getLayerHashKey(layerID))
+	bts, err := m.general.Get(getLayerHashKey(layerID))
 	if err != nil {
 		return EmptyLayerHash, err
 	}
@@ -485,7 +445,7 @@ func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
 }
 
 func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
-	if err := m.general.Put(m.getLayerHashKey(layerID), hash.Bytes()); err != nil {
+	if err := m.general.Put(getLayerHashKey(layerID), hash.Bytes()); err != nil {
 		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
 			log.String("layer_hash", hash.ShortString()))
 	}
@@ -496,35 +456,6 @@ func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
 		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
 			log.String("layer_hash", hash.ShortString()))
 	}
-}
-
-// try delete layer Handler (deletes if pending pendingCount is 0)
-func (m *DB) endLayerWorker(index types.LayerID) {
-	m.lhMutex.Lock()
-	defer m.lhMutex.Unlock()
-
-	ll, found := m.layerMutex[index]
-	if !found {
-		panic("trying to double close layer mutex")
-	}
-
-	ll.layerWorkers--
-	if ll.layerWorkers == 0 {
-		delete(m.layerMutex, index)
-	}
-}
-
-// returns the existing layer Handler (crates one if doesn't exist)
-func (m *DB) getLayerMutex(index types.LayerID) *layerMutex {
-	m.lhMutex.Lock()
-	defer m.lhMutex.Unlock()
-	ll, found := m.layerMutex[index]
-	if !found {
-		ll = &layerMutex{}
-		m.layerMutex[index] = ll
-	}
-	ll.layerWorkers++
-	return ll
 }
 
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
@@ -561,6 +492,12 @@ func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
 		WithNodeID(smesherID).Bytes()
 }
 
+func getLayerHashKey(layerID types.LayerID) []byte {
+	return new(keyBuilder).
+		WithLayerHashPrefix().
+		WithLayerID(layerID).Bytes()
+}
+
 type keyBuilder struct {
 	buf bytes.Buffer
 }
@@ -582,22 +519,27 @@ func (k *keyBuilder) WithLayerID(l types.LayerID) *keyBuilder {
 }
 
 func (k *keyBuilder) WithOriginPrefix() *keyBuilder {
-	k.buf.WriteString("a_o_")
+	k.buf.WriteString("to")
 	return k
 }
 
 func (k *keyBuilder) WithDestPrefix() *keyBuilder {
-	k.buf.WriteString("a_d_")
+	k.buf.WriteString("td")
+	return k
+}
+
+func (k *keyBuilder) WithLayerHashPrefix() *keyBuilder {
+	k.buf.WriteString("lh")
 	return k
 }
 
 func (k *keyBuilder) WithAccountRewardsPrefix() *keyBuilder {
-	k.buf.WriteString("r_")
+	k.buf.WriteString("ar")
 	return k
 }
 
 func (k *keyBuilder) WithSmesherRewardsPrefix() *keyBuilder {
-	k.buf.WriteString("s_")
+	k.buf.WriteString("sr")
 	return k
 }
 
@@ -972,13 +914,9 @@ func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address
 		if it.Key() == nil {
 			break
 		}
-		var a types.TransactionID
-		err := types.BytesToInterface(it.Value(), &a)
-		if err != nil {
-			// log error
-			break
-		}
-		txs = append(txs, a)
+		var id types.TransactionID
+		copy(id[:], it.Value())
+		txs = append(txs, id)
 	}
 	return
 }
@@ -990,13 +928,9 @@ func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (tx
 		if it.Key() == nil {
 			break
 		}
-		var a types.TransactionID
-		err := types.BytesToInterface(it.Value(), &a)
-		if err != nil {
-			// log error
-			break
-		}
-		txs = append(txs, a)
+		var id types.TransactionID
+		copy(id[:], it.Value())
+		txs = append(txs, id)
 	}
 	return
 }
