@@ -60,7 +60,9 @@ func (db *PoetDb) ValidateAndStoreMsg(data []byte) error {
 
 // Validate validates a new PoET proof.
 func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error {
-
+	if len(poetID) < 5 {
+		return types.ProcessingError(fmt.Sprintf("invalid poet id %x", poetID))
+	}
 	root, err := calcRoot(proof.Members)
 	if err != nil {
 		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetID %x round %s: %v",
