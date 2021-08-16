@@ -2,13 +2,11 @@
 package hare
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"time"
 
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -115,12 +113,11 @@ func (m *Msg) String() string {
 // Bytes returns the message as bytes (without the public key).
 // It panics if the message erred on unmarshal.
 func (m *Msg) Bytes() []byte {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, m.Message); err != nil {
+	buf, err := types.InterfaceToBytes(m.Message)
+	if err != nil {
 		log.Panic("could not marshal InnerMsg before send")
 	}
-
-	return w.Bytes()
+	return buf
 }
 
 // Upon receiving a protocol's message, we try to build the full message.

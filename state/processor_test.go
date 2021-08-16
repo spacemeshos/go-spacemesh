@@ -483,7 +483,8 @@ func TestTransactionProcessor_ApplyTransactionTestSuite(t *testing.T) {
 	suite.Run(t, new(ProcessorStateSuite))
 }
 
-func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transaction {
+func createSignerTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transaction {
+	t.Helper()
 	r := require.New(t)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	r.NoError(err)
@@ -500,14 +501,14 @@ func TestValidateTxSignature(t *testing.T) {
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
 	createAccount(proc, PublicKeyToAccountAddress(pub), 123, 321)
-	tx := createXdrSignedTransaction(t, pri)
+	tx := createSignerTransaction(t, pri)
 
 	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
 	assert.True(t, proc.AddressExists(tx.Origin()))
 
 	// negative flow
 	pub, pri, _ = ed25519.GenerateKey(crand.Reader)
-	tx = createXdrSignedTransaction(t, pri)
+	tx = createSignerTransaction(t, pri)
 
 	assert.False(t, proc.AddressExists(tx.Origin()))
 	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
