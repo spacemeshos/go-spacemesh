@@ -65,7 +65,7 @@ type innerMessage struct {
 func (im *innerMessage) Bytes() []byte {
 	buf, err := types.InterfaceToBytes(im)
 	if err != nil {
-		panic("could not marshal InnerMsg before send")
+		log.Panic("could not marshal InnerMsg before send")
 	}
 	return buf
 }
