@@ -45,7 +45,7 @@ func putEncoderBuffer(b *bytes.Buffer) {
 	encoderPool.Put(b)
 }
 
-// Encoda value to a byte buffer.
+// Encode value to a byte buffer.
 func Encode(value Encodable) ([]byte, error) {
 	b := getEncoderBuffer()
 	defer putEncoderBuffer(b)
