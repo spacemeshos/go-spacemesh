@@ -65,7 +65,7 @@ type turtle struct {
 	bdp   blockDataProvider
 	clock layerClock
 
-	// TODO: can some or all of these be unexported? is this an issue for serialization?
+	// note: the rest of these are exported for purposes of serialization only
 
 	// last layer processed: note that tortoise does not have a concept of "current" layer (and it's not aware of the
 	// current time or latest tick). As far as Tortoise is concerned, Last is the current layer. This is a subjective
@@ -202,6 +202,7 @@ func (t *turtle) evict(ctx context.Context) {
 	}
 
 	// TODO: fix potential leak when we can't verify but keep receiving layers
+	//    see https://github.com/spacemeshos/go-spacemesh/issues/2671
 
 	windowStart, ok := t.lookbackWindowStart()
 	if !ok {
@@ -246,6 +247,7 @@ func blockIDsToString(input []types.BlockID) string {
 // a block in that layer will be against.
 // TODO: does this ever need to return abstain?
 // TODO: cache but somehow check for changes (e.g., late-finishing Hare), maybe check hash?
+//    see https://github.com/spacemeshos/go-spacemesh/issues/2672
 func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID, blockid types.BlockID) (vec, error) {
 	if !layerID.After(types.GetEffectiveGenesis()) {
 		return support, nil

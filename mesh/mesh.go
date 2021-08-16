@@ -352,6 +352,7 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 // newly-validated layers.
 // TODO: rename this. When tortoise passes a layer, we call that "verify." "Validate" sounds too similar and it's
 //   confusing that a layer can be validated without being verified.
+//   See https://github.com/spacemeshos/go-spacemesh/issues/2669
 func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 	layerID := lyr.Index()
 	logger := vl.WithContext(ctx).WithFields(layerID)
@@ -390,7 +391,7 @@ func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 // HandleLateBlock process a late (contextually invalid) block.
 func (msh *Mesh) HandleLateBlock(ctx context.Context, b *types.Block) {
 	msh.WithContext(ctx).With().Info("validate late block", b.ID())
-	// TODO: handle late blocks in batches
+	// TODO: handle late blocks in batches, see https://github.com/spacemeshos/go-spacemesh/issues/2412
 	oldPbase, newPbase := msh.trtl.HandleLateBlocks(ctx, []*types.Block{b})
 	if err := msh.trtl.Persist(ctx); err != nil {
 		msh.WithContext(ctx).With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
@@ -410,6 +411,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 	logger.Info("pushing layers to state")
 
 	// TODO: does this need to be hardcoded? can we use types.GetEffectiveGenesis instead?
+	//   see https://github.com/spacemeshos/go-spacemesh/issues/2670
 	layerTwo := types.NewLayerID(2)
 	if oldPbase.Before(layerTwo) {
 		msh.With().Warning("tried to push layer < 2",

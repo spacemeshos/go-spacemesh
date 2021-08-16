@@ -152,7 +152,8 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 
 	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
 	// TODO: validate that there are no conflicts in the vote exception lists (e.g., that the block does not both
-	//   support and vote against a given block
+	//   support and vote against a given block)
+	//   See https://github.com/spacemeshos/go-spacemesh/issues/2369
 	if err := bh.fastValidation(block); err != nil {
 		bh.WithContext(ctx).With().Error("failed fast validation", block.ID(), log.Err(err))
 		return err
