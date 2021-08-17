@@ -403,6 +403,7 @@ func (m *DB) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
 	return v, err
 }
 
+// InputVectorBackupFunc specifies a backup function for testing
 type InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
 
 // GetLayerInputVectorByID gets the input vote vector for a layer (hare results)
@@ -413,10 +414,12 @@ func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) 
 	return m.defaultGetLayerInputVectorByID(id)
 }
 
+// SetInputVectorBackupFunc sets the backup function for testing
 func (m *DB) SetInputVectorBackupFunc(fn InputVectorBackupFunc) {
 	m.InputVectorBackupFunc = fn
 }
 
+// GetInputVectorBackupFunc gets the backup function for testing
 func (m *DB) GetInputVectorBackupFunc() InputVectorBackupFunc {
 	return m.InputVectorBackupFunc
 }
