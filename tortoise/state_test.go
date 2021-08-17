@@ -29,13 +29,13 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 		st.Evict = layers[1]
 		st.Verified = layers[2]
 
-		st.GoodBlocksIndex = map[types.BlockID]struct{}{}
+		st.GoodBlocksIndex = map[types.BlockID]bool{}
 		st.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
 
 		for i := 0; i < 100; i++ {
 			id, ok := quick.Value(reflect.TypeOf(types.BlockID{}), rng)
 			require.True(tb, ok)
-			st.GoodBlocksIndex[id.Interface().(types.BlockID)] = struct{}{}
+			st.GoodBlocksIndex[id.Interface().(types.BlockID)] = false
 		}
 
 		for i := 0; i < 100; i++ {
@@ -57,7 +57,9 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 			block2 := block2Gen.Interface().(types.BlockID)
 			vecGen, ok := quick.Value(reflect.TypeOf(vec{}), rng)
 			require.True(tb, ok)
-			st.BlockOpinionsByLayer[layer][block1][block2] = vecGen.Interface().(vec)
+			val := vecGen.Interface().(vec)
+			val.Flushed = false
+			st.BlockOpinionsByLayer[layer][block1][block2] = val
 		}
 		return st
 	}
@@ -91,6 +93,18 @@ func BenchmarkStatePersist(b *testing.B) {
 	st := makeStateGen(b, db, logtest.New(b))(rand.New(rand.NewSource(1001)))
 
 	b.Run("New", func(b *testing.B) {
+		st.diffMode = false
+		b.ReportAllocs()
+		b.ResetTimer()
+		for i := 0; i < b.N; i++ {
+			if err := st.Persist(); err != nil {
+				require.NoError(b, err)
+			}
+		}
+	})
+	b.Run("Repeat", func(b *testing.B) {
+		st.diffMode = true
+		require.NoError(b, st.Persist())
 		b.ReportAllocs()
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {

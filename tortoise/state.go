@@ -21,17 +21,20 @@ type state struct {
 	log log.Log
 	db  database.Database
 
+	// if true only non-flushed items will be synced
+	diffMode bool
+
 	Last            types.LayerID
 	Evict           types.LayerID
 	Verified        types.LayerID
-	GoodBlocksIndex map[types.BlockID]struct{}
+	GoodBlocksIndex map[types.BlockID]bool
 	// use 2D array to be able to iterate from latest elements easily
 	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion // records hdist, for each block, its votes about every
 	// TODO: Tal says: We keep a vector containing our vote totals (positive and negative) for every previous block
 	// that's not needed here, probably for self healing?
 }
 
-func (s *state) /*  */ Persist() error {
+func (s *state) Persist() error {
 	batch := s.db.NewBatch()
 
 	if err := batch.Put([]byte(namespaceLast), s.Last.Bytes()); err != nil {
@@ -44,7 +47,11 @@ func (s *state) /*  */ Persist() error {
 		return err
 	}
 	var b bytes.Buffer
-	for id := range s.GoodBlocksIndex {
+	for id, flushed := range s.GoodBlocksIndex {
+		if flushed && s.diffMode {
+			continue
+		}
+		s.GoodBlocksIndex[id] = true
 		b.Reset()
 		b.WriteString(namespaceGood)
 		b.Write(id.Bytes())
@@ -56,6 +63,12 @@ func (s *state) /*  */ Persist() error {
 	for layer, blocks := range s.BlockOpinionsByLayer {
 		for block1, opinions := range blocks {
 			for block2, opinion := range opinions {
+				if opinion.Flushed && s.diffMode {
+					continue
+				}
+				opinion.Flushed = true
+				opinions[block2] = opinion
+
 				b.Reset()
 				b.WriteString(namespaceOpinons)
 				b.Write(layer.Bytes())
@@ -76,7 +89,7 @@ func (s *state) /*  */ Persist() error {
 }
 
 func (s *state) Recover() error {
-	s.GoodBlocksIndex = map[types.BlockID]struct{}{}
+	s.GoodBlocksIndex = map[types.BlockID]bool{}
 	s.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
 
 	buf, err := s.db.Get([]byte(namespaceLast))
@@ -99,7 +112,7 @@ func (s *state) Recover() error {
 	for it.Next() {
 		var id types.BlockID
 		copy(id[:], it.Key()[1:])
-		s.GoodBlocksIndex[id] = struct{}{}
+		s.GoodBlocksIndex[id] = true
 	}
 
 	it = s.db.Find([]byte(namespaceOpinons))

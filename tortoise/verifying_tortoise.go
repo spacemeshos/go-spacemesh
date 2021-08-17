@@ -49,9 +49,10 @@ func (t *turtle) SetLogger(log2 log.Log) {
 func newTurtle(lg log.Log, db database.Database, bdp blockDataProvider, hdist uint32, avgLayerSize int) *turtle {
 	t := &turtle{
 		state: state{
+			diffMode:             true,
 			db:                   db,
 			log:                  lg,
-			GoodBlocksIndex:      map[types.BlockID]struct{}{},
+			GoodBlocksIndex:      map[types.BlockID]bool{},
 			BlockOpinionsByLayer: map[types.LayerID]map[types.BlockID]Opinion{},
 		},
 		logger:        lg,
@@ -72,7 +73,7 @@ func (t *turtle) init(genesisLayer *types.Layer) {
 	for _, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
 		t.BlockOpinionsByLayer[genesisLayer.Index()][blk.ID()] = Opinion{}
-		t.GoodBlocksIndex[id] = struct{}{}
+		t.GoodBlocksIndex[id] = false
 	}
 	t.Last = genesisLayer.Index()
 	t.Evict = genesisLayer.Index()
@@ -465,7 +466,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 			t.checkBlockAndGetInputVector(b.NeutralDiff, "abstain", abstain, b.ID(), baseBlock.LayerIndex) {
 			// (2) all diffs appear after the base block and are consistent with the input vote vector
 			t.logger.With().Debug("marking good block", b.ID(), b.LayerIndex)
-			t.GoodBlocksIndex[b.ID()] = struct{}{}
+			t.GoodBlocksIndex[b.ID()] = false
 		} else {
 			t.logger.With().Debug("not marking block good", b.ID(), b.LayerIndex)
 		}
@@ -542,7 +543,7 @@ layerLoop:
 						log.FieldNamed("voting_block", bid),
 						log.FieldNamed("voted_block", blk),
 						log.String("vote", opinionVote.String()),
-						log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
+						log.String("sum", fmt.Sprintf("[%v, %v]", sum.Support, sum.Against)))
 					sum = sum.Add(opinionVote.Multiply(t.BlockWeight(bid, blk)))
 				}
 			}
@@ -553,7 +554,7 @@ layerLoop:
 				log.FieldNamed("voted_block", blk),
 				i,
 				log.String("global_opinion", globalOpinion.String()),
-				log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
+				log.String("sum", fmt.Sprintf("[%v, %v]", sum.Support, sum.Against)))
 
 			// If, for any block in this layer, the global opinion (summed votes) disagrees with our vote (what the
 			// input vector says), or if the global opinion is abstain, then we do not verify this layer. Otherwise,
