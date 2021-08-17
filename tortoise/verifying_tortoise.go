@@ -148,8 +148,8 @@ func newTurtle(
 	}
 }
 
-// cloneTurtle creates a new verifying tortoise instance using the params of this instance
-func (t *turtle) cloneTurtle() *turtle {
+// cloneTurtleParams creates a new verifying tortoise instance using the params of this instance
+func (t *turtle) cloneTurtleParams() *turtle {
 	return newTurtle(
 		t.bdp,
 		t.atxdb,
@@ -481,7 +481,7 @@ func (t *turtle) calculateExceptions(
 		// support a block in an old layer, we are implicitly voting against it. But if the base block does explicitly
 		// support a block and we disagree, we need to add a vote against here.
 		// TODO: this is not currently possible since base block opinions aren't indexed by layer. See
-		// https://github.com/spacemeshos/go-spacemesh/issues/2424
+		//   https://github.com/spacemeshos/go-spacemesh/issues/2424
 		//for b, v := range baseBlockOpinion.BlockOpinions {
 		//	if _, ok := inInputVector[b]; !ok && v != against {
 		//		addDiffs(b, "against", against, againstDiff)
@@ -640,7 +640,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 			continue
 		}
 
-		// add base block vote only if there weren't already exceptions support/against/abstain for this block
+		// add base block vote only if there weren't already exceptions (support/against/abstain) for this block
 		if _, exists := opinion[blk]; !exists {
 			opinion[blk] = vote
 		}
@@ -693,8 +693,9 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 		}
 		if err := t.processBlock(ctx, b); err != nil {
 			logger.With().Error("error processing block", log.Err(err))
+		} else {
+			filteredBlocks = append(filteredBlocks, b)
 		}
-		filteredBlocks = append(filteredBlocks, b)
 	}
 
 	t.scoreBlocks(ctx, filteredBlocks)
@@ -969,7 +970,7 @@ candidateLayerLoop:
 						//   since no caching is currently performed. it needs to be optimized and cached.
 						//   see https://github.com/spacemeshos/go-spacemesh/issues/2672
 						if err := t.scoreBlocksByLayerID(ctx, layerID); err != nil {
-							// if we fail to process a layer, there's probably no point in trying to recore blocks
+							// if we fail to process a layer, there's probably no point in trying to rescore blocks
 							// in later layers, so just print an error and bail
 							logger.With().Error("error trying to rescore good blocks in healed layers",
 								log.FieldNamed("layer_from", lastVerified),
@@ -1060,9 +1061,14 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 				} else if localOpinionOnBlock == abstain {
 					// abstain means the votes for and against this block did not cross the local threshold.
 					// if any block in this layer doesn't cross the local threshold, rescore the entire layer using the
-					// weak coin. note: we use the weak coin for the previous layer since we expect to receive blocks
-					// for a layer before hare finishes for that layer, i.e., before the weak coin value is ready for
-					// the layer.
+					// weak coin.
+					// note: we use the weak coin not for the layer of the block being voted on but rather for the
+					// layer in which the voting block is created. this is because the weak coin must be generated late
+					// enough that any adversarial block that depends on the value of the coin will not be accepted by
+					// honest parties.
+					// we use the weak coin for the _previous_ layer since we expect to receive blocks for a layer
+					// before hare finishes for that layer, i.e., before the weak coin value is ready for the layer.
+					// TODO: update this logic per https://github.com/spacemeshos/go-spacemesh/issues/2688
 
 					// TODO: if we rescore old blocks, it's very likely that newly-created blocks will contain
 					//   exceptions for those blocks, and their opinion will differ from their base blocks for blocks

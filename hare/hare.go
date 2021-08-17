@@ -165,13 +165,15 @@ var ErrTooLate = errors.New("consensus process finished too late")
 // records the provided output
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	set := output.Set()
-	blocks := make([]types.BlockID, 0, len(set.values))
+	blocks := make([]types.BlockID, len(set.values))
+	i := 0
 	for v := range set.values {
-		blocks = append(blocks, v)
+		blocks[i] = v
+		i++
 	}
 
 	id := output.ID()
-	h.mesh.HandleValidatedLayer(ctx, types.LayerID(id), blocks)
+	h.mesh.HandleValidatedLayer(ctx, id, blocks)
 
 	if h.outOfBufferRange(id) {
 		return ErrTooLate
@@ -303,8 +305,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 	for {
 		select {
 		case out := <-h.outputChan:
-			layerID := types.LayerID(out.ID())
-
+			layerID := out.ID()
 			coin := out.Coinflip()
 			logger := h.WithContext(ctx).WithFields(layerID)
 

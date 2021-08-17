@@ -356,6 +356,8 @@ func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) err
 // layer, we consider all blocks in that layer to be invalid. Note that simply not having received a layer from Hare
 // as _validated_ is not sufficient information since we might still be waiting for Hare to finish for the layer. This
 // method lets us know that Hare has given up.
+// Note: this method is only called from the Hare's outputCollectionLoop, and there should only ever be one of those
+// running. If it is called on any other code paths, it will need to be made goroutine safe.
 func (m *DB) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
 	m.WithContext(ctx).With().Info("recording hare invalidated layer in mesh", layerID)
 	m.invalidatedLayers[layerID] = struct{}{}

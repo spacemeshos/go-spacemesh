@@ -218,7 +218,7 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (
 	logger.With().Info("triggering tortoise full rerun from genesis")
 
 	// start from scratch with a new tortoise instance for each rerun
-	trtlForRerun := trtl.trtl.cloneTurtle()
+	trtlForRerun := trtl.trtl.cloneTurtleParams()
 	trtlForRerun.SetLogger(logger.WithFields(log.String("tortoise_rerun", "true")))
 	trtlForRerun.init(ctx, mesh.GenesisLayer())
 	bdp := bdpWrapper{blockDataProvider: trtlForRerun.bdp}

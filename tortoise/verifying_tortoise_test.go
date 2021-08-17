@@ -1040,7 +1040,7 @@ func TestCloneTurtle(t *testing.T) {
 	trtl := defaultTurtle(t)
 	trtl.AvgLayerSize++              // make sure defaults aren't being read
 	trtl.Last = types.NewLayerID(10) // state should not be cloned
-	trtl2 := trtl.cloneTurtle()
+	trtl2 := trtl.cloneTurtleParams()
 	r.Equal(trtl.bdp, trtl2.bdp)
 	r.Equal(trtl.Hdist, trtl2.Hdist)
 	r.Equal(trtl.Zdist, trtl2.Zdist)
