@@ -67,16 +67,22 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 
 func TestStateRecover(t *testing.T) {
 	require.NoError(t, quick.Check(func(st *state) bool {
+		st.diffMode = true
 		original := *st
 		if err := st.Persist(); err != nil {
 			return false
 		}
 		st.BlockOpinionsByLayer = nil
 		st.GoodBlocksIndex = nil
-		if err := st.Recover(); err != nil {
-			return false
+		for i := 0; i < 2; i++ {
+			if err := st.Recover(); err != nil {
+				return false
+			}
+			if !assert.Equal(t, &original, st) {
+				return false
+			}
 		}
-		return assert.Equal(t, &original, st)
+		return true
 	}, &quick.Config{
 		Values: func(values []reflect.Value, rng *rand.Rand) {
 			require.Len(t, values, 1)
