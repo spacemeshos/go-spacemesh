@@ -588,12 +588,9 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		return fmt.Errorf("%s: %v, %v", errstrBaseBlockNotFoundInLayer, block.BaseBlock, baseBlock.LayerIndex)
 	}
 
-	calcWeightedVote := func(block *types.Block, votedOn types.BlockID, baseVote vec) (vec, error) {
-		weight, err := t.voteWeight(ctx, block)
-		if err != nil {
-			return baseVote, fmt.Errorf("error processing block %v in block %v for diff list: %w", votedOn, block.ID(), err)
-		}
-		return baseVote.Multiply(weight), nil
+	voteWeight, err := t.voteWeight(ctx, block)
+	if err != nil {
+		return fmt.Errorf("error getting vote weight for block %v: %w", block.ID(), err)
 	}
 
 	// TODO: this logic would be simpler if For and Against were a single list
@@ -603,11 +600,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	opinion := make(map[types.BlockID]vec)
 
 	for _, bid := range block.ForDiff {
-		weightedVote, err := calcWeightedVote(block, bid, support)
-		if err != nil {
-			return err
-		}
-		opinion[bid] = weightedVote
+		opinion[bid] = support.Multiply(voteWeight)
 	}
 	for _, bid := range block.AgainstDiff {
 		// this could only happen in malicious blocks, and they should not pass a syntax check, but check here just
@@ -615,11 +608,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		if _, alreadyVoted := opinion[bid]; alreadyVoted {
 			return fmt.Errorf("%s %v", errstrConflictingVotes, block.ID())
 		}
-		weightedVote, err := calcWeightedVote(block, bid, against)
-		if err != nil {
-			return err
-		}
-		opinion[bid] = weightedVote
+		opinion[bid] = against.Multiply(voteWeight)
 	}
 	for _, bid := range block.NeutralDiff {
 		if _, alreadyVoted := opinion[bid]; alreadyVoted {
@@ -640,9 +629,10 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 			continue
 		}
 
-		// add base block vote only if there weren't already exceptions (support/against/abstain) for this block
+		// add base block vote only if there weren't already exceptions (support/against/abstain) for this block.
+		// and re-weight vote since we want the voting block's weight, not the base block's weight.
 		if _, exists := opinion[blk]; !exists {
-			opinion[blk] = vote
+			opinion[blk] = simplifyVote(vote).Multiply(voteWeight)
 		}
 	}
 

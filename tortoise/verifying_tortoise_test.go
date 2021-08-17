@@ -1337,10 +1337,12 @@ func TestProcessBlock(t *testing.T) {
 	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
 	alg.trtl.atxdb = atxdb
+	blocksPerLayer := 4
+	baseBlockVoteWeight := uint(2)
 
 	// blocks in this layer will use the genesis block as their base block
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
+	l1Blocks := generateBlocks(t, l1ID, blocksPerLayer, alg.BaseBlock, atxdb, 1)
 	// add one block from the layer
 	blockWithMissingBaseBlock := l1Blocks[0]
 	r.NoError(mdb.AddBlock(blockWithMissingBaseBlock))
@@ -1352,10 +1354,10 @@ func TestProcessBlock(t *testing.T) {
 
 	// blocks in this layer will use a block from the previous layer as their base block
 	baseBlockProviderFn := func(context.Context) (types.BlockID, [][]types.BlockID, error) {
-		return blockWithMissingBaseBlock.ID(), make([][]types.BlockID, 3), nil
+		return blockWithMissingBaseBlock.ID(), make([][]types.BlockID, blocksPerLayer), nil
 	}
 	l2ID := l1ID.Add(1)
-	l2Blocks := generateBlocks(t, l2ID, 3, baseBlockProviderFn, atxdb, 1)
+	l2Blocks := generateBlocks(t, l2ID, blocksPerLayer, baseBlockProviderFn, atxdb, baseBlockVoteWeight)
 
 	// base block layer missing
 	alg.trtl.BlockOpinionsByLayer[l2ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
@@ -1378,21 +1380,23 @@ func TestProcessBlock(t *testing.T) {
 	r.Contains(err.Error(), errstrConflictingVotes)
 
 	// add vote diffs: make sure that base block votes flow through, but that block votes override them, and that the
-	// data structure is correctly updated
+	// data structure is correctly updated, and that weights are calculated correctly
 
 	// add base block to DB
 	r.NoError(mdb.AddBlock(l2Blocks[0]))
 	baseBlockProviderFn = func(context.Context) (types.BlockID, [][]types.BlockID, error) {
-		return l2Blocks[0].ID(), make([][]types.BlockID, 3), nil
+		return l2Blocks[0].ID(), make([][]types.BlockID, blocksPerLayer), nil
 	}
-	alg.trtl.BlockOpinionsByLayer[l2ID][l2Blocks[0].ID()] = Opinion{BlockOpinions: map[types.BlockID]vec{
-		// these votes all disagree with the block votes, below
-		l1Blocks[0].ID(): against,
-		l1Blocks[1].ID(): support,
-		l1Blocks[2].ID(): abstain,
+	baseBlockOpinionVector := Opinion{BlockOpinions: map[types.BlockID]vec{
+		l1Blocks[0].ID(): against.Multiply(uint64(baseBlockVoteWeight)), // disagrees with block below
+		l1Blocks[1].ID(): support.Multiply(uint64(baseBlockVoteWeight)), // disagrees with block below
+		l1Blocks[2].ID(): abstain,                                       // disagrees with block below
+		l1Blocks[3].ID(): against.Multiply(uint64(baseBlockVoteWeight)), // agrees with block below
 	}}
+	alg.trtl.BlockOpinionsByLayer[l2ID][l2Blocks[0].ID()] = baseBlockOpinionVector
 	l3ID := l2ID.Add(1)
-	l3Blocks := generateBlocks(t, l3ID, 3, baseBlockProviderFn, atxdb, 1)
+	blockVoteWeight := uint(3)
+	l3Blocks := generateBlocks(t, l3ID, blocksPerLayer, baseBlockProviderFn, atxdb, blockVoteWeight)
 	l3Blocks[0].AgainstDiff = []types.BlockID{
 		l1Blocks[1].ID(),
 	}
@@ -1400,17 +1404,20 @@ func TestProcessBlock(t *testing.T) {
 	l3Blocks[0].NeutralDiff = []types.BlockID{
 		l1Blocks[0].ID(),
 	}
-	alg.trtl.BlockOpinionsByLayer[l3ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
+	alg.trtl.BlockOpinionsByLayer[l3ID] = make(map[types.BlockID]Opinion, blocksPerLayer)
 	// these must be in the mesh or we'll get an error when processing a block (l3Blocks[0])
 	// with a base block (l2Blocks[0]) that contains an opinion on them
 	r.NoError(mdb.AddBlock(l1Blocks[1]))
 	r.NoError(mdb.AddBlock(l1Blocks[2]))
+	r.NoError(mdb.AddBlock(l1Blocks[3]))
 	r.NoError(alg.trtl.processBlock(context.TODO(), l3Blocks[0]))
 	expectedOpinionVector := Opinion{BlockOpinions: map[types.BlockID]vec{
-		l1Blocks[0].ID(): abstain, // from exception
-		l1Blocks[1].ID(): against, // from exception
-		l1Blocks[2].ID(): abstain, // from base block
+		l1Blocks[0].ID(): abstain,                                   // from exception
+		l1Blocks[1].ID(): against.Multiply(uint64(blockVoteWeight)), // from exception
+		l1Blocks[2].ID(): abstain,                                   // from base block
+		l1Blocks[3].ID(): against.Multiply(uint64(blockVoteWeight)), // from base block, reweighted
 	}}
+	r.Equal(baseBlockOpinionVector, alg.trtl.BlockOpinionsByLayer[l2ID][l2Blocks[0].ID()])
 	r.Equal(expectedOpinionVector, alg.trtl.BlockOpinionsByLayer[l3ID][l3Blocks[0].ID()])
 }
 
