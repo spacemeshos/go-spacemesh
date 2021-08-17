@@ -2,12 +2,13 @@ package types
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/sha256-simd"
 	"math/big"
 	"math/rand"
 	"reflect"
+
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/sha256-simd"
 )
 
 const (
@@ -18,13 +19,13 @@ const (
 )
 
 // Hash12 represents the first 12 bytes of sha256, mostly used for internal caches
-type Hash12 [hash12Length]byte
+type Hash12 [12]byte
 
 // Hash32 represents the 32-byte sha256 hash of arbitrary data.
-type Hash32 [Hash32Length]byte
+type Hash32 [32]byte
 
 // Hash20 represents the 20-byte sha256 hash of arbitrary data.
-type Hash20 [hash20Length]byte
+type Hash20 [20]byte
 
 // Field returns a log field. Implements the LoggableField interface.
 func (h Hash12) Field() log.Field { return log.String("hash", util.Bytes2Hex(h[:])) }

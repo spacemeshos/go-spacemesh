@@ -190,7 +190,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 		assert.True(t, ContainsTx(b.TxIDs, transids[1]))
 		assert.True(t, ContainsTx(b.TxIDs, transids[2]))
 
-		assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
+		assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, b.ActiveSet)
 	case <-time.After(1 * time.Minute):
 		assert.Fail(t, "timeout on receiving block")
 	}
@@ -230,7 +230,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	assert.True(t, ContainsTx(b.TxIDs, transids[1]))
 	assert.True(t, ContainsTx(b.TxIDs, transids[2]))
 
-	assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
+	assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, b.ActiveSet)
 
 	//test create second block
 	bl, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, nil)

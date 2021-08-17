@@ -5,10 +5,11 @@ import (
 	"errors"
 	"fmt"
 
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"time"
 )
 
 // NewBlockProtocol is the protocol indicator for gossip blocks
@@ -181,8 +182,8 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 	atxs := []types.ATXID{blk.ATXID}
 
 	if blk.ActiveSet != nil {
-		if len(*blk.ActiveSet) > 0 {
-			atxs = append(atxs, *blk.ActiveSet...)
+		if len(blk.ActiveSet) > 0 {
+			atxs = append(atxs, blk.ActiveSet...)
 		} else {
 			return errZeroActiveSet
 		}
@@ -223,8 +224,8 @@ func validateUniqueTxAtx(b *types.Block) error {
 
 	// check for duplicate atx id
 	if b.ActiveSet != nil {
-		ma := make(map[types.ATXID]struct{}, len(*b.ActiveSet))
-		for _, atx := range *b.ActiveSet {
+		ma := make(map[types.ATXID]struct{}, len(b.ActiveSet))
+		for _, atx := range b.ActiveSet {
 			if _, exist := ma[atx]; exist {
 				return errDupAtx
 			}

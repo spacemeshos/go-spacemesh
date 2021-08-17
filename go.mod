@@ -8,6 +8,7 @@ require (
 	github.com/bits-and-blooms/bitset v1.2.0
 	github.com/btcsuite/btcd v0.0.0-20190629003639-c26ffa870fd8
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
+	github.com/ferranbt/fastssz v0.0.0-20210816143236-3186e83e5630
 	github.com/go-kit/kit v0.10.0
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.5.0
@@ -16,7 +17,7 @@ require (
 	github.com/hashicorp/golang-lru v0.5.1
 	github.com/huin/goupnp v1.0.0
 	github.com/kr/pretty v0.2.1 // indirect
-	github.com/mitchellh/mapstructure v1.1.2
+	github.com/mitchellh/mapstructure v1.3.2
 	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077
 	github.com/prometheus/client_golang v1.10.0
 	github.com/prometheus/common v0.18.0
@@ -46,5 +47,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	nanomsg.org/go-mangos v1.4.0
 )
+
+replace github.com/ferranbt/fastssz => /home/dd/fastssz
 
 go 1.15

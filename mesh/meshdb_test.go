@@ -68,7 +68,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	})
 	var atxs []types.ATXID
 	atxs = append(atxs, atx.ID())
-	block1.ActiveSet = &atxs
+	block1.ActiveSet = atxs
 	err := mdb.AddBlock(block1)
 	assert.NoError(t, err)
 
@@ -78,7 +78,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	assert.Equal(t, block1.ID(), rBlock1.ID())
 	assert.Equal(t, block1.MinerID(), rBlock1.MinerID())
 	assert.Equal(t, len(rBlock1.TxIDs), len(block1.TxIDs), "block content was wrong")
-	assert.Equal(t, len(*rBlock1.ActiveSet), len(*block1.ActiveSet), "block content was wrong")
+	assert.Equal(t, len(rBlock1.ActiveSet), len(block1.ActiveSet), "block content was wrong")
 }
 
 func chooseRandomPattern(blocksInLayer int, patternSize int) []int {

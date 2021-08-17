@@ -201,7 +201,7 @@ func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 		return nil, err
 	}
 	mbk := &types.DBBlock{}
-	if err := types.BytesToInterface(b, mbk); err != nil {
+	if err := mbk.UnmarshalSSZ(b); err != nil {
 		return nil, err
 	}
 	return mbk.ToBlock(), nil
@@ -427,7 +427,7 @@ func (m *DB) writeBlock(bl *types.Block) error {
 		Signature: bl.Signature,
 		MinerID:   bl.MinerID().Bytes(),
 	}
-	if bytes, err := types.InterfaceToBytes(block); err != nil {
+	if bytes, err := block.MarshalSSZ(); err != nil {
 		return fmt.Errorf("could not encode block: %w", err)
 	} else if err := m.blocks.Put(bl.ID().AsHash32().Bytes(), bytes); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)

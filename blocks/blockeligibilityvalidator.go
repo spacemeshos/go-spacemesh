@@ -61,7 +61,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		return false, fmt.Errorf("cannot get active set from block %v", activeSetBlock.ID())
 	}
 	// todo: optimise by using reference to active set size and cache active set size to not load all atxsIDs from db
-	for _, atxID := range *activeSetBlock.ActiveSet {
+	for _, atxID := range activeSetBlock.ActiveSet {
 		atxHeader, err := v.activationDb.GetAtxHeader(atxID)
 		if err != nil {
 			return false, err

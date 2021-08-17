@@ -227,7 +227,7 @@ type BlockEligibilityProof struct {
 	J uint32
 
 	// Sig is the VRF signature from which the block's LayerID is derived.
-	Sig []byte
+	Sig []byte `ssz-max:"256"`
 }
 
 // BlockHeader includes all of a block's fields, except the list of transaction IDs, activation transaction IDs and the
@@ -237,14 +237,14 @@ type BlockHeader struct {
 	LayerIndex       LayerID
 	ATXID            ATXID
 	EligibilityProof BlockEligibilityProof
-	Data             []byte
+	Data             []byte `ssz-max:"4096"`
 	Coin             bool
 
 	BaseBlock BlockID
 
-	AgainstDiff []BlockID
-	ForDiff     []BlockID
-	NeutralDiff []BlockID
+	AgainstDiff []BlockID `ssz-max:"1024"`
+	ForDiff     []BlockID `ssz-max:"1024"`
+	NeutralDiff []BlockID `ssz-max:"1024"`
 }
 
 // Layer returns the block's LayerID.
@@ -256,10 +256,9 @@ func (b BlockHeader) Layer() LayerID {
 // produce the block signature.
 type MiniBlock struct {
 	BlockHeader
-	TxIDs []TransactionID
-	// ATXIDs    []ATXID
-	ActiveSet *[]ATXID
-	RefBlock  *BlockID
+	TxIDs     []TransactionID `ssz-max:"1024"`
+	ActiveSet []ATXID         `ssz-max:"1024"`
+	RefBlock  BlockID
 }
 
 // Block includes all of a block's fields, including signature and a cache of the BlockID and MinerID.
@@ -282,11 +281,6 @@ func (b *Block) Bytes() []byte {
 
 // Fields returns an array of LoggableFields for logging
 func (b *Block) Fields() []log.LoggableField {
-	activeSet := 0
-	if b.ActiveSet != nil {
-		activeSet = len(*b.ActiveSet)
-	}
-
 	return []log.LoggableField{
 		b.ID(),
 		b.LayerIndex,
@@ -299,7 +293,7 @@ func (b *Block) Fields() []log.LoggableField {
 		b.ATXID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_block", b.RefBlock),
-		log.Int("active_set_size", activeSet),
+		log.Int("active_set_size", len(b.ActiveSet)),
 		log.Int("tx_count", len(b.TxIDs)),
 	}
 }
@@ -347,8 +341,8 @@ type DBBlock struct {
 	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
 	// to break if in future key for database will be changed
 	ID        BlockID
-	Signature []byte
-	MinerID   []byte // derived from signature when block is received
+	Signature []byte `ssz-max:"256"`
+	MinerID   []byte `ssz-max:"256"`
 }
 
 // ToBlock create Block instance from data that is stored locally.

@@ -216,8 +216,7 @@ func (t *BlockBuilder) createBlock(ctx context.Context, id types.LayerID, atxID 
 			log.Int("active_set_size", len(activeSet)),
 			log.FieldNamed("ref_block", refBlock),
 			log.Err(err))
-		atxs := activeSet
-		b.ActiveSet = &atxs
+		b.ActiveSet = activeSet
 	} else {
 		t.With().Debug("creating block with reference block (no active set)",
 			log.Int("active_set_size", len(activeSet)),
