@@ -612,6 +612,7 @@ func (app *App) initServices(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	app.closers = append(app.closers, trtlStateDB)
 	trtl := tortoise.NewVerifyingTortoise(tortoise.Config{
 		LayerSize:    int(layerSize),
 		Database:     trtlStateDB,
