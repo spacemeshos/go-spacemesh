@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -68,7 +69,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 			trtl.logger.Info("Counting votes of blocks in layer %v on %v (lyr: %v)", l, i.String(), blk.LayerIndex)
 
 			for bid, opinionVote := range trtl.BlockOpinionsByLayer[l] {
-				opinionVote, ok := opinionVote.BlocksOpinion[i]
+				opinionVote, ok := opinionVote[i]
 				if !ok {
 					continue
 				}
@@ -190,7 +191,7 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 		return sorted[voteNegative:], nil
 	}
 
-	trtl = newTurtle(msh, defaultTestHdist, blocksPerLayer)
+	trtl = newTurtle(logtest.New(t), database.NewMemDatabase(), msh, defaultTestHdist, blocksPerLayer)
 	gen := mesh.GenesisLayer()
 	trtl.init(gen)
 
@@ -199,9 +200,9 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 		turtleMakeAndProcessLayer(t, l, trtl, blocksPerLayer, msh, hm)
 		lastlyr := trtl.BlockOpinionsByLayer[l]
 		for _, v := range lastlyr {
-			logger.Debug("block opinion map size", len(v.BlocksOpinion))
-			if (len(v.BlocksOpinion)) > int(blocksPerLayer*int(trtl.Hdist)) {
-				t.Errorf("layer opinion table exceeded max size, LEAK! size:%v, maxsize:%v", len(v.BlocksOpinion), int(blocksPerLayer*int(trtl.Hdist)))
+			logger.Debug("block opinion map size", len(v))
+			if (len(v)) > int(blocksPerLayer*int(trtl.Hdist)) {
+				t.Errorf("layer opinion table exceeded max size, LEAK! size:%v, maxsize:%v", len(v), int(blocksPerLayer*int(trtl.Hdist)))
 			}
 			break
 		}
@@ -286,7 +287,7 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 		})
 	}
 
-	trtl := newTurtle(msh, defaultTestHdist, blocksPerLayer)
+	trtl := newTurtle(logtest.New(t), database.NewMemDatabase(), msh, defaultTestHdist, blocksPerLayer)
 	gen := mesh.GenesisLayer()
 	trtl.init(gen)
 
@@ -373,7 +374,14 @@ func TestTurtle_Recovery(t *testing.T) {
 	mdb.InputVectorBackupFunc = getHareResults
 
 	lg := logtest.New(t)
-	alg := verifyingTortoise(3, mdb, 5, lg)
+	cfg := Config{
+		Database:     database.NewMemDatabase(),
+		MeshDatabase: mdb,
+		Log:          lg,
+		LayerSize:    3,
+		Hdist:        5,
+	}
+	alg := NewVerifyingTortoise(cfg)
 	l := mesh.GenesisLayer()
 
 	lg.With().Info("The genesis is ", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
@@ -411,7 +419,7 @@ func TestTurtle_Recovery(t *testing.T) {
 		if r := recover(); r != nil {
 			lg.Debug("Recovered from", r)
 		}
-		alg := recoveredVerifyingTortoise(mdb, lg)
+		alg := NewVerifyingTortoise(cfg)
 
 		alg.HandleIncomingLayer(l2)
 

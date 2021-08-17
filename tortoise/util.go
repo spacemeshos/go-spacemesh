@@ -2,11 +2,14 @@ package tortoise
 
 import (
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type vec [2]int
+// NOTE(dshulyak) there is a bug in xdr. without specifying size xdr will cut the value
+// down to int32
+type vec [2]int64
 
 const (
 	globalThreshold = 0.6
@@ -34,7 +37,7 @@ func (a vec) Negate() vec {
 	return a
 }
 
-func (a vec) Multiply(x int) vec {
+func (a vec) Multiply(x int64) vec {
 	a[0] = a[0] * x
 	a[1] = a[1] * x
 	return a
@@ -78,24 +81,8 @@ func calculateGlobalOpinion(logger log.Log, v vec, layerSize int, delta float64)
 	}
 }
 
-type blockIDLayerTuple struct {
-	types.BlockID
-	types.LayerID
-}
-
-func (blt blockIDLayerTuple) layer() types.LayerID {
-	return blt.LayerID
-}
-
-func (blt blockIDLayerTuple) id() types.BlockID {
-	return blt.BlockID
-}
-
 // Opinion is a tuple of block and layer id and its opinions on other blocks.
-type Opinion struct {
-	BILT          blockIDLayerTuple
-	BlocksOpinion map[types.BlockID]vec
-}
+type Opinion map[types.BlockID]vec
 
 type retriever interface {
 	Retrieve(key []byte, v interface{}) (interface{}, error)

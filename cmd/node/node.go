@@ -608,18 +608,20 @@ func (app *App) initServices(ctx context.Context,
 	minerPK := signing.NewPublicKey(util.Hex2Bytes(nodeID.Key))
 	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, minerPK, swarm, atxDB, tBeaconDB, sgn, edVerifier, vrfSigner, vrfVerifier, wc, clock, app.addLogger(TBeaconLogger, lg))
 
-	var msh *mesh.Mesh
-	var trtl *tortoise.ThreadSafeVerifyingTortoise
-	trtlCfg := tortoise.Config{
-		LayerSize: int(layerSize),
-		Database:  mdb,
-		Hdist:     app.Config.Hdist,
-		Log:       app.addLogger(TrtlLogger, lg),
-		Recovered: mdb.PersistentData(),
+	trtlStateDB, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "turtle"), 0, 0, app.addLogger(StateDbLogger, lg))
+	if err != nil {
+		return err
 	}
+	trtl := tortoise.NewVerifyingTortoise(tortoise.Config{
+		LayerSize:    int(layerSize),
+		Database:     trtlStateDB,
+		MeshDatabase: mdb,
+		Hdist:        app.Config.Hdist,
+		Log:          app.addLogger(TrtlLogger, lg),
+	})
 
-	trtl = tortoise.NewVerifyingTortoise(trtlCfg)
-	if trtlCfg.Recovered {
+	var msh *mesh.Mesh
+	if mdb.PersistentData() {
 		msh = mesh.NewRecoveredMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
