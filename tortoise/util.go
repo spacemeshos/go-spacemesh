@@ -27,7 +27,7 @@ var ( //correction vectors type
 
 // Field returns a log field. Implements the LoggableField interface.
 func (a vec) Field() log.Field {
-	return log.String("vote_vector", fmt.Sprint(a))
+	return log.String("vote_vector", fmt.Sprintf("[%d,%d]", a.Support, a.Against))
 }
 
 func (a vec) Add(v vec) vec {
@@ -86,9 +86,5 @@ func calculateGlobalOpinion(logger log.Log, v vec, layerSize int, delta float64)
 	}
 }
 
-// Opinion is a tuple of block and layer id and its opinions on other blocks.
+// Opinion is opinions on other blocks.
 type Opinion map[types.BlockID]vec
-
-type retriever interface {
-	Retrieve(key []byte, v interface{}) (interface{}, error)
-}
