@@ -15,6 +15,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
+//go:generate msgp
+
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
 type BlockID Hash20
 
@@ -255,10 +257,25 @@ func (b BlockHeader) Layer() LayerID {
 // MiniBlock includes all of a block's fields, except for the signature. This structure is serialized and signed to
 // produce the block signature.
 type MiniBlock struct {
-	BlockHeader
-	TxIDs     []TransactionID `ssz-max:"1024"`
-	ActiveSet []ATXID         `ssz-max:"1024"`
-	RefBlock  BlockID
+	LayerIndex       LayerID
+	ATXID            ATXID
+	EligibilityProof BlockEligibilityProof
+	Data             []byte `ssz-max:"4096"`
+	Coin             bool
+
+	BaseBlock BlockID
+
+	AgainstDiff []BlockID       `ssz-max:"1024"`
+	ForDiff     []BlockID       `ssz-max:"1024"`
+	NeutralDiff []BlockID       `ssz-max:"1024"`
+	TxIDs       []TransactionID `ssz-max:"1024"`
+	ActiveSet   []ATXID         `ssz-max:"1024"`
+	RefBlock    BlockID
+}
+
+// Layer returns the block's LayerID.
+func (b MiniBlock) Layer() LayerID {
+	return b.LayerIndex
 }
 
 // Block includes all of a block's fields, including signature and a cache of the BlockID and MinerID.
@@ -337,7 +354,7 @@ func (b *Block) MinerID() *signing.PublicKey {
 
 // DBBlock is a Block structure as it is stored in DB.
 type DBBlock struct {
-	MiniBlock
+	MiniBlock MiniBlock
 	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
 	// to break if in future key for database will be changed
 	ID        BlockID
@@ -429,10 +446,9 @@ func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
 func NewExistingBlock(layerIndex LayerID, data []byte, txs []TransactionID) *Block {
 	b := Block{
 		MiniBlock: MiniBlock{
-			BlockHeader: BlockHeader{
-				LayerIndex: layerIndex,
-				Data:       data},
-			TxIDs: txs,
+			LayerIndex: layerIndex,
+			Data:       data,
+			TxIDs:      txs,
 		}}
 	b.Signature = signing.NewEdSigner().Sign(b.Bytes())
 	b.Initialize()
