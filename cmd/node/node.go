@@ -635,7 +635,7 @@ func (app *App) initServices(ctx context.Context,
 		LocalThreshold:  app.Config.LocalThreshold,
 		Log:             app.addLogger(TrtlLogger, lg),
 		Recovered:       mdb.PersistentData(),
-		RerunInterval:   time.Hour, // rerun from genesis once per hour
+		RerunInterval:   time.Minute * time.Duration(app.Config.TortoiseRerunInterval),
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)

@@ -89,6 +89,9 @@ type BaseConfig struct {
 	GlobalThreshold  uint8  `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
 	LocalThreshold   uint8  `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
 
+	// how often we rerun tortoise from scratch, in minutes
+	TortoiseRerunInterval uint32 `mapstructure:"tortoise-rerun-interval"`
+
 	PoETServer string `mapstructure:"poet-server"`
 
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
@@ -184,34 +187,35 @@ func DefaultTestConfig() Config {
 // DefaultBaseConfig returns a default configuration for spacemesh
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		DataDirParent:       defaultDataDir,
-		ConfigFile:          defaultConfigFileName,
-		TestMode:            false,
-		CollectMetrics:      false,
-		MetricsPort:         1010,
-		MetricsPush:         "", // "" = doesn't push
-		MetricsPushPeriod:   60,
-		ProfilerURL:         "",
-		ProfilerName:        "gp-spacemesh",
-		OracleServer:        "http://localhost:3030",
-		OracleServerWorldID: 0,
-		GenesisTime:         time.Now().Format(time.RFC3339),
-		LayerDurationSec:    30,
-		LayersPerEpoch:      3,
-		PoETServer:          "127.0.0.1",
-		GoldenATXID:         "0x5678", // TODO: Change the value
-		Hdist:               10,
-		Zdist:               5,
-		ConfidenceParam:     5,
-		WindowSize:          100, // should be "a few thousand layers" in production
-		GlobalThreshold:     60,  // in percentage terms, must be in interval [0, 100]
-		LocalThreshold:      20,  // in percentage terms, must be in interval [0, 100]
-		BlockCacheSize:      20,
-		SyncRequestTimeout:  2000,
-		SyncInterval:        10,
-		SyncValidationDelta: 300,
-		AtxsPerBlock:        100,
-		TxsPerBlock:         100,
+		DataDirParent:         defaultDataDir,
+		ConfigFile:            defaultConfigFileName,
+		TestMode:              false,
+		CollectMetrics:        false,
+		MetricsPort:           1010,
+		MetricsPush:           "", // "" = doesn't push
+		MetricsPushPeriod:     60,
+		ProfilerURL:           "",
+		ProfilerName:          "gp-spacemesh",
+		OracleServer:          "http://localhost:3030",
+		OracleServerWorldID:   0,
+		GenesisTime:           time.Now().Format(time.RFC3339),
+		LayerDurationSec:      30,
+		LayersPerEpoch:        3,
+		PoETServer:            "127.0.0.1",
+		GoldenATXID:           "0x5678", // TODO: Change the value
+		Hdist:                 10,
+		Zdist:                 5,
+		ConfidenceParam:       5,
+		WindowSize:            100,     // should be "a few thousand layers" in production
+		GlobalThreshold:       60,      // in percentage terms, must be in interval [0, 100]
+		LocalThreshold:        20,      // in percentage terms, must be in interval [0, 100]
+		TortoiseRerunInterval: 60 * 24, // in minutes, once per day
+		BlockCacheSize:        20,
+		SyncRequestTimeout:    2000,
+		SyncInterval:          10,
+		SyncValidationDelta:   300,
+		AtxsPerBlock:          100,
+		TxsPerBlock:           100,
 	}
 }
 
