@@ -242,10 +242,7 @@ func blockIDsToString(input []types.BlockID) string {
 	return str
 }
 
-// returns the binary local opinion on the validity of a block in a layer (support or against).
-// abstain is not an option here: if the current opinion on a layer is abstain, an opinion on
-// a block in that layer will be against.
-// TODO: does this ever need to return abstain?
+// returns the local opinion on the validity of a block in a layer (support, against, or abstain)
 // TODO: cache but somehow check for changes (e.g., late-finishing Hare), maybe check hash?
 //    see https://github.com/spacemeshos/go-spacemesh/issues/2672
 func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID, blockid types.BlockID) (vec, error) {
@@ -309,8 +306,8 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 			logger.With().Debug("not adding block to good blocks because its vote differs from local opinion",
 				log.FieldNamed("older_block", exceptionBlock.ID()),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
-				log.FieldNamed("input_vector_vote", v),
-				log.String("block_vote", className))
+				log.FieldNamed("local_opinion", v),
+				log.String("block_exception_vote", className))
 			return false
 		}
 	}

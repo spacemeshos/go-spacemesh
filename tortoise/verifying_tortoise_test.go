@@ -417,8 +417,6 @@ func TestLayerPatterns(t *testing.T) {
 		msh := &meshWrapper{blockDataWriter: getInMemMesh(t)}
 		atxdb := getAtxDB()
 		trtl := defaultTurtle(t)
-		//level := zap.NewAtomicLevelAt(zap.DebugLevel)
-		//trtl.logger = log.NewWithLevel("trtl", level)
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
 		trtl.atxdb = atxdb
@@ -448,22 +446,22 @@ func TestLayerPatterns(t *testing.T) {
 		// five good layers, then two bad, then enough good to heal
 		// after healing, verifying tortoise should be able to start verifying again
 		pattern := []bool{
-			true,  // verified
-			true,  // verified
-			true,  // verified
-			true,  // verified
-			true,  // verification stalled: zdist
-			false, // verification stalled: zdist
-			false, // verification stalled: zdist
-			true,  // verification stalled: zdist
-			true,  // verification stalled: zdist
-			true,  // verification stalled: confidence interval
-			true,  // verification stalled: confidence interval
-			true,  // verification stalled: confidence interval
-			true,  // verification stalled: confidence interval
-			true,  // verification stalled: confidence interval
-			true,  // verification resumes zdist+confidence interval layers before
-			true,  // verification resumes zdist+confidence interval layers before
+			true,  // 8  verified
+			true,  // 9  verified
+			true,  // 10 verified
+			true,  // 11 verified
+			true,  // 12 verification stalled: zdist
+			false, // 13 verification stalled: zdist, simulated hare failure
+			false, // 14 verification stalled: zdist, simulated hare failure
+			true,  // 15 verification stalled: zdist
+			true,  // 16 verification stalled: zdist
+			true,  // 17 verification stalled: confidence interval
+			true,  // 18 verification stalled: confidence interval
+			true,  // 19 verification stalled: confidence interval
+			true,  // 20 verification stalled: confidence interval
+			true,  // 21 verification stalled: confidence interval
+			true,  // 22 verification resumes zdist+confidence interval layers before
+			true,  // 23 verification resumes zdist+confidence interval layers before
 		}
 		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
 		lastProcessed := types.GetEffectiveGenesis().Add(uint32(len(pattern)))
@@ -490,10 +488,14 @@ func TestLayerPatterns(t *testing.T) {
 		// verified layer should now lag by zdist+confidence interval+layers to heal
 		require.Equal(t, lastVerified, types.GetEffectiveGenesis().Add(uint32(len(pattern))-trtl.Zdist-trtl.ConfidenceParam))
 
-		// after one more good layer, verifying tortoise should catch up and start verifying again
-		lastProcessed = lastProcessed.Add(1)
-		lastVerified = lastVerified.Add(trtl.Zdist + trtl.ConfidenceParam + uint32(numLayersToFullyHeal))
-		makeAndProcessLayer(t, lastProcessed, trtl, blocksPerLayer, atxdb, msh, nil)
+		// after a few more good layers, verifying tortoise should catch up and start verifying again
+		// TODO: calculate this hardcoded number using the same simulation we used to do so above
+		lastVerified = lastVerified.Add(trtl.Zdist + trtl.ConfidenceParam + uint32(numLayersToFullyHeal-1))
+		for i := 1; i < 8; i++ {
+			lastProcessed = lastProcessed.Add(1)
+			makeAndProcessLayer(t, lastProcessed, trtl, blocksPerLayer, atxdb, msh, nil)
+			lastVerified = lastVerified.Add(1)
+		}
 		require.Equal(t, int(lastVerified.Uint32()), int(trtl.Verified.Uint32()))
 		require.Equal(t, int(lastVerified.Uint32()), int(lastProcessed.Uint32()-1))
 
@@ -533,9 +535,25 @@ func TestLayerPatterns(t *testing.T) {
 			true,
 			true,
 			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
+			true,
 		}
 
-		msh := getInMemMesh(t)
+		// use a mesh wrapper to simulate weakcoin, needed for healing
+		msh := &meshWrapper{blockDataWriter: getInMemMesh(t)}
 		atxdb := getAtxDB()
 		trtl := defaultTurtle(t)
 		trtl.AvgLayerSize = blocksPerLayer
@@ -1063,10 +1081,10 @@ func TestGetLocalBlockOpinion(t *testing.T) {
 	l1ID := types.GetEffectiveGenesis().Add(1)
 	blocks := generateBlocks(t, l1ID, 2, alg.BaseBlock, atxdb, 1)
 
-	// no input vector for recent layer: expect a vote against
+	// no input vector for recent layer: expect abstain vote
 	vec, err := alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID())
 	r.NoError(err)
-	r.Equal(against, vec)
+	r.Equal(abstain, vec)
 
 	// block included in input vector
 	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, []types.BlockID{blocks[0].ID()}))
