@@ -296,7 +296,7 @@ func (proofMessage PoetProofMessage) Ref() ([]byte, error) {
 
 // PoetRound includes the PoET's round ID.
 type PoetRound struct {
-	ID string
+	ID string `ssz-max:"256"`
 }
 
 // NIPost is Non-Interactive Proof of Space-Time.

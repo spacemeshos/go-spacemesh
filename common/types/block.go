@@ -157,7 +157,7 @@ func (l LayerID) String() string {
 // NodeID contains a miner's two public keys.
 type NodeID struct {
 	// Key is the miner's Edwards public key
-	Key []byte `ssz-max:"512"`
+	Key string `ssz-max:"512"`
 
 	// VRFPublicKey is the miner's public key used for VRF.
 	VRFPublicKey []byte `ssz-max:"512"`
@@ -166,7 +166,7 @@ type NodeID struct {
 // String returns a string representation of the NodeID, for logging purposes.
 // It implements the Stringer interface.
 func (id NodeID) String() string {
-	return util.Bytes2Hex(id.Key) + util.Bytes2Hex(id.VRFPublicKey)
+	return id.Key + util.Bytes2Hex(id.VRFPublicKey)
 }
 
 // ToBytes returns the byte representation of the Edwards public key.
@@ -193,8 +193,8 @@ func BytesToNodeID(b []byte) (*NodeID, error) {
 	pubKey := b[0:32]
 	vrfKey := b[32:]
 	return &NodeID{
-		Key:          pubKey,
-		VRFPublicKey: vrfKey,
+		Key:          util.Bytes2Hex(pubKey),
+		VRFPublicKey: []byte(util.Bytes2Hex(vrfKey)),
 	}, nil
 }
 
@@ -211,13 +211,13 @@ func StringToNodeID(s string) (*NodeID, error) {
 	}
 	// portion of the string corresponding to the Edwards public key
 	return &NodeID{
-		Key:          util.Hex2Bytes(s[:64]),
-		VRFPublicKey: util.Hex2Bytes(s[64:]),
+		Key:          s[:64],
+		VRFPublicKey: []byte(s[64:]),
 	}, nil
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (id NodeID) Field() log.Field { return log.String("node_id", util.Bytes2Hex(id.Key)) }
+func (id NodeID) Field() log.Field { return log.String("node_id", id.Key) }
 
 // BlockEligibilityProof includes the required values that, along with the miner's VRF public key, allow non-interactive
 // block eligibility validation.

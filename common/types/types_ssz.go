@@ -1053,7 +1053,7 @@ func (n *NodeID) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		err = ssz.ErrBytesLength
 		return
 	}
-	dst = append(dst, n.Key...)
+	dst = append(dst, []byte(n.Key)...)
 
 	// Field (1) 'VRFPublicKey'
 	if len(n.VRFPublicKey) > 512 {
@@ -1092,10 +1092,7 @@ func (n *NodeID) UnmarshalSSZ(buf []byte) error {
 		if len(buf) > 512 {
 			return ssz.ErrBytesLength
 		}
-		if cap(n.Key) == 0 {
-			n.Key = make([]byte, 0, len(buf))
-		}
-		n.Key = append(n.Key, buf...)
+		n.Key = string(buf)
 	}
 
 	// Field (1) 'VRFPublicKey'
