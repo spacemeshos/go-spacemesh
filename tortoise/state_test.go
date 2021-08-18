@@ -4,6 +4,7 @@ import (
 	"math/rand"
 	"path/filepath"
 	"reflect"
+	"sort"
 	"testing"
 	"testing/quick"
 
@@ -25,20 +26,15 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 			require.True(tb, ok)
 			layers[i] = layer.Interface().(types.LayerID)
 		}
+
 		st.Last = layers[0]
-		st.Evict = layers[1]
-		st.Verified = layers[2]
+		st.Verified = layers[1]
+		st.EvictFrom = layers[2]
 
 		st.GoodBlocksIndex = map[types.BlockID]bool{}
 		st.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
 
-		for i := 0; i < 100; i++ {
-			id, ok := quick.Value(reflect.TypeOf(types.BlockID{}), rng)
-			require.True(tb, ok)
-			st.GoodBlocksIndex[id.Interface().(types.BlockID)] = false
-		}
-
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 200; i++ {
 			layerGen, ok := quick.Value(reflect.TypeOf(types.LayerID{}), rng)
 			require.True(tb, ok)
 			block1Gen, ok := quick.Value(reflect.TypeOf(types.BlockID{}), rng)
@@ -54,6 +50,7 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 			if _, exist := st.BlockOpinionsByLayer[layer][block1]; !exist {
 				st.BlockOpinionsByLayer[layer][block1] = Opinion{}
 			}
+			st.GoodBlocksIndex[block1] = false
 			block2 := block2Gen.Interface().(types.BlockID)
 			vecGen, ok := quick.Value(reflect.TypeOf(vec{}), rng)
 			require.True(tb, ok)
@@ -69,7 +66,7 @@ func TestStateRecover(t *testing.T) {
 	require.NoError(t, quick.Check(func(st *state) bool {
 		st.diffMode = true
 		original := *st
-		if err := st.Persist(); err != nil {
+		if !assert.NoError(t, st.Persist()) {
 			return false
 		}
 		st.BlockOpinionsByLayer = nil
@@ -90,6 +87,54 @@ func TestStateRecover(t *testing.T) {
 			values[0] = reflect.ValueOf(gen(rng))
 		},
 	}))
+}
+
+func TestStateEvict(t *testing.T) {
+	require.NoError(t, quick.Check(func(st *state) bool {
+		layers := make([]types.LayerID, 0, len(st.BlockOpinionsByLayer))
+		for layer := range st.BlockOpinionsByLayer {
+			layers = append(layers, layer)
+		}
+		sort.Slice(layers, func(i, j int) bool {
+			return layers[i].Before(layers[j])
+		})
+		st.EvictFrom = layers[len(layers)/2]
+		if !assert.NoError(t, st.Persist()) {
+			return false
+		}
+
+		for layer := range st.BlockOpinionsByLayer {
+			if !layer.Before(st.EvictFrom) {
+				continue
+			}
+			for block := range st.BlockOpinionsByLayer[layer] {
+				delete(st.GoodBlocksIndex, block)
+			}
+			delete(st.BlockOpinionsByLayer, layer)
+		}
+		if !assert.NoError(t, st.Evict()) {
+			return false
+		}
+
+		original := *st
+		st.BlockOpinionsByLayer = nil
+		st.GoodBlocksIndex = nil
+		if !assert.NoError(t, st.Recover()) {
+			return false
+		}
+		return assert.Equal(t, &original, st)
+	}, &quick.Config{
+		Values: func(values []reflect.Value, rng *rand.Rand) {
+			require.Len(t, values, 1)
+			gen := makeStateGen(t, database.NewMemDatabase(), logtest.New(t))
+			values[0] = reflect.ValueOf(gen(rng))
+		},
+	}))
+}
+
+func TestStateRecoverNotFound(t *testing.T) {
+	st := makeStateGen(t, database.NewMemDatabase(), logtest.New(t))(rand.New(rand.NewSource(1001)))
+	require.ErrorIs(t, st.Recover(), database.ErrNotFound)
 }
 
 func BenchmarkStatePersist(b *testing.B) {

@@ -40,11 +40,6 @@ type turtle struct {
 	MaxExceptions int
 }
 
-// SetLogger sets the Log instance for this turtle
-func (t *turtle) SetLogger(log2 log.Log) {
-	t.logger = log2
-}
-
 // newTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
 func newTurtle(lg log.Log, db database.Database, bdp blockDataProvider, hdist uint32, avgLayerSize int) *turtle {
 	t := &turtle{
@@ -72,11 +67,11 @@ func (t *turtle) init(genesisLayer *types.Layer) {
 	t.BlockOpinionsByLayer[genesisLayer.Index()] = make(map[types.BlockID]Opinion)
 	for _, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
-		t.BlockOpinionsByLayer[genesisLayer.Index()][blk.ID()] = Opinion{}
+		t.BlockOpinionsByLayer[genesisLayer.Index()][id] = Opinion{}
 		t.GoodBlocksIndex[id] = false
 	}
 	t.Last = genesisLayer.Index()
-	t.Evict = genesisLayer.Index()
+	t.EvictFrom = genesisLayer.Index()
 	t.Verified = genesisLayer.Index()
 }
 
@@ -92,7 +87,7 @@ func (t *turtle) evict() {
 	window := t.Verified.Sub(t.Hdist)
 	t.logger.Info("window starts %v", window)
 	// evict from last evicted to the beginning of our window.
-	for lyr := t.Evict; lyr.Before(window); lyr = lyr.Add(1) {
+	for lyr := t.EvictFrom; lyr.Before(window); lyr = lyr.Add(1) {
 		t.logger.Info("removing layer %v", lyr)
 		for blk := range t.BlockOpinionsByLayer[lyr] {
 			delete(t.GoodBlocksIndex, blk)
@@ -101,7 +96,7 @@ func (t *turtle) evict() {
 		t.logger.Debug("evict block %v from maps", lyr)
 
 	}
-	t.Evict = window
+	t.EvictFrom = window
 }
 
 func blockIDsToString(input []types.BlockID) string {
@@ -349,7 +344,12 @@ func (t *turtle) BlockWeight(voting, voted types.BlockID) int64 {
 
 // Persist saves the current tortoise state to the database
 func (t *turtle) persist() error {
-	return t.Persist()
+	// TODO(dshulyak) make state eviction a part of regular eviction
+	// HandleIncomingLayer should expose an error for this
+	if err := t.state.Evict(); err != nil {
+		return err
+	}
+	return t.state.Persist()
 }
 
 func (t *turtle) processBlock(block *types.Block) error {
