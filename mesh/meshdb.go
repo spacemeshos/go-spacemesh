@@ -283,7 +283,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	for it.Next() {
 		if len(it.Key()) == len(layerBuf) {
 			zero = true
-			continue
+			break
 		}
 		var id types.BlockID
 		copy(id[:], it.Key()[len(layerBuf):])
@@ -308,6 +308,7 @@ func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
+	// FIXME(dshulyak) key should be prefixed otherwise collisions are possible
 	return m.blocks.Get(id.Bytes())
 }
 

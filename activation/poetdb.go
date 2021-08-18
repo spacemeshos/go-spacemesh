@@ -60,17 +60,18 @@ func (db *PoetDb) ValidateAndStoreMsg(data []byte) error {
 
 // Validate validates a new PoET proof.
 func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error {
-	if len(poetID) < 5 {
+	const shortIDlth = 5 // check the length to prevent a panic in the errors
+	if len(poetID) < shortIDlth {
 		return types.ProcessingError(fmt.Sprintf("invalid poet id %x", poetID))
 	}
 	root, err := calcRoot(proof.Members)
 	if err != nil {
 		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetID %x round %s: %v",
-			poetID[:5], roundID, err))
+			poetID[:shortIDlth], roundID, err))
 	}
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
 		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %v",
-			poetID[:5], roundID, err)
+			poetID[:shortIDlth], roundID, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
 
