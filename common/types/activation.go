@@ -170,7 +170,7 @@ func (challenge *NIPostChallenge) String() string {
 // structure is serialized and signed. It includes the header fields, as well as the larger fields that are only used
 // for validation: the NIPost and the initial Post.
 type InnerActivationTx struct {
-	*ActivationTxHeader
+	ActivationTxHeader
 	NIPost      *NIPost
 	InitialPost *Post
 }
@@ -178,15 +178,15 @@ type InnerActivationTx struct {
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
-	*InnerActivationTx
-	Sig []byte
+	InnerActivationTx
+	Sig []byte `ssz-max:"256"`
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
 func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint, initialPost *Post) *ActivationTx {
 	atx := &ActivationTx{
-		InnerActivationTx: &InnerActivationTx{
-			ActivationTxHeader: &ActivationTxHeader{
+		InnerActivationTx: InnerActivationTx{
+			ActivationTxHeader: ActivationTxHeader{
 				NIPostChallenge: challenge,
 				Coinbase:        coinbase,
 				NumUnits:        numUnits,
@@ -303,7 +303,7 @@ type PoetRound struct {
 type NIPost struct {
 	// Challenge is the challenge for the PoET which is
 	// constructed from fields in the activation transaction.
-	Challenge *Hash32
+	Challenge Hash32
 
 	// Post is the proof that the prover data is still stored (or was recomputed) at
 	// the time he learned the challenge constructed from the PoET.
@@ -320,11 +320,11 @@ type Post postShared.Proof
 
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PostMetadata struct {
-	Challenge     []byte
-	BitsPerLabel  uint
-	LabelsPerUnit uint
-	K1            uint
-	K2            uint
+	Challenge     []byte `ssz-max:"1024"`
+	BitsPerLabel  uint64
+	LabelsPerUnit uint64
+	K1            uint64
+	K2            uint64
 }
 
 // String returns a string representation of the PostProof, for logging purposes.

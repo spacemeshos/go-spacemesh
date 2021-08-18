@@ -276,7 +276,7 @@ type Block struct {
 
 // Bytes returns the serialization of the MiniBlock.
 func (b *Block) Bytes() []byte {
-	blkBytes, err := InterfaceToBytes(b.MiniBlock)
+	blkBytes, err := InterfaceToBytes(&b.MiniBlock)
 	if err != nil {
 		log.Panic(fmt.Sprintf("could not extract block bytes, %v", err))
 	}
@@ -310,7 +310,7 @@ func (b *Block) ID() BlockID {
 // Initialize calculates and sets the block's cached ID and MinerID. This should be called once all the other fields of
 // the block are set.
 func (b *Block) Initialize() {
-	blockBytes, err := InterfaceToBytes(b.MiniBlock)
+	blockBytes, err := InterfaceToBytes(&b.MiniBlock)
 	if err != nil {
 		panic("failed to marshal block: " + err.Error())
 	}

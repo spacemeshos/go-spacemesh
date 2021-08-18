@@ -149,15 +149,6 @@ func TestLayerIDString(t *testing.T) {
 	require.Equal(t, "10", NewLayerID(10).String())
 }
 
-func TestLayerIDBinaryEncoding(t *testing.T) {
-	lid := NewLayerID(100)
-	buf, err := InterfaceToBytes(lid)
-	require.NoError(t, err)
-	decoded := LayerID{}
-	require.NoError(t, BytesToInterface(buf, &decoded))
-	require.Equal(t, lid, decoded)
-}
-
 func TestLayerID_GetEpoch(t *testing.T) {
 	tests := []struct {
 		name           string

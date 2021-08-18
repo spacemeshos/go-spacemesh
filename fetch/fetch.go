@@ -79,20 +79,20 @@ type request struct {
 
 // requestMessage is the on the wire message that will be send to the peer for hash query
 type requestMessage struct {
-	Hint Hint
+	Hint []byte `ssz-max:"1024"`
 	Hash types.Hash32
 }
 
 // responseMessage is the on the wire message that will be send to the this node as response,
 type responseMessage struct {
 	Hash types.Hash32
-	Data []byte
+	Data []byte `ssz-max:"4096"`
 }
 
 // requestBatch is a batch of requests and a hash of all requests as ID
 type requestBatch struct {
 	ID       types.Hash32
-	Requests []requestMessage
+	Requests []*requestMessage `ssz-max:"4096"`
 }
 
 type batchInfo struct {
@@ -302,7 +302,7 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 	rLen := len(f.activeRequests)
 	f.activeReqM.Unlock()
 	if sendNow {
-		f.sendBatch([]requestMessage{{req.hint, req.hash}})
+		f.sendBatch([]requestMessage{{[]byte(req.hint), req.hash}})
 		f.log.With().Debug("high priority request sent", log.String("hash", req.hash.ShortString()))
 		return true
 	}
@@ -352,7 +352,7 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 	// be included in the response at all
 	for _, r := range requestBatch.Requests {
 		f.dbLock.RLock()
-		db, ok := f.dbs[r.Hint]
+		db, ok := f.dbs[Hint(r.Hint)]
 		f.dbLock.RUnlock()
 		if !ok {
 			f.log.WithContext(ctx).With().Warning("db not found", log.String("hint", string(r.Hint)))
@@ -490,12 +490,12 @@ func (f *Fetch) receiveResponse(data []byte) {
 
 // this is the main function that sends the hash request to the peer
 func (f *Fetch) requestHashBatchFromPeers() {
-	var requestList []requestMessage
+	var requestList []*requestMessage
 	f.activeReqM.Lock()
 	// only send one request per hash
 	for hash, reqs := range f.activeRequests {
 		f.log.With().Debug("batching hash request", log.String("hash", hash.ShortString()))
-		requestList = append(requestList, requestMessage{Hash: hash, Hint: reqs[0].hint})
+		requestList = append(requestList, &requestMessage{Hash: hash, Hint: []byte(reqs[0].hint)})
 		// move the processed requests to pending
 		f.pendingRequests[hash] = append(f.pendingRequests[hash], reqs...)
 		delete(f.activeRequests, hash)
@@ -513,7 +513,7 @@ func (f *Fetch) requestHashBatchFromPeers() {
 }
 
 // sendBatch dispatches batched request messages
-func (f *Fetch) sendBatch(requests []requestMessage) {
+func (f *Fetch) sendBatch(requests []*requestMessage) {
 	// build list of batch messages
 	var batch batchInfo
 	batch.Requests = requests
