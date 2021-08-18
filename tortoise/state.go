@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -25,7 +26,7 @@ type state struct {
 	diffMode bool
 
 	Last            types.LayerID
-	Evict           types.LayerID
+	EvictFrom       types.LayerID
 	Verified        types.LayerID
 	GoodBlocksIndex map[types.BlockID]bool
 	// use 2D array to be able to iterate from latest elements easily
@@ -40,7 +41,7 @@ func (s *state) Persist() error {
 	if err := batch.Put([]byte(namespaceLast), s.Last.Bytes()); err != nil {
 		return err
 	}
-	if err := batch.Put([]byte(namespaceEvict), s.Evict.Bytes()); err != nil {
+	if err := batch.Put([]byte(namespaceEvict), s.EvictFrom.Bytes()); err != nil {
 		return err
 	}
 	if err := batch.Put([]byte(namespaceVerified), s.Verified.Bytes()); err != nil {
@@ -52,12 +53,12 @@ func (s *state) Persist() error {
 			continue
 		}
 		s.GoodBlocksIndex[id] = true
-		b.Reset()
 		b.WriteString(namespaceGood)
 		b.Write(id.Bytes())
 		if err := batch.Put(b.Bytes(), nil); err != nil {
 			return err
 		}
+		b.Reset()
 	}
 
 	for layer, blocks := range s.BlockOpinionsByLayer {
@@ -69,9 +70,8 @@ func (s *state) Persist() error {
 				opinion.Flushed = true
 				opinions[block2] = opinion
 
-				b.Reset()
 				b.WriteString(namespaceOpinons)
-				b.Write(layer.Bytes())
+				b.Write(encodeLayerKey(layer))
 				b.Write(block1.Bytes())
 				b.Write(block2.Bytes())
 
@@ -82,6 +82,7 @@ func (s *state) Persist() error {
 				if err := batch.Put(b.Bytes(), buf); err != nil {
 					return err
 				}
+				b.Reset()
 			}
 		}
 	}
@@ -106,22 +107,19 @@ func (s *state) Recover() error {
 	if err != nil {
 		return err
 	}
-	s.Evict = types.BytesToLayerID(buf)
+	s.EvictFrom = types.BytesToLayerID(buf)
 
 	it := s.db.Find([]byte(namespaceGood))
 	for it.Next() {
-		var id types.BlockID
-		copy(id[:], it.Key()[1:])
-		s.GoodBlocksIndex[id] = true
+		s.GoodBlocksIndex[decodeBlock(it.Key()[1:])] = true
 	}
 
 	it = s.db.Find([]byte(namespaceOpinons))
 	for it.Next() {
-		// FIXME(dshulyak) derive these indexes from actual values
-		layer := types.BytesToLayerID(it.Key()[1:5])
-		var block1, block2 types.BlockID
-		copy(block1[:], it.Key()[5:37])
-		copy(block2[:], it.Key()[37:])
+		layer := decodeLayerKey(it.Key())
+		offset := 1 + types.LayerIDSize
+		block1 := decodeBlock(it.Key()[offset : offset+types.BlockIDSize])
+		block2 := decodeBlock(it.Key()[offset+types.BlockIDSize:])
 
 		if _, exist := s.BlockOpinionsByLayer[layer]; !exist {
 			s.BlockOpinionsByLayer[layer] = map[types.BlockID]Opinion{}
@@ -136,4 +134,43 @@ func (s *state) Recover() error {
 		s.BlockOpinionsByLayer[layer][block1][block2] = opinion
 	}
 	return nil
+}
+
+func (s *state) Evict() error {
+	var (
+		batch = s.db.NewBatch()
+		it    = s.db.Find([]byte(namespaceOpinons))
+		b     bytes.Buffer
+	)
+	for it.Next() {
+		layer := decodeLayerKey(it.Key())
+		if !layer.Before(s.EvictFrom) {
+			break
+		}
+		b.WriteString(namespaceGood)
+		offset := 1 + types.LayerIDSize
+		b.Write(it.Key()[offset : offset+types.BlockIDSize])
+		if err := batch.Delete(b.Bytes()); err != nil {
+			return err
+		}
+		b.Reset()
+		if err := batch.Delete(it.Key()); err != nil {
+			return err
+		}
+	}
+	return batch.Write()
+}
+
+func decodeBlock(key []byte) types.BlockID {
+	var block types.BlockID
+	copy(block[:], key)
+	return block
+}
+
+func encodeLayerKey(layer types.LayerID) []byte {
+	return util.Uint32ToBytesBE(layer.Uint32())
+}
+
+func decodeLayerKey(key []byte) types.LayerID {
+	return types.NewLayerID(util.BytesToUint32BE((key[1 : 1+types.LayerIDSize])))
 }

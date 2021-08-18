@@ -33,18 +33,21 @@ func (a vec) Field() log.Field {
 func (a vec) Add(v vec) vec {
 	a.Support += v.Support
 	a.Against += v.Against
+	a.Flushed = false
 	return a
 }
 
 func (a vec) Negate() vec {
 	a.Support *= -1
 	a.Against *= -1
+	a.Flushed = false
 	return a
 }
 
 func (a vec) Multiply(x int64) vec {
 	a.Against *= x
 	a.Support *= x
+	a.Flushed = false
 	return a
 }
 
