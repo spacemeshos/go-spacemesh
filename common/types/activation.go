@@ -7,8 +7,6 @@ import (
 	"sort"
 	"strings"
 
-	poetShared "github.com/spacemeshos/poet/shared"
-	postShared "github.com/spacemeshos/post/shared"
 	"github.com/spacemeshos/sha256-simd"
 
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -88,7 +86,7 @@ type ActivationTxHeader struct {
 	NIPostChallenge
 	id       *ATXID // non-exported cache of the ATXID
 	Coinbase Address
-	NumUnits uint
+	NumUnits uint64
 }
 
 // ShortString returns the first 5 characters of the ID, for logging purposes.
@@ -138,7 +136,7 @@ type NIPostChallenge struct {
 	StartTick          uint64
 	EndTick            uint64
 	PositioningATX     ATXID
-	InitialPostIndices []byte
+	InitialPostIndices []byte `ssz-max:"1024"`
 }
 
 // Hash serializes the NIPostChallenge and returns its hash.
@@ -172,7 +170,7 @@ func (challenge *NIPostChallenge) String() string {
 type InnerActivationTx struct {
 	ActivationTxHeader
 	NIPost      *NIPost
-	InitialPost *Post
+	InitialPost *Proof
 }
 
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
@@ -183,13 +181,13 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint, initialPost *Post) *ActivationTx {
+func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint, initialPost *Proof) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: InnerActivationTx{
 			ActivationTxHeader: ActivationTxHeader{
 				NIPostChallenge: challenge,
 				Coinbase:        coinbase,
-				NumUnits:        numUnits,
+				NumUnits:        uint64(numUnits),
 			},
 			NIPost:      nipost,
 			InitialPost: initialPost,
@@ -201,7 +199,7 @@ func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost
 
 // InnerBytes returns a byte slice of the serialization of the inner ATX (excluding the signature field).
 func (atx *ActivationTx) InnerBytes() ([]byte, error) {
-	return InterfaceToBytes(atx.InnerActivationTx)
+	return InterfaceToBytes(&atx.InnerActivationTx)
 }
 
 // Fields returns an array of LoggableFields for logging
@@ -262,11 +260,17 @@ func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	return ref[:util.Min(5, len(ref))]
 }
 
+type MerkleProof struct {
+	Root         []byte   `ssz-max:"1024"`
+	ProvenLeaves [][]byte `ssz-size:"?,?" ssz-max:"1024,1024"`
+	ProofNodes   [][]byte `ssz-size:"?,?" ssz-max:"1024,1024"`
+}
+
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
 type PoetProof struct {
-	poetShared.MerkleProof
-	Members   [][]byte
+	MerkleProof
+	Members   [][]byte `ssz-size:"?,?" ssz-max:"1024,1024"`
 	LeafCount uint64
 }
 
@@ -307,7 +311,7 @@ type NIPost struct {
 
 	// Post is the proof that the prover data is still stored (or was recomputed) at
 	// the time he learned the challenge constructed from the PoET.
-	Post *Post
+	Proof *Proof
 
 	// PostMetadata is the Post metadata, associated with the proof.
 	// The proof should be verified upon the metadata during the syntactic validation,
@@ -315,8 +319,11 @@ type NIPost struct {
 	PostMetadata *PostMetadata
 }
 
-// Post is an alias to postShared.Proof.
-type Post postShared.Proof
+// Proof ...
+type Proof struct {
+	Nonce   uint32
+	Indices []byte `ssz-max:"1024"`
+}
 
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PostMetadata struct {
@@ -329,7 +336,7 @@ type PostMetadata struct {
 
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
-func (p Post) String() string {
+func (p Proof) String() string {
 	return fmt.Sprintf("nonce: %v, indices: %v",
 		p.Nonce, bytesToShortString(p.Indices))
 }

@@ -5,7 +5,6 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,7 +37,7 @@ func TestFields(t *testing.T) {
 func TestStringToNodeID(t *testing.T) {
 	pubkey := genByte32()
 	nodeID1 := NodeID{
-		Key:          util.Bytes2Hex(pubkey[:]),
+		Key:          pubkey[:],
 		VRFPublicKey: []byte("22222"),
 	}
 	nodeIDStr := nodeID1.String()
@@ -63,7 +62,7 @@ func TestStringToNodeID(t *testing.T) {
 func TestBytesToNodeID(t *testing.T) {
 	pubkey := genByte32()
 	nodeID1 := NodeID{
-		Key:          util.Bytes2Hex(pubkey[:]),
+		Key:          pubkey[:],
 		VRFPublicKey: []byte("222222"),
 	}
 

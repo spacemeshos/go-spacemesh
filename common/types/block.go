@@ -157,16 +157,16 @@ func (l LayerID) String() string {
 // NodeID contains a miner's two public keys.
 type NodeID struct {
 	// Key is the miner's Edwards public key
-	Key string
+	Key []byte `ssz-max:"512"`
 
 	// VRFPublicKey is the miner's public key used for VRF.
-	VRFPublicKey []byte
+	VRFPublicKey []byte `ssz-max:"512"`
 }
 
 // String returns a string representation of the NodeID, for logging purposes.
 // It implements the Stringer interface.
 func (id NodeID) String() string {
-	return id.Key + string(id.VRFPublicKey)
+	return util.Bytes2Hex(id.Key) + util.Bytes2Hex(id.VRFPublicKey)
 }
 
 // ToBytes returns the byte representation of the Edwards public key.
@@ -176,8 +176,7 @@ func (id NodeID) ToBytes() []byte {
 
 // ShortString returns a the first 5 characters of the ID, for logging purposes.
 func (id NodeID) ShortString() string {
-	name := id.Key
-	return Shorten(name, 5)
+	return Shorten(id.String(), 5)
 }
 
 // BytesToNodeID deserializes a byte slice into a NodeID
@@ -194,8 +193,8 @@ func BytesToNodeID(b []byte) (*NodeID, error) {
 	pubKey := b[0:32]
 	vrfKey := b[32:]
 	return &NodeID{
-		Key:          util.Bytes2Hex(pubKey),
-		VRFPublicKey: []byte(util.Bytes2Hex(vrfKey)),
+		Key:          pubKey,
+		VRFPublicKey: vrfKey,
 	}, nil
 }
 
@@ -211,16 +210,14 @@ func StringToNodeID(s string) (*NodeID, error) {
 		return nil, fmt.Errorf("invalid length, input too long")
 	}
 	// portion of the string corresponding to the Edwards public key
-	pubKey := s[:64]
-	vrfKey := s[64:]
 	return &NodeID{
-		Key:          pubKey,
-		VRFPublicKey: []byte(vrfKey),
+		Key:          util.Hex2Bytes(s[:64]),
+		VRFPublicKey: util.Hex2Bytes(s[64:]),
 	}, nil
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (id NodeID) Field() log.Field { return log.String("node_id", id.Key) }
+func (id NodeID) Field() log.Field { return log.String("node_id", util.Bytes2Hex(id.Key)) }
 
 // BlockEligibilityProof includes the required values that, along with the miner's VRF public key, allow non-interactive
 // block eligibility validation.

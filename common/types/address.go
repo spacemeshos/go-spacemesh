@@ -3,10 +3,11 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
+	"math/big"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"math/big"
 )
 
 const (
@@ -15,7 +16,7 @@ const (
 )
 
 // Address represents the 20 byte address of an spacemesh account.
-type Address [AddressLength]byte
+type Address [20]byte
 
 // BytesToAddress returns Address with value b.
 // If b is larger than len(h), b will be cropped from the left.

@@ -5,6 +5,996 @@ import (
 	ssz "github.com/ferranbt/fastssz"
 )
 
+// MarshalSSZ ssz marshals the ActivationTxHeader object
+func (a *ActivationTxHeader) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(a)
+}
+
+// MarshalSSZTo ssz marshals the ActivationTxHeader object to a target array
+func (a *ActivationTxHeader) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(32)
+
+	// Offset (0) 'NIPostChallenge'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += a.NIPostChallenge.SizeSSZ()
+
+	// Field (1) 'Coinbase'
+	dst = append(dst, a.Coinbase[:]...)
+
+	// Field (2) 'NumUnits'
+	dst = ssz.MarshalUint64(dst, a.NumUnits)
+
+	// Field (0) 'NIPostChallenge'
+	if dst, err = a.NIPostChallenge.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ActivationTxHeader object
+func (a *ActivationTxHeader) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 32 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'NIPostChallenge'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Field (1) 'Coinbase'
+	copy(a.Coinbase[:], buf[4:24])
+
+	// Field (2) 'NumUnits'
+	a.NumUnits = ssz.UnmarshallUint64(buf[24:32])
+
+	// Field (0) 'NIPostChallenge'
+	{
+		buf = tail[o0:]
+		if err = a.NIPostChallenge.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ActivationTxHeader object
+func (a *ActivationTxHeader) SizeSSZ() (size int) {
+	size = 32
+
+	// Field (0) 'NIPostChallenge'
+	size += a.NIPostChallenge.SizeSSZ()
+
+	return
+}
+
+// MarshalSSZ ssz marshals the NIPostChallenge object
+func (n *NIPostChallenge) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(n)
+}
+
+// MarshalSSZTo ssz marshals the NIPostChallenge object to a target array
+func (n *NIPostChallenge) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(100)
+
+	// Offset (0) 'NodeID'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += n.NodeID.SizeSSZ()
+
+	// Field (1) 'Sequence'
+	dst = ssz.MarshalUint64(dst, n.Sequence)
+
+	// Field (2) 'PrevATXID'
+	dst = append(dst, n.PrevATXID[:]...)
+
+	// Field (3) 'PubLayerID'
+	if dst, err = n.PubLayerID.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (4) 'StartTick'
+	dst = ssz.MarshalUint64(dst, n.StartTick)
+
+	// Field (5) 'EndTick'
+	dst = ssz.MarshalUint64(dst, n.EndTick)
+
+	// Field (6) 'PositioningATX'
+	dst = append(dst, n.PositioningATX[:]...)
+
+	// Offset (7) 'InitialPostIndices'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(n.InitialPostIndices)
+
+	// Field (0) 'NodeID'
+	if dst, err = n.NodeID.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (7) 'InitialPostIndices'
+	if len(n.InitialPostIndices) > 1024 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, n.InitialPostIndices...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the NIPostChallenge object
+func (n *NIPostChallenge) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 100 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o7 uint64
+
+	// Offset (0) 'NodeID'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Field (1) 'Sequence'
+	n.Sequence = ssz.UnmarshallUint64(buf[4:12])
+
+	// Field (2) 'PrevATXID'
+	copy(n.PrevATXID[:], buf[12:44])
+
+	// Field (3) 'PubLayerID'
+	if err = n.PubLayerID.UnmarshalSSZ(buf[44:48]); err != nil {
+		return err
+	}
+
+	// Field (4) 'StartTick'
+	n.StartTick = ssz.UnmarshallUint64(buf[48:56])
+
+	// Field (5) 'EndTick'
+	n.EndTick = ssz.UnmarshallUint64(buf[56:64])
+
+	// Field (6) 'PositioningATX'
+	copy(n.PositioningATX[:], buf[64:96])
+
+	// Offset (7) 'InitialPostIndices'
+	if o7 = ssz.ReadOffset(buf[96:100]); o7 > size || o0 > o7 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'NodeID'
+	{
+		buf = tail[o0:o7]
+		if err = n.NodeID.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (7) 'InitialPostIndices'
+	{
+		buf = tail[o7:]
+		if len(buf) > 1024 {
+			return ssz.ErrBytesLength
+		}
+		if cap(n.InitialPostIndices) == 0 {
+			n.InitialPostIndices = make([]byte, 0, len(buf))
+		}
+		n.InitialPostIndices = append(n.InitialPostIndices, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the NIPostChallenge object
+func (n *NIPostChallenge) SizeSSZ() (size int) {
+	size = 100
+
+	// Field (0) 'NodeID'
+	size += n.NodeID.SizeSSZ()
+
+	// Field (7) 'InitialPostIndices'
+	size += len(n.InitialPostIndices)
+
+	return
+}
+
+// MarshalSSZ ssz marshals the InnerActivationTx object
+func (i *InnerActivationTx) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(i)
+}
+
+// MarshalSSZTo ssz marshals the InnerActivationTx object to a target array
+func (i *InnerActivationTx) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(12)
+
+	// Offset (0) 'ActivationTxHeader'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += i.ActivationTxHeader.SizeSSZ()
+
+	// Offset (1) 'NIPost'
+	dst = ssz.WriteOffset(dst, offset)
+	if i.NIPost == nil {
+		i.NIPost = new(NIPost)
+	}
+	offset += i.NIPost.SizeSSZ()
+
+	// Offset (2) 'InitialPost'
+	dst = ssz.WriteOffset(dst, offset)
+	if i.InitialPost == nil {
+		i.InitialPost = new(Proof)
+	}
+	offset += i.InitialPost.SizeSSZ()
+
+	// Field (0) 'ActivationTxHeader'
+	if dst, err = i.ActivationTxHeader.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'NIPost'
+	if dst, err = i.NIPost.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'InitialPost'
+	if dst, err = i.InitialPost.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the InnerActivationTx object
+func (i *InnerActivationTx) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 12 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o2 uint64
+
+	// Offset (0) 'ActivationTxHeader'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Offset (1) 'NIPost'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'InitialPost'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'ActivationTxHeader'
+	{
+		buf = tail[o0:o1]
+		if err = i.ActivationTxHeader.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (1) 'NIPost'
+	{
+		buf = tail[o1:o2]
+		if i.NIPost == nil {
+			i.NIPost = new(NIPost)
+		}
+		if err = i.NIPost.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (2) 'InitialPost'
+	{
+		buf = tail[o2:]
+		if i.InitialPost == nil {
+			i.InitialPost = new(Proof)
+		}
+		if err = i.InitialPost.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the InnerActivationTx object
+func (i *InnerActivationTx) SizeSSZ() (size int) {
+	size = 12
+
+	// Field (0) 'ActivationTxHeader'
+	size += i.ActivationTxHeader.SizeSSZ()
+
+	// Field (1) 'NIPost'
+	if i.NIPost == nil {
+		i.NIPost = new(NIPost)
+	}
+	size += i.NIPost.SizeSSZ()
+
+	// Field (2) 'InitialPost'
+	if i.InitialPost == nil {
+		i.InitialPost = new(Proof)
+	}
+	size += i.InitialPost.SizeSSZ()
+
+	return
+}
+
+// MarshalSSZ ssz marshals the ActivationTx object
+func (a *ActivationTx) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(a)
+}
+
+// MarshalSSZTo ssz marshals the ActivationTx object to a target array
+func (a *ActivationTx) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(8)
+
+	// Offset (0) 'InnerActivationTx'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += a.InnerActivationTx.SizeSSZ()
+
+	// Offset (1) 'Sig'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(a.Sig)
+
+	// Field (0) 'InnerActivationTx'
+	if dst, err = a.InnerActivationTx.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'Sig'
+	if len(a.Sig) > 256 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, a.Sig...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the ActivationTx object
+func (a *ActivationTx) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 8 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1 uint64
+
+	// Offset (0) 'InnerActivationTx'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Offset (1) 'Sig'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'InnerActivationTx'
+	{
+		buf = tail[o0:o1]
+		if err = a.InnerActivationTx.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (1) 'Sig'
+	{
+		buf = tail[o1:]
+		if len(buf) > 256 {
+			return ssz.ErrBytesLength
+		}
+		if cap(a.Sig) == 0 {
+			a.Sig = make([]byte, 0, len(buf))
+		}
+		a.Sig = append(a.Sig, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the ActivationTx object
+func (a *ActivationTx) SizeSSZ() (size int) {
+	size = 8
+
+	// Field (0) 'InnerActivationTx'
+	size += a.InnerActivationTx.SizeSSZ()
+
+	// Field (1) 'Sig'
+	size += len(a.Sig)
+
+	return
+}
+
+// MarshalSSZ ssz marshals the MerkleProof object
+func (m *MerkleProof) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(m)
+}
+
+// MarshalSSZTo ssz marshals the MerkleProof object to a target array
+func (m *MerkleProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(12)
+
+	// Offset (0) 'Root'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(m.Root)
+
+	// Offset (1) 'ProvenLeaves'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(m.ProvenLeaves); ii++ {
+		offset += 4
+		offset += len(m.ProvenLeaves[ii])
+	}
+
+	// Offset (2) 'ProofNodes'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(m.ProofNodes); ii++ {
+		offset += 4
+		offset += len(m.ProofNodes[ii])
+	}
+
+	// Field (0) 'Root'
+	if len(m.Root) > 1024 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, m.Root...)
+
+	// Field (1) 'ProvenLeaves'
+	if len(m.ProvenLeaves) > 1024 {
+		err = ssz.ErrListTooBig
+		return
+	}
+	{
+		offset = 4 * len(m.ProvenLeaves)
+		for ii := 0; ii < len(m.ProvenLeaves); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += len(m.ProvenLeaves[ii])
+		}
+	}
+	for ii := 0; ii < len(m.ProvenLeaves); ii++ {
+		if len(m.ProvenLeaves[ii]) > 1024 {
+			err = ssz.ErrBytesLength
+			return
+		}
+		dst = append(dst, m.ProvenLeaves[ii]...)
+	}
+
+	// Field (2) 'ProofNodes'
+	if len(m.ProofNodes) > 1024 {
+		err = ssz.ErrListTooBig
+		return
+	}
+	{
+		offset = 4 * len(m.ProofNodes)
+		for ii := 0; ii < len(m.ProofNodes); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += len(m.ProofNodes[ii])
+		}
+	}
+	for ii := 0; ii < len(m.ProofNodes); ii++ {
+		if len(m.ProofNodes[ii]) > 1024 {
+			err = ssz.ErrBytesLength
+			return
+		}
+		dst = append(dst, m.ProofNodes[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the MerkleProof object
+func (m *MerkleProof) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 12 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o2 uint64
+
+	// Offset (0) 'Root'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Offset (1) 'ProvenLeaves'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'ProofNodes'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'Root'
+	{
+		buf = tail[o0:o1]
+		if len(buf) > 1024 {
+			return ssz.ErrBytesLength
+		}
+		if cap(m.Root) == 0 {
+			m.Root = make([]byte, 0, len(buf))
+		}
+		m.Root = append(m.Root, buf...)
+	}
+
+	// Field (1) 'ProvenLeaves'
+	{
+		buf = tail[o1:o2]
+		num, err := ssz.DecodeDynamicLength(buf, 1024)
+		if err != nil {
+			return err
+		}
+		m.ProvenLeaves = make([][]byte, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if len(buf) > 1024 {
+				return ssz.ErrBytesLength
+			}
+			if cap(m.ProvenLeaves[indx]) == 0 {
+				m.ProvenLeaves[indx] = make([]byte, 0, len(buf))
+			}
+			m.ProvenLeaves[indx] = append(m.ProvenLeaves[indx], buf...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Field (2) 'ProofNodes'
+	{
+		buf = tail[o2:]
+		num, err := ssz.DecodeDynamicLength(buf, 1024)
+		if err != nil {
+			return err
+		}
+		m.ProofNodes = make([][]byte, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if len(buf) > 1024 {
+				return ssz.ErrBytesLength
+			}
+			if cap(m.ProofNodes[indx]) == 0 {
+				m.ProofNodes[indx] = make([]byte, 0, len(buf))
+			}
+			m.ProofNodes[indx] = append(m.ProofNodes[indx], buf...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the MerkleProof object
+func (m *MerkleProof) SizeSSZ() (size int) {
+	size = 12
+
+	// Field (0) 'Root'
+	size += len(m.Root)
+
+	// Field (1) 'ProvenLeaves'
+	for ii := 0; ii < len(m.ProvenLeaves); ii++ {
+		size += 4
+		size += len(m.ProvenLeaves[ii])
+	}
+
+	// Field (2) 'ProofNodes'
+	for ii := 0; ii < len(m.ProofNodes); ii++ {
+		size += 4
+		size += len(m.ProofNodes[ii])
+	}
+
+	return
+}
+
+// MarshalSSZ ssz marshals the PoetProof object
+func (p *PoetProof) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PoetProof object to a target array
+func (p *PoetProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(16)
+
+	// Offset (0) 'MerkleProof'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += p.MerkleProof.SizeSSZ()
+
+	// Offset (1) 'Members'
+	dst = ssz.WriteOffset(dst, offset)
+	for ii := 0; ii < len(p.Members); ii++ {
+		offset += 4
+		offset += len(p.Members[ii])
+	}
+
+	// Field (2) 'LeafCount'
+	dst = ssz.MarshalUint64(dst, p.LeafCount)
+
+	// Field (0) 'MerkleProof'
+	if dst, err = p.MerkleProof.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'Members'
+	if len(p.Members) > 1024 {
+		err = ssz.ErrListTooBig
+		return
+	}
+	{
+		offset = 4 * len(p.Members)
+		for ii := 0; ii < len(p.Members); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += len(p.Members[ii])
+		}
+	}
+	for ii := 0; ii < len(p.Members); ii++ {
+		if len(p.Members[ii]) > 1024 {
+			err = ssz.ErrBytesLength
+			return
+		}
+		dst = append(dst, p.Members[ii]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PoetProof object
+func (p *PoetProof) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 16 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1 uint64
+
+	// Offset (0) 'MerkleProof'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Offset (1) 'Members'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Field (2) 'LeafCount'
+	p.LeafCount = ssz.UnmarshallUint64(buf[8:16])
+
+	// Field (0) 'MerkleProof'
+	{
+		buf = tail[o0:o1]
+		if err = p.MerkleProof.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (1) 'Members'
+	{
+		buf = tail[o1:]
+		num, err := ssz.DecodeDynamicLength(buf, 1024)
+		if err != nil {
+			return err
+		}
+		p.Members = make([][]byte, num)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if len(buf) > 1024 {
+				return ssz.ErrBytesLength
+			}
+			if cap(p.Members[indx]) == 0 {
+				p.Members[indx] = make([]byte, 0, len(buf))
+			}
+			p.Members[indx] = append(p.Members[indx], buf...)
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PoetProof object
+func (p *PoetProof) SizeSSZ() (size int) {
+	size = 16
+
+	// Field (0) 'MerkleProof'
+	size += p.MerkleProof.SizeSSZ()
+
+	// Field (1) 'Members'
+	for ii := 0; ii < len(p.Members); ii++ {
+		size += 4
+		size += len(p.Members[ii])
+	}
+
+	return
+}
+
+// MarshalSSZ ssz marshals the NIPost object
+func (n *NIPost) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(n)
+}
+
+// MarshalSSZTo ssz marshals the NIPost object to a target array
+func (n *NIPost) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(40)
+
+	// Field (0) 'Challenge'
+	dst = append(dst, n.Challenge[:]...)
+
+	// Offset (1) 'Proof'
+	dst = ssz.WriteOffset(dst, offset)
+	if n.Proof == nil {
+		n.Proof = new(Proof)
+	}
+	offset += n.Proof.SizeSSZ()
+
+	// Offset (2) 'PostMetadata'
+	dst = ssz.WriteOffset(dst, offset)
+	if n.PostMetadata == nil {
+		n.PostMetadata = new(PostMetadata)
+	}
+	offset += n.PostMetadata.SizeSSZ()
+
+	// Field (1) 'Proof'
+	if dst, err = n.Proof.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'PostMetadata'
+	if dst, err = n.PostMetadata.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the NIPost object
+func (n *NIPost) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 40 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o1, o2 uint64
+
+	// Field (0) 'Challenge'
+	copy(n.Challenge[:], buf[0:32])
+
+	// Offset (1) 'Proof'
+	if o1 = ssz.ReadOffset(buf[32:36]); o1 > size {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'PostMetadata'
+	if o2 = ssz.ReadOffset(buf[36:40]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Field (1) 'Proof'
+	{
+		buf = tail[o1:o2]
+		if n.Proof == nil {
+			n.Proof = new(Proof)
+		}
+		if err = n.Proof.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (2) 'PostMetadata'
+	{
+		buf = tail[o2:]
+		if n.PostMetadata == nil {
+			n.PostMetadata = new(PostMetadata)
+		}
+		if err = n.PostMetadata.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the NIPost object
+func (n *NIPost) SizeSSZ() (size int) {
+	size = 40
+
+	// Field (1) 'Proof'
+	if n.Proof == nil {
+		n.Proof = new(Proof)
+	}
+	size += n.Proof.SizeSSZ()
+
+	// Field (2) 'PostMetadata'
+	if n.PostMetadata == nil {
+		n.PostMetadata = new(PostMetadata)
+	}
+	size += n.PostMetadata.SizeSSZ()
+
+	return
+}
+
+// MarshalSSZ ssz marshals the Proof object
+func (p *Proof) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the Proof object to a target array
+func (p *Proof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(8)
+
+	// Field (0) 'Nonce'
+	dst = ssz.MarshalUint32(dst, p.Nonce)
+
+	// Offset (1) 'Indices'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.Indices)
+
+	// Field (1) 'Indices'
+	if len(p.Indices) > 1024 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, p.Indices...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the Proof object
+func (p *Proof) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 8 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o1 uint64
+
+	// Field (0) 'Nonce'
+	p.Nonce = ssz.UnmarshallUint32(buf[0:4])
+
+	// Offset (1) 'Indices'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size {
+		return ssz.ErrOffset
+	}
+
+	// Field (1) 'Indices'
+	{
+		buf = tail[o1:]
+		if len(buf) > 1024 {
+			return ssz.ErrBytesLength
+		}
+		if cap(p.Indices) == 0 {
+			p.Indices = make([]byte, 0, len(buf))
+		}
+		p.Indices = append(p.Indices, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the Proof object
+func (p *Proof) SizeSSZ() (size int) {
+	size = 8
+
+	// Field (1) 'Indices'
+	size += len(p.Indices)
+
+	return
+}
+
+// MarshalSSZ ssz marshals the PostMetadata object
+func (p *PostMetadata) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PostMetadata object to a target array
+func (p *PostMetadata) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(36)
+
+	// Offset (0) 'Challenge'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.Challenge)
+
+	// Field (1) 'BitsPerLabel'
+	dst = ssz.MarshalUint64(dst, p.BitsPerLabel)
+
+	// Field (2) 'LabelsPerUnit'
+	dst = ssz.MarshalUint64(dst, p.LabelsPerUnit)
+
+	// Field (3) 'K1'
+	dst = ssz.MarshalUint64(dst, p.K1)
+
+	// Field (4) 'K2'
+	dst = ssz.MarshalUint64(dst, p.K2)
+
+	// Field (0) 'Challenge'
+	if len(p.Challenge) > 1024 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, p.Challenge...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PostMetadata object
+func (p *PostMetadata) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 36 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'Challenge'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Field (1) 'BitsPerLabel'
+	p.BitsPerLabel = ssz.UnmarshallUint64(buf[4:12])
+
+	// Field (2) 'LabelsPerUnit'
+	p.LabelsPerUnit = ssz.UnmarshallUint64(buf[12:20])
+
+	// Field (3) 'K1'
+	p.K1 = ssz.UnmarshallUint64(buf[20:28])
+
+	// Field (4) 'K2'
+	p.K2 = ssz.UnmarshallUint64(buf[28:36])
+
+	// Field (0) 'Challenge'
+	{
+		buf = tail[o0:]
+		if len(buf) > 1024 {
+			return ssz.ErrBytesLength
+		}
+		if cap(p.Challenge) == 0 {
+			p.Challenge = make([]byte, 0, len(buf))
+		}
+		p.Challenge = append(p.Challenge, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PostMetadata object
+func (p *PostMetadata) SizeSSZ() (size int) {
+	size = 36
+
+	// Field (0) 'Challenge'
+	size += len(p.Challenge)
+
+	return
+}
+
 // MarshalSSZ ssz marshals the LayerID object
 func (l *LayerID) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(l)
@@ -37,6 +1027,101 @@ func (l *LayerID) UnmarshalSSZ(buf []byte) error {
 // SizeSSZ returns the ssz encoded size in bytes for the LayerID object
 func (l *LayerID) SizeSSZ() (size int) {
 	size = 4
+	return
+}
+
+// MarshalSSZ ssz marshals the NodeID object
+func (n *NodeID) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(n)
+}
+
+// MarshalSSZTo ssz marshals the NodeID object to a target array
+func (n *NodeID) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(8)
+
+	// Offset (0) 'Key'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(n.Key)
+
+	// Offset (1) 'VRFPublicKey'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(n.VRFPublicKey)
+
+	// Field (0) 'Key'
+	if len(n.Key) > 512 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, n.Key...)
+
+	// Field (1) 'VRFPublicKey'
+	if len(n.VRFPublicKey) > 512 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, n.VRFPublicKey...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the NodeID object
+func (n *NodeID) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 8 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1 uint64
+
+	// Offset (0) 'Key'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Offset (1) 'VRFPublicKey'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'Key'
+	{
+		buf = tail[o0:o1]
+		if len(buf) > 512 {
+			return ssz.ErrBytesLength
+		}
+		if cap(n.Key) == 0 {
+			n.Key = make([]byte, 0, len(buf))
+		}
+		n.Key = append(n.Key, buf...)
+	}
+
+	// Field (1) 'VRFPublicKey'
+	{
+		buf = tail[o1:]
+		if len(buf) > 512 {
+			return ssz.ErrBytesLength
+		}
+		if cap(n.VRFPublicKey) == 0 {
+			n.VRFPublicKey = make([]byte, 0, len(buf))
+		}
+		n.VRFPublicKey = append(n.VRFPublicKey, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the NodeID object
+func (n *NodeID) SizeSSZ() (size int) {
+	size = 8
+
+	// Field (0) 'Key'
+	size += len(n.Key)
+
+	// Field (1) 'VRFPublicKey'
+	size += len(n.VRFPublicKey)
+
 	return
 }
 
@@ -640,5 +1725,164 @@ func (d *DBBlock) SizeSSZ() (size int) {
 	// Field (3) 'MinerID'
 	size += len(d.MinerID)
 
+	return
+}
+
+// MarshalSSZ ssz marshals the Transaction object
+func (t *Transaction) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(t)
+}
+
+// MarshalSSZTo ssz marshals the Transaction object to a target array
+func (t *Transaction) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'InnerTransaction'
+	if dst, err = t.InnerTransaction.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	dst = append(dst, t.Signature[:]...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the Transaction object
+func (t *Transaction) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 116 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'InnerTransaction'
+	if err = t.InnerTransaction.UnmarshalSSZ(buf[0:52]); err != nil {
+		return err
+	}
+
+	// Field (1) 'Signature'
+	copy(t.Signature[:], buf[52:116])
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the Transaction object
+func (t *Transaction) SizeSSZ() (size int) {
+	size = 116
+	return
+}
+
+// MarshalSSZ ssz marshals the MeshTransaction object
+func (m *MeshTransaction) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(m)
+}
+
+// MarshalSSZTo ssz marshals the MeshTransaction object to a target array
+func (m *MeshTransaction) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'Transaction'
+	if dst, err = m.Transaction.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'LayerID'
+	if dst, err = m.LayerID.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (2) 'BlockID'
+	dst = append(dst, m.BlockID[:]...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the MeshTransaction object
+func (m *MeshTransaction) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 140 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'Transaction'
+	if err = m.Transaction.UnmarshalSSZ(buf[0:116]); err != nil {
+		return err
+	}
+
+	// Field (1) 'LayerID'
+	if err = m.LayerID.UnmarshalSSZ(buf[116:120]); err != nil {
+		return err
+	}
+
+	// Field (2) 'BlockID'
+	copy(m.BlockID[:], buf[120:140])
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the MeshTransaction object
+func (m *MeshTransaction) SizeSSZ() (size int) {
+	size = 140
+	return
+}
+
+// MarshalSSZ ssz marshals the InnerTransaction object
+func (i *InnerTransaction) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(i)
+}
+
+// MarshalSSZTo ssz marshals the InnerTransaction object to a target array
+func (i *InnerTransaction) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+
+	// Field (0) 'AccountNonce'
+	dst = ssz.MarshalUint64(dst, i.AccountNonce)
+
+	// Field (1) 'Recipient'
+	dst = append(dst, i.Recipient[:]...)
+
+	// Field (2) 'GasLimit'
+	dst = ssz.MarshalUint64(dst, i.GasLimit)
+
+	// Field (3) 'Fee'
+	dst = ssz.MarshalUint64(dst, i.Fee)
+
+	// Field (4) 'Amount'
+	dst = ssz.MarshalUint64(dst, i.Amount)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the InnerTransaction object
+func (i *InnerTransaction) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size != 52 {
+		return ssz.ErrSize
+	}
+
+	// Field (0) 'AccountNonce'
+	i.AccountNonce = ssz.UnmarshallUint64(buf[0:8])
+
+	// Field (1) 'Recipient'
+	copy(i.Recipient[:], buf[8:28])
+
+	// Field (2) 'GasLimit'
+	i.GasLimit = ssz.UnmarshallUint64(buf[28:36])
+
+	// Field (3) 'Fee'
+	i.Fee = ssz.UnmarshallUint64(buf[36:44])
+
+	// Field (4) 'Amount'
+	i.Amount = ssz.UnmarshallUint64(buf[44:52])
+
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the InnerTransaction object
+func (i *InnerTransaction) SizeSSZ() (size int) {
+	size = 52
 	return
 }
