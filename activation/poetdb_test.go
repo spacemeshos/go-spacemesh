@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	xdr "github.com/nullstyle/go-xdr/xdr3"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -24,7 +24,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	r.NoError(err)
 
 	var poetProof types.PoetProof
-	_, err = xdr.Unmarshal(file, &poetProof)
+	_, err = codec.DecodeFrom(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
 	poetID := []byte("poet_id_123456")
@@ -65,7 +65,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	r.NoError(err)
 
 	var poetProof types.PoetProof
-	_, err = xdr.Unmarshal(file, &poetProof)
+	_, err = codec.DecodeFrom(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
 	poetID := []byte("poet_id_123456")
@@ -113,7 +113,7 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	r.NoError(err)
 
 	var poetProof types.PoetProof
-	_, err = xdr.Unmarshal(file, &poetProof)
+	_, err = codec.DecodeFrom(file, &poetProof)
 	r.NoError(err)
 
 	err = poetDb.Validate(poetProof, poetID, "0", nil)

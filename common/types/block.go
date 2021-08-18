@@ -69,7 +69,7 @@ func NewLayerID(value uint32) LayerID {
 // Internally it is a simple wrapper over uint32 and should be considered immutable
 // the same way as any integer.
 type LayerID struct {
-	// NOTE(dshulyak) it is made public for compatibility with encoding library (xdr).
+	// NOTE(dshulyak) it is made public for compatibility with encoding library.
 	// Don't modify it directly, as it will likely to be made private in the future.
 	Value uint32
 }
