@@ -77,13 +77,6 @@ type AtxDB interface {
 	SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) error
 }
 
-// ProcessedLayer represents the last processed layer in mesh.
-// This struct is used to for data serialization.
-type ProcessedLayer struct {
-	ID   types.LayerID
-	Hash types.Hash32
-}
-
 // Mesh is the logic layer above our mesh.DB database
 type Mesh struct {
 	log.Log
@@ -96,7 +89,7 @@ type Mesh struct {
 	config              Config
 	latestLayer         types.LayerID
 	latestLayerInState  types.LayerID
-	processedLayer      ProcessedLayer
+	processedLayer      types.LayerID
 	nextProcessedLayers map[types.LayerID]*types.Layer
 	maxProcessedLayer   types.LayerID
 	mutex               sync.RWMutex
@@ -163,7 +156,6 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 	msh.With().Info("recovered mesh from disk",
 		log.FieldNamed("latest", msh.LatestLayer()),
 		log.FieldNamed("processed", msh.ProcessedLayer()),
-		log.String("layer_hash", msh.ProcessedLayerHash().ShortString()),
 		log.String("root_hash", pr.GetStateRoot().String()))
 
 	return msh
@@ -246,38 +238,27 @@ func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 
 // ProcessedLayer returns the last processed layer ID
 func (msh *Mesh) ProcessedLayer() types.LayerID {
-	return msh.getProcessedLayer().ID
-}
-
-// ProcessedLayerHash returns the aggregated hash of the last processed layer
-func (msh *Mesh) ProcessedLayerHash() types.Hash32 {
-	return msh.getProcessedLayer().Hash
-}
-
-func (msh *Mesh) getProcessedLayer() ProcessedLayer {
 	msh.mutex.RLock()
 	defer msh.mutex.RUnlock()
 	return msh.processedLayer
 }
 
-func (msh *Mesh) setProcessedLayerFromRecoveredData(pLayer *ProcessedLayer) {
+func (msh *Mesh) setProcessedLayerFromRecoveredData(pLayer types.LayerID) {
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
-	msh.processedLayer = *pLayer
-	msh.Event().Info("processed layer set from recovered data",
-		pLayer.ID,
-		log.String("layer_hash", pLayer.Hash.ShortString()))
+	msh.processedLayer = pLayer
+	msh.Event().Info("processed layer set from recovered data", pLayer)
 }
 
 func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 	msh.persistLayerHash(layer.Index(), msh.calcSimpleLayerHash(layer))
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
-	if !layer.Index().After(msh.processedLayer.ID) {
+	if !layer.Index().After(msh.processedLayer) {
 		msh.With().Info("trying to set processed layer to an older layer",
-			log.FieldNamed("processed", msh.processedLayer.ID),
-			log.FieldNamed("old_layer", layer.Index()))
-		for i := layer.Index(); !i.After(msh.processedLayer.ID); i = i.Add(1) {
+			log.FieldNamed("processed", msh.processedLayer),
+			layer.Index())
+		for i := layer.Index(); !i.After(msh.processedLayer); i = i.Add(1) {
 			lyr, err := msh.GetLayer(i)
 			if err != nil {
 				msh.With().Error("failed to get layer", i, log.Err(err))
@@ -293,14 +274,10 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 			msh.With().Info("aggregated hash updated for layer",
 				log.FieldNamed("updated_layer", i),
 				log.String("updated_hash", newAggHash.ShortString()))
-			if i == msh.processedLayer.ID {
-				msh.processedLayer.Hash = newAggHash
-			}
 		}
-		if err := msh.persistProcessedLayer(&msh.processedLayer); err != nil {
+		if err := msh.persistProcessedLayer(msh.processedLayer); err != nil {
 			msh.With().Error("failed to persist processed layer",
-				log.FieldNamed("processed", msh.processedLayer.ID),
-				log.String("processed_layer_hash", msh.processedLayer.Hash.ShortString()),
+				log.FieldNamed("processed", msh.processedLayer),
 				log.Err(err))
 		}
 		return
@@ -310,10 +287,10 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 		msh.maxProcessedLayer = layer.Index()
 	}
 
-	if layer.Index() != msh.processedLayer.ID.Add(1) {
+	if layer.Index() != msh.processedLayer.Add(1) {
 		msh.With().Info("trying to set processed layer out of order",
-			log.FieldNamed("processed", msh.processedLayer.ID),
-			log.FieldNamed("new_layer", layer.Index()))
+			log.FieldNamed("processed", msh.processedLayer),
+			layer.Index())
 		msh.nextProcessedLayers[layer.Index()] = layer
 		return
 	}
@@ -326,24 +303,26 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 		if !ok {
 			break
 		}
-		aggHash := msh.calcAggregatedLayerHash(lyr, lastProcessed.Hash)
+		prevHash, err := msh.getAggregatedLayerHash(i.Sub(1))
+		if err != nil {
+			msh.With().Error("failed to get previous aggregated hash", i)
+			return
+		}
+		aggHash := msh.calcAggregatedLayerHash(lyr, prevHash)
 		msh.persistAggregatedLayerHash(i, aggHash)
 		msh.With().Info("aggregated hash set for layer",
 			i,
 			log.String("layer_hash", aggHash.ShortString()))
-		lastProcessed = ProcessedLayer{ID: i, Hash: aggHash}
+		lastProcessed = i
 		delete(msh.nextProcessedLayers, i)
 	}
 	msh.processedLayer = lastProcessed
 	events.ReportNodeStatusUpdate()
-	msh.Event().Info("processed layer set",
-		msh.processedLayer.ID,
-		log.String("layer_hash", msh.processedLayer.Hash.ShortString()))
+	msh.Event().Info("processed layer set", msh.processedLayer)
 
-	if err := msh.persistProcessedLayer(&lastProcessed); err != nil {
+	if err := msh.persistProcessedLayer(msh.processedLayer); err != nil {
 		msh.With().Error("failed to persist processed layer",
-			log.FieldNamed("processed", lastProcessed.ID),
-			log.String("processed_layer_hash", lastProcessed.Hash.ShortString()),
+			log.FieldNamed("processed", lastProcessed),
 			log.Err(err))
 	}
 }

@@ -409,31 +409,20 @@ func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blk
 	return m.inputVector.Put(id.Bytes(), buf)
 }
 
-func (m *DB) persistProcessedLayer(lyr *ProcessedLayer) error {
-	data, err := types.InterfaceToBytes(lyr)
-	if err != nil {
+func (m *DB) persistProcessedLayer(layerID types.LayerID) error {
+	if err := m.general.Put(constPROCESSED, layerID.Bytes()); err != nil {
 		return err
 	}
-	if err := m.general.Put(constPROCESSED, data); err != nil {
-		return err
-	}
-	m.With().Debug("persisted processed layer",
-		lyr.ID,
-		log.String("layer_hash", lyr.Hash.ShortString()))
+	m.With().Debug("persisted processed layer", layerID)
 	return nil
 }
 
-func (m *DB) recoverProcessedLayer() (*ProcessedLayer, error) {
-	processed, err := m.general.Get(constPROCESSED)
+func (m *DB) recoverProcessedLayer() (types.LayerID, error) {
+	data, err := m.general.Get(constPROCESSED)
 	if err != nil {
-		return nil, err
+		return types.NewLayerID(0), err
 	}
-	var data ProcessedLayer
-	err = types.BytesToInterface(processed, &data)
-	if err != nil {
-		return nil, err
-	}
-	return &data, nil
+	return types.BytesToLayerID(data), nil
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
