@@ -197,17 +197,15 @@ func (t *BlockBuilder) createBlock(ctx context.Context, id types.LayerID, atxID 
 	}
 
 	b := types.MiniBlock{
-		BlockHeader: types.BlockHeader{
-			LayerIndex:       id,
-			ATXID:            atxID,
-			EligibilityProof: eligibilityProof,
-			Data:             nil,
-			BaseBlock:        base,
-			AgainstDiff:      diffs[0],
-			ForDiff:          diffs[1],
-			NeutralDiff:      diffs[2],
-		},
-		TxIDs: txids,
+		LayerIndex:       id,
+		ATXID:            atxID,
+		EligibilityProof: eligibilityProof,
+		Data:             nil,
+		BaseBlock:        base,
+		AgainstDiff:      diffs[0],
+		ForDiff:          diffs[1],
+		NeutralDiff:      diffs[2],
+		TxIDs:            txids,
 	}
 	epoch := id.GetEpoch()
 	refBlock, err := t.getRefBlock(epoch)
@@ -221,7 +219,7 @@ func (t *BlockBuilder) createBlock(ctx context.Context, id types.LayerID, atxID 
 		t.With().Debug("creating block with reference block (no active set)",
 			log.Int("active_set_size", len(activeSet)),
 			log.FieldNamed("ref_block", refBlock))
-		b.RefBlock = &refBlock
+		b.RefBlock = refBlock[:]
 	}
 
 	blockBytes, err := types.InterfaceToBytes(b)

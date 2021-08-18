@@ -232,28 +232,6 @@ type BlockEligibilityProof struct {
 	Sig []byte `ssz-max:"256"`
 }
 
-// BlockHeader includes all of a block's fields, except the list of transaction IDs, activation transaction IDs and the
-// signature.
-// TODO: consider combining this with MiniBlock, since this type isn't used independently anywhere.
-type BlockHeader struct {
-	LayerIndex       LayerID
-	ATXID            ATXID
-	EligibilityProof BlockEligibilityProof
-	Data             []byte `ssz-max:"4096"`
-	Coin             bool
-
-	BaseBlock BlockID
-
-	AgainstDiff []BlockID `ssz-max:"1024"`
-	ForDiff     []BlockID `ssz-max:"1024"`
-	NeutralDiff []BlockID `ssz-max:"1024"`
-}
-
-// Layer returns the block's LayerID.
-func (b BlockHeader) Layer() LayerID {
-	return b.LayerIndex
-}
-
 // MiniBlock includes all of a block's fields, except for the signature. This structure is serialized and signed to
 // produce the block signature.
 type MiniBlock struct {
@@ -270,11 +248,20 @@ type MiniBlock struct {
 	NeutralDiff []BlockID       `ssz-max:"1024"`
 	TxIDs       []TransactionID `ssz-max:"1024"`
 	ActiveSet   []ATXID         `ssz-max:"1024"`
-	RefBlock    BlockID
+	RefBlock    []byte          `ssz-max:"20"`
+}
+
+func (b *MiniBlock) GetRefBlock() *BlockID {
+	if len(b.RefBlock) == 0 {
+		return nil
+	}
+	var id BlockID
+	copy(id[:], b.RefBlock)
+	return &id
 }
 
 // Layer returns the block's LayerID.
-func (b MiniBlock) Layer() LayerID {
+func (b *MiniBlock) Layer() LayerID {
 	return b.LayerIndex
 }
 
@@ -282,9 +269,9 @@ func (b MiniBlock) Layer() LayerID {
 type Block struct {
 	MiniBlock
 	// keep id and minerID private to prevent them from being serialized
-	id        BlockID            // ⚠️ keep private
-	minerID   *signing.PublicKey // ⚠️ keep private
-	Signature []byte
+	Signature []byte `ssz-max:"256"`
+	id        BlockID
+	minerID   *signing.PublicKey
 }
 
 // Bytes returns the serialization of the MiniBlock.
@@ -309,7 +296,7 @@ func (b *Block) Fields() []log.LoggableField {
 		log.Int("abstains", len(b.NeutralDiff)),
 		b.ATXID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
-		log.FieldNamed("ref_block", b.RefBlock),
+		log.FieldNamed("ref_block", b.GetRefBlock()),
 		log.Int("active_set_size", len(b.ActiveSet)),
 		log.Int("tx_count", len(b.TxIDs)),
 	}
@@ -354,7 +341,7 @@ func (b *Block) MinerID() *signing.PublicKey {
 
 // DBBlock is a Block structure as it is stored in DB.
 type DBBlock struct {
-	MiniBlock MiniBlock
+	MiniBlock
 	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
 	// to break if in future key for database will be changed
 	ID        BlockID

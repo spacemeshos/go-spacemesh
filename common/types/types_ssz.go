@@ -40,22 +40,6 @@ func (l *LayerID) SizeSSZ() (size int) {
 	return
 }
 
-// HashTreeRoot ssz hashes the LayerID object
-func (l *LayerID) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(l)
-}
-
-// HashTreeRootWith ssz hashes the LayerID object with a hasher
-func (l *LayerID) HashTreeRootWith(hh *ssz.Hasher) (err error) {
-	indx := hh.Index()
-
-	// Field (0) 'Value'
-	hh.PutUint32(l.Value)
-
-	hh.Merkleize(indx)
-	return
-}
-
 // MarshalSSZ ssz marshals the BlockEligibilityProof object
 func (b *BlockEligibilityProof) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(b)
@@ -126,29 +110,6 @@ func (b *BlockEligibilityProof) SizeSSZ() (size int) {
 	return
 }
 
-// HashTreeRoot ssz hashes the BlockEligibilityProof object
-func (b *BlockEligibilityProof) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(b)
-}
-
-// HashTreeRootWith ssz hashes the BlockEligibilityProof object with a hasher
-func (b *BlockEligibilityProof) HashTreeRootWith(hh *ssz.Hasher) (err error) {
-	indx := hh.Index()
-
-	// Field (0) 'J'
-	hh.PutUint32(b.J)
-
-	// Field (1) 'Sig'
-	if len(b.Sig) > 256 {
-		err = ssz.ErrBytesLength
-		return
-	}
-	hh.PutBytes(b.Sig)
-
-	hh.Merkleize(indx)
-	return
-}
-
 // MarshalSSZ ssz marshals the MiniBlock object
 func (m *MiniBlock) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(m)
@@ -157,7 +118,7 @@ func (m *MiniBlock) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the MiniBlock object to a target array
 func (m *MiniBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(105)
+	offset := int(89)
 
 	// Field (0) 'LayerIndex'
 	if dst, err = m.LayerIndex.MarshalSSZTo(dst); err != nil {
@@ -201,8 +162,9 @@ func (m *MiniBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(m.ActiveSet) * 32
 
-	// Field (11) 'RefBlock'
-	dst = append(dst, m.RefBlock[:]...)
+	// Offset (11) 'RefBlock'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(m.RefBlock)
 
 	// Field (2) 'EligibilityProof'
 	if dst, err = m.EligibilityProof.MarshalSSZTo(dst); err != nil {
@@ -261,6 +223,13 @@ func (m *MiniBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = append(dst, m.ActiveSet[ii][:]...)
 	}
 
+	// Field (11) 'RefBlock'
+	if len(m.RefBlock) > 20 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, m.RefBlock...)
+
 	return
 }
 
@@ -268,12 +237,12 @@ func (m *MiniBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 105 {
+	if size < 89 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o2, o3, o6, o7, o8, o9, o10 uint64
+	var o2, o3, o6, o7, o8, o9, o10, o11 uint64
 
 	// Field (0) 'LayerIndex'
 	if err = m.LayerIndex.UnmarshalSSZ(buf[0:4]); err != nil {
@@ -324,8 +293,10 @@ func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	// Field (11) 'RefBlock'
-	copy(m.RefBlock[:], buf[85:105])
+	// Offset (11) 'RefBlock'
+	if o11 = ssz.ReadOffset(buf[85:89]); o11 > size || o10 > o11 {
+		return ssz.ErrOffset
+	}
 
 	// Field (2) 'EligibilityProof'
 	{
@@ -401,7 +372,7 @@ func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 
 	// Field (10) 'ActiveSet'
 	{
-		buf = tail[o10:]
+		buf = tail[o10:o11]
 		num, err := ssz.DivideInt2(len(buf), 32, 1024)
 		if err != nil {
 			return err
@@ -411,12 +382,24 @@ func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 			copy(m.ActiveSet[ii][:], buf[ii*32:(ii+1)*32])
 		}
 	}
+
+	// Field (11) 'RefBlock'
+	{
+		buf = tail[o11:]
+		if len(buf) > 20 {
+			return ssz.ErrBytesLength
+		}
+		if cap(m.RefBlock) == 0 {
+			m.RefBlock = make([]byte, 0, len(buf))
+		}
+		m.RefBlock = append(m.RefBlock, buf...)
+	}
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the MiniBlock object
 func (m *MiniBlock) SizeSSZ() (size int) {
-	size = 105
+	size = 89
 
 	// Field (2) 'EligibilityProof'
 	size += m.EligibilityProof.SizeSSZ()
@@ -439,118 +422,98 @@ func (m *MiniBlock) SizeSSZ() (size int) {
 	// Field (10) 'ActiveSet'
 	size += len(m.ActiveSet) * 32
 
+	// Field (11) 'RefBlock'
+	size += len(m.RefBlock)
+
 	return
 }
 
-// HashTreeRoot ssz hashes the MiniBlock object
-func (m *MiniBlock) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(m)
+// MarshalSSZ ssz marshals the Block object
+func (b *Block) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
 }
 
-// HashTreeRootWith ssz hashes the MiniBlock object with a hasher
-func (m *MiniBlock) HashTreeRootWith(hh *ssz.Hasher) (err error) {
-	indx := hh.Index()
+// MarshalSSZTo ssz marshals the Block object to a target array
+func (b *Block) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(8)
 
-	// Field (0) 'LayerIndex'
-	if err = m.LayerIndex.HashTreeRootWith(hh); err != nil {
+	// Offset (0) 'MiniBlock'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += b.MiniBlock.SizeSSZ()
+
+	// Offset (1) 'Signature'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.Signature)
+
+	// Field (0) 'MiniBlock'
+	if dst, err = b.MiniBlock.MarshalSSZTo(dst); err != nil {
 		return
 	}
 
-	// Field (1) 'ATXID'
-	hh.PutBytes(m.ATXID[:])
-
-	// Field (2) 'EligibilityProof'
-	if err = m.EligibilityProof.HashTreeRootWith(hh); err != nil {
-		return
-	}
-
-	// Field (3) 'Data'
-	if len(m.Data) > 4096 {
+	// Field (1) 'Signature'
+	if len(b.Signature) > 256 {
 		err = ssz.ErrBytesLength
 		return
 	}
-	hh.PutBytes(m.Data)
+	dst = append(dst, b.Signature...)
 
-	// Field (4) 'Coin'
-	hh.PutBool(m.Coin)
+	return
+}
 
-	// Field (5) 'BaseBlock'
-	hh.PutBytes(m.BaseBlock[:])
-
-	// Field (6) 'AgainstDiff'
-	{
-		if len(m.AgainstDiff) > 1024 {
-			err = ssz.ErrListTooBig
-			return
-		}
-		subIndx := hh.Index()
-		for _, i := range m.AgainstDiff {
-			hh.Append(i[:])
-		}
-		numItems := uint64(len(m.AgainstDiff))
-		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(1024, numItems, 32))
+// UnmarshalSSZ ssz unmarshals the Block object
+func (b *Block) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 8 {
+		return ssz.ErrSize
 	}
 
-	// Field (7) 'ForDiff'
-	{
-		if len(m.ForDiff) > 1024 {
-			err = ssz.ErrListTooBig
-			return
-		}
-		subIndx := hh.Index()
-		for _, i := range m.ForDiff {
-			hh.Append(i[:])
-		}
-		numItems := uint64(len(m.ForDiff))
-		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(1024, numItems, 32))
+	tail := buf
+	var o0, o1 uint64
+
+	// Offset (0) 'MiniBlock'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
 	}
 
-	// Field (8) 'NeutralDiff'
-	{
-		if len(m.NeutralDiff) > 1024 {
-			err = ssz.ErrListTooBig
-			return
-		}
-		subIndx := hh.Index()
-		for _, i := range m.NeutralDiff {
-			hh.Append(i[:])
-		}
-		numItems := uint64(len(m.NeutralDiff))
-		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(1024, numItems, 32))
+	// Offset (1) 'Signature'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
 	}
 
-	// Field (9) 'TxIDs'
+	// Field (0) 'MiniBlock'
 	{
-		if len(m.TxIDs) > 1024 {
-			err = ssz.ErrListTooBig
-			return
+		buf = tail[o0:o1]
+		if err = b.MiniBlock.UnmarshalSSZ(buf); err != nil {
+			return err
 		}
-		subIndx := hh.Index()
-		for _, i := range m.TxIDs {
-			hh.Append(i[:])
-		}
-		numItems := uint64(len(m.TxIDs))
-		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(1024, numItems, 32))
 	}
 
-	// Field (10) 'ActiveSet'
+	// Field (1) 'Signature'
 	{
-		if len(m.ActiveSet) > 1024 {
-			err = ssz.ErrListTooBig
-			return
+		buf = tail[o1:]
+		if len(buf) > 256 {
+			return ssz.ErrBytesLength
 		}
-		subIndx := hh.Index()
-		for _, i := range m.ActiveSet {
-			hh.Append(i[:])
+		if cap(b.Signature) == 0 {
+			b.Signature = make([]byte, 0, len(buf))
 		}
-		numItems := uint64(len(m.ActiveSet))
-		hh.MerkleizeWithMixin(subIndx, numItems, ssz.CalculateLimit(1024, numItems, 32))
+		b.Signature = append(b.Signature, buf...)
 	}
+	return err
+}
 
-	// Field (11) 'RefBlock'
-	hh.PutBytes(m.RefBlock[:])
+// SizeSSZ returns the ssz encoded size in bytes for the Block object
+func (b *Block) SizeSSZ() (size int) {
+	size = 8
 
-	hh.Merkleize(indx)
+	// Field (0) 'MiniBlock'
+	size += b.MiniBlock.SizeSSZ()
+
+	// Field (1) 'Signature'
+	size += len(b.Signature)
+
 	return
 }
 
@@ -677,40 +640,5 @@ func (d *DBBlock) SizeSSZ() (size int) {
 	// Field (3) 'MinerID'
 	size += len(d.MinerID)
 
-	return
-}
-
-// HashTreeRoot ssz hashes the DBBlock object
-func (d *DBBlock) HashTreeRoot() ([32]byte, error) {
-	return ssz.HashWithDefaultHasher(d)
-}
-
-// HashTreeRootWith ssz hashes the DBBlock object with a hasher
-func (d *DBBlock) HashTreeRootWith(hh *ssz.Hasher) (err error) {
-	indx := hh.Index()
-
-	// Field (0) 'MiniBlock'
-	if err = d.MiniBlock.HashTreeRootWith(hh); err != nil {
-		return
-	}
-
-	// Field (1) 'ID'
-	hh.PutBytes(d.ID[:])
-
-	// Field (2) 'Signature'
-	if len(d.Signature) > 256 {
-		err = ssz.ErrBytesLength
-		return
-	}
-	hh.PutBytes(d.Signature)
-
-	// Field (3) 'MinerID'
-	if len(d.MinerID) > 256 {
-		err = ssz.ErrBytesLength
-		return
-	}
-	hh.PutBytes(d.MinerID)
-
-	hh.Merkleize(indx)
 	return
 }

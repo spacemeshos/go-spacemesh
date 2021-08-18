@@ -110,7 +110,7 @@ func init() {
 	// after the global vars
 	block1.ATXID = globalAtx.ID()
 	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
-	block1.ActiveSet = &[]types.ATXID{globalAtx.ID(), globalAtx2.ID()}
+	block1.ActiveSet = []types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 	txAPI.returnTx[globalTx.ID()] = globalTx
 	txAPI.returnTx[globalTx2.ID()] = globalTx2
 	types.SetLayersPerEpoch(layersPerEpoch)

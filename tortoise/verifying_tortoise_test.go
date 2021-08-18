@@ -224,10 +224,9 @@ func turtleMakeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, bloc
 	for i := 0; i < blocksPerLayer; i++ {
 		blk := &types.Block{
 			MiniBlock: types.MiniBlock{
-				BlockHeader: types.BlockHeader{
-					LayerIndex: l,
-					Data:       []byte(strconv.Itoa(i))},
-				TxIDs: nil,
+				LayerIndex: l,
+				Data:       []byte(strconv.Itoa(i)),
+				TxIDs:      nil,
 			}}
 		blk.BaseBlock = b
 		blk.AgainstDiff = lists[0]
@@ -322,10 +321,9 @@ func createTurtleLayer(ctx context.Context, l types.LayerID, msh *mesh.DB, bbp b
 	for i := 0; i < blocksPerLayer; i++ {
 		blk := &types.Block{
 			MiniBlock: types.MiniBlock{
-				BlockHeader: types.BlockHeader{
-					LayerIndex: l,
-					Data:       []byte(strconv.Itoa(i))},
-				TxIDs: nil,
+				LayerIndex: l,
+				Data:       []byte(strconv.Itoa(i)),
+				TxIDs:      nil,
 			}}
 		blk.BaseBlock = b
 		blk.AgainstDiff = lists[0]

@@ -181,7 +181,7 @@ func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
 	lg := logtest.New(t).WithName(nodeID.Key[:5])
 	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider, validateVRF, nil, lg.WithName("blkElgValidator"))
 	block := newBlockWithEligibility(types.NewLayerID(layersPerEpoch*2), atxID, types.BlockEligibilityProof{}, activationDB)
-	block.ActiveSet = &[]types.ATXID{}
+	block.ActiveSet = []types.ATXID{}
 	eligible, err := validator.BlockSignedAndEligible(block)
 	r.EqualError(err, "failed to get number of eligible blocks: zero total weight not allowed")
 	r.False(eligible)
@@ -319,13 +319,13 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 func newBlockWithEligibility(layerID types.LayerID, atxID types.ATXID, proof types.BlockEligibilityProof,
 	db *mockActivationDB) *types.Block {
 
-	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{
+	block := &types.Block{MiniBlock: types.MiniBlock{
 		LayerIndex:       layerID,
 		ATXID:            atxID,
 		EligibilityProof: proof,
-	}}}
+	}}
 	epochAtxs := db.GetEpochAtxs(layerID.GetEpoch())
-	block.ActiveSet = &epochAtxs
+	block.ActiveSet = epochAtxs
 	block.Signature = edSigner.Sign(block.Bytes())
 	if db.atxs == nil {
 		db.atxs = map[string]map[types.LayerID]types.ATXID{}

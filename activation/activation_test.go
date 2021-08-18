@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	//	"github.com/spacemeshos/post/config"
 )
 
 // ========== Vars / Consts ==========

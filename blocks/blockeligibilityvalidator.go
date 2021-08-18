@@ -50,10 +50,10 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	var err error
 	activeSetBlock := block
 	if block.RefBlock != nil {
-		activeSetBlock, err = v.blocks.GetBlock(*block.RefBlock)
+		activeSetBlock, err = v.blocks.GetBlock(*block.GetRefBlock())
 		if err != nil {
 			// block should be present because we've synced it in the calling function
-			return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
+			return false, fmt.Errorf("cannot get refrence block %v", *block.GetRefBlock())
 		}
 
 	}

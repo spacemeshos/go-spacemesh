@@ -383,7 +383,7 @@ func (t *turtle) processBlock(block *types.Block) error {
 		return fmt.Errorf("can't find baseblock")
 	}
 
-	t.logger.With().Debug("block supports", types.BlockIdsField(block.BlockHeader.ForDiff))
+	t.logger.With().Debug("block supports", types.BlockIdsField(block.ForDiff))
 	t.logger.With().Debug("checking baseblock", base.Fields()...)
 
 	layerOpinions, ok := t.BlockOpinionsByLayer[base.LayerIndex]

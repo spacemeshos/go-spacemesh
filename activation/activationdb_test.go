@@ -32,7 +32,7 @@ func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, n
 		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
 		block1.ForDiff = append(block1.ForDiff, votes...)
 		for _, atx := range atxs {
-			*block1.ActiveSet = append(*block1.ActiveSet, atx.ID())
+			block1.ActiveSet = append(block1.ActiveSet, atx.ID())
 		}
 	loop:
 		for _, v := range views {
@@ -184,7 +184,7 @@ func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, id types.LayerID, numOfBlo
 		if i < len(atxs) {
 			activeSet = append(activeSet, atxs[i].ID())
 		}
-		block1.ActiveSet = &activeSet
+		block1.ActiveSet = activeSet
 	viewLoop:
 		for _, v := range views {
 			for _, vv := range votes {

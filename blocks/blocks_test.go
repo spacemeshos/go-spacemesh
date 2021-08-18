@@ -167,17 +167,17 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 
 	// unique
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid3}
-	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
+	b.ActiveSet = []types.ATXID{atx1, atx2, atx3}
 	r.Nil(validateUniqueTxAtx(b))
 
 	// dup txs
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
-	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
+	b.ActiveSet = []types.ATXID{atx1, atx2, atx3}
 	r.EqualError(validateUniqueTxAtx(b), errDupTx.Error())
 
 	// dup atxs
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid3}
-	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx1}
+	b.ActiveSet = []types.ATXID{atx1, atx2, atx1}
 	r.EqualError(validateUniqueTxAtx(b), errDupAtx.Error())
 }
 
@@ -192,11 +192,11 @@ func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	err := s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.EqualError(err, errNoActiveSet.Error())
 
-	b.ActiveSet = &[]types.ATXID{}
+	b.ActiveSet = []types.ATXID{}
 	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.EqualError(err, errZeroActiveSet.Error())
 
-	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
+	b.ActiveSet = []types.ATXID{atx1, atx2, atx3}
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
 	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
 	r.EqualError(err, errDupTx.Error())
@@ -220,15 +220,15 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	b := &types.Block{}
 	b.TxIDs = []types.TransactionID{}
 	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
-	block1.ActiveSet = &[]types.ATXID{a.ID()}
+	block1.ActiveSet = []types.ATXID{a.ID()}
 	block1.ATXID = a.ID()
 	block1.Initialize()
 	block1ID := block1.ID()
-	b.RefBlock = &block1ID
+	b.RefBlock = block1ID[:]
 	b.ATXID = a.ID()
 	fetch.retError = true
 	err := s.blockSyntacticValidation(context.TODO(), b, fetch)
-	r.Equal(err, fmt.Errorf("failed to fetch ref block %v e: error", *b.RefBlock))
+	r.Equal(err, fmt.Errorf("failed to fetch ref block %v e: error", *b.GetRefBlock()))
 
 	fetch.retError = false
 	err = s.blockSyntacticValidation(context.TODO(), b, fetch)

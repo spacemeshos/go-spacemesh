@@ -201,7 +201,7 @@ func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, 
 		if b.ActiveSet == nil {
 			return false, nil
 		}
-		for _, id := range *b.ActiveSet {
+		for _, id := range b.ActiveSet {
 			atx, err := db.GetAtxHeader(id)
 			if err != nil {
 				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortString()) // TODO: handle inconsistent state
