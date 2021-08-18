@@ -283,7 +283,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	for it.Next() {
 		if len(it.Key()) == len(layerBuf) {
 			zero = true
-			break
+			continue
 		}
 		var id types.BlockID
 		copy(id[:], it.Key()[len(layerBuf):])
