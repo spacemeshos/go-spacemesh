@@ -97,11 +97,11 @@ func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, p
 	for _, req := range r.Requests {
 		m.SendCalled[req.Hash]++
 		if r, ok := m.Responses[req.Hash]; ok {
-			res.Responses = append(res.Responses, r)
+			res.Responses = append(res.Responses, &r)
 		}
 	}
 	res.ID = r.ID
-	bts, _ := types.InterfaceToBytes(res)
+	bts, _ := types.InterfaceToBytes(&res)
 	if m.AsyncChannel != nil {
 		go func(data []byte) {
 			<-m.AsyncChannel

@@ -102,7 +102,7 @@ type batchInfo struct {
 
 // SetID calculates the hash of all requests and sets it as this batches ID
 func (b *batchInfo) SetID() {
-	bts, err := types.InterfaceToBytes(b.Requests)
+	bts, err := types.InterfaceToBytes(&b.requestBatch)
 	if err != nil {
 		return
 	}
@@ -110,8 +110,8 @@ func (b *batchInfo) SetID() {
 }
 
 //ToMap converts the array of requests to map so it can be easily invalidated
-func (b batchInfo) ToMap() map[types.Hash32]requestMessage {
-	m := make(map[types.Hash32]requestMessage)
+func (b batchInfo) ToMap() map[types.Hash32]*requestMessage {
+	m := make(map[types.Hash32]*requestMessage)
 	for _, r := range b.Requests {
 		m[r.Hash] = r
 	}
@@ -122,7 +122,7 @@ func (b batchInfo) ToMap() map[types.Hash32]requestMessage {
 // as stated in requestBatch even if not all Data is present
 type responseBatch struct {
 	ID        types.Hash32
-	Responses []responseMessage
+	Responses []*responseMessage `ssz-max:"1024"`
 }
 
 // Config is the configuration file of the Fetch component
@@ -302,7 +302,7 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 	rLen := len(f.activeRequests)
 	f.activeReqM.Unlock()
 	if sendNow {
-		f.sendBatch([]requestMessage{{[]byte(req.hint), req.hash}})
+		f.sendBatch([]*requestMessage{{[]byte(req.hint), req.hash}})
 		f.log.With().Debug("high priority request sent", log.String("hash", req.hash.ShortString()))
 		return true
 	}
@@ -346,7 +346,7 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 	}
 	resBatch := responseBatch{
 		ID:        requestBatch.ID,
-		Responses: make([]responseMessage, 0, len(requestBatch.Requests)),
+		Responses: make([]*responseMessage, 0, len(requestBatch.Requests)),
 	}
 	// this will iterate all requests and populate appropriate Responses, if there are any missing items they will not
 	// be included in the response at all
@@ -371,7 +371,7 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 				log.Int("dataSize", len(res)))
 		}
 		// add response to batch
-		m := responseMessage{
+		m := &responseMessage{
 			Hash: r.Hash,
 			Data: res,
 		}
