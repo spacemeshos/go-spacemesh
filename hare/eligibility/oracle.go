@@ -130,7 +130,7 @@ func New(
 
 type vrfMessage struct {
 	Beacon uint32
-	Round  int32
+	Round  uint32
 	Layer  types.LayerID
 }
 
@@ -162,7 +162,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	}
 
 	// marshal message
-	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
+	msg := vrfMessage{Beacon: v, Round: uint32(round), Layer: layer}
 	buf, err := types.InterfaceToBytes(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Panic("failed to encode", log.Err(err))
