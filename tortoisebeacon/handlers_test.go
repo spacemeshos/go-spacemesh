@@ -59,6 +59,11 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
 	r.NoError(err)
 
+	nodeID := types.NodeID{
+		Key:          edPubkey.String(),
+		VRFPublicKey: vrfSigner.PublicKey().Bytes(),
+	}
+
 	tt := []struct {
 		name                     string
 		epoch                    types.EpochID
@@ -73,7 +78,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				epoch: round,
 			},
 			message: ProposalMessage{
-				MinerPK: vrfSigner.PublicKey().Bytes(),
+				NodeID:  nodeID,
 				EpochID: epoch,
 			},
 		},
@@ -87,7 +92,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			tb := TortoiseBeacon{
 				config:      UnitTestConfig(),
 				Log:         logtest.New(t).WithName("TortoiseBeacon"),
-				minerPK:     vrfSigner.PublicKey(),
+				nodeID:      nodeID,
 				atxDB:       mockDB,
 				vrfVerifier: signing.VRFVerifier{},
 				vrfSigner:   vrfSigner,

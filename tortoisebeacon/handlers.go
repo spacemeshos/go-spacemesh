@@ -162,8 +162,7 @@ func (tb *TortoiseBeacon) verifyProposalMessage(m ProposalMessage, currentEpoch 
 		return types.ATXID{}, fmt.Errorf("calculate proposal: %w", err)
 	}
 
-	edPK := m.NodeID.Key
-	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(edPK, currentEpoch-1)
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(m.NodeID, currentEpoch-1)
 	if errors.Is(err, database.ErrNotFound) {
 		tb.Log.With().Warning("Miner has no ATXs in the previous epoch",
 			log.String("miner_id", m.NodeID.ShortString()))
@@ -296,7 +295,7 @@ func (tb *TortoiseBeacon) verifyFirstVotingMessage(message FirstVotingMessage, c
 
 	// TODO(nkryuchkov): Ensure that epoch is the same.
 
-	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(minerPK.String(), currentEpoch-1)
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(types.NodeID{Key: minerPK.String()}, currentEpoch-1)
 	if errors.Is(err, database.ErrNotFound) {
 		tb.Log.With().Warning("Miner has no ATXs in the previous epoch",
 			log.String("miner_id", minerPK.ShortString()))
@@ -442,7 +441,7 @@ func (tb *TortoiseBeacon) verifyFollowingVotingMessage(message FollowingVotingMe
 		return nil, types.ATXID{}, fmt.Errorf("unable to recover ID from signature %x: %w", message.Signature, err)
 	}
 
-	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(minerPK.String(), currentEpoch-1)
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(types.NodeID{Key: minerPK.String()}, currentEpoch-1)
 	if errors.Is(err, database.ErrNotFound) {
 		tb.Log.With().Warning("Miner has no ATXs in the previous epoch",
 			log.String("miner_id", minerPK.ShortString()))
