@@ -198,7 +198,7 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 		epoch,
 		log.FieldNamed("atx_node_id", atx.NodeID),
 		atx.PubLayerID)
-	if err := db.ContextuallyValidateAtx(atx.ActivationTxHeader); err != nil {
+	if err := db.ContextuallyValidateAtx(&atx.ActivationTxHeader); err != nil {
 		db.log.With().Error("atx failed contextual validation",
 			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID),
@@ -469,7 +469,7 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 }
 
 func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
-	atxHeaderBytes, err := types.InterfaceToBytes(atx.ActivationTxHeader)
+	atxHeaderBytes, err := types.InterfaceToBytes(&atx.ActivationTxHeader)
 	if err != nil {
 		return err
 	}
@@ -710,7 +710,7 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 		return nil, err
 	}
 	atx.ActivationTxHeader.SetID(&id)
-	db.atxHeaderCache.Add(id, atx.ActivationTxHeader)
+	db.atxHeaderCache.Add(id, &atx.ActivationTxHeader)
 
 	return atx, nil
 }

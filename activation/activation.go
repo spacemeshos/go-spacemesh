@@ -61,8 +61,8 @@ type idStore interface {
 }
 
 type nipostValidator interface {
-	Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) error
-	ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error
+	Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint64) error
+	ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint64) error
 }
 
 type atxDBProvider interface {

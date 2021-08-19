@@ -154,7 +154,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		nb.log.Info("challenge submitted to PoET proving service (PoET id: %x, round id: %v, challenge: %x)",
 			nb.state.PoetServiceID, round.ID, poetChallenge)
 
-		nipost.Challenge = poetChallenge
+		nipost.Challenge = *poetChallenge
 		nb.state.PoetRound = round
 		nb.persist()
 	}
@@ -176,18 +176,18 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 			nb.log.With().Panic("failed to fetch membership for PoET proof",
 				log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef))) // TODO: handle inconsistent state
 		}
-		if !membership[*nipost.Challenge] {
+		if !membership[nipost.Challenge] {
 			round := nb.state.PoetRound
 			nb.state.PoetRound = nil // no point in waiting in Phase 1 since we are already received a proof
 			return nil, fmt.Errorf("%w not a member of this round (poetId: %x, roundId: %s, challenge: %x, num of members: %d)", ErrPoetServiceUnstable,
-				nb.state.PoetServiceID, round.ID, *nipost.Challenge, len(membership)) // TODO(noamnelke): handle this case!
+				nb.state.PoetServiceID, round.ID, nipost.Challenge, len(membership)) // TODO(noamnelke): handle this case!
 		}
 		nb.state.PoetProofRef = poetProofRef
 		nb.persist()
 	}
 
 	// Phase 2: Post execution.
-	if nipost.Post == nil {
+	if nipost.Proof == nil {
 		nb.log.With().Info("starting Post execution",
 			log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef)))
 		startTime := time.Now()
@@ -199,7 +199,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		nb.log.With().Info("finished Post execution",
 			log.Duration("duration", time.Now().Sub(startTime)))
 
-		nipost.Post = proof
+		nipost.Proof = proof
 		nipost.PostMetadata = proofMetadata
 
 		nb.persist()
@@ -217,8 +217,8 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 // NewNIPostWithChallenge is a convenience method FOR TESTS ONLY. TODO: move this out of production code.
 func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
 	return &types.NIPost{
-		Challenge: challenge,
-		Post: &types.Post{
+		Challenge: *challenge,
+		Proof: &types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),
 		},

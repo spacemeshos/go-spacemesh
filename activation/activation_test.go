@@ -220,8 +220,8 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 
 func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
-		InnerActivationTx: &types.InnerActivationTx{
-			ActivationTxHeader: &types.ActivationTxHeader{
+		InnerActivationTx: types.InnerActivationTx{
+			ActivationTxHeader: types.ActivationTxHeader{
 				NIPostChallenge: challenge,
 				NumUnits:        2,
 				Coinbase:        coinbase,
@@ -338,7 +338,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, &prevAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
 
 	// create and publish another ATX
 	publishedAtx, err := types.BytesToAtx(net.lastTransmission)
@@ -347,7 +347,7 @@ func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	published, _, err = publishAtx(b, postGenesisEpochLayer.Add(layersPerEpoch+1), postGenesisEpoch+1, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, publishedAtx.ActivationTxHeader, publishedAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, &publishedAtx.ActivationTxHeader, &publishedAtx.ActivationTxHeader, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
@@ -445,7 +445,7 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx.ActivationTxHeader, nil, layersPerEpoch)
+	assertLastAtx(r, &posAtx.ActivationTxHeader, nil, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
@@ -470,7 +470,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, &posAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
