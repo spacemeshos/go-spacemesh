@@ -441,7 +441,7 @@ func (tb *TortoiseBeacon) verifyFollowingVotingMessage(message FollowingVotingMe
 		return nil, types.ATXID{}, fmt.Errorf("unable to recover ID from signature %x: %w", message.Signature, err)
 	}
 
-	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(string(minerPK.Bytes()), currentEpoch-1)
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(minerPK.String(), currentEpoch-1)
 	if errors.Is(err, database.ErrNotFound) {
 		tb.Log.With().Warning("Miner has no ATXs in the previous epoch",
 			log.String("miner_id", minerPK.ShortString()))
