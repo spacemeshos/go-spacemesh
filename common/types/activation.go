@@ -170,7 +170,7 @@ func (challenge *NIPostChallenge) String() string {
 type InnerActivationTx struct {
 	ActivationTxHeader
 	NIPost      *NIPost
-	InitialPost *Proof
+	InitialPost *Post
 }
 
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
@@ -181,7 +181,7 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint, initialPost *Proof) *ActivationTx {
+func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint, initialPost *Post) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: InnerActivationTx{
 			ActivationTxHeader: ActivationTxHeader{
@@ -311,7 +311,7 @@ type NIPost struct {
 
 	// Post is the proof that the prover data is still stored (or was recomputed) at
 	// the time he learned the challenge constructed from the PoET.
-	Proof *Proof
+	Proof *Post
 
 	// PostMetadata is the Post metadata, associated with the proof.
 	// The proof should be verified upon the metadata during the syntactic validation,
@@ -319,8 +319,8 @@ type NIPost struct {
 	PostMetadata *PostMetadata
 }
 
-// Proof ...
-type Proof struct {
+// Post ...
+type Post struct {
 	Nonce   uint32
 	Indices []byte `ssz-max:"1024"`
 }
@@ -336,7 +336,7 @@ type PostMetadata struct {
 
 // String returns a string representation of the PostProof, for logging purposes.
 // It implements the Stringer interface.
-func (p Proof) String() string {
+func (p Post) String() string {
 	return fmt.Sprintf("nonce: %v, indices: %v",
 		p.Nonce, bytesToShortString(p.Indices))
 }
