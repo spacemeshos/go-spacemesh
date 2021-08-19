@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/monitoring"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spf13/cobra"
@@ -65,7 +66,7 @@ func (mbp *mockBlockProvider) RecordCoinflip(ctx context.Context, layerID types.
 // HareApp represents an Hare application
 type HareApp struct {
 	*cmdp.BaseApp
-	p2p     p2p.Service
+	p2p     service.Service
 	oracle  *oracleClient
 	sgn     hare.Signer
 	ha      *hare.Hare

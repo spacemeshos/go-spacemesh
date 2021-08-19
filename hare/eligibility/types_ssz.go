@@ -3,7 +3,6 @@ package eligibility
 
 import (
 	ssz "github.com/ferranbt/fastssz"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // MarshalSSZ ssz marshals the vrfMessage object

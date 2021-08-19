@@ -291,7 +291,7 @@ func New(opts ...Option) *App {
 type App struct {
 	*cobra.Command
 	nodeID         types.NodeID
-	P2P            p2p.Service
+	P2P            service.Service
 	Config         *cfg.Config
 	grpcAPIService *grpcserver.Server
 	jsonAPIService *grpcserver.JSONHTTPServer

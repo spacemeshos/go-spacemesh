@@ -118,8 +118,8 @@ func init() {
 
 func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
 	return &types.NIPost{
-		Challenge: challenge,
-		Post: &types.Post{
+		Challenge: *challenge,
+		Proof: &types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),
 		},
@@ -365,8 +365,8 @@ func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID type
 
 func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase types.Address) *types.ActivationTx {
 	activationTx := &types.ActivationTx{
-		InnerActivationTx: &types.InnerActivationTx{
-			ActivationTxHeader: &types.ActivationTxHeader{
+		InnerActivationTx: types.InnerActivationTx{
+			ActivationTxHeader: types.ActivationTxHeader{
 				NIPostChallenge: challenge,
 				Coinbase:        coinbase,
 				NumUnits:        numUnits,
@@ -1865,8 +1865,7 @@ func TestTransactionService(t *testing.T) {
 		{"SubmitTransaction_InvalidTx", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			// Try sending invalid tx data
-			serializedTx, err := types.InterfaceToBytes("this is not the transaction you're looking for")
-			require.NoError(t, err, "error serializing tx")
+			serializedTx := []byte("nonsense")
 			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
 				Transaction: serializedTx,
 			})

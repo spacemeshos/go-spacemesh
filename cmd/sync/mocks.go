@@ -79,10 +79,12 @@ func (*mockIStore) GetIdentity(string) (types.NodeID, error) {
 
 type validatorMock struct{}
 
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) error {
+func (*validatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint64) error {
 	return nil
 }
-func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint) error { return nil }
+func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint64) error {
+	return nil
+}
 
 type mockClock struct {
 	ch         map[timesync.LayerTimer]int

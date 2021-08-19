@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -89,7 +88,7 @@ func newMockConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set
 	return mcp
 }
 
-func createHare(n1 p2p.Service, logger log.Log) *Hare {
+func createHare(n1 service.Service, logger log.Log) *Hare {
 	return New(cfg, n1, signing.NewEdSigner(), types.NodeID{}, validateBlocks, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(logger), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
 }
 

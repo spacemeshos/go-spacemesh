@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 )
@@ -38,7 +39,7 @@ func init() {
 // P2PApp is an app struct used to run only p2p functionality
 type P2PApp struct {
 	*cmdp.BaseApp
-	p2p     p2p.Service
+	p2p     service.Service
 	closers []io.Closer
 }
 

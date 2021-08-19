@@ -153,11 +153,11 @@ type ValidatorMock struct{}
 // A compile time check to ensure that ValidatorMock fully implements the nipostValidator interface.
 var _ nipostValidator = (*ValidatorMock)(nil)
 
-func (*ValidatorMock) Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint) error {
+func (*ValidatorMock) Validate(id signing.PublicKey, NIPost *types.NIPost, expectedChallenge types.Hash32, numUnits uint64) error {
 	return nil
 }
 
-func (*ValidatorMock) ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error {
+func (*ValidatorMock) ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint64) error {
 	return nil
 }
 
