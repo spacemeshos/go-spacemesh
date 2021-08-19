@@ -45,7 +45,7 @@ type tortoiseBeaconDB interface {
 	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
 }
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./weak_coin.go coin
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./tortoise_beacon.go coin
 
 type coin interface {
 	StartEpoch(types.EpochID, weakcoin.UnitAllowances)

@@ -5,10 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
@@ -25,26 +27,23 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
-	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight",
-		mock.AnythingOfType("types.EpochID")).
-		Return(uint64(10), nil, nil)
-	mockDB.On("GetNodeAtxIDForEpoch",
-		mock.Anything,
-		mock.Anything).
-		Return(types.ATXID(hash), nil)
-	mockDB.On("GetAtxHeader",
-		mock.AnythingOfType("types.ATXID")).
-		Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				StartTick: 1,
-				EndTick:   3,
-			},
-			NumUnits: 5,
-		}, nil)
-	mockDB.On("GetAtxTimestamp",
-		mock.AnythingOfType("types.ATXID")).
-		Return(time.Now(), nil)
+	ctrl := gomock.NewController(t)
+	mockDB := mocks.NewMockactivationDB(ctrl)
+	mockDB.EXPECT().GetEpochWeight(gomock.AssignableToTypeOf(new(types.EpochID))).Return(uint64(10), nil, nil).AnyTimes()
+	mockDB.EXPECT().GetNodeAtxIDForEpoch(
+		gomock.AssignableToTypeOf(new(signing.PublicKey)),
+		gomock.AssignableToTypeOf(new(types.EpochID)),
+	).AnyTimes().Return(types.ATXID(hash))
+
+	mockATXHeader := types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 1,
+			EndTick:   3,
+		},
+		NumUnits: 5,
+	}
+	mockDB.EXPECT().GetAtxHeader(gomock.AssignableToTypeOf(new(types.ATXID))).AnyTimes().Return(&mockATXHeader)
+	mockDB.EXPECT().GetAtxTimestamp(mock.Anything).Return(time.Now()).AnyTimes()
 
 	const (
 		epoch = 3
