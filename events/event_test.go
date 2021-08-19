@@ -35,7 +35,7 @@ func TestNewBlockEvent(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	orig := NewBlock{Layer: 1, ID: "234"}
-	err = eventPublisher.PublishEvent(orig)
+	err = eventPublisher.PublishEvent(&orig)
 	assert.NoError(t, err)
 
 	tm := time.NewTimer(7 * time.Second)

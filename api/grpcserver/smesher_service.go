@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"fmt"
+
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -66,8 +67,8 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	coinbaseAddr := types.BytesToAddress(in.Coinbase.Address)
 	opts := activation.PostSetupOpts{
 		DataDir:           in.Opts.DataDir,
-		NumUnits:          uint(in.Opts.NumUnits),
-		NumFiles:          uint(in.Opts.NumFiles),
+		NumUnits:          uint64(in.Opts.NumUnits),
+		NumFiles:          uint64(in.Opts.NumFiles),
 		ComputeProviderID: int(in.Opts.ComputeProviderId),
 		Throttle:          in.Opts.Throttle,
 	}

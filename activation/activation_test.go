@@ -489,7 +489,7 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, posAtx.ActivationTxHeader, nil, layersPerEpoch)
+	assertLastAtx(r, &posAtx.ActivationTxHeader, nil, layersPerEpoch)
 }
 
 func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T) {
@@ -508,7 +508,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, &prevAtx.ActivationTxHeader, &prevAtx.ActivationTxHeader, layersPerEpoch)
 
 	publishedAtx, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
@@ -518,7 +518,7 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	published, _, err = publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch) // 👀
 	r.NoError(err)
 	r.True(published)
-	assertLastAtx(r, publishedAtx.ActivationTxHeader, publishedAtx.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, &publishedAtx.ActivationTxHeader, &publishedAtx.ActivationTxHeader, layersPerEpoch)
 
 	publishedAtx2, err := types.BytesToAtx(net.lastTransmission)
 	r.NoError(err)
@@ -596,7 +596,7 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	posAtx, err := activationDb.GetAtxHeader(newAtx.PositioningATX)
 	r.NoError(err)
 
-	assertLastAtx(r, posAtx, prevATX.ActivationTxHeader, layersPerEpoch)
+	assertLastAtx(r, posAtx, &prevATX.ActivationTxHeader, layersPerEpoch)
 
 	t.Skip("proves https://github.com/spacemeshos/go-spacemesh/issues/1166")
 	// check pos & prev has the same PubLayerID
@@ -617,7 +617,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	atx := newActivationTx(nodeID, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, nipost)
-	atxBytes, err := types.InterfaceToBytes(atx.InnerActivationTx)
+	atxBytes, err := types.InterfaceToBytes(&atx.InnerActivationTx)
 	assert.NoError(t, err)
 	err = b.SignAtx(atx)
 	assert.NoError(t, err)

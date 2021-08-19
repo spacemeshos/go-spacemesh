@@ -44,7 +44,7 @@ func TestPostSetupManager(t *testing.T) {
 			req.Equal(opts, *status.LastOpts)
 			req.Nil(status.LastError)
 
-			if uint(status.NumLabelsWritten) == opts.NumUnits*cfg.LabelsPerUnit {
+			if status.NumLabelsWritten == opts.NumUnits*cfg.LabelsPerUnit {
 				// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
 				//req.Equal(postSetupStateComplete, status.State)
 			} else {

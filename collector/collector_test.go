@@ -88,23 +88,23 @@ func TestCollectEvents(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	for i := 0; i < 10010; i++ {
 		orig := events.NewBlock{Layer: 1, ID: "234"}
-		err = eventPublisher.PublishEvent(orig)
+		err = eventPublisher.PublishEvent(&orig)
 	}
 
 	orig1 := events.ValidBlock{ID: "234", Valid: true}
-	err = eventPublisher.PublishEvent(orig1)
+	err = eventPublisher.PublishEvent(&orig1)
 
 	orig2 := events.NewAtx{ID: "1234"}
-	err = eventPublisher.PublishEvent(orig2)
+	err = eventPublisher.PublishEvent(&orig2)
 
 	orig3 := events.ValidAtx{ID: "1234", Valid: true}
-	err = eventPublisher.PublishEvent(orig3)
+	err = eventPublisher.PublishEvent(&orig3)
 
 	orig4 := events.NewTx{ID: "4321", Amount: 400, Destination: "1234567", Origin: "876543"}
-	err = eventPublisher.PublishEvent(orig4)
+	err = eventPublisher.PublishEvent(&orig4)
 
 	orig5 := events.ValidTx{ID: "4321", Valid: true}
-	err = eventPublisher.PublishEvent(orig5)
+	err = eventPublisher.PublishEvent(&orig5)
 
 	time.Sleep(1 * time.Second)
 	c.Stop()

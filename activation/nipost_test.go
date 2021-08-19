@@ -350,7 +350,7 @@ func TestValidator_Validate(t *testing.T) {
 	r.Contains(err.Error(), "invalid `Challenge`")
 
 	newNIPost := *nipost
-	newNIPost.Post = &types.Post{}
+	newNIPost.Proof = &types.Post{}
 	err = validateNIPost(minerID, &newNIPost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
 	r.Contains(err.Error(), "invalid Post")
 
@@ -386,7 +386,7 @@ func TestValidator_Validate(t *testing.T) {
 }
 
 //
-func validateNIPost(minerID []byte, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint) error {
+func validateNIPost(minerID []byte, nipost *types.NIPost, challenge types.Hash32, poetDb poetDbAPI, postCfg PostConfig, numUnits uint64) error {
 	v := &Validator{poetDb, postCfg}
 	return v.Validate(*signing.NewPublicKey(minerID), nipost, challenge, numUnits)
 }

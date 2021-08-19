@@ -87,9 +87,9 @@ func (p *EventPublisher) Close() error {
 
 // NewBlock is sent when a new block is created by this miner
 type NewBlock struct {
-	ID    string
+	ID    string `ssz-max:"4096"`
 	Layer uint32
-	Atx   string
+	Atx   string `ssz-max:"4096"`
 }
 
 // GetChannel gets the message type which means on which this message should be sent
@@ -101,7 +101,7 @@ func (NewBlock) GetChannel() ChannelID {
 type DoneCreatingBlock struct {
 	Eligible bool
 	Layer    uint32
-	Error    string
+	Error    string `ssz-max:"4096"`
 }
 
 // GetChannel gets the message type which means on which this message should be sent
@@ -111,7 +111,7 @@ func (DoneCreatingBlock) GetChannel() ChannelID {
 
 // ValidBlock signals that block with id ID has been validated
 type ValidBlock struct {
-	ID    string
+	ID    string `ssz-max:"4096"`
 	Valid bool
 }
 
@@ -122,7 +122,7 @@ func (ValidBlock) GetChannel() ChannelID {
 
 // NewAtx signals that a new ATX has been received
 type NewAtx struct {
-	ID      string
+	ID      string `ssz-max:"4096"`
 	EpochID uint32
 }
 
@@ -133,7 +133,7 @@ func (NewAtx) GetChannel() ChannelID {
 
 // ValidAtx signals that an activation transaction with id ID has been validated
 type ValidAtx struct {
-	ID    string
+	ID    string `ssz-max:"4096"`
 	Valid bool
 }
 
@@ -144,9 +144,9 @@ func (ValidAtx) GetChannel() ChannelID {
 
 // NewTx signals that a new transaction has been received and not yet validated
 type NewTx struct {
-	ID          string
-	Origin      string
-	Destination string
+	ID          string `ssz-max:"4096"`
+	Origin      string `ssz-max:"4096"`
+	Destination string `ssz-max:"4096"`
 	Amount      uint64
 	Fee         uint64
 }
@@ -158,7 +158,7 @@ func (NewTx) GetChannel() ChannelID {
 
 // ValidTx signals that the transaction with id ID has been validated
 type ValidTx struct {
-	ID    string
+	ID    string `ssz-max:"4096"`
 	Valid bool
 }
 
@@ -169,9 +169,9 @@ func (ValidTx) GetChannel() ChannelID {
 
 // RewardReceived signals reward has been received
 type RewardReceived struct {
-	Coinbase  string
+	Coinbase  string `ssz-max:"4096"`
 	Amount    uint64
-	SmesherID []byte
+	SmesherID []byte `ssz-max:"4096"`
 }
 
 // GetChannel gets the message type which means on which this message should be sent
@@ -182,7 +182,7 @@ func (RewardReceived) GetChannel() ChannelID {
 // AtxCreated signals this miner has created an activation transaction
 type AtxCreated struct {
 	Created bool
-	ID      string
+	ID      string `ssz-max:"4096"`
 	Epoch   uint32
 }
 
@@ -194,7 +194,7 @@ func (AtxCreated) GetChannel() ChannelID {
 // TortoiseBeaconCalculated signals this miner has calculated a tortoise beacon.
 type TortoiseBeaconCalculated struct {
 	Epoch  types.EpochID
-	Beacon string
+	Beacon string `ssz-max:"4096"`
 }
 
 // GetChannel gets the message type which means on which this message should be sent

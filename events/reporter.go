@@ -36,7 +36,7 @@ func EventHook() func(entry zapcore.Entry) error {
 
 // ReportNewTx dispatches incoming events to the reporter singleton
 func ReportNewTx(tx *types.Transaction) {
-	Publish(NewTx{
+	Publish(&NewTx{
 		ID:          tx.ID().String(),
 		Origin:      tx.Origin().String(),
 		Destination: tx.Recipient.String(),
@@ -71,7 +71,7 @@ func ReportTxWithValidity(tx *types.Transaction, valid bool) {
 
 // ReportValidTx reports a valid transaction
 func ReportValidTx(tx *types.Transaction, valid bool) {
-	Publish(ValidTx{ID: tx.ID().String(), Valid: valid})
+	Publish(&ValidTx{ID: tx.ID().String(), Valid: valid})
 }
 
 // ReportNewActivation reports a new activation
@@ -79,7 +79,7 @@ func ReportNewActivation(activation *types.ActivationTx) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	Publish(NewAtx{
+	Publish(&NewAtx{
 		ID:      activation.ShortString(),
 		EpochID: uint32(activation.PubLayerID.GetEpoch()),
 	})
@@ -105,14 +105,14 @@ func ReportNewActivation(activation *types.ActivationTx) {
 }
 
 // ReportRewardReceived reports a new reward
-func ReportRewardReceived(r Reward) {
+func ReportRewardReceived(r types.Reward) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	Publish(RewardReceived{
+	Publish(&RewardReceived{
 		Coinbase:  r.Coinbase.String(),
-		Amount:    r.Total,
-		SmesherID: r.Smesher.ToBytes(),
+		Amount:    r.TotalReward,
+		SmesherID: r.SmesherID.ToBytes(),
 	})
 
 	if reporter != nil {
@@ -132,7 +132,7 @@ func ReportRewardReceived(r Reward) {
 
 // ReportNewBlock reports a new block
 func ReportNewBlock(blk *types.Block) {
-	Publish(NewBlock{
+	Publish(&NewBlock{
 		ID:    blk.ID().String(),
 		Atx:   blk.ATXID.ShortString(),
 		Layer: blk.LayerIndex.Uint32(),
@@ -141,7 +141,7 @@ func ReportNewBlock(blk *types.Block) {
 
 // ReportValidBlock reports a block's validity
 func ReportValidBlock(blockID types.BlockID, valid bool) {
-	Publish(ValidBlock{
+	Publish(&ValidBlock{
 		ID:    blockID.String(),
 		Valid: valid,
 	})
@@ -149,17 +149,17 @@ func ReportValidBlock(blockID types.BlockID, valid bool) {
 
 // ReportAtxCreated reports a created activation
 func ReportAtxCreated(created bool, epoch uint32, id string) {
-	Publish(AtxCreated{Created: created, Epoch: epoch, ID: id})
+	Publish(&AtxCreated{Created: created, Epoch: epoch, ID: id})
 }
 
 // ReportValidActivation reports a valid activation
 func ReportValidActivation(activation *types.ActivationTx, valid bool) {
-	Publish(ValidAtx{ID: activation.ShortString(), Valid: valid})
+	Publish(&ValidAtx{ID: activation.ShortString(), Valid: valid})
 }
 
 // ReportDoneCreatingBlock reports a created block
 func ReportDoneCreatingBlock(eligible bool, layer uint32, error string) {
-	Publish(DoneCreatingBlock{
+	Publish(&DoneCreatingBlock{
 		Eligible: eligible,
 		Layer:    layer,
 		Error:    error,
@@ -168,7 +168,7 @@ func ReportDoneCreatingBlock(eligible bool, layer uint32, error string) {
 
 // ReportCalculatedTortoiseBeacon reports calculated tortoise beacon.
 func ReportCalculatedTortoiseBeacon(epoch types.EpochID, beacon string) {
-	Publish(TortoiseBeaconCalculated{
+	Publish(&TortoiseBeaconCalculated{
 		Epoch:  epoch,
 		Beacon: beacon,
 	})
@@ -352,7 +352,7 @@ func GetAccountChannel() chan types.Address {
 }
 
 // GetRewardChannel returns a channel for rewards
-func GetRewardChannel() chan Reward {
+func GetRewardChannel() chan types.Reward {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -456,18 +456,6 @@ type TxReceipt struct {
 	Address types.Address
 }
 
-// Reward represents a reward object with extra data needed by the API
-type Reward struct {
-	Layer       types.LayerID
-	Total       uint64
-	LayerReward uint64
-	Coinbase    types.Address
-	// TODO: We don't currently have a way to get the Layer Computed.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2275
-	//LayerComputed
-	Smesher types.NodeID
-}
-
 // TransactionWithValidity wraps a tx with its validity info
 type TransactionWithValidity struct {
 	Transaction *types.Transaction
@@ -482,7 +470,7 @@ type EventReporter struct {
 	channelError       chan NodeError
 	channelStatus      chan struct{}
 	channelAccount     chan types.Address
-	channelReward      chan Reward
+	channelReward      chan types.Reward
 	channelReceipt     chan TxReceipt
 	stopChan           chan struct{}
 	blocking           bool
@@ -495,7 +483,7 @@ func newEventReporter(bufsize int, blocking bool) *EventReporter {
 		channelLayer:       make(chan NewLayer, bufsize),
 		channelStatus:      make(chan struct{}, bufsize),
 		channelAccount:     make(chan types.Address, bufsize),
-		channelReward:      make(chan Reward, bufsize),
+		channelReward:      make(chan types.Reward, bufsize),
 		channelReceipt:     make(chan TxReceipt, bufsize),
 		channelError:       make(chan NodeError, bufsize),
 		stopChan:           make(chan struct{}),

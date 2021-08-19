@@ -385,4 +385,5 @@ sszgen:
 	sszgen --path ./p2p/ --output ./p2p/types_ssz.go --objs ProtocolMessage --include ./p2p/service
 	sszgen --path ./p2p/node --output ./p2p/node/types_ssz.go --objs Info
 	sszgen --path ./p2p/discovery --output ./p2p/discovery/types_ssz.go --objs response --include ./p2p/node
+	sszgen --path ./events/ --output ./events/types_ssz.go --objs NewBlock,ValidBlock,NewAtx,ValidAtx,NewTx,ValidTx,RewardReceived,AtxCreated,TortoiseBeaconCalculated,DoneCreatingBlock --include ./common/types
 .PHONY: sszgen
