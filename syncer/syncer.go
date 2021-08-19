@@ -269,7 +269,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		close(vQueue)
 		<-vDone
 		s.setStateAfterSync(ctx, success)
-		logger.With().Debug(fmt.Sprintf("finished sync run #%v", s.run),
+		logger.With().Info(fmt.Sprintf("finished sync run #%v", s.run),
 			log.Bool("success", success),
 			log.String("sync_state", s.getSyncState().String()),
 			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
@@ -301,7 +301,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		}
 		logger.With().Debug("finished data sync", layerID)
 	}
-	logger.With().Info("data is synced, waiting for validation",
+	logger.With().Debug("data is synced, waiting for validation",
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
 		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
