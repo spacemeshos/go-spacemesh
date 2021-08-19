@@ -2315,11 +2315,11 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	})
 
 	// publish a reward
-	events.ReportRewardReceived(events.Reward{
-		Layer:       layerFirst,
-		Total:       rewardAmount,
-		LayerReward: rewardAmount * 2,
-		Coinbase:    addr1,
+	events.ReportRewardReceived(types.Reward{
+		Layer:               layerFirst,
+		TotalReward:         rewardAmount,
+		LayerRewardEstimate: rewardAmount * 2,
+		Coinbase:            addr1,
 	})
 
 	// publish an account data update
@@ -2328,7 +2328,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	// test streaming a reward and account update that should be filtered out
 	// these should not be received
 	events.ReportAccountUpdate(addr2)
-	events.ReportRewardReceived(events.Reward{Coinbase: addr2})
+	events.ReportRewardReceived(types.Reward{Coinbase: addr2})
 
 	// close the stream
 	events.CloseEventReporter()
@@ -2410,11 +2410,11 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	})
 
 	// publish a reward
-	events.ReportRewardReceived(events.Reward{
-		Layer:       layerFirst,
-		Total:       rewardAmount,
-		LayerReward: rewardAmount * 2,
-		Coinbase:    addr1,
+	events.ReportRewardReceived(types.Reward{
+		Layer:               layerFirst,
+		TotalReward:         rewardAmount,
+		LayerRewardEstimate: rewardAmount * 2,
+		Coinbase:            addr1,
 	})
 
 	// publish an account data update
