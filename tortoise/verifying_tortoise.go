@@ -338,7 +338,7 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 }
 
-func (t *turtle) BlockWeight(voting, voted types.BlockID) int64 {
+func (t *turtle) BlockWeight(voting, voted types.BlockID) uint64 {
 	return 1
 }
 
@@ -396,10 +396,10 @@ func (t *turtle) processBlock(block *types.Block) error {
 	}
 
 	for _, b := range block.ForDiff {
-		opinion[b] = opinion[b].Add(support.Multiply(t.BlockWeight(block.ID(), b)))
+		opinion[b] = opinion[b].Add(support.Multiply(uint64(t.BlockWeight(block.ID(), b))))
 	}
 	for _, b := range block.AgainstDiff {
-		opinion[b] = opinion[b].Add(against.Multiply(t.BlockWeight(block.ID(), b)))
+		opinion[b] = opinion[b].Add(against.Multiply(uint64(t.BlockWeight(block.ID(), b))))
 	}
 
 	// TODO: neutral ?
@@ -544,7 +544,7 @@ layerLoop:
 						log.FieldNamed("voted_block", blk),
 						log.String("vote", opinionVote.String()),
 						log.String("sum", fmt.Sprintf("[%v, %v]", sum.Support, sum.Against)))
-					sum = sum.Add(opinionVote.Multiply(t.BlockWeight(bid, blk)))
+					sum = sum.Add(opinionVote.Multiply(uint64(t.BlockWeight(bid, blk))))
 				}
 			}
 

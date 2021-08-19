@@ -8,7 +8,6 @@ import (
 	"testing"
 	"testing/quick"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -160,19 +159,6 @@ func BenchmarkStatePersist(b *testing.B) {
 		b.ResetTimer()
 		for i := 0; i < b.N; i++ {
 			if err := st.Persist(); err != nil {
-				require.NoError(b, err)
-			}
-		}
-	})
-	b.Run("Old", func(b *testing.B) {
-		b.ReportAllocs()
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			buf, err := codec.Encode(st)
-			if err != nil {
-				require.NoError(b, err)
-			}
-			if err := db.Put([]byte("turtle"), buf); err != nil {
 				require.NoError(b, err)
 			}
 		}

@@ -75,7 +75,7 @@ func (s *state) Persist() error {
 				b.Write(block1.Bytes())
 				b.Write(block2.Bytes())
 
-				buf, err := codec.Encode(opinion)
+				buf, err := codec.Encode(&opinion)
 				if err != nil {
 					s.log.Panic("can't encode vec", log.Err(err))
 				}
