@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-type nanoTx struct {
+type NanoTx struct {
 	Amount                 uint64
 	Fee                    uint64
 	HighestLayerIncludedIn types.LayerID
@@ -19,14 +19,14 @@ type nanoTx struct {
 // AccountPendingTxs indexes the pending transactions (those that are in the mesh, but haven't been applied yet) of a
 // specific account.
 type AccountPendingTxs struct {
-	PendingTxs map[uint64]map[types.TransactionID]nanoTx // nonce -> TxID -> nanoTx
+	PendingTxs map[uint64]map[types.TransactionID]NanoTx // nonce -> TxID -> nanoTx
 	mu         sync.RWMutex
 }
 
 // NewAccountPendingTxs returns a new, initialized AccountPendingTxs structure.
 func NewAccountPendingTxs() *AccountPendingTxs {
 	return &AccountPendingTxs{
-		PendingTxs: make(map[uint64]map[types.TransactionID]nanoTx),
+		PendingTxs: make(map[uint64]map[types.TransactionID]NanoTx),
 	}
 }
 
@@ -37,13 +37,13 @@ func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction
 	for _, tx := range txs {
 		existing, found := apt.PendingTxs[tx.AccountNonce]
 		if !found {
-			existing = make(map[types.TransactionID]nanoTx)
+			existing = make(map[types.TransactionID]NanoTx)
 			apt.PendingTxs[tx.AccountNonce] = existing
 		}
 		if existing[tx.ID()].HighestLayerIncludedIn.After(layer) {
 			layer = existing[tx.ID()].HighestLayerIncludedIn
 		}
-		existing[tx.ID()] = nanoTx{
+		existing[tx.ID()] = NanoTx{
 			Amount:                 tx.Amount,
 			Fee:                    tx.Fee,
 			HighestLayerIncludedIn: layer,
@@ -132,7 +132,7 @@ func (apt *AccountPendingTxs) IsEmpty() bool {
 	return len(apt.PendingTxs) == 0
 }
 
-func validTxWithHighestFee(txs map[types.TransactionID]nanoTx, balance uint64) types.TransactionID {
+func validTxWithHighestFee(txs map[types.TransactionID]NanoTx, balance uint64) types.TransactionID {
 	bestID := types.EmptyTransactionID
 	var maxFee uint64
 	for id, tx := range txs {

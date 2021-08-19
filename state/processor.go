@@ -335,7 +335,7 @@ func (tp *TransactionProcessor) HandleTxSyncData(data []byte) error {
 		return err
 	}
 	// we don't validate the tx, todo: this is copied from old sync, unless I am wrong i think some validation is needed
-	tp.pool.Put(tx.Transaction.ID(), tx.Transaction)
+	tp.pool.Put(tx.Transaction.ID(), &tx.Transaction)
 	return nil
 }
 

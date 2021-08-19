@@ -837,12 +837,12 @@ func (n *NIPost) SizeSSZ() (size int) {
 	return
 }
 
-// MarshalSSZ ssz marshals the Post object
+// MarshalSSZ ssz marshals the Proof object
 func (p *Post) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(p)
 }
 
-// MarshalSSZTo ssz marshals the Post object to a target array
+// MarshalSSZTo ssz marshals the Proof object to a target array
 func (p *Post) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(8)
@@ -864,7 +864,7 @@ func (p *Post) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the Post object
+// UnmarshalSSZ ssz unmarshals the Proof object
 func (p *Post) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
@@ -897,7 +897,7 @@ func (p *Post) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the Post object
+// SizeSSZ returns the ssz encoded size in bytes for the Proof object
 func (p *Post) SizeSSZ() (size int) {
 	size = 8
 
@@ -1020,7 +1020,6 @@ func (l *LayerID) UnmarshalSSZ(buf []byte) error {
 
 	// Field (0) 'Value'
 	l.Value = ssz.UnmarshallUint32(buf[0:4])
-
 	return err
 }
 

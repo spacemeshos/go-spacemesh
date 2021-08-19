@@ -34,6 +34,11 @@ func Uint64ToBytesBigEndian(i uint64) []byte {
 	return a
 }
 
+// BytesToUint64BE decode bug into uint64 using big endian notation.
+func BytesToUint64BE(buf []byte) uint64 {
+	return binary.BigEndian.Uint64(buf)
+}
+
 // Uint32ToBytesBE marshal uint32 to bytes in big endian format.
 func Uint32ToBytesBE(i uint32) []byte {
 	a := make([]byte, 4)

@@ -12,7 +12,9 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
@@ -600,7 +602,7 @@ func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte 
 
 // DbTransaction is the transaction type stored in DB
 type DbTransaction struct {
-	*types.Transaction
+	types.Transaction
 	Origin  types.Address
 	BlockID types.BlockID
 	LayerID types.LayerID
@@ -608,7 +610,7 @@ type DbTransaction struct {
 
 func newDbTransaction(tx *types.Transaction, blockID types.BlockID, layerID types.LayerID) *DbTransaction {
 	return &DbTransaction{
-		Transaction: tx,
+		Transaction: *tx,
 		Origin:      tx.Origin(),
 		BlockID:     blockID,
 		LayerID:     layerID,
@@ -619,7 +621,7 @@ func (t DbTransaction) getTransaction() *types.MeshTransaction {
 	t.Transaction.SetOrigin(t.Origin)
 
 	return &types.MeshTransaction{
-		Transaction: *t.Transaction,
+		Transaction: t.Transaction,
 		LayerID:     t.LayerID,
 		BlockID:     t.BlockID,
 	}
@@ -629,7 +631,8 @@ func (t DbTransaction) getTransaction() *types.MeshTransaction {
 func (m *DB) writeTransactions(block *types.Block, txs ...*types.Transaction) error {
 	batch := m.transactions.NewBatch()
 	for _, t := range txs {
-		bytes, err := types.InterfaceToBytes(newDbTransaction(t, block.ID(), block.Layer()))
+		dbtx := newDbTransaction(t, block.ID(), block.Layer())
+		bytes, err := types.InterfaceToBytes(dbtx)
 		if err != nil {
 			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
 		}
@@ -670,7 +673,12 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 			if err != nil {
 				return fmt.Errorf("could not convert String to NodeID for %v: %v", smesherString, err)
 			}
-			reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64(), SmesherID: *smesherEntry, Coinbase: account}
+			reward := dbReward{
+				TotalReward:         cnt * totalReward.Uint64(),
+				LayerRewardEstimate: cnt * layerReward.Uint64(),
+				SmesherID:           *smesherEntry,
+				Coinbase:            account,
+			}
 			if b, err := types.InterfaceToBytes(&reward); err != nil {
 				return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
 			} else if err := batch.Put(getRewardKey(l, account, *smesherEntry), b); err != nil {
@@ -814,33 +822,52 @@ func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[ty
 }
 
 func (m *DB) storeAccountPendingTxs(account types.Address, pending *pendingtxs.AccountPendingTxs) error {
-	if pending.IsEmpty() {
-		if err := m.unappliedTxs.Delete(account.Bytes()); err != nil {
-			return fmt.Errorf("failed to delete empty pending txs for account %v: %v", account.Short(), err)
+	var (
+		it    = m.unappliedTxs.Find(account.Bytes())
+		batch = m.unappliedTxs.NewBatch()
+		b     bytes.Buffer
+	)
+	for it.Next() {
+		if err := batch.Delete(it.Key()); err != nil {
+			return err
 		}
-		return nil
 	}
-	if accountTxsBytes, err := types.InterfaceToBytes(&pending); err != nil {
-		return fmt.Errorf("failed to marshal account pending txs: %v", err)
-	} else if err := m.unappliedTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
-		return fmt.Errorf("failed to store mesh txs for address %s", account.Short())
+	for nonce, txs := range pending.PendingTxs {
+		for id, nano := range txs {
+			b.Write(account.Bytes())
+			b.Write(util.Uint64ToBytesBigEndian(nonce))
+			b.Write(id.Bytes())
+			buf, err := codec.Encode(&nano)
+			if err != nil {
+				return err
+			}
+			if err := batch.Put(b.Bytes(), buf); err != nil {
+				return err
+			}
+			b.Reset()
+		}
 	}
-	return nil
+	return batch.Write()
 }
 
 func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendingTxs, error) {
-	accountTxsBytes, err := m.unappliedTxs.Get(addr.Bytes())
-	if err != nil && err != database.ErrNotFound {
-		return nil, fmt.Errorf("failed to get mesh txs for account %s", addr.Short())
+	pending := pendingtxs.NewAccountPendingTxs()
+	it := m.unappliedTxs.Find(addr.Bytes())
+	offset := len(addr.Bytes())
+	for it.Next() {
+		nonce := util.BytesToUint64BE(it.Key()[offset : offset+8])
+		var id types.TransactionID
+		copy(id[:], it.Key()[offset+8:])
+		var tx pendingtxs.NanoTx
+		if err := codec.Decode(it.Value(), &tx); err != nil {
+			return nil, err
+		}
+		if _, exist := pending.PendingTxs[nonce]; !exist {
+			pending.PendingTxs[nonce] = map[types.TransactionID]pendingtxs.NanoTx{}
+		}
+		pending.PendingTxs[nonce][id] = tx
 	}
-	if err == database.ErrNotFound {
-		return pendingtxs.NewAccountPendingTxs(), nil
-	}
-	var pending pendingtxs.AccountPendingTxs
-	if err := types.BytesToInterface(accountTxsBytes, &pending); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal account pending txs: %v", err)
-	}
-	return &pending, nil
+	return pending, nil
 }
 
 func groupByOrigin(txs []*types.Transaction) map[types.Address][]*types.Transaction {
