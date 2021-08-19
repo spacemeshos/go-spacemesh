@@ -283,7 +283,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(message FirstVotingMessage) e
 }
 
 func (tb *TortoiseBeacon) verifyFirstVotingMessage(message FirstVotingMessage, currentEpoch types.EpochID) (*signing.PublicKey, types.ATXID, error) {
-	messageBytes, err := types.InterfaceToBytes(message.FirstVotingMessageBody)
+	messageBytes, err := types.InterfaceToBytes(&message.FirstVotingMessageBody)
 	if err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("unmarshal first voting message: %w", err)
 	}
@@ -431,7 +431,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(message FollowingVotingMe
 }
 
 func (tb *TortoiseBeacon) verifyFollowingVotingMessage(message FollowingVotingMessage, currentEpoch types.EpochID) (*signing.PublicKey, types.ATXID, error) {
-	messageBytes, err := types.InterfaceToBytes(message.FollowingVotingMessageBody)
+	messageBytes, err := types.InterfaceToBytes(&message.FollowingVotingMessageBody)
 	if err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("unmarshal first voting message: %w", err)
 	}

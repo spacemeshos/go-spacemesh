@@ -11,8 +11,8 @@ import (
 // ProposalMessage is a message type which is used when sending proposals.
 type ProposalMessage struct {
 	EpochID      types.EpochID
-	MinerPK      []byte
-	VRFSignature []byte
+	MinerPK      []byte `ssz-max:"256"`
+	VRFSignature []byte `ssz-max:"256"`
 }
 
 // String returns a string form of ProposalMessage.
@@ -33,14 +33,14 @@ type proposalMessageWithReceiptData struct {
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
 type FirstVotingMessageBody struct {
-	ValidProposals            [][]byte
-	PotentiallyValidProposals [][]byte
+	ValidProposals            [][]byte `ssz-size:"?,?" ssz-max:"4096,4096"`
+	PotentiallyValidProposals [][]byte `ssz-size:"?,?" ssz-max:"4096,4096"`
 }
 
 // FirstVotingMessage is a message type which is used when sending first voting messages.
 type FirstVotingMessage struct {
 	FirstVotingMessageBody
-	Signature []byte
+	Signature []byte `ssz-max:"256"`
 }
 
 // String returns a string form of FirstVotingMessage.
@@ -57,13 +57,13 @@ func (v FirstVotingMessage) String() string {
 type FollowingVotingMessageBody struct {
 	MinerID        types.NodeID
 	RoundID        types.RoundID
-	VotesBitVector []uint64
+	VotesBitVector []uint64 `ssz-max:"4096"`
 }
 
 // FollowingVotingMessage is a message type which is used when sending following voting messages.
 type FollowingVotingMessage struct {
 	FollowingVotingMessageBody
-	Signature []byte
+	Signature []byte `ssz-max:"256"`
 }
 
 // String returns a string form of FollowingVotingMessage.
@@ -74,4 +74,9 @@ func (v FollowingVotingMessage) String() string {
 	}
 
 	return string(bytes)
+}
+
+type vrfMessage struct {
+	Prefix string `ssz-max:"64"`
+	Epoch  uint32
 }

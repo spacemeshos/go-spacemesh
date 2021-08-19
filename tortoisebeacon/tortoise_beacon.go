@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ALTree/bigfloat"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -529,7 +530,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 		log.Uint32("epoch_id", uint32(epoch)),
 		log.String("message", m.String()))
 
-	if err := tb.sendToGossip(ctx, TBProposalProtocol, m); err != nil {
+	if err := tb.sendToGossip(ctx, TBProposalProtocol, &m); err != nil {
 		return fmt.Errorf("broadcast proposal message: %w", err)
 	}
 
@@ -729,7 +730,7 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		PotentiallyValidProposals: proposals.potentiallyValid,
 	}
 
-	sig, err := tb.signMessage(mb)
+	sig, err := tb.signMessage(&mb)
 	if err != nil {
 		return fmt.Errorf("signMessage: %w", err)
 	}
@@ -744,7 +745,7 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		log.Uint32("round_id", uint32(firstRound)),
 		log.String("message", m.String()))
 
-	if err := tb.sendToGossip(ctx, TBFirstVotingProtocol, m); err != nil {
+	if err := tb.sendToGossip(ctx, TBFirstVotingProtocol, &m); err != nil {
 		return fmt.Errorf("sendToGossip: %w", err)
 	}
 
@@ -761,7 +762,7 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 		VotesBitVector: bitVector,
 	}
 
-	sig, err := tb.signMessage(mb)
+	sig, err := tb.signMessage(&mb)
 	if err != nil {
 		return fmt.Errorf("getSignedProposal: %w", err)
 	}
@@ -776,7 +777,7 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 		log.Uint32("round_id", uint32(round)),
 		log.String("message", m.String()))
 
-	if err := tb.sendToGossip(ctx, TBFollowingVotingProtocol, m); err != nil {
+	if err := tb.sendToGossip(ctx, TBFollowingVotingProtocol, &m); err != nil {
 		return fmt.Errorf("broadcast voting message: %w", err)
 	}
 
@@ -861,7 +862,7 @@ func (tb *TortoiseBeacon) getSignedProposal(epoch types.EpochID) ([]byte, error)
 	return signature, nil
 }
 
-func (tb *TortoiseBeacon) signMessage(message interface{}) ([]byte, error) {
+func (tb *TortoiseBeacon) signMessage(message codec.Encodable) ([]byte, error) {
 	encoded, err := types.InterfaceToBytes(message)
 	if err != nil {
 		return nil, fmt.Errorf("InterfaceToBytes: %w", err)
@@ -871,15 +872,7 @@ func (tb *TortoiseBeacon) signMessage(message interface{}) ([]byte, error) {
 }
 
 func (tb *TortoiseBeacon) buildProposal(epoch types.EpochID) ([]byte, error) {
-	message := &struct {
-		Prefix string
-		Epoch  uint32
-	}{
-		Prefix: proposalPrefix,
-		Epoch:  uint32(epoch),
-	}
-
-	b, err := types.InterfaceToBytes(message)
+	b, err := types.InterfaceToBytes(&vrfMessage{Prefix: proposalPrefix, Epoch: uint32(epoch)})
 	if err != nil {
 		return nil, fmt.Errorf("InterfaceToBytes: %w", err)
 	}
@@ -896,7 +889,7 @@ func ceilDuration(duration, multiple time.Duration) time.Duration {
 	return result
 }
 
-func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data interface{}) error {
+func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data codec.Encodable) error {
 	serialized, err := types.InterfaceToBytes(data)
 	if err != nil {
 		return fmt.Errorf("serializing: %w", err)

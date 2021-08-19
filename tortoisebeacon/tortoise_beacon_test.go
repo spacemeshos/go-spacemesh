@@ -25,11 +25,11 @@ import (
 
 type validatorMock struct{}
 
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) error {
+func (*validatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint64) error {
 	return nil
 }
 
-func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint) error {
+func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint64) error {
 	return nil
 }
 
@@ -400,17 +400,17 @@ func TestTortoiseBeacon_signMessage(t *testing.T) {
 
 	tt := []struct {
 		name    string
-		message interface{}
+		message vrfMessage
 		result  []byte
 	}{
 		{
 			name:    "Case 1",
-			message: []byte{},
+			message: vrfMessage{},
 			result:  edSgn.Sign([]byte{0, 0, 0, 0}),
 		},
 		{
 			name:    "Case 2",
-			message: &struct{ Test int }{Test: 0x12345678},
+			message: vrfMessage{Epoch: 1001},
 			result:  edSgn.Sign([]byte{0x12, 0x34, 0x56, 0x78}),
 		},
 	}
@@ -425,7 +425,7 @@ func TestTortoiseBeacon_signMessage(t *testing.T) {
 				edSigner: edSgn,
 			}
 
-			result, err := tb.signMessage(tc.message)
+			result, err := tb.signMessage(&tc.message)
 			r.NoError(err)
 			r.Equal(string(tc.result), string(result))
 		})
