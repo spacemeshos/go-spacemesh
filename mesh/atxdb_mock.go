@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -27,7 +28,7 @@ func (t *AtxDbMock) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, err
 	}
 
 	if atx, ok := t.db[id]; ok {
-		return atx.ActivationTxHeader, nil
+		return &atx.ActivationTxHeader, nil
 	}
 	return nil, fmt.Errorf("cannot find atx")
 }

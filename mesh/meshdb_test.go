@@ -57,8 +57,8 @@ func TestMeshDB_AddBlock(t *testing.T) {
 
 	poetRef := []byte{0xba, 0x05}
 	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, types.NewLayerID(5), 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPost{
-		Challenge: &types.Hash32{},
-		Post: &types.Post{
+		Challenge: types.Hash32{},
+		Proof: &types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),
 		},

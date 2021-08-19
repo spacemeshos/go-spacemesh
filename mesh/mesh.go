@@ -910,12 +910,12 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 					log.String("smesher_string", smesherString))
 				return
 			}
-			events.ReportRewardReceived(events.Reward{
-				Layer:       l.Index(),
-				Total:       cnt * blockTotalReward.Uint64(),
-				LayerReward: cnt * blockLayerReward.Uint64(),
-				Coinbase:    account,
-				Smesher:     *smesherEntry,
+			events.ReportRewardReceived(types.Reward{
+				Layer:               l.Index(),
+				TotalReward:         cnt * blockTotalReward.Uint64(),
+				LayerRewardEstimate: cnt * blockLayerReward.Uint64(),
+				Coinbase:            account,
+				SmesherID:           *smesherEntry,
 			})
 		}
 	}
