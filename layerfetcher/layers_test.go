@@ -345,7 +345,7 @@ func generateLayerBlocks() []byte {
 		Blocks:          []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID(), randomBlockID()},
 		VerifyingVector: []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID()},
 	}
-	out, _ := types.InterfaceToBytes(lb)
+	out, _ := types.InterfaceToBytes(&lb)
 	return out
 }
 

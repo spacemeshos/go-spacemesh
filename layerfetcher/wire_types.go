@@ -13,7 +13,15 @@ type layerHash struct {
 
 // layerBlocks is the response for a given layer hash
 type layerBlocks struct {
-	Blocks          []types.BlockID
-	LatestBlocks    []types.BlockID // LatestBlocks are the blocks received in the last 30 seconds from gossip
-	VerifyingVector []types.BlockID // VerifyingVector is the input vector for verifying tortoise
+	Blocks          []types.BlockID `ssz-max:"4096"`
+	LatestBlocks    []types.BlockID `ssz-max:"4096"` // LatestBlocks are the blocks received in the last 30 seconds from gossip
+	VerifyingVector []types.BlockID `ssz-max:"4096"` // VerifyingVector is the input vector for verifying tortoise
+}
+
+type atxContainer struct {
+	List []types.ATXID `ssz-max:"4096"`
+}
+
+type blocksContainer struct {
+	List []types.BlockID `ssz-max:"4096"`
 }

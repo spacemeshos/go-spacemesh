@@ -32,10 +32,10 @@ type builderState struct {
 	PoetRound *types.PoetRound
 
 	// PoetServiceID returns the public key of the PoET proving service.
-	PoetServiceID []byte
+	PoetServiceID []byte `ssz-max:"1024"`
 
 	// PoetProofRef is the root of the proof received from the PoET service.
-	PoetProofRef []byte
+	PoetProofRef []byte `ssz-max:"1024"`
 }
 
 func nipostBuildStateKey() []byte {

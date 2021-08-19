@@ -218,7 +218,7 @@ func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) []byte {
 	epoch := types.EpochID(util.BytesToUint32(msg))
 	atxs := l.atxIds.GetEpochAtxs(epoch)
 	l.log.WithContext(ctx).With().Debug("responded epoch atxs request", epoch, log.Int("numATXs", len(atxs)))
-	bts, err := types.InterfaceToBytes(atxs)
+	bts, err := types.InterfaceToBytes(&atxContainer{List: atxs})
 	if err != nil {
 		l.log.WithContext(ctx).With().Warning("cannot find epoch atxs", epoch, log.Err(err))
 	}
@@ -244,7 +244,7 @@ func (l *Logic) layerHashBlocksReqReceiver(ctx context.Context, msg []byte) []by
 		vector,
 	}
 
-	out, err := types.InterfaceToBytes(b)
+	out, err := types.InterfaceToBytes(&b)
 	if err != nil {
 		l.log.WithContext(ctx).With().Error("cannot serialize layer blocks response", log.Err(err))
 	}
@@ -534,11 +534,11 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 
 	// build receiver function
 	receiveForPeerFunc := func(data []byte) {
-		var atxsIDs []types.ATXID
+		var atxsIDs atxContainer
 		err := types.BytesToInterface(data, &atxsIDs)
 		resCh <- epochAtxRes{
 			Error: err,
-			Atxs:  atxsIDs,
+			Atxs:  atxsIDs.List,
 		}
 	}
 	errFunc := func(err error) {
@@ -743,12 +743,12 @@ func (l *Logic) GetInputVector(ctx context.Context, id types.LayerID) error {
 	// if result is local we don't need to process it again
 	if !res.IsLocal {
 		l.log.WithContext(ctx).With().Debug("saving input vector from peer", id, res.Hash)
-		var blocks []types.BlockID
+		var blocks blocksContainer
 		if err := types.BytesToInterface(res.Data, &blocks); err != nil {
 			l.log.WithContext(ctx).With().Error("got invalid input vector from peer", id, log.Err(err))
 			return err
 		}
-		return l.layerDB.SaveLayerInputVectorByID(ctx, id, blocks)
+		return l.layerDB.SaveLayerInputVectorByID(ctx, id, blocks.List)
 	}
 	return nil
 }

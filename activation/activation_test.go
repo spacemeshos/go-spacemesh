@@ -898,7 +898,7 @@ func newActivationTx(
 	pubLayerID types.LayerID,
 	startTick, numTicks uint64,
 	coinbase types.Address,
-	numUnints uint,
+	numUnints uint64,
 	nipost *types.NIPost,
 ) *types.ActivationTx {
 	nipostChallenge := types.NIPostChallenge{

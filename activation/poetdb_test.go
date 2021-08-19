@@ -45,7 +45,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	ref, err := poetDb.getProofRef(makeKey(poetID, roundID))
 	r.NoError(err)
 
-	proofBytes, err := types.InterfaceToBytes(poetProof)
+	proofBytes, err := types.InterfaceToBytes(&poetProof)
 	r.NoError(err)
 	expectedRef := sha256.Sum256(proofBytes)
 	r.Equal(types.CalcHash32(expectedRef[:]).Bytes(), ref)
