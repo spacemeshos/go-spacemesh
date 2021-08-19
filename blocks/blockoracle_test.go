@@ -341,7 +341,7 @@ func newBlockWithEligibility(layerID types.LayerID, atxID types.ATXID, proof typ
 func TestBlockEligibility_calc(t *testing.T) {
 	r := require.New(t)
 	atxH := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, nil, 0, nil)
-	atxDb := &mockAtxDB{atxH: atxH.ActivationTxHeader}
+	atxDb := &mockAtxDB{atxH: &atxH.ActivationTxHeader}
 	o := NewMinerBlockOracle(10, 1, atxDb, &EpochBeaconProvider{}, vrfsgn, nodeID, func() bool { return true }, logtest.New(t).WithName(t.Name()))
 	_, err := o.calcEligibilityProofs(1)
 	r.EqualError(err, "zero total weight not allowed") // a hack to make sure we got genesis active set size on genesis

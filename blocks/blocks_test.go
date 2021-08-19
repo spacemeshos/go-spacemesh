@@ -238,7 +238,7 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 
 func TestBlockHandler_AtxSetID(t *testing.T) {
 	a := atx("")
-	bbytes, err := types.InterfaceToBytes(*a)
+	bbytes, err := types.InterfaceToBytes(a)
 	require.NoError(t, err)
 	var b types.ActivationTx
 	types.BytesToInterface(bbytes, &b)

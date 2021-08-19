@@ -234,7 +234,7 @@ func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, erro
 }
 
 type vrfMessage struct {
-	EpochBeacon []byte
+	EpochBeacon []byte `ssz-max:"1024"`
 	EpochNumber types.EpochID
 	Counter     uint32
 }
