@@ -53,8 +53,8 @@ type Message struct {
 	Epoch     types.EpochID
 	Round     types.RoundID
 	Unit      uint64
-	MinerPK   []byte
-	Signature []byte
+	MinerPK   []byte `ssz-max:"256"`
+	Signature []byte `ssz-max:"256"`
 }
 
 // Option for optional configuration adjustments.
@@ -228,7 +228,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (b
 				MinerPK:   wc.signer.PublicKey().Bytes(),
 				Signature: signature,
 			}
-			msg, err := types.InterfaceToBytes(message)
+			msg, err := types.InterfaceToBytes(&message)
 			if err != nil {
 				wc.logger.Panic("can't serialize weak coin message", log.Err(err))
 			}
