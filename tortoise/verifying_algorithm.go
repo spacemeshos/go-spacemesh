@@ -2,9 +2,11 @@ package tortoise
 
 import (
 	"context"
+	"errors"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
@@ -17,43 +19,26 @@ type ThreadSafeVerifyingTortoise struct {
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
 type Config struct {
-	LayerSize int
-	Database  blockDataProvider
-	Hdist     uint32
-	Log       log.Log
-	Recovered bool
+	LayerSize    int
+	Database     database.Database
+	MeshDatabase blockDataProvider
+	Hdist        uint32
+	Log          log.Log
 }
 
 // NewVerifyingTortoise creates a new verifying tortoise wrapper
 func NewVerifyingTortoise(cfg Config) *ThreadSafeVerifyingTortoise {
-	if cfg.Recovered {
-		return recoveredVerifyingTortoise(cfg.Database, cfg.Log)
+	alg := &ThreadSafeVerifyingTortoise{
+		trtl: newTurtle(cfg.Log, cfg.Database, cfg.MeshDatabase, cfg.Hdist, cfg.LayerSize),
 	}
-	return verifyingTortoise(cfg.LayerSize, cfg.Database, cfg.Hdist, cfg.Log)
-}
-
-// verifyingTortoise creates a new verifying tortoise wrapper
-func verifyingTortoise(layerSize int, mdb blockDataProvider, hdist uint32, lg log.Log) *ThreadSafeVerifyingTortoise {
-	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, layerSize)}
-	alg.trtl.SetLogger(lg)
-	alg.trtl.init(mesh.GenesisLayer())
+	if err := alg.trtl.Recover(); err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			alg.trtl.init(mesh.GenesisLayer())
+		} else {
+			cfg.Log.Panic("can't recover turtle state", log.Err(err))
+		}
+	}
 	return alg
-}
-
-// NewRecoveredVerifyingTortoise recovers a previously persisted tortoise copy from mesh.DB
-func recoveredVerifyingTortoise(mdb blockDataProvider, lg log.Log) *ThreadSafeVerifyingTortoise {
-	tmp, err := RecoverVerifyingTortoise(mdb)
-	if err != nil {
-		lg.Panic("could not recover tortoise state from disc ", err)
-	}
-
-	trtl := tmp.(*turtle)
-
-	lg.Info("recovered tortoise from disc")
-	trtl.bdp = mdb
-	trtl.logger = lg
-
-	return &ThreadSafeVerifyingTortoise{trtl: trtl}
 }
 
 // LatestComplete returns the latest verified layer. TODO: rename?

@@ -15,7 +15,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-//go:generate msgp
+const (
+	// LayerIDSize in bytes.
+	LayerIDSize = 4
+	// BlockIDSize in bytes.
+	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
+	BlockIDSize = Hash32Length
+)
 
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
 type BlockID Hash20

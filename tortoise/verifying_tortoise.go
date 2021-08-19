@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -14,13 +15,8 @@ import (
 type blockDataProvider interface {
 	GetBlock(types.BlockID) (*types.Block, error)
 	LayerBlockIds(types.LayerID) (ids []types.BlockID, err error)
-
 	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)
-
 	SaveContextualValidity(id types.BlockID, valid bool) error
-
-	Persist(key []byte, v interface{}) error
-	Retrieve(key []byte, v interface{}) (interface{}, error)
 }
 
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
@@ -34,44 +30,31 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 }
 
 type turtle struct {
+	state
 	logger log.Log
 
 	bdp blockDataProvider
 
-	Last  types.LayerID
-	Hdist uint32
-	Evict types.LayerID
-
+	Hdist         uint32
 	AvgLayerSize  int
 	MaxExceptions int
-
-	GoodBlocksIndex map[types.BlockID]struct{}
-
-	Verified types.LayerID
-
-	// use 2D array to be able to iterate from latest elements easily
-	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion // records hdist, for each block, its votes about every
-	// previous block
-
-	// TODO: Tal says: We keep a vector containing our vote totals (positive and negative) for every previous block
-	// that's not needed here, probably for self healing?
-}
-
-// SetLogger sets the Log instance for this turtle
-func (t *turtle) SetLogger(log2 log.Log) {
-	t.logger = log2
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance. XXX: maybe rename?
-func newTurtle(bdp blockDataProvider, hdist uint32, avgLayerSize int) *turtle {
+func newTurtle(lg log.Log, db database.Database, bdp blockDataProvider, hdist uint32, avgLayerSize int) *turtle {
 	t := &turtle{
-		logger:               log.NewNop(),
-		Hdist:                hdist,
-		bdp:                  bdp,
-		AvgLayerSize:         avgLayerSize,
-		GoodBlocksIndex:      make(map[types.BlockID]struct{}),
-		BlockOpinionsByLayer: make(map[types.LayerID]map[types.BlockID]Opinion, hdist),
-		MaxExceptions:        int(hdist) * avgLayerSize * 100,
+		state: state{
+			diffMode:             true,
+			db:                   db,
+			log:                  lg,
+			GoodBlocksIndex:      map[types.BlockID]bool{},
+			BlockOpinionsByLayer: map[types.LayerID]map[types.BlockID]Opinion{},
+		},
+		logger:        lg,
+		Hdist:         hdist,
+		bdp:           bdp,
+		AvgLayerSize:  avgLayerSize,
+		MaxExceptions: int(hdist) * avgLayerSize * 100,
 	}
 	return t
 }
@@ -84,13 +67,11 @@ func (t *turtle) init(genesisLayer *types.Layer) {
 	t.BlockOpinionsByLayer[genesisLayer.Index()] = make(map[types.BlockID]Opinion)
 	for _, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
-		t.BlockOpinionsByLayer[genesisLayer.Index()][blk.ID()] = Opinion{
-			BlocksOpinion: make(map[types.BlockID]vec),
-		}
-		t.GoodBlocksIndex[id] = struct{}{}
+		t.BlockOpinionsByLayer[genesisLayer.Index()][id] = Opinion{}
+		t.GoodBlocksIndex[id] = false
 	}
 	t.Last = genesisLayer.Index()
-	t.Evict = genesisLayer.Index()
+	t.EvictFrom = genesisLayer.Index()
 	t.Verified = genesisLayer.Index()
 }
 
@@ -106,7 +87,7 @@ func (t *turtle) evict() {
 	window := t.Verified.Sub(t.Hdist)
 	t.logger.Info("window starts %v", window)
 	// evict from last evicted to the beginning of our window.
-	for lyr := t.Evict; lyr.Before(window); lyr = lyr.Add(1) {
+	for lyr := t.EvictFrom; lyr.Before(window); lyr = lyr.Add(1) {
 		t.logger.Info("removing layer %v", lyr)
 		for blk := range t.BlockOpinionsByLayer[lyr] {
 			delete(t.GoodBlocksIndex, blk)
@@ -115,7 +96,7 @@ func (t *turtle) evict() {
 		t.logger.Debug("evict block %v from maps", lyr)
 
 	}
-	t.Evict = window
+	t.EvictFrom = window
 }
 
 func blockIDsToString(input []types.BlockID) string {
@@ -303,7 +284,7 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 		if err != nil {
 			t.logger.With().Debug("input vector is empty, adding neutral diffs", i, log.Err(err))
 			for _, b := range layerBlockIds {
-				if v, ok := opinion2.BlocksOpinion[b]; !ok || v != abstain {
+				if v, ok := opinion2[b]; !ok || v != abstain {
 					t.logger.With().Debug("added diff",
 						log.FieldNamed("base_block_candidate", blockid),
 						log.FieldNamed("diff_block", b),
@@ -318,7 +299,7 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 
 		for _, b := range layerInputVector {
 			inInputVector[b] = struct{}{}
-			if v, ok := opinion2.BlocksOpinion[b]; !ok || v != support {
+			if v, ok := opinion2[b]; !ok || v != support {
 				// Block is in input vector but no base block vote or base block doesn't support it:
 				// add diff FOR this block
 				t.logger.With().Debug("added diff",
@@ -336,7 +317,7 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 			}
 
 			// TODO: maybe we don't need this if it is not included
-			if v, ok := opinion2.BlocksOpinion[b]; !ok || v != against {
+			if v, ok := opinion2[b]; !ok || v != against {
 				// Layer block has no base block vote or base block supports, but not in input vector:
 				// add diff AGAINST this block
 				t.logger.With().Debug("added diff",
@@ -357,18 +338,18 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 }
 
-func (t *turtle) BlockWeight(voting, voted types.BlockID) int {
+func (t *turtle) BlockWeight(voting, voted types.BlockID) int64 {
 	return 1
 }
 
 // Persist saves the current tortoise state to the database
 func (t *turtle) persist() error {
-	return t.bdp.Persist(mesh.TORTOISE, t)
-}
-
-// RecoverVerifyingTortoise retrieve latest saved tortoise from the database
-func RecoverVerifyingTortoise(mdb retriever) (interface{}, error) {
-	return mdb.Retrieve(mesh.TORTOISE, &turtle{})
+	// TODO(dshulyak) make state eviction a part of regular eviction
+	// HandleIncomingLayer should expose an error for this
+	if err := t.state.Evict(); err != nil {
+		return err
+	}
+	return t.state.Persist()
 }
 
 func (t *turtle) processBlock(block *types.Block) error {
@@ -397,8 +378,8 @@ func (t *turtle) processBlock(block *types.Block) error {
 	}
 
 	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
-	opinion := make(map[types.BlockID]vec)
-	for blk, vote := range baseBlockOpinion.BlocksOpinion {
+	opinion := Opinion{}
+	for blk, vote := range baseBlockOpinion {
 		fblk, err := t.bdp.GetBlock(blk)
 		if err != nil {
 			return fmt.Errorf("voted block not in db voting_block_id: %v, voting_block_layer_id: %v, voted_block_id: %v", block.ID().String(), block.LayerIndex, blk.String())
@@ -423,7 +404,7 @@ func (t *turtle) processBlock(block *types.Block) error {
 
 	// TODO: neutral ?
 	t.logger.With().Debug("adding block to blocks table", block.Fields()...)
-	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = Opinion{BlocksOpinion: opinion}
+	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = opinion
 	return nil
 }
 
@@ -485,7 +466,7 @@ func (t *turtle) HandleIncomingLayer(newlyr *types.Layer) (pbaseOld, pbaseNew ty
 			t.checkBlockAndGetInputVector(b.NeutralDiff, "abstain", abstain, b.ID(), baseBlock.LayerIndex) {
 			// (2) all diffs appear after the base block and are consistent with the input vote vector
 			t.logger.With().Debug("marking good block", b.ID(), b.LayerIndex)
-			t.GoodBlocksIndex[b.ID()] = struct{}{}
+			t.GoodBlocksIndex[b.ID()] = false
 		} else {
 			t.logger.With().Debug("not marking block good", b.ID(), b.LayerIndex)
 		}
@@ -550,7 +531,7 @@ layerLoop:
 					}
 
 					// check if this block has an opinion on this block (TODO: maybe no opinion means AGAINST?)
-					opinionVote, ok := op.BlocksOpinion[blk]
+					opinionVote, ok := op[blk]
 					if !ok {
 						t.logger.With().Debug("no opinion on block",
 							log.FieldNamed("voting_block", bid),
@@ -562,7 +543,7 @@ layerLoop:
 						log.FieldNamed("voting_block", bid),
 						log.FieldNamed("voted_block", blk),
 						log.String("vote", opinionVote.String()),
-						log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
+						log.String("sum", fmt.Sprintf("[%v, %v]", sum.Support, sum.Against)))
 					sum = sum.Add(opinionVote.Multiply(t.BlockWeight(bid, blk)))
 				}
 			}
@@ -573,7 +554,7 @@ layerLoop:
 				log.FieldNamed("voted_block", blk),
 				i,
 				log.String("global_opinion", globalOpinion.String()),
-				log.String("sum", fmt.Sprintf("[%v, %v]", sum[0], sum[1])))
+				log.String("sum", fmt.Sprintf("[%v, %v]", sum.Support, sum.Against)))
 
 			// If, for any block in this layer, the global opinion (summed votes) disagrees with our vote (what the
 			// input vector says), or if the global opinion is abstain, then we do not verify this layer. Otherwise,
