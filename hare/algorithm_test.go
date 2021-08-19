@@ -33,7 +33,7 @@ func (mmv *mockMessageValidator) SyntacticallyValidateMessage(context.Context, *
 	return mmv.syntaxValid
 }
 
-func (mmv *mockMessageValidator) ContextuallyValidateMessage(context.Context, *Msg, int32) error {
+func (mmv *mockMessageValidator) ContextuallyValidateMessage(context.Context, *Msg, uint32) error {
 	mmv.countContext++
 	return mmv.contextValid
 }
@@ -506,7 +506,7 @@ func TestProcOutput_Set(t *testing.T) {
 
 func TestIterationFromCounter(t *testing.T) {
 	for i := 0; i < 10; i++ {
-		assert.Equal(t, int32(i/4), iterationFromCounter(int32(i)))
+		assert.Equal(t, int32(i/4), iterationFromCounter(uint32(i)))
 	}
 }
 

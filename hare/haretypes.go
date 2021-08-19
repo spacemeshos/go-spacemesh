@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-type messageType byte
+type messageType uint8
 
 // declare all known message types
 const (
@@ -22,11 +22,11 @@ const (
 
 // declare round identifiers
 const (
-	preRound      = -1
-	statusRound   = 0
-	proposalRound = 1
-	commitRound   = 2
-	notifyRound   = 3
+	preRound uint32 = iota + 1
+	statusRound
+	proposalRound
+	commitRound
+	notifyRound
 )
 
 const defaultSetSize = 200
