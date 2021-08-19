@@ -75,7 +75,7 @@ type layerClock interface {
 func New(
 	conf Config,
 	layerDuration time.Duration,
-	minerPK *signing.PublicKey,
+	nodeID types.NodeID,
 	net broadcaster,
 	atxDB activationDB,
 	tortoiseBeaconDB tortoiseBeaconDB,
@@ -91,7 +91,7 @@ func New(
 		Log:                     logger,
 		config:                  conf,
 		layerDuration:           layerDuration,
-		minerPK:                 minerPK,
+		nodeID:                  nodeID,
 		net:                     net,
 		atxDB:                   atxDB,
 		tortoiseBeaconDB:        tortoiseBeaconDB,
@@ -120,7 +120,7 @@ type TortoiseBeacon struct {
 
 	config        Config
 	layerDuration time.Duration
-	minerPK       *signing.PublicKey
+	nodeID        types.NodeID
 
 	net              broadcaster
 	atxDB            activationDB
@@ -521,7 +521,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	// concat them into a single proposal message
 	m := ProposalMessage{
 		EpochID:      epoch,
-		MinerPK:      tb.minerPK.Bytes(),
+		NodeID:       tb.nodeID,
 		VRFSignature: proposedSignature,
 	}
 
