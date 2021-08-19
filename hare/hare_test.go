@@ -16,7 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	signing2 "github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -90,7 +90,7 @@ func newMockConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set
 }
 
 func createHare(n1 p2p.Service, logger log.Log) *Hare {
-	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, validateBlocks, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(logger), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
+	return New(cfg, n1, signing.NewEdSigner(), types.NodeID{}, validateBlocks, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(logger), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
 }
 
 var _ Consensus = (*mockConsensusProcess)(nil)
@@ -285,7 +285,7 @@ func TestHare_onTick(t *testing.T) {
 	layerTicker := make(chan types.LayerID)
 
 	oracle := newMockHashOracle(numOfClients)
-	signing := signing2.NewEdSigner()
+	signing := signing.NewEdSigner()
 
 	blockset := []types.BlockID{value1, value2, value3}
 	om := new(orphanMock)
@@ -471,7 +471,7 @@ func TestHare_WeakCoin(t *testing.T) {
 	done := make(chan struct{})
 	layerTicker := make(chan types.LayerID)
 	oracle := newMockHashOracle(numOfClients)
-	signing := signing2.NewEdSigner()
+	signing := signing.NewEdSigner()
 	om := &orphanMock{recordCoinflipsFn: func(_ context.Context, id types.LayerID, b bool) {
 		r.Equal(layerID, id)
 		r.True(b)

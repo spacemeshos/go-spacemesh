@@ -2,12 +2,13 @@ package node
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"net"
 	"strconv"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNew(t *testing.T) {
@@ -31,7 +32,7 @@ func TestNewNodeFromString(t *testing.T) {
 
 	assert.NoError(t, err)
 	ip, port, _ := net.SplitHostPort(address)
-	assert.Equal(t, ip, node.IP.String())
+	assert.Equal(t, ip, node.GetIP().String())
 	assert.Equal(t, port, strconv.Itoa(int(node.ProtocolPort)))
 	assert.Equal(t, pubkey, node.PublicKey().String())
 
@@ -51,7 +52,7 @@ func TestStringFromNode(t *testing.T) {
 
 	require.NoError(t, err)
 
-	assert.Equal(t, n2.IP.String(), n.IP.String())
+	assert.Equal(t, n2.GetIP().String(), n.GetIP().String())
 	assert.Equal(t, n2.ID.String(), n.PublicKey().String())
 	assert.Equal(t, n2.ProtocolPort, n.ProtocolPort)
 	assert.Equal(t, n2.DiscoveryPort, n.DiscoveryPort)

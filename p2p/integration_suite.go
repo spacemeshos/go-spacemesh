@@ -2,7 +2,7 @@ package p2p
 
 import (
 	"context"
-	"net"
+	inet "net"
 	"sync"
 	"testing"
 	"time"
@@ -15,11 +15,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
 // NodeTestInstance is an instance of a p2p node for testing
 type NodeTestInstance interface {
-	Service
+	service.Service
 	LocalNode() node.LocalNode // this holds the keys
 }
 
@@ -71,8 +72,8 @@ func (its *IntegrationTestSuite) SetupSuite() {
 			if j == i {
 				continue
 			}
-			udpAddr := boot[j].udpnetwork.LocalAddr().(*net.UDPAddr)
-			tcpAddr := boot[j].network.LocalAddr().(*net.TCPAddr)
+			udpAddr := boot[j].udpnetwork.LocalAddr().(*inet.UDPAddr)
+			tcpAddr := boot[j].network.LocalAddr().(*inet.TCPAddr)
 			pk := boot[j].lNode.PublicKey()
 			info := node.NewNode(pk, tcpAddr.IP, uint16(tcpAddr.Port), uint16(udpAddr.Port))
 			boot[i].discover.Update(info, info)
@@ -230,9 +231,9 @@ func StringIdentifiers(boot ...*Switch) []string {
 	s := make([]string, len(boot))
 	for i := 0; i < len(s); i++ {
 		pk := boot[i].LocalNode().PublicKey()
-		tcp := boot[i].network.LocalAddr().(*net.TCPAddr)
-		udp := boot[i].udpnetwork.LocalAddr().(*net.UDPAddr)
-		nodeinfo := node.NewNode(pk, net.IPv6loopback, uint16(tcp.Port), uint16(udp.Port))
+		tcp := boot[i].network.LocalAddr().(*inet.TCPAddr)
+		udp := boot[i].udpnetwork.LocalAddr().(*inet.UDPAddr)
+		nodeinfo := node.NewNode(pk, inet.IPv6loopback, uint16(tcp.Port), uint16(udp.Port))
 		s[i] = nodeinfo.String() //node.StringFromNode(node.New(boot[i].LocalNode().Node.PublicKey(), boot[i].udpnetwork.LocalAddr().String())) )
 	}
 	return s

@@ -17,7 +17,7 @@ func assertAddr(t *testing.T, got, expected *node.Info) {
 	if got.ID != expected.ID {
 		t.Fatalf("expected ID %v, got %v", expected.ID.String(), got.ID.String())
 	}
-	if !got.IP.Equal(expected.IP) {
+	if !got.GetIP().Equal(expected.GetIP()) {
 		t.Fatalf("expected address IP %v, got %v", expected.IP, got.IP)
 	}
 	if got.DiscoveryPort != expected.DiscoveryPort {

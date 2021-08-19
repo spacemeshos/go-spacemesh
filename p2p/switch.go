@@ -374,7 +374,7 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 	protomessage := &ProtocolMessage{
 		Metadata: &ProtocolMessageMetadata{
 			NextProtocol: protocol, ClientVersion: config.ClientVersion,
-			Timestamp: time.Now().Unix(), AuthPubkey: s.LocalNode().PublicKey().Bytes(),
+			Timestamp: uint64(time.Now().Unix()), AuthPubkey: s.LocalNode().PublicKey().Bytes(),
 		},
 		Payload: nil,
 	}
@@ -583,7 +583,7 @@ func (s *Switch) onRemoteClientMessage(ctx context.Context, msg net.IncomingMess
 	}
 
 	// check that the message was sent within a reasonable time
-	if ok := timesync.CheckMessageDrift(pm.Metadata.Timestamp); !ok {
+	if ok := timesync.CheckMessageDrift(int64(pm.Metadata.Timestamp)); !ok {
 		// TODO: consider kill connection with this node and maybe blacklist
 		// TODO : Also consider moving send timestamp into metadata(encrypted).
 		return ErrOutOfSync
@@ -854,7 +854,7 @@ func (s *Switch) getMorePeers(ctx context.Context, numpeers int) int {
 				return
 			}
 			s.discover.Attempt(nd.PublicKey())
-			addr := inet.TCPAddr{IP: inet.ParseIP(nd.IP.String()), Port: int(nd.ProtocolPort)}
+			addr := inet.TCPAddr{IP: inet.ParseIP(nd.GetIP().String()), Port: int(nd.ProtocolPort)}
 			_, err := s.cPool.GetConnection(ctx, &addr, nd.PublicKey())
 			reportChan <- cnErr{nd, err}
 		}(nds[i], res)

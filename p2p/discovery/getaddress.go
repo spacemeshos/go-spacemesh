@@ -12,6 +12,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
+type response struct {
+	Nodes []*node.Info `ssz-max:"300"`
+}
+
 // todo : calculate real udp max message size
 
 func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.Message) []byte {
@@ -36,7 +40,7 @@ func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.
 
 		//todo: limit results to message size
 		//todo: what to do if we have no addresses?
-		resp, err := types.InterfaceToBytes(results)
+		resp, err := types.InterfaceToBytes(&response{Nodes: results})
 
 		if err != nil {
 			plogger.With().Error("error marshaling response message (GetAddress)", log.Err(err))
@@ -64,23 +68,15 @@ func (p *protocol) GetAddresses(ctx context.Context, remoteID p2pcrypto.PublicKe
 	ch := make(chan []*node.Info)
 	resHandler := func(msg []byte) {
 		defer close(ch)
-		nodes := make([]*node.Info, 0, getAddrMax)
-		err := types.BytesToInterface(msg, &nodes)
+		var resp response
+		err := types.BytesToInterface(msg, &resp)
 		//todo: check that we're not pass max results ?
 		if err != nil {
 			plogger.With().Warning("could not deserialize bytes, skipping packet", log.Err(err))
 			return
 		}
 
-		if len(nodes) > getAddrMax {
-			plogger.With().Warning("addresses response too large, ignoring",
-				log.FieldNamed("from", remoteID),
-				log.Int("got", len(nodes)),
-				log.Int("expected", getAddrMax))
-			return
-		}
-
-		ch <- nodes
+		ch <- resp.Nodes
 	}
 
 	err = p.msgServer.SendRequest(ctx, server.GetAddresses, []byte(""), remoteID, resHandler, func(err error) {})

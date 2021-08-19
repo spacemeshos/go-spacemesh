@@ -79,8 +79,8 @@ func TestGetAddress(t *testing.T) {
 	if ka == nil {
 		t.Fatalf("Did not get an address where there is one in the pool")
 	}
-	if !ka.na.IP.Equal(n2.IP) {
-		t.Errorf("Wrong IP: got %v, want %v", ka.na.IP.String(), n2.IP.String())
+	if !ka.na.GetIP().Equal(n2.GetIP()) {
+		t.Errorf("Wrong IP: got %v, want %v", ka.na.GetIP().String(), n2.GetIP().String())
 	}
 
 	// Mark this as a good address and get it
@@ -89,8 +89,8 @@ func TestGetAddress(t *testing.T) {
 	if ka == nil {
 		t.Fatalf("Did not get an address where there is one in the pool")
 	}
-	if !ka.na.IP.Equal(n2.IP) {
-		t.Errorf("Wrong IP: got %v, want %v", ka.na.IP.String(), n2.IP.String())
+	if !ka.na.GetIP().Equal(n2.GetIP()) {
+		t.Errorf("Wrong IP: got %v, want %v", ka.na.GetIP().String(), n2.GetIP().String())
 	}
 
 	numAddrs := n.NumAddresses()
@@ -115,8 +115,8 @@ func Test_Lookup(t *testing.T) {
 	if ka == nil {
 		t.Fatalf("Did not get an address where there is one in the pool")
 	}
-	if !ka.na.IP.Equal(n2.IP) {
-		t.Errorf("Wrong IP: got %v, want %v", ka.na.IP.String(), n2.IP.String())
+	if !ka.na.GetIP().Equal(n2.GetIP()) {
+		t.Errorf("Wrong IP: got %v, want %v", ka.na.GetIP().String(), n2.GetIP().String())
 	}
 
 	n.AddAddresses(generateDiscNodes(100), n.localAddresses[0])

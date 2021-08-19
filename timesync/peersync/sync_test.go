@@ -56,9 +56,9 @@ func TestSyncGetOffset(t *testing.T) {
 		p2pcrypto.NewRandomPubkey(),
 	}
 	resp := Response{
-		Timestamp: peerResponse.UnixNano(),
+		Timestamp: uint64(peerResponse.UnixNano()),
 	}
-	respBuf, err := types.InterfaceToBytes(resp)
+	respBuf, err := types.InterfaceToBytes(&resp)
 	require.NoError(t, err)
 	receive := make(chan service.DirectMessage, len(peers))
 
@@ -157,9 +157,9 @@ func TestSyncTerminateOnError(t *testing.T) {
 				assert.NoError(t, types.BytesToInterface(msg.Payload, &req))
 				resp := Response{
 					ID:        req.ID,
-					Timestamp: peerResponse.UnixNano(),
+					Timestamp: uint64(peerResponse.UnixNano()),
 				}
-				respBuf, err := types.InterfaceToBytes(resp)
+				respBuf, err := types.InterfaceToBytes(&resp)
 				assert.NoError(t, err)
 
 				receive <- (*directMessage)(&service.DataMsgWrapper{

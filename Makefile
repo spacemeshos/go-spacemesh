@@ -372,3 +372,17 @@ dockerrun-stress: dockerbuild-test dockerrun-blocks-stress dockerrun-grpc-stress
 
 dockertest-stress: dockerpush dockerrun-stress
 .PHONY: dockertest-stress
+
+sszgen:
+	sszgen --path ./fetch/ --output ./fetch/types_ssz.go --objs requestBatch,responseBatch --include ./common/types
+	sszgen --path ./hare/ --output ./hare/types_ssz.go --objs Message --include ./common/types
+	sszgen --path ./hare/eligibility/ --output ./hare/eligibility/types_ssz.go --objs vrfMessage --include ./common/types
+	sszgen --path ./blocks/ --output ./blocks/types_ssz.go --objs vrfMessage --include ./common/types
+	sszgen --path ./common/types/ --output ./common/types/types_ssz.go --objs DBBlock,Block,PoetProof,ActivationTx,MeshTransaction
+	sszgen --path ./timesync/peersync/ --output ./timesync/peersync/types_ssz.go --objs Request,Response
+	sszgen --path ./p2p/net --output ./p2p/net/types_ssz.go --objs HandshakeData
+	sszgen --path ./p2p/service/ --output ./p2p/service/types_ssz.go --objs DataMsgWrapper
+	sszgen --path ./p2p/ --output ./p2p/types_ssz.go --objs ProtocolMessage --include ./p2p/service
+	sszgen --path ./p2p/node --output ./p2p/node/types_ssz.go --objs Info
+	sszgen --path ./p2p/discovery --output ./p2p/discovery/types_ssz.go --objs response --include ./p2p/node
+.PHONY: sszgen

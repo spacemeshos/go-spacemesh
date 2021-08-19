@@ -131,7 +131,7 @@ func (a *addrBook) isLocalAddressUnlocked(addr *node.Info) bool {
 		}
 
 		if local.ProtocolPort != 0 && local.DiscoveryPort != 0 {
-			if local.IP.Equal(addr.IP) && (local.ProtocolPort == addr.ProtocolPort && local.DiscoveryPort == addr.DiscoveryPort) {
+			if local.GetIP().Equal(addr.GetIP()) && (local.ProtocolPort == addr.ProtocolPort && local.DiscoveryPort == addr.DiscoveryPort) {
 				return true
 			}
 		}

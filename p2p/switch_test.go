@@ -553,7 +553,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	goodmsg := &ProtocolMessage{
 		Metadata: &ProtocolMessageMetadata{
 			AuthPubkey: id.PublicKey().Bytes(), NextProtocol: exampleProtocol,
-			Timestamp: time.Now().Unix(), ClientVersion: config.ClientVersion,
+			Timestamp: uint64(time.Now().Unix()), ClientVersion: config.ClientVersion,
 		}, // not signed
 		Payload: &Payload{Payload: []byte(examplePayload)},
 	}
@@ -565,7 +565,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 		return goodbin, nil
 	}
 
-	goodmsg.Metadata.Timestamp = time.Now().Add(-time.Hour).Unix()
+	goodmsg.Metadata.Timestamp = uint64(time.Now().Add(-time.Hour).Unix())
 	nosynced, _ := types.InterfaceToBytes(goodmsg)
 
 	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
@@ -579,7 +579,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	assert.Equal(t, ErrOutOfSync, err)
 
 	// Test no protocol
-	goodmsg.Metadata.Timestamp = time.Now().Unix()
+	goodmsg.Metadata.Timestamp = uint64(time.Now().Unix())
 
 	goodbin, _ = types.InterfaceToBytes(goodmsg)
 	ime.Message = goodbin
@@ -1018,7 +1018,7 @@ func TestSwarm_AskPeersSerial(t *testing.T) {
 
 func Test_NodeInfo(t *testing.T) {
 	pinged := node.NewNode(p2pcrypto.NewRandomPubkey(), net.IPv4LoopbackAddress, 1010, 1020)
-	raw, err := types.InterfaceToBytes(&pinged)
+	raw, err := types.InterfaceToBytes(pinged)
 	require.NoError(t, err)
 	pinged2 := &node.Info{}
 	err = types.BytesToInterface(raw, pinged2)

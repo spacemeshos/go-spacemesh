@@ -10,7 +10,7 @@ import (
 )
 
 func marshallUnmarshall(t *testing.T, msg *Message) *Message {
-	buf, err := types.InterfaceToBytes(&msg)
+	buf, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
 	m := &Message{}

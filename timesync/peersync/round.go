@@ -36,7 +36,7 @@ func (r *round) Offset() time.Duration {
 	offsets := make([]int64, len(r.responses))
 	for i := range r.responses {
 		rtt := r.responses[i].receiveTimestamp - r.Timestamp
-		offsets[i] = r.responses[i].Timestamp - r.Timestamp - rtt/2
+		offsets[i] = int64(r.responses[i].Timestamp) - r.Timestamp - rtt/2
 	}
 	sort.Slice(offsets, func(i, j int) bool {
 		return offsets[i] < offsets[j]

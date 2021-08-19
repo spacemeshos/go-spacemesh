@@ -4,14 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
+	inet "net"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
-	inet "github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -23,10 +23,10 @@ type Lookuper func(key p2pcrypto.PublicKey) (*node.Info, error)
 
 type udpNetwork interface {
 	Shutdown()
-	Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (inet.Connection, error)
-	IncomingMessages() chan inet.IncomingMessageEvent
-	SubscribeOnNewRemoteConnections(f func(event inet.NewConnectionEvent))
-	SubscribeClosingConnections(f func(ctx context.Context, connection inet.ConnectionWithErr))
+	Dial(ctx context.Context, address inet.Addr, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error)
+	IncomingMessages() chan net.IncomingMessageEvent
+	SubscribeOnNewRemoteConnections(f func(event net.NewConnectionEvent))
+	SubscribeClosingConnections(f func(ctx context.Context, connection net.ConnectionWithErr))
 }
 
 // UDPMux is a server for receiving and sending udp messages through protocols.
@@ -59,14 +59,14 @@ func NewUDPMux(ctx, shutdownCtx context.Context, localNode node.LocalNode, looku
 		shutdownCtx: shutdownCtx,
 	}
 
-	udpNet.SubscribeOnNewRemoteConnections(func(event inet.NewConnectionEvent) {
+	udpNet.SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent) {
 		ctx := log.WithNewSessionID(ctx)
 		if err := cpool.OnNewConnection(ctx, event); err != nil {
 			um.logger.WithContext(ctx).With().Warning("error adding udp connection to cpool", log.Err(err))
 		}
 	})
 
-	udpNet.SubscribeClosingConnections(func(ctx context.Context, connection inet.ConnectionWithErr) {
+	udpNet.SubscribeClosingConnections(func(ctx context.Context, connection net.ConnectionWithErr) {
 		cpool.OnClosedConnection(ctx, connection)
 	})
 
@@ -107,7 +107,7 @@ func (mux *UDPMux) listenToNetworkMessage() {
 			if mux.isShuttingDown() {
 				return
 			}
-			go func(event inet.IncomingMessageEvent) {
+			go func(event net.IncomingMessageEvent) {
 				err := mux.processUDPMessage(event)
 				if err != nil {
 					mux.logger.Error("Error handing network message err=%v", err)
@@ -165,7 +165,7 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 		return err
 	}
 
-	addr := &net.UDPAddr{IP: net.ParseIP(peer.IP.String()), Port: int(peer.DiscoveryPort)}
+	addr := &inet.UDPAddr{IP: inet.ParseIP(peer.GetIP().String()), Port: int(peer.DiscoveryPort)}
 
 	conn, err := mux.cpool.GetConnection(ctx, addr, peer.PublicKey())
 	if err != nil {
@@ -181,9 +181,9 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 	mt := ProtocolMessageMetadata{
 		protocol,
 		config.ClientVersion,
-		time.Now().UnixNano(),
+		uint64(time.Now().UnixNano()),
 		mux.local.PublicKey().Bytes(),
-		int32(mux.networkid),
+		mux.networkid,
 	}
 
 	message := ProtocolMessage{
@@ -241,7 +241,7 @@ func (upm *udpProtocolMessage) Data() service.Data {
 }
 
 // processUDPMessage processes a udp message received and passes it to the protocol, it adds related p2p metadata.
-func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
+func (mux *UDPMux) processUDPMessage(msg net.IncomingMessageEvent) error {
 	if msg.Message == nil || msg.Conn == nil {
 		return ErrBadFormat1
 	}
@@ -272,7 +272,7 @@ func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
 		return ErrBadFormat2
 	}
 
-	if pm.Metadata.NetworkID != int32(mux.networkid) {
+	if pm.Metadata.NetworkID != mux.networkid {
 		// todo: tell net to blacklist the ip or sender ?
 		return fmt.Errorf("wrong NetworkID, want: %v, got: %v", mux.networkid, pm.Metadata.NetworkID)
 	}

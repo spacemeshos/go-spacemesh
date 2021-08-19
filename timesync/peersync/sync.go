@@ -56,7 +56,7 @@ type Request struct {
 // Response for time from a peer.
 type Response struct {
 	ID        uint64
-	Timestamp int64
+	Timestamp uint64
 }
 
 // DefaultConfig for Sync.
@@ -166,7 +166,7 @@ func (s *Sync) requestHandler(ctx context.Context, buf []byte) []byte {
 	}
 	resp := Response{
 		ID:        request.ID,
-		Timestamp: s.time.Now().UnixNano(),
+		Timestamp: uint64(s.time.Now().UnixNano()),
 	}
 	buf, err := types.InterfaceToBytes(&resp)
 	if err != nil {

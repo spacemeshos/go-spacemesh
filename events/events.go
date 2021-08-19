@@ -2,6 +2,7 @@
 package events
 
 import (
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -55,6 +56,7 @@ type EventPublisher struct {
 // Event defines the interface that each message sent by the EventPublisher needs to implemet for it to correctly
 // be routed by topic.
 type Event interface {
+	codec.Encodable
 	// GetChannel returns the channel on which this message will be published.
 	GetChannel() ChannelID
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	signing2 "github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // Integration Tests
@@ -56,7 +56,7 @@ func Test_16Nodes_HareIntegrationSuite(t *testing.T) {
 	his.honestSets = []*Set{set1}
 	oracle := eligibility.New(logtest.New(t))
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
-		signing := signing2.NewEdSigner()
+		signing := signing.NewEdSigner()
 		lg := logtest.New(t).WithName(signing.PublicKey().String())
 		broker := newBroker(s, newEligibilityValidator(eligibility.New(logtest.New(t)), 10, &mockIDProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.Closer{}, lg)
 		output := make(chan TerminationOutput, 1)
@@ -109,7 +109,7 @@ func Test_20Nodes_HareIntegrationSuite(t *testing.T) {
 	his.honestSets = []*Set{set1, set2, set3}
 	oracle := eligibility.New(logtest.New(t))
 	his.BeforeHook = func(idx int, s p2p.NodeTestInstance) {
-		signing := signing2.NewEdSigner()
+		signing := signing.NewEdSigner()
 		lg := logtest.New(t).WithName(signing.PublicKey().String())
 		broker := newBroker(s, newEligibilityValidator(eligibility.New(logtest.New(t)), 10, &mockIDProvider{}, cfg.N, cfg.ExpectedLeaders, lg), NewMockStateQuerier(), (&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.Closer{}, lg)
 		output := make(chan TerminationOutput, 1)

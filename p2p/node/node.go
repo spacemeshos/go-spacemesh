@@ -40,7 +40,7 @@ func (d ID) String() string {
 // Info represents a p2p node that we know about.
 type Info struct {
 	ID
-	IP            net.IP
+	IP            []byte `ssz-max:"1024"`
 	ProtocolPort  uint16 // TCP
 	DiscoveryPort uint16 // UDP
 }
@@ -81,6 +81,11 @@ func (n Info) Valid() error {
 		return errors.New("Invalid ID")
 	}
 	return nil
+}
+
+// GetIP return net.IP object.
+func (n Info) GetIP() net.IP {
+	return net.IP(n.IP)
 }
 
 // The string representation of a Node is a URL.

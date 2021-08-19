@@ -228,7 +228,7 @@ func (i *InnerActivationTx) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	// Offset (2) 'InitialPost'
 	dst = ssz.WriteOffset(dst, offset)
 	if i.InitialPost == nil {
-		i.InitialPost = new(Proof)
+		i.InitialPost = new(Post)
 	}
 	offset += i.InitialPost.SizeSSZ()
 
@@ -299,7 +299,7 @@ func (i *InnerActivationTx) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o2:]
 		if i.InitialPost == nil {
-			i.InitialPost = new(Proof)
+			i.InitialPost = new(Post)
 		}
 		if err = i.InitialPost.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -323,7 +323,7 @@ func (i *InnerActivationTx) SizeSSZ() (size int) {
 
 	// Field (2) 'InitialPost'
 	if i.InitialPost == nil {
-		i.InitialPost = new(Proof)
+		i.InitialPost = new(Post)
 	}
 	size += i.InitialPost.SizeSSZ()
 
@@ -746,7 +746,7 @@ func (n *NIPost) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	// Offset (1) 'Proof'
 	dst = ssz.WriteOffset(dst, offset)
 	if n.Proof == nil {
-		n.Proof = new(Proof)
+		n.Proof = new(Post)
 	}
 	offset += n.Proof.SizeSSZ()
 
@@ -798,7 +798,7 @@ func (n *NIPost) UnmarshalSSZ(buf []byte) error {
 	{
 		buf = tail[o1:o2]
 		if n.Proof == nil {
-			n.Proof = new(Proof)
+			n.Proof = new(Post)
 		}
 		if err = n.Proof.UnmarshalSSZ(buf); err != nil {
 			return err
@@ -824,7 +824,7 @@ func (n *NIPost) SizeSSZ() (size int) {
 
 	// Field (1) 'Proof'
 	if n.Proof == nil {
-		n.Proof = new(Proof)
+		n.Proof = new(Post)
 	}
 	size += n.Proof.SizeSSZ()
 
@@ -837,13 +837,13 @@ func (n *NIPost) SizeSSZ() (size int) {
 	return
 }
 
-// MarshalSSZ ssz marshals the Proof object
-func (p *Proof) MarshalSSZ() ([]byte, error) {
+// MarshalSSZ ssz marshals the Post object
+func (p *Post) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(p)
 }
 
-// MarshalSSZTo ssz marshals the Proof object to a target array
-func (p *Proof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+// MarshalSSZTo ssz marshals the Post object to a target array
+func (p *Post) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(8)
 
@@ -864,8 +864,8 @@ func (p *Proof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the Proof object
-func (p *Proof) UnmarshalSSZ(buf []byte) error {
+// UnmarshalSSZ ssz unmarshals the Post object
+func (p *Post) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
 	if size < 8 {
@@ -897,8 +897,8 @@ func (p *Proof) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the Proof object
-func (p *Proof) SizeSSZ() (size int) {
+// SizeSSZ returns the ssz encoded size in bytes for the Post object
+func (p *Post) SizeSSZ() (size int) {
 	size = 8
 
 	// Field (1) 'Indices'

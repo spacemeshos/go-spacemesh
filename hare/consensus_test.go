@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	signing2 "github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // Test the consensus process as a whole
@@ -140,7 +140,7 @@ func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, ora
 	broker := buildBroker(tb, network, name)
 	broker.Start(context.TODO())
 	output := make(chan TerminationOutput, 1)
-	signing := signing2.NewEdSigner()
+	signing := signing.NewEdSigner()
 	oracle.Register(isHonest, signing.PublicKey().String())
 	proc := newConsensusProcess(cfg, layer, initialSet, oracle, NewMockStateQuerier(), 10, signing,
 		types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, truer{}, logtest.New(tb).WithName(signing.PublicKey().ShortString()))

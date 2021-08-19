@@ -11,7 +11,7 @@ import (
 
 // Message is the tuple of a message and its corresponding signature.
 type Message struct {
-	Sig      []byte
+	Sig      []byte `ssz-max:"256"`
 	InnerMsg *innerMessage
 }
 
@@ -39,13 +39,13 @@ func (m *Message) Field() log.Field {
 // certificate is a collection of messages and the set of values.
 // Typically used as a collection of commit messages.
 type certificate struct {
-	Values  []types.BlockID // the committed set S
+	Values  []types.BlockID `ssz-max:"1024"` // the committed set S
 	AggMsgs *aggregatedMessages
 }
 
 // aggregatedMessages is a collection of messages.
 type aggregatedMessages struct {
-	Messages []*Message
+	Messages []*Message `ssz-max:"1024"`
 }
 
 // innerMessage is the actual set of fields that describe a message in the Hare protocol.
@@ -54,8 +54,8 @@ type innerMessage struct {
 	InstanceID       types.LayerID
 	K                uint32 // the round counter
 	Ki               uint32
-	Values           []types.BlockID     // the set S. optional for commit InnerMsg in a certificate
-	RoleProof        []byte              // role is implicit by InnerMsg type, this is the proof
+	Values           []types.BlockID     `ssz-max:"1024"`  // the set S. optional for commit InnerMsg in a certificate
+	RoleProof        []byte              `ssz-max:"20000"` // role is implicit by InnerMsg type, this is the proof
 	EligibilityCount uint16              // the number of claimed eligibilities
 	Svp              *aggregatedMessages // optional. only for proposal Messages
 	Cert             *certificate        // optional

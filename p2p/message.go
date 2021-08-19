@@ -78,16 +78,16 @@ func (pm gossipProtocolMessage) ReportValidation(ctx context.Context, protocol s
 
 // ProtocolMessageMetadata is a general p2p message wrapper
 type ProtocolMessageMetadata struct {
-	NextProtocol  string
-	ClientVersion string
-	Timestamp     int64
-	AuthPubkey    []byte
-	NetworkID     int32
+	NextProtocol  string `ssz-max:"4096"`
+	ClientVersion string `ssz-max:"4096"`
+	Timestamp     uint64
+	AuthPubkey    []byte `ssz-max:"4096"`
+	NetworkID     uint32
 }
 
 // Payload holds either a byte array or a wrapped req-res message.
 type Payload struct {
-	Payload []byte
+	Payload []byte `ssz-max:"4096"`
 	Wrapped *service.DataMsgWrapper
 }
 

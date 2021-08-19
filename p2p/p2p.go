@@ -8,11 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
-
-// Service is a wrapper for service.Service to expose the Service interface to `p2p` package clients
-type Service service.Service
 
 // New creates a new P2P service a.k.a `Switch` it loads existing node information from the disk or creates a new one.
 func New(ctx context.Context, config config.Config, logger log.Log, path string) (*Switch, error) {

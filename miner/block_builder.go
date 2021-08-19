@@ -15,7 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
 const defaultGasLimit = 10
@@ -61,7 +61,7 @@ type BlockBuilder struct {
 	stopChan        chan struct{}
 	TransactionPool txPool
 	mu              sync.Mutex
-	network         p2p.Service
+	network         service.Service
 	meshProvider    meshProvider
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
@@ -87,7 +87,7 @@ type Config struct {
 func NewBlockBuilder(
 	config Config,
 	sgn signer,
-	net p2p.Service,
+	net service.Service,
 	beginRoundEvent chan types.LayerID,
 	orph meshProvider,
 	bbp baseBlockProvider,
@@ -222,7 +222,7 @@ func (t *BlockBuilder) createBlock(ctx context.Context, id types.LayerID, atxID 
 		b.RefBlock = refBlock[:]
 	}
 
-	blockBytes, err := types.InterfaceToBytes(b)
+	blockBytes, err := types.InterfaceToBytes(&b)
 	if err != nil {
 		return nil, err
 	}
