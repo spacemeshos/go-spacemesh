@@ -13,11 +13,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-var atxID = types.ATXID([32]byte{1, 3, 3, 7})
-var nodeID, vrfsgn = generateNodeIDAndSigner()
-var validateVRF = signing.VRFVerify
-var edSigner = signing.NewEdSigner()
-var activeSetAtxs = []types.ATXID{atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID} // 10 ATXs
+var (
+	atxID          = types.ATXID([32]byte{1, 3, 3, 7})
+	nodeID, vrfsgn = generateNodeIDAndSigner()
+	validateVRF    = signing.VRFVerify
+	edSigner       = signing.NewEdSigner()
+	activeSetAtxs  = []types.ATXID{atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID} // 10 ATXs
+)
 
 const defaultAtxWeight = 1024
 
@@ -367,5 +369,4 @@ func TestMinerBlockOracle_GetEligibleLayers(t *testing.T) {
 		}
 	}
 	r.Equal(eligibleLayers, len(blockOracle.GetEligibleLayers()))
-
 }

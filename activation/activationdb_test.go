@@ -63,6 +63,7 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
 	return layer.Index().Sub(1), layer.Index()
 }
+
 func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
 	return bl.Layer().Sub(1), bl.Layer()
 }
@@ -111,6 +112,7 @@ func (MockState) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 func (MockState) GetBalance(addr types.Address) uint64 {
 	panic("implement me")
 }
+
 func (MockState) GetNonce(addr types.Address) uint64 {
 	panic("implement me")
 }
@@ -257,9 +259,9 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	assert.NoError(t, err)
 	// TODO: check this test failure
 	_ = actives
-	//assert.Len(t, actives, 2)
-	//assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
-	//assert.Equal(t, uint64(20000), actives[id2.Key], "actives[id2.Key] (%d) != %d", actives[id2.Key], 20000)
+	// assert.Len(t, actives, 2)
+	// assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
+	// assert.Equal(t, uint64(20000), actives[id2.Key], "actives[id2.Key] (%d) != %d", actives[id2.Key], 20000)
 }
 
 func TestMesh_ActiveSetForLayerView2(t *testing.T) {
@@ -736,7 +738,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
-
 }
 
 func TestActivationDb_ProcessAtx(t *testing.T) {
@@ -846,7 +847,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			prevAtxs[miner] = atx.ID()
 			storeAtx(r, atxdb, atx, lg.WithName("storeAtx"))
 		}
-		//noinspection GoNilness
+		// noinspection GoNilness
 		posAtx = atx.ID()
 		layer = layer.Add(layersPerEpoch)
 		if epoch%batchSize == batchSize-1 {
@@ -945,7 +946,6 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	signedAtx.Sig = []byte("anton")
 	_, err = ExtractPublicKey(signedAtx)
 	r.Error(err)
-
 }
 
 func createAndStoreAtx(atxdb *DB, layer types.LayerID) (*types.ActivationTx, error) {
