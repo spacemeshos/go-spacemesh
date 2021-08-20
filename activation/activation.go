@@ -560,11 +560,10 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		return nil, err
 	}
 
-	var initialPost *types.Post
+	var initialPost = &types.Post{}
 	if b.challenge.PrevATXID == *types.EmptyATXID {
 		initialPost = b.initialPost
 	}
-
 	return types.NewActivationTx(*b.challenge, b.Coinbase(), nipost, b.postSetupProvider.LastOpts().NumUnits, initialPost), nil
 }
 

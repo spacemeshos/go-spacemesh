@@ -119,7 +119,7 @@ func (n *NIPostChallenge) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 
 	// Field (7) 'InitialPostIndices'
-	if len(n.InitialPostIndices) > 1024 {
+	if len(n.InitialPostIndices) > 1024000 {
 		err = ssz.ErrBytesLength
 		return
 	}
@@ -180,7 +180,7 @@ func (n *NIPostChallenge) UnmarshalSSZ(buf []byte) error {
 	// Field (7) 'InitialPostIndices'
 	{
 		buf = tail[o7:]
-		if len(buf) > 1024 {
+		if len(buf) > 1024000 {
 			return ssz.ErrBytesLength
 		}
 		if cap(n.InitialPostIndices) == 0 {
@@ -220,16 +220,10 @@ func (i *InnerActivationTx) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 
 	// Offset (1) 'NIPost'
 	dst = ssz.WriteOffset(dst, offset)
-	if i.NIPost == nil {
-		i.NIPost = new(NIPost)
-	}
 	offset += i.NIPost.SizeSSZ()
 
 	// Offset (2) 'InitialPost'
 	dst = ssz.WriteOffset(dst, offset)
-	if i.InitialPost == nil {
-		i.InitialPost = new(Post)
-	}
 	offset += i.InitialPost.SizeSSZ()
 
 	// Field (0) 'ActivationTxHeader'
@@ -287,9 +281,6 @@ func (i *InnerActivationTx) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'NIPost'
 	{
 		buf = tail[o1:o2]
-		if i.NIPost == nil {
-			i.NIPost = new(NIPost)
-		}
 		if err = i.NIPost.UnmarshalSSZ(buf); err != nil {
 			return err
 		}
@@ -298,9 +289,6 @@ func (i *InnerActivationTx) UnmarshalSSZ(buf []byte) error {
 	// Field (2) 'InitialPost'
 	{
 		buf = tail[o2:]
-		if i.InitialPost == nil {
-			i.InitialPost = new(Post)
-		}
 		if err = i.InitialPost.UnmarshalSSZ(buf); err != nil {
 			return err
 		}
@@ -316,15 +304,9 @@ func (i *InnerActivationTx) SizeSSZ() (size int) {
 	size += i.ActivationTxHeader.SizeSSZ()
 
 	// Field (1) 'NIPost'
-	if i.NIPost == nil {
-		i.NIPost = new(NIPost)
-	}
 	size += i.NIPost.SizeSSZ()
 
 	// Field (2) 'InitialPost'
-	if i.InitialPost == nil {
-		i.InitialPost = new(Post)
-	}
 	size += i.InitialPost.SizeSSZ()
 
 	return
@@ -354,7 +336,7 @@ func (a *ActivationTx) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 
 	// Field (1) 'Sig'
-	if len(a.Sig) > 256 {
+	if len(a.Sig) > 4096 {
 		err = ssz.ErrBytesLength
 		return
 	}
@@ -395,7 +377,7 @@ func (a *ActivationTx) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'Sig'
 	{
 		buf = tail[o1:]
-		if len(buf) > 256 {
+		if len(buf) > 4096 {
 			return ssz.ErrBytesLength
 		}
 		if cap(a.Sig) == 0 {
@@ -806,16 +788,10 @@ func (n *NIPost) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 
 	// Offset (1) 'Proof'
 	dst = ssz.WriteOffset(dst, offset)
-	if n.Proof == nil {
-		n.Proof = new(Post)
-	}
 	offset += n.Proof.SizeSSZ()
 
 	// Offset (2) 'PostMetadata'
 	dst = ssz.WriteOffset(dst, offset)
-	if n.PostMetadata == nil {
-		n.PostMetadata = new(PostMetadata)
-	}
 	offset += n.PostMetadata.SizeSSZ()
 
 	// Field (1) 'Proof'
@@ -858,9 +834,6 @@ func (n *NIPost) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'Proof'
 	{
 		buf = tail[o1:o2]
-		if n.Proof == nil {
-			n.Proof = new(Post)
-		}
 		if err = n.Proof.UnmarshalSSZ(buf); err != nil {
 			return err
 		}
@@ -869,9 +842,6 @@ func (n *NIPost) UnmarshalSSZ(buf []byte) error {
 	// Field (2) 'PostMetadata'
 	{
 		buf = tail[o2:]
-		if n.PostMetadata == nil {
-			n.PostMetadata = new(PostMetadata)
-		}
 		if err = n.PostMetadata.UnmarshalSSZ(buf); err != nil {
 			return err
 		}
@@ -884,15 +854,9 @@ func (n *NIPost) SizeSSZ() (size int) {
 	size = 40
 
 	// Field (1) 'Proof'
-	if n.Proof == nil {
-		n.Proof = new(Post)
-	}
 	size += n.Proof.SizeSSZ()
 
 	// Field (2) 'PostMetadata'
-	if n.PostMetadata == nil {
-		n.PostMetadata = new(PostMetadata)
-	}
 	size += n.PostMetadata.SizeSSZ()
 
 	return
@@ -916,7 +880,7 @@ func (p *Post) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset += len(p.Indices)
 
 	// Field (1) 'Indices'
-	if len(p.Indices) > 1024 {
+	if len(p.Indices) > 1024000 {
 		err = ssz.ErrBytesLength
 		return
 	}
@@ -947,7 +911,7 @@ func (p *Post) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'Indices'
 	{
 		buf = tail[o1:]
-		if len(buf) > 1024 {
+		if len(buf) > 1024000 {
 			return ssz.ErrBytesLength
 		}
 		if cap(p.Indices) == 0 {
@@ -995,7 +959,7 @@ func (p *PostMetadata) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = ssz.MarshalUint64(dst, p.K2)
 
 	// Field (0) 'Challenge'
-	if len(p.Challenge) > 1024 {
+	if len(p.Challenge) > 1024000 {
 		err = ssz.ErrBytesLength
 		return
 	}
@@ -1035,7 +999,7 @@ func (p *PostMetadata) UnmarshalSSZ(buf []byte) error {
 	// Field (0) 'Challenge'
 	{
 		buf = tail[o0:]
-		if len(buf) > 1024 {
+		if len(buf) > 1024000 {
 			return ssz.ErrBytesLength
 		}
 		if cap(p.Challenge) == 0 {

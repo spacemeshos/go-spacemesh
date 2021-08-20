@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/post/initialization"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -180,7 +181,7 @@ func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 				prevStatus = status
 			} else {
 				// Verify last status.
-				req.Equal(opts.NumUnits*cfg.LabelsPerUnit, uint(prevStatus.NumLabelsWritten))
+				assert.Equal(t, opts.NumUnits*cfg.LabelsPerUnit, prevStatus.NumLabelsWritten)
 				break
 			}
 		}
@@ -223,7 +224,7 @@ func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 				prevStatus = status
 			} else {
 				// Verify last status.
-				req.Equal(longerSetupOpts.NumUnits*cfg.LabelsPerUnit, uint(prevStatus.NumLabelsWritten))
+				assert.Equal(t, longerSetupOpts.NumUnits*cfg.LabelsPerUnit, prevStatus.NumLabelsWritten)
 				break
 			}
 		}
@@ -329,5 +330,5 @@ func TestPostSetupManager_Stop_WhileInProgress(t *testing.T) {
 	status = mgr.Status()
 	req.Equal(&longerSetupOpts, status.LastOpts)
 	req.Equal(postSetupStateComplete, status.State)
-	req.Equal(longerSetupOpts.NumUnits*cfg.LabelsPerUnit, uint(status.NumLabelsWritten))
+	req.Equal(longerSetupOpts.NumUnits*cfg.LabelsPerUnit, status.NumLabelsWritten)
 }

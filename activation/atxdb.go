@@ -328,7 +328,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
 
-		if atx.InitialPost != nil && len(atx.InitialPost.Indices) > 0 {
+		if len(atx.InitialPost.Indices) > 0 {
 			return fmt.Errorf("prevATX declared, but initial Post is included")
 		}
 
@@ -340,11 +340,11 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("no prevATX declared, but sequence number not zero")
 		}
 
-		if atx.InitialPost == nil {
+		if len(atx.InitialPost.Indices) == 0 {
 			return fmt.Errorf("no prevATX declared, but initial Post is not included")
 		}
 
-		if atx.InitialPostIndices == nil {
+		if len(atx.InitialPostIndices) == 0 {
 			return fmt.Errorf("no prevATX declared, but initial Post indices is not included in challenge")
 		}
 
@@ -354,9 +354,9 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 
 		// Use the NIPost's Post metadata, while overriding the challenge to a zero challenge,
 		// as expected from the initial Post.
-		initialPostMetadata := *atx.NIPost.PostMetadata
+		initialPostMetadata := atx.NIPost.PostMetadata
 		initialPostMetadata.Challenge = shared.ZeroChallenge
-		if err := db.nipostValidator.ValidatePost(pub.Bytes(), atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
+		if err := db.nipostValidator.ValidatePost(pub.Bytes(), &atx.InitialPost, &initialPostMetadata, atx.NumUnits); err != nil {
 			return fmt.Errorf("invalid initial Post: %v", err)
 		}
 	}
@@ -389,7 +389,7 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 	db.log.With().Info("Validating NIPost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
-	if err = db.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, atx.NumUnits); err != nil {
+	if err = db.nipostValidator.Validate(*pubKey, &atx.NIPost, *expectedChallengeHash, atx.NumUnits); err != nil {
 		return fmt.Errorf("invalid NIPost: %v", err)
 	}
 
@@ -756,8 +756,8 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 
 	logger.With().Info(fmt.Sprintf("got new atx %v", atx.ID().ShortString()), atx.Fields(len(data))...)
 
-	if atx.NIPost == nil {
-		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
+	if len(atx.NIPost.PostMetadata.Challenge) == 0 {
+		return fmt.Errorf("empty nipst in gossip for atx %s", atx.ShortString())
 	}
 
 	if err := fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {

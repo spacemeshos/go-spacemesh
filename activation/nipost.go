@@ -133,7 +133,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	nipost := nb.state.NIPost
 
 	// Phase 0: Submit challenge to PoET service.
-	if nb.state.PoetRound == nil {
+	if nb.state.PoetRound == nil || nb.state.PoetRound.ID == "" {
 		poetServiceID, err := nb.poetProver.PoetServiceID(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to get PoET service ID: %v", ErrPoetServiceUnstable, err)
@@ -160,7 +160,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	}
 
 	// Phase 1: receive proofs from PoET service
-	if nb.state.PoetProofRef == nil {
+	if nb.state.PoetProofRef == nil || len(nb.state.PoetProofRef) == 0 {
 		var poetProofRef []byte
 		select {
 		case poetProofRef = <-nb.poetDB.SubscribeToProofRef(nb.state.PoetServiceID, nb.state.PoetRound.ID):
@@ -187,7 +187,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	}
 
 	// Phase 2: Post execution.
-	if nipost.Proof == nil {
+	if len(nipost.Proof.Indices) == 0 {
 		nb.log.With().Info("starting Post execution",
 			log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef)))
 		startTime := time.Now()
@@ -199,8 +199,8 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		nb.log.With().Info("finished Post execution",
 			log.Duration("duration", time.Now().Sub(startTime)))
 
-		nipost.Proof = proof
-		nipost.PostMetadata = proofMetadata
+		nipost.Proof = *proof
+		nipost.PostMetadata = *proofMetadata
 
 		nb.persist()
 	}
@@ -218,11 +218,11 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
 	return &types.NIPost{
 		Challenge: *challenge,
-		Proof: &types.Post{
+		Proof: types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),
 		},
-		PostMetadata: &types.PostMetadata{
+		PostMetadata: types.PostMetadata{
 			Challenge: poetRef,
 		},
 	}

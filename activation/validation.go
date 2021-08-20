@@ -63,7 +63,7 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPost, ex
 		return fmt.Errorf("invalid PoET chain: %v", err)
 	}
 
-	if err := v.ValidatePost(minerID.Bytes(), nipost.Proof, nipost.PostMetadata, numUnits); err != nil {
+	if err := v.ValidatePost(minerID.Bytes(), &nipost.Proof, &nipost.PostMetadata, numUnits); err != nil {
 		return fmt.Errorf("invalid Post: %v", err)
 	}
 

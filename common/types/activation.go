@@ -136,7 +136,7 @@ type NIPostChallenge struct {
 	StartTick          uint64
 	EndTick            uint64
 	PositioningATX     ATXID
-	InitialPostIndices []byte `ssz-max:"1024"`
+	InitialPostIndices []byte `ssz-max:"1024000"`
 }
 
 // Hash serializes the NIPostChallenge and returns its hash.
@@ -169,15 +169,15 @@ func (challenge *NIPostChallenge) String() string {
 // for validation: the NIPost and the initial Post.
 type InnerActivationTx struct {
 	ActivationTxHeader
-	NIPost      *NIPost
-	InitialPost *Post
+	NIPost      NIPost
+	InitialPost Post
 }
 
 // ActivationTx is a full, signed activation transaction. It includes (or references) everything a miner needs to prove
 // they are eligible to actively participate in the Spacemesh protocol in the next epoch.
 type ActivationTx struct {
 	InnerActivationTx
-	Sig []byte `ssz-max:"256"`
+	Sig []byte `ssz-max:"4096"`
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
@@ -189,8 +189,8 @@ func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost
 				Coinbase:        coinbase,
 				NumUnits:        numUnits,
 			},
-			NIPost:      nipost,
-			InitialPost: initialPost,
+			NIPost:      *nipost,
+			InitialPost: *initialPost,
 		},
 	}
 	atx.CalcAndSetID()
@@ -204,10 +204,7 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 
 // Fields returns an array of LoggableFields for logging
 func (atx *ActivationTx) Fields(size int) []log.LoggableField {
-	initialPost := ""
-	if atx.InitialPost != nil {
-		initialPost = atx.InitialPost.String()
-	}
+	initialPost := atx.InitialPost.String()
 
 	challenge := ""
 	h, err := atx.NIPostChallenge.Hash()
@@ -311,23 +308,23 @@ type NIPost struct {
 
 	// Post is the proof that the prover data is still stored (or was recomputed) at
 	// the time he learned the challenge constructed from the PoET.
-	Proof *Post
+	Proof Post
 
 	// PostMetadata is the Post metadata, associated with the proof.
 	// The proof should be verified upon the metadata during the syntactic validation,
 	// while the metadata should be verified during the contextual validation.
-	PostMetadata *PostMetadata
+	PostMetadata PostMetadata
 }
 
 // Post ...
 type Post struct {
 	Nonce   uint32
-	Indices []byte `ssz-max:"1024"`
+	Indices []byte `ssz-max:"1024000"`
 }
 
 // PostMetadata is similar postShared.ProofMetadata, but without the fields which can be derived elsewhere in a given ATX (ID, NumUnits).
 type PostMetadata struct {
-	Challenge     []byte `ssz-max:"1024"`
+	Challenge     []byte `ssz-max:"1024000"`
 	BitsPerLabel  uint64
 	LabelsPerUnit uint64
 	K1            uint64

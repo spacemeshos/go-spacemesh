@@ -262,7 +262,6 @@ func TestNewNIPostBuilderNotInitialized(t *testing.T) {
 	nipost, err = nb.BuildNIPost(context.TODO(), &nipostChallenge, nil)
 	r.NoError(err)
 	r.NotNil(nipost)
-
 	err = validateNIPost(minerIDNotInitialized, nipost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
 	r.NoError(err)
 }
@@ -286,7 +285,7 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	assert.NoError(err)
 	assert.NotNil(nipost)
 	db := database.NewMemDatabase()
-	assert.Equal(builderState{NIPost: &types.NIPost{}}, *nb.state)
+	assert.Equal(builderState{NIPost: &types.NIPost{}, PoetRound: &types.PoetRound{}}, *nb.state)
 
 	//fail after getting proof ref
 	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
@@ -351,8 +350,9 @@ func TestValidator_Validate(t *testing.T) {
 	r.Contains(err.Error(), "invalid `Challenge`")
 
 	newNIPost := *nipost
-	newNIPost.Proof = &types.Post{}
+	newNIPost.Proof = types.Post{}
 	err = validateNIPost(minerID, &newNIPost, nipostChallenge, poetDb, postCfg, postSetupOpts.NumUnits)
+	r.Error(err)
 	r.Contains(err.Error(), "invalid Post")
 
 	newPostCfg := postCfg

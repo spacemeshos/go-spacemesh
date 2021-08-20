@@ -46,7 +46,7 @@ func atx(pubkey string) *types.ActivationTx {
 	npst := activation.NewNIPostWithChallenge(&chlng, poetRef)
 
 	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, types.NewLayerID(5), 1, goldenATXID, coinbase, npst)
-	atx.InitialPost = initialPost
+	atx.InitialPost = *initialPost
 	atx.InitialPostIndices = initialPost.Indices
 	atx.CalcAndSetID()
 	return atx

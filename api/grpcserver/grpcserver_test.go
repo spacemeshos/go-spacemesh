@@ -119,11 +119,11 @@ func init() {
 func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPost {
 	return &types.NIPost{
 		Challenge: *challenge,
-		Proof: &types.Post{
+		Proof: types.Post{
 			Nonce:   0,
 			Indices: []byte(nil),
 		},
-		PostMetadata: &types.PostMetadata{
+		PostMetadata: types.PostMetadata{
 			Challenge:     poetRef,
 			LabelsPerUnit: labelsPerUnit,
 			BitsPerLabel:  bitsPerLabel,
@@ -371,7 +371,7 @@ func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost, coinbase type
 				Coinbase:        coinbase,
 				NumUnits:        numUnits,
 			},
-			NIPost: nipost,
+			NIPost: *nipost,
 		},
 	}
 	activationTx.CalcAndSetID()

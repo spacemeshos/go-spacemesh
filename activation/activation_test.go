@@ -226,7 +226,7 @@ func newAtx(challenge types.NIPostChallenge, nipost *types.NIPost) *types.Activa
 				NumUnits:        2,
 				Coinbase:        coinbase,
 			},
-			NIPost: nipost,
+			NIPost: *nipost,
 		},
 	}
 	activationTx.CalcAndSetID()
@@ -285,13 +285,13 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHea
 	if prevAtx != nil {
 		r.Equal(prevAtx.Sequence+1, atx.Sequence)
 		r.Equal(prevAtx.ID(), atx.PrevATXID)
-		r.Nil(atx.InitialPost)
-		r.Nil(atx.InitialPostIndices)
+		r.Empty(atx.InitialPost.Indices)
+		r.Empty(atx.InitialPostIndices)
 	} else {
 		r.Zero(atx.Sequence)
 		r.Equal(*types.EmptyATXID, atx.PrevATXID)
-		r.NotNil(atx.InitialPost)
-		r.NotNil(atx.InitialPostIndices)
+		r.NotEmpty(atx.InitialPost.Indices)
+		r.NotEmpty(atx.InitialPostIndices)
 	}
 	r.Equal(posAtx.ID(), atx.PositioningATX)
 	r.Equal(posAtx.PubLayerID.Add(layersPerEpoch), atx.PubLayerID)
@@ -463,7 +463,7 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	challenge = newChallenge(nodeID /*👀*/, 0, *types.EmptyATXID, posAtx.ID(), postGenesisEpochLayer)
 	challenge.InitialPostIndices = initialPost.Indices
 	prevAtx := newAtx(challenge, nipost)
-	prevAtx.InitialPost = initialPost
+	prevAtx.InitialPost = *initialPost
 	storeAtx(r, activationDb, prevAtx, logtest.New(t).WithName("storeAtx"))
 
 	// create and publish ATX
@@ -910,5 +910,5 @@ func newActivationTx(
 		EndTick:        startTick + numTicks,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipostChallenge, coinbase, nipost, numUnints, nil)
+	return types.NewActivationTx(nipostChallenge, coinbase, nipost, numUnints, &types.Post{})
 }

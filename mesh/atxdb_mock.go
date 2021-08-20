@@ -41,7 +41,7 @@ func (t *AtxDbMock) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 // AddAtx stores an ATX for later retrieval
 func (t *AtxDbMock) AddAtx(id types.ATXID, atx *types.ActivationTx) {
 	t.db[id] = atx
-	t.niposts[id] = atx.NIPost
+	t.niposts[id] = &atx.NIPost
 }
 
 // ProcessAtxs counts how many ATXs were processed
