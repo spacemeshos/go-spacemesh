@@ -57,7 +57,6 @@ type coin interface {
 }
 
 type (
-	proposal  = string
 	proposals = struct{ valid, potentiallyValid [][]byte }
 	allVotes  = struct{ valid, invalid proposalSet }
 )
@@ -105,7 +104,7 @@ func New(
 		firstRoundIncomingVotes: make(map[string]proposals),
 		seenEpochs:              make(map[types.EpochID]struct{}),
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
-		votesMargin:             map[proposal]*big.Int{},
+		votesMargin:             map[string]*big.Int{},
 	}
 }
 
@@ -144,7 +143,7 @@ type TortoiseBeacon struct {
 	incomingProposals       proposals
 	firstRoundIncomingVotes map[string]proposals // sorted votes for bit vector decoding
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
-	votesMargin map[proposal]*big.Int
+	votesMargin map[string]*big.Int
 	hasVoted    []map[string]struct{}
 
 	proposalPhaseFinishedTimeMu sync.RWMutex
@@ -266,7 +265,7 @@ func (tb *TortoiseBeacon) cleanupVotes() {
 
 	tb.incomingProposals = proposals{}
 	tb.firstRoundIncomingVotes = map[string]proposals{}
-	tb.votesMargin = map[proposal]*big.Int{}
+	tb.votesMargin = map[string]*big.Int{}
 	tb.hasVoted = make([]map[string]struct{}, tb.config.RoundsNumber)
 
 	tb.proposalPhaseFinishedTimeMu.Lock()

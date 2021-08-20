@@ -57,7 +57,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 		name          string
 		epoch         types.EpochID
 		round         types.RoundID
-		votesMargin   map[proposal]*big.Int
+		votesMargin   map[string]*big.Int
 		incomingVotes []map[string]allVotes
 		expected      allVotes
 	}{
@@ -65,7 +65,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 			name:  "Case 1",
 			epoch: epoch,
 			round: round,
-			votesMargin: map[proposal]*big.Int{
+			votesMargin: map[string]*big.Int{
 				"0x1": big.NewInt(2),
 				"0x2": big.NewInt(0),
 				"0x3": big.NewInt(0),
@@ -135,7 +135,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 		epoch              types.EpochID
 		round              types.RoundID
 		ownFirstRoundVotes allVotes
-		votesCount         map[proposal]*big.Int
+		votesCount         map[string]*big.Int
 		weakCoin           bool
 		result             allVotes
 	}{
@@ -152,7 +152,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 					"0x3": {},
 				},
 			},
-			votesCount: map[proposal]*big.Int{
+			votesCount: map[string]*big.Int{
 				"0x1": big.NewInt(threshold * 2),
 				"0x2": big.NewInt(-threshold * 3),
 				"0x3": big.NewInt(threshold / 2),
@@ -172,7 +172,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 			name:  "Case 2",
 			epoch: 5,
 			round: 5,
-			votesCount: map[proposal]*big.Int{
+			votesCount: map[string]*big.Int{
 				"0x1": big.NewInt(threshold * 2),
 				"0x2": big.NewInt(-threshold * 3),
 				"0x3": big.NewInt(threshold / 2),
