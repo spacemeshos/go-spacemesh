@@ -717,18 +717,40 @@ func TestEviction(t *testing.T) {
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, 0, 0)
 	require.Equal(t, int(trtl.WindowSize+2), len(trtl.BlockOpinionsByLayer))
 
+	// verified layer was advanced
+	require.Equal(t, int(layers.Sub(1).Uint32()), int(trtl.Verified.Uint32()))
+
+	// old data were evicted
+	require.Equal(t, int(trtl.Verified.Sub(trtl.WindowSize+1).Uint32()), int(trtl.LastEvicted.Uint32()))
+
+	checkBlockLayer := func(bid types.BlockID) {
+		blk, err := trtl.bdp.GetBlock(bid)
+		require.NoError(t, err, "error reading block data")
+		require.True(t, blk.LayerIndex.After(trtl.LastEvicted),
+			"block data is older than last evicted layer: block %v layer %v lastevicted %v",
+			blk.ID(), blk.LayerIndex, trtl.LastEvicted)
+	}
+
 	count := 0
 	for _, blks := range trtl.BlockOpinionsByLayer {
 		count += len(blks)
+		for blockID, opinion := range blks {
+			checkBlockLayer(blockID)
+
+			// check deep opinion layers
+			for bid := range opinion.BlockOpinions {
+				checkBlockLayer(bid)
+			}
+		}
 	}
+
 	require.Equal(t, (int(trtl.WindowSize)+2)*avgPerLayer, count)
 	logger.Debug("=======================================================================")
-	logger.Debug("=======================================================================")
-	logger.Debug("=======================================================================")
-	logger.Debug("Count blocks on blocks layers ", len(trtl.BlockOpinionsByLayer))
-	logger.Debug("Count blocks on blocks blocks ", count)
+	logger.Debug("count blocks on blocks layers ", len(trtl.BlockOpinionsByLayer))
+	logger.Debug("count blocks on blocks blocks ", count)
 	require.Equal(t, int(trtl.WindowSize+2)*avgPerLayer, len(trtl.GoodBlocksIndex)) // all blocks should be good
-	logger.Debug("Count good blocks ", len(trtl.GoodBlocksIndex))
+	logger.Debug("count good blocks ", len(trtl.GoodBlocksIndex))
+
 }
 
 func TestEviction2(t *testing.T) {
