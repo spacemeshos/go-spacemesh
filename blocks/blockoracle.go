@@ -13,7 +13,7 @@ import (
 )
 
 type activationDB interface {
-	GetNodeAtxIDForEpoch(nodePK string, targetEpoch types.EpochID) (types.ATXID, error)
+	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error)
 }
@@ -222,7 +222,7 @@ func getNumberOfEligibleBlocks(weight, totalWeight uint64, committeeSize uint32,
 }
 
 func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {
-	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID.Key, targetEpoch)
+	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
 	if err != nil {
 		bo.log.With().Warning("did not find atx ids for node",
 			log.FieldNamed("atx_node_id", bo.nodeID),

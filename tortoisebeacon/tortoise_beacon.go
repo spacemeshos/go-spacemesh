@@ -57,8 +57,6 @@ type coin interface {
 }
 
 type (
-	nodeID    = string
-	proposal  = string
 	proposals = struct{ valid, potentiallyValid [][]byte }
 	allVotes  = struct{ valid, invalid proposalSet }
 )
@@ -75,7 +73,7 @@ type layerClock interface {
 func New(
 	conf Config,
 	layerDuration time.Duration,
-	minerPK *signing.PublicKey,
+	nodeID types.NodeID,
 	net broadcaster,
 	atxDB activationDB,
 	tortoiseBeaconDB tortoiseBeaconDB,
@@ -91,7 +89,7 @@ func New(
 		Log:                     logger,
 		config:                  conf,
 		layerDuration:           layerDuration,
-		minerPK:                 minerPK,
+		nodeID:                  nodeID,
 		net:                     net,
 		atxDB:                   atxDB,
 		tortoiseBeaconDB:        tortoiseBeaconDB,
@@ -102,11 +100,11 @@ func New(
 		weakCoin:                weakCoin,
 		clock:                   clock,
 		beacons:                 make(map[types.EpochID]types.Hash32),
-		hasVoted:                make([]map[nodeID]struct{}, conf.RoundsNumber),
-		firstRoundIncomingVotes: make(map[nodeID]proposals),
+		hasVoted:                make([]map[string]struct{}, conf.RoundsNumber),
+		firstRoundIncomingVotes: make(map[string]proposals),
 		seenEpochs:              make(map[types.EpochID]struct{}),
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
-		votesMargin:             map[proposal]*big.Int{},
+		votesMargin:             map[string]*big.Int{},
 	}
 }
 
@@ -120,7 +118,7 @@ type TortoiseBeacon struct {
 
 	config        Config
 	layerDuration time.Duration
-	minerPK       *signing.PublicKey
+	nodeID        types.NodeID
 
 	net              broadcaster
 	atxDB            activationDB
@@ -143,10 +141,10 @@ type TortoiseBeacon struct {
 	// TODO(nkryuchkov): have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
 	incomingProposals       proposals
-	firstRoundIncomingVotes map[nodeID]proposals // sorted votes for bit vector decoding
+	firstRoundIncomingVotes map[string]proposals // sorted votes for bit vector decoding
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
-	votesMargin map[proposal]*big.Int
-	hasVoted    []map[nodeID]struct{}
+	votesMargin map[string]*big.Int
+	hasVoted    []map[string]struct{}
 
 	proposalPhaseFinishedTimeMu sync.RWMutex
 	proposalPhaseFinishedTime   time.Time
@@ -266,9 +264,9 @@ func (tb *TortoiseBeacon) cleanupVotes() {
 	defer tb.consensusMu.Unlock()
 
 	tb.incomingProposals = proposals{}
-	tb.firstRoundIncomingVotes = map[nodeID]proposals{}
-	tb.votesMargin = map[proposal]*big.Int{}
-	tb.hasVoted = make([]map[nodeID]struct{}, tb.config.RoundsNumber)
+	tb.firstRoundIncomingVotes = map[string]proposals{}
+	tb.votesMargin = map[string]*big.Int{}
+	tb.hasVoted = make([]map[string]struct{}, tb.config.RoundsNumber)
 
 	tb.proposalPhaseFinishedTimeMu.Lock()
 	defer tb.proposalPhaseFinishedTimeMu.Unlock()
@@ -520,7 +518,7 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	// concat them into a single proposal message
 	m := ProposalMessage{
 		EpochID:      epoch,
-		MinerPK:      tb.minerPK.Bytes(),
+		NodeID:       tb.nodeID,
 		VRFSignature: proposedSignature,
 	}
 

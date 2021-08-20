@@ -604,11 +604,10 @@ func (app *App) initServices(ctx context.Context,
 	)
 
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	minerPK := signing.NewPublicKey(util.Hex2Bytes(nodeID.Key))
 	tBeacon := tortoisebeacon.New(
 		app.Config.TortoiseBeacon,
 		ld,
-		minerPK,
+		nodeID,
 		swarm,
 		atxDB,
 		tBeaconDB,
