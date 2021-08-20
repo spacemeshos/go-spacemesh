@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -85,17 +86,17 @@ func (p *postSetupProviderMock) Config() PostConfig {
 	return postCfg
 }
 
-func defaultPoetServiceMock(tb testing.TB) (*MockPoetProvingServiceClient, *gomock.Controller) {
+func defaultPoetServiceMock(tb testing.TB) (*mocks.MockPoetProvingServiceClient, *gomock.Controller) {
 	poetClient, controller := newPoetServiceMock(tb)
 	poetClient.EXPECT().Submit(gomock.Any(), gomock.Any()).AnyTimes().Return(&types.PoetRound{}, nil)
 	poetClient.EXPECT().PoetServiceID(gomock.Any()).AnyTimes().Return([]byte{}, nil)
 	return poetClient, controller
 }
 
-func newPoetServiceMock(tb testing.TB) (*MockPoetProvingServiceClient, *gomock.Controller) {
+func newPoetServiceMock(tb testing.TB) (*mocks.MockPoetProvingServiceClient, *gomock.Controller) {
 	tb.Helper()
 	controller := gomock.NewController(tb)
-	poetClient := NewMockPoetProvingServiceClient(controller)
+	poetClient := mocks.NewMockPoetProvingServiceClient(controller)
 	return poetClient, controller
 }
 

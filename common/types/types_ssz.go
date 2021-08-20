@@ -730,6 +730,67 @@ func (p *PoetProof) SizeSSZ() (size int) {
 	return
 }
 
+// MarshalSSZ ssz marshals the PoetRound object
+func (p *PoetRound) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PoetRound object to a target array
+func (p *PoetRound) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(4)
+
+	// Offset (0) 'ID'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.ID)
+
+	// Field (0) 'ID'
+	if len(p.ID) > 256 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, []byte(p.ID)...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PoetRound object
+func (p *PoetRound) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'ID'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'ID'
+	{
+		buf = tail[o0:]
+		if len(buf) > 256 {
+			return ssz.ErrBytesLength
+		}
+		p.ID = string(buf)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PoetRound object
+func (p *PoetRound) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'ID'
+	size += len(p.ID)
+
+	return
+}
+
 // MarshalSSZ ssz marshals the NIPost object
 func (n *NIPost) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(n)
@@ -837,12 +898,12 @@ func (n *NIPost) SizeSSZ() (size int) {
 	return
 }
 
-// MarshalSSZ ssz marshals the Proof object
+// MarshalSSZ ssz marshals the Post object
 func (p *Post) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(p)
 }
 
-// MarshalSSZTo ssz marshals the Proof object to a target array
+// MarshalSSZTo ssz marshals the Post object to a target array
 func (p *Post) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
 	offset := int(8)
@@ -864,7 +925,7 @@ func (p *Post) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	return
 }
 
-// UnmarshalSSZ ssz unmarshals the Proof object
+// UnmarshalSSZ ssz unmarshals the Post object
 func (p *Post) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
@@ -897,7 +958,7 @@ func (p *Post) UnmarshalSSZ(buf []byte) error {
 	return err
 }
 
-// SizeSSZ returns the ssz encoded size in bytes for the Proof object
+// SizeSSZ returns the ssz encoded size in bytes for the Post object
 func (p *Post) SizeSSZ() (size int) {
 	size = 8
 
@@ -1020,6 +1081,7 @@ func (l *LayerID) UnmarshalSSZ(buf []byte) error {
 
 	// Field (0) 'Value'
 	l.Value = ssz.UnmarshallUint32(buf[0:4])
+
 	return err
 }
 

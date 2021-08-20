@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-//go:generate mockgen -package=activation -destination=./poet_client_mock_test.go -source=./nipost.go PoetProvingServiceClient
+//go:generate mockgen -package=mocks -destination=./mocks/poet_client.go -source=./nipost.go PoetProvingServiceClient
 
 // PoetProvingServiceClient provides a gateway to a trust-less public proving service, which may serve many PoET
 // proving clients, and thus enormously reduce the cost-per-proof for PoET since each additional proof adds only
@@ -63,7 +63,7 @@ func (nb *NIPostBuilder) load(challenge types.Hash32) {
 }
 
 func (nb *NIPostBuilder) persist() {
-	bts, err := types.InterfaceToBytes(&nb.state)
+	bts, err := types.InterfaceToBytes(nb.state)
 	if err != nil {
 		nb.log.Warning("cannot store NIPost state %v", err)
 		return
