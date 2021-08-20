@@ -539,7 +539,7 @@ func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 // advances the state to the next round
 func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
 	proc.k++
-	if proc.k >= 4 && proc.k%4 == 0 {
+	if proc.k >= nextIteration && proc.k%nextIteration == 0 {
 		proc.WithContext(ctx).Event().Warning("starting new iteration",
 			log.Uint32("current_k", proc.k),
 			types.LayerID(proc.instanceID))
@@ -694,7 +694,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 	case notifyRound:
 		proc.beginNotifyRound(ctx)
 	default:
-		proc.Panic("current round out of bounds. Expected: 0-3, Found: %v", proc.currentRound())
+		proc.Panic("current round out of bounds. Expected: %d-%d, Found: %v", statusRound, notifyRound, proc.currentRound())
 	}
 
 	if len(proc.pending) == 0 { // no pending messages
@@ -791,7 +791,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 }
 
 func (proc *consensusProcess) currentRound() uint32 {
-	return proc.k % 4
+	return proc.k % nextIteration
 }
 
 // returns a function to validate status messages

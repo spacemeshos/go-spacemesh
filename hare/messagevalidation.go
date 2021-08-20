@@ -156,6 +156,9 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	case pre:
 		return nil
 	case notify:
+		if currentK == preRound {
+			return errInvalidRound
+		}
 		// notify before notify could be created for this iteration
 		if currentRound < commitRound && sameIter {
 			return errInvalidRound
@@ -178,7 +181,7 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	// check status, proposal & commit types
 	switch m.InnerMsg.Type {
 	case status:
-		if currentRound == preRound && sameIter {
+		if currentK == preRound {
 			return errEarlyMsg
 		}
 		if currentRound == notifyRound && currentIteration+1 == msgIteration {
@@ -192,6 +195,9 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 		}
 		return errInvalidRound
 	case proposal:
+		if currentK == preRound {
+			return errInvalidRound
+		}
 		if currentRound == statusRound && sameIter {
 			return errEarlyMsg
 		}
@@ -204,6 +210,9 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 		}
 		return errInvalidRound
 	case commit:
+		if currentK == preRound {
+			return errInvalidRound
+		}
 		if currentRound == proposalRound && sameIter {
 			return errEarlyMsg
 		}
@@ -382,7 +391,7 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 	var maxSet []types.BlockID
 	for _, status := range msg.InnerMsg.Svp.Messages {
 		// track max
-		if status.InnerMsg.Ki > maxKi {
+		if status.InnerMsg.Ki > maxKi || maxKi == preRound {
 			maxKi = status.InnerMsg.Ki
 			maxSet = status.InnerMsg.Values
 		}

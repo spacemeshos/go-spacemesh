@@ -50,7 +50,7 @@ func (st *statusTracker) AnalyzeStatuses(isValid func(m *Msg) bool) {
 			delete(st.statuses, key)
 		} else {
 			st.count += m.InnerMsg.EligibilityCount
-			if m.InnerMsg.Ki >= st.maxKi { // track max Ki & matching raw set
+			if m.InnerMsg.Ki >= st.maxKi || st.maxKi == preRound { // track max Ki & matching raw set
 				st.maxKi = m.InnerMsg.Ki
 				st.maxSet = NewSet(m.InnerMsg.Values)
 			}

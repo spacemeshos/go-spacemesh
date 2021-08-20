@@ -20,13 +20,15 @@ const (
 	pre      messageType = 10
 )
 
+const preRound = ^uint32(0)
+
 // declare round identifiers
 const (
-	preRound uint32 = iota + 1
-	statusRound
+	statusRound uint32 = iota
 	proposalRound
 	commitRound
 	notifyRound
+	nextIteration
 )
 
 const defaultSetSize = 200

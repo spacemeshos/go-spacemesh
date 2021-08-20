@@ -133,7 +133,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 	nipost := nb.state.NIPost
 
 	// Phase 0: Submit challenge to PoET service.
-	if nb.state.PoetRound == nil || nb.state.PoetRound.ID == "" {
+	if nb.state.PoetRound == nil {
 		poetServiceID, err := nb.poetProver.PoetServiceID(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to get PoET service ID: %v", ErrPoetServiceUnstable, err)

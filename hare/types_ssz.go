@@ -217,12 +217,22 @@ func (a *aggregatedMessages) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 
 	// Offset (0) 'Messages'
 	dst = ssz.WriteOffset(dst, offset)
-	offset += len(a.Messages) * 0
+	for ii := 0; ii < len(a.Messages); ii++ {
+		offset += 4
+		offset += a.Messages[ii].SizeSSZ()
+	}
 
 	// Field (0) 'Messages'
 	if len(a.Messages) > 1024 {
 		err = ssz.ErrListTooBig
 		return
+	}
+	{
+		offset = 4 * len(a.Messages)
+		for ii := 0; ii < len(a.Messages); ii++ {
+			dst = ssz.WriteOffset(dst, offset)
+			offset += a.Messages[ii].SizeSSZ()
+		}
 	}
 	for ii := 0; ii < len(a.Messages); ii++ {
 		if dst, err = a.Messages[ii].MarshalSSZTo(dst); err != nil {
@@ -252,18 +262,22 @@ func (a *aggregatedMessages) UnmarshalSSZ(buf []byte) error {
 	// Field (0) 'Messages'
 	{
 		buf = tail[o0:]
-		num, err := ssz.DivideInt2(len(buf), 0, 1024)
+		num, err := ssz.DecodeDynamicLength(buf, 1024)
 		if err != nil {
 			return err
 		}
 		a.Messages = make([]*Message, num)
-		for ii := 0; ii < num; ii++ {
-			if a.Messages[ii] == nil {
-				a.Messages[ii] = new(Message)
+		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
+			if a.Messages[indx] == nil {
+				a.Messages[indx] = new(Message)
 			}
-			if err = a.Messages[ii].UnmarshalSSZ(buf[ii*0 : (ii+1)*0]); err != nil {
+			if err = a.Messages[indx].UnmarshalSSZ(buf); err != nil {
 				return err
 			}
+			return nil
+		})
+		if err != nil {
+			return err
 		}
 	}
 	return err
@@ -274,7 +288,10 @@ func (a *aggregatedMessages) SizeSSZ() (size int) {
 	size = 4
 
 	// Field (0) 'Messages'
-	size += len(a.Messages) * 0
+	for ii := 0; ii < len(a.Messages); ii++ {
+		size += 4
+		size += a.Messages[ii].SizeSSZ()
+	}
 
 	return
 }

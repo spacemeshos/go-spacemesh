@@ -25,6 +25,9 @@ func DecodeFrom(r io.Reader, value Decodable) (int, error) {
 
 // Encode value to a byte buffer.
 func Encode(value Encodable) ([]byte, error) {
+	if value == nil {
+		return nil, nil
+	}
 	buf := make([]byte, 0, value.SizeSSZ())
 	return value.MarshalSSZTo(buf)
 }

@@ -503,7 +503,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	seed := make([]byte, 32)
 	// eligibility of the proof depends on the identity (private key is generated from seed)
 	// all zeroes doesn't pass the test
-	seed[0] = 1
+	seed[0] = 10
 	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(seed)
 	assert.NoError(t, err)
 	o.vrfSigner = vrfSigner
