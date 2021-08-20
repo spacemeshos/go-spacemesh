@@ -90,12 +90,12 @@ func (_m *mockActivationDB) GetEpochWeight(epochID types.EpochID) (uint64, []typ
 }
 
 // GetNodeAtxIDForEpoch provides a mock function with given fields: nodeID, targetEpoch
-func (_m *mockActivationDB) GetNodeAtxIDForEpoch(nodePK string, targetEpoch types.EpochID) (types.ATXID, error) {
-	ret := _m.Called(nodePK, targetEpoch)
+func (_m *mockActivationDB) GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
+	ret := _m.Called(nodeID, targetEpoch)
 
 	var r0 types.ATXID
-	if rf, ok := ret.Get(0).(func(string, types.EpochID) types.ATXID); ok {
-		r0 = rf(nodePK, targetEpoch)
+	if rf, ok := ret.Get(0).(func(types.NodeID, types.EpochID) types.ATXID); ok {
+		r0 = rf(nodeID, targetEpoch)
 	} else {
 		if ret.Get(0) != nil {
 			r0 = ret.Get(0).(types.ATXID)
@@ -103,8 +103,8 @@ func (_m *mockActivationDB) GetNodeAtxIDForEpoch(nodePK string, targetEpoch type
 	}
 
 	var r1 error
-	if rf, ok := ret.Get(1).(func(string, types.EpochID) error); ok {
-		r1 = rf(nodePK, targetEpoch)
+	if rf, ok := ret.Get(1).(func(types.NodeID, types.EpochID) error); ok {
+		r1 = rf(nodeID, targetEpoch)
 	} else {
 		r1 = ret.Error(1)
 	}

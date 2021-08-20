@@ -9,9 +9,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-type proposalList []proposal
+type proposalList []string
 
-func (hl proposalList) sort() []proposal {
+func (hl proposalList) sort() []string {
 	sort.Slice(hl, func(i, j int) bool {
 		return strings.Compare(hl[i], hl[j]) == -1
 	})
