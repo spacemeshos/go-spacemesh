@@ -58,7 +58,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 		epoch         types.EpochID
 		round         types.RoundID
 		votesMargin   map[proposal]*big.Int
-		incomingVotes []map[nodePK]allVotes
+		incomingVotes []map[string]allVotes
 		expected      allVotes
 	}{
 		{

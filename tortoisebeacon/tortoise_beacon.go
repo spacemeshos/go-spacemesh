@@ -57,7 +57,6 @@ type coin interface {
 }
 
 type (
-	nodePK    = string
 	proposal  = string
 	proposals = struct{ valid, potentiallyValid [][]byte }
 	allVotes  = struct{ valid, invalid proposalSet }
@@ -102,8 +101,8 @@ func New(
 		weakCoin:                weakCoin,
 		clock:                   clock,
 		beacons:                 make(map[types.EpochID]types.Hash32),
-		hasVoted:                make([]map[nodePK]struct{}, conf.RoundsNumber),
-		firstRoundIncomingVotes: make(map[nodePK]proposals),
+		hasVoted:                make([]map[string]struct{}, conf.RoundsNumber),
+		firstRoundIncomingVotes: make(map[string]proposals),
 		seenEpochs:              make(map[types.EpochID]struct{}),
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 		votesMargin:             map[proposal]*big.Int{},
@@ -143,10 +142,10 @@ type TortoiseBeacon struct {
 	// TODO(nkryuchkov): have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
 	incomingProposals       proposals
-	firstRoundIncomingVotes map[nodePK]proposals // sorted votes for bit vector decoding
+	firstRoundIncomingVotes map[string]proposals // sorted votes for bit vector decoding
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin map[proposal]*big.Int
-	hasVoted    []map[nodePK]struct{}
+	hasVoted    []map[string]struct{}
 
 	proposalPhaseFinishedTimeMu sync.RWMutex
 	proposalPhaseFinishedTime   time.Time
@@ -266,9 +265,9 @@ func (tb *TortoiseBeacon) cleanupVotes() {
 	defer tb.consensusMu.Unlock()
 
 	tb.incomingProposals = proposals{}
-	tb.firstRoundIncomingVotes = map[nodePK]proposals{}
+	tb.firstRoundIncomingVotes = map[string]proposals{}
 	tb.votesMargin = map[proposal]*big.Int{}
-	tb.hasVoted = make([]map[nodePK]struct{}, tb.config.RoundsNumber)
+	tb.hasVoted = make([]map[string]struct{}, tb.config.RoundsNumber)
 
 	tb.proposalPhaseFinishedTimeMu.Lock()
 	defer tb.proposalPhaseFinishedTimeMu.Unlock()

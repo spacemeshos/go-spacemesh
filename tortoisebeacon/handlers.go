@@ -320,7 +320,7 @@ func (tb *TortoiseBeacon) verifyFirstVotingMessage(message FirstVotingMessage, c
 	defer tb.consensusMu.Unlock()
 
 	if tb.hasVoted[firstRound] == nil {
-		tb.hasVoted[firstRound] = make(map[nodePK]struct{})
+		tb.hasVoted[firstRound] = make(map[string]struct{})
 	}
 
 	// TODO(nkryuchkov): consider having a separate table for an epoch with one bit in it if atx/miner is voted already
@@ -467,7 +467,7 @@ func (tb *TortoiseBeacon) verifyFollowingVotingMessage(message FollowingVotingMe
 	defer tb.consensusMu.Unlock()
 
 	if tb.hasVoted[message.RoundID-firstRound] == nil {
-		tb.hasVoted[message.RoundID-firstRound] = make(map[nodePK]struct{})
+		tb.hasVoted[message.RoundID-firstRound] = make(map[string]struct{})
 	}
 
 	if _, ok := tb.hasVoted[message.RoundID-firstRound][string(minerPK.Bytes())]; ok {
