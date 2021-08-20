@@ -131,7 +131,7 @@ var (
 	defaultTestLayerSize       = 3
 	defaultTestHdist           = config.DefaultConfig().Hdist
 	defaultTestZdist           = config.DefaultConfig().Zdist
-	defaultTestWindowSize      = uint32(30) // make test faster
+	defaultTestWindowSize      = uint32(30)
 	defaultTestGlobalThreshold = uint8(60)
 	defaultTestLocalThreshold  = uint8(20)
 	defaultTestRerunInterval   = time.Hour
@@ -712,7 +712,7 @@ func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDat
 
 func TestEviction(t *testing.T) {
 	logger := logtest.New(t)
-	layers := types.NewLayerID(defaultTestHdist * 5)
+	layers := types.NewLayerID(defaultTestWindowSize * 5)
 	avgPerLayer := 20 // more blocks = longer test
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, 0, 0)
 	require.Equal(t, int(trtl.WindowSize+2), len(trtl.BlockOpinionsByLayer))
@@ -723,23 +723,29 @@ func TestEviction(t *testing.T) {
 	// old data were evicted
 	require.Equal(t, int(trtl.Verified.Sub(trtl.WindowSize+1).Uint32()), int(trtl.LastEvicted.Uint32()))
 
-	checkBlockLayer := func(bid types.BlockID) {
+	checkBlockLayer := func(bid types.BlockID, layerAfter types.LayerID) types.LayerID {
 		blk, err := trtl.bdp.GetBlock(bid)
 		require.NoError(t, err, "error reading block data")
-		require.True(t, blk.LayerIndex.After(trtl.LastEvicted),
-			"block data is older than last evicted layer: block %v layer %v lastevicted %v",
-			blk.ID(), blk.LayerIndex, trtl.LastEvicted)
+		require.True(t, !blk.LayerIndex.Before(layerAfter),
+			"opinion on ancient block should have been evicted: block %v layer %v maxdepth %v lastevicted %v windowsize %v",
+			blk.ID(), blk.LayerIndex, layerAfter, trtl.LastEvicted, trtl.WindowSize)
+		return blk.LayerIndex
 	}
 
 	count := 0
 	for _, blks := range trtl.BlockOpinionsByLayer {
 		count += len(blks)
 		for blockID, opinion := range blks {
-			checkBlockLayer(blockID)
+			lid := checkBlockLayer(blockID, trtl.LastEvicted)
 
 			// check deep opinion layers
 			for bid := range opinion.BlockOpinions {
-				checkBlockLayer(bid)
+				// check that child (opinion) block layer is within window size from parent block layer
+				// we allow a leeway of three layers:
+				// 1. eviction evicts one layer prior to window start (Verified - WindowSize)
+				// 2. Verified layer lags Last processed layer by one
+				// 3. block opinions are added before block layer is finished processing
+				checkBlockLayer(bid, lid.Sub(trtl.WindowSize+3))
 			}
 		}
 	}
