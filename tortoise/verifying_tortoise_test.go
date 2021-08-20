@@ -1012,10 +1012,10 @@ func TestBaseBlock(t *testing.T) {
 	r.Nil(exceptions)
 }
 
-func defaultClock() layerClock {
+func defaultClock(tb testing.TB) layerClock {
 	genesisTime := time.Now().Add(time.Second * 10)
 	ld := time.Duration(10) * time.Second
-	return timesync.NewClock(timesync.RealClock{}, ld, genesisTime, log.NewDefault("clock"))
+	return timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(tb))
 }
 
 func defaultTurtle(tb testing.TB) *turtle {
@@ -1023,7 +1023,7 @@ func defaultTurtle(tb testing.TB) *turtle {
 	return newTurtle(
 		mdb,
 		getAtxDB(),
-		defaultClock(),
+		defaultClock(tb),
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -1059,7 +1059,7 @@ func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
 		defaultTestLayerSize,
 		mdb,
 		getAtxDB(),
-		defaultClock(),
+		defaultClock(t),
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -1067,7 +1067,7 @@ func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
 		defaultTestGlobalThreshold,
 		defaultTestLocalThreshold,
 		defaultTestRerunInterval,
-		log.NewDefault(t.Name()),
+		logtest.New(t),
 	)
 }
 
