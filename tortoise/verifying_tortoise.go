@@ -142,7 +142,7 @@ func newTurtle(
 		Last:                 types.NewLayerID(0),
 		AvgLayerSize:         avgLayerSize,
 		GoodBlocksIndex:      make(map[types.BlockID]struct{}),
-		BlockOpinionsByLayer: make(map[types.LayerID]map[types.BlockID]Opinion, hdist),
+		BlockOpinionsByLayer: make(map[types.LayerID]map[types.BlockID]Opinion, windowSize),
 		MaxExceptions:        int(hdist) * avgLayerSize * 100,
 		RerunInterval:        rerun,
 	}
