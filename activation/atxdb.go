@@ -328,11 +328,11 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 			return fmt.Errorf("sequence number is not one more than prev sequence number")
 		}
 
-		if atx.InitialPost != nil {
+		if atx.InitialPost != nil && len(atx.InitialPost.Indices) > 0 {
 			return fmt.Errorf("prevATX declared, but initial Post is included")
 		}
 
-		if atx.InitialPostIndices != nil {
+		if atx.InitialPostIndices != nil && len(atx.InitialPostIndices) > 0 {
 			return fmt.Errorf("prevATX declared, but initial Post indices is included in challenge")
 		}
 	} else {

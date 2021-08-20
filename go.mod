@@ -8,7 +8,7 @@ require (
 	github.com/bits-and-blooms/bitset v1.2.0
 	github.com/btcsuite/btcd v0.0.0-20190629003639-c26ffa870fd8
 	github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d
-	github.com/ferranbt/fastssz v0.0.0-20210816143236-3186e83e5630
+	github.com/ferranbt/fastssz v0.0.0-20210817104241-ab271261c6d9
 	github.com/go-kit/kit v0.10.0
 	github.com/golang/mock v1.4.4
 	github.com/golang/protobuf v1.5.0
@@ -34,7 +34,6 @@ require (
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
 	github.com/spf13/viper v1.4.0
-	github.com/stretchr/objx v0.3.0 // indirect
 	github.com/stretchr/testify v1.7.0
 	github.com/syndtr/goleveldb v1.0.1-0.20190318030020-c3a204f8e965
 	go.uber.org/zap v1.15.0
@@ -44,10 +43,14 @@ require (
 	google.golang.org/api v0.32.0
 	google.golang.org/genproto v0.0.0-20201007142714-5c0e72c5e71e
 	google.golang.org/grpc v1.32.0
-	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect
 	nanomsg.org/go-mangos v1.4.0
 )
 
-replace github.com/ferranbt/fastssz => /home/dd/fastssz
+replace (
+	github.com/ferranbt/fastssz => /home/dd/fastssz
+	github.com/spacemeshos/merkle-tree => /home/dd/merkle-tree
+	github.com/spacemeshos/poet => /home/dd/poet
+	github.com/spacemeshos/post => /home/dd/post
+)
 
 go 1.15

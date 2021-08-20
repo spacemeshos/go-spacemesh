@@ -262,15 +262,15 @@ func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 
 type MerkleProof struct {
 	Root         []byte   `ssz-max:"1024"`
-	ProvenLeaves [][]byte `ssz-size:"?,?" ssz-max:"1024,1024"`
-	ProofNodes   [][]byte `ssz-size:"?,?" ssz-max:"1024,1024"`
+	ProvenLeaves [][]byte `ssz-size:"?,?" ssz-max:"1024000,1024000"`
+	ProofNodes   [][]byte `ssz-size:"?,?" ssz-max:"1024000,1024000"`
 }
 
 // PoetProof is the full PoET service proof of elapsed time. It includes the list of members, a leaf count declaration
 // and the actual PoET Merkle proof.
 type PoetProof struct {
 	MerkleProof
-	Members   [][]byte `ssz-size:"?,?" ssz-max:"1024,1024"`
+	Members   [][]byte `ssz-size:"?,?" ssz-max:"102400,102400"`
 	LeafCount uint64
 }
 

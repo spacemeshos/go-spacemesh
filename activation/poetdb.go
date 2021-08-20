@@ -69,7 +69,7 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetID %x round %s: %v",
 			poetID[:shortIDlth], roundID, err))
 	}
-	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
+	if err := validatePoet(root, (shared.MerkleProof)(proof.MerkleProof), proof.LeafCount); err != nil {
 		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %v",
 			poetID[:shortIDlth], roundID, err)
 	}

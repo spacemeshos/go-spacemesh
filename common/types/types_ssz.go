@@ -455,7 +455,7 @@ func (m *MerkleProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = append(dst, m.Root...)
 
 	// Field (1) 'ProvenLeaves'
-	if len(m.ProvenLeaves) > 1024 {
+	if len(m.ProvenLeaves) > 1024000 {
 		err = ssz.ErrListTooBig
 		return
 	}
@@ -467,7 +467,7 @@ func (m *MerkleProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		}
 	}
 	for ii := 0; ii < len(m.ProvenLeaves); ii++ {
-		if len(m.ProvenLeaves[ii]) > 1024 {
+		if len(m.ProvenLeaves[ii]) > 1024000 {
 			err = ssz.ErrBytesLength
 			return
 		}
@@ -475,7 +475,7 @@ func (m *MerkleProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 
 	// Field (2) 'ProofNodes'
-	if len(m.ProofNodes) > 1024 {
+	if len(m.ProofNodes) > 1024000 {
 		err = ssz.ErrListTooBig
 		return
 	}
@@ -487,7 +487,7 @@ func (m *MerkleProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		}
 	}
 	for ii := 0; ii < len(m.ProofNodes); ii++ {
-		if len(m.ProofNodes[ii]) > 1024 {
+		if len(m.ProofNodes[ii]) > 1024000 {
 			err = ssz.ErrBytesLength
 			return
 		}
@@ -538,13 +538,13 @@ func (m *MerkleProof) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'ProvenLeaves'
 	{
 		buf = tail[o1:o2]
-		num, err := ssz.DecodeDynamicLength(buf, 1024)
+		num, err := ssz.DecodeDynamicLength(buf, 1024000)
 		if err != nil {
 			return err
 		}
 		m.ProvenLeaves = make([][]byte, num)
 		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
-			if len(buf) > 1024 {
+			if len(buf) > 1024000 {
 				return ssz.ErrBytesLength
 			}
 			if cap(m.ProvenLeaves[indx]) == 0 {
@@ -561,13 +561,13 @@ func (m *MerkleProof) UnmarshalSSZ(buf []byte) error {
 	// Field (2) 'ProofNodes'
 	{
 		buf = tail[o2:]
-		num, err := ssz.DecodeDynamicLength(buf, 1024)
+		num, err := ssz.DecodeDynamicLength(buf, 1024000)
 		if err != nil {
 			return err
 		}
 		m.ProofNodes = make([][]byte, num)
 		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
-			if len(buf) > 1024 {
+			if len(buf) > 1024000 {
 				return ssz.ErrBytesLength
 			}
 			if cap(m.ProofNodes[indx]) == 0 {
@@ -635,7 +635,7 @@ func (p *PoetProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 
 	// Field (1) 'Members'
-	if len(p.Members) > 1024 {
+	if len(p.Members) > 102400 {
 		err = ssz.ErrListTooBig
 		return
 	}
@@ -647,7 +647,7 @@ func (p *PoetProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		}
 	}
 	for ii := 0; ii < len(p.Members); ii++ {
-		if len(p.Members[ii]) > 1024 {
+		if len(p.Members[ii]) > 102400 {
 			err = ssz.ErrBytesLength
 			return
 		}
@@ -692,13 +692,13 @@ func (p *PoetProof) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'Members'
 	{
 		buf = tail[o1:]
-		num, err := ssz.DecodeDynamicLength(buf, 1024)
+		num, err := ssz.DecodeDynamicLength(buf, 102400)
 		if err != nil {
 			return err
 		}
 		p.Members = make([][]byte, num)
 		err = ssz.UnmarshalDynamic(buf, num, func(indx int, buf []byte) (err error) {
-			if len(buf) > 1024 {
+			if len(buf) > 102400 {
 				return ssz.ErrBytesLength
 			}
 			if cap(p.Members[indx]) == 0 {
