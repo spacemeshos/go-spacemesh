@@ -301,7 +301,6 @@ func Test_DBSanity(t *testing.T) {
 	id1 := types.NodeID{Key: uuid.New().String()}
 	id2 := types.NodeID{Key: uuid.New().String()}
 	id3 := types.NodeID{Key: uuid.New().String()}
-
 	coinbase1 := types.HexToAddress("aaaa")
 	coinbase2 := types.HexToAddress("bbbb")
 	coinbase3 := types.HexToAddress("cccc")
@@ -317,27 +316,27 @@ func Test_DBSanity(t *testing.T) {
 	err = atxdb.storeAtxUnlocked(atx3)
 	assert.NoError(t, err)
 
-	err = atxdb.addAtxToNodeID(id1.Key, atx1)
+	err = atxdb.addAtxToNodeID(id1, atx1)
 	assert.NoError(t, err)
 	id, err := atxdb.GetNodeLastAtxID(id1)
 	assert.NoError(t, err)
 	assert.Equal(t, atx1.ID(), id)
 	assert.Equal(t, types.EpochID(1), atx1.TargetEpoch())
-	id, err = atxdb.GetNodeAtxIDForEpoch(id1.Key, atx1.PubLayerID.GetEpoch())
+	id, err = atxdb.GetNodeAtxIDForEpoch(id1, atx1.PubLayerID.GetEpoch())
 	assert.NoError(t, err)
 	assert.Equal(t, atx1.ID(), id)
 
-	err = atxdb.addAtxToNodeID(id2.Key, atx2)
+	err = atxdb.addAtxToNodeID(id2, atx2)
 	assert.NoError(t, err)
 
-	err = atxdb.addAtxToNodeID(id1.Key, atx3)
+	err = atxdb.addAtxToNodeID(id1, atx3)
 	assert.NoError(t, err)
 
 	id, err = atxdb.GetNodeLastAtxID(id2)
 	assert.NoError(t, err)
 	assert.Equal(t, atx2.ID(), id)
 	assert.Equal(t, types.EpochID(2), atx2.TargetEpoch())
-	id, err = atxdb.GetNodeAtxIDForEpoch(id2.Key, atx2.PubLayerID.GetEpoch())
+	id, err = atxdb.GetNodeAtxIDForEpoch(id2, atx2.PubLayerID.GetEpoch())
 	assert.NoError(t, err)
 	assert.Equal(t, atx2.ID(), id)
 
@@ -345,7 +344,7 @@ func Test_DBSanity(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, atx3.ID(), id)
 	assert.Equal(t, types.EpochID(3), atx3.TargetEpoch())
-	id, err = atxdb.GetNodeAtxIDForEpoch(id1.Key, atx3.PubLayerID.GetEpoch())
+	id, err = atxdb.GetNodeAtxIDForEpoch(id1, atx3.PubLayerID.GetEpoch())
 	assert.NoError(t, err)
 	assert.Equal(t, atx3.ID(), id)
 
@@ -570,7 +569,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12), 0, 100, coinbase, 100, &types.NIPost{})
-	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeID.Key))
+	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeID))
 	for iter.Next() {
 		err = atxdb.atxs.Delete(iter.Key())
 		assert.NoError(t, err)

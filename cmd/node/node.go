@@ -605,8 +605,7 @@ func (app *App) initServices(ctx context.Context,
 	)
 
 	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	minerPK := signing.NewPublicKey(util.Hex2Bytes(nodeID.Key))
-	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, minerPK, swarm, atxDB, tBeaconDB, sgn, edVerifier, vrfSigner, vrfVerifier, wc, clock, app.addLogger(TBeaconLogger, lg))
+	tBeacon := tortoisebeacon.New(app.Config.TortoiseBeacon, ld, nodeID, swarm, atxDB, tBeaconDB, sgn, edVerifier, vrfSigner, vrfVerifier, wc, clock, app.addLogger(TBeaconLogger, lg))
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise

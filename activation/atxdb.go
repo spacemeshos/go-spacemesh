@@ -22,12 +22,12 @@ import (
 
 const topAtxKey = "topAtxKey"
 
-func getNodeAtxKey(nodePK string, targetEpoch types.EpochID) []byte {
-	return append(getNodeAtxPrefix(nodePK), util.Uint64ToBytesBigEndian(uint64(targetEpoch))...)
+func getNodeAtxKey(nodeID types.NodeID, targetEpoch types.EpochID) []byte {
+	return append(getNodeAtxPrefix(nodeID), util.Uint64ToBytesBigEndian(uint64(targetEpoch))...)
 }
 
-func getNodeAtxPrefix(nodePK string) []byte {
-	return []byte(fmt.Sprintf("n_%v_", nodePK))
+func getNodeAtxPrefix(nodeID types.NodeID) []byte {
+	return []byte(fmt.Sprintf("n_%v_", nodeID.Key))
 }
 
 func getNodeAtxEpochKey(epoch types.EpochID, nodeID types.NodeID) []byte {
@@ -425,7 +425,7 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 
-	err = db.addAtxToNodeID(atx.NodeID.Key, atx)
+	err = db.addAtxToNodeID(atx.NodeID, atx)
 	if err != nil {
 		return err
 	}
@@ -534,8 +534,8 @@ func (db *DB) getAtxTimestamp(id types.ATXID) (time.Time, error) {
 }
 
 // addAtxToNodeID inserts activation atx id by node
-func (db *DB) addAtxToNodeID(nodePK string, atx *types.ActivationTx) error {
-	err := db.atxs.Put(getNodeAtxKey(nodePK, atx.PubLayerID.GetEpoch()), atx.ID().Bytes())
+func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
+	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.PubLayerID.GetEpoch()), atx.ID().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store atx ID for node: %v", err)
 	}
@@ -569,7 +569,7 @@ type ErrAtxNotFound error
 
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
-	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID.Key))
+	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID))
 	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
 	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
 	// added will always be the next ATX returned by this method.
@@ -606,11 +606,11 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 
 // GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified publication epoch. meaning the atx
 // that the requested nodeID has published. it returns an error if no atx was found for provided nodeID
-func (db *DB) GetNodeAtxIDForEpoch(nodePK string, publicationEpoch types.EpochID) (types.ATXID, error) {
-	id, err := db.atxs.Get(getNodeAtxKey(nodePK, publicationEpoch))
+func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, publicationEpoch types.EpochID) (types.ATXID, error) {
+	id, err := db.atxs.Get(getNodeAtxKey(nodeID, publicationEpoch))
 	if err != nil {
-		return *types.EmptyATXID, fmt.Errorf("atx for node %v with publication epoch %v: %w",
-			util.Bytes2Hex([]byte(nodePK)), publicationEpoch, err)
+		return *types.EmptyATXID, fmt.Errorf("atx for node %v with publication epoch %v: %v",
+			nodeID.ShortString(), publicationEpoch, err)
 	}
 	return types.ATXID(types.BytesToHash(id)), nil
 }
