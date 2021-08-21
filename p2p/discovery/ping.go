@@ -14,8 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-func (p *protocol) newPingRequestHandler() func(context.Context, server.Message) []byte {
-	return func(ctx context.Context, msg server.Message) []byte {
+func (p *protocol) newPingRequestHandler() func(context.Context, server.Message) ([]byte, error) {
+	return func(ctx context.Context, msg server.Message) ([]byte, error) {
 		plogger := p.logger.WithContext(ctx).WithFields(log.String("type", "ping"),
 			log.String("from", msg.Sender().String()))
 		plogger.Debug("handle request")
@@ -23,24 +23,23 @@ func (p *protocol) newPingRequestHandler() func(context.Context, server.Message)
 		err := types.BytesToInterface(msg.Bytes(), pinged)
 		if err != nil {
 			plogger.With().Error("failed to deserialize ping message", log.Err(err))
-			return nil
+			return nil, server.ErrBadRequest
 		}
 
 		if err := p.verifyPinger(msg.Metadata().FromAddress, pinged); err != nil {
 			plogger.With().Error("msg contents were not valid", log.Err(err))
-			return nil
+			return nil, server.ErrBadRequest
 		}
 
 		//pong
 		payload, err := types.InterfaceToBytes(p.local)
 		// TODO: include the resolved To address
 		if err != nil {
-			plogger.With().Error("error marshaling response message (ping)", log.Err(err))
-			return nil
+			plogger.With().Panic("error marshaling response message (ping)", log.Err(err))
 		}
 
 		plogger.Debug("sending pong message")
-		return payload
+		return payload, nil
 	}
 }
 
