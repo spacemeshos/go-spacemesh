@@ -1000,11 +1000,12 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 }
 
 // LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer
-func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	logger := m.WithContext(ctx)
 	if layer == types.NewLayerID(0) || layer == types.NewLayerID(1) {
 		v, err := m.LayerBlockIds(layer)
 		if err != nil {
-			m.With().Error("could not get layer block ids", layer, log.Err(err))
+			logger.With().Error("could not get layer block ids", layer, log.Err(err))
 			return nil, err
 		}
 
@@ -1028,7 +1029,7 @@ func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockI
 	for _, b := range blockIds {
 		valid, err := m.ContextualValidity(b)
 		if err != nil {
-			m.With().Warning("could not get contextual validity for block in layer", b, layer, log.Err(err))
+			logger.With().Warning("could not get contextual validity for block in layer", b, layer, log.Err(err))
 			cvErrors[err.Error()] = append(cvErrors[err.Error()], b)
 			cvErrorCount++
 		}
@@ -1040,13 +1041,15 @@ func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockI
 		validBlks[b] = struct{}{}
 	}
 
-	m.With().Debug("count of contextually valid blocks in layer",
+	logger.With().Debug("count of contextually valid blocks in layer",
 		layer,
 		log.Int("count_valid", len(validBlks)),
 		log.Int("count_error", cvErrorCount),
 		log.Int("count_total", len(blockIds)))
 	if cvErrorCount != 0 {
-		m.With().Error("errors occurred getting contextual validity", layer,
+		logger.With().Error("errors occurred getting contextual validity of blocks in layer",
+			layer,
+			log.Int("count", cvErrorCount),
 			log.String("errors", fmt.Sprint(cvErrors)))
 	}
 	return validBlks, nil
