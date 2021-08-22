@@ -14,8 +14,8 @@ import (
 
 // todo : calculate real udp max message size
 
-func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.Message) []byte {
-	return func(ctx context.Context, msg server.Message) []byte {
+func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.Message) ([]byte, error) {
+	return func(ctx context.Context, msg server.Message) ([]byte, error) {
 		t := time.Now()
 		plogger := p.logger.WithContext(ctx).WithFields(log.String("type", "getaddresses"),
 			log.String("from", msg.Sender().String()))
@@ -39,14 +39,13 @@ func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.
 		resp, err := types.InterfaceToBytes(results)
 
 		if err != nil {
-			plogger.With().Error("error marshaling response message (GetAddress)", log.Err(err))
-			return nil
+			plogger.With().Panic("error marshaling response message (GetAddress)", log.Err(err))
 		}
 
 		plogger.With().Debug("sending response",
 			log.Int("size", len(results)),
 			log.Duration("time_to_make", time.Since(t)))
-		return resp
+		return resp, nil
 	}
 }
 
