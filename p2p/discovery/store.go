@@ -3,10 +3,11 @@ package discovery
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"os"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 const defaultPeersFileName = "peers.json"
@@ -74,13 +75,13 @@ func (a *addrBook) savePeers(path string) {
 
 	w, err := os.Create(path)
 	if err != nil {
-		log.Error("Error creating file: %v", err)
+		a.logger.Error("Error creating file: %v", err)
 		return
 	}
 	enc := json.NewEncoder(w)
 	defer w.Close()
 	if err := enc.Encode(&sam); err != nil {
-		log.Error("Failed to encode file %s: %v", path, err)
+		a.logger.Error("Failed to encode file %s: %v", path, err)
 		return
 	}
 }
@@ -95,11 +96,11 @@ func (a *addrBook) loadPeers(filePath string) {
 
 	err := a.deserializePeers(filePath)
 	if err != nil {
-		log.Error("Failed to parse file %s: %v", filePath, err)
+		a.logger.Error("Failed to parse file %s: %v", filePath, err)
 		// if it is invalid we nuke the old one unconditionally.
 		err = os.Remove(filePath)
 		if err != nil {
-			log.Warning("Failed to remove corrupt peers file %s: %v",
+			a.logger.Warning("Failed to remove corrupt peers file %s: %v",
 				filePath, err)
 		}
 		a.reset()
@@ -229,6 +230,6 @@ out:
 
 	a.logger.Debug("Saving peer before exit to file %v", filepath)
 	a.savePeers(filepath)
-	log.Debug("Address handler done")
+	a.logger.Debug("Address handler done")
 
 }

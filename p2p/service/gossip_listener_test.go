@@ -2,15 +2,16 @@ package service
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"github.com/stretchr/testify/assert"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/stretchr/testify/assert"
 )
 
 type syncMock struct {
@@ -68,7 +69,7 @@ func (*syncMock) IsSynced(context.Context) bool {
 func Test_AddListener(t *testing.T) {
 	net := NewSimulator()
 	n1 := net.NewNode()
-	l := NewListener(n1, &syncMock{Synced: true}, func() bool { return true }, config.DefaultConfig(), log.NewDefault(n1.Info.ID.String()))
+	l := NewListener(n1, &syncMock{Synced: true}, func() bool { return true }, config.DefaultConfig(), logtest.New(t).WithName(n1.Info.ID.String()))
 	defer l.Stop()
 
 	var channelCount, secondChannel int32
@@ -99,7 +100,7 @@ func Test_AddListener(t *testing.T) {
 func Test_AddListener_notSynced(t *testing.T) {
 	net := NewSimulator()
 	n1 := net.NewNode()
-	l := NewListener(n1, &syncMock{Synced: false}, func() bool { return true }, config.DefaultConfig(), log.NewDefault(n1.Info.ID.String()))
+	l := NewListener(n1, &syncMock{Synced: false}, func() bool { return true }, config.DefaultConfig(), logtest.New(t).WithName(n1.Info.ID.String()))
 	defer l.Stop()
 
 	var channelCount, secondChannel int32
@@ -131,7 +132,7 @@ func TestListenerConcurrency(t *testing.T) {
 		return true
 	}
 	conf := config.DefaultTestConfig()
-	l := NewListener(n1, &syncMock{true, listenFn}, func() bool { return true }, conf, log.NewDefault(n1.Info.ID.String()))
+	l := NewListener(n1, &syncMock{true, listenFn}, func() bool { return true }, conf, logtest.New(t).WithName(n1.Info.ID.String()))
 	defer l.Stop()
 
 	var channelCount int32

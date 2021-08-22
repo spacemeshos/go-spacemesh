@@ -2,19 +2,20 @@
 package hare
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
+	"time"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"time"
 )
 
 const protoName = "HARE_PROTOCOL"
@@ -32,7 +33,7 @@ type Rolacle interface {
 	Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
 	CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
 	Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error)
-	IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error)
+	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
 // NetworkService provides the registration and broadcast abilities in the network.
@@ -52,15 +53,15 @@ const (
 	notCompleted = false
 )
 
-// procReport is the termination report of the CP.
-// It consists of the layer id, the set we agreed on (if available) and a flag to indicate if the CP completed.
+// procReport is the termination report of the CP
 type procReport struct {
-	id        instanceID
-	set       *Set
-	completed bool
+	id        types.LayerID // layer id
+	set       *Set          // agreed-upon set
+	coinflip  bool          // weak coin value
+	completed bool          // whether the CP completed
 }
 
-func (cpo procReport) ID() instanceID {
+func (cpo procReport) ID() types.LayerID {
 	return cpo.id
 }
 
@@ -68,12 +69,16 @@ func (cpo procReport) Set() *Set {
 	return cpo.set
 }
 
+func (cpo procReport) Coinflip() bool {
+	return cpo.coinflip
+}
+
 func (cpo procReport) Completed() bool {
 	return cpo.completed
 }
 
 func (proc *consensusProcess) report(completed bool) {
-	proc.terminationReport <- procReport{proc.instanceID, proc.s, completed}
+	proc.terminationReport <- procReport{proc.instanceID, proc.s, proc.preRoundTracker.coinflip, completed}
 }
 
 var _ TerminationOutput = (*procReport)(nil)
@@ -90,7 +95,7 @@ type State struct {
 // It returns true if the identity is active and false otherwise.
 // An error is set iff the identity could not be checked for activeness.
 type StateQuerier interface {
-	IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error)
+	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
 // Msg is the wrapper of the protocol's message.
@@ -108,19 +113,18 @@ func (m *Msg) String() string {
 // Bytes returns the message as bytes (without the public key).
 // It panics if the message erred on unmarshal.
 func (m *Msg) Bytes() []byte {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, m.Message); err != nil {
+	buf, err := types.InterfaceToBytes(m.Message)
+	if err != nil {
 		log.Panic("could not marshal InnerMsg before send")
 	}
-
-	return w.Bytes()
+	return buf
 }
 
 // Upon receiving a protocol's message, we try to build the full message.
 // The full message consists of the original message and the extracted public key.
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
-func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, error) {
-	logger := log.AppLog.WithContext(ctx)
+func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier StateQuerier) (*Msg, error) {
+	logger = logger.WithContext(ctx)
 
 	// extract pub key
 	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
@@ -133,7 +137,7 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
+	res, err := querier.IsIdentityActiveOnConsensusView(ctx, pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
 	if err != nil {
 		logger.With().Error("error while checking if identity is active",
 			log.String("sender_id", pub.ShortString()),
@@ -171,9 +175,9 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 type consensusProcess struct {
 	log.Log
 	State
-	Closer
-	instanceID        instanceID // the layer id
-	oracle            Rolacle    // the roles oracle provider
+	util.Closer
+	instanceID        types.LayerID
+	oracle            Rolacle // the roles oracle provider
 	signing           Signer
 	nid               types.NodeID
 	network           NetworkService
@@ -195,13 +199,13 @@ type consensusProcess struct {
 }
 
 // newConsensusProcess creates a new consensus process instance.
-func newConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
+func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
 	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p NetworkService,
 	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *consensusProcess {
 	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
-		Closer:            NewCloser(),
+		Closer:            util.NewCloser(),
 		instanceID:        instanceID,
 		oracle:            oracle,
 		signing:           signing,
@@ -249,7 +253,7 @@ func (proc *consensusProcess) Start(ctx context.Context) error {
 }
 
 // ID returns the instance id.
-func (proc *consensusProcess) ID() instanceID {
+func (proc *consensusProcess) ID() types.LayerID {
 	return proc.instanceID
 }
 
@@ -301,7 +305,7 @@ func (proc *consensusProcess) eventLoop(ctx context.Context) {
 PreRound:
 	for {
 		select {
-		// listen to pre-round Messages
+		// listen to pre-round messages
 		case msg := <-proc.inbox:
 			proc.handleMessage(ctx, msg)
 		case <-timer.C:
@@ -456,8 +460,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	proc.WithContext(ctx).With().Debug("processing message",
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
-	// TODO: fix metrics
-	// metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
+	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", m.InnerMsg.InstanceID.String(), "reporter", "processMsg").Add(1)
 
 	switch m.InnerMsg.Type {
 	case pre:
@@ -697,6 +700,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 	if len(proc.pending) == 0 { // no pending messages
 		return
 	}
+
 	// handle pending messages
 	pendingProcess := proc.pending
 	proc.pending = make(map[string]*Msg, proc.cfg.N)
@@ -837,7 +841,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	logger := proc.WithContext(ctx)
 
 	// query if identity is active
-	res, err := proc.oracle.IsIdentityActiveOnConsensusView(proc.signing.PublicKey().String(), types.LayerID(proc.instanceID))
+	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, proc.signing.PublicKey().String(), types.LayerID(proc.instanceID))
 	if err != nil {
 		logger.With().Error("should not participate: error checking our identity for activeness",
 			log.Err(err), types.LayerID(proc.instanceID))

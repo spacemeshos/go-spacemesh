@@ -4,12 +4,13 @@ package node
 import (
 	"errors"
 	"fmt"
-	"github.com/btcsuite/btcutil/base58"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
 	"net/url"
 	"regexp"
 	"strconv"
+
+	"github.com/btcsuite/btcutil/base58"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // Scheme sets the URI scheme for the node string format.
@@ -129,7 +130,7 @@ func ParseNode(rawurl string) (*Info, error) {
 	if m := incompleteNodeURL.FindStringSubmatch(rawurl); m != nil {
 		id, err := p2pcrypto.NewPrivateKeyFromBase58(m[1])
 		if err != nil {
-			return nil, fmt.Errorf("invalid node ID (%v)", err)
+			return nil, fmt.Errorf("invalid node ID: %w", err)
 		}
 		return NewNode(id, nil, 0, 0), nil
 	}
@@ -154,12 +155,12 @@ func parseComplete(rawurl string) (*Info, error) {
 		return nil, errors.New("does not contain node ID")
 	}
 	if id, err = p2pcrypto.NewPrivateKeyFromBase58(u.User.String()); err != nil {
-		return nil, fmt.Errorf("invalid node ID (%v)", err)
+		return nil, fmt.Errorf("invalid node ID: %w", err)
 	}
 	// Parse the IP address.
 	host, port, err := net.SplitHostPort(u.Host)
 	if err != nil {
-		return nil, fmt.Errorf("invalid host: %v", err)
+		return nil, fmt.Errorf("invalid host: %w", err)
 	}
 	if ip = net.ParseIP(host); ip == nil {
 		return nil, errors.New("invalid IP address")

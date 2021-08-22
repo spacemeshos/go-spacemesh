@@ -100,16 +100,16 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 // Get transaction and status for a given txid. It's not an error if we cannot find the tx,
 // we just return all nils.
 func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (retTx *types.Transaction, state pb.TransactionState_TransactionState) {
-	tx, err := s.Mesh.GetTransaction(txID) // have we seen this transaction in a block?
-	retTx = tx
+	tx, err := s.Mesh.GetMeshTransaction(txID) // have we seen this transaction in a block?
 	if err != nil {
-		tx, err = s.Mempool.Get(txID) // do we have it in the mempool?
-		if err != nil {               // we don't know this transaction
+		retTx, err = s.Mempool.Get(txID) // do we have it in the mempool?
+		if err != nil {                  // we don't know this transaction
 			return
 		}
 		state = pb.TransactionState_TRANSACTION_STATE_MEMPOOL
 		return
 	}
+	retTx = &tx.Transaction
 
 	layer := s.Mesh.GetLayerApplied(txID)
 	if layer != nil {
@@ -262,13 +262,13 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 							},
 						}
 						if in.IncludeTransactions {
-							tx, err := s.Mesh.GetTransaction(txid)
+							tx, err := s.Mesh.GetMeshTransaction(txid)
 							if err != nil {
 								log.Error("could not find transaction %v from layer %v: %v", txid, layer, err)
 								return status.Error(codes.Internal, "error retrieving tx data")
 							}
 
-							res.Transaction = convertTransaction(tx)
+							res.Transaction = convertTransaction(&tx.Transaction)
 						}
 						if err := stream.Send(res); err != nil {
 							return err

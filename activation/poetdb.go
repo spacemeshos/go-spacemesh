@@ -2,15 +2,17 @@ package activation
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"sync"
+
 	"github.com/spacemeshos/merkle-tree"
 	"github.com/spacemeshos/poet/hash"
 	"github.com/spacemeshos/poet/shared"
 	"github.com/spacemeshos/poet/verifier"
 	"github.com/spacemeshos/sha256-simd"
-	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type poetProofKey [sha256.Size]byte
@@ -58,15 +60,18 @@ func (db *PoetDb) ValidateAndStoreMsg(data []byte) error {
 
 // Validate validates a new PoET proof.
 func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error {
-
+	const shortIDlth = 5 // check the length to prevent a panic in the errors
+	if len(poetID) < shortIDlth {
+		return types.ProcessingError(fmt.Sprintf("invalid poet id %x", poetID))
+	}
 	root, err := calcRoot(proof.Members)
 	if err != nil {
 		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetID %x round %s: %v",
-			poetID[:5], roundID, err))
+			poetID[:shortIDlth], roundID, err))
 	}
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
 		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %v",
-			poetID[:5], roundID, err)
+			poetID[:shortIDlth], roundID, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
 
@@ -99,9 +104,9 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
 	db.log.With().Info("stored PoET proof",
-		log.String("poet_proof_id", fmt.Sprintf("%x", ref)[:5]),
+		log.String("poet_proof_id", fmt.Sprintf("%x", ref[:5])),
 		log.String("round_id", proofMessage.RoundID),
-		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID)[:5]),
+		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID[:5])),
 	)
 	db.publishProofRef(key, ref)
 	return nil
@@ -111,8 +116,7 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 // proof is already available it will be sent immediately, otherwise it will be sent when available.
 func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan []byte {
 	key := makeKey(poetID, roundID)
-	ch := make(chan []byte)
-
+	ch := make(chan []byte, 1)
 	db.addSubscription(key, ch)
 
 	if poetProofRef, err := db.getProofRef(key); err == nil {
@@ -124,16 +128,16 @@ func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan []byte
 
 func (db *PoetDb) addSubscription(key poetProofKey, ch chan []byte) {
 	db.mu.Lock()
+	defer db.mu.Unlock()
 	db.poetProofRefSubscriptions[key] = append(db.poetProofRefSubscriptions[key], ch)
-	db.mu.Unlock()
 }
 
 // UnsubscribeFromProofRef removes all subscriptions from a given poetID and roundID. This method should be used with
 // caution since any subscribers still waiting will now hang forever. TODO: only cancel specific subscription.
 func (db *PoetDb) UnsubscribeFromProofRef(poetID []byte, roundID string) {
 	db.mu.Lock()
+	defer db.mu.Unlock()
 	delete(db.poetProofRefSubscriptions, makeKey(poetID, roundID))
-	db.mu.Unlock()
 }
 
 func (db *PoetDb) getProofRef(key poetProofKey) ([]byte, error) {
@@ -147,12 +151,9 @@ func (db *PoetDb) getProofRef(key poetProofKey) ([]byte, error) {
 func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef []byte) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-
 	for _, ch := range db.poetProofRefSubscriptions[key] {
-		go func(c chan []byte) {
-			c <- poetProofRef
-			close(c)
-		}(ch)
+		ch <- poetProofRef
+		close(ch)
 	}
 	delete(db.poetProofRefSubscriptions, key)
 }
@@ -166,7 +167,7 @@ func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
 func (db *PoetDb) GetMembershipMap(proofRef []byte) (map[types.Hash32]bool, error) {
 	proofMessageBytes, err := db.GetProofMessage(proofRef)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", proofRef[:3], err)
+		return nil, fmt.Errorf("could not fetch poet proof for ref %x: %v", proofRef[:5], err)
 	}
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(proofMessageBytes, &proofMessage); err != nil {

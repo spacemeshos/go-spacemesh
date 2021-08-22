@@ -42,6 +42,7 @@ type PriorityQueue interface {
 	Write(prio Priority, m interface{}) error
 	Read() (interface{}, error)
 	Close()
+	Length() int
 }
 
 // New returns a new priority queue where each priority has a buffer of prioQueueLimit
@@ -98,6 +99,14 @@ func (pq *Queue) Read() (interface{}, error) {
 
 	// should be unreachable
 	return nil, ErrUnexpected
+}
+
+// Length returns the number of pending messages in all of the queues
+func (pq *Queue) Length() (length int) {
+	for _, q := range pq.queues {
+		length += len(q)
+	}
+	return
 }
 
 // Close the priority queue

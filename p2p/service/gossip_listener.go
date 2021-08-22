@@ -2,15 +2,16 @@ package service
 
 import (
 	"context"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"sync"
 )
 
 // GossipDataHandler is the function type that will be called when data is
-type GossipDataHandler func(ctx context.Context, data GossipMessage, syncer Fetcher)
+type GossipDataHandler func(ctx context.Context, data GossipMessage, fetcher Fetcher)
 
 type enableGossipFunc func() bool
 
@@ -20,31 +21,22 @@ type Listener struct {
 	net                  Service
 	channels             []chan GossipMessage
 	stoppers             []chan struct{}
-	syncer               Fetcher
+	fetcher              Fetcher
 	wg                   sync.WaitGroup
 	shouldListenToGossip enableGossipFunc
 	config               config.Config
 }
 
 // NewListener creates a new listener struct
-func NewListener(net Service, syncer Fetcher, shouldListenToGossip enableGossipFunc, config config.Config, log log.Log) *Listener {
+func NewListener(net Service, fetcher Fetcher, shouldListenToGossip enableGossipFunc, config config.Config, log log.Log) *Listener {
 	return &Listener{
 		Log:                  &log,
 		net:                  net,
-		syncer:               syncer,
+		fetcher:              fetcher,
 		shouldListenToGossip: shouldListenToGossip,
 		wg:                   sync.WaitGroup{},
 		config:               config,
 	}
-}
-
-// Syncer is interface for sync services
-type Syncer interface {
-	FetchAtxReferences(context.Context, *types.ActivationTx) error
-	FetchPoetProof(ctx context.Context, poetProofRef []byte) error
-	ListenToGossip() bool
-	GetBlock(ID types.BlockID) (*types.Block, error)
-	IsSynced(context.Context) bool
 }
 
 // Fetcher is a general interface that defines a component capable of fetching data from remote peers
@@ -55,8 +47,6 @@ type Fetcher interface {
 	GetTxs(context.Context, []types.TransactionID) error
 	GetBlocks(context.Context, []types.BlockID) error
 	GetAtxs(context.Context, []types.ATXID) error
-	ListenToGossip() bool
-	IsSynced(context.Context) bool
 }
 
 // AddListener adds a listener to a specific gossip channel
@@ -100,14 +90,14 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 		l.WithContext(ctx).With().Info("got gossip message, forwarding to data handler",
 			log.String("protocol", channel),
 			log.Int("queue_length", len(gossipChannel)))
-		if !l.syncer.ListenToGossip() {
+		if !l.shouldListenToGossip() {
 			// not accepting data
 			l.WithContext(ctx).Info("not currently listening to gossip, dropping message")
 			return
 		}
 		go func() {
 			// TODO: these handlers should have an API that includes a cancel method. they should time out eventually.
-			dataHandler(ctx, data, l.syncer)
+			dataHandler(ctx, data, l.fetcher)
 			// replace token when done
 			tokenChan <- struct{}{}
 		}()
@@ -119,6 +109,9 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 			l.wg.Done()
 			return
 		case data := <-gossipChannel:
+			l.WithContext(ctx).With().Debug("got gossip message, forwarding to data handler",
+				log.String("protocol", channel),
+				log.Int("queue_length", len(gossipChannel)))
 			if !l.shouldListenToGossip() {
 				// not accepting data
 				continue

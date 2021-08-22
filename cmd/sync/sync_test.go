@@ -1,10 +1,12 @@
 package main
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
@@ -18,7 +20,7 @@ func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
 	defer syncApp.Cleanup()
 	syncApp.Initialize(cmd)
 	syncApp.Config.DataDirParent = "bin/data/"
-	lg := log.NewDefault("")
+	lg := logtest.New(t)
 
 	defer func() {
 		err := os.RemoveAll(syncApp.Config.DataDirParent)
@@ -42,7 +44,7 @@ func TestSpacemeshApp_TestSyncCmd(t *testing.T) {
 			t.Error("timed out ")
 			return
 		default:
-			if syncApp.sync.ProcessedLayer() > 20 {
+			if syncApp.msh.ProcessedLayer().After(types.NewLayerID(20)) {
 				t.Log("done!")
 				return
 			}

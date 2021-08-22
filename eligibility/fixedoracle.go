@@ -13,25 +13,27 @@ import (
 
 // FixedRolacle is an eligibility simulator with pre-determined honest and faulty participants.
 type FixedRolacle struct {
+	logger log.Log
+
+	mutex  sync.Mutex
+	mapRW  sync.RWMutex
 	honest map[string]struct{}
 	faulty map[string]struct{}
 	emaps  map[uint32]map[string]struct{}
-	mutex  sync.Mutex
-	mapRW  sync.RWMutex
 }
 
 // New initializes the oracle with no participants.
-func New() *FixedRolacle {
-	rolacle := &FixedRolacle{}
-	rolacle.honest = make(map[string]struct{})
-	rolacle.faulty = make(map[string]struct{})
-	rolacle.emaps = make(map[uint32]map[string]struct{})
-
-	return rolacle
+func New(logger log.Log) *FixedRolacle {
+	return &FixedRolacle{
+		logger: logger,
+		honest: make(map[string]struct{}),
+		faulty: make(map[string]struct{}),
+		emaps:  make(map[uint32]map[string]struct{}),
+	}
 }
 
 // IsIdentityActiveOnConsensusView is use to satisfy the API, currently always returns true.
-func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
+func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -44,7 +46,7 @@ func (fo *FixedRolacle) Export(id uint32, committeeSize int) map[string]struct{}
 	// normalize committee size
 	size := committeeSize
 	if committeeSize > total {
-		log.AppLog.With().Warning("committee size bigger than the number of clients",
+		fo.logger.With().Warning("committee size bigger than the number of clients",
 			log.Int("committee_size", committeeSize),
 			log.Int("num_clients", total))
 		size = total
@@ -118,7 +120,7 @@ func pickUnique(pickCount int, orig map[string]struct{}, dest map[string]struct{
 }
 
 func (fo *FixedRolacle) generateEligibility(ctx context.Context, expCom int) map[string]struct{} {
-	logger := log.AppLog.WithContext(ctx)
+	logger := fo.logger.WithContext(ctx)
 	emap := make(map[string]struct{}, expCom)
 
 	if expCom == 0 {
@@ -161,7 +163,7 @@ func (fo *FixedRolacle) generateEligibility(ctx context.Context, expCom int) map
 	return emap
 }
 
-func hashLayerAndRound(instanceID types.LayerID, round int32) uint32 {
+func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round int32) uint32 {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
 	h := fnv.New32()
@@ -169,7 +171,7 @@ func hashLayerAndRound(instanceID types.LayerID, round int32) uint32 {
 	_, err2 := h.Write(kInBytes)
 
 	if err != nil || err2 != nil {
-		log.AppLog.With().Error("errors trying to create a hash",
+		logger.With().Error("errors trying to create a hash",
 			log.FieldNamed("err1", log.Err(err)),
 			log.FieldNamed("err2", log.Err(err2)))
 	}
@@ -200,13 +202,13 @@ func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round
 	// normalize committee size
 	size := committeeSize
 	if committeeSize > total {
-		log.AppLog.WithContext(ctx).With().Warning("committee size bigger than the number of clients",
+		fo.logger.WithContext(ctx).With().Warning("committee size bigger than the number of clients",
 			log.Int("committee_size", committeeSize),
 			log.Int("num_clients", total))
 		size = total
 	}
 
-	instID := hashLayerAndRound(layer, round)
+	instID := hashLayerAndRound(fo.logger, layer, round)
 
 	fo.mapRW.Lock()
 	// generate if not exist for the requested K
@@ -226,7 +228,7 @@ func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round in
 	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
 	hash := fnv.New32()
 	if _, err := hash.Write(kInBytes); err != nil {
-		log.AppLog.WithContext(ctx).With().Error("error writing hash", log.Err(err))
+		fo.logger.WithContext(ctx).With().Error("error writing hash", log.Err(err))
 	}
 
 	hashBytes := make([]byte, 4)

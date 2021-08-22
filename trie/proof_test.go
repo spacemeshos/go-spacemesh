@@ -19,17 +19,13 @@ package trie
 import (
 	"bytes"
 	crand "crypto/rand"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	mrand "github.com/spacemeshos/go-spacemesh/rand"
-	"testing"
-	"time"
 )
-
-func init() {
-	mrand.Seed(time.Now().Unix())
-}
 
 // makeProvers creates Merkle trie provers based on different implementations to
 // test all variations.

@@ -1,30 +1,28 @@
 package p2p
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	inet "net"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/nattraversal"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	"github.com/spacemeshos/go-spacemesh/p2p/discovery"
-	"github.com/stretchr/testify/require"
-
-	"context"
-	"errors"
-	"sync"
-
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 type cpoolMock struct {
@@ -51,6 +49,7 @@ func (cp *cpoolMock) GetConnection(ctx context.Context, address inet.Addr, pk p2
 	}
 	return net.NewConnectionMock(pk), nil
 }
+
 func (cp *cpoolMock) GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connection, error) {
 	if cp.fExists != nil {
 		return cp.fExists(pk)
@@ -59,7 +58,6 @@ func (cp *cpoolMock) GetConnectionIfExists(pk p2pcrypto.PublicKey) (net.Connecti
 }
 
 func (cp *cpoolMock) Shutdown() {
-
 }
 
 func p2pTestInstance(t testing.TB, config config.Config) *Switch {
@@ -73,7 +71,7 @@ func p2pTestInstance(t testing.TB, config config.Config) *Switch {
 }
 
 func p2pTestNoStart(t testing.TB, config config.Config) *Switch {
-	p, err := newSwarm(context.TODO(), config, log.NewDefault(t.Name()), "")
+	p, err := newSwarm(context.TODO(), config, logtest.New(t).WithName(t.Name()), "")
 	if err != nil {
 		t.Fatal("err creating a Switch", err)
 	}
@@ -83,11 +81,13 @@ func p2pTestNoStart(t testing.TB, config config.Config) *Switch {
 	return p
 }
 
-const exampleProtocol = "EX"
-const examplePayload = "Example"
+const (
+	exampleProtocol = "EX"
+	examplePayload  = "Example"
+)
 
 func TestNew(t *testing.T) {
-	s, err := New(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
+	s, err := New(context.TODO(), configWithPort(0), logtest.New(t).WithName(t.Name()), "")
 	require.NoError(t, err)
 	err = s.Start(context.TODO())
 	require.NoError(t, err)
@@ -96,7 +96,7 @@ func TestNew(t *testing.T) {
 }
 
 func Test_newSwarm(t *testing.T) {
-	s, err := newSwarm(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
+	s, err := newSwarm(context.TODO(), configWithPort(0), logtest.New(t).WithName(t.Name()), "")
 	assert.NoError(t, err)
 	err = s.Start(context.TODO())
 	assert.NoError(t, err)
@@ -105,7 +105,7 @@ func Test_newSwarm(t *testing.T) {
 }
 
 func TestSwarm_Shutdown(t *testing.T) {
-	s, err := newSwarm(context.TODO(), configWithPort(0), log.NewDefault(t.Name()), "")
+	s, err := newSwarm(context.TODO(), configWithPort(0), logtest.New(t).WithName(t.Name()), "")
 	assert.NoError(t, err)
 	err = s.Start(context.TODO())
 	assert.NoError(t, err)
@@ -134,7 +134,7 @@ func TestSwarm_Shutdown(t *testing.T) {
 }
 
 func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
-	s, err := newSwarm(context.TODO(), configWithPort(7513), log.NewDefault(t.Name()), "")
+	s, err := newSwarm(context.TODO(), configWithPort(7513), logtest.New(t).WithName(t.Name()), "")
 	assert.NoError(t, err)
 	msgs := s.RegisterDirectProtocol("Anton")
 	assert.NotNil(t, msgs)
@@ -142,6 +142,7 @@ func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 
 func TestSwarm_processMessage(t *testing.T) {
 	s := Switch{
+		shutdownCtx:  context.TODO(),
 		inpeers:      make(map[p2pcrypto.PublicKey]struct{}),
 		outpeers:     make(map[p2pcrypto.PublicKey]struct{}),
 		delPeerSub:   make([]chan p2pcrypto.PublicKey, 0),
@@ -150,7 +151,7 @@ func TestSwarm_processMessage(t *testing.T) {
 	cpmock := newCpoolMock()
 	s.cPool = cpmock
 	s.config = config.DefaultConfig()
-	s.logger = log.NewDefault(t.Name())
+	s.logger = logtest.New(t).WithName(t.Name())
 	s.lNode, _ = node.GenerateTestNode(t)
 	r := node.GenerateRandomNodeData()
 
@@ -233,7 +234,7 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 
 	oldCpool := p2.cPool.(*connectionpool.ConnectionPool)
 
-	//called := make(chan struct{}, numNodes)
+	// called := make(chan struct{}, numNodes)
 	cpm := new(cpoolMock)
 
 	cpm.fExists = func(pk p2pcrypto.PublicKey) (net.Connection, error) {
@@ -267,7 +268,6 @@ func Test_ConnectionBeforeMessage(t *testing.T) {
 	cpm.f = nil
 	sa.clean()
 	cancel()
-
 }
 
 func RandString(n int) string {
@@ -281,16 +281,17 @@ func RandString(n int) string {
 func sendDirectMessage(t *testing.T, sender *Switch, recvPub p2pcrypto.PublicKey, inChan chan service.DirectMessage, checkpayload bool) {
 	payload := []byte(RandString(10))
 	err := sender.SendMessage(context.TODO(), recvPub, exampleProtocol, payload)
-	require.NoError(t, err)
+	if !assert.NoError(t, err) {
+		return
+	}
 	select {
 	case msg := <-inChan:
 		if checkpayload {
 			assert.Equal(t, msg.Bytes(), payload)
 		}
 		assert.Equal(t, msg.Sender().String(), sender.lNode.PublicKey().String())
-		break
-	case <-time.After(5 * time.Second):
-		t.Error("Took too much time to receive")
+	case <-time.After(time.Second):
+		assert.Fail(t, "Took too much time to receive")
 	}
 }
 
@@ -337,7 +338,10 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	var wg sync.WaitGroup
 	for i := 0; i < 500; i++ {
 		wg.Add(1)
-		go func() { sendDirectMessage(t, p2, p1.lNode.PublicKey(), exchan1, false); wg.Done() }()
+		go func() {
+			sendDirectMessage(t, p2, p1.lNode.PublicKey(), exchan1, false)
+			wg.Done()
+		}()
 	}
 	wg.Wait()
 
@@ -422,7 +426,6 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 }
 
 func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing.T) {
-
 	const Senders = 100
 	const Protos = 50
 
@@ -529,7 +532,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	err = p.onRemoteClientMessage(context.TODO(), ime)
 	assert.Equal(t, ErrNoSession, err)
 
-	//Test bad session
+	// Test bad session
 	session := &net.SessionMock{}
 	session.OpenMessageFunc = func(boxedMessage []byte) (bytes []byte, err error) {
 		return nil, errors.New("fail")
@@ -548,8 +551,10 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	assert.Equal(t, ErrBadFormat2, err)
 
 	goodmsg := &ProtocolMessage{
-		Metadata: &ProtocolMessageMetadata{AuthPubkey: id.PublicKey().Bytes(), NextProtocol: exampleProtocol,
-			Timestamp: time.Now().Unix(), ClientVersion: config.ClientVersion}, // not signed
+		Metadata: &ProtocolMessageMetadata{
+			AuthPubkey: id.PublicKey().Bytes(), NextProtocol: exampleProtocol,
+			Timestamp: time.Now().Unix(), ClientVersion: config.ClientVersion,
+		}, // not signed
 		Payload: &Payload{Payload: []byte(examplePayload)},
 	}
 
@@ -604,7 +609,6 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 	err = p.onRemoteClientMessage(context.TODO(), ime)
 	assert.NoError(t, err)
 	wg.Wait()
-
 }
 
 func assertNewPeerEvent(t *testing.T, peer p2pcrypto.PublicKey, connChan <-chan p2pcrypto.PublicKey) {
@@ -771,9 +775,9 @@ func Test_Swarm_getMorePeers5(t *testing.T) {
 
 	conn, _ := n.SubscribePeerEvents()
 
-	//res := n.getMorePeers(0) // this should'nt work
-	//assert.Equal(t, res, 0)
-	//assertNoNewPeerEvent(t, conn)
+	// res := n.getMorePeers(0) // this should'nt work
+	// assert.Equal(t, res, 0)
+	// assertNoNewPeerEvent(t, conn)
 
 	mdht := new(discovery.MockPeerStore)
 	n.discover = mdht
@@ -804,9 +808,9 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 
 	conn, _ := n.SubscribePeerEvents()
 
-	//res := n.getMorePeers(0) // this should'nt work
-	//assert.Equal(t, res, 0)
-	//assertNoNewPeerEvent(t, conn)
+	// res := n.getMorePeers(0) // this should'nt work
+	// assert.Equal(t, res, 0)
+	// assertNoNewPeerEvent(t, conn)
 
 	mdht := new(discovery.MockPeerStore)
 	n.discover = mdht
@@ -819,7 +823,7 @@ func Test_Swarm_getMorePeers6(t *testing.T) {
 		return node.GenerateRandomNodesData(qty)
 	}
 
-	//test inc peer
+	// test inc peer
 	nd := node.GenerateRandomNodeData()
 	require.NoError(t, n.addIncomingPeer(nd.PublicKey()))
 
@@ -1015,10 +1019,7 @@ func TestSwarm_AskPeersSerial(t *testing.T) {
 func Test_NodeInfo(t *testing.T) {
 	pinged := node.NewNode(p2pcrypto.NewRandomPubkey(), net.IPv4LoopbackAddress, 1010, 1020)
 	raw, err := types.InterfaceToBytes(&pinged)
-	if err != nil {
-		panic("LOL")
-	}
-	fmt.Println("GOT MSG ", raw)
+	require.NoError(t, err)
 	pinged2 := &node.Info{}
 	err = types.BytesToInterface(raw, pinged2)
 	if err != nil {
@@ -1128,7 +1129,7 @@ func TestSwarm_SendMessage(t *testing.T) {
 
 	someky := p2pcrypto.NewRandomPubkey()
 	proto := exampleDirectProto
-	//payload := service.DataBytes{Payload:[]byte("LOL")}
+	// payload := service.DataBytes{Payload:[]byte("LOL")}
 
 	err := p.SendMessage(context.TODO(), someky, proto, []byte("LOL"))
 	require.Equal(t, err, errors.New("can't send message to self"))
@@ -1142,7 +1143,7 @@ func TestSwarm_SendMessage(t *testing.T) {
 	}
 
 	err = p.SendMessage(context.TODO(), someky, proto, []byte("LOL"))
-	require.Equal(t, errors.New("peer not a neighbor or connection lost: no conn"), err)
+	require.EqualError(t, err, "peer not a neighbor or connection lost: no conn")
 
 	cp.fExists = func(pk p2pcrypto.PublicKey) (connection net.Connection, err error) {
 		return net.NewConnectionMock(pk), nil

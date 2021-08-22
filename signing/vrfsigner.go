@@ -3,17 +3,31 @@ package signing
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/spacemeshos/ed25519"
 )
+
+var _ Signer = VRFSigner{}
 
 // VRFSigner is a signer for VRF purposes
 type VRFSigner struct {
 	privateKey []byte
+	pub        *PublicKey
 }
 
 // Sign signs a message for VRF purposes
 func (s VRFSigner) Sign(msg []byte) []byte {
 	return ed25519.Sign(s.privateKey, msg)
+}
+
+// PublicKey of the signer.
+func (s VRFSigner) PublicKey() *PublicKey {
+	return s.pub
+}
+
+// LittleEndian indicates whether byte order in a signature is little-endian.
+func (s VRFSigner) LittleEndian() bool {
+	return true
 }
 
 // NewVRFSigner creates a new VRFSigner from a 32-byte seed
@@ -25,10 +39,21 @@ func NewVRFSigner(seed []byte) (*VRFSigner, []byte, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	return &VRFSigner{privateKey: vrfPriv}, vrfPub, nil
+
+	return &VRFSigner{privateKey: vrfPriv, pub: &PublicKey{pub: vrfPub}}, vrfPub, nil
 }
 
 // VRFVerify verifies a message and signature, given a public key
 func VRFVerify(pub, msg, sig []byte) bool {
 	return ed25519.Verify(pub, msg, sig)
+}
+
+var _ Verifier = VRFVerifier{}
+
+// VRFVerifier is a verifier for VRF purposes.
+type VRFVerifier struct{}
+
+// Verify that signature matches public key.
+func (VRFVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
+	return VRFVerify(pub.Bytes(), msg, sig)
 }

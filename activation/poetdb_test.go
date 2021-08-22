@@ -2,28 +2,29 @@ package activation
 
 import (
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/sha256-simd"
-	"github.com/stretchr/testify/require"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/codec"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/sha256-simd"
+	"github.com/stretchr/testify/require"
 )
 
 func TestPoetDbHappyFlow(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
+	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
 
 	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
 
 	var poetProof types.PoetProof
-	_, err = xdr.Unmarshal(file, &poetProof)
+	_, err = codec.DecodeFrom(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
 	poetID := []byte("poet_id_123456")
@@ -58,13 +59,13 @@ func TestPoetDbHappyFlow(t *testing.T) {
 func TestPoetDbInvalidPoetProof(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
+	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
 
 	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
 
 	var poetProof types.PoetProof
-	_, err = xdr.Unmarshal(file, &poetProof)
+	_, err = codec.DecodeFrom(file, &poetProof)
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
 	poetID := []byte("poet_id_123456")
@@ -80,7 +81,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 func TestPoetDbNonExistingKeys(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
+	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
 
 	poetID := []byte("poet_id_123456")
 
@@ -90,13 +91,13 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 
 	ref := []byte("abcde")
 	_, err = poetDb.GetMembershipMap(ref)
-	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: leveldb: not found", ref[:3]))
+	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: leveldb: not found", ref[:5]))
 }
 
 func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), log.NewDefault("poetdb_test"))
+	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
 
 	poetID := []byte("poet_id_123456")
 
@@ -112,7 +113,7 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	r.NoError(err)
 
 	var poetProof types.PoetProof
-	_, err = xdr.Unmarshal(file, &poetProof)
+	_, err = codec.DecodeFrom(file, &poetProof)
 	r.NoError(err)
 
 	err = poetDb.Validate(poetProof, poetID, "0", nil)

@@ -78,7 +78,6 @@ func (s *Simulator) SubscribeToPeerEvents(myid p2pcrypto.Key) (chan p2pcrypto.Pu
 func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.newPeersSubs {
-		log.Info("publish new peer on chan with len %v, cap %v", len(ch), cap(ch))
 		ch <- peer
 	}
 	s.subLock.Unlock()
@@ -206,7 +205,7 @@ func (sm SimGossipMessage) ValidationCompletedChan() chan MessageValidation {
 }
 
 // ReportValidation reports sm as a valid message for protocol.
-func (sm SimGossipMessage) ReportValidation(protocol string) {
+func (sm SimGossipMessage) ReportValidation(ctx context.Context, protocol string) {
 	if sm.validationCompletedChan != nil {
 		sm.validationCompletedChan <- NewMessageValidation(sm.sender, sm.Bytes(), protocol, sm.RequestID())
 	}

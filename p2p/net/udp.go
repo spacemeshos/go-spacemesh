@@ -4,14 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"io"
 	"net"
 	"strconv"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // TODO: we should remove this const. Should  not depend on the number of addresses.
@@ -206,7 +208,7 @@ func (n *UDPNet) EnqueueMessage(ctx context.Context, ime IncomingMessageEvent) {
 }
 
 // NetworkID returns the network id given and used for creating a session.
-func (n *UDPNet) NetworkID() int8 {
+func (n *UDPNet) NetworkID() uint32 {
 	return 0
 }
 
@@ -214,7 +216,7 @@ func (n *UDPNet) NetworkID() int8 {
 func (n *UDPNet) listenToUDPNetworkMessages(ctx context.Context, listener net.PacketConn) {
 	n.logger.Info("listening for incoming udp connections")
 
-	buf := make([]byte, maxMessageSize) // todo: buffer pool ?
+	buf := make([]byte, maxMessageSize)
 	for {
 		size, addr, err := listener.ReadFrom(buf)
 		if err != nil {
@@ -399,11 +401,9 @@ func (ucw *udpConnWrapper) RemoteAddr() net.Addr {
 func (ucw *udpConnWrapper) Read(b []byte) (int, error) {
 	select {
 	case msg := <-ucw.incChan:
-		copy(b, msg)
-		log.Debug("passing message to conn")
-		return len(msg), nil
+		return copy(b, msg), nil
 	case <-ucw.closeChan:
-		return 0, errors.New("closed")
+		return 0, io.EOF
 	}
 }
 
@@ -412,6 +412,10 @@ func (ucw *udpConnWrapper) Write(b []byte) (int, error) {
 }
 
 func (ucw *udpConnWrapper) Close() error {
-	close(ucw.closeChan)
+	select {
+	case <-ucw.closeChan:
+	default:
+		close(ucw.closeChan)
+	}
 	return nil
 }

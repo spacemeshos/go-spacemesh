@@ -13,7 +13,7 @@ def wait_for_dump_to_end(src_ip, dst_ip, indx, usr, pwd, port=9200, timeout=8640
     print(f"source documents count: {src_docs_count}")
     dst_docs_count = 0
     interval = 10
-    while src_docs_count > dst_docs_count and timeout >= 0:
+    while timeout >= 0:
         # sleep first in order to allow index to be created at destination
         if src_docs_count > dst_docs_count:
             timeout -= interval
