@@ -243,9 +243,9 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	assert.NoError(t, err)
 	// TODO: check this test failure
 	_ = actives
-	// assert.Len(t, actives, 2)
-	// assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
-	// assert.Equal(t, uint64(20000), actives[id2.Key], "actives[id2.Key] (%d) != %d", actives[id2.Key], 20000)
+	//assert.Len(t, actives, 2)
+	//assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
+	//assert.Equal(t, uint64(20000), actives[id2.Key], "actives[id2.Key] (%d) != %d", actives[id2.Key], 20000)
 }
 
 func TestMesh_ActiveSetForLayerView2(t *testing.T) {
@@ -553,7 +553,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12), 0, 100, coinbase, 100, &types.NIPost{})
-	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeID))
+	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeID).Bytes())
 	for iter.Next() {
 		err = atxdb.atxs.Delete(iter.Key())
 		assert.NoError(t, err)
@@ -722,6 +722,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	err = atxdb.StoreAtx(1, atx)
 	assert.NoError(t, err)
+
 }
 
 func TestActivationDb_ProcessAtx(t *testing.T) {
@@ -831,7 +832,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			prevAtxs[miner] = atx.ID()
 			storeAtx(r, atxdb, atx, lg.WithName("storeAtx"))
 		}
-		// noinspection GoNilness
+		//noinspection GoNilness
 		posAtx = atx.ID()
 		layer = layer.Add(layersPerEpoch)
 		if epoch%batchSize == batchSize-1 {
@@ -930,6 +931,7 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	signedAtx.Sig = []byte("anton")
 	_, err = ExtractPublicKey(signedAtx)
 	r.Error(err)
+
 }
 
 func createAndStoreAtx(atxdb *DB, layer types.LayerID) (*types.ActivationTx, error) {

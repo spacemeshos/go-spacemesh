@@ -3,6 +3,7 @@
 package mesh
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -591,7 +592,7 @@ func (msh *Mesh) calcSimpleLayerHash(layer *types.Layer) types.Hash32 {
 }
 
 func (msh *Mesh) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) {
-	if err := msh.general.Put(msh.getAggregatedLayerHashKey(layerID), hash.Bytes()); err != nil {
+	if err := msh.general.Put(getAggregatedLayerHashKey(layerID), hash.Bytes()); err != nil {
 		msh.With().Error("failed to persist running layer hash",
 			log.Err(err),
 			msh.ProcessedLayer(),
@@ -613,7 +614,7 @@ func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, er
 		return EmptyLayerHash, nil
 	}
 	var hash types.Hash32
-	bts, err := msh.general.Get(msh.getAggregatedLayerHashKey(layerID))
+	bts, err := msh.general.Get(getAggregatedLayerHashKey(layerID))
 	if err == nil {
 		hash.SetBytes(bts)
 		return hash, nil
@@ -634,14 +635,6 @@ func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
 		return []types.BlockID{}
 	}
 	return mBlocks
-}
-
-func (msh *Mesh) getLayerBlockHashKey(layerID types.LayerID) []byte {
-	return []byte(fmt.Sprintf("layerBlockHash_%v", layerID.Bytes()))
-}
-
-func (msh *Mesh) getAggregatedLayerHashKey(layerID types.LayerID) []byte {
-	return []byte(fmt.Sprintf("rLayerHash_%v", layerID.Bytes()))
 }
 
 func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs []*types.Transaction) {
@@ -737,11 +730,6 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 
 	msh.setLatestLayer(lyr)
 
-	lm := msh.getLayerMutex(lyr)
-	defer msh.endLayerWorker(lyr)
-
-	lm.m.Lock()
-	defer lm.m.Unlock()
 	// layer doesnt exist, need to insert new layer
 	return msh.AddZeroBlockLayer(lyr)
 }
@@ -994,4 +982,11 @@ func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.A
 		}
 	}
 	return atxs, mIds
+}
+
+func getAggregatedLayerHashKey(layerID types.LayerID) []byte {
+	var b bytes.Buffer
+	b.WriteString("ag")
+	b.Write(layerID.Bytes())
+	return b.Bytes()
 }

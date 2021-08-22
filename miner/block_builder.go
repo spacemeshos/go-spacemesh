@@ -172,7 +172,7 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 	if err != nil {
 		return
 	}
-	err = types.BytesToInterface(bts, &blockID)
+	copy(blockID[:], bts)
 	return
 }
 
