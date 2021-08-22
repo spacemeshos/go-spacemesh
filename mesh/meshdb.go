@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -349,12 +350,13 @@ func (m *DB) GetCoinflip(ctx context.Context, layerID types.LayerID) (bool, bool
 
 // GetLayerInputVector gets the input vote vector for a layer (hare results)
 func (m *DB) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
-	it := m.inputVector.Find(hash.Bytes())
+	buf, err := m.inputVector.Get(hash.Bytes())
+	if err != nil {
+		return nil, err
+	}
 	var ids []types.BlockID
-	for it.Next() {
-		var id types.BlockID
-		copy(id[:], it.Key()[len(hash.Bytes()):])
-		ids = append(ids, id)
+	if err := codec.Decode(buf, &ids); err != nil {
+		return nil, err
 	}
 	return ids, nil
 }
@@ -373,13 +375,12 @@ func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blk
 	m.WithContext(ctx).With().Info("saving input vector",
 		id,
 		log.String("iv_hash", hash.ShortString()))
-	batch := m.inputVector.NewBatch()
-	for _, id := range blks {
-		if err := batch.Put(append(hash.Bytes(), id.Bytes()...), nil); err != nil {
-			return err
-		}
+	// NOTE(dshulyak) there is an implicit dependency in fetcher
+	buf, err := codec.Encode(blks)
+	if err != nil {
+		return err
 	}
-	return batch.Write()
+	return m.inputVector.Put(hash.Bytes(), buf)
 }
 
 func (m *DB) persistProcessedLayer(lyr *ProcessedLayer) error {
