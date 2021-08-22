@@ -35,7 +35,7 @@ type mockNet struct {
 func (m mockNet) Close() {
 }
 
-func (m mockNet) RegisterBytesMsgHandler(_ server.MessageType, reqHandler func(context.Context, []byte) []byte) {
+func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) ([]byte, error)) {
 }
 
 func (m mockNet) Start(context.Context) error {
