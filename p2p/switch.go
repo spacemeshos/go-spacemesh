@@ -804,7 +804,8 @@ func (s *Switch) askForMorePeers(ctx context.Context) {
 		return
 	}
 
-	s.logger.Warning("needs %d more peers", s.config.SwarmConfig.RandomConnections-numpeers)
+	s.logger.With().Warning("needs more peers",
+		log.Int("count_needed", s.config.SwarmConfig.RandomConnections-numpeers))
 
 	// if we couldn't get any maybe we're initializing
 	// wait a little bit before trying again

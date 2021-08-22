@@ -222,7 +222,8 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		// this is called only for its side effects, but at least print the error if it returns one
 		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(ctx, h.nid.Key, id); err != nil {
 			logger.With().Error("error checking if identity is active",
-				log.Bool("isActive", isActive), log.Err(err))
+				log.Bool("is_active", isActive),
+				log.Err(err))
 		}
 	}()
 

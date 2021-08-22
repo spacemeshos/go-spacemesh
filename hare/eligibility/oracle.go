@@ -491,8 +491,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID strin
 	}()
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		o.WithContext(ctx).With().Error("method IsIdentityActiveOnConsensusView erred while calling actives func",
-			layer, log.Err(err))
+		o.WithContext(ctx).With().Error("error getting active set", layer, log.Err(err))
 		return false, err
 	}
 	_, exist := actives[edID]
