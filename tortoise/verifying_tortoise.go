@@ -338,7 +338,7 @@ func (t *turtle) calculateExceptions(layerid types.LayerID, blockid types.BlockI
 	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 }
 
-func (t *turtle) BlockWeight(voting, voted types.BlockID) int64 {
+func (t *turtle) BlockWeight(voting, voted types.BlockID) uint64 {
 	return 1
 }
 

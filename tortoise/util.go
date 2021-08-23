@@ -10,7 +10,7 @@ import (
 // NOTE(dshulyak) there is a bug in xdr. without specifying size xdr will cut the value
 // down to int32
 type vec struct {
-	Support, Against int64
+	Support, Against uint64
 	Flushed          bool
 }
 
@@ -37,14 +37,7 @@ func (a vec) Add(v vec) vec {
 	return a
 }
 
-func (a vec) Negate() vec {
-	a.Support *= -1
-	a.Against *= -1
-	a.Flushed = false
-	return a
-}
-
-func (a vec) Multiply(x int64) vec {
+func (a vec) Multiply(x uint64) vec {
 	a.Against *= x
 	a.Support *= x
 	a.Flushed = false

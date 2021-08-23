@@ -77,7 +77,7 @@ func (s *state) Persist() error {
 
 				buf, err := codec.Encode(opinion)
 				if err != nil {
-					s.log.Panic("can't encode vec", log.Err(err))
+					s.log.With().Panic("can't encode vec", log.Err(err))
 				}
 				if err := batch.Put(b.Bytes(), buf); err != nil {
 					return err

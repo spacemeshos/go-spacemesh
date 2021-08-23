@@ -35,7 +35,7 @@ func NewVerifyingTortoise(cfg Config) *ThreadSafeVerifyingTortoise {
 		if errors.Is(err, database.ErrNotFound) {
 			alg.trtl.init(mesh.GenesisLayer())
 		} else {
-			cfg.Log.Panic("can't recover turtle state", log.Err(err))
+			cfg.Log.With().Panic("can't recover turtle state", log.Err(err))
 		}
 	}
 	return alg
