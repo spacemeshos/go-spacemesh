@@ -1,6 +1,6 @@
 package tortoisebeacon
 
-type proposalSet map[proposal]struct{}
+type proposalSet map[string]struct{}
 
 func (vs proposalSet) list() proposalList {
 	votes := make(proposalList, 0)

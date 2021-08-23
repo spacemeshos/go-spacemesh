@@ -52,8 +52,8 @@ func (a mockActivationDB) GetIdentity(edID string) (types.NodeID, error) {
 	return types.NodeID{Key: edID, VRFPublicKey: nodeID.VRFPublicKey}, nil
 }
 
-func (a mockActivationDB) GetNodeAtxIDForEpoch(nodePK string, targetEpoch types.EpochID) (types.ATXID, error) {
-	if nodePK != nodeID.Key || targetEpoch == 0 {
+func (a mockActivationDB) GetNodeAtxIDForEpoch(nID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
+	if nID.Key != nodeID.Key || targetEpoch == 0 {
 		return *types.EmptyATXID, errors.New("not found")
 	}
 	return atxID, nil
