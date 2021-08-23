@@ -197,7 +197,7 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 			log.Int("queue_length", len(c.messages)))
 	}
 
-	// perform a non-blocking send and start dropping messages if the channel is full
+	// perform a non-blocking send and drop the peer if the channel is full
 	// otherwise, the entire gossip stack will get blocked
 	select {
 	case c.messages <- msgToSend{m, reqID, peerID}:
@@ -205,7 +205,10 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 	case <-c.stopSending:
 		return ErrClosed
 	default:
-		return fmt.Errorf("msgconnection: dropping outbound message, send queue full")
+		_ = c.Close()
+		err := fmt.Errorf("msgconnection: outbound message queue is full, dropping peer")
+		c.networker.publishClosingConnection(ConnectionWithErr{c, err})
+		return err
 	}
 }
 

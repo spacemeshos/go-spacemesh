@@ -286,7 +286,10 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	case <-c.stopSending:
 		return ErrClosed
 	default:
-		return fmt.Errorf("connection: dropping outbound message, send queue full")
+		err := fmt.Errorf("connection: outbound message queue is full, dropping peer")
+		c.networker.publishClosingConnection(ConnectionWithErr{c, err}) //
+		_ = c.closeNoWait()
+		return err
 	}
 }
 
@@ -345,17 +348,17 @@ var (
 func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Duration) error {
 	err := c.deadliner.SetReadDeadline(time.Now().Add(timeout))
 	if err != nil {
-		c.closeNoWait()
+		_ = c.closeNoWait()
 		return err
 	}
 	msg, err := c.r.Next()
 	if err != nil {
-		c.closeNoWait()
+		_ = c.closeNoWait()
 		return err
 	}
 	err = c.deadliner.SetReadDeadline(time.Time{})
 	if err != nil {
-		c.closeNoWait()
+		_ = c.closeNoWait()
 		return fmt.Errorf("failed to set read dealine: %w", err)
 	}
 
@@ -366,13 +369,13 @@ func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Du
 	}
 
 	if c.session != nil {
-		c.closeNoWait()
+		_ = c.closeNoWait()
 		return errors.New("setup connection twice")
 	}
 
 	err = c.networker.HandlePreSessionIncomingMessage(c, msg)
 	if err != nil {
-		c.closeNoWait()
+		_ = c.closeNoWait()
 		return err
 	}
 
