@@ -1058,7 +1058,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
 
-		log.With().Warning("created new identity", edSgn.PublicKey())
+		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
 
