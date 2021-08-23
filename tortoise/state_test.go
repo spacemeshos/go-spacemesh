@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"fmt"
 	"math/rand"
 	"path/filepath"
 	"reflect"
@@ -13,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -177,4 +179,47 @@ func BenchmarkStatePersist(b *testing.B) {
 			}
 		}
 	})
+}
+
+func TestRecoverData(t *testing.T) {
+	mdb, err := mesh.NewPersistentMeshDB("/tmp/data46/node/203/mesh", 1, logtest.New(t))
+	require.NoError(t, err)
+	db, err := database.NewLDBDatabase("/tmp/data46/node/203/turtle/", 0, 0, logtest.New(t))
+	require.NoError(t, err)
+	trtl := state{db: db}
+	require.NoError(t, trtl.Recover())
+	var layers []types.LayerID
+	var visited = map[types.LayerID]struct{}{}
+	cnt := 0
+	for _, blocks := range trtl.BlockOpinionsByLayer {
+		for block1, opinions := range blocks {
+			for block2 := range opinions {
+				cnt++
+				b1, err := mdb.GetBlock(block1)
+				if err != nil {
+					continue
+				}
+				b2, err := mdb.GetBlock(block2)
+
+				if err != nil {
+					continue
+				}
+
+				if _, exist := visited[b1.LayerIndex]; !exist {
+					layers = append(layers, b1.LayerIndex)
+				}
+				if _, exist := visited[b2.LayerIndex]; !exist {
+					layers = append(layers, b2.LayerIndex)
+				}
+				visited[b1.LayerIndex] = struct{}{}
+				visited[b2.LayerIndex] = struct{}{}
+
+			}
+		}
+
+	}
+	sort.Slice(layers, func(i, j int) bool {
+		return layers[i].Before(layers[j])
+	})
+	fmt.Printf("opinion layers %v-%v. total %d. evict from %v. last evicted %v. verified %v\n", layers[0], layers[len(layers)-1], cnt, trtl.LastEvicted, trtl.Last, trtl.Verified)
 }

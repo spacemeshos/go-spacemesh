@@ -1,0 +1,131 @@
+{
+  "api": {
+    "grpc": "gateway,node,mesh,globalstate,transaction,smesher"
+  },
+  "genesis": {
+    "accounts": {
+      "0x8868600d2835019249a0f756f754d5a5ab17ebf0": 1e+17,
+      "0x9f120e40e330affe6aa27d5bda49ac0960df7d6f": 1e+17,
+      "0xafed9a1c17ca7eaa7a6795dbc7bee1b1d992c7ba": 1e+17,
+      "0xb20c3a31f973231e01bf2d6b5c00a22cc13b5c63": 1e+17,
+      "0xff083c9a22e05d3459b03f3dbed61c7ad6e0a209": 1e+17
+    }
+  },
+  "hare": {
+    "hare-committee-size": "800",
+    "hare-exp-leaders": "10",
+    "hare-limit-concurrent": "5",
+    "hare-limit-iterations": "10",
+    "hare-max-adversaries": "399",
+    "hare-round-duration-sec": "30",
+    "hare-wakeup-delta": "30"
+  },
+  "hare-eligibility": {
+    "eligibility-confidence-param": "25",
+    "eligibility-epoch-offset": "0"
+  },
+  "logging": {
+    "app": "warn",
+    "atx-builder": "warn",
+    "atxDb": "warn",
+    "block-builder": "warn",
+    "block-eligibility": "warn",
+    "block-listener": "warn",
+    "block-oracle": "warn",
+    "hare": "warn",
+    "hare-beacon": "warn",
+    "hare-oracle": "warn",
+    "mesh": "warn",
+    "meshDb": "warn",
+    "nipst": "warn",
+    "p2p": "warn",
+    "poet": "warn",
+    "poetDb": "warn",
+    "post": "warn",
+    "state": "warn",
+    "stateDb": "warn",
+    "store": "warn",
+    "sync": "warn",
+    "trtl": "warn"
+  },
+  "main": {
+    "atxs-per-block": 25,
+    "block-cache-size": 20,
+    "genesis-active-size": 50,
+    "genesis-time": "2021-08-23T13:00:03+03:00",
+    "hdist": 10,
+    "layer-average-size": 30,
+    "layer-duration-sec": 200,
+    "layers-per-epoch": 6,
+    "poet-server": "34.123.10.172:31096",
+    "space-to-commit": 1048576,
+    "sync-interval": 10,
+    "sync-request-timeout": 60000,
+    "sync-validation-delta": 30,
+    "tortoise-rerun-interval": 525600
+  },
+  "p2p": {
+    "buffer-size": 10000,
+    "conn-keepalive": "48h",
+    "dial-timeout": "1m",
+    "max-inbound": 32,
+    "max-pending-connections": 100,
+    "msg-size-limit": 0,
+    "network-id": 203,
+    "outbound-target": 10,
+    "response-timeout": "60s",
+    "session-timeout": "15s",
+    "swarm": {
+      "alpha": 3,
+      "bootnodes": [
+        "spacemesh://8u6gKcCJaKsc4saw4hUjqB8HVATsopWwNt9fUAsKWkCp@34.123.10.172:5002",
+        "spacemesh://H1wXWcqzYQ59aJxDbdKyEgg5sfriSrc7bfXSRdxuq52S@34.72.102.179:5003",
+        "spacemesh://2NWhiJ9U6tdSaQ1Kh3hmokdhWSTeW9LsF125WmmxpR9d@34.133.135.14:5004",
+        "spacemesh://AgrFH4pPgvKuhnSe3bCDLd43pXaShASe7rnNvMWABYTP@35.223.61.97:5005",
+        "spacemesh://CSNkx6S3Mh311dSMbmYdVnKooLY63TEhmSvBCW9U6M9i@34.72.179.117:5006",
+        "spacemesh://7GeEFRPdYsYjQjMEoLqoZNMd51i9Aaxc7GD2txZtDZKp@35.188.197.76:5007"
+      ],
+      "bootstrap": true,
+      "bucketsize": 20,
+      "randcon": 8
+    }
+  },
+  "post": {
+    "post-bits-per-label": 8,
+    "post-k1": 2000,
+    "post-k2": 1800,
+    "post-labels-per-unit": 1024,
+    "post-max-numunits": 4,
+    "post-min-numunits": 2
+  },
+  "smeshing": {
+    "smeshing-coinbase": "1",
+    "smeshing-opts": {
+      "smeshing-opts-datadir": "/tmp/dataheal/post",
+      "smeshing-opts-numfiles": 1,
+      "smeshing-opts-numunits": 2,
+      "smeshing-opts-provider": 1,
+      "smeshing-opts-throttle": true
+    },
+    "smeshing-start": true
+  },
+  "time": {
+    "default-timeout-latency": "10s",
+    "max-allowed-time-drift": "10s",
+    "ntp-queries": 5,
+    "refresh-ntp-interval": "30m"
+  },
+  "tortoise-beacon": {
+    "tortoise-beacon-first-voting-round-duration": "60s",
+    "tortoise-beacon-grace-period-duration": "10s",
+    "tortoise-beacon-kappa": 400000,
+    "tortoise-beacon-proposal-duration": "30s",
+    "tortoise-beacon-q": "1/3",
+    "tortoise-beacon-rounds-number": 6,
+    "tortoise-beacon-theta": "1/25000",
+    "tortoise-beacon-votes-limit": 100,
+    "tortoise-beacon-voting-round-duration": "50s",
+    "tortoise-beacon-wait-after-epoch-start": "50s",
+    "tortoise-beacon-weak-coin-round-duration": "10s"
+  }
+}
