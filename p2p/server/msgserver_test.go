@@ -170,32 +170,23 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 func TestProtocol_Close(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	serv1 := NewMsgServer(context.TODO(), n1, protocol, 5*time.Second, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("srv1"))
-
-	t.Cleanup(func() {
-		serv1.Close()
-	})
-	//handler that returns some bytes on request
-
-	handler := func(ctx context.Context, msg []byte) ([]byte, error) {
-		time.Sleep(60 * time.Second)
+	srv1 := NewMsgServer(context.TODO(), n1, protocol, 10*time.Millisecond, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t5"))
+	t.Cleanup(srv1.Close)
+	srv1.RegisterBytesMsgHandler(1, func(ctx context.Context, msg []byte) ([]byte, error) {
+		time.Sleep(2 * time.Second)
 		return nil, nil
-	}
-
-	serv1.RegisterBytesMsgHandler(1, handler)
+	})
 
 	n2 := sim.NewNode()
-	serv2 := NewMsgServer(context.TODO(), n2, protocol, 10*time.Millisecond, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("srv2"))
-	t.Cleanup(func() {
-		serv2.Close()
-	})
+	srv2 := NewMsgServer(context.TODO(), n2, protocol, 10*time.Millisecond, make(chan service.DirectMessage, config.Values.BufferSize), logtest.New(t).WithName("t6"))
+	t.Cleanup(srv2.Close)
 
-	respCh := make(chan []byte)
-	callback := func(resp []byte) {
-		respCh <- resp
+	strCh := make(chan string, 1)
+	callback := func(msg []byte) {
+		strCh <- string(msg)
 	}
 
-	err := serv2.SendRequest(context.TODO(), 1, nil, n1.PublicKey(), callback, func(err error) {})
+	err := srv2.SendRequest(context.TODO(), 1, nil, n1.PublicKey(), callback, func(err error) {})
 	assert.NoError(t, err, "Should not return error")
-	assert.EqualValues(t, 1, serv2.pendingQueue.Len(), "value received did not match correct value1")
+	assert.EqualValues(t, 1, srv2.pendingQueue.Len(), "value received did not match correct value")
 }
