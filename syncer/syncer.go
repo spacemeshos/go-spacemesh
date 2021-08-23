@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 )
 
 type layerTicker interface {
@@ -23,8 +22,7 @@ type layerTicker interface {
 }
 
 type layerFetcher interface {
-	PollLayerHash(ctx context.Context, layerID types.LayerID) chan layerfetcher.LayerHashResult
-	PollLayerBlocks(ctx context.Context, layerID types.LayerID, hashes map[types.Hash32][]peers.Peer) chan layerfetcher.LayerPromiseResult
+	PollLayerContent(ctx context.Context, layerID types.LayerID) chan layerfetcher.LayerPromiseResult
 	GetEpochATXs(ctx context.Context, id types.EpochID) error
 	GetTortoiseBeacon(ctx context.Context, id types.EpochID) error
 }
@@ -365,23 +363,13 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 }
 
 func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (*types.Layer, error) {
-	ch := s.fetcher.PollLayerHash(ctx, layerID)
-	hashRes := <-ch
-	if hashRes.Err != nil {
-		return nil, fmt.Errorf("PollLayerHash: %w", hashRes.Err)
-	}
-	// TODO: resolve hash with peers
-	hashes := make(map[types.Hash32][]peers.Peer)
-	for lyrHash, peers := range hashRes.Hashes {
-		hashes[lyrHash.Hash] = peers
-	}
-	bch := s.fetcher.PollLayerBlocks(ctx, layerID, hashes)
+	bch := s.fetcher.PollLayerContent(ctx, layerID)
 	res := <-bch
 	if res.Err != nil {
 		if res.Err == layerfetcher.ErrZeroLayer {
 			return types.NewLayer(layerID), nil
 		}
-		return nil, fmt.Errorf("PollLayerBlocks: %w", res.Err)
+		return nil, fmt.Errorf("PollLayerContent: %w", res.Err)
 	}
 
 	layer, err := s.mesh.GetLayer(layerID)

@@ -161,6 +161,18 @@ func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh)
 	return l
 }
 
+func TestMesh_GenesisLayersSaved(t *testing.T) {
+	msh := getMesh(t, "genesis layers")
+	t.Cleanup(func() {
+		msh.Close()
+	})
+	for i := types.NewLayerID(1); i.Before(types.GetEffectiveGenesis()); i = i.Add(1) {
+		lyr, err := msh.GetLayer(i)
+		assert.NoError(t, err)
+		assert.Equal(t, 0, len(lyr.Blocks()))
+	}
+}
+
 func TestMesh_GetLayerHash(t *testing.T) {
 	r := require.New(t)
 	msh := getMesh(t, "get layer hash")
@@ -168,7 +180,7 @@ func TestMesh_GetLayerHash(t *testing.T) {
 		msh.Close()
 	})
 
-	lyrID := types.NewLayerID(1)
+	lyrID := types.GetEffectiveGenesis().Add(1)
 	lyr, err := msh.GetLayer(lyrID)
 	r.Equal(database.ErrNotFound, err)
 	r.Nil(lyr)
@@ -216,7 +228,7 @@ func TestMesh_SetZeroBlockLayer(t *testing.T) {
 		msh.Close()
 	})
 
-	lyrID := types.NewLayerID(1)
+	lyrID := types.GetEffectiveGenesis().Add(1)
 	lyr, err := msh.GetLayer(lyrID)
 	r.Equal(database.ErrNotFound, err)
 	r.Nil(lyr)
@@ -244,7 +256,7 @@ func TestMesh_AddLayerGetLayer(t *testing.T) {
 		msh.Close()
 	})
 
-	id := types.NewLayerID(1)
+	id := types.GetEffectiveGenesis().Add(1)
 	_, err := msh.GetLayer(id)
 	r.EqualError(err, database.ErrNotFound.Error())
 

@@ -124,6 +124,9 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 	}
 
 	msh.Validator = &validator{Mesh: msh}
+	for lyr := types.NewLayerID(1); lyr.Before(types.GetEffectiveGenesis()); lyr = lyr.Add(1) {
+		msh.SetZeroBlockLayer(lyr)
+	}
 	return msh
 }
 
@@ -621,21 +624,6 @@ func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, er
 		return hash, nil
 	}
 	return hash, err
-}
-
-// GetLayerHashBlocks returns blocks for given hash
-func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
-	layerIDBytes, err := msh.general.Get(h.Bytes())
-	if err != nil {
-		msh.With().Warning("requested unknown layer hash", log.String("hash", h.ShortString()))
-		return []types.BlockID{}
-	}
-	l := types.BytesToLayerID(layerIDBytes)
-	mBlocks, err := msh.LayerBlockIds(l)
-	if err != nil {
-		return []types.BlockID{}
-	}
-	return mBlocks
 }
 
 func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs []*types.Transaction) {
