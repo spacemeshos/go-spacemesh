@@ -505,24 +505,17 @@ func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block) (uint
 
 	// check if the ATX was received on time
 	// TODO: add an exception for sync, when we expect everything to be received late
-	if atxTimestamp.Before(nextEpochStart) {
-		blockWeight := atxHeader.GetWeight()
-		logger.With().Debug("voting block atx was timely",
-			log.FieldNamed("next_epoch", atxEpoch+1),
-			log.Time("next_epoch_start", nextEpochStart),
-			log.Time("atx_timestamp", atxTimestamp),
-			votingBlock.ID(),
-			votingBlock.ATXID,
-			log.Uint64("block_weight", blockWeight))
-		return blockWeight, nil
-	}
-	logger.With().Warning("voting block atx was untimely, zeroing block vote weight",
+
+	blockWeight := atxHeader.GetWeight()
+	logger.With().Debug("voting block atx was timely",
 		log.FieldNamed("next_epoch", atxEpoch+1),
 		log.Time("next_epoch_start", nextEpochStart),
 		log.Time("atx_timestamp", atxTimestamp),
 		votingBlock.ID(),
-		votingBlock.ATXID)
-	return 0, nil
+		votingBlock.ATXID,
+		log.Uint64("block_weight", blockWeight))
+	return blockWeight, nil
+
 }
 
 func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID, blockVotedOn types.BlockID) (uint64, error) {
