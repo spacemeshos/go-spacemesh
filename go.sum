@@ -690,6 +690,8 @@ github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d h1:S4vq8zxKOp1S
 github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d/go.mod h1:Zcdq864a2sxmWjyI1/3gN1Xk1jVWerzFbFw7bjPRYN4=
 github.com/spacemeshos/post v0.0.0-20210726170806-5cf91a7ae467 h1:UHd6NTKdP9qI2fXMcSRND+2OFe99cppKfVuRPx0VKwc=
 github.com/spacemeshos/post v0.0.0-20210726170806-5cf91a7ae467/go.mod h1:YT7ffozrk444dk3A/sM3RAxEr0WxmHTOg89TnXTy2V0=
+github.com/spacemeshos/post v0.0.0-20210812074153-0c0c5acf44e2 h1:hgJbasOWMdnaaDlmyQV92BqKLYflOBbM/YIk9FavEFg=
+github.com/spacemeshos/post v0.0.0-20210812074153-0c0c5acf44e2/go.mod h1:yL5XcvEgquVOAn/pkJTlzc5UsYs2M8z/rpwb3eD/Jkk=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9/go.mod h1:Pz5LyRghtiEuSixOVGO0da5AxKBZa6+Yq8ZJfjTAPI0=
 github.com/spacemeshos/smutil v0.0.0-20190604133034-b5189449f5c5 h1:a+uIX0wjwWdK2JpsQnNhSdp3KDkqGg6P7Jp3nMZP8BM=
