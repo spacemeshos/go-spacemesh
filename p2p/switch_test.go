@@ -318,6 +318,8 @@ func TestSwarm_RoundTrip(t *testing.T) {
 }
 
 func TestSwarm_MultipleMessages(t *testing.T) {
+	numMessagesToSendConcurrently := 250
+
 	p1 := p2pTestNoStart(t, configWithPort(0))
 	p2 := p2pTestNoStart(t, configWithPort(0))
 
@@ -330,13 +332,20 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	require.NoError(t, p2.Start(context.TODO()))
 
 	err := p2.SendMessage(context.TODO(), p1.lNode.PublicKey(), exampleProtocol, []byte(examplePayload))
-	require.Error(t, err, "ERR") // should'nt be in routing table
+	require.Error(t, err, "ERR") // shouldn't be in routing table
 
 	_, err = p2.cPool.GetConnection(context.TODO(), p1.network.LocalAddr(), p1.lNode.PublicKey())
 	require.NoError(t, err)
+	conn, err := p2.cPool.GetConnectionIfExists(p1.lNode.PublicKey())
+	require.NotNil(t, conn)
+	require.NoError(t, err)
+
+	// number of messages sent concurrently must be less than the outbound message queue size
+	require.LessOrEqual(t, numMessagesToSendConcurrently, net.MessageQueueSize,
+		"attempt to send more concurrent messages than outbound queue can handle")
 
 	var wg sync.WaitGroup
-	for i := 0; i < 500; i++ {
+	for i := 0; i < numMessagesToSendConcurrently; i++ {
 		wg.Add(1)
 		go func() {
 			sendDirectMessage(t, p2, p1.lNode.PublicKey(), exchan1, false)
