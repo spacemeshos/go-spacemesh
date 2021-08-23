@@ -717,7 +717,7 @@ func (t *turtle) scoreBlocks(ctx context.Context, blocks []*types.Block) {
 	for _, b := range blocks {
 		if t.determineBlockGoodness(ctx, b) {
 			// note: we have no way of warning if a block was previously marked as not good
-			logger.With().Info("marking block good", b.ID(), b.LayerIndex)
+			logger.With().Debug("marking block good", b.ID(), b.LayerIndex)
 			t.GoodBlocksIndex[b.ID()] = struct{}{}
 			numGood++
 		} else {

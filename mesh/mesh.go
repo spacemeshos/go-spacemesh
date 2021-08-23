@@ -436,7 +436,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 			return
 		}
 		validBlocks, invalidBlocks := msh.BlocksByValidity(l.Blocks())
-		msh.updateStateWithLayer(types.NewExistingLayer(layerID, validBlocks))
+		msh.updateStateWithLayer(ctx, types.NewExistingLayer(layerID, validBlocks))
 		msh.logStateRoot(l.Index())
 		msh.persistLayerHash(l.Index(), msh.calcSimpleLayerHash(l))
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
@@ -526,12 +526,12 @@ func (msh *Mesh) getInvalidBlocksByHare(ctx context.Context, hareLayer *types.La
 
 // apply the state for a single layer. stores layer results for early layers, and applies previously stored results for
 // now-older layers.
-func (msh *Mesh) updateStateWithLayer(layer *types.Layer) {
+func (msh *Mesh) updateStateWithLayer(ctx context.Context, layer *types.Layer) {
 	msh.txMutex.Lock()
 	defer msh.txMutex.Unlock()
 	latest := msh.LatestLayerInState()
 	if !layer.Index().After(latest) {
-		msh.With().Warning("result received after state has advanced",
+		msh.WithContext(ctx).With().Warning("result received after state has advanced, late block received?",
 			log.FieldNamed("validated", layer.Index()),
 			log.FieldNamed("latest", latest))
 		return
@@ -540,7 +540,7 @@ func (msh *Mesh) updateStateWithLayer(layer *types.Layer) {
 		msh.maxValidatedLayer = layer.Index()
 	}
 	if layer.Index().After(latest.Add(1)) {
-		msh.With().Warning("early layer result received",
+		msh.WithContext(ctx).With().Warning("early layer result received",
 			log.FieldNamed("validated", layer.Index()),
 			log.FieldNamed("max_validated", msh.maxValidatedLayer),
 			log.FieldNamed("latest", latest))
