@@ -165,8 +165,10 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 	if time.Now().Sub(trtl.lastRerun) > trtl.trtl.RerunInterval {
 		var revertLayer types.LayerID
 		if reverted, revertLayer = trtl.rerunFromGenesis(ctx); reverted {
-			// make sure state is reapplied from far enough back if there was a state reversion
-			oldVerified = revertLayer
+			// make sure state is reapplied from far enough back if there was a state reversion.
+			// this is the first changed layer. subtract one to indicate that the layer _prior_ was the old
+			// pBase, since we never reapply the state of oldPbase.
+			oldVerified = revertLayer.Sub(1)
 		}
 		trtl.lastRerun = time.Now()
 	}

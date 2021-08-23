@@ -424,7 +424,8 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 		oldPbase = layerTwo
 	}
 
-	for layerID := oldPbase; layerID.Before(newPbase); layerID = layerID.Add(1) {
+	// we never reapply the state of oldPbase. note that state reversions must be handled separately.
+	for layerID := oldPbase.Add(1); !layerID.After(newPbase); layerID = layerID.Add(1) {
 		l, err := msh.GetLayer(layerID)
 		// TODO: propagate/handle error
 		if err != nil || l == nil {
