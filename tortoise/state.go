@@ -69,7 +69,6 @@ func (s *state) Persist() error {
 				}
 				opinion.Flushed = true
 				opinions[block2] = opinion
-
 				b.WriteString(namespaceOpinons)
 				b.Write(encodeLayerKey(layer))
 				b.Write(block1.Bytes())
@@ -119,7 +118,6 @@ func (s *state) Recover() error {
 		layer := decodeLayerKey(it.Key())
 		offset := 1 + types.LayerIDSize
 		block1 := decodeBlock(it.Key()[offset : offset+types.BlockIDSize])
-		block2 := decodeBlock(it.Key()[offset+types.BlockIDSize:])
 
 		if _, exist := s.BlockOpinionsByLayer[layer]; !exist {
 			s.BlockOpinionsByLayer[layer] = map[types.BlockID]Opinion{}
@@ -127,6 +125,8 @@ func (s *state) Recover() error {
 		if _, exist := s.BlockOpinionsByLayer[layer][block1]; !exist {
 			s.BlockOpinionsByLayer[layer][block1] = Opinion{}
 		}
+		block2 := decodeBlock(it.Key()[offset+types.BlockIDSize:])
+
 		var opinion vec
 		if err := codec.Decode(it.Value(), &opinion); err != nil {
 			return err

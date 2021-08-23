@@ -211,6 +211,9 @@ func (t *turtle) evict(ctx context.Context) {
 		delete(t.BlockOpinionsByLayer, layerToEvict)
 	}
 	t.LastEvicted = windowStart.Sub(1)
+	if err := t.state.Evict(); err != nil {
+		logger.With().Panic("can't evict persisted state", log.Err(err))
+	}
 }
 
 func blockIDsToString(input []types.BlockID) string {
@@ -532,11 +535,6 @@ func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID, blockVotedOn
 
 // Persist saves the current tortoise state to the database
 func (t *turtle) persist() error {
-	// TODO(dshulyak) make state eviction a part of regular eviction
-	// HandleIncomingLayer should expose an error for this
-	if err := t.state.Evict(); err != nil {
-		return err
-	}
 	return t.state.Persist()
 }
 

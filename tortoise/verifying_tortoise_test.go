@@ -844,8 +844,8 @@ func TestPersistAndRecover(t *testing.T) {
 	mdb.InputVectorBackupFunc = getHareResults
 	atxdb := getAtxDB()
 	cfg := defaultConfig(t, mdb)
+	cfg.ATXDB = atxdb
 	alg := NewVerifyingTortoise(context.TODO(), cfg)
-	alg.trtl.atxdb = atxdb
 
 	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
@@ -873,6 +873,7 @@ func TestPersistAndRecover(t *testing.T) {
 
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
+
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
 	alg2.HandleIncomingLayer(context.TODO(), l3.Index())
 
