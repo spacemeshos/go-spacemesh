@@ -27,7 +27,8 @@ type MsgConnection struct {
 	session     NetworkSession
 	deadline    time.Duration
 	r           io.Reader
-	wmtx        sync.Mutex
+	wmtx        sync.Mutex // serialize IO writes
+	cmtx        sync.Mutex // protect closed status
 	w           io.Writer
 	closer      io.Closer
 	closed      bool
@@ -177,13 +178,12 @@ func (c *MsgConnection) sendListener() {
 
 // Send pushes a message to the messages queue
 func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
-	c.logger.WithContext(ctx).Debug("waiting for send lock")
-	c.wmtx.Lock()
+	c.cmtx.Lock()
 	if c.closed {
-		c.wmtx.Unlock()
+		c.cmtx.Unlock()
 		return ErrClosed
 	}
-	c.wmtx.Unlock()
+	c.cmtx.Unlock()
 
 	// extract some useful context
 	reqID, _ := log.ExtractRequestID(ctx)
@@ -208,6 +208,12 @@ func (c *MsgConnection) sendSock(m []byte) error {
 	if err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline)); err != nil {
 		return err
 	}
+
+	// not entirely clear whether the underlying IOWriter here is goroutine safe, so we serialize writes to be safe
+	// see https://github.com/spacemeshos/go-spacemesh/pull/2435#issuecomment-851039112
+	c.wmtx.Lock()
+	defer c.wmtx.Unlock()
+
 	if _, err := c.w.Write(m); err != nil {
 		if err := c.Close(); err != ErrAlreadyClosed {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
@@ -220,8 +226,8 @@ func (c *MsgConnection) sendSock(m []byte) error {
 
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *MsgConnection) Close() error {
-	c.wmtx.Lock()
-	defer c.wmtx.Unlock()
+	c.cmtx.Lock()
+	defer c.cmtx.Unlock()
 	if c.closed {
 		return ErrAlreadyClosed
 	}
@@ -232,8 +238,8 @@ func (c *MsgConnection) Close() error {
 
 // Closed returns whether the connection is closed
 func (c *MsgConnection) Closed() bool {
-	c.wmtx.Lock()
-	defer c.wmtx.Unlock()
+	c.cmtx.Lock()
+	defer c.cmtx.Unlock()
 	return c.closed
 }
 
