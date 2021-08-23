@@ -10,7 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -18,19 +18,17 @@ func init() {
 	types.SetLayersPerEpoch(3)
 }
 
-var commitment = &types.PostProof{
-	Challenge:    []byte(nil),
-	MerkleRoot:   []byte("1"),
-	ProofNodes:   [][]byte(nil),
-	ProvenLeaves: [][]byte(nil),
+var initialPost = &types.Post{
+	Nonce:   0,
+	Indices: []byte(nil),
 }
 
 var goldenATXID = types.ATXID(types.HexToHash32("77777"))
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
-	startTick uint64, positioningATX types.ATXID, coinbase types.Address, nipst *types.NIPST) *types.ActivationTx {
+	startTick uint64, positioningATX types.ATXID, coinbase types.Address, nipost *types.NIPost) *types.ActivationTx {
 
-	nipstChallenge := types.NIPSTChallenge{
+	nipostChallenge := types.NIPostChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,
 		PrevATXID:      prevATX,
@@ -38,18 +36,18 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipstChallenge, coinbase, nipst, 1024, nil)
+	return types.NewActivationTx(nipostChallenge, coinbase, nipost, 1024, nil)
 }
 
 func atx(pubkey string) *types.ActivationTx {
 	coinbase := types.HexToAddress("aaaa")
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xde, 0xad}
-	npst := activation.NewNIPSTWithChallenge(&chlng, poetRef)
+	npst := activation.NewNIPostWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, 5, 1, goldenATXID, coinbase, npst)
-	atx.Commitment = commitment
-	atx.CommitmentMerkleRoot = commitment.MerkleRoot
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, types.NewLayerID(5), 1, goldenATXID, coinbase, npst)
+	atx.InitialPost = initialPost
+	atx.InitialPostIndices = initialPost.Indices
 	atx.CalcAndSetID()
 	return atx
 }
@@ -144,7 +142,7 @@ func (m meshMock) GetBlock(ID types.BlockID) (*types.Block, error) {
 	panic("implement me")
 }
 
-func (m meshMock) AddBlockWithTxs(blk *types.Block) error {
+func (m meshMock) AddBlockWithTxs(context.Context, *types.Block) error {
 	panic("implement me")
 }
 
@@ -187,7 +185,7 @@ func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
 	cfg := Config{3, goldenATXID}
 	//yncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
-	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, log.NewDefault("BlockSyntacticValidation"))
+	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, logtest.New(t))
 	b := &types.Block{}
 
 	fetch := newFetchMock()
@@ -215,13 +213,13 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	cfg := Config{
 		3, goldenATXID,
 	}
-	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, log.NewDefault("syncRefBlock"))
+	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, logtest.New(t))
 	s.traverse = mockForBlockInView
 	a := atx("")
 	atxpool.Put(a)
 	b := &types.Block{}
 	b.TxIDs = []types.TransactionID{}
-	block1 := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
+	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
 	block1.ActiveSet = &[]types.ATXID{a.ID()}
 	block1.ATXID = a.ID()
 	block1.Initialize()
@@ -240,21 +238,19 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 
 func TestBlockHandler_AtxSetID(t *testing.T) {
 	a := atx("")
-	bbytes, _ := types.InterfaceToBytes(*a)
+	bbytes, err := types.InterfaceToBytes(*a)
+	require.NoError(t, err)
 	var b types.ActivationTx
 	types.BytesToInterface(bbytes, &b)
-	t.Log(fmt.Sprintf("%+v\n", *a))
-	t.Log("---------------------")
-	t.Log(fmt.Sprintf("%+v\n", b))
-	t.Log("---------------------")
-	assert.Equal(t, b.Nipst, a.Nipst)
-	assert.Equal(t, b.Commitment, a.Commitment)
+
+	assert.Equal(t, b.NIPost, a.NIPost)
+	assert.Equal(t, b.InitialPost, a.InitialPost)
 
 	assert.Equal(t, b.ActivationTxHeader.NodeID, a.ActivationTxHeader.NodeID)
 	assert.Equal(t, b.ActivationTxHeader.PrevATXID, a.ActivationTxHeader.PrevATXID)
 	assert.Equal(t, b.ActivationTxHeader.Coinbase, a.ActivationTxHeader.Coinbase)
-	assert.Equal(t, b.ActivationTxHeader.CommitmentMerkleRoot, a.ActivationTxHeader.CommitmentMerkleRoot)
-	assert.Equal(t, b.ActivationTxHeader.NIPSTChallenge, a.ActivationTxHeader.NIPSTChallenge)
+	assert.Equal(t, b.ActivationTxHeader.InitialPostIndices, a.ActivationTxHeader.InitialPostIndices)
+	assert.Equal(t, b.ActivationTxHeader.NIPostChallenge, a.ActivationTxHeader.NIPostChallenge)
 	b.CalcAndSetID()
 	assert.Equal(t, a.ShortString(), b.ShortString())
 }

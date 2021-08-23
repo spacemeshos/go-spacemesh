@@ -4,6 +4,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	"os"
+	"time"
+
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -16,12 +20,9 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"net/http"
-	"os"
-	"time"
-)
 
-import _ "net/http/pprof"
+	_ "net/http/pprof"
+)
 
 // Cmd the command of the hare app
 var Cmd = &cobra.Command{
@@ -58,6 +59,9 @@ func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, err
 	return buildSet(), nil
 }
 
+func (mbp *mockBlockProvider) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
+}
+
 // HareApp represents an Hare application
 type HareApp struct {
 	*cmdp.BaseApp
@@ -90,7 +94,7 @@ func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.NewExistingBlock(types.GetEffectiveGenesis()+1, util.Uint64ToBytes(i), nil).ID())
+		s = append(s, types.NewExistingBlock(types.GetEffectiveGenesis().Add(1), util.Uint64ToBytes(i), nil).ID())
 	}
 
 	return s
@@ -106,7 +110,7 @@ func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeID, error) {
 type mockStateQuerier struct {
 }
 
-func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
+func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -127,7 +131,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 			}
 		}()
 	}
-	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
+	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	log.Info("initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
 	app.p2p = swarm
@@ -168,8 +172,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		log.Info("sleeping until %v", gTime)
 		time.Sleep(gTime.Sub(time.Now()))
 	}
-	startLayer := types.GetEffectiveGenesis() + 1
-	lt <- startLayer
+	lt <- types.GetEffectiveGenesis().Add(1)
 }
 
 func main() {

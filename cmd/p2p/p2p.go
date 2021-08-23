@@ -3,6 +3,11 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
@@ -10,10 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spf13/cobra"
-	"io"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
+	"go.uber.org/zap"
 )
 
 // Cmd is the p2p cmd
@@ -59,11 +61,10 @@ func (app *P2PApp) Cleanup() {
 func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	// init p2p services
 	log.JSONLog(true)
-	log.DebugMode(true)
+	logger := log.NewWithLevel("P2P_Test", zap.NewAtomicLevelAt(zap.DebugLevel))
+	log.SetupGlobal(logger)
 
 	log.Info("initializing p2p services")
-
-	logger := log.NewDefault("P2P_Test")
 
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, logger, app.Config.DataDir())
 	if err != nil {
@@ -73,7 +74,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 
 	// Testing stuff
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
-	metrics.StartCollectingMetrics(app.Config.MetricsPort)
+	metrics.StartMetricsServer(app.Config.MetricsPort)
 
 	// start the node
 

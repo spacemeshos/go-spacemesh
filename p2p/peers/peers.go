@@ -1,10 +1,9 @@
 package peers
 
 import (
-	"github.com/spacemeshos/go-spacemesh/events"
-	"math/rand"
+	"context"
+	"sync"
 	"sync/atomic"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -13,55 +12,84 @@ import (
 // Peer is represented by a p2p identity public key.
 type Peer p2pcrypto.PublicKey
 
-// Peers is used by protocols to manage available peers.
-type Peers struct {
-	log.Log
-	snapshot *atomic.Value
-	exit     chan struct{}
-
-	rand *rand.Rand
-}
-
 // PeerSubscriptionProvider is the interface that provides us with peer events channels.
 type PeerSubscriptionProvider interface {
 	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
 }
 
-// NewPeers creates a Peers instance that is registered to `s`'s events and updates with them.
-func NewPeers(s PeerSubscriptionProvider, lg log.Log) *Peers {
-	value := atomic.Value{}
-	value.Store(make([]Peer, 0, 20))
-	pi := NewPeersImpl(&value, make(chan struct{}), lg)
-	newPeerC, expiredPeerC := s.SubscribePeerEvents()
-	go pi.listenToPeers(newPeerC, expiredPeerC)
-	events.ReportNodeStatusUpdate()
-	return pi
+type waitPeersReq struct {
+	ch  chan []Peer
+	min int
 }
 
-// NewPeersImpl creates a Peers using specified parameters and returns it
-func NewPeersImpl(snapshot *atomic.Value, exit chan struct{}, lg log.Log) *Peers {
-	return &Peers{
-		snapshot: snapshot,
-		Log:      lg,
-		exit:     exit,
-		rand:     rand.New(rand.NewSource(time.Now().UnixNano()).(rand.Source64)),
+// Option to modify peers instance.
+type Option func(*Peers)
+
+// WithLog sets logger for Peers instance.
+func WithLog(lg log.Log) Option {
+	return func(p *Peers) {
+		p.log = lg
 	}
 }
 
-// Close stops listening for events.
+// WithNodeStatesReporter sets callback to report node status.
+// Callback is invoked after new peer joins or disconnects.
+func WithNodeStatesReporter(f func()) Option {
+	return func(p *Peers) {
+		p.nodeReporter = f
+	}
+}
+
+// Start creates a Peers instance that is registered to `s`'s events and starts it.
+func Start(s PeerSubscriptionProvider, opts ...Option) *Peers {
+	p := New(opts...)
+	added, expired := s.SubscribePeerEvents()
+	p.Start(added, expired)
+	return p
+}
+
+// New creates a Peers using specified parameters and returns it.
+func New(opts ...Option) *Peers {
+	p := &Peers{
+		log:      log.NewNop(),
+		exit:     make(chan struct{}),
+		requests: make(chan *waitPeersReq),
+	}
+	p.snapshot.Store(make([]Peer, 0, 20))
+	for _, opt := range opts {
+		opt(p)
+	}
+	return p
+
+}
+
+// Peers is used by protocols to manage available peers.
+type Peers struct {
+	log      log.Log
+	snapshot atomic.Value
+	requests chan *waitPeersReq
+
+	wg   sync.WaitGroup
+	exit chan struct{}
+
+	nodeReporter func()
+}
+
+// Close stops listening for events and waits for background worker to exit.
 func (p *Peers) Close() {
-	close(p.exit)
+	select {
+	case <-p.exit:
+		return
+	default:
+		close(p.exit)
+		p.wg.Wait()
+	}
 }
 
 // GetPeers returns a snapshot of the connected peers shuffled.
-// Method is not concurrent-safe.
 func (p *Peers) GetPeers() []Peer {
 	peers := p.snapshot.Load().([]Peer)
-	cpy := make([]Peer, len(peers))
-	copy(cpy, peers) // if we dont copy we will shuffle orig array
-	p.With().Debug("now connected", log.Int("n_peers", len(cpy)))
-	p.rand.Shuffle(len(cpy), func(i, j int) { cpy[i], cpy[j] = cpy[j], cpy[i] }) // shuffle peers order
-	return cpy
+	return peers
 }
 
 // PeerCount returns the number of connected peers.
@@ -70,31 +98,87 @@ func (p *Peers) PeerCount() uint64 {
 	return uint64(len(peers))
 }
 
-func (p *Peers) listenToPeers(newPeerC, expiredPeerC chan p2pcrypto.PublicKey) {
-	peerSet := make(map[Peer]struct{}) // set of unique peers
-	defer p.Debug("run stopped")
+// WaitPeers returns with atleast N peers or when context is terminated.
+// Nil slice is returned if Peers is closing.
+func (p *Peers) WaitPeers(ctx context.Context, n int) ([]Peer, error) {
+	req := waitPeersReq{min: n, ch: make(chan []Peer, 1)}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-p.exit:
+		return nil, nil
+	case p.requests <- &req:
+	}
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case <-p.exit:
+		return nil, nil
+	case prs := <-req.ch:
+		return prs, nil
+	}
+}
+
+// Start listener goroutine in background.
+func (p *Peers) Start(added, expired chan p2pcrypto.PublicKey) {
+	p.wg.Add(1)
+	go func() {
+		p.listen(added, expired)
+		p.wg.Done()
+	}()
+}
+
+func (p *Peers) listen(added, expired chan p2pcrypto.PublicKey) {
+	var (
+		peerSet  = make(map[Peer]struct{})
+		requests = map[*waitPeersReq]struct{}{}
+		isAdded  bool
+	)
+	defer p.log.Debug("peers events listener is stopped")
 	for {
 		select {
 		case <-p.exit:
 			return
-		case peer, ok := <-newPeerC:
+		case peer, ok := <-added:
 			if !ok {
 				return
 			}
-			p.With().Debug("new peer", log.String("peer", peer.String()))
+			isAdded = true
 			peerSet[peer] = struct{}{}
-		case peer, ok := <-expiredPeerC:
+			p.log.With().Debug("new peer", log.String("peer", peer.String()),
+				log.Int("total", len(peerSet)),
+			)
+		case peer, ok := <-expired:
 			if !ok {
 				return
 			}
-			p.With().Debug("expired peer", log.String("peer", peer.String()))
+			isAdded = false
 			delete(peerSet, peer)
+			p.log.With().Debug("expired peer", log.String("peer", peer.String()),
+				log.Int("total", len(peerSet)),
+			)
+		case req := <-p.requests:
+			if len(peerSet) >= req.min {
+				req.ch <- p.snapshot.Load().([]Peer)
+			} else {
+				requests[req] = struct{}{}
+			}
 		}
 		keys := make([]Peer, 0, len(peerSet))
 		for k := range peerSet {
 			keys = append(keys, k)
 		}
-		p.snapshot.Store(keys) //swap snapshot
-		events.ReportNodeStatusUpdate()
+		if isAdded {
+			for req := range requests {
+				if len(peerSet) >= req.min {
+					req.ch <- keys
+					delete(requests, req)
+				}
+			}
+		}
+		p.snapshot.Store(keys)
+		if p.nodeReporter != nil {
+			p.nodeReporter()
+		}
 	}
 }

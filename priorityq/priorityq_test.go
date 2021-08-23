@@ -1,11 +1,11 @@
 package priorityq
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -94,10 +94,10 @@ func TestPriorityQ_Read(t *testing.T) {
 		m, e := pq.Read()
 		for e == nil {
 			prio, ok := m.(int)
-			//fmt.Println("reading  ", m, e, i, len(pq.queues[0]), len(pq.queues[1]))
+			//t.Logln("reading  ", m, e, i, len(pq.queues[0]), len(pq.queues[1]))
 			if !ok {
 				// should never happen
-				log.Panic("unable to read message priority")
+				require.FailNow(t, "unable to read message priority")
 			}
 
 			r.False(prio < maxPrio)

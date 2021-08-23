@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,9 +17,9 @@ type ThreadSafeVerifyingTortoise struct {
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
 type Config struct {
-	LayerSyze int
+	LayerSize int
 	Database  blockDataProvider
-	Hdist     int
+	Hdist     uint32
 	Log       log.Log
 	Recovered bool
 }
@@ -28,11 +29,11 @@ func NewVerifyingTortoise(cfg Config) *ThreadSafeVerifyingTortoise {
 	if cfg.Recovered {
 		return recoveredVerifyingTortoise(cfg.Database, cfg.Log)
 	}
-	return verifyingTortoise(cfg.LayerSyze, cfg.Database, cfg.Hdist, cfg.Log)
+	return verifyingTortoise(cfg.LayerSize, cfg.Database, cfg.Hdist, cfg.Log)
 }
 
 // verifyingTortoise creates a new verifying tortoise wrapper
-func verifyingTortoise(layerSize int, mdb blockDataProvider, hdist int, lg log.Log) *ThreadSafeVerifyingTortoise {
+func verifyingTortoise(layerSize int, mdb blockDataProvider, hdist uint32, lg log.Log) *ThreadSafeVerifyingTortoise {
 	alg := &ThreadSafeVerifyingTortoise{trtl: newTurtle(mdb, hdist, layerSize)}
 	alg.trtl.SetLogger(lg)
 	alg.trtl.init(mesh.GenesisLayer())
@@ -64,9 +65,9 @@ func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 }
 
 // BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
-func (trtl *ThreadSafeVerifyingTortoise) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
+func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	trtl.mutex.Lock()
-	block, diffs, err := trtl.trtl.BaseBlock()
+	block, diffs, err := trtl.trtl.BaseBlock(ctx)
 	trtl.mutex.Unlock()
 	if err != nil {
 		return types.BlockID{}, nil, err
@@ -92,7 +93,7 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlock(b *types.Block) (types.
 	l := types.NewLayer(b.Layer())
 	l.AddBlock(b)
 	oldVerified, newVerified := trtl.HandleIncomingLayer(l) // block wasn't in input vector for sure.
-	log.With().Info("late block ", b.Layer(), b.ID())
+	trtl.trtl.logger.With().Debug("late block ", b.Layer(), b.ID())
 	return oldVerified, newVerified
 }
 
@@ -100,6 +101,6 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlock(b *types.Block) (types.
 func (trtl *ThreadSafeVerifyingTortoise) Persist() error {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
-	log.Info("persist tortoise ")
+	trtl.trtl.logger.Debug("persist tortoise ")
 	return trtl.trtl.persist()
 }

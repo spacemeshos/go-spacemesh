@@ -3,24 +3,25 @@ package eligibility
 import (
 	"context"
 	"encoding/binary"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/stretchr/testify/require"
 )
 
 type mockBeaconProvider struct {
 	value []byte
 }
 
-func (mbp mockBeaconProvider) GetBeacon(types.EpochID) []byte {
-	return mbp.value
+func (mbp mockBeaconProvider) GetBeacon(types.EpochID) ([]byte, error) {
+	return mbp.value, nil
 }
 
 func TestBeacon_Value(t *testing.T) {
 	r := require.New(t)
 
-	b := NewBeacon(nil, 0, log.NewDefault(t.Name()))
+	b := NewBeacon(nil, 0, logtest.New(t))
 	c := newMockCacher()
 	b.cache = c
 
@@ -46,8 +47,8 @@ func TestBeacon_Value(t *testing.T) {
 func TestNewBeacon(t *testing.T) {
 	r := require.New(t)
 	p := &mockBeaconProvider{}
-	b := NewBeacon(p, 10, log.NewDefault(t.Name()))
+	b := NewBeacon(p, 10, logtest.New(t))
 	r.Equal(p, b.beaconGetter)
-	r.Equal(uint64(10), b.confidenceParam)
+	r.Equal(10, int(b.confidenceParam))
 	r.NotNil(p, b.cache)
 }

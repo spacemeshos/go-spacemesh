@@ -14,5 +14,13 @@ type Config struct {
 
 // DefaultConfig returns the default configuration for the hare.
 func DefaultConfig() Config {
-	return Config{10, 5, 2, 10, 5, false, 1000, 5}
+	return Config{
+		N:               10,
+		F:               5,
+		RoundDuration:   10,
+		WakeupDelta:     10,
+		ExpectedLeaders: 5,
+		LimitIterations: 50,
+		LimitConcurrent: 5,
+	}
 }

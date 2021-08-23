@@ -5,16 +5,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
-	"net"
-	"strconv"
-	"sync"
-	"time"
 )
 
 // DefaultQueueCount is the default number of messages queue we hold. messages queues are used to serialize message receiving
@@ -53,7 +54,7 @@ type ManagedConnection interface {
 // It provides full duplex messaging functionality over the same tcp/ip connection
 // Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
 type Net struct {
-	networkID int8
+	networkID uint32
 	localNode node.LocalNode
 	logger    log.Log
 
@@ -135,7 +136,7 @@ func (n *Net) Logger() log.Log {
 }
 
 // NetworkID retuers Net's network ID
-func (n *Net) NetworkID() int8 {
+func (n *Net) NetworkID() uint32 {
 	return n.networkID
 }
 
@@ -148,7 +149,7 @@ func (n *Net) LocalNode() node.LocalNode {
 func sumByteArray(b []byte) uint {
 	var sumOfChars uint
 
-	//take each byte in the string and add the values
+	// take each byte in the string and add the values
 	for i := 0; i < len(b); i++ {
 		byteVal := b[i]
 		sumOfChars += uint(byteVal)
@@ -264,7 +265,7 @@ func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto
 
 	conn, err := n.createSecuredConnection(ctx, address, remotePubkey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial, err: %v", err)
+		return nil, fmt.Errorf("failed to dial, err: %w", err)
 	}
 
 	// Add session ID to context
@@ -400,28 +401,28 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	return nil
 }
 
-func verifyNetworkIDAndClientVersion(networkID int8, handshakeData *HandshakeData) error {
+func verifyNetworkIDAndClientVersion(networkID uint32, handshakeData *HandshakeData) error {
 	// compare that version to the min client version in config
 	ok, err := version.CheckNodeVersion(handshakeData.ClientVersion, config.MinClientVersion)
 	if err == nil && !ok {
 		return errors.New("unsupported client version")
 	}
 	if err != nil {
-		return fmt.Errorf("invalid client version, err: %v", err)
+		return fmt.Errorf("invalid client version, err: %w", err)
 	}
 
 	// make sure we're on the same network
-	if handshakeData.NetworkID != int32(networkID) {
+	if handshakeData.NetworkID != networkID {
 		return fmt.Errorf("request net id (%d) is different than local net id (%d)", handshakeData.NetworkID, networkID)
-		//TODO : drop and blacklist this sender
+		// TODO : drop and blacklist this sender
 	}
 	return nil
 }
 
-func generateHandshakeMessage(session NetworkSession, networkID int8, localIncomingPort int, localPubkey p2pcrypto.PublicKey) ([]byte, error) {
+func generateHandshakeMessage(session NetworkSession, networkID uint32, localIncomingPort int, localPubkey p2pcrypto.PublicKey) ([]byte, error) {
 	handshakeData := &HandshakeData{
 		ClientVersion: config.ClientVersion,
-		NetworkID:     int32(networkID),
+		NetworkID:     networkID,
 		Port:          uint16(localIncomingPort),
 	}
 	handshakeMessage, err := types.InterfaceToBytes(handshakeData)
@@ -435,7 +436,7 @@ func generateHandshakeMessage(session NetworkSession, networkID int8, localIncom
 func replacePort(addr string, newPort uint16) (string, error) {
 	addrWithoutPort, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		return "", fmt.Errorf("invalid address format, (%v) err: %v", addr, err)
+		return "", fmt.Errorf("invalid address format, (%v) err: %w", addr, err)
 	}
 	return net.JoinHostPort(addrWithoutPort, strconv.Itoa(int(newPort))), nil
 }

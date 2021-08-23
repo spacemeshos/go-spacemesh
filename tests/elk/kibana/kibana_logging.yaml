@@ -127,5 +127,9 @@ spec:
       protocol: TCP
       name: http
       targetPort: 5601
+    - port: 80
+      protocol: TCP
+      name: http80
+      targetPort: 5601
   selector:
     app: kibana

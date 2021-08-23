@@ -97,13 +97,6 @@ func CalcHash12(data []byte) (h Hash12) {
 	return
 }
 
-// CalcBlocksHash12 returns the 12-byte sha256 sum of the block IDs, sorted in lexicographic order.
-func CalcBlocksHash12(view []BlockID) (h Hash12) {
-	h32 := CalcBlocksHash32(view, nil)
-	copy(h[:], h32[:])
-	return
-}
-
 // CalcBlocksHash32 returns the 32-byte sha256 sum of the block IDs, sorted in lexicographic order. The pre-image is
 // prefixed with additionalBytes.
 func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {

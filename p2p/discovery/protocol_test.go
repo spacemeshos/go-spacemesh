@@ -2,12 +2,13 @@ package discovery
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 /* methods below are kept to keep tests working without big changes */
@@ -20,28 +21,24 @@ func generateDiscNodes(n int) []*node.Info {
 	return node.GenerateRandomNodesData(n)
 }
 
-func GetTestLogger(name string) log.Log {
-	return log.NewDefault(name)
-}
-
 type testNode struct {
 	svc  *service.Node
 	d    *mockAddrBook
 	dscv *protocol
 }
 
-func newTestNode(simulator *service.Simulator) *testNode {
+func newTestNode(tb testing.TB, simulator *service.Simulator) *testNode {
 	nd := simulator.NewNode()
 	d := &mockAddrBook{}
-	disc := newProtocol(context.TODO(), nd.Info.PublicKey(), d, nd, log.NewDefault(nd.String()))
+	disc := newProtocol(context.TODO(), nd.Info.PublicKey(), d, nd, logtest.New(tb).WithName(nd.String()))
 	return &testNode{nd, d, disc}
 }
 
 func TestPing_Ping(t *testing.T) {
 
 	sim := service.NewSimulator()
-	p1 := newTestNode(sim)
-	p2 := newTestNode(sim)
+	p1 := newTestNode(t, sim)
+	p2 := newTestNode(t, sim)
 	p3 := sim.NewNode()
 
 	p1.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.Info, e error) {
@@ -68,10 +65,10 @@ func TestPing_Ping(t *testing.T) {
 func TestPing_Ping_Concurrency(t *testing.T) {
 	//TODO : bigger concurrency test
 	sim := service.NewSimulator()
-	node1 := newTestNode(sim)
-	node2 := newTestNode(sim)
-	node3 := newTestNode(sim)
-	node4 := newTestNode(sim)
+	node1 := newTestNode(t, sim)
+	node2 := newTestNode(t, sim)
+	node3 := newTestNode(t, sim)
+	node4 := newTestNode(t, sim)
 
 	done := make(chan struct{})
 
@@ -103,8 +100,8 @@ func TestPing_Ping_Concurrency(t *testing.T) {
 func TestFindNodeProtocol_FindNode(t *testing.T) {
 
 	sim := service.NewSimulator()
-	n1 := newTestNode(sim)
-	n2 := newTestNode(sim)
+	n1 := newTestNode(t, sim)
+	n2 := newTestNode(t, sim)
 
 	idarr, err := n1.dscv.GetAddresses(context.TODO(), n2.svc.Info.PublicKey())
 
@@ -119,8 +116,8 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 
 	sim := service.NewSimulator()
 
-	n1 := newTestNode(sim)
-	n2 := newTestNode(sim)
+	n1 := newTestNode(t, sim)
+	n2 := newTestNode(t, sim)
 
 	gen := generateDiscNodes(100)
 
@@ -154,7 +151,7 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 	concurrency := 100
 
 	sim := service.NewSimulator()
-	n1 := newTestNode(sim)
+	n1 := newTestNode(t, sim)
 	gen := generateDiscNodes(100)
 	n1.d.AddressCacheFunc = func() []*node.Info {
 		return gen
@@ -165,7 +162,7 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 
 	for i := 0; i < concurrency; i++ {
 		go func() {
-			nx := newTestNode(sim)
+			nx := newTestNode(t, sim)
 			nx.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.Info, e error) {
 				return n1.svc.Info, nil
 			}

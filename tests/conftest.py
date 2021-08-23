@@ -18,7 +18,7 @@ from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_fluen
 from tests.misc import CoreV1ApiClient
 from tests.node_pool_deployer import NodePoolDep
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
-from tests.utils import api_call, wait_for_elk_cluster_ready
+from tests.utils import api_call, wait_for_minimal_elk_cluster_ready
 
 
 def random_id(length):
@@ -288,7 +288,7 @@ def add_elk(init_session, request):
     add_elastic_cluster(init_session)
     add_fluent_bit_cluster(init_session)
     add_kibana_cluster(init_session)
-    wait_for_elk_cluster_ready(init_session)
+    wait_for_minimal_elk_cluster_ready(init_session)
 
 
 @pytest.fixture(scope='session')
@@ -297,7 +297,7 @@ def teardown(request, session_id, delete_ns, input_dump):
     # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
     yield
     # dump ES content either if tests has failed of whether is_dump param was set to True in the test config file
-    is_dump = request.session.testsfailed == 1 or input_dump
+    is_dump = request.session.testsfailed > 0 or input_dump
     dump_params = {}
     if is_dump:
         dump_params = {

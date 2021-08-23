@@ -2,14 +2,15 @@ package gossip
 
 import (
 	"context"
-	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
-	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
@@ -18,14 +19,12 @@ import (
 
 //go:generate mockgen -package=gossip -destination=./protocol_mock_test.go -source=./protocol.go peersManager, baseNetwork, prioQ
 
-var logger = log.NewDefault("gossip-protocol-test")
-
 func TestProcessMessage(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	net := NewMockbaseNetwork(ctrl)
-	protocol := NewProtocol(context.TODO(), config.SwarmConfig{}, net, nil, nil, logger)
+	protocol := NewProtocol(context.TODO(), config.SwarmConfig{}, net, nil, nil, logtest.New(t))
 
 	isSent := false
 	net.EXPECT().
@@ -48,7 +47,7 @@ func TestPropagateMessage(t *testing.T) {
 
 	net := NewMockbaseNetwork(ctrl)
 	peersManager := NewMockpeersManager(ctrl)
-	protocol := NewProtocol(context.TODO(), config.SwarmConfig{}, net, peersManager, nil, logger)
+	protocol := NewProtocol(context.TODO(), config.SwarmConfig{}, net, peersManager, nil, logtest.New(t))
 
 	peers := make([]p2ppeers.Peer, 30)
 	for i := range peers {
@@ -101,9 +100,13 @@ func (mpq *mockPriorityQueue) Close() {
 	mpq.called <- struct{}{}
 }
 
+func (mpq *mockPriorityQueue) Length() int {
+	return len(mpq.bus)
+}
+
 func TestPropagationEventLoop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	protocol := NewProtocol(ctx, config.SwarmConfig{}, nil, nil, nil, log.AppLog)
+	protocol := NewProtocol(ctx, config.SwarmConfig{}, nil, nil, nil, logtest.New(t))
 	called := make(chan struct{})
 	mpq := mockPriorityQueue{called: called, bus: make(chan struct{}, 10)}
 	protocol.pq = &mpq
