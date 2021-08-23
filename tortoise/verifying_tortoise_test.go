@@ -1,18 +1,19 @@
 package tortoise
 
 import (
+	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
 	"os"
 	"strconv"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -22,19 +23,19 @@ func init() {
 
 const Path = "../tmp/tortoise/"
 
-func getPersistentMash() (*mesh.DB, func() error) {
+func getPersistentMash(tb testing.TB) (*mesh.DB, func() error) {
 	path := Path + "ninje_tortoise"
 	teardown := func() error { return os.RemoveAll(path) }
 	if err := teardown(); err != nil {
 		panic(err)
 	}
 	db, _ := mesh.NewPersistentMeshDB(fmt.Sprintf(path+
-		"/"), 10, log.NewDefault("ninje_tortoise").WithOptions(log.Nop))
+		"/"), 10, logtest.New(tb).WithName("ninje_tortoise"))
 	return db, teardown
 }
 
-func getInMemMesh() *mesh.DB {
-	return mesh.NewMemMeshDB(log.NewDefault(""))
+func getInMemMesh(tb testing.TB) *mesh.DB {
+	return mesh.NewMemMeshDB(logtest.New(tb))
 }
 
 func AddLayer(m *mesh.DB, layer *types.Layer) error {
@@ -54,7 +55,15 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 		sum := abstain
 		blk, _ := trtl.bdp.GetBlock(i)
 
-		for l := trtl.Last; l > blk.LayerIndex; l-- {
+		wind := types.NewLayerID(0)
+		if blk.LayerIndex.Uint32() > trtl.Hdist {
+			wind = trtl.Last.Sub(trtl.Hdist)
+		}
+		if blk.LayerIndex.Before(wind) {
+			continue
+		}
+
+		for l := trtl.Last; l.After(blk.LayerIndex); l = l.Sub(1) {
 
 			trtl.logger.Info("Counting votes of blocks in layer %v on %v (lyr: %v)", l, i.String(), blk.LayerIndex)
 
@@ -76,13 +85,13 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 }
 
 func TestTurtle_HandleIncomingLayerHappyFlow(t *testing.T) {
-	layers := types.GetEffectiveGenesis() + 28
+	layers := types.GetEffectiveGenesis().Add(28)
 	avgPerLayer := 10
 	voteNegative := 0
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-	require.Equal(t, int(layers-1), int(trtl.Verified))
-	blkids := make([]types.BlockID, 0, avgPerLayer*int(layers))
-	for l := types.LayerID(0); l < layers; l++ {
+	require.Equal(t, layers.Sub(1), trtl.Verified)
+	blkids := make([]types.BlockID, 0, avgPerLayer*int(layers.Uint32()))
+	for l := types.NewLayerID(0); l.Before(layers); l = l.Add(1) {
 		lids, _ := trtl.bdp.LayerBlockIds(l)
 		blkids = append(blkids, lids...)
 	}
@@ -99,14 +108,14 @@ func inArr(id types.BlockID, list []types.BlockID) bool {
 }
 
 func TestTurtle_HandleIncomingLayer_VoteNegative(t *testing.T) {
-	lyrsAfterGenesis := types.LayerID(10)
-	layers := types.GetEffectiveGenesis() + lyrsAfterGenesis
+	lyrsAfterGenesis := uint32(10)
+	layers := types.GetEffectiveGenesis().Add(lyrsAfterGenesis)
 	avgPerLayer := 10
 	voteNegative := 2
 	trtl, negs, abs := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-	require.Equal(t, int(layers-1), int(trtl.Verified))
-	poblkids := make([]types.BlockID, 0, avgPerLayer*int(layers))
-	for l := types.LayerID(0); l < layers; l++ {
+	require.Equal(t, layers.Sub(1), trtl.Verified)
+	poblkids := make([]types.BlockID, 0, avgPerLayer*int(layers.Uint32()))
+	for l := types.NewLayerID(0); l.Before(layers); l = l.Add(1) {
 		lids, _ := trtl.bdp.LayerBlockIds(l)
 		for _, lid := range lids {
 			if !inArr(lid, negs) {
@@ -121,22 +130,22 @@ func TestTurtle_HandleIncomingLayer_VoteNegative(t *testing.T) {
 }
 
 func TestTurtle_HandleIncomingLayer_VoteAbstain(t *testing.T) {
-	layers := types.LayerID(10)
+	layers := types.NewLayerID(10)
 	avgPerLayer := 10
 	trtl, _, abs := turtleSanity(t, layers, avgPerLayer, 0, 10)
-	require.Equal(t, int(types.GetEffectiveGenesis()), int(trtl.Verified), "when all votes abstain verification should stay at first layer and advance")
+	require.Equal(t, types.GetEffectiveGenesis(), trtl.Verified, "when all votes abstain verification should stay at first layer and advance")
 	requireVote(t, trtl, abstain, abs...)
 }
 
 // voteNegative - the amoutn of blocks to vote negative per layer
 // voteAbstain - the amoutn of layers to vote abstain because we always abstain on a whole layer
 func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegative int, voteAbstain int) (trtl *turtle, negative []types.BlockID, abstains []types.BlockID) {
-	msh := getInMemMesh()
-
+	msh := getInMemMesh(t)
+	logger := logtest.New(t)
 	newlyrs := make(map[types.LayerID]struct{})
 
 	hm := func(l types.LayerID) (ids []types.BlockID, err error) {
-		if l < mesh.GenesisLayer().Index() {
+		if l.Before(mesh.GenesisLayer().Index()) {
 			panic("shouldn't happen")
 		}
 		if l == mesh.GenesisLayer().Index() {
@@ -151,6 +160,7 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 
 		blks, err := msh.LayerBlockIds(l)
 		if err != nil {
+			t.Log(err)
 			panic("db err")
 		}
 
@@ -185,19 +195,27 @@ func turtleSanity(t *testing.T, layers types.LayerID, blocksPerLayer, voteNegati
 	trtl.init(gen)
 
 	var l types.LayerID
-	for l = mesh.GenesisLayer().Index() + 1; l <= layers; l++ {
+	for l = mesh.GenesisLayer().Index().Add(1); !l.After(layers); l = l.Add(1) {
 		turtleMakeAndProcessLayer(t, l, trtl, blocksPerLayer, msh, hm)
-		fmt.Println("Handled ", l, "========================================================================")
+		lastlyr := trtl.BlockOpinionsByLayer[l]
+		for _, v := range lastlyr {
+			logger.Debug("block opinion map size", len(v.BlocksOpinion))
+			if (len(v.BlocksOpinion)) > int(blocksPerLayer*int(trtl.Hdist)) {
+				t.Errorf("layer opinion table exceeded max size, LEAK! size:%v, maxsize:%v", len(v.BlocksOpinion), int(blocksPerLayer*int(trtl.Hdist)))
+			}
+			break
+		}
 	}
 
 	return
 }
 
 func turtleMakeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, msh *mesh.DB, hm func(id types.LayerID) ([]types.BlockID, error)) {
-	fmt.Println("choosing base block layer ", l)
+	logger := logtest.New(t)
+	logger.Debug("choosing base block layer ", l)
 	msh.InputVectorBackupFunc = hm
-	b, lists, err := trtl.BaseBlock()
-	fmt.Println("the base block for ", l, "is ", b)
+	b, lists, err := trtl.BaseBlock(context.TODO())
+	logger.Debug("the base block for ", l, "is ", b)
 	if err != nil {
 		panic(fmt.Sprint("no base - ", err))
 	}
@@ -220,7 +238,7 @@ func turtleMakeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, bloc
 		lyr.AddBlock(blk)
 		err = msh.AddBlock(blk)
 		if err != nil {
-			fmt.Println("Err inserting to db - ", err)
+			t.Log("Err inserting to db - ", err)
 		}
 	}
 
@@ -228,40 +246,41 @@ func turtleMakeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, bloc
 	blocks, err := hm(l)
 	if err == nil {
 		// save blocks to db for this layer
-		require.NoError(t, msh.SaveLayerInputVectorByID(l, blocks))
+		require.NoError(t, msh.SaveLayerInputVectorByID(context.TODO(), l, blocks))
 	}
 
 	trtl.HandleIncomingLayer(lyr)
 }
 
 func Test_TurtleAbstainsInMiddle(t *testing.T) {
-	layers := types.LayerID(15)
+	logger := logtest.New(t)
+	layers := types.NewLayerID(15)
 	blocksPerLayer := 10
 
-	msh := getInMemMesh()
+	msh := getInMemMesh(t)
 
-	layerfuncs := make([]func(id types.LayerID) (ids []types.BlockID, err error), 0, int(layers))
+	layerfuncs := make([]func(id types.LayerID) (ids []types.BlockID, err error), 0, layers.Uint32())
 
 	// first 5 layers incl genesis just work
-	for i := types.LayerID(0); i <= 5; i++ {
+	for i := 0; i <= 5; i++ {
 		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
-			fmt.Println("Giveing good results for layer", id)
+			logger.Debug("Giving good results for layer", id)
 			return msh.LayerBlockIds(id)
 		})
 	}
 
 	// next up two layers that didn't finish
-	newlastlyr := types.LayerID(len(layerfuncs))
-	for i := newlastlyr; i < newlastlyr+2; i++ {
+	newlastlyr := types.NewLayerID(uint32(len(layerfuncs)))
+	for i := newlastlyr; i.Before(newlastlyr.Add(2)); i = i.Add(1) {
 		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
-			fmt.Println("Giving bad result for layer ", id)
+			logger.Debug("Giving bad result for layer ", id)
 			return nil, errors.New("idontknow")
 		})
 	}
 
 	// more good layers
-	newlastlyr = types.LayerID(len(layerfuncs))
-	for i := newlastlyr; i < newlastlyr+(layers-newlastlyr); i++ {
+	newlastlyr = types.NewLayerID(uint32(len(layerfuncs)))
+	for i := newlastlyr; i.Before(newlastlyr.Add(layers.Difference(newlastlyr))); i = i.Add(1) {
 		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
 			return msh.LayerBlockIds(id)
 		})
@@ -272,37 +291,32 @@ func Test_TurtleAbstainsInMiddle(t *testing.T) {
 	trtl.init(gen)
 
 	var l types.LayerID
-	for l = types.GetEffectiveGenesis() + 1; l < layers; l++ {
-		turtleMakeAndProcessLayer(t, l, trtl, blocksPerLayer, msh, layerfuncs[l-types.GetEffectiveGenesis()-1])
-		fmt.Println("Handled ", l, " Verified ", trtl.Verified, "========================================================================")
+	for l = types.GetEffectiveGenesis().Add(1); l.Before(layers); l = l.Add(1) {
+		turtleMakeAndProcessLayer(t, l, trtl, blocksPerLayer, msh, layerfuncs[l.Difference(types.GetEffectiveGenesis())-1])
+		logger.Debug("Handled ", l, " Verified ", trtl.Verified, "========================================================================")
 	}
 
-	require.Equal(t, int(types.GetEffectiveGenesis()+5), int(trtl.Verified), "verification should advance after hare finishes")
+	require.Equal(t, types.GetEffectiveGenesis().Add(5), trtl.Verified, "verification should advance after hare finishes")
 	//todo: also check votes with requireVote
 }
 
-type baseBlockProvider func() (types.BlockID, [][]types.BlockID, error)
+type baseBlockProvider func(ctx context.Context) (types.BlockID, [][]types.BlockID, error)
 type inputVectorProvider func(l types.LayerID) ([]types.BlockID, error)
 
-func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
-	fmt.Println("choosing base block layer ", l)
+func createTurtleLayer(ctx context.Context, l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
 	msh.InputVectorBackupFunc = ivp
-	b, lists, err := bbp()
-	fmt.Println("the base block for ", l, "is ", b)
-	fmt.Println("Against ", lists[0])
-	fmt.Println("For ", lists[1])
-	fmt.Println("Neutral ", lists[2])
+	b, lists, err := bbp(ctx)
 	if err != nil {
 		panic(fmt.Sprint("no base - ", err))
 	}
 	lyr := types.NewLayer(l)
 
-	blocks, err := ivp(l - 1)
+	blocks, err := ivp(l.Sub(1))
 	if err != nil {
 		blocks = nil
 	}
-	if err := msh.SaveLayerInputVectorByID(l-1, blocks); err != nil {
-		panic("db is fucked up")
+	if err := msh.SaveLayerInputVectorByID(context.TODO(), l.Sub(1), blocks); err != nil {
+		panic("can't save layuer input vector")
 	}
 
 	for i := 0; i < blocksPerLayer; i++ {
@@ -325,34 +339,32 @@ func createTurtleLayer(l types.LayerID, msh *mesh.DB, bbp baseBlockProvider, ivp
 }
 
 func TestTurtle_Eviction(t *testing.T) {
-	layers := types.LayerID(defaultTestHdist * 10)
-	avgPerLayer := 10
+	defaultTestHdist = 12
+	logger := logtest.New(t)
+	layers := types.NewLayerID(defaultTestHdist * 5)
+	avgPerLayer := 20 // more blocks = longer test
 	voteNegative := 0
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-	require.Equal(t, len(trtl.BlockOpinionsByLayer),
+	require.EqualValues(t, len(trtl.BlockOpinionsByLayer),
 		(defaultTestHdist + 2))
+
 	count := 0
 	for _, blks := range trtl.BlockOpinionsByLayer {
 		count += len(blks)
 	}
 	require.Equal(t, count,
-		(defaultTestHdist+2)*avgPerLayer)
+		int(defaultTestHdist+2)*avgPerLayer)
+
+	logger.Debug("Count blocks on blocks layers ", len(trtl.BlockOpinionsByLayer))
+	logger.Debug("Count blocks on blocks blocks ", count)
+	//t.Log("mem Size: ", size(trtl.BlockOpinionsByLayer))
 	require.Equal(t, len(trtl.GoodBlocksIndex),
-		(defaultTestHdist+2)*avgPerLayer) // all blocks should be good
+		int(defaultTestHdist+2)*avgPerLayer) // all blocks should be good
+	logger.Debug("Count good blocks ", len(trtl.GoodBlocksIndex))
 }
 
-//func TestTurtle_Eviction2(t *testing.T) {
-//	layers := types.LayerID(defaultTestHdist * 14)
-//	avgPerLayer := 30
-//	voteNegative := 5
-//	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-//	require.Equal(t, len(trtl.BlockOpinionsByLayer),
-//		(defaultTestHdist+2)*avgPerLayer)
-//}
-
 func TestTurtle_Recovery(t *testing.T) {
-	log.DebugMode(true)
-	mdb, teardown := getPersistentMash()
+	mdb, teardown := getPersistentMash(t)
 
 	getHareResults := func(l types.LayerID) ([]types.BlockID, error) {
 		return mdb.LayerBlockIds(l)
@@ -360,33 +372,33 @@ func TestTurtle_Recovery(t *testing.T) {
 
 	mdb.InputVectorBackupFunc = getHareResults
 
-	lg := log.NewDefault(t.Name())
+	lg := logtest.New(t)
 	alg := verifyingTortoise(3, mdb, 5, lg)
 	l := mesh.GenesisLayer()
 
-	log.With().Info("The genesis is ", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
-	log.With().Info("The genesis is ", l.Blocks()[0].Fields()...)
+	lg.With().Info("The genesis is ", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
+	lg.With().Info("The genesis is ", l.Blocks()[0].Fields()...)
 
-	l1 := createTurtleLayer(types.GetEffectiveGenesis()+1, mdb, alg.BaseBlock, getHareResults, 3)
+	l1 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis().Add(1), mdb, alg.BaseBlock, getHareResults, 3)
 	require.NoError(t, AddLayer(mdb, l1))
 
-	log.With().Info("The first is ", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
-	log.With().Info("The first bb is ", l1.Index(), l1.Blocks()[0].BaseBlock, types.BlockIdsField(l1.Blocks()[0].ForDiff))
+	lg.With().Info("The first is ", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
+	lg.With().Info("The first bb is ", l1.Index(), l1.Blocks()[0].BaseBlock, types.BlockIdsField(l1.Blocks()[0].ForDiff))
 
 	alg.HandleIncomingLayer(l1)
 	require.NoError(t, alg.Persist())
 
-	l2 := createTurtleLayer(types.GetEffectiveGenesis()+2, mdb, alg.BaseBlock, getHareResults, 3)
+	l2 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis().Add(2), mdb, alg.BaseBlock, getHareResults, 3)
 	require.NoError(t, AddLayer(mdb, l2))
 	alg.HandleIncomingLayer(l2)
 
 	require.NoError(t, alg.Persist())
 
-	require.Equal(t, int(types.GetEffectiveGenesis()+1), int(alg.LatestComplete()))
+	require.Equal(t, types.GetEffectiveGenesis().Add(1), alg.LatestComplete())
 
-	l31 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 4)
+	l31 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis().Add(3), mdb, alg.BaseBlock, getHareResults, 4)
 
-	l32 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, func() (types.BlockID, [][]types.BlockID, error) {
+	l32 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis().Add(3), mdb, func(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 		diffs := make([][]types.BlockID, 3)
 		diffs[0] = make([]types.BlockID, 0)
 		diffs[1] = types.BlockIDs(l.Blocks())
@@ -397,25 +409,22 @@ func TestTurtle_Recovery(t *testing.T) {
 
 	defer func() {
 		if r := recover(); r != nil {
-			t.Log("Recovered from", r)
+			lg.Debug("Recovered from", r)
 		}
-
-		log.Info("I've recovered")
-
 		alg := recoveredVerifyingTortoise(mdb, lg)
 
 		alg.HandleIncomingLayer(l2)
 
-		l3 := createTurtleLayer(types.GetEffectiveGenesis()+3, mdb, alg.BaseBlock, getHareResults, 3)
+		l3 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis().Add(3), mdb, alg.BaseBlock, getHareResults, 3)
 		AddLayer(mdb, l3)
 		alg.HandleIncomingLayer(l3)
 		alg.Persist()
 
-		l4 := createTurtleLayer(types.GetEffectiveGenesis()+4, mdb, alg.BaseBlock, getHareResults, 3)
+		l4 := createTurtleLayer(context.TODO(), types.GetEffectiveGenesis().Add(4), mdb, alg.BaseBlock, getHareResults, 3)
 		AddLayer(mdb, l4)
 		alg.HandleIncomingLayer(l4)
 		alg.Persist()
-		assert.True(t, alg.LatestComplete() == types.GetEffectiveGenesis()+3)
+		assert.True(t, alg.LatestComplete() == types.GetEffectiveGenesis().Add(3))
 
 		require.NoError(t, teardown())
 

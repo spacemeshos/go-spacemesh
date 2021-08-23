@@ -4,18 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
-	"github.com/spacemeshos/go-spacemesh/p2p/version"
 	"net"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/connectionpool"
 	inet "github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/version"
 )
 
 // Lookuper is a service used to lookup for nodes we know already
@@ -34,7 +34,7 @@ type UDPMux struct {
 	logger log.Log
 
 	local     node.LocalNode
-	networkid int8
+	networkid uint32
 
 	cpool    cPool
 	lookuper Lookuper
@@ -45,7 +45,7 @@ type UDPMux struct {
 }
 
 // NewUDPMux creates a new udp protocol server
-func NewUDPMux(ctx, shutdownCtx context.Context, localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid int8, logger log.Log) *UDPMux {
+func NewUDPMux(ctx, shutdownCtx context.Context, localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid uint32, logger log.Log) *UDPMux {
 	cpool := connectionpool.NewConnectionPool(shutdownCtx, udpNet.Dial, localNode.PublicKey(), logger.WithName("udp_cpool"))
 
 	um := &UDPMux{
@@ -168,7 +168,6 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 	addr := &net.UDPAddr{IP: net.ParseIP(peer.IP.String()), Port: int(peer.DiscoveryPort)}
 
 	conn, err := mux.cpool.GetConnection(ctx, addr, peer.PublicKey())
-
 	if err != nil {
 		return err
 	}
@@ -179,7 +178,8 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 		return ErrNoSession
 	}
 
-	mt := ProtocolMessageMetadata{protocol,
+	mt := ProtocolMessageMetadata{
+		protocol,
 		config.ClientVersion,
 		time.Now().UnixNano(),
 		mux.local.PublicKey().Bytes(),
@@ -192,12 +192,12 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 
 	message.Payload, err = CreatePayload(payload)
 	if err != nil {
-		return fmt.Errorf("can't create payload, err:%v", err)
+		return fmt.Errorf("can't create payload: %w", err)
 	}
 
 	data, err := types.InterfaceToBytes(&message)
 	if err != nil {
-		return fmt.Errorf("failed to encode signed message err: %v", err)
+		return fmt.Errorf("failed to encode signed message: %w", err)
 	}
 
 	// TODO: node.address should have IP address, UDP and TCP PORT.
@@ -255,7 +255,6 @@ func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
 	}
 
 	rawmsg, _, err := p2pcrypto.ExtractPubkey(msg.Message)
-
 	if err != nil {
 		return err
 	}
@@ -287,11 +286,10 @@ func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
 	data, err = ExtractData(pm.Payload)
 
 	if err != nil {
-		return fmt.Errorf("failed extracting data from message err:%v", err)
+		return fmt.Errorf("failed extracting data from message: %w", err)
 	}
 
 	p2pmeta := service.P2PMetadata{FromAddress: msg.Conn.RemoteAddr()}
 
 	return mux.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data, p2pmeta)
-
 }

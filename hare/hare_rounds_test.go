@@ -3,14 +3,15 @@ package hare
 import (
 	"context"
 	"errors"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
-	"testing"
-	"time"
 )
 
 const skipMoreTests = true
@@ -21,14 +22,13 @@ type TestHareWrapper struct {
 
 func newTestHareWrapper(count int) *TestHareWrapper {
 	w := &TestHareWrapper{
-		HareWrapper: newHareWrapper(count),
+		HareWrapper: newHareWrapper(uint32(count)),
 	}
 	return w
 }
 
 func (w *TestHareWrapper) Tick(layer types.LayerID) {
 	for i := 0; i < len(w.lCh); i++ {
-		log.Debug("tick layer %v for instance %v", layer, i)
 		w.lCh[i] <- layer
 	}
 }
@@ -37,10 +37,10 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	j := types.GetEffectiveGenesis() + 1
-	last := j + types.LayerID(w.totalCP)
+	j := types.GetEffectiveGenesis().Add(1)
+	last := j.Add(w.totalCP)
 
-	for ; j < last; j++ {
+	for ; j.Before(last); j = j.Add(1) {
 		w.Tick(j)
 		select {
 		case <-w.termination.CloseChannel():
@@ -62,8 +62,8 @@ type testHare struct {
 	N        int
 }
 
-func (h *testHare) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, commite int, id types.NodeID, sig []byte) (uint16, error) {
-	return h.oracle(layer, round, commite, id, sig, h)
+func (h *testHare) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committee int, id types.NodeID, sig []byte) (uint16, error) {
+	return h.oracle(layer, round, committee, id, sig, h)
 }
 
 func (testHare) Register(bool, string)   {}
@@ -74,7 +74,7 @@ func (testHare) Validate(context.Context, types.LayerID, int32, int, types.NodeI
 func (testHare) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	return []byte{}, nil
 }
-func (testHare) IsIdentityActiveOnConsensusView(string, types.LayerID) (bool, error) {
+func (testHare) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
 func (h *testHare) HandleValidatedLayer(ctx context.Context, layer types.LayerID, ids []types.BlockID) {
@@ -83,13 +83,14 @@ func (h *testHare) HandleValidatedLayer(ctx context.Context, layer types.LayerID
 func (h *testHare) LayerBlockIds(layer types.LayerID) ([]types.BlockID, error) {
 	return h.layers(layer, h)
 }
+func (h *testHare) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {}
 
-func createTestHare(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string, bp layers) *Hare {
+func createTestHare(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string, bp meshProvider) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: pub.Bytes()}
 	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, bp, rolacle, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, layersCh, log.NewDefault(name+"_"+ed.PublicKey().ShortString()))
+		&MockStateQuerier{true, nil}, layersCh, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 	return hare
 }
 
@@ -108,10 +109,10 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations, concu
 	sim := service.NewSimulator()
 	for i := 0; i < nodes; i++ {
 		s := sim.NewNode()
-		mp2p := &p2pManipulator{nd: s, stalledLayer: 1, err: errors.New("fake err")}
+		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		w.lCh = append(w.lCh, make(chan types.LayerID, 1))
 		h := &testHare{nil, oracle, bp, validate, i}
-		h.Hare = createTestHare(cfg, w.lCh[i], mp2p, h, t.Name(), h)
+		h.Hare = createTestHare(t, cfg, w.lCh[i], mp2p, h, t.Name(), h)
 		w.hare = append(w.hare, h.Hare)
 		e := h.Start(context.TODO())
 		r.NoError(e)
@@ -127,7 +128,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 2, 5,
-		func(layer types.LayerID, round int32, commite int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round/4 > 1 {
 				t.Fatal("out of round limit")
 			}
@@ -137,7 +138,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 			return []types.BlockID{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -147,13 +148,13 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y])
+				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 			}
 		}
 	}
 }
 
-func Test_HareNoEnoughStatuses(t *testing.T) {
+func Test_HareNotEnoughStatuses(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
@@ -164,8 +165,8 @@ func Test_HareNoEnoughStatuses(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 1, 5,
-		func(layer types.LayerID, round int32, commite int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
-			if round%4 == statusRound && hare.N >= commite/2-1 {
+		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+			if round%4 == statusRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
 			return 1, nil
@@ -174,7 +175,7 @@ func Test_HareNoEnoughStatuses(t *testing.T) {
 			return []types.BlockID{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -184,13 +185,13 @@ func Test_HareNoEnoughStatuses(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y])
+				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 			}
 		}
 	}
 }
 
-func Test_HareNoEnoughLeaders(t *testing.T) {
+func Test_HareNotEnoughLeaders(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
@@ -200,7 +201,7 @@ func Test_HareNoEnoughLeaders(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 1, 5,
-		func(layer types.LayerID, round int32, commite int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == proposalRound {
 				return 0, nil
 			}
@@ -210,7 +211,7 @@ func Test_HareNoEnoughLeaders(t *testing.T) {
 			return []types.BlockID{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -220,13 +221,13 @@ func Test_HareNoEnoughLeaders(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y])
+				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 			}
 		}
 	}
 }
 
-func Test_HareNoEnoughCommits(t *testing.T) {
+func Test_HareNotEnoughCommits(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
@@ -236,8 +237,8 @@ func Test_HareNoEnoughCommits(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 1, 5,
-		func(layer types.LayerID, round int32, commite int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
-			if round%4 == commitRound && hare.N >= commite/2-1 {
+		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+			if round%4 == commitRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
 			return 1, nil
@@ -246,7 +247,7 @@ func Test_HareNoEnoughCommits(t *testing.T) {
 			return []types.BlockID{genBlockID(1)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -256,13 +257,13 @@ func Test_HareNoEnoughCommits(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y])
+				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 			}
 		}
 	}
 }
 
-func Test_HareNoEnoughNotifies(t *testing.T) {
+func Test_HareNotEnoughNotifications(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}
@@ -272,8 +273,8 @@ func Test_HareNoEnoughNotifies(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 1, 5,
-		func(layer types.LayerID, round int32, commite int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
-			if round%4 == notifyRound && hare.N >= commite/2-1 {
+		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+			if round%4 == notifyRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
 			return 1, nil
@@ -282,7 +283,7 @@ func Test_HareNoEnoughNotifies(t *testing.T) {
 			return []types.BlockID{genBlockID(1)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks) + 1
 		})
 
@@ -292,7 +293,7 @@ func Test_HareNoEnoughNotifies(t *testing.T) {
 	for x := range m {
 		for y := range m[x] {
 			if m[x][y] != 1 {
-				t.Errorf("at layer %v node %v has not emty set in result (%v)", x, y, m[x][y])
+				t.Errorf("at layer %v node %v has non-empty set in result (%v)", x, y, m[x][y])
 			}
 		}
 	}
@@ -308,14 +309,14 @@ func Test_HareComplete(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 1, 5,
-		func(layer types.LayerID, round int32, commite int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			return 1, nil
 		},
 		func(layer types.LayerID, hare *testHare) ([]types.BlockID, error) {
-			return []types.BlockID{genBlockID(int(layer))}, nil
+			return []types.BlockID{genBlockID(int(layer.Uint32()))}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
-			l := layer - types.GetEffectiveGenesis() - 1
+			l := layer.Difference(types.GetEffectiveGenesis()) - 1
 			m[l][hare.N] = len(blocks)
 		})
 

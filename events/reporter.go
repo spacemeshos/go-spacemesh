@@ -3,12 +3,14 @@ package events
 import (
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
+
+	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"go.uber.org/zap/zapcore"
 )
 
 // reporter is the event reporter singleton.
@@ -17,8 +19,19 @@ var reporter *EventReporter
 // we use a mutex to ensure thread safety
 var mu sync.RWMutex
 
-func init() {
-	mu = sync.RWMutex{}
+// EventHook returns hook for logger.
+func EventHook() func(entry zapcore.Entry) error {
+	return func(entry zapcore.Entry) error {
+		// If we report anything less than this we'll end up in an infinite loop
+		if entry.Level >= zapcore.ErrorLevel {
+			ReportError(NodeError{
+				Msg:   entry.Message,
+				Trace: string(debug.Stack()),
+				Level: entry.Level,
+			})
+		}
+		return nil
+	}
 }
 
 // ReportNewTx dispatches incoming events to the reporter singleton
@@ -68,7 +81,7 @@ func ReportNewActivation(activation *types.ActivationTx) {
 
 	Publish(NewAtx{
 		ID:      activation.ShortString(),
-		LayerID: uint64(activation.PubLayerID.GetEpoch()),
+		EpochID: uint32(activation.PubLayerID.GetEpoch()),
 	})
 
 	if reporter != nil {
@@ -122,7 +135,7 @@ func ReportNewBlock(blk *types.Block) {
 	Publish(NewBlock{
 		ID:    blk.ID().String(),
 		Atx:   blk.ATXID.ShortString(),
-		Layer: uint64(blk.LayerIndex),
+		Layer: blk.LayerIndex.Uint32(),
 	})
 }
 
@@ -135,8 +148,8 @@ func ReportValidBlock(blockID types.BlockID, valid bool) {
 }
 
 // ReportAtxCreated reports a created activation
-func ReportAtxCreated(created bool, layer uint64, id string) {
-	Publish(AtxCreated{Created: created, Layer: layer, ID: id})
+func ReportAtxCreated(created bool, epoch uint32, id string) {
+	Publish(AtxCreated{Created: created, Epoch: epoch, ID: id})
 }
 
 // ReportValidActivation reports a valid activation
@@ -145,11 +158,19 @@ func ReportValidActivation(activation *types.ActivationTx, valid bool) {
 }
 
 // ReportDoneCreatingBlock reports a created block
-func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
+func ReportDoneCreatingBlock(eligible bool, layer uint32, error string) {
 	Publish(DoneCreatingBlock{
 		Eligible: eligible,
 		Layer:    layer,
 		Error:    error,
+	})
+}
+
+// ReportCalculatedTortoiseBeacon reports calculated tortoise beacon.
+func ReportCalculatedTortoiseBeacon(epoch types.EpochID, beacon string) {
+	Publish(TortoiseBeaconCalculated{
+		Epoch:  epoch,
+		Beacon: beacon,
 	})
 }
 

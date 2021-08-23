@@ -1,16 +1,18 @@
 package events
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zapcore"
-	"runtime/debug"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
 )
 
 func TestNewBlockEvent(t *testing.T) {
@@ -64,7 +66,6 @@ var (
 func MakeTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
 	if err != nil {
-		log.Error("error creating new signed tx: %v", err)
 		return nil
 	}
 	return tx
@@ -113,6 +114,8 @@ func TestEventReporter(t *testing.T) {
 }
 
 func TestReportError(t *testing.T) {
+	logger := logtest.New(t, zap.ErrorLevel)
+
 	nodeErr := NodeError{
 		Msg:   "hi there",
 		Trace: "<trace goes here>",
@@ -140,6 +143,7 @@ func TestReportError(t *testing.T) {
 	wgListening.Add(1)
 	wgDone := sync.WaitGroup{}
 	wgDone.Add(1)
+	errMsg := "abracadabra"
 	go func() {
 		defer wgDone.Done()
 		// report that we're listening
@@ -152,7 +156,7 @@ func TestReportError(t *testing.T) {
 		// now check errors sent through logging
 		msg := <-stream
 		require.Equal(t, zapcore.ErrorLevel, msg.Level)
-		require.Equal(t, "abracadabra", msg.Msg)
+		require.Equal(t, errMsg, msg.Msg)
 	}()
 
 	// Wait until goroutine is listening
@@ -160,18 +164,8 @@ func TestReportError(t *testing.T) {
 	ReportError(nodeErr)
 
 	// Try reporting using log
-	log.InitSpacemeshLoggingSystemWithHooks(func(entry zapcore.Entry) error {
-		// If we report anything less than this we'll end up in an infinite loop
-		if entry.Level >= zapcore.ErrorLevel {
-			ReportError(NodeError{
-				Msg:   entry.Message,
-				Trace: string(debug.Stack()),
-				Level: entry.Level,
-			})
-		}
-		return nil
-	})
-	log.Error("abracadabra")
+	logger = log.RegisterHooks(logger, EventHook())
+	logger.Error(errMsg)
 
 	// Wait for goroutine to finish
 	wgDone.Wait()

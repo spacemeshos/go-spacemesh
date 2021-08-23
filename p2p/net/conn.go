@@ -3,12 +3,14 @@ package net
 import (
 	"context"
 	"errors"
+	"sync/atomic"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"time"
 
 	"fmt"
 	"io"
@@ -19,8 +21,10 @@ import (
 )
 
 var (
-	// ErrConnectionClosed is sent when the connection is closed after Close was called
-	ErrConnectionClosed = errors.New("connections was intentionally closed")
+	// ErrAlreadyClosed is an error for when `Close` is called on a closed connection.
+	ErrAlreadyClosed = errors.New("p2p: connection is already closed")
+	// ErrClosed is returned when connection already closed.
+	ErrClosed = errors.New("p2p: connection closed")
 )
 
 // ConnectionSource specifies the connection originator - local or remote node.
@@ -63,6 +67,7 @@ type Connection interface {
 // FormattedConnection is an io.Writer and an io.Closer
 // A network connection supporting full-duplex messaging
 type FormattedConnection struct {
+	closed uint64
 	// metadata for logging / debugging
 	logger      log.Log
 	id          string // uuid for logging
@@ -75,11 +80,11 @@ type FormattedConnection struct {
 	r           formattedReader
 	wmtx        sync.Mutex
 	w           formattedWriter
-	closed      bool
 	deadliner   deadliner
 	messages    chan msgToSend
 	stopSending chan struct{}
 	close       io.Closer
+	wg          sync.WaitGroup
 
 	msgSizeLimit int
 }
@@ -89,7 +94,7 @@ type networker interface {
 	EnqueueMessage(ctx context.Context, ime IncomingMessageEvent)
 	SubscribeClosingConnections(func(context.Context, ConnectionWithErr))
 	publishClosingConnection(c ConnectionWithErr)
-	NetworkID() int8
+	NetworkID() uint32
 }
 
 type readWriteCloseAddresser interface {
@@ -140,7 +145,11 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		stopSending:  make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
-	go connection.sendListener()
+	connection.wg.Add(1)
+	go func() {
+		connection.sendListener()
+		connection.wg.Done()
+	}()
 	return connection
 }
 
@@ -232,10 +241,10 @@ func (c *FormattedConnection) sendListener() {
 	for {
 		select {
 		case m := <-c.messages:
-			//todo: re insert when log loss is fixed
-			/*c.logger.With().Debug("connection: sending outgoing message",
-			log.String("peer_id", m.peerID),
-			log.String("requestId", m.reqID))*/
+			c.logger.With().Debug("connection: sending outgoing message",
+				log.String("peer_id", m.peerID),
+				log.String("requestId", m.reqID),
+				log.Int("queue_length", len(c.messages)))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
@@ -243,6 +252,7 @@ func (c *FormattedConnection) sendListener() {
 					log.String("peer_id", m.peerID),
 					log.String("requestId", m.reqID),
 					log.Err(err))
+				return
 			}
 		case <-c.stopSending:
 			return
@@ -252,12 +262,10 @@ func (c *FormattedConnection) sendListener() {
 
 // Send pushes a message into the queue if the connection is not closed.
 func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
-	c.wmtx.Lock()
-	if c.closed {
-		c.wmtx.Unlock()
-		return fmt.Errorf("connection was closed")
+	c.logger.WithContext(ctx).Debug("waiting for send lock")
+	if c.Closed() {
+		return ErrClosed
 	}
-	c.wmtx.Unlock()
 
 	// extract some useful context
 	reqID, _ := log.ExtractRequestID(ctx)
@@ -265,7 +273,7 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 
 	c.logger.WithContext(ctx).With().Debug("connection: enqueuing outgoing message",
 		log.Int("queue_length", len(c.messages)))
-	if len(c.messages) > 10 {
+	if len(c.messages) > 30 {
 		c.logger.WithContext(ctx).With().Warning("connection: outbound send queue backlog",
 			log.Int("queue_length", len(c.messages)))
 	}
@@ -275,6 +283,8 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	select {
 	case c.messages <- msgToSend{m, reqID, peerID}:
 		return nil
+	case <-c.stopSending:
+		return ErrClosed
 	default:
 		return fmt.Errorf("connection: dropping outbound message, send queue full")
 	}
@@ -282,19 +292,18 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 
 // SendSock sends a message directly on the socket without waiting for the queue.
 func (c *FormattedConnection) SendSock(m []byte) error {
-	c.wmtx.Lock()
-	if c.closed {
-		c.wmtx.Unlock()
-		return fmt.Errorf("connection was closed")
+	if c.Closed() {
+		return ErrClosed
 	}
-
+	c.wmtx.Lock()
 	err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline))
 	if err != nil {
+		c.wmtx.Unlock()
 		return err
 	}
 	_, err = c.w.WriteRecord(m)
 	if err != nil {
-		cerr := c.closeUnlocked()
+		cerr := c.closeNoWait()
 		c.wmtx.Unlock()
 		if cerr != ErrAlreadyClosed {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
@@ -306,38 +315,24 @@ func (c *FormattedConnection) SendSock(m []byte) error {
 	return nil
 }
 
-// ErrAlreadyClosed is an error for when `Close` is called on a closed connection.
-var ErrAlreadyClosed = errors.New("connection is already closed")
+// Closed returns whether the connection is closed
+func (c *FormattedConnection) Closed() bool {
+	return atomic.LoadUint64(&c.closed) == 1
+}
 
-func (c *FormattedConnection) closeUnlocked() error {
-	if c.closed {
+func (c *FormattedConnection) closeNoWait() error {
+	if !atomic.CompareAndSwapUint64(&c.closed, 0, 1) {
 		return ErrAlreadyClosed
 	}
-	err := c.close.Close()
-	c.closed = true
-	if err != nil {
-		return err
-	}
-	return nil
+	close(c.stopSending)
+	return c.close.Close()
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *FormattedConnection) Close() error {
-	c.wmtx.Lock()
-	defer c.wmtx.Unlock()
-	err := c.closeUnlocked()
-	if err != nil {
-		return err
-	}
-	close(c.stopSending)
-	return nil
-}
-
-// Closed returns whether the connection is closed
-func (c *FormattedConnection) Closed() bool {
-	c.wmtx.Lock()
-	defer c.wmtx.Unlock()
-	return c.closed
+	err := c.closeNoWait()
+	c.wg.Wait()
+	return err
 }
 
 var (
@@ -348,39 +343,20 @@ var (
 )
 
 func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Duration) error {
-	be := make(chan struct {
-		b []byte
-		e error
-	})
-
-	go func() {
-		// TODO: some other way to make sure this groutine closes
-		err := c.deadliner.SetReadDeadline(time.Now().Add(timeout))
-		if err != nil {
-			be <- struct {
-				b []byte
-				e error
-			}{b: nil, e: err}
-			return
-		}
-		msg, err := c.r.Next()
-		be <- struct {
-			b []byte
-			e error
-		}{b: msg, e: err}
-		err = c.deadliner.SetReadDeadline(time.Time{}) // disable read deadline
-		if err != nil {
-			c.logger.With().Warning("could not set a read deadline", log.Err(err))
-		}
-	}()
-
-	msgbe := <-be
-	msg := msgbe.b
-	err := msgbe.e
-
+	err := c.deadliner.SetReadDeadline(time.Now().Add(timeout))
 	if err != nil {
-		c.Close()
+		c.closeNoWait()
 		return err
+	}
+	msg, err := c.r.Next()
+	if err != nil {
+		c.closeNoWait()
+		return err
+	}
+	err = c.deadliner.SetReadDeadline(time.Time{})
+	if err != nil {
+		c.closeNoWait()
+		return fmt.Errorf("failed to set read dealine: %w", err)
 	}
 
 	if c.msgSizeLimit != config.UnlimitedMsgSize && len(msg) > c.msgSizeLimit {
@@ -390,13 +366,13 @@ func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Du
 	}
 
 	if c.session != nil {
-		c.Close()
+		c.closeNoWait()
 		return errors.New("setup connection twice")
 	}
 
 	err = c.networker.HandlePreSessionIncomingMessage(c, msg)
 	if err != nil {
-		c.Close()
+		c.closeNoWait()
 		return err
 	}
 
@@ -406,8 +382,10 @@ func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Du
 // Read from the incoming new messages and send down the connection
 func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 	//TODO: use a buffer pool
-	var err error
-	var buf []byte
+	var (
+		err error
+		buf []byte
+	)
 	for {
 		buf, err = c.r.Next()
 		if err != nil && err != io.EOF {
@@ -430,7 +408,7 @@ func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 		}
 	}
 
-	if cerr := c.Close(); cerr != ErrAlreadyClosed {
+	if cerr := c.closeNoWait(); cerr != ErrAlreadyClosed {
 		c.networker.publishClosingConnection(ConnectionWithErr{c, err})
 	}
 }

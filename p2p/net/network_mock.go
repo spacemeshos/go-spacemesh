@@ -2,12 +2,15 @@ package net
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"net"
 	"sync/atomic"
+	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 // ReadWriteCloserMock is a mock of ReadWriteCloserMock
@@ -38,10 +41,6 @@ func (m ReadWriteCloserMock) RemoteAddr() net.Addr {
 	return r
 }
 
-func getTestLogger(name string) log.Log {
-	return log.NewDefault(name)
-}
-
 // NetworkMock is a mock struct
 type NetworkMock struct {
 	dialErr          error
@@ -50,7 +49,7 @@ type NetworkMock struct {
 	preSessionErr    error
 	preSessionCount  int32
 	regNewRemoteConn []func(NewConnectionEvent)
-	networkID        int8
+	networkID        uint32
 	closingConn      []func(context.Context, ConnectionWithErr)
 	incomingMessages []chan IncomingMessageEvent
 	dialSessionID    []byte
@@ -58,11 +57,11 @@ type NetworkMock struct {
 }
 
 // NewNetworkMock is a mock
-func NewNetworkMock() *NetworkMock {
+func NewNetworkMock(tb testing.TB) *NetworkMock {
 	return &NetworkMock{
 		regNewRemoteConn: make([]func(NewConnectionEvent), 0, 3),
 		closingConn:      make([]func(context.Context, ConnectionWithErr), 0, 3),
-		logger:           getTestLogger("network mock"),
+		logger:           logtest.New(tb).WithName("network mock"),
 		incomingMessages: []chan IncomingMessageEvent{make(chan IncomingMessageEvent, 256)},
 	}
 }
@@ -140,7 +139,7 @@ func (n NetworkMock) PublishClosingConnection(con ConnectionWithErr) {
 }
 
 // NetworkID is netid
-func (n *NetworkMock) NetworkID() int8 {
+func (n *NetworkMock) NetworkID() uint32 {
 	return n.networkID
 }
 

@@ -3,14 +3,15 @@ package net
 import (
 	"context"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"io"
 	"net"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // MsgConnection is an io.Writer and an io.Closer
@@ -29,6 +30,7 @@ type MsgConnection struct {
 	r           io.Reader
 	wmtx        sync.Mutex
 	w           io.Writer
+	closer      io.Closer
 	closed      bool
 	deadliner   deadliner
 	messages    chan msgToSend
@@ -55,6 +57,7 @@ func newMsgConnection(conn readWriteCloseAddresser, netw networker,
 		remoteAddr:   conn.RemoteAddr(),
 		r:            conn,
 		w:            conn,
+		closer:       conn,
 		deadline:     deadline,
 		deadliner:    conn,
 		networker:    netw,
@@ -154,17 +157,18 @@ func (c *MsgConnection) sendListener() {
 	for {
 		select {
 		case m := <-c.messages:
-			//todo: re insert when log loss is fixed
-			/*c.logger.With().Debug("msgconnection: sending outgoing message",
-			log.String("peer_id", m.peerID),
-			log.String("requestId", m.reqID))*/
+			c.logger.With().Debug("msgconnection: sending outgoing message",
+				log.String("peer_id", m.peerID),
+				log.String("requestId", m.reqID),
+				log.Int("queue_length", len(c.messages)))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
-				log.With().Error("msgconnection: cannot send message to peer",
+				c.logger.With().Error("msgconnection: cannot send message to peer",
 					log.String("peer_id", m.peerID),
 					log.String("requestId", m.reqID),
 					log.Err(err))
+				return
 			}
 		case <-c.stopSending:
 			return
@@ -174,10 +178,11 @@ func (c *MsgConnection) sendListener() {
 
 // Send pushes a message to the messages queue
 func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
+	c.logger.WithContext(ctx).Debug("waiting for send lock")
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
-		return fmt.Errorf("connection was closed")
+		return ErrClosed
 	}
 	c.wmtx.Unlock()
 
@@ -187,7 +192,7 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 
 	c.logger.WithContext(ctx).With().Debug("msgconnection: enqueuing outgoing message",
 		log.Int("queue_length", len(c.messages)))
-	if len(c.messages) > 10 {
+	if len(c.messages) > 30 {
 		c.logger.WithContext(ctx).With().Warning("msgconnection: outbound send queue backlog",
 			log.Int("queue_length", len(c.messages)))
 	}
@@ -197,6 +202,8 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 	select {
 	case c.messages <- msgToSend{m, reqID, peerID}:
 		return nil
+	case <-c.stopSending:
+		return ErrClosed
 	default:
 		return fmt.Errorf("msgconnection: dropping outbound message, send queue full")
 	}
@@ -207,11 +214,12 @@ func (c *MsgConnection) SendSock(m []byte) error {
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
-		return fmt.Errorf("connection was closed")
+		return ErrClosed
 	}
 
 	err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline))
 	if err != nil {
+		c.wmtx.Unlock()
 		return err
 	}
 	_, err = c.w.Write(m)
@@ -219,7 +227,7 @@ func (c *MsgConnection) SendSock(m []byte) error {
 		cerr := c.closeUnlocked()
 		c.wmtx.Unlock()
 		if cerr != ErrAlreadyClosed {
-			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
+			c.networker.publishClosingConnection(ConnectionWithErr{c, err})
 		}
 		return err
 	}
@@ -233,18 +241,15 @@ func (c *MsgConnection) closeUnlocked() error {
 		return ErrAlreadyClosed
 	}
 	c.closed = true
-	return nil
+	close(c.stopSending)
+	return c.closer.Close()
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
 func (c *MsgConnection) Close() error {
 	c.wmtx.Lock()
 	defer c.wmtx.Unlock()
-	if err := c.closeUnlocked(); err != nil {
-		return err
-	}
-	close(c.stopSending)
-	return nil
+	return c.closeUnlocked()
 }
 
 // Closed returns whether the connection is closed
@@ -257,33 +262,31 @@ func (c *MsgConnection) Closed() bool {
 // Push outgoing message to the connections
 // Read from the incoming new messages and send down the connection
 func (c *MsgConnection) beginEventProcessing(ctx context.Context) {
-	//TODO: use a buffer pool
-	var err error
+	var (
+		err error
+		buf = make([]byte, maxMessageSize)
+		n   int
+	)
 	for {
-		buf := make([]byte, maxMessageSize)
-		size, err := c.r.Read(buf)
+		n, err = c.r.Read(buf)
 		if err != nil && err != io.EOF {
 			break
 		}
-
 		if c.session == nil {
 			err = ErrTriedToSetupExistingConn
 			break
 		}
-
-		if len(buf) > 0 {
-			newbuf := make([]byte, size)
-			copy(newbuf, buf[:size])
+		if n > 0 {
+			newbuf := make([]byte, n)
+			copy(newbuf, buf)
 
 			// Create a new requestId for context
 			c.publish(log.WithNewRequestID(ctx), newbuf)
 		}
-
 		if err != nil {
 			break
 		}
 	}
-
 	if cerr := c.Close(); cerr != ErrAlreadyClosed {
 		c.networker.publishClosingConnection(ConnectionWithErr{c, err})
 	}

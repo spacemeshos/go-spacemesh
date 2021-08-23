@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,7 +43,7 @@ func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me"
 func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
 
 func (s *ProcessorStateSuite) SetupTest() {
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(s.T()).WithName("proc_logger")
 	s.db = database.NewMemDatabase()
 	s.projector = &ProjectorMock{}
 	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, s.projector, NewTxMemPool(), lg)
@@ -85,7 +85,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
-	failed, err := s.processor.ApplyTransactions(1, transactions)
+	failed, err := s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
@@ -179,26 +179,26 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
 	}
 
-	failed, err := s.processor.ApplyTransactions(1, transactions)
+	failed, err := s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
-	err = s.processor.ApplyTransaction(createTransaction(s.T(), 0, obj2.address, 1, 5, signer1), 0)
+	err = s.processor.ApplyTransaction(createTransaction(s.T(), 0, obj2.address, 1, 5, signer1), types.LayerID{})
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), errNonce)
 
-	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signer1), 0)
+	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signer1), types.LayerID{})
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), errFunds)
 
 	//Test origin
-	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signing.NewEdSigner()), 0)
+	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signing.NewEdSigner()), types.LayerID{})
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), errOrigin)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
-	s.processor.ApplyRewards(1, []types.Address{types.HexToAddress("aaa"),
+	s.processor.ApplyRewards(types.NewLayerID(1), []types.Address{types.HexToAddress("aaa"),
 		types.HexToAddress("bbb"),
 		types.HexToAddress("ccc"),
 		types.HexToAddress("ddd"),
@@ -233,7 +233,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
-	s.processor.ApplyTransactions(1, transactions)
+	s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	//assert.Error(s.T(), err)
 
 	got := string(s.processor.Dump())
@@ -264,7 +264,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(s.T()).WithName("proc_logger")
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
 	processor := NewTransactionProcessor(db, txDb, s.projector, NewTxMemPool(), lg)
@@ -294,7 +294,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 		//createTransaction(obj2.Nonce(),obj2.address, obj1.address, 1),
 	}
 
-	failed, err := processor.ApplyTransactions(1, transactions)
+	failed, err := processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
 	assert.True(s.T(), failed == 0)
 
@@ -303,7 +303,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 		createTransaction(s.T(), obj2.Nonce(), obj1.address, 10, 5, signer2),
 	}
 
-	failed, err = processor.ApplyTransactions(2, transactions)
+	failed, err = processor.ApplyTransactions(types.NewLayerID(2), transactions)
 	assert.True(s.T(), failed == 0)
 	assert.NoError(s.T(), err)
 
@@ -330,7 +330,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
 	}
 
-	err = processor.LoadState(1)
+	err = processor.LoadState(types.NewLayerID(1))
 	assert.NoError(s.T(), err)
 
 	got = string(processor.Dump())
@@ -364,14 +364,13 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	maxTransactions := 20
 	minTransactions := 1
 
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(s.T()).WithName("proc_logger")
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
 	processor := NewTransactionProcessor(db, txDb, s.projector, NewTxMemPool(), lg)
 
 	revertToLayer := rand.Intn(testCycles)
 	revertAfterLayer := rand.Intn(testCycles - revertToLayer) //rand.Intn(min(testCycles - revertToLayer,maxPas.processors))
-	log.Info("starting test: revert on layer %v, after %v layers received since that layer ", revertToLayer, revertAfterLayer)
 
 	signers := []*signing.EdSigner{
 		signing.NewEdSigner(),
@@ -411,19 +410,17 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			t := createTransaction(s.T(), processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]), dstAccount.address, (rand.Uint64()%srcAccount.Balance())/100, 5, signers[src])
 			trns = append(trns, t)
 
-			log.Info("transaction %v nonce %v amount %v", t.Origin().Hex(), t.AccountNonce, t.Amount)
 		}
-		failed, err := processor.ApplyTransactions(types.LayerID(i), trns)
+		failed, err := processor.ApplyTransactions(types.NewLayerID(uint32(i)), trns)
 		assert.NoError(s.T(), err)
 		assert.True(s.T(), failed == 0)
 
 		if i == revertToLayer {
 			want = string(processor.Dump())
-			log.Info("wanted state: %v", want)
 		}
 
 		if i == revertToLayer+revertAfterLayer {
-			err = processor.LoadState(types.LayerID(revertToLayer))
+			err = processor.LoadState(types.NewLayerID(uint32(revertToLayer)))
 			assert.NoError(s.T(), err)
 			got := string(processor.Dump())
 
@@ -488,7 +485,8 @@ func TestTransactionProcessor_ApplyTransactionTestSuite(t *testing.T) {
 	suite.Run(t, new(ProcessorStateSuite))
 }
 
-func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transaction {
+func createSignerTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transaction {
+	t.Helper()
 	r := require.New(t)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	r.NoError(err)
@@ -499,20 +497,20 @@ func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Tra
 
 func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(t).WithName("proc_logger")
 	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, NewTxMemPool(), lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
 	createAccount(proc, PublicKeyToAccountAddress(pub), 123, 321)
-	tx := createXdrSignedTransaction(t, pri)
+	tx := createSignerTransaction(t, pri)
 
 	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
 	assert.True(t, proc.AddressExists(tx.Origin()))
 
 	// negative flow
 	pub, pri, _ = ed25519.GenerateKey(crand.Reader)
-	tx = createXdrSignedTransaction(t, pri)
+	tx = createSignerTransaction(t, pri)
 
 	assert.False(t, proc.AddressExists(tx.Origin()))
 	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
@@ -522,20 +520,20 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 	r := require.New(t)
 
 	db := database.NewMemDatabase()
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(t).WithName("proc_logger")
 	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, NewTxMemPool(), lg)
 
 	r.NotEqual(types.Hash32{}, proc.rootHash)
 
 	expectedRoot := types.Hash32{1, 2, 3}
-	r.NoError(proc.addState(expectedRoot, 1))
+	r.NoError(proc.addState(expectedRoot, types.NewLayerID(1)))
 
 	actualRoot := proc.GetStateRoot()
 	r.Equal(expectedRoot, actualRoot)
 }
 
 func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(t).WithName("proc_logger")
 	db := database.NewMemDatabase()
 	projector := &ProjectorMock{}
 	processor := NewTransactionProcessor(db, db, projector, NewTxMemPool(), lg)
@@ -556,16 +554,16 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 		createTransaction(t, obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
-	_, err = processor.ApplyTransactions(1, transactions)
+	_, err = processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(t, err)
 
-	_, err = processor.ApplyTransactions(2, []*types.Transaction{})
+	_, err = processor.ApplyTransactions(types.NewLayerID(2), []*types.Transaction{})
 	assert.NoError(t, err)
 
-	_, err = processor.ApplyTransactions(3, []*types.Transaction{})
+	_, err = processor.ApplyTransactions(types.NewLayerID(3), []*types.Transaction{})
 	assert.NoError(t, err)
 
-	_, err = processor.GetLayerStateRoot(3)
+	_, err = processor.GetLayerStateRoot(types.NewLayerID(3))
 	assert.NoError(t, err)
 
 }

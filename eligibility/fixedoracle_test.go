@@ -2,11 +2,13 @@ package eligibility
 
 import (
 	"context"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 const numOfClients = 100
@@ -29,21 +31,21 @@ func genStr() string {
 }
 
 func TestFixedRolacle_Eligible(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	for i := 0; i < numOfClients-1; i++ {
 		oracle.Register(true, genStr())
 	}
 	v := genStr()
 	oracle.Register(true, v)
 
-	res, _ := oracle.eligible(context.TODO(), 1, 1, 10, types.NodeID{Key: v}, nil)
-	res2, _ := oracle.eligible(context.TODO(), 1, 1, 10, types.NodeID{Key: v}, nil)
+	res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, types.NodeID{Key: v}, nil)
+	res2, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, types.NodeID{Key: v}, nil)
 	assert.True(t, res == res2)
 }
 
 func TestFixedRolacle_Eligible2(t *testing.T) {
 	pubs := make([]string, 0, numOfClients)
-	oracle := New()
+	oracle := New(logtest.New(t))
 	for i := 0; i < numOfClients; i++ {
 		s := genStr()
 		pubs = append(pubs, s)
@@ -52,7 +54,7 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 
 	count := 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), 1, 1, 10, types.NodeID{Key: p}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 10, types.NodeID{Key: p}, nil)
 		if res {
 			count++
 		}
@@ -62,7 +64,7 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 
 	count = 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), 1, 1, 20, types.NodeID{Key: p}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, 20, types.NodeID{Key: p}, nil)
 		if res {
 			count++
 		}
@@ -72,7 +74,7 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 }
 
 func TestFixedRolacle_Range(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	pubs := make([]string, 0, numOfClients)
 	for i := 0; i < numOfClients; i++ {
 		s := genStr()
@@ -82,7 +84,7 @@ func TestFixedRolacle_Range(t *testing.T) {
 
 	count := 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), 1, 1, numOfClients, types.NodeID{Key: p}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, numOfClients, types.NodeID{Key: p}, nil)
 		if res {
 			count++
 		}
@@ -93,7 +95,7 @@ func TestFixedRolacle_Range(t *testing.T) {
 
 	count = 0
 	for _, p := range pubs {
-		res, _ := oracle.eligible(context.TODO(), 2, 1, 0, types.NodeID{Key: p}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(2), 1, 0, types.NodeID{Key: p}, nil)
 		if res {
 			count++
 		}
@@ -104,7 +106,7 @@ func TestFixedRolacle_Range(t *testing.T) {
 }
 
 func TestFixedRolacle_Eligible3(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	for i := 0; i < numOfClients/3; i++ {
 		s := genStr()
 		oracle.Register(true, s)
@@ -116,13 +118,13 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 	}
 
 	exp := numOfClients / 2
-	ok, err := oracle.eligible(context.TODO(), 1, 1, exp, types.NodeID{Key: ""}, nil)
+	ok, err := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, types.NodeID{Key: ""}, nil)
 	require.NoError(t, err)
 	require.False(t, ok)
 
 	hc := 0
 	for k := range oracle.honest {
-		res, _ := oracle.eligible(context.TODO(), 1, 1, exp, types.NodeID{Key: k}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, types.NodeID{Key: k}, nil)
 		if res {
 			hc++
 		}
@@ -130,7 +132,7 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 
 	dc := 0
 	for k := range oracle.faulty {
-		res, _ := oracle.eligible(context.TODO(), 1, 1, exp, types.NodeID{Key: k}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.NewLayerID(1), 1, exp, types.NodeID{Key: k}, nil)
 		if res {
 			dc++
 		}
@@ -141,7 +143,7 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 }
 
 func TestGenerateElibility(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	ids := []string{}
 	for i := 0; i < 30; i++ {
 		s := genStr()
@@ -158,7 +160,7 @@ func TestGenerateElibility(t *testing.T) {
 }
 
 func TestFixedRolacle_Eligible4(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	var ids []string
 	for i := 0; i < 33; i++ {
 		s := genStr()
@@ -169,13 +171,13 @@ func TestFixedRolacle_Eligible4(t *testing.T) {
 	// when requesting a bigger committee size everyone should be eligible
 
 	for _, s := range ids {
-		res, _ := oracle.eligible(context.TODO(), 0, 1, numOfClients, types.NodeID{Key: s}, nil)
+		res, _ := oracle.eligible(context.TODO(), types.LayerID{}, 1, numOfClients, types.NodeID{Key: s}, nil)
 		assert.True(t, res)
 	}
 }
 
 func TestFixedRolacle_Export(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	var ids []string
 	for i := 0; i < 35; i++ {
 		s := genStr()

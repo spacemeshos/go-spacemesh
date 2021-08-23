@@ -2,7 +2,7 @@ package mesh
 
 import (
 	"bytes"
-	"fmt"
+	"context"
 	"math"
 	"math/big"
 	"os"
@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -30,13 +31,14 @@ func teardown() {
 	_ = os.RemoveAll(Path)
 }
 
-func getMeshDB() *DB {
-	return NewMemMeshDB(log.NewDefault("mdb"))
+func getMeshDB(tb testing.TB) *DB {
+	tb.Helper()
+	return NewMemMeshDB(logtest.New(tb))
 }
 
-func TestNewMeshDB(t *testing.T) {
-	mdb := getMeshDB()
-	bl := types.NewExistingBlock(1, []byte(rand.String(8)), nil)
+func TestMeshDB_New(t *testing.T) {
+	mdb := getMeshDB(t)
+	bl := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
 	err := mdb.AddBlock(bl)
 	assert.NoError(t, err)
 	block, err := mdb.GetBlock(bl.ID())
@@ -45,23 +47,23 @@ func TestNewMeshDB(t *testing.T) {
 }
 
 func TestMeshDB_AddBlock(t *testing.T) {
-
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	defer mdb.Close()
 	coinbase := types.HexToAddress("aaaa")
 
-	block1 := types.NewExistingBlock(1, []byte("data1"), nil)
+	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data1"), nil)
 
 	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
 
 	poetRef := []byte{0xba, 0x05}
-	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, 5, 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPST{
-		NipstChallenge: &types.Hash32{},
-		PostProof: &types.PostProof{
-			Challenge:    poetRef,
-			MerkleRoot:   []byte(nil),
-			ProofNodes:   [][]byte(nil),
-			ProvenLeaves: [][]byte(nil),
+	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, types.NewLayerID(5), 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPost{
+		Challenge: &types.Hash32{},
+		Post: &types.Post{
+			Nonce:   0,
+			Indices: []byte(nil),
+		},
+		PostMetadata: &types.PostMetadata{
+			Challenge: poetRef,
 		},
 	})
 	var atxs []types.ATXID
@@ -73,13 +75,13 @@ func TestMeshDB_AddBlock(t *testing.T) {
 	rBlock1, err := mdb.GetBlock(block1.ID())
 	assert.NoError(t, err)
 
-	assert.True(t, len(rBlock1.TxIDs) == len(block1.TxIDs), "block content was wrong")
-	assert.True(t, len(*rBlock1.ActiveSet) == len(*block1.ActiveSet), "block content was wrong")
-	// assert.True(t, bytes.Compare(rBlock2.Data, []byte("data2")) == 0, "block content was wrong")
+	assert.Equal(t, block1.ID(), rBlock1.ID())
+	assert.Equal(t, block1.MinerID(), rBlock1.MinerID())
+	assert.Equal(t, len(rBlock1.TxIDs), len(block1.TxIDs), "block content was wrong")
+	assert.Equal(t, len(*rBlock1.ActiveSet), len(*block1.ActiveSet), "block content was wrong")
 }
 
 func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
-	rand.Seed(time.Now().UnixNano())
 	p := rand.Perm(blocksInLayer)
 	indexes := make([]int, 0, patternSize)
 	for _, r := range p[:patternSize] {
@@ -98,7 +100,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 	}
 	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(0, []byte(rand.String(8)), nil)
+		bl := types.NewExistingBlock(types.NewLayerID(0), []byte(rand.String(8)), nil)
 		voted := make(map[types.BlockID]struct{})
 		layerBlocks = append(layerBlocks, bl.ID())
 		for idx, pat := range patterns {
@@ -121,7 +123,7 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 }
 
 func TestForEachInView_Persistent(t *testing.T) {
-	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.NewDefault("TestForEachInView"))
+	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, logtest.New(t))
 	require.NoError(t, err)
 	defer mdb.Close()
 	defer teardown()
@@ -129,7 +131,7 @@ func TestForEachInView_Persistent(t *testing.T) {
 }
 
 func TestForEachInView_InMem(t *testing.T) {
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	testForeachInView(mdb, t)
 }
 
@@ -144,7 +146,7 @@ func testForeachInView(mdb *DB, t *testing.T) {
 	}*/
 
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, logtest.New(t))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 			err := mdb.AddBlock(b)
@@ -154,7 +156,6 @@ func testForeachInView(mdb *DB, t *testing.T) {
 	}
 	mp := map[types.BlockID]struct{}{}
 	foo := func(nb *types.Block) (bool, error) {
-		fmt.Println("process block", "layer", nb.ID(), nb.LayerIndex)
 		mp[nb.ID()] = struct{}{}
 		return false, nil
 	}
@@ -162,7 +163,7 @@ func testForeachInView(mdb *DB, t *testing.T) {
 	for _, b := range l.Blocks() {
 		ids[b.ID()] = struct{}{}
 	}
-	err := mdb.ForBlockInView(ids, 0, foo)
+	err := mdb.ForBlockInView(ids, types.NewLayerID(0), foo)
 	assert.NoError(t, err)
 	for _, bl := range blocks {
 		_, found := mp[bl.ID()]
@@ -171,14 +172,14 @@ func testForeachInView(mdb *DB, t *testing.T) {
 }
 
 func TestForEachInView_InMem_WithStop(t *testing.T) {
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
 	gen := l.Blocks()[0]
 	blocks[gen.ID()] = gen
 
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, logtest.New(t))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 			err := mdb.AddBlock(b)
@@ -189,7 +190,6 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 	mp := map[types.BlockID]struct{}{}
 	i := 0
 	foo := func(nb *types.Block) (bool, error) {
-		fmt.Println("process block", "layer", nb.ID(), nb.LayerIndex)
 		mp[nb.ID()] = struct{}{}
 		i++
 		return i == 5, nil
@@ -198,18 +198,18 @@ func TestForEachInView_InMem_WithStop(t *testing.T) {
 	for _, b := range l.Blocks() {
 		ids[b.ID()] = struct{}{}
 	}
-	err := mdb.ForBlockInView(ids, 0, foo)
+	err := mdb.ForBlockInView(ids, types.NewLayerID(0), foo)
 	assert.NoError(t, err)
 	assert.Equal(t, 5, i)
 }
 
 func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	blocks := make(map[types.BlockID]*types.Block)
 	l := GenesisLayer()
 
 	for i := 0; i < 4; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 2, 2, log.NewDefault("msh"))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 2, 2, logtest.New(t))
 		for _, b := range lyr.Blocks() {
 			blocks[b.ID()] = b
 			err := mdb.AddBlock(b)
@@ -220,7 +220,6 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 	mp := map[types.BlockID]struct{}{}
 	i := 0
 	foo := func(nb *types.Block) (bool, error) {
-		fmt.Println("process block", "layer", nb.ID(), nb.LayerIndex)
 		mp[nb.ID()] = struct{}{}
 		i++
 		return false, nil
@@ -230,7 +229,7 @@ func TestForEachInView_InMem_WithLimitedLayer(t *testing.T) {
 		ids[b.ID()] = struct{}{}
 	}
 	// traverse until (and including) layer 2
-	err := mdb.ForBlockInView(ids, 2, foo)
+	err := mdb.ForBlockInView(ids, types.NewLayerID(2), foo)
 	assert.NoError(t, err)
 	assert.Equal(t, 9, i)
 }
@@ -240,7 +239,7 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 
 	r := require.New(b)
 
-	mdb, err := NewPersistentMeshDB(path.Join(Path, "mesh_db"), 5, log.NewDefault("meshDb"))
+	mdb, err := NewPersistentMeshDB(path.Join(Path, "mesh_db"), 5, logtest.New(b))
 	require.NoError(b, err)
 	defer mdb.Close()
 	defer teardown()
@@ -254,14 +253,14 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 	start := time.Now()
 	lStart := time.Now()
 	for i := 0; i < 10*batchSize; i++ {
-		lyr := createLayerWithRandVoting(l.Index()+1, []*types.Layer{l}, 200, 20, log.NewDefault("msh").WithOptions(log.Nop))
+		lyr := createLayerWithRandVoting(l.Index().Add(1), []*types.Layer{l}, 200, 20, logtest.New(b))
 		for _, b := range lyr.Blocks() {
 			err := mdb.AddBlock(b)
 			r.NoError(err)
 		}
 		l = lyr
 		if i%batchSize == batchSize-1 {
-			fmt.Printf("layers %3d-%3d took %12v\t", i-(batchSize-1), i, time.Since(lStart))
+			b.Logf("layers %3d-%3d took %12v\t", i-(batchSize-1), i, time.Since(lStart))
 			lStart = time.Now()
 			for i := 0; i < 100; i++ {
 				for _, b := range lyr.Blocks() {
@@ -270,11 +269,11 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 					r.NotNil(block)
 				}
 			}
-			fmt.Printf("reading last layer 100 times took %v\n", time.Since(lStart))
+			b.Logf("reading last layer 100 times took %v\n", time.Since(lStart))
 			lStart = time.Now()
 		}
 	}
-	fmt.Printf("\n>>> Total time: %v\n\n", time.Since(start))
+	b.Logf("\n>>> Total time: %v\n\n", time.Since(start))
 }
 
 const (
@@ -317,12 +316,12 @@ func newSignerAndAddress(r *require.Assertions, seedStr string) (*signing.EdSign
 func TestMeshDB_GetStateProjection(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("DB.GetStateProjection"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	signer, origin := newSignerAndAddress(r, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 0, 10),
 		newTx(r, signer, 1, 20),
-	}, 1)
+	}, types.NewLayerID(1))
 	r.NoError(err)
 
 	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
@@ -334,12 +333,12 @@ func TestMeshDB_GetStateProjection(t *testing.T) {
 func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	signer, origin := newSignerAndAddress(r, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 1, 10),
 		newTx(r, signer, 2, 20),
-	}, 1)
+	}, types.NewLayerID(1))
 	r.NoError(err)
 
 	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
@@ -351,12 +350,12 @@ func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	signer, origin := newSignerAndAddress(r, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newTx(r, signer, 0, 10),
 		newTx(r, signer, 1, 95),
-	}, 1)
+	}, types.NewLayerID(1))
 	r.NoError(err)
 
 	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
@@ -368,7 +367,7 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 
 	nonce, balance, err := mdb.GetProjection(address(), initialNonce, initialBalance)
 	r.NoError(err)
@@ -379,7 +378,7 @@ func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
 func TestMeshDB_UnappliedTxs(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 
 	signer1, origin1 := newSignerAndAddress(r, "thc")
 	signer2, origin2 := newSignerAndAddress(r, "cbd")
@@ -388,7 +387,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 		newTx(r, signer1, 421, 241),
 		newTx(r, signer2, 0, 100),
 		newTx(r, signer2, 1, 101),
-	}, 1)
+	}, types.NewLayerID(1))
 	r.NoError(err)
 
 	txns1 := getTxns(r, mdb, origin1)
@@ -425,30 +424,32 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 func TestMeshDB_testGetTransactions(t *testing.T) {
 	r := require.New(t)
 
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 
 	signer1, addr1 := newSignerAndAddress(r, "thc")
 	signer2, _ := newSignerAndAddress(r, "cbd")
 	_, addr3 := newSignerAndAddress(r, "cbe")
-	err := mdb.writeTransactions(1, []*types.Transaction{
+	blk := &types.Block{}
+	blk.LayerIndex = types.NewLayerID(1)
+	err := mdb.writeTransactions(blk,
 		newTx(r, signer1, 420, 240),
 		newTx(r, signer1, 421, 241),
 		newTxWithDest(r, signer2, addr1, 0, 100),
 		newTxWithDest(r, signer2, addr1, 1, 101),
-	})
+	)
 	r.NoError(err)
 
-	txs := mdb.GetTransactionsByOrigin(1, addr1)
+	txs := mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr1)
 	r.Equal(2, len(txs))
 
-	txs = mdb.GetTransactionsByDestination(1, addr1)
+	txs = mdb.GetTransactionsByDestination(types.NewLayerID(1), addr1)
 	r.Equal(2, len(txs))
 
 	// test negative case
-	txs = mdb.GetTransactionsByOrigin(1, addr3)
+	txs = mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr3)
 	r.Equal(0, len(txs))
 
-	txs = mdb.GetTransactionsByDestination(1, addr3)
+	txs = mdb.GetTransactionsByDestination(types.NewLayerID(1), addr3)
 	r.Equal(0, len(txs))
 }
 
@@ -481,7 +482,7 @@ func getTxns(r *require.Assertions, mdb *DB, origin types.Address) []TinyTx {
 
 func TestMeshDB_testGetRewards(t *testing.T) {
 	r := require.New(t)
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
@@ -531,28 +532,28 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500))
+	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, big.NewInt(15000), big.NewInt(14500))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewards(addr2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(3), TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr4)
@@ -562,7 +563,7 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 
 func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 	r := require.New(t)
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
@@ -616,28 +617,28 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500))
+	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, big.NewInt(15000), big.NewInt(14500))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(3), TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
@@ -647,7 +648,7 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 
 func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 	r := require.New(t)
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
@@ -701,34 +702,34 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(3, test3Map, big.NewInt(15000), big.NewInt(14500))
+	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, big.NewInt(15000), big.NewInt(14500))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 3, TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(3), TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher3)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3, Coinbase: addr2},
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3, Coinbase: addr2},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
@@ -738,7 +739,7 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 
 func TestMeshDB_testGetRewardsBySmesherMultipleSmeshers(t *testing.T) {
 	r := require.New(t)
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
@@ -779,44 +780,44 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshers(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher3)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
 	}, rewards)
 }
 
 func TestMeshDB_testGetRewardsBySmesherMultipleSmeshersAndLayers(t *testing.T) {
 	r := require.New(t)
-	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
+	mdb := NewMemMeshDB(logtest.New(t))
 	signer1, addr1 := newSignerAndAddress(r, "123")
 	signer2, addr2 := newSignerAndAddress(r, "456")
 	signer3, addr3 := newSignerAndAddress(r, "789")
@@ -870,46 +871,157 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshersAndLayers(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(1, test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(2, test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr2},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher3)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3, Coinbase: addr3},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher3, Coinbase: addr3},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher3, Coinbase: addr3},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher4)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher4, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewards(addr1)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
-		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
-		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher1, Coinbase: addr1},
+		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher4, Coinbase: addr1},
 	}, rewards)
+}
+
+func TestMeshDB_RecordCoinFlip(t *testing.T) {
+	r := require.New(t)
+	layerID := types.NewLayerID(123)
+
+	testCoinflip := func(mdb *DB) {
+		_, exists := mdb.GetCoinflip(context.TODO(), layerID)
+		r.False(exists, "coin value should not exist before being inserted")
+		mdb.RecordCoinflip(context.TODO(), layerID, true)
+		coin, exists := mdb.GetCoinflip(context.TODO(), layerID)
+		r.True(exists, "expected coin value to exist")
+		r.True(coin, "expected true coin value")
+		mdb.RecordCoinflip(context.TODO(), layerID, false)
+		coin, exists = mdb.GetCoinflip(context.TODO(), layerID)
+		r.True(exists, "expected coin value to exist")
+		r.False(coin, "expected false coin value on overwrite")
+	}
+
+	mdb1 := NewMemMeshDB(logtest.New(t))
+	defer mdb1.Close()
+	testCoinflip(mdb1)
+	mdb2, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, logtest.New(t))
+	require.NoError(t, err)
+	defer mdb2.Close()
+	defer teardown()
+	testCoinflip(mdb2)
+}
+
+func TestMeshDB_GetMeshTransactions(t *testing.T) {
+	r := require.New(t)
+
+	mdb := NewMemMeshDB(logtest.New(t))
+
+	signer1, _ := newSignerAndAddress(r, "thc")
+
+	blk := &types.Block{}
+	blk.LayerIndex = types.NewLayerID(1)
+	var (
+		nonce  uint64
+		ids    []types.TransactionID
+		layers = 10
+	)
+	for i := 1; i <= layers; i++ {
+		nonce++
+		blk.LayerIndex = types.NewLayerID(uint32(i))
+		tx := newTx(r, signer1, nonce, 240)
+		ids = append(ids, tx.ID())
+		r.NoError(mdb.writeTransactions(blk, tx))
+	}
+	txs, missing := mdb.GetMeshTransactions(ids)
+	r.Len(missing, 0)
+	for i := 1; i < layers; i++ {
+		r.Equal(ids[i-1], txs[i-1].ID())
+		r.EqualValues(types.NewLayerID(uint32(i)), txs[i-1].LayerID)
+	}
+}
+
+func TestMesh_FindOnce(t *testing.T) {
+	mdb := NewMemMeshDB(logtest.New(t))
+	defer mdb.Close()
+
+	r := require.New(t)
+	signer1, addr1 := newSignerAndAddress(r, "thc")
+	signer2, _ := newSignerAndAddress(r, "cbd")
+
+	blk := &types.Block{}
+	layers := []uint32{1, 10, 100}
+	nonce := uint64(0)
+	for _, layer := range layers {
+		blk.LayerIndex = types.NewLayerID(layer)
+		nonce++
+		err := mdb.writeTransactions(blk,
+			newTx(r, signer1, nonce, 100),
+			newTxWithDest(r, signer2, addr1, nonce, 100),
+		)
+		r.NoError(err)
+	}
+	t.Run("ByDestination", func(t *testing.T) {
+		for _, layer := range layers {
+			assert.Len(t, mdb.GetTransactionsByDestination(types.NewLayerID(layer), addr1), 1)
+		}
+	})
+
+	t.Run("ByOrigin", func(t *testing.T) {
+		for _, layer := range layers {
+			assert.Len(t, mdb.GetTransactionsByOrigin(types.NewLayerID(layer), addr1), 1)
+		}
+	})
+}
+
+func BenchmarkGetBlockHeader(b *testing.B) {
+	// blocks is set to be twice as large as cache to avoid hitting the cache
+	cache := layerSize
+	blocks := make([]*types.Block, cache*2)
+	db, err := NewPersistentMeshDB(b.TempDir(),
+		1, /*size of the cache is multiplied by a constant (layerSize). for the benchmark it needs to be no more than layerSize*/
+		logtest.New(b))
+	require.NoError(b, err)
+	for i := range blocks {
+		blocks[i] = types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
+		require.NoError(b, db.AddBlock(blocks[i]))
+	}
+
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		block := blocks[i%len(blocks)]
+		_, err = db.GetBlock(block.ID())
+		require.NoError(b, err)
+	}
 }
