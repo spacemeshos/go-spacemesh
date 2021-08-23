@@ -1055,34 +1055,6 @@ func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.Layer
 	return validBlks, nil
 }
 
-// Persist persists an item v into the database using key as its id
-func (m *DB) Persist(key []byte, v interface{}) error {
-	buf, err := types.InterfaceToBytes(v)
-	if err != nil {
-		panic(err)
-	}
-	return m.general.Put(key, buf)
-}
-
-// Retrieve retrieves item by key into v
-func (m *DB) Retrieve(key []byte, v interface{}) (interface{}, error) {
-	val, err := m.general.Get(key)
-	if err != nil {
-		m.Warning("failed retrieving object from db ", err)
-		return nil, err
-	}
-
-	if val == nil {
-		return nil, fmt.Errorf("no such value in database db ")
-	}
-
-	if err := types.BytesToInterface(val, v); err != nil {
-		return nil, fmt.Errorf("failed decoding object from db %v", err)
-	}
-
-	return v, nil
-}
-
 func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 	m.Info("warming up cache with layers %v to %v", from, to)
 	for i := from; i.Before(to); i = i.Add(1) {

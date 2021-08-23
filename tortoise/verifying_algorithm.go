@@ -2,11 +2,13 @@ package tortoise
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
@@ -22,7 +24,8 @@ type ThreadSafeVerifyingTortoise struct {
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
 type Config struct {
 	LayerSize       int
-	Database        blockDataProvider
+	Database        database.Database
+	MeshDatabase    blockDataProvider
 	ATXDB           atxDataProvider
 	Clock           layerClock
 	Hdist           uint32 // hare lookback distance: the distance over which we use the input vector/hare results
@@ -32,82 +35,43 @@ type Config struct {
 	LocalThreshold  uint8  // threshold that determines whether a node votes based on local or global opinion (0-100)
 	WindowSize      uint32 // tortoise sliding window: how many layers we store data for
 	Log             log.Log
-	Recovered       bool
 	RerunInterval   time.Duration // how often to rerun from genesis
 }
 
-// NewVerifyingTortoise creates a new verifying tortoise wrapper
 func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingTortoise {
-	if cfg.Recovered {
-		return recoveredVerifyingTortoise(cfg.Database, cfg.ATXDB, cfg.Clock, cfg.Log)
+	if cfg.Hdist < cfg.Zdist {
+		cfg.Log.With().Panic("hdist must be >= zdist", log.Uint32("hdist", cfg.Hdist), log.Uint32("zdist", cfg.Zdist))
 	}
-	return verifyingTortoise(
-		ctx,
-		cfg.LayerSize,
-		cfg.Database,
-		cfg.ATXDB,
-		cfg.Clock,
-		cfg.Hdist,
-		cfg.Zdist,
-		cfg.ConfidenceParam,
-		cfg.WindowSize,
-		cfg.GlobalThreshold,
-		cfg.LocalThreshold,
-		cfg.RerunInterval,
-		cfg.Log)
-}
-
-// verifyingTortoise creates a new verifying tortoise wrapper
-func verifyingTortoise(
-	ctx context.Context,
-	layerSize int,
-	mdb blockDataProvider,
-	atxdb atxDataProvider,
-	clock layerClock,
-	hdist,
-	zdist,
-	confidenceParam,
-	windowSize uint32,
-	globalThreshold,
-	localThreshold uint8,
-	rerunInterval time.Duration,
-	logger log.Log,
-) *ThreadSafeVerifyingTortoise {
-	if hdist < zdist {
-		logger.With().Panic("hdist must be >= zdist", log.Uint32("hdist", hdist), log.Uint32("zdist", zdist))
-	}
-	if globalThreshold > 100 || localThreshold > 100 {
-		logger.With().Panic("global and local threshold values must be in the interval [0, 100]")
+	if cfg.GlobalThreshold > 100 || cfg.LocalThreshold > 100 {
+		cfg.Log.With().Panic("global and local threshold values must be in the interval [0, 100]")
 	}
 	alg := &ThreadSafeVerifyingTortoise{
-		trtl: newTurtle(mdb, atxdb, clock, hdist, zdist, confidenceParam, windowSize, layerSize, globalThreshold, localThreshold, rerunInterval),
+		trtl: newTurtle(
+			cfg.Log.WithFields(log.String("tortoise_rerun", "false")),
+			cfg.Database,
+			cfg.MeshDatabase,
+			cfg.ATXDB,
+			cfg.Clock,
+			cfg.Hdist,
+			cfg.Zdist,
+			cfg.ConfidenceParam,
+			cfg.WindowSize,
+			cfg.LayerSize,
+			cfg.GlobalThreshold,
+			cfg.LocalThreshold,
+			cfg.RerunInterval,
+		),
+		logger:    cfg.Log,
+		lastRerun: time.Now(),
 	}
-	alg.logger = logger
-	alg.lastRerun = time.Now()
-	alg.trtl.SetLogger(logger.WithFields(log.String("tortoise_rerun", "false")))
-	alg.trtl.init(ctx, mesh.GenesisLayer())
+	if err := alg.trtl.Recover(); err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			alg.trtl.init(ctx, mesh.GenesisLayer())
+		} else {
+			cfg.Log.With().Panic("can't recover turtle state", log.Err(err))
+		}
+	}
 	return alg
-}
-
-// NewRecoveredVerifyingTortoise recovers a previously persisted tortoise copy from mesh.DB
-func recoveredVerifyingTortoise(mdb blockDataProvider, atxdb atxDataProvider, clock layerClock, logger log.Log) *ThreadSafeVerifyingTortoise {
-	tmp, err := RecoverVerifyingTortoise(mdb)
-	if err != nil {
-		logger.With().Panic("could not recover tortoise state from disk", log.Err(err))
-	}
-
-	trtl, ok := tmp.(*turtle)
-	if !ok {
-		logger.Panic("type error reading recovered tortoise state")
-	}
-
-	logger.Info("recovered tortoise from disk")
-	trtl.bdp = mdb
-	trtl.atxdb = atxdb
-	trtl.clock = clock
-	trtl.logger = logger
-
-	return &ThreadSafeVerifyingTortoise{trtl: trtl, lastRerun: time.Now(), logger: logger}
 }
 
 // LatestComplete returns the latest verified layer
@@ -219,7 +183,7 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (
 
 	// start from scratch with a new tortoise instance for each rerun
 	trtlForRerun := trtl.trtl.cloneTurtleParams()
-	trtlForRerun.SetLogger(logger.WithFields(log.String("tortoise_rerun", "true")))
+	trtlForRerun.log = logger.WithFields(log.String("tortoise_rerun", "true"))
 	trtlForRerun.init(ctx, mesh.GenesisLayer())
 	bdp := bdpWrapper{blockDataProvider: trtlForRerun.bdp}
 	trtlForRerun.bdp = &bdp

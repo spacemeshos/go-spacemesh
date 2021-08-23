@@ -31,9 +31,6 @@ var (
 	constPROCESSED = []byte("processed")
 )
 
-// TORTOISE key for tortoise persistence in database
-var TORTOISE = []byte("tortoise")
-
 // VERIFIED refers to layers we pushed into the state
 var VERIFIED = []byte("verified")
 
