@@ -77,25 +77,32 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 		tokenChan <- struct{}{}
 	}
 
-	handleMsg := func(ctx context.Context, data GossipMessage) {
+	waitForGossipToken := func(ctx context.Context) {
 		// get a token to create a new channel
-		l.WithContext(ctx).With().Info("waiting for available slot for gossip handler",
+		l.WithContext(ctx).With().Debug("waiting for available slot for gossip handler",
 			log.Int("available_slots", len(tokenChan)),
 			log.Int("total_slots", cap(tokenChan)))
+
 		if len(tokenChan) == 0 {
 			l.WithContext(ctx).Error("no available slots for gossip handler, blocking")
 		}
+
 		<-tokenChan
 
-		l.WithContext(ctx).With().Info("got gossip message, forwarding to data handler",
+		l.WithContext(ctx).With().Debug("got gossip token",
 			log.String("protocol", channel),
 			log.Int("queue_length", len(gossipChannel)))
+	}
+
+	handleMsg := func(ctx context.Context, data GossipMessage) {
 		if !l.shouldListenToGossip() {
 			// not accepting data
 			l.WithContext(ctx).Info("not currently listening to gossip, dropping message")
+			tokenChan <- struct{}{}
 			return
 		}
 		go func() {
+			l.WithContext(ctx).Info("passing data to data handler")
 			// TODO: these handlers should have an API that includes a cancel method. they should time out eventually.
 			dataHandler(ctx, data, l.fetcher)
 			// replace token when done
@@ -116,6 +123,8 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 				// not accepting data
 				continue
 			}
+			// block until there's a token available
+			waitForGossipToken(ctx)
 			handleMsg(log.WithNewRequestID(ctx), data)
 		}
 	}

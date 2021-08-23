@@ -15,8 +15,6 @@ import (
 )
 
 type syncMock struct {
-	Synced           bool
-	listenToGossipFn func() bool
 }
 
 func (sm *syncMock) FetchBlock(context.Context, types.BlockID) error {
@@ -28,10 +26,6 @@ func (sm *syncMock) FetchAtx(context.Context, types.ATXID) error {
 }
 
 func (sm *syncMock) GetPoetProof(context.Context, types.Hash32) error {
-	return nil
-}
-
-func (sm *syncMock) GetBlock(types.BlockID) error {
 	return nil
 }
 
@@ -47,29 +41,10 @@ func (sm *syncMock) GetAtxs(context.Context, []types.ATXID) error {
 	return nil
 }
 
-func (*syncMock) FetchAtxReferences(context.Context, *types.ActivationTx) error {
-	return nil
-}
-
-func (*syncMock) FetchPoetProof(context.Context, []byte) error {
-	panic("implement me")
-}
-
-func (sm *syncMock) ListenToGossip() bool {
-	if sm.listenToGossipFn != nil {
-		return sm.listenToGossipFn()
-	}
-	return true
-}
-
-func (*syncMock) IsSynced(context.Context) bool {
-	return true
-}
-
 func Test_AddListener(t *testing.T) {
 	net := NewSimulator()
 	n1 := net.NewNode()
-	l := NewListener(n1, &syncMock{Synced: true}, func() bool { return true }, config.DefaultConfig(), logtest.New(t).WithName(n1.Info.ID.String()))
+	l := NewListener(n1, &syncMock{}, func() bool { return true }, config.DefaultConfig(), logtest.New(t).WithName(n1.Info.ID.String()))
 	defer l.Stop()
 
 	var channelCount, secondChannel int32
@@ -100,7 +75,7 @@ func Test_AddListener(t *testing.T) {
 func Test_AddListener_notSynced(t *testing.T) {
 	net := NewSimulator()
 	n1 := net.NewNode()
-	l := NewListener(n1, &syncMock{Synced: false}, func() bool { return true }, config.DefaultConfig(), logtest.New(t).WithName(n1.Info.ID.String()))
+	l := NewListener(n1, &syncMock{}, func() bool { return true }, config.DefaultConfig(), logtest.New(t).WithName(n1.Info.ID.String()))
 	defer l.Stop()
 
 	var channelCount, secondChannel int32
@@ -127,20 +102,17 @@ func TestListenerConcurrency(t *testing.T) {
 	net := NewSimulator()
 	n1 := net.NewNode()
 	var listenCount int32
+	conf := config.DefaultTestConfig()
 	listenFn := func() bool {
 		atomic.AddInt32(&listenCount, 1)
 		return true
 	}
-	conf := config.DefaultTestConfig()
-	l := NewListener(n1, &syncMock{true, listenFn}, func() bool { return true }, conf, logtest.New(t).WithName(n1.Info.ID.String()))
+	l := NewListener(n1, &syncMock{}, listenFn, conf, logtest.New(t).WithName(n1.Info.ID.String()))
 	defer l.Stop()
-
-	var channelCount int32
 
 	releaseChan := make(chan struct{})
 	handlerFn := func(ctx context.Context, data GossipMessage, syncer Fetcher) {
 		<-releaseChan
-		atomic.AddInt32(&channelCount, 1)
 	}
 
 	l.AddListener(context.TODO(), "channel1", priorityq.Mid, handlerFn)
@@ -158,15 +130,19 @@ func TestListenerConcurrency(t *testing.T) {
 			return atomic.LoadInt32(&listenCount) == expectedVal
 		}
 	}
-	assert.Eventually(t, checkVal(2), time.Second, 10*time.Millisecond)
+
+	// two processed completely (two checks each), one processed and blocking
+	assert.Eventually(t, checkVal(5), time.Second, 10*time.Millisecond)
 
 	// release one handler
 	releaseChan <- struct{}{}
-	assert.Eventually(t, checkVal(3), time.Second, 10*time.Millisecond)
+	// unblocked one checks again, another checks and is blocked
+	assert.Eventually(t, checkVal(7), time.Second, 10*time.Millisecond)
 	releaseChan <- struct{}{}
-	assert.Eventually(t, checkVal(4), time.Second, 10*time.Millisecond)
+	// unblocked one checks again, no more blocking
+	assert.Eventually(t, checkVal(8), time.Second, 10*time.Millisecond)
 	releaseChan <- struct{}{}
-	assert.Eventually(t, checkVal(4), time.Second, 10*time.Millisecond)
+	assert.Eventually(t, checkVal(8), time.Second, 10*time.Millisecond)
 	releaseChan <- struct{}{}
-	assert.Eventually(t, checkVal(4), time.Second, 10*time.Millisecond)
+	assert.Eventually(t, checkVal(8), time.Second, 10*time.Millisecond)
 }
