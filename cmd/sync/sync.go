@@ -92,7 +92,6 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		log.String("storage_path", bucket),
 		log.Bool("download_from_remote_storage", remote),
 		log.Uint32("expected_layers", expectedLayers),
-		log.Int("request_timeout", app.Config.SyncRequestTimeout),
 		log.String("data_version", version),
 		log.Uint32("layers_per_epoch", app.Config.LayersPerEpoch),
 		log.Uint32("hdist", app.Config.Hdist),

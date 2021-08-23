@@ -148,7 +148,7 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 		workerLimiter:      make(chan struct{}, runtime.NumCPU()),
 	}
 	if err := p.tg.Go(p.readLoop); err != nil {
-		logger.WithContext(ctx).With().Error("error creating message server read loop", log.Err(err))
+		logger.WithContext(ctx).With().Panic("error creating message server read loop", log.Err(err))
 	}
 	return p
 }

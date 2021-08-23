@@ -21,6 +21,7 @@ const (
 	// defaultTCPInterface is the inet interface that P2P listens on by default
 	defaultTCPInterface = "0.0.0.0"
 	// max number of parallel gossip goroutines per channel (protocol)
+	// TODO: correctly parameterize this. see https://github.com/spacemeshos/go-spacemesh/issues/2708.
 	defaultMaxGossipRoutines = 50
 )
 
