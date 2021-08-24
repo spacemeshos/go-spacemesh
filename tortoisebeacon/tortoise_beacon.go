@@ -162,6 +162,7 @@ type TortoiseBeacon struct {
 	proposalChans   map[types.EpochID]chan *proposalMessageWithReceiptData
 }
 
+// SetSyncState updates sync state provider. Must be executed only once.
 func (tb *TortoiseBeacon) SetSyncState(sync SyncState) {
 	if tb.sync != nil {
 		tb.Log.Panic("sync state provider can be updated only once")
