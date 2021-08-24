@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -560,7 +559,7 @@ func TestShutdown(t *testing.T) {
 		t.Skip()
 	}
 
-	// make sure previous goroutines has stopped
+	// make sure previous goroutines have stopped
 	time.Sleep(3 * time.Second)
 	gCount := runtime.NumGoroutine()
 	net := service.NewSimulator()
@@ -575,7 +574,7 @@ func TestShutdown(t *testing.T) {
 
 	smApp.Config.SMESHING.Start = true
 	smApp.Config.SMESHING.CoinbaseAccount = "0x123"
-	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-test-post")
+	smApp.Config.SMESHING.Opts.DataDir = t.TempDir()
 	smApp.Config.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	smApp.Config.HARE.N = 5
@@ -634,10 +633,9 @@ func TestShutdown(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	gCount2 := runtime.NumGoroutine()
 
-	if gCount != gCount2 {
+	if !assert.Equal(t, gCount, gCount2) {
 		buf := make([]byte, 4096)
 		runtime.Stack(buf, true)
 		logtest.New(t).Error(string(buf))
 	}
-	require.Equal(t, gCount, gCount2)
 }

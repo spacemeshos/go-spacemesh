@@ -438,7 +438,7 @@ func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(ctx context.Context, coinbase types.Address, opts activation.PostSetupOpts) error {
+func (*SmeshingAPIMock) StartSmeshing(context.Context, activation.PostSetupOpts) error {
 	return nil
 }
 
