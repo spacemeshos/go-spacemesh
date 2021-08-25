@@ -307,7 +307,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 		if layerID.OrdinalInEpoch() < s.conf.TBCalculationLayers {
 			s.processTortoiseBeacons(ctx, layer)
-		} else {
+		} else if layerID.OrdinalInEpoch() == s.conf.TBCalculationLayers {
 			epoch := layerID.GetEpoch()
 			if err := s.fetcher.SetTortoiseBeacon(ctx, epoch, types.BytesToHash(s.mostUsedTB)); err != nil {
 				logger.With().Error("failed to write synced tortoise beacon into DB",
@@ -452,6 +452,8 @@ func (s *Syncer) processTortoiseBeacons(ctx context.Context, layer *types.Layer)
 	for _, b := range layer.Blocks() {
 		if _, ok := s.seenTB[b.MinerID().String()]; ok {
 			// TODO(nkryuchkov): invalid block, miner attempted to include beacon in two blocks within the same epoch
+			// TODO(nkryuchkov): handle this case
+			s.logger.Warning("miner attempted to include beacon in two blocks within the same epoch")
 		}
 
 		s.seenTB[b.MinerID().String()] = struct{}{}
