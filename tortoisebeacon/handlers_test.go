@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -100,11 +101,11 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				lastLayer:   types.NewLayerID(epoch),
 			}
 
-			sig, err := tb.getSignedProposal(epoch)
+			sig, err := tb.getSignedProposal(context.TODO(), epoch)
 			r.NoError(err)
 			tc.message.VRFSignature = sig
 
-			err = tb.handleProposalMessage(tc.message, time.Now())
+			err = tb.handleProposalMessage(context.TODO(), tc.message, time.Now())
 			r.NoError(err)
 
 			expectedProposals := proposals{
@@ -231,7 +232,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			r.NoError(err)
 			tc.message.Signature = sig
 
-			err = tb.handleFirstVotingMessage(tc.message)
+			err = tb.handleFirstVotingMessage(context.TODO(), tc.message)
 			r.NoError(err)
 
 			tb.consensusMu.RLock()
@@ -363,7 +364,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 			r.NoError(err)
 			tc.message.Signature = sig
 
-			err = tb.handleFollowingVotingMessage(tc.message)
+			err = tb.handleFollowingVotingMessage(context.TODO(), tc.message)
 			r.NoError(err)
 
 			r.EqualValues(tc.expected, tb.votesMargin)
