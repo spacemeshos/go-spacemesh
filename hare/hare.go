@@ -309,6 +309,10 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			layerID := out.ID()
 			coin := out.Coinflip()
 			logger := h.WithContext(ctx).WithFields(layerID)
+			if !h.broker.Synced(ctx, out.ID()) {
+				logger.With().Warning("consensus reported output for non synced layer", layerID)
+				continue
+			}
 
 			// collect coinflip, regardless of success
 			logger.With().Info("recording weak coinflip result for layer",
