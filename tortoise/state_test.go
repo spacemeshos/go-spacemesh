@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"path/filepath"
@@ -229,15 +228,18 @@ func TestRecoverData(t *testing.T) {
 
 func TestExperiment(t *testing.T) {
 	mdb, err := mesh.NewPersistentMeshDB("/tmp/data55/node/203/mesh", 1, logtest.New(t))
-	require.NoError(t, err)
-	db, err := database.NewLDBDatabase("/tmp/data55/node/203/turtle/", 0, 0, logtest.New(t))
-	require.NoError(t, err)
+	require.NoError(t, err) /*
+		db, err := database.NewLDBDatabase("/tmp/data55/node/203/turtle/", 0, 0, logtest.New(t))
+		require.NoError(t, err)
 
-	trtl := NewVerifyingTortoise(context.TODO(), Config{
-		Database: db, MeshDatabase: mdb, Hdist: 10, WindowSize: 100, Zdist: 5, ConfidenceParam: 5,
-		GlobalThreshold: 60,
-		LocalThreshold:  20,
-		Log:             logtest.New(t),
-	})
-	trtl.trtl.verifyLayers(context.TODO())
+		trtl := NewVerifyingTortoise(context.TODO(), Config{
+			Database: db, MeshDatabase: mdb, Hdist: 10, WindowSize: 100, Zdist: 5, ConfidenceParam: 5,
+			GlobalThreshold: 60,
+			LocalThreshold:  20,
+			Log:             logtest.New(t),
+		})
+		trtl.trtl.verifyLayers(context.TODO()) */
+
+	blocks, err := mdb.GetLayerInputVectorByID(types.NewLayerID(18))
+	fmt.Println(blocks, err)
 }
