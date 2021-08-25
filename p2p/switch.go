@@ -754,8 +754,8 @@ func (s *Switch) closeInitial() {
 	}
 }
 
-// askForMorePeers checks the number of peers required and tries to match this number. if there are enough peers it returns.
-// if it failed it issues a one second timeout and then sends a request to try again.
+// askForMorePeers checks the number of peers required and tries to match this number. if there are enough peers
+// it returns. if it failed it issues a one second timeout and then sends a request to try again.
 func (s *Switch) askForMorePeers(ctx context.Context) {
 	// check how much peers needed
 	s.outpeersMutex.RLock()
@@ -785,8 +785,9 @@ func (s *Switch) askForMorePeers(ctx context.Context) {
 	s.outpeersMutex.RLock()
 	numpeers = len(s.outpeers)
 	s.outpeersMutex.RUnlock()
+
 	// announce if initial number of peers achieved
-	// todo: better way then going in this every time ?
+	// todo: better way then going in this every time?
 	if numpeers >= s.config.SwarmConfig.RandomConnections {
 		s.initOnce.Do(func() {
 			s.logger.WithContext(ctx).With().Info("gossip connected to initial required neighbors",

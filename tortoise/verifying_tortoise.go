@@ -519,24 +519,25 @@ func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block) (uint
 
 	// check if the ATX was received on time
 	// TODO: add an exception for sync, when we expect everything to be received late
-	if atxTimestamp.Before(nextEpochStart) {
-		blockWeight := atxHeader.GetWeight()
-		logger.With().Debug("voting block atx was timely",
-			log.FieldNamed("next_epoch", atxEpoch+1),
-			log.Time("next_epoch_start", nextEpochStart),
-			log.Time("atx_timestamp", atxTimestamp),
-			votingBlock.ID(),
-			votingBlock.ATXID,
-			log.Uint64("block_weight", blockWeight))
-		return blockWeight, nil
-	}
-	logger.With().Warning("voting block atx was untimely, zeroing block vote weight",
+	//   see https://github.com/spacemeshos/go-spacemesh/issues/2540
+	//if atxTimestamp.Before(nextEpochStart) {
+	blockWeight := atxHeader.GetWeight()
+	logger.With().Debug("voting block atx was timely",
 		log.FieldNamed("next_epoch", atxEpoch+1),
 		log.Time("next_epoch_start", nextEpochStart),
 		log.Time("atx_timestamp", atxTimestamp),
 		votingBlock.ID(),
-		votingBlock.ATXID)
-	return 0, nil
+		votingBlock.ATXID,
+		log.Uint64("block_weight", blockWeight))
+	return blockWeight, nil
+	//}
+	//logger.With().Warning("voting block atx was untimely, zeroing block vote weight",
+	//	log.FieldNamed("next_epoch", atxEpoch+1),
+	//	log.Time("next_epoch_start", nextEpochStart),
+	//	log.Time("atx_timestamp", atxTimestamp),
+	//	votingBlock.ID(),
+	//	votingBlock.ATXID)
+	//return 0, nil
 }
 
 func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID, blockVotedOn types.BlockID) (uint64, error) {
@@ -716,7 +717,7 @@ func (t *turtle) scoreBlocks(ctx context.Context, blocks []*types.Block) {
 	for _, b := range blocks {
 		if t.determineBlockGoodness(ctx, b) {
 			// note: we have no way of warning if a block was previously marked as not good
-			logger.With().Info("marking block good", b.ID(), b.LayerIndex)
+			logger.With().Debug("marking block good", b.ID(), b.LayerIndex)
 			t.GoodBlocksIndex[b.ID()] = struct{}{}
 			numGood++
 		} else {

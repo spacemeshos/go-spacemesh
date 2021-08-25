@@ -669,7 +669,7 @@ func (app *App) initServices(ctx context.Context,
 		Depth:       app.Config.Hdist,
 		GoldenATXID: goldenATXID,
 	}
-	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, lg)
+	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, app.addLogger(BlockListenerLogger, lg))
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
@@ -1058,7 +1058,7 @@ func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 			return nil, fmt.Errorf("failed to write identity file: %w", err)
 		}
 
-		log.With().Warning("created new identity", edSgn.PublicKey())
+		log.With().Info("created new identity", edSgn.PublicKey())
 		return edSgn, nil
 	}
 
