@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"fmt"
 	"math/rand"
 	"path/filepath"
@@ -182,12 +183,13 @@ func BenchmarkStatePersist(b *testing.B) {
 }
 
 func TestRecoverData(t *testing.T) {
-	mdb, err := mesh.NewPersistentMeshDB("/tmp/data466/node/203/mesh", 1, logtest.New(t))
+	mdb, err := mesh.NewPersistentMeshDB("/tmp/data55/203/mesh", 1, logtest.New(t))
 	require.NoError(t, err)
-	db, err := database.NewLDBDatabase("/tmp/data466/node/203/turtle/", 0, 0, logtest.New(t))
+	db, err := database.NewLDBDatabase("/tmp/data55/203/turtle/", 0, 0, logtest.New(t))
 	require.NoError(t, err)
 	trtl := state{db: db}
 	require.NoError(t, trtl.Recover())
+
 	var layers []types.LayerID
 	var visited = map[types.LayerID]struct{}{}
 	cnt := 0
@@ -221,5 +223,21 @@ func TestRecoverData(t *testing.T) {
 	sort.Slice(layers, func(i, j int) bool {
 		return layers[i].Before(layers[j])
 	})
+	fmt.Println(layers)
 	fmt.Printf("opinion layers %v-%v. total %d. evict from %v. last evicted %v. verified %v\n", layers[0], layers[len(layers)-1], cnt, trtl.LastEvicted, trtl.Last, trtl.Verified)
+}
+
+func TestExperiment(t *testing.T) {
+	mdb, err := mesh.NewPersistentMeshDB("/tmp/data55/node/203/mesh", 1, logtest.New(t))
+	require.NoError(t, err)
+	db, err := database.NewLDBDatabase("/tmp/data55/node/203/turtle/", 0, 0, logtest.New(t))
+	require.NoError(t, err)
+
+	trtl := NewVerifyingTortoise(context.TODO(), Config{
+		Database: db, MeshDatabase: mdb, Hdist: 10, WindowSize: 100, Zdist: 5, ConfidenceParam: 5,
+		GlobalThreshold: 60,
+		LocalThreshold:  20,
+		Log:             logtest.New(t),
+	})
+	trtl.trtl.verifyLayers(context.TODO())
 }
