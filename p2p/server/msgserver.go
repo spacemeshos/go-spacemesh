@@ -164,34 +164,39 @@ func (p *MessageServer) Close() {
 
 // readLoop reads incoming messages and matches them to requests or responses.
 func (p *MessageServer) readLoop(ctx context.Context) error {
+	logger := p.WithContext(ctx)
 	sctx := log.WithNewSessionID(ctx)
 	timer := time.NewTicker(p.requestLifetime + time.Millisecond*100)
 	defer timer.Stop()
-	defer p.With().Info("shutting down protocol", log.String("protocol", p.name))
+	defer logger.With().Info("shutting down protocol", log.String("protocol", p.name))
 	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C:
-			p.tg.Go(func(ctx context.Context) error {
+			if err := p.tg.Go(func(ctx context.Context) error {
 				p.cleanStaleMessages()
 				return nil
-			})
+			}); err != nil {
+				logger.With().Panic("error from cleanStaleMessages taskgroup", log.Err(err))
+			}
 		case msg, ok := <-p.ingressChannel:
 			// generate new reqID for message
 			ctx := log.WithNewRequestID(ctx)
-			p.WithContext(ctx).Debug("new msg received from channel")
+			logger.Debug("new msg received from channel")
 			if !ok {
-				p.WithContext(ctx).Error("read loop channel was closed")
+				logger.Error("read loop channel was closed")
 				return context.Canceled
 			}
 			select {
 			case p.workerLimiter <- struct{}{}:
-				p.tg.Go(func(ctx context.Context) error {
+				if err := p.tg.Go(func(ctx context.Context) error {
 					p.handleMessage(sctx, msg.(Message)) // pass session ctx to log session id
 					<-p.workerLimiter
 					return nil
-				})
+				}); err != nil {
+					logger.With().Panic("error from handleMessage taskgroup", log.Err(err))
+				}
 			case <-ctx.Done():
 				return ctx.Err()
 			}
