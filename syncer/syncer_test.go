@@ -245,7 +245,8 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
 	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
-	ticker.advanceToLayer(mm.LatestLayer())
+	lyr := types.GetEffectiveGenesis()
+	ticker.advanceToLayer(lyr.Add(1))
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -255,8 +256,8 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	}()
 
 	// this will cause getLayerFromPeers to return an error
-	mf.getLayerResultChan(types.NewLayerID(1)) <- layerfetcher.LayerPromiseResult{
-		Layer: types.NewLayerID(1),
+	mf.getLayerResultChan(lyr) <- layerfetcher.LayerPromiseResult{
+		Layer: lyr,
 		Err:   errors.New("something baaahhhhhhd"),
 	}
 	wg.Wait()
@@ -424,7 +425,8 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
-	current := mm.LatestLayer()
+	firstLayer := types.GetEffectiveGenesis()
+	current := firstLayer.Add(5)
 	ticker.advanceToLayer(current)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -432,14 +434,13 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	firstLayer := types.NewLayerID(1)
 	mf.feedLayerResult(firstLayer, firstLayer)
 	// wait till layer 1's content is requested to check whether sync state has changed
 	<-mf.getLayerPollChan(firstLayer)
 	// the node should remain not synced and not gossiping
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
-	mf.feedLayerResult(types.NewLayerID(2), current)
+	mf.feedLayerResult(firstLayer.Add(1), current)
 	wg.Wait()
 	// node should be in gossip sync state
 	assert.True(t, syncer.ListenToGossip())
@@ -460,7 +461,8 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
-	current := mm.LatestLayer()
+	firstLayer := types.GetEffectiveGenesis()
+	current := firstLayer.Add(5)
 	ticker.advanceToLayer(current)
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -468,7 +470,6 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	firstLayer := types.NewLayerID(1)
 	mf.feedLayerResult(firstLayer, firstLayer)
 	// wait till layer 1's content is requested to check whether sync state has changed
 	<-mf.getLayerPollChan(firstLayer)
@@ -533,6 +534,7 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	wg.Wait()
 
 	// cause the syncer to get out of synced and then wait again
+	firstLayer := types.GetEffectiveGenesis()
 	current := mm.LatestLayer().Add(outOfSyncThreshold)
 	ticker.advanceToLayer(current)
 	wg.Add(1)
@@ -540,7 +542,6 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	firstLayer := types.NewLayerID(1)
 	mf.feedLayerResult(firstLayer, firstLayer)
 	// wait till layer 1's content is requested to check whether sync state has changed
 	<-mf.getLayerPollChan(firstLayer)

@@ -124,9 +124,6 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 	}
 
 	msh.Validator = &validator{Mesh: msh}
-	for lyr := types.NewLayerID(1); lyr.Before(types.GetEffectiveGenesis()); lyr = lyr.Add(1) {
-		msh.SetZeroBlockLayer(lyr)
-	}
 	return msh
 }
 

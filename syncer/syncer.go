@@ -288,13 +288,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			return false
 		}
 
-		if len(layer.Blocks()) == 0 {
-			logger.With().Info("setting layer to zero-block", layerID)
-			if err := s.mesh.SetZeroBlockLayer(layerID); err != nil {
-				logger.With().Error("failed to set zero-block for layer", layerID, log.Err(err))
-			}
-		}
-
 		if s.shouldValidateLayer(layerID) {
 			vQueue <- layer
 		}
@@ -346,16 +339,33 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		return nil, errors.New("shutdown")
 	}
 
-	layer, err := s.getLayerFromPeers(ctx, layerID)
-	if err != nil {
+	var layer *types.Layer
+	var err error
+	if layerID.Before(types.GetEffectiveGenesis()) {
+		if err = s.mesh.SetZeroBlockLayer(layerID); err != nil {
+			s.logger.WithContext(ctx).With().Panic("failed to set zero-block for genesis layer", layerID, log.Err(err))
+		}
+		if layer, err = s.mesh.GetLayer(layerID); err != nil {
+			s.logger.WithContext(ctx).With().Panic("failed to get genesis layer", layerID, log.Err(err))
+		}
+	} else {
+		s.logger.WithContext(ctx).With().Debug("polling layer from peers", layerID)
+		if layer, err = s.getLayerFromPeers(ctx, layerID); err != nil {
+			return nil, err
+		}
+		if len(layer.Blocks()) == 0 {
+			s.logger.WithContext(ctx).With().Info("setting layer to zero-block", layerID)
+			if err := s.mesh.SetZeroBlockLayer(layerID); err != nil {
+				s.logger.WithContext(ctx).With().Warning("failed to set zero-block for layer", layerID, log.Err(err))
+			}
+		}
+	}
+
+	if err = s.getATXs(ctx, layerID); err != nil {
 		return nil, err
 	}
 
-	if err := s.getATXs(ctx, layerID); err != nil {
-		return nil, err
-	}
-
-	if err := s.getTortoiseBeacon(ctx, layerID); err != nil {
+	if err = s.getTortoiseBeacon(ctx, layerID); err != nil {
 		return nil, err
 	}
 

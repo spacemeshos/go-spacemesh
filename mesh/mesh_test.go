@@ -161,18 +161,6 @@ func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh)
 	return l
 }
 
-func TestMesh_GenesisLayersSaved(t *testing.T) {
-	msh := getMesh(t, "genesis layers")
-	t.Cleanup(func() {
-		msh.Close()
-	})
-	for i := types.NewLayerID(1); i.Before(types.GetEffectiveGenesis()); i = i.Add(1) {
-		lyr, err := msh.GetLayer(i)
-		assert.NoError(t, err)
-		assert.Equal(t, 0, len(lyr.Blocks()))
-	}
-}
-
 func TestMesh_GetLayerHash(t *testing.T) {
 	r := require.New(t)
 	msh := getMesh(t, "get layer hash")
