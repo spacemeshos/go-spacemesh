@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
 	"math/big"
 	"strconv"
 	"testing"
@@ -210,10 +211,13 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	mesh, atxDB := getMeshWithMapState(t, "t1", s)
 	defer mesh.Close()
 
-	for i := 1; i <= numOfLayers; i++ {
-		createLayer(t, mesh, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDB)
-		l, err := mesh.GetLayer(types.NewLayerID(uint32(i)))
-		assert.NoError(t, err)
+	startLayer := types.GetEffectiveGenesis()
+
+	for i := 0; i < numOfLayers; i++ {
+		layerID := startLayer.Add(uint32(i))
+		createLayer(t, mesh, layerID, numOfBlocks, maxTxs, atxDB)
+		l, err := mesh.GetLayer(layerID)
+		require.NoError(t, err)
 		mesh.ValidateLayer(context.TODO(), l)
 	}
 
@@ -221,67 +225,71 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	mesh2, atxDB2 := getMeshWithMapState(t, "t2", s2)
 
 	// this should be played until numOfLayers-1 if we want to compare states
-	for i := 1; i <= numOfLayers-1; i++ {
-		blockIds := copyLayer(t, mesh, mesh2, atxDB2, types.NewLayerID(uint32(i)))
-		mesh2.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(i)), blockIds)
+	for i := 0; i < numOfLayers-1; i++ {
+		layerID := startLayer.Add(uint32(i))
+		blockIds := copyLayer(t, mesh, mesh2, atxDB2, layerID)
+		mesh2.HandleValidatedLayer(context.TODO(), layerID, blockIds)
 	}
 
 	// test states are the same when one input is from tortoise and the other from hare
-	assert.NotEqual(t, s.Txs, s2.Txs)
+	require.NotEqual(t, s.Txs, s2.Txs)
 
-	for i := 1; i <= numOfLayers; i++ {
-		l, err := mesh.GetLayer(types.NewLayerID(uint32(i)))
-		assert.NoError(t, err)
-		mesh2.ValidateLayer(context.TODO(), l)
-	}
+	layerIDFinal := startLayer.Add(uint32(numOfLayers - 1))
+	copyLayer(t, mesh, mesh2, atxDB2, layerIDFinal)
+	l, err := mesh.GetLayer(layerIDFinal)
+	require.NoError(t, err)
+	mesh2.ValidateLayer(context.TODO(), l)
 
 	// test states are the same when one input is from tortoise and the other from hare
-	assert.Equal(t, s.Txs, s2.Txs)
+	require.Equal(t, s.Txs, s2.Txs)
 
 	// test state is the same if receiving result from tortoise after same result from hare received
 	assert.ObjectsAreEqualValues(s.Txs, s2.Txs)
 
 	// test state is the same after late block
-	layer4, err := mesh.GetLayer(types.NewLayerID(4))
-	assert.NoError(t, err)
+	layer4, err := mesh.GetLayer(startLayer.Add(4))
+	require.NoError(t, err)
 
 	blk := layer4.Blocks()[0]
 	mesh2.HandleLateBlock(context.TODO(), blk)
-	assert.Equal(t, s.Txs, s2.Txs)
+	require.Equal(t, s.Txs, s2.Txs)
 
-	// test that state does not advance when layer x+2 is received before layer x+1, and then test that all layers are pushed
+	// test that state does not advance when layer x+2 is received before layer x+1,
+	// and then test that all layers are pushed
 	s3 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
 	mesh3, atxDB3 := getMeshWithMapState(t, "t3", s3)
 
 	// this should be played until numOfLayers-1 if we want to compare states
-	for i := 1; i <= numOfLayers-3; i++ {
-		blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(i)))
-		mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(i)), blockIds)
+	for i := 0; i < numOfLayers-3; i++ {
+		layerID := startLayer.Add(uint32(i))
+		blockIds := copyLayer(t, mesh, mesh3, atxDB3, layerID)
+		mesh3.HandleValidatedLayer(context.TODO(), layerID, blockIds)
 	}
 	s3Len := len(s3.Txs)
-	blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-1))
-	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-1), blockIds)
-	assert.Equal(t, s3Len, len(s3.Txs))
+	blockIds := copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-2))
+	// layer arrived early, gets queued for state processing (no new txs processed)
+	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-2), blockIds)
+	require.Equal(t, s3Len, len(s3.Txs))
 
-	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-2))
-	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-2), blockIds)
-	assert.Greater(t, len(s3.Txs), s3Len) // expect txs from layer 6 to have been applied
+	blockIds = copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-3))
+	// this is the next layer, it's processed along with layer n-2
+	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-3), blockIds)
+	require.Greater(t, len(s3.Txs), s3Len)
 	s3Len = len(s3.Txs)
 
-	// re-validate layer 8 (applying layer 7 state)
-	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-1), blockIds)
-	assert.Greater(t, len(s3.Txs), s3Len) // expect txs from layer 7 to have been applied
-	s3Len = len(s3.Txs)
+	// re-validate layer n-2: no change, it should already have been processed
+	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-2), blockIds)
+	require.Equal(t, s3Len, len(s3.Txs))
 
-	// validate layer 9 (applying layer 8 state)
-	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)))
-	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)), blockIds)
-	assert.Greater(t, len(s3.Txs), s3Len) // expect txs from layer 9 to have been applied
+	// validate layer n-1
+	blockIds = copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-1))
+	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-1), blockIds)
+	require.Greater(t, len(s3.Txs), s3Len) // expect txs from layer n-1 to have been applied
 
 	// now everything should have been applied
-	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-1))
-	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-1), blockIds)
-	assert.Equal(t, s.Txs, s3.Txs)
+	blockIds = copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-2))
+	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-2), blockIds)
+	require.Equal(t, s.Txs, s3.Txs)
 }
 
 func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id types.LayerID) []types.BlockID {
