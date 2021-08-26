@@ -290,55 +290,6 @@ var (
 	atx5 = types.ATXID(five)
 )
 
-var (
-	b1 = types.NewExistingBlock(types.NewLayerID(1), []byte{1}, nil)
-	b2 = types.NewExistingBlock(types.NewLayerID(1), []byte{2}, nil)
-	b3 = types.NewExistingBlock(types.NewLayerID(1), []byte{3}, nil)
-	b4 = types.NewExistingBlock(types.NewLayerID(1), []byte{4}, nil)
-	b5 = types.NewExistingBlock(types.NewLayerID(1), []byte{5}, nil)
-	b6 = types.NewExistingBlock(types.NewLayerID(1), []byte{6}, nil)
-	b7 = types.NewExistingBlock(types.NewLayerID(1), []byte{7}, nil)
-)
-
-func genBlockIds() []types.BlockID {
-	bids := []types.BlockID{b1.ID(), b2.ID(), b3.ID(), b4.ID(), b5.ID(), b6.ID(), b7.ID()}
-	for i := 0; i < len(bids)*2; i++ {
-		l := rand.Int() % len(bids)
-		j := rand.Int() % len(bids)
-		bids[l], bids[j] = bids[j], bids[l]
-	}
-
-	return bids
-}
-
-type mockResult struct {
-	err error
-	ids map[types.LayerID][]types.BlockID
-}
-
-func newMockResult() *mockResult {
-	m := &mockResult{}
-	m.ids = make(map[types.LayerID][]types.BlockID)
-	return m
-}
-
-func (m *mockResult) set(id types.LayerID) []types.BlockID {
-	bids := genBlockIds()
-	m.ids[id] = bids
-
-	return bids
-}
-
-func (m *mockResult) GetResult(id types.LayerID) ([]types.BlockID, error) {
-	bl, ok := m.ids[id]
-	if ok {
-		return bl, nil
-	}
-	return nil, m.err
-}
-
-var errExample = errors.New("example errExample")
-
 type mockMesh struct {
 	b   []*types.Block
 	err error

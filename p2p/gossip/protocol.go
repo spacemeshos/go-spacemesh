@@ -22,6 +22,7 @@ const propagateHandleBufferSize = 5000 // number of MessageValidation that we al
 type peersManager interface {
 	GetPeers() []peers.Peer
 	PeerCount() uint64
+	Close()
 }
 
 // Interface for the underlying p2p layer
@@ -229,6 +230,7 @@ func (p *Protocol) propagationEventLoop(ctx context.Context) {
 
 		case <-p.shutdownCtx.Done():
 			p.pq.Close()
+			p.peers.Close()
 			p.WithContext(ctx).Error("propagate event loop stopped: protocol shutdown")
 			return
 		}

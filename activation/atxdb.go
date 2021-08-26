@@ -20,34 +20,58 @@ import (
 	"github.com/spacemeshos/post/shared"
 )
 
-const topAtxKey = "topAtxKey"
+const (
+	namespaceAtx       = "a"
+	namespaceEpoch     = "e"
+	namespaceTop       = "p"
+	namespaceHeader    = "h"
+	namespaceTimestamp = "t"
+)
 
 func getNodeAtxKey(nodeID types.NodeID, targetEpoch types.EpochID) []byte {
-	return append(getNodeAtxPrefix(nodeID), util.Uint64ToBytesBigEndian(uint64(targetEpoch))...)
+	b := getNodeAtxPrefix(nodeID)
+	b.Write(util.Uint64ToBytesBigEndian(uint64(targetEpoch)))
+	return b.Bytes()
 }
 
-func getNodeAtxPrefix(nodeID types.NodeID) []byte {
-	return []byte(fmt.Sprintf("n_%v_", nodeID.Key))
+func getNodeAtxPrefix(nodeID types.NodeID) *bytes.Buffer {
+	var b bytes.Buffer
+	b.WriteString(namespaceAtx)
+	b.WriteString(nodeID.Key)
+	return &b
 }
 
 func getNodeAtxEpochKey(epoch types.EpochID, nodeID types.NodeID) []byte {
-	return append(getEpochPrefix(epoch), nodeID.ToBytes()...)
+	b := getEpochPrefix(epoch)
+	b.WriteString(nodeID.Key)
+	b.Write(nodeID.VRFPublicKey)
+	return b.Bytes()
 }
 
-func getEpochPrefix(epoch types.EpochID) []byte {
-	return []byte(fmt.Sprintf("e_%v_", epoch.ToBytes()))
+func getEpochPrefix(epoch types.EpochID) *bytes.Buffer {
+	var b bytes.Buffer
+	b.WriteString(namespaceEpoch)
+	b.Write(epoch.ToBytes())
+	return &b
 }
 
 func getAtxHeaderKey(atxID types.ATXID) []byte {
-	return []byte(fmt.Sprintf("h_%v", atxID.Bytes()))
+	var b bytes.Buffer
+	b.WriteString(namespaceHeader)
+	b.Write(atxID.Bytes())
+	return b.Bytes()
 }
 
 func getAtxBodyKey(atxID types.ATXID) []byte {
+	// FIXME(dshulyak) this must be prefixed too. otherwise collisions are possible
 	return atxID.Bytes()
 }
 
 func getAtxTimestampKey(atxID types.ATXID) []byte {
-	return []byte(fmt.Sprintf("ts_%v", atxID.Bytes()))
+	var b bytes.Buffer
+	b.WriteString(namespaceTimestamp)
+	b.Write(atxID.Bytes())
+	return b.Bytes()
 }
 
 var (
@@ -134,26 +158,6 @@ func (db *DB) UnsubscribeAtx(id types.ATXID) {
 	if ch.listeners < 1 {
 		delete(db.atxChannels, id)
 	}
-}
-
-// ProcessAtxs processes the list of given atxs using ProcessAtx method
-func (db *DB) ProcessAtxs(atxs []*types.ActivationTx) error {
-	// seenMinerIds := map[string]struct{}{}
-	for _, atx := range atxs {
-		/* minerID := atx.NodeID.Key
-		if _, found := seenMinerIds[minerID]; found {
-			// TODO: Blacklist this miner
-			// TODO: Ensure that these are two different, syntactically valid ATXs for the same epoch, otherwise the
-			//  miner did nothing wrong
-			db.log.With().Error("found miner with multiple ATXs published in same block",
-				log.FieldNamed("atx_node_id", atx.NodeID), atx.ID())
-		}*/
-		err := db.ProcessAtx(atx)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
@@ -362,11 +366,11 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		return fmt.Errorf("failed to compute NIPost's expected challenge hash: %v", err)
 	}
 
-	db.log.With().Info("Validating NIPost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
+	db.log.With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
 	if err = db.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, atx.NumUnits); err != nil {
-		return fmt.Errorf("invalid NIPost: %v", err)
+		return fmt.Errorf("invalid nipost: %v", err)
 	}
 
 	return nil
@@ -498,7 +502,7 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 		return fmt.Errorf("failed to marshal top atx: %v", err)
 	}
 
-	err = db.atxs.Put([]byte(topAtxKey), topAtxBytes)
+	err = db.atxs.Put([]byte(namespaceTop), topAtxBytes)
 	if err != nil {
 		return fmt.Errorf("failed to store top atx: %v", err)
 	}
@@ -506,7 +510,7 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 }
 
 func (db *DB) getTopAtx() (atxIDAndLayer, error) {
-	topAtxBytes, err := db.atxs.Get([]byte(topAtxKey))
+	topAtxBytes, err := db.atxs.Get([]byte(namespaceTop))
 	if err != nil {
 		if err == database.ErrNotFound {
 			return atxIDAndLayer{
@@ -569,7 +573,7 @@ type ErrAtxNotFound error
 
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
-	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID))
+	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID).Bytes())
 	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
 	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
 	// added will always be the next ATX returned by this method.
@@ -585,19 +589,15 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID
 func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
-	atxIterator := db.atxs.Find(getEpochPrefix(epochID))
-	for atxIterator.Next() {
-		if atxIterator.Key() == nil {
+	it := db.atxs.Find(getEpochPrefix(epochID).Bytes())
+	for it.Next() {
+		if it.Key() == nil {
 			break
 		}
 		var a types.ATXID
-		if err := types.BytesToInterface(atxIterator.Value(), &a); err != nil {
-			db.log.Panic("cannot parse atx from DB")
-			break
-		}
+		copy(a[:], it.Value())
 		atxs = append(atxs, a)
 	}
-	db.log.With().Info("returned epoch atxs", epochID, log.Int("count", len(atxs)))
 	db.log.With().Debug("returned epoch atxs", epochID,
 		log.Int("count", len(atxs)),
 		log.String("atxs", fmt.Sprint(atxs)))
@@ -746,7 +746,7 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 	}
 
 	if err := db.FetchAtxReferences(ctx, atx, fetcher); err != nil {
-		return fmt.Errorf("received ATX with missing references of prev or pos id %v, %v, %v, %v",
+		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 
@@ -770,19 +770,19 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f service.Fetcher) error {
 	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
-		logger.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
+		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
 		if err := f.FetchAtx(ctx, atx.PositioningATX); err != nil {
 			return err
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		logger.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
+		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
 		if err := f.FetchAtx(ctx, atx.PrevATXID); err != nil {
 			return err
 		}
 	}
-	logger.With().Info("done fetching references for atx", atx.ID())
+	logger.With().Debug("done fetching references for atx", atx.ID())
 
 	return nil
 }

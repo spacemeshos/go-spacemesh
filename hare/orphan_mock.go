@@ -13,6 +13,9 @@ type orphanMock struct {
 func (op *orphanMock) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
 
+func (op *orphanMock) InvalidateLayer(context.Context, types.LayerID) {
+}
+
 func (op *orphanMock) GetOrphanBlocks() []types.BlockID {
 	if op.f != nil {
 		return op.f()
