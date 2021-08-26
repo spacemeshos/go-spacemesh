@@ -421,7 +421,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 		if newPbase.Before(types.NewLayerID(3)) {
 			return
 		}
-		oldPbase = layerTwo
+		oldPbase = layerTwo.Sub(1) // since we add one, below
 	}
 
 	// we never reapply the state of oldPbase. note that state reversions must be handled separately.
