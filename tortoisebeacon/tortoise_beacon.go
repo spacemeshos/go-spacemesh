@@ -2,7 +2,6 @@ package tortoisebeacon
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"math/big"
@@ -223,10 +222,6 @@ func (tb *TortoiseBeacon) IsClosed() bool {
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
 // TODO(nkryuchkov): consider not using (using DB instead)
 func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
-	b := make([]byte, 4)
-	binary.LittleEndian.PutUint32(b, uint32(epochID))
-	return b, nil
-
 	if epochID == 0 {
 		return nil, ErrZeroEpoch
 	}
