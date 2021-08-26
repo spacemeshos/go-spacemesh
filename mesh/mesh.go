@@ -74,7 +74,7 @@ type txMemPool interface {
 type AtxDB interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
 	GetFullAtx(id types.ATXID) (*types.ActivationTx, error)
-	SyntacticallyValidateAtx(atx *types.ActivationTx) error
+	SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) error
 }
 
 // ProcessedLayer represents the last processed layer in mesh.

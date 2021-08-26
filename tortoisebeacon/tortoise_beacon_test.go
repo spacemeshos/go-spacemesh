@@ -475,7 +475,7 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 				vrfSigner: vrfSigner,
 			}
 
-			result, err := tb.getSignedProposal(tc.epoch)
+			result, err := tb.getSignedProposal(context.TODO(), tc.epoch)
 			r.NoError(err)
 			r.Equal(string(tc.result), string(result))
 		})

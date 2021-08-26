@@ -237,6 +237,7 @@ func (s *Syncer) getTargetSyncedLayer() types.LayerID {
 }
 
 func (s *Syncer) synchronize(ctx context.Context) bool {
+	ctx = log.WithNewSessionID(ctx)
 	logger := s.logger.WithContext(ctx)
 
 	if s.isClosed() {
