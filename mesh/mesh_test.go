@@ -69,7 +69,7 @@ func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, bl []*types.Bloc
 type MockState struct{}
 
 func (MockState) ValidateAndAddTxToPool(*types.Transaction) error {
-	panic("implement me")
+	return nil
 }
 
 func (MockState) LoadState(types.LayerID) error {
