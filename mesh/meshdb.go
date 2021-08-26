@@ -301,11 +301,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 
 // AddZeroBlockLayer tags lyr as a layer without blocks
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
-	err := m.layers.Put(index.Bytes(), nil)
-	if err == nil {
-		m.persistLayerHash(index, types.EmptyLayerHash)
-	}
-	return err
+	return m.layers.Put(index.Bytes(), nil)
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
