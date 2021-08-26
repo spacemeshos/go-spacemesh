@@ -43,6 +43,12 @@ func NewBeacon(beaconGetter blocks.BeaconGetter, confidenceParam uint32, logger 
 // Note: Value is concurrency-safe but not concurrency-optimized
 // TODO: does this ever return an error? If not, remove it
 func (b *Beacon) Value(ctx context.Context, epochID types.EpochID) (uint32, error) {
+	// TODO(nkryuchkov): remove when beacon sync is done
+	beaconSyncEnabled := false
+	if !beaconSyncEnabled {
+		return uint32(epochID), nil
+	}
+
 	// check cache
 	if val, ok := b.cache.Get(epochID); ok {
 		return val.(uint32), nil

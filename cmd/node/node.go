@@ -661,7 +661,8 @@ func (app *App) initServices(ctx context.Context,
 		AlwaysListen:    app.Config.AlwaysListen,
 	}
 	syncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
-
+	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
+	tBeacon.SetSyncState(syncer)
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxDB, tBeacon, vrfSigner, nodeID, syncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
