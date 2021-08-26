@@ -2,8 +2,9 @@ package api
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -72,7 +73,7 @@ type PeerCounter interface {
 // MempoolAPI is an API for reading mempool data that's useful for API services
 type MempoolAPI interface {
 	Get(types.TransactionID) (*types.Transaction, error)
-	GetTxIdsByAddress(types.Address) []types.TransactionID
+	GetTxsByAddress(types.Address) []*types.Transaction
 	GetProjection(types.Address, uint64, uint64) (uint64, uint64)
 }
 

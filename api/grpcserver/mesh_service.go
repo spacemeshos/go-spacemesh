@@ -106,20 +106,24 @@ func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactio
 
 // QUERIES
 
-func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr types.Address) (txs []*types.MeshTransaction, err error) {
+func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr types.Address) ([]*types.MeshTransaction, error) {
 	meshTxIds := s.getTxIdsFromMesh(startLayer, addr)
-	mempoolTxIds := s.Mempool.GetTxIdsByAddress(addr)
+	mempoolTxs := s.Mempool.GetTxsByAddress(addr)
 
+	all := make([]*types.MeshTransaction, 0, len(meshTxIds)+len(mempoolTxs))
 	// Look up full data for all unique txids
-	txs, missing := s.Mesh.GetMeshTransactions(append(meshTxIds, mempoolTxIds...))
+	txs, missing := s.Mesh.GetMeshTransactions(meshTxIds)
+	all = append(all, txs...)
 
-	// TODO: Do we ever expect txs to be missing here?
-	// E.g., if this node has not synced/received them yet.
+	for _, tx := range mempoolTxs {
+		all = append(txs, &types.MeshTransaction{Transaction: *tx})
+	}
+	// FIXME(dshulyak) this call should never return missing transactions, since we got the list of transactions
+	// couple of lines above. and index should be written atomically with transaction body
 	if len(missing) != 0 {
 		log.Error("could not find transactions %v", missing)
-		return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 	}
-	return
+	return all, nil
 }
 
 func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {

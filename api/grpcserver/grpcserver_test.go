@@ -16,6 +16,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/rand"
+
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -527,8 +529,10 @@ func (m MempoolMock) GetProjection(types.Address, uint64, uint64) (nonce, balanc
 	return
 }
 
-func (m MempoolMock) GetTxIdsByAddress(addr types.Address) (ids []types.TransactionID) {
-	ids = append(ids, m.poolByAddress[addr])
+func (m MempoolMock) GetTxsByAddress(addr types.Address) (txs []*types.Transaction) {
+	if id, exist := m.poolByAddress[addr]; exist {
+		txs = append(txs, m.poolByTxid[id])
+	}
 	return
 }
 
