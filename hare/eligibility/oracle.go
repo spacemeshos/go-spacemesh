@@ -13,9 +13,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const vrfMsgCacheSize = 20       // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
-const activesCacheSize = 5       // we don't expect to handle more than two layers concurrently
-const maxSupportedN = 1073741824 // higher values result in an overflow
+const (
+	vrfMsgCacheSize  = 20         // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
+	activesCacheSize = 5          // we don't expect to handle more than two layers concurrently
+	maxSupportedN    = 1073741824 // higher values result in an overflow
+)
 
 type valueProvider interface {
 	Value(context.Context, types.EpochID) (uint32, error)

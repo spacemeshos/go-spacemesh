@@ -228,6 +228,9 @@ type BlockEligibilityProof struct {
 
 	// Sig is the VRF signature from which the block's LayerID is derived.
 	Sig []byte
+
+	// TortoiseBeacon is the tortoise beacon value for this block.
+	TortoiseBeacon []byte
 }
 
 // BlockHeader includes all of a block's fields, except the list of transaction IDs, activation transaction IDs and the
@@ -450,9 +453,11 @@ func NewExistingBlock(layerIndex LayerID, data []byte, txs []TransactionID) *Blo
 		MiniBlock: MiniBlock{
 			BlockHeader: BlockHeader{
 				LayerIndex: layerIndex,
-				Data:       data},
+				Data:       data,
+			},
 			TxIDs: txs,
-		}}
+		},
+	}
 	b.Signature = signing.NewEdSigner().Sign(b.Bytes())
 	b.Initialize()
 	return &b

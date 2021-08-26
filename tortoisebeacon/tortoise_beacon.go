@@ -69,6 +69,11 @@ type layerClock interface {
 	LayerToTime(types.LayerID) time.Time
 }
 
+// SyncState interface to check the state the sync.
+type SyncState interface {
+	IsSynced(context.Context) bool
+}
+
 // New returns a new TortoiseBeacon.
 func New(
 	conf Config,
@@ -120,6 +125,7 @@ type TortoiseBeacon struct {
 	layerDuration time.Duration
 	nodeID        types.NodeID
 
+	sync             SyncState
 	net              broadcaster
 	atxDB            activationDB
 	tortoiseBeaconDB tortoiseBeaconDB
@@ -156,6 +162,14 @@ type TortoiseBeacon struct {
 	proposalChans   map[types.EpochID]chan *proposalMessageWithReceiptData
 }
 
+// SetSyncState updates sync state provider. Must be executed only once.
+func (tb *TortoiseBeacon) SetSyncState(sync SyncState) {
+	if tb.sync != nil {
+		tb.Log.Panic("sync state provider can be updated only once")
+	}
+	tb.sync = sync
+}
+
 // Start starts listening for layers and outputs.
 func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 	if !atomic.CompareAndSwapUint64(&tb.closed, 0, 1) {
@@ -163,6 +177,9 @@ func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 		return nil
 	}
 	tb.Log.Info("starting %v with the following config: %+v", protoName, tb.config)
+	if tb.sync == nil {
+		tb.Log.Panic("update sync state provider can't be nil")
+	}
 
 	ctx, cancel := context.WithCancel(ctx)
 	tb.tg = taskgroup.New(taskgroup.WithContext(ctx))
@@ -356,6 +373,10 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		tb.Log.With().Debug("not starting tortoise beacon since we are in genesis epoch",
 			log.Uint32("epoch_id", uint32(epoch)))
 
+		return
+	}
+	if !tb.sync.IsSynced(ctx) {
+		tb.Log.With().Info("tortoise beacon protocol is skipped while node is not synced", epoch)
 		return
 	}
 
