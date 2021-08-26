@@ -2267,7 +2267,7 @@ func TestRerunAndRevert(t *testing.T) {
 	// force a rerun and make sure there was a reversion
 	alg.lastRerun = time.Now().Add(-alg.trtl.RerunInterval)
 	oldVerified, newVerified, reverted = alg.HandleIncomingLayer(context.TODO(), l2ID)
-	r.Equal(int(l1ID.Uint32()), int(oldVerified.Uint32()))
+	r.Equal(int(l0ID.Uint32()), int(oldVerified.Uint32()))
 	r.Equal(int(l1ID.Uint32()), int(newVerified.Uint32()))
 	r.True(reverted)
 	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))
