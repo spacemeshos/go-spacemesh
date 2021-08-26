@@ -197,9 +197,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	if id.After(h.lastLayer) {
 		h.lastLayer = id
 	} else {
-		logger.With().Error("received out of order layer tick",
-			log.FieldNamed("last_layer", h.lastLayer),
-			log.FieldNamed("this_layer", id))
+		logger.With().Error("received out of order layer tick", log.FieldNamed("last_layer", h.lastLayer))
 	}
 
 	h.layerLock.Unlock()
@@ -227,16 +225,14 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		}
 	}()
 
-	logger.With().Debug("hare got tick, sleeping",
-		log.String("delta", fmt.Sprint(h.networkDelta)))
+	logger.With().Debug("hare got tick, sleeping", log.String("delta", fmt.Sprint(h.networkDelta)))
 
 	ti := time.NewTimer(h.networkDelta)
 	select {
 	case <-ti.C:
-		break // keep going
+		break
 	case <-h.CloseChannel():
-		// closed while waiting the delta
-		err = errors.New("closed while waiting the delta")
+		err = errors.New("closed while waiting for hare delta")
 		return
 	}
 
@@ -245,8 +241,6 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		logger.Info("not processing hare tick since node is not synced")
 		return
 	}
-
-	logger.Debug("get hare results")
 
 	// retrieve set from orphan blocks
 	blocks, err := h.mesh.LayerBlockIds(h.lastLayer)
@@ -258,7 +252,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		// TODO:   and achieve consensus on empty set
 	}
 
-	logger.With().Debug("received new blocks", log.Int("count", len(blocks)))
+	logger.With().Debug("hare received layer blocks", log.Int("count", len(blocks)))
 	set := NewSet(blocks)
 
 	instID := id
@@ -320,8 +314,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 				if err := h.collectOutput(ctx, out); err != nil {
 					logger.With().Warning("error collecting output from hare", log.Err(err))
 				}
-			}
-			if !out.Completed() {
+			} else {
 				// Notify the mesh that Hare failed
 				h.WithContext(ctx).With().Info("recording hare instance failure", layerID)
 				h.mesh.InvalidateLayer(ctx, layerID)
