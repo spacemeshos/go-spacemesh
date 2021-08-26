@@ -152,21 +152,19 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 		return val.([]byte), nil
 	}
 
-	// TODO(nkryuchkov): enable when beacon sync is done
-	//// get value from beacon
-	//v, err := o.beacon.Value(ctx, layer.GetEpoch())
-	//if err != nil {
-	//	o.WithContext(ctx).With().Error("could not get hare beacon value for epoch",
-	//		log.Err(err),
-	//		layer,
-	//		layer.GetEpoch(),
-	//		log.Int32("round", round))
-	//	return nil, err
-	//}
-	//
-	//// marshal message
-	//msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
-	msg := vrfMessage{Beacon: 0, Round: round, Layer: layer}
+	// get value from beacon
+	v, err := o.beacon.Value(ctx, layer.GetEpoch())
+	if err != nil {
+		o.WithContext(ctx).With().Error("could not get hare beacon value for epoch",
+			log.Err(err),
+			layer,
+			layer.GetEpoch(),
+			log.Int32("round", round))
+		return nil, err
+	}
+
+	// marshal message
+	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
 	buf, err := types.InterfaceToBytes(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Panic("failed to encode", log.Err(err))
