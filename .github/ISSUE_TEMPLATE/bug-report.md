@@ -10,11 +10,13 @@ assignees: ''
 ## Description
 <!-- Please provide a clear and detailed description of the bug. -->
 
-## Steps To Reproduce
+## Reproduce Steps
 1. Go to '...'
 2. Click on '....'
 3. Scroll down to '....'
-4. See error
+
+## Actual Behavior
+<!-- Specify the actual behavior after following the reproduce step -->
 
 ## Expected Behavior
 <!-- A clear and concise description of what you expected to happen. -->
@@ -25,8 +27,8 @@ Please complete the following information:
  <!-- e.g. Windows -->
  - Node Version: 
  <!-- e.g. 0.1.2, available by running `./go-spacemesh version` -->
- - App Version (if applicable): 
- <!-- e.g. 1.2.3, available by clicking on the cog icon in the app and scrolling down to "App Version" -->
+ - Smapp version (when applicable): 
+ <!-- e.g. 1.2.3, available by clicking on the settings icon in the main screen and scrolling down to "App Version" -->
 
 ## Additional Resources 
 <!-- 
