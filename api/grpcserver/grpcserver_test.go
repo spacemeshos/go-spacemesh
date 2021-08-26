@@ -16,8 +16,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/rand"
-
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
