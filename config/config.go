@@ -206,12 +206,12 @@ func defaultBaseConfig() BaseConfig {
 		PoETServer:              "127.0.0.1",
 		GoldenATXID:             "0x5678", // TODO: Change the value
 		Hdist:                   10,
-		Zdist:                 5,
-		ConfidenceParam:       5,
-		WindowSize:            100,     // should be "a few thousand layers" in production
-		GlobalThreshold:       60,      // in percentage terms, must be in interval [0, 100]
-		LocalThreshold:        20,      // in percentage terms, must be in interval [0, 100]
-		TortoiseRerunInterval: 60 * 24, // in minutes, once per day
+		Zdist:                   5,
+		ConfidenceParam:         5,
+		WindowSize:              100,     // should be "a few thousand layers" in production
+		GlobalThreshold:         60,      // in percentage terms, must be in interval [0, 100]
+		LocalThreshold:          20,      // in percentage terms, must be in interval [0, 100]
+		TortoiseRerunInterval:   60 * 24, // in minutes, once per day
 		BlockCacheSize:          20,
 		SyncRequestTimeout:      2000,
 		SyncInterval:            10,
