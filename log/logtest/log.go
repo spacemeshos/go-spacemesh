@@ -12,10 +12,10 @@ import (
 const testLogLevel = "TEST_LOG_LEVEL"
 
 // New creates log.Log instance that will use testing.TB.Log internally.
-func New(tb testing.TB, overvwrite ...zapcore.Level) log.Log {
+func New(tb testing.TB, override ...zapcore.Level) log.Log {
 	var level zapcore.Level
-	if len(overvwrite) > 0 {
-		level = overvwrite[0]
+	if len(override) > 0 {
+		level = override[0]
 	} else {
 		lvl := os.Getenv(testLogLevel)
 		if len(lvl) == 0 {

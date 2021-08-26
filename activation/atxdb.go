@@ -160,26 +160,6 @@ func (db *DB) UnsubscribeAtx(id types.ATXID) {
 	}
 }
 
-// ProcessAtxs processes the list of given atxs using ProcessAtx method
-func (db *DB) ProcessAtxs(atxs []*types.ActivationTx) error {
-	// seenMinerIds := map[string]struct{}{}
-	for _, atx := range atxs {
-		/* minerID := atx.NodeID.Key
-		if _, found := seenMinerIds[minerID]; found {
-			// TODO: Blacklist this miner
-			// TODO: Ensure that these are two different, syntactically valid ATXs for the same epoch, otherwise the
-			//  miner did nothing wrong
-			db.log.With().Error("found miner with multiple ATXs published in same block",
-				log.FieldNamed("atx_node_id", atx.NodeID), atx.ID())
-		}*/
-		err := db.ProcessAtx(atx)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
 // validation rules it then stores the atx with flag set to validity of the atx.
 //
@@ -386,11 +366,11 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		return fmt.Errorf("failed to compute NIPost's expected challenge hash: %v", err)
 	}
 
-	db.log.With().Info("Validating NIPost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
+	db.log.With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
 	if err = db.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, atx.NumUnits); err != nil {
-		return fmt.Errorf("invalid NIPost: %v", err)
+		return fmt.Errorf("invalid nipost: %v", err)
 	}
 
 	return nil
@@ -766,7 +746,7 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 	}
 
 	if err := db.FetchAtxReferences(ctx, atx, fetcher); err != nil {
-		return fmt.Errorf("received ATX with missing references of prev or pos id %v, %v, %v, %v",
+		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 
@@ -790,19 +770,19 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f service.Fetcher) error {
 	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
-		logger.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
+		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
 		if err := f.FetchAtx(ctx, atx.PositioningATX); err != nil {
 			return err
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		logger.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
+		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
 		if err := f.FetchAtx(ctx, atx.PrevATXID); err != nil {
 			return err
 		}
 	}
-	logger.With().Info("done fetching references for atx", atx.ID())
+	logger.With().Debug("done fetching references for atx", atx.ID())
 
 	return nil
 }

@@ -58,6 +58,7 @@ func newMockNet() *mockNet {
 	}
 }
 func (m *mockNet) GetPeers() []peers.Peer    { return m.peers }
+func (m *mockNet) PeerCount() uint64         { return uint64(len(m.peers)) }
 func (m *mockNet) GetRandomPeer() peers.Peer { return m.peers[0] }
 func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, _ []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errorHandler func(err error)) error {
 	if _, ok := m.timeouts[address]; ok {

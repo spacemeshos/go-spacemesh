@@ -110,7 +110,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 	}
 
 	beaconDbgStr := types.BytesToHash(epochBeacon).ShortString()
-	bo.log.With().Info("Got beacon",
+	bo.log.With().Info("got beacon",
 		log.Uint64("epoch_id", uint64(epochNumber)),
 		log.String("epoch_beacon", beaconDbgStr))
 
@@ -150,7 +150,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 		}
 		vrfSig := bo.vrfSigner.Sign(message)
 
-		bo.log.Debug("signed VRF message, beacon %v, epoch %v, counter: %v, vrfSig: %v",
+		bo.log.Debug("signed vrf message, beacon %v, epoch %v, counter: %v, vrfSig: %v",
 			types.BytesToHash(epochBeacon).ShortString(), epochNumber, counter, types.BytesToHash(vrfSig).ShortString())
 
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfSig)
@@ -181,7 +181,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 	// Pretty-print the number of blocks per eligible layer
 	var strs []string
 	for k := range keys {
-		strs = append(strs, fmt.Sprintf("Layer %d: %d", keys[k], len(eligibilityProofs[keys[k]])))
+		strs = append(strs, fmt.Sprintf("Layer %s: %d", keys[k].String(), len(eligibilityProofs[keys[k]])))
 	}
 
 	bo.log.With().Info("block eligibility calculated",

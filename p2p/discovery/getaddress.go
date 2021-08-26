@@ -79,7 +79,11 @@ func (p *protocol) GetAddresses(ctx context.Context, remoteID p2pcrypto.PublicKe
 			return
 		}
 
-		ch <- nodes
+		select {
+		case ch <- nodes:
+		default:
+			plogger.With().Error("get addresses listener timed out, dropping response")
+		}
 	}
 
 	err = p.msgServer.SendRequest(ctx, server.GetAddresses, []byte(""), remoteID, resHandler, func(err error) {})

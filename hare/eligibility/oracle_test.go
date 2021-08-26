@@ -40,7 +40,7 @@ type mockBlocksProvider struct {
 	layerContextuallyValidBlocksFn func(types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
-func (mbp mockBlocksProvider) LayerContextuallyValidBlocks(layerID types.LayerID) (map[types.BlockID]struct{}, error) {
+func (mbp mockBlocksProvider) LayerContextuallyValidBlocks(_ context.Context, layerID types.LayerID) (map[types.BlockID]struct{}, error) {
 	if mbp.layerContextuallyValidBlocksFn != nil {
 		return mbp.layerContextuallyValidBlocksFn(layerID)
 	}
