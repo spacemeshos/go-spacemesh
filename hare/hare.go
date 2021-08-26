@@ -240,9 +240,9 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		return
 	}
 
-	if !h.broker.Synced(ctx, id) { // if not synced don't start consensus
-		err = errors.New("not starting hare since node is not synced")
-		logger.Error(err.Error())
+	if !h.broker.Synced(ctx, id) {
+		// if not currently synced don't start consensus process
+		logger.Info("not processing hare tick since node is not synced")
 		return
 	}
 
