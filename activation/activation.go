@@ -92,6 +92,8 @@ type syncer interface {
 	RegisterChForSynced(context.Context, chan struct{})
 }
 
+//go:generate mockgen -package=mocks -destination=./mocks/activation_mocks.go -source=./activation.go
+
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool

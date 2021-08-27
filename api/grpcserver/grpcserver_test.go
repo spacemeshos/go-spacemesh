@@ -17,11 +17,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/activation/mocks"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -1230,6 +1232,43 @@ func TestSmesherService(t *testing.T) {
 	// Run subtests
 	for _, tc := range testCases {
 		t.Run(tc.name, tc.run)
+	}
+}
+
+func TestSmesherService_Context(t *testing.T) {
+	logtest.SetupGlobal(t)
+	ctrl := gomock.NewController(t)
+	smesher := mocks.NewMockSmeshingProvider(ctrl)
+	var received context.Context
+	smesher.EXPECT().StartSmeshing(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(ctx context.Context, _ types.Address, _ activation.PostSetupOpts) {
+		received = ctx
+	}).Return(nil)
+
+	svc := NewSmesherService(&PostAPIMock{}, smesher)
+	shutDown := launchServer(t, svc)
+	t.Cleanup(shutDown)
+
+	conn, err := grpc.Dial(fmt.Sprintf("localhost:%d", cfg.GrpcServerPort), grpc.WithInsecure(), grpc.WithBlock())
+	require.NoError(t, err)
+	t.Cleanup(func() { conn.Close() })
+	client := pb.NewSmesherServiceClient(conn)
+
+	request := &pb.StartSmeshingRequest{
+		Coinbase: &pb.AccountId{Address: []byte("123")},
+		Opts: &pb.PostSetupOpts{
+			DataDir:  t.TempDir(),
+			NumUnits: 1,
+			NumFiles: 1,
+		},
+	}
+	resp, err := client.StartSmeshing(context.Background(), request)
+	require.NoError(t, err)
+	require.EqualValues(t, code.Code_OK, resp.Status.Code)
+	require.NotNil(t, received)
+	select {
+	case <-received.Done():
+		require.FailNow(t, "smesher context is closed")
+	default:
 	}
 }
 

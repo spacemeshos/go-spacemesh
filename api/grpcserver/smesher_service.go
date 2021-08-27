@@ -72,7 +72,6 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		Throttle:          in.Opts.Throttle,
 	}
 
-	// NOTE(dshulyak) don't use grpc context it will be canceled on method return or when client closes connection
 	if err := s.smeshingProvider.StartSmeshing(context.Background(), coinbaseAddr, opts); err != nil {
 		err := fmt.Sprintf("failed to start smeshing: %v", err)
 		log.Error(err)
