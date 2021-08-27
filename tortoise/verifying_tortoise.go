@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/syndtr/goleveldb/leveldb"
-	"time"
 )
 
 type blockDataProvider interface {
@@ -21,9 +23,6 @@ type blockDataProvider interface {
 	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)
 	SaveContextualValidity(types.BlockID, types.LayerID, bool) error
 	ContextualValidity(types.BlockID) (bool, error)
-
-	Persist(key []byte, v interface{}) error
-	Retrieve(key []byte, v interface{}) (interface{}, error)
 }
 
 type atxDataProvider interface {
@@ -59,6 +58,7 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 }
 
 type turtle struct {
+	state
 	logger log.Log
 
 	atxdb atxDataProvider
@@ -66,15 +66,6 @@ type turtle struct {
 	clock layerClock
 
 	// note: the rest of these are exported for purposes of serialization only
-
-	// last layer processed: note that tortoise does not have a concept of "current" layer (and it's not aware of the
-	// current time or latest tick). As far as Tortoise is concerned, Last is the current layer. This is a subjective
-	// view of time, but Tortoise receives layers as soon as Hare finishes processing them or when they are received via
-	// gossip, and there's nothing for Tortoise to verify without new data anyway.
-	Last types.LayerID
-
-	// last evicted layer
-	LastEvicted types.LayerID
 
 	// hare lookback (distance): up to Hdist layers back, we only consider hare results/input vector
 	Hdist uint32
@@ -97,25 +88,14 @@ type turtle struct {
 	AvgLayerSize  int
 	MaxExceptions int
 
-	GoodBlocksIndex map[types.BlockID]struct{}
-
-	Verified types.LayerID
-
-	// this matrix stores the opinion of each block about other blocks. blocks are indexed by layer.
-	// it stores good and bad blocks
-	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion
-
 	// how often we want to rerun from genesis
 	RerunInterval time.Duration
 }
 
-// SetLogger sets the Log instance for this turtle
-func (t *turtle) SetLogger(logger log.Log) {
-	t.logger = logger
-}
-
 // newTurtle creates a new verifying tortoise algorithm instance
 func newTurtle(
+	lg log.Log,
+	db database.Database,
 	bdp blockDataProvider,
 	atxdb atxDataProvider,
 	clock layerClock,
@@ -129,28 +109,34 @@ func newTurtle(
 	rerun time.Duration,
 ) *turtle {
 	return &turtle{
-		logger:               log.NewDefault("trtl"),
-		Hdist:                hdist,
-		Zdist:                zdist,
-		ConfidenceParam:      confidenceParam,
-		WindowSize:           windowSize,
-		GlobalThreshold:      globalThreshold,
-		LocalThreshold:       localThreshold,
-		bdp:                  bdp,
-		atxdb:                atxdb,
-		clock:                clock,
-		Last:                 types.NewLayerID(0),
-		AvgLayerSize:         avgLayerSize,
-		GoodBlocksIndex:      make(map[types.BlockID]struct{}),
-		BlockOpinionsByLayer: make(map[types.LayerID]map[types.BlockID]Opinion, windowSize),
-		MaxExceptions:        int(hdist) * avgLayerSize * 100,
-		RerunInterval:        rerun,
+		state: state{
+			diffMode:             true,
+			db:                   db,
+			log:                  lg,
+			GoodBlocksIndex:      map[types.BlockID]bool{},
+			BlockOpinionsByLayer: map[types.LayerID]map[types.BlockID]Opinion{},
+		},
+		logger:          lg.Named("turtle"),
+		Hdist:           hdist,
+		Zdist:           zdist,
+		ConfidenceParam: confidenceParam,
+		WindowSize:      windowSize,
+		GlobalThreshold: globalThreshold,
+		LocalThreshold:  localThreshold,
+		bdp:             bdp,
+		atxdb:           atxdb,
+		clock:           clock,
+		AvgLayerSize:    avgLayerSize,
+		MaxExceptions:   int(hdist) * avgLayerSize * 100,
+		RerunInterval:   rerun,
 	}
 }
 
 // cloneTurtleParams creates a new verifying tortoise instance using the params of this instance
 func (t *turtle) cloneTurtleParams() *turtle {
 	return newTurtle(
+		t.log,
+		t.db,
 		t.bdp,
 		t.atxdb,
 		t.clock,
@@ -173,13 +159,10 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	t.BlockOpinionsByLayer[genesisLayer.Index()] = make(map[types.BlockID]Opinion)
 	for _, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
-		t.BlockOpinionsByLayer[genesisLayer.Index()][blk.ID()] = Opinion{
-			BlockOpinions: make(map[types.BlockID]vec),
-		}
-		t.GoodBlocksIndex[id] = struct{}{}
+		t.BlockOpinionsByLayer[genesisLayer.Index()][id] = Opinion{}
+		t.GoodBlocksIndex[id] = false
 	}
 	t.Last = genesisLayer.Index()
-	// set last evicted one layer earlier since we look for things starting one layer after last evicted
 	t.LastEvicted = genesisLayer.Index().Sub(1)
 	t.Verified = genesisLayer.Index()
 }
@@ -228,6 +211,9 @@ func (t *turtle) evict(ctx context.Context) {
 		delete(t.BlockOpinionsByLayer, layerToEvict)
 	}
 	t.LastEvicted = windowStart.Sub(1)
+	if err := t.state.Evict(); err != nil {
+		logger.With().Panic("can't evict persisted state", log.Err(err))
+	}
 }
 
 func blockIDsToString(input []types.BlockID) string {
@@ -434,7 +420,7 @@ func (t *turtle) calculateExceptions(
 
 		// helper function for adding diffs
 		addDiffs := func(bid types.BlockID, voteClass string, voteVec vec, diffMap map[types.BlockID]struct{}) {
-			if v, ok := baseBlockOpinion.BlockOpinions[bid]; !ok || simplifyVote(v) != voteVec {
+			if v, ok := baseBlockOpinion[bid]; !ok || simplifyVote(v) != voteVec {
 				logger.With().Debug("added vote diff",
 					log.FieldNamed("diff_block", bid),
 					log.String("diff_class", voteClass))
@@ -550,12 +536,7 @@ func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID, blockVotedOn
 
 // Persist saves the current tortoise state to the database
 func (t *turtle) persist() error {
-	return t.bdp.Persist(mesh.TORTOISE, t)
-}
-
-// RecoverVerifyingTortoise retrieves the latest saved tortoise from the database
-func RecoverVerifyingTortoise(mdb retriever) (interface{}, error) {
-	return mdb.Retrieve(mesh.TORTOISE, &turtle{})
+	return t.state.Persist()
 }
 
 func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
@@ -617,7 +598,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		}
 		opinion[bid] = abstain
 	}
-	for blk, vote := range baseBlockOpinion.BlockOpinions {
+	for blk, vote := range baseBlockOpinion {
 		// ignore opinions of very old blocks
 		fblk, err := t.bdp.GetBlock(blk)
 		if err != nil {
@@ -638,7 +619,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	}
 
 	logger.With().Debug("adding or updating block opinion")
-	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = Opinion{BlockOpinions: opinion}
+	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = opinion
 	return nil
 }
 
@@ -718,7 +699,7 @@ func (t *turtle) scoreBlocks(ctx context.Context, blocks []*types.Block) {
 		if t.determineBlockGoodness(ctx, b) {
 			// note: we have no way of warning if a block was previously marked as not good
 			logger.With().Debug("marking block good", b.ID(), b.LayerIndex)
-			t.GoodBlocksIndex[b.ID()] = struct{}{}
+			t.GoodBlocksIndex[b.ID()] = false
 			numGood++
 		} else {
 			logger.With().Info("not marking block good", b.ID(), b.LayerIndex)
@@ -1148,7 +1129,7 @@ func (t *turtle) sumVotesForBlock(
 			// check if this block has an opinion on the block to vote on.
 			// no opinion (on a block in an older layer) counts as an explicit vote against the block.
 			// note: in this case, the weight is already factored into the vote, so no need to fetch weight.
-			if opinionVote, exists := votingBlockOpinion.BlockOpinions[blockID]; exists {
+			if opinionVote, exists := votingBlockOpinion[blockID]; exists {
 				sum = sum.Add(opinionVote)
 				logger.With().Debug("added block opinion to vote sum",
 					log.FieldNamed("vote", opinionVote),
