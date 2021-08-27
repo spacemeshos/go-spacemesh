@@ -354,6 +354,7 @@ func buildSVP(ki uint32, S ...*Set) *aggregatedMessages {
 }
 
 func validateMatrix(t *testing.T, mType messageType, msgK uint32, exp []error) {
+	t.Helper()
 	r := require.New(t)
 	rounds := []uint32{preRound, 0, 1, 2, 3, 4, 5, 6, 7}
 	v := defaultValidator(t)

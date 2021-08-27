@@ -132,8 +132,8 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 
 	w := runNodesFor(t, nodes, 2, layers, 2, 5,
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
-			if round/4 > 1 {
-				t.Fatal("out of round limit")
+			if round/4 > 1 && round != preRound {
+				t.Fatalf("out of round %d limit", round)
 			}
 			return 1, nil
 		},

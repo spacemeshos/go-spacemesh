@@ -141,10 +141,10 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	if m == nil {
 		return errNilMsg
 	}
-
 	if m.InnerMsg == nil {
 		return errNilInner
 	}
+
 	currentRound := currentK % 4
 	// the message must match the current iteration unless it is a notify or pre-round message
 	currentIteration := currentK / 4
@@ -156,7 +156,9 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	case pre:
 		return nil
 	case notify:
-		if currentK == preRound {
+		if currentK == preRound && msgIteration != 0 {
+			return errInvalidIter
+		} else if currentK == preRound {
 			return errInvalidRound
 		}
 		// notify before notify could be created for this iteration
@@ -181,7 +183,9 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	// check status, proposal & commit types
 	switch m.InnerMsg.Type {
 	case status:
-		if currentK == preRound {
+		if currentK == preRound && msgIteration != 0 {
+			return errInvalidIter
+		} else if currentK == preRound {
 			return errEarlyMsg
 		}
 		if currentRound == notifyRound && currentIteration+1 == msgIteration {
@@ -195,7 +199,9 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 		}
 		return errInvalidRound
 	case proposal:
-		if currentK == preRound {
+		if currentK == preRound && msgIteration != 0 {
+			return errInvalidIter
+		} else if currentK == preRound {
 			return errInvalidRound
 		}
 		if currentRound == statusRound && sameIter {
@@ -210,7 +216,9 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 		}
 		return errInvalidRound
 	case commit:
-		if currentK == preRound {
+		if currentK == preRound && msgIteration != 0 {
+			return errInvalidIter
+		} else if currentK == preRound {
 			return errInvalidRound
 		}
 		if currentRound == proposalRound && sameIter {
