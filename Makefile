@@ -140,7 +140,7 @@ test test-all: get-gpu-setup
 .PHONY: test
 
 test-no-app-test: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -timeout 0 -p 1 -tags exclude_app_test -v ./...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test-no-app-test
 
 test-only-app-test: get-gpu-setup
