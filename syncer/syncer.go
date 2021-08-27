@@ -349,7 +349,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 			s.logger.WithContext(ctx).With().Panic("failed to get genesis layer", layerID, log.Err(err))
 		}
 	} else {
-		s.logger.WithContext(ctx).With().Debug("polling layer from peers", layerID)
+		s.logger.WithContext(ctx).With().Info("polling layer content", layerID)
 		if layer, err = s.getLayerFromPeers(ctx, layerID); err != nil {
 			return nil, err
 		}

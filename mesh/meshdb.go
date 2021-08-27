@@ -303,14 +303,11 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return nil, database.ErrNotFound
 }
 
-// EmptyLayerHash is the layer hash for an empty layer
-var EmptyLayerHash = types.Hash32{}
-
 // AddZeroBlockLayer tags lyr as a layer without blocks
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
 	err := m.layers.Put(index.Bytes(), nil)
 	if err == nil {
-		m.persistLayerHash(index, EmptyLayerHash)
+		m.persistLayerHash(index, types.EmptyLayerHash)
 	}
 	return err
 }
@@ -470,10 +467,10 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 }
 
 func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
-	h := EmptyLayerHash
+	h := types.EmptyLayerHash
 	bts, err := m.general.Get(getLayerHashKey(layerID))
 	if err != nil {
-		return EmptyLayerHash, err
+		return types.EmptyLayerHash, err
 	}
 	h.SetBytes(bts)
 	return h, nil

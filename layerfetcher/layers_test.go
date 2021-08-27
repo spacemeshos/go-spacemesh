@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -75,12 +74,12 @@ func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, _ [
 func (mockNet) Close() {}
 
 type layerDBMock struct {
-	layers     map[types.LayerID][]types.BlockID
-	vectors    map[types.LayerID][]types.BlockID
-	hashes     map[types.LayerID]types.Hash32
-	aggHashes  map[types.LayerID]types.Hash32
-	processed  types.LayerID
-	unknownErr error
+	layers       map[types.LayerID][]types.BlockID
+	vectors      map[types.LayerID][]types.BlockID
+	hashes       map[types.LayerID]types.Hash32
+	aggHashes    map[types.LayerID]types.Hash32
+	processed    types.LayerID
+	getBlocksErr error
 }
 
 func newLayerDBMock() *layerDBMock {
@@ -103,8 +102,8 @@ func (l *layerDBMock) ProcessedLayer() types.LayerID                        { re
 func (l *layerDBMock) GetLayerHash(ID types.LayerID) types.Hash32           { return l.hashes[ID] }
 func (l *layerDBMock) GetAggregatedLayerHash(ID types.LayerID) types.Hash32 { return l.aggHashes[ID] }
 func (l *layerDBMock) LayerBlockIds(ID types.LayerID) ([]types.BlockID, error) {
-	if l.unknownErr != nil {
-		return nil, l.unknownErr
+	if l.getBlocksErr != nil {
+		return nil, l.getBlocksErr
 	}
 	return l.layers[ID], nil
 }
@@ -180,7 +179,7 @@ func TestLayerHashBlocksReqReceiverEmptyLayer(t *testing.T) {
 	lyrID := types.NewLayerID(100)
 	var blockIDs []types.BlockID
 	db.layers[lyrID] = blockIDs
-	db.hashes[lyrID] = mesh.EmptyLayerHash
+	db.hashes[lyrID] = types.EmptyLayerHash
 	db.aggHashes[lyrID] = randomHash()
 
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
@@ -191,7 +190,26 @@ func TestLayerHashBlocksReqReceiverEmptyLayer(t *testing.T) {
 	assert.Equal(t, db.layers[lyrID], got.Blocks)
 	assert.Nil(t, got.InputVector)
 	assert.Equal(t, db.processed, got.ProcessedLayer)
-	assert.Equal(t, mesh.EmptyLayerHash, got.Hash)
+	assert.Equal(t, types.EmptyLayerHash, got.Hash)
+	assert.Equal(t, db.aggHashes[lyrID], got.AggregatedHash)
+}
+
+func TestLayerHashBlocksReqReceiverLayerNotPresent(t *testing.T) {
+	db := newLayerDBMock()
+	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
+	lyrID := types.NewLayerID(100)
+	db.getBlocksErr = database.ErrNotFound
+	db.aggHashes[lyrID] = randomHash()
+
+	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
+	require.NoError(t, err)
+	var got layerBlocks
+	err = types.BytesToInterface(out, &got)
+	assert.NoError(t, err)
+	assert.Nil(t, got.Blocks)
+	assert.Nil(t, got.InputVector)
+	assert.Equal(t, db.processed, got.ProcessedLayer)
+	assert.Equal(t, types.EmptyLayerHash, got.Hash)
 	assert.Equal(t, db.aggHashes[lyrID], got.AggregatedHash)
 }
 
@@ -199,7 +217,7 @@ func TestLayerHashBlocksReqReceiverUnknownError(t *testing.T) {
 	db := newLayerDBMock()
 	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	lyrID := types.NewLayerID(100)
-	db.unknownErr = database.ErrNotFound
+	db.getBlocksErr = errors.New("unknown")
 
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
 	assert.Nil(t, out)
@@ -234,7 +252,7 @@ func generateEmptyLayer() []byte {
 		Blocks:         []types.BlockID{},
 		InputVector:    nil,
 		ProcessedLayer: types.NewLayerID(10),
-		Hash:           mesh.EmptyLayerHash,
+		Hash:           types.EmptyLayerHash,
 		AggregatedHash: randomHash(),
 	}
 	out, _ := types.InterfaceToBytes(lb)

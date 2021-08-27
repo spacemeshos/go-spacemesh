@@ -191,24 +191,23 @@ func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) ([]byte, e
 // it also returns the validation vector for this data and the latest blocks received in gossip
 func (l *Logic) layerBlocksReqReceiver(ctx context.Context, req []byte) ([]byte, error) {
 	lyrID := types.BytesToLayerID(req)
-	blockIDs, err := l.layerDB.LayerBlockIds(lyrID)
-	if err != nil {
-		l.log.WithContext(ctx).With().Debug("failed to get layer content", lyrID, log.Err(err))
-		return nil, ErrInternal
-	}
-
-	inputVector, err := l.layerDB.GetLayerInputVectorByID(lyrID)
-	if err != nil {
-		// best effort with input vector
-		l.log.WithContext(ctx).With().Debug("failed to get input vector for layer", lyrID, log.Err(err))
-	}
-
 	b := &layerBlocks{
-		Blocks:         blockIDs,
-		InputVector:    inputVector,
 		ProcessedLayer: l.layerDB.ProcessedLayer(),
 		Hash:           l.layerDB.GetLayerHash(lyrID),
 		AggregatedHash: l.layerDB.GetAggregatedLayerHash(lyrID),
+	}
+	var err error
+	b.Blocks, err = l.layerDB.LayerBlockIds(lyrID)
+	if err != nil {
+		if err != database.ErrNotFound {
+			l.log.WithContext(ctx).With().Debug("failed to get layer content", lyrID, log.Err(err))
+			return nil, ErrInternal
+		}
+	} else {
+		if b.InputVector, err = l.layerDB.GetLayerInputVectorByID(lyrID); err != nil {
+			// best effort with input vector
+			l.log.WithContext(ctx).With().Debug("failed to get input vector for layer", lyrID, log.Err(err))
+		}
 	}
 
 	out, err := types.InterfaceToBytes(b)
@@ -242,7 +241,6 @@ func (l *Logic) tortoiseBeaconReqReceiver(ctx context.Context, data []byte) ([]b
 // PollLayerContent polls peers for the content of a given layer ID.
 // it returns a channel for the caller to be notified when responses are received from all peers.
 func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) chan LayerPromiseResult {
-	l.log.WithContext(ctx).With().Info("polling layer content", layerID)
 	resChannel := make(chan LayerPromiseResult, 1)
 
 	remotePeers := l.net.GetPeers()
