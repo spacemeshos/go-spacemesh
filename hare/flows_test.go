@@ -280,6 +280,9 @@ func Test_multipleCPs(t *testing.T) {
 
 // Test - run multiple CPs where one of them runs more than one iteration
 func Test_multipleCPsAndIterations(t *testing.T) {
+	logtest.SetupGlobal(t)
+
+	types.SetLayersPerEpoch(4)
 	r := require.New(t)
 	totalCp := uint32(4)
 	test := newHareWrapper(totalCp)

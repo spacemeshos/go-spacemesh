@@ -204,7 +204,7 @@ func TestConsensusProcess_TerminationLimit(t *testing.T) {
 	p.cfg.RoundDuration = 1
 	p.Start(context.TODO())
 	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
-	assert.Equal(t, int32(1), p.k/4)
+	assert.EqualValues(t, 1, p.k/4)
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
@@ -274,9 +274,9 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
 	proc.advanceToNextRound(context.TODO())
 	proc.advanceToNextRound(context.TODO())
-	assert.Equal(t, int32(1), proc.k)
+	assert.EqualValues(t, 1, proc.k)
 	proc.advanceToNextRound(context.TODO())
-	assert.Equal(t, int32(2), proc.k)
+	assert.EqualValues(t, 2, proc.k)
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
