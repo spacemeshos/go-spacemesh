@@ -64,7 +64,7 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.Info) error {
 // Ping notifies `peer` about our p2p identity.
 func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 	plogger := p.logger.WithFields(log.String("type", "ping"), log.String("to", peer.String()))
-	plogger.Debug("send request")
+	plogger.Debug("send ping request")
 
 	data, err := types.InterfaceToBytes(p.local)
 	if err != nil {
@@ -73,19 +73,22 @@ func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 	ch := make(chan []byte)
 	foo := func(msg []byte) {
 		defer close(ch)
-		plogger.Debug("handle response")
+		plogger.Debug("handle ping response")
 		sender := &node.Info{}
 		err := types.BytesToInterface(msg, sender)
 
 		if err != nil {
-			plogger.Warning("got unreadable pong. err=%v", err)
+			plogger.With().Warning("got unreadable pong", log.Err(err))
 			return
 		}
 
-		// todo: if we pinged it we already have id so no need to update
-		// todo : but what if id or listen address has changed ?
-
-		ch <- sender.ID.Bytes()
+		// TODO: if we pinged it we already have id so no need to update,
+		//   but what if id or listen address has changed?
+		select {
+		case ch <- sender.ID.Bytes():
+		default:
+			plogger.With().Error("ping listener timed out, dropping response")
+		}
 	}
 
 	err = p.msgServer.SendRequest(ctx, server.PingPong, data, peer, foo, func(err error) {})

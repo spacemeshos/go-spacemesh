@@ -64,6 +64,18 @@ func (mr *MockpeersManagerMockRecorder) PeerCount() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerCount", reflect.TypeOf((*MockpeersManager)(nil).PeerCount))
 }
 
+// Close mocks base method
+func (m *MockpeersManager) Close() {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Close")
+}
+
+// Close indicates an expected call of Close
+func (mr *MockpeersManagerMockRecorder) Close() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*MockpeersManager)(nil).Close))
+}
+
 // MockbaseNetwork is a mock of baseNetwork interface
 type MockbaseNetwork struct {
 	ctrl     *gomock.Controller

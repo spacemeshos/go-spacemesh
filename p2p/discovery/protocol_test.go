@@ -35,7 +35,6 @@ func newTestNode(tb testing.TB, simulator *service.Simulator) *testNode {
 }
 
 func TestPing_Ping(t *testing.T) {
-
 	sim := service.NewSimulator()
 	p1 := newTestNode(t, sim)
 	p2 := newTestNode(t, sim)
@@ -98,7 +97,6 @@ func TestPing_Ping_Concurrency(t *testing.T) {
 // todo : test verifypinger
 
 func TestFindNodeProtocol_FindNode(t *testing.T) {
-
 	sim := service.NewSimulator()
 	n1 := newTestNode(t, sim)
 	n2 := newTestNode(t, sim)
@@ -113,7 +111,6 @@ func TestFindNodeProtocol_FindNode(t *testing.T) {
 
 //
 func TestFindNodeProtocol_FindNode2(t *testing.T) {
-
 	sim := service.NewSimulator()
 
 	n1 := newTestNode(t, sim)
@@ -147,7 +144,6 @@ func TestFindNodeProtocol_FindNode2(t *testing.T) {
 }
 
 func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
-
 	concurrency := 100
 
 	sim := service.NewSimulator()

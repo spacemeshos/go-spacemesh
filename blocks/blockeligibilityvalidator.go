@@ -104,7 +104,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			beaconShortString, epochNumber, counter, types.BytesToHash(vrfSig).ShortString())
 	}
 
-	v.log.Info("validated tortoise beacon eligibility VRF of beacon %v in epoch %v (counter: %v)", beaconShortString, epochNumber, counter)
+	v.log.Info("validated tortoise beacon eligibility vrf of beacon %v in epoch %v (counter: %v)", beaconShortString, epochNumber, counter)
 
 	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfSig)
 

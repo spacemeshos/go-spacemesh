@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -78,7 +79,12 @@ func (s *Simulator) SubscribeToPeerEvents(myid p2pcrypto.Key) (chan p2pcrypto.Pu
 func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.newPeersSubs {
-		ch <- peer
+		log.Debug("publish new peer on chan with len %v, cap %v", len(ch), cap(ch))
+		select {
+		case ch <- peer:
+		default:
+			log.Warning("unable to publish new peer event to subscriber")
+		}
 	}
 	s.subLock.Unlock()
 }
@@ -87,7 +93,11 @@ func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 func (s *Simulator) publishDelPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
 	for _, ch := range s.delPeersSubs {
-		ch <- peer
+		select {
+		case ch <- peer:
+		default:
+			log.Warning("unable to publish delete peer event to subscriber")
+		}
 	}
 	s.subLock.Unlock()
 }
@@ -278,10 +288,14 @@ func (sn *Node) sendMessageImpl(_ context.Context, nodeID p2pcrypto.PublicKey, p
 	thec, ok := sn.sim.protocolDirectHandler[nodeID][protocol]
 	sn.sim.mutex.RUnlock()
 	if ok {
-		thec <- simDirectMessage{simulatorMetadata(), payload, sn.Info.PublicKey()}
+		select {
+		case thec <- simDirectMessage{simulatorMetadata(), payload, sn.Info.PublicKey()}:
+		default:
+			return fmt.Errorf("unable to send direct message for protocol %v node %v", protocol, nodeID.String())
+		}
 		return nil
 	}
-	return errors.New("could not find " + protocol + " handler for node: " + nodeID.String())
+	return fmt.Errorf("could not find %v handler for node %v", protocol, nodeID.String())
 }
 
 func (sn *Node) sleep(delay uint32) {
@@ -364,22 +378,12 @@ func (sn *Node) RegisterDirectProtocolWithChannel(protocol string, ingressChanne
 	return ingressChannel
 }
 
-// Shutdown closes all node channels are remove it from the Simulator map
+// Shutdown closes all node channels and removes them from the Simulator map
 func (sn *Node) Shutdown() {
 	sn.sim.mutex.Lock()
-	// TODO: close all chans, but that makes us send on nil chan.
 	delete(sn.sim.protocolDirectHandler, sn.Info.PublicKey())
 	delete(sn.sim.protocolGossipHandler, sn.Info.PublicKey())
+	delete(sn.sim.nodes, sn.Info.PublicKey())
 	sn.sim.mutex.Unlock()
-
-	sn.sim.subLock.Lock()
-	for _, ch := range sn.sim.newPeersSubs {
-		close(ch)
-	}
-	sn.sim.newPeersSubs = nil
-	for _, ch := range sn.sim.delPeersSubs {
-		close(ch)
-	}
-	sn.sim.delPeersSubs = nil
-	sn.sim.subLock.Unlock()
+	sn.sim.publishDelPeer(sn.Info.PublicKey())
 }

@@ -96,12 +96,13 @@ func (a *addrBook) loadPeers(filePath string) {
 
 	err := a.deserializePeers(filePath)
 	if err != nil {
-		a.logger.Error("Failed to parse file %s: %v", filePath, err)
+		a.logger.With().Error("failed to parse file", log.String("path", filePath), log.Err(err))
 		// if it is invalid we nuke the old one unconditionally.
 		err = os.Remove(filePath)
 		if err != nil {
-			a.logger.Warning("Failed to remove corrupt peers file %s: %v",
-				filePath, err)
+			a.logger.With().Warning("failed to remove corrupt peers file",
+				log.String("path", filePath),
+				log.Err(err))
 		}
 		a.reset()
 		return
@@ -109,10 +110,10 @@ func (a *addrBook) loadPeers(filePath string) {
 }
 
 func (a *addrBook) deserializePeers(filePath string) error {
-
 	_, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
-		a.logger.Warning("Peers not loaded to addrbook since file does not exist. file=%v", filePath)
+		a.logger.With().Warning("peers not loaded to addrbook since file does not exist",
+			log.String("path", filePath))
 		return nil
 	}
 	r, err := os.Open(filePath)

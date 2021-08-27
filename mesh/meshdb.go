@@ -24,6 +24,9 @@ type layerMutex struct {
 	layerWorkers uint32
 }
 
+// ErrInvalidLayer signifies that hare has failed for a given layer, thus marking it invalid
+var ErrInvalidLayer = errors.New("layer invalid")
+
 // DB represents a mesh database instance
 type DB struct {
 	log.Log
@@ -38,7 +41,8 @@ type DB struct {
 	unappliedTxsMutex     sync.Mutex
 	blockMutex            sync.RWMutex
 	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
-	coinflips             map[types.LayerID]bool // weak coinflip results from Hare
+	invalidatedLayers     map[types.LayerID]struct{} // layers for which Hare has failed
+	coinflips             map[types.LayerID]bool     // weak coinflip results from Hare
 	layerMutex            map[types.LayerID]*layerMutex
 	lhMutex               sync.Mutex
 	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
@@ -87,21 +91,22 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 		unappliedTxs:       utx,
 		inputVector:        iv,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
+		invalidatedLayers:  make(map[types.LayerID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
 	for _, blk := range GenesisLayer().Blocks() {
-		ll.Log.With().Info("Adding genesis block ", blk.ID(), blk.LayerIndex)
-		if err := ll.AddBlock(blk); err != nil {
-			ll.Log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+		ll.Log.With().Info("adding genesis block", blk.ID(), blk.LayerIndex)
+		if err = ll.AddBlock(blk); err != nil {
+			ll.Log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex, log.Err(err))
 		}
-		if err := ll.SaveContextualValidity(blk.ID(), true); err != nil {
-			ll.Log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+		if err = ll.SaveContextualValidity(blk.ID(), blk.LayerIndex, true); err != nil {
+			ll.Log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex, log.Err(err))
 		}
 	}
-	if err := ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
-		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+	if err = ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+		log.With().Error("error inserting genesis input vector to db", GenesisLayer().Index(), log.Err(err))
 	}
 	return ll, err
 }
@@ -117,9 +122,9 @@ func (m *DB) PersistentData() bool {
 }
 
 // NewMemMeshDB is a mock used for testing
-func NewMemMeshDB(log log.Log) *DB {
+func NewMemMeshDB(logger log.Log) *DB {
 	ll := &DB{
-		Log:                log,
+		Log:                logger,
 		blockCache:         newBlockCache(100 * layerSize),
 		blocks:             database.NewMemDatabase(),
 		layers:             database.NewMemDatabase(),
@@ -129,16 +134,18 @@ func NewMemMeshDB(log log.Log) *DB {
 		unappliedTxs:       database.NewMemDatabase(),
 		inputVector:        database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
+		invalidatedLayers:  make(map[types.LayerID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
 	for _, blk := range GenesisLayer().Blocks() {
-		ll.AddBlock(blk)
-		ll.SaveContextualValidity(blk.ID(), true)
+		// these are only used for testing so we can safely ignore errors here
+		_ = ll.AddBlock(blk)
+		_ = ll.SaveContextualValidity(blk.ID(), blk.LayerIndex, true)
 	}
 	if err := ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
-		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+		logger.With().Error("error inserting genesis input vector to db", GenesisLayer().Index(), log.Err(err))
 	}
 	return ll
 }
@@ -323,15 +330,36 @@ func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
 }
 
 // SaveContextualValidity persists opinion on block to the database
-func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
+func (m *DB) SaveContextualValidity(id types.BlockID, _ types.LayerID, valid bool) error {
 	var v []byte
 	if valid {
 		v = constTrue
 	} else {
 		v = constFalse
 	}
-	m.Debug("save contextual validity %v %v", id, valid)
+	m.With().Debug("save block contextual validity", id, log.Bool("validity", valid))
 	return m.contextualValidity.Put(id.Bytes(), v)
+}
+
+// SaveLayerInputVector saves the input vote vector for a layer (hare results)
+func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) error {
+	bytes, err := types.InterfaceToBytes(vector)
+	if err != nil {
+		return err
+	}
+
+	return m.inputVector.Put(hash.Bytes(), bytes)
+}
+
+// InvalidateLayer receives notification from Hare that it failed for a layer. If Hare explicitly fails for a
+// layer, we consider all blocks in that layer to be invalid. Note that simply not having received a layer from Hare
+// as _validated_ is not sufficient information since we might still be waiting for Hare to finish for the layer. This
+// method lets us know that Hare has given up.
+// Note: this method is only called from the Hare's outputCollectionLoop, and there should only ever be one of those
+// running. If it is called on any other code paths, it will need to be made goroutine safe.
+func (m *DB) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
+	m.WithContext(ctx).With().Info("recording hare invalidated layer in mesh", layerID)
+	m.invalidatedLayers[layerID] = struct{}{}
 }
 
 // RecordCoinflip saves the weak coinflip result to memory for the given layer
@@ -343,7 +371,7 @@ func (m *DB) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip
 }
 
 // GetCoinflip returns the weak coinflip result for the given layer
-func (m *DB) GetCoinflip(ctx context.Context, layerID types.LayerID) (bool, bool) {
+func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) {
 	coin, exists := m.coinflips[layerID]
 	return coin, exists
 }
@@ -361,12 +389,29 @@ func (m *DB) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
 	return ids, nil
 }
 
+// InputVectorBackupFunc specifies a backup function for testing
+type InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
+
 // GetLayerInputVectorByID gets the input vote vector for a layer (hare results)
-func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
+func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, error) {
 	if m.InputVectorBackupFunc != nil {
-		return m.InputVectorBackupFunc(id)
+		return m.InputVectorBackupFunc(layerID)
 	}
-	return m.GetLayerInputVector(types.CalcHash32(id.Bytes()))
+	// check if this layer was marked invalid
+	if _, ok := m.invalidatedLayers[layerID]; ok {
+		return nil, ErrInvalidLayer
+	}
+	return m.GetLayerInputVector(types.CalcHash32(layerID.Bytes()))
+}
+
+// SetInputVectorBackupFunc sets the backup function for testing
+func (m *DB) SetInputVectorBackupFunc(fn InputVectorBackupFunc) {
+	m.InputVectorBackupFunc = fn
+}
+
+// GetInputVectorBackupFunc gets the backup function for testing
+func (m *DB) GetInputVectorBackupFunc() InputVectorBackupFunc {
+	return m.InputVectorBackupFunc
 }
 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
@@ -375,6 +420,7 @@ func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blk
 	m.WithContext(ctx).With().Info("saving input vector",
 		id,
 		log.String("iv_hash", hash.ShortString()))
+
 	// NOTE(dshulyak) there is an implicit dependency in fetcher
 	buf, err := codec.Encode(blks)
 	if err != nil {
@@ -417,9 +463,9 @@ func (m *DB) writeBlock(bl *types.Block) error {
 		Signature: bl.Signature,
 		MinerID:   bl.MinerID().Bytes(),
 	}
-	if bytes, err := types.InterfaceToBytes(block); err != nil {
+	if ifBytes, err := types.InterfaceToBytes(block); err != nil {
 		return fmt.Errorf("could not encode block: %w", err)
-	} else if err := m.blocks.Put(bl.ID().Bytes(), bytes); err != nil {
+	} else if err := m.blocks.Put(bl.ID().Bytes(), ifBytes); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)
 	} else if err := m.updateLayerWithBlock(bl); err != nil {
 		return fmt.Errorf("could not update layer %v with new block %v: %w", bl.Layer(), bl.ID(), err)
@@ -634,7 +680,7 @@ func (m *DB) writeTransactions(block *types.Block, txs ...*types.Transaction) er
 		if err != nil {
 			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
 		}
-		m.Log.Info("storing tx id %v size %v", t.ID().ShortString(), len(bytes))
+		m.Log.With().Debug("storing transaction", t.ID(), log.Int("tx_length", len(bytes)))
 		if err := batch.Put(t.ID().Bytes(), bytes); err != nil {
 			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 		}
@@ -942,7 +988,7 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 	for _, b := range blocks {
 		valid, err := m.ContextualValidity(b.ID())
 		if err != nil {
-			m.With().Warning("could not get contextual validity by block", b.ID(), log.Err(err))
+			m.With().Warning("could not get contextual validity for block in list", b.ID(), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)
@@ -954,11 +1000,12 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 }
 
 // LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer
-func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	logger := m.WithContext(ctx)
 	if layer == types.NewLayerID(0) || layer == types.NewLayerID(1) {
 		v, err := m.LayerBlockIds(layer)
 		if err != nil {
-			m.With().Error("could not get layer block ids", layer, log.Err(err))
+			logger.With().Error("could not get layer block ids", layer, log.Err(err))
 			return nil, err
 		}
 
@@ -982,6 +1029,7 @@ func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockI
 	for _, b := range blockIds {
 		valid, err := m.ContextualValidity(b)
 		if err != nil {
+			logger.With().Warning("could not get contextual validity for block in layer", b, layer, log.Err(err))
 			cvErrors[err.Error()] = append(cvErrors[err.Error()], b)
 			cvErrorCount++
 		}
@@ -993,13 +1041,15 @@ func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockI
 		validBlks[b] = struct{}{}
 	}
 
-	m.With().Info("count of contextually valid blocks in layer",
+	logger.With().Debug("count of contextually valid blocks in layer",
 		layer,
 		log.Int("count_valid", len(validBlks)),
 		log.Int("count_error", cvErrorCount),
 		log.Int("count_total", len(blockIds)))
 	if cvErrorCount != 0 {
-		m.With().Error("errors occurred getting contextual validity", layer,
+		logger.With().Error("errors occurred getting contextual validity of blocks in layer",
+			layer,
+			log.Int("count", cvErrorCount),
 			log.String("errors", fmt.Sprint(cvErrors)))
 	}
 	return validBlks, nil

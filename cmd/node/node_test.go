@@ -561,7 +561,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
 	localNet := service.NewSimulator()
-	cfg := getTestDefaultConfig(1)
+	cfg := getTestDefaultConfig()
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	require.NoError(t, err)

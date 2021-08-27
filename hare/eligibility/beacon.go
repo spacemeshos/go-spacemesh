@@ -27,9 +27,9 @@ type Beacon struct {
 // NewBeacon returns a new beacon
 // confidenceParam is the number of layers that the Beacon assumes for consensus view.
 func NewBeacon(beaconGetter blocks.BeaconGetter, confidenceParam uint32, logger log.Log) *Beacon {
-	c, e := lru.New(activesCacheSize)
-	if e != nil {
-		logger.Panic("could not create lru cache, err: %v", e)
+	c, err := lru.New(activesCacheSize)
+	if err != nil {
+		logger.With().Panic("could not create lru cache", log.Err(err))
 	}
 	return &Beacon{
 		beaconGetter:    beaconGetter,
@@ -41,7 +41,6 @@ func NewBeacon(beaconGetter blocks.BeaconGetter, confidenceParam uint32, logger 
 
 // Value returns the beacon value for an epoch
 // Note: Value is concurrency-safe but not concurrency-optimized
-// TODO: does this ever return an error? If not, remove it
 func (b *Beacon) Value(ctx context.Context, epochID types.EpochID) (uint32, error) {
 	// TODO(nkryuchkov): remove when beacon sync is done
 	beaconSyncEnabled := false
