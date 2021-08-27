@@ -92,12 +92,10 @@ type syncer interface {
 	RegisterChForSynced(context.Context, chan struct{})
 }
 
-//go:generate mockgen -package=mocks -destination=./mocks/activation_mocks.go -source=./activation.go
-
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(ctx context.Context, coinbase types.Address, opts PostSetupOpts) error
+	StartSmeshing(coinbase types.Address, opts PostSetupOpts) error
 	StopSmeshing(deleteFiles bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
@@ -179,11 +177,19 @@ func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption 
 	}
 }
 
+// WithContext modifies parent context for background job.
+func WithContext(ctx context.Context) BuilderOption {
+	return func(b *Builder) {
+		b.runCtx = ctx
+	}
+}
+
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider,
 	layersPerEpoch uint32, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
+		runCtx:            context.Background(),
 		signer:            signer,
 		nodeID:            nodeID,
 		coinbaseAccount:   conf.CoinbaseAccount,
@@ -204,6 +210,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 	for _, opt := range opts {
 		opt(b)
 	}
+	b.runCtx, b.stop = context.WithCancel(b.runCtx)
 	return b
 }
 
@@ -220,14 +227,13 @@ func (b *Builder) Smeshing() bool {
 // If the post data is incomplete or missing, data creation
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
-func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opts PostSetupOpts) error {
+func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
 	b.mtx.Lock()
 	if b.status != smeshingStatusIdle {
 		b.mtx.Unlock()
 		return errors.New("already started")
 	}
 	b.status = smeshingStatusPendingPostSetup
-	b.runCtx, b.stop = context.WithCancel(ctx)
 	b.mtx.Unlock()
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)
