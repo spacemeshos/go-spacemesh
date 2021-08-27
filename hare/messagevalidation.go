@@ -12,7 +12,7 @@ import (
 
 type messageValidator interface {
 	SyntacticallyValidateMessage(ctx context.Context, m *Msg) bool
-	ContextuallyValidateMessage(ctx context.Context, m *Msg, expectedK int32) error
+	ContextuallyValidateMessage(ctx context.Context, m *Msg, expectedK uint32) error
 }
 
 type identityProvider interface {
@@ -137,7 +137,7 @@ var (
 
 // ContextuallyValidateMessage checks if the message is contextually valid.
 // Returns nil if the message is contextually valid or a suitable error otherwise.
-func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context, m *Msg, currentK int32) error {
+func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context, m *Msg, currentK uint32) error {
 	if m == nil {
 		return errNilMsg
 	}
@@ -359,8 +359,8 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 			logger.With().Warning("proposal validation failed: not same iteration",
 				log.String("sender_id", m.PubKey.ShortString()),
 				types.LayerID(m.InnerMsg.InstanceID),
-				log.Int32("expected", proposalIter),
-				log.Int32("actual", statusIter))
+				log.Uint32("expected", proposalIter),
+				log.Uint32("actual", statusIter))
 			return false
 		}
 
@@ -378,17 +378,17 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 		return false
 	}
 
-	maxKi := int32(-1) // Ki>=-1
+	maxKi := preRound // Ki>=-1
 	var maxSet []types.BlockID
 	for _, status := range msg.InnerMsg.Svp.Messages {
 		// track max
-		if status.InnerMsg.Ki > maxKi {
+		if status.InnerMsg.Ki > maxKi || maxKi == preRound {
 			maxKi = status.InnerMsg.Ki
 			maxSet = status.InnerMsg.Values
 		}
 	}
 
-	if maxKi == -1 { // type A
+	if maxKi == preRound { // type A
 		if !v.validateSVPTypeA(ctx, msg) {
 			logger.Warning("proposal validation failed: type a validation failed")
 			return false

@@ -124,7 +124,7 @@ func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.
 
 func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload []byte) error {
 	msg, _ := MessageFromBuffer(payload)
-	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != -1 {
+	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != preRound {
 		return m.err
 	}
 
@@ -141,15 +141,15 @@ func (trueOracle) Register(bool, string) {
 func (trueOracle) Unregister(bool, string) {
 }
 
-func (trueOracle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+func (trueOracle) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
 }
 
-func (trueOracle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
+func (trueOracle) CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error) {
 	return 1, nil
 }
 
-func (trueOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
+func (trueOracle) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	x := make([]byte, 100)
 	return x, nil
 }

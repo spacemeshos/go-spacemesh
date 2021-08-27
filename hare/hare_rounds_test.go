@@ -51,7 +51,7 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 	}
 }
 
-type funcOracle func(types.LayerID, int32, int, types.NodeID, []byte, *testHare) (uint16, error)
+type funcOracle func(types.LayerID, uint32, int, types.NodeID, []byte, *testHare) (uint16, error)
 type funcLayers func(types.LayerID, *testHare) ([]types.BlockID, error)
 type funcValidate func(types.LayerID, []types.BlockID, *testHare)
 type testHare struct {
@@ -62,16 +62,16 @@ type testHare struct {
 	N        int
 }
 
-func (h *testHare) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committee int, id types.NodeID, sig []byte) (uint16, error) {
+func (h *testHare) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committee int, id types.NodeID, sig []byte) (uint16, error) {
 	return h.oracle(layer, round, committee, id, sig, h)
 }
 
 func (testHare) Register(bool, string)   {}
 func (testHare) Unregister(bool, string) {}
-func (testHare) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+func (testHare) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
 }
-func (testHare) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
+func (testHare) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	return []byte{}, nil
 }
 func (testHare) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
@@ -131,7 +131,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 2, 5,
-		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round/4 > 1 {
 				t.Fatal("out of round limit")
 			}
@@ -168,7 +168,7 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 1, 5,
-		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == statusRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
@@ -204,7 +204,7 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 1, 5,
-		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == proposalRound {
 				return 0, nil
 			}
@@ -240,7 +240,7 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 1, 5,
-		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == commitRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
@@ -276,7 +276,7 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 1, 5,
-		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			if round%4 == notifyRound && hare.N >= committee/2-1 {
 				return 0, nil
 			}
@@ -312,7 +312,7 @@ func Test_HareComplete(t *testing.T) {
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 1, 5,
-		func(layer types.LayerID, round int32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
+		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			return 1, nil
 		},
 		func(layer types.LayerID, hare *testHare) ([]types.BlockID, error) {

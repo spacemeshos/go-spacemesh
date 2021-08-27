@@ -48,30 +48,30 @@ func (nt *notifyTracker) NotificationsCount(s *Set) int {
 }
 
 // calculates a unique id for the provided k and set.
-func calcID(k int32, set *Set) uint32 {
+func calcID(k uint32, set *Set) uint32 {
 	hash := fnv.New32()
 
 	// write K
 	buff := make([]byte, 4)
-	binary.LittleEndian.PutUint32(buff, uint32(k)) // K>=0 because this not pre-round
+	binary.LittleEndian.PutUint32(buff, k) // K>=0 because this not pre-round
 	hash.Write(buff)
 
 	// TODO: is this hash enough for this usage?
 	// write set ObjectID
 	buff = make([]byte, 4)
-	binary.LittleEndian.PutUint32(buff, uint32(set.ID()))
+	binary.LittleEndian.PutUint32(buff, set.ID())
 	hash.Write(buff)
 
 	return hash.Sum32()
 }
 
 // tracks certificates
-func (nt *notifyTracker) onCertificate(k int32, set *Set) {
+func (nt *notifyTracker) onCertificate(k uint32, set *Set) {
 	nt.certificates[calcID(k, set)] = struct{}{}
 }
 
 // HasCertificate returns true if a certificate exist for the provided set in the provided round, false otherwise.
-func (nt *notifyTracker) HasCertificate(k int32, set *Set) bool {
+func (nt *notifyTracker) HasCertificate(k uint32, set *Set) bool {
 	_, exist := nt.certificates[calcID(k, set)]
 	return exist
 }

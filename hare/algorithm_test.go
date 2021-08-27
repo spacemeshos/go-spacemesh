@@ -33,7 +33,7 @@ func (mmv *mockMessageValidator) SyntacticallyValidateMessage(context.Context, *
 	return mmv.syntaxValid
 }
 
-func (mmv *mockMessageValidator) ContextuallyValidateMessage(context.Context, *Msg, int32) error {
+func (mmv *mockMessageValidator) ContextuallyValidateMessage(context.Context, *Msg, uint32) error {
 	mmv.countContext++
 	return mmv.contextValid
 }
@@ -44,18 +44,18 @@ type mockRolacle struct {
 	MockStateQuerier
 }
 
-func (mr *mockRolacle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+func (mr *mockRolacle) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return mr.isEligible, mr.err
 }
 
-func (mr *mockRolacle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
+func (mr *mockRolacle) CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error) {
 	if mr.isEligible {
 		return 1, nil
 	}
 	return 0, mr.err
 }
 
-func (mr *mockRolacle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
+func (mr *mockRolacle) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	return []byte{}, nil
 }
 
@@ -506,7 +506,7 @@ func TestProcOutput_Set(t *testing.T) {
 
 func TestIterationFromCounter(t *testing.T) {
 	for i := 0; i < 10; i++ {
-		assert.Equal(t, int32(i/4), iterationFromCounter(int32(i)))
+		assert.Equal(t, uint32(i/4), iterationFromCounter(uint32(i)))
 	}
 }
 
