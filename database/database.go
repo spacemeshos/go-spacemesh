@@ -61,7 +61,7 @@ func NewLDBDatabase(file string, cache int, handles int, logger log.Log) (*LDBDa
 	if handles < 16 {
 		handles = 16
 	}
-	logger.With().Info("Allocated cache and file handles",
+	logger.With().Info("allocated cache and file handles",
 		log.Int("cache_size", cache),
 		log.Int("num_handles", handles))
 

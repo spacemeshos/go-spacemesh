@@ -47,7 +47,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 	}
 
 	pub := m.PubKey
-	layer := types.LayerID(m.InnerMsg.InstanceID)
+	layer := m.InnerMsg.InstanceID
 	if layer.GetEpoch().IsGenesis() {
 		return true, nil // TODO: remove this lie after inception problem is addressed
 	}
@@ -84,7 +84,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 		ev.WithContext(ctx).With().Error("error occurred while validating role",
 			log.Err(err),
 			log.String("sender_id", m.PubKey.ShortString()),
-			types.LayerID(m.InnerMsg.InstanceID),
+			m.InnerMsg.InstanceID,
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
@@ -93,7 +93,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 	if !res {
 		ev.WithContext(ctx).With().Warning("validate message failed: role is invalid",
 			log.String("sender_id", m.PubKey.ShortString()),
-			types.LayerID(m.InnerMsg.InstanceID),
+			m.InnerMsg.InstanceID,
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
