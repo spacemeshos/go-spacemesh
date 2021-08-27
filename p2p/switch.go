@@ -63,7 +63,7 @@ type Switch struct {
 	lNode node.LocalNode
 
 	// map between protocol names to listening protocol handlers
-	// NOTE: maybe let more than one handler register on a protocol ?
+	// NOTE: maybe let more than one handler register on a protocol?
 	directProtocolHandlers map[string]chan service.DirectMessage
 	gossipProtocolHandlers map[string]chan service.GossipMessage
 
@@ -512,7 +512,7 @@ func (s *Switch) isShuttingDown() bool {
 	return false
 }
 
-// listenToNetworkMessages is listening on new messages from the opened connections and processes them.
+// listenToNetworkMessages listens on new messages from the opened connections and processes them.
 func (s *Switch) listenToNetworkMessages(ctx context.Context) {
 	// We listen to each of the messages queues we get from `net`
 	// It's net's responsibility to distribute the messages to the queues

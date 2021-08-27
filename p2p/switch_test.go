@@ -322,11 +322,11 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 
 	p1 := p2pTestNoStart(t, configWithPort(0))
 	p2 := p2pTestNoStart(t, configWithPort(0))
+	defer p1.Shutdown()
+	defer p2.Shutdown()
 
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
 	require.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
-	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
-	require.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
 
 	require.NoError(t, p1.Start(context.TODO()))
 	require.NoError(t, p2.Start(context.TODO()))
@@ -353,9 +353,6 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-
-	p1.Shutdown()
-	p2.Shutdown()
 }
 
 type swarmArray struct {
@@ -870,9 +867,6 @@ func Test_Swarm_callCpoolCloseCon(t *testing.T) {
 	cpm := newCpoolMock()
 	p1.cPool = cpm
 
-	wg := sync.WaitGroup{}
-	wg.Add(2)
-
 	_, err := p2.cPool.GetConnection(context.TODO(), p1.network.LocalAddr(), p1.lNode.PublicKey())
 	require.NoError(t, err)
 
@@ -931,7 +925,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 	case <-p.initial:
 		break
 	case <-ti:
-		t.Error("Start succeded")
+		t.Error("start succeeded")
 	}
 
 	p.Shutdown()
@@ -1081,7 +1075,7 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 
 	cm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (connection net.Connection, e error) {
 		atomicIncOne(&getConnCount)
-		return nil, errors.New("coudln't create connection")
+		return nil, errors.New("couldn't create connection")
 	}
 
 	n.cPool = cm
