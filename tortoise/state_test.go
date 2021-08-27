@@ -182,6 +182,7 @@ func BenchmarkStatePersist(b *testing.B) {
 }
 
 func TestRecoverData(t *testing.T) {
+	t.Skip("for debugging purposes")
 	mdb, err := mesh.NewPersistentMeshDB("/tmp/data55/203/mesh", 1, logtest.New(t))
 	require.NoError(t, err)
 	db, err := database.NewLDBDatabase("/tmp/data55/203/turtle/", 0, 0, logtest.New(t))
