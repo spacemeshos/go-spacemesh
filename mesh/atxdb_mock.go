@@ -1,7 +1,9 @@
 package mesh
 
 import (
+	"context"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -44,12 +46,12 @@ func (t *AtxDbMock) AddAtx(id types.ATXID, atx *types.ActivationTx) {
 }
 
 // ProcessAtxs counts how many ATXs were processed
-func (t *AtxDbMock) ProcessAtxs(atxs []*types.ActivationTx) error {
+func (t *AtxDbMock) ProcessAtxs(_ context.Context, atxs []*types.ActivationTx) error {
 	t.ProcCnt += len(atxs)
 	return nil
 }
 
 // SyntacticallyValidateAtx always returns no error
-func (AtxDbMock) SyntacticallyValidateAtx(*types.ActivationTx) error {
+func (AtxDbMock) SyntacticallyValidateAtx(context.Context, *types.ActivationTx) error {
 	return nil
 }

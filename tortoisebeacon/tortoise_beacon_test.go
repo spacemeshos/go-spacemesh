@@ -32,6 +32,12 @@ func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uin
 	return nil
 }
 
+type testSyncState bool
+
+func (ss testSyncState) IsSynced(context.Context) bool {
+	return bool(ss)
+}
+
 func TestTortoiseBeacon(t *testing.T) {
 	t.Parallel()
 
@@ -75,6 +81,7 @@ func TestTortoiseBeacon(t *testing.T) {
 
 	tb := New(conf, ld, minerID, n1, mockDB, nil, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, clock, logger)
 	requirer.NotNil(tb)
+	tb.SetSyncState(testSyncState(true))
 
 	err = tb.Start(context.TODO())
 	requirer.NoError(err)
@@ -468,7 +475,7 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 				vrfSigner: vrfSigner,
 			}
 
-			result, err := tb.getSignedProposal(tc.epoch)
+			result, err := tb.getSignedProposal(context.TODO(), tc.epoch)
 			r.NoError(err)
 			r.Equal(string(tc.result), string(result))
 		})

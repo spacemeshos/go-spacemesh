@@ -50,7 +50,7 @@ type MeshValidatorMock struct {
 	mdb *DB
 }
 
-func (m *MeshValidatorMock) Persist() error {
+func (m *MeshValidatorMock) Persist(context.Context) error {
 	return nil
 }
 
@@ -58,17 +58,18 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 	panic("implement me")
 }
 
-func (m *MeshValidatorMock) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
-	return layer.Index().Sub(1), layer.Index()
+func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
+	return layerID.Sub(1), layerID, false
 }
-func (m *MeshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
-	return bl.Layer().Sub(1), bl.Layer()
+
+func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, bl []*types.Block) (types.LayerID, types.LayerID) {
+	return bl[0].Layer().Sub(1), bl[0].Layer()
 }
 
 type MockState struct{}
 
-func (MockState) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	panic("implement me")
+func (MockState) ValidateAndAddTxToPool(*types.Transaction) error {
+	return nil
 }
 
 func (MockState) LoadState(types.LayerID) error {
@@ -102,14 +103,15 @@ func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
-func (MockState) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
+func (MockState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 	panic("implement me")
 }
 
-func (MockState) GetBalance(addr types.Address) uint64 {
+func (MockState) GetBalance(types.Address) uint64 {
 	panic("implement me")
 }
-func (MockState) GetNonce(addr types.Address) uint64 {
+
+func (MockState) GetNonce(types.Address) uint64 {
 	panic("implement me")
 }
 
@@ -143,7 +145,7 @@ func getMesh(tb testing.TB, id string) *Mesh {
 
 func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
 	if layerSize == 0 {
-		msh.SetZeroBlockLayer(id)
+		r.NoError(msh.SetZeroBlockLayer(id))
 	} else {
 		for i := 0; i < layerSize; i++ {
 			txIDs, _ := addManyTXsToPool(r, msh, 4)
@@ -151,7 +153,7 @@ func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh)
 			block.Initialize()
 			err := msh.AddBlockWithTxs(context.TODO(), block)
 			r.NoError(err, "cannot add data to test")
-			msh.contextualValidity.Put(block.ID().Bytes(), []byte{1})
+			r.NoError(msh.contextualValidity.Put(block.ID().Bytes(), []byte{1}))
 		}
 	}
 	l, err := msh.GetLayer(id)
@@ -173,7 +175,7 @@ func TestMesh_GetLayerHash(t *testing.T) {
 
 	numBlocks := 10
 	lyr = addLayer(r, lyrID, numBlocks, msh)
-	msh.SaveContextualValidity(lyr.Blocks()[0].ID(), false)
+	r.NoError(msh.SaveContextualValidity(lyr.Blocks()[0].ID(), lyrID, false))
 
 	// before a layer is validated, all blocks count towards its hash, valid or not
 	lyr, err = msh.GetLayer(lyrID)
@@ -182,7 +184,7 @@ func TestMesh_GetLayerHash(t *testing.T) {
 	assert.Equal(t, lyr.Hash(), msh.GetLayerHash(lyrID))
 
 	validBlocks := lyr.Blocks()[1:]
-	msh.ValidateLayer(lyr)
+	msh.ValidateLayer(context.TODO(), lyr)
 	// after a layer is validated, only contextually valid blocks count towards its hash
 	expHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(validBlocks)), nil)
 	assert.Equal(t, expHash, msh.GetLayerHash(lyrID))
@@ -197,12 +199,12 @@ func TestMesh_GetLayerHash(t *testing.T) {
 	lyr, err = msh.GetLayer(lyrID)
 	r.NoError(err)
 	assert.Equal(t, numBlocks+1, len(lyr.Blocks()))
-	msh.ValidateLayer(lyr)
+	msh.ValidateLayer(context.TODO(), lyr)
 	assert.Equal(t, expHash, msh.GetLayerHash(lyrID))
 
 	// now if the late block is determined valid, the hash should be updated
-	msh.SaveContextualValidity(block.ID(), true)
-	msh.ValidateLayer(lyr)
+	r.NoError(msh.SaveContextualValidity(block.ID(), lyrID, true))
+	msh.ValidateLayer(context.TODO(), lyr)
 	newExpectedHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(append(validBlocks, block))), nil)
 	assert.Equal(t, newExpectedHash, msh.GetLayerHash(lyrID))
 }
@@ -224,7 +226,7 @@ func TestMesh_SetZeroBlockLayer(t *testing.T) {
 
 	// it's ok to add to an empty layer
 	lyr = addLayer(r, lyrID, 10, msh)
-	msh.ValidateLayer(lyr)
+	msh.ValidateLayer(context.TODO(), lyr)
 	lyr, err = msh.GetLayer(lyrID)
 	r.NoError(err)
 	assert.Equal(t, 10, len(lyr.Blocks()))
@@ -270,7 +272,7 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 	prevHash := EmptyLayerHash
 	for i := types.NewLayerID(1); i.Before(gLyr); i = i.Add(1) {
 		lyr := addLayer(r, i, 0, msh)
-		msh.ValidateLayer(lyr)
+		msh.ValidateLayer(context.TODO(), lyr)
 		aggHash := types.CalcBlocksHash32([]types.BlockID{}, prevHash.Bytes())
 		assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
 		prevHash = aggHash
@@ -278,7 +280,7 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 	lyr, err := msh.GetLayer(gLyr)
 	r.NoError(err)
 	assert.Equal(t, 1, len(lyr.Blocks()))
-	msh.ValidateLayer(lyr)
+	msh.ValidateLayer(context.TODO(), lyr)
 	aggHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(lyr.Blocks())), prevHash.Bytes())
 	assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
 	prevHash = aggHash
@@ -287,8 +289,8 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 	lyrID := gLyr.Add(1)
 	lyr = addLayer(r, lyrID, 5, msh)
 	r.Equal(5, len(lyr.Blocks()))
-	r.NoError(msh.SaveContextualValidity(lyr.Blocks()[0].ID(), false))
-	msh.ValidateLayer(lyr)
+	r.NoError(msh.SaveContextualValidity(lyr.Blocks()[0].ID(), lyrID, false))
+	msh.ValidateLayer(context.TODO(), lyr)
 	// aggregated layer hash only includes valid blocks
 	aggHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(lyr.Blocks()[1:])), prevHash.Bytes())
 	assert.Equal(t, aggHash, msh.GetAggregatedLayerHash(lyr.Index()))
@@ -628,7 +630,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 		r.Equal(111, int(txns[i].TotalAmount))
 	}
 
-	msh.pushLayersToState(types.GetEffectiveGenesis().Add(1), types.GetEffectiveGenesis().Add(2))
+	msh.pushLayersToState(context.TODO(), types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(1))
 	r.Equal(4, len(state.Txs))
 
 	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(state.Pool...))
@@ -736,7 +738,7 @@ func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid b
 		msh.txPool.Put(tx.ID(), tx)
 	}
 	blk.Initialize()
-	err := msh.SaveContextualValidity(blk.ID(), valid)
+	err := msh.SaveContextualValidity(blk.ID(), blk.LayerIndex, valid)
 	r.NoError(err)
 
 	err = msh.AddBlockWithTxs(context.TODO(), blk)

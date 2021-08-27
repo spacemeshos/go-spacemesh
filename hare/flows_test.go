@@ -183,10 +183,6 @@ func Test_consensusIterations(t *testing.T) {
 	test.WaitForTimedTermination(t, 30*time.Second)
 }
 
-func validateBlock([]types.BlockID) bool {
-	return true
-}
-
 func isSynced(context.Context) bool {
 	return true
 }
@@ -222,11 +218,14 @@ type mockBlockProvider struct {
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
 
-func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
-	return buildSet(), nil
+func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
 }
 
-func (mbp *mockBlockProvider) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
+func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
+}
+
+func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
+	return buildSet(), nil
 }
 
 func createMaatuf(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string) *Hare {
@@ -237,7 +236,7 @@ func createMaatuf(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID
 		panic("failed to create vrf signer")
 	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
-	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
+	hare := New(tcfg, p2p, ed, nodeID, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, layersCh, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare

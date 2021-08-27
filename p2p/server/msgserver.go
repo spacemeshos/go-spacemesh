@@ -153,9 +153,9 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 
 // Close stops the MessageServer
 func (p *MessageServer) Close() {
-	p.With().Info("closing MessageServer")
+	p.With().Info("closing message server")
 	p.cancel()
-	p.With().Info("waiting for message workers to finish...")
+	p.With().Info("waiting for message workers to finish")
 	p.tg.Wait()
 	p.With().Info("message workers all done")
 }

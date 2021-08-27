@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
@@ -79,7 +80,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 
 			tb.initGenesisBeacons()
 
-			err := tb.calcBeacon(epoch, tc.votes)
+			err := tb.calcBeacon(context.TODO(), epoch, tc.votes)
 			r.NoError(err)
 			r.EqualValues(tc.hash.String(), tb.beacons[epoch].String())
 		})
