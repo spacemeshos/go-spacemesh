@@ -78,7 +78,6 @@ type FormattedConnection struct {
 	session     NetworkSession
 	deadline    time.Duration
 	r           formattedReader
-	wmtx        sync.Mutex
 	w           formattedWriter
 	deadliner   deadliner
 	messages    chan msgToSend
@@ -246,7 +245,8 @@ func (c *FormattedConnection) sendListener() {
 				log.String("requestId", m.reqID),
 				log.Int("queue_length", len(c.messages)))
 
-			//todo: we are hiding the error here...
+			// TODO: do we need to propagate this error upwards or add a callback?
+			// see https://github.com/spacemeshos/go-spacemesh/issues/2733
 			if err := c.sendSock(m.payload); err != nil {
 				c.logger.With().Error("connection: cannot send message to peer",
 					log.String("peer_id", m.peerID),
@@ -286,17 +286,12 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 
 // sendSock sends a message directly on the socket without waiting for the queue.
 func (c *FormattedConnection) sendSock(m []byte) error {
-	// no need to check if closed here, the caller just checked
-
 	if err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline)); err != nil {
 		return err
 	}
 
-	// not entirely clear whether the underlying IOWriter here is goroutine safe, so we serialize writes to be safe
-	// see https://github.com/spacemeshos/go-spacemesh/pull/2435#issuecomment-851039112
-	c.wmtx.Lock()
-	defer c.wmtx.Unlock()
-
+	// the underlying net.Conn object performs its own write locking and is goroutine safe, so no need for a
+	// mutex here. see https://github.com/spacemeshos/go-spacemesh/pull/2435#issuecomment-851039112.
 	if _, err := c.w.WriteRecord(m); err != nil {
 		if err := c.closeNoWait(); err != ErrAlreadyClosed {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider

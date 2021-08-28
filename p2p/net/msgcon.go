@@ -27,7 +27,6 @@ type MsgConnection struct {
 	session     NetworkSession
 	deadline    time.Duration
 	r           io.Reader
-	wmtx        sync.Mutex // serialize IO writes
 	cmtx        sync.Mutex // protect closed status
 	w           io.Writer
 	closer      io.Closer
@@ -163,6 +162,7 @@ func (c *MsgConnection) sendListener() {
 				log.Int("queue_length", len(c.messages)))
 
 			// TODO: do we need to propagate this error upwards or add a callback?
+			// see https://github.com/spacemeshos/go-spacemesh/issues/2733
 			if err := c.sendSock(m.payload); err != nil {
 				c.logger.With().Error("msgconnection: cannot send message to peer",
 					log.String("peer_id", m.peerID),
@@ -209,11 +209,8 @@ func (c *MsgConnection) sendSock(m []byte) error {
 		return err
 	}
 
-	// not entirely clear whether the underlying IOWriter here is goroutine safe, so we serialize writes to be safe
-	// see https://github.com/spacemeshos/go-spacemesh/pull/2435#issuecomment-851039112
-	c.wmtx.Lock()
-	defer c.wmtx.Unlock()
-
+	// the underlying net.Conn object performs its own write locking and is goroutine safe, so no need for a
+	// mutex here. see https://github.com/spacemeshos/go-spacemesh/pull/2435#issuecomment-851039112.
 	if _, err := c.w.Write(m); err != nil {
 		if err := c.Close(); err != ErrAlreadyClosed {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
