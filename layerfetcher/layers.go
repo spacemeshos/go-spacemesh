@@ -518,7 +518,9 @@ func notifyLayerBlocksResult(layerID types.LayerID, channels []chan LayerPromise
 			result.Err = firstErr
 		}
 	}
-	logger.With().Debug("notifying layer blocks result", layerID, log.String("blocks", fmt.Sprintf("%+v", result)))
+	logger.With().Debug("notifying layer blocks result",
+		layerID,
+		log.String("blocks", fmt.Sprintf("%+v", result)))
 	for _, ch := range channels {
 		ch <- *result
 	}
