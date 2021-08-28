@@ -6,7 +6,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-//go:generate mockery -name activationDB -case underscore -inpkg
+//go:generate mockgen -package=mocks -destination=./mocks/activation_db.go -source=./activation_db.go
+
 type activationDB interface {
 	GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error)
 	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)

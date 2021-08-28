@@ -145,7 +145,8 @@ func (p *Peers) listen(added, expired chan p2pcrypto.PublicKey) {
 			}
 			isAdded = true
 			peerSet[peer] = struct{}{}
-			p.log.With().Debug("new peer", log.String("peer", peer.String()),
+			p.log.With().Debug("new peer",
+				log.String("peer", peer.String()),
 				log.Int("total", len(peerSet)),
 			)
 		case peer, ok := <-expired:
@@ -154,7 +155,8 @@ func (p *Peers) listen(added, expired chan p2pcrypto.PublicKey) {
 			}
 			isAdded = false
 			delete(peerSet, peer)
-			p.log.With().Debug("expired peer", log.String("peer", peer.String()),
+			p.log.With().Debug("expired peer",
+				log.String("peer", peer.String()),
 				log.Int("total", len(peerSet)),
 			)
 		case req := <-p.requests:
