@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/stretchr/testify/mock"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 	"github.com/stretchr/testify/require"
 )
 
@@ -26,26 +27,21 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
-	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight",
-		mock.AnythingOfType("types.EpochID")).
-		Return(uint64(10), nil, nil)
-	mockDB.On("GetNodeAtxIDForEpoch",
-		mock.Anything,
-		mock.Anything).
-		Return(types.ATXID(hash), nil)
-	mockDB.On("GetAtxHeader",
-		mock.AnythingOfType("types.ATXID")).
-		Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				StartTick: 1,
-				EndTick:   3,
-			},
-			NumUnits: 5,
-		}, nil)
-	mockDB.On("GetAtxTimestamp",
-		mock.AnythingOfType("types.ATXID")).
-		Return(time.Now(), nil)
+	ctrl := gomock.NewController(t)
+	mockDB := mocks.NewMockactivationDB(ctrl)
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(10), nil, nil).AnyTimes()
+	mockDB.EXPECT().GetNodeAtxIDForEpoch(
+		gomock.Any(),
+		gomock.Any()).
+		Return(types.ATXID(hash), nil).AnyTimes()
+	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 1,
+			EndTick:   3,
+		},
+		NumUnits: 5,
+	}, nil).AnyTimes()
+	mockDB.EXPECT().GetAtxTimestamp(gomock.Any()).Return(time.Now(), nil)
 
 	const (
 		epoch = 3
@@ -131,26 +127,21 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
-	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight",
-		mock.AnythingOfType("types.EpochID")).
-		Return(uint64(10), nil, nil)
-	mockDB.On("GetNodeAtxIDForEpoch",
-		mock.Anything,
-		mock.Anything).
-		Return(types.ATXID(hash), nil)
-	mockDB.On("GetAtxHeader",
-		mock.AnythingOfType("types.ATXID")).
-		Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				StartTick: 1,
-				EndTick:   3,
-			},
-			NumUnits: 5,
-		}, nil)
-	mockDB.On("GetAtxTimestamp",
-		mock.AnythingOfType("types.ATXID")).
-		Return(time.Now(), nil)
+	ctrl := gomock.NewController(t)
+	mockDB := mocks.NewMockactivationDB(ctrl)
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(10), nil, nil).AnyTimes()
+	mockDB.EXPECT().GetNodeAtxIDForEpoch(
+		gomock.Any(),
+		gomock.Any()).
+		Return(types.ATXID(hash), nil).AnyTimes()
+	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 1,
+			EndTick:   3,
+		},
+		NumUnits: 5,
+	}, nil).AnyTimes()
+	mockDB.EXPECT().GetAtxTimestamp(gomock.Any()).Return(time.Now(), nil)
 
 	const (
 		epoch = 0
@@ -256,26 +247,21 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
-	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight",
-		mock.AnythingOfType("types.EpochID")).
-		Return(uint64(1), nil, nil)
-	mockDB.On("GetNodeAtxIDForEpoch",
-		mock.Anything,
-		mock.Anything).
-		Return(types.ATXID(hash1), nil)
-	mockDB.On("GetAtxHeader",
-		mock.AnythingOfType("types.ATXID")).
-		Return(&types.ActivationTxHeader{
-			NIPostChallenge: types.NIPostChallenge{
-				StartTick: 0,
-				EndTick:   1,
-			},
-			NumUnits: 1,
-		}, nil)
-	mockDB.On("GetAtxTimestamp",
-		mock.AnythingOfType("types.ATXID")).
-		Return(time.Now(), nil)
+	ctrl := gomock.NewController(t)
+	mockDB := mocks.NewMockactivationDB(ctrl)
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(1), nil, nil).AnyTimes()
+	mockDB.EXPECT().GetNodeAtxIDForEpoch(
+		gomock.Any(),
+		gomock.Any()).
+		Return(types.ATXID(hash1), nil).AnyTimes()
+	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 1,
+	}, nil).AnyTimes()
+	mockDB.EXPECT().GetAtxTimestamp(gomock.Any()).Return(time.Now(), nil)
 
 	const epoch = 3
 	const round = 5
