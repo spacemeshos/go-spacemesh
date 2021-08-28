@@ -78,28 +78,26 @@ func (s *Simulator) SubscribeToPeerEvents(myid p2pcrypto.Key) (chan p2pcrypto.Pu
 
 func (s *Simulator) publishNewPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
+	defer s.subLock.Unlock()
 	for _, ch := range s.newPeersSubs {
 		log.Debug("publish new peer on chan with len %v, cap %v", len(ch), cap(ch))
-		select {
-		case ch <- peer:
-		default:
-			log.Warning("unable to publish new peer event to subscriber")
-		}
+		// NOTE(dshulyak) services are not expected to be ready to receive all peers
+		// all tests that are using Simulator will become very flaky, especially on slow
+		// environments
+		ch <- peer
 	}
-	s.subLock.Unlock()
 }
 
 // nolint
 func (s *Simulator) publishDelPeer(peer p2pcrypto.PublicKey) {
 	s.subLock.Lock()
+	defer s.subLock.Unlock()
 	for _, ch := range s.delPeersSubs {
-		select {
-		case ch <- peer:
-		default:
-			log.Warning("unable to publish delete peer event to subscriber")
-		}
+		// NOTE(dshulyak) services are not expected to be ready to receive all peers
+		// all tests that are using Simulator will become very flaky, especially on slow
+		// environments
+		ch <- peer
 	}
-	s.subLock.Unlock()
 }
 
 func (s *Simulator) createdNode(n *Node) {
