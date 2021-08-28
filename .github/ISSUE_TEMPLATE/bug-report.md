@@ -10,7 +10,7 @@ assignees: ''
 ## Description
 <!-- Please provide a clear and detailed description of the bug. -->
 
-## Reproduce Steps
+## Steps to reproduce
 1. Go to '...'
 2. Click on '....'
 3. Scroll down to '....'
@@ -27,7 +27,7 @@ Please complete the following information:
  <!-- e.g. Windows -->
  - Node Version: 
  <!-- e.g. 0.1.2, available by running `./go-spacemesh version` -->
- - Smapp version (when applicable): 
+ - Smapp version (if applicable): 
  <!-- e.g. 1.2.3, available by clicking on the settings icon in the main screen and scrolling down to "App Version" -->
 
 ## Additional Resources 
