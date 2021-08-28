@@ -35,9 +35,7 @@ type state struct {
 	// if key exists in the map the block is good. if value is true it was written to the disk.
 	GoodBlocksIndex map[types.BlockID]bool
 	// use 2D array to be able to iterate from latest elements easily
-	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion // records hdist, for each block, its votes about every
-	// TODO: Tal says: We keep a vector containing our vote totals (positive and negative) for every previous block
-	// that's not needed here, probably for self healing?
+	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion
 }
 
 func (s *state) Persist() error {
