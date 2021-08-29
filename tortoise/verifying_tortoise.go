@@ -1117,6 +1117,8 @@ func (t *turtle) sumVotesForBlock(
 		log.FieldNamed("layer_voting_on", startLayer.Sub(1)))
 	for voteLayer := startLayer; !voteLayer.After(t.Last); voteLayer = voteLayer.Add(1) {
 		logger := logger.WithFields(voteLayer)
+		// logger.With().Debug("summing layer votes",
+		// 	log.Int("count", len(t.BlockOpinionsByLayer[voteLayer])))
 		for votingBlockID, votingBlockOpinion := range t.BlockOpinionsByLayer[voteLayer] {
 			if !filter(votingBlockID) {
 				logger.Debug("voting block did not pass filter, not counting its vote", log.FieldNamed("voting_block", votingBlockID))
@@ -1127,6 +1129,10 @@ func (t *turtle) sumVotesForBlock(
 			// no opinion (on a block in an older layer) counts as an explicit vote against the block.
 			// note: in this case, the weight is already factored into the vote, so no need to fetch weight.
 			if opinionVote, exists := votingBlockOpinion[blockID]; exists {
+				// logger.With().Debug("added block opinion to vote sum",
+				// 	log.FieldNamed("voting_block", votingBlockID),
+				// 	log.FieldNamed("vote", opinionVote),
+				// 	sum)
 				sum = sum.Add(opinionVote)
 			} else {
 				// in this case, we still need to fetch the block's voting weight.
