@@ -699,7 +699,7 @@ func (t *turtle) scoreBlocks(ctx context.Context, blocks []*types.Block) {
 		if t.determineBlockGoodness(ctx, b) {
 			// note: we have no way of warning if a block was previously marked as not good
 			logger.With().Debug("marking block good", b.ID(), b.LayerIndex)
-			t.GoodBlocksIndex[b.ID()] = false
+			t.GoodBlocksIndex[b.ID()] = false // false means good block, not flushed
 			numGood++
 		} else {
 			logger.With().Info("not marking block good", b.ID(), b.LayerIndex)
