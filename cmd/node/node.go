@@ -747,7 +747,11 @@ func (app *App) initServices(ctx context.Context,
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxDB, swarm, msh, layersPerEpoch, nipostBuilder, postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg))
+	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn,
+		atxDB, swarm, msh, layersPerEpoch, nipostBuilder,
+		postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg),
+		activation.WithContext(ctx),
+	)
 
 	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxGossipData)
 	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxDB.HandleGossipAtx)
@@ -863,8 +867,8 @@ func (app *App) startServices(ctx context.Context) error {
 	if app.Config.SMESHING.Start {
 		coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 		go func() {
-			if err := app.atxBuilder.StartSmeshing(ctx, coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
-				log.With().Panic("failed to start smeshing", log.Err(err))
+			if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
+				log.Panic("failed to start smeshing: %v", err)
 			}
 		}()
 	} else {
