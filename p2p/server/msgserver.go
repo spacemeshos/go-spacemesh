@@ -183,7 +183,8 @@ func (p *MessageServer) readLoop(ctx context.Context) error {
 		case msg, ok := <-p.ingressChannel:
 			// generate new reqID for message
 			ctx := log.WithNewRequestID(ctx)
-			logger.Debug("new msg received from channel")
+			// this causes issues with tests, leaving it here for debugging purposes
+			//logger.Debug("new msg received from channel")
 			if !ok {
 				logger.Error("read loop channel was closed")
 				return context.Canceled
