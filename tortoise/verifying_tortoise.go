@@ -102,7 +102,7 @@ type turtle struct {
 	Verified types.LayerID
 
 	// this matrix stores the opinion of each block about other blocks. blocks are indexed by layer.
-	// it stores good and bad blocks
+	// it stores good and bad blocks.
 	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion
 
 	// how often we want to rerun from genesis
@@ -173,9 +173,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	t.BlockOpinionsByLayer[genesisLayer.Index()] = make(map[types.BlockID]Opinion)
 	for _, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
-		t.BlockOpinionsByLayer[genesisLayer.Index()][blk.ID()] = Opinion{
-			BlockOpinions: make(map[types.BlockID]vec),
-		}
+		t.BlockOpinionsByLayer[genesisLayer.Index()][blk.ID()] = make(Opinion, t.WindowSize)
 		t.GoodBlocksIndex[id] = struct{}{}
 	}
 	t.Last = genesisLayer.Index()
@@ -225,7 +223,16 @@ func (t *turtle) evict(ctx context.Context) {
 		for blk := range t.BlockOpinionsByLayer[layerToEvict] {
 			delete(t.GoodBlocksIndex, blk)
 		}
+
+		// delete opinions _of_ blocks in the layer to evict
 		delete(t.BlockOpinionsByLayer, layerToEvict)
+
+		// delete opinions _about_ blocks in the layer to evict
+		for lyr := range t.BlockOpinionsByLayer {
+			for blk := range t.BlockOpinionsByLayer[lyr] {
+				delete(t.BlockOpinionsByLayer[lyr][blk], layerToEvict)
+			}
+		}
 	}
 	t.LastEvicted = windowStart.Sub(1)
 }
@@ -434,7 +441,7 @@ func (t *turtle) calculateExceptions(
 
 		// helper function for adding diffs
 		addDiffs := func(bid types.BlockID, voteClass string, voteVec vec, diffMap map[types.BlockID]struct{}) {
-			if v, ok := baseBlockOpinion.BlockOpinions[bid]; !ok || simplifyVote(v) != voteVec {
+			if v, ok := baseBlockOpinion[layerID][bid]; !ok || simplifyVote(v) != voteVec {
 				logger.With().Debug("added vote diff",
 					log.FieldNamed("diff_block", bid),
 					log.String("diff_class", voteClass))
@@ -480,13 +487,11 @@ func (t *turtle) calculateExceptions(
 		// We do not explicitly add votes against blocks that the base block does _not_ support, since by not voting to
 		// support a block in an old layer, we are implicitly voting against it. But if the base block does explicitly
 		// support a block and we disagree, we need to add a vote against here.
-		// TODO: this is not currently possible since base block opinions aren't indexed by layer. See
-		//   https://github.com/spacemeshos/go-spacemesh/issues/2424
-		//for b, v := range baseBlockOpinion.BlockOpinions {
-		//	if _, ok := inInputVector[b]; !ok && v != against {
-		//		addDiffs(b, "against", against, againstDiff)
-		//	}
-		//}
+		for b, v := range baseBlockOpinion[layerID] {
+			if _, ok := inInputVector[b]; !ok && v != against {
+				addDiffs(b, "against", against, againstDiff)
+			}
+		}
 	}
 
 	// check if exceeded max no. exceptions
@@ -540,7 +545,7 @@ func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block) (uint
 	//return 0, nil
 }
 
-func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID, blockVotedOn types.BlockID) (uint64, error) {
+func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID types.BlockID) (uint64, error) {
 	block, err := t.bdp.GetBlock(votingBlockID)
 	if err != nil {
 		return 0, err
@@ -598,47 +603,60 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	//   see https://github.com/spacemeshos/go-spacemesh/issues/2369
 	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
 	//   see https://github.com/spacemeshos/go-spacemesh/issues/2673
-	opinion := make(map[types.BlockID]vec)
+	opinion := make(Opinion, t.WindowSize)
 
-	for _, bid := range block.ForDiff {
-		opinion[bid] = support.Multiply(voteWeight)
-	}
-	for _, bid := range block.AgainstDiff {
+	addDiff := func(blockID types.BlockID, vote vec, allowConflict bool) error {
+		blk, err := t.bdp.GetBlock(blockID)
+		if err != nil {
+			// print error and keep going
+			logger.With().Error("block in for diff is missing", blockID, log.Err(err))
+			return nil
+		}
+		if _, ok := opinion[blk.LayerIndex]; !ok {
+			opinion[blk.LayerIndex] = make(map[types.BlockID]vec, t.AvgLayerSize)
+		}
 		// this could only happen in malicious blocks, and they should not pass a syntax check, but check here just
 		// to be extra safe
-		if _, alreadyVoted := opinion[bid]; alreadyVoted {
-			return fmt.Errorf("%s %v", errstrConflictingVotes, block.ID())
+		if _, alreadyVoted := opinion[blk.LayerIndex][blockID]; alreadyVoted && !allowConflict {
+			return fmt.Errorf("%s %v", errstrConflictingVotes, blockID)
 		}
-		opinion[bid] = against.Multiply(voteWeight)
+		opinion[blk.LayerIndex][blockID] = vote.Multiply(voteWeight)
+		return nil
+	}
+
+	for _, bid := range block.ForDiff {
+		if err := addDiff(bid, support, false); err != nil {
+			return err
+		}
+	}
+	for _, bid := range block.AgainstDiff {
+		if err := addDiff(bid, against, false); err != nil {
+			return err
+		}
 	}
 	for _, bid := range block.NeutralDiff {
-		if _, alreadyVoted := opinion[bid]; alreadyVoted {
-			return fmt.Errorf("%s %v", errstrConflictingVotes, block.ID())
+		if err := addDiff(bid, abstain, false); err != nil {
+			return err
 		}
-		opinion[bid] = abstain
 	}
-	for blk, vote := range baseBlockOpinion.BlockOpinions {
-		// ignore opinions of very old blocks
-		fblk, err := t.bdp.GetBlock(blk)
-		if err != nil {
-			return fmt.Errorf(
-				"block in base block opinion list not in db! "+
-					"voting_block_id: %v, voting_block_layer: %v, base_block_id: %v, base_block_layer: %v, block_id: %v",
-				block.ID().String(), block.LayerIndex, baseBlock.ID(), baseBlock.LayerIndex, blk.String())
-		}
-		if fblk.LayerIndex.Before(t.LastEvicted) {
+
+	for lyr := range baseBlockOpinion {
+		// ignore opinions of blocks from previously evicted layers
+		if lyr.Before(t.LastEvicted) {
 			continue
 		}
 
 		// add base block vote only if there weren't already exceptions (support/against/abstain) for this block.
 		// and re-weight vote since we want the voting block's weight, not the base block's weight.
-		if _, exists := opinion[blk]; !exists {
-			opinion[blk] = simplifyVote(vote).Multiply(voteWeight)
+		for bid, vote := range baseBlockOpinion[lyr] {
+			if err := addDiff(bid, simplifyVote(vote), true); err != nil {
+				return err
+			}
 		}
 	}
 
 	logger.With().Debug("adding or updating block opinion")
-	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = Opinion{BlockOpinions: opinion}
+	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = opinion
 	return nil
 }
 
@@ -862,7 +880,7 @@ candidateLayerLoop:
 				blockID,
 				log.FieldNamed("layer_start", candidateLayerID.Add(1)),
 				log.FieldNamed("layer_end", t.Last))
-			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID.Add(1), func(votingBlockID types.BlockID) bool {
+			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID, func(votingBlockID types.BlockID) bool {
 				if _, isgood := t.GoodBlocksIndex[votingBlockID]; !isgood {
 					logger.With().Debug("not counting vote of block not marked good",
 						log.FieldNamed("voting_block", votingBlockID))
@@ -1034,7 +1052,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 				logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
 				// TODO: this operation can be expensive, it needs to be cached
 				//   see https://github.com/spacemeshos/go-spacemesh/issues/2676
-				sum, err := t.sumVotesForBlock(ctx, blockID, layerID.Add(1), func(id types.BlockID) bool { return true })
+				sum, err := t.sumVotesForBlock(ctx, blockID, layerID, func(id types.BlockID) bool { return true })
 				if err != nil {
 					return nil, fmt.Errorf("error summing votes for block %v in old layer %v: %w",
 						blockID, layerID, err)
@@ -1125,14 +1143,16 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 func (t *turtle) sumVotesForBlock(
 	ctx context.Context,
 	blockID types.BlockID, // the block we're summing votes for/against
-	startLayer types.LayerID,
+	blockLayerID types.LayerID,
 	filter func(types.BlockID) bool,
 ) (sum vec, err error) {
 	sum = abstain
+	startLayer := blockLayerID.Add(1)
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.FieldNamed("start_layer", startLayer),
 		log.FieldNamed("end_layer", t.Last),
 		log.FieldNamed("block_voting_on", blockID),
+		log.FieldNamed("block_voting_on_layer_id", blockLayerID),
 		log.FieldNamed("layer_voting_on", startLayer.Sub(1)))
 	for voteLayer := startLayer; !voteLayer.After(t.Last); voteLayer = voteLayer.Add(1) {
 		logger := logger.WithFields(voteLayer)
@@ -1148,14 +1168,14 @@ func (t *turtle) sumVotesForBlock(
 			// check if this block has an opinion on the block to vote on.
 			// no opinion (on a block in an older layer) counts as an explicit vote against the block.
 			// note: in this case, the weight is already factored into the vote, so no need to fetch weight.
-			if opinionVote, exists := votingBlockOpinion.BlockOpinions[blockID]; exists {
-				sum = sum.Add(opinionVote)
+			if vote, exists := votingBlockOpinion[blockLayerID][blockID]; exists {
+				sum = sum.Add(vote)
 				logger.With().Debug("added block opinion to vote sum",
-					log.FieldNamed("vote", opinionVote),
+					log.FieldNamed("vote", vote),
 					sum)
 			} else {
 				// in this case, we still need to fetch the block's voting weight.
-				weight, err := t.voteWeightByID(ctx, votingBlockID, blockID)
+				weight, err := t.voteWeightByID(ctx, votingBlockID)
 				if err != nil {
 					return sum, fmt.Errorf("error getting vote weight for block %v: %w",
 						votingBlockID, err)
@@ -1218,7 +1238,7 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 			logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
 
 			// count all votes for or against this block by all blocks in later layers: don't filter out any
-			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID.Add(1), func(id types.BlockID) bool { return true })
+			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID, func(id types.BlockID) bool { return true })
 			if err != nil {
 				logger.Error("error summing votes for candidate block in candidate layer", log.Err(err))
 				return

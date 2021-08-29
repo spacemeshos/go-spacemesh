@@ -164,7 +164,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 					continue
 				}
 
-				weight, err := trtl.voteWeightByID(context.TODO(), bid, i)
+				weight, err := trtl.voteWeightByID(context.TODO(), bid)
 				require.NoError(t, err)
 				sum = sum.Add(opinionVote.Multiply(weight))
 			}

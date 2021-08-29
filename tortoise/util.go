@@ -94,24 +94,8 @@ func calculateOpinionWithThreshold(logger log.Log, v vec, layerSize int, theta u
 	}
 }
 
-type blockIDLayerTuple struct {
-	types.BlockID
-	types.LayerID
-}
-
-func (blt blockIDLayerTuple) layer() types.LayerID {
-	return blt.LayerID
-}
-
-func (blt blockIDLayerTuple) id() types.BlockID {
-	return blt.BlockID
-}
-
 // Opinion is a tuple of block and layer id. It stores a block's opinion about many other blocks.
-type Opinion struct {
-	BlockAndLayer blockIDLayerTuple
-	BlockOpinions map[types.BlockID]vec
-}
+type Opinion map[types.LayerID]map[types.BlockID]vec
 
 type retriever interface {
 	Retrieve(key []byte, v interface{}) (interface{}, error)
