@@ -130,7 +130,7 @@ func (c *MsgConnection) Created() time.Time {
 func (c *MsgConnection) publish(ctx context.Context, message []byte) {
 	// Print a log line to establish a link between the originating sessionID and this requestID,
 	// before the sessionID disappears.
-	//todo: re insert when log loss is fixed
+	// This causes issues with the p2p system test, but leaving here for debugging purposes.
 	//c.logger.WithContext(ctx).Debug("msgconnection: enqueuing incoming message")
 
 	// Rather than store the context on the heap, which is an antipattern, we instead extract the relevant IDs and
