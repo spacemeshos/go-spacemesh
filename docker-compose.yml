@@ -32,7 +32,6 @@ services:
           "--tortoise-beacon-wait-after-epoch-start", "${SMESH_TORTOISE_BEACON_WAIT_AFTER_EPOCH_START:?10s}",
           "--tortoise-beacon-theta", "${SMESH_TORTOISE_BEACON_THETA:?1/4}",
           "--tortoise-beacon-votes-limit", "${SMESH_TORTOISE_BEACON_VOTES_LIMIT:-100}",
-          "--sync-request-timeout", "${SMESH_SYNC_REQ_TIMEOUT:-60000}",
           "--post-labels", "${SMESH_POST_LABELS:-100}",
           "--max-inbound", "${SMESH_MAX_INBOUND:-12}",
           "--genesis-time", "${SMESH_GENESIS_TIME:?SMESH_GENESIS_TIME Must be specified}",
