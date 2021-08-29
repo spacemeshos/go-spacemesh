@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -127,7 +128,7 @@ func (s *Server) streamHandler(stream network.Stream) {
 func (s *Server) Request(ctx context.Context, p peer.ID, req []byte, resp func([]byte), failure func(error)) error {
 	stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), p, protocol.ID(s.protocol))
 	if err != nil {
-		return err
+		return fmt.Errorf("new stream: %w", err)
 	}
 	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 	go func() {

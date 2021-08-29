@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -164,7 +165,7 @@ func (b *Broker) queueMessage(ctx context.Context, pid lp2p.Peer, msg []byte) (*
 	m := &msgRPC{Data: msg, Error: make(chan error, 1), Ctx: ctx}
 	if err := b.queue.Write(priority, m); err != nil {
 		logger.With().Error("error writing inbound message to priority queue, dropping", log.Err(err))
-		return nil, err
+		return nil, fmt.Errorf("write inbound message to priority queue: %w", err)
 	}
 
 	// indicate to the listener that there's a new message in the queue

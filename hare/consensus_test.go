@@ -2,6 +2,7 @@ package hare
 
 import (
 	"context"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -382,7 +383,12 @@ func (ps *delayeadPubSub) Publish(ctx context.Context, protocol string, msg []by
 		case <-time.After(rng):
 		}
 	}
-	return ps.ps.Publish(ctx, protocol, msg)
+
+	if err := ps.ps.Publish(ctx, protocol, msg); err != nil {
+		return fmt.Errorf("publish message: %w", err)
+	}
+
+	return nil
 }
 
 func (ps *delayeadPubSub) Register(protocol string, handler pubsub.GossipHandler) {

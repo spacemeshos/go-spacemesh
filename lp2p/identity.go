@@ -49,7 +49,11 @@ func ensureIdentity(dir string) (crypto.PrivKey, error) {
 	}
 	info, err := identityInfoFromDir(dir)
 	if err == nil {
-		return crypto.UnmarshalPrivateKey(info.Key)
+		pk, err := crypto.UnmarshalPrivateKey(info.Key)
+		if err != nil {
+			return nil, fmt.Errorf("unmarshal privkey: %w", err)
+		}
+		return pk, nil
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		key, err := genIdentity()

@@ -77,7 +77,12 @@ type Bootstrap struct {
 // Stop bootstrap and wait until background workers are terminated.
 func (b *Bootstrap) Stop() error {
 	b.cancel()
-	return b.eg.Wait()
+
+	if err := b.eg.Wait(); err != nil {
+		return fmt.Errorf("wait: %w", err)
+	}
+
+	return nil
 }
 
 func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter event.Emitter) error {
