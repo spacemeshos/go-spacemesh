@@ -27,7 +27,6 @@ type layerFetcher interface {
 	PollLayerBlocks(ctx context.Context, layerID types.LayerID, hashes map[types.Hash32][]peers.Peer) chan layerfetcher.LayerPromiseResult
 	GetEpochATXs(ctx context.Context, id types.EpochID) error
 	GetTortoiseBeacon(ctx context.Context, id types.EpochID) error
-	GetTimeout() time.Duration
 }
 
 // Configuration is the config params for syncer
@@ -376,17 +375,17 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 	for lyrHash, peers := range hashRes.Hashes {
 		hashes[lyrHash.Hash] = peers
 	}
+
+	// a note on the concurrency model here: PollLayerBlocks returns a channel that receives a single message from
+	// the message server when the request succeeds or times out. PollLayerBlocks itself sends the request message but
+	// should not block, and should result in the peer connection being dropped if it's stuck.
 	bch := s.fetcher.PollLayerBlocks(ctx, layerID, hashes)
-	select {
-	case res := <-bch:
-		if res.Err != nil {
-			if res.Err == layerfetcher.ErrZeroLayer {
-				return types.NewLayer(layerID), nil
-			}
-			return nil, fmt.Errorf("getLayerFromPeers: %w", res.Err)
+	res := <-bch
+	if res.Err != nil {
+		if res.Err == layerfetcher.ErrZeroLayer {
+			return types.NewLayer(layerID), nil
 		}
-	case <-time.After(s.fetcher.GetTimeout()):
-		return nil, fmt.Errorf("getLayerFromPeers timed out waiting for result")
+		return nil, fmt.Errorf("getLayerFromPeers: %w", res.Err)
 	}
 
 	layer, err := s.mesh.GetLayer(layerID)

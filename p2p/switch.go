@@ -404,7 +404,8 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 		return err
 	}
 
-	logger.Debug("direct message sent successfully")
+	// this causes issues with tests, leaving it here for debugging purposes
+	//logger.Debug("direct message sent successfully")
 	return nil
 }
 

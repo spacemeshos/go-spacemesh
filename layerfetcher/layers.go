@@ -121,7 +121,6 @@ type Logic struct {
 	tbDB           tortoiseBeaconDB
 	gossipBlocks   gossipBlocks
 	goldenATXID    types.ATXID
-	timeout        time.Duration
 }
 
 // Config defines configuration for layer fetching logic
@@ -154,7 +153,6 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		atxIds:         atxIDs,
 		txs:            txs,
 		goldenATXID:    cfg.GoldenATXID,
-		timeout:        time.Duration(cfg.RequestTimeout) * time.Second,
 	}
 
 	srv.RegisterBytesMsgHandler(server.LayerHashMsg, l.layerHashReqReceiver)
@@ -178,11 +176,6 @@ func (l *Logic) Start() {
 func (l *Logic) Close() {
 	l.net.Close()
 	l.fetcher.Stop()
-}
-
-// GetTimeout returns the request timeout
-func (l *Logic) GetTimeout() time.Duration {
-	return l.timeout
 }
 
 // AddDBs adds dbs that will be queried when sync requests are received. these databases will be exposed to external callers

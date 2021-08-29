@@ -102,10 +102,6 @@ func (mf *mockFetcher) GetTortoiseBeacon(_ context.Context, epoch types.EpochID)
 	return mf.tbError[epoch]
 }
 
-func (mf *mockFetcher) GetTimeout() time.Duration {
-	return time.Second
-}
-
 func (mf *mockFetcher) getLayerPollChan(layerID types.LayerID) chan struct{} {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()

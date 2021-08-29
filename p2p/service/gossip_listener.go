@@ -75,20 +75,22 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 	tokenChan := make(chan struct{}, l.config.MaxGossipRoutines)
 
 	waitForGossipToken := func(ctx context.Context) {
-		// get a token to create a new channel
-		l.WithContext(ctx).With().Debug("waiting for available slot for gossip handler",
-			log.Int("available_slots", cap(tokenChan)-len(tokenChan)),
-			log.Int("total_slots", cap(tokenChan)))
+		// this causes issues with tests, leaving here for debug purposes
+		//l.WithContext(ctx).With().Debug("waiting for available slot for gossip handler",
+		//	log.Int("available_slots", cap(tokenChan)-len(tokenChan)),
+		//	log.Int("total_slots", cap(tokenChan)))
 
+		// get a token to create a new channel
 		if len(tokenChan) == cap(tokenChan) {
 			l.WithContext(ctx).Error("no available slots for gossip handler, blocking")
 		}
 
 		tokenChan <- struct{}{}
 
-		l.WithContext(ctx).With().Debug("got gossip token",
-			log.String("protocol", channel),
-			log.Int("queue_length", len(gossipChannel)))
+		// this causes issues with tests, leaving here for debug purposes
+		//l.WithContext(ctx).With().Debug("got gossip token",
+		//	log.String("protocol", channel),
+		//	log.Int("queue_length", len(gossipChannel)))
 	}
 
 	handleMsg := func(ctx context.Context, data GossipMessage) {
@@ -99,7 +101,8 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 			return
 		}
 		go func() {
-			l.WithContext(ctx).Info("passing data to data handler")
+			// this causes issues with tests, leaving here for debug purposes
+			//l.WithContext(ctx).Info("passing data to data handler")
 			// TODO: these handlers should have an API that includes a cancel method. they should time out eventually.
 			dataHandler(ctx, data, l.fetcher)
 			// replace token when done
@@ -113,9 +116,10 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 			l.wg.Done()
 			return
 		case data := <-gossipChannel:
-			l.WithContext(ctx).With().Debug("got gossip message, forwarding to data handler",
-				log.String("protocol", channel),
-				log.Int("queue_length", len(gossipChannel)))
+			// this causes issues with tests, leaving here for debug purposes
+			//l.WithContext(ctx).With().Debug("got gossip message, forwarding to data handler",
+			//	log.String("protocol", channel),
+			//	log.Int("queue_length", len(gossipChannel)))
 			if !l.shouldListenToGossip() {
 				// not accepting data
 				continue
