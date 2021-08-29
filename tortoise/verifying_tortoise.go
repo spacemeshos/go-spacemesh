@@ -160,7 +160,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	for _, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
 		t.BlockOpinionsByLayer[genesisLayer.Index()][id] = Opinion{}
-		t.GoodBlocksIndex[id] = false
+		t.GoodBlocksIndex[id] = false // false means good block, not flushed
 	}
 	t.Last = genesisLayer.Index()
 	t.LastEvicted = genesisLayer.Index().Sub(1)
