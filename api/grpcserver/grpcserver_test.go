@@ -1233,7 +1233,7 @@ func TestSmesherService(t *testing.T) {
 
 func TestMeshService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(txAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2168,7 +2168,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	logtest.SetupGlobal(t)
-	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(txAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2444,7 +2444,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	}
 	logtest.SetupGlobal(t)
 
-	grpcService := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(txAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2663,7 +2663,7 @@ func TestMultiService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	cfg.GrpcServerPort = 9192
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc2 := NewMeshService(txAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -2723,7 +2723,7 @@ func TestJsonApi(t *testing.T) {
 
 	// enable services and try again
 	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(txAPI, mempoolMock, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc2 := NewMeshService(txAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)

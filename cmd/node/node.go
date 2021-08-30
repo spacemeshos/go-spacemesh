@@ -869,7 +869,7 @@ func (app *App) startAPIServices(ctx context.Context, net api.NetworkAPI) {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.txPool))
 	}
 	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.txPool, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
+		registerService(grpcserver.NewMeshService(app.mesh, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
 	}
 	if apiConf.StartNodeService {
 		registerService(grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer, app.atxBuilder))
