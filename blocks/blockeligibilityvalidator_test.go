@@ -41,7 +41,9 @@ func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	types.SetLayersPerEpoch(5)
 	r := require.New(t)
 	atxdb := &mockAtxDB{err: errFoo}
-	v := NewBlockEligibilityValidator(10, 5, atxdb, &EpochBeaconProvider{}, validateVRF, nil, logtest.New(t))
+	blockDB := mockBlockDB(t)
+
+	v := NewBlockEligibilityValidator(10, 5, atxdb, &EpochBeaconProvider{}, validateVRF, blockDB, logtest.New(t))
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: types.NewLayerID(20)}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())

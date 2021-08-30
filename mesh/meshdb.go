@@ -45,6 +45,7 @@ type DB struct {
 	coinflips             map[types.LayerID]bool     // weak coinflip results from Hare
 	layerMutex            map[types.LayerID]*layerMutex
 	lhMutex               sync.Mutex
+	tortoiseBeacons       map[types.EpochID]map[string]types.TortoiseBeacon
 	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
 	exit                  chan struct{}
 }
@@ -93,6 +94,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		invalidatedLayers:  make(map[types.LayerID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
+		tortoiseBeacons:    make(map[types.EpochID]map[string]types.TortoiseBeacon),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
@@ -136,6 +138,7 @@ func NewMemMeshDB(logger log.Log) *DB {
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		invalidatedLayers:  make(map[types.LayerID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
+		tortoiseBeacons:    make(map[types.EpochID]map[string]types.TortoiseBeacon),
 		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
@@ -374,6 +377,37 @@ func (m *DB) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip
 func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) {
 	coin, exists := m.coinflips[layerID]
 	return coin, exists
+}
+
+// AddTortoiseBeacon adds a tortoise beacon to the database.
+func (m *DB) AddTortoiseBeacon(ctx context.Context, epochID types.EpochID, minerID []byte, tBeacon types.TortoiseBeacon) error {
+	m.WithContext(ctx).With().Info("recording tortoise beacon result for epoch and miner in mesh",
+		epochID,
+		log.Uint32("epoch_id", uint32(epochID)),
+		log.Binary("miner_id", minerID),
+	)
+
+	if _, ok := m.tortoiseBeacons[epochID]; !ok {
+		m.tortoiseBeacons[epochID] = map[string]types.TortoiseBeacon{}
+	}
+
+	m.tortoiseBeacons[epochID][string(minerID)] = tBeacon
+
+	return nil
+}
+
+// GetTortoiseBeacon gets a tortoise beacon from the database.
+func (m *DB) GetTortoiseBeacon(_ context.Context, epochID types.EpochID, minerID []byte) (types.TortoiseBeacon, error) {
+	if _, ok := m.tortoiseBeacons[epochID]; !ok {
+		return nil, database.ErrNotFound
+	}
+
+	tBeacon, ok := m.tortoiseBeacons[epochID][string(minerID)]
+	if !ok {
+		return nil, database.ErrNotFound
+	}
+
+	return tBeacon, nil
 }
 
 // GetLayerInputVector gets the input vote vector for a layer (hare results)

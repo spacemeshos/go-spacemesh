@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -756,95 +755,26 @@ func (l *Logic) GetInputVector(ctx context.Context, id types.LayerID) error {
 	return nil
 }
 
-// GetTortoiseBeacon gets tortoise beacon data from remote peer
-func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
-	remotePeers := l.net.GetPeers()
-	if len(remotePeers) == 0 {
-		return ErrNoPeers
+// UpdateTortoiseBeacon updates tortoise beacon if needed.
+//
+// Tortoise beacon value may be either calculated by node or synced.
+// When syncing, if the DB already contains a tortoise beacon value,
+// this means that the beacon was calculated by the node.
+// In this case, we don't need to overwrite it.
+//
+// Different beacons will not break syncing process because beacons are fetched from multiple nodes
+// and the node decides on beacon by looking for the one that has the highest weight.
+func (l *Logic) UpdateTortoiseBeacon(ctx context.Context, epochID types.EpochID, beacon types.Hash32) error {
+	_, err := l.tbDB.GetTortoiseBeacon(epochID)
+	if err != nil && !errors.Is(err, database.ErrNotFound) {
+		return err
 	}
 
-	cancelCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-
-	resCh := make(chan []byte, len(remotePeers))
-
-	// build receiver function
-	makeReceiveFunc := func(peer fmt.Stringer) func([]byte) {
-		return func(data []byte) {
-			if len(data) == 0 {
-				l.log.WithContext(ctx).With().Info("empty tortoise beacon response (peer does not have it)",
-					id,
-					log.String("peer", peer.String()))
-				return
-			}
-
-			if len(data) != types.Hash32Length {
-				l.log.WithContext(ctx).With().Warning("tortoise beacon response contains bad data, ignoring",
-					log.String("data", util.Bytes2Hex(data)))
-				return
-			}
-
-			l.log.WithContext(ctx).With().Info("tortoise beacon response from peer",
-				log.String("peer", peer.String()),
-				log.String("beacon", types.BytesToHash(data).ShortString()))
-			resCh <- data
+	if errors.Is(err, database.ErrNotFound) {
+		if err := l.tbDB.SetTortoiseBeacon(epochID, beacon); err != nil {
+			return err
 		}
 	}
 
-	makeErrFunc := func(peer fmt.Stringer) func(error) {
-		return func(err error) {
-			l.log.WithContext(ctx).With().Warning("error in tortoise beacon response",
-				log.String("peer", peer.String()),
-				log.Err(err))
-		}
-	}
-
-	l.log.WithContext(ctx).With().Info("requesting tortoise beacon from all peers", id)
-
-	for _, p := range remotePeers {
-		go func(peer peers.Peer) {
-			select {
-			case <-cancelCtx.Done():
-				return
-			default:
-				l.log.WithContext(ctx).With().Debug("requesting tortoise beacon from peer",
-					id,
-					log.String("peer", peer.String()))
-				err := l.net.SendRequest(cancelCtx, server.TortoiseBeaconMsg, id.ToBytes(), peer, makeReceiveFunc(peer), makeErrFunc(peer))
-				if err != nil {
-					l.log.WithContext(ctx).Warning("failed to send tortoise beacon request",
-						log.String("peer", peer.String()),
-						log.Err(err))
-				}
-			}
-		}(p)
-	}
-
-	l.log.WithContext(ctx).Info("waiting for tortoise beacon response")
-
-	const timeout = 10 * time.Second // TODO(nkryuchkov): define in config or globally
-	timer := time.NewTimer(timeout)
-	defer timer.Stop()
-
-	select {
-	case <-cancelCtx.Done():
-		l.log.WithContext(ctx).With().Debug("receiving tortoise beacon canceled", id)
-		return nil
-
-	case <-timer.C:
-		l.log.WithContext(ctx).With().Debug("receiving tortoise beacon timed out", id, log.String("timeout", timeout.String()))
-		return nil
-
-	case res := <-resCh:
-		resHash := types.BytesToHash(res)
-		l.log.WithContext(ctx).With().Info("received tortoise beacon",
-			id,
-			log.String("beacon", resHash.String()))
-		return l.tbDB.SetTortoiseBeacon(id, resHash)
-	}
-}
-
-// SetTortoiseBeacon sets tortoise beacon data from remote peer
-func (l *Logic) SetTortoiseBeacon(ctx context.Context, epochID types.EpochID, beacon types.Hash32) error {
-	return l.tbDB.SetTortoiseBeacon(epochID, beacon)
+	return nil
 }

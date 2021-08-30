@@ -4,11 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"time"
 )
 
 // NewBlockProtocol is the protocol indicator for gossip blocks
@@ -32,7 +32,7 @@ type mesh interface {
 }
 
 type blockValidator interface {
-	BlockSignedAndEligible(block *types.Block) (bool, error)
+	BlockSignedAndEligible(ctx context.Context, block *types.Block) (bool, error)
 }
 
 // BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip
@@ -154,7 +154,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	// TODO: validate that there are no conflicts in the vote exception lists (e.g., that the block does not both
 	//   support and vote against a given block)
 	//   See https://github.com/spacemeshos/go-spacemesh/issues/2369
-	if err := bh.fastValidation(block); err != nil {
+	if err := bh.fastValidation(ctx, block); err != nil {
 		bh.WithContext(ctx).With().Error("failed fast validation", block.ID(), log.Err(err))
 		return err
 	}
@@ -200,9 +200,9 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 	return nil
 }
 
-func (bh *BlockHandler) fastValidation(block *types.Block) error {
+func (bh *BlockHandler) fastValidation(ctx context.Context, block *types.Block) error {
 	// block eligibility
-	if eligible, err := bh.validator.BlockSignedAndEligible(block); err != nil || !eligible {
+	if eligible, err := bh.validator.BlockSignedAndEligible(ctx, block); err != nil || !eligible {
 		return fmt.Errorf("block eligibility check failed: %w", err)
 	}
 

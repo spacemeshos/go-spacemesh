@@ -18,8 +18,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
-const defaultGasLimit = 10
-const defaultFee = 1
+const (
+	defaultGasLimit = 10
+	defaultFee      = 1
+)
 
 // AtxsPerBlockLimit indicates the maximum number of atxs a block can reference
 const AtxsPerBlockLimit = 100
@@ -41,7 +43,7 @@ type projector interface {
 }
 
 type blockOracle interface {
-	BlockEligible(types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error)
+	BlockEligible(types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, []byte, error)
 }
 
 type baseBlockProvider interface {
@@ -193,6 +195,7 @@ func (t *BlockBuilder) createBlock(
 	eligibilityProof types.BlockEligibilityProof,
 	txids []types.TransactionID,
 	activeSet []types.ATXID,
+	tortoiseBeacon types.TortoiseBeacon,
 ) (*types.Block, error) {
 	logger := t.WithContext(ctx)
 	if !id.After(types.GetEffectiveGenesis()) {
@@ -210,6 +213,7 @@ func (t *BlockBuilder) createBlock(
 			LayerIndex:       id,
 			ATXID:            atxID,
 			EligibilityProof: eligibilityProof,
+			TortoiseBeacon:   tortoiseBeacon,
 			Data:             nil,
 			BaseBlock:        base,
 			AgainstDiff:      diffs[0],
@@ -247,7 +251,7 @@ func (t *BlockBuilder) createBlock(
 		logger.With().Debug("storing ref block", epoch, bl.ID())
 		if err := t.storeRefBlock(epoch, bl.ID()); err != nil {
 			logger.With().Error("cannot store ref block", epoch, log.Err(err))
-			//todo: panic?
+			// todo: panic?
 		}
 	}
 
@@ -274,7 +278,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 				continue
 			}
 
-			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
+			atxID, proofs, atxs, tBeacon, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to check for block eligibility")
 				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
@@ -295,7 +299,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
-				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs)
+				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs, tBeacon)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot create new block")
 					logger.With().Error("failed to create new block", log.Err(err))

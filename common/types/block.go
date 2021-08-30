@@ -228,9 +228,6 @@ type BlockEligibilityProof struct {
 
 	// Sig is the VRF signature from which the block's LayerID is derived.
 	Sig []byte
-
-	// TODO(nkryuchkov): The tortoise beacon value only appears in the first block a party generates in an epoch (i.e., you can't change beacons mid-epoch).
-	TortoiseBeacon []byte
 }
 
 // BlockHeader includes all of a block's fields, except the list of transaction IDs, activation transaction IDs,
@@ -240,6 +237,7 @@ type BlockHeader struct {
 	LayerIndex       LayerID
 	ATXID            ATXID
 	EligibilityProof BlockEligibilityProof
+	TortoiseBeacon   []byte
 	Data             []byte
 
 	BaseBlock BlockID

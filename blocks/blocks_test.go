@@ -58,17 +58,23 @@ func genByte32() [32]byte {
 	return x
 }
 
-var txid1 = types.TransactionID(genByte32())
-var txid2 = types.TransactionID(genByte32())
-var txid3 = types.TransactionID(genByte32())
+var (
+	txid1 = types.TransactionID(genByte32())
+	txid2 = types.TransactionID(genByte32())
+	txid3 = types.TransactionID(genByte32())
+)
 
-var one = types.CalcHash32([]byte("1"))
-var two = types.CalcHash32([]byte("2"))
-var three = types.CalcHash32([]byte("3"))
+var (
+	one   = types.CalcHash32([]byte("1"))
+	two   = types.CalcHash32([]byte("2"))
+	three = types.CalcHash32([]byte("3"))
+)
 
-var atx1 = types.ATXID(one)
-var atx2 = types.ATXID(two)
-var atx3 = types.ATXID(three)
+var (
+	atx1 = types.ATXID(one)
+	atx2 = types.ATXID(two)
+	atx3 = types.ATXID(three)
+)
 
 type fetchMock struct {
 	retError       bool
@@ -131,8 +137,7 @@ func (f fetchMock) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	return f.returnError()
 }
 
-type meshMock struct {
-}
+type meshMock struct{}
 
 func (m meshMock) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
 	panic("implement me")
@@ -154,10 +159,9 @@ func (m meshMock) HandleLateBlock(context.Context, *types.Block) {
 	panic("implement me")
 }
 
-type verifierMock struct {
-}
+type verifierMock struct{}
 
-func (v verifierMock) BlockSignedAndEligible(*types.Block) (bool, error) {
+func (v verifierMock) BlockSignedAndEligible(context.Context, *types.Block) (bool, error) {
 	return true, nil
 }
 
@@ -184,7 +188,7 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
 	cfg := Config{3, goldenATXID}
-	//yncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
+	// yncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
 	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, logtest.New(t))
 	b := &types.Block{}
 

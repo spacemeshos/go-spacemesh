@@ -24,7 +24,7 @@ import (
 
 type blockEligibilityValidatorMock struct{}
 
-func (blockEligibilityValidatorMock) BlockSignedAndEligible(*types.Block) (bool, error) {
+func (blockEligibilityValidatorMock) BlockSignedAndEligible(context.Context, *types.Block) (bool, error) {
 	return true, nil
 }
 
@@ -97,6 +97,7 @@ type mockClock struct {
 func (m *mockClock) LayerToTime(types.LayerID) time.Time {
 	return time.Now().Add(1000 * time.Hour) // hack so this wont take affect in the mock
 }
+
 func (m *mockClock) Tick() {
 	l := m.GetCurrentLayer()
 	log.Info("tick %v", l)
@@ -118,11 +119,13 @@ func (m *mockClock) Subscribe() timesync.LayerTimer {
 
 	return newCh
 }
+
 func (m *mockClock) Unsubscribe(timer timesync.LayerTimer) {
 	m.countUnsub++
 	delete(m.ids, m.ch[timer])
 	delete(m.ch, timer)
 }
+
 func configTst() mesh.Config {
 	return mesh.Config{
 		BaseReward: big.NewInt(5000),

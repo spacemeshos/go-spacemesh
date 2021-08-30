@@ -60,9 +60,17 @@ func NewMinerBlockOracle(committeeSize uint32, layersPerEpoch uint32, atxDB acti
 
 // BlockEligible returns the ATXID and list of block eligibility proofs for the given layer. It caches proofs for a
 // single epoch and only refreshes the cache if eligibility is queried for a different epoch.
-func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error) {
+func (bo *Oracle) BlockEligible(
+	layerID types.LayerID,
+) (
+	atxID types.ATXID,
+	proofs []types.BlockEligibilityProof,
+	activeSet []types.ATXID,
+	tortoiseBeacon types.TortoiseBeacon,
+	err error,
+) {
 	if !bo.isSynced() {
-		return types.ATXID{}, nil, nil, fmt.Errorf("cannot calc eligibility, not synced yet")
+		return types.ATXID{}, nil, nil, nil, fmt.Errorf("cannot calc eligibility, not synced yet")
 	}
 
 	epochNumber := layerID.GetEpoch()
@@ -72,44 +80,49 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	} else {
 		cachedEpochDescription = log.FieldNamed("cached_epoch_id", bo.proofsEpoch.Field())
 	}
+
 	bo.log.With().Info("asked for block eligibility", layerID, epochNumber, cachedEpochDescription)
 	if epochNumber.IsGenesis() {
 		bo.log.With().Error("asked for block eligibility in genesis epoch, cannot create blocks here",
 			layerID, epochNumber, cachedEpochDescription)
-		return *types.EmptyATXID, nil, nil, nil
+		return *types.EmptyATXID, nil, nil, nil, nil
 	}
-	var proofs []types.BlockEligibilityProof
+
 	bo.eligibilityMutex.RLock()
 	if bo.proofsEpoch != epochNumber {
 		bo.eligibilityMutex.RUnlock()
-		newProofs, err := bo.calcEligibilityProofs(epochNumber)
+
+		// Only first miner's block in epoch contains tortoise beacon
+		// because miner is not allowed to change its opinion later.
+		tortoiseBeacon, err = bo.beaconProvider.GetBeacon(epochNumber)
+		if err != nil {
+			bo.log.With().Error("Failed to get beacon",
+				log.Uint64("epoch_id", uint64(epochNumber)),
+				log.Err(err))
+
+			return *types.EmptyATXID, nil, nil, nil, err
+		}
+
+		newProofs, err := bo.calcEligibilityProofs(epochNumber, tortoiseBeacon)
 		proofs = newProofs[layerID]
 		if err != nil {
 			bo.log.With().Error("failed to calculate eligibility proofs", layerID, epochNumber, log.Err(err))
-			return *types.EmptyATXID, nil, nil, err
+			return *types.EmptyATXID, nil, nil, nil, err
 		}
 	} else {
 		proofs = bo.eligibilityProofs[layerID]
 		bo.eligibilityMutex.RUnlock()
 	}
+
 	bo.log.With().Info("got eligibility for blocks",
 		bo.nodeID, layerID, layerID.GetEpoch(),
 		log.Int("num_blocks", len(proofs)))
 
-	return bo.atxID, proofs, bo.epochAtxs, nil
+	return bo.atxID, proofs, bo.epochAtxs, tortoiseBeacon, nil
 }
 
-func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.LayerID][]types.BlockEligibilityProof, error) {
-	epochBeacon, err := bo.beaconProvider.GetBeacon(epochNumber)
-	if err != nil {
-		bo.log.With().Error("Failed to get beacon",
-			log.Uint64("epoch_id", uint64(epochNumber)),
-			log.Err(err))
-
-		return nil, err
-	}
-
-	beaconDbgStr := types.BytesToHash(epochBeacon).ShortString()
+func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID, tortoiseBeacon types.TortoiseBeacon) (map[types.LayerID][]types.BlockEligibilityProof, error) {
+	beaconDbgStr := types.BytesToHash(tortoiseBeacon).ShortString()
 	bo.log.With().Info("got beacon",
 		log.Uint64("epoch_id", uint64(epochNumber)),
 		log.String("epoch_beacon", beaconDbgStr))
@@ -144,20 +157,19 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 
 	eligibilityProofs := map[types.LayerID][]types.BlockEligibilityProof{}
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
-		message, err := serializeVRFMessage(epochBeacon, epochNumber, counter)
+		message, err := serializeVRFMessage(tortoiseBeacon, epochNumber, counter)
 		if err != nil {
 			return nil, err
 		}
 		vrfSig := bo.vrfSigner.Sign(message)
 
 		bo.log.Debug("signed vrf message, beacon %v, epoch %v, counter: %v, vrfSig: %v",
-			types.BytesToHash(epochBeacon).ShortString(), epochNumber, counter, types.BytesToHash(vrfSig).ShortString())
+			types.BytesToHash(tortoiseBeacon).ShortString(), epochNumber, counter, types.BytesToHash(vrfSig).ShortString())
 
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfSig)
 		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.BlockEligibilityProof{
-			J:              counter,
-			Sig:            vrfSig,
-			TortoiseBeacon: epochBeacon,
+			J:   counter,
+			Sig: vrfSig,
 		})
 	}
 

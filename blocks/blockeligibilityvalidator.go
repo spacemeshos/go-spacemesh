@@ -1,6 +1,7 @@
 package blocks
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -10,8 +11,12 @@ import (
 // VRFValidationFunction is the VRF validation function.
 type VRFValidationFunction func(publicKey, message, signature []byte) bool
 
+//go:generate mockgen -package=mocks -destination=./mocks/blockeligibilityvalidator.go -source=./blockeligibilityvalidator.go
+
 type blockDB interface {
 	GetBlock(ID types.BlockID) (*types.Block, error)
+	AddTortoiseBeacon(context.Context, types.EpochID, []byte, types.TortoiseBeacon) error
+	GetTortoiseBeacon(context.Context, types.EpochID, []byte) (types.TortoiseBeacon, error)
 }
 
 // BlockEligibilityValidator holds all the dependencies for validating block eligibility.
@@ -43,7 +48,7 @@ func NewBlockEligibilityValidator(
 
 // BlockSignedAndEligible checks that a given block is signed and eligible. It returns true with no error or false and
 // an error that explains why validation failed.
-func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (bool, error) {
+func (v BlockEligibilityValidator) BlockSignedAndEligible(ctx context.Context, block *types.Block) (bool, error) {
 	var weight, totalWeight uint64
 
 	epochNumber := block.LayerIndex.GetEpoch()
@@ -55,8 +60,8 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			// block should be present because we've synced it in the calling function
 			return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
 		}
-
 	}
+
 	if activeSetBlock.ActiveSet == nil {
 		return false, fmt.Errorf("cannot get active set from block %v", activeSetBlock.ID())
 	}
@@ -90,7 +95,18 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			numberOfEligibleBlocks, totalWeight)
 	}
 
-	epochBeacon := block.EligibilityProof.TortoiseBeacon
+	epochBeacon := block.TortoiseBeacon
+	if epochBeacon != nil {
+		if err := v.blocks.AddTortoiseBeacon(context.Background(), epochNumber, block.MinerID().Bytes(), epochBeacon); err != nil {
+			v.log.WithContext(ctx).Error("Failed to add tortoise beacon to DB", epochNumber, block.MinerID(), epochBeacon)
+		}
+	} else {
+		epochBeacon, err = v.blocks.GetTortoiseBeacon(context.Background(), epochNumber, block.MinerID().Bytes())
+		if err != nil {
+			v.log.WithContext(ctx).Error("Failed to get tortoise beacon from DB", epochNumber, block.MinerID())
+			return false, err
+		}
+	}
 
 	message, err := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	if err != nil {

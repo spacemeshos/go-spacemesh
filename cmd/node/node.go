@@ -179,7 +179,7 @@ type HareService interface {
 // TortoiseBeaconService is an interface that defines tortoise beacon functionality.
 type TortoiseBeaconService interface {
 	Service
-	GetBeacon(id types.EpochID) ([]byte, error)
+	GetBeacon(id types.EpochID) (types.TortoiseBeacon, error)
 	HandleSerializedProposalMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
 	HandleSerializedFirstVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
 	HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)

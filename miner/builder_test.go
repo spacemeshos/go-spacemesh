@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -29,9 +30,9 @@ type mockBlockOracle struct {
 	J     uint32
 }
 
-func (mbo *mockBlockOracle) BlockEligible(types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error) {
+func (mbo *mockBlockOracle) BlockEligible(types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, []byte, error) {
 	mbo.calls++
-	return types.ATXID(types.Hash32{1, 2, 3}), []types.BlockEligibilityProof{{J: mbo.J, Sig: []byte{1}}}, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, mbo.err
+	return types.ATXID(types.Hash32{1, 2, 3}), []types.BlockEligibilityProof{{J: mbo.J, Sig: []byte{1}}}, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, util.Hex2Bytes("1234"), mbo.err
 }
 
 type mockSyncer struct {
@@ -46,8 +47,7 @@ func (mockSyncer) GetPoetProof(context.Context, types.Hash32) error { return nil
 
 func (m mockSyncer) IsSynced(context.Context) bool { return !m.notSynced }
 
-type MockProjector struct {
-}
+type MockProjector struct{}
 
 func (p *MockProjector) GetProjection(types.Address) (nonce uint64, balance uint64, err error) {
 	return 1, 1000, nil
@@ -108,9 +108,9 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	atxID1 := types.ATXID(types.HexToHash32("dead"))
 	atxID2 := types.ATXID(types.HexToHash32("beef"))
 
-	b1, err := builder1.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), atxID1, types.BlockEligibilityProof{}, nil, nil)
+	b1, err := builder1.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), atxID1, types.BlockEligibilityProof{}, nil, nil, nil)
 	assert.NoError(t, err)
-	b2, err := builder2.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), atxID2, types.BlockEligibilityProof{}, nil, nil)
+	b2, err := builder2.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), atxID2, types.BlockEligibilityProof{}, nil, nil, nil)
 	assert.NoError(t, err)
 
 	assert.NotEqual(t, b1.ID(), b2.ID(), "ids are identical")
@@ -194,7 +194,6 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	case <-time.After(1 * time.Minute):
 		assert.Fail(t, "timeout on receiving block")
 	}
-
 }
 
 func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
@@ -220,7 +219,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 
 	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
 
-	b, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(1), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, []types.ATXID{atx1, atx2, atx3, atx4, atx5})
+	b, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(1), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, nil)
 	assert.NoError(t, err)
 
 	assert.Equal(t, hareRes, b.ForDiff)
@@ -232,8 +231,8 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 
 	assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
 
-	//test create second block
-	bl, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, nil)
+	// test create second block
+	bl, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, nil, nil)
 	assert.NoError(t, err)
 
 	assert.Equal(t, hareRes, bl.ForDiff)
@@ -347,24 +346,24 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	st := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	builder1 := createBlockBuilder(t, "a", n1, bs)
 	builder1.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
-		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, []types.BlockID{}, st}, nil
+		return types.BlockID{0}, [][]types.BlockID{{}, {}, st}, nil
 	}}
 
-	b, err := builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	b, err := builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil, nil)
 	r.Nil(err)
 	r.Equal(st, b.NeutralDiff)
 
 	builder1.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
-		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, nil, st}, nil
+		return types.BlockID{0}, [][]types.BlockID{{}, nil, st}, nil
 	}}
 
-	b, err = builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	b, err = builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil, nil)
 	r.Nil(err)
 	r.Equal([]types.BlockID(nil), b.ForDiff)
 	emptyID := types.BlockID{}
 	r.NotEqual(b.ID(), emptyID)
 
-	b, err = builder1.createBlock(context.TODO(), types.NewLayerID(5), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	b, err = builder1.createBlock(context.TODO(), types.NewLayerID(5), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil, nil)
 	r.EqualError(err, "cannot create blockBytes in genesis layer")
 }
 
