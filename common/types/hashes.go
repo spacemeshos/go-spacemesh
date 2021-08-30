@@ -2,12 +2,13 @@ package types
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/sha256-simd"
 	"math/big"
 	"math/rand"
 	"reflect"
+
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/sha256-simd"
 )
 
 const (
@@ -122,6 +123,11 @@ func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash
 // CalcMessageHash12 returns the 12-byte sha256 sum of the given msg suffixed with protocol.
 func CalcMessageHash12(msg []byte, protocol string) Hash12 {
 	return CalcHash12(append(msg, protocol...))
+}
+
+// CalcMessageHash32 returns full sha256 hash for the msg with protocol suffix.
+func CalcMessageHash32(msg []byte, protocol string) Hash32 {
+	return CalcHash32(append(msg, protocol...))
 }
 
 var hashT = reflect.TypeOf(Hash32{})

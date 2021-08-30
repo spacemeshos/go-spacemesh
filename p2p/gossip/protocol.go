@@ -111,12 +111,12 @@ func (p *Protocol) SetPriority(protoName string, priority priorityq.Priority) {
 
 // markMessageAsOld adds the message's hash to the old messages queue so that the message won't be processed in case received again.
 // Returns true if message was already processed before
-func (p *Protocol) markMessageAsOld(h types.Hash12) bool {
+func (p *Protocol) markMessageAsOld(h types.Hash32) bool {
 	return p.oldMessageQ.GetOrInsert(h)
 }
 
 func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, msg service.Data) error {
-	h := types.CalcMessageHash12(msg.Bytes(), protocol)
+	h := types.CalcMessageHash32(msg.Bytes(), protocol)
 	logger := p.WithContext(ctx).WithFields(
 		log.FieldNamed("msg_sender", sender),
 		log.String("protocol", protocol),
