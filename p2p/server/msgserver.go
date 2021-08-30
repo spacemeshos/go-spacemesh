@@ -178,7 +178,7 @@ func (p *MessageServer) readLoop(ctx context.Context) error {
 				p.cleanStaleMessages()
 				return nil
 			}); err != nil {
-				logger.With().Panic("error from cleanStaleMessages taskgroup", log.Err(err))
+				logger.With().Info("taskgroup was stopped, failed to cleanStaleMessages", log.Err(err))
 			}
 		case msg, ok := <-p.ingressChannel:
 			// generate new reqID for message
@@ -196,7 +196,7 @@ func (p *MessageServer) readLoop(ctx context.Context) error {
 					<-p.workerLimiter
 					return nil
 				}); err != nil {
-					logger.With().Panic("error from handleMessage taskgroup", log.Err(err))
+					logger.With().Info("taskgroup was stopped, failed to handleMessage", log.Err(err))
 				}
 			case <-ctx.Done():
 				return ctx.Err()
