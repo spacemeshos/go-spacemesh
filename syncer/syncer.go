@@ -89,10 +89,10 @@ type Syncer struct {
 	// targetSyncedLayer is used to signal at which layer we can set this node to synced state
 	targetSyncedLayer unsafe.Pointer
 
-	tbWeight        map[string]uint64
-	seenTB          map[string]struct{}
-	mostUsedTBCount uint64
-	mostUsedTB      []byte
+	tbWeight         map[string]uint64
+	seenTB           map[string]struct{}
+	mostUsedTBWeight uint64
+	mostUsedTB       []byte
 
 	// awaitSyncedCh is the list of subscribers' channels to notify when this node enters synced state
 	awaitSyncedCh []chan struct{}
@@ -297,7 +297,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		if layerID.FirstInEpoch() {
 			s.tbWeight = make(map[string]uint64)
 			s.seenTB = make(map[string]struct{})
-			s.mostUsedTBCount = 0
+			s.mostUsedTBWeight = 0
 			s.mostUsedTB = nil
 		}
 
@@ -468,8 +468,8 @@ func (s *Syncer) processTortoiseBeacons(ctx context.Context, layer *types.Layer)
 			}
 
 			s.tbWeight[tbString] += atxHeader.GetWeight()
-			if s.tbWeight[tbString] > s.mostUsedTBCount {
-				s.mostUsedTBCount = s.tbWeight[tbString]
+			if s.tbWeight[tbString] > s.mostUsedTBWeight {
+				s.mostUsedTBWeight = s.tbWeight[tbString]
 				s.mostUsedTB = tb
 			}
 		}
