@@ -803,7 +803,7 @@ func (m *DB) addUnapplied(addr types.Address, txs []*types.Transaction, layer ty
 			m.Log.With().Panic("can't encode tx", log.Err(err))
 		}
 
-		b.Write(addr[:])
+		b.Write(addr.Bytes())
 		b.Write(tx.ID().Bytes())
 		if err := batch.Put(b.Bytes(), buf); err != nil {
 			return err
@@ -833,13 +833,13 @@ func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[ty
 	return m.removePending(account, rejected[account])
 }
 
-func (m *DB) removePending(account types.Address, txs []*types.Transaction) error {
+func (m *DB) removePending(addr types.Address, txs []*types.Transaction) error {
 	var (
 		batch = m.unappliedTxs.NewBatch()
 		b     bytes.Buffer
 	)
 	for _, tx := range txs {
-		b.Write(account[:])
+		b.Write(addr.Bytes())
 		b.Write(tx.ID().Bytes())
 		if err := batch.Delete(b.Bytes()); err != nil {
 			return err
