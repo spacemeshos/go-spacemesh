@@ -150,15 +150,22 @@ func newMemMesh(lg log.Log) *mesh.Mesh {
 }
 
 var conf = Configuration{
-	SyncInterval:    100 * time.Millisecond,
+	SyncInterval:    time.Second * 60 * 60 * 24, // long enough that it doesn't kick in during testing
 	ValidationDelta: 30 * time.Millisecond,
 	AlwaysListen:    false,
+}
+
+func newSyncerWithoutSyncTimer(ctx context.Context, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, logger log.Log) *Syncer {
+	syncer := NewSyncer(ctx, conf, ticker, mesh, fetcher, logger)
+	syncer.syncTimer.Stop()
+	return syncer
 }
 
 func TestStartAndShutdown(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	ctx, cancel := context.WithCancel(context.TODO())
+	conf.SyncInterval = time.Millisecond * 5
 	syncer := NewSyncer(ctx, conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
 	syncedCh := make(chan struct{})
 	syncer.RegisterChForSynced(context.TODO(), syncedCh)
@@ -167,12 +174,7 @@ func TestStartAndShutdown(t *testing.T) {
 	assert.False(t, syncer.ListenToGossip())
 
 	// the node is synced when current layer is 0
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		syncer.Start(context.TODO())
-		wg.Done()
-	}()
+	syncer.Start(context.TODO())
 	<-syncedCh
 	assert.True(t, syncer.IsSynced(context.TODO()))
 	assert.True(t, syncer.ListenToGossip())
@@ -180,15 +182,16 @@ func TestStartAndShutdown(t *testing.T) {
 	cancel()
 	assert.True(t, syncer.isClosed())
 	assert.False(t, syncer.synchronize(context.TODO()))
-	wg.Wait()
+	syncer.Close()
 }
 
 func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
 	ticker.advanceToLayer(types.NewLayerID(10))
+	syncer.Start(context.TODO())
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -214,6 +217,7 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	// one of the synchronize calls should fail
 	assert.False(t, first && second)
 	assert.Equal(t, uint64(1), syncer.run)
+	syncer.Close()
 }
 
 func TestSynchronize_AllGood(t *testing.T) {
@@ -221,8 +225,9 @@ func TestSynchronize_AllGood(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
 	ticker.advanceToLayer(mm.LatestLayer())
+	syncer.Start(context.TODO())
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -237,6 +242,7 @@ func TestSynchronize_AllGood(t *testing.T) {
 
 	assert.True(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
+	syncer.Close()
 }
 
 func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
@@ -244,9 +250,10 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
 	lyr := types.GetEffectiveGenesis()
 	ticker.advanceToLayer(lyr.Add(1))
+	syncer.Start(context.TODO())
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -264,6 +271,7 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
+	syncer.Close()
 }
 
 func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
@@ -271,8 +279,9 @@ func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
 	ticker.advanceToLayer(types.NewLayerID(numGossipSyncLayers * 2))
+	syncer.Start(context.TODO())
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -287,6 +296,7 @@ func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
 
 	assert.True(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
+	syncer.Close()
 }
 
 func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
@@ -294,8 +304,9 @@ func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
 	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 2))
+	syncer.Start(context.TODO())
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -310,6 +321,7 @@ func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
 
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
+	syncer.Close()
 }
 
 func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
@@ -317,7 +329,8 @@ func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer.Start(context.TODO())
 
 	// brings the node to synced state
 	ticker.advanceToLayer(types.NewLayerID(1))
@@ -359,6 +372,7 @@ func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
 
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
+	syncer.Close()
 }
 
 func TestSynchronize_getTBFailed(t *testing.T) {
@@ -366,8 +380,9 @@ func TestSynchronize_getTBFailed(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
 	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 3).Add(1))
+	syncer.Start(context.TODO())
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -382,6 +397,7 @@ func TestSynchronize_getTBFailed(t *testing.T) {
 
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
+	syncer.Close()
 }
 
 func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
@@ -389,9 +405,10 @@ func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
 	gLayer := types.GetEffectiveGenesis()
 	ticker.advanceToLayer(gLayer.Add(1))
+	syncer.Start(context.TODO())
 
 	var wg sync.WaitGroup
 	wg.Add(1)
@@ -412,6 +429,7 @@ func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
 	waitOutGossipSync(t, ticker.GetCurrentLayer(), syncer, ticker, mf)
+	syncer.Close()
 }
 
 // test the case where the node originally starts from notSynced and eventually becomes synced
@@ -420,7 +438,7 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
 
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
@@ -428,6 +446,8 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	firstLayer := types.GetEffectiveGenesis()
 	current := firstLayer.Add(5)
 	ticker.advanceToLayer(current)
+	syncer.Start(context.TODO())
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -447,6 +467,7 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
 	waitOutGossipSync(t, current, syncer, ticker, mf)
+	syncer.Close()
 }
 
 // test the case where the node originally starts from notSynced, advances to gossipSync, but falls behind
@@ -456,7 +477,7 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
 
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
@@ -464,6 +485,8 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	firstLayer := types.GetEffectiveGenesis()
 	current := firstLayer.Add(5)
 	ticker.advanceToLayer(current)
+
+	syncer.Start(context.TODO())
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -505,6 +528,7 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
 	waitOutGossipSync(t, newCurrent, syncer, ticker, mf)
+	syncer.Close()
 }
 
 // test the case where the node was originally synced, and somehow gets out of sync, but
@@ -514,12 +538,12 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
-	syncer := NewSyncer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
 	syncedCh := make(chan struct{})
 	syncer.RegisterChForSynced(context.TODO(), syncedCh)
-
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
+	syncer.Start(context.TODO())
 
 	// the node is synced when it starts syncing when current layer is 0
 	var wg sync.WaitGroup
@@ -556,6 +580,7 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
 	waitOutGossipSync(t, current, syncer, ticker, mf)
+	syncer.Close()
 }
 
 func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt *mockLayerTicker, mf *mockFetcher) {
@@ -598,23 +623,25 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt 
 
 func TestForceSync(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
-	syncer := NewSyncer(context.TODO(), conf, newMockLayerTicker(), newMemMesh(lg), newMockFetcher(), lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, newMockLayerTicker(), newMemMesh(lg), newMockFetcher(), lg)
 	syncedCh := make(chan struct{})
 	syncer.RegisterChForSynced(context.TODO(), syncedCh)
-
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
+	syncer.Start(context.TODO())
 
 	syncer.ForceSync(context.TODO())
 	<-syncedCh
 	assert.True(t, syncer.ListenToGossip())
 	assert.True(t, syncer.IsSynced(context.TODO()))
+	syncer.Close()
 }
 
 func TestShouldValidateLayer(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
+	syncer.Start(context.TODO())
 	assert.False(t, syncer.shouldValidateLayer(types.NewLayerID(0)))
 
 	ticker.advanceToLayer(types.NewLayerID(3))
@@ -627,13 +654,16 @@ func TestShouldValidateLayer(t *testing.T) {
 	// but if current layer has elapsed ValidationDelta ms, we will validate
 	ticker.layerStartTime = time.Now().Add(-conf.ValidationDelta)
 	assert.True(t, syncer.shouldValidateLayer(types.NewLayerID(3)))
+	syncer.Close()
 }
 
 func TestGetATXsCurrentEpoch(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer.Start(context.TODO())
+
 	require.Equal(t, 3, layersPerEpoch)
 	mf.setATXsErrors(0, errors.New("no ATXs for epoch 0, expected for epoch 0"))
 	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1, error out"))
@@ -665,13 +695,16 @@ func TestGetATXsCurrentEpoch(t *testing.T) {
 	assert.Equal(t, uint32(5), atomic.LoadUint32(&mf.atxsCalls))
 	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(8)))
 	assert.Equal(t, uint32(6), atomic.LoadUint32(&mf.atxsCalls))
+	syncer.Close()
 }
 
 func TestGetATXsOldAndCurrentEpoch(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer.Start(context.TODO())
+
 	require.Equal(t, 3, layersPerEpoch)
 	mf.setATXsErrors(0, errors.New("no ATXs for epoch 0, expected for epoch 0"))
 	mf.setATXsErrors(1, errors.New("no ATXs for epoch 1"))
@@ -701,13 +734,16 @@ func TestGetATXsOldAndCurrentEpoch(t *testing.T) {
 	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.atxsCalls))
 	assert.NoError(t, syncer.getATXs(context.TODO(), types.NewLayerID(8)))
 	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.atxsCalls))
+	syncer.Close()
 }
 
 func TestGetTBCurrentEpoch(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer.Start(context.TODO())
+
 	require.Equal(t, 3, layersPerEpoch)
 	mf.setTBErrors(0, errors.New("no tortoise beacon for epoch 0, expected for epoch 0"))
 	mf.setTBErrors(1, errors.New("no tortoise beacon for epoch 1, expected for epoch 1"))
@@ -748,13 +784,16 @@ func TestGetTBCurrentEpoch(t *testing.T) {
 	assert.Equal(t, uint32(5), atomic.LoadUint32(&mf.tbCalls))
 	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(11)))
 	assert.Equal(t, uint32(6), atomic.LoadUint32(&mf.tbCalls))
+	syncer.Close()
 }
 
 func TestGetTBOldAndCurrentEpoch(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
-	syncer := NewSyncer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	syncer.Start(context.TODO())
+
 	require.Equal(t, 3, layersPerEpoch)
 	mf.setTBErrors(0, errors.New("no tortoise beacon for epoch 0, expected for epoch 0"))
 	mf.setTBErrors(1, errors.New("no tortoise beacon for epoch 1, expected for epoch 1"))
@@ -792,4 +831,5 @@ func TestGetTBOldAndCurrentEpoch(t *testing.T) {
 	assert.Equal(t, uint32(3), atomic.LoadUint32(&mf.tbCalls))
 	assert.Error(t, syncer.getTortoiseBeacon(context.TODO(), types.NewLayerID(11)))
 	assert.Equal(t, uint32(4), atomic.LoadUint32(&mf.tbCalls))
+	syncer.Close()
 }
