@@ -10,19 +10,19 @@ import (
 // DoubleCache is thread safe.
 type DoubleCache struct {
 	size       uint
-	cacheA     map[Hash32]struct{}
-	cacheB     map[Hash32]struct{}
+	cacheA     map[Hash12]struct{}
+	cacheB     map[Hash12]struct{}
 	cacheMutex sync.RWMutex
 }
 
 // NewDoubleCache returns a new DoubleCache.
 func NewDoubleCache(size uint) *DoubleCache {
-	return &DoubleCache{size: size, cacheA: make(map[Hash32]struct{}, size), cacheB: make(map[Hash32]struct{}, size)}
+	return &DoubleCache{size: size, cacheA: make(map[Hash12]struct{}, size), cacheB: make(map[Hash12]struct{}, size)}
 }
 
 // GetOrInsert checks if a value is already in the cache, otherwise it adds it. Returns bool whether or not the value
 // was found in the cache (true - already in cache, false - wasn't in cache before this was called).
-func (a *DoubleCache) GetOrInsert(key Hash32) bool {
+func (a *DoubleCache) GetOrInsert(key Hash12) bool {
 	a.cacheMutex.Lock()
 	defer a.cacheMutex.Unlock()
 	if a.get(key) {
@@ -32,7 +32,7 @@ func (a *DoubleCache) GetOrInsert(key Hash32) bool {
 	return false
 }
 
-func (a *DoubleCache) get(key Hash32) bool {
+func (a *DoubleCache) get(key Hash12) bool {
 	_, ok := a.cacheA[key]
 	if ok {
 		return true
@@ -44,7 +44,7 @@ func (a *DoubleCache) get(key Hash32) bool {
 	return false
 }
 
-func (a *DoubleCache) insert(key Hash32) {
+func (a *DoubleCache) insert(key Hash12) {
 	if uint(len(a.cacheA)) < a.size {
 		a.cacheA[key] = struct{}{}
 		return
@@ -54,6 +54,6 @@ func (a *DoubleCache) insert(key Hash32) {
 		return
 	}
 	a.cacheA = a.cacheB
-	a.cacheB = make(map[Hash32]struct{}, a.size)
+	a.cacheB = make(map[Hash12]struct{}, a.size)
 	a.cacheB[key] = struct{}{}
 }
