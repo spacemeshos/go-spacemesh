@@ -224,7 +224,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	obj1 := createAccount(s.processor, SignerToAddr(signer), 25, 0)
 	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 02}), 1, 10)
 	obj3 := createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
-	s.processor.Commit()
+	_, err = s.processor.Commit()
+	assert.NoError(s.T(), err)
 
 	transactions := []*types.Transaction{
 		createTransaction(s.T(), obj1.Nonce()+3, obj3.address, 1, 5, signer),
@@ -390,10 +391,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	var want string
 	for i := 0; i < testCycles; i++ {
 		numOfTransactions := rand.Intn(maxTransactions-minTransactions) + minTransactions
-		trns := []*types.Transaction{}
+		var trns []*types.Transaction
 		nonceTrack := make(map[*Object]int)
 		for j := 0; j < numOfTransactions; j++ {
-
 			src := int(rand.Uint32() % (uint32(len(accounts) - 1)))
 			srcAccount := accounts[src]
 			dstAccount := accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
@@ -428,11 +428,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 				s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
 			}
 		}
-
 	}
 
 	writtenMore := db.Len()
-
 	assert.True(s.T(), writtenMore > written)
 }
 
@@ -485,7 +483,8 @@ func TestTransactionProcessor_ApplyTransactionTestSuite(t *testing.T) {
 	suite.Run(t, new(ProcessorStateSuite))
 }
 
-func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transaction {
+func createSignerTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transaction {
+	t.Helper()
 	r := require.New(t)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	r.NoError(err)
@@ -502,14 +501,14 @@ func TestValidateTxSignature(t *testing.T) {
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
 	createAccount(proc, PublicKeyToAccountAddress(pub), 123, 321)
-	tx := createXdrSignedTransaction(t, pri)
+	tx := createSignerTransaction(t, pri)
 
 	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
 	assert.True(t, proc.AddressExists(tx.Origin()))
 
 	// negative flow
 	pub, pri, _ = ed25519.GenerateKey(crand.Reader)
-	tx = createXdrSignedTransaction(t, pri)
+	tx = createSignerTransaction(t, pri)
 
 	assert.False(t, proc.AddressExists(tx.Origin()))
 	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
@@ -525,7 +524,7 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 	r.NotEqual(types.Hash32{}, proc.rootHash)
 
 	expectedRoot := types.Hash32{1, 2, 3}
-	r.NoError(proc.addState(expectedRoot, types.NewLayerID(1)))
+	r.NoError(proc.saveStateRoot(expectedRoot, types.NewLayerID(1)))
 
 	actualRoot := proc.GetStateRoot()
 	r.Equal(expectedRoot, actualRoot)
@@ -547,7 +546,8 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	obj1 := createAccount(processor, SignerToAddr(signer), 21, 0)
 	obj2 := createAccount(processor, toAddr([]byte{0x01, 02}), 1, 10)
 	createAccount(processor, toAddr([]byte{0x02}), 44, 0)
-	processor.Commit()
+	_, err = processor.Commit()
+	assert.NoError(t, err)
 
 	transactions := []*types.Transaction{
 		createTransaction(t, obj1.Nonce(), obj2.address, 1, 5, signer),

@@ -95,20 +95,20 @@ func NewBlockBuilder(
 	syncer syncer,
 	projector projector,
 	txPool txPool,
-	lg log.Log,
+	logger log.Log,
 ) *BlockBuilder {
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
-	db, err := database.Create("builder", 16, 16, lg)
+	db, err := database.Create("builder", 16, 16, logger)
 	if err != nil {
-		lg.Panic("cannot create block builder DB %v", err)
+		logger.With().Panic("cannot create block builder database", log.Err(err))
 	}
 
 	return &BlockBuilder{
 		minerID:         config.MinerID,
 		signer:          sgn,
 		hdist:           config.Hdist,
-		Log:             lg,
+		Log:             logger,
 		rnd:             rand.New(rand.NewSource(int64(seed))),
 		beginRoundEvent: beginRoundEvent,
 		stopChan:        make(chan struct{}),
@@ -172,7 +172,7 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 	if err != nil {
 		return
 	}
-	err = types.BytesToInterface(bts, &blockID)
+	copy(blockID[:], bts)
 	return
 }
 
@@ -186,11 +186,20 @@ func (t *BlockBuilder) stopped() bool {
 	}
 }
 
-func (t *BlockBuilder) createBlock(ctx context.Context, id types.LayerID, atxID types.ATXID, eligibilityProof types.BlockEligibilityProof, txids []types.TransactionID, activeSet []types.ATXID) (*types.Block, error) {
+func (t *BlockBuilder) createBlock(
+	ctx context.Context,
+	id types.LayerID,
+	atxID types.ATXID,
+	eligibilityProof types.BlockEligibilityProof,
+	txids []types.TransactionID,
+	activeSet []types.ATXID,
+) (*types.Block, error) {
+	logger := t.WithContext(ctx)
 	if !id.After(types.GetEffectiveGenesis()) {
 		return nil, errors.New("cannot create blockBytes in genesis layer")
 	}
 
+	// get the most up-to-date base block, and a list of diffs versus local opinion
 	base, diffs, err := t.baseBlockP.BaseBlock(ctx)
 	if err != nil {
 		return nil, err
@@ -212,14 +221,14 @@ func (t *BlockBuilder) createBlock(ctx context.Context, id types.LayerID, atxID 
 	epoch := id.GetEpoch()
 	refBlock, err := t.getRefBlock(epoch)
 	if err != nil {
-		t.With().Debug("creating block with active set (no reference block for epoch)",
+		logger.With().Debug("creating block with active set (no reference block for epoch)",
 			log.Int("active_set_size", len(activeSet)),
 			log.FieldNamed("ref_block", refBlock),
 			log.Err(err))
 		atxs := activeSet
 		b.ActiveSet = &atxs
 	} else {
-		t.With().Debug("creating block with reference block (no active set)",
+		logger.With().Debug("creating block with reference block (no active set)",
 			log.Int("active_set_size", len(activeSet)),
 			log.FieldNamed("ref_block", refBlock))
 		b.RefBlock = &refBlock
@@ -235,14 +244,14 @@ func (t *BlockBuilder) createBlock(ctx context.Context, id types.LayerID, atxID 
 	bl.Initialize()
 
 	if b.ActiveSet != nil {
-		t.With().Info("storing ref block", epoch, bl.ID())
+		logger.With().Debug("storing ref block", epoch, bl.ID())
 		if err := t.storeRefBlock(epoch, bl.ID()); err != nil {
-			t.With().Error("cannot store ref block", epoch, log.Err(err))
+			logger.With().Error("cannot store ref block", epoch, log.Err(err))
 			//todo: panic?
 		}
 	}
 
-	t.Event().Info("block created", bl.Fields()...)
+	logger.Event().Info("block created", bl.Fields()...)
 	return bl, nil
 }
 
@@ -255,7 +264,8 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			return
 
 		case layerID := <-t.beginRoundEvent:
-			logger.With().Debug("builder got layer", layerID)
+			logger := logger.WithFields(layerID, layerID.GetEpoch())
+			logger.Info("builder got layer")
 			if !t.syncer.IsSynced(ctx) {
 				logger.Info("not synced yet, not building a block in this round")
 				continue
@@ -277,9 +287,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			logger.With().Info("eligible for one or more blocks in layer",
-				log.Int("count", len(proofs)),
-				layerID)
+			logger.With().Info("eligible for one or more blocks in layer", log.Int("count", len(proofs)))
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
@@ -288,7 +296,6 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					continue
 				}
 				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs)
-
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot create new block")
 					logger.With().Error("failed to create new block", log.Err(err))

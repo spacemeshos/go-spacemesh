@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func randomHash() types.Hash32 {
@@ -57,10 +58,11 @@ func newMockNet() *mockNet {
 	}
 }
 func (m *mockNet) GetPeers() []peers.Peer    { return m.peers }
+func (m *mockNet) PeerCount() uint64         { return uint64(len(m.peers)) }
 func (m *mockNet) GetRandomPeer() peers.Peer { return m.peers[0] }
-func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, _ []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error {
+func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, _ []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errorHandler func(err error)) error {
 	if _, ok := m.timeouts[address]; ok {
-		timeoutHandler(errors.New("peer timeout"))
+		errorHandler(errors.New("peer timeout"))
 		return nil
 	}
 	switch msgType {
@@ -165,7 +167,8 @@ func TestLayerHashReqReceiver(t *testing.T) {
 	aggHash := randomHash()
 	db.hashes[layerID] = hash
 	db.aggHashes[layerID] = aggHash
-	out := l.layerHashReqReceiver(context.TODO(), layerID.Bytes())
+	out, err := l.layerHashReqReceiver(context.TODO(), layerID.Bytes())
+	require.NoError(t, err)
 	var lyrHash layerHash
 	assert.NoError(t, types.BytesToInterface(out, &lyrHash))
 	assert.Equal(t, db.processed, lyrHash.ProcessedLayer)
@@ -180,10 +183,10 @@ func TestLayerHashBlocksReqReceiver(t *testing.T) {
 	db.layers[h] = []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID(), randomBlockID()}
 	db.vectors[h] = []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID()}
 
-	outB := l.layerHashBlocksReqReceiver(context.TODO(), h.Bytes())
-
+	out, err := l.layerHashBlocksReqReceiver(context.TODO(), h.Bytes())
+	require.NoError(t, err)
 	var act layerBlocks
-	err := types.BytesToInterface(outB, &act)
+	err = types.BytesToInterface(out, &act)
 	assert.NoError(t, err)
 	assert.Equal(t, act.Blocks, db.layers[h])
 	assert.Equal(t, act.VerifyingVector, db.vectors[h])

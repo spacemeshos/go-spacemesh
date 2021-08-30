@@ -1,23 +1,23 @@
 package eligibility
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
 	"sync"
 
 	lru "github.com/hashicorp/golang-lru"
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/fixed"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const vrfMsgCacheSize = 20       // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
-const activesCacheSize = 5       // we don't expect to handle more than two layers concurrently
-const maxSupportedN = 1073741824 // higher values result in an overflow
+const (
+	vrfMsgCacheSize  = 20         // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
+	activesCacheSize = 5          // we don't expect to handle more than two layers concurrently
+	maxSupportedN    = 1073741824 // higher values result in an overflow
+)
 
 type valueProvider interface {
 	Value(context.Context, types.EpochID) (uint32, error)
@@ -38,7 +38,7 @@ type atxProvider interface {
 
 type meshProvider interface {
 	// LayerContextuallyValidBlocks returns the set of contextually valid blocks from the mesh for a given layer
-	LayerContextuallyValidBlocks(types.LayerID) (map[types.BlockID]struct{}, error)
+	LayerContextuallyValidBlocks(context.Context, types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
 // a function to verify the message with the signature and its public key.
@@ -164,17 +164,13 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	}
 
 	// marshal message
-	var w bytes.Buffer
 	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
-	if _, err := xdr.Marshal(&w, &msg); err != nil {
-		o.WithContext(ctx).With().Error("could not marshal xdr", log.Err(err))
-		return nil, err
+	buf, err := types.InterfaceToBytes(&msg)
+	if err != nil {
+		o.WithContext(ctx).With().Panic("failed to encode", log.Err(err))
 	}
-
-	val := w.Bytes()
-	o.vrfMsgCache.Add(key, val) // update cache
-
-	return val, nil
+	o.vrfMsgCache.Add(key, buf)
+	return buf, nil
 }
 
 func (o *Oracle) totalWeight(ctx context.Context, layer types.LayerID) (uint64, error) {
@@ -259,9 +255,9 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
-	logger.With().Info("prep",
-		log.Uint64("minerWeight", minerWeight),
-		log.Uint64("totalWeight", totalWeight),
+	logger.With().Info("preparing eligibility check",
+		log.Uint64("miner_weight", minerWeight),
+		log.Uint64("total_weight", totalWeight),
 	)
 	n = int(minerWeight)
 
@@ -273,8 +269,8 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	// calc p
 	if committeeSize > int(totalWeight) {
 		logger.With().Warning("committee size is greater than total weight",
-			log.Int("committeeSize", committeeSize),
-			log.Uint64("totalWeight", totalWeight),
+			log.Int("committee_size", committeeSize),
+			log.Uint64("total_weight", totalWeight),
 		)
 		totalWeight *= uint64(committeeSize)
 		n *= committeeSize
@@ -299,11 +295,11 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round int32,
 
 	defer func() {
 		if msg := recover(); msg != nil {
-			o.With().Error("panic in Validate",
+			o.WithContext(ctx).With().Error("panic in validate",
 				log.String("msg", fmt.Sprint(msg)),
 				log.Int("n", n),
 				log.String("p", p.String()),
-				log.String("vrfFrac", vrfFrac.String()),
+				log.String("vrf_frac", vrfFrac.String()),
 			)
 			o.Panic("%s", msg)
 		}
@@ -313,15 +309,15 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round int32,
 	if !fixed.BinCDF(n, p, x-1).GreaterThan(vrfFrac) && vrfFrac.LessThan(fixed.BinCDF(n, p, x)) {
 		return true, nil
 	}
-	o.With().Warning("eligibility: node did not pass vrf eligibility threshold",
+	o.WithContext(ctx).With().Warning("eligibility: node did not pass vrf eligibility threshold",
 		layer,
 		log.Int32("round", round),
 		log.Int("committee_size", committeeSize),
 		id,
-		log.Uint64("eligibilityCount", uint64(eligibilityCount)),
+		log.Uint64("eligibility_count", uint64(eligibilityCount)),
 		log.Int("n", n),
 		log.String("p", p.String()),
-		log.String("vrfFrac", vrfFrac.String()),
+		log.String("vrf_frac", vrfFrac.String()),
 		log.Int("x", x),
 	)
 	return false, nil
@@ -338,13 +334,13 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 
 	defer func() {
 		if msg := recover(); msg != nil {
-			o.With().Error("panic in CalcEligibility",
+			o.With().Error("panic in calc eligibility",
 				layer, layer.GetEpoch(), log.Int32("round_id", round),
 				log.String("msg", fmt.Sprint(msg)),
-				log.Int("committeeSize", committeeSize),
+				log.Int("committee_size", committeeSize),
 				log.Int("n", n),
 				log.String("p", fmt.Sprintf("%g", p.Float())),
-				log.String("vrfFrac", fmt.Sprintf("%g", vrfFrac.Float())),
+				log.String("vrf_frac", fmt.Sprintf("%g", vrfFrac.Float())),
 			)
 			o.Panic("%s", msg)
 		}
@@ -352,10 +348,10 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 
 	o.With().Info("params",
 		layer, layer.GetEpoch(), log.Int32("round_id", round),
-		log.Int("committeeSize", committeeSize),
+		log.Int("committee_size", committeeSize),
 		log.Int("n", n),
 		log.String("p", fmt.Sprintf("%g", p.Float())),
-		log.String("vrfFrac", fmt.Sprintf("%g", vrfFrac.Float())),
+		log.String("vrf_frac", fmt.Sprintf("%g", vrfFrac.Float())),
 	)
 
 	for x := 0; x < n; x++ {
@@ -430,7 +426,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 
 	activeBlockIDs := make(map[types.BlockID]struct{})
 	for layerID := safeLayerStart; !layerID.After(safeLayerEnd); layerID = layerID.Add(1) {
-		layerBlockIDs, err := o.meshdb.LayerContextuallyValidBlocks(layerID)
+		layerBlockIDs, err := o.meshdb.LayerContextuallyValidBlocks(ctx, layerID)
 		if err != nil {
 			return nil, fmt.Errorf("error getting active blocks for layer %v for target layer %v: %w",
 				layerID, targetLayer, err)
@@ -497,8 +493,7 @@ func (o *Oracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID strin
 	}()
 	actives, err := o.actives(ctx, layer)
 	if err != nil {
-		o.WithContext(ctx).With().Error("method IsIdentityActiveOnConsensusView erred while calling actives func",
-			layer, log.Err(err))
+		o.WithContext(ctx).With().Error("error getting active set", layer, log.Err(err))
 		return false, err
 	}
 	_, exist := actives[edID]

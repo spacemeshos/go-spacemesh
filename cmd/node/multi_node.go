@@ -125,7 +125,7 @@ func (clk *ManualClock) GetGenesisTime() time.Time {
 // Close does nothing because this clock is manual
 func (clk *ManualClock) Close() {}
 
-func getTestDefaultConfig(numOfInstances int) *config.Config {
+func getTestDefaultConfig() *config.Config {
 	cfg, err := LoadConfigFromFile()
 	if err != nil {
 		log.Error("cannot load config from file")
@@ -141,12 +141,13 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.SMESHING.Start = true
 	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
 	cfg.SMESHING.Opts.NumFiles = 1
-	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
+	cfg.SMESHING.Opts.ComputeProviderID = initialization.CPUProviderID()
 
+	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
+	cfg.HARE.RoundDuration = 2
+	cfg.HARE.WakeupDelta = 1
 	cfg.HARE.N = 5
 	cfg.HARE.F = 2
-	cfg.HARE.RoundDuration = 3
-	cfg.HARE.WakeupDelta = 5
 	cfg.HARE.ExpectedLeaders = 5
 	cfg.HARE.SuperHare = true
 	cfg.LayerAvgSize = 5
@@ -162,7 +163,7 @@ func getTestDefaultConfig(numOfInstances int) *config.Config {
 	cfg.SyncValidationDelta = 5
 
 	cfg.FETCH.RequestTimeout = 10
-	cfg.FETCH.MaxRetiresForPeer = 5
+	cfg.FETCH.MaxRetriesForPeer = 5
 	cfg.FETCH.BatchSize = 5
 	cfg.FETCH.BatchTimeout = 5
 
@@ -195,7 +196,7 @@ func ActivateGrpcServer(smApp *App) {
 
 // GracefulShutdown stops the current services running in apps
 func GracefulShutdown(apps []*App) {
-	log.Info("Graceful shutdown begin")
+	log.Info("graceful shutdown begin")
 
 	var wg sync.WaitGroup
 	for _, app := range apps {
@@ -207,7 +208,7 @@ func GracefulShutdown(apps []*App) {
 	}
 	wg.Wait()
 
-	log.Info("Graceful shutdown end")
+	log.Info("graceful shutdown end")
 }
 
 type network interface {
@@ -219,7 +220,6 @@ type network interface {
 func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network, edSgn *signing.EdSigner) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg
-
 	smApp.Config.GenesisTime = genesisTime
 
 	smApp.Config.SMESHING.CoinbaseAccount = strconv.Itoa(i + 1)
@@ -254,7 +254,7 @@ func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 // StartMultiNode Starts the run of a number of nodes, running in process consensus between them.
 // this also runs a single transaction between the nodes.
 func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
-	cfg := getTestDefaultConfig(numOfInstances)
+	cfg := getTestDefaultConfig()
 	cfg.LayerAvgSize = layerAvgSize
 	net := service.NewSimulator()
 	path := dbPath + time.Now().Format(time.RFC3339)
@@ -263,7 +263,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	if err != nil {
-		logger.Panic("failed creating poet client harness: %v", err)
+		logger.With().Panic("failed creating poet client harness", log.Err(err))
 	}
 	defer func() {
 		err := poetHarness.Teardown(true)
@@ -275,7 +275,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 	rolacle := eligibility.New(logger)
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
-		logger.Error("cannot parse genesis time %v", err)
+		logger.With().Error("cannot parse genesis time", log.Err(err))
 	}
 	events.CloseEventPubSub()
 	pubsubAddr := "tcp://localhost:55666"
@@ -292,7 +292,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 		edSgn := signing.NewEdSigner()
 		smApp, err := InitSingleInstance(logger, *cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
 		if err != nil {
-			logger.Error("cannot run multi node %v", err)
+			logger.With().Error("cannot run multi node", log.Err(err))
 			return
 		}
 		apps = append(apps, smApp)
@@ -302,7 +302,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 	eventDb := collector.NewMemoryCollector()
 	collect := collector.NewCollector(eventDb, pubsubAddr)
 	for _, a := range apps {
-		a.startServices(context.TODO(), logger)
+		a.startServices(context.TODO())
 	}
 	collect.Start(false)
 	ActivateGrpcServer(apps[0])
@@ -315,11 +315,11 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 				return
 			}
 			if err != nil {
-				logger.Error("Failed to read PoET stdout: %v", err)
+				logger.Error("failed to read poet stdout: %v", err)
 				return
 			}
 
-			logger.Info("[PoET stdout] %v\n", string(line))
+			logger.Info("[poet stdout] %v\n", string(line))
 		}
 	}()
 	go func() {
@@ -330,11 +330,11 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 				return
 			}
 			if err != nil {
-				logger.Error("Failed to read PoET stderr: %v", err)
+				logger.Error("failed to read poet stderr: %v", err)
 				return
 			}
 
-			logger.Info("[PoET stderr] %v", string(line))
+			logger.Info("[poet stderr] %v", string(line))
 		}
 	}()
 

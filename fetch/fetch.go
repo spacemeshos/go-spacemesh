@@ -128,7 +128,7 @@ type responseBatch struct {
 // Config is the configuration file of the Fetch component
 type Config struct {
 	BatchTimeout         int // in milliseconds
-	MaxRetiresForPeer    int
+	MaxRetriesForPeer    int
 	BatchSize            int
 	RequestTimeout       int // in seconds
 	MaxRetriesForRequest int
@@ -138,7 +138,7 @@ type Config struct {
 func DefaultConfig() Config {
 	return Config{
 		BatchTimeout:         50,
-		MaxRetiresForPeer:    2,
+		MaxRetriesForPeer:    2,
 		BatchSize:            20,
 		RequestTimeout:       10,
 		MaxRetriesForRequest: 20,
@@ -147,6 +147,8 @@ func DefaultConfig() Config {
 
 type peersProvider interface {
 	GetPeers() []peers.Peer
+	PeerCount() uint64
+	Close()
 }
 
 // MessageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'
@@ -154,6 +156,12 @@ type MessageNetwork struct {
 	*server.MessageServer
 	peersProvider
 	log.Log
+}
+
+// Close closes the message network
+func (mn MessageNetwork) Close() {
+	mn.MessageServer.Close()
+	mn.peersProvider.Close()
 }
 
 // NewMessageNetwork creates a new instance of the fetch network server
@@ -168,20 +176,21 @@ func NewMessageNetwork(ctx context.Context, requestTimeOut int, net service.Serv
 // GetRandomPeer returns a random peer from current peer list
 func GetRandomPeer(peers []peers.Peer) peers.Peer {
 	if len(peers) == 0 {
-		log.Panic("cannot send fetch - no peers found")
+		log.Panic("cannot send fetch: no peers found")
 	}
 	return peers[rand.Intn(len(peers))]
 }
 
 // GetPeers return active peers
-func (f MessageNetwork) GetPeers() []peers.Peer {
-	return f.peersProvider.GetPeers()
+func (mn MessageNetwork) GetPeers() []peers.Peer {
+	return mn.peersProvider.GetPeers()
 }
 
 type network interface {
 	GetPeers() []peers.Peer
+	PeerCount() uint64
 	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
-	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(ctx context.Context, b []byte) []byte)
+	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(ctx context.Context, b []byte) ([]byte, error))
 	Close()
 }
 
@@ -203,7 +212,6 @@ type Fetch struct {
 	stop                 chan struct{}
 	activeReqM           sync.RWMutex
 	activeBatchM         sync.RWMutex
-	stopM                sync.RWMutex
 	onlyOnce             sync.Once
 	doneChan             chan struct{}
 	dbLock               sync.RWMutex
@@ -242,8 +250,8 @@ func (f *Fetch) Start() {
 func (f *Fetch) Stop() {
 	f.log.Info("stopping fetch")
 	f.batchTimeout.Stop()
-	f.net.Close()
 	close(f.stop)
+	f.net.Close()
 	f.activeReqM.Lock()
 	for _, batch := range f.activeRequests {
 		for _, req := range batch {
@@ -333,16 +341,16 @@ func (f *Fetch) loop() {
 
 // FetchRequestHandler handles requests for sync from peersProvider, and basically reads Data from database and puts it
 // in a response batch
-func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
+func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) ([]byte, error) {
 	if f.stopped() {
-		return nil
+		return nil, server.ErrShuttingDown
 	}
 
 	var requestBatch requestBatch
 	err := types.BytesToInterface(data, &requestBatch)
 	if err != nil {
 		f.log.WithContext(ctx).With().Error("failed to parse request", log.Err(err))
-		return []byte{}
+		return nil, server.ErrBadRequest
 	}
 	resBatch := responseBatch{
 		ID:        requestBatch.ID,
@@ -355,12 +363,12 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 		db, ok := f.dbs[r.Hint]
 		f.dbLock.RUnlock()
 		if !ok {
-			f.log.WithContext(ctx).With().Warning("db not found", log.String("hint", string(r.Hint)))
+			f.log.WithContext(ctx).With().Warning("hint not found in database", log.String("hint", string(r.Hint)))
 			continue
 		}
 		res, err := db.Get(r.Hash.Bytes())
 		if err != nil {
-			f.log.WithContext(ctx).With().Info("remote peer requested non existing hash",
+			f.log.WithContext(ctx).With().Info("remote peer requested nonexistent hash",
 				log.String("hash", r.Hash.ShortString()),
 				log.String("hint", string(r.Hint)),
 				log.Err(err))
@@ -380,15 +388,14 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) []byte {
 
 	bts, err := types.InterfaceToBytes(&resBatch)
 	if err != nil {
-		f.log.WithContext(ctx).With().Error("cannot parse message for batch ID",
-			log.String("batchHash", resBatch.ID.ShortString()))
-		return nil
+		f.log.WithContext(ctx).With().Panic("failed to serialize batch id",
+			log.String("batch_hash", resBatch.ID.ShortString()))
 	}
 	f.log.WithContext(ctx).With().Debug("returning response for batch",
-		log.String("batchHash", resBatch.ID.ShortString()),
-		log.Int("numResponse", len(resBatch.Responses)),
-		log.Int("dataSize", len(bts)))
-	return bts
+		log.String("batch_hash", resBatch.ID.ShortString()),
+		log.Int("count_responses", len(resBatch.Responses)),
+		log.Int("data_size", len(bts)))
+	return bts, nil
 }
 
 // receive Data from message server and call response handlers accordingly
@@ -447,7 +454,8 @@ func (f *Fetch) receiveResponse(data []byte) {
 		f.activeReqM.Unlock()
 	}
 
-	// iterate all requests that didn't return value from peer and notify - they will be retried for MaxRetriesForRequest
+	// iterate all requests that didn't return value from peer and notify
+	// they will be retried for MaxRetriesForRequest
 	err = fmt.Errorf("failed to fetch hash after max retries")
 	for h := range batchMap {
 		if f.stopped() {
@@ -463,7 +471,8 @@ func (f *Fetch) receiveResponse(data []byte) {
 		for _, req := range reqs {
 			req.retries++
 			if req.retries > f.cfg.MaxRetriesForRequest {
-				f.log.With().Debug("gave up on hash after max retries", log.String("hash", req.hash.ShortString()))
+				f.log.With().Debug("gave up on hash after max retries",
+					log.String("hash", req.hash.ShortString()))
 				req.returnChan <- HashDataPromiseResult{
 					Err:     ErrExceedMaxRetries,
 					Hash:    req.hash,
@@ -523,8 +532,10 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	f.activeBatches[batch.ID] = batch
 	f.activeBatchM.Unlock()
 	// timeout function will be called if no response was received for the hashes sent
-	timeoutFunc := func(err error) {
-		f.log.With().Error("request timed out", log.String("batchHash", batch.ID.ShortString()))
+	errorFunc := func(err error) {
+		f.log.With().Error("error occurred for sendbatch",
+			log.String("batch_hash", batch.ID.ShortString()),
+			log.Err(err))
 		f.handleHashError(batch.ID, err)
 	}
 
@@ -540,21 +551,29 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 			return
 		}
 
+		if f.net.PeerCount() == 0 {
+			f.log.With().Error("no peers found, unable to send request batch",
+				batch.ID,
+				log.Int("items", len(batch.Requests)))
+			return
+		}
+
 		// get random peer
 		p = GetRandomPeer(f.net.GetPeers())
 		f.log.With().Debug("sending request batch to peer",
-			log.String("batchHash", batch.ID.ShortString()),
-			log.Int("numRequests", len(batch.Requests)),
+			log.String("batch_hash", batch.ID.ShortString()),
+			log.Int("num_requests", len(batch.Requests)),
 			log.String("peer", p.String()))
 		batch.peer = p
 		f.activeBatchM.Lock()
 		f.activeBatches[batch.ID] = batch
 		f.activeBatchM.Unlock()
-		err := f.net.SendRequest(context.TODO(), server.Fetch, bytes, p, f.receiveResponse, timeoutFunc)
+		err := f.net.SendRequest(context.TODO(), server.Fetch, bytes, p, f.receiveResponse, errorFunc)
+
 		// if call succeeded, continue to other requests
 		if err != nil {
 			retries++
-			if retries > f.cfg.MaxRetiresForPeer {
+			if retries > f.cfg.MaxRetriesForPeer {
 				f.handleHashError(batch.ID, ErrCouldNotSend(fmt.Errorf("could not send message: %w", err)))
 				break
 			}
@@ -638,7 +657,8 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 	db, ok := f.dbs[h]
 	f.dbLock.RUnlock()
 	if !ok {
-		f.log.With().Panic("tried to fetch Data from DB that doesn't exist locally", log.String("hint", string(h)))
+		f.log.With().Panic("tried to fetch Data from DB that doesn't exist locally",
+			log.String("hint", string(h)))
 	}
 
 	if b, err := db.Get(hash.Bytes()); err == nil {

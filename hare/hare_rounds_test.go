@@ -83,13 +83,16 @@ func (h *testHare) HandleValidatedLayer(ctx context.Context, layer types.LayerID
 func (h *testHare) LayerBlockIds(layer types.LayerID) ([]types.BlockID, error) {
 	return h.layers(layer, h)
 }
+func (h *testHare) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
+	panic("implement me")
+}
 func (h *testHare) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {}
 
 func createTestHare(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string, bp meshProvider) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: pub.Bytes()}
-	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, bp, rolacle, 10, &mockIdentityP{nid: nodeID},
+	hare := New(tcfg, p2p, ed, nodeID, isSynced, bp, rolacle, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, layersCh, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 	return hare
 }

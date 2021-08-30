@@ -13,7 +13,7 @@ import (
 )
 
 type activationDB interface {
-	GetNodeAtxIDForEpoch(nodePK string, targetEpoch types.EpochID) (types.ATXID, error)
+	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error)
 }
@@ -110,7 +110,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 	}
 
 	beaconDbgStr := types.BytesToHash(epochBeacon).ShortString()
-	bo.log.With().Info("Got beacon",
+	bo.log.With().Info("got beacon",
 		log.Uint64("epoch_id", uint64(epochNumber)),
 		log.String("epoch_beacon", beaconDbgStr))
 
@@ -150,13 +150,14 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 		}
 		vrfSig := bo.vrfSigner.Sign(message)
 
-		bo.log.Debug("signed VRF message, beacon %v, epoch %v, counter: %v, vrfSig: %v",
+		bo.log.Debug("signed vrf message, beacon %v, epoch %v, counter: %v, vrfSig: %v",
 			types.BytesToHash(epochBeacon).ShortString(), epochNumber, counter, types.BytesToHash(vrfSig).ShortString())
 
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfSig)
 		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.BlockEligibilityProof{
-			J:   counter,
-			Sig: vrfSig,
+			J:              counter,
+			Sig:            vrfSig,
+			TortoiseBeacon: epochBeacon,
 		})
 	}
 
@@ -180,7 +181,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 	// Pretty-print the number of blocks per eligible layer
 	var strs []string
 	for k := range keys {
-		strs = append(strs, fmt.Sprintf("Layer %d: %d", keys[k], len(eligibilityProofs[keys[k]])))
+		strs = append(strs, fmt.Sprintf("Layer %s: %d", keys[k].String(), len(eligibilityProofs[keys[k]])))
 	}
 
 	bo.log.With().Info("block eligibility calculated",
@@ -222,7 +223,7 @@ func getNumberOfEligibleBlocks(weight, totalWeight uint64, committeeSize uint32,
 }
 
 func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {
-	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID.Key, targetEpoch)
+	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
 	if err != nil {
 		bo.log.With().Warning("did not find atx ids for node",
 			log.FieldNamed("atx_node_id", bo.nodeID),

@@ -1,14 +1,16 @@
 package tortoisebeacon
 
 import (
+	"context"
 	"math/big"
 	"testing"
 
-	"github.com/stretchr/testify/mock"
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 )
 
 func TestTortoiseBeacon_calcBeacon(t *testing.T) {
@@ -16,17 +18,16 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 
 	r := require.New(t)
 
-	mockDB := &mockActivationDB{}
-	mockDB.On("GetEpochWeight", mock.AnythingOfType("types.EpochID")).Return(uint64(1), nil, nil)
-	mockDB.On("GetNodeAtxIDForEpoch", mock.AnythingOfType("*signing.PublicKey"), mock.AnythingOfType("types.EpochID")).Return(types.ATXID{}, nil)
-	mockATXHeader := types.ActivationTxHeader{
+	ctrl := gomock.NewController(t)
+	mockDB := mocks.NewMockactivationDB(ctrl)
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(1), nil, nil).AnyTimes()
+	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 0,
 			EndTick:   1,
 		},
 		NumUnits: 1,
-	}
-	mockDB.On("GetAtxHeader", mock.AnythingOfType("types.ATXID")).Return(&mockATXHeader, nil)
+	}, nil).AnyTimes()
 
 	const (
 		epoch  = 5
@@ -79,7 +80,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 
 			tb.initGenesisBeacons()
 
-			err := tb.calcBeacon(epoch, tc.votes)
+			err := tb.calcBeacon(context.TODO(), epoch, tc.votes)
 			r.NoError(err)
 			r.EqualValues(tc.hash.String(), tb.beacons[epoch].String())
 		})
