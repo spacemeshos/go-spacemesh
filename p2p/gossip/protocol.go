@@ -120,14 +120,18 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 	logger := p.WithContext(ctx).WithFields(
 		log.FieldNamed("msg_sender", sender),
 		log.String("protocol", protocol),
-		log.String("msghash", util.Bytes2Hex(h[:])))
+		log.String("msghash", util.Bytes2Hex(h[:])),
+		log.Bool("own_message", ownMessage),
+	)
 	logger.Debug("checking gossip message newness")
 	if p.markMessageAsOld(h) {
 		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
-		// todo	: - maybe tell the peer we got this message already?
-		// todo : - maybe block this peer since he sends us old messages
-		logger.Debug("gossip message is old, dropping")
+		if !ownMessage {
+			logger.Debug("gossip message is old, dropping")
+		} else {
+			logger.Warning("own message is marked as old")
+		}
 		return nil
 	}
 
