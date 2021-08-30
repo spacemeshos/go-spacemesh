@@ -306,6 +306,7 @@ func (b *Block) Fields() []log.LoggableField {
 		log.FieldNamed("ref_block", b.RefBlock),
 		log.Int("active_set_size", activeSet),
 		log.Int("tx_count", len(b.TxIDs)),
+		log.Binary("tortoise_beacon", b.TortoiseBeacon),
 	}
 }
 
