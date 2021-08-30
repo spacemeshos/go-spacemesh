@@ -79,6 +79,8 @@ type Syncer struct {
 	fetcher  layerFetcher
 	syncOnce sync.Once
 	// access via atomic.[Load|Store]Uint32
+	started uint32
+	// access via atomic.[Load|Store]Uint32
 	syncState syncState
 	// access via atomic.[Load|Store]Uint32
 	isBusy    uint32
@@ -121,12 +123,14 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh
 func (s *Syncer) Close() {
 	s.syncTimer.Stop()
 	s.cancelFunc()
-	s.logger.Info("waiting for goroutines to finish")
-	if err := s.tg.Wait(); err != nil {
-		s.logger.With().Warning("taskgroup: Wait returned an error",
-			log.Err(err))
+	if s.getStarted() {
+		s.logger.Info("waiting for goroutines to finish")
+		if err := s.tg.Wait(); err != nil {
+			s.logger.With().Warning("taskgroup: Wait returned an error",
+				log.Err(err))
+		}
+		s.logger.Info("all syncer goroutines finished")
 	}
-	s.logger.Info("all syncer goroutines finished")
 }
 
 // RegisterChForSynced registers ch for notification when the node enters synced state
@@ -161,9 +165,12 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 func (s *Syncer) Start(ctx context.Context) {
 	s.syncOnce.Do(func() {
 		s.logger.WithContext(ctx).Info("Starting syncer loop")
-		if err := s.tg.Go(s.loop); err != nil {
+		err := s.tg.Go(s.loop)
+		if err != nil {
 			s.logger.With().Warning("taskgroup: Go returned an error",
 				log.Err(err))
+		} else {
+			s.setStarted()
 		}
 	})
 }
@@ -205,6 +212,14 @@ func (s *Syncer) isClosed() bool {
 	default:
 		return false
 	}
+}
+
+func (s *Syncer) setStarted() {
+	atomic.CompareAndSwapUint32(&s.started, 0, 1)
+}
+
+func (s *Syncer) getStarted() bool {
+	return atomic.LoadUint32(&s.started) == 1
 }
 
 func (s *Syncer) getSyncState() syncState {
