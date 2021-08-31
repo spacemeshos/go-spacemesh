@@ -384,6 +384,7 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	builder.blockOracle = mbo
 	builder.beginRoundEvent = beginRound
 	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
 		builder.createBlockLoop(context.TODO())
 		wg.Done()
