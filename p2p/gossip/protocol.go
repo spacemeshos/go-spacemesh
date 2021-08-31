@@ -42,7 +42,9 @@ type Protocol struct {
 
 	peers peersManager
 
+	wg          sync.WaitGroup
 	shutdownCtx context.Context
+	cancel      context.CancelFunc
 
 	oldMessageQ *types.DoubleCache
 
@@ -54,6 +56,7 @@ type Protocol struct {
 // NewProtocol creates a new gossip protocol instance.
 func NewProtocol(ctx context.Context, config config.SwarmConfig, base baseNetwork, peersManager peersManager, localNodePubkey p2pcrypto.PublicKey, logger log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
+	ctx, cancel := context.WithCancel(ctx)
 	return &Protocol{
 		Log:             logger,
 		config:          config,
@@ -61,6 +64,7 @@ func NewProtocol(ctx context.Context, config config.SwarmConfig, base baseNetwor
 		localNodePubkey: localNodePubkey,
 		peers:           peersManager,
 		shutdownCtx:     ctx,
+		cancel:          cancel,
 		oldMessageQ:     types.NewDoubleCache(oldMessageCacheSize), // todo : remember to drain this
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
 		pq:              priorityq.New(propagateHandleBufferSize),
@@ -70,7 +74,21 @@ func NewProtocol(ctx context.Context, config config.SwarmConfig, base baseNetwor
 
 // Start a loop that process peers events
 func (p *Protocol) Start(ctx context.Context) {
-	go p.propagationEventLoop(ctx) // TODO consider running several consumers
+	p.wg.Add(2)
+	go func() {
+		p.propagationEventLoop(ctx)
+		p.wg.Done()
+	}()
+	go func() {
+		p.handlePQ(ctx)
+		p.wg.Done()
+	}()
+}
+
+// Close stops the protocol and waits for background workers to exit.
+func (p *Protocol) Close() {
+	p.cancel()
+	p.wg.Wait()
 }
 
 // Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues
@@ -102,14 +120,18 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 	logger := p.WithContext(ctx).WithFields(
 		log.FieldNamed("msg_sender", sender),
 		log.String("protocol", protocol),
-		log.String("msghash", util.Bytes2Hex(h[:])))
+		log.String("msghash", util.Bytes2Hex(h[:])),
+		log.Bool("own_message", ownMessage),
+	)
 	logger.Debug("checking gossip message newness")
 	if p.markMessageAsOld(h) {
 		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
-		// todo	: - maybe tell the peer we got this message already?
-		// todo : - maybe block this peer since he sends us old messages
-		logger.Debug("gossip message is old, dropping")
+		if !ownMessage {
+			logger.Debug("gossip message is old, dropping")
+		} else {
+			logger.Warning("own message is marked as old")
+		}
 		return nil
 	}
 
@@ -208,8 +230,6 @@ func (p *Protocol) isShuttingDown() bool {
 
 // pushes messages that passed validation into the priority queue
 func (p *Protocol) propagationEventLoop(ctx context.Context) {
-	go p.handlePQ(ctx)
-
 	for {
 		select {
 		case msgV := <-p.propagateQ:
