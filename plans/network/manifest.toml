@@ -1,0 +1,71 @@
+name = "network"
+
+[defaults]
+builder = "docker:generic"
+runner = "local:docker"
+
+[builders."docker:generic"]
+enabled = true
+link_sdk = true
+runtime_image = "debian"
+build_base_image = "golang:1.16-buster"
+enable_go_build_cache = true
+
+[builders."docker:go"]
+enabled = true
+runtime_image = "debian"
+build_base_image = "golang:1.16-buster"
+enable_go_build_cache = true
+# skip_runtime_image = true
+
+[extra_sources]
+   docker_generic = [ "../.." ]
+
+[runners."local:docker"]
+enabled = true
+
+[[testcases]]
+name = "start_network"
+instances = { min = 3, max = 5, default = 5 }
+
+  [testcases.params]
+  # test params
+  poets = { type = "int", default = 1 }
+  gateways = { type = "int", default = 1 }
+  genesis_timestamp_offset = { type = "int", default = 0 }
+  
+  # miner params
+  randcon = { type = "int", default = 8 }
+  hare-committee-size = { type = "int", default = 800 }
+  hare-max-adversaries = { type = "int", default = 399 }
+  hare-round-duration-sec = { type = "int", default = 7 }
+  hare-exp-leaders = { type = "int", default = 10 }
+  layer-duration-sec = { type = "int", default = 60 }
+  layer-average-size = { type = "int", default = 50 }
+  hare-wakeup-delta = { type = "int", default = 20 }
+  tortoise-beacon-q = { type = "string", default = "1/3" }
+  tortoise-beacon-rounds-number = { type = "int", default = 6 }
+  tortoise-beacon-grace-period-duration = { type = "string", default = "10s" }
+  tortoise-beacon-proposal-duration = { type = "string", default = "20s" }
+  tortoise-beacon-first-voting-round-duration = { type = "string", default = "20s" }
+  tortoise-beacon-voting-round-duration = { type = "string", default = "15s" }
+  tortoise-beacon-weak-coin-round-duration = { type = "string", default = "5s" }
+  tortoise-beacon-wait-after-epoch-start = { type = "string", default = "1s" }
+  tortoise-beacon-theta = { type = "string", default = "1/25000" }
+  tortoise-beacon-votes-limit = { type = "int", default = 100 }
+  layers-per-epoch = { type = "int", default = 3 }
+  eligibility-confidence-param = { type = "int", default = 6 }
+  eligibility-epoch-offset = { type = "int", default = 0 }
+  sync-request-timeout = { type = "int", default = 5000 }
+  hdist = { type = "int", default = 5 }
+#  executable-path = { type = "string", default = /bin/go-spacemesh } # only with harness
+  post-bits-per-label = { type = "int", default = 8 }
+  post-labels-per-unit = { type = "int", default = 1024 }
+  post-min-numunits = { type = "int", default = 2 }
+  post-max-numunits = { type = "int", default = 4 }
+  post-k1 = { type = "int", default = 2000 }
+  post-k2 = { type = "int", default = 1800 }
+  smeshing-coinbase = { type = "string", default = "0x1234" }
+  smeshing-opts-numunits = { type = "int", default = 2 }
+  smeshing-opts-numfiles = { type = "int", default = 1 }
+  smeshing-opts-datadir = { type = "string", default = "/Users/x/dev/postdata" }
