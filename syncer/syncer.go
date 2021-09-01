@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/taskgroup"
+	"golang.org/x/sync/errgroup"
 )
 
 type layerTicker interface {
@@ -79,8 +79,6 @@ type Syncer struct {
 	fetcher  layerFetcher
 	syncOnce sync.Once
 	// access via atomic.[Load|Store]Uint32
-	started uint32
-	// access via atomic.[Load|Store]Uint32
 	syncState syncState
 	// access via atomic.[Load|Store]Uint32
 	isBusy    uint32
@@ -92,9 +90,11 @@ type Syncer struct {
 	awaitSyncedCh []chan struct{}
 	awaitSyncedMu sync.Mutex
 
+	forceSyncCh chan struct{}
+
 	shutdownCtx context.Context
 	cancelFunc  context.CancelFunc
-	tg          *taskgroup.Group
+	eg          errgroup.Group
 
 	// recording the run # since started. for logging/debugging only.
 	run uint64
@@ -113,9 +113,9 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh
 		syncTimer:         time.NewTicker(conf.SyncInterval),
 		targetSyncedLayer: unsafe.Pointer(&types.LayerID{}),
 		awaitSyncedCh:     make([]chan struct{}, 0),
+		forceSyncCh:       make(chan struct{}, 1),
 		shutdownCtx:       shutdownCtx,
 		cancelFunc:        cancel,
-		tg:                taskgroup.New(taskgroup.WithContext(shutdownCtx)),
 	}
 }
 
@@ -123,14 +123,9 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh
 func (s *Syncer) Close() {
 	s.syncTimer.Stop()
 	s.cancelFunc()
-	if s.getStarted() {
-		s.logger.Info("waiting for goroutines to finish")
-		if err := s.tg.Wait(); err != nil {
-			s.logger.With().Warning("taskgroup: Wait returned an error",
-				log.Err(err))
-		}
-		s.logger.Info("all syncer goroutines finished")
-	}
+	s.logger.With().Info("waiting for syncer goroutines to finish")
+	err := s.eg.Wait()
+	s.logger.With().Info("all syncer goroutines finished", log.Err(err))
 }
 
 // RegisterChForSynced registers ch for notification when the node enters synced state
@@ -165,44 +160,32 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 func (s *Syncer) Start(ctx context.Context) {
 	s.syncOnce.Do(func() {
 		s.logger.WithContext(ctx).Info("Starting syncer loop")
-		err := s.tg.Go(s.loop)
-		if err != nil {
-			s.logger.With().Warning("taskgroup: Go returned an error",
-				log.Err(err))
-		} else {
-			s.setStarted()
-		}
+		s.eg.Go(func() error {
+			if s.ticker.GetCurrentLayer().Uint32() <= 1 {
+				s.setSyncState(ctx, synced)
+			}
+			for {
+				select {
+				case <-s.shutdownCtx.Done():
+					s.logger.WithContext(ctx).Info("stopping sync to shutdown")
+					return s.shutdownCtx.Err()
+				case <-s.syncTimer.C:
+					s.logger.WithContext(ctx).Debug("synchronize on tick")
+					s.synchronize(ctx)
+				case <-s.forceSyncCh:
+					s.logger.WithContext(ctx).Debug("force synchronize")
+					s.synchronize(ctx)
+				}
+			}
+		})
 	})
-}
-
-func (s *Syncer) loop(ctx context.Context) error {
-	if s.ticker.GetCurrentLayer().Uint32() <= 1 {
-		s.setSyncState(ctx, synced)
-	}
-	for {
-		select {
-		case <-s.shutdownCtx.Done():
-			s.logger.WithContext(ctx).Info("stopping sync to shutdown")
-			return s.shutdownCtx.Err()
-		case <-s.syncTimer.C:
-			s.logger.WithContext(ctx).Debug("synchronize on tick")
-			s.synchronize(ctx)
-		}
-	}
 }
 
 // ForceSync manually starts a sync process outside the main sync loop. If the node is already running a sync process,
 // ForceSync will be ignored.
 func (s *Syncer) ForceSync(ctx context.Context) {
 	s.logger.WithContext(ctx).Debug("executing ForceSync")
-	err := s.tg.Go(func(ctx context.Context) error {
-		s.synchronize(ctx)
-		return nil
-	})
-	if err != nil {
-		s.logger.With().Warning("taskgroup: Go returned an error",
-			log.Err(err))
-	}
+	s.forceSyncCh <- struct{}{}
 }
 
 func (s *Syncer) isClosed() bool {
@@ -212,14 +195,6 @@ func (s *Syncer) isClosed() bool {
 	default:
 		return false
 	}
-}
-
-func (s *Syncer) setStarted() {
-	atomic.CompareAndSwapUint32(&s.started, 0, 1)
-}
-
-func (s *Syncer) getStarted() bool {
-	return atomic.LoadUint32(&s.started) == 1
 }
 
 func (s *Syncer) getSyncState() syncState {
@@ -302,15 +277,10 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	// if validation for the last layer is still running
 	vQueue := make(chan *types.Layer, s.ticker.GetCurrentLayer().Uint32())
 	vDone := make(chan struct{})
-	err := s.tg.Go(func(ctx context.Context) error {
+	s.eg.Go(func() error {
 		s.startValidating(ctx, s.run, vQueue, vDone)
 		return nil
 	})
-	if err != nil {
-		s.logger.With().Warning("taskgroup: Go returned an error",
-			log.Err(err))
-		return false
-	}
 	success := false
 	defer func() {
 		close(vQueue)
