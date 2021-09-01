@@ -3,6 +3,17 @@
 Closes #
 <!-- `Closes #XXXX, closes #XXXX, ...` links mentioned issues to this PR and automatically closes them when this it's merged -->
 
+## For the CHANGELOG
+<!-- If this change affects the users, please describe the change in  a one-liner using their terms,
+please start your line with Added, Fixed, Changed or Removed -->
+
+## Compatibility
+<!-- Please check these items as applicable to ensure we properly name the version -->
+- [ ] This PR does not break compatibility with the `main` network
+- [ ] This PR does not change public APIs
+- [ ] This PR does not rely on a new version of external services (PoET, elasticsearch, etc.)
+- [ ] This PR does not require new DevOps resources
+
 ## Changes
 <!-- Please describe in detail the changes made -->
 
@@ -15,10 +26,3 @@ Closes #
 - [ ] Explain motivation or link existing issue(s)
 - [ ] Test changes and document test plan
 - [ ] Update documentation as needed
-
-## DevOps Notes
-<!-- Please uncheck these items as applicable to make DevOps aware of changes that may affect releases -->
-- [x] This PR does not require configuration changes (e.g., environment variables, GitHub secrets, VM resources)
-- [x] This PR does not affect public APIs
-- [x] This PR does not rely on a new version of external services (PoET, elasticsearch, etc.)
-- [x] This PR does not make changes to log messages (which monitoring infrastructure may rely on)
