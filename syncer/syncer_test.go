@@ -149,13 +149,13 @@ func (mf *mockFetcher) setTBErrors(epoch types.EpochID, err error) {
 type mockValidator struct{}
 
 func (mv *mockValidator) LatestComplete() types.LayerID { return types.LayerID{} }
-func (mv *mockValidator) Persist() error                { return nil }
-func (mv *mockValidator) HandleIncomingLayer(layer *types.Layer) (types.LayerID, types.LayerID) {
-	return layer.Index(), layer.Index().Sub(1)
+func (mv *mockValidator) Persist(context.Context) error { return nil }
+func (mv *mockValidator) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
+	return layerID, layerID.Sub(1), false
 }
 
-func (mv *mockValidator) HandleLateBlock(block *types.Block) (types.LayerID, types.LayerID) {
-	return block.Layer(), block.Layer().Sub(1)
+func (mv *mockValidator) HandleLateBlocks(_ context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
+	return blocks[0].Layer(), blocks[0].Layer().Sub(1)
 }
 
 func newMemMesh(lg log.Log) *mesh.Mesh {

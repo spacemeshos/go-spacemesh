@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"io"
 	"io/ioutil"
 	"math"
@@ -106,6 +107,9 @@ var (
 )
 
 func init() {
+	// run on a random port
+	cfg.GrpcServerPort = 1024 + rand.Intn(9999)
+
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
 	block1.ATXID = globalAtx.ID()
@@ -438,7 +442,7 @@ func (*SmeshingAPIMock) Smeshing() bool {
 	return false
 }
 
-func (*SmeshingAPIMock) StartSmeshing(ctx context.Context, coinbase types.Address, opts activation.PostSetupOpts) error {
+func (*SmeshingAPIMock) StartSmeshing(coinbase types.Address, opts activation.PostSetupOpts) error {
 	return nil
 }
 
@@ -2426,9 +2430,9 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	// publish a new layer
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
-	events.ReportNewLayer(events.NewLayer{
-		Layer:  layer,
-		Status: events.LayerStatusTypeConfirmed,
+	events.ReportLayerUpdate(events.LayerUpdate{
+		LayerID: layer.Index(),
+		Status:  events.LayerStatusTypeConfirmed,
 	})
 
 	// close the stream
@@ -2490,9 +2494,9 @@ func TestLayerStream_comprehensive(t *testing.T) {
 
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
-	events.ReportNewLayer(events.NewLayer{
-		Layer:  layer,
-		Status: events.LayerStatusTypeConfirmed,
+	events.ReportLayerUpdate(events.LayerUpdate{
+		LayerID: layer.Index(),
+		Status:  events.LayerStatusTypeConfirmed,
 	})
 
 	// close the stream

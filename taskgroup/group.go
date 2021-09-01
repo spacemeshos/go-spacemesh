@@ -43,10 +43,11 @@ type Group struct {
 	ctx    context.Context
 	cancel context.CancelFunc
 
-	mu      sync.Mutex
-	err     error
-	waitErr chan struct{}
-	wg      sync.WaitGroup
+	mu       sync.Mutex
+	err      error
+	waitErr  chan struct{}
+	waitOnce bool
+	wg       sync.WaitGroup
 }
 
 // Go spawns new goroutine that will run f, unless Group was already terminated.
@@ -76,11 +77,17 @@ func (g *Group) Go(f func(ctx context.Context) error) error {
 // Wait until Group is terminated. First error is returned.
 func (g *Group) Wait() error {
 	g.mu.Lock()
-	if g.err != nil {
-		g.mu.Unlock()
-		return g.err
+	err := g.err
+	// wait atleast once even if error was already set when we Wait is called for the first time
+	// otherwise we can't guarantee that all goroutines are closed when Wait exits
+	once := g.waitOnce
+	if !once {
+		g.waitOnce = true
 	}
 	g.mu.Unlock()
+	if err != nil && once {
+		return err
+	}
 
 	<-g.waitErr
 	// at this point the error is set to a non-nil value, won't be ever overwritten,
