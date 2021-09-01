@@ -9,7 +9,7 @@ RUN chmod +x ./kubectl
 RUN mv ./kubectl /usr/local/bin
 
 # Downloading gcloud package
-RUN curl https://dl.google.com/dl/cloudsdk/release/google-cloud-sdk.tar.gz > /tmp/google-cloud-sdk.tar.gz
+RUN curl https://dl.google.com/dl/cloudsdk/release/google-cloud-sdk.tar.gz > /tmp/google-cloud-sdk.tar.gz || echo $?
 
 # Installing the package
 RUN mkdir -p /usr/local/gcloud \
