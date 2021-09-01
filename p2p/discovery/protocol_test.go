@@ -2,12 +2,14 @@ package discovery
 
 import (
 	"context"
+	"sync"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,6 +33,7 @@ func newTestNode(tb testing.TB, simulator *service.Simulator) *testNode {
 	nd := simulator.NewNode()
 	d := &mockAddrBook{}
 	disc := newProtocol(context.TODO(), nd.Info.PublicKey(), d, nd, logtest.New(tb).WithName(nd.String()))
+	tb.Cleanup(disc.Close)
 	return &testNode{nd, d, disc}
 }
 
@@ -147,17 +150,21 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 	concurrency := 100
 
 	sim := service.NewSimulator()
+
 	n1 := newTestNode(t, sim)
-	gen := generateDiscNodes(100)
+	gen := generateDiscNodes(concurrency)
 	n1.d.AddressCacheFunc = func() []*node.Info {
 		return gen
 	}
 	n1.dscv.table = n1.d
 
-	retchans := make(chan []*node.Info)
+	retchans := make(chan []*node.Info, concurrency)
+	var wg sync.WaitGroup
 
 	for i := 0; i < concurrency; i++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			nx := newTestNode(t, sim)
 			nx.d.LookupFunc = func(key p2pcrypto.PublicKey) (d *node.Info, e error) {
 				return n1.svc.Info, nil
@@ -165,15 +172,18 @@ func TestFindNodeProtocol_FindNode_Concurrency(t *testing.T) {
 			nx.dscv.table = nx.d
 			res, err := nx.dscv.GetAddresses(context.TODO(), n1.svc.PublicKey())
 			if err != nil {
-				t.Log(err)
-				retchans <- nil
+				assert.NoError(t, err)
+				return
 			}
 			retchans <- res
 		}()
 	}
-
-	for i := 0; i < concurrency; i++ {
-		res := <-retchans // todo: this might deadlock if not working
+	go func() {
+		wg.Wait()
+		close(retchans)
+	}()
+	for res := range retchans {
+		require.NotNil(t, res)
 		require.Equal(t, gen, res)
 	}
 }
