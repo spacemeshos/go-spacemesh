@@ -303,14 +303,11 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return nil, database.ErrNotFound
 }
 
-// EmptyLayerHash is the layer hash for an empty layer
-var EmptyLayerHash = types.Hash32{}
-
 // AddZeroBlockLayer tags lyr as a layer without blocks
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
 	err := m.layers.Put(index.Bytes(), nil)
 	if err == nil {
-		m.persistLayerHash(index, EmptyLayerHash)
+		m.persistLayerHash(index, types.EmptyLayerHash)
 	}
 	return err
 }
@@ -376,19 +373,6 @@ func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) 
 	return coin, exists
 }
 
-// GetLayerInputVector gets the input vote vector for a layer (hare results)
-func (m *DB) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
-	buf, err := m.inputVector.Get(hash.Bytes())
-	if err != nil {
-		return nil, err
-	}
-	var ids []types.BlockID
-	if err := codec.Decode(buf, &ids); err != nil {
-		return nil, err
-	}
-	return ids, nil
-}
-
 // InputVectorBackupFunc specifies a backup function for testing
 type InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
 
@@ -397,11 +381,15 @@ func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, er
 	if m.InputVectorBackupFunc != nil {
 		return m.InputVectorBackupFunc(layerID)
 	}
-	// check if this layer was marked invalid
-	if _, ok := m.invalidatedLayers[layerID]; ok {
-		return nil, ErrInvalidLayer
+	buf, err := m.inputVector.Get(layerID.Bytes())
+	if err != nil {
+		return nil, err
 	}
-	return m.GetLayerInputVector(types.CalcHash32(layerID.Bytes()))
+	var ids []types.BlockID
+	if err := codec.Decode(buf, &ids); err != nil {
+		return nil, err
+	}
+	return ids, nil
 }
 
 // SetInputVectorBackupFunc sets the backup function for testing
@@ -416,17 +404,13 @@ func (m *DB) GetInputVectorBackupFunc() InputVectorBackupFunc {
 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
 func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error {
-	hash := types.CalcHash32(id.Bytes())
-	m.WithContext(ctx).With().Info("saving input vector",
-		id,
-		log.String("iv_hash", hash.ShortString()))
-
+	m.WithContext(ctx).With().Debug("saving input vector", id)
 	// NOTE(dshulyak) there is an implicit dependency in fetcher
 	buf, err := codec.Encode(blks)
 	if err != nil {
 		return err
 	}
-	return m.inputVector.Put(hash.Bytes(), buf)
+	return m.inputVector.Put(id.Bytes(), buf)
 }
 
 func (m *DB) persistProcessedLayer(lyr *ProcessedLayer) error {
@@ -483,10 +467,10 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 }
 
 func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
-	h := EmptyLayerHash
+	h := types.EmptyLayerHash
 	bts, err := m.general.Get(getLayerHashKey(layerID))
 	if err != nil {
-		return EmptyLayerHash, err
+		return types.EmptyLayerHash, err
 	}
 	h.SetBytes(bts)
 	return h, nil
@@ -494,13 +478,6 @@ func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
 
 func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
 	if err := m.general.Put(getLayerHashKey(layerID), hash.Bytes()); err != nil {
-		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
-			log.String("layer_hash", hash.ShortString()))
-	}
-
-	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
-	// when this changes we can simply point to the layes
-	if err := m.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
 		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
 			log.String("layer_hash", hash.ShortString()))
 	}
