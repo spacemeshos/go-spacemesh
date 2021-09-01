@@ -183,9 +183,18 @@ func (s *Syncer) Start(ctx context.Context) {
 
 // ForceSync manually starts a sync process outside the main sync loop. If the node is already running a sync process,
 // ForceSync will be ignored.
-func (s *Syncer) ForceSync(ctx context.Context) {
+func (s *Syncer) ForceSync(ctx context.Context) bool {
 	s.logger.WithContext(ctx).Debug("executing ForceSync")
+	if s.isClosed() {
+		s.logger.WithContext(ctx).Info("shutting down. dropping ForceSync request")
+		return false
+	}
+	if len(s.forceSyncCh) > 0 {
+		s.logger.WithContext(ctx).Info("another ForceSync already in progress. dropping this one")
+		return false
+	}
 	s.forceSyncCh <- struct{}{}
+	return true
 }
 
 func (s *Syncer) isClosed() bool {

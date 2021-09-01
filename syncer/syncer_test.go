@@ -637,6 +637,28 @@ func TestForceSync(t *testing.T) {
 	syncer.Close()
 }
 
+func TestMultipleForceSync(t *testing.T) {
+	lg := logtest.New(t).WithName("syncer")
+	ticker := newMockLayerTicker()
+	mf := newMockFetcher()
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	assert.False(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+	lyr := types.NewLayerID(1)
+	ticker.advanceToLayer(lyr)
+	syncer.Start(context.TODO())
+
+	assert.True(t, true, syncer.ForceSync(context.TODO()))
+	assert.False(t, false, syncer.ForceSync(context.TODO()))
+
+	// allow synchronize to finish
+	mf.feedLayerResult(lyr, lyr)
+	syncer.Close()
+
+	// node already shutdown
+	assert.False(t, false, syncer.ForceSync(context.TODO()))
+}
+
 func TestShouldValidateLayer(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
