@@ -60,9 +60,8 @@ func (p *protocol) GetAddresses(ctx context.Context, remoteID p2pcrypto.PublicKe
 	plogger.Debug("sending request")
 
 	// response handler
-	ch := make(chan []*node.Info)
+	ch := make(chan []*node.Info, 1)
 	resHandler := func(msg []byte) {
-		defer close(ch)
 		nodes := make([]*node.Info, 0, getAddrMax)
 		err := types.BytesToInterface(msg, &nodes)
 		//todo: check that we're not pass max results ?
@@ -78,21 +77,16 @@ func (p *protocol) GetAddresses(ctx context.Context, remoteID p2pcrypto.PublicKe
 				log.Int("expected", getAddrMax))
 			return
 		}
-
-		select {
-		case ch <- nodes:
-		default:
-			plogger.With().Error("get addresses listener timed out, dropping response")
-		}
+		ch <- nodes
 	}
 
 	err = p.msgServer.SendRequest(ctx, server.GetAddresses, []byte(""), remoteID, resHandler, func(err error) {})
-
 	if err != nil {
 		return nil, err
 	}
 
 	timeout := time.NewTimer(MessageTimeout)
+	defer timeout.Stop()
 	select {
 	case nodes := <-ch:
 		if nodes == nil {

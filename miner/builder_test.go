@@ -3,6 +3,7 @@ package miner
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -382,7 +383,15 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	builder.syncer = ms
 	builder.blockOracle = mbo
 	builder.beginRoundEvent = beginRound
-	go builder.createBlockLoop(context.TODO())
+	var wg sync.WaitGroup
+	go func() {
+		builder.createBlockLoop(context.TODO())
+		wg.Done()
+	}()
+	t.Cleanup(func() {
+		builder.Close()
+		wg.Wait()
+	})
 	beginRound <- types.NewLayerID(1)
 	beginRound <- types.NewLayerID(2)
 	r.Equal(0, mbo.calls)
