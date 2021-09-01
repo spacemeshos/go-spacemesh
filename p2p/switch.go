@@ -440,6 +440,7 @@ func (s *Switch) Shutdown() {
 		// udpServer (udpMux) shuts down the udpnet as well
 		s.udpServer.Shutdown()
 		s.peersWatcher.Close()
+		s.gossip.Close()
 
 		for i := range s.directProtocolHandlers {
 			delete(s.directProtocolHandlers, i)
