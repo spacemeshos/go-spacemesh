@@ -9,7 +9,7 @@ RUN chmod +x ./kubectl
 RUN mv ./kubectl /usr/local/bin
 
 # Downloading gcloud package
-RUN wget https://dl.google.com/dl/cloudsdk/release/google-cloud-sdk.tar.gz -P /tmp/
+RUN wget https://dl.google.com/dl/cloudsdk/release/google-cloud-sdk.tar.gz -P /tmp/ --progress=dot
 
 # Installing the package
 RUN mkdir -p /usr/local/gcloud \
