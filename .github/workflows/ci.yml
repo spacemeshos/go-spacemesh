@@ -163,6 +163,14 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - id: gcloud
+        uses: google-github-actions/deploy-cloudrun@main
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
       - name: checkout
         uses: actions/checkout@v2
       - name: late nodes system test
@@ -176,6 +184,14 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - id: gcloud
+        uses: google-github-actions/deploy-cloudrun@main
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
       - name: Sleep for 30 seconds
         uses: jakejarvis/wait-action@master
         with:
@@ -193,6 +209,14 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - id: gcloud
+        uses: google-github-actions/deploy-cloudrun@main
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
       - name: Sleep for 90 seconds
         uses: jakejarvis/wait-action@master
         with:
@@ -210,6 +234,14 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - id: gcloud
+        uses: google-github-actions/deploy-cloudrun@main
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
       - name: Sleep for 150 seconds
         uses: jakejarvis/wait-action@master
         with:
@@ -227,6 +259,14 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - id: gcloud
+        uses: google-github-actions/deploy-cloudrun@main
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
       - name: Sleep for 210 seconds
         uses: jakejarvis/wait-action@master
         with:
@@ -244,6 +284,14 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - id: gcloud
+        uses: google-github-actions/deploy-cloudrun@main
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
       - name: Sleep for 270 seconds
         uses: jakejarvis/wait-action@master
         with:
@@ -261,6 +309,14 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - id: gcloud
+        uses: google-github-actions/deploy-cloudrun@main
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
       - name: Sleep for 330 seconds
         uses: jakejarvis/wait-action@master
         with:
@@ -278,6 +334,14 @@ jobs:
       - dockerpush
     timeout-minutes: 80
     steps:
+      - id: gcloud
+        uses: google-github-actions/deploy-cloudrun@main
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@master
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          service_account_key: ${{ secrets.GCP_SA_KEY }}
+          export_default_credentials: true
       - name: Sleep for 330 seconds
         uses: jakejarvis/wait-action@master
         with:
