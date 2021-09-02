@@ -117,8 +117,8 @@ jobs:
           release_name: Release ${{ steps.version.outputs.content }}
           body: |
             ## Zip Files
-            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/windows-latest/${{ runner.os }}.zip
-            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/ubuntu-latest/${{ runner.os }}.zip
-            - Mac: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macos-latest/${{ runner.os }}.zip
+            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Windows.zip
+            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Linux.zip
+            - Mac: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macOS.zip
           draft: true
           prerelease: true
