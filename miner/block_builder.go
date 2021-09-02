@@ -246,7 +246,7 @@ func (t *BlockBuilder) createBlock(
 
 	bl.Initialize()
 
-	if b.ActiveSet != nil {
+	if len(b.ActiveSet) > 0 {
 		logger.With().Debug("storing ref block", epoch, bl.ID())
 		if err := t.storeRefBlock(epoch, bl.ID()); err != nil {
 			logger.With().Error("cannot store ref block", epoch, log.Err(err))

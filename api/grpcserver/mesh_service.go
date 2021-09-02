@@ -135,9 +135,7 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 		}
 
 		for _, b := range layer.Blocks() {
-			if b.ActiveSet != nil {
-				atxids = append(atxids, b.ActiveSet...)
-			}
+			atxids = append(atxids, b.ActiveSet...)
 		}
 	}
 
@@ -329,9 +327,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 		}
 
-		if b.ActiveSet != nil {
-			activations = append(activations, b.ActiveSet...)
-		}
+		activations = append(activations, b.ActiveSet...)
 
 		var pbTxs []*pb.Transaction
 		for _, t := range txs {

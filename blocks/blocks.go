@@ -16,10 +16,9 @@ import (
 const NewBlockProtocol = "newBlock"
 
 var (
-	errDupTx         = errors.New("duplicate TransactionID in block")
-	errDupAtx        = errors.New("duplicate ATXID in block")
-	errNoActiveSet   = errors.New("block does not declare active set")
-	errZeroActiveSet = errors.New("block declares empty active set")
+	errDupTx              = errors.New("duplicate TransactionID in block")
+	errDupAtx             = errors.New("duplicate ATXID in block")
+	errAmbiguousReference = errors.New("only one of active set or refence must be declared")
 )
 
 type forBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
@@ -183,18 +182,12 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 
 	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
 	atxs := []types.ATXID{blk.ATXID}
-
-	if blk.ActiveSet != nil {
-		if len(blk.ActiveSet) > 0 {
-			atxs = append(atxs, blk.ActiveSet...)
-		} else {
-			return errZeroActiveSet
-		}
-	} else {
-		if blk.RefBlock == nil {
-			return errNoActiveSet
-		}
+	if len(blk.RefBlock) != 0 && len(blk.ActiveSet) != 0 {
+		return errAmbiguousReference
+	} else if len(blk.RefBlock) == 0 && len(blk.ActiveSet) == 0 {
+		return errAmbiguousReference
 	}
+	atxs = append(atxs, blk.ActiveSet...)
 	if len(atxs) > 0 {
 		return fetcher.GetAtxs(ctx, atxs)
 	}
@@ -225,7 +218,7 @@ func validateUniqueTxAtx(b *types.Block) error {
 	}
 
 	// check for duplicate atx id
-	if b.ActiveSet != nil {
+	if len(b.ActiveSet) > 0 {
 		ma := make(map[types.ATXID]struct{}, len(b.ActiveSet))
 		for _, atx := range b.ActiveSet {
 			if _, exist := ma[atx]; exist {

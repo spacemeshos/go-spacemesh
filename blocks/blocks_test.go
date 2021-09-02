@@ -36,7 +36,7 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipostChallenge, coinbase, nipost, 1024, nil)
+	return types.NewActivationTx(nipostChallenge, coinbase, nipost, 1024, &types.Post{})
 }
 
 func atx(pubkey string) *types.ActivationTx {
@@ -190,12 +190,14 @@ func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 
 	fetch := newFetchMock()
 	err := s.blockSyntacticValidation(context.TODO(), b, fetch)
-	r.EqualError(err, errNoActiveSet.Error())
+	r.ErrorIs(err, errAmbiguousReference)
 
-	b.ActiveSet = []types.ATXID{}
+	b.ActiveSet = []types.ATXID{{}}
+	b.RefBlock = []byte{1, 1, 1}
 	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
-	r.EqualError(err, errZeroActiveSet.Error())
+	r.ErrorIs(err, errAmbiguousReference)
 
+	b.RefBlock = nil
 	b.ActiveSet = []types.ATXID{atx1, atx2, atx3}
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
 	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
@@ -243,14 +245,6 @@ func TestBlockHandler_AtxSetID(t *testing.T) {
 	var b types.ActivationTx
 	types.BytesToInterface(bbytes, &b)
 
-	assert.Equal(t, b.NIPost, a.NIPost)
-	assert.Equal(t, b.InitialPost, a.InitialPost)
-
-	assert.Equal(t, b.ActivationTxHeader.NodeID, a.ActivationTxHeader.NodeID)
-	assert.Equal(t, b.ActivationTxHeader.PrevATXID, a.ActivationTxHeader.PrevATXID)
-	assert.Equal(t, b.ActivationTxHeader.Coinbase, a.ActivationTxHeader.Coinbase)
-	assert.Equal(t, b.ActivationTxHeader.InitialPostIndices, a.ActivationTxHeader.InitialPostIndices)
-	assert.Equal(t, b.ActivationTxHeader.NIPostChallenge, a.ActivationTxHeader.NIPostChallenge)
 	b.CalcAndSetID()
 	assert.Equal(t, a.ShortString(), b.ShortString())
 }

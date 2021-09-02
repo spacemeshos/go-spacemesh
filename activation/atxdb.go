@@ -202,7 +202,7 @@ func (db *DB) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error {
 func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, targetEpoch types.EpochID) func(b *types.Block) (bool, error) {
 	return func(b *types.Block) (stop bool, err error) {
 		// count unique ATXs
-		if b.ActiveSet == nil {
+		if len(b.ActiveSet) == 0 {
 			return false, nil
 		}
 		for _, id := range b.ActiveSet {
