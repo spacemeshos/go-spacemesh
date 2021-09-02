@@ -18,8 +18,9 @@ var ( //correction vectors type
 )
 
 type vec struct {
-	Support, Against uint64
-	Flushed          bool
+	Support uint64
+	Against uint64
+	Flushed bool
 }
 
 // Field returns a log field. Implements the LoggableField interface.

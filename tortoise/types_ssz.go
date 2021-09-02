@@ -17,7 +17,10 @@ func (v *vec) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	// Field (0) 'Support'
 	dst = ssz.MarshalUint64(dst, v.Support)
 
-	// Field (1) 'Flushed'
+	// Field (1) 'Against'
+	dst = ssz.MarshalUint64(dst, v.Against)
+
+	// Field (2) 'Flushed'
 	dst = ssz.MarshalBool(dst, v.Flushed)
 
 	return
@@ -27,21 +30,24 @@ func (v *vec) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (v *vec) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size != 9 {
+	if size != 17 {
 		return ssz.ErrSize
 	}
 
 	// Field (0) 'Support'
 	v.Support = ssz.UnmarshallUint64(buf[0:8])
 
-	// Field (1) 'Flushed'
-	v.Flushed = ssz.UnmarshalBool(buf[8:9])
+	// Field (1) 'Against'
+	v.Against = ssz.UnmarshallUint64(buf[8:16])
+
+	// Field (2) 'Flushed'
+	v.Flushed = ssz.UnmarshalBool(buf[16:17])
 
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the vec object
 func (v *vec) SizeSSZ() (size int) {
-	size = 9
+	size = 17
 	return
 }

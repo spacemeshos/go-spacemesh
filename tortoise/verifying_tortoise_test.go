@@ -357,7 +357,7 @@ func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer
 	for i := 0; i < blocksPerLayer; i++ {
 		blk := &types.Block{
 			MiniBlock: types.MiniBlock{
-				ATXID:      atxHeader.ID(),
+				ATXID:      atx.ID(),
 				LayerIndex: layerID,
 				Data:       []byte(strconv.Itoa(i)),
 				TxIDs:      nil,

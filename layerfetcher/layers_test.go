@@ -187,8 +187,8 @@ func TestLayerHashBlocksReqReceiverEmptyLayer(t *testing.T) {
 	var got layerBlocks
 	err = types.BytesToInterface(out, &got)
 	assert.NoError(t, err)
-	assert.Equal(t, db.layers[lyrID], got.Blocks)
-	assert.Nil(t, got.InputVector)
+	assert.Empty(t, db.layers[lyrID], got.Blocks)
+	assert.Empty(t, got.InputVector)
 	assert.Equal(t, db.processed, got.ProcessedLayer)
 	assert.Equal(t, types.EmptyLayerHash, got.Hash)
 	assert.Equal(t, db.aggHashes[lyrID], got.AggregatedHash)
@@ -206,8 +206,8 @@ func TestLayerHashBlocksReqReceiverLayerNotPresent(t *testing.T) {
 	var got layerBlocks
 	err = types.BytesToInterface(out, &got)
 	assert.NoError(t, err)
-	assert.Nil(t, got.Blocks)
-	assert.Nil(t, got.InputVector)
+	assert.Empty(t, got.Blocks)
+	assert.Empty(t, got.InputVector)
 	assert.Equal(t, db.processed, got.ProcessedLayer)
 	assert.Equal(t, types.EmptyLayerHash, got.Hash)
 	assert.Equal(t, db.aggHashes[lyrID], got.AggregatedHash)
