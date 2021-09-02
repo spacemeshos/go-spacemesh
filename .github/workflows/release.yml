@@ -8,8 +8,7 @@ on:
   push:
     tags:
       - '*'
-    branches:
-      - gpu-post-bin
+      
 jobs:
   build-and-upload:
     runs-on: ${{ matrix.os }}
