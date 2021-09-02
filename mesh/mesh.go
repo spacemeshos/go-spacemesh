@@ -241,7 +241,7 @@ func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 			return lyr.Hash()
 		}
 	}
-	return EmptyLayerHash
+	return types.EmptyLayerHash
 }
 
 // ProcessedLayer returns the last processed layer ID
@@ -586,7 +586,7 @@ func (msh *Mesh) calcAggregatedLayerHash(layer *types.Layer, prevHash types.Hash
 
 func (msh *Mesh) calcSimpleLayerHash(layer *types.Layer) types.Hash32 {
 	if len(layer.Blocks()) == 0 {
-		return EmptyLayerHash
+		return types.EmptyLayerHash
 	}
 	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
 	return types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(validBlocks)), nil)
@@ -605,14 +605,14 @@ func (msh *Mesh) persistAggregatedLayerHash(layerID types.LayerID, hash types.Ha
 func (msh *Mesh) GetAggregatedLayerHash(layerID types.LayerID) types.Hash32 {
 	h, err := msh.getAggregatedLayerHash(layerID)
 	if err != nil {
-		return EmptyLayerHash
+		return types.EmptyLayerHash
 	}
 	return h
 }
 
 func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, error) {
 	if layerID.Before(types.NewLayerID(1)) {
-		return EmptyLayerHash, nil
+		return types.EmptyLayerHash, nil
 	}
 	var hash types.Hash32
 	bts, err := msh.general.Get(getAggregatedLayerHashKey(layerID))
@@ -621,21 +621,6 @@ func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, er
 		return hash, nil
 	}
 	return hash, err
-}
-
-// GetLayerHashBlocks returns blocks for given hash
-func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
-	layerIDBytes, err := msh.general.Get(h.Bytes())
-	if err != nil {
-		msh.With().Warning("requested unknown layer hash", log.String("hash", h.ShortString()))
-		return []types.BlockID{}
-	}
-	l := types.BytesToLayerID(layerIDBytes)
-	mBlocks, err := msh.LayerBlockIds(l)
-	if err != nil {
-		return []types.BlockID{}
-	}
-	return mBlocks
 }
 
 func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs []*types.Transaction) {

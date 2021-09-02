@@ -302,6 +302,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 		case out := <-h.outputChan:
 			layerID := out.ID()
 			coin := out.Coinflip()
+			ctx := log.WithNewSessionID(ctx)
 			logger := h.WithContext(ctx).WithFields(layerID)
 
 			// collect coinflip, regardless of success

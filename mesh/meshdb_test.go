@@ -13,10 +13,8 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -460,13 +458,7 @@ type TinyTx struct {
 }
 
 func getTxns(r *require.Assertions, mdb *DB, origin types.Address) []TinyTx {
-	txnsB, err := mdb.unappliedTxs.Get(origin.Bytes())
-	if err == database.ErrNotFound {
-		return []TinyTx{}
-	}
-	r.NoError(err)
-	var txns pendingtxs.AccountPendingTxs
-	err = types.BytesToInterface(txnsB, &txns)
+	txns, err := mdb.getAccountPendingTxs(origin)
 	r.NoError(err)
 	var ret []TinyTx
 	for nonce, nonceTxs := range txns.PendingTxs {

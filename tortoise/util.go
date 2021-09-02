@@ -3,59 +3,68 @@ package tortoise
 import (
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type vec [2]uint64
+var errOverflow = errors.New("vector overflow")
 
-var (
-	support     = vec{1, 0}
-	against     = vec{0, 1}
-	abstain     = vec{0, 0}
-	errOverflow = errors.New("vector arithmetic overflow")
+var ( //correction vectors type
+	// Opinion vectors
+	support = vec{Support: 1, Against: 0}
+	against = vec{Support: 0, Against: 1}
+	abstain = vec{Support: 0, Against: 0}
 )
+
+type vec struct {
+	Support, Against uint64
+	Flushed          bool
+}
 
 // Field returns a log field. Implements the LoggableField interface.
 func (a vec) Field() log.Field {
-	return log.String("vote_vector", fmt.Sprintf("%s (+%d, -%d)", a, a[0], a[1]))
-}
-
-func (a vec) Add(v vec) vec {
-	a[0] += v[0]
-	a[1] += v[1]
-	// prevent overflow/wraparound
-	if a[0] < v[0] || a[1] < v[1] {
-		panic(errOverflow)
-	}
-	return a
-}
-
-func (a vec) Multiply(x uint64) vec {
-	one := a[0] * x
-	two := a[1] * x
-	// prevent overflow/wraparound
-	if x != 0 && (one/x != a[0] || two/x != a[1]) {
-		panic(errOverflow)
-	}
-	return vec{one, two}
+	return log.String("vote_vector", fmt.Sprintf("(+%d, -%d)", a.Support, a.Against))
 }
 
 func (a vec) netVote() int64 {
 	// prevent overflow/wraparound
-	one := int64(a[0])
-	two := int64(a[1])
+	one := int64(a.Support)
+	two := int64(a.Against)
 	if one < 0 || two < 0 {
 		panic(errOverflow)
 	}
 	return one - two
 }
 
+func (a vec) Add(v vec) vec {
+	a.Support += v.Support
+	a.Against += v.Against
+	a.Flushed = false
+	if a.Support < v.Support || a.Against < v.Against {
+		panic(errOverflow)
+	}
+	return a
+}
+
+func (a vec) Multiply(x uint64) vec {
+	one := a.Support * x
+	two := a.Against * x
+	if x != 0 && (one/x != a.Support || two/x != a.Against) {
+		panic(errOverflow)
+	}
+	a.Flushed = false
+	a.Support = one
+	a.Against = two
+	return a
+}
+
 func simplifyVote(v vec) vec {
-	if v[0] > v[1] {
+	if v.Support > v.Against {
 		return support
 	}
-	if v[1] > v[0] {
+
+	if v.Against > v.Support {
 		return against
 	}
 	return abstain
@@ -94,25 +103,5 @@ func calculateOpinionWithThreshold(logger log.Log, v vec, layerSize int, theta u
 	}
 }
 
-type blockIDLayerTuple struct {
-	types.BlockID
-	types.LayerID
-}
-
-func (blt blockIDLayerTuple) layer() types.LayerID {
-	return blt.LayerID
-}
-
-func (blt blockIDLayerTuple) id() types.BlockID {
-	return blt.BlockID
-}
-
-// Opinion is a tuple of block and layer id. It stores a block's opinion about many other blocks.
-type Opinion struct {
-	BlockAndLayer blockIDLayerTuple
-	BlockOpinions map[types.BlockID]vec
-}
-
-type retriever interface {
-	Retrieve(key []byte, v interface{}) (interface{}, error)
-}
+// Opinion is opinions on other blocks.
+type Opinion map[types.BlockID]vec
