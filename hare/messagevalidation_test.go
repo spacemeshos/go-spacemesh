@@ -383,28 +383,28 @@ func validateMatrix(t *testing.T, mType messageType, msgK uint32, exp []error) {
 
 func TestSyntaxContextValidator_StatusContextMatrix(t *testing.T) {
 	msg0 := []error{errEarlyMsg, nil, errInvalidRound, errInvalidRound, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
-	msg4 := []error{errEarlyMsg, errInvalidIter, errInvalidIter, errInvalidIter, errEarlyMsg, nil, errInvalidRound, errInvalidRound, errInvalidRound}
+	msg4 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errEarlyMsg, nil, errInvalidRound, errInvalidRound, errInvalidRound}
 	validateMatrix(t, status, 0, msg0)
 	validateMatrix(t, status, 4, msg4)
 }
 
 func TestSyntaxContextValidator_ProposalContextMatrix(t *testing.T) {
 	msg1 := []error{errInvalidRound, errEarlyMsg, nil, nil, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
-	msg5 := []error{errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errEarlyMsg, nil, nil, errInvalidRound}
+	msg5 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errEarlyMsg, nil, nil, errInvalidRound}
 	validateMatrix(t, proposal, 1, msg1)
 	validateMatrix(t, proposal, 5, msg5)
 }
 
 func TestSyntaxContextValidator_CommitContextMatrix(t *testing.T) {
 	msg2 := []error{errInvalidRound, errInvalidRound, errEarlyMsg, nil, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
-	msg6 := []error{errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errEarlyMsg, nil, errInvalidRound}
+	msg6 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errEarlyMsg, nil, errInvalidRound}
 	validateMatrix(t, commit, commitRound, msg2)
 	validateMatrix(t, commit, commitRound+4, msg6)
 }
 
 func TestSyntaxContextValidator_NotifyContextMatrix(t *testing.T) {
 	msg3 := []error{errInvalidRound, errInvalidRound, errInvalidRound, errEarlyMsg, nil, nil, nil, nil, nil}
-	msg7 := []error{errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errInvalidRound, errEarlyMsg, nil}
+	msg7 := []error{errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errInvalidRound, errEarlyMsg, nil}
 	validateMatrix(t, notify, notifyRound, msg3)
 	validateMatrix(t, notify, notifyRound+4, msg7)
 }
