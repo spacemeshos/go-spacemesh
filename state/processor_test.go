@@ -365,7 +365,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	maxTransactions := 20
 	minTransactions := 1
 
-	lg := logtest.New(s.T()).WithName("proc_logger")
+	lg := logtest.New(s.T())
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
 	processor := NewTransactionProcessor(db, txDb, s.projector, NewTxMemPool(), lg)
@@ -383,7 +383,10 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		createAccount(processor, toAddr(signers[1].PublicKey().Bytes()), 341578872634786, 10),
 		createAccount(processor, toAddr(signers[2].PublicKey().Bytes()), 1044987234, 0),
 	}
-
+	maxAmmount := map[types.Address]uint64{}
+	for _, acc := range accounts {
+		maxAmmount[acc.address] = acc.Balance() / uint64(testCycles*maxTransactions)
+	}
 	processor.Commit()
 
 	written := db.Len()
@@ -407,13 +410,22 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			for dstAccount == srcAccount {
 				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 			}
-			t := createTransaction(s.T(), processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]), dstAccount.address, (rand.Uint64()%srcAccount.Balance())/100, 5, signers[src])
+			amount := (rand.Uint64() % srcAccount.Balance()) / 10000
+			if amount > maxAmmount[srcAccount.address] {
+				amount = maxAmmount[srcAccount.address]
+			}
+			t := createTransaction(s.T(),
+				processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]),
+				dstAccount.address,
+				amount,
+				5, signers[src])
 			trns = append(trns, t)
 
 		}
 		failed, err := processor.ApplyTransactions(types.NewLayerID(uint32(i)), trns)
-		assert.NoError(s.T(), err)
-		assert.True(s.T(), failed == 0)
+
+		s.Require().NoError(err)
+		s.Require().Zero(failed)
 
 		if i == revertToLayer {
 			want = string(processor.Dump())
@@ -421,17 +433,13 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 
 		if i == revertToLayer+revertAfterLayer {
 			err = processor.LoadState(types.NewLayerID(uint32(revertToLayer)))
-			assert.NoError(s.T(), err)
+			s.Require().NoError(err)
 			got := string(processor.Dump())
-
-			if got != want {
-				s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-			}
+			s.Require().Equal(string(want), string(got))
 		}
 	}
 
-	writtenMore := db.Len()
-	assert.True(s.T(), writtenMore > written)
+	s.Require().LessOrEqual(written, db.Len())
 }
 
 func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *types.Transaction {
