@@ -181,7 +181,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	go func() { beginRound <- types.GetEffectiveGenesis().Add(1) }()
 	select {
 	case output := <-gossipMessages:
-		b := types.MiniBlock{}
+		var b types.Block
 		require.NoError(t, types.BytesToInterface(output.Bytes(), &b))
 
 		assert.Equal(t, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, b.ForDiff)
