@@ -869,8 +869,9 @@ func (app *App) startServices(ctx context.Context) error {
 	app.poetListener.Start(ctx)
 
 	if app.Config.SMESHING.Start {
+		coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 		go func() {
-			if err := app.atxBuilder.StartSmeshing(ctx, app.Config.SMESHING.Opts); err != nil {
+			if err := app.atxBuilder.StartSmeshing(ctx, coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
 				log.Panic("failed to start smeshing: %v", err)
 			}
 		}()

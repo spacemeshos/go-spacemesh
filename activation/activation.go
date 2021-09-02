@@ -95,7 +95,7 @@ type syncer interface {
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(ctx context.Context, opts PostSetupOpts) error
+	StartSmeshing(context.Context, types.Address, PostSetupOpts) error
 	StopSmeshing(deleteFiles bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
@@ -227,7 +227,7 @@ func (b *Builder) Smeshing() bool {
 // If the post data is incomplete or missing, data creation
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
-func (b *Builder) StartSmeshing(ctx context.Context, opts PostSetupOpts) error {
+func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opts PostSetupOpts) error {
 	b.mtx.Lock()
 	if b.status != smeshingStatusIdle {
 		b.mtx.Unlock()
@@ -247,7 +247,7 @@ func (b *Builder) StartSmeshing(ctx context.Context, opts PostSetupOpts) error {
 		<-doneChan
 		if s := b.postSetupProvider.Status(); s.State != postSetupStateComplete {
 			b.status = smeshingStatusIdle
-			b.log.With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
+			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
 			return
 		}
 
