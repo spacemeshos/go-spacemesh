@@ -8,14 +8,15 @@ on:
   push:
     tags:
       - '*'
-
+    branches:
+      - gpu-post-bin
 jobs:
   build-and-upload:
     runs-on: ${{ matrix.os }}
 
     strategy:
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest]
     steps:
       - name: Setup Go
         uses: actions/setup-go@v1
@@ -27,6 +28,18 @@ jobs:
         uses: crazy-max/ghaction-chocolatey@v1
         with:
           args: install make
+
+      - if: matrix.os == 'windows-latest'
+        name: Install wget in windows
+        uses: crazy-max/ghaction-chocolatey@v1
+        with:
+          args: install wget
+
+      - if: matrix.os == 'windows-latest'
+        name: Install zip in windows
+        uses: crazy-max/ghaction-chocolatey@v1
+        with:
+          args: install zip
       
       - name: setup env
         run: |
@@ -51,6 +64,23 @@ jobs:
         run: |
           make install
           make build VERSION=${{ steps.version.outputs.content }} BIN_DIR_WIN=./build
+      - name: Get gpu-post release
+        shell: bash
+        run: |
+          mkdir build_${{ runner.os }}
+          unzip libgpu-setup-*.zip -d build_${{ runner.os }}
+
+          #Download latest smrepl release
+          wget https://github.com/spacemeshos/smrepl/releases/latest/download/${{ runner.os }}.zip
+          unzip ${{ runner.os }}.zip -d build_${{ runner.os }}
+          
+          rm -f build_${{ runner.os }}/api.h
+          rm -f ${{ runner.os }}.zip
+          mv build_${{ runner.os }} ${{ runner.os }}
+
+          mv ./build/* ${{ runner.os }}
+
+          zip -r ${{ runner.os }}.zip ${{ runner.os }}
       - name: Set up Cloud SDK
         uses: google-github-actions/setup-gcloud@master
         with:
@@ -58,18 +88,11 @@ jobs:
           service_account_key: ${{ secrets.GCP_SA_KEY }}
           export_default_credentials: true
       
-      - uses: haya14busa/action-cond@v1
-        id: buildpath
-        with:
-          cond: ${{ matrix.os == 'windows-latest' }}
-          if_true: ./build/go-spacemesh.exe
-          if_false: ./build/go-spacemesh
-
-      - name: Upload build
+      - name: Upload zip
         uses: google-github-actions/upload-cloud-storage@main
         with:
-          path: ${{ steps.buildpath.outputs.value }}
-          destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/${{ matrix.os }}
+          path: ${{ runner.os }}.zip
+          destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/
   
   release:
     runs-on: ubuntu-latest
@@ -83,7 +106,7 @@ jobs:
         uses: juliangruber/read-file-action@v1
         with:
           path: ./version.txt
-          
+      
       - name: Create Release
         uses: actions/create-release@v1
         env:
@@ -92,9 +115,19 @@ jobs:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ steps.version.outputs.content }}
           body: |
-            ## Compiled Binaries
-            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/windows-latest/go-spacemesh.exe
-            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/ubuntu-latest/go-spacemesh
-            - Mac: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macos-latest/go-spacemesh
+            ## Zip Files
+            - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/windows-latest/${{ runner.os }}.zip
+            - Linux: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/ubuntu-latest/${{ runner.os }}.zip
+            - Mac: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macos-latest/${{ runner.os }}.zip
           draft: true
           prerelease: true
+      - name: Upload Release Asset
+        id: upload-release-asset 
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./macOS.zip
+          asset_name: macOS.zip
+          asset_content_type: application/zip
