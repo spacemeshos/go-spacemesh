@@ -4,13 +4,13 @@ Closes #
 <!-- `Closes #XXXX, closes #XXXX, ...` links mentioned issues to this PR and automatically closes them when this it's merged -->
 
 ## For the CHANGELOG
-<!-- If this change affects the users, please describe the change in  a one-liner using their terms,
+<!-- Please describe the change in  a one-line,
 please start your line with Added, Fixed, Changed or Removed -->
 
-## Compatibility
+## Breaking Compatibility
 <!-- Please check these items as applicable to ensure we properly name the version -->
-- [ ] This PR does not break compatibility with the `main` network
-- [ ] This PR does not change public APIs
+- [ ] This PR does not break conseounsous compatibility
+- [ ] This PR does not change gRPC APIs
 - [ ] This PR does not rely on a new version of external services (PoET, elasticsearch, etc.)
 - [ ] This PR does not require new DevOps resources
 
