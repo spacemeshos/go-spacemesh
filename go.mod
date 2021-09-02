@@ -26,9 +26,9 @@ require (
 	github.com/spacemeshos/api/release/go v1.3.1-0.20210726064428-9474f58a4ace
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
-	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
-	github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d
-	github.com/spacemeshos/post v0.0.0-20210831040706-7255a25137a2
+	github.com/spacemeshos/merkle-tree v0.0.0-20210820115759-e8ac5a775ec1
+	github.com/spacemeshos/poet v0.1.1-0.20210902091740-cb443775ddf9
+	github.com/spacemeshos/post v0.0.0-20210902090222-ef049e8a6467
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/afero v1.2.0 // indirect
 	github.com/spf13/cobra v1.0.0
@@ -44,13 +44,6 @@ require (
 	google.golang.org/genproto v0.0.0-20201007142714-5c0e72c5e71e
 	google.golang.org/grpc v1.32.0
 	nanomsg.org/go-mangos v1.4.0
-)
-
-replace (
-	github.com/ferranbt/fastssz => /home/dd/fastssz
-	github.com/spacemeshos/merkle-tree => /home/dd/merkle-tree
-	github.com/spacemeshos/poet => /home/dd/poet
-	github.com/spacemeshos/post => /home/dd/post
 )
 
 go 1.15
