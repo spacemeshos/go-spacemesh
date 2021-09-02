@@ -378,15 +378,16 @@ sszgen:
 	sszgen --path ./hare/ --output ./hare/types_ssz.go --objs Message --include ./common/types
 	sszgen --path ./hare/eligibility/ --output ./hare/eligibility/types_ssz.go --objs vrfMessage --include ./common/types
 	sszgen --path ./blocks/ --output ./blocks/types_ssz.go --objs vrfMessage --include ./common/types
-	sszgen --path ./common/types/ --output ./common/types/types_ssz.go --objs DBBlock,Block,PoetProof,ActivationTx,MeshTransaction,PoetRound
+	sszgen --path ./common/types/ --output ./common/types/types_ssz.go --objs DBBlock,Block,PoetProof,ActivationTx,MeshTransaction,PoetRound,BlockIDsContainer
 	sszgen --path ./timesync/peersync/ --output ./timesync/peersync/types_ssz.go --objs Request,Response
 	sszgen --path ./p2p/net --output ./p2p/net/types_ssz.go --objs HandshakeData
 	sszgen --path ./p2p/service/ --output ./p2p/service/types_ssz.go --objs DataMsgWrapper
+	sszgen --path ./p2p/server/ --output ./p2p/server/types_ssz.go --objs response
 	sszgen --path ./p2p/ --output ./p2p/types_ssz.go --objs ProtocolMessage --include ./p2p/service
 	sszgen --path ./p2p/node --output ./p2p/node/types_ssz.go --objs Info
 	sszgen --path ./p2p/discovery --output ./p2p/discovery/types_ssz.go --objs response --include ./p2p/node
 	sszgen --path ./events/ --output ./events/types_ssz.go --objs NewBlock,ValidBlock,NewAtx,ValidAtx,NewTx,ValidTx,RewardReceived,AtxCreated,TortoiseBeaconCalculated,DoneCreatingBlock --include ./common/types
-	sszgen --path ./layerfetcher/ --output ./layerfetcher/types_ssz.go --objs layerHash,layerBlocks,atxContainer,blocksContainer --include ./common/types
+	sszgen --path ./layerfetcher/ --output ./layerfetcher/types_ssz.go --objs layerHash,layerBlocks,atxContainer --include ./common/types
 	sszgen --path ./tortoise/ --output ./tortoise/types_ssz.go --objs vec
 	sszgen --path ./mesh/ --output ./mesh/types_ssz.go --objs dbReward,ProcessedLayer,DbTransaction --include ./common/types/
 	sszgen --path ./pendingtxs/ --output ./pendingtxs/types_ssz.go --objs NanoTx --include ./common/types/

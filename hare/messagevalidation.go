@@ -47,7 +47,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 	}
 
 	pub := m.PubKey
-	layer := types.LayerID(m.InnerMsg.InstanceID)
+	layer := m.InnerMsg.InstanceID
 	if layer.GetEpoch().IsGenesis() {
 		return true, nil // TODO: remove this lie after inception problem is addressed
 	}
@@ -61,7 +61,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 	}
 
 	// validate role
-	res, err := ev.oracle.Validate(ctx, layer, int32(m.InnerMsg.K), expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof, m.InnerMsg.EligibilityCount)
+	res, err := ev.oracle.Validate(ctx, layer, m.InnerMsg.K, expectedCommitteeSize(m.InnerMsg.K, ev.maxExpActives, ev.expLeaders), nID, m.InnerMsg.RoleProof, m.InnerMsg.EligibilityCount)
 	if err != nil {
 		logger.With().Error("eligibility validator: could not retrieve eligibility result",
 			log.Err(err),
@@ -84,7 +84,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 		ev.WithContext(ctx).With().Error("error occurred while validating role",
 			log.Err(err),
 			log.String("sender_id", m.PubKey.ShortString()),
-			types.LayerID(m.InnerMsg.InstanceID),
+			m.InnerMsg.InstanceID,
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
@@ -93,7 +93,7 @@ func (ev *eligibilityValidator) Validate(ctx context.Context, m *Msg) bool {
 	if !res {
 		ev.WithContext(ctx).With().Warning("validate message failed: role is invalid",
 			log.String("sender_id", m.PubKey.ShortString()),
-			types.LayerID(m.InnerMsg.InstanceID),
+			m.InnerMsg.InstanceID,
 			log.String("msg_type", m.InnerMsg.Type.String()))
 		return false
 	}
@@ -141,10 +141,10 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	if m == nil {
 		return errNilMsg
 	}
-
 	if m.InnerMsg == nil {
 		return errNilInner
 	}
+
 	currentRound := currentK % 4
 	// the message must match the current iteration unless it is a notify or pre-round message
 	currentIteration := currentK / 4
@@ -156,7 +156,9 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	case pre:
 		return nil
 	case notify:
-		if currentK == preRound {
+		if currentK == preRound && msgIteration != 0 {
+			return errInvalidIter
+		} else if currentK == preRound {
 			return errInvalidRound
 		}
 		// notify before notify could be created for this iteration
@@ -181,7 +183,9 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 	// check status, proposal & commit types
 	switch m.InnerMsg.Type {
 	case status:
-		if currentK == preRound {
+		if currentK == preRound && msgIteration != 0 {
+			return errInvalidIter
+		} else if currentK == preRound {
 			return errEarlyMsg
 		}
 		if currentRound == notifyRound && currentIteration+1 == msgIteration {
@@ -195,7 +199,9 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 		}
 		return errInvalidRound
 	case proposal:
-		if currentK == preRound {
+		if currentK == preRound && msgIteration != 0 {
+			return errInvalidIter
+		} else if currentK == preRound {
 			return errInvalidRound
 		}
 		if currentRound == statusRound && sameIter {
@@ -210,7 +216,9 @@ func (v *syntaxContextValidator) ContextuallyValidateMessage(ctx context.Context
 		}
 		return errInvalidRound
 	case commit:
-		if currentK == preRound {
+		if currentK == preRound && msgIteration != 0 {
+			return errInvalidIter
+		} else if currentK == preRound {
 			return errInvalidRound
 		}
 		if currentRound == proposalRound && sameIter {
@@ -387,7 +395,7 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 		return false
 	}
 
-	maxKi := preRound // Ki>=-1
+	maxKi := preRound
 	var maxSet []types.BlockID
 	for _, status := range msg.InnerMsg.Svp.Messages {
 		// track max

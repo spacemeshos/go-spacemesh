@@ -28,7 +28,7 @@ type mesh interface {
 	GetBlock(types.BlockID) (*types.Block, error)
 	AddBlockWithTxs(context.Context, *types.Block) error
 	ProcessedLayer() types.LayerID
-	HandleLateBlock(*types.Block)
+	HandleLateBlock(context.Context, *types.Block)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 }
 
@@ -118,10 +118,10 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 		logger.With().Error("block is late",
 			log.FieldNamed("processed_layer", bh.mesh.ProcessedLayer()),
 			log.FieldNamed("miner_id", blk.MinerID()))
-		bh.mesh.HandleLateBlock(&blk)
+		bh.mesh.HandleLateBlock(ctx, &blk)
 	}
 
-	logger.With().Info("time to process block", log.Duration("duration", time.Since(start)))
+	logger.With().Debug("time to process block", log.Duration("duration", time.Since(start)))
 	return nil
 }
 
@@ -152,6 +152,9 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	}
 
 	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
+	// TODO: validate that there are no conflicts in the vote exception lists (e.g., that the block does not both
+	//   support and vote against a given block)
+	//   See https://github.com/spacemeshos/go-spacemesh/issues/2369
 	if err := bh.fastValidation(block); err != nil {
 		bh.WithContext(ctx).With().Error("failed fast validation", block.ID(), log.Err(err))
 		return err
@@ -201,7 +204,7 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 func (bh *BlockHandler) fastValidation(block *types.Block) error {
 	// block eligibility
 	if eligible, err := bh.validator.BlockSignedAndEligible(block); err != nil || !eligible {
-		return fmt.Errorf("block eligibility check failed - err %v", err)
+		return fmt.Errorf("block eligibility check failed: %w", err)
 	}
 
 	// validate unique tx atx
@@ -209,7 +212,6 @@ func (bh *BlockHandler) fastValidation(block *types.Block) error {
 		return err
 	}
 	return nil
-
 }
 
 func validateUniqueTxAtx(b *types.Block) error {

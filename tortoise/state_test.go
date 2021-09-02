@@ -28,7 +28,7 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 
 		st.Last = layers[0]
 		st.Verified = layers[1]
-		st.EvictFrom = layers[2]
+		st.LastEvicted = layers[2]
 
 		st.GoodBlocksIndex = map[types.BlockID]bool{}
 		st.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
@@ -97,13 +97,13 @@ func TestStateEvict(t *testing.T) {
 		sort.Slice(layers, func(i, j int) bool {
 			return layers[i].Before(layers[j])
 		})
-		st.EvictFrom = layers[len(layers)/2]
+		st.LastEvicted = layers[len(layers)/2]
 		if !assert.NoError(t, st.Persist()) {
 			return false
 		}
 
 		for layer := range st.BlockOpinionsByLayer {
-			if !layer.Before(st.EvictFrom) {
+			if layer.After(st.LastEvicted) {
 				continue
 			}
 			for block := range st.BlockOpinionsByLayer[layer] {

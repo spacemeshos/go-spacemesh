@@ -53,13 +53,13 @@ func calcID(k uint32, set *Set) uint32 {
 
 	// write K
 	buff := make([]byte, 4)
-	binary.LittleEndian.PutUint32(buff, uint32(k)) // K>=0 because this not pre-round
+	binary.LittleEndian.PutUint32(buff, k) // K>=0 because this not pre-round
 	hash.Write(buff)
 
 	// TODO: is this hash enough for this usage?
 	// write set ObjectID
 	buff = make([]byte, 4)
-	binary.LittleEndian.PutUint32(buff, uint32(set.ID()))
+	binary.LittleEndian.PutUint32(buff, set.ID())
 	hash.Write(buff)
 
 	return hash.Sum32()

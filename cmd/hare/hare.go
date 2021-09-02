@@ -53,14 +53,17 @@ func init() {
 type mockBlockProvider struct {
 }
 
-func (mbp *mockBlockProvider) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
+func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
+}
+
+func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
+}
+
+func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
 }
 
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
-}
-
-func (mbp *mockBlockProvider) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
 }
 
 // HareApp represents an Hare application
@@ -115,10 +118,6 @@ func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(ctx context.Context,
 	return true, nil
 }
 
-func validateBlocks(blocks []types.BlockID) bool {
-	return true
-}
-
 // Start the app
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("starting hare main")
@@ -160,7 +159,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	//app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
 	lt := make(timesync.LayerTimer)
 
-	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
+	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
 	log.Info("starting hare service")
 	app.ha = hareI
 	if err = app.ha.Start(cmdp.Ctx); err != nil {

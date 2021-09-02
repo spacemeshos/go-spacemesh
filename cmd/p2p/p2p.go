@@ -62,7 +62,7 @@ func (app *P2PApp) Cleanup() {
 func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	// init p2p services
 	log.JSONLog(true)
-	logger := log.NewWithLevel("P2P_Test", zap.NewAtomicLevelAt(zap.DebugLevel))
+	logger := log.NewWithLevel("P2P_Test", zap.NewAtomicLevelAt(zap.InfoLevel))
 	log.SetupGlobal(logger)
 
 	log.Info("initializing p2p services")

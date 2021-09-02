@@ -6,57 +6,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// MarshalSSZ ssz marshals the layerHash object
-func (l *layerHash) MarshalSSZ() ([]byte, error) {
-	return ssz.MarshalSSZ(l)
-}
-
-// MarshalSSZTo ssz marshals the layerHash object to a target array
-func (l *layerHash) MarshalSSZTo(buf []byte) (dst []byte, err error) {
-	dst = buf
-
-	// Field (0) 'ProcessedLayer'
-	if dst, err = l.ProcessedLayer.MarshalSSZTo(dst); err != nil {
-		return
-	}
-
-	// Field (1) 'Hash'
-	dst = append(dst, l.Hash[:]...)
-
-	// Field (2) 'AggregatedHash'
-	dst = append(dst, l.AggregatedHash[:]...)
-
-	return
-}
-
-// UnmarshalSSZ ssz unmarshals the layerHash object
-func (l *layerHash) UnmarshalSSZ(buf []byte) error {
-	var err error
-	size := uint64(len(buf))
-	if size != 68 {
-		return ssz.ErrSize
-	}
-
-	// Field (0) 'ProcessedLayer'
-	if err = l.ProcessedLayer.UnmarshalSSZ(buf[0:4]); err != nil {
-		return err
-	}
-
-	// Field (1) 'Hash'
-	copy(l.Hash[:], buf[4:36])
-
-	// Field (2) 'AggregatedHash'
-	copy(l.AggregatedHash[:], buf[36:68])
-
-	return err
-}
-
-// SizeSSZ returns the ssz encoded size in bytes for the layerHash object
-func (l *layerHash) SizeSSZ() (size int) {
-	size = 68
-	return
-}
-
 // MarshalSSZ ssz marshals the layerBlocks object
 func (l *layerBlocks) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(l)
@@ -65,19 +14,26 @@ func (l *layerBlocks) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the layerBlocks object to a target array
 func (l *layerBlocks) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(12)
+	offset := int(76)
 
 	// Offset (0) 'Blocks'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(l.Blocks) * 20
 
-	// Offset (1) 'LatestBlocks'
+	// Offset (1) 'InputVector'
 	dst = ssz.WriteOffset(dst, offset)
-	offset += len(l.LatestBlocks) * 20
+	offset += len(l.InputVector) * 20
 
-	// Offset (2) 'VerifyingVector'
-	dst = ssz.WriteOffset(dst, offset)
-	offset += len(l.VerifyingVector) * 20
+	// Field (2) 'ProcessedLayer'
+	if dst, err = l.ProcessedLayer.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (3) 'Hash'
+	dst = append(dst, l.Hash[:]...)
+
+	// Field (4) 'AggregatedHash'
+	dst = append(dst, l.AggregatedHash[:]...)
 
 	// Field (0) 'Blocks'
 	if len(l.Blocks) > 4096 {
@@ -88,22 +44,13 @@ func (l *layerBlocks) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = append(dst, l.Blocks[ii][:]...)
 	}
 
-	// Field (1) 'LatestBlocks'
-	if len(l.LatestBlocks) > 4096 {
+	// Field (1) 'InputVector'
+	if len(l.InputVector) > 4096 {
 		err = ssz.ErrListTooBig
 		return
 	}
-	for ii := 0; ii < len(l.LatestBlocks); ii++ {
-		dst = append(dst, l.LatestBlocks[ii][:]...)
-	}
-
-	// Field (2) 'VerifyingVector'
-	if len(l.VerifyingVector) > 4096 {
-		err = ssz.ErrListTooBig
-		return
-	}
-	for ii := 0; ii < len(l.VerifyingVector); ii++ {
-		dst = append(dst, l.VerifyingVector[ii][:]...)
+	for ii := 0; ii < len(l.InputVector); ii++ {
+		dst = append(dst, l.InputVector[ii][:]...)
 	}
 
 	return
@@ -113,27 +60,33 @@ func (l *layerBlocks) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (l *layerBlocks) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 12 {
+	if size < 76 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o0, o1, o2 uint64
+	var o0, o1 uint64
 
 	// Offset (0) 'Blocks'
 	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
 		return ssz.ErrOffset
 	}
 
-	// Offset (1) 'LatestBlocks'
+	// Offset (1) 'InputVector'
 	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
 		return ssz.ErrOffset
 	}
 
-	// Offset (2) 'VerifyingVector'
-	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
-		return ssz.ErrOffset
+	// Field (2) 'ProcessedLayer'
+	if err = l.ProcessedLayer.UnmarshalSSZ(buf[8:12]); err != nil {
+		return err
 	}
+
+	// Field (3) 'Hash'
+	copy(l.Hash[:], buf[12:44])
+
+	// Field (4) 'AggregatedHash'
+	copy(l.AggregatedHash[:], buf[44:76])
 
 	// Field (0) 'Blocks'
 	{
@@ -148,29 +101,16 @@ func (l *layerBlocks) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field (1) 'LatestBlocks'
+	// Field (1) 'InputVector'
 	{
-		buf = tail[o1:o2]
+		buf = tail[o1:]
 		num, err := ssz.DivideInt2(len(buf), 20, 4096)
 		if err != nil {
 			return err
 		}
-		l.LatestBlocks = make([]types.BlockID, num)
+		l.InputVector = make([]types.BlockID, num)
 		for ii := 0; ii < num; ii++ {
-			copy(l.LatestBlocks[ii][:], buf[ii*20:(ii+1)*20])
-		}
-	}
-
-	// Field (2) 'VerifyingVector'
-	{
-		buf = tail[o2:]
-		num, err := ssz.DivideInt2(len(buf), 20, 4096)
-		if err != nil {
-			return err
-		}
-		l.VerifyingVector = make([]types.BlockID, num)
-		for ii := 0; ii < num; ii++ {
-			copy(l.VerifyingVector[ii][:], buf[ii*20:(ii+1)*20])
+			copy(l.InputVector[ii][:], buf[ii*20:(ii+1)*20])
 		}
 	}
 	return err
@@ -178,16 +118,13 @@ func (l *layerBlocks) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the layerBlocks object
 func (l *layerBlocks) SizeSSZ() (size int) {
-	size = 12
+	size = 76
 
 	// Field (0) 'Blocks'
 	size += len(l.Blocks) * 20
 
-	// Field (1) 'LatestBlocks'
-	size += len(l.LatestBlocks) * 20
-
-	// Field (2) 'VerifyingVector'
-	size += len(l.VerifyingVector) * 20
+	// Field (1) 'InputVector'
+	size += len(l.InputVector) * 20
 
 	return
 }
@@ -255,73 +192,6 @@ func (a *atxContainer) SizeSSZ() (size int) {
 
 	// Field (0) 'List'
 	size += len(a.List) * 32
-
-	return
-}
-
-// MarshalSSZ ssz marshals the blocksContainer object
-func (b *blocksContainer) MarshalSSZ() ([]byte, error) {
-	return ssz.MarshalSSZ(b)
-}
-
-// MarshalSSZTo ssz marshals the blocksContainer object to a target array
-func (b *blocksContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
-	dst = buf
-	offset := int(4)
-
-	// Offset (0) 'List'
-	dst = ssz.WriteOffset(dst, offset)
-	offset += len(b.List) * 20
-
-	// Field (0) 'List'
-	if len(b.List) > 4096 {
-		err = ssz.ErrListTooBig
-		return
-	}
-	for ii := 0; ii < len(b.List); ii++ {
-		dst = append(dst, b.List[ii][:]...)
-	}
-
-	return
-}
-
-// UnmarshalSSZ ssz unmarshals the blocksContainer object
-func (b *blocksContainer) UnmarshalSSZ(buf []byte) error {
-	var err error
-	size := uint64(len(buf))
-	if size < 4 {
-		return ssz.ErrSize
-	}
-
-	tail := buf
-	var o0 uint64
-
-	// Offset (0) 'List'
-	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
-		return ssz.ErrOffset
-	}
-
-	// Field (0) 'List'
-	{
-		buf = tail[o0:]
-		num, err := ssz.DivideInt2(len(buf), 20, 4096)
-		if err != nil {
-			return err
-		}
-		b.List = make([]types.BlockID, num)
-		for ii := 0; ii < num; ii++ {
-			copy(b.List[ii][:], buf[ii*20:(ii+1)*20])
-		}
-	}
-	return err
-}
-
-// SizeSSZ returns the ssz encoded size in bytes for the blocksContainer object
-func (b *blocksContainer) SizeSSZ() (size int) {
-	size = 4
-
-	// Field (0) 'List'
-	size += len(b.List) * 20
 
 	return
 }

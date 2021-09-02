@@ -40,7 +40,7 @@ type mockBlocksProvider struct {
 	layerContextuallyValidBlocksFn func(types.LayerID) (map[types.BlockID]struct{}, error)
 }
 
-func (mbp mockBlocksProvider) LayerContextuallyValidBlocks(layerID types.LayerID) (map[types.BlockID]struct{}, error) {
+func (mbp mockBlocksProvider) LayerContextuallyValidBlocks(_ context.Context, layerID types.LayerID) (map[types.BlockID]struct{}, error) {
 	if mbp.layerContextuallyValidBlocksFn != nil {
 		return mbp.layerContextuallyValidBlocksFn(layerID)
 	}
@@ -212,7 +212,7 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	for i := 0; i < total; i++ {
 		wg.Add(1)
 		go func(x int) {
-			_, err := o.buildVRFMessage(context.TODO(), firstLayer, int32(x%10))
+			_, err := o.buildVRFMessage(context.TODO(), firstLayer, uint32(x%10))
 			r.NoError(err)
 			wg.Done()
 		}(i)

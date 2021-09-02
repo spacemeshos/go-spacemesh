@@ -19,20 +19,18 @@ func (p *ProposalMessage) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	// Field (0) 'EpochID'
 	dst = ssz.MarshalUint32(dst, uint32(p.EpochID))
 
-	// Offset (1) 'MinerPK'
+	// Offset (1) 'NodeID'
 	dst = ssz.WriteOffset(dst, offset)
-	offset += len(p.MinerPK)
+	offset += p.NodeID.SizeSSZ()
 
 	// Offset (2) 'VRFSignature'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(p.VRFSignature)
 
-	// Field (1) 'MinerPK'
-	if len(p.MinerPK) > 256 {
-		err = ssz.ErrBytesLength
+	// Field (1) 'NodeID'
+	if dst, err = p.NodeID.MarshalSSZTo(dst); err != nil {
 		return
 	}
-	dst = append(dst, p.MinerPK...)
 
 	// Field (2) 'VRFSignature'
 	if len(p.VRFSignature) > 256 {
@@ -58,7 +56,7 @@ func (p *ProposalMessage) UnmarshalSSZ(buf []byte) error {
 	// Field (0) 'EpochID'
 	p.EpochID = types.EpochID(ssz.UnmarshallUint32(buf[0:4]))
 
-	// Offset (1) 'MinerPK'
+	// Offset (1) 'NodeID'
 	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size {
 		return ssz.ErrOffset
 	}
@@ -68,16 +66,12 @@ func (p *ProposalMessage) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	// Field (1) 'MinerPK'
+	// Field (1) 'NodeID'
 	{
 		buf = tail[o1:o2]
-		if len(buf) > 256 {
-			return ssz.ErrBytesLength
+		if err = p.NodeID.UnmarshalSSZ(buf); err != nil {
+			return err
 		}
-		if cap(p.MinerPK) == 0 {
-			p.MinerPK = make([]byte, 0, len(buf))
-		}
-		p.MinerPK = append(p.MinerPK, buf...)
 	}
 
 	// Field (2) 'VRFSignature'
@@ -98,8 +92,8 @@ func (p *ProposalMessage) UnmarshalSSZ(buf []byte) error {
 func (p *ProposalMessage) SizeSSZ() (size int) {
 	size = 12
 
-	// Field (1) 'MinerPK'
-	size += len(p.MinerPK)
+	// Field (1) 'NodeID'
+	size += p.NodeID.SizeSSZ()
 
 	// Field (2) 'VRFSignature'
 	size += len(p.VRFSignature)

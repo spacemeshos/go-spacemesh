@@ -33,6 +33,12 @@ func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uin
 	return nil
 }
 
+type testSyncState bool
+
+func (ss testSyncState) IsSynced(context.Context) bool {
+	return bool(ss)
+}
+
 func TestTortoiseBeacon(t *testing.T) {
 	t.Parallel()
 
@@ -41,7 +47,7 @@ func TestTortoiseBeacon(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetEpochWeight(gomock.AssignableToTypeOf(new(types.EpochID))).Return(uint64(10), nil, nil).AnyTimes()
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(10), nil, nil).AnyTimes()
 
 	mwc := coinValueMock(t, true)
 
@@ -75,8 +81,9 @@ func TestTortoiseBeacon(t *testing.T) {
 	atxdb := activation.NewDB(database.NewMemDatabase(), idStore, memesh, 3, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
 	_ = atxdb
 
-	tb := New(conf, ld, signing.NewPublicKey(util.Hex2Bytes(minerID.Key)), n1, mockDB, nil, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, clock, logger)
+	tb := New(conf, ld, minerID, n1, mockDB, nil, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, clock, logger)
 	requirer.NotNil(tb)
+	tb.SetSyncState(testSyncState(true))
 
 	err = tb.Start(context.TODO())
 	requirer.NoError(err)
@@ -470,7 +477,7 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 				vrfSigner: vrfSigner,
 			}
 
-			result, err := tb.getSignedProposal(tc.epoch)
+			result, err := tb.getSignedProposal(context.TODO(), tc.epoch)
 			r.NoError(err)
 			r.Equal(string(tc.result), string(result))
 		})

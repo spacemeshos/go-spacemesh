@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
@@ -37,21 +36,16 @@ type TxProcessor interface {
 
 // layerDB is an interface that returns layer data and blocks
 type layerDB interface {
-	GetLayerHash(ID types.LayerID) types.Hash32
-	GetAggregatedLayerHash(ID types.LayerID) types.Hash32
-	GetLayerHashBlocks(hash types.Hash32) []types.BlockID
-	GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error)
+	GetLayerHash(types.LayerID) types.Hash32
+	GetAggregatedLayerHash(types.LayerID) types.Hash32
+	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
+	GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error)
 	SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error
 	ProcessedLayer() types.LayerID
 }
 
 type atxIDsDB interface {
 	GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID)
-}
-
-// gossipBlocks returns gossip block received byu this node in the last x time frame
-type gossipBlocks interface {
-	Get() []types.BlockID
 }
 
 // poetDB is an interface to reading and storing poet proofs
@@ -70,7 +64,8 @@ type tortoiseBeaconDB interface {
 // network defines network capabilities used
 type network interface {
 	GetPeers() []peers.Peer
-	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), timeoutHandler func(err error)) error
+	PeerCount() uint64
+	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errorHandler func(err error)) error
 	Close()
 }
 
@@ -83,19 +78,13 @@ var ErrNoPeers = errors.New("no peers")
 // ErrTooManyPeerErrors is returned when too many (> 1/2) peers return error
 var ErrTooManyPeerErrors = errors.New("too many peers returned error")
 
-// ErrBeaconNotReceived is returned when no valid beacon was received.
-var ErrBeaconNotReceived = errors.New("no peer sent a valid beacon")
+// ErrInternal is returned from the peer when the peer encounters an internal error
+var ErrInternal = errors.New("unspecified error returned by peer")
 
 // peerResult captures the response from each peer.
 type peerResult struct {
-	data []byte
+	data *layerBlocks
 	err  error
-}
-
-// LayerHashResult is the result of fetching hashes for each layer from peers.
-type LayerHashResult struct {
-	Hashes map[layerHash][]peers.Peer
-	Err    error
 }
 
 // LayerPromiseResult is the result of trying to fetch data for an entire layer.
@@ -110,8 +99,6 @@ type Logic struct {
 	fetcher        fetch.Fetcher
 	net            network
 	mutex          sync.Mutex
-	layerHashesRes map[types.LayerID]map[peers.Peer]*peerResult
-	layerHashesChs map[types.LayerID][]chan LayerHashResult
 	layerBlocksRes map[types.LayerID]map[peers.Peer]*peerResult
 	layerBlocksChs map[types.LayerID][]chan LayerPromiseResult
 	poetProofs     poetDB
@@ -121,7 +108,6 @@ type Logic struct {
 	layerDB        layerDB
 	atxIds         atxIDsDB
 	tbDB           tortoiseBeaconDB
-	gossipBlocks   gossipBlocks
 	goldenATXID    types.ATXID
 }
 
@@ -143,8 +129,6 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		log:            log,
 		fetcher:        fetcher,
 		net:            srv,
-		layerHashesRes: make(map[types.LayerID]map[peers.Peer]*peerResult),
-		layerHashesChs: make(map[types.LayerID][]chan LayerHashResult),
 		layerBlocksRes: make(map[types.LayerID]map[peers.Peer]*peerResult),
 		layerBlocksChs: make(map[types.LayerID][]chan LayerPromiseResult),
 		poetProofs:     poet,
@@ -157,8 +141,7 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		goldenATXID:    cfg.GoldenATXID,
 	}
 
-	srv.RegisterBytesMsgHandler(server.LayerHashMsg, l.layerHashReqReceiver)
-	srv.RegisterBytesMsgHandler(server.LayerBlocksMsg, l.layerHashBlocksReqReceiver)
+	srv.RegisterBytesMsgHandler(server.LayerBlocksMsg, l.layerBlocksReqReceiver)
 	srv.RegisterBytesMsgHandler(server.AtxIDsMsg, l.epochATXsReqReceiver)
 	srv.RegisterBytesMsgHandler(server.TortoiseBeaconMsg, l.tortoiseBeaconReqReceiver)
 
@@ -190,212 +173,87 @@ func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB, tbDB database.Getter)
 	l.fetcher.AddDB(fetch.TBDB, tbDB)
 }
 
-// layerHashReqReceiver returns the layer hash for the specified layer.
-func (l *Logic) layerHashReqReceiver(ctx context.Context, msg []byte) []byte {
-	lyr := types.NewLayerID(util.BytesToUint32(msg))
-	lyrHash := &layerHash{
-		ProcessedLayer: l.layerDB.ProcessedLayer(),
-		Hash:           l.layerDB.GetLayerHash(lyr),
-		AggregatedHash: l.layerDB.GetAggregatedLayerHash(lyr),
-	}
-	out, err := types.InterfaceToBytes(lyrHash)
-	if err != nil {
-		l.log.WithContext(ctx).With().Panic("failed to serialize layer hash",
-			lyr,
-			log.String("hash", lyrHash.Hash.ShortString()),
-			log.String("aggregatedHash", lyrHash.AggregatedHash.ShortString()))
-	} else {
-		l.log.WithContext(ctx).With().Debug("responded layer hash request",
-			lyr,
-			log.String("hash", lyrHash.Hash.ShortString()),
-			log.String("aggregatedHash", lyrHash.AggregatedHash.ShortString()))
-	}
-	return out
-}
-
 // epochATXsReqReceiver returns the ATXs for the specified epoch.
-func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) []byte {
+func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) ([]byte, error) {
 	epoch := types.EpochID(util.BytesToUint32(msg))
 	atxs := l.atxIds.GetEpochAtxs(epoch)
-	l.log.WithContext(ctx).With().Debug("responded epoch atxs request", epoch, log.Int("numATXs", len(atxs)))
+	l.log.WithContext(ctx).With().Debug("responded to epoch atxs request",
+		epoch,
+		log.Int("count", len(atxs)))
 	bts, err := types.InterfaceToBytes(&atxContainer{List: atxs})
 	if err != nil {
-		l.log.WithContext(ctx).With().Warning("cannot find epoch atxs", epoch, log.Err(err))
+		l.log.WithContext(ctx).With().Panic("failed to serialize epoch atxs", epoch, log.Err(err))
 	}
-	return bts
+	return bts, err
 }
 
-// layerHashBlocksReqReceiver returns the block IDs for the specified layer hash,
+// layerBlocksReqReceiver returns the block IDs for the specified layer hash,
 // it also returns the validation vector for this data and the latest blocks received in gossip
-func (l *Logic) layerHashBlocksReqReceiver(ctx context.Context, msg []byte) []byte {
-	h := types.BytesToHash(msg)
-
-	blocks := l.layerDB.GetLayerHashBlocks(h)
-	vector, err := l.layerDB.GetLayerInputVector(h)
-	// best effort with input vector
+func (l *Logic) layerBlocksReqReceiver(ctx context.Context, req []byte) ([]byte, error) {
+	lyrID := types.BytesToLayerID(req)
+	b := &layerBlocks{
+		ProcessedLayer: l.layerDB.ProcessedLayer(),
+		Hash:           l.layerDB.GetLayerHash(lyrID),
+		AggregatedHash: l.layerDB.GetAggregatedLayerHash(lyrID),
+	}
+	var err error
+	b.Blocks, err = l.layerDB.LayerBlockIds(lyrID)
 	if err != nil {
-		// TODO: We need to diff empty set and no results in sync somehow.
-		l.log.WithContext(ctx).With().Debug("didn't have input vector for layer", log.String("layerHash", h.ShortString()))
-	}
-	// latest := l.gossipBlocks.Get() todo: implement this
-	b := layerBlocks{
-		blocks,
-		nil,
-		vector,
+		if err != database.ErrNotFound {
+			l.log.WithContext(ctx).With().Debug("failed to get layer content", lyrID, log.Err(err))
+			return nil, ErrInternal
+		}
+	} else {
+		if b.InputVector, err = l.layerDB.GetLayerInputVectorByID(lyrID); err != nil {
+			// best effort with input vector
+			l.log.WithContext(ctx).With().Debug("failed to get input vector for layer", lyrID, log.Err(err))
+		}
 	}
 
-	out, err := types.InterfaceToBytes(&b)
+	out, err := types.InterfaceToBytes(b)
 	if err != nil {
-		l.log.WithContext(ctx).With().Error("cannot serialize layer blocks response", log.Err(err))
+		l.log.WithContext(ctx).With().Panic("failed to serialize layer blocks response", log.Err(err))
 	}
 
-	return out
+	return out, nil
 }
 
 // tortoiseBeaconReqReceiver returns the tortoise beacon for the given layer ID
-func (l *Logic) tortoiseBeaconReqReceiver(ctx context.Context, msg []byte) []byte {
-	epoch := types.EpochID(util.BytesToUint32(msg))
+func (l *Logic) tortoiseBeaconReqReceiver(ctx context.Context, data []byte) ([]byte, error) {
+	epoch := types.EpochID(util.BytesToUint32(data))
 	l.log.WithContext(ctx).With().Debug("got tortoise beacon request", epoch)
 
 	beacon, err := l.tbDB.GetTortoiseBeacon(epoch)
 	if errors.Is(err, database.ErrNotFound) {
 		l.log.WithContext(ctx).With().Warning("tortoise beacon not found in DB", epoch)
-		return []byte{}
+		return nil, err
 	}
 
 	if err != nil {
 		l.log.WithContext(ctx).With().Error("failed to get tortoise beacon", epoch, log.Err(err))
-		return []byte{}
+		return nil, err
 	}
 
 	l.log.WithContext(ctx).With().Debug("replying to tortoise beacon request", epoch, log.String("beacon", beacon.ShortString()))
-	return beacon.Bytes()
+	return beacon.Bytes(), nil
 }
 
-// PollLayerHash polls peers on the layer hash. it returns a channel for the caller to be notified when
-// responses are received from all peers.
-func (l *Logic) PollLayerHash(ctx context.Context, layerID types.LayerID) chan LayerHashResult {
-	l.log.WithContext(ctx).With().Info("polling layer hash", layerID)
-	resChannel := make(chan LayerHashResult, 1)
+// PollLayerContent polls peers for the content of a given layer ID.
+// it returns a channel for the caller to be notified when responses are received from all peers.
+func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) chan LayerPromiseResult {
+	resChannel := make(chan LayerPromiseResult, 1)
 
 	remotePeers := l.net.GetPeers()
 	numPeers := len(remotePeers)
 	if numPeers == 0 {
-		resChannel <- LayerHashResult{Hashes: nil, Err: ErrNoPeers}
+		resChannel <- LayerPromiseResult{Layer: layerID, Err: ErrNoPeers}
 		return resChannel
 	}
 
-	l.mutex.Lock()
-	l.layerHashesChs[layerID] = append(l.layerHashesChs[layerID], resChannel)
-	if _, ok := l.layerHashesRes[layerID]; ok {
-		// polling hashes of layerID is on-going, just wait for the polling to finish and get notified
-		l.mutex.Unlock()
-		return resChannel
-	}
-	l.layerHashesRes[layerID] = make(map[peers.Peer]*peerResult)
-	l.mutex.Unlock()
-
-	// request layers from all peers since different peers can have different layer hashes
-	for _, p := range remotePeers {
-		// build custom receiver for each peer so that receiver will know which peer the data came from
-		// so that it could request relevant block ids from the same peer
-		peer := p
-		receiveForPeerFunc := func(b []byte) {
-			l.receiveLayerHash(ctx, layerID, peer, numPeers, b, nil)
-		}
-		timeoutFunc := func(err error) {
-			l.receiveLayerHash(ctx, layerID, peer, numPeers, nil, err)
-		}
-		err := l.net.SendRequest(ctx, server.LayerHashMsg, layerID.Bytes(), p, receiveForPeerFunc, timeoutFunc)
-		if err != nil {
-			l.receiveLayerHash(ctx, layerID, peer, numPeers, nil, err)
-		}
-	}
-	return resChannel
-}
-
-// receiveLayerHash is called when a layer hash response is received from a remote peer.
-// if enough responses are received, it notifies the channels waiting for the layer hash result.
-func (l *Logic) receiveLayerHash(ctx context.Context, layerID types.LayerID, peer peers.Peer, numPeers int, data []byte, err error) {
-	l.mutex.Lock()
-	defer l.mutex.Unlock()
-	if err == nil {
-		hash := types.BytesToHash(data)
-		l.layerHashesRes[layerID][peer] = &peerResult{data: data, err: nil}
-		l.log.WithContext(ctx).With().Debug("received layer hash from peer",
-			layerID,
-			log.String("layerHash", hash.ShortString()),
-			log.String("peer", peer.String()))
-	} else {
-		l.layerHashesRes[layerID][peer] = &peerResult{data: nil, err: err}
-		l.log.WithContext(ctx).With().Debug("received layer hash error from peer",
-			layerID,
-			log.String("peer", peer.String()),
-			log.Err(err))
-	}
-
-	// check if we have all responses from peers
-	result := l.layerHashesRes[layerID]
-	if len(result) < numPeers {
-		l.log.WithContext(ctx).With().Debug("not yet received layer hash from all peers",
-			log.Int("received", len(result)),
-			log.Int("expected", numPeers))
-		return
-	}
-
-	// make a copy of data and channels to avoid holding a lock while notifying
-	go notifyLayerHashResult(layerID, l.layerHashesChs[layerID], result, numPeers, l.log.WithContext(ctx))
-	delete(l.layerHashesChs, layerID)
-	delete(l.layerHashesRes, layerID)
-}
-
-// notifyLayerHashResult aggregates all layer hash responses from peers and notify subscribed channels of the result.
-// if there are too many errors from peers, it reports error instead.
-// it deliberately doesn't hold any lock while notifying channels
-func notifyLayerHashResult(layerID types.LayerID, channels []chan LayerHashResult, peerResult map[peers.Peer]*peerResult, numPeers int, logger log.Log) {
-	logger.With().Debug("got layer hashes. now aggregating", layerID)
-	numErrors := 0
-	// aggregate the peerResult by data
-	hashes := make(map[layerHash][]peers.Peer)
-	for peer, res := range peerResult {
-		if res.err != nil {
-			numErrors++
-		} else {
-			var lyrHash layerHash
-			convertErr := types.BytesToInterface(res.data, &lyrHash)
-			if convertErr != nil {
-				logger.With().Debug("received error converting bytes to layerHash", log.Err(convertErr))
-				numErrors++
-			}
-			hashes[lyrHash] = append(hashes[lyrHash], peer)
-		}
-	}
-	result := LayerHashResult{Hashes: hashes, Err: nil}
-
-	// if more than half the peers returned an error, fail the sync of the entire layer
-	// todo: think whether we should panic here
-	if numErrors > numPeers/2 {
-		logger.With().Error("too many errors from peers",
-			layerID,
-			log.Int("numPeers", numPeers),
-			log.Int("numErrors", numErrors))
-		result.Hashes = nil
-		result.Err = ErrTooManyPeerErrors
-	}
-	for _, ch := range channels {
-		ch <- result
-	}
-}
-
-// PollLayerBlocks polls peers on blocks for given layer hashes. for each layer hash, it requests the blocks from a
-// peer that reported the layer hash previously. it returns a channel for the caller to be notified when responses
-// are received from all peers.
-func (l *Logic) PollLayerBlocks(ctx context.Context, layerID types.LayerID, hashes map[types.Hash32][]peers.Peer) chan LayerPromiseResult {
-	resChannel := make(chan LayerPromiseResult, 1)
 	l.mutex.Lock()
 	l.layerBlocksChs[layerID] = append(l.layerBlocksChs[layerID], resChannel)
 	if _, ok := l.layerBlocksRes[layerID]; ok {
-		// polling of block hashes of  is on-going, just wait for the polling to finish and get notified
+		// polling of block IDs of this layerID is ongoing, just wait for the polling to finish and get notified
 		l.mutex.Unlock()
 		return resChannel
 	}
@@ -404,22 +262,17 @@ func (l *Logic) PollLayerBlocks(ctx context.Context, layerID types.LayerID, hash
 
 	// send a request to the first peer of the list to get blocks data.
 	// todo: think if we should aggregate or ask from multiple peers to have some redundancy in requests
-	numHashes := len(hashes)
-	for hash, remotePeers := range hashes {
-		peer := remotePeers[0]
-		if hash == mesh.EmptyLayerHash {
-			l.receiveBlockHashes(ctx, layerID, peer, numHashes, nil, ErrZeroLayer)
-			continue
-		}
+	for _, p := range remotePeers {
+		peer := p
 		receiveForPeerFunc := func(data []byte) {
-			l.receiveBlockHashes(ctx, layerID, peer, numHashes, data, nil)
+			l.receiveLayerContent(ctx, layerID, peer, numPeers, data, nil)
 		}
 		errFunc := func(err error) {
-			l.receiveBlockHashes(ctx, layerID, peer, numHashes, nil, err)
+			l.receiveLayerContent(ctx, layerID, peer, numPeers, nil, err)
 		}
-		err := l.net.SendRequest(ctx, server.LayerBlocksMsg, hash.Bytes(), peer, receiveForPeerFunc, errFunc)
+		err := l.net.SendRequest(ctx, server.LayerBlocksMsg, layerID.Bytes(), peer, receiveForPeerFunc, errFunc)
 		if err != nil {
-			l.receiveBlockHashes(ctx, layerID, peer, numHashes, nil, err)
+			l.receiveLayerContent(ctx, layerID, peer, numPeers, nil, err)
 		}
 	}
 	return resChannel
@@ -427,51 +280,62 @@ func (l *Logic) PollLayerBlocks(ctx context.Context, layerID types.LayerID, hash
 
 // fetchLayerBlocks fetches the content of the block IDs in the specified layerBlocks
 func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blocks *layerBlocks) {
+	l.log.WithContext(ctx).With().Debug("fetching layer blocks", layerID, log.Int("numBlocks", len(blocks.Blocks)))
 	if err := l.GetBlocks(ctx, blocks.Blocks); err != nil {
 		// if there is an error this means that the entire layerID cannot be validated and therefore sync should fail
 		// TODO: fail sync?
 		l.log.WithContext(ctx).With().Debug("error fetching layer blocks", layerID, log.Err(err))
 	}
 
-	if len(blocks.VerifyingVector) > 0 {
+	if len(blocks.InputVector) > 0 {
 		l.log.WithContext(ctx).With().Debug("saving input vector from peer blocks", layerID)
-		err := l.layerDB.SaveLayerInputVectorByID(ctx, layerID, blocks.VerifyingVector)
+		err := l.layerDB.SaveLayerInputVectorByID(ctx, layerID, blocks.InputVector)
 		if err == nil {
 			return
 		}
 		l.log.WithContext(ctx).With().Error("failed to save input vector", layerID, log.Err(err))
-	}
-
-	if !layerID.GetEpoch().IsGenesis() {
+	} else if !layerID.GetEpoch().IsGenesis() {
 		if err := l.GetInputVector(ctx, layerID); err != nil {
 			l.log.WithContext(ctx).With().Debug("error getting input vector", layerID, log.Err(err))
 		}
 	}
 }
 
-// receiveBlockHashes is called when response of block IDs for a layer hash is received from remote peer.
-// if enough responses are received, it notifies the channels waiting for the layer blocks result.
-func (l *Logic) receiveBlockHashes(ctx context.Context, layerID types.LayerID, peer peers.Peer, expectedResults int, data []byte, extErr error) {
-	pRes := &peerResult{err: extErr}
-	if extErr != nil {
-		if !errors.Is(extErr, ErrZeroLayer) || !(layerID.GetEpoch()).IsGenesis() {
-			l.log.WithContext(ctx).With().Error("received error from peer for block hashes", log.Err(extErr), layerID, layerID.GetEpoch())
-		}
-	} else if data != nil {
-		var blocks layerBlocks
-		convertErr := types.BytesToInterface(data, &blocks)
-		if convertErr != nil {
-			l.log.WithContext(ctx).With().Error("error converting bytes to layerBlocks", log.Err(convertErr))
-			pRes.err = convertErr
-		} else {
-			pRes.data = data
-			l.fetchLayerBlocks(ctx, layerID, &blocks)
-		}
+func extractPeerResult(logger log.Log, layerID types.LayerID, data []byte, peerErr error) (result peerResult) {
+	result.err = peerErr
+	if peerErr != nil {
+		logger.With().Debug("received peer error for layer content", layerID, log.Err(peerErr))
+		return
 	}
+
+	var blocks layerBlocks
+	if err := types.BytesToInterface(data, &blocks); err != nil {
+		logger.With().Debug("error converting bytes to layerBlocks", log.Err(err))
+		result.err = err
+		return
+	}
+
+	result.data = &blocks
+	if len(blocks.Blocks) == 0 {
+		result.err = ErrZeroLayer
+	}
+	// TODO check layer hash to be consistent with the content. if not, blacklist the peer
+	return
+}
+
+// receiveLayerContent is called when response of block IDs for a layer hash is received from remote peer.
+// if enough responses are received, it notifies the channels waiting for the layer blocks result.
+func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, peer peers.Peer, expectedResults int, data []byte, peerErr error) {
+	l.log.WithContext(ctx).With().Debug("received layer content from peer", log.String("peer", peer.String()))
+	peerRes := extractPeerResult(l.log.WithContext(ctx), layerID, data, peerErr)
+	if peerRes.err == nil {
+		l.fetchLayerBlocks(ctx, layerID, peerRes.data)
+	}
+
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	l.layerBlocksRes[layerID][peer] = pRes
+	l.layerBlocksRes[layerID][peer] = &peerRes
 
 	// check if we have all responses from peers
 	result := l.layerBlocksRes[layerID]
@@ -496,7 +360,7 @@ func notifyLayerBlocksResult(layerID types.LayerID, channels []chan LayerPromise
 	hasZeroBlockHash := false
 	var firstErr error
 	for _, res := range peerResult {
-		if res.data != nil {
+		if res.err == nil && res.data != nil {
 			// at least one layer hash contains blocks. not a zero block layer
 			result = &LayerPromiseResult{Layer: layerID, Err: nil}
 			break
@@ -517,7 +381,7 @@ func notifyLayerBlocksResult(layerID types.LayerID, channels []chan LayerPromise
 			result.Err = firstErr
 		}
 	}
-	logger.With().Debug("notifying layer blocks result", layerID, log.String("blocks", fmt.Sprintf("%+v", result)))
+	logger.With().Debug("notifying layer blocks result", layerID, log.String("blocks", fmt.Sprintf("%+v", *result)))
 	for _, ch := range channels {
 		ch <- *result
 	}
@@ -547,6 +411,9 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 			Atxs:  nil,
 		}
 	}
+	if l.net.PeerCount() == 0 {
+		return errors.New("no peers")
+	}
 	err := l.net.SendRequest(ctx, server.AtxIDsMsg, id.ToBytes(), fetch.GetRandomPeer(l.net.GetPeers()), receiveForPeerFunc, errFunc)
 	if err != nil {
 		return err
@@ -561,14 +428,14 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 
 // getAtxResults is called when an ATX result is received
 func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byte) error {
-	l.log.WithContext(ctx).With().Info("got response for ATX",
+	l.log.WithContext(ctx).With().Debug("got response for ATX",
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
 	return l.atxs.HandleAtxData(ctx, data, l)
 }
 
 func (l *Logic) getTxResult(ctx context.Context, hash types.Hash32, data []byte) error {
-	l.log.WithContext(ctx).With().Info("got response for TX",
+	l.log.WithContext(ctx).With().Debug("got response for TX",
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
 	return l.txs.HandleTxSyncData(data)
@@ -576,7 +443,7 @@ func (l *Logic) getTxResult(ctx context.Context, hash types.Hash32, data []byte)
 
 // getPoetResult is handler function to poet proof fetch result
 func (l *Logic) getPoetResult(ctx context.Context, hash types.Hash32, data []byte) error {
-	l.log.WithContext(ctx).Info("got poet ref",
+	l.log.WithContext(ctx).Debug("got poet ref",
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
 	return l.poetProofs.ValidateAndStoreMsg(data)
@@ -648,7 +515,7 @@ func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	for _, atxID := range IDs {
 		hashes = append(hashes, atxID.Hash32())
 	}
-	// todo: atx Id is currently only the header bytes - should we change it?
+	// TODO: atx Id is currently only the header bytes - should we change it?
 	results := l.fetcher.GetHashes(hashes, fetch.ATXDB, false)
 	for hash, resC := range results {
 		res := <-resC
@@ -659,7 +526,7 @@ func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 			return res.Err
 		}
 		if !res.IsLocal {
-			err := l.getAtxResults(nil, hash, res.Data)
+			err := l.getAtxResults(ctx, res.Hash, res.Data)
 			if err != nil {
 				return err
 			}
@@ -668,8 +535,8 @@ func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	return nil
 }
 
-// GetBlocks gets the data for given block ids and validates the blocks. returns an error if a single atx failed to be fetched
-// or validated
+// GetBlocks gets the data for given block ids and validates the blocks. returns an error if a single atx failed to be
+// fetched or validated
 func (l *Logic) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
 	l.log.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("numBlocks", len(IDs)))
 	hashes := make([]types.Hash32, 0, len(IDs))
@@ -743,7 +610,7 @@ func (l *Logic) GetInputVector(ctx context.Context, id types.LayerID) error {
 	// if result is local we don't need to process it again
 	if !res.IsLocal {
 		l.log.WithContext(ctx).With().Debug("saving input vector from peer", id, res.Hash)
-		var blocks blocksContainer
+		var blocks types.BlockIDsContainer
 		if err := types.BytesToInterface(res.Data, &blocks); err != nil {
 			l.log.WithContext(ctx).With().Error("got invalid input vector from peer", id, log.Err(err))
 			return err
@@ -790,7 +657,9 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 
 	makeErrFunc := func(peer fmt.Stringer) func(error) {
 		return func(err error) {
-			l.log.WithContext(ctx).With().Warning("error in tortoise beacon response", log.String("peer", peer.String()), log.Err(err))
+			l.log.WithContext(ctx).With().Warning("error in tortoise beacon response",
+				log.String("peer", peer.String()),
+				log.Err(err))
 		}
 	}
 
@@ -802,10 +671,14 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 			case <-cancelCtx.Done():
 				return
 			default:
-				l.log.WithContext(ctx).With().Debug("requesting tortoise beacon from peer", id, log.String("peer", peer.String()))
+				l.log.WithContext(ctx).With().Debug("requesting tortoise beacon from peer",
+					id,
+					log.String("peer", peer.String()))
 				err := l.net.SendRequest(cancelCtx, server.TortoiseBeaconMsg, id.ToBytes(), peer, makeReceiveFunc(peer), makeErrFunc(peer))
 				if err != nil {
-					l.log.WithContext(ctx).Warning("failed to send tortoise beacon request", log.String("peer", peer.String()), log.Err(err))
+					l.log.WithContext(ctx).Warning("failed to send tortoise beacon request",
+						log.String("peer", peer.String()),
+						log.Err(err))
 				}
 			}
 		}(p)
@@ -828,7 +701,9 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 
 	case res := <-resCh:
 		resHash := types.BytesToHash(res)
-		l.log.WithContext(ctx).With().Info("received tortoise beacon", id, log.String("beacon", resHash.ShortString()))
+		l.log.WithContext(ctx).With().Info("received tortoise beacon",
+			id,
+			log.String("beacon", resHash.String()))
 		return l.tbDB.SetTortoiseBeacon(id, resHash)
 	}
 }

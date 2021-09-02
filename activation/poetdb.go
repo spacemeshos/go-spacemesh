@@ -81,7 +81,7 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 	ref, err := proofMessage.Ref()
 	if err != nil {
-		return fmt.Errorf("failed to get PoET proof message reference: %v", err)
+		return fmt.Errorf("failed to get poet proof message reference: %v", err)
 	}
 
 	messageBytes, err := types.InterfaceToBytes(proofMessage)
@@ -103,7 +103,7 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 		return fmt.Errorf("failed to store poet proof and index for poetId %x round %s: %v",
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
-	db.log.With().Info("stored PoET proof",
+	db.log.With().Info("stored poet proof",
 		log.String("poet_proof_id", fmt.Sprintf("%x", ref[:5])),
 		log.String("round_id", proofMessage.RoundID),
 		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID[:5])),

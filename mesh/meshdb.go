@@ -14,7 +14,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
@@ -24,6 +23,9 @@ type layerMutex struct {
 	m            sync.Mutex
 	layerWorkers uint32
 }
+
+// ErrInvalidLayer signifies that hare has failed for a given layer, thus marking it invalid
+var ErrInvalidLayer = errors.New("layer invalid")
 
 // DB represents a mesh database instance
 type DB struct {
@@ -36,11 +38,10 @@ type DB struct {
 	general               database.Database
 	unappliedTxs          database.Database
 	inputVector           database.Database
-	unappliedTxsMutex     sync.Mutex
 	blockMutex            sync.RWMutex
 	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
-	coinflips             map[types.LayerID]bool // weak coinflip results from Hare
-	layerMutex            map[types.LayerID]*layerMutex
+	invalidatedLayers     map[types.LayerID]struct{} // layers for which Hare has failed
+	coinflips             map[types.LayerID]bool     // weak coinflip results from Hare
 	lhMutex               sync.Mutex
 	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
 	exit                  chan struct{}
@@ -88,21 +89,21 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 		unappliedTxs:       utx,
 		inputVector:        iv,
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
+		invalidatedLayers:  make(map[types.LayerID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
-		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
 	for _, blk := range GenesisLayer().Blocks() {
-		ll.Log.With().Info("Adding genesis block ", blk.ID(), blk.LayerIndex)
-		if err := ll.AddBlock(blk); err != nil {
-			ll.Log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+		ll.Log.With().Info("adding genesis block", blk.ID(), blk.LayerIndex)
+		if err = ll.AddBlock(blk); err != nil {
+			ll.Log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex, log.Err(err))
 		}
-		if err := ll.SaveContextualValidity(blk.ID(), true); err != nil {
-			ll.Log.With().Error("Error inserting genesis block to db", blk.ID(), blk.LayerIndex)
+		if err = ll.SaveContextualValidity(blk.ID(), blk.LayerIndex, true); err != nil {
+			ll.Log.With().Error("error inserting genesis block to db", blk.ID(), blk.LayerIndex, log.Err(err))
 		}
 	}
-	if err := ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
-		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+	if err = ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
+		log.With().Error("error inserting genesis input vector to db", GenesisLayer().Index(), log.Err(err))
 	}
 	return ll, err
 }
@@ -118,9 +119,9 @@ func (m *DB) PersistentData() bool {
 }
 
 // NewMemMeshDB is a mock used for testing
-func NewMemMeshDB(log log.Log) *DB {
+func NewMemMeshDB(logger log.Log) *DB {
 	ll := &DB{
-		Log:                log,
+		Log:                logger,
 		blockCache:         newBlockCache(100 * layerSize),
 		blocks:             database.NewMemDatabase(),
 		layers:             database.NewMemDatabase(),
@@ -130,16 +131,17 @@ func NewMemMeshDB(log log.Log) *DB {
 		unappliedTxs:       database.NewMemDatabase(),
 		inputVector:        database.NewMemDatabase(),
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
+		invalidatedLayers:  make(map[types.LayerID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
-		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
 	for _, blk := range GenesisLayer().Blocks() {
-		ll.AddBlock(blk)
-		ll.SaveContextualValidity(blk.ID(), true)
+		// these are only used for testing so we can safely ignore errors here
+		_ = ll.AddBlock(blk)
+		_ = ll.SaveContextualValidity(blk.ID(), blk.LayerIndex, true)
 	}
 	if err := ll.SaveLayerInputVectorByID(context.Background(), GenesisLayer().Index(), types.BlockIDs(GenesisLayer().Blocks())); err != nil {
-		log.With().Error("Error inserting genesis input vector to db", GenesisLayer().Index())
+		logger.With().Error("error inserting genesis input vector to db", GenesisLayer().Index(), log.Err(err))
 	}
 	return ll
 }
@@ -297,14 +299,11 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return nil, database.ErrNotFound
 }
 
-// EmptyLayerHash is the layer hash for an empty layer
-var EmptyLayerHash = types.Hash32{}
-
 // AddZeroBlockLayer tags lyr as a layer without blocks
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
 	err := m.layers.Put(index.Bytes(), nil)
 	if err == nil {
-		m.persistLayerHash(index, EmptyLayerHash)
+		m.persistLayerHash(index, types.EmptyLayerHash)
 	}
 	return err
 }
@@ -324,15 +323,36 @@ func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
 }
 
 // SaveContextualValidity persists opinion on block to the database
-func (m *DB) SaveContextualValidity(id types.BlockID, valid bool) error {
+func (m *DB) SaveContextualValidity(id types.BlockID, _ types.LayerID, valid bool) error {
 	var v []byte
 	if valid {
 		v = constTrue
 	} else {
 		v = constFalse
 	}
-	m.Debug("save contextual validity %v %v", id, valid)
+	m.With().Debug("save block contextual validity", id, log.Bool("validity", valid))
 	return m.contextualValidity.Put(id.Bytes(), v)
+}
+
+// SaveLayerInputVector saves the input vote vector for a layer (hare results)
+func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) error {
+	bytes, err := types.InterfaceToBytes(&types.BlockIDsContainer{List: vector})
+	if err != nil {
+		return err
+	}
+
+	return m.inputVector.Put(hash.Bytes(), bytes)
+}
+
+// InvalidateLayer receives notification from Hare that it failed for a layer. If Hare explicitly fails for a
+// layer, we consider all blocks in that layer to be invalid. Note that simply not having received a layer from Hare
+// as _validated_ is not sufficient information since we might still be waiting for Hare to finish for the layer. This
+// method lets us know that Hare has given up.
+// Note: this method is only called from the Hare's outputCollectionLoop, and there should only ever be one of those
+// running. If it is called on any other code paths, it will need to be made goroutine safe.
+func (m *DB) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
+	m.WithContext(ctx).With().Info("recording hare invalidated layer in mesh", layerID)
+	m.invalidatedLayers[layerID] = struct{}{}
 }
 
 // RecordCoinflip saves the weak coinflip result to memory for the given layer
@@ -344,44 +364,49 @@ func (m *DB) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip
 }
 
 // GetCoinflip returns the weak coinflip result for the given layer
-func (m *DB) GetCoinflip(ctx context.Context, layerID types.LayerID) (bool, bool) {
+func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) {
 	coin, exists := m.coinflips[layerID]
 	return coin, exists
 }
 
-// GetLayerInputVector gets the input vote vector for a layer (hare results)
-func (m *DB) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
-	it := m.inputVector.Find(hash.Bytes())
-	var ids []types.BlockID
-	for it.Next() {
-		var id types.BlockID
-		copy(id[:], it.Key()[len(hash.Bytes()):])
-		ids = append(ids, id)
-	}
-	return ids, nil
-}
+// InputVectorBackupFunc specifies a backup function for testing
+type InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
 
 // GetLayerInputVectorByID gets the input vote vector for a layer (hare results)
-func (m *DB) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
+func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, error) {
 	if m.InputVectorBackupFunc != nil {
-		return m.InputVectorBackupFunc(id)
+		return m.InputVectorBackupFunc(layerID)
 	}
-	return m.GetLayerInputVector(types.CalcHash32(id.Bytes()))
+	buf, err := m.inputVector.Get(layerID.Bytes())
+	if err != nil {
+		return nil, err
+	}
+	var list types.BlockIDsContainer
+	if err := codec.Decode(buf, &list); err != nil {
+		return nil, err
+	}
+	return list.List, nil
+}
+
+// SetInputVectorBackupFunc sets the backup function for testing
+func (m *DB) SetInputVectorBackupFunc(fn InputVectorBackupFunc) {
+	m.InputVectorBackupFunc = fn
+}
+
+// GetInputVectorBackupFunc gets the backup function for testing
+func (m *DB) GetInputVectorBackupFunc() InputVectorBackupFunc {
+	return m.InputVectorBackupFunc
 }
 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
 func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error {
-	hash := types.CalcHash32(id.Bytes())
-	m.WithContext(ctx).With().Info("saving input vector",
-		id,
-		log.String("iv_hash", hash.ShortString()))
-	batch := m.inputVector.NewBatch()
-	for _, id := range blks {
-		if err := batch.Put(append(hash.Bytes(), id.Bytes()...), nil); err != nil {
-			return err
-		}
+	m.WithContext(ctx).With().Debug("saving input vector", id)
+	// NOTE(dshulyak) there is an implicit dependency in fetcher
+	buf, err := codec.Encode(&types.BlockIDsContainer{List: blks})
+	if err != nil {
+		return err
 	}
-	return batch.Write()
+	return m.inputVector.Put(id.Bytes(), buf)
 }
 
 func (m *DB) persistProcessedLayer(lyr *ProcessedLayer) error {
@@ -418,9 +443,9 @@ func (m *DB) writeBlock(bl *types.Block) error {
 		Signature: bl.Signature,
 		MinerID:   bl.MinerID().Bytes(),
 	}
-	if bytes, err := block.MarshalSSZ(); err != nil {
+	if ifBytes, err := codec.Encode(block); err != nil {
 		return fmt.Errorf("could not encode block: %w", err)
-	} else if err := m.blocks.Put(bl.ID().Bytes(), bytes); err != nil {
+	} else if err := m.blocks.Put(bl.ID().Bytes(), ifBytes); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", bl.ID(), err)
 	} else if err := m.updateLayerWithBlock(bl); err != nil {
 		return fmt.Errorf("could not update layer %v with new block %v: %w", bl.Layer(), bl.ID(), err)
@@ -438,10 +463,10 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 }
 
 func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
-	h := EmptyLayerHash
+	h := types.EmptyLayerHash
 	bts, err := m.general.Get(getLayerHashKey(layerID))
 	if err != nil {
-		return EmptyLayerHash, err
+		return types.EmptyLayerHash, err
 	}
 	h.SetBytes(bts)
 	return h, nil
@@ -449,13 +474,6 @@ func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
 
 func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
 	if err := m.general.Put(getLayerHashKey(layerID), hash.Bytes()); err != nil {
-		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
-			log.String("layer_hash", hash.ShortString()))
-	}
-
-	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
-	// when this changes we can simply point to the layes
-	if err := m.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
 		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
 			log.String("layer_hash", hash.ShortString()))
 	}
@@ -636,7 +654,7 @@ func (m *DB) writeTransactions(block *types.Block, txs ...*types.Transaction) er
 		if err != nil {
 			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
 		}
-		m.Log.Info("storing tx id %v size %v", t.ID().ShortString(), len(bytes))
+		m.Log.With().Debug("storing transaction", t.ID(), log.Int("tx_length", len(bytes)))
 		if err := batch.Put(t.ID().Bytes(), bytes); err != nil {
 			return fmt.Errorf("could not write tx %v to database: %v", t.ID().ShortString(), err)
 		}
@@ -748,29 +766,34 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 
 func (m *DB) addToUnappliedTxs(txs []*types.Transaction, layer types.LayerID) error {
 	groupedTxs := groupByOrigin(txs)
-
 	for addr, accountTxs := range groupedTxs {
-		if err := m.addToAccountTxs(addr, accountTxs, layer); err != nil {
+		if err := m.addUnapplied(addr, accountTxs, layer); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (m *DB) addToAccountTxs(addr types.Address, accountTxs []*types.Transaction, layer types.LayerID) error {
-	m.unappliedTxsMutex.Lock()
-	defer m.unappliedTxsMutex.Unlock()
+func (m *DB) addUnapplied(addr types.Address, txs []*types.Transaction, layer types.LayerID) error {
+	var (
+		batch = m.unappliedTxs.NewBatch()
+		b     bytes.Buffer
+	)
+	for _, tx := range txs {
+		mtx := types.MeshTransaction{Transaction: *tx, LayerID: layer}
+		buf, err := codec.Encode(&mtx)
+		if err != nil {
+			m.Log.With().Panic("can't encode tx", log.Err(err))
+		}
 
-	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
-	pending, err := m.getAccountPendingTxs(addr)
-	if err != nil {
-		return err
+		b.Write(addr.Bytes())
+		b.Write(tx.ID().Bytes())
+		if err := batch.Put(b.Bytes(), buf); err != nil {
+			return err
+		}
+		b.Reset()
 	}
-	pending.Add(layer, accountTxs...)
-	if err := m.storeAccountPendingTxs(addr, pending); err != nil {
-		return err
-	}
-	return nil
+	return batch.Write()
 }
 
 func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction) (grouped map[types.Address][]*types.Transaction, accounts map[types.Address]struct{}) {
@@ -785,87 +808,41 @@ func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction) (grouped map[
 	return
 }
 
-func (m *DB) removeFromAccountTxs(account types.Address, gAccepted map[types.Address][]*types.Transaction) {
-	m.unappliedTxsMutex.Lock()
-	defer m.unappliedTxsMutex.Unlock()
-
-	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
-	pending, err := m.getAccountPendingTxs(account)
-	if err != nil {
-		m.With().Error("failed to get account pending txs",
-			log.String("address", account.Short()), log.Err(err))
-		return
-	}
-	pending.RemoveAccepted(gAccepted[account])
-	if err := m.storeAccountPendingTxs(account, pending); err != nil {
-		m.With().Error("failed to store account pending txs",
-			log.String("address", account.Short()), log.Err(err))
-	}
+func (m *DB) removeFromAccountTxs(account types.Address, accepted map[types.Address][]*types.Transaction) error {
+	return m.removePending(account, accepted[account])
 }
 
-func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction, layer types.LayerID) {
-	m.unappliedTxsMutex.Lock()
-	defer m.unappliedTxsMutex.Unlock()
-
-	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
-	pending, err := m.getAccountPendingTxs(account)
-	if err != nil {
-		m.With().Error("failed to get account pending txs",
-			layer, log.String("address", account.Short()), log.Err(err))
-		return
-	}
-	pending.RemoveRejected(rejected[account], layer)
-	if err := m.storeAccountPendingTxs(account, pending); err != nil {
-		m.With().Error("failed to store account pending txs",
-			layer, log.String("address", account.Short()), log.Err(err))
-	}
+func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction, layer types.LayerID) error {
+	return m.removePending(account, rejected[account])
 }
 
-func (m *DB) storeAccountPendingTxs(account types.Address, pending *pendingtxs.AccountPendingTxs) error {
+func (m *DB) removePending(addr types.Address, txs []*types.Transaction) error {
 	var (
-		it    = m.unappliedTxs.Find(account.Bytes())
 		batch = m.unappliedTxs.NewBatch()
 		b     bytes.Buffer
 	)
-	for it.Next() {
-		if err := batch.Delete(it.Key()); err != nil {
+	for _, tx := range txs {
+		b.Write(addr.Bytes())
+		b.Write(tx.ID().Bytes())
+		if err := batch.Delete(b.Bytes()); err != nil {
 			return err
 		}
-	}
-	for nonce, txs := range pending.PendingTxs {
-		for id, nano := range txs {
-			b.Write(account.Bytes())
-			b.Write(util.Uint64ToBytesBigEndian(nonce))
-			b.Write(id.Bytes())
-			buf, err := codec.Encode(&nano)
-			if err != nil {
-				return err
-			}
-			if err := batch.Put(b.Bytes(), buf); err != nil {
-				return err
-			}
-			b.Reset()
-		}
+		b.Reset()
 	}
 	return batch.Write()
 }
 
 func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendingTxs, error) {
-	pending := pendingtxs.NewAccountPendingTxs()
-	it := m.unappliedTxs.Find(addr.Bytes())
-	offset := len(addr.Bytes())
+	var (
+		it      = m.unappliedTxs.Find(addr[:])
+		pending = pendingtxs.NewAccountPendingTxs()
+	)
 	for it.Next() {
-		nonce := util.BytesToUint64BE(it.Key()[offset : offset+8])
-		var id types.TransactionID
-		copy(id[:], it.Key()[offset+8:])
-		var tx pendingtxs.NanoTx
-		if err := codec.Decode(it.Value(), &tx); err != nil {
+		var mtx types.MeshTransaction
+		if err := codec.Decode(it.Value(), &mtx); err != nil {
 			return nil, err
 		}
-		if _, exist := pending.PendingTxs[nonce]; !exist {
-			pending.PendingTxs[nonce] = map[types.TransactionID]pendingtxs.NanoTx{}
-		}
-		pending.PendingTxs[nonce][id] = tx
+		pending.Add(mtx.LayerID, &mtx.Transaction)
 	}
 	return pending, nil
 }
@@ -968,7 +945,7 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 	for _, b := range blocks {
 		valid, err := m.ContextualValidity(b.ID())
 		if err != nil {
-			m.With().Warning("could not get contextual validity by block", b.ID(), log.Err(err))
+			m.With().Warning("could not get contextual validity for block in list", b.ID(), log.Err(err))
 		}
 		if valid {
 			validBlocks = append(validBlocks, b)
@@ -980,11 +957,12 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 }
 
 // LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer
-func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockID]struct{}, error) {
+func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.LayerID) (map[types.BlockID]struct{}, error) {
+	logger := m.WithContext(ctx)
 	if layer == types.NewLayerID(0) || layer == types.NewLayerID(1) {
 		v, err := m.LayerBlockIds(layer)
 		if err != nil {
-			m.With().Error("could not get layer block ids", layer, log.Err(err))
+			logger.With().Error("could not get layer block ids", layer, log.Err(err))
 			return nil, err
 		}
 
@@ -1008,6 +986,7 @@ func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockI
 	for _, b := range blockIds {
 		valid, err := m.ContextualValidity(b)
 		if err != nil {
+			logger.With().Warning("could not get contextual validity for block in layer", b, layer, log.Err(err))
 			cvErrors[err.Error()] = append(cvErrors[err.Error()], b)
 			cvErrorCount++
 		}
@@ -1019,13 +998,15 @@ func (m *DB) LayerContextuallyValidBlocks(layer types.LayerID) (map[types.BlockI
 		validBlks[b] = struct{}{}
 	}
 
-	m.With().Info("count of contextually valid blocks in layer",
+	logger.With().Debug("count of contextually valid blocks in layer",
 		layer,
 		log.Int("count_valid", len(validBlks)),
 		log.Int("count_error", cvErrorCount),
 		log.Int("count_total", len(blockIds)))
 	if cvErrorCount != 0 {
-		m.With().Error("errors occurred getting contextual validity", layer,
+		logger.With().Error("errors occurred getting contextual validity of blocks in layer",
+			layer,
+			log.Int("count", cvErrorCount),
 			log.String("errors", fmt.Sprint(cvErrors)))
 	}
 	return validBlks, nil

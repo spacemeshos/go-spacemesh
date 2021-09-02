@@ -44,18 +44,18 @@ type mockRolacle struct {
 	MockStateQuerier
 }
 
-func (mr *mockRolacle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+func (mr *mockRolacle) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return mr.isEligible, mr.err
 }
 
-func (mr *mockRolacle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
+func (mr *mockRolacle) CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error) {
 	if mr.isEligible {
 		return 1, nil
 	}
 	return 0, mr.err
 }
 
-func (mr *mockRolacle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
+func (mr *mockRolacle) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	return []byte{}, nil
 }
 
@@ -204,7 +204,7 @@ func TestConsensusProcess_TerminationLimit(t *testing.T) {
 	p.cfg.RoundDuration = 1
 	p.Start(context.TODO())
 	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
-	assert.EqualValues(t, int32(1), p.k/4)
+	assert.EqualValues(t, 1, p.k/4)
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {

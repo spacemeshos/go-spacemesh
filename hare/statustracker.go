@@ -22,7 +22,7 @@ func newStatusTracker(threshold int, expectedSize int) *statusTracker {
 	st := &statusTracker{}
 	st.statuses = make(map[string]*Msg, expectedSize)
 	st.threshold = uint16(threshold)
-	st.maxKi = preRound // since Ki>=-1
+	st.maxKi = preRound
 	st.maxSet = nil
 	st.analyzed = false
 

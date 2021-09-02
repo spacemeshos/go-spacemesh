@@ -30,9 +30,9 @@ const ( // constants of the different roles
 
 // Rolacle is the roles oracle provider.
 type Rolacle interface {
-	Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
-	CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
-	Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error)
+	Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
+	CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
+	Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
@@ -115,12 +115,12 @@ func (m *Msg) String() string {
 func (m *Msg) Bytes() []byte {
 	buf, err := types.InterfaceToBytes(m.Message)
 	if err != nil {
-		log.Panic("could not marshal InnerMsg before send")
+		log.Panic("could not marshal innermsg before send")
 	}
 	return buf
 }
 
-// Upon receiving a protocol's message, we try to build the full message.
+// Upon receiving a protocol message, we try to build the full message.
 // The full message consists of the original message and the extracted public key.
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
 func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier StateQuerier) (*Msg, error) {
@@ -129,7 +129,7 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier State
 	// extract pub key
 	pubKey, err := ed25519.ExtractPublicKey(hareMsg.InnerMsg.Bytes(), hareMsg.Sig)
 	if err != nil {
-		logger.With().Error("newMsg construction failed: could not extract public key",
+		logger.With().Error("newmsg construction failed: could not extract public key",
 			log.Err(err),
 			log.Int("sig_len", len(hareMsg.Sig)))
 		return nil, err
@@ -137,12 +137,12 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier State
 
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	res, err := querier.IsIdentityActiveOnConsensusView(ctx, pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
+	res, err := querier.IsIdentityActiveOnConsensusView(ctx, pub.String(), hareMsg.InnerMsg.InstanceID)
 	if err != nil {
 		logger.With().Error("error while checking if identity is active",
 			log.String("sender_id", pub.ShortString()),
 			log.Err(err),
-			types.LayerID(hareMsg.InnerMsg.InstanceID),
+			hareMsg.InnerMsg.InstanceID,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("is identity active query failed")
 	}
@@ -151,7 +151,7 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier State
 	if !res {
 		logger.With().Error("identity is not active",
 			log.String("sender_id", pub.ShortString()),
-			types.LayerID(hareMsg.InnerMsg.InstanceID),
+			hareMsg.InnerMsg.InstanceID,
 			log.String("msg_type", hareMsg.InnerMsg.Type.String()))
 		return nil, errors.New("inactive identity")
 	}
@@ -539,7 +539,7 @@ func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 // advances the state to the next round
 func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
 	proc.k++
-	if proc.k >= nextIteration && proc.k%nextIteration == 0 {
+	if proc.k >= 4 && proc.k%4 == 0 {
 		proc.WithContext(ctx).Event().Warning("starting new iteration",
 			log.Uint32("current_k", proc.k),
 			types.LayerID(proc.instanceID))
@@ -711,7 +711,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
 	builder := newMessageBuilder().SetInstanceID(proc.instanceID)
 	builder = builder.SetRoundCounter(proc.k).SetKi(proc.ki).SetValues(s)
-	proof, err := proc.oracle.Proof(context.TODO(), types.LayerID(proc.instanceID), int32(proc.k))
+	proof, err := proc.oracle.Proof(context.TODO(), types.LayerID(proc.instanceID), proc.k)
 	if err != nil {
 		proc.With().Error("could not initialize default builder", log.Err(err))
 		return nil, err
@@ -791,7 +791,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 }
 
 func (proc *consensusProcess) currentRound() uint32 {
-	return proc.k % nextIteration
+	return proc.k % 4
 }
 
 // returns a function to validate status messages
@@ -873,14 +873,14 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 // Returns the role matching the current round if eligible for this round, false otherwise
 func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	logger := proc.WithContext(ctx)
-	proof, err := proc.oracle.Proof(ctx, types.LayerID(proc.instanceID), int32(proc.k))
+	proof, err := proc.oracle.Proof(ctx, types.LayerID(proc.instanceID), proc.k)
 	if err != nil {
 		logger.With().Error("could not retrieve eligibility proof from oracle", log.Err(err))
 		return passive
 	}
 
 	eligibilityCount, err := proc.oracle.CalcEligibility(ctx, types.LayerID(proc.instanceID),
-		int32(proc.k), expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
+		proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
 	if err != nil {
 		logger.With().Error("failed to check eligibility", log.Err(err), types.LayerID(proc.instanceID))
 		return passive

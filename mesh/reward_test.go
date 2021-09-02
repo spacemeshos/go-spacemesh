@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"context"
+	"github.com/stretchr/testify/require"
 	"math/big"
 	"strconv"
 	"testing"
@@ -189,7 +190,7 @@ func TestMesh_integration(t *testing.T) {
 
 		l, err := layers.GetLayer(types.NewLayerID(uint32(i)))
 		assert.NoError(t, err)
-		layers.ValidateLayer(l)
+		layers.ValidateLayer(context.TODO(), l)
 	}
 	// since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
 	totalPayout := l3Rewards + ConfigTst().BaseReward.Int64()
@@ -201,8 +202,7 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	// test state is the same if receiving result from tortoise after same result from hare received
 	// test state is the same after late block
 	// test panic after block from hare was not found in mesh
-	// test that state does not advance when layer x +2 is received before layer x+1, and then test that all layers are pushed
-
+	// test that state does not advance when layer x+2 is received before layer x+1, and then test that all layers are pushed
 	numOfLayers := 10
 	numOfBlocks := 10
 	maxTxs := 20
@@ -211,57 +211,85 @@ func TestMesh_updateStateWithLayer(t *testing.T) {
 	mesh, atxDB := getMeshWithMapState(t, "t1", s)
 	defer mesh.Close()
 
-	for i := 1; i <= numOfLayers; i++ {
-		createLayer(t, mesh, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDB)
-		l, err := mesh.GetLayer(types.NewLayerID(uint32(i)))
-		assert.NoError(t, err)
-		mesh.ValidateLayer(l)
+	startLayer := types.GetEffectiveGenesis()
+
+	for i := 0; i < numOfLayers; i++ {
+		layerID := startLayer.Add(uint32(i))
+		createLayer(t, mesh, layerID, numOfBlocks, maxTxs, atxDB)
+		l, err := mesh.GetLayer(layerID)
+		require.NoError(t, err)
+		mesh.ValidateLayer(context.TODO(), l)
 	}
 
 	s2 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
 	mesh2, atxDB2 := getMeshWithMapState(t, "t2", s2)
 
-	// this should be played until numOfLayers -1 if we want to compare states
-	for i := 1; i <= numOfLayers-1; i++ {
-		blockIds := copyLayer(t, mesh, mesh2, atxDB2, types.NewLayerID(uint32(i)))
-		mesh2.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(i)), blockIds)
+	// this should be played until numOfLayers-1 if we want to compare states
+	for i := 0; i < numOfLayers-1; i++ {
+		layerID := startLayer.Add(uint32(i))
+		blockIds := copyLayer(t, mesh, mesh2, atxDB2, layerID)
+		mesh2.HandleValidatedLayer(context.TODO(), layerID, blockIds)
 	}
-	// test states are the same when one input is from tortoise and the other from hare
-	assert.Equal(t, s.Txs, s2.Txs)
 
-	for i := 1; i <= numOfLayers; i++ {
-		l, err := mesh.GetLayer(types.NewLayerID(uint32(i)))
-		assert.NoError(t, err)
-		mesh2.ValidateLayer(l)
-	}
+	// test states are the same when one input is from tortoise and the other from hare
+	require.NotEqual(t, s.Txs, s2.Txs)
+
+	layerIDFinal := startLayer.Add(uint32(numOfLayers - 1))
+	copyLayer(t, mesh, mesh2, atxDB2, layerIDFinal)
+	l, err := mesh.GetLayer(layerIDFinal)
+	require.NoError(t, err)
+	mesh2.ValidateLayer(context.TODO(), l)
+
+	// test states are the same when one input is from tortoise and the other from hare
+	require.Equal(t, s.Txs, s2.Txs)
+
 	// test state is the same if receiving result from tortoise after same result from hare received
 	assert.ObjectsAreEqualValues(s.Txs, s2.Txs)
 
 	// test state is the same after late block
-	layer4, err := mesh.GetLayer(types.NewLayerID(4))
-	assert.NoError(t, err)
+	layer4, err := mesh.GetLayer(startLayer.Add(4))
+	require.NoError(t, err)
 
 	blk := layer4.Blocks()[0]
-	mesh2.HandleLateBlock(blk)
-	assert.Equal(t, s.Txs, s2.Txs)
+	mesh2.HandleLateBlock(context.TODO(), blk)
+	require.Equal(t, s.Txs, s2.Txs)
 
-	// test that state does not advance when layer x +2 is received before layer x+1, and then test that all layers are pushed
+	// test that state does not advance when layer x+2 is received before layer x+1,
+	// and then test that all layers are pushed
 	s3 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
 	mesh3, atxDB3 := getMeshWithMapState(t, "t3", s3)
 
-	// this should be played until numOfLayers -1 if we want to compare states
-	for i := 1; i <= numOfLayers-3; i++ {
-		blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(i)))
-		mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(i)), blockIds)
+	// this should be played until numOfLayers-1 if we want to compare states
+	for i := 0; i < numOfLayers-3; i++ {
+		layerID := startLayer.Add(uint32(i))
+		blockIds := copyLayer(t, mesh, mesh3, atxDB3, layerID)
+		mesh3.HandleValidatedLayer(context.TODO(), layerID, blockIds)
 	}
 	s3Len := len(s3.Txs)
-	blockIds := copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-1))
-	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-1), blockIds)
-	assert.Equal(t, s3Len, len(s3.Txs))
+	blockIds := copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-2))
+	// layer arrived early, gets queued for state processing (no new txs processed)
+	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-2), blockIds)
+	require.Equal(t, s3Len, len(s3.Txs))
 
-	blockIds = copyLayer(t, mesh, mesh3, atxDB3, types.NewLayerID(uint32(numOfLayers)-2))
-	mesh3.HandleValidatedLayer(context.TODO(), types.NewLayerID(uint32(numOfLayers)-2), blockIds)
-	assert.Equal(t, s.Txs, s3.Txs)
+	blockIds = copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-3))
+	// this is the next layer, it's processed along with layer n-2
+	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-3), blockIds)
+	require.Greater(t, len(s3.Txs), s3Len)
+	s3Len = len(s3.Txs)
+
+	// re-validate layer n-2: no change, it should already have been processed
+	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-2), blockIds)
+	require.Equal(t, s3Len, len(s3.Txs))
+
+	// validate layer n-1
+	blockIds = copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-1))
+	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-1), blockIds)
+	require.Greater(t, len(s3.Txs), s3Len) // expect txs from layer n-1 to have been applied
+
+	// now everything should have been applied
+	blockIds = copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-2))
+	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-2), blockIds)
+	require.Equal(t, s.Txs, s3.Txs)
 }
 
 func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id types.LayerID) []types.BlockID {
@@ -293,18 +321,18 @@ type meshValidatorBatchMock struct {
 	layerHash      types.Hash32
 }
 
-func (m *meshValidatorBatchMock) ValidateLayer(lyr *types.Layer) {
+func (m *meshValidatorBatchMock) ValidateLayer(_ context.Context, lyr *types.Layer) {
 	m.mesh.setProcessedLayer(lyr)
 	layerID := lyr.Index()
 	if layerID.Uint32() == 0 {
 		return
 	}
 	if layerID.Uint32()%m.batchSize == 0 {
-		m.mesh.pushLayersToState(layerID.Sub(m.batchSize), layerID)
+		m.mesh.pushLayersToState(context.TODO(), layerID.Sub(m.batchSize), layerID)
 		return
 	}
 	prevPBase := layerID.Sub(layerID.Uint32() % m.batchSize)
-	m.mesh.pushLayersToState(prevPBase, prevPBase)
+	m.mesh.pushLayersToState(context.TODO(), prevPBase, prevPBase)
 }
 
 func TestMesh_AccumulateRewards(t *testing.T) {
@@ -333,19 +361,19 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	l4, err := mesh.GetLayer(types.NewLayerID(4))
 	assert.NoError(t, err)
 	// Test negative case
-	mesh.ValidateLayer(l4)
+	mesh.ValidateLayer(context.TODO(), l4)
 	assert.Equal(t, oldTotal, s.TotalReward)
 
 	l5, err := mesh.GetLayer(types.NewLayerID(5))
 	assert.NoError(t, err)
 	// Since batch size is 6, rewards will not be applied yet at this point
-	mesh.ValidateLayer(l5)
+	mesh.ValidateLayer(context.TODO(), l5)
 	assert.Equal(t, oldTotal, s.TotalReward)
 
 	l6, err := mesh.GetLayer(types.NewLayerID(6))
 	assert.NoError(t, err)
 	// Rewards will be applied at this point
-	mesh.ValidateLayer(l6)
+	mesh.ValidateLayer(context.TODO(), l6)
 
 	// When distributing rewards to blocks they are rounded down, so we have to allow up to numOfBlocks difference
 	totalPayout := firstLayerRewards + ConfigTst().BaseReward.Int64()

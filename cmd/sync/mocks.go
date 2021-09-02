@@ -39,20 +39,21 @@ type meshValidatorMock struct {
 }
 
 func (m *meshValidatorMock) LatestComplete() types.LayerID { return m.vl }
-func (m *meshValidatorMock) Persist() error                { return nil }
-func (m *meshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
+func (m *meshValidatorMock) Persist(context.Context) error { return nil }
+func (m *meshValidatorMock) HandleIncomingLayer(_ context.Context, lyr types.LayerID) (types.LayerID, types.LayerID, bool) {
 	m.countValidate++
 	m.calls++
-	m.vl = lyr.Index()
+	m.vl = lyr
 	if m.validatedLayers == nil {
 		m.validatedLayers = make(map[types.LayerID]struct{})
 	}
-	m.validatedLayers[lyr.Index()] = struct{}{}
+	m.validatedLayers[lyr] = struct{}{}
 	time.Sleep(m.delay)
-	return lyr.Index(), lyr.Index().Sub(1)
+	return lyr, lyr.Sub(1), false
 }
-func (m *meshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
-	return bl.Layer(), bl.Layer().Sub(1)
+
+func (m *meshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
+	return blocks[0].Layer(), blocks[0].Layer().Sub(1)
 }
 
 type mockState struct{}
@@ -148,7 +149,7 @@ func createMeshWithMock(dbs *allDbs, txpool *state.TxMempool, lg log.Log) *mesh.
 	var msh *mesh.Mesh
 	if dbs.mshdb.PersistentData() {
 		lg.Info("persistent data found")
-		msh = mesh.NewRecoveredMesh(dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
+		msh = mesh.NewRecoveredMesh(context.TODO(), dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	} else {
 		lg.Info("no persistent data found")
 		msh = mesh.NewMesh(dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)

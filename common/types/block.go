@@ -48,12 +48,15 @@ func (id BlockID) AsHash32() Hash32 {
 
 var (
 	layersPerEpoch uint32
-	// effectiveGenesis marks when actual blocks would start being created in the network, this will take into account the first
-	// genesis epoch and the following epoch in which ATXs are published
+	// effectiveGenesis marks when actual blocks would start being created in the network. It takes into account
+	// the first genesis epoch and the following epoch in which ATXs are published.
 	effectiveGenesis uint32
+
+	// EmptyLayerHash is the layer hash for an empty layer
+	EmptyLayerHash = Hash32{}
 )
 
-// SetLayersPerEpoch sets global parameter of layers per epoch, all conversion from layer to epoch use this param
+// SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param
 func SetLayersPerEpoch(layers uint32) {
 	atomic.StoreUint32(&layersPerEpoch, layers)
 	atomic.StoreUint32(&effectiveGenesis, layers*2-1)
@@ -233,6 +236,8 @@ type BlockEligibilityProof struct {
 
 	// Sig is the VRF signature from which the block's LayerID is derived.
 	Sig []byte `ssz-max:"256"`
+	// TortoiseBeacon is the tortoise beacon value for this block.
+	TortoiseBeacon []byte `ssz-max:"1024"`
 }
 
 // MiniBlock includes all of a block's fields, except for the signature. This structure is serialized and signed to
@@ -241,17 +246,24 @@ type MiniBlock struct {
 	LayerIndex       LayerID
 	ATXID            ATXID
 	EligibilityProof BlockEligibilityProof
-	Data             []byte `ssz-max:"4096"`
 	Coin             bool
 
-	BaseBlock BlockID
+	AgainstDiff []BlockID `ssz-max:"1024"` // base block explicitly supports a block that we want to vote against
+	ForDiff     []BlockID `ssz-max:"1024"` // any additional blocks we want to support that base block doesn't (incl. in newer layers)
+	NeutralDiff []BlockID `ssz-max:"1024"` // blocks that the base block is explicitly for or against for which we are neutral.
+	// NOTE on neutral votes: a base block is by default neutral on all blocks and layers that come after it, so
+	// there's no need to explicitly add neutral votes for more recent layers.
+	// TODO: optimize this data structure in two ways:
+	//   - neutral votes are only ever for an entire layer, never for a subset of blocks.
+	//   - collapse AgainstDiff and ForDiff into a single list.
+	//   see https://github.com/spacemeshos/go-spacemesh/issues/2369.
 
-	AgainstDiff []BlockID       `ssz-max:"1024"`
-	ForDiff     []BlockID       `ssz-max:"1024"`
-	NeutralDiff []BlockID       `ssz-max:"1024"`
-	TxIDs       []TransactionID `ssz-max:"1024"`
-	ActiveSet   []ATXID         `ssz-max:"1024"`
-	RefBlock    []byte          `ssz-max:"20"`
+	TxIDs     []TransactionID `ssz-max:"1024"`
+	ActiveSet []ATXID         `ssz-max:"1024"`
+	RefBlock  []byte          `ssz-max:"20"`
+	Data      []byte          `ssz-max:"4096"`
+
+	BaseBlock BlockID
 }
 
 func (b *MiniBlock) GetRefBlock() *BlockID {
@@ -342,6 +354,11 @@ func (b *Block) MinerID() *signing.PublicKey {
 	return b.minerID
 }
 
+// BlockIDsContainer is a container for block ids.
+type BlockIDsContainer struct {
+	List []BlockID `ssz-max:"1024"`
+}
+
 // DBBlock is a Block structure as it is stored in DB.
 type DBBlock struct {
 	MiniBlock
@@ -373,7 +390,7 @@ func BlockIDs(blocks []*Block) []BlockID {
 
 // BlockIdsField returns a list of loggable fields for a given list of BlockIDs
 func BlockIdsField(ids []BlockID) log.Field {
-	strs := []string{}
+	var strs []string
 	for _, a := range ids {
 		strs = append(strs, a.String())
 	}
@@ -402,9 +419,21 @@ func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
+// BlocksIDs returns the list of IDs of blocks in this layer.
+func (l *Layer) BlocksIDs() []BlockID {
+	blockIDs := make([]BlockID, len(l.blocks))
+	for i := range l.blocks {
+		blockIDs[i] = l.blocks[i].ID()
+	}
+	return blockIDs
+}
+
 // Hash returns the 32-byte sha256 sum of the block IDs of both contextually valid and invalid blocks in this layer,
 // sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
+	if len(l.blocks) == 0 {
+		return EmptyLayerHash
+	}
 	return CalcBlocksHash32(SortBlockIDs(BlockIDs(l.blocks)), nil)
 }
 

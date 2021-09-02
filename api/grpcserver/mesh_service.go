@@ -297,12 +297,27 @@ func convertActivation(a *types.ActivationTx) (*pb.Activation, error) {
 	}, nil
 }
 
-func (s MeshService) readLayer(ctx context.Context, layer *types.Layer, layerStatus pb.Layer_LayerStatus) (*pb.Layer, error) {
+func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layerStatus pb.Layer_LayerStatus) (*pb.Layer, error) {
 	// Load all block data
 	var blocks []*pb.Block
 
 	// Save activations too
 	var activations []types.ATXID
+
+	// read layer blocks
+	layer, err := s.Mesh.GetLayer(layerID)
+
+	// TODO: Be careful with how we handle missing layers here.
+	// A layer that's newer than the currentLayer (defined above)
+	// is clearly an input error. A missing layer that's older than
+	// lastValidLayer is clearly an internal error. A missing layer
+	// between these two is a gray area: do we define this as an
+	// internal or an input error? For now, all missing layers produce
+	// internal errors.
+	if err != nil {
+		log.With().Error("could not read layer from database", layerID, log.Err(err))
+		return nil, status.Errorf(codes.Internal, "error reading layer data")
+	}
 
 	for _, b := range layer.Blocks() {
 		txs, missing := s.Mesh.GetTransactions(b.TxIDs)
@@ -382,7 +397,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 	lastLayerPassedHare := s.Mesh.LatestLayerInState()
 	lastLayerPassedTortoise := s.Mesh.ProcessedLayer()
 
-	layers := []*pb.Layer{}
+	var layers []*pb.Layer
 	for l := startLayer; !l.After(endLayer); l = l.Add(1) {
 		layerStatus := pb.Layer_LAYER_STATUS_UNSPECIFIED
 
@@ -408,7 +423,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 
-		pbLayer, err := s.readLayer(ctx, layer, layerStatus)
+		pbLayer, err := s.readLayer(ctx, l, layerStatus)
 		if err != nil {
 			return nil, err
 		}
@@ -522,7 +537,7 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 				log.Info("LayerStream closed, shutting down")
 				return nil
 			}
-			pbLayer, err := s.readLayer(stream.Context(), layer.Layer, convertLayerStatus(layer.Status))
+			pbLayer, err := s.readLayer(stream.Context(), layer.LayerID, convertLayerStatus(layer.Status))
 			if err != nil {
 				return err
 			}

@@ -210,7 +210,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 	mgr.initStatusMtx.Lock()
 	if mgr.state == postSetupStateInProgress {
 		mgr.initStatusMtx.Unlock()
-		return nil, fmt.Errorf("Post setup session in-progress")
+		return nil, fmt.Errorf("post setup session in progress")
 	}
 	if mgr.state == postSetupStateComplete {
 		// Check whether the new request invalidates the current status.
@@ -233,7 +233,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 			return nil, err
 		}
 
-		mgr.logger.Info("Found best compute provider: id: %d, model: %v, computeAPI: %v", p.ID, p.Model, p.ComputeAPI)
+		mgr.logger.Info("found best compute provider: id: %d, model: %v, computeAPI: %v", p.ID, p.Model, p.ComputeAPI)
 		opts.ComputeProviderID = int(p.ID)
 	}
 
@@ -257,7 +257,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 			close(mgr.doneChan)
 		}()
 
-		mgr.logger.With().Info("Post setup session starting...",
+		mgr.logger.With().Info("post setup session starting",
 			log.String("data_dir", opts.DataDir),
 			log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
 			log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),
@@ -267,7 +267,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 
 		if err := newInit.Initialize(); err != nil {
 			if err == initialization.ErrStopped {
-				mgr.logger.Info("Post setup session stopped")
+				mgr.logger.Info("post setup session stopped")
 				mgr.state = postSetupStateNotStarted
 			} else {
 				mgr.state = postSetupStateError
@@ -276,7 +276,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 			return
 		}
 
-		mgr.logger.With().Info("Post setup completed",
+		mgr.logger.With().Info("post setup completed",
 			log.String("datadir", opts.DataDir),
 			log.String("num_units", fmt.Sprintf("%d", opts.NumUnits)),
 			log.String("labels_per_unit", fmt.Sprintf("%d", mgr.cfg.LabelsPerUnit)),

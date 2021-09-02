@@ -25,14 +25,17 @@ type state struct {
 	// if true only non-flushed items will be synced
 	diffMode bool
 
-	Last            types.LayerID
-	EvictFrom       types.LayerID
-	Verified        types.LayerID
+	// last layer processed: note that tortoise does not have a concept of "current" layer (and it's not aware of the
+	// current time or latest tick). As far as Tortoise is concerned, Last is the current layer. This is a subjective
+	// view of time, but Tortoise receives layers as soon as Hare finishes processing them or when they are received via
+	// gossip, and there's nothing for Tortoise to verify without new data anyway.
+	Last        types.LayerID
+	LastEvicted types.LayerID
+	Verified    types.LayerID
+	// if key exists in the map the block is good. if value is true it was written to the disk.
 	GoodBlocksIndex map[types.BlockID]bool
 	// use 2D array to be able to iterate from latest elements easily
-	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion // records hdist, for each block, its votes about every
-	// TODO: Tal says: We keep a vector containing our vote totals (positive and negative) for every previous block
-	// that's not needed here, probably for self healing?
+	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion
 }
 
 func (s *state) Persist() error {
@@ -41,7 +44,7 @@ func (s *state) Persist() error {
 	if err := batch.Put([]byte(namespaceLast), s.Last.Bytes()); err != nil {
 		return err
 	}
-	if err := batch.Put([]byte(namespaceEvict), s.EvictFrom.Bytes()); err != nil {
+	if err := batch.Put([]byte(namespaceEvict), s.LastEvicted.Bytes()); err != nil {
 		return err
 	}
 	if err := batch.Put([]byte(namespaceVerified), s.Verified.Bytes()); err != nil {
@@ -69,7 +72,6 @@ func (s *state) Persist() error {
 				}
 				opinion.Flushed = true
 				opinions[block2] = opinion
-
 				b.WriteString(namespaceOpinons)
 				b.Write(encodeLayerKey(layer))
 				b.Write(block1.Bytes())
@@ -77,7 +79,7 @@ func (s *state) Persist() error {
 
 				buf, err := codec.Encode(&opinion)
 				if err != nil {
-					s.log.Panic("can't encode vec", log.Err(err))
+					s.log.With().Panic("can't encode vec", log.Err(err))
 				}
 				if err := batch.Put(b.Bytes(), buf); err != nil {
 					return err
@@ -107,7 +109,7 @@ func (s *state) Recover() error {
 	if err != nil {
 		return err
 	}
-	s.EvictFrom = types.BytesToLayerID(buf)
+	s.LastEvicted = types.BytesToLayerID(buf)
 
 	it := s.db.Find([]byte(namespaceGood))
 	for it.Next() {
@@ -119,7 +121,6 @@ func (s *state) Recover() error {
 		layer := decodeLayerKey(it.Key())
 		offset := 1 + types.LayerIDSize
 		block1 := decodeBlock(it.Key()[offset : offset+types.BlockIDSize])
-		block2 := decodeBlock(it.Key()[offset+types.BlockIDSize:])
 
 		if _, exist := s.BlockOpinionsByLayer[layer]; !exist {
 			s.BlockOpinionsByLayer[layer] = map[types.BlockID]Opinion{}
@@ -127,6 +128,8 @@ func (s *state) Recover() error {
 		if _, exist := s.BlockOpinionsByLayer[layer][block1]; !exist {
 			s.BlockOpinionsByLayer[layer][block1] = Opinion{}
 		}
+		block2 := decodeBlock(it.Key()[offset+types.BlockIDSize:])
+
 		var opinion vec
 		if err := codec.Decode(it.Value(), &opinion); err != nil {
 			return err
@@ -144,7 +147,7 @@ func (s *state) Evict() error {
 	)
 	for it.Next() {
 		layer := decodeLayerKey(it.Key())
-		if !layer.Before(s.EvictFrom) {
+		if layer.After(s.LastEvicted) {
 			break
 		}
 		b.WriteString(namespaceGood)

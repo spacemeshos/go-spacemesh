@@ -82,16 +82,16 @@ func (mr *MockactivationDBMockRecorder) GetEpochWeight(epochID interface{}) *gom
 }
 
 // GetNodeAtxIDForEpoch mocks base method.
-func (m *MockactivationDB) GetNodeAtxIDForEpoch(nodePK string, targetEpoch types.EpochID) (types.ATXID, error) {
+func (m *MockactivationDB) GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNodeAtxIDForEpoch", nodePK, targetEpoch)
+	ret := m.ctrl.Call(m, "GetNodeAtxIDForEpoch", nodeID, targetEpoch)
 	ret0, _ := ret[0].(types.ATXID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetNodeAtxIDForEpoch indicates an expected call of GetNodeAtxIDForEpoch.
-func (mr *MockactivationDBMockRecorder) GetNodeAtxIDForEpoch(nodePK, targetEpoch interface{}) *gomock.Call {
+func (mr *MockactivationDBMockRecorder) GetNodeAtxIDForEpoch(nodeID, targetEpoch interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeAtxIDForEpoch", reflect.TypeOf((*MockactivationDB)(nil).GetNodeAtxIDForEpoch), nodePK, targetEpoch)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeAtxIDForEpoch", reflect.TypeOf((*MockactivationDB)(nil).GetNodeAtxIDForEpoch), nodeID, targetEpoch)
 }

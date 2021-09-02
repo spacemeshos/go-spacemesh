@@ -1155,7 +1155,7 @@ func (b *BlockEligibilityProof) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the BlockEligibilityProof object to a target array
 func (b *BlockEligibilityProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(8)
+	offset := int(12)
 
 	// Field (0) 'J'
 	dst = ssz.MarshalUint32(dst, b.J)
@@ -1164,12 +1164,23 @@ func (b *BlockEligibilityProof) MarshalSSZTo(buf []byte) (dst []byte, err error)
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(b.Sig)
 
+	// Offset (2) 'TortoiseBeacon'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.TortoiseBeacon)
+
 	// Field (1) 'Sig'
 	if len(b.Sig) > 256 {
 		err = ssz.ErrBytesLength
 		return
 	}
 	dst = append(dst, b.Sig...)
+
+	// Field (2) 'TortoiseBeacon'
+	if len(b.TortoiseBeacon) > 1024 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, b.TortoiseBeacon...)
 
 	return
 }
@@ -1178,12 +1189,12 @@ func (b *BlockEligibilityProof) MarshalSSZTo(buf []byte) (dst []byte, err error)
 func (b *BlockEligibilityProof) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 8 {
+	if size < 12 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o1 uint64
+	var o1, o2 uint64
 
 	// Field (0) 'J'
 	b.J = ssz.UnmarshallUint32(buf[0:4])
@@ -1193,9 +1204,14 @@ func (b *BlockEligibilityProof) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
+	// Offset (2) 'TortoiseBeacon'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
 	// Field (1) 'Sig'
 	{
-		buf = tail[o1:]
+		buf = tail[o1:o2]
 		if len(buf) > 256 {
 			return ssz.ErrBytesLength
 		}
@@ -1204,15 +1220,30 @@ func (b *BlockEligibilityProof) UnmarshalSSZ(buf []byte) error {
 		}
 		b.Sig = append(b.Sig, buf...)
 	}
+
+	// Field (2) 'TortoiseBeacon'
+	{
+		buf = tail[o2:]
+		if len(buf) > 1024 {
+			return ssz.ErrBytesLength
+		}
+		if cap(b.TortoiseBeacon) == 0 {
+			b.TortoiseBeacon = make([]byte, 0, len(buf))
+		}
+		b.TortoiseBeacon = append(b.TortoiseBeacon, buf...)
+	}
 	return err
 }
 
 // SizeSSZ returns the ssz encoded size in bytes for the BlockEligibilityProof object
 func (b *BlockEligibilityProof) SizeSSZ() (size int) {
-	size = 8
+	size = 12
 
 	// Field (1) 'Sig'
 	size += len(b.Sig)
+
+	// Field (2) 'TortoiseBeacon'
+	size += len(b.TortoiseBeacon)
 
 	return
 }
@@ -1239,53 +1270,46 @@ func (m *MiniBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = ssz.WriteOffset(dst, offset)
 	offset += m.EligibilityProof.SizeSSZ()
 
-	// Offset (3) 'Data'
-	dst = ssz.WriteOffset(dst, offset)
-	offset += len(m.Data)
-
-	// Field (4) 'Coin'
+	// Field (3) 'Coin'
 	dst = ssz.MarshalBool(dst, m.Coin)
 
-	// Field (5) 'BaseBlock'
-	dst = append(dst, m.BaseBlock[:]...)
-
-	// Offset (6) 'AgainstDiff'
+	// Offset (4) 'AgainstDiff'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(m.AgainstDiff) * 20
 
-	// Offset (7) 'ForDiff'
+	// Offset (5) 'ForDiff'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(m.ForDiff) * 20
 
-	// Offset (8) 'NeutralDiff'
+	// Offset (6) 'NeutralDiff'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(m.NeutralDiff) * 20
 
-	// Offset (9) 'TxIDs'
+	// Offset (7) 'TxIDs'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(m.TxIDs) * 32
 
-	// Offset (10) 'ActiveSet'
+	// Offset (8) 'ActiveSet'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(m.ActiveSet) * 32
 
-	// Offset (11) 'RefBlock'
+	// Offset (9) 'RefBlock'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(m.RefBlock)
+
+	// Offset (10) 'Data'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(m.Data)
+
+	// Field (11) 'BaseBlock'
+	dst = append(dst, m.BaseBlock[:]...)
 
 	// Field (2) 'EligibilityProof'
 	if dst, err = m.EligibilityProof.MarshalSSZTo(dst); err != nil {
 		return
 	}
 
-	// Field (3) 'Data'
-	if len(m.Data) > 4096 {
-		err = ssz.ErrBytesLength
-		return
-	}
-	dst = append(dst, m.Data...)
-
-	// Field (6) 'AgainstDiff'
+	// Field (4) 'AgainstDiff'
 	if len(m.AgainstDiff) > 1024 {
 		err = ssz.ErrListTooBig
 		return
@@ -1294,7 +1318,7 @@ func (m *MiniBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = append(dst, m.AgainstDiff[ii][:]...)
 	}
 
-	// Field (7) 'ForDiff'
+	// Field (5) 'ForDiff'
 	if len(m.ForDiff) > 1024 {
 		err = ssz.ErrListTooBig
 		return
@@ -1303,7 +1327,7 @@ func (m *MiniBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = append(dst, m.ForDiff[ii][:]...)
 	}
 
-	// Field (8) 'NeutralDiff'
+	// Field (6) 'NeutralDiff'
 	if len(m.NeutralDiff) > 1024 {
 		err = ssz.ErrListTooBig
 		return
@@ -1312,7 +1336,7 @@ func (m *MiniBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = append(dst, m.NeutralDiff[ii][:]...)
 	}
 
-	// Field (9) 'TxIDs'
+	// Field (7) 'TxIDs'
 	if len(m.TxIDs) > 1024 {
 		err = ssz.ErrListTooBig
 		return
@@ -1321,7 +1345,7 @@ func (m *MiniBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = append(dst, m.TxIDs[ii][:]...)
 	}
 
-	// Field (10) 'ActiveSet'
+	// Field (8) 'ActiveSet'
 	if len(m.ActiveSet) > 1024 {
 		err = ssz.ErrListTooBig
 		return
@@ -1330,12 +1354,19 @@ func (m *MiniBlock) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 		dst = append(dst, m.ActiveSet[ii][:]...)
 	}
 
-	// Field (11) 'RefBlock'
+	// Field (9) 'RefBlock'
 	if len(m.RefBlock) > 20 {
 		err = ssz.ErrBytesLength
 		return
 	}
 	dst = append(dst, m.RefBlock...)
+
+	// Field (10) 'Data'
+	if len(m.Data) > 4096 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, m.Data...)
 
 	return
 }
@@ -1349,7 +1380,7 @@ func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 	}
 
 	tail := buf
-	var o2, o3, o6, o7, o8, o9, o10, o11 uint64
+	var o2, o4, o5, o6, o7, o8, o9, o10 uint64
 
 	// Field (0) 'LayerIndex'
 	if err = m.LayerIndex.UnmarshalSSZ(buf[0:4]); err != nil {
@@ -1364,70 +1395,58 @@ func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 		return ssz.ErrOffset
 	}
 
-	// Offset (3) 'Data'
-	if o3 = ssz.ReadOffset(buf[40:44]); o3 > size || o2 > o3 {
+	// Field (3) 'Coin'
+	m.Coin = ssz.UnmarshalBool(buf[40:41])
+
+	// Offset (4) 'AgainstDiff'
+	if o4 = ssz.ReadOffset(buf[41:45]); o4 > size || o2 > o4 {
 		return ssz.ErrOffset
 	}
 
-	// Field (4) 'Coin'
-	m.Coin = ssz.UnmarshalBool(buf[44:45])
-
-	// Field (5) 'BaseBlock'
-	copy(m.BaseBlock[:], buf[45:65])
-
-	// Offset (6) 'AgainstDiff'
-	if o6 = ssz.ReadOffset(buf[65:69]); o6 > size || o3 > o6 {
+	// Offset (5) 'ForDiff'
+	if o5 = ssz.ReadOffset(buf[45:49]); o5 > size || o4 > o5 {
 		return ssz.ErrOffset
 	}
 
-	// Offset (7) 'ForDiff'
-	if o7 = ssz.ReadOffset(buf[69:73]); o7 > size || o6 > o7 {
+	// Offset (6) 'NeutralDiff'
+	if o6 = ssz.ReadOffset(buf[49:53]); o6 > size || o5 > o6 {
 		return ssz.ErrOffset
 	}
 
-	// Offset (8) 'NeutralDiff'
-	if o8 = ssz.ReadOffset(buf[73:77]); o8 > size || o7 > o8 {
+	// Offset (7) 'TxIDs'
+	if o7 = ssz.ReadOffset(buf[53:57]); o7 > size || o6 > o7 {
 		return ssz.ErrOffset
 	}
 
-	// Offset (9) 'TxIDs'
-	if o9 = ssz.ReadOffset(buf[77:81]); o9 > size || o8 > o9 {
+	// Offset (8) 'ActiveSet'
+	if o8 = ssz.ReadOffset(buf[57:61]); o8 > size || o7 > o8 {
 		return ssz.ErrOffset
 	}
 
-	// Offset (10) 'ActiveSet'
-	if o10 = ssz.ReadOffset(buf[81:85]); o10 > size || o9 > o10 {
+	// Offset (9) 'RefBlock'
+	if o9 = ssz.ReadOffset(buf[61:65]); o9 > size || o8 > o9 {
 		return ssz.ErrOffset
 	}
 
-	// Offset (11) 'RefBlock'
-	if o11 = ssz.ReadOffset(buf[85:89]); o11 > size || o10 > o11 {
+	// Offset (10) 'Data'
+	if o10 = ssz.ReadOffset(buf[65:69]); o10 > size || o9 > o10 {
 		return ssz.ErrOffset
 	}
+
+	// Field (11) 'BaseBlock'
+	copy(m.BaseBlock[:], buf[69:89])
 
 	// Field (2) 'EligibilityProof'
 	{
-		buf = tail[o2:o3]
+		buf = tail[o2:o4]
 		if err = m.EligibilityProof.UnmarshalSSZ(buf); err != nil {
 			return err
 		}
 	}
 
-	// Field (3) 'Data'
+	// Field (4) 'AgainstDiff'
 	{
-		buf = tail[o3:o6]
-		if len(buf) > 4096 {
-			return ssz.ErrBytesLength
-		}
-		if cap(m.Data) == 0 {
-			m.Data = make([]byte, 0, len(buf))
-		}
-		m.Data = append(m.Data, buf...)
-	}
-
-	// Field (6) 'AgainstDiff'
-	{
-		buf = tail[o6:o7]
+		buf = tail[o4:o5]
 		num, err := ssz.DivideInt2(len(buf), 20, 1024)
 		if err != nil {
 			return err
@@ -1438,9 +1457,9 @@ func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field (7) 'ForDiff'
+	// Field (5) 'ForDiff'
 	{
-		buf = tail[o7:o8]
+		buf = tail[o5:o6]
 		num, err := ssz.DivideInt2(len(buf), 20, 1024)
 		if err != nil {
 			return err
@@ -1451,9 +1470,9 @@ func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field (8) 'NeutralDiff'
+	// Field (6) 'NeutralDiff'
 	{
-		buf = tail[o8:o9]
+		buf = tail[o6:o7]
 		num, err := ssz.DivideInt2(len(buf), 20, 1024)
 		if err != nil {
 			return err
@@ -1464,9 +1483,9 @@ func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field (9) 'TxIDs'
+	// Field (7) 'TxIDs'
 	{
-		buf = tail[o9:o10]
+		buf = tail[o7:o8]
 		num, err := ssz.DivideInt2(len(buf), 32, 1024)
 		if err != nil {
 			return err
@@ -1477,9 +1496,9 @@ func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field (10) 'ActiveSet'
+	// Field (8) 'ActiveSet'
 	{
-		buf = tail[o10:o11]
+		buf = tail[o8:o9]
 		num, err := ssz.DivideInt2(len(buf), 32, 1024)
 		if err != nil {
 			return err
@@ -1490,9 +1509,9 @@ func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 		}
 	}
 
-	// Field (11) 'RefBlock'
+	// Field (9) 'RefBlock'
 	{
-		buf = tail[o11:]
+		buf = tail[o9:o10]
 		if len(buf) > 20 {
 			return ssz.ErrBytesLength
 		}
@@ -1500,6 +1519,18 @@ func (m *MiniBlock) UnmarshalSSZ(buf []byte) error {
 			m.RefBlock = make([]byte, 0, len(buf))
 		}
 		m.RefBlock = append(m.RefBlock, buf...)
+	}
+
+	// Field (10) 'Data'
+	{
+		buf = tail[o10:]
+		if len(buf) > 4096 {
+			return ssz.ErrBytesLength
+		}
+		if cap(m.Data) == 0 {
+			m.Data = make([]byte, 0, len(buf))
+		}
+		m.Data = append(m.Data, buf...)
 	}
 	return err
 }
@@ -1511,26 +1542,26 @@ func (m *MiniBlock) SizeSSZ() (size int) {
 	// Field (2) 'EligibilityProof'
 	size += m.EligibilityProof.SizeSSZ()
 
-	// Field (3) 'Data'
-	size += len(m.Data)
-
-	// Field (6) 'AgainstDiff'
+	// Field (4) 'AgainstDiff'
 	size += len(m.AgainstDiff) * 20
 
-	// Field (7) 'ForDiff'
+	// Field (5) 'ForDiff'
 	size += len(m.ForDiff) * 20
 
-	// Field (8) 'NeutralDiff'
+	// Field (6) 'NeutralDiff'
 	size += len(m.NeutralDiff) * 20
 
-	// Field (9) 'TxIDs'
+	// Field (7) 'TxIDs'
 	size += len(m.TxIDs) * 32
 
-	// Field (10) 'ActiveSet'
+	// Field (8) 'ActiveSet'
 	size += len(m.ActiveSet) * 32
 
-	// Field (11) 'RefBlock'
+	// Field (9) 'RefBlock'
 	size += len(m.RefBlock)
+
+	// Field (10) 'Data'
+	size += len(m.Data)
 
 	return
 }
@@ -1620,6 +1651,73 @@ func (b *Block) SizeSSZ() (size int) {
 
 	// Field (1) 'Signature'
 	size += len(b.Signature)
+
+	return
+}
+
+// MarshalSSZ ssz marshals the BlockIDsContainer object
+func (b *BlockIDsContainer) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(b)
+}
+
+// MarshalSSZTo ssz marshals the BlockIDsContainer object to a target array
+func (b *BlockIDsContainer) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(4)
+
+	// Offset (0) 'List'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(b.List) * 20
+
+	// Field (0) 'List'
+	if len(b.List) > 1024 {
+		err = ssz.ErrListTooBig
+		return
+	}
+	for ii := 0; ii < len(b.List); ii++ {
+		dst = append(dst, b.List[ii][:]...)
+	}
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the BlockIDsContainer object
+func (b *BlockIDsContainer) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 4 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0 uint64
+
+	// Offset (0) 'List'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'List'
+	{
+		buf = tail[o0:]
+		num, err := ssz.DivideInt2(len(buf), 20, 1024)
+		if err != nil {
+			return err
+		}
+		b.List = make([]BlockID, num)
+		for ii := 0; ii < num; ii++ {
+			copy(b.List[ii][:], buf[ii*20:(ii+1)*20])
+		}
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the BlockIDsContainer object
+func (b *BlockIDsContainer) SizeSSZ() (size int) {
+	size = 4
+
+	// Field (0) 'List'
+	size += len(b.List) * 20
 
 	return
 }

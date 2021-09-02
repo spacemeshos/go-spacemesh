@@ -7,7 +7,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/stretchr/testify/require"
@@ -38,20 +37,14 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetEpochWeight(gomock.AssignableToTypeOf(new(types.EpochID))).Return(uint64(1), nil, nil).AnyTimes()
-	mockDB.EXPECT().GetNodeAtxIDForEpoch(
-		gomock.AssignableToTypeOf(new(signing.PublicKey)),
-		gomock.AssignableToTypeOf(new(types.EpochID)),
-	).AnyTimes().Return(types.ATXID{})
-
-	mockATXHeader := types.ActivationTxHeader{
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(1), nil, nil).AnyTimes()
+	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 0,
 			EndTick:   1,
 		},
 		NumUnits: 1,
-	}
-	mockDB.EXPECT().GetAtxHeader(gomock.AssignableToTypeOf(new(types.ATXID))).AnyTimes().Return(&mockATXHeader)
+	}, nil).AnyTimes()
 
 	const epoch = 5
 	const round = 3
@@ -60,15 +53,15 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 		name          string
 		epoch         types.EpochID
 		round         types.RoundID
-		votesMargin   map[proposal]*big.Int
-		incomingVotes []map[nodeID]allVotes
+		votesMargin   map[string]*big.Int
+		incomingVotes []map[string]allVotes
 		expected      allVotes
 	}{
 		{
 			name:  "Case 1",
 			epoch: epoch,
 			round: round,
-			votesMargin: map[proposal]*big.Int{
+			votesMargin: map[string]*big.Int{
 				"0x1": big.NewInt(2),
 				"0x2": big.NewInt(0),
 				"0x3": big.NewInt(0),
@@ -121,27 +114,21 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetEpochWeight(gomock.AssignableToTypeOf(new(types.EpochID))).Return(uint64(threshold), nil, nil).AnyTimes()
-	mockDB.EXPECT().GetNodeAtxIDForEpoch(
-		gomock.AssignableToTypeOf(new(signing.PublicKey)),
-		gomock.AssignableToTypeOf(new(types.EpochID)),
-	).AnyTimes().Return(types.ATXID{})
-
-	mockATXHeader := types.ActivationTxHeader{
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(threshold), nil, nil).AnyTimes()
+	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 0,
 			EndTick:   1,
 		},
 		NumUnits: 1,
-	}
-	mockDB.EXPECT().GetAtxHeader(gomock.AssignableToTypeOf(new(types.ATXID))).AnyTimes().Return(&mockATXHeader)
+	}, nil).AnyTimes()
 
 	tt := []struct {
 		name               string
 		epoch              types.EpochID
 		round              types.RoundID
 		ownFirstRoundVotes allVotes
-		votesCount         map[proposal]*big.Int
+		votesCount         map[string]*big.Int
 		weakCoin           bool
 		result             allVotes
 	}{
@@ -158,7 +145,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 					"0x3": {},
 				},
 			},
-			votesCount: map[proposal]*big.Int{
+			votesCount: map[string]*big.Int{
 				"0x1": big.NewInt(threshold * 2),
 				"0x2": big.NewInt(-threshold * 3),
 				"0x3": big.NewInt(threshold / 2),
@@ -178,7 +165,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 			name:  "Case 2",
 			epoch: 5,
 			round: 5,
-			votesCount: map[proposal]*big.Int{
+			votesCount: map[string]*big.Int{
 				"0x1": big.NewInt(threshold * 2),
 				"0x2": big.NewInt(-threshold * 3),
 				"0x3": big.NewInt(threshold / 2),

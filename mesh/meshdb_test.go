@@ -459,9 +459,7 @@ type TinyTx struct {
 
 func getTxns(r *require.Assertions, mdb *DB, origin types.Address) []TinyTx {
 	txns, err := mdb.getAccountPendingTxs(origin)
-	if err != nil {
-		return nil
-	}
+	r.NoError(err)
 	var ret []TinyTx
 	for nonce, nonceTxs := range txns.PendingTxs {
 		for id, tx := range nonceTxs {

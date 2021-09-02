@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"context"
 	"math/big"
 	"testing"
 	"time"
@@ -11,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 )
 
@@ -29,21 +29,19 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetEpochWeight(gomock.AssignableToTypeOf(new(types.EpochID))).Return(uint64(10), nil, nil).AnyTimes()
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(10), nil, nil).AnyTimes()
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(
-		gomock.AssignableToTypeOf(new(signing.PublicKey)),
-		gomock.AssignableToTypeOf(new(types.EpochID)),
-	).AnyTimes().Return(types.ATXID(hash))
-
-	mockATXHeader := types.ActivationTxHeader{
+		gomock.Any(),
+		gomock.Any()).
+		Return(types.ATXID(hash), nil).AnyTimes()
+	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 1,
 			EndTick:   3,
 		},
 		NumUnits: 5,
-	}
-	mockDB.EXPECT().GetAtxHeader(gomock.AssignableToTypeOf(new(types.ATXID))).AnyTimes().Return(&mockATXHeader)
-	mockDB.EXPECT().GetAtxTimestamp(mock.Anything).Return(time.Now()).AnyTimes()
+	}, nil).AnyTimes()
+	mockDB.EXPECT().GetAtxTimestamp(gomock.Any()).Return(time.Now(), nil)
 
 	const (
 		epoch = 3
@@ -57,6 +55,11 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 
 	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
 	r.NoError(err)
+
+	nodeID := types.NodeID{
+		Key:          edPubkey.String(),
+		VRFPublicKey: vrfSigner.PublicKey().Bytes(),
+	}
 
 	tt := []struct {
 		name                     string
@@ -72,7 +75,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				epoch: round,
 			},
 			message: ProposalMessage{
-				MinerPK: vrfSigner.PublicKey().Bytes(),
+				NodeID:  nodeID,
 				EpochID: epoch,
 			},
 		},
@@ -86,7 +89,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			tb := TortoiseBeacon{
 				config:      UnitTestConfig(),
 				Log:         logtest.New(t).WithName("TortoiseBeacon"),
-				minerPK:     vrfSigner.PublicKey(),
+				nodeID:      nodeID,
 				atxDB:       mockDB,
 				vrfVerifier: signing.VRFVerifier{},
 				vrfSigner:   vrfSigner,
@@ -94,11 +97,11 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				lastLayer:   types.NewLayerID(epoch),
 			}
 
-			sig, err := tb.getSignedProposal(epoch)
+			sig, err := tb.getSignedProposal(context.TODO(), epoch)
 			r.NoError(err)
 			tc.message.VRFSignature = sig
 
-			err = tb.handleProposalMessage(tc.message, time.Now())
+			err = tb.handleProposalMessage(context.TODO(), tc.message, time.Now())
 			r.NoError(err)
 
 			expectedProposals := proposals{
@@ -126,21 +129,19 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetEpochWeight(gomock.AssignableToTypeOf(new(types.EpochID))).Return(uint64(10), nil, nil).AnyTimes()
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(10), nil, nil).AnyTimes()
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(
-		gomock.AssignableToTypeOf(new(signing.PublicKey)),
-		gomock.AssignableToTypeOf(new(types.EpochID)),
-	).AnyTimes().Return(types.ATXID(hash))
-
-	mockATXHeader := types.ActivationTxHeader{
+		gomock.Any(),
+		gomock.Any()).
+		Return(types.ATXID(hash), nil).AnyTimes()
+	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 1,
 			EndTick:   3,
 		},
 		NumUnits: 5,
-	}
-	mockDB.EXPECT().GetAtxHeader(gomock.AssignableToTypeOf(new(types.ATXID))).AnyTimes().Return(&mockATXHeader)
-	mockDB.EXPECT().GetAtxTimestamp(mock.Anything).Return(time.Now()).AnyTimes()
+	}, nil).AnyTimes()
+	mockDB.EXPECT().GetAtxTimestamp(gomock.Any()).Return(time.Now(), nil)
 
 	const (
 		epoch = 0
@@ -160,7 +161,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 		epoch         types.EpochID
 		currentRounds map[types.EpochID]types.RoundID
 		message       FirstVotingMessage
-		expected      map[nodeID]proposals
+		expected      map[string]proposals
 	}{
 		{
 			name:  "Current round and message round equal",
@@ -174,7 +175,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 					PotentiallyValidProposals: nil,
 				},
 			},
-			expected: map[nodeID]proposals{
+			expected: map[string]proposals{
 				string(edSgn.PublicKey().Bytes()): {
 					valid: [][]byte{hash.Bytes()},
 				},
@@ -192,7 +193,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 					PotentiallyValidProposals: nil,
 				},
 			},
-			expected: map[nodeID]proposals{
+			expected: map[string]proposals{
 				string(edSgn.PublicKey().Bytes()): {
 					valid: [][]byte{hash.Bytes()},
 				},
@@ -213,16 +214,16 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				edSigner:                edSgn,
 				edVerifier:              signing.NewEDVerifier(),
 				clock:                   clock,
-				firstRoundIncomingVotes: map[nodeID]proposals{},
-				votesMargin:             map[proposal]*big.Int{},
-				hasVoted:                make([]map[nodeID]struct{}, round+1),
+				firstRoundIncomingVotes: map[string]proposals{},
+				votesMargin:             map[string]*big.Int{},
+				hasVoted:                make([]map[string]struct{}, round+1),
 			}
 
 			sig, err := tb.signMessage(&tc.message.FirstVotingMessageBody)
 			r.NoError(err)
 			tc.message.Signature = sig
 
-			err = tb.handleFirstVotingMessage(tc.message)
+			err = tb.handleFirstVotingMessage(context.TODO(), tc.message)
 			r.NoError(err)
 
 			tb.consensusMu.RLock()
@@ -248,21 +249,19 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetEpochWeight(gomock.AssignableToTypeOf(new(types.EpochID))).Return(uint64(10), nil, nil).AnyTimes()
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(1), nil, nil).AnyTimes()
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(
-		gomock.AssignableToTypeOf(new(signing.PublicKey)),
-		gomock.AssignableToTypeOf(new(types.EpochID)),
-	).AnyTimes().Return(types.ATXID(hash1))
-
-	mockATXHeader := types.ActivationTxHeader{
+		gomock.Any(),
+		gomock.Any()).
+		Return(types.ATXID(hash1), nil).AnyTimes()
+	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 0,
 			EndTick:   1,
 		},
 		NumUnits: 1,
-	}
-	mockDB.EXPECT().GetAtxHeader(gomock.AssignableToTypeOf(new(types.ATXID))).AnyTimes().Return(&mockATXHeader)
-	mockDB.EXPECT().GetAtxTimestamp(mock.Anything).Return(time.Now()).AnyTimes()
+	}, nil).AnyTimes()
+	mockDB.EXPECT().GetAtxTimestamp(gomock.Any()).Return(time.Now(), nil)
 
 	const epoch = 3
 	const round = 5
@@ -280,7 +279,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 		epoch         types.EpochID
 		currentRounds map[types.EpochID]types.RoundID
 		message       FollowingVotingMessage
-		expected      map[proposal]*big.Int
+		expected      map[string]*big.Int
 	}{
 		{
 			name:  "Current round and message round equal",
@@ -294,7 +293,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 					VotesBitVector: []uint64{0b101},
 				},
 			},
-			expected: map[proposal]*big.Int{
+			expected: map[string]*big.Int{
 				string(hash1.Bytes()): big.NewInt(1),
 				string(hash2.Bytes()): big.NewInt(-1),
 				string(hash3.Bytes()): big.NewInt(1),
@@ -312,7 +311,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 					VotesBitVector: []uint64{0b101},
 				},
 			},
-			expected: map[proposal]*big.Int{
+			expected: map[string]*big.Int{
 				string(hash1.Bytes()): big.NewInt(1),
 				string(hash2.Bytes()): big.NewInt(-1),
 				string(hash3.Bytes()): big.NewInt(1),
@@ -336,22 +335,22 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				edSigner:    edSgn,
 				edVerifier:  signing.NewEDVerifier(),
 				clock:       clock,
-				firstRoundIncomingVotes: map[nodeID]proposals{
+				firstRoundIncomingVotes: map[string]proposals{
 					string(edSgn.PublicKey().Bytes()): {
 						valid:            [][]byte{hash1.Bytes(), hash2.Bytes()},
 						potentiallyValid: [][]byte{hash3.Bytes()},
 					},
 				},
 				lastLayer:   types.NewLayerID(epoch),
-				hasVoted:    make([]map[nodeID]struct{}, round+1),
-				votesMargin: map[proposal]*big.Int{},
+				hasVoted:    make([]map[string]struct{}, round+1),
+				votesMargin: map[string]*big.Int{},
 			}
 
 			sig, err := tb.signMessage(&tc.message.FollowingVotingMessageBody)
 			r.NoError(err)
 			tc.message.Signature = sig
 
-			err = tb.handleFollowingVotingMessage(tc.message)
+			err = tb.handleFollowingVotingMessage(context.TODO(), tc.message)
 			r.NoError(err)
 
 			r.EqualValues(tc.expected, tb.votesMargin)

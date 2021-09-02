@@ -43,16 +43,13 @@ func nipostBuildStateKey() []byte {
 }
 
 func (nb *NIPostBuilder) load(challenge types.Hash32) {
-	bts, err := nb.store.Get(nipostBuildStateKey())
-	if err != nil {
-		nb.log.Warning("cannot load NIPost state %v", err)
+	if bts, err := nb.store.Get(nipostBuildStateKey()); err != nil {
+		nb.log.With().Warning("cannot load nipost state", log.Err(err))
 		return
-	}
-	if len(bts) > 0 {
+	} else if len(bts) > 0 {
 		var state builderState
-		err = types.BytesToInterface(bts, &state)
-		if err != nil {
-			nb.log.Error("cannot load NIPost state %v", err)
+		if err := types.BytesToInterface(bts, &state); err != nil {
+			nb.log.With().Error("cannot load nipost state", log.Err(err))
 		}
 		if state.Challenge == challenge {
 			nb.state = &state
@@ -67,10 +64,8 @@ func (nb *NIPostBuilder) persist() {
 	if err != nil {
 		nb.log.Warning("cannot store NIPost state %v", err)
 		return
-	}
-	err = nb.store.Put(nipostBuildStateKey(), bts)
-	if err != nil {
-		nb.log.Warning("cannot store NIPost state %v", err)
+	} else if err := nb.store.Put(nipostBuildStateKey(), bts); err != nil {
+		nb.log.With().Warning("cannot store nipost state", log.Err(err))
 	}
 }
 
@@ -143,7 +138,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		poetChallenge := challenge
 		nb.state.Challenge = *challenge
 
-		nb.log.Debug("submitting challenge to PoET proving service (PoET id: %x, challenge: %x)",
+		nb.log.Debug("submitting challenge to poet proving service (poet id: %x, challenge: %x)",
 			nb.state.PoetServiceID, poetChallenge)
 
 		round, err := nb.poetProver.Submit(ctx, *poetChallenge)
@@ -151,7 +146,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 			return nil, fmt.Errorf("%w: failed to submit challenge to poet service: %v", ErrPoetServiceUnstable, err)
 		}
 
-		nb.log.Info("challenge submitted to PoET proving service (PoET id: %x, round id: %v, challenge: %x)",
+		nb.log.Info("challenge submitted to poet proving service (poet id: %x, round id: %v, challenge: %x)",
 			nb.state.PoetServiceID, round.ID, poetChallenge)
 
 		nipost.Challenge = *poetChallenge
@@ -173,7 +168,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 
 		membership, err := nb.poetDB.GetMembershipMap(poetProofRef)
 		if err != nil {
-			nb.log.With().Panic("failed to fetch membership for PoET proof",
+			nb.log.With().Panic("failed to fetch membership for poet proof",
 				log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef))) // TODO: handle inconsistent state
 		}
 		if !membership[nipost.Challenge] {
@@ -188,7 +183,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 
 	// Phase 2: Post execution.
 	if len(nipost.Proof.Indices) == 0 {
-		nb.log.With().Info("starting Post execution",
+		nb.log.With().Info("starting post execution",
 			log.String("challenge", fmt.Sprintf("%x", nb.state.PoetProofRef)))
 		startTime := time.Now()
 		proof, proofMetadata, err := nb.postSetupProvider.GenerateProof(nb.state.PoetProofRef)
@@ -196,7 +191,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 			return nil, fmt.Errorf("failed to execute Post: %v", err)
 		}
 
-		nb.log.With().Info("finished Post execution",
+		nb.log.With().Info("finished post execution",
 			log.Duration("duration", time.Now().Sub(startTime)))
 
 		nipost.Proof = *proof
@@ -205,7 +200,7 @@ func (nb *NIPostBuilder) BuildNIPost(ctx context.Context, challenge *types.Hash3
 		nb.persist()
 	}
 
-	nb.log.Info("finished NIPost construction")
+	nb.log.Info("finished nipost construction")
 
 	nb.state = &builderState{
 		NIPost: &types.NIPost{},

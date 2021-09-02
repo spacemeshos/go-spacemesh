@@ -399,12 +399,12 @@ func TestSyntaxContextValidator_CommitContextMatrix(t *testing.T) {
 	msg2 := []error{errInvalidRound, errInvalidRound, errEarlyMsg, nil, errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter}
 	msg6 := []error{errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errEarlyMsg, nil, errInvalidRound}
 	validateMatrix(t, commit, commitRound, msg2)
-	validateMatrix(t, commit, commitRound+nextIteration, msg6)
+	validateMatrix(t, commit, commitRound+4, msg6)
 }
 
 func TestSyntaxContextValidator_NotifyContextMatrix(t *testing.T) {
 	msg3 := []error{errInvalidRound, errInvalidRound, errInvalidRound, errEarlyMsg, nil, nil, nil, nil, nil}
 	msg7 := []error{errInvalidRound, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidIter, errInvalidRound, errInvalidRound, errEarlyMsg, nil}
 	validateMatrix(t, notify, notifyRound, msg3)
-	validateMatrix(t, notify, notifyRound+nextIteration, msg7)
+	validateMatrix(t, notify, notifyRound+4, msg7)
 }
