@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -60,6 +61,7 @@ func (l *PoetListener) loop(ctx context.Context) {
 func (l *PoetListener) handlePoetProofMessage(ctx context.Context, gossipMessage service.GossipMessage) {
 	// ⚠️ IMPORTANT: We must not ensure that the node is synced! PoET messages must be propagated regardless.
 	var proofMessage types.PoetProofMessage
+
 	if err := types.BytesToInterface(gossipMessage.Bytes(), &proofMessage); err != nil {
 		l.Log.Error("failed to unmarshal poet membership proof: %v", err)
 		return

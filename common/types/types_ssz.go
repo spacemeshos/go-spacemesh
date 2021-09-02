@@ -430,7 +430,7 @@ func (m *MerkleProof) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 
 	// Field (0) 'Root'
-	if len(m.Root) > 1024 {
+	if len(m.Root) > 512 {
 		err = ssz.ErrBytesLength
 		return
 	}
@@ -508,7 +508,7 @@ func (m *MerkleProof) UnmarshalSSZ(buf []byte) error {
 	// Field (0) 'Root'
 	{
 		buf = tail[o0:o1]
-		if len(buf) > 1024 {
+		if len(buf) > 512 {
 			return ssz.ErrBytesLength
 		}
 		if cap(m.Root) == 0 {
@@ -708,6 +708,154 @@ func (p *PoetProof) SizeSSZ() (size int) {
 		size += 4
 		size += len(p.Members[ii])
 	}
+
+	return
+}
+
+// MarshalSSZ ssz marshals the PoetProofMessage object
+func (p *PoetProofMessage) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(p)
+}
+
+// MarshalSSZTo ssz marshals the PoetProofMessage object to a target array
+func (p *PoetProofMessage) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(16)
+
+	// Offset (0) 'PoetProof'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += p.PoetProof.SizeSSZ()
+
+	// Offset (1) 'PoetServiceID'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.PoetServiceID)
+
+	// Offset (2) 'RoundID'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.RoundID)
+
+	// Offset (3) 'Signature'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(p.Signature)
+
+	// Field (0) 'PoetProof'
+	if dst, err = p.PoetProof.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'PoetServiceID'
+	if len(p.PoetServiceID) > 4096 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, p.PoetServiceID...)
+
+	// Field (2) 'RoundID'
+	if len(p.RoundID) > 4096 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, []byte(p.RoundID)...)
+
+	// Field (3) 'Signature'
+	if len(p.Signature) > 4096 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, p.Signature...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the PoetProofMessage object
+func (p *PoetProofMessage) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 16 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1, o2, o3 uint64
+
+	// Offset (0) 'PoetProof'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Offset (1) 'PoetServiceID'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (2) 'RoundID'
+	if o2 = ssz.ReadOffset(buf[8:12]); o2 > size || o1 > o2 {
+		return ssz.ErrOffset
+	}
+
+	// Offset (3) 'Signature'
+	if o3 = ssz.ReadOffset(buf[12:16]); o3 > size || o2 > o3 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'PoetProof'
+	{
+		buf = tail[o0:o1]
+		if err = p.PoetProof.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (1) 'PoetServiceID'
+	{
+		buf = tail[o1:o2]
+		if len(buf) > 4096 {
+			return ssz.ErrBytesLength
+		}
+		if cap(p.PoetServiceID) == 0 {
+			p.PoetServiceID = make([]byte, 0, len(buf))
+		}
+		p.PoetServiceID = append(p.PoetServiceID, buf...)
+	}
+
+	// Field (2) 'RoundID'
+	{
+		buf = tail[o2:o3]
+		if len(buf) > 4096 {
+			return ssz.ErrBytesLength
+		}
+		p.RoundID = string(buf)
+	}
+
+	// Field (3) 'Signature'
+	{
+		buf = tail[o3:]
+		if len(buf) > 4096 {
+			return ssz.ErrBytesLength
+		}
+		if cap(p.Signature) == 0 {
+			p.Signature = make([]byte, 0, len(buf))
+		}
+		p.Signature = append(p.Signature, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the PoetProofMessage object
+func (p *PoetProofMessage) SizeSSZ() (size int) {
+	size = 16
+
+	// Field (0) 'PoetProof'
+	size += p.PoetProof.SizeSSZ()
+
+	// Field (1) 'PoetServiceID'
+	size += len(p.PoetServiceID)
+
+	// Field (2) 'RoundID'
+	size += len(p.RoundID)
+
+	// Field (3) 'Signature'
+	size += len(p.Signature)
 
 	return
 }

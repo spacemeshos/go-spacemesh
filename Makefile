@@ -378,7 +378,7 @@ sszgen:
 	sszgen --path ./hare/ --output ./hare/types_ssz.go --objs Message --include ./common/types
 	sszgen --path ./hare/eligibility/ --output ./hare/eligibility/types_ssz.go --objs vrfMessage --include ./common/types
 	sszgen --path ./blocks/ --output ./blocks/types_ssz.go --objs vrfMessage --include ./common/types
-	sszgen --path ./common/types/ --output ./common/types/types_ssz.go --objs DBBlock,Block,PoetProof,ActivationTx,MeshTransaction,PoetRound,BlockIDsContainer
+	sszgen --path ./common/types/ --output ./common/types/types_ssz.go --objs DBBlock,Block,PoetProof,ActivationTx,MeshTransaction,PoetRound,BlockIDsContainer,PoetProofMessage
 	sszgen --path ./timesync/peersync/ --output ./timesync/peersync/types_ssz.go --objs Request,Response
 	sszgen --path ./p2p/net --output ./p2p/net/types_ssz.go --objs HandshakeData
 	sszgen --path ./p2p/service/ --output ./p2p/service/types_ssz.go --objs DataMsgWrapper

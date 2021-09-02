@@ -235,7 +235,7 @@ func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 }
 
 type MerkleProof struct {
-	Root         []byte   `ssz-max:"1024"`
+	Root         []byte   `ssz-max:"512"`
 	ProvenLeaves [][]byte `ssz-size:"?,?" ssz-max:"1024000,1024000"`
 	ProofNodes   [][]byte `ssz-size:"?,?" ssz-max:"1024000,1024000"`
 }
@@ -251,9 +251,9 @@ type PoetProof struct {
 // PoetProofMessage is the envelope which includes the PoetProof, service ID, round ID and signature.
 type PoetProofMessage struct {
 	PoetProof
-	PoetServiceID []byte
-	RoundID       string
-	Signature     []byte
+	PoetServiceID []byte `ssz-max:"4096"`
+	RoundID       string `ssz-max:"4096"`
+	Signature     []byte `ssz-max:"4096"`
 }
 
 // Ref returns the reference to the PoET proof message. It's the sha256 sum of the entire proof message.
