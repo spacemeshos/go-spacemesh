@@ -122,13 +122,3 @@ jobs:
             - Mac: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macos-latest/${{ runner.os }}.zip
           draft: true
           prerelease: true
-      - name: Upload Release Asset
-        id: upload-release-asset 
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./macOS.zip
-          asset_name: macOS.zip
-          asset_content_type: application/zip
