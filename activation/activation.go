@@ -233,6 +233,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 		b.mtx.Unlock()
 		return errors.New("already started")
 	}
+	b.coinbaseAccount = coinbase
 	b.status = smeshingStatusPendingPostSetup
 	b.mtx.Unlock()
 

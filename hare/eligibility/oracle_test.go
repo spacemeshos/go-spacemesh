@@ -212,7 +212,7 @@ func TestOracle_buildVRFMessageConcurrency(t *testing.T) {
 	for i := 0; i < total; i++ {
 		wg.Add(1)
 		go func(x int) {
-			_, err := o.buildVRFMessage(context.TODO(), firstLayer, int32(x%10))
+			_, err := o.buildVRFMessage(context.TODO(), firstLayer, uint32(x%10))
 			r.NoError(err)
 			wg.Done()
 		}(i)

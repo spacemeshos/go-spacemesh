@@ -30,9 +30,9 @@ const ( // constants of the different roles
 
 // Rolacle is the roles oracle provider.
 type Rolacle interface {
-	Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
-	CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
-	Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error)
+	Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
+	CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
+	Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
@@ -85,8 +85,8 @@ var _ TerminationOutput = (*procReport)(nil)
 
 // State holds the current state of the consensus process (aka the participant).
 type State struct {
-	k           int32        // the round counter (k%4 is the round number)
-	ki          int32        // indicates when S was first committed upon
+	k           uint32       // the round counter (k%4 is the round number)
+	ki          uint32       // indicates when S was first committed upon
 	s           *Set         // the set of values
 	certificate *certificate // the certificate
 }
@@ -204,7 +204,7 @@ func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, or
 	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *consensusProcess {
 	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
-		State:             State{-1, -1, s.Clone(), nil},
+		State:             State{preRound, preRound, s.Clone(), nil},
 		Closer:            util.NewCloser(),
 		instanceID:        instanceID,
 		oracle:            oracle,
@@ -225,7 +225,7 @@ func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, or
 }
 
 // Returns the iteration number from a given round counter
-func iterationFromCounter(roundCounter int32) int32 {
+func iterationFromCounter(roundCounter uint32) uint32 {
 	return roundCounter / 4
 }
 
@@ -297,7 +297,7 @@ func (proc *consensusProcess) eventLoop(ctx context.Context) {
 			proc.sendMessage(ctx, m)
 		} else {
 			logger.With().Info("should not participate",
-				log.Int32("current_k", proc.k),
+				log.Uint32("current_k", proc.k),
 				types.LayerID(proc.instanceID))
 		}
 	}()
@@ -312,7 +312,7 @@ PreRound:
 			break PreRound
 		case <-proc.CloseChannel():
 			logger.With().Info("terminating during preround: received termination signal",
-				log.Int32("current_k", proc.k),
+				log.Uint32("current_k", proc.k),
 				types.LayerID(proc.instanceID))
 			return
 		}
@@ -350,10 +350,10 @@ PreRound:
 			proc.advanceToNextRound(ctx)
 
 			// exit if we reached the limit on number of iterations
-			if proc.k/4 >= int32(proc.cfg.LimitIterations) {
+			if proc.k/4 >= uint32(proc.cfg.LimitIterations) {
 				logger.With().Warning("terminating: reached iterations limit",
 					log.Int("limit", proc.cfg.LimitIterations),
-					log.Int32("current_k", proc.k),
+					log.Uint32("current_k", proc.k),
 					types.LayerID(proc.instanceID))
 				proc.report(notCompleted)
 				return
@@ -362,7 +362,7 @@ PreRound:
 			proc.onRoundBegin(ctx)
 		case <-proc.CloseChannel(): // close event
 			logger.With().Info("terminating: received termination signal",
-				log.Int32("current_k", proc.k),
+				log.Uint32("current_k", proc.k),
 				types.LayerID(proc.instanceID))
 			proc.report(notCompleted)
 			return
@@ -404,8 +404,8 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	logger := proc.WithContext(ctx).WithFields(
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.FieldNamed("sender_id", m.PubKey),
-		log.Int32("current_k", proc.k),
-		log.Int32("msg_k", m.InnerMsg.K),
+		log.Uint32("current_k", proc.k),
+		log.Uint32("msg_k", m.InnerMsg.K),
 		types.LayerID(proc.instanceID))
 
 	// Try to extract reqID from message and restore it to context
@@ -447,7 +447,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	}
 
 	// warn on late pre-round msgs
-	if m.InnerMsg.Type == pre && proc.k != -1 {
+	if m.InnerMsg.Type == pre && proc.k != preRound {
 		logger.Warning("encountered late preround message")
 	}
 
@@ -492,11 +492,11 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 	// generate a new requestID for this message
 	ctx = log.WithNewRequestID(ctx,
 		types.LayerID(proc.instanceID),
-		log.Int32("msg_k", msg.InnerMsg.K),
+		log.Uint32("msg_k", msg.InnerMsg.K),
 		log.String("msg_type", msg.InnerMsg.Type.String()),
 		log.Int("eligibility_count", int(msg.InnerMsg.EligibilityCount)),
 		log.String("current_set", proc.s.String()),
-		log.Int32("current_k", proc.k),
+		log.Uint32("current_k", proc.k),
 	)
 	logger := proc.WithContext(ctx)
 
@@ -512,7 +512,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 // logic of the end of a round by the round type
 func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 	logger := proc.WithContext(ctx).WithFields(
-		log.Int32("current_k", proc.k),
+		log.Uint32("current_k", proc.k),
 		types.LayerID(proc.instanceID),
 	)
 	logger.Debug("end of round")
@@ -541,7 +541,7 @@ func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
 	proc.k++
 	if proc.k >= 4 && proc.k%4 == 0 {
 		proc.WithContext(ctx).Event().Warning("starting new iteration",
-			log.Int32("current_k", proc.k),
+			log.Uint32("current_k", proc.k),
 			types.LayerID(proc.instanceID))
 	}
 }
@@ -740,8 +740,8 @@ func (proc *consensusProcess) processProposalMsg(ctx context.Context, msg *Msg) 
 		proc.proposalTracker.OnLateProposal(ctx, msg)
 	} else {
 		proc.WithContext(ctx).With().Error("received proposal message for processing in an invalid context",
-			log.Int32("current_k", proc.k),
-			log.Int32("msg_k", msg.InnerMsg.K))
+			log.Uint32("current_k", proc.k),
+			log.Uint32("msg_k", msg.InnerMsg.K))
 	}
 }
 
@@ -771,7 +771,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
 		proc.WithContext(ctx).With().Debug("not enough notifications for termination",
 			log.String("current_set", proc.s.String()),
-			log.Int32("current_k", proc.k),
+			log.Uint32("current_k", proc.k),
 			types.LayerID(proc.instanceID),
 			log.Int("expected", proc.cfg.F+1),
 			log.Int("actual", proc.notifyTracker.NotificationsCount(s)))
@@ -782,23 +782,23 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 	proc.s = s // update to the agreed set
 	proc.WithContext(ctx).Event().Info("consensus process terminated",
 		log.String("current_set", proc.s.String()),
-		log.Int32("current_k", proc.k),
+		log.Uint32("current_k", proc.k),
 		types.LayerID(proc.instanceID),
-		log.Int("set_size", proc.s.Size()), log.Int32("K", proc.k))
+		log.Int("set_size", proc.s.Size()), log.Uint32("K", proc.k))
 	proc.report(completed)
 	proc.terminating = true
 	close(proc.CloseChannel())
 }
 
-func (proc *consensusProcess) currentRound() int {
-	return int(proc.k % 4)
+func (proc *consensusProcess) currentRound() uint32 {
+	return proc.k % 4
 }
 
 // returns a function to validate status messages
 func (proc *consensusProcess) statusValidator() func(m *Msg) bool {
 	validate := func(m *Msg) bool {
 		s := NewSet(m.InnerMsg.Values)
-		if m.InnerMsg.Ki == -1 { // no certificates, validate by pre-round msgs
+		if m.InnerMsg.Ki == preRound { // no certificates, validate by pre-round msgs
 			if proc.preRoundTracker.CanProveSet(s) { // can prove s
 				return true
 			}
@@ -857,13 +857,13 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	currentRole := proc.currentRole(ctx)
 	if currentRole == passive {
 		logger.With().Info("should not participate: passive",
-			log.Int32("current_k", proc.k), types.LayerID(proc.instanceID))
+			log.Uint32("current_k", proc.k), types.LayerID(proc.instanceID))
 		return false
 	}
 
 	// should participate
 	logger.With().Info("should participate",
-		log.Int32("current_k", proc.k), types.LayerID(proc.instanceID),
+		log.Uint32("current_k", proc.k), types.LayerID(proc.instanceID),
 		log.Bool("leader", currentRole == leader),
 		log.Uint32("eligibility_count", uint32(proc.eligibilityCount)),
 	)
@@ -898,7 +898,7 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 }
 
 // Returns the expected committee size for the given round assuming maxExpActives is the default size
-func expectedCommitteeSize(k int32, maxExpActive, expLeaders int) int {
+func expectedCommitteeSize(k uint32, maxExpActive, expLeaders int) int {
 	if k%4 == proposalRound {
 		return expLeaders // expected number of leaders
 	}

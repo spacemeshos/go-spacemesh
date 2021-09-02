@@ -168,7 +168,7 @@ func TestMesh_GetLayerHash(t *testing.T) {
 		msh.Close()
 	})
 
-	lyrID := types.NewLayerID(1)
+	lyrID := types.GetEffectiveGenesis().Add(1)
 	lyr, err := msh.GetLayer(lyrID)
 	r.Equal(database.ErrNotFound, err)
 	r.Nil(lyr)
@@ -216,13 +216,13 @@ func TestMesh_SetZeroBlockLayer(t *testing.T) {
 		msh.Close()
 	})
 
-	lyrID := types.NewLayerID(1)
+	lyrID := types.GetEffectiveGenesis().Add(1)
 	lyr, err := msh.GetLayer(lyrID)
 	r.Equal(database.ErrNotFound, err)
 	r.Nil(lyr)
 	err = msh.SetZeroBlockLayer(lyrID)
 	assert.NoError(t, err)
-	assert.Equal(t, EmptyLayerHash, msh.GetLayerHash(lyrID))
+	assert.Equal(t, types.EmptyLayerHash, msh.GetLayerHash(lyrID))
 
 	// it's ok to add to an empty layer
 	lyr = addLayer(r, lyrID, 10, msh)
@@ -244,7 +244,7 @@ func TestMesh_AddLayerGetLayer(t *testing.T) {
 		msh.Close()
 	})
 
-	id := types.NewLayerID(1)
+	id := types.GetEffectiveGenesis().Add(1)
 	_, err := msh.GetLayer(id)
 	r.EqualError(err, database.ErrNotFound.Error())
 
@@ -269,7 +269,7 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 	})
 
 	gLyr := types.GetEffectiveGenesis()
-	prevHash := EmptyLayerHash
+	prevHash := types.EmptyLayerHash
 	for i := types.NewLayerID(1); i.Before(gLyr); i = i.Add(1) {
 		lyr := addLayer(r, i, 0, msh)
 		msh.ValidateLayer(context.TODO(), lyr)
@@ -312,7 +312,7 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	}
 	prevHash := types.Hash32{}
 	for _, lyr := range lyrs {
-		assert.Equal(t, EmptyLayerHash, msh.GetLayerHash(lyr.Index()))
+		assert.Equal(t, types.EmptyLayerHash, msh.GetLayerHash(lyr.Index()))
 		msh.setProcessedLayer(lyr)
 		expectedHash := types.CalcBlocksHash32([]types.BlockID{}, prevHash.Bytes())
 		assert.Equal(t, lyr.Index(), msh.ProcessedLayer())
