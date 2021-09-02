@@ -20,7 +20,7 @@ func TestProtocol_ResponseNoDataNoError(t *testing.T) {
 	assert.Greater(t, len(data), 0)
 	resp, err := deserializeResponse(data)
 	assert.NoError(t, err)
-	assert.Nil(t, resp.Data)
+	assert.Empty(t, resp.Data)
 	assert.NoError(t, resp.getError())
 }
 
@@ -39,7 +39,7 @@ func TestProtocol_ResponseHasError(t *testing.T) {
 	assert.Greater(t, len(data), 0)
 	resp, err := deserializeResponse(data)
 	assert.NoError(t, err)
-	assert.Nil(t, resp.Data)
+	assert.Empty(t, resp.Data)
 	assert.Equal(t, ErrShuttingDown, resp.getError())
 }
 
