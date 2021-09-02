@@ -2,6 +2,7 @@ package p2p
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"testing"
@@ -54,7 +55,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 
 	// start boot
 	for i := 0; i < len(boot); i++ {
-		boot[i] = createP2pInstance(its.T(), bootcfg)
+		boot[i] = createP2pInstance(its.T(), bootcfg, fmt.Sprintf("test-bootnode-%v", i))
 		if its.BeforeHook != nil {
 			its.BeforeHook(i, boot[i])
 		}
@@ -92,7 +93,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 	totalTimeout := time.NewTimer((time.Second * 5) * time.Duration(len(swarm)))
 	finchan := make(chan error)
 	for i := 0; i < len(swarm); i++ {
-		swarm[i] = createP2pInstance(its.T(), cfg)
+		swarm[i] = createP2pInstance(its.T(), cfg, fmt.Sprintf("test-node-%v", i))
 		i := i
 		//	wg.Add(1)
 		go func() {
@@ -155,10 +156,10 @@ func (its *IntegrationTestSuite) TearDownSuite() {
 	}, nil)
 }
 
-func createP2pInstance(t testing.TB, config config.Config) *Switch {
+func createP2pInstance(t testing.TB, config config.Config, loggerName string) *Switch {
 	config.TCPPort = 0
 	config.AcquirePort = false
-	p, err := newSwarm(context.TODO(), config, logtest.New(t).WithName("test instance"), "")
+	p, err := newSwarm(context.TODO(), config, logtest.New(t).WithName(loggerName), "")
 	require.NoError(t, err)
 	require.NotNil(t, p)
 	return p
