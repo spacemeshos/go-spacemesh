@@ -163,9 +163,9 @@ func (fo *FixedRolacle) generateEligibility(ctx context.Context, expCom int) map
 	return emap
 }
 
-func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round int32) uint32 {
+func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) uint32 {
 	kInBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
+	binary.LittleEndian.PutUint32(kInBytes, round)
 	h := fnv.New32()
 	_, err := h.Write(instanceID.Bytes())
 	_, err2 := h.Write(kInBytes)
@@ -180,12 +180,12 @@ func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round int32) ui
 }
 
 // Validate is required to conform to the Rolacle interface, but should never be called.
-func (fo *FixedRolacle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+func (fo *FixedRolacle) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	panic("implement me!")
 }
 
 // CalcEligibility returns 1 if the miner is eligible in given layer, and 0 otherwise.
-func (fo *FixedRolacle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+func (fo *FixedRolacle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
 	eligible, err := fo.eligible(ctx, layer, round, committeeSize, id, sig)
 	if eligible {
 		return 1, nil
@@ -194,7 +194,7 @@ func (fo *FixedRolacle) CalcEligibility(ctx context.Context, layer types.LayerID
 }
 
 // eligible returns whether the specific NodeID is eligible for layer in round and committee size.
-func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	fo.mapRW.RLock()
 	total := len(fo.honest) + len(fo.faulty) // safe since len >= 0
 	fo.mapRW.RUnlock()
@@ -223,9 +223,9 @@ func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round
 }
 
 // Proof generates a proof for the round. used to satisfy interface.
-func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error) {
+func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	kInBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
+	binary.LittleEndian.PutUint32(kInBytes, round)
 	hash := fnv.New32()
 	if _, err := hash.Write(kInBytes); err != nil {
 		fo.logger.WithContext(ctx).With().Error("error writing hash", log.Err(err))
