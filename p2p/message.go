@@ -85,10 +85,18 @@ type ProtocolMessageMetadata struct {
 	NetworkID     uint32
 }
 
+const (
+	// MessageGossip is for gossip message
+	MessageGossip = iota + 1
+	// MessageDirect is for direct message
+	MessageDirect
+)
+
 // Payload holds either a byte array or a wrapped req-res message.
 type Payload struct {
-	Payload []byte `ssz-max:"4096"`
-	Wrapped *service.DataMsgWrapper
+	MessageType uint8
+	Payload     []byte `ssz-max:"10240000"`
+	Wrapped     *service.DataMsgWrapper
 }
 
 // ProtocolMessage is a pair of metadata and a a payload.
@@ -104,9 +112,9 @@ func CreatePayload(data service.Data) (*Payload, error) {
 		if x.Payload == nil {
 			return nil, fmt.Errorf("unable to send empty payload")
 		}
-		return &Payload{Payload: x.Bytes()}, nil
+		return &Payload{MessageType: MessageGossip, Payload: x.Bytes()}, nil
 	case *service.DataMsgWrapper:
-		return &Payload{Wrapped: x}, nil
+		return &Payload{MessageType: MessageDirect, Wrapped: x}, nil
 	case nil:
 		return nil, fmt.Errorf("unable to send empty payload")
 	default:
@@ -116,13 +124,16 @@ func CreatePayload(data service.Data) (*Payload, error) {
 
 // ExtractData is a helper function to extract the payload data from a message payload.
 func ExtractData(pm *Payload) (service.Data, error) {
-	var data service.Data
-	if payload := pm.Payload; payload != nil {
-		data = &service.DataBytes{Payload: payload}
-	} else if wrap := pm.Wrapped; wrap != nil {
-		data = &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.MsgType, ReqID: wrap.ReqID, Payload: wrap.Payload}
-	} else {
-		return nil, errors.New("not valid data type")
+	switch pm.MessageType {
+	case MessageGossip:
+		return &service.DataBytes{Payload: pm.Payload}, nil
+	case MessageDirect:
+		wrap := pm.Wrapped
+		if wrap == nil {
+			return nil, errors.New("invalid direct message")
+		}
+		return &service.DataMsgWrapper{Req: wrap.Req, MsgType: wrap.MsgType, ReqID: wrap.ReqID, Payload: wrap.Payload}, nil
 	}
-	return data, nil
+	return nil, errors.New("not valid data type")
+
 }

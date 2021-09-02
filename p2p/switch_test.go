@@ -555,7 +555,7 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 			AuthPubkey: id.PublicKey().Bytes(), NextProtocol: exampleProtocol,
 			Timestamp: uint64(time.Now().Unix()), ClientVersion: config.ClientVersion,
 		}, // not signed
-		Payload: &Payload{Payload: []byte(examplePayload)},
+		Payload: &Payload{MessageType: MessageGossip, Payload: []byte(examplePayload)},
 	}
 
 	goodbin, _ := types.InterfaceToBytes(goodmsg)

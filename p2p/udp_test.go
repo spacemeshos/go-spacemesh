@@ -194,7 +194,7 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 	msg.Metadata = &ProtocolMessageMetadata{NextProtocol: testStr, ClientVersion: config.ClientVersion, Timestamp: uint64(time.Now().Unix()),
 		NetworkID: 1}
 	//pb.NewUDPProtocolMessageMetadata(gotfrom.PublicKey(), int8(nd.NetworkID()), testStr)
-	msg.Payload = &Payload{Payload: data.Bytes()}
+	msg.Payload = &Payload{MessageType: MessageGossip, Payload: data.Bytes()}
 
 	themsgbuf, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)

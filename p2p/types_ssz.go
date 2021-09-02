@@ -146,27 +146,30 @@ func (p *Payload) MarshalSSZ() ([]byte, error) {
 // MarshalSSZTo ssz marshals the Payload object to a target array
 func (p *Payload) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	dst = buf
-	offset := int(8)
+	offset := int(9)
 
-	// Offset (0) 'Payload'
+	// Field (0) 'MessageType'
+	dst = ssz.MarshalUint8(dst, p.MessageType)
+
+	// Offset (1) 'Payload'
 	dst = ssz.WriteOffset(dst, offset)
 	offset += len(p.Payload)
 
-	// Offset (1) 'Wrapped'
+	// Offset (2) 'Wrapped'
 	dst = ssz.WriteOffset(dst, offset)
 	if p.Wrapped == nil {
 		p.Wrapped = new(service.DataMsgWrapper)
 	}
 	offset += p.Wrapped.SizeSSZ()
 
-	// Field (0) 'Payload'
-	if len(p.Payload) > 4096 {
+	// Field (1) 'Payload'
+	if len(p.Payload) > 10240000 {
 		err = ssz.ErrBytesLength
 		return
 	}
 	dst = append(dst, p.Payload...)
 
-	// Field (1) 'Wrapped'
+	// Field (2) 'Wrapped'
 	if dst, err = p.Wrapped.MarshalSSZTo(dst); err != nil {
 		return
 	}
@@ -178,27 +181,30 @@ func (p *Payload) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 func (p *Payload) UnmarshalSSZ(buf []byte) error {
 	var err error
 	size := uint64(len(buf))
-	if size < 8 {
+	if size < 9 {
 		return ssz.ErrSize
 	}
 
 	tail := buf
-	var o0, o1 uint64
+	var o1, o2 uint64
 
-	// Offset (0) 'Payload'
-	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+	// Field (0) 'MessageType'
+	p.MessageType = ssz.UnmarshallUint8(buf[0:1])
+
+	// Offset (1) 'Payload'
+	if o1 = ssz.ReadOffset(buf[1:5]); o1 > size {
 		return ssz.ErrOffset
 	}
 
-	// Offset (1) 'Wrapped'
-	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+	// Offset (2) 'Wrapped'
+	if o2 = ssz.ReadOffset(buf[5:9]); o2 > size || o1 > o2 {
 		return ssz.ErrOffset
 	}
 
-	// Field (0) 'Payload'
+	// Field (1) 'Payload'
 	{
-		buf = tail[o0:o1]
-		if len(buf) > 4096 {
+		buf = tail[o1:o2]
+		if len(buf) > 10240000 {
 			return ssz.ErrBytesLength
 		}
 		if cap(p.Payload) == 0 {
@@ -207,9 +213,9 @@ func (p *Payload) UnmarshalSSZ(buf []byte) error {
 		p.Payload = append(p.Payload, buf...)
 	}
 
-	// Field (1) 'Wrapped'
+	// Field (2) 'Wrapped'
 	{
-		buf = tail[o1:]
+		buf = tail[o2:]
 		if p.Wrapped == nil {
 			p.Wrapped = new(service.DataMsgWrapper)
 		}
@@ -222,12 +228,12 @@ func (p *Payload) UnmarshalSSZ(buf []byte) error {
 
 // SizeSSZ returns the ssz encoded size in bytes for the Payload object
 func (p *Payload) SizeSSZ() (size int) {
-	size = 8
+	size = 9
 
-	// Field (0) 'Payload'
+	// Field (1) 'Payload'
 	size += len(p.Payload)
 
-	// Field (1) 'Wrapped'
+	// Field (2) 'Wrapped'
 	if p.Wrapped == nil {
 		p.Wrapped = new(service.DataMsgWrapper)
 	}
