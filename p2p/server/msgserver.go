@@ -25,8 +25,6 @@ const (
 	PingPong MessageType = iota
 	// GetAddresses is the findnode protocol ID
 	GetAddresses
-	// LayerHashMsg is used to fetch layer hash for a given layer ID
-	LayerHashMsg
 	// LayerBlocksMsg is used to fetch block IDs for a given layer hash
 	LayerBlocksMsg
 	// AtxIDsMsg is used to fetch ATXs for a given epoch
