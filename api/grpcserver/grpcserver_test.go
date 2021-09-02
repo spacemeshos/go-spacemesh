@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"io"
 	"io/ioutil"
 	"math"
@@ -16,6 +15,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/rand"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -2560,6 +2561,7 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 }
 
 func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
+	t.Helper()
 	switch x := dataItem.(type) {
 	case *pb.AccountMeshData_Activation:
 		require.Equal(t, globalAtx.ID().Bytes(), x.Activation.Id.Id)
@@ -2567,7 +2569,7 @@ func checkAccountMeshDataItemActivation(t *testing.T, dataItem interface{}) {
 		require.Equal(t, globalAtx.NodeID.ToBytes(), x.Activation.SmesherId.Id)
 		require.Equal(t, globalAtx.Coinbase.Bytes(), x.Activation.Coinbase.Address)
 		require.Equal(t, globalAtx.PrevATXID.Bytes(), x.Activation.PrevAtx.Id)
-		require.Equal(t, globalAtx.NumUnits, uint(x.Activation.NumUnits))
+		require.Equal(t, globalAtx.NumUnits, x.Activation.NumUnits)
 	default:
 		require.Fail(t, "inner account data item has wrong tx data type")
 	}

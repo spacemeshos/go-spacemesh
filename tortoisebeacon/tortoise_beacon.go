@@ -876,7 +876,6 @@ func (tb *TortoiseBeacon) getSignedProposal(ctx context.Context, epoch types.Epo
 	if err != nil {
 		return nil, fmt.Errorf("calculate proposal: %w", err)
 	}
-
 	signature := tb.vrfSigner.Sign(p)
 	tb.Log.WithContext(ctx).With().Debug("calculated signature",
 		log.Uint32("epoch_id", uint32(epoch)),

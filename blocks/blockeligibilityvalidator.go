@@ -49,7 +49,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	epochNumber := block.LayerIndex.GetEpoch()
 	var err error
 	activeSetBlock := block
-	if block.RefBlock != nil {
+	if len(block.RefBlock) > 0 {
 		activeSetBlock, err = v.blocks.GetBlock(*block.GetRefBlock())
 		if err != nil {
 			// block should be present because we've synced it in the calling function

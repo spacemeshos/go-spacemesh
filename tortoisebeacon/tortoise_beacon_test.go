@@ -378,7 +378,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  0x12345678,
-			result: string(util.Hex2Bytes("000000035442500012345678")),
+			result: "0800000078563412544250",
 		},
 	}
 
@@ -393,7 +393,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 
 			result, err := tb.buildProposal(tc.epoch)
 			r.NoError(err)
-			r.Equal(tc.result, string(result))
+			r.Equal(tc.result, util.Bytes2Hex(result))
 		})
 	}
 }
@@ -413,12 +413,12 @@ func TestTortoiseBeacon_signMessage(t *testing.T) {
 		{
 			name:    "Case 1",
 			message: vrfMessage{},
-			result:  edSgn.Sign([]byte{0, 0, 0, 0}),
+			result:  edSgn.Sign([]byte{8, 0, 0, 0, 0, 0, 0, 0}),
 		},
 		{
 			name:    "Case 2",
 			message: vrfMessage{Epoch: 1001},
-			result:  edSgn.Sign([]byte{0x12, 0x34, 0x56, 0x78}),
+			result:  edSgn.Sign([]byte{8, 0, 0, 0, 233, 3, 0, 0}),
 		},
 	}
 
@@ -458,12 +458,12 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: vrfSigner.Sign(util.Hex2Bytes("000000035442500000000001")),
+			result: vrfSigner.Sign(util.Hex2Bytes("0800000001000000544250")),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: vrfSigner.Sign(util.Hex2Bytes("000000035442500000000002")),
+			result: vrfSigner.Sign(util.Hex2Bytes("0800000002000000544250")),
 		},
 	}
 

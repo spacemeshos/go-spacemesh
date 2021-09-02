@@ -138,7 +138,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	bh.WithContext(ctx).With().Debug("syntactically validating block", block.ID())
 
 	// if there is a reference block - first validate it
-	if block.RefBlock != nil {
+	if len(block.RefBlock) > 0 {
 		err := fetcher.FetchBlock(ctx, *block.GetRefBlock())
 		if err != nil {
 			return fmt.Errorf("failed to fetch ref block %v e: %v", *block.GetRefBlock(), err)

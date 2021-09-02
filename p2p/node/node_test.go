@@ -20,7 +20,7 @@ func TestNew(t *testing.T) {
 	node := NewNode(pu, address, port, port)
 
 	assert.Equal(t, node.PublicKey(), pu)
-	assert.Equal(t, node.IP, address)
+	assert.Equal(t, node.GetIP(), address)
 }
 
 func TestNewNodeFromString(t *testing.T) {
