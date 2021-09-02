@@ -135,7 +135,9 @@ func TestNewAccountPendingTxs(t *testing.T) {
 	r.Equal(prevBalance-100, balance)
 
 	// Trying to fill the gap with a transaction that would over-draft the account has no effect
-	pendingTxs.Add(types.NewLayerID(1), newTx(t, 6, 950, 1))
+	// NOTE make sure that fee in this tx is higher than in the next one, otherwise projections checks will depend
+	// on iteration order
+	pendingTxs.Add(types.NewLayerID(1), newTx(t, 6, 950, 2))
 	nonce, balance = pendingTxs.GetProjection(prevNonce, prevBalance)
 	r.Equal(int(prevNonce)+1, int(nonce))
 	r.Equal(prevBalance-100, balance)
