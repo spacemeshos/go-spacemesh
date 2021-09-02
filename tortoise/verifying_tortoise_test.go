@@ -3,13 +3,14 @@ package tortoise
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 	"math"
 	"strconv"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -435,7 +436,7 @@ func TestLayerPatterns(t *testing.T) {
 		for i := 0; vote == abstain; i++ {
 			// fast-forward to the point where Zdist is past, we've stopped waiting for hare results for the bad
 			// layers and started voting against them, and we've accumulated votes for ConfidenceParam layers
-			netVote := vec{0, uint64(i * blocksPerLayer)}
+			netVote := vec{Against: uint64(i * blocksPerLayer)}
 			// Zdist + ConfidenceParam (+ a margin of one due to the math) layers have already passed, so that's our
 			// delta
 			vote = calculateOpinionWithThreshold(trtl.logger, netVote, blocksPerLayer, trtl.GlobalThreshold, float64(uint32(i+1)+trtl.Zdist+trtl.ConfidenceParam))
@@ -848,8 +849,9 @@ func TestPersistAndRecover(t *testing.T) {
 
 	mdb.InputVectorBackupFunc = getHareResults
 	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
+	cfg := defaultConfig(t, mdb)
+	cfg.ATXDB = atxdb
+	alg := NewVerifyingTortoise(context.TODO(), cfg)
 
 	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
@@ -863,7 +865,7 @@ func TestPersistAndRecover(t *testing.T) {
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 
 	// now recover
-	alg2 := recoveredVerifyingTortoise(mdb, alg.trtl.atxdb, alg.trtl.clock, alg.logger)
+	alg2 := NewVerifyingTortoise(context.TODO(), cfg)
 	require.Equal(t, alg.LatestComplete(), alg2.LatestComplete())
 	require.Equal(t, alg.trtl.bdp, alg2.trtl.bdp)
 	require.Equal(t, alg.trtl.LastEvicted, alg2.trtl.LastEvicted)
@@ -877,6 +879,7 @@ func TestPersistAndRecover(t *testing.T) {
 
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
+
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
 	alg2.HandleIncomingLayer(context.TODO(), l3.Index())
 
@@ -1039,7 +1042,7 @@ func TestBaseBlock(t *testing.T) {
 	expectBaseBlockLayer(l2.Index(), 0, defaultTestLayerSize, 0)
 
 	// mark all blocks bad
-	alg.trtl.GoodBlocksIndex = make(map[types.BlockID]struct{}, 0)
+	alg.trtl.GoodBlocksIndex = make(map[types.BlockID]bool, 0)
 	baseBlockID, exceptions, err := alg.BaseBlock(context.TODO())
 	r.Equal(errNoBaseBlockFound, err)
 	r.Equal(types.BlockID{0}, baseBlockID)
@@ -1055,6 +1058,8 @@ func defaultClock(tb testing.TB) layerClock {
 func defaultTurtle(tb testing.TB) *turtle {
 	mdb := getInMemMesh(tb)
 	return newTurtle(
+		logtest.New(tb),
+		database.NewMemDatabase(),
 		mdb,
 		getAtxDB(),
 		defaultClock(tb),
@@ -1087,22 +1092,26 @@ func TestCloneTurtle(t *testing.T) {
 	r.NotEqual(trtl.Last, trtl2.Last)
 }
 
+func defaultConfig(t *testing.T, mdb *mesh.DB) Config {
+	return Config{
+		LayerSize:       defaultTestLayerSize,
+		Database:        database.NewMemDatabase(),
+		MeshDatabase:    mdb,
+		ATXDB:           getAtxDB(),
+		Clock:           defaultClock(t),
+		Hdist:           defaultTestHdist,
+		Zdist:           defaultTestZdist,
+		ConfidenceParam: defaultTestConfidenceParam,
+		WindowSize:      defaultTestWindowSize,
+		GlobalThreshold: defaultTestGlobalThreshold,
+		LocalThreshold:  defaultTestLocalThreshold,
+		RerunInterval:   defaultTestRerunInterval,
+		Log:             logtest.New(t),
+	}
+}
+
 func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
-	return verifyingTortoise(
-		context.TODO(),
-		defaultTestLayerSize,
-		mdb,
-		getAtxDB(),
-		defaultClock(t),
-		defaultTestHdist,
-		defaultTestZdist,
-		defaultTestConfidenceParam,
-		defaultTestWindowSize,
-		defaultTestGlobalThreshold,
-		defaultTestLocalThreshold,
-		defaultTestRerunInterval,
-		logtest.New(t),
-	)
+	return NewVerifyingTortoise(context.TODO(), defaultConfig(t, mdb))
 }
 
 func TestGetLocalBlockOpinion(t *testing.T) {
@@ -1318,7 +1327,7 @@ func TestDetermineBlockGoodness(t *testing.T) {
 
 	// base block not found
 	randBlockID := randomBlockID()
-	alg.trtl.GoodBlocksIndex[randBlockID] = struct{}{}
+	alg.trtl.GoodBlocksIndex[randBlockID] = false
 	l1Blocks[1].BaseBlock = randBlockID
 	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[1]))
 
@@ -1588,7 +1597,7 @@ func TestProcessNewBlocks(t *testing.T) {
 		},
 	})
 	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
-	r.Equal(alg.trtl.GoodBlocksIndex[l1Blocks[0].ID()], struct{}{})
+	r.Equal(alg.trtl.GoodBlocksIndex[l1Blocks[0].ID()], false)
 
 	// base block opinion missing: input block should also not be marked good
 	l1Blocks[1].BaseBlock = l1Blocks[2].ID()
@@ -1724,9 +1733,9 @@ func TestVerifyLayers(t *testing.T) {
 	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))
 
 	// now mark voting blocks good
-	alg.trtl.GoodBlocksIndex[l3Blocks[0].ID()] = struct{}{}
-	alg.trtl.GoodBlocksIndex[l3Blocks[1].ID()] = struct{}{}
-	alg.trtl.GoodBlocksIndex[l3Blocks[2].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l3Blocks[0].ID()] = false
+	alg.trtl.GoodBlocksIndex[l3Blocks[1].ID()] = false
+	alg.trtl.GoodBlocksIndex[l3Blocks[2].ID()] = false
 
 	var l2BlockIDs, l3BlockIDs, l4BlockIDs, l5BlockIDs []types.BlockID
 	for _, block := range l3Blocks {
@@ -1782,9 +1791,9 @@ func TestVerifyLayers(t *testing.T) {
 		l4Blocks[2].ID(): l4Votes,
 	}
 	alg.trtl.Last = l4ID
-	alg.trtl.GoodBlocksIndex[l4Blocks[0].ID()] = struct{}{}
-	alg.trtl.GoodBlocksIndex[l4Blocks[1].ID()] = struct{}{}
-	alg.trtl.GoodBlocksIndex[l4Blocks[2].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l4Blocks[0].ID()] = false
+	alg.trtl.GoodBlocksIndex[l4Blocks[1].ID()] = false
+	alg.trtl.GoodBlocksIndex[l4Blocks[2].ID()] = false
 	l5Votes := Opinion{
 		l2ID: {
 			l2Blocks[0].ID(): support,
@@ -1807,9 +1816,9 @@ func TestVerifyLayers(t *testing.T) {
 		l5Blocks[1].ID(): l5Votes,
 		l5Blocks[2].ID(): l5Votes,
 	}
-	alg.trtl.GoodBlocksIndex[l5Blocks[0].ID()] = struct{}{}
-	alg.trtl.GoodBlocksIndex[l5Blocks[1].ID()] = struct{}{}
-	alg.trtl.GoodBlocksIndex[l5Blocks[2].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l5Blocks[0].ID()] = false
+	alg.trtl.GoodBlocksIndex[l5Blocks[1].ID()] = false
+	alg.trtl.GoodBlocksIndex[l5Blocks[2].ID()] = false
 	l6Votes := Opinion{
 		l2ID: {
 			l2Blocks[0].ID(): support,
@@ -1836,9 +1845,9 @@ func TestVerifyLayers(t *testing.T) {
 		l6Blocks[1].ID(): l6Votes,
 		l6Blocks[2].ID(): l6Votes,
 	}
-	alg.trtl.GoodBlocksIndex[l6Blocks[0].ID()] = struct{}{}
-	alg.trtl.GoodBlocksIndex[l6Blocks[1].ID()] = struct{}{}
-	alg.trtl.GoodBlocksIndex[l6Blocks[2].ID()] = struct{}{}
+	alg.trtl.GoodBlocksIndex[l6Blocks[0].ID()] = false
+	alg.trtl.GoodBlocksIndex[l6Blocks[1].ID()] = false
+	alg.trtl.GoodBlocksIndex[l6Blocks[2].ID()] = false
 
 	// verified layer advances one step, but L3 is not verified because global opinion is undecided, so verification
 	// stops there
@@ -2051,9 +2060,9 @@ func TestSumVotesForBlock(t *testing.T) {
 		l2Blocks[3].ID(): {l1ID: map[types.BlockID]vec{blockWeReallyLike.ID(): support}},
 		l2Blocks[4].ID(): {l1ID: map[types.BlockID]vec{blockWeReallyLike.ID(): support}},
 		l2Blocks[5].ID(): {l1ID: map[types.BlockID]vec{blockWeReallyDontCare.ID(): abstain}},
-		l2Blocks[6].ID(): nil,
-		l2Blocks[7].ID(): nil,
-		l2Blocks[8].ID(): nil,
+		l2Blocks[6].ID(): {},
+		l2Blocks[7].ID(): {},
+		l2Blocks[8].ID(): {},
 	}
 	// some blocks explicitly vote against, others have no opinion
 	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterPassAll)
@@ -2215,7 +2224,7 @@ func TestHealing(t *testing.T) {
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
 
 		// delete good blocks data
-		alg.trtl.GoodBlocksIndex = make(map[types.BlockID]struct{}, 0)
+		alg.trtl.GoodBlocksIndex = make(map[types.BlockID]bool, 0)
 
 		alg.trtl.heal(context.TODO(), l4ID)
 		checkVerifiedLayer(t, alg.trtl, l3ID)
@@ -2463,14 +2472,14 @@ func TestVectorArithmetic(t *testing.T) {
 	r.Equal(support, support.Add(abstain))
 	r.Equal(against, abstain.Add(against))
 	r.Equal(against, against.Add(abstain))
-	r.Equal(vec{1, 1}, against.Add(support))
+	r.Equal(vec{Support: 1, Against: 1}, against.Add(support))
 	r.Equal(abstain, simplifyVote(against.Add(support)))
-	r.Equal(vec{1, 1}, support.Add(against))
+	r.Equal(vec{Support: 1, Against: 1}, support.Add(against))
 	r.Equal(abstain, simplifyVote(support.Add(against)))
 	r.Equal(support, simplifyVote(support.Add(support)))
 	r.Equal(against, simplifyVote(against.Add(against)))
-	r.Equal(support, simplifyVote(vec{100, 10}))
-	r.Equal(against, simplifyVote(vec{10, 100}))
+	r.Equal(support, simplifyVote(vec{Support: 100, Against: 10}))
+	r.Equal(against, simplifyVote(vec{Support: 10, Against: 100}))
 	r.Equal(abstain, simplifyVote(abstain))
 	r.Equal(abstain, abstain.Multiply(1))
 	r.Equal(support, support.Multiply(1))
@@ -2484,7 +2493,7 @@ func TestVectorArithmetic(t *testing.T) {
 	r.Equal(against.Multiply(2), against.Add(against))
 
 	// test wraparound
-	bigVec := vec{math.MaxUint64, math.MaxUint64}
+	bigVec := vec{Support: math.MaxUint64, Against: math.MaxUint64}
 	r.NotPanics(func() { bigVec.Add(abstain) })
 	r.NotPanics(func() { abstain.Add(bigVec) })
 	r.PanicsWithError(errOverflow.Error(), func() { bigVec.Add(support) })
@@ -2500,16 +2509,16 @@ func TestVectorArithmetic(t *testing.T) {
 	r.Equal(int64(1), support.netVote())
 	r.Equal(int64(-1), against.netVote())
 	r.Equal(int64(0), support.Add(against).netVote())
-	r.Equal(int64(10), vec{25, 15}.netVote())
-	r.Equal(int64(-10), vec{15, 25}.netVote())
-	r.NotPanics(func() { vec{math.MaxInt64, 0}.netVote() })
-	r.NotPanics(func() { vec{0, math.MaxInt64}.netVote() })
+	r.Equal(int64(10), vec{Support: 25, Against: 15}.netVote())
+	r.Equal(int64(-10), vec{Support: 15, Against: 25}.netVote())
+	r.NotPanics(func() { vec{Support: math.MaxInt64}.netVote() })
+	r.NotPanics(func() { vec{Against: math.MaxInt64}.netVote() })
 	r.PanicsWithError(errOverflow.Error(), func() { bigVec.netVote() })
-	r.PanicsWithError(errOverflow.Error(), func() { vec{0, math.MaxUint64}.netVote() })
-	r.PanicsWithError(errOverflow.Error(), func() { vec{0, math.MaxInt64 + 1}.netVote() })
-	r.PanicsWithError(errOverflow.Error(), func() { vec{math.MaxInt64 + 1, 0}.netVote() })
-	r.Equal(int64(math.MaxInt64), vec{math.MaxInt64, 0}.netVote())
-	r.Equal(int64(-math.MaxInt64), vec{0, math.MaxInt64}.netVote())
+	r.PanicsWithError(errOverflow.Error(), func() { vec{Against: math.MaxUint64}.netVote() })
+	r.PanicsWithError(errOverflow.Error(), func() { vec{Against: math.MaxInt64 + 1}.netVote() })
+	r.PanicsWithError(errOverflow.Error(), func() { vec{Support: math.MaxInt64 + 1}.netVote() })
+	r.Equal(int64(math.MaxInt64), vec{Support: math.MaxInt64}.netVote())
+	r.Equal(int64(-math.MaxInt64), vec{Against: math.MaxInt64}.netVote())
 }
 
 func TestCalculateOpinionWithThreshold(t *testing.T) {
@@ -2542,9 +2551,9 @@ func TestCalculateOpinionWithThreshold(t *testing.T) {
 	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(11), 10, 10, 10))
 
 	// a more realistic example
-	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, vec{72, 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, vec{12, 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
-	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, vec{9, 18}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
+	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, vec{Support: 72, Against: 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
+	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, vec{Support: 12, Against: 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
+	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, vec{Support: 9, Against: 18}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
 }
 
 func TestMultiTortoise(t *testing.T) {
