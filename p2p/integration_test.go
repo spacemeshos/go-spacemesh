@@ -8,15 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-	"github.com/stretchr/testify/suite"
-	"golang.org/x/sync/errgroup"
-
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/stretchr/testify/require"
+	"github.com/stretchr/testify/suite"
+	"golang.org/x/sync/errgroup"
 )
 
 var exampleGossipProto = "exampleGossip"
@@ -122,7 +121,7 @@ func Test_ReallySmallP2PIntegrationSuite(t *testing.T) {
 
 	protocolsHelper(s)
 
-	s.BootstrappedNodeCount = 2
+	s.BootstrappedNodeCount = 3
 	s.BootstrapNodesCount = 1
 	s.NeighborsCount = 1
 
