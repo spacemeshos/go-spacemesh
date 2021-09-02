@@ -410,10 +410,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			for dstAccount == srcAccount {
 				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 			}
-			amount := (rand.Uint64() % srcAccount.Balance()) / 10000
-			if amount > maxAmmount[srcAccount.address] {
-				amount = maxAmmount[srcAccount.address]
-			}
+			amount := rand.Uint64() % maxAmmount[srcAccount.address]
 			t := createTransaction(s.T(),
 				processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]),
 				dstAccount.address,
