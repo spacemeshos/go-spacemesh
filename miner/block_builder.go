@@ -66,6 +66,7 @@ type BlockBuilder struct {
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
 	syncer          syncer
+	wg              sync.WaitGroup
 	started         bool
 	atxsPerBlock    int // number of atxs to select per block
 	txsPerBlock     int // max number of tx to select per block
@@ -138,7 +139,11 @@ func (t *BlockBuilder) Start(ctx context.Context) error {
 	}
 
 	t.started = true
-	go t.createBlockLoop(log.WithNewSessionID(ctx))
+	t.wg.Add(1)
+	go func() {
+		t.createBlockLoop(log.WithNewSessionID(ctx))
+		t.wg.Done()
+	}()
 	return nil
 }
 
@@ -152,6 +157,7 @@ func (t *BlockBuilder) Close() error {
 	}
 	t.started = false
 	close(t.stopChan)
+	t.wg.Wait()
 	return nil
 }
 

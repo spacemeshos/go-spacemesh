@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 )
@@ -22,15 +23,15 @@ func (bo *localOracle) Register(isHonest bool, pubkey string) {
 	bo.oc.Register(isHonest, pubkey)
 }
 
-func (bo *localOracle) Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+func (bo *localOracle) Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
 	return bo.oc.Validate(ctx, layer, round, committeeSize, id, sig, eligibilityCount)
 }
 
-func (bo *localOracle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+func (bo *localOracle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
 	return bo.oc.CalcEligibility(ctx, layer, round, committeeSize, id, sig)
 }
 
-func (bo *localOracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error) {
+func (bo *localOracle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	return bo.oc.Proof(ctx, layer, round)
 }
 
