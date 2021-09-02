@@ -1230,12 +1230,13 @@ func (app *App) Start() error {
 		return fmt.Errorf("error starting services: %w", err)
 	}
 
+	app.startAPIServices(ctx, app.P2P)
+
 	// P2P must start last to not block when sending messages to protocols
 	if err := app.P2P.Start(ctx); err != nil {
 		return fmt.Errorf("error starting p2p services: %w", err)
 	}
 
-	app.startAPIServices(ctx, app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())
 	logger.Info("app started")
 
