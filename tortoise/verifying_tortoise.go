@@ -612,13 +612,13 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 			logger.With().Error("block in for diff is missing", blockID, log.Err(err))
 			return nil
 		}
-		if _, ok := opinion[blk.LayerIndex]; !ok {
-			opinion[blk.LayerIndex] = make(map[types.BlockID]vec, t.AvgLayerSize)
-		}
 		// this could only happen in malicious blocks, and they should not pass a syntax check, but check here just
 		// to be extra safe
 		if _, alreadyVoted := opinion[blk.LayerIndex][blockID]; alreadyVoted && !allowConflict {
 			return fmt.Errorf("%s %v", errstrConflictingVotes, blockID)
+		}
+		if _, ok := opinion[blk.LayerIndex]; !ok {
+			opinion[blk.LayerIndex] = make(map[types.BlockID]vec, t.AvgLayerSize)
 		}
 		opinion[blk.LayerIndex][blockID] = vote.Multiply(voteWeight)
 		return nil
@@ -642,7 +642,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 
 	for lyr := range baseBlockOpinion {
 		// ignore opinions of blocks from previously evicted layers
-		if lyr.Before(t.LastEvicted) {
+		if !lyr.After(t.LastEvicted) {
 			continue
 		}
 
