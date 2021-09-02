@@ -113,7 +113,7 @@ func TestSwarm_Shutdown(t *testing.T) {
 	s.Shutdown()
 
 	select {
-	case _, ok := <-s.shutdown:
+	case _, ok := <-s.shutdownCtx.Done():
 		assert.False(t, ok)
 	case <-time.After(1 * time.Second):
 		t.Error("Failed to shutdown")
@@ -142,6 +142,7 @@ func TestSwarm_RegisterProtocolNoStart(t *testing.T) {
 
 func TestSwarm_processMessage(t *testing.T) {
 	s := Switch{
+		shutdownCtx:  context.TODO(),
 		inpeers:      make(map[p2pcrypto.PublicKey]struct{}),
 		outpeers:     make(map[p2pcrypto.PublicKey]struct{}),
 		delPeerSub:   make([]chan p2pcrypto.PublicKey, 0),

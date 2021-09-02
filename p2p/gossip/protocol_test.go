@@ -25,7 +25,7 @@ func TestProcessMessage(t *testing.T) {
 	defer ctrl.Finish()
 
 	net := NewMockbaseNetwork(ctrl)
-	protocol := NewProtocol(config.SwarmConfig{}, net, nil, nil, logger)
+	protocol := NewProtocol(context.TODO(), config.SwarmConfig{}, net, nil, nil, logger)
 
 	isSent := false
 	net.EXPECT().
@@ -48,7 +48,7 @@ func TestPropagateMessage(t *testing.T) {
 
 	net := NewMockbaseNetwork(ctrl)
 	peersManager := NewMockpeersManager(ctrl)
-	protocol := NewProtocol(config.SwarmConfig{}, net, peersManager, nil, logger)
+	protocol := NewProtocol(context.TODO(), config.SwarmConfig{}, net, peersManager, nil, logger)
 
 	peers := make([]p2ppeers.Peer, 30)
 	for i := range peers {
@@ -101,8 +101,13 @@ func (mpq *mockPriorityQueue) Close() {
 	mpq.called <- struct{}{}
 }
 
+func (mpq *mockPriorityQueue) Length() int {
+	return len(mpq.bus)
+}
+
 func TestPropagationEventLoop(t *testing.T) {
-	protocol := NewProtocol(config.SwarmConfig{}, nil, nil, nil, log.AppLog)
+	ctx, cancel := context.WithCancel(context.Background())
+	protocol := NewProtocol(ctx, config.SwarmConfig{}, nil, nil, nil, log.AppLog)
 	called := make(chan struct{})
 	mpq := mockPriorityQueue{called: called, bus: make(chan struct{}, 10)}
 	protocol.pq = &mpq
@@ -115,7 +120,7 @@ func TestPropagationEventLoop(t *testing.T) {
 	assert.Equal(t, false, mpq.isClosed, "listener should not be shut down yet")
 
 	mpq.isWritten = false
-	protocol.shutdown <- struct{}{}
+	cancel()
 	<-called
 	assert.Equal(t, false, mpq.isWritten, "message should not be written")
 	assert.Equal(t, true, mpq.isClosed, "listener should be shut down")

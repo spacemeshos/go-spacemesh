@@ -404,7 +404,7 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 func (msh *Mesh) getInvalidBlocksByHare(ctx context.Context, hareLayer *types.Layer) (invalid []*types.Block) {
 	dbLayer, err := msh.GetLayer(hareLayer.Index())
 	if err != nil {
-		msh.WithContext(ctx).With().Panic("failed to get layer", log.Err(err))
+		msh.WithContext(ctx).With().Error("failed to get layer", log.Err(err))
 		return
 	}
 	exists := make(map[types.BlockID]struct{})
@@ -456,7 +456,9 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
 	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
 	msh.pMutex.Lock()
 	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
-		msh.Panic("could not persist validated layer index %d", lyr)
+		// can happen if database already closed
+		msh.Error("could not persist validated layer index %d: %v", lyr, err.Error())
+		// TODO: return here without setting latestLayerInState ?
 	}
 	msh.latestLayerInState = lyr
 	msh.pMutex.Unlock()
@@ -664,31 +666,28 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 // AddBlockWithTxs adds a block to the database
 // blk - the block to add
 // txs - block txs that we dont have in our tx database yet
-func (msh *Mesh) AddBlockWithTxs(blk *types.Block) error {
-	msh.With().Debug("adding block", blk.Fields()...)
+func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
+	logger := msh.WithContext(ctx).WithFields(blk.ID())
+	logger.With().Debug("adding block to mesh", blk.Fields()...)
 
-	err := msh.StoreTransactionsFromPool(blk)
-	if err != nil {
-		msh.Log.Error("not all txs were processed %v", err)
+	if err := msh.StoreTransactionsFromPool(blk); err != nil {
+		logger.With().Error("not all txs were processed", log.Err(err))
 	}
 
 	// Store block (delete if storing ATXs fails)
-	err = msh.DB.AddBlock(blk)
-	if err != nil && err == ErrAlreadyExist {
-		return nil
-	}
-
-	if err != nil {
-		msh.With().Error("failed to add block", blk.ID(), log.Err(err))
+	if err := msh.DB.AddBlock(blk); err != nil {
+		if err == ErrAlreadyExist {
+			return nil
+		}
+		logger.With().Error("failed to add block", log.Err(err))
 		return err
 	}
 
 	msh.SetLatestLayer(blk.Layer())
-	// new block add to orphans
+	// add new block to orphans
 	msh.handleOrphanBlocks(blk)
-
 	events.ReportNewBlock(blk)
-	msh.With().Info("added block to database", blk.Fields()...)
+	logger.Info("added block to database")
 	return nil
 }
 

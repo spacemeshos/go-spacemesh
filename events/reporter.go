@@ -5,10 +5,11 @@ import (
 	"fmt"
 	"sync"
 
+	"go.uber.org/zap/zapcore"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"go.uber.org/zap/zapcore"
 )
 
 // reporter is the event reporter singleton.
@@ -16,10 +17,6 @@ var reporter *EventReporter
 
 // we use a mutex to ensure thread safety
 var mu sync.RWMutex
-
-func init() {
-	mu = sync.RWMutex{}
-}
 
 // ReportNewTx dispatches incoming events to the reporter singleton
 func ReportNewTx(tx *types.Transaction) {
@@ -150,6 +147,14 @@ func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
 		Eligible: eligible,
 		Layer:    layer,
 		Error:    error,
+	})
+}
+
+// ReportCalculatedTortoiseBeacon reports calculated tortoise beacon.
+func ReportCalculatedTortoiseBeacon(epoch types.EpochID, beacon string) {
+	Publish(TortoiseBeaconCalculated{
+		Epoch:  epoch,
+		Beacon: beacon,
 	})
 }
 

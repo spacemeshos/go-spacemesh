@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"time"
 )
 
 // NewBlockProtocol is the protocol indicator for gossip blocks
@@ -22,10 +24,10 @@ var (
 type forBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 
 type mesh interface {
-	GetBlock(ID types.BlockID) (*types.Block, error)
-	AddBlockWithTxs(blk *types.Block) error
+	GetBlock(types.BlockID) (*types.Block, error)
+	AddBlockWithTxs(context.Context, *types.Block) error
 	ProcessedLayer() types.LayerID
-	HandleLateBlock(blk *types.Block)
+	HandleLateBlock(*types.Block)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 }
 
@@ -62,7 +64,7 @@ func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHan
 }
 
 // HandleBlock handles blocks from gossip
-func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
+func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMessage, fetcher service.Fetcher) {
 	// restore the request ID and add context
 	if data.RequestID() != "" {
 		ctx = log.WithRequestID(ctx, data.RequestID())
@@ -71,24 +73,26 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMess
 		bh.WithContext(ctx).Warning("got block from gossip with no requestId, generated new id")
 	}
 
-	if err := bh.HandleBlockData(ctx, data.Bytes(), sync); err != nil {
+	if err := bh.HandleBlockData(ctx, data.Bytes(), fetcher); err != nil {
 		bh.WithContext(ctx).With().Error("error handling block data", log.Err(err))
 		return
 	}
-	data.ReportValidation(NewBlockProtocol)
+	data.ReportValidation(ctx, NewBlockProtocol)
 }
 
 // HandleBlockData handles blocks from gossip and sync
-func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync service.Fetcher) error {
+func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetcher service.Fetcher) error {
+	logger := bh.WithContext(ctx)
+	logger.Info("handling data for new block")
+	start := time.Now()
+
 	var blk types.Block
 	if err := types.BytesToInterface(data, &blk); err != nil {
-		bh.WithContext(ctx).With().Error("received invalid block", log.Err(err))
+		logger.With().Error("received invalid block", log.Err(err))
 	}
 
 	// set the block id when received
 	blk.Initialize()
-	logger := bh.WithContext(ctx)
-	logger.With().Info("got new block", blk.Fields()...)
 	logger = logger.WithFields(blk.ID(), blk.Layer())
 
 	// check if known
@@ -96,13 +100,14 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 		logger.Info("we already know this block")
 		return nil
 	}
+	logger.With().Info("got new block", blk.Fields()...)
 
-	if err := bh.blockSyntacticValidation(ctx, &blk, sync); err != nil {
+	if err := bh.blockSyntacticValidation(ctx, &blk, fetcher); err != nil {
 		logger.With().Error("failed to validate block", log.Err(err))
 		return fmt.Errorf("failed to validate block %v", err)
 	}
 
-	if err := bh.mesh.AddBlockWithTxs(&blk); err != nil {
+	if err := bh.mesh.AddBlockWithTxs(ctx, &blk); err != nil {
 		logger.With().Error("failed to add block to database", log.Err(err))
 		// we return nil here so that the block will still be propagated
 		return nil
@@ -110,11 +115,12 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, sync s
 
 	if blk.Layer() <= bh.mesh.ProcessedLayer() { //|| blk.Layer() == bh.mesh.getValidatingLayer() {
 		logger.With().Error("block is late",
-			log.FieldNamed("block_layer", blk.Layer()),
 			log.FieldNamed("processed_layer", bh.mesh.ProcessedLayer()),
 			log.FieldNamed("miner_id", blk.MinerID()))
 		bh.mesh.HandleLateBlock(&blk)
 	}
+
+	logger.With().Info("time to process block", log.Duration("duration", time.Since(start)))
 	return nil
 }
 
@@ -122,7 +128,7 @@ func combineBlockDiffs(blk types.Block) []types.BlockID {
 	return append(blk.ForDiff, append(blk.AgainstDiff, blk.NeutralDiff...)...)
 }
 
-func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block, syncer service.Fetcher) error {
+func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block, fetcher service.Fetcher) error {
 	// Add layer to context, for logging purposes, since otherwise the context will be lost here below
 	if reqID, ok := log.ExtractRequestID(ctx); ok {
 		ctx = log.WithRequestID(ctx, reqID, block.Layer())
@@ -132,14 +138,14 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 
 	// if there is a reference block - first validate it
 	if block.RefBlock != nil {
-		err := syncer.FetchBlock(ctx, *block.RefBlock)
+		err := fetcher.FetchBlock(ctx, *block.RefBlock)
 		if err != nil {
 			return fmt.Errorf("failed to fetch ref block %v e: %v", *block.RefBlock, err)
 		}
 	}
 
 	// try fetch referenced ATXs
-	err := bh.fetchAllReferencedAtxs(ctx, block, syncer)
+	err := bh.fetchAllReferencedAtxs(ctx, block, fetcher)
 	if err != nil {
 		return err
 	}
@@ -152,14 +158,14 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 
 	// get the TXs
 	if len(block.TxIDs) > 0 {
-		err := syncer.GetTxs(ctx, block.TxIDs)
+		err := fetcher.GetTxs(ctx, block.TxIDs)
 		if err != nil {
 			return fmt.Errorf("failed to fetch txs %v e: %v", block.ID(), err)
 		}
 	}
 
 	// get and validate blocks views using the fetch
-	err = syncer.GetBlocks(ctx, combineBlockDiffs(*block))
+	err = fetcher.GetBlocks(ctx, combineBlockDiffs(*block))
 	if err != nil {
 		return fmt.Errorf("failed to fetch view %v e: %v", block.ID(), err)
 	}
@@ -168,7 +174,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	return nil
 }
 
-func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block, syncer service.Fetcher) error {
+func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block, fetcher service.Fetcher) error {
 	bh.WithContext(ctx).With().Debug("block handler fetching all atxs referenced by block", blk.ID())
 
 	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
@@ -186,7 +192,7 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 		}
 	}
 	if len(atxs) > 0 {
-		return syncer.GetAtxs(ctx, atxs)
+		return fetcher.GetAtxs(ctx, atxs)
 	}
 	return nil
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/post/shared"
@@ -19,8 +20,6 @@ import (
 
 // AtxProtocol is the protocol id for broadcasting atxs over gossip
 const AtxProtocol = "AtxGossip"
-
-var totalWeightCache = NewTotalWeightCache(1000)
 
 type meshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
@@ -54,9 +53,9 @@ type nipstValidator interface {
 
 type atxDBProvider interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
-	CalcTotalWeightFromView(view []types.BlockID, pubEpoch types.EpochID) (uint64, error)
 	GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error)
 	GetPosAtxID() (types.ATXID, error)
+	GetAtxTimestamp(id types.ATXID) (time.Time, error)
 	AwaitAtx(id types.ATXID) chan struct{}
 	UnsubscribeAtx(id types.ATXID)
 }
@@ -121,7 +120,7 @@ type layerClock interface {
 }
 
 type syncer interface {
-	Await() chan struct{}
+	RegisterChForSynced(context.Context, chan struct{})
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
@@ -207,6 +206,10 @@ func (b *Builder) loop(ctx context.Context) {
 		default:
 		}
 		if err := b.PublishActivationTx(ctx); err != nil {
+			b.log.WithContext(ctx).With().Error("error attempting to publish atx",
+				b.layerClock.GetCurrentLayer(),
+				b.currentEpoch(),
+				log.Err(err))
 			if _, stopRequested := err.(StopRequestedError); stopRequested {
 				return
 			}
@@ -223,8 +226,10 @@ func (b *Builder) loop(ctx context.Context) {
 	}
 }
 
-func (b *Builder) buildNipstChallenge() error {
-	<-b.syncer.Await()
+func (b *Builder) buildNipstChallenge(ctx context.Context) error {
+	syncedCh := make(chan struct{})
+	b.syncer.RegisterChForSynced(ctx, syncedCh)
+	<-syncedCh
 	challenge := &types.NIPSTChallenge{NodeID: b.nodeID}
 	atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo()
 	if err != nil {
@@ -384,24 +389,34 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		b.log.With().Info("using existing atx challenge", b.currentEpoch())
 	} else {
 		b.log.With().Info("building new atx challenge", b.currentEpoch())
-		err := b.buildNipstChallenge()
+		err := b.buildNipstChallenge(ctx)
 		if err != nil {
+			b.log.With().Error("failed to build new atx challenge", log.Err(err))
 			return err
 		}
 	}
+
+	b.log.With().Info("challenge ready")
+
 	pubEpoch := b.challenge.PubLayerID.GetEpoch()
 
 	hash, err := b.challenge.Hash()
 	if err != nil {
+		b.log.With().Error("getting challenge hash failed", log.Err(err))
 		return fmt.Errorf("getting challenge hash failed: %v", err)
 	}
+
 	// ⏳ the following method waits for a PoET proof, which should take ~1 epoch
 	atxExpired := b.layerClock.AwaitLayer((pubEpoch + 2).FirstLayer()) // this fires when the target epoch is over
+
+	b.log.With().Info("build NIPST")
+
 	nipst, err := b.nipstBuilder.BuildNIPST(hash, atxExpired, b.stop)
 	if err != nil {
 		if _, stopRequested := err.(StopRequestedError); stopRequested {
 			return err
 		}
+		b.log.With().Error("failed to build nipst", log.Err(err))
 		return fmt.Errorf("failed to build nipst: %v", err)
 	}
 
@@ -411,6 +426,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
 	)
 	if err := b.waitOrStop(b.layerClock.AwaitLayer(pubEpoch.FirstLayer())); err != nil {
+		b.log.With().Error("failed to wait of publication epoch", log.Err(err))
 		return err
 	}
 	b.log.Info("publication epoch has arrived!")
@@ -423,7 +439,9 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	// we need to provide number of atx seen in the epoch of the positioning atx.
 
 	// ensure we are synced before generating the ATX's view
-	if err := b.waitOrStop(b.syncer.Await()); err != nil {
+	syncedCh := make(chan struct{})
+	b.syncer.RegisterChForSynced(ctx, syncedCh)
+	if err := b.waitOrStop(syncedCh); err != nil {
 		return err
 	}
 
@@ -449,10 +467,12 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	case <-atxReceived:
 		b.log.Info("atx received in db")
 	case <-b.layerClock.AwaitLayer((atx.TargetEpoch() + 1).FirstLayer()):
+		syncedCh := make(chan struct{})
+		b.syncer.RegisterChForSynced(ctx, syncedCh)
 		select {
 		case <-atxReceived:
 			b.log.Info("atx received in db (in the last moment)")
-		case <-b.syncer.Await(): // ensure we've seen all blocks before concluding that the ATX was lost
+		case <-syncedCh: // ensure we've seen all blocks before concluding that the ATX was lost
 			b.log.With().Error("target epoch has passed before atx was added to database", atx.ID())
 			b.discardChallenge()
 			return fmt.Errorf("target epoch has passed")

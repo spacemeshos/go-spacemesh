@@ -3,21 +3,23 @@ package hare
 import (
 	"context"
 	"errors"
+	"math/rand"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
-	"math/rand"
-	"testing"
-	"time"
 )
 
 type HareWrapper struct {
 	totalCP     int
-	termination Closer
+	termination util.Closer
 	lCh         []chan types.LayerID
 	hare        []*Hare
 	initialSets []*Set // all initial sets
@@ -29,7 +31,7 @@ func newHareWrapper(totalCp int) *HareWrapper {
 	hs := new(HareWrapper)
 	hs.lCh = make([]chan types.LayerID, 0)
 	hs.totalCP = totalCp
-	hs.termination = NewCloser()
+	hs.termination = util.NewCloser()
 	hs.outputs = make(map[instanceID][]*Set, 0)
 
 	return hs
@@ -155,7 +157,7 @@ func (trueOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
 	return x, nil
 }
 
-func (trueOracle) IsIdentityActiveOnConsensusView(string, types.LayerID) (bool, error) {
+func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -225,6 +227,9 @@ func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerI
 
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
+}
+
+func (mbp *mockBlockProvider) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
 }
 
 func createMaatuf(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string) *Hare {

@@ -456,8 +456,8 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	}
 
 	// start gRPC and json servers
-	grpcService.Start()
-	jsonService.StartService(
+	grpcStarted := grpcService.Start()
+	jsonStarted := jsonService.StartService(
 		context.TODO(),
 		cfg.StartDebugService,
 		cfg.StartGatewayService,
@@ -466,7 +466,17 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 		cfg.StartNodeService,
 		cfg.StartSmesherService,
 		cfg.StartTransactionService)
-	time.Sleep(3 * time.Second) // wait for server to be ready (critical on CI)
+
+	timer := time.NewTimer(3 * time.Second)
+	defer timer.Stop()
+
+	// wait for server to be ready (critical on CI)
+	for _, ch := range []<-chan struct{}{grpcStarted, jsonStarted} {
+		select {
+		case <-ch:
+		case <-timer.C:
+		}
+	}
 
 	return func() {
 		require.NoError(t, jsonService.Close())
@@ -567,9 +577,9 @@ func TestNodeService(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, uint64(0), res.Status.ConnectedPeers)
 			require.Equal(t, false, res.Status.IsSynced)
-			require.Equal(t, uint32(layerCurrent), res.Status.SyncedLayer.Number)
+			require.Equal(t, uint32(layerLatest), res.Status.SyncedLayer.Number)
 			require.Equal(t, uint32(layerCurrent), res.Status.TopLayer.Number)
-			require.Equal(t, uint32(layerCurrent), res.Status.VerifiedLayer.Number)
+			require.Equal(t, uint32(layerLatest), res.Status.VerifiedLayer.Number)
 
 			// Now do a mock check post-genesis
 			layerCurrent = oldCurLayer

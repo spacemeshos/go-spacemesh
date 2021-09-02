@@ -3,12 +3,13 @@ package net
 import (
 	"context"
 	"errors"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"time"
 
 	"fmt"
 	"io"
@@ -89,7 +90,7 @@ type networker interface {
 	EnqueueMessage(ctx context.Context, ime IncomingMessageEvent)
 	SubscribeClosingConnections(func(context.Context, ConnectionWithErr))
 	publishClosingConnection(c ConnectionWithErr)
-	NetworkID() int8
+	NetworkID() uint32
 }
 
 type readWriteCloseAddresser interface {
@@ -232,10 +233,10 @@ func (c *FormattedConnection) sendListener() {
 	for {
 		select {
 		case m := <-c.messages:
-			//todo: re insert when log loss is fixed
-			/*c.logger.With().Debug("connection: sending outgoing message",
-			log.String("peer_id", m.peerID),
-			log.String("requestId", m.reqID))*/
+			c.logger.With().Debug("connection: sending outgoing message",
+				log.String("peer_id", m.peerID),
+				log.String("requestId", m.reqID),
+				log.Int("queue_length", len(c.messages)))
 
 			//todo: we are hiding the error here...
 			if err := c.SendSock(m.payload); err != nil {
@@ -252,6 +253,7 @@ func (c *FormattedConnection) sendListener() {
 
 // Send pushes a message into the queue if the connection is not closed.
 func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
+	c.logger.WithContext(ctx).Debug("waiting for send lock")
 	c.wmtx.Lock()
 	if c.closed {
 		c.wmtx.Unlock()
@@ -263,8 +265,12 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 	reqID, _ := log.ExtractRequestID(ctx)
 	peerID, _ := ctx.Value(log.PeerIDKey).(string)
 
-	//todo: re insert when log loss is fixed
-	//c.logger.WithContext(ctx).Debug("connection: enqueuing outgoing message")
+	c.logger.WithContext(ctx).With().Debug("connection: enqueuing outgoing message",
+		log.Int("queue_length", len(c.messages)))
+	if len(c.messages) > 30 {
+		c.logger.WithContext(ctx).With().Warning("connection: outbound send queue backlog",
+			log.Int("queue_length", len(c.messages)))
+	}
 	c.messages <- msgToSend{m, reqID, peerID}
 	return nil
 }

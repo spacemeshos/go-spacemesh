@@ -3,10 +3,11 @@ package config
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"path/filepath"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
@@ -17,6 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
+
 	postConfig "github.com/spacemeshos/post/config"
 	"github.com/spf13/viper"
 )
@@ -40,6 +43,7 @@ type Config struct {
 	API             apiConfig.Config      `mapstructure:"api"`
 	HARE            hareConfig.Config     `mapstructure:"hare"`
 	HareEligibility eligConfig.Config     `mapstructure:"hare-eligibility"`
+	TortoiseBeacon  tortoisebeacon.Config `mapstructure:"tortoise-beacon"`
 	TIME            timeConfig.TimeConfig `mapstructure:"time"`
 	REWARD          mesh.Config           `mapstructure:"reward"`
 	POST            postConfig.Config     `mapstructure:"post"`
@@ -65,6 +69,9 @@ type BaseConfig struct {
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
+	MetricsPush       string `mapstructure:"metrics-push"`
+	MetricsPushPeriod int    `mapstructure:"metrics-push-period"`
+
 	ProfilerName string `mapstructure:"profiler-name"`
 	ProfilerURL  string `mapstructure:"profiler-url"`
 
@@ -82,8 +89,6 @@ type BaseConfig struct {
 	PprofHTTPServer bool `mapstructure:"pprof-server"`
 
 	GenesisConfPath string `mapstructure:"genesis-conf"`
-
-	GenesisTotalWeight uint64 `mapstructure:"genesis-total-weight"` // the total weight for genesis
 
 	CoinbaseAccount string `mapstructure:"coinbase"`
 
@@ -120,6 +125,10 @@ type LoggerConfig struct {
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
 	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
+	TBeaconDbStoreLoggerLevel string `mapstructure:"tbDbStore"`
+	TBeaconDbLoggerLevel      string `mapstructure:"tbDb"`
+	TBeaconLoggerLevel        string `mapstructure:"tBeacon"`
+	WeakCoinLoggerLevel       string `mapstructure:"weakCoin"`
 	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
 	StoreLoggerLevel          string `mapstructure:"store"`
 	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
@@ -148,6 +157,7 @@ func DefaultConfig() Config {
 		API:             apiConfig.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
+		TortoiseBeacon:  tortoisebeacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
 		POST:            activation.DefaultConfig(),
@@ -173,6 +183,8 @@ func defaultBaseConfig() BaseConfig {
 		TestMode:            defaultTestMode,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
+		MetricsPush:         "", // "" = doesn't push
+		MetricsPushPeriod:   60,
 		ProfilerURL:         "",
 		ProfilerName:        "gp-spacemesh",
 		OracleServer:        "http://localhost:3030",
@@ -183,7 +195,6 @@ func defaultBaseConfig() BaseConfig {
 		PoETServer:          "127.0.0.1",
 		GoldenATXID:         "0x5678", // TODO: Change the value
 		Hdist:               5,
-		GenesisTotalWeight:  5 * 1024 * 1, // 5 miners * 1024 byte PoST * 1 PoET ticks
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,

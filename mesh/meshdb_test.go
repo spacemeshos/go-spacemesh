@@ -2,6 +2,7 @@ package mesh
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"math"
 	"math/big"
@@ -45,7 +46,6 @@ func TestNewMeshDB(t *testing.T) {
 }
 
 func TestMeshDB_AddBlock(t *testing.T) {
-
 	mdb := NewMemMeshDB(log.NewDefault("TestForEachInView"))
 	defer mdb.Close()
 	coinbase := types.HexToAddress("aaaa")
@@ -912,4 +912,66 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshersAndLayers(t *testing.T) {
 		{Layer: 1, TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher4, Coinbase: addr1},
 		{Layer: 2, TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher4, Coinbase: addr1},
 	}, rewards)
+}
+
+func TestMeshDB_RecordCoinFlip(t *testing.T) {
+	r := require.New(t)
+	layerID := types.LayerID(123)
+
+	testCoinflip := func(mdb *DB) {
+		_, exists := mdb.GetCoinflip(context.TODO(), layerID)
+		r.False(exists, "coin value should not exist before being inserted")
+		mdb.RecordCoinflip(context.TODO(), layerID, true)
+		coin, exists := mdb.GetCoinflip(context.TODO(), layerID)
+		r.True(exists, "expected coin value to exist")
+		r.True(coin, "expected true coin value")
+		mdb.RecordCoinflip(context.TODO(), layerID, false)
+		coin, exists = mdb.GetCoinflip(context.TODO(), layerID)
+		r.True(exists, "expected coin value to exist")
+		r.False(coin, "expected false coin value on overwrite")
+	}
+
+	mdb1 := NewMemMeshDB(log.NewDefault(t.Name()))
+	defer mdb1.Close()
+	testCoinflip(mdb1)
+	mdb2, err := NewPersistentMeshDB(Path+"/mesh_db/", 5, log.NewDefault(t.Name()))
+	require.NoError(t, err)
+	defer mdb2.Close()
+	defer teardown()
+	testCoinflip(mdb2)
+}
+
+func TestMesh_FindOnce(t *testing.T) {
+	mdb := NewMemMeshDB(log.NewDefault(t.Name()))
+	defer mdb.Close()
+
+	r := require.New(t)
+	signer1, addr1 := newSignerAndAddress(r, "thc")
+	signer2, _ := newSignerAndAddress(r, "cbd")
+
+	blk := &types.Block{}
+	layers := []int{1, 10, 100}
+	nonce := uint64(0)
+	for _, layer := range layers {
+		blk.LayerIndex = types.LayerID(layer)
+		nonce++
+		err := mdb.writeTransactions(blk.LayerIndex,
+			[]*types.Transaction{
+				newTx(r, signer1, nonce, 100),
+				newTxWithDest(r, signer2, addr1, nonce, 100),
+			},
+		)
+		r.NoError(err)
+	}
+	t.Run("ByDestination", func(t *testing.T) {
+		for _, layer := range layers {
+			assert.Len(t, mdb.GetTransactionsByDestination(types.LayerID(layer), addr1), 1)
+		}
+	})
+
+	t.Run("ByOrigin", func(t *testing.T) {
+		for _, layer := range layers {
+			assert.Len(t, mdb.GetTransactionsByOrigin(types.LayerID(layer), addr1), 1)
+		}
+	})
 }

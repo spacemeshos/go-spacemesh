@@ -6,15 +6,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
+	"strconv"
+	"time"
+
+	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"time"
 )
 
 const protoName = "HARE_PROTOCOL"
@@ -32,7 +36,7 @@ type Rolacle interface {
 	Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
 	CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
 	Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error)
-	IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error)
+	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
 // NetworkService provides the registration and broadcast abilities in the network.
@@ -52,12 +56,12 @@ const (
 	notCompleted = false
 )
 
-// procReport is the termination report of the CP.
-// It consists of the layer id, the set we agreed on (if available) and a flag to indicate if the CP completed.
+// procReport is the termination report of the CP
 type procReport struct {
-	id        instanceID
-	set       *Set
-	completed bool
+	id        instanceID // layer id
+	set       *Set       // agreed-upon set
+	coinflip  bool       // weak coin value
+	completed bool       // whether the CP completed
 }
 
 func (cpo procReport) ID() instanceID {
@@ -68,12 +72,16 @@ func (cpo procReport) Set() *Set {
 	return cpo.set
 }
 
+func (cpo procReport) Coinflip() bool {
+	return cpo.coinflip
+}
+
 func (cpo procReport) Completed() bool {
 	return cpo.completed
 }
 
 func (proc *consensusProcess) report(completed bool) {
-	proc.terminationReport <- procReport{proc.instanceID, proc.s, completed}
+	proc.terminationReport <- procReport{proc.instanceID, proc.s, proc.preRoundTracker.coinflip, completed}
 }
 
 var _ TerminationOutput = (*procReport)(nil)
@@ -90,7 +98,7 @@ type State struct {
 // It returns true if the identity is active and false otherwise.
 // An error is set iff the identity could not be checked for activeness.
 type StateQuerier interface {
-	IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error)
+	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
 // Msg is the wrapper of the protocol's message.
@@ -133,7 +141,7 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 
 	// query if identity is active
 	pub := signing.NewPublicKey(pubKey)
-	res, err := querier.IsIdentityActiveOnConsensusView(pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
+	res, err := querier.IsIdentityActiveOnConsensusView(ctx, pub.String(), types.LayerID(hareMsg.InnerMsg.InstanceID))
 	if err != nil {
 		logger.With().Error("error while checking if identity is active",
 			log.String("sender_id", pub.ShortString()),
@@ -171,7 +179,7 @@ func newMsg(ctx context.Context, hareMsg *Message, querier StateQuerier) (*Msg, 
 type consensusProcess struct {
 	log.Log
 	State
-	Closer
+	util.Closer
 	instanceID        instanceID // the layer id
 	oracle            Rolacle    // the roles oracle provider
 	signing           Signer
@@ -201,7 +209,7 @@ func newConsensusProcess(cfg config.Config, instanceID instanceID, s *Set, oracl
 	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
 		State:             State{-1, -1, s.Clone(), nil},
-		Closer:            NewCloser(),
+		Closer:            util.NewCloser(),
 		instanceID:        instanceID,
 		oracle:            oracle,
 		signing:           signing,
@@ -234,11 +242,6 @@ func (proc *consensusProcess) Start(ctx context.Context) error {
 	if proc.isStarted { // called twice on same instance
 		logger.Error("consensusProcess has already been started")
 		return startInstanceError(errors.New("instance already started"))
-	}
-
-	if proc.s.Size() == 0 { // empty set is not valid
-		logger.Error("consensusProcess cannot be started with an empty set")
-		return startInstanceError(errors.New("instance started with an empty set"))
 	}
 
 	if proc.inbox == nil { // no inbox
@@ -306,7 +309,7 @@ func (proc *consensusProcess) eventLoop(ctx context.Context) {
 PreRound:
 	for {
 		select {
-		// listen to pre-round Messages
+		// listen to pre-round messages
 		case msg := <-proc.inbox:
 			proc.handleMessage(ctx, msg)
 		case <-timer.C:
@@ -326,11 +329,7 @@ PreRound:
 		types.LayerID(proc.instanceID),
 		log.Int("set_size", proc.s.Size()))
 	if proc.s.Size() == 0 {
-		logger.Event().Error("preround ended with empty set",
-			types.LayerID(proc.instanceID),
-			log.String("tracked_values", proc.preRoundTracker.tracker.String()),
-			log.Uint32("threshold", proc.preRoundTracker.threshold),
-		)
+		logger.Event().Warning("preround ended with empty set", types.LayerID(proc.instanceID))
 	} else {
 		logger.With().Info("preround ended",
 			log.Int("set_size", proc.s.Size()),
@@ -465,8 +464,7 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	proc.WithContext(ctx).With().Debug("processing message",
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
-	// TODO: fix metrics
-	// metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
+	metrics.MessageTypeCounter.With("type_id", m.InnerMsg.Type.String(), "layer", strconv.FormatUint(uint64(m.InnerMsg.InstanceID), 10), "reporter", "processMsg").Add(1)
 
 	switch m.InnerMsg.Type {
 	case pre:
@@ -706,6 +704,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 	if len(proc.pending) == 0 { // no pending messages
 		return
 	}
+
 	// handle pending messages
 	pendingProcess := proc.pending
 	proc.pending = make(map[string]*Msg, proc.cfg.N)
@@ -775,6 +774,9 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 
 	if proc.notifyTracker.NotificationsCount(s) < proc.cfg.F+1 { // not enough
 		proc.WithContext(ctx).With().Debug("not enough notifications for termination",
+			log.String("current_set", proc.s.String()),
+			log.Int32("current_k", proc.k),
+			types.LayerID(proc.instanceID),
 			log.Int("expected", proc.cfg.F+1),
 			log.Int("actual", proc.notifyTracker.NotificationsCount(s)))
 		return
@@ -788,8 +790,8 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 		types.LayerID(proc.instanceID),
 		log.Int("set_size", proc.s.Size()), log.Int32("K", proc.k))
 	proc.report(completed)
-	close(proc.CloseChannel())
 	proc.terminating = true
+	close(proc.CloseChannel())
 }
 
 func (proc *consensusProcess) currentRound() int {
@@ -843,7 +845,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	logger := proc.WithContext(ctx)
 
 	// query if identity is active
-	res, err := proc.oracle.IsIdentityActiveOnConsensusView(proc.signing.PublicKey().String(), types.LayerID(proc.instanceID))
+	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, proc.signing.PublicKey().String(), types.LayerID(proc.instanceID))
 	if err != nil {
 		logger.With().Error("should not participate: error checking our identity for activeness",
 			log.Err(err), types.LayerID(proc.instanceID))

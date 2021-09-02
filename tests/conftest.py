@@ -9,17 +9,16 @@ import string
 import subprocess
 
 from tests import config as conf
-from tests import convenience as conv
 from tests import pod
-from tests.context import Context
+from tests.context import Context, ES
 from tests.convenience import str2bool
-from tests.es_dump import es_reindex
-from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_fluent_bit_cluster, fluent_bit_teardown, \
+from tests.app_engine.gcloud_tasks.add_task_to_queue import create_google_cloud_task
+from tests.k8s_handler import add_elastic_cluster, add_kibana_cluster, add_fluent_bit_cluster, \
     wait_for_daemonset_to_be_ready
 from tests.misc import CoreV1ApiClient
 from tests.node_pool_deployer import NodePoolDep
 from tests.setup_utils import setup_bootstrap_in_namespace, setup_clients_in_namespace
-from tests.utils import api_call, wait_for_elk_cluster_ready
+from tests.utils import api_call, wait_for_minimal_elk_cluster_ready
 
 
 def random_id(length):
@@ -62,9 +61,8 @@ class NetworkDeploymentInfo:
 
 
 def pytest_configure():
-    # set a global variable for set_namespace fixture to use in order to figure out whether or not to delete the
-    # namespace at the end of the test, default value is True
-    pytest.delete_namespace = True
+    # set a global variable to share index date between fixtures
+    pytest.index_date = None
 
 
 def pytest_addoption(parser):
@@ -75,6 +73,7 @@ def pytest_addoption(parser):
     )
     # namespace - current namespace value, if None a namespace will be randomly created
     parser.addoption("--namespace", action="store", default=None, help="namespace name")
+    parser.addoption("--dump", action="store", default=False, help="whether or not to dump ES when done")
 
 
 @pytest.fixture(scope='session')
@@ -83,8 +82,13 @@ def delete_ns(request):
 
 
 @pytest.fixture(scope='session')
-def namespace(request):
+def input_namespace(request):
     return request.config.getoption("--namespace")
+
+
+@pytest.fixture(scope='session')
+def input_dump(request):
+    return str2bool(request.config.getoption("--dump"))
 
 
 @pytest.fixture(scope='session')
@@ -126,9 +130,9 @@ def set_docker_images():
 
 
 @pytest.fixture(scope='session')
-def session_id(namespace):
-    if namespace:
-        return namespace
+def session_id(input_namespace):
+    if input_namespace:
+        return input_namespace
     return random_id(length=5)
 
 
@@ -141,34 +145,15 @@ def set_namespace(request, session_id, load_config, delete_ns):
     print("\nRun tests in namespace: {0}".format(testconfig['namespace']))
     namespaces_list = [ns.metadata.name for ns in v1.list_namespace().items]
     if testconfig['namespace'] in namespaces_list:
-        pytest.delete_namespace = False
-        return
+        raise ValueError(f"namespace: {testconfig['namespace']} already exists!")
 
     body = client.V1Namespace()
     body.metadata = client.V1ObjectMeta(name=testconfig['namespace'])
     v1.create_namespace(body)
-    # pytest considers any code after `yield` to be teardown code
-    # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
-    yield
-    # delete namespace if was not mentioned otherwise in the command line args and if global arg is set to
-    # True (pytest.delete_namespace)
-    # fin([delete_ns, pytest.delete_namespace])
-    conditions = [delete_ns, pytest.delete_namespace]
-    restarted_pods = pod.check_for_restarted_pods(testconfig['namespace'])
-    if restarted_pods:
-        print('\n\nAttention!!! The following pods were restarted during test: {0}\n\n'.format(restarted_pods))
-    if all(condition is True for condition in conditions):
-        print("\nDeleting test namespace: {0}".format(testconfig['namespace']))
-        v1.delete_namespace(name=testconfig['namespace'], body=client.V1DeleteOptions())
-    else:
-        exit_msg = f"NOTICE!!! namespace {session_id} was not deleted!!!\n" \
-                   f"please make sure to delete it after use:\n" \
-                   f"kubectl delete namespace {session_id}"
-        print(exit_msg)
 
 
 @pytest.fixture(scope='session')
-def init_session(load_config, set_namespace, set_docker_images, session_id):
+def init_session(load_config, teardown, set_namespace, set_docker_images, session_id):
     """
     init_session sets up a new testing environment using k8s with
     the given yaml config file
@@ -293,34 +278,49 @@ def add_node_pool(session_id):
     print(f"total time waiting for clients node pool creation: {time_elapsed}")
     # wait for fluent bit daemonset to be ready after node pool creation
     wait_for_daemonset_to_be_ready("fluent-bit", session_id, timeout=60)
-    # pytest considers any code after `yield` to be teardown code
-    # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
-    yield time_elapsed
-    _, time_elapsed = deployer.remove_node_pool()
-    print(f"total time waiting for clients node pool deletion: {time_elapsed}")
+    return time_elapsed
 
 
 @pytest.fixture(scope='module')
 def add_elk(init_session, request):
     # get today's date for filebeat data index
-    index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
+    pytest.index_date = datetime.utcnow().date().strftime("%Y.%m.%d")
     add_elastic_cluster(init_session)
     add_fluent_bit_cluster(init_session)
     add_kibana_cluster(init_session)
-    wait_for_elk_cluster_ready(init_session)
+    wait_for_minimal_elk_cluster_ready(init_session)
+
+
+@pytest.fixture(scope='session')
+def teardown(request, session_id, delete_ns, input_dump):
     # pytest considers any code after `yield` to be teardown code
     # see: https://docs.pytest.org/en/reorganize-docs/yieldfixture.html
     yield
-    fluent_bit_teardown(init_session)
-    # in case the dumping process has failed the namespace won't be deleted if delete_namespace (global) is set to False
-    pytest.delete_namespace = dump_es_to_main_server(init_session, index_date, request.session.testsfailed)
-
-
-def dump_es_to_main_server(init_session, index_date, testsfailed):
-    # dump local ES content into main ES server if the test has failed
-    if testsfailed:
-        return es_reindex(init_session, index_date)
-    # dump local ES content into main ES server if is_dump argument is in the tests config.py file
-    if "is_dump" in testconfig.keys() and conv.str2bool(testconfig["is_dump"]):
-        return es_reindex(init_session, index_date)
-    return True
+    # dump ES content either if tests has failed of whether is_dump param was set to True in the test config file
+    is_dump = request.session.testsfailed == 1 or input_dump
+    dump_params = {}
+    if is_dump:
+        dump_params = {
+            "index_date": pytest.index_date,
+            "es_ip": ES(session_id).get_elastic_ip(),
+            "es_user": conf.ES_USER_LOCAL,
+            "es_pass": conf.ES_PASS_LOCAL,
+            "main_es_ip": conf.MAIN_ES_IP,
+            "dump_queue_name": conf.DUMP_QUEUE_NAME,
+            "dump_queue_zone": conf.DUMP_QUEUE_ZONE,
+        }
+    queue_params = {
+        "project_id": conf.PROJECT_ID,
+        "queue_name": conf.TD_QUEUE_NAME,
+        "queue_zone": conf.TD_QUEUE_ZONE,
+    }
+    payload = {
+        "namespace": session_id,
+        "is_delns": delete_ns,
+        "is_dump": is_dump,
+        "project_id": conf.PROJECT_ID,
+        "pool_name": f"pool-{session_id}",
+        "cluster_name": conf.CLUSTER_NAME,
+        "node_pool_zone": conf.CLUSTER_ZONE,
+    }
+    create_google_cloud_task(queue_params, payload, **dump_params)

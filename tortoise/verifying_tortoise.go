@@ -1,8 +1,10 @@
 package tortoise
 
 import (
+	"context"
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -10,11 +12,11 @@ import (
 )
 
 type blockDataProvider interface {
-	GetBlock(id types.BlockID) (*types.Block, error)
-	LayerBlockIds(l types.LayerID) (ids []types.BlockID, err error)
+	GetBlock(types.BlockID) (*types.Block, error)
+	LayerBlockIds(types.LayerID) (ids []types.BlockID, err error)
 
-	GetLayerInputVectorByID(lyrid types.LayerID) ([]types.BlockID, error)
-	SaveLayerInputVectorByID(lyrid types.LayerID, vector []types.BlockID) error
+	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)
+	SaveLayerInputVectorByID(types.LayerID, []types.BlockID) error
 
 	SaveContextualValidity(id types.BlockID, valid bool) error
 
@@ -221,11 +223,15 @@ func (t *turtle) inputVectorForLayer(layerBlocks []types.BlockID, input []types.
 	return
 }
 
-func (t *turtle) BaseBlock() (types.BlockID, [][]types.BlockID, error) {
+func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	// Try to find a block counting only good blocks
 	// TODO: could we do better than just grabbing the first non-error, good block, as below?
 	// e.g., trying to minimize the size of the exception list instead
-	for i := t.Last; i > t.Last-t.Hdist; i-- {
+	window := types.LayerID(0)
+	if t.Hdist < t.Last {
+		window = t.Last - t.Hdist
+	}
+	for i := t.Last; i > window; i-- {
 		for block, opinion := range t.BlockOpinionsByLayer[i] {
 			if _, ok := t.GoodBlocksIndex[block]; !ok {
 				t.logger.With().Debug("skipping block not marked good",
@@ -395,6 +401,18 @@ func (t *turtle) processBlock(block *types.Block) error {
 	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
 	opinion := make(map[types.BlockID]vec)
 	for blk, vote := range baseBlockOpinion.BlocksOpinion {
+		fblk, err := t.bdp.GetBlock(blk)
+		if err != nil {
+			return fmt.Errorf("voted block not in db voting_block_id: %v, voting_block_layer_id: %v, voted_block_id: %v", block.ID().String(), block.LayerIndex, blk.String())
+		}
+		window := types.LayerID(0)
+		if block.LayerIndex > t.Hdist {
+			window = block.LayerIndex - t.Hdist
+		}
+		if fblk.LayerIndex < window {
+			continue
+		}
+
 		opinion[blk] = vote
 	}
 

@@ -3,6 +3,11 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
@@ -10,10 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spf13/cobra"
-	"io"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
 )
 
 // Cmd is the p2p cmd
@@ -73,7 +74,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 
 	// Testing stuff
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
-	metrics.StartCollectingMetrics(app.Config.MetricsPort)
+	metrics.StartMetricsServer(app.Config.MetricsPort)
 
 	// start the node
 

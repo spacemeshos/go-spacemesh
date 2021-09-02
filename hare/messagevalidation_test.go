@@ -63,12 +63,12 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	res, err := ev.validateRole(context.TODO(), nil)
 	assert.NotNil(t, err)
 	assert.False(t, res)
-	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet(), nil)
 	m.InnerMsg = nil
 	res, err = ev.validateRole(context.TODO(), m)
 	assert.NotNil(t, err)
 	assert.False(t, res)
-	m = BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	m = BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet(), nil)
 	oracle.isEligible = false
 	res, err = ev.validateRole(context.TODO(), m)
 	assert.Nil(t, err)
@@ -109,12 +109,14 @@ func TestMessageValidator_IsStructureValid(t *testing.T) {
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 	m.PubKey = generateSigning(t).PublicKey()
 	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
+
+	// empty set is allowed now
 	m.InnerMsg = &innerMessage{}
-	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
+	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 	m.InnerMsg.Values = nil
-	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
+	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 	m.InnerMsg.Values = NewDefaultEmptySet().ToSlice()
-	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
+	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 }
 
 type mockValidator struct {
@@ -165,9 +167,6 @@ func TestMessageValidator_Aggregated(t *testing.T) {
 
 	msgs[0].Sig = tmp
 	inner := msgs[0].InnerMsg.Values
-	msgs[0].InnerMsg.Values = nil
-	r.Equal(errInnerSyntax, validator.validateAggregatedMessage(context.TODO(), agg, funcs))
-
 	msgs[0].InnerMsg.Values = inner
 	validator.roleValidator = &mockValidator{}
 	r.Equal(errInnerEligibility, validator.validateAggregatedMessage(context.TODO(), agg, funcs))
@@ -207,7 +206,7 @@ func TestSyntaxContextValidator_PreRoundContext(t *testing.T) {
 	r := require.New(t)
 	validator := defaultValidator()
 	ed := signing.NewEdSigner()
-	pre := BuildPreRoundMsg(ed, NewDefaultEmptySet())
+	pre := BuildPreRoundMsg(ed, NewDefaultEmptySet(), nil)
 	for i := int32(0); i < 10; i++ {
 		k := i * 4
 		pre.InnerMsg.K = k
@@ -221,7 +220,7 @@ func TestSyntaxContextValidator_ContextuallyValidateMessageForIteration(t *testi
 	v := defaultValidator()
 	ed := signing.NewEdSigner()
 	set := NewDefaultEmptySet()
-	pre := BuildPreRoundMsg(ed, set)
+	pre := BuildPreRoundMsg(ed, set, nil)
 	pre.InnerMsg.K = -1
 	r.Nil(v.ContextuallyValidateMessage(context.TODO(), pre, 1))
 
@@ -289,9 +288,9 @@ func (pg pubGetter) PublicKey(m *Message) *signing.PublicKey {
 
 func TestMessageValidator_SyntacticallyValidateMessage(t *testing.T) {
 	validator := newSyntaxContextValidator(signing.NewEdSigner(), 1, validate, &MockStateQuerier{true, nil}, 10, truer{}, newPubGetter(), log.NewDefault("Validator"))
-	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
-	assert.False(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
-	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
+	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet(), nil)
+	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
+	m = BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1), nil)
 	assert.True(t, validator.SyntacticallyValidateMessage(context.TODO(), m))
 }
 

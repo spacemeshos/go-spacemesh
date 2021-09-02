@@ -1,6 +1,6 @@
 # Inspired by https://container-solutions.com/faster-builds-in-docker-with-go-1-11/
 # Base build image
-FROM golang:1.14.4-alpine3.12 AS build_base
+FROM golang:1.15.13-alpine3.12 AS build_base
 RUN apk add bash make git curl unzip rsync libc6-compat gcc musl-dev lsof
 WORKDIR /go/src/github.com/spacemeshos/go-spacemesh
 
