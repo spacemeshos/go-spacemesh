@@ -86,13 +86,13 @@ type requestMessage struct {
 // responseMessage is the on the wire message that will be send to the this node as response,
 type responseMessage struct {
 	Hash types.Hash32
-	Data []byte `ssz-max:"4096"`
+	Data []byte `ssz-max:"1024000"`
 }
 
 // requestBatch is a batch of requests and a hash of all requests as ID
 type requestBatch struct {
 	ID       types.Hash32
-	Requests []*requestMessage `ssz-max:"4096"`
+	Requests []*requestMessage `ssz-max:"1024000"`
 }
 
 type batchInfo struct {
@@ -122,7 +122,7 @@ func (b batchInfo) ToMap() map[types.Hash32]*requestMessage {
 // as stated in requestBatch even if not all Data is present
 type responseBatch struct {
 	ID        types.Hash32
-	Responses []*responseMessage `ssz-max:"1024"`
+	Responses []*responseMessage `ssz-max:"1024000"`
 }
 
 // Config is the configuration file of the Fetch component

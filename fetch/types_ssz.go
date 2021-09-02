@@ -93,7 +93,7 @@ func (r *responseMessage) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset += len(r.Data)
 
 	// Field (1) 'Data'
-	if len(r.Data) > 4096 {
+	if len(r.Data) > 1024000 {
 		err = ssz.ErrBytesLength
 		return
 	}
@@ -124,7 +124,7 @@ func (r *responseMessage) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'Data'
 	{
 		buf = tail[o1:]
-		if len(buf) > 4096 {
+		if len(buf) > 1024000 {
 			return ssz.ErrBytesLength
 		}
 		if cap(r.Data) == 0 {
@@ -166,7 +166,7 @@ func (r *requestBatch) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 
 	// Field (1) 'Requests'
-	if len(r.Requests) > 4096 {
+	if len(r.Requests) > 1024000 {
 		err = ssz.ErrListTooBig
 		return
 	}
@@ -208,7 +208,7 @@ func (r *requestBatch) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'Requests'
 	{
 		buf = tail[o1:]
-		num, err := ssz.DecodeDynamicLength(buf, 4096)
+		num, err := ssz.DecodeDynamicLength(buf, 1024000)
 		if err != nil {
 			return err
 		}
@@ -263,7 +263,7 @@ func (r *responseBatch) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 
 	// Field (1) 'Responses'
-	if len(r.Responses) > 1024 {
+	if len(r.Responses) > 1024000 {
 		err = ssz.ErrListTooBig
 		return
 	}
@@ -305,7 +305,7 @@ func (r *responseBatch) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'Responses'
 	{
 		buf = tail[o1:]
-		num, err := ssz.DecodeDynamicLength(buf, 1024)
+		num, err := ssz.DecodeDynamicLength(buf, 1024000)
 		if err != nil {
 			return err
 		}
