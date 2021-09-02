@@ -178,6 +178,7 @@ func New(ctx context.Context, ln node.LocalNode, config config.SwarmConfig, serv
 
 // Shutdown stops the discovery service
 func (d *Discovery) Shutdown() {
+	d.disc.Close()
 	d.rt.Stop()
 }
 
