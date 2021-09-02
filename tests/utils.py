@@ -51,6 +51,38 @@ def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
     return res
 
 
+def exec_on_pod(name, namespace, command, container=None, retry=3, interval=1):
+    res = None
+    while True:
+        try:
+            params = {
+                "name": name,
+                "namespace": namespace,
+                "command": command,
+                "stderr": True,
+                "stdin": False,
+                "stdout": True,
+                "tty": False,
+                "_request_timeout": 90,
+            }
+            # add container name to params in case container param is not None
+            if container:
+                params["container"] = container
+            res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, **params)
+        except ApiException as e:
+            print(f"got an ApiException while streaming: {e}")
+            print(f"sleeping for {interval} seconds before trying again")
+            time.sleep(interval)
+            retry -= 1
+            if retry < 0:
+                raise ApiException(e)
+            continue
+        else:
+            break
+
+    return res
+
+
 def get_curr_ind():
     dt = datetime.now()
     today_date = dt.strftime("%Y.%m.%d")
@@ -274,7 +306,7 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
     return cspec
 
 
-def choose_k8s_object_create(config, deployment_file, statefulset_file, is_async=False):
+def select_k8s_deployment_type(config, deployment_file, statefulset_file, is_async=False):
     dep_type = 'deployment' if 'deployment_type' not in config else config['deployment_type']
     if dep_type == 'deployment':
         if is_async:

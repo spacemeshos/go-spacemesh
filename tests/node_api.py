@@ -3,7 +3,7 @@ import multiprocessing as mp
 from tests.utils import api_call_async
 
 
-def shutdown(namespace, ips):
+def shutdown_miners(namespace, ips):
     api_endpoint = "v1/node/shutdown"
     processes = []
     manager = mp.Manager()

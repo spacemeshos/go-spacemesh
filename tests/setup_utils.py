@@ -8,7 +8,7 @@ import tests.conftest as conftest
 from tests.pod import search_phrase_in_pod_log
 from tests.misc import CoreV1ApiClient, ContainerSpec
 from tests.gcloud.storage.storage_handler import list_files_in_path
-from tests.utils import get_conf, get_genesis_time_delta, choose_k8s_object_create
+from tests.utils import get_conf, get_genesis_time_delta, select_k8s_deployment_type
 
 
 def add_multi_clients(testconfig, deployment_id, container_specs, size, client_title='client', ret_dep=False):
@@ -23,7 +23,7 @@ def add_multi_clients(testconfig, deployment_id, container_specs, size, client_t
     :param ret_dep: boolean, if 'True' RETURN deployment name in addition
     :return: list (strings), list of pods names
     """
-    k8s_file, k8s_create_func = choose_k8s_object_create(testconfig[client_title],
+    k8s_file, k8s_create_func = select_k8s_deployment_type(testconfig[client_title],
                                                          conf.CLIENT_DEPLOYMENT_FILE,
                                                          conf.CLIENT_STATEFULSET_FILE)
     resp = k8s_create_func(k8s_file, testconfig['namespace'],
@@ -83,8 +83,6 @@ def _setup_dep_ss_file_path(file_path, dep_type, node_type):
 
 def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, gen_time_del, oracle=None, poet=None,
                                  file_path=None, dep_time_out=180):
-
-    print(bootstrap_config)
     """
     adds a bootstrap node to a specific namespace
 
@@ -99,6 +97,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 
     :return: DeploymentInfo, bootstrap info with a list of active pods
     """
+    print(f"bootsrap config:\n{bootstrap_config}")
     # setting stateful and deployment configuration files
     dep_method = bootstrap_config["deployment_type"] if "deployment_type" in bootstrap_config.keys() else "deployment"
     try:
@@ -121,23 +120,27 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
         bootstrap_args['poet_server'] = '{0}:{1}'.format(poet, conf.POET_SERVER_PORT)
 
     gen_delta = get_genesis_time_delta(gen_time_del)
-    cspec.append_args(genesis_time=gen_delta.isoformat('T', 'seconds'),
-                      **bootstrap_args)
+    cspec.append_args(genesis_time=gen_delta.isoformat('T', 'seconds'), **bootstrap_args)
 
     if "data-dir" in cspec.args:
         data_dir = cspec.args.pop("data-dir")
         state_bucket = get_state_bucket()
-        cspec.args["state_bucket"] = state_bucket
+        # add state-bucket to the specs arguments dictionary
+        cspec.args["state-bucket"] = state_bucket
         all_files = list_files_in_path(state_bucket, data_dir)
         for file in all_files:
             if "bootstrap/" in file:
                 if "data-paths" not in cspec.args:
+                    # add data files paths to the specs arguments dictionary
                     cspec.args["data-paths"] = file
                     break
+        if "data-paths" not in cspec.args:
+            raise ValueError(
+                "missing 'data-paths' argument, the cause might be missing boostrap folder in the saved state directory"
+            )
+
     # choose k8s creation function (deployment/stateful) and the matching k8s file
-    k8s_file, k8s_create_func = choose_k8s_object_create(bootstrap_config,
-                                                         dep_file_path,
-                                                         ss_file_path)
+    k8s_file, k8s_create_func = select_k8s_deployment_type(bootstrap_config, dep_file_path, ss_file_path)
     # run the chosen creation function
     resp = k8s_create_func(k8s_file, namespace,
                            deployment_id=bs_deployment_info.deployment_id,
@@ -162,13 +165,14 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 
     bs_pod['pod_ip'] = resp.status.pod_ip
 
-    match = search_phrase_in_pod_log(bs_pod['name'], namespace, 'bootstrap',
-                                     r"local node identity.*\"key\"\s*:\s*\"(?P<bootstrap_key>\w+)")
+    if "data-dir" not in cspec.args:
+        match = search_phrase_in_pod_log(bs_pod['name'], namespace, 'bootstrap',
+                                         r"local node identity.*\"key\"\s*:\s*\"(?P<bootstrap_key>\w+)")
+        if not match:
+            raise Exception("Failed to read container logs in {0}".format('bootstrap'))
 
-    if not match:
-        raise Exception("Failed to read container logs in {0}".format('bootstrap'))
+        bs_pod['key'] = match.group('bootstrap_key')
 
-    bs_pod['key'] = match.group('bootstrap_key')
     bs_deployment_info.pods = [bs_pod]
 
     return bs_deployment_info
@@ -194,7 +198,7 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
     cspec = get_conf(bs_deployment_info, client_config, genesis_time, setup_oracle=oracle,
                      setup_poet=poet)
 
-    k8s_file, k8s_create_func = choose_k8s_object_create(client_config, dep_file_path, ss_file_path)
+    k8s_file, k8s_create_func = select_k8s_deployment_type(client_config, dep_file_path, ss_file_path)
     resp = k8s_create_func(k8s_file, namespace,
                            deployment_id=client_deployment_info.deployment_id,
                            replica_size=client_config['replicas'],
@@ -233,7 +237,7 @@ def setup_clients_preset_data_dir(namespace, bs_deployment_info, client_config, 
         raise ValueError(f"missing 'data-dir' argument in test config")
 
     processes = []
-    k8s_file, k8s_create_func = choose_k8s_object_create(client_config, dep_file_path, ss_file_path, True)
+    k8s_file, k8s_create_func = select_k8s_deployment_type(client_config, dep_file_path, ss_file_path, True)
     data_dir = cspec.args.pop("data-dir")
     state_bucket = get_state_bucket()
     all_files = list_files_in_path(state_bucket, data_dir)

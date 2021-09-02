@@ -292,16 +292,19 @@ def get_latest_layer(deployment, num_miners):
             return layer
 
 
-def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch, num_miners):
-    # wait up to 10 secs * 60 = 10 mins
-    for i in range(0, 60):
-        time.sleep(10)
+def wait_for_latest_layer(deployment, min_layer_id, layers_per_epoch, num_miners, interval=10, timeout=600):
+    # wait up to 10 mins
+    while True:
+        time.sleep(interval)
         lyr = get_latest_layer(deployment, num_miners)
         print("current layer: " + str(lyr))
         if lyr is not None and lyr >= min_layer_id and lyr % layers_per_epoch == 0:
             return lyr
         else:
-            print("sleeping 10 seconds")
+            print(f"sleeping {interval} seconds")
+        timeout -= interval
+        if timeout < 0:
+            raise TimeoutError(f"timeout has reached while waiting for layer {min_layer_id}")
 
 
 def node_published_atx(deployment, node_id, epoch_id):

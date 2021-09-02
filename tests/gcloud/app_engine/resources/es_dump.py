@@ -10,7 +10,7 @@ class DstCountException(Exception):
     def __init__(self, dst_docs_count, elapsed_time):
         self.dst_docs_count = dst_docs_count
         self.elapsed_time = elapsed_time
-        self.message = "destination documents count is stuck at {count} for {elapsed_time} seconds"
+        self.message = "destination documents count is stuck at {count} for {elapsed_time} minutes"
         super().__init__(self.message)
 
     def __str__(self):
@@ -102,7 +102,7 @@ def es_reindex(namespace, index_date, es_ip, es_user, es_pass, main_es_ip, port=
     except DstCountException as e:
         # this means that even if we get this exception we do delete the namespace
         # if we'd like to change this behaviour raise this exception
-        print(e)
+        return "failed"
     except Exception as e:
         raise Exception(f"got an exception while waiting for dumping to be done:\n{e}")
     return "success"

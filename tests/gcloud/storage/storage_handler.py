@@ -26,7 +26,7 @@ def upload_data_to_google_storage(bucket_name, dir_name, file_name, data):
 def upload_from_pod_to_gcloud_storage(namespace, pod_name, data_path=None, bucket_name=None,
                                       bucket_dir=None, bucket_file=None, container=None):
     """
-    upload data directories from spacemesh nodes - bootstrap, client and poet.
+    upload data directories from a pod.
     the data is being compressed to a tar.gz format and returned in base64 following a bug in k8s stream -
     fails to pass binary data
 
@@ -39,7 +39,7 @@ def upload_from_pod_to_gcloud_storage(namespace, pod_name, data_path=None, bucke
     :param container: string, the name of the container inside the pod
     :return:
     """
-    # save sm data directory to stdout using tar command
+    # save data directory to stdout using tar command
     # z - compress the data, c - create new
     # we pipe to base64 because kubernetes.stream is failing to pass bytes
     exec_command = ['/bin/sh', '-c', f'tar zc {data_path} | base64']
@@ -62,6 +62,18 @@ def upload_from_pod_to_gcloud_storage(namespace, pod_name, data_path=None, bucke
 
 def upload_sm_from_pod_to_gcloud_storage(namespace, pod_name, data_path=SM_NODE_DATA_PATH, bucket_name=None,
                                          bucket_dir=None, bucket_file=None, container=None):
+    """
+    upload the data from data_path to google cloud storage bucket
+
+    :param namespace: string, namespace name
+    :param pod_name: string, the pod name, the one that contains the data
+    :param data_path: string, path to data inside the pod
+    :param bucket_name: string, the bucket name on google storage
+    :param bucket_dir: string, the name of the directory to create inside the bucket
+    :param bucket_file: string, file name to create inside the directory
+    :param container: string, the container name inside the pod (needed only if there's more than 1 container)
+    :return:
+    """
     # set bucket name to default value if not supplied
     bucket_name = get_state_bucket() if not bucket_name else bucket_name
     # if dir_name is not supplied set default value to namespace
@@ -69,16 +81,18 @@ def upload_sm_from_pod_to_gcloud_storage(namespace, pod_name, data_path=SM_NODE_
     upload_from_pod_to_gcloud_storage(namespace, pod_name, data_path, bucket_name, bucket_dir, bucket_file, container)
 
 
-def upload_whole_network(namespace):
+def upload_whole_network(namespace, bucket_dir_name=None):
     print(f"uploading client poet and bootstrap data from namespace {namespace}")
     pods_names = list_all_pods_names_in_namespace(namespace)
     for pod in pods_names:
         if 'client' in pod:
-            upload_sm_from_pod_to_gcloud_storage(namespace, pod)
+            upload_sm_from_pod_to_gcloud_storage(namespace, pod, bucket_dir=bucket_dir_name)
         if 'poet' in pod:
-            upload_sm_from_pod_to_gcloud_storage(namespace, pod, data_path=POET_DATA_PATH, container="poet")
+            upload_sm_from_pod_to_gcloud_storage(namespace, pod, bucket_dir=bucket_dir_name, data_path=POET_DATA_PATH,
+                                                 container="poet")
         if 'bootstrap' in pod:
-            upload_sm_from_pod_to_gcloud_storage(namespace, pod, data_path=SM_NODE_DATA_PATH, container="bootstrap")
+            upload_sm_from_pod_to_gcloud_storage(namespace, pod, bucket_dir=bucket_dir_name, data_path=SM_NODE_DATA_PATH,
+                                                 container="bootstrap")
 
 
 def list_files_in_path(bucket_name, path=None):

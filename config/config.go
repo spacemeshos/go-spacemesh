@@ -198,7 +198,7 @@ func defaultBaseConfig() BaseConfig {
 		ProfilerName:          "gp-spacemesh",
 		OracleServer:          "http://localhost:3030",
 		OracleServerWorldID:   0,
-		GenesisTime:           time.Now().Format(time.RFC3339),
+		GenesisTime:           time.Now().Add(-9*time.Minute).Format(time.RFC3339), // TODO: (amit) #@! remove `Add` this is for debugging
 		LayerDurationSec:      30,
 		LayersPerEpoch:        3,
 		PoETServer:            "127.0.0.1",
