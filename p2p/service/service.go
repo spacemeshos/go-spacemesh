@@ -93,7 +93,7 @@ type DataMsgWrapper struct {
 	Req     bool
 	MsgType uint32
 	ReqID   uint64
-	Payload []byte `ssz-max:"4096"`
+	Payload []byte `ssz-max:"10485760"`
 }
 
 // Bytes returns the message as bytes

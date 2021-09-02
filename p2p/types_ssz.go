@@ -163,7 +163,7 @@ func (p *Payload) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset += p.Wrapped.SizeSSZ()
 
 	// Field (1) 'Payload'
-	if len(p.Payload) > 10240000 {
+	if len(p.Payload) > 10485760 {
 		err = ssz.ErrBytesLength
 		return
 	}
@@ -204,7 +204,7 @@ func (p *Payload) UnmarshalSSZ(buf []byte) error {
 	// Field (1) 'Payload'
 	{
 		buf = tail[o1:o2]
-		if len(buf) > 10240000 {
+		if len(buf) > 10485760 {
 			return ssz.ErrBytesLength
 		}
 		if cap(p.Payload) == 0 {

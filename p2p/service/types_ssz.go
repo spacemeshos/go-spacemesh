@@ -29,7 +29,7 @@ func (d *DataMsgWrapper) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	offset += len(d.Payload)
 
 	// Field (3) 'Payload'
-	if len(d.Payload) > 4096 {
+	if len(d.Payload) > 10485760 {
 		err = ssz.ErrBytesLength
 		return
 	}
@@ -66,7 +66,7 @@ func (d *DataMsgWrapper) UnmarshalSSZ(buf []byte) error {
 	// Field (3) 'Payload'
 	{
 		buf = tail[o3:]
-		if len(buf) > 4096 {
+		if len(buf) > 10485760 {
 			return ssz.ErrBytesLength
 		}
 		if cap(d.Payload) == 0 {

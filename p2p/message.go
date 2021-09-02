@@ -95,7 +95,7 @@ const (
 // Payload holds either a byte array or a wrapped req-res message.
 type Payload struct {
 	MessageType uint8
-	Payload     []byte `ssz-max:"10240000"`
+	Payload     []byte `ssz-max:"10485760"`
 	Wrapped     *service.DataMsgWrapper
 }
 
