@@ -70,9 +70,8 @@ func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 	if err != nil {
 		return err
 	}
-	ch := make(chan []byte)
+	ch := make(chan []byte, 1)
 	foo := func(msg []byte) {
-		defer close(ch)
 		plogger.Debug("handle ping response")
 		sender := &node.Info{}
 		err := types.BytesToInterface(msg, sender)
@@ -81,14 +80,9 @@ func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 			plogger.With().Warning("got unreadable pong", log.Err(err))
 			return
 		}
-
 		// TODO: if we pinged it we already have id so no need to update,
 		//   but what if id or listen address has changed?
-		select {
-		case ch <- sender.ID.Bytes():
-		default:
-			plogger.With().Error("ping listener timed out, dropping response")
-		}
+		ch <- sender.ID.Bytes()
 	}
 
 	err = p.msgServer.SendRequest(ctx, server.PingPong, data, peer, foo, func(err error) {})

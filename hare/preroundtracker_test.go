@@ -16,7 +16,7 @@ import (
 
 const (
 	k              = 1
-	ki             = -1
+	ki             = preRound
 	lowThresh10    = 10
 	lowDefaultSize = 100
 )

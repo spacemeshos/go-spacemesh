@@ -15,6 +15,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
+const (
+	// LayerIDSize in bytes.
+	LayerIDSize = 4
+	// BlockIDSize in bytes.
+	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
+	BlockIDSize = Hash32Length
+)
+
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
 type BlockID Hash20
 
@@ -43,6 +51,9 @@ var (
 	// effectiveGenesis marks when actual blocks would start being created in the network. It takes into account
 	// the first genesis epoch and the following epoch in which ATXs are published.
 	effectiveGenesis uint32
+
+	// EmptyLayerHash is the layer hash for an empty layer
+	EmptyLayerHash = Hash32{}
 )
 
 // SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param
@@ -420,6 +431,9 @@ func (l *Layer) BlocksIDs() []BlockID {
 // Hash returns the 32-byte sha256 sum of the block IDs of both contextually valid and invalid blocks in this layer,
 // sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
+	if len(l.blocks) == 0 {
+		return EmptyLayerHash
+	}
 	return CalcBlocksHash32(SortBlockIDs(BlockIDs(l.blocks)), nil)
 }
 

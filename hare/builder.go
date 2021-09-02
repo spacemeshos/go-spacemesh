@@ -52,8 +52,8 @@ type aggregatedMessages struct {
 type innerMessage struct {
 	Type             messageType
 	InstanceID       types.LayerID
-	K                int32 // the round counter
-	Ki               int32
+	K                uint32 // the round counter
+	Ki               uint32
 	Values           []types.BlockID     // the set S. optional for commit InnerMsg in a certificate
 	RoleProof        []byte              // role is implicit by InnerMsg type, this is the proof
 	EligibilityCount uint16              // the number of claimed eligibilities
@@ -124,12 +124,12 @@ func (builder *messageBuilder) SetInstanceID(id types.LayerID) *messageBuilder {
 	return builder
 }
 
-func (builder *messageBuilder) SetRoundCounter(k int32) *messageBuilder {
+func (builder *messageBuilder) SetRoundCounter(k uint32) *messageBuilder {
 	builder.inner.K = k
 	return builder
 }
 
-func (builder *messageBuilder) SetKi(ki int32) *messageBuilder {
+func (builder *messageBuilder) SetKi(ki uint32) *messageBuilder {
 	builder.inner.Ki = ki
 	return builder
 }

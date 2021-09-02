@@ -78,7 +78,7 @@ func (g *Group) Go(f func(ctx context.Context) error) error {
 func (g *Group) Wait() error {
 	g.mu.Lock()
 	err := g.err
-	// wait atleast once even if error was already set when we Wait is called for the first time
+	// wait at least once even if error was already set when we Wait is called for the first time
 	// otherwise we can't guarantee that all goroutines are closed when Wait exits
 	once := g.waitOnce
 	if !once {
@@ -91,7 +91,7 @@ func (g *Group) Wait() error {
 
 	<-g.waitErr
 	// at this point the error is set to a non-nil value, won't be ever overwritten,
-	// and all Go calls will be terminated immediatly, therefore re-locking here is not required.
+	// and all Go calls will be terminated immediately, therefore re-locking here is not required.
 	g.wg.Wait()
 	return g.err
 }

@@ -382,7 +382,10 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	builder.syncer = ms
 	builder.blockOracle = mbo
 	builder.beginRoundEvent = beginRound
-	go builder.createBlockLoop(context.TODO())
+	require.NoError(t, builder.Start(context.TODO()))
+	t.Cleanup(func() {
+		builder.Close()
+	})
 	beginRound <- types.NewLayerID(1)
 	beginRound <- types.NewLayerID(2)
 	r.Equal(0, mbo.calls)
