@@ -1001,7 +1001,7 @@ func (app *App) stopServices() {
 
 	if app.atxBuilder != nil {
 		app.log.Info("closing atx builder")
-		_ = app.atxBuilder.StopSmeshing(false)
+		_ = app.atxBuilder.StopSmeshing(context.Background(), false)
 	}
 
 	if app.hare != nil {

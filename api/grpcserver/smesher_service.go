@@ -87,7 +87,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StopSmeshing")
 
-	if err := s.smeshingProvider.StopSmeshing(in.DeleteFiles); err != nil {
+	if err := s.smeshingProvider.StopSmeshing(ctx, in.DeleteFiles); err != nil {
 		err := fmt.Sprintf("failed to stop smeshing: %v", err)
 		log.Error(err)
 		return nil, status.Error(codes.Internal, err)

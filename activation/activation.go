@@ -95,7 +95,7 @@ type syncer interface {
 type SmeshingProvider interface {
 	Smeshing() bool
 	StartSmeshing(coinbase types.Address, opts PostSetupOpts) error
-	StopSmeshing(deleteFiles bool) error
+	StopSmeshing(context.Context, bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
@@ -262,10 +262,10 @@ func (b *Builder) StopSmeshing(ctx context.Context, deleteFiles bool) error {
 	b.stop()
 	select {
 	case <-b.exited:
+		b.exited = nil
 	case <-ctx.Done():
 		return ctx.Err()
 	}
-	<-b.exited
 	return nil
 }
 

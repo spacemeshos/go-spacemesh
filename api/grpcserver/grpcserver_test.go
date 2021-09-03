@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"io"
 	"io/ioutil"
 	"math"
@@ -16,6 +15,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/rand"
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
@@ -446,7 +447,7 @@ func (*SmeshingAPIMock) StartSmeshing(coinbase types.Address, opts activation.Po
 	return nil
 }
 
-func (*SmeshingAPIMock) StopSmeshing(bool) error {
+func (*SmeshingAPIMock) StopSmeshing(context.Context, bool) error {
 	return nil
 }
 

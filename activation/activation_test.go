@@ -335,12 +335,27 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 
 func TestBuilder_RestartSmeshing(t *testing.T) {
 	activationDb := newActivationDb(t)
-	builder := newBuilder(t, activationDb)
+	net.atxDb = activationDb
+	cfg := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+	sessionChan := make(chan struct{})
+	close(sessionChan)
+	builder := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, meshProviderMock, layersPerEpoch, nipostBuilderMock,
+		&postSetupProviderMock{sessionChan: sessionChan},
+		layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
+	builder.initialPost = initialPost
 
-	for i := 0; i < 10; i++ {
-		require.NoError(t, builder.StartSmeshing(types.Address{1, 1, 1}, PostSetupOpts{}))
-		time.Sleep(10 * time.Second)
-		require.NoError(t, builder.StopSmeshing(true))
+	for i := 0; i < 100; i++ {
+		require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
+		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediatly,
+		// but proper test requires adding quite a lot of additional mocking and general refactoring.
+		time.Sleep(200 * time.Microsecond)
+		require.True(t, builder.Smeshing())
+		require.NoError(t, builder.StopSmeshing(context.Background(), true))
+		require.False(t, builder.Smeshing())
 	}
 }
 
