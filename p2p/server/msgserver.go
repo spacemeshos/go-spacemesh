@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/taskgroup"
+	"golang.org/x/sync/errgroup"
 )
 
 // MessageType is a uint32 used to distinguish between server messages inside a single protocol.
@@ -118,7 +118,7 @@ type MessageServer struct {
 	ingressChannel     chan service.DirectMessage                                     //chan to relay messages into the server
 	requestLifetime    time.Duration
 	workerLimiter      chan struct{}
-	tg                 *taskgroup.Group
+	eg                 errgroup.Group
 	cancel             context.CancelFunc
 	log.Log
 }
@@ -141,11 +141,12 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 		ingressChannel:     network.RegisterDirectProtocolWithChannel(name, c),
 		msgRequestHandlers: make(map[MessageType]func(context.Context, Message) ([]byte, error)),
 		requestLifetime:    requestLifetime,
-		tg:                 taskgroup.New(taskgroup.WithContext(ctx)),
 		cancel:             cancel,
 		workerLimiter:      make(chan struct{}, runtime.NumCPU()),
 	}
-	p.tg.Go(p.readLoop)
+	p.eg.Go(func() error {
+		return p.readLoop(ctx)
+	})
 	return p
 }
 
@@ -154,7 +155,7 @@ func (p *MessageServer) Close() {
 	p.With().Info("closing message server")
 	p.cancel()
 	p.With().Info("waiting for message workers to finish")
-	p.tg.Wait()
+	p.eg.Wait()
 	p.With().Info("message workers all done")
 }
 
@@ -169,7 +170,7 @@ func (p *MessageServer) readLoop(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-timer.C:
-			p.tg.Go(func(ctx context.Context) error {
+			p.eg.Go(func() error {
 				p.cleanStaleMessages()
 				return nil
 			})
@@ -183,7 +184,7 @@ func (p *MessageServer) readLoop(ctx context.Context) error {
 			}
 			select {
 			case p.workerLimiter <- struct{}{}:
-				p.tg.Go(func(ctx context.Context) error {
+				p.eg.Go(func() error {
 					p.handleMessage(sctx, msg.(Message)) // pass session ctx to log session id
 					<-p.workerLimiter
 					return nil

@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -711,7 +710,7 @@ func TestShutdown(t *testing.T) {
 
 	smApp.Config.SMESHING.Start = true
 	smApp.Config.SMESHING.CoinbaseAccount = "0x123"
-	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-test-post")
+	smApp.Config.SMESHING.Opts.DataDir = t.TempDir()
 	smApp.Config.SMESHING.Opts.ComputeProviderID = initialization.CPUProviderID()
 
 	smApp.Config.HARE.N = 5
@@ -767,10 +766,9 @@ func TestShutdown(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	gCount2 := runtime.NumGoroutine()
 
-	if gCount != gCount2 {
+	if !assert.Equal(t, gCount, gCount2) {
 		buf := make([]byte, 1<<16)
 		numbytes := runtime.Stack(buf, true)
 		t.Log(string(buf[:numbytes]))
 	}
-	require.Equal(t, gCount, gCount2)
 }

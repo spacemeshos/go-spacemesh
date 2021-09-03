@@ -94,7 +94,7 @@ type syncer interface {
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(coinbase types.Address, opts PostSetupOpts) error
+	StartSmeshing(types.Address, PostSetupOpts) error
 	StopSmeshing(context.Context, bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
@@ -236,7 +236,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 		<-doneChan
 		defer close(exited)
 		if s := b.postSetupProvider.Status(); s.State != postSetupStateComplete {
-			b.log.With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
+			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
 			return
 		}
 		b.started.Store(true)
