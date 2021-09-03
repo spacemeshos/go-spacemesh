@@ -392,16 +392,18 @@ func TestOracle_CalcEligibility(t *testing.T) {
 	r := require.New(t)
 	numOfMiners := 2000
 	committeeSize := 800
+	rng := rand.New(rand.NewSource(999))
+
 	o := defaultOracle(t)
 	o.atxdb = &mockActiveSetProvider{size: numOfMiners}
 
 	var eligibilityCount uint16
 	sig := make([]byte, 64)
-	for pubkey := range createMapWithSize(numOfMiners) {
-		n, err := rand.Read(sig)
+	for i := 0; i < numOfMiners; i++ {
+		n, err := rng.Read(sig)
 		r.NoError(err)
 		r.Equal(64, n)
-		nodeID := types.NodeID{Key: pubkey}
+		nodeID := types.NodeID{Key: strconv.Itoa(i)}
 
 		res, err := o.CalcEligibility(context.TODO(), types.NewLayerID(50), 1, committeeSize, nodeID, sig)
 		r.NoError(err)

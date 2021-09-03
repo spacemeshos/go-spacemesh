@@ -16,7 +16,6 @@ import (
 // MeshService exposes mesh data such as accounts, blocks, and transactions
 type MeshService struct {
 	Mesh             api.TxAPI // Mesh
-	Mempool          api.MempoolAPI
 	GenTime          api.GenesisTimeAPI
 	LayersPerEpoch   uint32
 	NetworkID        uint32
@@ -32,12 +31,11 @@ func (s MeshService) RegisterService(server *Server) {
 
 // NewMeshService creates a new service using config data
 func NewMeshService(
-	tx api.TxAPI, mempool api.MempoolAPI, genTime api.GenesisTimeAPI,
+	tx api.TxAPI, genTime api.GenesisTimeAPI,
 	layersPerEpoch uint32, networkID uint32, layerDurationSec int,
 	layerAvgSize int, txsPerBlock int) *MeshService {
 	return &MeshService{
 		Mesh:             tx,
-		Mempool:          mempool,
 		GenTime:          genTime,
 		LayersPerEpoch:   layersPerEpoch,
 		NetworkID:        networkID,
@@ -106,20 +104,15 @@ func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactio
 
 // QUERIES
 
-func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr types.Address) (txs []*types.MeshTransaction, err error) {
+func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr types.Address) ([]*types.MeshTransaction, error) {
 	meshTxIds := s.getTxIdsFromMesh(startLayer, addr)
-	mempoolTxIds := s.Mempool.GetTxIdsByAddress(addr)
-
-	// Look up full data for all unique txids
-	txs, missing := s.Mesh.GetMeshTransactions(append(meshTxIds, mempoolTxIds...))
-
-	// TODO: Do we ever expect txs to be missing here?
-	// E.g., if this node has not synced/received them yet.
+	txs, missing := s.Mesh.GetMeshTransactions(meshTxIds)
+	// FIXME(dshulyak) this call should never return missing transactions, since we got the list of transactions
+	// couple of lines above. and index should be written atomically with transaction body
 	if len(missing) != 0 {
 		log.Error("could not find transactions %v", missing)
-		return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 	}
-	return
+	return txs, nil
 }
 
 func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
