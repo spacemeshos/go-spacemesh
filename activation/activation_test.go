@@ -329,7 +329,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 
 	coinbase := types.Address{1, 1, 1}
 	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
-	t.Cleanup(func() { builder.StopSmeshing(true) })
+	t.Cleanup(func() { builder.StopSmeshing(context.TODO(), true) })
 	require.Equal(t, coinbase, builder.Coinbase())
 }
 
