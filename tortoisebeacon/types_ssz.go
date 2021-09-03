@@ -443,6 +443,95 @@ func (f *FollowingVotingMessageBody) SizeSSZ() (size int) {
 	return
 }
 
+// MarshalSSZ ssz marshals the FollowingVotingMessage object
+func (f *FollowingVotingMessage) MarshalSSZ() ([]byte, error) {
+	return ssz.MarshalSSZ(f)
+}
+
+// MarshalSSZTo ssz marshals the FollowingVotingMessage object to a target array
+func (f *FollowingVotingMessage) MarshalSSZTo(buf []byte) (dst []byte, err error) {
+	dst = buf
+	offset := int(8)
+
+	// Offset (0) 'FollowingVotingMessageBody'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += f.FollowingVotingMessageBody.SizeSSZ()
+
+	// Offset (1) 'Signature'
+	dst = ssz.WriteOffset(dst, offset)
+	offset += len(f.Signature)
+
+	// Field (0) 'FollowingVotingMessageBody'
+	if dst, err = f.FollowingVotingMessageBody.MarshalSSZTo(dst); err != nil {
+		return
+	}
+
+	// Field (1) 'Signature'
+	if len(f.Signature) > 256 {
+		err = ssz.ErrBytesLength
+		return
+	}
+	dst = append(dst, f.Signature...)
+
+	return
+}
+
+// UnmarshalSSZ ssz unmarshals the FollowingVotingMessage object
+func (f *FollowingVotingMessage) UnmarshalSSZ(buf []byte) error {
+	var err error
+	size := uint64(len(buf))
+	if size < 8 {
+		return ssz.ErrSize
+	}
+
+	tail := buf
+	var o0, o1 uint64
+
+	// Offset (0) 'FollowingVotingMessageBody'
+	if o0 = ssz.ReadOffset(buf[0:4]); o0 > size {
+		return ssz.ErrOffset
+	}
+
+	// Offset (1) 'Signature'
+	if o1 = ssz.ReadOffset(buf[4:8]); o1 > size || o0 > o1 {
+		return ssz.ErrOffset
+	}
+
+	// Field (0) 'FollowingVotingMessageBody'
+	{
+		buf = tail[o0:o1]
+		if err = f.FollowingVotingMessageBody.UnmarshalSSZ(buf); err != nil {
+			return err
+		}
+	}
+
+	// Field (1) 'Signature'
+	{
+		buf = tail[o1:]
+		if len(buf) > 256 {
+			return ssz.ErrBytesLength
+		}
+		if cap(f.Signature) == 0 {
+			f.Signature = make([]byte, 0, len(buf))
+		}
+		f.Signature = append(f.Signature, buf...)
+	}
+	return err
+}
+
+// SizeSSZ returns the ssz encoded size in bytes for the FollowingVotingMessage object
+func (f *FollowingVotingMessage) SizeSSZ() (size int) {
+	size = 8
+
+	// Field (0) 'FollowingVotingMessageBody'
+	size += f.FollowingVotingMessageBody.SizeSSZ()
+
+	// Field (1) 'Signature'
+	size += len(f.Signature)
+
+	return
+}
+
 // MarshalSSZ ssz marshals the vrfMessage object
 func (v *vrfMessage) MarshalSSZ() ([]byte, error) {
 	return ssz.MarshalSSZ(v)

@@ -391,6 +391,6 @@ sszgen:
 	sszgen --path ./tortoise/ --output ./tortoise/types_ssz.go --objs vec
 	sszgen --path ./mesh/ --output ./mesh/types_ssz.go --objs dbReward,ProcessedLayer,DbTransaction --include ./common/types/
 	sszgen --path ./tortoisebeacon/weakcoin --output ./tortoisebeacon/weakcoin/types_ssz.go --objs Message --include ./common/types/
-	sszgen --path ./tortoisebeacon/ --output ./tortoisebeacon/types_ssz.go --objs ProposalMessage,FirstVotingMessageBody,FirstVotingMessage,FollowingVotingMessageBody,vrfMessage --include ./common/types/
+	sszgen --path ./tortoisebeacon/ --output ./tortoisebeacon/types_ssz.go --objs ProposalMessage,FirstVotingMessage,FollowingVotingMessage,vrfMessage --include ./common/types/
 	sszgen --path ./activation/ --output ./activation/types_ssz.go --objs atxIDAndLayer,builderState --include ./common/types/
 .PHONY: sszgen
