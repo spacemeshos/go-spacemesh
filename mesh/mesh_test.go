@@ -440,11 +440,12 @@ func TestMesh_WakeUp(t *testing.T) {
 		msh.Close()
 	})
 
+	gLyr := types.GetEffectiveGenesis()
 	r := require.New(t)
 	txIDs1, _ := addManyTXsToPool(r, msh, 4)
 	txIDs2, _ := addManyTXsToPool(r, msh, 3)
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data1"), txIDs1)
-	block2 := types.NewExistingBlock(types.NewLayerID(2), []byte("data2"), txIDs2)
+	block1 := types.NewExistingBlock(gLyr.Add(1), []byte("data1"), txIDs1)
+	block2 := types.NewExistingBlock(gLyr.Add(2), []byte("data2"), txIDs2)
 
 	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block1))
 	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block2))

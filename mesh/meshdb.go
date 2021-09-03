@@ -406,11 +406,7 @@ func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blk
 }
 
 func (m *DB) persistProcessedLayer(layerID types.LayerID) error {
-	if err := m.general.Put(constPROCESSED, layerID.Bytes()); err != nil {
-		return err
-	}
-	m.With().Debug("persisted processed layer", layerID)
-	return nil
+	return m.general.Put(constPROCESSED, layerID.Bytes())
 }
 
 func (m *DB) recoverProcessedLayer() (types.LayerID, error) {
@@ -457,11 +453,12 @@ func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
 	return h, nil
 }
 
-func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
-	if err := m.general.Put(getLayerHashKey(layerID), hash.Bytes()); err != nil {
-		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
-			log.String("layer_hash", hash.ShortString()))
-	}
+func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) error {
+	return m.general.Put(getLayerHashKey(layerID), hash.Bytes())
+}
+
+func (m *DB) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) error {
+	return m.general.Put(getAggregatedLayerHashKey(layerID), hash.Bytes())
 }
 
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
