@@ -60,7 +60,16 @@ func (m *MeshValidatorMock) LatestComplete() types.LayerID {
 }
 
 func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
-	return layerID.Sub(1), layerID, false
+	gLyr := types.GetEffectiveGenesis()
+	if !layerID.After(gLyr) {
+		return gLyr, gLyr, false
+	}
+	oldVerified := layerID.Sub(2)
+	if oldVerified.Before(gLyr) {
+		oldVerified = gLyr
+	}
+	newVerified := layerID.Sub(1)
+	return oldVerified, newVerified, false
 }
 
 func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, bl []*types.Block) (types.LayerID, types.LayerID) {
@@ -170,9 +179,6 @@ func TestMesh_LayerHash(t *testing.T) {
 	})
 
 	gLyr := types.GetEffectiveGenesis()
-	for i := types.NewLayerID(1); i.Before(gLyr); i = i.Add(1) {
-		msh.SetZeroBlockLayer(i)
-	}
 	latestLyr := gLyr.Add(5)
 	for i := gLyr.Add(1); !i.After(latestLyr); i = i.Add(1) {
 		numBlocks := 10 * i.Uint32()
@@ -185,37 +191,32 @@ func TestMesh_LayerHash(t *testing.T) {
 		thisLyr, err := msh.GetLayer(i)
 		r.NoError(err)
 		if !i.After(gLyr) {
-			// nothing is validated by tortoise before genesis layer
-			msh.ValidateLayer(context.TODO(), thisLyr)
-			if i.Before(gLyr) {
-				assert.Equal(t, types.EmptyLayerHash, msh.GetLayerHash(i))
-				assert.Equal(t, types.EmptyLayerHash, thisLyr.Hash())
+			var expHash types.Hash32
+			if i == gLyr {
+				expHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(thisLyr.Blocks())), nil)
 			} else {
-				assert.Equal(t, thisLyr.Hash(), msh.GetLayerHash(i))
+				expHash = types.EmptyLayerHash
 			}
-			continue
-		}
-
-		// only layers before "lyr" will have their block contextual validity determined
-		prevLyr, err := msh.GetLayer(i.Sub(1))
-		r.NoError(err)
-		assert.Equal(t, prevLyr.Hash(), msh.GetLayerHash(i.Sub(1)))
-		assert.Equal(t, thisLyr.Hash(), msh.GetLayerHash(i))
-		msh.ValidateLayer(context.TODO(), thisLyr)
-		// contextual validity is still not determined for thisLyr, so hash is still calculated from all blocks
-		assert.Equal(t, thisLyr.Hash(), msh.GetLayerHash(i))
-		// but for previous layer hash should already be changed to contain only valid blocks
-		if prevLyr.Index() == gLyr {
-			// genesis blocks are all valid
-			expHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(prevLyr.Blocks())), nil)
-			actHash := msh.GetLayerHash(prevLyr.Index())
-			assert.Equal(t, expHash, actHash)
-			assert.Equal(t, prevLyr.Hash(), actHash)
+			assert.Equal(t, thisLyr.Hash(), msh.GetLayerHash(i))
+			assert.Equal(t, expHash, msh.GetLayerHash(i))
+			msh.ValidateLayer(context.TODO(), thisLyr)
+			assert.Equal(t, thisLyr.Hash(), msh.GetLayerHash(i))
+			assert.Equal(t, expHash, msh.GetLayerHash(i))
 		} else {
-			expHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(prevLyr.Blocks()[1:])), nil)
-			actHash := msh.GetLayerHash(prevLyr.Index())
-			assert.Equal(t, expHash, actHash)
-			assert.NotEqual(t, prevLyr.Hash(), actHash)
+			// when tortoise verify a layer N, it can only determine blocks' contextual validity for layer N-1
+			prevLyr, err := msh.GetLayer(i.Sub(1))
+			r.NoError(err)
+			assert.Equal(t, thisLyr.Hash(), msh.GetLayerHash(i))
+			assert.Equal(t, prevLyr.Hash(), msh.GetLayerHash(i.Sub(1)))
+			msh.ValidateLayer(context.TODO(), thisLyr)
+			// for this layer, hash is unchanged because the block contextual validity is not determined yet
+			assert.Equal(t, thisLyr.Hash(), msh.GetLayerHash(i))
+			if prevLyr.Index().After(gLyr) {
+				// but for previous layer hash should already be changed to contain only valid blocks
+				prevExpHash := types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(prevLyr.Blocks()[1:])), nil)
+				assert.Equal(t, prevExpHash, msh.GetLayerHash(i.Sub(1)))
+				assert.NotEqual(t, prevLyr.Hash(), msh.GetLayerHash(i.Sub(1)))
+			}
 		}
 	}
 }
@@ -228,9 +229,6 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 	})
 
 	gLyr := types.GetEffectiveGenesis()
-	for i := types.NewLayerID(1); i.Before(gLyr); i = i.Add(1) {
-		msh.SetZeroBlockLayer(i)
-	}
 	latestLyr := gLyr.Add(5)
 	for i := gLyr.Add(1); !i.After(latestLyr); i = i.Add(1) {
 		numBlocks := 10 * i.Uint32()
@@ -240,42 +238,43 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 	}
 
 	prevAggHash := types.EmptyLayerHash
-	for i := types.NewLayerID(1); !i.After(latestLyr); i = i.Add(1) {
+	var expHash types.Hash32
+	for i := types.NewLayerID(1); !i.After(gLyr); i = i.Add(1) {
 		thisLyr, err := msh.GetLayer(i)
 		r.NoError(err)
-		if i.Before(gLyr) {
-			// nothing is validated by tortoise before genesis layer
+		if i == gLyr {
+			expHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(thisLyr.Blocks())), prevAggHash.Bytes())
+		} else {
+			expHash = types.CalcBlocksHash32([]types.BlockID{}, prevAggHash.Bytes())
+		}
+		assert.Equal(t, expHash, msh.GetAggregatedLayerHash(i))
+		msh.ValidateLayer(context.TODO(), thisLyr)
+		assert.Equal(t, expHash, msh.GetAggregatedLayerHash(i))
+		prevAggHash = expHash
+	}
+
+	for i := gLyr.Add(1); !i.After(latestLyr); i = i.Add(1) {
+		thisLyr, err := msh.GetLayer(i)
+		r.NoError(err)
+		prevLyr, err := msh.GetLayer(i.Sub(1))
+		r.NoError(err)
+		if prevLyr.Index() == gLyr {
+			r.Equal(prevAggHash, msh.GetAggregatedLayerHash(i.Sub(1)))
+			r.Equal(types.EmptyLayerHash, msh.GetAggregatedLayerHash(i))
 			msh.ValidateLayer(context.TODO(), thisLyr)
-			assert.Equal(t, types.EmptyLayerHash, msh.GetAggregatedLayerHash(i))
+			r.Equal(prevAggHash, msh.GetAggregatedLayerHash(i.Sub(1)))
+			r.Equal(types.EmptyLayerHash, msh.GetAggregatedLayerHash(i))
 			continue
 		}
-
 		r.Equal(types.EmptyLayerHash, msh.GetAggregatedLayerHash(i.Sub(1)))
 		r.Equal(types.EmptyLayerHash, msh.GetAggregatedLayerHash(i))
 		msh.ValidateLayer(context.TODO(), thisLyr)
 		// contextual validity is still not determined for thisLyr, so aggregated hash is not calculated for this layer
 		r.Equal(types.EmptyLayerHash, msh.GetAggregatedLayerHash(i))
 		// but for previous layer hash should already be changed to contain only valid blocks
-		var expHash types.Hash32
-		if i == gLyr {
-			// aggregated layer hash for genesis layers should be computed now
-			for j := types.NewLayerID(1); j.Before(gLyr); j = j.Add(1) {
-				expHash = types.CalcBlocksHash32([]types.BlockID{}, prevAggHash.Bytes())
-				assert.Equal(t, expHash, msh.GetAggregatedLayerHash(j))
-				prevAggHash = expHash
-			}
-		} else {
-			prevLyr, err := msh.GetLayer(i.Sub(1))
-			r.NoError(err)
-			if prevLyr.Index() == gLyr {
-				// all genesis blocks are valid
-				expHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(prevLyr.Blocks())), prevAggHash.Bytes())
-			} else {
-				expHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(prevLyr.Blocks()[1:])), prevAggHash.Bytes())
-			}
-			assert.Equal(t, expHash, msh.GetAggregatedLayerHash(prevLyr.Index()))
-			prevAggHash = expHash
-		}
+		expHash = types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(prevLyr.Blocks()[1:])), prevAggHash.Bytes())
+		assert.Equal(t, expHash, msh.GetAggregatedLayerHash(prevLyr.Index()))
+		prevAggHash = expHash
 	}
 }
 

@@ -120,6 +120,11 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 	}
 
 	msh.Validator = &validator{Mesh: msh}
+	gLyr := types.GetEffectiveGenesis()
+	for i := types.NewLayerID(1); i.Before(gLyr); i = i.Add(1) {
+		msh.SetZeroBlockLayer(i)
+	}
+	msh.persistLayerHashes(context.Background(), types.NewLayerID(1), gLyr)
 	return msh
 }
 
@@ -331,7 +336,9 @@ func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 		logger.With().Error("could not persist tortoise", log.Err(err))
 	}
 	vl.pushLayersToState(ctx, oldPbase, newPbase)
-	vl.persistLayerHashes(oldPbase.Add(1), newPbase)
+	if newPbase.After(oldPbase) {
+		vl.persistLayerHashes(ctx, oldPbase.Add(1), newPbase)
+	}
 	vl.setProcessedLayer(lyr)
 	for newlyVerifiedLayer := oldPbase.Add(1); !newlyVerifiedLayer.After(newPbase); newlyVerifiedLayer = newlyVerifiedLayer.Add(1) {
 		events.ReportLayerUpdate(events.LayerUpdate{
@@ -342,17 +349,20 @@ func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 	logger.Info("done validating layer")
 }
 
-func (msh *Mesh) persistLayerHashes(from, to types.LayerID) error {
+func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID) error {
 	if to.Before(from) {
-		msh.With().Warning("validated layer went backward",
+		msh.WithContext(ctx).With().Panic("verified layer went backward",
 			log.FieldNamed("fromLayer", from),
 			log.FieldNamed("toLayer", to))
-		from = to
 	}
+
+	msh.WithContext(ctx).With().Debug("persisting layer hashes",
+		log.FieldNamed("from_layer", from),
+		log.FieldNamed("to_layer", to))
 	for i := from; !i.After(to); i = i.Add(1) {
 		lyr, err := msh.GetLayer(i)
 		if err != nil {
-			msh.With().Error("failed to get validated layer", i, log.Err(err))
+			msh.WithContext(ctx).With().Error("failed to get verified layer", i, log.Err(err))
 			return err
 		}
 		validBlocks, _ := msh.BlocksByValidity(lyr.Blocks())
@@ -365,13 +375,13 @@ func (msh *Mesh) persistLayerHashes(from, to types.LayerID) error {
 
 		prevHash, err := msh.getAggregatedLayerHash(i.Sub(1))
 		if err != nil {
-			msh.With().Debug("failed to get previous aggregated hash", i, log.Err(err))
+			msh.WithContext(ctx).With().Debug("failed to get previous aggregated hash", i, log.Err(err))
 			return err
 		}
-		msh.With().Debug("got previous aggregatedHash", i, log.String("prevAggHash", prevHash.ShortString()))
+		msh.WithContext(ctx).With().Debug("got previous aggregatedHash", i, log.String("prevAggHash", prevHash.ShortString()))
 		newAggHash := types.CalcBlocksHash32(sorted, prevHash.Bytes())
 		msh.persistAggregatedLayerHash(i, newAggHash)
-		msh.With().Info("aggregated hash updated for layer",
+		msh.WithContext(ctx).With().Info("aggregated hash updated for layer",
 			i,
 			log.String("hash", hash.ShortString()),
 			log.String("aggHash", newAggHash.ShortString()))
