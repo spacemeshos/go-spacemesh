@@ -148,6 +148,7 @@ type Builder struct {
 	store                 bytesStore
 	syncer                syncer
 	log                   log.Log
+	parentCtx             context.Context
 	runCtx                context.Context
 	stop                  func()
 	poetRetryInterval     time.Duration
@@ -180,7 +181,7 @@ func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption 
 // WithContext modifies parent context for background job.
 func WithContext(ctx context.Context) BuilderOption {
 	return func(b *Builder) {
-		b.runCtx = ctx
+		b.parentCtx = ctx
 	}
 }
 
@@ -189,7 +190,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 	layersPerEpoch uint32, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
-		runCtx:            context.Background(),
+		parentCtx:         context.Background(),
 		signer:            signer,
 		nodeID:            nodeID,
 		coinbaseAccount:   conf.CoinbaseAccount,
@@ -210,7 +211,6 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 	for _, opt := range opts {
 		opt(b)
 	}
-	b.runCtx, b.stop = context.WithCancel(b.runCtx)
 	return b
 }
 
@@ -235,6 +235,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	}
 	b.coinbaseAccount = coinbase
 	b.status = smeshingStatusPendingPostSetup
+	b.runCtx, b.stop = context.WithCancel(b.parentCtx)
 	b.mtx.Unlock()
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)

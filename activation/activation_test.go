@@ -333,6 +333,17 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	require.Equal(t, coinbase, builder.Coinbase())
 }
 
+func TestBuilder_RestartSmeshing(t *testing.T) {
+	activationDb := newActivationDb(t)
+	builder := newBuilder(t, activationDb)
+
+	for i := 0; i < 10; i++ {
+		require.NoError(t, builder.StartSmeshing(types.Address{1, 1, 1}, PostSetupOpts{}))
+		time.Sleep(10 * time.Second)
+		require.NoError(t, builder.StopSmeshing(true))
+	}
+}
+
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)
