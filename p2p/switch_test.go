@@ -62,11 +62,12 @@ func (cp *cpoolMock) Shutdown() {
 
 func p2pTestInstance(t testing.TB, config config.Config) *Switch {
 	p := p2pTestNoStart(t, config)
-	err := p.Start(context.TODO())
-	if err != nil {
+	if err := p.Start(context.TODO()); err != nil {
 		t.Fatal(err)
 	}
-
+	t.Cleanup(func() {
+		p.Shutdown()
+	})
 	return p
 }
 
