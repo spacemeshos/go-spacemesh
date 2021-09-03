@@ -266,6 +266,7 @@ type MiniBlock struct {
 	BaseBlock BlockID
 }
 
+// GetRefBlock returns BlockID if RefBlock was set.
 func (b *MiniBlock) GetRefBlock() *BlockID {
 	if len(b.RefBlock) == 0 {
 		return nil

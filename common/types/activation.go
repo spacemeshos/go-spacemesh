@@ -234,6 +234,7 @@ func (atx *ActivationTx) GetShortPoetProofRef() []byte {
 	return ref[:util.Min(5, len(ref))]
 }
 
+// MerkleProof used in PoetProof.
 type MerkleProof struct {
 	Root         []byte   `ssz-max:"512"`
 	ProvenLeaves [][]byte `ssz-size:"?,?" ssz-max:"1024000,1024000"`

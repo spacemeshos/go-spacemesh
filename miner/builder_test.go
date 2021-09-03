@@ -243,7 +243,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	assert.True(t, ContainsTx(bl.TxIDs, transids[1]))
 	assert.True(t, ContainsTx(bl.TxIDs, transids[2]))
 
-	assert.Equal(t, bl.RefBlock, b.ID())
+	assert.Equal(t, *bl.GetRefBlock(), b.ID())
 }
 
 func NewTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
