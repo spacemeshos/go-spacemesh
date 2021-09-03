@@ -5,7 +5,7 @@ from tests.ed25519.eddsa import signature2
 
 
 ADDRESS_SIZE = 20
-INT_SIZE = INT_SIZE
+INT_SIZE = 8
 ENDIAN = "little"
 
 class TxGenerator:
