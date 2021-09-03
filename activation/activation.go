@@ -117,7 +117,8 @@ type Config struct {
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof
 type Builder struct {
-	started atomic.Bool
+	pendingPoetClient atomic.UnsafePointer
+	started           atomic.Bool
 
 	signer
 	accountLock       sync.RWMutex
@@ -145,8 +146,6 @@ type Builder struct {
 	exited                chan struct{}
 	poetRetryInterval     time.Duration
 	poetClientInitializer PoETClientInitializer
-	// pendingPoetClient is modified using atomic operations on unsafe.Pointer
-	pendingPoetClient atomic.UnsafePointer
 }
 
 // BuilderOption ...
