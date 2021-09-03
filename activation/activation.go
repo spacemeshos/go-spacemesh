@@ -367,7 +367,11 @@ func (b *Builder) run(ctx context.Context) {
 func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	syncedCh := make(chan struct{})
 	b.syncer.RegisterChForSynced(ctx, syncedCh)
-	<-syncedCh
+	select {
+	case <-ctx.Done():
+		return ErrStopRequested
+	case <-syncedCh:
+	}
 	challenge := &types.NIPostChallenge{NodeID: b.nodeID}
 	atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo()
 	if err != nil {
