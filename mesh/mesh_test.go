@@ -171,6 +171,21 @@ func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh)
 	return l
 }
 
+func TestMesh_LayerBlocksSortedByIDs(t *testing.T) {
+	r := require.New(t)
+	msh := getMesh(t, "blockIDs")
+	t.Cleanup(func() {
+		msh.Close()
+	})
+	lyr := addLayer(r, types.GetEffectiveGenesis().Add(19), 100, msh)
+	blockIDs := types.BlockIDs(lyr.Blocks())
+	outOfSort := blockIDs[1:]
+	outOfSort = append(outOfSort, blockIDs[0])
+	sorted := types.SortBlockIDs(blockIDs)
+	assert.Equal(t, sorted, blockIDs)
+	assert.NotEqual(t, sorted, outOfSort)
+}
+
 func TestMesh_LayerHash(t *testing.T) {
 	r := require.New(t)
 	msh := getMesh(t, "layerHash")

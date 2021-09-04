@@ -360,49 +360,71 @@ func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 }
 
 func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID) error {
+	logger := msh.WithContext(ctx)
 	if to.Before(from) {
-		msh.WithContext(ctx).With().Panic("verified layer went backward",
+		logger.With().Panic("verified layer went backward",
 			log.FieldNamed("fromLayer", from),
 			log.FieldNamed("toLayer", to))
 	}
 
-	msh.WithContext(ctx).With().Debug("persisting layer hashes",
+	logger.With().Debug("persisting layer hashes",
 		log.FieldNamed("from_layer", from),
 		log.FieldNamed("to_layer", to))
 	for i := from; !i.After(to); i = i.Add(1) {
-		lyr, err := msh.GetLayer(i)
+		validBlockIDs, err := msh.getValidBlockIDs(ctx, i)
 		if err != nil {
-			msh.WithContext(ctx).With().Error("failed to get verified layer", i, log.Err(err))
+			logger.With().Error("failed to get valid block IDs", i, log.Err(err))
 			return err
 		}
-		validBlocks, _ := msh.BlocksByValidity(lyr.Blocks())
-		sorted := types.SortBlockIDs(types.BlockIDs(validBlocks))
 		hash := types.EmptyLayerHash
-		if len(sorted) > 0 {
-			hash = types.CalcBlocksHash32(sorted, nil)
+		if len(validBlockIDs) > 0 {
+			hash = types.CalcBlocksHash32(validBlockIDs, nil)
 		}
 		if err := msh.persistLayerHash(i, hash); err != nil {
-			msh.WithContext(ctx).With().Error("failed to persist layer hash", i, log.Err(err))
+			logger.With().Error("failed to persist layer hash", i, log.Err(err))
 			return err
 		}
 
 		prevHash, err := msh.getAggregatedLayerHash(i.Sub(1))
 		if err != nil {
-			msh.WithContext(ctx).With().Debug("failed to get previous aggregated hash", i, log.Err(err))
+			logger.With().Debug("failed to get previous aggregated hash", i, log.Err(err))
 			return err
 		}
-		msh.WithContext(ctx).With().Debug("got previous aggregatedHash", i, log.String("prevAggHash", prevHash.ShortString()))
-		newAggHash := types.CalcBlocksHash32(sorted, prevHash.Bytes())
+		logger.With().Debug("got previous aggregatedHash", i, log.String("prevAggHash", prevHash.ShortString()))
+		newAggHash := types.CalcBlocksHash32(validBlockIDs, prevHash.Bytes())
 		if err := msh.persistAggregatedLayerHash(i, newAggHash); err != nil {
-			msh.WithContext(ctx).With().Error("failed to persist aggregated layer hash", i, log.Err(err))
+			logger.With().Error("failed to persist aggregated layer hash", i, log.Err(err))
 			return err
 		}
-		msh.WithContext(ctx).With().Info("aggregated hash updated for layer",
+		logger.With().Info("aggregated hash updated for layer",
 			i,
 			log.String("hash", hash.ShortString()),
 			log.String("aggHash", newAggHash.ShortString()))
 	}
 	return nil
+}
+
+func (msh *Mesh) getValidBlockIDs(ctx context.Context, layerID types.LayerID) ([]types.BlockID, error) {
+	logger := msh.WithContext(ctx)
+	lyr, err := msh.GetLayer(layerID)
+	if err != nil {
+		logger.With().Error("failed to get layer", layerID, log.Err(err))
+		return nil, err
+	}
+	var validBlockIDs []types.BlockID
+	for _, bID := range lyr.BlocksIDs() {
+		valid, err := msh.ContextualValidity(bID)
+		if err != nil {
+			// block contextual validity is determined by layer. if one block in the layer is not determined,
+			// the whole layer is not yet verified.
+			logger.With().Warning("block contextual validity not yet determined", layerID, bID, log.Err(err))
+			return nil, err
+		}
+		if valid {
+			validBlockIDs = append(validBlockIDs, bID)
+		}
+	}
+	return validBlockIDs, nil
 }
 
 // HandleLateBlock process a late (contextually invalid) block.
