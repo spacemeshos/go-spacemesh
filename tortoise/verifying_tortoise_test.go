@@ -8,16 +8,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/spacemeshos/go-spacemesh/timesync"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/stretchr/testify/require"
 )
 
@@ -818,22 +817,54 @@ func TestAddToMesh(t *testing.T) {
 	require.NoError(t, addLayerToMesh(mdb, l2))
 	alg.HandleIncomingLayer(context.TODO(), l2.Index())
 
-	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
+	require.Equal(t, types.GetEffectiveGenesis().Add(1), alg.LatestComplete())
 
 	l3a := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize+1)
 
 	// this should fail as the blocks for this layer have not been added to the mesh yet
 	alg.HandleIncomingLayer(context.TODO(), l3a.Index())
-	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
+	require.Equal(t, types.GetEffectiveGenesis().Add(1), alg.LatestComplete())
 
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
+	require.Equal(t, types.GetEffectiveGenesis().Add(2), alg.LatestComplete())
 
 	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l4))
 	alg.HandleIncomingLayer(context.TODO(), l4.Index())
-	require.Equal(t, int(types.GetEffectiveGenesis().Add(3).Uint32()), int(alg.LatestComplete().Uint32()), "wrong latest complete layer")
+	require.Equal(t, types.GetEffectiveGenesis().Add(3), alg.LatestComplete(), "wrong latest complete layer")
+}
+
+func TestHareOutputLayersOutOfOrder(t *testing.T) {
+	logger := logtest.New(t)
+	mdb := getInMemMesh(t)
+
+	getHareResults := mdb.LayerBlockIds
+
+	mdb.InputVectorBackupFunc = getHareResults
+	atxdb := getAtxDB()
+	alg := defaultAlgorithm(t, mdb)
+	alg.trtl.atxdb = atxdb
+	l := mesh.GenesisLayer()
+
+	logger.With().Info("genesis is", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
+	logger.With().Info("genesis is", l.Blocks()[0].Fields()...)
+
+	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
+	require.NoError(t, addLayerToMesh(mdb, l1))
+	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
+	require.NoError(t, addLayerToMesh(mdb, l2))
+	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
+	require.NoError(t, addLayerToMesh(mdb, l3))
+	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
+	require.NoError(t, addLayerToMesh(mdb, l4))
+
+	alg.HandleIncomingLayer(context.TODO(), l1.Index())
+	alg.HandleIncomingLayer(context.TODO(), l3.Index())
+	alg.HandleIncomingLayer(context.TODO(), l4.Index())
+	alg.HandleIncomingLayer(context.TODO(), l2.Index())
+	require.Equal(t, types.GetEffectiveGenesis(), alg.LatestComplete())
 }
 
 func TestPersistAndRecover(t *testing.T) {
