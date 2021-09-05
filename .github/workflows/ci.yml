@@ -17,7 +17,10 @@ env:
   DUMP_QUEUE_NAME: ${{ secrets.DUMP_QUEUE_NAME }}
   DUMP_QUEUE_ZONE: ${{ secrets.DUMP_QUEUE_ZONE }}
 
-# Trigger the workflow on all pull requests, and on push to specific branches
+on:  
+  push:
+    tags:
+      - '*'
 
 jobs:
   ## stage 0: check which files were changed
