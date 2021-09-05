@@ -8,6 +8,8 @@ on:
   push:
     tags:
       - '*'
+    branchs: 
+      - gpu-post-bin
       
 jobs:
   build-and-upload:
@@ -23,23 +25,11 @@ jobs:
           go-version: '1.15.13'
       
       - if: matrix.os == 'windows-latest'
-        name: Install make in windows
+        name: Install dependencies in windows
         uses: crazy-max/ghaction-chocolatey@v1
         with:
-          args: install make
+          args: install make wget zip
 
-      - if: matrix.os == 'windows-latest'
-        name: Install wget in windows
-        uses: crazy-max/ghaction-chocolatey@v1
-        with:
-          args: install wget
-
-      - if: matrix.os == 'windows-latest'
-        name: Install zip in windows
-        uses: crazy-max/ghaction-chocolatey@v1
-        with:
-          args: install zip
-      
       - name: setup env
         run: |
           echo "::set-env name=GOPATH::$(go env GOPATH)"
@@ -70,7 +60,7 @@ jobs:
           unzip libgpu-setup-*.zip -d build_${{ runner.os }}
 
           #Download latest smrepl release
-          wget https://github.com/spacemeshos/smrepl/releases/latest/download/${{ runner.os }}.zip
+          wget https://github.com/spacemeshos/smrepl/releases/download/v0.1.32/${{ runner.os }}.zip
           unzip ${{ runner.os }}.zip -d build_${{ runner.os }}
           
           rm -f build_${{ runner.os }}/api.h
