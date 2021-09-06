@@ -189,8 +189,11 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 		wc.nextRoundBuffer[i] = Message{}
 	}
 	wc.nextRoundBuffer = wc.nextRoundBuffer[:0]
+
+	err := wc.publishProposal(ctx, epoch, round)
 	wc.mu.Unlock()
-	return wc.publishProposal(ctx, epoch, round)
+
+	return err
 }
 
 func (wc *WeakCoin) updateProposal(message Message) error {

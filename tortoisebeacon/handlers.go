@@ -128,7 +128,9 @@ func (tb *TortoiseBeacon) classifyProposalMessage(ctx context.Context, m Proposa
 			log.String("received_time", receivedTime.String()),
 			log.Duration("grace_period", tb.config.GracePeriodDuration))
 
+		tb.consensusMu.Lock()
 		tb.incomingProposals.valid = append(tb.incomingProposals.valid, m.VRFSignature)
+		tb.consensusMu.Unlock()
 
 	case tb.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		tb.Log.WithContext(ctx).With().Debug("received potentially valid proposal message",
@@ -139,7 +141,9 @@ func (tb *TortoiseBeacon) classifyProposalMessage(ctx context.Context, m Proposa
 			log.String("received_time", receivedTime.String()),
 			log.Duration("grace_period", tb.config.GracePeriodDuration))
 
+		tb.consensusMu.Lock()
 		tb.incomingProposals.potentiallyValid = append(tb.incomingProposals.potentiallyValid, m.VRFSignature)
+		tb.consensusMu.Unlock()
 
 	default:
 		tb.Log.WithContext(ctx).With().Warning("received invalid proposal message",
