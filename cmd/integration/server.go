@@ -72,7 +72,7 @@ func (s *server) start(args []string) error {
 	if err != nil {
 		// move err to error channel
 		log.Error("an error has occurred during go-spacemesh command wait: %v", err)
-		s.errChan <- fmt.Errorf("cmd.Run() failed with %s", err)
+		s.errChan <- fmt.Errorf("cmd.Run() failed with error: %w", err)
 	}
 
 	log.With().Info("exiting integration server")
@@ -95,7 +95,7 @@ func (s *server) shutdown() error {
 func (s *server) stop() error {
 	// Do nothing if the process is not running.
 	if err := s.cmd.Process.Kill(); err != nil {
-		return fmt.Errorf("failed to kill process: %v", err)
+		return fmt.Errorf("failed to kill process: %w", err)
 	}
 
 	close(s.quit)

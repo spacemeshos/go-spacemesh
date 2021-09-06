@@ -90,10 +90,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			numberOfEligibleBlocks, totalWeight)
 	}
 
-	epochBeacon, err := v.beaconProvider.GetBeacon(epochNumber)
-	if err != nil {
-		return false, fmt.Errorf("get beacon for epoch %v: %w", epochNumber, err)
-	}
+	epochBeacon := block.EligibilityProof.TortoiseBeacon
 
 	message, err := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	if err != nil {
@@ -107,7 +104,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			beaconShortString, epochNumber, counter, types.BytesToHash(vrfSig).ShortString())
 	}
 
-	v.log.Info("validated tortoise beacon eligibility VRF of beacon %v in epoch %v (counter: %v)", beaconShortString, epochNumber, counter)
+	v.log.Info("validated tortoise beacon eligibility vrf of beacon %v in epoch %v (counter: %v)", beaconShortString, epochNumber, counter)
 
 	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfSig)
 

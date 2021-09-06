@@ -2,14 +2,14 @@ package state
 
 import (
 	"encoding/binary"
-	"fmt"
+	"sync"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
-	"sync"
-	"testing"
-	"time"
 )
 
 func getState(types.Address) (uint64, uint64, error) {
@@ -34,25 +34,25 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
 	r.Equal(prevBalance-50, balance)
-	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(origin))
-	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(tx1.Recipient))
+	r.ElementsMatch([]*types.Transaction{tx1}, pool.GetTxsByAddress(origin))
+	r.ElementsMatch([]*types.Transaction{tx1}, pool.GetTxsByAddress(tx1.Recipient))
 
 	tx2 := newTx(t, 5, 150, signer)
 	pool.Put(tx2.ID(), tx2)
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
-	r.ElementsMatch([]types.TransactionID{tx1.ID(), tx2.ID()}, pool.GetTxIdsByAddress(origin))
-	r.ElementsMatch([]types.TransactionID{tx1.ID()}, pool.GetTxIdsByAddress(tx1.Recipient))
-	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(tx2.Recipient))
+	r.ElementsMatch([]*types.Transaction{tx1, tx2}, pool.GetTxsByAddress(origin))
+	r.ElementsMatch([]*types.Transaction{tx1}, pool.GetTxsByAddress(tx1.Recipient))
+	r.ElementsMatch([]*types.Transaction{tx2}, pool.GetTxsByAddress(tx2.Recipient))
 
 	pool.Invalidate(tx1.ID())
 	nonce, balance = pool.GetProjection(origin, prevNonce+1, prevBalance-50)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
-	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(origin))
-	r.Empty(pool.GetTxIdsByAddress(tx1.Recipient))
-	r.ElementsMatch([]types.TransactionID{tx2.ID()}, pool.GetTxIdsByAddress(tx2.Recipient))
+	r.ElementsMatch([]*types.Transaction{tx2}, pool.GetTxsByAddress(origin))
+	r.Empty(pool.GetTxsByAddress(tx1.Recipient))
+	r.ElementsMatch([]*types.Transaction{tx2}, pool.GetTxsByAddress(tx2.Recipient))
 
 	seed := []byte("seedseed")
 	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
@@ -79,7 +79,6 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	for i := uint64(0); i < numTxs; i++ {
 		tx := newTx(t, prevNonce+i, 50, signer)
 		ids[i] = tx.ID()
-		fmt.Printf("%d: %v\n", i, ids[i].ShortString())
 		pool.Put(ids[i], tx)
 	}
 

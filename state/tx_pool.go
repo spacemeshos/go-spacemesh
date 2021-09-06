@@ -39,13 +39,15 @@ func (t *TxMempool) Get(id types.TransactionID) (*types.Transaction, error) {
 	return nil, errors.New("transaction not found in mempool")
 }
 
-// GetTxIdsByAddress returns all transactions from/to a specific address
-func (t *TxMempool) GetTxIdsByAddress(addr types.Address) []types.TransactionID {
-	var ids []types.TransactionID
+// GetTxsByAddress returs all transactions from/to a specific address.
+func (t *TxMempool) GetTxsByAddress(addr types.Address) []*types.Transaction {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	txs := make([]*types.Transaction, 0, len(t.txByAddr))
 	for id := range t.txByAddr[addr] {
-		ids = append(ids, id)
+		txs = append(txs, t.txs[id])
 	}
-	return ids
+	return txs
 }
 
 // GetTxsForBlock gets a specific number of random txs for a block. This function also receives a state calculation function

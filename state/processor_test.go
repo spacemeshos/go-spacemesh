@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -43,7 +43,7 @@ func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me"
 func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
 
 func (s *ProcessorStateSuite) SetupTest() {
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(s.T()).WithName("proc_logger")
 	s.db = database.NewMemDatabase()
 	s.projector = &ProjectorMock{}
 	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, s.projector, NewTxMemPool(), lg)
@@ -224,7 +224,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	obj1 := createAccount(s.processor, SignerToAddr(signer), 25, 0)
 	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 02}), 1, 10)
 	obj3 := createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
-	s.processor.Commit()
+	_, err = s.processor.Commit()
+	assert.NoError(s.T(), err)
 
 	transactions := []*types.Transaction{
 		createTransaction(s.T(), obj1.Nonce()+3, obj3.address, 1, 5, signer),
@@ -264,7 +265,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(s.T()).WithName("proc_logger")
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
 	processor := NewTransactionProcessor(db, txDb, s.projector, NewTxMemPool(), lg)
@@ -364,14 +365,13 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	maxTransactions := 20
 	minTransactions := 1
 
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(s.T()).WithName("proc_logger")
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
 	processor := NewTransactionProcessor(db, txDb, s.projector, NewTxMemPool(), lg)
 
 	revertToLayer := rand.Intn(testCycles)
 	revertAfterLayer := rand.Intn(testCycles - revertToLayer) //rand.Intn(min(testCycles - revertToLayer,maxPas.processors))
-	log.Info("starting test: revert on layer %v, after %v layers received since that layer ", revertToLayer, revertAfterLayer)
 
 	signers := []*signing.EdSigner{
 		signing.NewEdSigner(),
@@ -391,10 +391,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	var want string
 	for i := 0; i < testCycles; i++ {
 		numOfTransactions := rand.Intn(maxTransactions-minTransactions) + minTransactions
-		trns := []*types.Transaction{}
+		var trns []*types.Transaction
 		nonceTrack := make(map[*Object]int)
 		for j := 0; j < numOfTransactions; j++ {
-
 			src := int(rand.Uint32() % (uint32(len(accounts) - 1)))
 			srcAccount := accounts[src]
 			dstAccount := accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
@@ -411,7 +410,6 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			t := createTransaction(s.T(), processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]), dstAccount.address, (rand.Uint64()%srcAccount.Balance())/100, 5, signers[src])
 			trns = append(trns, t)
 
-			log.Info("transaction %v nonce %v amount %v", t.Origin().Hex(), t.AccountNonce, t.Amount)
 		}
 		failed, err := processor.ApplyTransactions(types.NewLayerID(uint32(i)), trns)
 		assert.NoError(s.T(), err)
@@ -419,7 +417,6 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 
 		if i == revertToLayer {
 			want = string(processor.Dump())
-			log.Info("wanted state: %v", want)
 		}
 
 		if i == revertToLayer+revertAfterLayer {
@@ -431,11 +428,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 				s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
 			}
 		}
-
 	}
 
 	writtenMore := db.Len()
-
 	assert.True(s.T(), writtenMore > written)
 }
 
@@ -488,7 +483,8 @@ func TestTransactionProcessor_ApplyTransactionTestSuite(t *testing.T) {
 	suite.Run(t, new(ProcessorStateSuite))
 }
 
-func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transaction {
+func createSignerTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transaction {
+	t.Helper()
 	r := require.New(t)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	r.NoError(err)
@@ -499,20 +495,20 @@ func createXdrSignedTransaction(t *testing.T, key ed25519.PrivateKey) *types.Tra
 
 func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(t).WithName("proc_logger")
 	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, NewTxMemPool(), lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
 	createAccount(proc, PublicKeyToAccountAddress(pub), 123, 321)
-	tx := createXdrSignedTransaction(t, pri)
+	tx := createSignerTransaction(t, pri)
 
 	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
 	assert.True(t, proc.AddressExists(tx.Origin()))
 
 	// negative flow
 	pub, pri, _ = ed25519.GenerateKey(crand.Reader)
-	tx = createXdrSignedTransaction(t, pri)
+	tx = createSignerTransaction(t, pri)
 
 	assert.False(t, proc.AddressExists(tx.Origin()))
 	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
@@ -522,20 +518,20 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 	r := require.New(t)
 
 	db := database.NewMemDatabase()
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(t).WithName("proc_logger")
 	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, NewTxMemPool(), lg)
 
 	r.NotEqual(types.Hash32{}, proc.rootHash)
 
 	expectedRoot := types.Hash32{1, 2, 3}
-	r.NoError(proc.addState(expectedRoot, types.NewLayerID(1)))
+	r.NoError(proc.saveStateRoot(expectedRoot, types.NewLayerID(1)))
 
 	actualRoot := proc.GetStateRoot()
 	r.Equal(expectedRoot, actualRoot)
 }
 
 func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
-	lg := log.NewDefault("proc_logger")
+	lg := logtest.New(t).WithName("proc_logger")
 	db := database.NewMemDatabase()
 	projector := &ProjectorMock{}
 	processor := NewTransactionProcessor(db, db, projector, NewTxMemPool(), lg)
@@ -550,7 +546,8 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	obj1 := createAccount(processor, SignerToAddr(signer), 21, 0)
 	obj2 := createAccount(processor, toAddr([]byte{0x01, 02}), 1, 10)
 	createAccount(processor, toAddr([]byte{0x02}), 44, 0)
-	processor.Commit()
+	_, err = processor.Commit()
+	assert.NoError(t, err)
 
 	transactions := []*types.Transaction{
 		createTransaction(t, obj1.Nonce(), obj2.address, 1, 5, signer),

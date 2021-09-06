@@ -2,8 +2,9 @@ package api
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -60,19 +61,20 @@ type TxAPI interface {
 	GetBalance(types.Address) uint64
 	GetNonce(types.Address) uint64
 	GetAllAccounts() (*types.MultipleAccountsState, error)
-	//TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
 	GetRewardsBySmesherID(types.NodeID) ([]types.Reward, error)
+	// TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
 }
 
 // PeerCounter is an api to get amount of connected peers
 type PeerCounter interface {
+	Close()
 	PeerCount() uint64
 }
 
 // MempoolAPI is an API for reading mempool data that's useful for API services
 type MempoolAPI interface {
 	Get(types.TransactionID) (*types.Transaction, error)
-	GetTxIdsByAddress(types.Address) []types.TransactionID
+	GetTxsByAddress(types.Address) []*types.Transaction
 	GetProjection(types.Address, uint64, uint64) (uint64, uint64)
 }
 

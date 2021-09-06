@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -110,7 +109,6 @@ func TestCollectEvents(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	c.Stop()
 
-	log.Info("got %v", len(m.msgs))
 	assert.Equal(t, 10015, m.total)
 	assert.Equal(t, 6, len(m.msgs))
 }

@@ -1,26 +1,27 @@
 package discovery
 
 import (
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/stretchr/testify/require"
 
 	"testing"
 )
 
-func testAddrBook(name string) *addrBook {
-	book := newAddrBook(config.DefaultConfig().SwarmConfig, "", GetTestLogger(name))
+func testAddrBook(tb testing.TB, name string) *addrBook {
+	book := newAddrBook(config.DefaultConfig().SwarmConfig, "", logtest.New(tb).WithName(name))
 	book.localAddresses = append(book.localAddresses, generateDiscNode())
 	return book
 }
 
 func TestStartStop(t *testing.T) {
-	n := newAddrBook(config.DefaultConfig().SwarmConfig, "", GetTestLogger("starttest"))
+	n := newAddrBook(config.DefaultConfig().SwarmConfig, "", logtest.New(t).WithName("starttest"))
 	n.Start()
 	n.Stop()
 }
 
 func TestAttempt(t *testing.T) {
-	n := testAddrBook("attemptest")
+	n := testAddrBook(t, "attemptest")
 
 	nd := generateDiscNode()
 	// Add a new address and get it
@@ -41,7 +42,7 @@ func TestAttempt(t *testing.T) {
 }
 
 func TestGood(t *testing.T) {
-	n := testAddrBook("testgood")
+	n := testAddrBook(t, "testgood")
 	addrsToAdd := 64 * 64
 
 	addrs := generateDiscNodes(addrsToAdd)
@@ -63,7 +64,7 @@ func TestGood(t *testing.T) {
 }
 
 func TestGetAddress(t *testing.T) {
-	n := testAddrBook("getaddress")
+	n := testAddrBook(t, "getaddress")
 
 	// Get an address from an empty set (should error)
 	if rv := n.GetAddress(); rv != nil {
@@ -99,7 +100,7 @@ func TestGetAddress(t *testing.T) {
 }
 
 func Test_Lookup(t *testing.T) {
-	n := testAddrBook("lookup")
+	n := testAddrBook(t, "lookup")
 
 	n2 := generateDiscNode()
 
@@ -126,7 +127,7 @@ func Test_Lookup(t *testing.T) {
 }
 
 func Test_LocalAddreses(t *testing.T) {
-	n := testAddrBook(t.Name())
+	n := testAddrBook(t, t.Name())
 
 	addr := n.localAddresses[0]
 	addr2 := generateDiscNode()

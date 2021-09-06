@@ -1,13 +1,11 @@
 package miner
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"testing"
 	"time"
 
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -15,7 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -74,7 +72,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	txMempool := state.NewTxMemPool()
 
 	bs := []*types.Block{block1, block2, block3, block4}
-	builder := createBlockBuilder("a", n, bs)
+	builder := createBlockBuilder(t, "a", n, bs)
 	builder.TransactionPool = txMempool
 
 	err := builder.Start(context.TODO())
@@ -103,8 +101,8 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	block4 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
 
 	st := []*types.Block{block2, block3, block4}
-	builder1 := createBlockBuilder("a", n1, st)
-	builder2 := createBlockBuilder("b", n2, st)
+	builder1 := createBlockBuilder(t, "a", n1, st)
+	builder2 := createBlockBuilder(t, "b", n2, st)
 
 	atxID1 := types.ATXID(types.HexToHash32("dead"))
 	atxID2 := types.ATXID(types.HexToHash32("beef"))
@@ -149,7 +147,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	atxPool := activation.NewAtxMemPool()
 
 	st := []*types.Block{block1, block2, block3}
-	builder := createBlockBuilder("a", n, st)
+	builder := createBlockBuilder(t, "a", n, st)
 	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{{}, blockset, {}}, nil
 	}}
@@ -183,7 +181,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	select {
 	case output := <-gossipMessages:
 		b := types.MiniBlock{}
-		_, _ = xdr.Unmarshal(bytes.NewBuffer(output.Bytes()), &b)
+		require.NoError(t, types.BytesToInterface(output.Bytes(), &b))
 
 		assert.Equal(t, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, b.ForDiff)
 
@@ -204,7 +202,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
 
 	st := []*types.Block{block1, block2, block3}
-	builder := createBlockBuilder("a", n, st)
+	builder := createBlockBuilder(t, "a", n, st)
 	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{{block4.ID()}, hareRes, {}}, nil
 	}}
@@ -290,55 +288,6 @@ var (
 	atx5 = types.ATXID(five)
 )
 
-var (
-	b1 = types.NewExistingBlock(types.NewLayerID(1), []byte{1}, nil)
-	b2 = types.NewExistingBlock(types.NewLayerID(1), []byte{2}, nil)
-	b3 = types.NewExistingBlock(types.NewLayerID(1), []byte{3}, nil)
-	b4 = types.NewExistingBlock(types.NewLayerID(1), []byte{4}, nil)
-	b5 = types.NewExistingBlock(types.NewLayerID(1), []byte{5}, nil)
-	b6 = types.NewExistingBlock(types.NewLayerID(1), []byte{6}, nil)
-	b7 = types.NewExistingBlock(types.NewLayerID(1), []byte{7}, nil)
-)
-
-func genBlockIds() []types.BlockID {
-	bids := []types.BlockID{b1.ID(), b2.ID(), b3.ID(), b4.ID(), b5.ID(), b6.ID(), b7.ID()}
-	for i := 0; i < len(bids)*2; i++ {
-		l := rand.Int() % len(bids)
-		j := rand.Int() % len(bids)
-		bids[l], bids[j] = bids[j], bids[l]
-	}
-
-	return bids
-}
-
-type mockResult struct {
-	err error
-	ids map[types.LayerID][]types.BlockID
-}
-
-func newMockResult() *mockResult {
-	m := &mockResult{}
-	m.ids = make(map[types.LayerID][]types.BlockID)
-	return m
-}
-
-func (m *mockResult) set(id types.LayerID) []types.BlockID {
-	bids := genBlockIds()
-	m.ids[id] = bids
-
-	return bids
-}
-
-func (m *mockResult) GetResult(id types.LayerID) ([]types.BlockID, error) {
-	bl, ok := m.ids[id]
-	if ok {
-		return bl, nil
-	}
-	return nil, m.err
-}
-
-var errExample = errors.New("example errExample")
-
 type mockMesh struct {
 	b   []*types.Block
 	err error
@@ -394,7 +343,7 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	block3 := types.NewExistingBlock(types.NewLayerID(6), []byte(rand.String(8)), nil)
 	bs := []*types.Block{block1, block2, block3}
 	st := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
-	builder1 := createBlockBuilder("a", n1, bs)
+	builder1 := createBlockBuilder(t, "a", n1, bs)
 	builder1.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{{}, {}, st}, nil
 	}}
@@ -427,11 +376,14 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	mbo := &mockBlockOracle{}
 	mbo.err = errors.New("err")
 
-	builder := createBlockBuilder("a", n1, bs)
+	builder := createBlockBuilder(t, "a", n1, bs)
 	builder.syncer = ms
 	builder.blockOracle = mbo
 	builder.beginRoundEvent = beginRound
-	go builder.createBlockLoop(context.TODO())
+	require.NoError(t, builder.Start(context.TODO()))
+	t.Cleanup(func() {
+		builder.Close()
+	})
 	beginRound <- types.NewLayerID(1)
 	beginRound <- types.NewLayerID(2)
 	r.Equal(0, mbo.calls)
@@ -449,7 +401,7 @@ func (b *mockBBP) BaseBlock(context.Context) (types.BlockID, [][]types.BlockID, 
 	return types.BlockID{0}, [][]types.BlockID{{}, {}, {}}, nil
 }
 
-func createBlockBuilder(ID string, n *service.Node, meshBlocks []*types.Block) *BlockBuilder {
+func createBlockBuilder(tb testing.TB, ID string, n *service.Node, meshBlocks []*types.Block) *BlockBuilder {
 	beginRound := make(chan types.LayerID)
 	cfg := Config{
 		Hdist:          5,
@@ -460,7 +412,7 @@ func createBlockBuilder(ID string, n *service.Node, meshBlocks []*types.Block) *
 	}
 	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{}, [][]types.BlockID{{}, {}, {}}, nil
-	}}, &mockBlockOracle{}, &mockSyncer{}, mockProjector, nil, log.NewDefault("mock_builder_"+"a"))
+	}}, &mockBlockOracle{}, &mockSyncer{}, mockProjector, nil, logtest.New(tb).WithName(ID))
 	return bb
 }
 

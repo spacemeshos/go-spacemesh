@@ -160,6 +160,7 @@ func (state *DB) updateStateObj(StateObj *Object) {
 func (state *DB) getStateObj(addr types.Address) (StateObj *Object) {
 	state.lock.Lock()
 	defer state.lock.Unlock()
+
 	// Prefer 'live' objects.
 	if obj := state.stateObjects[addr]; obj != nil {
 		/*if obj.deleted {
@@ -179,6 +180,7 @@ func (state *DB) getStateObj(addr types.Address) (StateObj *Object) {
 		log.Error("Failed to decode state object", "addr", addr, "err", err)
 		return nil
 	}
+
 	// Insert into the live set.
 	obj := newObject(state, addr, data)
 	state.setStateObj(obj)
@@ -265,6 +267,7 @@ func (state *DB) Copy() *DB {
 func (state *DB) Commit() (root types.Hash32, err error) {
 	state.lock.Lock()
 	defer state.lock.Unlock()
+
 	// Commit objects to the trie.
 	for addr, stateObject := range state.stateObjects {
 		_, isDirty := state.stateObjectsDirty[addr]
@@ -273,6 +276,7 @@ func (state *DB) Commit() (root types.Hash32, err error) {
 			state.updateStateObj(stateObject)
 		}
 	}
+
 	// Write trie changes.
 	root, err = state.globalTrie.Commit(nil)
 	return root, err

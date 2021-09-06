@@ -3,17 +3,18 @@ package p2p
 import (
 	"context"
 	"errors"
+	net2 "net"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/stretchr/testify/require"
-	net2 "net"
-	"testing"
-	"time"
 )
 
 const testStr = "regTest"
@@ -60,14 +61,14 @@ func (mun *mockUDPNetwork) SubscribeOnNewRemoteConnections(func(event net.NewCon
 func TestNewUDPMux(t *testing.T) {
 	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpMock, 1, log.NewDefault("test"))
+	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpMock, 1, logtest.New(t))
 	require.NotNil(t, m)
 }
 
 func TestUDPMux_RegisterDirectProtocolWithChannel(t *testing.T) {
 	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpMock, 1, log.NewDefault(testStr))
+	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpMock, 1, logtest.New(t))
 	require.NotNil(t, m)
 	c := make(chan service.DirectMessage, 1)
 	m.RegisterDirectProtocolWithChannel(testStr, c)
@@ -80,7 +81,7 @@ func TestUDPMux_RegisterDirectProtocolWithChannel(t *testing.T) {
 func TestUDPMux_Start(t *testing.T) {
 	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpMock, 1, log.NewDefault(testStr))
+	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpMock, 1, logtest.New(t))
 	require.NotNil(t, m)
 	err := m.Start()
 	require.NoError(t, err)
@@ -89,7 +90,7 @@ func TestUDPMux_Start(t *testing.T) {
 func TestUDPMux_ProcessDirectProtocolMessage(t *testing.T) {
 	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpMock, 1, log.NewDefault(testStr))
+	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpMock, 1, logtest.New(t))
 	require.NotNil(t, m)
 
 	data := service.DataBytes{Payload: []byte(testStr)}
@@ -120,7 +121,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 		return nil, errors.New("nonode")
 	}
 
-	m := NewUDPMux(context.TODO(), context.TODO(), nd, f, udpMock, 1, log.NewDefault(testStr))
+	m := NewUDPMux(context.TODO(), context.TODO(), nd, f, udpMock, 1, logtest.New(t))
 	require.NotNil(t, m)
 	data := service.DataBytes{Payload: []byte(testStr)}
 
@@ -183,7 +184,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 func TestUDPMux_ProcessUDP(t *testing.T) {
 	nd, _ := node.NewNodeIdentity()
 	udpMock := &mockUDPNetwork{}
-	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpMock, 1, log.NewDefault(testStr))
+	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpMock, 1, logtest.New(t))
 	require.NotNil(t, m)
 	data := service.DataBytes{Payload: []byte(testStr)}
 	msg := &ProtocolMessage{}
@@ -241,17 +242,17 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 
 func Test_RoundTrip(t *testing.T) {
 	nd, ndinfo := node.GenerateTestNode(t)
-	udpnet, err := net.NewUDPNet(context.TODO(), config.DefaultConfig(), nd, log.NewDefault(""))
+	udpnet, err := net.NewUDPNet(context.TODO(), config.DefaultConfig(), nd, logtest.New(t))
 	require.NoError(t, err)
 
-	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpnet, 0, log.NewDefault(testStr))
+	m := NewUDPMux(context.TODO(), context.TODO(), nd, nil, udpnet, 0, logtest.New(t).WithName(testStr))
 	require.NotNil(t, m)
 
 	nd2, ndinfo2 := node.GenerateTestNode(t)
-	udpnet2, err := net.NewUDPNet(context.TODO(), config.DefaultConfig(), nd2, log.NewDefault(""))
+	udpnet2, err := net.NewUDPNet(context.TODO(), config.DefaultConfig(), nd2, logtest.New(t))
 	require.NoError(t, err)
 
-	m2 := NewUDPMux(context.TODO(), context.TODO(), nd2, nil, udpnet2, 0, log.NewDefault(testStr+"2"))
+	m2 := NewUDPMux(context.TODO(), context.TODO(), nd2, nil, udpnet2, 0, logtest.New(t).WithName(testStr+"2"))
 	require.NotNil(t, m2)
 
 	c := make(chan service.DirectMessage, 1)

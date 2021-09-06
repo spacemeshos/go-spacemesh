@@ -168,7 +168,6 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 	addr := &net.UDPAddr{IP: net.ParseIP(peer.IP.String()), Port: int(peer.DiscoveryPort)}
 
 	conn, err := mux.cpool.GetConnection(ctx, addr, peer.PublicKey())
-
 	if err != nil {
 		return err
 	}
@@ -179,7 +178,8 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 		return ErrNoSession
 	}
 
-	mt := ProtocolMessageMetadata{protocol,
+	mt := ProtocolMessageMetadata{
+		protocol,
 		config.ClientVersion,
 		time.Now().UnixNano(),
 		mux.local.PublicKey().Bytes(),
@@ -192,12 +192,12 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 
 	message.Payload, err = CreatePayload(payload)
 	if err != nil {
-		return fmt.Errorf("can't create payload, err:%v", err)
+		return fmt.Errorf("can't create payload: %w", err)
 	}
 
 	data, err := types.InterfaceToBytes(&message)
 	if err != nil {
-		return fmt.Errorf("failed to encode signed message err: %v", err)
+		return fmt.Errorf("failed to encode signed message: %w", err)
 	}
 
 	// TODO: node.address should have IP address, UDP and TCP PORT.
@@ -255,7 +255,6 @@ func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
 	}
 
 	rawmsg, _, err := p2pcrypto.ExtractPubkey(msg.Message)
-
 	if err != nil {
 		return err
 	}
@@ -287,11 +286,10 @@ func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
 	data, err = ExtractData(pm.Payload)
 
 	if err != nil {
-		return fmt.Errorf("failed extracting data from message err:%v", err)
+		return fmt.Errorf("failed extracting data from message: %w", err)
 	}
 
 	p2pmeta := service.P2PMetadata{FromAddress: msg.Conn.RemoteAddr()}
 
 	return mux.ProcessDirectProtocolMessage(msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data, p2pmeta)
-
 }

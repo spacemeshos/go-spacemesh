@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"hash/fnv"
+	"math"
 	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -20,13 +21,14 @@ const (
 	pre      messageType = 10
 )
 
+const preRound uint32 = math.MaxUint32
+
 // declare round identifiers
 const (
-	preRound      = -1
-	statusRound   = 0
-	proposalRound = 1
-	commitRound   = 2
-	notifyRound   = 3
+	statusRound uint32 = iota
+	proposalRound
+	commitRound
+	notifyRound
 )
 
 const defaultSetSize = 200

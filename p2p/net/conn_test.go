@@ -19,7 +19,7 @@ import (
 var msgSizeLimit = config.DefaultTestConfig().P2P.MsgSizeLimit
 
 func TestSendReceiveMessage(t *testing.T) {
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
@@ -36,7 +36,7 @@ func TestSendReceiveMessage(t *testing.T) {
 }
 
 func TestSendMessage(t *testing.T) {
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	rwcam.writeWaitChan = make(chan []byte)
@@ -49,14 +49,14 @@ func TestSendMessage(t *testing.T) {
 	case <-rwcam.writeWaitChan:
 		rcvmsg := <-rwcam.writeWaitChan
 		assert.Equal(t, rcvmsg, []byte(msg))
-	case <-time.After(5 * time.Second):
+	case <-time.After(time.Second):
 		assert.Fail(t, "timeout waiting for message to be sent")
 	}
 }
 
 func TestReceiveError(t *testing.T) {
 	runtime.GOMAXPROCS(1)
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
@@ -76,7 +76,7 @@ func TestReceiveError(t *testing.T) {
 }
 
 func TestSendError(t *testing.T) {
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
@@ -90,7 +90,7 @@ func TestSendError(t *testing.T) {
 }
 
 func TestPreSessionMessage(t *testing.T) {
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, nil, msgSizeLimit, time.Second, netw.logger)
@@ -102,7 +102,7 @@ func TestPreSessionMessage(t *testing.T) {
 }
 
 func TestPreSessionMessageAfterSession(t *testing.T) {
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, nil, msgSizeLimit, time.Second, netw.logger)
@@ -113,7 +113,7 @@ func TestPreSessionMessageAfterSession(t *testing.T) {
 }
 
 func TestConn_Limit(t *testing.T) {
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, nil, 1, time.Second, netw.logger)
@@ -123,7 +123,7 @@ func TestConn_Limit(t *testing.T) {
 }
 
 func TestPreSessionError(t *testing.T) {
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, nil, msgSizeLimit, time.Second, netw.logger)
@@ -134,7 +134,7 @@ func TestPreSessionError(t *testing.T) {
 }
 
 func TestErrClose(t *testing.T) {
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
@@ -151,8 +151,9 @@ func TestErrClose(t *testing.T) {
 	wg.Wait()
 	assert.Equal(t, 1, rwcam.CloseCount())
 }
+
 func TestClose(t *testing.T) {
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
@@ -164,23 +165,19 @@ func TestClose(t *testing.T) {
 	rwcam.SetWriteResult(errors.New("x"))
 	rwcam.SetReadResult(nil, errors.New("x"))
 	go conn.beginEventProcessing(context.TODO())
-	//conn.Close()
-	//err := conn.Send([]byte{3, 1,2,3})
-	//assert.NoError(t, err)
 	time.Sleep(time.Millisecond * 1000) // block a little bit
 	assert.Equal(t, 1, rwcam.CloseCount())
 	<-c
-
 }
 
 func TestDoubleClose(t *testing.T) {
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	rPub := p2pcrypto.NewRandomPubkey()
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
 
 	go conn.beginEventProcessing(context.TODO())
-	conn.Close()
+	assert.NoError(t, conn.Close())
 	time.Sleep(time.Millisecond * 10)
 	assert.Equal(t, 1, rwcam.CloseCount())
 	err := conn.Close()
@@ -191,7 +188,7 @@ func TestDoubleClose(t *testing.T) {
 }
 
 func TestGettersToBoostCoverage(t *testing.T) {
-	netw := NewNetworkMock()
+	netw := NewNetworkMock(t)
 	rwcam := NewReadWriteCloseAddresserMock()
 	addr := net.TCPAddr{IP: net.ParseIP("1.1.1.1"), Port: 555}
 	rwcam.setRemoteAddrResult(&addr)
@@ -204,5 +201,54 @@ func TestGettersToBoostCoverage(t *testing.T) {
 	assert.Equal(t, rPub, conn.RemotePublicKey())
 	assert.NotNil(t, conn.Session())
 	assert.Equal(t, addr.String(), conn.RemoteAddr().String())
+}
 
+func TestDropPeerWhenOutboundQueueFull(t *testing.T) {
+	queueSize := 5
+	rPub := p2pcrypto.NewRandomPubkey()
+
+	runTest := func(t *testing.T, netw *NetworkMock, conn Connection, mChan chan msgToSend) {
+		r := require.New(t)
+		called := 0
+		netw.SubscribeClosingConnections(func(_ context.Context, conn2 ConnectionWithErr) {
+			r.Equal(conn, conn2.Conn)
+			r.Equal(ErrQueueFull, conn2.Err)
+			called++
+		})
+		msg := []byte("hello")
+
+		// send enough messages to fill the channel
+		for i := 0; i < queueSize; i++ {
+			r.NoError(conn.Send(context.TODO(), msg))
+		}
+		r.Len(mChan, queueSize)
+		r.Equal(0, called, "publishClosingConnection was called prematurely")
+
+		// send one more message and expect conn not to block and peer to be dropped
+		err := conn.Send(context.TODO(), msg)
+		r.Equal(ErrQueueFull, err)
+		r.Equal(1, called, "publishClosingConnection was not called")
+
+		// expect connection to already be closed
+		err = conn.Close()
+		r.Equal(ErrAlreadyClosed, err)
+	}
+
+	t.Run("conn", func(t *testing.T) {
+		netw := NewNetworkMock(t)
+		rwcam := NewReadWriteCloseAddresserMock()
+		rwcam.writeWaitChan = make(chan []byte)
+		mChan := make(chan msgToSend, queueSize)
+		conn := newConnectionWithMessagesChan(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, mChan, netw.logger)
+		runTest(t, netw, conn, mChan)
+	})
+
+	t.Run("msgconn", func(t *testing.T) {
+		netw := NewNetworkMock(t)
+		rwcam := NewReadWriteCloseAddresserMock()
+		rwcam.writeWaitChan = make(chan []byte)
+		mChan := make(chan msgToSend, queueSize)
+		conn := newMsgConnectionWithMessagesChan(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, mChan, netw.logger)
+		runTest(t, netw, conn, mChan)
+	})
 }

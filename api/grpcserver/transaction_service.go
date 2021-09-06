@@ -225,11 +225,25 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				log.Info("layer channel closed, shutting down")
 				return nil
 			}
+
+			// Transaction objects do not have an associated status. The status we assign them here is based on the
+			// status of the layer (really, the block) they're contained in. Here, we receive updates to layer status.
+			// In order to update tx status, we have to read every transaction in the layer.
+			// TODO: this is inefficient, come up with a more optimal way of doing this
+			// TODO: tx status should depend upon block status, not layer status
+
+			// In order to read transactions, we first need to read layer blocks
+			layerObj, err := s.Mesh.GetLayer(layer.LayerID)
+			if err != nil {
+				log.With().Error("error reading layer data for updated layer", layer.LayerID, log.Err(err))
+				return status.Error(codes.Internal, "error reading layer data")
+			}
+
 			// Filter for any matching transactions in the reported layer
-			for _, b := range layer.Layer.Blocks() {
+			for _, b := range layerObj.Blocks() {
 				blockTXIDSet := make(map[types.TransactionID]struct{})
 
-				//create a set for the block transaction IDs
+				// create a set for the block transaction IDs
 				for _, txid := range b.TxIDs {
 					blockTXIDSet[txid] = struct{}{}
 				}

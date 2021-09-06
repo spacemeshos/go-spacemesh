@@ -61,16 +61,16 @@ func (l *PoetListener) handlePoetProofMessage(ctx context.Context, gossipMessage
 	// ⚠️ IMPORTANT: We must not ensure that the node is synced! PoET messages must be propagated regardless.
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(gossipMessage.Bytes(), &proofMessage); err != nil {
-		l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
+		l.Log.Error("failed to unmarshal poet membership proof: %v", err)
 		return
 	}
 	if err := l.poetDb.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
 		proofMessage.RoundID, proofMessage.Signature); err != nil {
 
 		if types.IsProcessingError(err) {
-			l.Log.Error("failed to validate PoET proof: %v", err)
+			l.Log.Error("failed to validate poet proof: %v", err)
 		} else {
-			l.Log.Warning("PoET proof not valid: %v", err)
+			l.Log.Warning("poet proof not valid: %v", err)
 		}
 		return
 	}
@@ -78,7 +78,7 @@ func (l *PoetListener) handlePoetProofMessage(ctx context.Context, gossipMessage
 	gossipMessage.ReportValidation(ctx, PoetProofProtocol)
 
 	if err := l.poetDb.storeProof(&proofMessage); err != nil {
-		l.Log.Error("failed to store PoET proof: %v", err)
+		l.Log.Error("failed to store poet proof: %v", err)
 	}
 }
 

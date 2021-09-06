@@ -1,15 +1,13 @@
 package hare
 
 import (
-	"bytes"
 	"context"
 	"sync"
 	"testing"
 	"time"
 
-	xdr "github.com/nullstyle/go-xdr/xdr3"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -55,23 +53,24 @@ func (msq MockStateQuerier) IsIdentityActiveOnConsensusView(ctx context.Context,
 	return msq.res, msq.err
 }
 
-func createMessage(t *testing.T, instanceID types.LayerID) []byte {
+func createMessage(tb testing.TB, instanceID types.LayerID) []byte {
+	tb.Helper()
+
 	sr := signing.NewEdSigner()
 	b := newMessageBuilder()
 	msg := b.SetPubKey(sr.PublicKey()).SetInstanceID(instanceID).Sign(sr).Build()
 
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, msg.Message); err != nil {
-		assert.Fail(t, "Failed to marshal data")
+	buf, err := types.InterfaceToBytes(msg.Message)
+	if err != nil {
+		require.NoError(tb, err)
 	}
-
-	return w.Bytes()
+	return buf
 }
 
 func TestBroker_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 
 	err := broker.Start(context.TODO())
 	assert.Nil(t, err)
@@ -87,7 +86,7 @@ func TestBroker_Received(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 
 	inbox, err := broker.Register(context.TODO(), instanceID1)
@@ -102,7 +101,7 @@ func TestBroker_Received(t *testing.T) {
 func TestBroker_Priority(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 
 	// this allows us to pause and release broker processing of incoming messages
 	wg := sync.WaitGroup{}
@@ -130,12 +129,11 @@ func TestBroker_Priority(t *testing.T) {
 		b := newMessageBuilder()
 		msg := b.SetPubKey(sr.PublicKey()).SetInstanceID(instanceID1).SetRoleProof(roleProof).Sign(sr).Build()
 
-		var w bytes.Buffer
-		if _, err := xdr.Marshal(&w, msg.Message); err != nil {
-			assert.Fail(t, "failed to marshal data")
+		buf, err := types.InterfaceToBytes(msg.Message)
+		if err != nil {
+			require.NoError(t, err)
 		}
-
-		return w.Bytes()
+		return buf
 	}
 	roleProofInbound := []byte{1, 2, 3}
 	roleProofOutbound := []byte{3, 2, 1}
@@ -145,7 +143,6 @@ func TestBroker_Priority(t *testing.T) {
 	// first, broadcast a bunch of simulated inbound messages
 	for i := 0; i < 10; i++ {
 		// channel send is blocking, so we're sure the messages have been processed
-		log.Info("sending inbound hare message")
 		msgChan <- service.NewSimGossipMessage(
 			n1.Info.PublicKey(),
 			false,
@@ -157,7 +154,6 @@ func TestBroker_Priority(t *testing.T) {
 	wg2.Wait()
 
 	// now broadcast one outbound message
-	log.Info("sending outbound hare message")
 	msgChan <- service.NewSimGossipMessage(n1.Info.PublicKey(), true, service.DataBytes{Payload: serMsgOutbound})
 
 	// we know that the hare queueLoop has received the previous message, but we don't know that it's actually been
@@ -224,7 +220,7 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	n1 := sim.NewNode()
 	n2 := sim.NewNode()
 
-	broker := buildBrokerLimit4(n1, t.Name())
+	broker := buildBrokerLimit4(t, n1, t.Name())
 	broker.Start(context.TODO())
 
 	broker.Register(context.TODO(), instanceID1)
@@ -256,7 +252,7 @@ func TestBroker_Abort(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 
 	timer := time.NewTimer(3 * time.Second)
@@ -306,7 +302,7 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	n2 := sim.NewNode()
 	const msgCount = 1
 
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 
 	inbox1, _ := broker.Register(context.TODO(), instanceID1)
@@ -327,7 +323,7 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 func TestBroker_RegisterUnregister(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 	broker.Register(context.TODO(), instanceID1)
 	assert.Equal(t, 1, len(broker.outbox))
@@ -342,13 +338,11 @@ type mockGossipMessage struct {
 }
 
 func (mgm *mockGossipMessage) Bytes() []byte {
-	var w bytes.Buffer
-	if _, err := xdr.Marshal(&w, mgm.msg.Message); err != nil {
-		log.With().Error("could not marshal message", log.Err(err))
+	buf, err := types.InterfaceToBytes(mgm.msg.Message)
+	if err != nil {
 		return nil
 	}
-
-	return w.Bytes()
+	return buf
 }
 
 func (mgm *mockGossipMessage) ValidationCompletedChan() chan service.MessageValidation {
@@ -378,7 +372,7 @@ func newMockGossipMsg(msg *Message) *mockGossipMessage {
 func TestBroker_Send(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	mev := &mockEligibilityValidator{valid: false}
 	broker.eValidator = mev
 	broker.Start(context.TODO())
@@ -407,7 +401,7 @@ func TestBroker_Send(t *testing.T) {
 func TestBroker_Register(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil)
 	broker.pending[instanceID1.Uint32()] = []*Msg{msg, msg}
@@ -430,7 +424,7 @@ func assertMsg(t *testing.T, msg *mockGossipMessage) (m service.MessageValidatio
 func TestBroker_Register2(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 	broker.Register(context.TODO(), instanceID1)
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
@@ -447,7 +441,7 @@ func TestBroker_Register2(t *testing.T) {
 func TestBroker_Register3(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
@@ -471,7 +465,7 @@ func TestBroker_Register3(t *testing.T) {
 func TestBroker_PubkeyExtraction(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 	inbox, _ := broker.Register(context.TODO(), instanceID1)
 	sgn := signing.NewEdSigner()
@@ -498,13 +492,13 @@ func Test_newMsg(t *testing.T) {
 	// TODO: remove this comment when ready
 	//_, e := newMsg(m, MockStateQuerier{false, errors.New("my err")})
 	//assert.NotNil(t, e)
-	_, e := newMsg(context.TODO(), m, MockStateQuerier{true, nil})
+	_, e := newMsg(context.TODO(), logtest.New(t), m, MockStateQuerier{true, nil})
 	assert.Nil(t, e)
 }
 
 func TestBroker_updateInstance(t *testing.T) {
 	r := require.New(t)
-	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+	b := buildBroker(t, service.NewSimulator().NewNode(), t.Name())
 	r.Equal(types.NewLayerID(0), b.latestLayer)
 	b.updateLatestLayer(context.TODO(), types.NewLayerID(1))
 	r.Equal(types.NewLayerID(1), b.latestLayer)
@@ -514,7 +508,7 @@ func TestBroker_updateInstance(t *testing.T) {
 
 func TestBroker_updateSynchronicity(t *testing.T) {
 	r := require.New(t)
-	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+	b := buildBroker(t, service.NewSimulator().NewNode(), t.Name())
 	b.isNodeSynced = trueFunc
 	b.updateSynchronicity(context.TODO(), types.NewLayerID(1))
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
@@ -527,7 +521,7 @@ func TestBroker_updateSynchronicity(t *testing.T) {
 
 func TestBroker_isSynced(t *testing.T) {
 	r := require.New(t)
-	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+	b := buildBroker(t, service.NewSimulator().NewNode(), t.Name())
 	b.isNodeSynced = trueFunc
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
 	b.isNodeSynced = falseFunc
@@ -539,7 +533,7 @@ func TestBroker_isSynced(t *testing.T) {
 
 func TestBroker_Register4(t *testing.T) {
 	r := require.New(t)
-	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+	b := buildBroker(t, service.NewSimulator().NewNode(), t.Name())
 	b.Start(context.TODO())
 	b.isNodeSynced = trueFunc
 	c, e := b.Register(context.TODO(), types.NewLayerID(1))
@@ -553,7 +547,7 @@ func TestBroker_Register4(t *testing.T) {
 
 func TestBroker_eventLoop(t *testing.T) {
 	r := require.New(t)
-	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+	b := buildBroker(t, service.NewSimulator().NewNode(), t.Name())
 	b.Start(context.TODO())
 
 	// unknown-->invalid, ignore
@@ -590,7 +584,7 @@ func TestBroker_eventLoop(t *testing.T) {
 
 func TestBroker_eventLoop2(t *testing.T) {
 	r := require.New(t)
-	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+	b := buildBroker(t, service.NewSimulator().NewNode(), t.Name())
 	b.Start(context.TODO())
 
 	// invalid instance
@@ -615,7 +609,7 @@ func TestBroker_eventLoop2(t *testing.T) {
 
 func Test_validate(t *testing.T) {
 	r := require.New(t)
-	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+	b := buildBroker(t, service.NewSimulator().NewNode(), t.Name())
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
 	m.InnerMsg.InstanceID = types.NewLayerID(1)
@@ -644,7 +638,7 @@ func Test_validate(t *testing.T) {
 
 func TestBroker_clean(t *testing.T) {
 	r := require.New(t)
-	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+	b := buildBroker(t, service.NewSimulator().NewNode(), t.Name())
 
 	ten := types.NewLayerID(10)
 	for i := types.NewLayerID(1); i.Before(ten); i = i.Add(1) {
@@ -664,7 +658,7 @@ func TestBroker_clean(t *testing.T) {
 
 func TestBroker_Flow(t *testing.T) {
 	r := require.New(t)
-	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+	b := buildBroker(t, service.NewSimulator().NewNode(), t.Name())
 
 	b.Start(context.TODO())
 
@@ -701,7 +695,7 @@ func TestBroker_Flow(t *testing.T) {
 
 func TestBroker_Synced(t *testing.T) {
 	r := require.New(t)
-	b := buildBroker(service.NewSimulator().NewNode(), t.Name())
+	b := buildBroker(t, service.NewSimulator().NewNode(), t.Name())
 	b.Start(context.TODO())
 	wg := sync.WaitGroup{}
 	for i := uint32(0); i < 1000; i++ {

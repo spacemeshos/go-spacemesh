@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -58,7 +59,6 @@ var (
 		Nonce:   0,
 		Indices: make([]byte, 10),
 	}
-	lg = log.NewDefault(nodeID.Key[:5])
 )
 
 // ========== Mocks ==========
@@ -98,7 +98,7 @@ func (n *NetMock) hookToAtxPool(transmission []byte) {
 
 		if n.atxDb != nil {
 			if atxDb, ok := n.atxDb.(*DB); ok {
-				err := atxDb.StoreAtx(atx.PubLayerID.GetEpoch(), atx)
+				err := atxDb.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx)
 				if err != nil {
 					panic(err)
 				}
@@ -201,8 +201,8 @@ func (n *FaultyNetMock) Broadcast(_ context.Context, _ string, d []byte) error {
 
 // ========== Helper functions ==========
 
-func newActivationDb() *DB {
-	return NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+func newActivationDb(tb testing.TB) *DB {
+	return NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(logtest.New(tb).WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(tb).WithName("atxDB"))
 }
 
 func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
@@ -256,14 +256,15 @@ func (m *mockSyncer) RegisterChForSynced(_ context.Context, ch chan struct{}) {
 	close(ch)
 }
 
-func newBuilder(activationDb atxDBProvider) *Builder {
+func newBuilder(tb testing.TB, activationDb atxDBProvider) *Builder {
 	net.atxDb = activationDb
 	cfg := Config{
 		CoinbaseAccount: coinbase,
 		GoldenATXID:     goldenATXID,
 		LayersPerEpoch:  layersPerEpoch,
 	}
-	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{},
+		layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(tb).WithName("atxBuilder"))
 	b.initialPost = initialPost
 	return b
 }
@@ -300,7 +301,7 @@ func assertLastAtx(r *require.Assertions, posAtx, prevAtx *types.ActivationTxHea
 func storeAtx(r *require.Assertions, activationDb *DB, atx *types.ActivationTx, lg log.Log) {
 	epoch := atx.PubLayerID.GetEpoch()
 	lg.Info("stored ATX in epoch %v", epoch)
-	err := activationDb.StoreAtx(epoch, atx)
+	err := activationDb.StoreAtx(context.TODO(), epoch, atx)
 	r.NoError(err)
 }
 
@@ -321,17 +322,27 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 
 // ========== Tests ==========
 
+func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
+	activationDb := newActivationDb(t)
+	builder := newBuilder(t, activationDb)
+
+	coinbase := types.Address{1, 1, 1}
+	require.NoError(t, builder.StartSmeshing(context.TODO(), coinbase, PostSetupOpts{}))
+	t.Cleanup(func() { builder.StopSmeshing(true) })
+	require.Equal(t, coinbase, builder.Coinbase())
+}
+
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)
 
 	// setup
-	activationDb := newActivationDb()
-	b := newBuilder(activationDb)
+	activationDb := newActivationDb(t)
+	b := newBuilder(t, activationDb)
 
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, nipost)
-	storeAtx(r, activationDb, prevAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, prevAtx, logtest.New(t).WithName("storeAtx"))
 
 	// create and publish ATX
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
@@ -353,10 +364,10 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	r := require.New(t)
 
 	// setup
-	activationDb := newActivationDb()
+	activationDb := newActivationDb(t)
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, nipost)
-	storeAtx(r, activationDb, prevAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, prevAtx, logtest.New(t).WithName("storeAtx"))
 
 	cfg := Config{
 		CoinbaseAccount: coinbase,
@@ -366,14 +377,14 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
-	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "failed to broadcast ATX: faulty")
 	r.False(published)
 
 	// create and attempt to publish ATX
 	faultyNet.retErr = false
-	b = NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	b = NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 	published, builtNipost, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
 	r.ErrorIs(err, ErrATXChallengeExpired)
 	r.False(published)
@@ -383,7 +394,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	b.net = net
 	net.atxDb = activationDb
 	posAtx := newAtx(newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(layersPerEpoch+1)), nipost)
-	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, posAtx, logtest.New(t).WithName("storeAtx"))
 	published, builtNipost, err = publishAtx(b, postGenesisEpochLayer.Add(layersPerEpoch+2), postGenesisEpoch+1, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
@@ -394,10 +405,10 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	r := require.New(t)
 
 	// setup
-	activationDb := newActivationDb()
+	activationDb := newActivationDb(t)
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, nipost)
-	storeAtx(r, activationDb, prevAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, prevAtx, logtest.New(t).WithName("storeAtx"))
 
 	cfg := Config{
 		CoinbaseAccount: coinbase,
@@ -407,7 +418,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 
 	// create and attempt to publish ATX
 	faultyNet := &FaultyNetMock{retErr: true}
-	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 	published, builtNIPost, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "failed to broadcast ATX: faulty")
 	r.False(published)
@@ -421,7 +432,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	b.net = net
 	net.atxDb = activationDb
 	posAtx := newAtx(newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(3*layersPerEpoch)), nipost)
-	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, posAtx, logtest.New(t).WithName("storeAtx"))
 	published, builtNIPost, err = publishAtx(b, postGenesisEpochLayer.Add(3*layersPerEpoch).Add(1), postGenesisEpoch+3, layersPerEpoch)
 	r.NoError(err)
 	r.True(published)
@@ -433,12 +444,12 @@ func TestBuilder_PublishActivationTx_NoPrevATX(t *testing.T) {
 	r := require.New(t)
 
 	// setup
-	activationDb := newActivationDb()
-	b := newBuilder(activationDb)
+	activationDb := newActivationDb(t)
+	b := newBuilder(t, activationDb)
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, nipost)
-	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, posAtx, logtest.New(t).WithName("storeAtx"))
 
 	// create and publish ATX
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
@@ -452,18 +463,18 @@ func TestBuilder_PublishActivationTx_PrevATXWithoutPrevATX(t *testing.T) {
 	r := require.New(t)
 
 	// setup
-	activationDb := newActivationDb()
-	b := newBuilder(activationDb)
+	activationDb := newActivationDb(t)
+	b := newBuilder(t, activationDb)
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, nipost)
-	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, posAtx, logtest.New(t).WithName("storeAtx"))
 
 	challenge = newChallenge(nodeID /*👀*/, 0, *types.EmptyATXID, posAtx.ID(), postGenesisEpochLayer)
 	challenge.InitialPostIndices = initialPost.Indices
 	prevAtx := newAtx(challenge, nipost)
 	prevAtx.InitialPost = initialPost
-	storeAtx(r, activationDb, prevAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, prevAtx, logtest.New(t).WithName("storeAtx"))
 
 	// create and publish ATX
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
@@ -477,12 +488,12 @@ func TestBuilder_PublishActivationTx_TargetsEpochBasedOnPosAtx(t *testing.T) {
 	r := require.New(t)
 
 	// setup
-	activationDb := newActivationDb()
-	b := newBuilder(activationDb)
+	activationDb := newActivationDb(t)
+	b := newBuilder(t, activationDb)
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer.Sub(layersPerEpoch) /*👀*/)
 	posAtx := newAtx(challenge, nipost)
-	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, posAtx, logtest.New(t).WithName("storeAtx"))
 
 	// create and publish ATX based on the best available posAtx, as long as the node is synced
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
@@ -496,12 +507,12 @@ func TestBuilder_PublishActivationTx_DoesNotPublish2AtxsInSameEpoch(t *testing.T
 	r := require.New(t)
 
 	// setup
-	activationDb := newActivationDb()
-	b := newBuilder(activationDb)
+	activationDb := newActivationDb(t)
+	b := newBuilder(t, activationDb)
 
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	prevAtx := newAtx(challenge, nipost)
-	storeAtx(r, activationDb, prevAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, prevAtx, logtest.New(t).WithName("storeAtx"))
 
 	// create and publish ATX
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
@@ -534,14 +545,14 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	activationDb := newActivationDb()
+	activationDb := newActivationDb(t)
 	nipostBuilder := &NIPostErrBuilderMock{} // 👀 mock that returns error from BuildNIPost()
-	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, meshProviderMock, layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, meshProviderMock, layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 	b.initialPost = initialPost
 
 	challenge := newChallenge(otherNodeID /*👀*/, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, nipost)
-	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, posAtx, logtest.New(t).WithName("storeAtx"))
 
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
 	r.EqualError(err, "failed to build NIPost: NIPost builder error")
@@ -551,11 +562,11 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 	r := require.New(t)
 
-	activationDb := newActivationDb()
-	b := newBuilder(activationDb)
+	activationDb := newActivationDb(t)
+	b := newBuilder(t, activationDb)
 
 	atx := newActivationTx(nodeID, 1, prevAtxID, prevAtxID, types.NewLayerID(5), 1, 100, coinbase, 100, nipost)
-	storeAtx(r, activationDb, atx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, atx, logtest.New(t).WithName("storeAtx"))
 
 	act := newActivationTx(b.nodeID, 2, atx.ID(), atx.ID(), atx.PubLayerID.Add(10), 0, 100, coinbase, 100, nipost)
 
@@ -575,10 +586,10 @@ func TestBuilder_PublishActivationTx_PosAtxOnSameLayerAsPrevAtx(t *testing.T) {
 	r := require.New(t)
 
 	types.SetLayersPerEpoch(layersPerEpoch)
-	activationDb := newActivationDb()
-	b := newBuilder(activationDb)
+	activationDb := newActivationDb(t)
+	b := newBuilder(t, activationDb)
 
-	lg := log.NewDefault("storeAtx")
+	lg := logtest.New(t).WithName("storeAtx")
 	for i := postGenesisEpochLayer; i.Before(postGenesisEpochLayer.Add(3)); i = i.Add(1) {
 		challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, types.LayerID(i))
 		atx := newAtx(challenge, nipost)
@@ -615,8 +626,8 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 	ed := signing.NewEdSigner()
 	nodeID := types.NodeID{Key: ed.PublicKey().String(), VRFPublicKey: []byte("bbbbb")}
-	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB1"))
-	b := NewBuilder(cfg, nodeID, ed, activationDb, net, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"))
+	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(logtest.New(t).WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	b := NewBuilder(cfg, nodeID, ed, activationDb, net, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	atx := newActivationTx(nodeID, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, nipost)
@@ -640,10 +651,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	layers := &MeshProviderMock{}
 	nipostBuilder := &NIPostBuilderMock{}
 	layersPerEpoch := uint32(10)
-	lg := log.NewDefault(id.Key[:5])
 	db := NewMockDB()
 	sig := &MockSigning{}
-	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(lg.WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB1"))
+	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(logtest.New(t).WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
 	net.atxDb = activationDb
 
 	cfg := Config{
@@ -652,7 +662,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	b := NewBuilder(cfg, id, sig, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	b := NewBuilder(cfg, id, sig, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, logtest.New(t).WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
 	chlng := types.HexToHash32("0x3333")
@@ -662,7 +672,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 
 	atx := newActivationTx(types.NodeID{Key: "aaaaaa", VRFPublicKey: []byte("bbbbb")}, 1, prevAtx, prevAtx, types.NewLayerID(15), 1, 100, coinbase, 100, npst)
 
-	err := activationDb.StoreAtx(atx.PubLayerID.GetEpoch(), atx)
+	err := activationDb.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx)
 	assert.NoError(t, err)
 
 	challenge := types.NIPostChallenge{
@@ -683,7 +693,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	assert.ErrorIs(t, err, ErrATXChallengeExpired)
 
 	// test load in correct epoch
-	b = NewBuilder(cfg, id, &MockSigning{}, activationDb, net, layers, layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	b = NewBuilder(cfg, id, &MockSigning{}, activationDb, net, layers, layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, logtest.New(t).WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layers.latestLayer = types.NewLayerID(22)
@@ -697,12 +707,12 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	//assert.NoError(t, err)
 	//assert.Equal(t, bts, net.lastTransmission)
 
-	b = NewBuilder(cfg, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	b = NewBuilder(cfg, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, logtest.New(t).WithName("atxBuilder"))
 	err = b.buildNIPostChallenge(context.TODO())
 	assert.NoError(t, err)
 	db.hadNone = false
 	// test load challenge in later epoch - NIPost should be truncated
-	b = NewBuilder(cfg, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, lg.WithName("atxBuilder"))
+	b = NewBuilder(cfg, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, logtest.New(t).WithName("atxBuilder"))
 	err = b.loadChallenge()
 	assert.NoError(t, err)
 	layerClockMock.currentLayer = types.EpochID(4).FirstLayer().Add(3)
@@ -723,18 +733,18 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	retryInterval := 10 * time.Microsecond
 	expectedTries := 3
 
-	activationDb := newActivationDb()
+	activationDb := newActivationDb(t)
 	nipostBuilder := &NIPostBuilderMock{}
 	b := NewBuilder(bc, nodeID, &MockSigning{}, activationDb, net, meshProviderMock,
 		layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock,
-		&mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"),
+		&mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"),
 		WithPoetRetryInterval(retryInterval),
 	)
 	b.initialPost = initialPost
 
 	challenge := newChallenge(otherNodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	posAtx := newAtx(challenge, nipost)
-	storeAtx(r, activationDb, posAtx, log.NewDefault("storeAtx"))
+	storeAtx(r, activationDb, posAtx, logtest.New(t).WithName("storeAtx"))
 
 	net.lastTransmission = nil
 	meshProviderMock.latestLayer = postGenesisEpochLayer.Add(1)
@@ -780,7 +790,7 @@ func TestBuilder_UpdatePoETProver(t *testing.T) {
 		LayersPerEpoch:  layersPerEpoch,
 	}
 
-	activationDb := newActivationDb()
+	activationDb := newActivationDb(t)
 	poetProver, controller := newPoetServiceMock(t)
 	defer controller.Finish()
 
@@ -792,10 +802,10 @@ func TestBuilder_UpdatePoETProver(t *testing.T) {
 	}
 	poetDb := &poetDbMock{}
 	nb := NewNIPSTBuilder(minerID, postProver, poetProver,
-		poetDb, database.NewMemDatabase(), log.NewDefault(string(minerID)))
+		poetDb, database.NewMemDatabase(), logtest.New(t).WithName(string(minerID)))
 	b := NewBuilder(bc, nodeID, 0, &MockSigning{}, activationDb, net, meshProviderMock,
 		nb, postProver, layerClockMock,
-		&mockSyncer{}, NewMockDB(), lg.WithName("atxBuilder"),
+		&mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"),
 		WithPoetRetryInterval(time.Millisecond),
 		WithPoETClientInitializer(mockInitializer),
 	)
@@ -856,7 +866,7 @@ func TestActivationDB_FetchAtxReferences(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)
 
-	activationDb := newActivationDb()
+	activationDb := newActivationDb(t)
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	fetcher := newFetchMock()
 

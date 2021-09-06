@@ -10,7 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -138,7 +138,7 @@ func (m meshMock) ForBlockInView(view map[types.BlockID]struct{}, layer types.La
 	panic("implement me")
 }
 
-func (m meshMock) GetBlock(ID types.BlockID) (*types.Block, error) {
+func (m meshMock) GetBlock(types.BlockID) (*types.Block, error) {
 	panic("implement me")
 }
 
@@ -150,14 +150,14 @@ func (m meshMock) ProcessedLayer() types.LayerID {
 	panic("implement me")
 }
 
-func (m meshMock) HandleLateBlock(blk *types.Block) {
+func (m meshMock) HandleLateBlock(context.Context, *types.Block) {
 	panic("implement me")
 }
 
 type verifierMock struct {
 }
 
-func (v verifierMock) BlockSignedAndEligible(block *types.Block) (bool, error) {
+func (v verifierMock) BlockSignedAndEligible(*types.Block) (bool, error) {
 	return true, nil
 }
 
@@ -185,7 +185,7 @@ func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
 	cfg := Config{3, goldenATXID}
 	//yncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
-	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, log.NewDefault("BlockSyntacticValidation"))
+	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, logtest.New(t))
 	b := &types.Block{}
 
 	fetch := newFetchMock()
@@ -213,7 +213,7 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	cfg := Config{
 		3, goldenATXID,
 	}
-	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, log.NewDefault("syncRefBlock"))
+	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, logtest.New(t))
 	s.traverse = mockForBlockInView
 	a := atx("")
 	atxpool.Put(a)
@@ -242,10 +242,7 @@ func TestBlockHandler_AtxSetID(t *testing.T) {
 	require.NoError(t, err)
 	var b types.ActivationTx
 	types.BytesToInterface(bbytes, &b)
-	t.Log(fmt.Sprintf("%+v", *a))
-	t.Log("---------------------")
-	t.Log(fmt.Sprintf("%+v", b))
-	t.Log("---------------------")
+
 	assert.Equal(t, b.NIPost, a.NIPost)
 	assert.Equal(t, b.InitialPost, a.InitialPost)
 

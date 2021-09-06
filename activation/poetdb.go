@@ -60,15 +60,18 @@ func (db *PoetDb) ValidateAndStoreMsg(data []byte) error {
 
 // Validate validates a new PoET proof.
 func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error {
-
+	const shortIDlth = 5 // check the length to prevent a panic in the errors
+	if len(poetID) < shortIDlth {
+		return types.ProcessingError(fmt.Sprintf("invalid poet id %x", poetID))
+	}
 	root, err := calcRoot(proof.Members)
 	if err != nil {
 		return types.ProcessingError(fmt.Sprintf("failed to calculate membership root for poetID %x round %s: %v",
-			poetID[:5], roundID, err))
+			poetID[:shortIDlth], roundID, err))
 	}
 	if err := validatePoet(root, proof.MerkleProof, proof.LeafCount); err != nil {
 		return fmt.Errorf("failed to validate poet proof for poetID %x round %s: %v",
-			poetID[:5], roundID, err)
+			poetID[:shortIDlth], roundID, err)
 	}
 	// TODO(noamnelke): validate signature (or extract public key and use for salting merkle hashes)
 
@@ -78,7 +81,7 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 	ref, err := proofMessage.Ref()
 	if err != nil {
-		return fmt.Errorf("failed to get PoET proof message reference: %v", err)
+		return fmt.Errorf("failed to get poet proof message reference: %v", err)
 	}
 
 	messageBytes, err := types.InterfaceToBytes(proofMessage)
@@ -100,7 +103,7 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 		return fmt.Errorf("failed to store poet proof and index for poetId %x round %s: %v",
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
-	db.log.With().Info("stored PoET proof",
+	db.log.With().Info("stored poet proof",
 		log.String("poet_proof_id", fmt.Sprintf("%x", ref[:5])),
 		log.String("round_id", proofMessage.RoundID),
 		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID[:5])),

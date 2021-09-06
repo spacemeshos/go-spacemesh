@@ -445,7 +445,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		channelAccount chan types.Address
 		channelReward  chan events.Reward
 		channelReceipt chan events.TxReceipt
-		channelLayer   chan events.NewLayer
+		channelLayer   chan events.LayerUpdate
 	)
 	if filterAccount {
 		channelAccount = events.GetAccountChannel()
@@ -540,7 +540,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Info("layer channel closed, shutting down")
 				return nil
 			}
-			root, err := s.Mesh.GetLayerStateRoot(layer.Layer.Index())
+			root, err := s.Mesh.GetLayerStateRoot(layer.LayerID)
 			if err != nil {
 				log.Error("error retrieving layer data: %s", err)
 				return status.Errorf(codes.Internal, "error retrieving layer data")
@@ -548,7 +548,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
 				GlobalState: &pb.GlobalStateHash{
 					RootHash: root.Bytes(),
-					Layer:    &pb.LayerNumber{Number: layer.Layer.Index().Uint32()},
+					Layer:    &pb.LayerNumber{Number: layer.LayerID.Uint32()},
 				},
 			}}}); err != nil {
 				return err
