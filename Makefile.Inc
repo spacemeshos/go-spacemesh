@@ -26,7 +26,8 @@ CGO_TEST_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$(BIN_DIR)
 
 ifeq ($(GOOS),windows)
   platform := windows
-  export PATH := $(PATH):$(PROJ_DIR)build
+  export GOPATH := $(HOME)/.go
+  export PATH := /mingw64/bin:/go/bin:$(GOPATH)/bin:$(PATH):$(PROJ_DIR)build
   EXE := .exe
 else
   TEMP := /tmp
