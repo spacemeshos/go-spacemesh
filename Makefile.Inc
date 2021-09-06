@@ -117,7 +117,7 @@ print-test-ldflags: get-gpu-setup
 .PHONY: print-test-ldflags
 
 setup-windows-toolchain:
-	pacman -S p7zip mingw-w64-x86_64-toolchain --noconfirm --needed
+	pacman -S unzip p7zip mingw-w64-x86_64-toolchain --noconfirm --needed
 	if [ "$$(go version)" != "go version go$(GO_VERSION) windows/amd64" ]; then \
 		curl -L https://golang.org/dl/go$(GO_VERSION).windows-amd64.zip  -o /tmp/go$(GO_VERSION).windows-amd64.zip && \
 		7z x -o/ /tmp/go$(GO_VERSION).windows-amd64.zip && \
