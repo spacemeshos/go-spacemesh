@@ -1,4 +1,4 @@
-# All checks, exit code is 1 on errors.
+# All checks, exit code is 0 on errors.
 
 # This file contains all available configuration options
 # Modified for linting cmd/ and pkg/
