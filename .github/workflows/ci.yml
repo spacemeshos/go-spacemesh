@@ -75,6 +75,9 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v2
+      - name: prepare
+        run: |
+          - go get ./...
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2.5.2
         with:
