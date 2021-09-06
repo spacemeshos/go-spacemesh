@@ -94,7 +94,7 @@ func ExtractRequestFields(ctx context.Context) (fields []LoggableField) {
 func WithSessionID(ctx context.Context, sessionID string, fields ...LoggableField) context.Context {
 	// Warn if overwriting
 	if curSessionID, ok := ExtractSessionID(ctx); ok && curSessionID != sessionID {
-		AppLog.WithContext(ctx).With().Warning("overwriting sessionID in context",
+		AppLog.WithContext(ctx).With().Info("overwriting sessionID in context",
 			String("old_session_id", curSessionID),
 			String("new_session_id", sessionID))
 	}

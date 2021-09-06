@@ -1,10 +1,9 @@
 package hare
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
-	"github.com/nullstyle/go-xdr/xdr3"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -18,15 +17,9 @@ type Message struct {
 
 // MessageFromBuffer builds an Hare message from the provided bytes buffer.
 // It returns an error if unmarshal of the provided byte slice failed.
-func MessageFromBuffer(buffer []byte) (*Message, error) {
-	rdr := bytes.NewReader(buffer)
-	hareMsg := &Message{}
-	if _, err := xdr.Unmarshal(rdr, hareMsg); err != nil {
-		log.With().Error("could not unmarshal message", log.Err(err))
-		return nil, err
-	}
-
-	return hareMsg, nil
+func MessageFromBuffer(buf []byte) (*Message, error) {
+	msg := &Message{}
+	return msg, types.BytesToInterface(buf, msg)
 }
 
 func (m *Message) String() string {
@@ -58,9 +51,9 @@ type aggregatedMessages struct {
 // innerMessage is the actual set of fields that describe a message in the Hare protocol.
 type innerMessage struct {
 	Type             messageType
-	InstanceID       instanceID
-	K                int32 // the round counter
-	Ki               int32
+	InstanceID       types.LayerID
+	K                uint32 // the round counter
+	Ki               uint32
 	Values           []types.BlockID     // the set S. optional for commit InnerMsg in a certificate
 	RoleProof        []byte              // role is implicit by InnerMsg type, this is the proof
 	EligibilityCount uint16              // the number of claimed eligibilities
@@ -70,13 +63,11 @@ type innerMessage struct {
 
 // Bytes returns the message as bytes.
 func (im *innerMessage) Bytes() []byte {
-	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, im)
+	buf, err := types.InterfaceToBytes(im)
 	if err != nil {
 		log.Panic("could not marshal InnerMsg before send")
 	}
-
-	return w.Bytes()
+	return buf
 }
 
 func (im *innerMessage) String() string {
@@ -128,17 +119,17 @@ func (builder *messageBuilder) SetType(msgType messageType) *messageBuilder {
 	return builder
 }
 
-func (builder *messageBuilder) SetInstanceID(id instanceID) *messageBuilder {
+func (builder *messageBuilder) SetInstanceID(id types.LayerID) *messageBuilder {
 	builder.inner.InstanceID = id
 	return builder
 }
 
-func (builder *messageBuilder) SetRoundCounter(k int32) *messageBuilder {
+func (builder *messageBuilder) SetRoundCounter(k uint32) *messageBuilder {
 	builder.inner.K = k
 	return builder
 }
 
-func (builder *messageBuilder) SetKi(ki int32) *messageBuilder {
+func (builder *messageBuilder) SetKi(ki uint32) *messageBuilder {
 	builder.inner.Ki = ki
 	return builder
 }

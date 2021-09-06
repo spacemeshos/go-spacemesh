@@ -1,18 +1,21 @@
 package net
 
 import (
+	"bytes"
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"io/ioutil"
+	"net"
+	"sync/atomic"
+	"testing"
+	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/require"
-	"net"
-	"sync/atomic"
-	"testing"
-	"time"
 )
 
 var testUDPAddr = func() *net.UDPAddr {
@@ -75,7 +78,7 @@ const testMsg = "TEST"
 func TestUDPNet_Sanity(t *testing.T) {
 	local, localinfo := node.GenerateTestNode(t)
 	udpAddr := &net.UDPAddr{IP: net.IPv4zero, Port: int(localinfo.DiscoveryPort)}
-	udpnet, err := NewUDPNet(context.TODO(), config.DefaultConfig(), local, log.NewDefault("TEST_"+t.Name()))
+	udpnet, err := NewUDPNet(context.TODO(), config.DefaultConfig(), local, logtest.New(t).WithName("TEST_"+t.Name()))
 	require.NoError(t, err)
 	require.NotNil(t, udpnet)
 
@@ -286,13 +289,13 @@ func (ucw *udpConnMock) Close() error {
 
 func TestUDPNet_Cache(t *testing.T) {
 	localnode, _ := node.NewNodeIdentity()
-	n, err := NewUDPNet(context.TODO(), config.DefaultConfig(), localnode, log.NewDefault(t.Name()))
+	n, err := NewUDPNet(context.TODO(), config.DefaultConfig(), localnode, logtest.New(t).WithName(t.Name()))
 	require.NoError(t, err)
 	require.NotNil(t, n)
 	addr2 := testUDPAddr()
 	n.addConn(addr2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()
-	}}, &MsgConnection{stopSending: make(chan struct{})})
+	}}, &MsgConnection{stopSending: make(chan struct{}), closer: ioutil.NopCloser(&bytes.Buffer{})})
 	require.Len(t, n.incomingConn, 1)
 
 	for i := 1; i < maxUDPConn-1; i++ {
@@ -304,7 +307,7 @@ func TestUDPNet_Cache(t *testing.T) {
 		}
 		n.addConn(addrx, &udpConnMock{CreatedFunc: func() time.Time {
 			return time.Now()
-		}}, &MsgConnection{stopSending: make(chan struct{})})
+		}}, &MsgConnection{stopSending: make(chan struct{}), closer: ioutil.NopCloser(&bytes.Buffer{})})
 	}
 
 	require.Len(t, n.incomingConn, maxUDPConn-1)
@@ -318,7 +321,7 @@ func TestUDPNet_Cache(t *testing.T) {
 
 	n.addConn(addrx, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now().Add(-maxUDPLife - 1*time.Second)
-	}}, &MsgConnection{stopSending: make(chan struct{})})
+	}}, &MsgConnection{stopSending: make(chan struct{}), closer: ioutil.NopCloser(&bytes.Buffer{})})
 
 	require.Len(t, n.incomingConn, maxUDPConn)
 
@@ -330,7 +333,7 @@ func TestUDPNet_Cache(t *testing.T) {
 	}
 	n.addConn(addrx2, &udpConnMock{CreatedFunc: func() time.Time {
 		return time.Now()
-	}}, &MsgConnection{stopSending: make(chan struct{})})
+	}}, &MsgConnection{stopSending: make(chan struct{}), closer: ioutil.NopCloser(&bytes.Buffer{})})
 
 	require.Len(t, n.incomingConn, maxUDPConn)
 
@@ -359,7 +362,8 @@ func TestUDPNet_Cache(t *testing.T) {
 		_, okk = n.incomingConn[addrxx.String()]
 	}
 
-	n.addConn(addrxx, somecon, &MsgConnection{stopSending: make(chan struct{})})
+	n.addConn(addrxx, somecon,
+		&MsgConnection{stopSending: make(chan struct{}), closer: ioutil.NopCloser(&bytes.Buffer{})})
 
 	c, err := n.getConn(addrxx)
 	require.Error(t, err)
@@ -373,7 +377,7 @@ func TestUDPNet_Cache2(t *testing.T) {
 	// instead we now give up on "Closing" from within the "connection" when there's an error since
 	// we provide the errors from the level above anyway, so closing should be performed there.
 	localnode, _ := node.NewNodeIdentity()
-	n, err := NewUDPNet(context.TODO(), config.DefaultConfig(), localnode, log.NewDefault(t.Name()))
+	n, err := NewUDPNet(context.TODO(), config.DefaultConfig(), localnode, logtest.New(t).WithName(t.Name()))
 	require.NoError(t, err)
 	require.NotNil(t, n)
 
@@ -466,11 +470,11 @@ func TestUDPNet_Cache2(t *testing.T) {
 func Test_UDPIncomingConnClose(t *testing.T) {
 	localnode, _ := node.NewNodeIdentity()
 	remotenode, _ := node.NewNodeIdentity()
-	n, err := NewUDPNet(context.TODO(), config.DefaultConfig(), localnode, log.NewDefault(t.Name()+"_local"))
+	n, err := NewUDPNet(context.TODO(), config.DefaultConfig(), localnode, logtest.New(t).WithName(t.Name()+"_local"))
 	require.NoError(t, err)
 	require.NotNil(t, n)
 
-	remoten, rerr := NewUDPNet(context.TODO(), config.DefaultConfig(), remotenode, log.NewDefault(t.Name()+"_remote"))
+	remoten, rerr := NewUDPNet(context.TODO(), config.DefaultConfig(), remotenode, logtest.New(t).WithName(t.Name()+"_remote"))
 	require.NoError(t, rerr)
 	require.NotNil(t, remoten)
 

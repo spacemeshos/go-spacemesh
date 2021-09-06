@@ -3,6 +3,7 @@ package events
 import (
 	"errors"
 	"fmt"
+	"runtime/debug"
 	"sync"
 
 	"go.uber.org/zap/zapcore"
@@ -17,6 +18,21 @@ var reporter *EventReporter
 
 // we use a mutex to ensure thread safety
 var mu sync.RWMutex
+
+// EventHook returns hook for logger.
+func EventHook() func(entry zapcore.Entry) error {
+	return func(entry zapcore.Entry) error {
+		// If we report anything less than this we'll end up in an infinite loop
+		if entry.Level >= zapcore.ErrorLevel {
+			ReportError(NodeError{
+				Msg:   entry.Message,
+				Trace: string(debug.Stack()),
+				Level: entry.Level,
+			})
+		}
+		return nil
+	}
+}
 
 // ReportNewTx dispatches incoming events to the reporter singleton
 func ReportNewTx(tx *types.Transaction) {
@@ -65,7 +81,7 @@ func ReportNewActivation(activation *types.ActivationTx) {
 
 	Publish(NewAtx{
 		ID:      activation.ShortString(),
-		LayerID: uint64(activation.PubLayerID.GetEpoch()),
+		EpochID: uint32(activation.PubLayerID.GetEpoch()),
 	})
 
 	if reporter != nil {
@@ -119,7 +135,7 @@ func ReportNewBlock(blk *types.Block) {
 	Publish(NewBlock{
 		ID:    blk.ID().String(),
 		Atx:   blk.ATXID.ShortString(),
-		Layer: uint64(blk.LayerIndex),
+		Layer: blk.LayerIndex.Uint32(),
 	})
 }
 
@@ -132,8 +148,8 @@ func ReportValidBlock(blockID types.BlockID, valid bool) {
 }
 
 // ReportAtxCreated reports a created activation
-func ReportAtxCreated(created bool, layer uint64, id string) {
-	Publish(AtxCreated{Created: created, Layer: layer, ID: id})
+func ReportAtxCreated(created bool, epoch uint32, id string) {
+	Publish(AtxCreated{Created: created, Epoch: epoch, ID: id})
 }
 
 // ReportValidActivation reports a valid activation
@@ -142,7 +158,7 @@ func ReportValidActivation(activation *types.ActivationTx, valid bool) {
 }
 
 // ReportDoneCreatingBlock reports a created block
-func ReportDoneCreatingBlock(eligible bool, layer uint64, error string) {
+func ReportDoneCreatingBlock(eligible bool, layer uint32, error string) {
 	Publish(DoneCreatingBlock{
 		Eligible: eligible,
 		Layer:    layer,
@@ -158,21 +174,21 @@ func ReportCalculatedTortoiseBeacon(epoch types.EpochID, beacon string) {
 	})
 }
 
-// ReportNewLayer reports a new layer
-func ReportNewLayer(layer NewLayer) {
+// ReportLayerUpdate reports a new layer, or an update to an existing layer
+func ReportLayerUpdate(layer LayerUpdate) {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
 		if reporter.blocking {
 			reporter.channelLayer <- layer
-			log.With().Debug("reported new layer", layer)
+			log.With().Debug("reported new or updated layer", layer)
 		} else {
 			select {
 			case reporter.channelLayer <- layer:
-				log.With().Debug("reported new layer", layer)
+				log.With().Debug("reported new or updated layer", layer)
 			default:
-				log.With().Debug("not reporting new layer as no one is listening", layer)
+				log.With().Debug("not reporting new or updated layer as no one is listening", layer)
 			}
 		}
 	}
@@ -292,7 +308,7 @@ func GetActivationsChannel() chan *types.ActivationTx {
 }
 
 // GetLayerChannel returns a channel of all layer data
-func GetLayerChannel() chan NewLayer {
+func GetLayerChannel() chan LayerUpdate {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -402,24 +418,22 @@ func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 }
 
 // The status of a layer
+// TODO: this list is woefully inadequate and does not map to reality. See https://github.com/spacemeshos/api/issues/144.
 const (
 	LayerStatusTypeUnknown   = iota
 	LayerStatusTypeApproved  // approved by Hare
 	LayerStatusTypeConfirmed // confirmed by Tortoise
 )
 
-// NewLayer packages up a layer with its status (which a layer does not
-// ordinarily contain)
-type NewLayer struct {
-	Layer  *types.Layer
-	Status int
+// LayerUpdate packages up a layer with its status (which a layer does not ordinarily contain)
+type LayerUpdate struct {
+	LayerID types.LayerID
+	Status  int
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (nl NewLayer) Field() log.Field {
-	return log.String("layer",
-		fmt.Sprintf("status: %d, number: %d, numblocks: %d",
-			nl.Status, nl.Layer.Index(), len(nl.Layer.Blocks())))
+func (nl LayerUpdate) Field() log.Field {
+	return log.String("layer", fmt.Sprintf("status: %d, number: %d", nl.Status, nl.LayerID))
 }
 
 // NodeError represents an internal error to be reported
@@ -462,7 +476,7 @@ type TransactionWithValidity struct {
 type EventReporter struct {
 	channelTransaction chan TransactionWithValidity
 	channelActivation  chan *types.ActivationTx
-	channelLayer       chan NewLayer
+	channelLayer       chan LayerUpdate
 	channelError       chan NodeError
 	channelStatus      chan struct{}
 	channelAccount     chan types.Address
@@ -476,7 +490,7 @@ func newEventReporter(bufsize int, blocking bool) *EventReporter {
 	return &EventReporter{
 		channelTransaction: make(chan TransactionWithValidity, bufsize),
 		channelActivation:  make(chan *types.ActivationTx, bufsize),
-		channelLayer:       make(chan NewLayer, bufsize),
+		channelLayer:       make(chan LayerUpdate, bufsize),
 		channelStatus:      make(chan struct{}, bufsize),
 		channelAccount:     make(chan types.Address, bufsize),
 		channelReward:      make(chan Reward, bufsize),

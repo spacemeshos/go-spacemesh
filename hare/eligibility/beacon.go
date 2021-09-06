@@ -19,17 +19,17 @@ type addGet interface {
 // Beacon provides the value that is under consensus as defined by the hare.
 type Beacon struct {
 	beaconGetter    blocks.BeaconGetter
-	confidenceParam uint16
+	confidenceParam uint32
 	cache           addGet
 	log.Log
 }
 
 // NewBeacon returns a new beacon
 // confidenceParam is the number of layers that the Beacon assumes for consensus view.
-func NewBeacon(beaconGetter blocks.BeaconGetter, confidenceParam uint16, logger log.Log) *Beacon {
-	c, e := lru.New(activesCacheSize)
-	if e != nil {
-		logger.Panic("could not create lru cache, err: %v", e)
+func NewBeacon(beaconGetter blocks.BeaconGetter, confidenceParam uint32, logger log.Log) *Beacon {
+	c, err := lru.New(activesCacheSize)
+	if err != nil {
+		logger.With().Panic("could not create lru cache", log.Err(err))
 	}
 	return &Beacon{
 		beaconGetter:    beaconGetter,
@@ -41,8 +41,13 @@ func NewBeacon(beaconGetter blocks.BeaconGetter, confidenceParam uint16, logger 
 
 // Value returns the beacon value for an epoch
 // Note: Value is concurrency-safe but not concurrency-optimized
-// TODO: does this ever return an error? If not, remove it
 func (b *Beacon) Value(ctx context.Context, epochID types.EpochID) (uint32, error) {
+	// TODO(nkryuchkov): remove when beacon sync is done
+	beaconSyncEnabled := false
+	if !beaconSyncEnabled {
+		return uint32(epochID), nil
+	}
+
 	// check cache
 	if val, ok := b.cache.Get(epochID); ok {
 		return val.(uint32), nil

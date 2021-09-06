@@ -5,8 +5,9 @@ package pendingtxs
 
 import (
 	"bytes"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type nanoTx struct {
@@ -33,13 +34,14 @@ func NewAccountPendingTxs() *AccountPendingTxs {
 // transaction is already indexed.
 func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction) {
 	apt.mu.Lock()
+	defer apt.mu.Unlock()
 	for _, tx := range txs {
 		existing, found := apt.PendingTxs[tx.AccountNonce]
 		if !found {
 			existing = make(map[types.TransactionID]nanoTx)
 			apt.PendingTxs[tx.AccountNonce] = existing
 		}
-		if existing[tx.ID()].HighestLayerIncludedIn > layer {
+		if existing[tx.ID()].HighestLayerIncludedIn.After(layer) {
 			layer = existing[tx.ID()].HighestLayerIncludedIn
 		}
 		existing[tx.ID()] = nanoTx{
@@ -48,17 +50,16 @@ func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction
 			HighestLayerIncludedIn: layer,
 		}
 	}
-	apt.mu.Unlock()
 }
 
 // RemoveAccepted removes a list of accepted transactions from the AccountPendingTxs. Since the given transactions were
 // accepted, any other version of the transaction with the same nonce is also discarded.
 func (apt *AccountPendingTxs) RemoveAccepted(accepted []*types.Transaction) {
 	apt.mu.Lock()
+	defer apt.mu.Unlock()
 	for _, tx := range accepted {
 		delete(apt.PendingTxs, tx.AccountNonce)
 	}
-	apt.mu.Unlock()
 }
 
 // RemoveRejected removes a list of rejected transactions from the AccountPendingTxs, assuming they were rejected in the
@@ -66,10 +67,11 @@ func (apt *AccountPendingTxs) RemoveAccepted(accepted []*types.Transaction) {
 // removed.
 func (apt *AccountPendingTxs) RemoveRejected(rejected []*types.Transaction, layer types.LayerID) {
 	apt.mu.Lock()
+	defer apt.mu.Unlock()
 	for _, tx := range rejected {
 		existing, found := apt.PendingTxs[tx.AccountNonce]
 		if found {
-			if existing[tx.ID()].HighestLayerIncludedIn > layer {
+			if existing[tx.ID()].HighestLayerIncludedIn.After(layer) {
 				continue
 			}
 			delete(existing, tx.ID())
@@ -78,18 +80,17 @@ func (apt *AccountPendingTxs) RemoveRejected(rejected []*types.Transaction, laye
 			}
 		}
 	}
-	apt.mu.Unlock()
 }
 
 // RemoveNonce removes any transaction with the given nonce from AccountPendingTxs. For each transaction removed it also
 // calls the given deleteTx function with the corresponding transaction ID.
 func (apt *AccountPendingTxs) RemoveNonce(nonce uint64, deleteTx func(id types.TransactionID)) {
 	apt.mu.Lock()
+	defer apt.mu.Unlock()
 	for id := range apt.PendingTxs[nonce] {
 		deleteTx(id)
 	}
 	delete(apt.PendingTxs, nonce)
-	apt.mu.Unlock()
 }
 
 // GetProjection provides projected nonce and balance after valid transactions in the AccountPendingTxs would be
@@ -106,6 +107,7 @@ func (apt *AccountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonc
 func (apt *AccountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []types.TransactionID, nonce, balance uint64) {
 	nonce, balance = prevNonce, prevBalance
 	apt.mu.RLock()
+	defer apt.mu.RUnlock()
 	for {
 		txs, found := apt.PendingTxs[nonce]
 		if !found {
@@ -120,7 +122,6 @@ func (apt *AccountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []t
 		balance -= tx.Amount + tx.Fee
 		nonce++
 	}
-	apt.mu.RUnlock()
 	return txIds, nonce, balance
 }
 

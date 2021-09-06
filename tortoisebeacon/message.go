@@ -2,13 +2,16 @@ package tortoisebeacon
 
 import (
 	"encoding/json"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
 // ProposalMessage is a message type which is used when sending proposals.
 type ProposalMessage struct {
-	MinerID      types.NodeID
+	EpochID      types.EpochID
+	NodeID       types.NodeID
 	VRFSignature []byte
 }
 
@@ -22,9 +25,14 @@ func (p ProposalMessage) String() string {
 	return string(bytes)
 }
 
+type proposalMessageWithReceiptData struct {
+	message      ProposalMessage
+	gossip       service.GossipMessage
+	receivedTime time.Time
+}
+
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
 type FirstVotingMessageBody struct {
-	MinerID                   types.NodeID
 	ValidProposals            [][]byte
 	PotentiallyValidProposals [][]byte
 }
@@ -32,7 +40,7 @@ type FirstVotingMessageBody struct {
 // FirstVotingMessage is a message type which is used when sending first voting messages.
 type FirstVotingMessage struct {
 	FirstVotingMessageBody
-	Signature []byte // TODO: implement extracting pk from signature
+	Signature []byte
 }
 
 // String returns a string form of FirstVotingMessage.
@@ -48,7 +56,6 @@ func (v FirstVotingMessage) String() string {
 // FollowingVotingMessageBody is FollowingVotingMessage without a signature.
 type FollowingVotingMessageBody struct {
 	MinerID        types.NodeID
-	EpochID        types.EpochID
 	RoundID        types.RoundID
 	VotesBitVector []uint64
 }

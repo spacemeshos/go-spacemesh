@@ -3,6 +3,7 @@ package util
 
 import (
 	"encoding/binary"
+	"fmt"
 )
 
 // BytesToUint32 interprets a byte slice as uint32, using little endian encoding.
@@ -31,6 +32,21 @@ func Uint64ToBytesBigEndian(i uint64) []byte {
 	a := make([]byte, 8)
 	binary.BigEndian.PutUint64(a, i)
 	return a
+}
+
+// Uint32ToBytesBE marshal uint32 to bytes in big endian format.
+func Uint32ToBytesBE(i uint32) []byte {
+	a := make([]byte, 4)
+	binary.BigEndian.PutUint32(a, i)
+	return a
+}
+
+// BytesToUint32BE decode buf as uint32. Panics if length is not 4 bytes.
+func BytesToUint32BE(buf []byte) uint32 {
+	if len(buf) != 4 {
+		panic(fmt.Sprintf("invalid buffer to decode uint32 %v", buf))
+	}
+	return binary.BigEndian.Uint32(buf)
 }
 
 // CopyBytes returns an exact copy of the provided bytes.

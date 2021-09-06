@@ -7,19 +7,19 @@ import (
 	"context"
 	"fmt"
 	"io"
-	lg "log"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"sync"
 	"testing"
 	"time"
 
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
-
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apicfg "github.com/spacemeshos/go-spacemesh/api/config"
@@ -29,6 +29,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -37,23 +38,27 @@ import (
 
 type AppTestSuite struct {
 	suite.Suite
-	apps        []*SpacemeshApp
+	apps        []*App
+	killedApps  []*App
+	killEpoch   types.EpochID
+	log         log.Log
 	poetCleanup func(cleanup bool) error
 }
 
 func (suite *AppTestSuite) SetupTest() {
-	suite.apps = make([]*SpacemeshApp, 0, 0)
+	suite.apps = make([]*App, 0, 0)
+	suite.log = logtest.New(suite.T())
 	suite.poetCleanup = func(bool) error { return nil }
 }
 
 func (suite *AppTestSuite) TearDownTest() {
 	// poet should clean up after itself
 	if matches, err := filepath.Glob("*.bin"); err != nil {
-		log.With().Error("error while finding poet bin files", log.Err(err))
+		suite.log.With().Error("error while finding poet bin files", log.Err(err))
 	} else {
 		for _, f := range matches {
 			if err = os.Remove(f); err != nil {
-				log.With().Error("error while cleaning up poet bin files", log.Err(err))
+				suite.log.With().Error("error while cleaning up poet bin files", log.Err(err))
 			}
 		}
 	}
@@ -65,21 +70,26 @@ func Test_PoETHarnessSanity(t *testing.T) {
 	require.NotNil(t, h)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, storeFormat string, genesisTime string, poetClient *activation.HTTPPoetClient, clock TickProvider, network network) {
+func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, genesisTime string, poetClient *activation.HTTPPoetClient, clock TickProvider, network network) (firstDir string) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
-		dbStorepath := storeFormat + string(name)
+		dbStorepath := suite.T().TempDir()
+		if i == 0 {
+			firstDir = dbStorepath
+		}
 		database.SwitchCreationContext(dbStorepath, string(name))
-		smApp, err := InitSingleInstance(*cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network)
+		edSgn := signing.NewEdSigner()
+		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network, edSgn)
 		suite.NoError(err)
 		suite.apps = append(suite.apps, smApp)
 		name++
 	}
+	return
 }
 
 func (suite *AppTestSuite) ClosePoet() {
 	if err := suite.poetCleanup(true); err != nil {
-		log.With().Error("error while cleaning up poet", log.Err(err))
+		suite.log.With().Error("error while cleaning up poet", log.Err(err))
 	}
 }
 
@@ -88,6 +98,22 @@ var tests = []TestScenario{
 	sameRootTester([]int{0}),
 	reachedEpochTester([]int{}),
 	txWithUnorderedNonceGenerator([]int{1}),
+	healingTester([]int{}), // run last as it kills some of the running apps!
+}
+
+type sharedClock struct {
+	logger log.Log
+	*timesync.TimeClock
+}
+
+func (clock sharedClock) Close() {
+	// wrap the Close method so closing one app doesn't close the clock for other listeners
+	clock.logger.Info("simulating clock close")
+}
+
+func (clock sharedClock) RealClose() {
+	// actually close the underlying clock
+	clock.TimeClock.Close()
 }
 
 func (suite *AppTestSuite) TestMultipleNodes() {
@@ -96,62 +122,67 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		numberOfEpochs = 5 // first 2 epochs are genesis
 		numOfInstances = 5
 	)
-	cfg := getTestDefaultConfig(numOfInstances)
-	types.SetLayersPerEpoch(int32(cfg.LayersPerEpoch))
-	path := suite.T().TempDir()
+	cfg := getTestDefaultConfig()
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
+	lg := logtest.New(suite.T())
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
-	require.NoError(suite.T(), err, "failed creating poet client harness: %v", err)
+	suite.NoError(err, "failed creating poet client harness: %v", err)
 	suite.poetCleanup = poetHarness.Teardown
 
 	// Scan and print the poet output, and catch errors early
-	l := lg.New(os.Stderr, "[poet]\t", 0)
 	failChan := make(chan struct{})
 	go func() {
+		poetLog := lg.WithName("poet")
 		scanner := bufio.NewScanner(io.MultiReader(poetHarness.Stdout, poetHarness.Stderr))
 		for scanner.Scan() {
 			line := scanner.Text()
 			matched, err := regexp.MatchString(`\bERROR\b`, line)
-			require.NoError(suite.T(), err)
+			suite.NoError(err)
 			// Fail fast if we encounter a poet error
 			// Must use a channel since we're running inside a goroutine
 			if matched {
 				close(failChan)
 				suite.T().Fatalf("got error from poet: %s", line)
 			}
-			l.Println(line)
+			poetLog.Debug(line)
 		}
 	}()
 
-	rolacle := eligibility.New()
+	rolacle := eligibility.New(lg)
 
 	gTime, err := time.Parse(time.RFC3339, genesisTime)
 	if err != nil {
-		log.With().Error("cannot parse genesis time", log.Err(err))
+		suite.log.With().Error("cannot parse genesis time", log.Err(err))
 	}
-	ld := time.Duration(20) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	suite.initMultipleInstances(cfg, rolacle, numOfInstances, path, genesisTime, poetHarness.HTTPPoetClient, clock, net)
+	ld := 20 * time.Second
+	clock := sharedClock{suite.log, timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(suite.T()))}
+	firstDir := suite.initMultipleInstances(cfg, rolacle, numOfInstances, genesisTime, poetHarness.HTTPPoetClient, clock, net)
 
 	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
 	// when we try to allocate more database files. Wrap this context neatly in an inline func.
 	var oldRoot types.Hash32
+	var edSgn *signing.EdSigner
 	func() {
-		defer GracefulShutdown(suite.apps)
+		// wrap so apps list is lazily evaluated
+		defer func() {
+			GracefulShutdown(suite.apps)
+		}()
 		defer suite.ClosePoet()
+		defer clock.RealClose()
 
 		for _, a := range suite.apps {
-			a.startServices(context.TODO(), log.AppLog.WithName(suite.T().Name()))
+			suite.NoError(a.startServices(context.TODO()))
 		}
 
 		ActivateGrpcServer(suite.apps[0])
 
-		if err := poetHarness.Start([]string{"127.0.0.1:9094"}); err != nil {
+		if err := poetHarness.Start(context.TODO(), []string{fmt.Sprintf("127.0.0.1:%d", suite.apps[0].grpcAPIService.Port)}); err != nil {
 			suite.T().Fatalf("failed to start poet server: %v", err)
 		}
 
-		timeout := time.After(6 * time.Minute)
+		timeout := time.After(10 * time.Minute)
 
 		// Run setup first. We need to allow this to timeout, and monitor the failure channel too,
 		// as this can also loop forever.
@@ -185,30 +216,30 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 				if runTests(suite, finished) {
 					break loop
 				}
-				time.Sleep(10 * time.Second)
+				time.Sleep(20 * time.Second)
 			}
 		}
-		suite.validateBlocksAndATXs(types.LayerID(numberOfEpochs*suite.apps[0].Config.LayersPerEpoch) - 1)
+		suite.validateBlocksAndATXs(types.NewLayerID(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
 		oldRoot = suite.apps[0].state.GetStateRoot()
+		edSgn = suite.apps[0].edSgn
 	}()
 
-	// this tests loading of previous state, maybe it's not the best place to put this here...
-	smApp, err := InitSingleInstance(*cfg, 0, genesisTime, path+"a", rolacle, poetHarness.HTTPPoetClient, clock, net)
-	assert.NoError(suite.T(), err)
+	// initialize a new app using the same database as the first node and make sure the state roots match
+	smApp, err := InitSingleInstance(lg, *cfg, 0, genesisTime, firstDir, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
+	suite.NoError(err)
 	// test that loaded root is equal
-	assert.Equal(suite.T(), oldRoot, smApp.state.GetStateRoot())
-	// start and stop and test for no panics
-	smApp.startServices(context.TODO(), log.AppLog)
-	smApp.stopServices()
+	suite.validateReloadStateRoot(smApp, oldRoot)
 }
 
-type ScenarioSetup func(*AppTestSuite, *testing.T)
-type ScenarioTestCriteria func(*AppTestSuite, *testing.T) bool
-type TestScenario struct {
-	Setup        ScenarioSetup
-	Criteria     ScenarioTestCriteria
-	Dependencies []int
-}
+type (
+	ScenarioSetup        func(*AppTestSuite, *testing.T)
+	ScenarioTestCriteria func(*AppTestSuite, *testing.T) bool
+	TestScenario         struct {
+		Setup        ScenarioSetup
+		Criteria     ScenarioTestCriteria
+		Dependencies []int
+	}
+)
 
 func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apicfg.Account2Private))
@@ -223,28 +254,35 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 		for i := 0; i < txsSent; i++ {
 			tx, err := types.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
 			if err != nil {
-				log.With().Panic("panicked creating signed tx", log.Err(err))
+				suite.log.With().Panic("panicked creating signed tx", log.Err(err))
 			}
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
 			_, err = suite.apps[0].txService.SubmitTransaction(nil, pbMsg)
-			assert.Error(suite.T(), err)
+			suite.Error(err)
+			suite.log.With().Info("got expected error submitting tx with out of order nonce", log.Err(err))
 		}
 	}
 
-	teardown := func(suite *AppTestSuite, t *testing.T) bool {
+	test := func(suite *AppTestSuite, t *testing.T) bool {
 		ok := true
 		for _, app := range suite.apps {
-			log.Info("zero acc current balance: %d nonce %d", app.state.GetBalance(dst), app.state.GetNonce(addr))
+			suite.log.With().Info("zero acc current balance",
+				app.nodeID,
+				log.FieldNamed("sender", addr),
+				log.FieldNamed("dest", dst),
+				log.Uint64("dest_balance", app.state.GetBalance(dst)),
+				log.Uint64("sender_nonce", app.state.GetNonce(addr)),
+				log.Uint64("sender_balance", app.state.GetBalance(addr)))
 			ok = ok && 0 == app.state.GetBalance(dst) && app.state.GetNonce(addr) == 0
 		}
 		if ok {
-			log.Info("zero addresses ok")
+			suite.log.Info("zero addresses ok")
 		}
 		return ok
 	}
 
-	return TestScenario{setup, teardown, dependencies}
+	return TestScenario{setup, test, dependencies}
 }
 
 func txWithRunningNonceGenerator(dependencies []int) TestScenario {
@@ -269,7 +307,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 
 		for i := 0; i < txsSent; i++ {
 			actNonce := getNonce()
-			log.Info("waiting for nonce: %d, current projected nonce: %d", i, actNonce)
+			suite.log.Info("waiting for nonce: %d, current projected nonce: %d", i, actNonce)
 
 			// Note: this may loop forever if the nonce is not advancing for some reason, but the entire
 			// setup process will timeout above if this happens
@@ -286,19 +324,25 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 		}
 	}
 
-	teardown := func(suite *AppTestSuite, t *testing.T) bool {
+	test := func(suite *AppTestSuite, t *testing.T) bool {
 		ok := true
 		for _, app := range suite.apps {
-			log.Info("current balance: %d nonce %d", app.state.GetBalance(dst), app.state.GetNonce(addr))
-			ok = ok && 250 <= app.state.GetBalance(dst) && app.state.GetNonce(addr) == uint64(txsSent)
+			suite.log.With().Info("valid tx recipient acc current balance",
+				app.nodeID,
+				log.FieldNamed("sender", addr),
+				log.FieldNamed("dest", dst),
+				log.Uint64("dest_balance", app.state.GetBalance(dst)),
+				log.Uint64("sender_nonce", app.state.GetNonce(addr)),
+				log.Uint64("sender_balance", app.state.GetBalance(addr)))
+			ok = ok && app.state.GetBalance(dst) >= 250 && app.state.GetNonce(addr) == uint64(txsSent)
 		}
 		if ok {
-			log.Info("addresses ok")
+			suite.log.Info("addresses ok")
 		}
 		return ok
 	}
 
-	return TestScenario{setup, teardown, dependencies}
+	return TestScenario{setup, test, dependencies}
 }
 
 func reachedEpochTester(dependencies []int) TestScenario {
@@ -308,12 +352,13 @@ func reachedEpochTester(dependencies []int) TestScenario {
 	test := func(suite *AppTestSuite, t *testing.T) bool {
 		expectedTotalWeight := configuredTotalWeight(suite.apps)
 		for _, app := range suite.apps {
-			if uint32(app.mesh.LatestLayer()) < numberOfEpochs*uint32(app.Config.LayersPerEpoch) {
+			if app.mesh.LatestLayer().Before(types.NewLayerID(numberOfEpochs * uint32(app.Config.LayersPerEpoch))) {
 				return false
 			}
 			suite.validateLastATXTotalWeight(app, numberOfEpochs, expectedTotalWeight)
 		}
-		log.Info("epoch ok")
+		suite.log.Info("epoch ok")
+
 		// weakcoin test runs once, after epoch has been reached
 		suite.healingWeakcoinTester()
 		return true
@@ -330,7 +375,7 @@ func (suite *AppTestSuite) healingWeakcoinTester() {
 		suite.Equal(globalLayer, lastLayer, "bad last layer on node %v", i)
 		// there will be no coin value for layer zero since ticker delivers only new layers
 		// and there will be no coin value for the last layer
-		for layerID := types.LayerID(1); layerID < lastLayer; layerID++ {
+		for layerID := types.NewLayerID(1); layerID.Before(lastLayer); layerID = layerID.Add(1) {
 			coinflip, exists := app.mesh.DB.GetCoinflip(context.TODO(), layerID)
 			if !exists {
 				suite.Fail("no weak coin value", "node %v layer %v last layer %v", i, layerID, lastLayer)
@@ -345,10 +390,69 @@ func (suite *AppTestSuite) healingWeakcoinTester() {
 	}
 }
 
-func configuredTotalWeight(apps []*SpacemeshApp) uint64 {
+func healingTester(dependencies []int) TestScenario {
+	var lastVerifiedLayer types.LayerID
+	var ok1, ok2 map[int]bool
+	confidenceInterval := uint32(2)
+	once := sync.Once{}
+	setup := func(suite *AppTestSuite, t *testing.T) {}
+
+	test := func(suite *AppTestSuite, t *testing.T) bool {
+		// we can't actually use setup() as it's destructive to other tests, so run setup here
+		once.Do(func() {
+			// immediately kill half of the participating nodes.
+			// poet communicates with GRPC server on the first app, so leave first one alone
+			// we need to kill at least half, so round up.
+			// the last apps in the list have the largest voting weight so we should remove them.
+			firstAppToKill := len(suite.apps) - (len(suite.apps)/2 + 1)
+
+			// save data on the nodes we're about to kill for posterity
+			suite.killedApps = suite.apps[firstAppToKill:]
+			GracefulShutdown(suite.apps[firstAppToKill:])
+
+			// make sure we don't attempt to shut down the same apps twice
+			suite.apps = suite.apps[:firstAppToKill]
+
+			lastVerifiedLayer = suite.apps[0].mesh.LatestLayerInState()
+			suite.killEpoch = lastVerifiedLayer.GetEpoch()
+
+			// initialize maps
+			ok1 = make(map[int]bool, len(suite.apps))
+			ok2 = make(map[int]bool, len(suite.apps))
+		})
+
+		// now wait for healing to kick in and advance the verified layer
+		success := true
+		for i, app := range suite.apps {
+			lyrProcessed := app.mesh.ProcessedLayer()
+			lyrVerified := app.mesh.LatestLayerInState()
+			suite.log.With().Info("node latest layers",
+				log.FieldNamed("old_verified", lastVerifiedLayer),
+				log.Uint32("confidence_interval", confidenceInterval),
+				log.FieldNamed("processed", lyrProcessed),
+				log.FieldNamed("verified", lyrVerified),
+				log.Int("app", i),
+				log.FieldNamed("nodeid", app.nodeID))
+
+			// two success conditions:
+			//   1. make sure verified layer gets stuck (healing is needed)
+			ok1[i] = ok1[i] || lyrProcessed.After(lyrVerified.Add(confidenceInterval))
+
+			//   2. make sure healing actually kicks in
+			//   (verified needs to advance, and to nearly catch up to last received)
+			ok2[i] = ok1[i] && lyrVerified.After(lastVerifiedLayer.Add(confidenceInterval))
+			ok2[i] = ok2[i] && !lyrVerified.Add(confidenceInterval).Before(lyrProcessed)
+			success = success && ok2[i]
+		}
+		return success
+	}
+	return TestScenario{setup, test, dependencies}
+}
+
+func configuredTotalWeight(apps []*App) uint64 {
 	expectedTotalWeight := uint64(0)
 	for _, app := range apps {
-		expectedTotalWeight += app.Config.SpaceToCommit
+		expectedTotalWeight += uint64(app.Config.SMESHING.Opts.NumUnits)
 	}
 	return expectedTotalWeight
 }
@@ -368,7 +472,7 @@ func sameRootTester(dependencies []int) TestScenario {
 					if r1 == r2 {
 						clientsDone++
 						if clientsDone == len(suite.apps)-1 {
-							log.Info("%d roots confirmed out of %d return ok", clientsDone, len(suite.apps))
+							suite.log.Info("%d roots confirmed out of %d return ok", clientsDone, len(suite.apps))
 							return true
 						}
 					}
@@ -381,7 +485,7 @@ func sameRootTester(dependencies []int) TestScenario {
 
 		if maxClientsDone != stickyClientsDone {
 			stickyClientsDone = maxClientsDone
-			log.Info("%d roots confirmed out of %d", maxClientsDone, len(suite.apps))
+			suite.log.Info("%d roots confirmed out of %d", maxClientsDone, len(suite.apps))
 		}
 		return false
 	}
@@ -406,7 +510,7 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 		}
 		if depsOk && !finished[i] {
 			finished[i] = test.Criteria(suite, suite.T())
-			log.Info("test %d completion state: %v", i, finished[i])
+			suite.log.Info("test %d completion state: %v", i, finished[i])
 		}
 		if !finished[i] {
 			// at least one test isn't completed, pre-empt and return to keep looping
@@ -416,9 +520,16 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	return true
 }
 
-func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
-	log.Info("untilLayer=%v", untilLayer)
+func (suite *AppTestSuite) validateReloadStateRoot(app *App, oldRoot types.Hash32) {
+	// test that loaded root is equal
+	assert.Equal(suite.T(), oldRoot, app.state.GetStateRoot())
 
+	// start and stop and test for no panics
+	suite.NoError(app.startServices(context.TODO()))
+	app.stopServices()
+}
+
+func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	type nodeData struct {
 		layertoblocks map[types.LayerID][]types.BlockID
 		atxPerEpoch   map[types.EpochID]uint32
@@ -430,7 +541,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	// assert all nodes validated untilLayer-1
 	for _, ap := range suite.apps {
 		curNodeLastLayer := ap.mesh.ProcessedLayer()
-		assert.True(suite.T(), int(untilLayer)-1 <= int(curNodeLastLayer))
+		assert.True(suite.T(), !untilLayer.Sub(1).After(curNodeLastLayer))
 	}
 
 	for _, ap := range suite.apps {
@@ -440,7 +551,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			datamap[ap.nodeID.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
 		}
 
-		for i := types.LayerID(5); i <= untilLayer; i++ {
+		for i := types.NewLayerID(5); !i.After(untilLayer); i = i.Add(1) {
 			lyr, err := ap.mesh.GetLayer(i)
 			suite.NoError(err, "couldn't get validated layer from db", i)
 			for _, b := range lyr.Blocks() {
@@ -449,29 +560,22 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		}
 	}
 
-	lateNodeKey := suite.apps[len(suite.apps)-1].nodeID.Key
 	for i, d := range datamap {
-		log.Info("node %v in len(layerstoblocks) %v", i, len(d.layertoblocks))
-		if i == lateNodeKey { // skip late node
-			continue
-		}
+		suite.log.Info("node %v: len(layerstoblocks) %v", i, len(d.layertoblocks))
 		for i2, d2 := range datamap {
 			if i == i2 {
 				continue
 			}
-			if i2 == lateNodeKey { // skip late node
-				continue
-			}
 
-			assert.Equal(suite.T(), len(d.layertoblocks), len(d2.layertoblocks), "%v has not matching layer to %v. %v not %v", i, i2, len(d.layertoblocks), len(d2.layertoblocks))
+			suite.Equal(len(d.layertoblocks), len(d2.layertoblocks), "%v layer block count mismatch with %v: %v not %v", i, i2, len(d.layertoblocks), len(d2.layertoblocks))
 
 			for l, bl := range d.layertoblocks {
-				assert.Equal(suite.T(), len(bl), len(d2.layertoblocks[l]),
+				suite.Equal(len(bl), len(d2.layertoblocks[l]),
 					fmt.Sprintf("%v and %v had different block maps for layer: %v: %v: %v \r\n %v: %v", i, i2, l, i, bl, i2, d2.layertoblocks[l]))
 			}
 
 			for e, atx := range d.atxPerEpoch {
-				assert.Equal(suite.T(), atx, d2.atxPerEpoch[e],
+				suite.Equal(atx, d2.atxPerEpoch[e],
 					fmt.Sprintf("%v and %v had different atx counts for epoch: %v: %v: %v \r\n %v: %v", i, i2, e, i, atx, i2, d2.atxPerEpoch[e]))
 			}
 		}
@@ -479,45 +583,54 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	// assuming all nodes have the same results
 	layerAvgSize := suite.apps[0].Config.LayerAvgSize
-	patient := datamap[suite.apps[0].nodeID.Key]
+	nodedata := datamap[suite.apps[0].nodeID.Key]
 
-	lastLayer := len(patient.layertoblocks) + 5
-	log.Info("patient %v", suite.apps[0].nodeID.ShortString())
+	lastLayer := len(nodedata.layertoblocks) + 5
+	suite.log.Info("node %v", suite.apps[0].nodeID.ShortString())
 
 	totalBlocks := 0
-	for id, l := range patient.layertoblocks {
+	for id, l := range nodedata.layertoblocks {
 		totalBlocks += len(l)
-		log.Info("patient %v layer %v, blocks %v", suite.apps[0].nodeID.ShortString(), id, len(l))
+		suite.log.Info("node %v: layer %v, blocks %v", suite.apps[0].nodeID.ShortString(), id, len(l))
 	}
 
 	genesisBlocks := 0
-	for i := 0; i < layersPerEpoch*2; i++ {
-		if l, ok := patient.layertoblocks[types.LayerID(i)]; ok {
+	for i := uint32(0); i < layersPerEpoch*2; i++ {
+		if l, ok := nodedata.layertoblocks[types.NewLayerID(i)]; ok {
 			genesisBlocks += len(l)
 		}
 	}
 
 	// assert number of blocks
 	totalEpochs := int(untilLayer.GetEpoch()) + 1
-	expectedEpochWeight := configuredTotalWeight(suite.apps)
-	blocksPerEpochTarget := layerAvgSize * layersPerEpoch
+	blocksPerEpochTarget := layerAvgSize * int(layersPerEpoch)
+
+	allApps := append(suite.apps, suite.killedApps...)
+	expectedEpochWeight := configuredTotalWeight(allApps)
+
+	// note: expected no. blocks per epoch should remain the same even after some nodes are killed, since the
+	// remaining nodes will be eligible for proportionally more blocks per layer
 	expectedBlocksPerEpoch := 0
-	for _, app := range suite.apps {
-		expectedBlocksPerEpoch += max(blocksPerEpochTarget*int(app.Config.SpaceToCommit)/int(expectedEpochWeight), 1)
+	for _, app := range allApps {
+		expectedBlocksPerEpoch += max(blocksPerEpochTarget*int(app.Config.SMESHING.Opts.NumUnits)/int(expectedEpochWeight), 1)
 	}
 
+	// note: we expect the number of blocks to be a bit less than the expected number since, after some apps were
+	// killed and before healing kicked in, some blocks should be missing
 	expectedTotalBlocks := (totalEpochs - 2) * expectedBlocksPerEpoch
 	actualTotalBlocks := totalBlocks - genesisBlocks
-	assert.Equal(suite.T(), expectedTotalBlocks, actualTotalBlocks,
-		fmt.Sprintf("not good num of blocks got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v layerAvgSize: %v totalEpochs: %v datamap: %v",
+	suite.Equal(expectedTotalBlocks, actualTotalBlocks,
+		fmt.Sprintf("got unexpected block count! got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v, layerAvgSize: %v, totalEpochs: %v, datamap: %v",
 			actualTotalBlocks, expectedTotalBlocks, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
-	totalWeightAllEpochs := calcTotalWeight(assert.New(suite.T()), suite.apps)
+	totalWeightAllEpochs := calcTotalWeight(suite, suite.apps[0].atxDb, allApps, types.EpochID(totalEpochs))
 
-	// assert number of ATXs
-	allMiners := len(suite.apps)
+	// assert total ATX weight
 	expectedTotalWeight := uint64(totalEpochs) * expectedEpochWeight
-	assert.Equal(suite.T(), expectedTotalWeight, totalWeightAllEpochs, fmt.Sprintf("not good total atx weight. got: %v, want: %v.\ntotalEpochs: %v, allMiners: %v", totalWeightAllEpochs, expectedTotalWeight, totalEpochs, allMiners))
+	suite.Equal(int(expectedTotalWeight), int(totalWeightAllEpochs),
+		fmt.Sprintf("total atx weight is wrong, got: %v, want: %v\n"+
+			"totalEpochs: %v, numApps: %v, expectedWeight: %v",
+			totalWeightAllEpochs, expectedTotalWeight, totalEpochs, len(allApps), expectedEpochWeight))
 }
 
 func max(i, j int) int {
@@ -527,27 +640,38 @@ func max(i, j int) int {
 	return j
 }
 
-func calcTotalWeight(assert *assert.Assertions, apps []*SpacemeshApp) (totalWeightAllEpochs uint64) {
-	app := apps[0]
-	atxDb := app.atxDb
-
+func calcTotalWeight(
+	suite *AppTestSuite,
+	atxDb *activation.DB,
+	apps []*App,
+	untilEpoch types.EpochID) (totalWeightAllEpochs uint64) {
+	r := require.New(suite.T())
 	for _, app := range apps {
 		atxID, err := atxDb.GetNodeLastAtxID(app.nodeID)
-		assert.NoError(err)
+		r.NoError(err)
 
 		for atxID != *types.EmptyATXID {
 			atx, err := atxDb.GetAtxHeader(atxID)
-			assert.NoError(err)
-			totalWeightAllEpochs += atx.GetWeight()
-			log.Info("added atx. pub layer: %v, target epoch: %v, weight: %v",
-				atx.PubLayerID, atx.TargetEpoch(), atx.GetWeight())
+			r.NoError(err)
+			if atx.TargetEpoch() < untilEpoch+2 {
+				totalWeightAllEpochs += atx.GetWeight()
+				suite.log.With().Info("added atx weight",
+					log.FieldNamed("pub_layer", atx.PubLayerID),
+					log.FieldNamed("target_epoch", atx.TargetEpoch()),
+					log.Uint64("weight", atx.GetWeight()))
+			} else {
+				suite.log.With().Info("ignoring atx after final epoch",
+					log.FieldNamed("pub_layer", atx.PubLayerID),
+					log.FieldNamed("target_epoch", atx.TargetEpoch()),
+					log.Uint64("weight", atx.GetWeight()))
+			}
 			atxID = atx.PrevATXID
 		}
 	}
-	return totalWeightAllEpochs
+	return
 }
 
-func (suite *AppTestSuite) validateLastATXTotalWeight(app *SpacemeshApp, numberOfEpochs int, expectedTotalWeight uint64) {
+func (suite *AppTestSuite) validateLastATXTotalWeight(app *App, numberOfEpochs int, expectedTotalWeight uint64) {
 	atxs := app.atxDb.GetEpochAtxs(types.EpochID(numberOfEpochs - 1))
 	suite.Len(atxs, len(suite.apps), "node: %v", app.nodeID.ShortString())
 
@@ -556,33 +680,14 @@ func (suite *AppTestSuite) validateLastATXTotalWeight(app *SpacemeshApp, numberO
 		atx, _ := app.atxDb.GetAtxHeader(atxID)
 		totalWeight += atx.GetWeight()
 	}
-	suite.Equal(expectedTotalWeight, totalWeight, "node: %v", app.nodeID.ShortString())
-}
-
-// CI has a 10 minute timeout
-// this ensures we print something before the timeout
-func patchCITimeout(termchan chan struct{}) {
-	ticker := time.NewTimer(5 * time.Minute)
-	for {
-		select {
-		case <-ticker.C:
-			fmt.Printf("CI timeout patch\n")
-			ticker = time.NewTimer(5 * time.Minute)
-		case <-termchan:
-			return
-		}
-	}
+	suite.Equal(int(expectedTotalWeight), int(totalWeight), "node: %v", app.nodeID.ShortString())
 }
 
 func TestAppTestSuite(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
 	}
-	// defer leaktest.Check(t)()
-	term := make(chan struct{})
-	go patchCITimeout(term)
 	suite.Run(t, new(AppTestSuite))
-	close(term)
 }
 
 func TestShutdown(t *testing.T) {
@@ -590,27 +695,29 @@ func TestShutdown(t *testing.T) {
 		t.Skip()
 	}
 
-	// make sure previous goroutines has stopped
+	// make sure previous goroutines have stopped
 	time.Sleep(3 * time.Second)
 	gCount := runtime.NumGoroutine()
 	net := service.NewSimulator()
-	// defer leaktest.Check(t)()
 	r := require.New(t)
 
-	smApp := NewSpacemeshApp()
+	smApp := New(WithLog(logtest.New(t)))
 	genesisTime := time.Now().Add(time.Second * 10)
-	smApp.Config.POST = activation.DefaultConfig()
-	smApp.Config.POST.Difficulty = 5
-	smApp.Config.POST.NumProvenLabels = 10
-	smApp.Config.POST.SpacePerUnit = 1 << 10 // 1KB.
-	smApp.Config.POST.NumFiles = 1
+
+	smApp.Config.POST.BitsPerLabel = 8
+	smApp.Config.POST.LabelsPerUnit = 32
+	smApp.Config.POST.K2 = 4
+
+	smApp.Config.SMESHING.Start = true
+	smApp.Config.SMESHING.CoinbaseAccount = "0x123"
+	smApp.Config.SMESHING.Opts.DataDir = t.TempDir()
+	smApp.Config.SMESHING.Opts.ComputeProviderID = initialization.CPUProviderID()
 
 	smApp.Config.HARE.N = 5
 	smApp.Config.HARE.F = 2
 	smApp.Config.HARE.RoundDuration = 3
 	smApp.Config.HARE.WakeupDelta = 5
 	smApp.Config.HARE.ExpectedLeaders = 5
-	smApp.Config.CoinbaseAccount = "0x123"
 	smApp.Config.GoldenATXID = "0x5678"
 	smApp.Config.LayerAvgSize = 5
 	smApp.Config.LayersPerEpoch = 3
@@ -620,16 +727,15 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
-	smApp.Config.TortoiseBeacon = tortoisebeacon.TestConfig()
-	smApp.Config.StartMining = true
+	smApp.Config.TortoiseBeacon = tortoisebeacon.NodeSimUnitTestConfig()
 
 	smApp.Config.FETCH.RequestTimeout = 1
 	smApp.Config.FETCH.BatchTimeout = 1
 	smApp.Config.FETCH.BatchSize = 5
-	smApp.Config.FETCH.MaxRetiresForPeer = 5
+	smApp.Config.FETCH.MaxRetriesForPeer = 5
 
-	rolacle := eligibility.New()
-	types.SetLayersPerEpoch(int32(smApp.Config.LayersPerEpoch))
+	rolacle := eligibility.New(logtest.New(t))
+	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
 
 	edSgn := signing.NewEdSigner()
 	pub := edSgn.PublicKey()
@@ -647,17 +753,11 @@ func TestShutdown(t *testing.T) {
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	postClient, err := activation.NewPostClient(&smApp.Config.POST, util.Hex2Bytes(nodeID.Key))
-	r.NoError(err)
-	r.NotNil(postClient)
 	gTime := genesisTime
 	ld := time.Duration(20) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, log.NewDefault("clock"))
-	err = smApp.initServices(context.TODO(), log.AppLog, nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), postClient, poetHarness.HTTPPoetClient, vrfSigner, uint16(smApp.Config.LayersPerEpoch), clock)
-
-	r.NoError(err)
-
-	smApp.startServices(context.TODO(), log.AppLog)
+	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(t))
+	r.NoError(smApp.initServices(context.TODO(), nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock))
+	r.NoError(smApp.startServices(context.TODO()))
 	ActivateGrpcServer(smApp)
 
 	r.NoError(poetHarness.Teardown(true))
@@ -666,10 +766,9 @@ func TestShutdown(t *testing.T) {
 	time.Sleep(5 * time.Second)
 	gCount2 := runtime.NumGoroutine()
 
-	if gCount != gCount2 {
-		buf := make([]byte, 4096)
-		runtime.Stack(buf, true)
-		log.Error(string(buf))
+	if !assert.Equal(t, gCount, gCount2) {
+		buf := make([]byte, 1<<16)
+		numbytes := runtime.Stack(buf, true)
+		t.Log(string(buf[:numbytes]))
 	}
-	require.Equal(t, gCount, gCount2)
 }

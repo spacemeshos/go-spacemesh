@@ -48,13 +48,13 @@ type Fetcher interface {
 
 // AddListener adds a listener to a specific gossip channel
 func (l *Listener) AddListener(ctx context.Context, channel string, priority priorityq.Priority, dataHandler GossipDataHandler) {
-	ctx = log.WithNewSessionID(ctx, log.String("channel", channel))
+	ctx = log.WithNewSessionID(ctx, log.String("gossip_listener_channel", channel))
 	ch := l.net.RegisterGossipProtocol(channel, priority)
 	stop := make(chan struct{})
 	l.channels = append(l.channels, ch)
 	l.stoppers = append(l.stoppers, stop)
 	l.wg.Add(1)
-	go l.listenToGossip(log.WithNewSessionID(ctx), dataHandler, ch, stop, channel)
+	go l.listenToGossip(ctx, dataHandler, ch, stop, channel)
 }
 
 // Stop stops listening to all gossip channels

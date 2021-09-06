@@ -112,7 +112,7 @@ func (w Writer) Put(record []byte) error {
 func (w Writer) PutProto(msg proto.Message) error {
 	rec, err := proto.Marshal(msg)
 	if err != nil {
-		return fmt.Errorf("error encoding proto: %v", err)
+		return fmt.Errorf("error encoding proto: %w", err)
 	}
 	return w.Put(rec)
 }

@@ -3,11 +3,12 @@ package state
 import (
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"sync"
 )
 
 // TxMempool is a struct that holds txs received via gossip network
@@ -38,13 +39,15 @@ func (t *TxMempool) Get(id types.TransactionID) (*types.Transaction, error) {
 	return nil, errors.New("transaction not found in mempool")
 }
 
-// GetTxIdsByAddress returns all transactions from/to a specific address
-func (t *TxMempool) GetTxIdsByAddress(addr types.Address) []types.TransactionID {
-	var ids []types.TransactionID
+// GetTxsByAddress returs all transactions from/to a specific address.
+func (t *TxMempool) GetTxsByAddress(addr types.Address) []*types.Transaction {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	txs := make([]*types.Transaction, 0, len(t.txByAddr))
 	for id := range t.txByAddr[addr] {
-		ids = append(ids, id)
+		txs = append(txs, t.txs[id])
 	}
-	return ids
+	return txs
 }
 
 // GetTxsForBlock gets a specific number of random txs for a block. This function also receives a state calculation function
@@ -97,7 +100,7 @@ func getRandIdxs(numOfTxs, spaceSize int) map[uint64]struct{} {
 func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction) {
 	t.mu.Lock()
 	t.txs[id] = tx
-	t.getOrCreate(tx.Origin()).Add(0, tx)
+	t.getOrCreate(tx.Origin()).Add(types.LayerID{}, tx)
 	t.addToAddr(tx.Origin(), id)
 	t.addToAddr(tx.Recipient, id)
 	t.mu.Unlock()

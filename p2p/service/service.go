@@ -48,6 +48,8 @@ func NewMessageValidation(sender p2pcrypto.PublicKey, msg []byte, prot string, r
 	return MessageValidation{sender, msg, prot, reqID}
 }
 
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=service.go
+
 // DirectMessage is an interface that represents a simple direct message structure
 type DirectMessage interface {
 	Metadata() P2PMetadata

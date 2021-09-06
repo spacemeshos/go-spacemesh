@@ -148,14 +148,14 @@ type Publisher struct {
 func newPublisher(url string) (*Publisher, error) {
 	sock, err := pub.NewSocket()
 	if err != nil {
-		return nil, fmt.Errorf("can't get NewEventPublisher pub socket: %s", err)
+		return nil, fmt.Errorf("can't get NewEventPublisher pub socket: %w", err)
 	}
 	sock.AddTransport(ipc.NewTransport())
 	sock.AddTransport(tcp.NewTransport())
 	sock.SetOption(mangos.OptionBestEffort, false)
 	sock.SetOption(mangos.OptionWriteQLen, 10000)
 	if err = sock.Listen(url); err != nil {
-		return nil, fmt.Errorf("can't listen on pub socket: %s", err.Error())
+		return nil, fmt.Errorf("can't listen on pub socket: %w", err)
 	}
 	time.Sleep(time.Second)
 	p := &Publisher{sock: sock}

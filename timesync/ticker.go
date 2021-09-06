@@ -61,16 +61,30 @@ type Ticker struct {
 	log             log.Log
 }
 
+// TickerOption to configure Ticker.
+type TickerOption func(*Ticker)
+
+// WithLog configures logger for Ticker.
+func WithLog(lg log.Log) TickerOption {
+	return func(t *Ticker) {
+		t.log = lg
+	}
+}
+
 // NewTicker returns a new instance of ticker
-func NewTicker(c Clock, lc LayerConverter) *Ticker {
-	return &Ticker{
+func NewTicker(c Clock, lc LayerConverter, opts ...TickerOption) *Ticker {
+	t := &Ticker{
 		subs:            newSubs(),
 		lastTickedLayer: lc.TimeToLayer(c.Now()),
 		clock:           c,
 		LayerConverter:  lc,
 		layerChannels:   make(map[types.LayerID]chan struct{}),
-		log:             log.NewDefault("ticker"),
+		log:             log.NewNop(),
 	}
+	for _, opt := range opts {
+		opt(t)
+	}
+	return t
 }
 
 var (
@@ -97,7 +111,7 @@ func (t *Ticker) Notify() (int, error) {
 
 	layer := t.TimeToLayer(t.clock.Now())
 	// close prev layers
-	for l := t.lastTickedLayer + 1; l <= layer; l++ {
+	for l := t.lastTickedLayer.Add(1); !l.After(layer); l = l.Add(1) {
 		if layerChan, found := t.layerChannels[l]; found {
 			close(layerChan)
 			delete(t.layerChannels, l)
@@ -113,7 +127,7 @@ func (t *Ticker) Notify() (int, error) {
 	}
 
 	// already ticked
-	if layer <= t.lastTickedLayer {
+	if !layer.After(t.lastTickedLayer) {
 		t.log.With().Warning("skipping tick to avoid double ticking the same layer (time was not monotonic)",
 			log.FieldNamed("current_layer", layer),
 			log.FieldNamed("last_ticked_layer", t.lastTickedLayer))

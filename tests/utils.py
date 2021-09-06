@@ -155,7 +155,7 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
     print("\nvalidation succeeded!\n")
 
 
-def validate_beacons(log_messages):
+def validate_tortoise_beacons(log_messages):
     epoch_messages = defaultdict(dict)
 
     assert len(log_messages) > 0, f"no log messages"
@@ -178,6 +178,29 @@ def validate_beacons(log_messages):
     for epoch, beacons in epoch_messages.items():
         assert len(beacons) == 1, f"all beacons in epoch {epoch} were not same, saw: {beacons}"
         print(f"all beacons in epoch {epoch} were same, saw: {beacons}")
+
+    print(f"successfully validated beacons")
+
+
+def validate_tortoise_beacon_weak_coins(log_messages):
+    epoch_messages = defaultdict(dict)
+
+    assert len(log_messages) > 0, f"no log messages"
+
+    for log in log_messages:
+        epoch_round_pair = str(log.epoch_id) + "/" + str(log.round_id)
+
+        if epoch_round_pair  not in epoch_messages:
+            epoch_messages[epoch_round_pair] = dict()
+
+        if log.weak_coin not in epoch_messages[epoch_round_pair]:
+            epoch_messages[epoch_round_pair][log.weak_coin] = 0
+
+        epoch_messages[epoch_round_pair][log.weak_coin] += 1
+
+    for epoch_round, weak_coins in epoch_messages.items():
+        assert len(weak_coins) == 1, f"all weak coins in epoch/round {epoch_round} were not same, saw: {weak_coins}"
+        print(f"all beacons in epoch {epoch_round} were same, saw: {weak_coins}")
 
     print(f"successfully validated beacons")
 
@@ -269,7 +292,7 @@ def wait_genesis(genesis_time, genesis_delta):
 def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
                                                   logstash_ss_name=LOGSTASH_SS_NAME,
                                                   kibana_dep_name=KIBANA_DEP_NAME):
-    es_timeout = 240
+    es_timeout = 600
     try:
         print("waiting for ES to be ready")
         es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_ss_name, namespace, time_out=es_timeout)
