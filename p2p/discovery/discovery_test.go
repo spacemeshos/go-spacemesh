@@ -151,7 +151,7 @@ func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
 	for i := 0; i < numPeers; i++ {
 		ln, lninfo := node.GenerateTestNode(t)
 		n := sim.NewNodeFrom(lninfo)
-		//dht := New(context.TODO(), ln, cfg, n, "", logtest.New(t, zapcore.InfoLevel).WithName("dht"+strconv.Itoa(i)))
+		// dht := New(context.TODO(), ln, cfg, n, "", logtest.New(t, zapcore.InfoLevel).WithName("dht"+strconv.Itoa(i)))
 		dht := New(context.TODO(), ln, cfg, n, "", logtest.New(t).WithName("dht"+strconv.Itoa(i)))
 		dht.SetLocalAddresses(int(lninfo.ProtocolPort), int(lninfo.DiscoveryPort))
 		nods[i] = lninfo
