@@ -1261,10 +1261,11 @@ func TestCalculateExceptions(t *testing.T) {
 	// now advance the processed layer
 	alg.trtl.Last = l1ID
 
-	// missing layer data
+	// missing layer data:
+	// expect FOR only for l0, and neutral is 0 since there are no blocks in l1 to add an exception for
 	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
-	r.Equal(database.ErrNotFound, err)
-	r.Nil(votes)
+	r.NoError(err)
+	expectVotes(votes, 0, 1, 0)
 
 	// layer opinion vector is nil (abstains): recent layer, in mesh, no input vector
 	alg.trtl.Last = l0ID
