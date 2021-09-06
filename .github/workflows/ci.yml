@@ -82,9 +82,6 @@ jobs:
           go-version: ${{ env.go-version }}
       - name: setup env
         run: make
-      - name: prepare
-        run: |
-          go get ./...
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v2.5.2
         with:
