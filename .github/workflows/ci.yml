@@ -74,7 +74,14 @@ jobs:
     # should not take more than 2-3 mins
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v2
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: set up go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.go-version }}
+      - name: setup env
+        run: make
       - name: prepare
         run: |
           go get ./...
