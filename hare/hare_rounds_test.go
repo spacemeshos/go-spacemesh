@@ -162,7 +162,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	time.Sleep(time.Second * 6)
 
 	mu.RLock()
-	defer mu.Unlock()
+	defer mu.RUnlock()
 
 	for x := range m {
 		for y := range m[x] {
