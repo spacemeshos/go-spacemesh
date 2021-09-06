@@ -18,8 +18,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
-      if: env.DOCKER_USERNAME != null
       uses: actions/checkout@v2
     - name: push to dockerhub
-      if: env.DOCKER_USERNAME != null
       run: make dockerpush
