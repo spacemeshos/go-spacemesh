@@ -4,6 +4,10 @@ export GOOS
 export GOARCH
 export GOARM
 export BIN_DIR
+GO_MAJOR_VERSION=1
+GO_MINOR_VERSION=15
+GO_PATCH_VERSION=3
+GO_VERSION=$(GO_MAJOR_VERSION).$(GO_MINOR_VERSION).$(GO_PATCH_VERSION)
 
 ifeq ($(OS),Windows_NT)
   HOST_OS := windows
@@ -110,3 +114,11 @@ print-ldflags: get-gpu-setup
 print-test-ldflags: get-gpu-setup
 	@echo $(CGO_TEST_LDFLAGS)
 .PHONY: print-test-ldflags
+
+setup-windows-toolchain:
+	pacman -S p7zip mingw-w64-x86_64-toolchain --noconfirm --needed
+	if [ "$$(go version)" != "go version go$(GO_VERSION) windows/amd64" ]; then \
+		curl -L https://golang.org/dl/go$(GO_VERSION).windows-amd64.zip  -o /tmp/go$(GO_VERSION).windows-amd64.zip && \
+		7z x -o/ /tmp/go$(GO_VERSION).windows-amd64.zip && \
+		rm /tmp/go$(GO_VERSION).windows-amd64.zip; \
+	fi

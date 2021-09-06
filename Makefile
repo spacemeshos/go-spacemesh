@@ -19,11 +19,10 @@ PKGS = $(shell go list ./...)
 ifeq ($(OS),Windows_NT)
   # Just assume we're in interactive mode on Windows
   INTERACTIVE = 1
-  VERSION ?= $(shell type version.txt)
 else
   INTERACTIVE := $(shell [ -t 0 ] && echo 1)
-  VERSION ?= $(shell cat version.txt)
 endif
+VERSION ?= $(shell cat version.txt)
 
 # Add an indicator to the branch name if dirty and use commithash if running in detached mode
 ifeq ($(BRANCH),HEAD)
@@ -86,7 +85,7 @@ else
 endif
 
 install:
-	go run scripts/check-go-version.go --major 1 --minor 15
+	go run scripts/check-go-version.go --major $(GO_MAJOR_VERSION) --minor $(GO_MINOR_VERSION)
 	go mod download
 	GO111MODULE=off go get golang.org/x/lint/golint
 .PHONY: install
