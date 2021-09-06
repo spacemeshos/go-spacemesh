@@ -91,7 +91,7 @@ jobs:
           # TODO(nkryuchkov): Remove this when linter issues are fixed.
           # This is a temporary workaround to postpone fixing linter issues.
           # With this flag, linter issues will be reported but will not trigger CI failure.
-          issues-exit-code: 0
+          args: --issues-exit-code=0
 
           # Optional: working directory, useful for monorepos
           # working-directory: somedir
