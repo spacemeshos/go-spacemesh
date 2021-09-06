@@ -3,6 +3,7 @@ package state
 import (
 	"io"
 	"math/big"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -23,6 +24,7 @@ type AccountState interface {
 // Object is the struct in which account information is stored. It contains account info such as nonce and balance
 // and also the accounts address, address hash and a reference to this structs containing database
 type Object struct {
+	mu       sync.RWMutex
 	address  types.Address
 	addrHash types.Hash32
 	account  types.AccountState
@@ -41,6 +43,9 @@ func newObject(db *DB, address types.Address, data types.AccountState) *Object {
 
 // EncodeRLP implements rlp.Encoder.
 func (state *Object) EncodeRLP(w io.Writer) error {
+	state.mu.RLock()
+	defer state.mu.RUnlock()
+
 	return rlp.Encode(w, state.account)
 }
 
@@ -64,6 +69,9 @@ func (state *Object) touch() {
 
 // empty returns whether the account is considered empty.
 func (state *Object) empty() bool {
+	state.mu.RLock()
+	defer state.mu.RUnlock()
+
 	return state.account.Nonce == 0 && state.account.Balance == 0
 }
 
@@ -83,6 +91,9 @@ func (state *Object) SetBalance(amount uint64) {
 }
 
 func (state *Object) setBalance(amount uint64) {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
 	state.account.Balance = amount
 }
 
@@ -101,6 +112,9 @@ func (state *Object) deepCopy(db *DB) *Object {
 
 // Address returns the address of the contract/account
 func (state *Object) Address() types.Address {
+	state.mu.RLock()
+	defer state.mu.RUnlock()
+
 	return state.address
 }
 
@@ -111,16 +125,25 @@ func (state *Object) SetNonce(nonce uint64) {
 }
 
 func (state *Object) setNonce(nonce uint64) {
+	state.mu.Lock()
+	defer state.mu.Unlock()
+
 	state.account.Nonce = nonce
 }
 
 // Balance returns the account current balance
 func (state *Object) Balance() uint64 {
+	state.mu.RLock()
+	defer state.mu.RUnlock()
+
 	return state.account.Balance
 }
 
 // Nonce returns the accounts current nonce
 func (state *Object) Nonce() uint64 {
+	state.mu.RLock()
+	defer state.mu.RUnlock()
+
 	return state.account.Nonce
 }
 
