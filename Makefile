@@ -89,7 +89,7 @@ install:
 	go run scripts/check-go-version.go --major 1 --minor 15
 	go mod download
 	GO111MODULE=off go get golang.org/x/lint/golint
-	go get github.com/golangci/golangci-lint
+	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s latest
 .PHONY: install
 
 build: go-spacemesh
@@ -173,7 +173,7 @@ golangci-lint:
 .PHONY: golangci-lint
 
 golangci-lint-github-action:
-	golangci-lint run --out-format=github-actions --issues-exit-code=0
+	./bin/golangci-lint run --out-format=github-actions --issues-exit-code=0
 .PHONY: golangci-lint-github-action
 
 cover:
