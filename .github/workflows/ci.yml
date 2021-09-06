@@ -109,7 +109,9 @@ jobs:
 
   unittests:
     runs-on: ubuntu-latest
-    needs: filter-changes
+    needs:
+      - filter-changes
+      - golangci-lint
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     # should take around 8-10 mins
     timeout-minutes: 15
@@ -128,7 +130,9 @@ jobs:
           TEST_LOG_LEVEL: debug
   apptests:
     runs-on: ubuntu-latest
-    needs: filter-changes
+    needs:
+      - filter-changes
+      - golangci-lint
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     # should take around 7-9 mins
     timeout-minutes: 15
