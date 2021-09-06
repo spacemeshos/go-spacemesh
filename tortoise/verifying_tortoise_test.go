@@ -841,30 +841,60 @@ func TestHareOutputLayersOutOfOrder(t *testing.T) {
 	mdb := getInMemMesh(t)
 
 	getHareResults := mdb.LayerBlockIds
-
 	mdb.InputVectorBackupFunc = getHareResults
 	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
+	// for debugging:
+	//level := zap.NewAtomicLevelAt(zap.DebugLevel)
+	//alg.trtl.logger = log.NewWithLevel("trtl", level)
+	//alg.logger = log.NewWithLevel("alg", level)
 	alg.trtl.atxdb = atxdb
 	l := mesh.GenesisLayer()
 
 	logger.With().Info("genesis is", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
 	logger.With().Info("genesis is", l.Blocks()[0].Fields()...)
 
+	// create layer 8
 	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
-	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
-	require.NoError(t, addLayerToMesh(mdb, l2))
+
+	// layer 8 incoming: no progress yet
+	alg.HandleIncomingLayer(context.TODO(), l1.Index())
+	require.Equal(t, int(types.GetEffectiveGenesis().Uint32()), int(alg.LatestComplete().Uint32()))
+
+	// skip layer 9
+
+	// create layer 10
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
+
+	// layer 10 arrives (before l9):
+	// global opinion on l8 is undecided (not enough votes)
+	// global opinion on l9 is abstain (no votes for l9 blocks)
+	// l10 abstains on l9
+	alg.HandleIncomingLayer(context.TODO(), l3.Index())
+	require.Equal(t, int(types.GetEffectiveGenesis().Uint32()), int(alg.LatestComplete().Uint32()))
+
+	// create layer 11
 	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l4))
 
-	alg.HandleIncomingLayer(context.TODO(), l1.Index())
-	alg.HandleIncomingLayer(context.TODO(), l3.Index())
+	// layer 11 arrives
+	// global opinion on l8 is now support, since we have enough votes for it, so verified advances one layer
+	// opinion on l9 (against) differs from local opinion (support)
+	// l11 also abstains on l9
+	// cannot verify l9 since it's missing in the database
 	alg.HandleIncomingLayer(context.TODO(), l4.Index())
+	require.Equal(t, int(l1.Index().Uint32()), int(alg.LatestComplete().Uint32()))
+
+	// layer 9 finally arrives late
+	// global opinion is against since layers 10-11 were created without having seen l9
+	// local opinion is support
+	// verification remains stuck
+	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
+	require.NoError(t, addLayerToMesh(mdb, l2))
 	alg.HandleIncomingLayer(context.TODO(), l2.Index())
-	require.Equal(t, types.GetEffectiveGenesis(), alg.LatestComplete())
+	require.Equal(t, int(l1.Index().Uint32()), int(alg.LatestComplete().Uint32()))
 }
 
 func TestPersistAndRecover(t *testing.T) {

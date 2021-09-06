@@ -410,12 +410,10 @@ func (t *turtle) calculateExceptions(
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(layerID)
 		if err != nil {
-			if err != leveldb.ErrClosed {
-				// this should not happen! we only look at layers up to the last processed layer, and we only process
-				// layers with valid block data.
-				logger.With().Error("no block ids for layer in database", log.Err(err))
+			if err == leveldb.ErrClosed {
+				return nil, err
 			}
-			return nil, err
+			logger.With().Warning("no block ids in database for diff layer", log.Err(err))
 		}
 
 		// helper function for adding diffs
@@ -810,7 +808,7 @@ candidateLayerLoop:
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
-			return fmt.Errorf("%s %v: %w", errstrCantFindLayer, candidateLayerID, err)
+			return fmt.Errorf("%s for layer %v: %w", errstrCantFindLayer, candidateLayerID, err)
 		}
 
 		// get the local opinion for this layer. below, we calculate the global opinion on each block in the layer and
@@ -1117,11 +1115,13 @@ func (t *turtle) sumVotesForBlock(
 		log.FieldNamed("layer_voting_on", startLayer.Sub(1)))
 	for voteLayer := startLayer; !voteLayer.After(t.Last); voteLayer = voteLayer.Add(1) {
 		logger := logger.WithFields(voteLayer)
+		// this causes problems with logs, leaving here for debugging
 		// logger.With().Debug("summing layer votes",
 		// 	log.Int("count", len(t.BlockOpinionsByLayer[voteLayer])))
 		for votingBlockID, votingBlockOpinion := range t.BlockOpinionsByLayer[voteLayer] {
 			if !filter(votingBlockID) {
-				logger.Debug("voting block did not pass filter, not counting its vote", log.FieldNamed("voting_block", votingBlockID))
+				logger.With().Debug("voting block did not pass filter, not counting its vote",
+					log.FieldNamed("voting_block", votingBlockID))
 				continue
 			}
 
