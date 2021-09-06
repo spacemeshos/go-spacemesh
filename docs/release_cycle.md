@@ -27,7 +27,8 @@ with `1.2.3` and enter its date. The he committs this and all other edits as
 
 Once the manager is finished he tags the version with the name + a build number.
 In the first build the version is named `v1.2.3+1`.
-Then the manager `git push --tags` to update github and start the pipeline.
+Then the manager `git push --tags` to update github which starts building
+the binaries and publishing a new release on gh's release page.
 
 ## Deploy 
 
