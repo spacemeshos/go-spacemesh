@@ -12,7 +12,7 @@ run:
   deadline: 3m
 
   # exit code when at least one issue was found, default is 1
-  issues-exit-code: 0
+  issues-exit-code: 1
 
   # include test files or not, default is true
   tests: true

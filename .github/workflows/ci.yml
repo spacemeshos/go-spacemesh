@@ -85,7 +85,7 @@ jobs:
       - name: golangci-lint (fast and strict)
         run: make golangci-lint-fast-strict-github-action
       - name: golangci-lint (slow and tolerant)
-        run: make golangci-lint-slow-tolerant-github-action
+        run: make golangci-lint-slow-tolerant-github-action || true
 
   unittests:
     runs-on: ubuntu-latest
