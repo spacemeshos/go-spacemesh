@@ -88,7 +88,7 @@ endif
 install:
 	go run scripts/check-go-version.go --major 1 --minor 15
 	go mod download
-	GO111MODULE=off go get golang.org/x/lint/golint
+	go get golang.org/x/lint/golint
 	go get github.com/golangci/golangci-lint
 .PHONY: install
 
