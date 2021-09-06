@@ -177,7 +177,7 @@ golangci-lint-fast-strict-github-action:
 .PHONY: golangci-lint-fast-strict-github-action
 
 golangci-lint-slow-tolerant-github-action:
-	golangci-lint run --config .golangci-slow-tolerant.yml --out-format=github-actions
+	./bin/golangci-lint run --config .golangci-slow-tolerant.yml --out-format=github-actions
 .PHONY: golangci-lint-slow-tolerant-github-action
 
 cover:
