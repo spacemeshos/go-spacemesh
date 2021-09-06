@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+
 	"github.com/google/uuid"
 )
 
@@ -32,7 +33,7 @@ func WithRequestID(ctx context.Context, requestID string, fields ...LoggableFiel
 	// outbound request, e.g., a newly-received block causes us to request the blocks and ATXs it refers to.
 	// But it's important that we log the old and new reqIDs here so that the thread can be followed.
 	if curRequestID, ok := ExtractRequestID(ctx); ok && curRequestID != requestID {
-		AppLog.WithContext(ctx).With().Info("overwriting requestID in context",
+		GetLogger().WithContext(ctx).With().Info("overwriting requestID in context",
 			String("old_request_id", curRequestID),
 			String("new_request_id", requestID))
 	}
@@ -94,7 +95,7 @@ func ExtractRequestFields(ctx context.Context) (fields []LoggableField) {
 func WithSessionID(ctx context.Context, sessionID string, fields ...LoggableField) context.Context {
 	// Warn if overwriting
 	if curSessionID, ok := ExtractSessionID(ctx); ok && curSessionID != sessionID {
-		AppLog.WithContext(ctx).With().Info("overwriting sessionID in context",
+		GetLogger().WithContext(ctx).With().Info("overwriting sessionID in context",
 			String("old_session_id", curSessionID),
 			String("new_session_id", sessionID))
 	}

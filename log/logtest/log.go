@@ -32,9 +32,9 @@ func New(tb testing.TB, override ...zapcore.Level) log.Log {
 // Some tests do not terminate all goroutines when they exit, so we can't recover original for now.
 func SetupGlobal(tb testing.TB, overvwrite ...zapcore.Level) {
 	tlog := New(tb, overvwrite...)
-	tmp := log.AppLog
+	tmp := log.GetLogger()
 	log.SetupGlobal(tlog)
 	tb.Cleanup(func() {
-		log.AppLog = tmp
+		log.SetLogger(tmp)
 	})
 }

@@ -67,7 +67,7 @@ func (pm gossipProtocolMessage) ValidationCompletedChan() chan service.MessageVa
 func (pm gossipProtocolMessage) ReportValidation(ctx context.Context, protocol string) {
 	if pm.validationChan != nil {
 		// TODO(dshulyak) this definitely should not be logged in message data structure
-		log.AppLog.WithContext(ctx).With().Debug("reporting valid gossip message",
+		log.GetLogger().WithContext(ctx).With().Debug("reporting valid gossip message",
 			log.String("protocol", protocol),
 			log.String("requestId", pm.requestID),
 			log.FieldNamed("sender", pm.sender),
