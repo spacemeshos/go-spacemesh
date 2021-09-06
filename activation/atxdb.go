@@ -20,34 +20,58 @@ import (
 	"github.com/spacemeshos/post/shared"
 )
 
-const topAtxKey = "topAtxKey"
+const (
+	namespaceAtx       = "a"
+	namespaceEpoch     = "e"
+	namespaceTop       = "p"
+	namespaceHeader    = "h"
+	namespaceTimestamp = "t"
+)
 
 func getNodeAtxKey(nodeID types.NodeID, targetEpoch types.EpochID) []byte {
-	return append(getNodeAtxPrefix(nodeID), util.Uint64ToBytesBigEndian(uint64(targetEpoch))...)
+	b := getNodeAtxPrefix(nodeID)
+	b.Write(util.Uint64ToBytesBigEndian(uint64(targetEpoch)))
+	return b.Bytes()
 }
 
-func getNodeAtxPrefix(nodeID types.NodeID) []byte {
-	return []byte(fmt.Sprintf("n_%v_", nodeID.Key))
+func getNodeAtxPrefix(nodeID types.NodeID) *bytes.Buffer {
+	var b bytes.Buffer
+	b.WriteString(namespaceAtx)
+	b.WriteString(nodeID.Key)
+	return &b
 }
 
 func getNodeAtxEpochKey(epoch types.EpochID, nodeID types.NodeID) []byte {
-	return append(getEpochPrefix(epoch), nodeID.ToBytes()...)
+	b := getEpochPrefix(epoch)
+	b.WriteString(nodeID.Key)
+	b.Write(nodeID.VRFPublicKey)
+	return b.Bytes()
 }
 
-func getEpochPrefix(epoch types.EpochID) []byte {
-	return []byte(fmt.Sprintf("e_%v_", epoch.ToBytes()))
+func getEpochPrefix(epoch types.EpochID) *bytes.Buffer {
+	var b bytes.Buffer
+	b.WriteString(namespaceEpoch)
+	b.Write(epoch.ToBytes())
+	return &b
 }
 
 func getAtxHeaderKey(atxID types.ATXID) []byte {
-	return []byte(fmt.Sprintf("h_%v", atxID.Bytes()))
+	var b bytes.Buffer
+	b.WriteString(namespaceHeader)
+	b.Write(atxID.Bytes())
+	return b.Bytes()
 }
 
 func getAtxBodyKey(atxID types.ATXID) []byte {
+	// FIXME(dshulyak) this must be prefixed too. otherwise collisions are possible
 	return atxID.Bytes()
 }
 
 func getAtxTimestampKey(atxID types.ATXID) []byte {
-	return []byte(fmt.Sprintf("ts_%v", atxID.Bytes()))
+	var b bytes.Buffer
+	b.WriteString(namespaceTimestamp)
+	b.Write(atxID.Bytes())
+	return b.Bytes()
 }
 
 var (
@@ -136,31 +160,11 @@ func (db *DB) UnsubscribeAtx(id types.ATXID) {
 	}
 }
 
-// ProcessAtxs processes the list of given atxs using ProcessAtx method
-func (db *DB) ProcessAtxs(atxs []*types.ActivationTx) error {
-	// seenMinerIds := map[string]struct{}{}
-	for _, atx := range atxs {
-		/* minerID := atx.NodeID.Key
-		if _, found := seenMinerIds[minerID]; found {
-			// TODO: Blacklist this miner
-			// TODO: Ensure that these are two different, syntactically valid ATXs for the same epoch, otherwise the
-			//  miner did nothing wrong
-			db.log.With().Error("found miner with multiple ATXs published in same block",
-				log.FieldNamed("atx_node_id", atx.NodeID), atx.ID())
-		}*/
-		err := db.ProcessAtx(atx)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // ProcessAtx validates the active set size declared in the atx, and contextually validates the atx according to atx
 // validation rules it then stores the atx with flag set to validity of the atx.
 //
 // ATXs received as input must be already syntactically valid. Only contextual validation is performed.
-func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
+func (db *DB) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error {
 	db.processAtxMutex.Lock()
 	defer db.processAtxMutex.Unlock()
 
@@ -169,25 +173,25 @@ func (db *DB) ProcessAtx(atx *types.ActivationTx) error {
 		return nil
 	}
 	epoch := atx.PubLayerID.GetEpoch()
-	db.log.With().Info("processing atx",
+	db.log.WithContext(ctx).With().Info("processing atx",
 		atx.ID(),
 		epoch,
 		log.FieldNamed("atx_node_id", atx.NodeID),
 		atx.PubLayerID)
 	if err := db.ContextuallyValidateAtx(atx.ActivationTxHeader); err != nil {
-		db.log.With().Error("atx failed contextual validation",
+		db.log.WithContext(ctx).With().Error("atx failed contextual validation",
 			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID),
 			log.Err(err))
 		// TODO: Blacklist this miner
 	} else {
-		db.log.With().Info("atx is valid", atx.ID())
+		db.log.WithContext(ctx).With().Info("atx is valid", atx.ID())
 	}
-	if err := db.StoreAtx(epoch, atx); err != nil {
-		return fmt.Errorf("cannot store atx %s: %v", atx.ShortString(), err)
+	if err := db.StoreAtx(ctx, epoch, atx); err != nil {
+		return fmt.Errorf("cannot store atx %s: %w", atx.ShortString(), err)
 	}
 	if err := db.StoreNodeIdentity(atx.NodeID); err != nil {
-		db.log.With().Error("cannot store node identity",
+		db.log.WithContext(ctx).With().Error("cannot store node identity",
 			log.FieldNamed("atx_node_id", atx.NodeID),
 			atx.ID(),
 			log.Err(err))
@@ -262,7 +266,7 @@ func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map
 // - The NIPost is valid.
 // - ATX LayerID is NIPostLayerTime or less after the PositioningATX LayerID.
 // - The ATX view of the previous epoch contains ActiveSetSize activations.
-func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
+func (db *DB) SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) error {
 	events.ReportNewActivation(atx)
 	pub, err := ExtractPublicKey(atx)
 	if err != nil {
@@ -362,11 +366,11 @@ func (db *DB) SyntacticallyValidateAtx(atx *types.ActivationTx) error {
 		return fmt.Errorf("failed to compute NIPost's expected challenge hash: %v", err)
 	}
 
-	db.log.With().Info("Validating NIPost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
+	db.log.WithContext(ctx).With().Info("validating nipost", log.String("expected_challenge_hash", expectedChallengeHash.String()), atx.ID())
 
 	pubKey := signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key))
 	if err = db.nipostValidator.Validate(*pubKey, atx.NIPost, *expectedChallengeHash, atx.NumUnits); err != nil {
-		return fmt.Errorf("invalid NIPost: %v", err)
+		return fmt.Errorf("invalid nipost: %v", err)
 	}
 
 	return nil
@@ -405,7 +409,7 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 // StoreAtx stores an atx for epoch ech, it stores atx for the current epoch and adds the atx for the nodeID that
 // created it in a sorted manner by the sequence id. This function does not validate the atx and assumes all data is
 // correct and that all associated atx exist in the db. Will return error if writing to db failed.
-func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
+func (db *DB) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.ActivationTx) error {
 	db.Lock()
 	defer db.Unlock()
 
@@ -430,17 +434,17 @@ func (db *DB) StoreAtx(ech types.EpochID, atx *types.ActivationTx) error {
 		return err
 	}
 
-	err = db.addNodeAtxToEpoch(atx.PubLayerID.GetEpoch(), atx.NodeID, atx)
+	err = db.addNodeAtxToEpoch(ctx, atx.PubLayerID.GetEpoch(), atx.NodeID, atx)
 	if err != nil {
 		return err
 	}
 
-	err = db.addAtxTimestamp(time.Now(), atx)
+	err = db.addAtxTimestamp(ctx, time.Now(), atx)
 	if err != nil {
 		return err
 	}
 
-	db.log.With().Info("finished storing atx in epoch", atx.ID(), ech)
+	db.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), ech)
 	return nil
 }
 
@@ -498,7 +502,7 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 		return fmt.Errorf("failed to marshal top atx: %v", err)
 	}
 
-	err = db.atxs.Put([]byte(topAtxKey), topAtxBytes)
+	err = db.atxs.Put([]byte(namespaceTop), topAtxBytes)
 	if err != nil {
 		return fmt.Errorf("failed to store top atx: %v", err)
 	}
@@ -506,7 +510,7 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 }
 
 func (db *DB) getTopAtx() (atxIDAndLayer, error) {
-	topAtxBytes, err := db.atxs.Get([]byte(topAtxKey))
+	topAtxBytes, err := db.atxs.Get([]byte(namespaceTop))
 	if err != nil {
 		if err == database.ErrNotFound {
 			return atxIDAndLayer{
@@ -542,8 +546,8 @@ func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error
 	return nil
 }
 
-func (db *DB) addNodeAtxToEpoch(epoch types.EpochID, nodeID types.NodeID, atx *types.ActivationTx) error {
-	db.log.Info("added atx %v to epoch %v", atx.ID().ShortString(), epoch)
+func (db *DB) addNodeAtxToEpoch(ctx context.Context, epoch types.EpochID, nodeID types.NodeID, atx *types.ActivationTx) error {
+	db.log.WithContext(ctx).Info("added atx %v to epoch %v", atx.ID().ShortString(), epoch)
 	err := db.atxs.Put(getNodeAtxEpochKey(atx.PubLayerID.GetEpoch(), nodeID), atx.ID().Bytes())
 	if err != nil {
 		return fmt.Errorf("failed to store atx ID for node: %v", err)
@@ -551,8 +555,8 @@ func (db *DB) addNodeAtxToEpoch(epoch types.EpochID, nodeID types.NodeID, atx *t
 	return nil
 }
 
-func (db *DB) addAtxTimestamp(timestamp time.Time, atx *types.ActivationTx) error {
-	db.log.Info("added atx %v timestamp %v", atx.ID().ShortString(), timestamp)
+func (db *DB) addAtxTimestamp(ctx context.Context, timestamp time.Time, atx *types.ActivationTx) error {
+	db.log.WithContext(ctx).Info("added atx %v timestamp %v", atx.ID().ShortString(), timestamp)
 
 	b := make([]byte, 8)
 	binary.LittleEndian.PutUint64(b, uint64(timestamp.UnixNano()))
@@ -569,7 +573,7 @@ type ErrAtxNotFound error
 
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
-	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID))
+	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID).Bytes())
 	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
 	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
 	// added will always be the next ATX returned by this method.
@@ -585,19 +589,15 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID
 func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
-	atxIterator := db.atxs.Find(getEpochPrefix(epochID))
-	for atxIterator.Next() {
-		if atxIterator.Key() == nil {
+	it := db.atxs.Find(getEpochPrefix(epochID).Bytes())
+	for it.Next() {
+		if it.Key() == nil {
 			break
 		}
 		var a types.ATXID
-		if err := types.BytesToInterface(atxIterator.Value(), &a); err != nil {
-			db.log.Panic("cannot parse atx from DB")
-			break
-		}
+		copy(a[:], it.Value())
 		atxs = append(atxs, a)
 	}
-	db.log.With().Info("returned epoch atxs", epochID, log.Int("count", len(atxs)))
 	db.log.With().Debug("returned epoch atxs", epochID,
 		log.Int("count", len(atxs)),
 		log.String("atxs", fmt.Sprint(atxs)))
@@ -746,17 +746,17 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 	}
 
 	if err := db.FetchAtxReferences(ctx, atx, fetcher); err != nil {
-		return fmt.Errorf("received ATX with missing references of prev or pos id %v, %v, %v, %v",
+		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
 
-	err = db.SyntacticallyValidateAtx(atx)
+	err = db.SyntacticallyValidateAtx(ctx, atx)
 	events.ReportValidActivation(atx, err == nil)
 	if err != nil {
 		return fmt.Errorf("received syntactically invalid atx %v: %v", atx.ShortString(), err)
 	}
 
-	err = db.ProcessAtx(atx)
+	err = db.ProcessAtx(ctx, atx)
 	if err != nil {
 		return fmt.Errorf("cannot process atx %v: %v", atx.ShortString(), err)
 		// TODO: blacklist peer
@@ -770,19 +770,19 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f service.Fetcher) error {
 	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
-		logger.With().Info("going to fetch pos atx", atx.PositioningATX, atx.ID())
+		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
 		if err := f.FetchAtx(ctx, atx.PositioningATX); err != nil {
 			return err
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
-		logger.With().Info("going to fetch prev atx", atx.PrevATXID, atx.ID())
+		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
 		if err := f.FetchAtx(ctx, atx.PrevATXID); err != nil {
 			return err
 		}
 	}
-	logger.With().Info("done fetching references for atx", atx.ID())
+	logger.With().Debug("done fetching references for atx", atx.ID())
 
 	return nil
 }

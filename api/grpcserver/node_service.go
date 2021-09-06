@@ -41,7 +41,7 @@ func NewNodeService(
 	return &NodeService{
 		Mesh:        tx,
 		GenTime:     genTime,
-		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.NodeService")),
+		PeerCounter: peers.Start(net, peers.WithLog(log.NewDefault("grpcserver.NodeService"))),
 		Syncer:      syncer,
 		AtxAPI:      atxapi,
 	}
@@ -200,6 +200,11 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 		// TODO: do we need an additional case here for a context to indicate
 		// that the service needs to shut down?
 	}
+}
+
+// Close closes underlying services
+func (s NodeService) Close() {
+	s.PeerCounter.Close()
 }
 
 // Convert internal error level into level understood by the API

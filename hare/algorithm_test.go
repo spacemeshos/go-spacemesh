@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -35,7 +35,7 @@ func (mmv *mockMessageValidator) SyntacticallyValidateMessage(context.Context, *
 	return mmv.syntaxValid
 }
 
-func (mmv *mockMessageValidator) ContextuallyValidateMessage(context.Context, *Msg, int32) error {
+func (mmv *mockMessageValidator) ContextuallyValidateMessage(context.Context, *Msg, uint32) error {
 	mmv.countContext++
 	return mmv.contextValid
 }
@@ -46,18 +46,18 @@ type mockRolacle struct {
 	MockStateQuerier
 }
 
-func (mr *mockRolacle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+func (mr *mockRolacle) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return mr.isEligible, mr.err
 }
 
-func (mr *mockRolacle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
+func (mr *mockRolacle) CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error) {
 	if mr.isEligible {
 		return 1, nil
 	}
 	return 0, mr.err
 }
 
-func (mr *mockRolacle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
+func (mr *mockRolacle) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	return []byte{}, nil
 }
 
@@ -179,14 +179,14 @@ func buildMessage(msg *Message) *Msg {
 	return &Msg{Message: msg, PubKey: nil}
 }
 
-func buildBroker(net NetworkService, testName string) *Broker {
+func buildBroker(tb testing.TB, net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{valid: 1}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.NewCloser(), log.NewDefault(testName))
+		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.NewCloser(), logtest.New(tb).WithName(testName))
 }
 
-func buildBrokerLimit4(net NetworkService, testName string) *Broker {
+func buildBrokerLimit4(tb testing.TB, net NetworkService, testName string) *Broker {
 	return newBroker(net, &mockEligibilityValidator{valid: 1}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, 4, util.NewCloser(), log.NewDefault(testName))
+		(&mockSyncer{true}).IsSynced, 10, 4, util.NewCloser(), logtest.New(tb).WithName(testName))
 }
 
 type mockEligibilityValidator struct {
@@ -215,7 +215,7 @@ func buildOracle(oracle Rolacle) Rolacle {
 func TestConsensusProcess_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 	proc := generateConsensusProcess(t)
 	inbox, _ := broker.Register(context.TODO(), proc.ID())
@@ -236,12 +236,12 @@ func TestConsensusProcess_TerminationLimit(t *testing.T) {
 
 	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
 
-	assert.Equal(t, int32(1), p.getK()/4)
+	assert.EqualValues(t, 1, p.getK()/4)
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
 	net := &mockP2p{}
-	broker := buildBroker(net, t.Name())
+	broker := buildBroker(t, net, t.Name())
 	broker.Start(context.TODO())
 	proc := generateConsensusProcess(t)
 	proc.network = net
@@ -259,7 +259,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 func TestConsensusProcess_handleMessage(t *testing.T) {
 	r := require.New(t)
 	net := &mockP2p{}
-	broker := buildBroker(net, t.Name())
+	broker := buildBroker(t, net, t.Name())
 	r.NoError(broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	proc.network = net
@@ -301,17 +301,16 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
 
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 
 	proc := generateConsensusProcess(t)
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
 	proc.advanceToNextRound(context.TODO())
 	proc.advanceToNextRound(context.TODO())
-	assert.Equal(t, int32(1), proc.getK())
-
+	assert.EqualValues(t, 1, proc.getK())
 	proc.advanceToNextRound(context.TODO())
-	assert.Equal(t, int32(2), proc.getK())
+	assert.EqualValues(t, 2, proc.getK())
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
@@ -320,7 +319,7 @@ func generateConsensusProcess(t *testing.T) *consensusProcess {
 	n1 := sim.NewNodeFrom(bninfo)
 
 	s := NewSetFromValues(value1)
-	oracle := eligibility.New()
+	oracle := eligibility.New(logtest.New(t))
 	edSigner := signing.NewEdSigner()
 	edPubkey := edSigner.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(edSigner.Sign(edPubkey.Bytes()))
@@ -329,7 +328,8 @@ func generateConsensusProcess(t *testing.T) *consensusProcess {
 	oracle.Register(true, edPubkey.String())
 	output := make(chan TerminationOutput, 1)
 
-	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.AppLog.WithName(edPubkey.String()))
+	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, edSigner,
+		types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}, n1, output, truer{}, logtest.New(t).WithName(edPubkey.String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -541,7 +541,7 @@ func TestProcOutput_Set(t *testing.T) {
 
 func TestIterationFromCounter(t *testing.T) {
 	for i := 0; i < 10; i++ {
-		assert.Equal(t, int32(i/4), iterationFromCounter(int32(i)))
+		assert.Equal(t, uint32(i/4), iterationFromCounter(uint32(i)))
 	}
 }
 

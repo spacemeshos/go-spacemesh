@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"golang.org/x/sync/errgroup"
 )
 
 type layerTicker interface {
@@ -23,8 +23,7 @@ type layerTicker interface {
 }
 
 type layerFetcher interface {
-	PollLayerHash(ctx context.Context, layerID types.LayerID) chan layerfetcher.LayerHashResult
-	PollLayerBlocks(ctx context.Context, layerID types.LayerID, hashes map[types.Hash32][]peers.Peer) chan layerfetcher.LayerPromiseResult
+	PollLayerContent(ctx context.Context, layerID types.LayerID) chan layerfetcher.LayerPromiseResult
 	GetEpochATXs(ctx context.Context, id types.EpochID) error
 	GetTortoiseBeacon(ctx context.Context, id types.EpochID) error
 }
@@ -38,7 +37,7 @@ type Configuration struct {
 }
 
 const (
-	outOfSyncThreshold  uint32 = 2 // see notSynced
+	outOfSyncThreshold  uint32 = 3 // see notSynced
 	numGossipSyncLayers uint32 = 2 // see gossipSync
 )
 
@@ -50,8 +49,8 @@ const (
 	// gossipSync is the state in which a node listens to at least one full layer of gossip before participating
 	// in the protocol. this is to protect the node from participating in the consensus without full information.
 	// for example, when a node wakes up in the middle of layer N, since it didn't receive all relevant messages and
-	// blocks of layer N, it shouldn't vote or produce blocks in layer N+1. it instead listens to gossip for all of
-	// layer N+1 and starts producing blocks and participates in hare committee in layer N+2
+	// blocks of layer N, it shouldn't vote or produce blocks in layer N+1. it instead listens to gossip for all
+	// through layer N+1 and starts producing blocks and participates in hare committee in layer N+2
 	gossipSync
 	// synced is the state where the node is in sync with its peers.
 	synced
@@ -91,8 +90,11 @@ type Syncer struct {
 	awaitSyncedCh []chan struct{}
 	awaitSyncedMu sync.Mutex
 
+	forceSyncCh chan struct{}
+
 	shutdownCtx context.Context
 	cancelFunc  context.CancelFunc
+	eg          errgroup.Group
 
 	// recording the run # since started. for logging/debugging only.
 	run uint64
@@ -111,6 +113,7 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh
 		syncTimer:         time.NewTicker(conf.SyncInterval),
 		targetSyncedLayer: unsafe.Pointer(&types.LayerID{}),
 		awaitSyncedCh:     make([]chan struct{}, 0),
+		forceSyncCh:       make(chan struct{}, 1),
 		shutdownCtx:       shutdownCtx,
 		cancelFunc:        cancel,
 	}
@@ -118,8 +121,11 @@ func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh
 
 // Close stops the syncing process and the goroutines syncer spawns.
 func (s *Syncer) Close() {
-	// TODO: ensure goroutines are all terminated before shutting down
+	s.syncTimer.Stop()
 	s.cancelFunc()
+	s.logger.With().Info("waiting for syncer goroutines to finish")
+	err := s.eg.Wait()
+	s.logger.With().Info("all syncer goroutines finished", log.Err(err))
 }
 
 // RegisterChForSynced registers ch for notification when the node enters synced state
@@ -133,45 +139,62 @@ func (s *Syncer) RegisterChForSynced(ctx context.Context, ch chan struct{}) {
 	s.awaitSyncedCh = append(s.awaitSyncedCh, ch)
 }
 
-// ListenToGossip returns true if the node is listening to gossip for blocks/TXs/ATXs data.
+// ListenToGossip returns true if the node is listening to gossip for blocks/TXs/ATXs data
 func (s *Syncer) ListenToGossip() bool {
 	return s.conf.AlwaysListen || s.getSyncState() >= gossipSync
 }
 
-// IsSynced returns true if the nodes is in synced state.
+// IsSynced returns true if the node is in synced state
 func (s *Syncer) IsSynced(ctx context.Context) bool {
+	// TODO: at startup, ctx contains no sessionId here
 	res := s.getSyncState() == synced
 	s.logger.WithContext(ctx).With().Info("node sync state",
 		log.Bool("synced", res),
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
-		log.FieldNamed("validated", s.mesh.ProcessedLayer()))
+		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
 	return res
 }
 
-// Start starts the main sync loop that tries to sync data for every SyncInterval.
+// Start starts the main sync loop that tries to sync data for every SyncInterval
 func (s *Syncer) Start(ctx context.Context) {
 	s.syncOnce.Do(func() {
-		if s.ticker.GetCurrentLayer().Uint32() <= 1 {
-			s.setSyncState(ctx, synced)
-		}
-		for {
-			select {
-			case <-s.shutdownCtx.Done():
-				s.logger.WithContext(ctx).Info("stopping sync to shutdown")
-				return
-			case <-s.syncTimer.C:
-				s.synchronize(ctx)
+		s.logger.WithContext(ctx).Info("Starting syncer loop")
+		s.eg.Go(func() error {
+			if s.ticker.GetCurrentLayer().Uint32() <= 1 {
+				s.setSyncState(ctx, synced)
 			}
-		}
+			for {
+				select {
+				case <-s.shutdownCtx.Done():
+					s.logger.WithContext(ctx).Info("stopping sync to shutdown")
+					return s.shutdownCtx.Err()
+				case <-s.syncTimer.C:
+					s.logger.WithContext(ctx).Debug("synchronize on tick")
+					s.synchronize(ctx)
+				case <-s.forceSyncCh:
+					s.logger.WithContext(ctx).Debug("force synchronize")
+					s.synchronize(ctx)
+				}
+			}
+		})
 	})
 }
 
 // ForceSync manually starts a sync process outside the main sync loop. If the node is already running a sync process,
 // ForceSync will be ignored.
-func (s *Syncer) ForceSync(ctx context.Context) {
+func (s *Syncer) ForceSync(ctx context.Context) bool {
 	s.logger.WithContext(ctx).Debug("executing ForceSync")
-	go s.synchronize(ctx)
+	if s.isClosed() {
+		s.logger.WithContext(ctx).Info("shutting down. dropping ForceSync request")
+		return false
+	}
+	if len(s.forceSyncCh) > 0 {
+		s.logger.WithContext(ctx).Info("another ForceSync already in progress. dropping this one")
+		return false
+	}
+	s.forceSyncCh <- struct{}{}
+	return true
 }
 
 func (s *Syncer) isClosed() bool {
@@ -195,7 +218,7 @@ func (s *Syncer) setSyncState(ctx context.Context, newState syncState) {
 			log.String("to_state", newState.String()),
 			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 			log.FieldNamed("latest", s.mesh.LatestLayer()),
-			log.FieldNamed("validated", s.mesh.ProcessedLayer()))
+			log.FieldNamed("processed", s.mesh.ProcessedLayer()))
 		events.ReportNodeStatusUpdate()
 		if newState != synced {
 			return
@@ -228,7 +251,7 @@ func (s *Syncer) setTargetSyncedLayer(ctx context.Context, layerID types.LayerID
 		log.Uint32("to_layer", layerID.Uint32()),
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
-		log.FieldNamed("validated", s.mesh.ProcessedLayer()))
+		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
 }
 
 func (s *Syncer) getTargetSyncedLayer() types.LayerID {
@@ -236,6 +259,7 @@ func (s *Syncer) getTargetSyncedLayer() types.LayerID {
 }
 
 func (s *Syncer) synchronize(ctx context.Context) bool {
+	ctx = log.WithNewSessionID(ctx)
 	logger := s.logger.WithContext(ctx)
 
 	if s.isClosed() {
@@ -254,7 +278,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.String("sync_state", s.getSyncState().String()),
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
-		log.FieldNamed("validated", s.mesh.ProcessedLayer()))
+		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
 
 	s.setStateBeforeSync(ctx)
 	// start a dedicated process for validation.
@@ -262,7 +286,10 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	// if validation for the last layer is still running
 	vQueue := make(chan *types.Layer, s.ticker.GetCurrentLayer().Uint32())
 	vDone := make(chan struct{})
-	go s.startValidating(ctx, s.run, vQueue, vDone)
+	s.eg.Go(func() error {
+		s.startValidating(ctx, s.run, vQueue, vDone)
+		return nil
+	})
 	success := false
 	defer func() {
 		close(vQueue)
@@ -273,37 +300,30 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			log.String("sync_state", s.getSyncState().String()),
 			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 			log.FieldNamed("latest", s.mesh.LatestLayer()),
-			log.FieldNamed("validated", s.mesh.ProcessedLayer()))
+			log.FieldNamed("processed", s.mesh.ProcessedLayer()))
 		s.setSyncerIdle()
 	}()
 
 	// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis.
 	// our clock starts ticking from 1 so it is safe to skip layer 0
-	for layerID := s.mesh.ProcessedLayer().Add(1); !layerID.After(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
+	// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
+	for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
 		var layer *types.Layer
 		var err error
 		if layer, err = s.syncLayer(ctx, layerID); err != nil {
-			logger.With().Error("failed to sync to layer", log.Err(err))
+			logger.With().Error("failed to sync to layer", layerID, log.Err(err))
 			return false
-		}
-
-		if len(layer.Blocks()) == 0 {
-			logger.Info("setting layer %v to zero-block", layerID)
-			if err := s.mesh.SetZeroBlockLayer(layerID); err != nil {
-				logger.With().Error("failed to set zero-block for layer", layerID, log.Err(err))
-				return false
-			}
 		}
 
 		if s.shouldValidateLayer(layerID) {
 			vQueue <- layer
 		}
-		logger.Debug("finished data sync for layer %v", layerID)
+		logger.With().Debug("finished data sync", layerID)
 	}
-	logger.With().Info("data is synced. waiting for validation",
+	logger.With().Debug("data is synced, waiting for validation",
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
-		log.FieldNamed("validated", s.mesh.ProcessedLayer()))
+		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
 	success = true
 	return true
 }
@@ -319,7 +339,7 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 		s.logger.WithContext(ctx).With().Info("node is too far behind",
 			log.FieldNamed("current", current),
 			log.FieldNamed("latest", latest),
-			log.Uint32("behindThreshold", outOfSyncThreshold))
+			log.Uint32("behind_threshold", outOfSyncThreshold))
 		s.setSyncState(ctx, notSynced)
 	}
 }
@@ -346,16 +366,33 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		return nil, errors.New("shutdown")
 	}
 
-	layer, err := s.getLayerFromPeers(ctx, layerID)
-	if err != nil {
+	var layer *types.Layer
+	var err error
+	if layerID.Before(types.GetEffectiveGenesis()) {
+		if err = s.mesh.SetZeroBlockLayer(layerID); err != nil {
+			s.logger.WithContext(ctx).With().Panic("failed to set zero-block for genesis layer", layerID, log.Err(err))
+		}
+		if layer, err = s.mesh.GetLayer(layerID); err != nil {
+			s.logger.WithContext(ctx).With().Panic("failed to get genesis layer", layerID, log.Err(err))
+		}
+	} else {
+		s.logger.WithContext(ctx).With().Info("polling layer content", layerID)
+		if layer, err = s.getLayerFromPeers(ctx, layerID); err != nil {
+			return nil, err
+		}
+		if len(layer.Blocks()) == 0 {
+			s.logger.WithContext(ctx).With().Info("setting layer to zero-block", layerID)
+			if err := s.mesh.SetZeroBlockLayer(layerID); err != nil {
+				s.logger.WithContext(ctx).With().Warning("failed to set zero-block for layer", layerID, log.Err(err))
+			}
+		}
+	}
+
+	if err = s.getATXs(ctx, layerID); err != nil {
 		return nil, err
 	}
 
-	if err := s.getATXs(ctx, layerID); err != nil {
-		return nil, err
-	}
-
-	if err := s.getTortoiseBeacon(ctx, layerID); err != nil {
+	if err = s.getTortoiseBeacon(ctx, layerID); err != nil {
 		return nil, err
 	}
 
@@ -363,19 +400,13 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 }
 
 func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (*types.Layer, error) {
-	ch := s.fetcher.PollLayerHash(ctx, layerID)
-	hashRes := <-ch
-	if hashRes.Err != nil {
-		return nil, fmt.Errorf("PollLayerHash: %w", hashRes.Err)
-	}
-	// TODO: resolve hash with peers
-	bch := s.fetcher.PollLayerBlocks(ctx, layerID, hashRes.Hashes)
+	bch := s.fetcher.PollLayerContent(ctx, layerID)
 	res := <-bch
 	if res.Err != nil {
 		if res.Err == layerfetcher.ErrZeroLayer {
 			return types.NewLayer(layerID), nil
 		}
-		return nil, fmt.Errorf("PollLayerBlocks: %w", res.Err)
+		return nil, fmt.Errorf("PollLayerContent: %w", res.Err)
 	}
 
 	layer, err := s.mesh.GetLayer(layerID)
@@ -388,21 +419,26 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 
 func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 	if layerID.GetEpoch() == 0 {
-		s.logger.WithContext(ctx).Info("skip getting ATX in epoch 0")
+		s.logger.WithContext(ctx).Info("skip getting atx in epoch 0")
 		return nil
 	}
 	epoch := layerID.GetEpoch()
-	currentEpoch := s.ticker.GetCurrentLayer().GetEpoch()
+	atCurrentEpoch := epoch == s.ticker.GetCurrentLayer().GetEpoch()
+	atLastLayerOfEpoch := layerID == (epoch + 1).FirstLayer().Sub(1)
 	// only get ATXs if
 	// - layerID is in the current epoch
 	// - layerID is the last layer of a previous epoch
 	// i.e. for older epochs we sync ATXs once per epoch. for current epoch we sync ATXs in every layer
-	if epoch == currentEpoch || layerID == (epoch+1).FirstLayer().Sub(1) {
-		s.logger.WithContext(ctx).With().Debug("getting ATXs", epoch, layerID)
+	if atCurrentEpoch || atLastLayerOfEpoch {
+		s.logger.WithContext(ctx).With().Debug("getting atxs", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
-			s.logger.WithContext(ctx).With().Error("failed to fetch epoch ATXs", layerID, epoch, log.Err(err))
-			return err
+			// dont fail sync if we cannot fetch atxs for the current epoch before the last layer
+			if !atCurrentEpoch || atLastLayerOfEpoch {
+				s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", layerID, epoch, log.Err(err))
+				return err
+			}
+			s.logger.WithContext(ctx).With().Warning("failed to fetch epoch atxs", layerID, epoch, log.Err(err))
 		}
 	}
 	return nil
@@ -424,7 +460,10 @@ func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) e
 		s.logger.WithContext(ctx).With().Debug("getting tortoise beacons", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetTortoiseBeacon(ctx, epoch); err != nil {
-			s.logger.WithContext(ctx).With().Error("failed to fetch epoch tortoise beacons", layerID, epoch, log.Err(err))
+			s.logger.WithContext(ctx).With().Error("failed to fetch epoch tortoise beacons",
+				layerID,
+				epoch,
+				log.Err(err))
 			return err
 		}
 	}
@@ -443,11 +482,11 @@ func (s *Syncer) shouldValidateLayer(layerID types.LayerID) bool {
 
 // start a dedicated process to validate layers one by one
 func (s *Syncer) startValidating(ctx context.Context, run uint64, queue chan *types.Layer, done chan struct{}) {
-	logger := s.logger.WithName("validation")
+	logger := s.logger.WithContext(ctx).WithName("validation")
 	logger.Debug("validation started for run #%v", run)
 	defer func() {
-		logger.Debug("validation done for run #%v", run)
 		close(done)
+		logger.Debug("validation done for run #%v", run)
 	}()
 	for layer := range queue {
 		if s.isClosed() {
@@ -466,5 +505,10 @@ func (s *Syncer) validateLayer(ctx context.Context, layer *types.Layer) {
 	s.logger.WithContext(ctx).With().Debug("validating layer",
 		layer.Index(),
 		log.String("blocks", fmt.Sprint(types.BlockIDs(layer.Blocks()))))
-	s.mesh.ValidateLayer(layer)
+
+	// TODO: re-architect this so the syncer does not need to actually wait for tortoise to finish running.
+	//   It should be sufficient to call GetLayer (above), and maybe, to queue a request to tortoise to analyze this
+	//   layer (without waiting for this to finish -- it should be able to run async).
+	//   See https://github.com/spacemeshos/go-spacemesh/issues/2415
+	s.mesh.ValidateLayer(ctx, layer)
 }

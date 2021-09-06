@@ -7,10 +7,10 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	p2ppeers "github.com/spacemeshos/go-spacemesh/p2p/peers"
@@ -19,14 +19,17 @@ import (
 
 //go:generate mockgen -package=gossip -destination=./protocol_mock_test.go -source=./protocol.go peersManager, baseNetwork, prioQ
 
-var logger = log.NewDefault("gossip-protocol-test")
-
 func TestProcessMessage(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	net := NewMockbaseNetwork(ctrl)
-	protocol := NewProtocol(context.TODO(), config.SwarmConfig{}, net, nil, nil, logger)
+	peersManager := NewMockpeersManager(ctrl)
+	protocol := NewProtocol(context.TODO(), config.SwarmConfig{}, net, peersManager, nil, logtest.New(t))
+	t.Cleanup(func() {
+		peersManager.EXPECT().Close()
+		protocol.Close()
+	})
 
 	isSent := false
 	net.EXPECT().
@@ -49,7 +52,11 @@ func TestPropagateMessage(t *testing.T) {
 
 	net := NewMockbaseNetwork(ctrl)
 	peersManager := NewMockpeersManager(ctrl)
-	protocol := NewProtocol(context.TODO(), config.SwarmConfig{}, net, peersManager, nil, logger)
+	protocol := NewProtocol(context.TODO(), config.SwarmConfig{}, net, peersManager, nil, logtest.New(t))
+	t.Cleanup(func() {
+		peersManager.EXPECT().Close()
+		protocol.Close()
+	})
 
 	peers := make([]p2ppeers.Peer, 30)
 	for i := range peers {
@@ -161,8 +168,6 @@ func (mpq *mockPriorityQueue) Read() (interface{}, error) {
 
 func (mpq *mockPriorityQueue) Close() {
 	mpq.setIsClosed(true)
-	called := mpq.getCalled()
-	called <- struct{}{}
 }
 
 func (mpq *mockPriorityQueue) Length() int {
@@ -170,13 +175,21 @@ func (mpq *mockPriorityQueue) Length() int {
 }
 
 func TestPropagationEventLoop(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	protocol := NewProtocol(ctx, config.SwarmConfig{}, nil, nil, nil, log.AppLog)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	peersManager := NewMockpeersManager(ctrl)
+	peersManager.EXPECT().Close()
+	protocol := NewProtocol(context.Background(), config.SwarmConfig{}, nil, peersManager, nil, logtest.New(t))
 	called := make(chan struct{})
 	mpq := mockPriorityQueue{called: called, bus: make(chan struct{}, 10)}
 	protocol.pq = &mpq
 
-	go protocol.propagationEventLoop(context.TODO())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		protocol.propagationEventLoop(context.TODO())
+		wg.Done()
+	}()
 
 	protocol.propagateQ <- service.MessageValidation{}
 	<-called
@@ -184,8 +197,8 @@ func TestPropagationEventLoop(t *testing.T) {
 	assert.Equal(t, false, mpq.getIsClosed(), "listener should not be shut down yet")
 
 	mpq.setIsWritten(false)
-	cancel()
-	<-called
+	protocol.Close()
+	wg.Wait()
 	assert.Equal(t, false, mpq.getIsWritten(), "message should not be written")
 	assert.Equal(t, true, mpq.getIsClosed(), "listener should be shut down")
 

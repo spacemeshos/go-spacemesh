@@ -236,7 +236,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			}
 
 			// create msg
-			iMsg, err := newMsg(messageCtx, hareMsg, b.stateQuerier)
+			iMsg, err := newMsg(messageCtx, b.Log, hareMsg, b.stateQuerier)
 			if err != nil {
 				msgLogger.With().Warning("message validation failed: could not construct msg", log.Err(err))
 				continue
@@ -251,7 +251,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 
 			// validation passed, report
 			msg.ReportValidation(ctx, protoName)
-			msgLogger.With().Info("broker reported hare message as valid", hareMsg)
+			msgLogger.With().Debug("broker reported hare message as valid", hareMsg)
 
 			if isEarly {
 				if _, exist := b.pending[msgInstID.Uint32()]; !exist { // create buffer if first msg

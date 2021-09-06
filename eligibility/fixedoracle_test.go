@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,7 +31,7 @@ func genStr() string {
 }
 
 func TestFixedRolacle_Eligible(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	for i := 0; i < numOfClients-1; i++ {
 		oracle.Register(true, genStr())
 	}
@@ -44,7 +45,7 @@ func TestFixedRolacle_Eligible(t *testing.T) {
 
 func TestFixedRolacle_Eligible2(t *testing.T) {
 	pubs := make([]string, 0, numOfClients)
-	oracle := New()
+	oracle := New(logtest.New(t))
 	for i := 0; i < numOfClients; i++ {
 		s := genStr()
 		pubs = append(pubs, s)
@@ -73,7 +74,7 @@ func TestFixedRolacle_Eligible2(t *testing.T) {
 }
 
 func TestFixedRolacle_Range(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	pubs := make([]string, 0, numOfClients)
 	for i := 0; i < numOfClients; i++ {
 		s := genStr()
@@ -105,7 +106,7 @@ func TestFixedRolacle_Range(t *testing.T) {
 }
 
 func TestFixedRolacle_Eligible3(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	for i := 0; i < numOfClients/3; i++ {
 		s := genStr()
 		oracle.Register(true, s)
@@ -142,7 +143,7 @@ func TestFixedRolacle_Eligible3(t *testing.T) {
 }
 
 func TestGenerateElibility(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	ids := []string{}
 	for i := 0; i < 30; i++ {
 		s := genStr()
@@ -159,7 +160,7 @@ func TestGenerateElibility(t *testing.T) {
 }
 
 func TestFixedRolacle_Eligible4(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	var ids []string
 	for i := 0; i < 33; i++ {
 		s := genStr()
@@ -176,7 +177,7 @@ func TestFixedRolacle_Eligible4(t *testing.T) {
 }
 
 func TestFixedRolacle_Export(t *testing.T) {
-	oracle := New()
+	oracle := New(logtest.New(t))
 	var ids []string
 	for i := 0; i < 35; i++ {
 		s := genStr()

@@ -14,8 +14,8 @@ import (
 
 // todo : calculate real udp max message size
 
-func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.Message) []byte {
-	return func(ctx context.Context, msg server.Message) []byte {
+func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.Message) ([]byte, error) {
+	return func(ctx context.Context, msg server.Message) ([]byte, error) {
 		t := time.Now()
 		plogger := p.logger.WithContext(ctx).WithFields(log.String("type", "getaddresses"),
 			log.String("from", msg.Sender().String()))
@@ -39,14 +39,13 @@ func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.
 		resp, err := types.InterfaceToBytes(results)
 
 		if err != nil {
-			plogger.With().Error("error marshaling response message (GetAddress)", log.Err(err))
-			return nil
+			plogger.With().Panic("error marshaling response message (GetAddress)", log.Err(err))
 		}
 
 		plogger.With().Debug("sending response",
 			log.Int("size", len(results)),
 			log.Duration("time_to_make", time.Since(t)))
-		return resp
+		return resp, nil
 	}
 }
 
@@ -61,9 +60,8 @@ func (p *protocol) GetAddresses(ctx context.Context, remoteID p2pcrypto.PublicKe
 	plogger.Debug("sending request")
 
 	// response handler
-	ch := make(chan []*node.Info)
+	ch := make(chan []*node.Info, 1)
 	resHandler := func(msg []byte) {
-		defer close(ch)
 		nodes := make([]*node.Info, 0, getAddrMax)
 		err := types.BytesToInterface(msg, &nodes)
 		//todo: check that we're not pass max results ?
@@ -79,17 +77,16 @@ func (p *protocol) GetAddresses(ctx context.Context, remoteID p2pcrypto.PublicKe
 				log.Int("expected", getAddrMax))
 			return
 		}
-
 		ch <- nodes
 	}
 
 	err = p.msgServer.SendRequest(ctx, server.GetAddresses, []byte(""), remoteID, resHandler, func(err error) {})
-
 	if err != nil {
 		return nil, err
 	}
 
 	timeout := time.NewTimer(MessageTimeout)
+	defer timeout.Stop()
 	select {
 	case nodes := <-ch:
 		if nodes == nil {

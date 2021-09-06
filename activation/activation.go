@@ -94,7 +94,7 @@ type syncer interface {
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(ctx context.Context, coinbase types.Address, opts PostSetupOpts) error
+	StartSmeshing(context.Context, types.Address, PostSetupOpts) error
 	StopSmeshing(deleteFiles bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
@@ -176,11 +176,19 @@ func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption 
 	}
 }
 
+// WithContext modifies parent context for background job.
+func WithContext(ctx context.Context) BuilderOption {
+	return func(b *Builder) {
+		b.runCtx = ctx
+	}
+}
+
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider,
 	layersPerEpoch uint32, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
+		runCtx:            context.Background(),
 		signer:            signer,
 		nodeID:            nodeID,
 		coinbaseAccount:   conf.CoinbaseAccount,
@@ -201,6 +209,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 	for _, opt := range opts {
 		opt(b)
 	}
+	b.runCtx, b.stop = context.WithCancel(b.runCtx)
 	return b
 }
 
@@ -218,20 +227,20 @@ func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opt
 	if b.getStatus() != smeshingStatusIdle {
 		return errors.New("already started")
 	}
+	b.coinbaseAccount = coinbase
 	b.setStatus(smeshingStatusPendingPostSetup)
-	b.runCtx, b.stop = context.WithCancel(ctx)
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
 		b.setStatus(smeshingStatusIdle)
-		return fmt.Errorf("failed to start Post setup session: %v", err)
+		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
 
 	go func() {
 		<-doneChan
 		if s := b.postSetupProvider.Status(); s.State != postSetupStateComplete {
 			b.setStatus(smeshingStatusIdle)
-			b.log.Error("failed to complete Post setup: %v", b.postSetupProvider.LastError())
+			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
 			return
 		}
 
@@ -282,7 +291,7 @@ func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
 func (b *Builder) loop(ctx context.Context) {
 	err := b.loadChallenge()
 	if err != nil {
-		log.Info("challenge not loaded: %s", err)
+		b.log.Info("challenge not loaded: %s", err)
 	}
 
 	// Once initialized, run the execution phase with zero-challenge,
@@ -290,7 +299,7 @@ func (b *Builder) loop(ctx context.Context) {
 	// TODO(moshababo): don't generate the commitment every time smeshing is starting, but once only.
 	b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 	if err != nil {
-		b.log.Error("Post execution failed: %v", err)
+		b.log.Error("post execution failed: %v", err)
 		b.setStatus(smeshingStatusIdle)
 		return
 	}
@@ -532,7 +541,7 @@ func (b *Builder) createAtx(ctx context.Context) (*types.ActivationTx, error) {
 		log.FieldNamed("current_layer", b.layerClock.GetCurrentLayer()),
 	)
 	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(pubEpoch.FirstLayer())); err != nil {
-		return nil, fmt.Errorf("failed to wait of publication epoch: %w", err)
+		return nil, fmt.Errorf("failed to wait for publication epoch: %w", err)
 	}
 	b.log.Info("publication epoch has arrived!")
 	if discarded := b.discardChallengeIfStale(); discarded {

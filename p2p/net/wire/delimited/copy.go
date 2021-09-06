@@ -43,10 +43,10 @@ func Copy(sink Sink, src Source) error {
 		if err == io.EOF {
 			return nil
 		} else if err != nil {
-			return fmt.Errorf("copy: read error: %v", err)
+			return fmt.Errorf("copy: read error: %w", err)
 		}
 		if err := sink.Put(record); err != nil {
-			return fmt.Errorf("copy: write error: %v", err)
+			return fmt.Errorf("copy: write error: %w", err)
 		}
 	}
 }

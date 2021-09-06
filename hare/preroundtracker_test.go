@@ -4,20 +4,19 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
-	"fmt"
 	"math"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 const (
 	k              = 1
-	ki             = -1
+	ki             = preRound
 	lowThresh10    = 10
 	lowDefaultSize = 100
 )
@@ -53,7 +52,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	verifier := generateSigning(t)
 
 	m1 := BuildPreRoundMsg(verifier, s, nil)
-	tracker := newPreRoundTracker(lowThresh10, lowThresh10, log.AppLog)
+	tracker := newPreRoundTracker(lowThresh10, lowThresh10, logtest.New(t))
 	tracker.OnPreRound(context.TODO(), m1)
 	assert.Equal(t, 1, len(tracker.preRound))      // one msg
 	assert.Equal(t, 2, len(tracker.tracker.table)) // two Values
@@ -81,7 +80,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 
 func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 	s := NewSetFromValues(value1, value2)
-	tracker := newPreRoundTracker(lowThresh10, lowThresh10, log.AppLog)
+	tracker := newPreRoundTracker(lowThresh10, lowThresh10, logtest.New(t))
 
 	for i := 0; i < lowThresh10; i++ {
 		assert.False(t, tracker.CanProveSet(s))
@@ -95,7 +94,7 @@ func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 }
 
 func TestPreRoundTracker_UpdateSet(t *testing.T) {
-	tracker := newPreRoundTracker(2, 2, log.AppLog)
+	tracker := newPreRoundTracker(2, 2, logtest.New(t))
 	s1 := NewSetFromValues(value1, value2, value3)
 	s2 := NewSetFromValues(value1, value2, value4)
 	prMsg1 := BuildPreRoundMsg(generateSigning(t), s1, nil)
@@ -109,7 +108,7 @@ func TestPreRoundTracker_UpdateSet(t *testing.T) {
 }
 
 func TestPreRoundTracker_OnPreRound2(t *testing.T) {
-	tracker := newPreRoundTracker(2, 2, log.AppLog)
+	tracker := newPreRoundTracker(2, 2, logtest.New(t))
 	s1 := NewSetFromValues(value1)
 	verifier := generateSigning(t)
 	prMsg1 := BuildPreRoundMsg(verifier, s1, nil)
@@ -121,7 +120,7 @@ func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 }
 
 func TestPreRoundTracker_FilterSet(t *testing.T) {
-	tracker := newPreRoundTracker(2, 2, log.AppLog)
+	tracker := newPreRoundTracker(2, 2, logtest.New(t))
 	s1 := NewSetFromValues(value1, value2)
 	prMsg1 := BuildPreRoundMsg(generateSigning(t), s1, nil)
 	tracker.OnPreRound(context.TODO(), prMsg1)
@@ -154,7 +153,7 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 	}
 
 	// check default coin value
-	tracker := newPreRoundTracker(2, 2, log.AppLog)
+	tracker := newPreRoundTracker(2, 2, logtest.New(t))
 	r.False(tracker.coinflip, "expected initial coinflip value to be false")
 	r.Equal(tracker.bestVRF, uint32(math.MaxUint32), "expected initial best VRF to be max uint32")
 	s1 := NewSetFromValues(value1, value2)
@@ -162,10 +161,6 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 	for _, v := range values {
 		sha := sha256.Sum256(v.proof)
 		shaUint32 := binary.LittleEndian.Uint32(sha[:4])
-		log.With().Debug("hashed proof value",
-			log.String("input", util.Bytes2Hex(v.proof)),
-			log.String("hex", fmt.Sprintf("%08x", shaUint32)),
-			log.Uint32("int", shaUint32))
 		r.Equal(v.val, shaUint32, "mismatch in hash output")
 		prMsg := BuildPreRoundMsg(generateSigning(t), s1, v.proof)
 		tracker.OnPreRound(context.TODO(), prMsg)

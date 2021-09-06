@@ -11,7 +11,7 @@ import (
 type statusTracker struct {
 	statuses  map[string]*Msg // maps PubKey->StatusMsg
 	threshold uint16          // threshold to indicate a set can be proved
-	maxKi     int32           // tracks max Ki in tracked status Messages
+	maxKi     uint32          // tracks max Ki in tracked status Messages
 	maxSet    *Set            // tracks the max raw set in the tracked status Messages
 	count     uint16          // the count of valid status messages
 	analyzed  bool            // indicates if the Messages have already been analyzed
@@ -22,7 +22,7 @@ func newStatusTracker(threshold int, expectedSize int) *statusTracker {
 	st := &statusTracker{}
 	st.statuses = make(map[string]*Msg, expectedSize)
 	st.threshold = uint16(threshold)
-	st.maxKi = -1 // since Ki>=-1
+	st.maxKi = preRound
 	st.maxSet = nil
 	st.analyzed = false
 
@@ -50,7 +50,7 @@ func (st *statusTracker) AnalyzeStatuses(isValid func(m *Msg) bool) {
 			delete(st.statuses, key)
 		} else {
 			st.count += m.InnerMsg.EligibilityCount
-			if m.InnerMsg.Ki >= st.maxKi { // track max Ki & matching raw set
+			if m.InnerMsg.Ki >= st.maxKi || st.maxKi == preRound { // track max Ki & matching raw set
 				st.maxKi = m.InnerMsg.Ki
 				st.maxSet = NewSet(m.InnerMsg.Values)
 			}
@@ -67,7 +67,7 @@ func (st *statusTracker) IsSVPReady() bool {
 
 // ProposalSet returns the proposed set if available, nil otherwise.
 func (st *statusTracker) ProposalSet(expectedSize int) *Set {
-	if st.maxKi == -1 {
+	if st.maxKi == preRound {
 		return st.buildUnionSet(expectedSize)
 	}
 

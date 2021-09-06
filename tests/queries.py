@@ -70,12 +70,12 @@ def get_app_started_msgs(namespace, pod_name):
 
 
 def get_tortoise_beacon_msgs(namespace, pod_name):
-    beacon_msg = "Calculated beacon"
+    beacon_msg = "calculated beacon"
     return get_all_msg_containing(namespace, pod_name, beacon_msg)
 
 
 def get_tortoise_beacon_weak_coin_msgs(namespace, pod_name):
-    weak_coin_msg = "Calculated weak coin"
+    weak_coin_msg = "calculated weak coin"
     return get_all_msg_containing(namespace, pod_name, weak_coin_msg)
 
 

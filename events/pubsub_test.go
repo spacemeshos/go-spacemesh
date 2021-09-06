@@ -8,7 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"nanomsg.org/go-mangos/transport/tcp"
@@ -65,8 +64,6 @@ func server(url string) {
 	}
 	for {
 		// Could also use sock.RecvMsg to get header
-		d := date()
-		fmt.Printf("SERVER: PUBLISHING DATE %s\n", d)
 		if err = sock.Send([]byte("topic1anton")); err != nil {
 			die("Failed publishing: %s", err.Error())
 		}
@@ -77,7 +74,6 @@ func server(url string) {
 func client(url string, name string) {
 	var sock mangos.Socket
 	var err error
-	var msg []byte
 
 	if sock, err = sub.NewSocket(); err != nil {
 		die("can't get NewEventPublisher sub socket: %s", err.Error())
@@ -93,10 +89,9 @@ func client(url string, name string) {
 		die("cannot Subscribe: %s", err.Error())
 	}
 	for {
-		if msg, err = sock.Recv(); err != nil {
+		if _, err = sock.Recv(); err != nil {
 			die("Cannot recv: %s", err.Error())
 		}
-		fmt.Printf("CLIENT(%s): RECEIVED %s\n", name, string(msg))
 	}
 }
 
@@ -141,9 +136,6 @@ func TestPubSub(t *testing.T) {
 		for i := 0; i < numOfMessages; i++ {
 			err = p.publish(topics[0], payload)
 			assert.NoError(t, err)
-			if err != nil {
-				log.Error("wtf : %v", err)
-			}
 		}
 		wg.Done()
 	}()
@@ -161,10 +153,8 @@ loop:
 			break loop
 		case rec := <-s.output[topics[0]]:
 			counter--
-			log.Info("got msg: %v count %v", string(rec), counter)
 			if counter == 0 {
 				assert.Equal(t, rec, msg)
-				log.Info(string(msg))
 				break loop
 			}
 		case <-irrelevantTopic:

@@ -37,7 +37,7 @@ func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger
 	}
 
 	t := &TimeClock{
-		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: genesisTime}),
+		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: genesisTime}, WithLog(logger)),
 		tickInterval: tickInterval,
 		startEpoch:   genesisTime,
 		stop:         make(chan struct{}),
@@ -61,6 +61,9 @@ func (t *TimeClock) startClock() {
 			log.FieldNamed("curr_layer", currLayer))
 		select {
 		case <-tmr.C:
+			t.log.With().Info("clock notifying subscribers of new layer tick",
+				log.Int("subscriber_count", len(t.subscribers)),
+				t.TimeToLayer(t.clock.Now()))
 			// notify subscribers
 			if missed, err := t.Notify(); err != nil {
 				t.log.With().Error("could not notify subscribers",

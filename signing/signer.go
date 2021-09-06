@@ -3,6 +3,7 @@ package signing
 import (
 	"bytes"
 	"errors"
+
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -54,6 +55,8 @@ func (p *PublicKey) Equals(o *PublicKey) bool {
 	return bytes.Equal(p.Bytes(), o.Bytes())
 }
 
+var _ Signer = (*EdSigner)(nil)
+
 // EdSigner represents an ED25519 signer
 type EdSigner struct {
 	privKey ed25519.PrivateKey // the pub & private key
@@ -80,7 +83,6 @@ func NewEdSignerFromBuffer(buff []byte) (*EdSigner, error) {
 // NewEdSigner returns an auto-generated ed signer
 func NewEdSigner() *EdSigner {
 	pub, priv, err := ed25519.GenerateKey(nil)
-
 	if err != nil {
 		log.Panic("Could not generate key pair err=%v", err)
 	}
@@ -93,14 +95,14 @@ func (es *EdSigner) Sign(m []byte) []byte {
 	return ed25519.Sign2(es.privKey, m)
 }
 
-// Verify verifies the provided message
-func Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
-	return ed25519.Verify2(ed25519.PublicKey(pubkey.Bytes()), message, sign)
-}
-
 // PublicKey returns the public key of the signer
 func (es *EdSigner) PublicKey() *PublicKey {
 	return NewPublicKey(es.pubKey)
+}
+
+// LittleEndian indicates whether byte order in a signature is little-endian.
+func (es *EdSigner) LittleEndian() bool {
+	return true
 }
 
 // ToBuffer returns the private key as a byte buffer
@@ -109,4 +111,33 @@ func (es *EdSigner) ToBuffer() []byte {
 	copy(buff, es.privKey)
 
 	return buff
+}
+
+// Verify verifies the provided message
+func Verify(pubkey *PublicKey, message []byte, sign []byte) bool {
+	return ed25519.Verify2(pubkey.Bytes(), message, sign)
+}
+
+// EDVerifier is a verifier for ED purposes.
+type EDVerifier struct{}
+
+// NewEDVerifier returns a new EDVerifier.
+func NewEDVerifier() EDVerifier {
+	return EDVerifier{}
+}
+
+var _ VerifyExtractor = EDVerifier{}
+
+// Verify that signature matches public key.
+func (EDVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
+	return Verify(pub, msg, sig)
+}
+
+// Extract public key from signature.
+func (EDVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
+	pub, err := ed25519.ExtractPublicKey(msg, sig)
+	if err != nil {
+		return nil, err
+	}
+	return &PublicKey{pub: pub}, nil
 }
