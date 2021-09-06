@@ -173,7 +173,7 @@ golangci-lint:
 .PHONY: golangci-lint
 
 golangci-lint-github-action:
-	./bin/golangci-lint run --out-format=github-actions --issues-exit-code=0
+	./bin/golangci-lint run --out-format=github-actions
 .PHONY: golangci-lint-github-action
 
 cover:
