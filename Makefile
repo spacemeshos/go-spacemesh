@@ -172,9 +172,13 @@ golangci-lint:
 	golangci-lint run
 .PHONY: golangci-lint
 
-golangci-lint-github-action:
-	./bin/golangci-lint run --out-format=github-actions
-.PHONY: golangci-lint-github-action
+golangci-lint-fast-strict-github-action:
+	./bin/golangci-lint run --config .golangci-fast-strict.yml --out-format=github-actions
+.PHONY: golangci-lint-fast-strict-github-action
+
+golangci-lint-slow-tolerant-github-action:
+	golangci-lint run --config .golangci-slow-tolerant.yml --out-format=github-actions
+.PHONY: golangci-lint-slow-tolerant-github-action
 
 cover:
 	@echo "mode: count" > cover-all.out

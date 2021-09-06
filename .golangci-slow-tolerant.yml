@@ -1,4 +1,4 @@
-# All checks, exit code is 1 on errors.
+# All checks, exit code is 0 on errors.
 
 # This file contains all available configuration options
 # Modified for linting cmd/ and pkg/
@@ -12,7 +12,7 @@ run:
   deadline: 3m
 
   # exit code when at least one issue was found, default is 1
-  issues-exit-code: 1
+  issues-exit-code: 0
 
   # include test files or not, default is true
   tests: true

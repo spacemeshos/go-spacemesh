@@ -1,4 +1,4 @@
-# All checks, exit code is 1 on errors.
+# Few checks, exit code is 1 on errors.
 
 # This file contains all available configuration options
 # Modified for linting cmd/ and pkg/
@@ -160,8 +160,9 @@ linters-settings:
 
 
 linters:
-#  enable:
-#    - staticcheck
+  # TODO(nkryuchkov): enable needed linters
+  enable:
+    - staticcheck
 #    - golint
 #    - goimports
 #    - varcheck
@@ -178,23 +179,9 @@ linters:
 #    - misspell
 #    - nakedret
 #    - depguard
-  enable-all: true
-  disable:
-    - wsl
-    - lll
-    - unparam
-    - nlreturn
-    - gomnd
-    - goerr113
-    - exhaustivestruct
-    - testpackage
-    - thelper
-    - paralleltest
-    - godox
-    - gosec
-    - godot
-    - gci
-  disable-all: false
+  enable-all: false
+#  disable:
+  disable-all: true
 #  presets:
   fast: false
 
