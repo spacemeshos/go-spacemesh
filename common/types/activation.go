@@ -167,7 +167,7 @@ type ActivationTx struct {
 }
 
 // NewActivationTx returns a new activation transaction. The ATXID is calculated and cached.
-func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost, numUnits uint64, initialPost *Post) *ActivationTx {
+func NewActivationTx(challenge NIPostChallenge, coinbase Address, numUnits uint64, nipost NIPost, initialPost Post) *ActivationTx {
 	atx := &ActivationTx{
 		InnerActivationTx: InnerActivationTx{
 			ActivationTxHeader: ActivationTxHeader{
@@ -175,8 +175,8 @@ func NewActivationTx(challenge NIPostChallenge, coinbase Address, nipost *NIPost
 				Coinbase:        coinbase,
 				NumUnits:        numUnits,
 			},
-			NIPost:      *nipost,
-			InitialPost: *initialPost,
+			NIPost:      nipost,
+			InitialPost: initialPost,
 		},
 	}
 	atx.CalcAndSetID()

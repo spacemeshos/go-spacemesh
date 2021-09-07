@@ -264,13 +264,13 @@ func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
 	id1 := types.NodeID{Key: uuid.New().String()}
 	coinbase1 := types.HexToAddress("aaaa")
 	epoch1 := types.EpochID(2)
-	atx1 := types.NewActivationTx(newChallenge(id1, 0, *types.EmptyATXID, goldenATXID, epoch1.FirstLayer()), coinbase1, &types.NIPost{}, 0, &types.Post{})
+	atx1 := types.NewActivationTx(newChallenge(id1, 0, *types.EmptyATXID, goldenATXID, epoch1.FirstLayer()), coinbase1, 0, types.NIPost{}, types.Post{})
 	r.NoError(atxdb.StoreAtx(context.TODO(), epoch1, atx1))
 
 	epoch2 := types.EpochID(1) + (1 << 8)
 	// This will fail if we convert the epoch id to bytes using LittleEndian, since LevelDB's lexicographic sorting will
 	// then sort by LSB instead of MSB, first.
-	atx2 := types.NewActivationTx(newChallenge(id1, 1, atx1.ID(), atx1.ID(), epoch2.FirstLayer()), coinbase1, &types.NIPost{}, 0, &types.Post{})
+	atx2 := types.NewActivationTx(newChallenge(id1, 1, atx1.ID(), atx1.ID(), epoch2.FirstLayer()), coinbase1, 0, types.NIPost{}, types.Post{})
 	r.NoError(atxdb.StoreAtx(context.TODO(), epoch2, atx2))
 
 	id, err := atxdb.GetNodeLastAtxID(id1)
@@ -334,7 +334,7 @@ func Test_DBSanity(t *testing.T) {
 	assert.Equal(t, atx3.ID(), id)
 
 	id, err = atxdb.GetNodeLastAtxID(id3)
-	assert.EqualError(t, err, fmt.Sprintf("atx for node %v does not exist", id3.ShortString()))
+	assert.ErrorIs(t, err, ErrAtxNotFound)
 	assert.Equal(t, *types.EmptyATXID, id)
 }
 
@@ -562,8 +562,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	err = SignAtx(signer, atx)
 	assert.NoError(t, err)
 	err = atxdb.ContextuallyValidateAtx(&atx.ActivationTxHeader)
-	assert.EqualError(t, err,
-		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", atx.NodeID.ShortString()))
+	assert.ErrorIs(t, err, ErrAtxNotFound)
 
 	// Prev atx not declared but initial Post not included.
 	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
@@ -994,15 +993,15 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
-	validAtx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, goldenATXID, types.LayerID{}), [20]byte{}, &types.NIPost{}, 0, &types.Post{})
+	validAtx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, goldenATXID, types.LayerID{}), [20]byte{}, 0, types.NIPost{}, types.Post{})
 	err := atxdb.ContextuallyValidateAtx(&validAtx.ActivationTxHeader)
 	r.NoError(err)
 
 	arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
-	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, goldenATXID, types.LayerID{}), [20]byte{}, &types.NIPost{}, 0, &types.Post{})
+	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, goldenATXID, types.LayerID{}), [20]byte{}, 0, types.NIPost{}, types.Post{})
 	err = atxdb.ContextuallyValidateAtx(&malformedAtx.ActivationTxHeader)
-	r.EqualError(err,
-		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", nodeID.ShortString()))
+
+	r.ErrorIs(err, ErrAtxNotFound)
 }
 
 func TestActivateDB_HandleAtxEmptyNipst(t *testing.T) {
@@ -1037,7 +1036,7 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 			pub, _, _ := ed25519.GenerateKey(nil)
 			id := types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
 			for i := 0; ; i++ {
-				atx := types.NewActivationTx(newChallenge(id, uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0)), [20]byte{}, nil, 0, nil)
+				atx := types.NewActivationTx(newChallenge(id, uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0)), [20]byte{}, 0, types.NIPost{}, types.Post{})
 				if !assert.NoError(b, atxdb.StoreAtx(context.TODO(), types.EpochID(1), atx)) {
 					return
 				}

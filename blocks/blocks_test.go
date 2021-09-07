@@ -26,7 +26,7 @@ var initialPost = &types.Post{
 var goldenATXID = types.ATXID(types.HexToHash32("77777"))
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
-	startTick uint64, positioningATX types.ATXID, coinbase types.Address, nipost *types.NIPost) *types.ActivationTx {
+	startTick uint64, positioningATX types.ATXID, coinbase types.Address, nipost types.NIPost) *types.ActivationTx {
 
 	nipostChallenge := types.NIPostChallenge{
 		NodeID:         nodeID,
@@ -36,7 +36,7 @@ func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, 
 		StartTick:      startTick,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipostChallenge, coinbase, nipost, 1024, &types.Post{})
+	return types.NewActivationTx(nipostChallenge, coinbase, 1024, nipost, types.Post{})
 }
 
 func atx(pubkey string) *types.ActivationTx {
@@ -45,7 +45,7 @@ func atx(pubkey string) *types.ActivationTx {
 	poetRef := []byte{0xde, 0xad}
 	npst := activation.NewNIPostWithChallenge(&chlng, poetRef)
 
-	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, types.NewLayerID(5), 1, goldenATXID, coinbase, npst)
+	atx := newActivationTx(types.NodeID{Key: pubkey, VRFPublicKey: []byte(rand.String(8))}, 0, *types.EmptyATXID, types.NewLayerID(5), 1, goldenATXID, coinbase, *npst)
 	atx.InitialPost = *initialPost
 	atx.InitialPostIndices = initialPost.Indices
 	atx.CalcAndSetID()

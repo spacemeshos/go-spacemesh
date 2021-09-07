@@ -920,5 +920,5 @@ func newActivationTx(
 		EndTick:        startTick + numTicks,
 		PositioningATX: positioningATX,
 	}
-	return types.NewActivationTx(nipostChallenge, coinbase, nipost, numUnints, &types.Post{})
+	return types.NewActivationTx(nipostChallenge, coinbase, numUnints, *nipost, types.Post{})
 }

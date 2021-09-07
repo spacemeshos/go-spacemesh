@@ -215,7 +215,7 @@ func NewNIPostWithChallenge(challenge *types.Hash32, poetRef []byte) *types.NIPo
 		Challenge: *challenge,
 		Proof: types.Post{
 			Nonce:   0,
-			Indices: []byte(nil),
+			Indices: []byte{},
 		},
 		PostMetadata: types.PostMetadata{
 			Challenge: poetRef,

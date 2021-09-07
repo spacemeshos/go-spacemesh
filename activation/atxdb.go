@@ -385,7 +385,7 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 			db.log.With().Error("could not fetch node last atx", atx.ID(),
 				log.FieldNamed("atx_node_id", atx.NodeID),
 				log.Err(err))
-			return fmt.Errorf("could not fetch node last atx: %v", err)
+			return fmt.Errorf("could not fetch node last atx: %w", err)
 		}
 		// last atx is not the one referenced
 		if lastAtx != atx.PrevATXID {
@@ -393,16 +393,16 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 		}
 	} else {
 		lastAtx, err := db.GetNodeLastAtxID(atx.NodeID)
-		if _, ok := err.(ErrAtxNotFound); err != nil && !ok {
-			db.log.With().Error("fetching atx ids failed", log.Err(err))
-			return err
-		}
-		if err == nil { // we found an ATX for this node ID, although it reported no prevATX -- this is invalid
+		if err == nil {
+			// we found an ATX for this node ID, although it reported no prevATX -- this is invalid
 			return fmt.Errorf("no prevATX reported, but other atx with same nodeID (%v) found: %v",
 				atx.NodeID.ShortString(), lastAtx.ShortString())
 		}
+		if !errors.Is(err, ErrAtxNotFound) {
+			db.log.With().Error("fetching atx ids failed", log.Err(err))
+			return err
+		}
 	}
-
 	return nil
 }
 
@@ -569,7 +569,7 @@ func (db *DB) addAtxTimestamp(ctx context.Context, timestamp time.Time, atx *typ
 }
 
 // ErrAtxNotFound is a specific error returned when no atx was found in DB
-type ErrAtxNotFound error
+var ErrAtxNotFound = errors.New("atx not found")
 
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
@@ -582,7 +582,7 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
 	// composing the key.
 	if exists := nodeAtxsIterator.Last(); !exists {
-		return *types.EmptyATXID, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
+		return *types.EmptyATXID, fmt.Errorf("%w atx for node %v does not exist", ErrAtxNotFound, nodeID.ShortString())
 	}
 	return types.ATXID(types.BytesToHash(nodeAtxsIterator.Value())), nil
 }
@@ -737,7 +737,7 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 	logger.With().Info(fmt.Sprintf("got new atx %v", atx.ID().ShortString()), atx.Fields(len(data))...)
 
 	if len(atx.NIPost.PostMetadata.Challenge) == 0 {
-		return fmt.Errorf("empty nipst in gossip for atx %s", atx.ShortString())
+		return fmt.Errorf("received atx with empty challenge")
 	}
 
 	if err := fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {

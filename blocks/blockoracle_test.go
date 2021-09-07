@@ -338,7 +338,7 @@ func newBlockWithEligibility(layerID types.LayerID, atxID types.ATXID, proof typ
 
 func TestBlockEligibility_calc(t *testing.T) {
 	r := require.New(t)
-	atxH := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, &types.NIPost{}, 0, &types.Post{})
+	atxH := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, 0, types.NIPost{}, types.Post{})
 	atxDb := &mockAtxDB{atxH: &atxH.ActivationTxHeader}
 	o := NewMinerBlockOracle(10, 1, atxDb, &EpochBeaconProvider{}, vrfsgn, nodeID, func() bool { return true }, logtest.New(t).WithName(t.Name()))
 	_, err := o.calcEligibilityProofs(1)
