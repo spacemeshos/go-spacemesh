@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"io"
 	"io/ioutil"
 	"math"
@@ -21,25 +20,25 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/code"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/stretchr/testify/require"
-
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"google.golang.org/grpc"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 const (
@@ -633,7 +632,8 @@ func TestNodeService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			const message = "Hello World"
 			res, err := c.Echo(context.Background(), &pb.EchoRequest{
-				Msg: &pb.SimpleString{Value: message}})
+				Msg: &pb.SimpleString{Value: message},
+			})
 			require.NoError(t, err)
 			require.Equal(t, message, res.Msg.Value)
 
@@ -703,7 +703,11 @@ func TestNodeService(t *testing.T) {
 		{"Shutdown", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			called := false
+
+			cmd.Mu.Lock()
 			cmd.Cancel = func() { called = true }
+			cmd.Mu.Unlock()
+
 			require.Equal(t, false, called, "cmd.Shutdown() not yet called")
 			req := &pb.ShutdownRequest{}
 			res, err := c.Shutdown(context.Background(), req)
@@ -931,7 +935,7 @@ func TestGlobalStateService(t *testing.T) {
 					}),
 				},
 
-				//These tests should be successful
+				// These tests should be successful
 				{
 					name: "valid address",
 					run: generateRunFn(&pb.SmesherRewardStreamRequest{
@@ -939,7 +943,7 @@ func TestGlobalStateService(t *testing.T) {
 					}),
 				},
 			}
-			//Run sub-subtests
+			// Run sub-subtests
 			for _, r := range subtests {
 				t.Run(r.name, r.run)
 			}
@@ -2686,7 +2690,8 @@ func TestMultiService(t *testing.T) {
 	// call endpoints and validate results
 	const message = "Hello World"
 	res1, err1 := c1.Echo(context.Background(), &pb.EchoRequest{
-		Msg: &pb.SimpleString{Value: message}})
+		Msg: &pb.SimpleString{Value: message},
+	})
 	require.NoError(t, err1)
 	require.Equal(t, message, res1.Msg.Value)
 	res2, err2 := c2.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
@@ -2698,7 +2703,8 @@ func TestMultiService(t *testing.T) {
 
 	// Make sure NodeService is off
 	res1, err1 = c1.Echo(context.Background(), &pb.EchoRequest{
-		Msg: &pb.SimpleString{Value: message}})
+		Msg: &pb.SimpleString{Value: message},
+	})
 	require.Error(t, err1)
 	require.Contains(t, err1.Error(), "rpc error: code = Unavailable")
 

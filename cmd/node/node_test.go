@@ -216,8 +216,11 @@ func setup() {
 	// Reset the shutdown context
 	// oof, globals make testing really difficult
 	ctx, cancel := context.WithCancel(context.Background())
+
+	cmdp.Mu.Lock()
 	cmdp.Ctx = ctx
 	cmdp.Cancel = cancel
+	cmdp.Mu.Unlock()
 
 	events.CloseEventReporter()
 	resetFlags()
@@ -673,7 +676,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
-	cmd.Cancel() // stop the app
+	cmdp.Mu.RLock()
+	cancel := cmd.Cancel // stop the app
+	cmdp.Mu.RUnlock()
+
+	cancel()
+
 	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
 }
@@ -825,7 +833,11 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2.Wait()
 
 	// This stops the app
-	cmdp.Cancel()
+	cmdp.Mu.RLock()
+	cancel := cmdp.Cancel
+	cmdp.Mu.RUnlock()
+
+	cancel()
 
 	// Wait for it to stop
 	wg.Wait()
@@ -854,20 +866,34 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 
 	// Try to connect before we start the P2P service: this should fail
 	tcpAddr := inet.TCPAddr{IP: inet.ParseIP(addr), Port: port}
-	_, err = p2pnet.Dial(cmdp.Ctx, &tcpAddr, l.PublicKey())
+
+	cmdp.Mu.RLock()
+	ctx := cmdp.Ctx
+	cmdp.Mu.RUnlock()
+
+	_, err = p2pnet.Dial(ctx, &tcpAddr, l.PublicKey())
 	r.Error(err)
 
 	// Start P2P services
 	app.Config.P2P.TCPPort = port
 	app.Config.P2P.TCPInterface = addr
 	app.Config.P2P.AcquirePort = false
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, logtest.New(t), app.Config.DataDir())
+
+	cmdp.Mu.RLock()
+	ctx := cmdp.Ctx
+	cmdp.Mu.RUnlock()
+
+	swarm, err := p2p.New(ctx, app.Config.P2P, logtest.New(t), app.Config.DataDir())
 	r.NoError(err)
 	r.NoError(swarm.Start(context.TODO()))
 	defer swarm.Shutdown()
 
+	cmdp.Mu.RLock()
+	ctx := cmdp.Ctx
+	cmdp.Mu.RUnlock()
+
 	// Try to connect again: this should succeed
-	conn, err := p2pnet.Dial(cmdp.Ctx, &tcpAddr, l.PublicKey())
+	conn, err := p2pnet.Dial(ctx, &tcpAddr, l.PublicKey())
 	r.NoError(err)
 	defer conn.Close()
 	r.Equal(fmt.Sprintf("%s:%d", addr, app.Config.P2P.TCPPort), conn.RemoteAddr().String())

@@ -347,7 +347,12 @@ func (app *App) Initialize() (err error) {
 	go func() {
 		for range signalChan {
 			app.log.Info("Received an interrupt, stopping services...\n")
-			cmdp.Cancel()
+
+			cmdp.Mu.RLock()
+			cancel := cmdp.Cancel
+			cmdp.Mu.RUnlock()
+
+			cancel()
 		}
 	}()
 
@@ -809,7 +814,13 @@ func (app *App) checkTimeDrifts() {
 			_, err := timesync.CheckSystemClockDrift()
 			if err != nil {
 				app.log.With().Error("unable to synchronize system time", log.Err(err))
-				cmdp.Cancel()
+
+				cmdp.Mu.RLock()
+				cancel := cmdp.Cancel
+				cmdp.Mu.RUnlock()
+
+				cancel()
+
 				return
 			}
 		}
@@ -1254,7 +1265,11 @@ func (app *App) Start() error {
 			syncErr <- app.ptimesync.Wait()
 			// if nil node was already stopped
 			if syncErr != nil {
-				cmdp.Cancel()
+				cmdp.Mu.RLock()
+				cancel := cmdp.Cancel
+				cmdp.Mu.RUnlock()
+
+				cancel()
 			}
 		}()
 	}

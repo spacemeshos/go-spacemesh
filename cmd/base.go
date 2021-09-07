@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
+	"sync"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -28,6 +29,9 @@ var (
 
 	// Commit is the git commit used to build the app. Designed to be overwritten by make.
 	Commit string
+
+	// Mu is the mutex for accessing global variables in this package.
+	Mu sync.RWMutex
 
 	// Ctx is the node's main context.
 	Ctx, cancel = context.WithCancel(context.Background())
@@ -58,7 +62,12 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	go func() {
 		for range signalChan {
 			log.Info("Received an interrupt, stopping services...\n")
-			Cancel()
+
+			Mu.RLock()
+			cancelF := Cancel
+			Mu.RUnlock()
+
+			cancelF()
 		}
 	}()
 

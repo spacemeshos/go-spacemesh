@@ -66,19 +66,23 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 
 	log.Info("initializing p2p services")
 
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, logger, app.Config.DataDir())
+	cmdp.Mu.RLock()
+	ctx := cmdp.Ctx
+	cmdp.Mu.RUnlock()
+
+	swarm, err := p2p.New(ctx, app.Config.P2P, logger, app.Config.DataDir())
 	if err != nil {
 		log.With().Panic("error init p2p services", log.Err(err))
 	}
 	app.p2p = swarm
 
 	// Testing stuff
-	api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
+	api.ApproveAPIGossipMessages(ctx, app.p2p)
 	metrics.StartMetricsServer(app.Config.MetricsPort)
 
 	// start the node
 
-	err = app.p2p.Start(cmdp.Ctx)
+	err = app.p2p.Start(ctx)
 	defer app.p2p.Shutdown()
 
 	if err != nil {
@@ -95,7 +99,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 
 	app.startAPI()
 
-	<-cmdp.Ctx.Done()
+	<-ctx.Done()
 }
 
 func (app *P2PApp) startAPI() {
@@ -138,9 +142,14 @@ func (app *P2PApp) startAPI() {
 			// It should be caught inside apiConf.
 			log.Panic("one or more new grpc services must be enabled with new json gateway server")
 		}
+
+		cmdp.Mu.RLock()
+		ctx := cmdp.Ctx
+		cmdp.Mu.RUnlock()
+
 		jsonSvc = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
 		jsonSvc.StartService(
-			cmdp.Ctx,
+			ctx,
 			apiConf.StartDebugService,
 			apiConf.StartGatewayService,
 			apiConf.StartGlobalStateService,

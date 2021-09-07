@@ -49,8 +49,7 @@ func init() {
 	cmdp.AddCommands(Cmd)
 }
 
-type mockBlockProvider struct {
-}
+type mockBlockProvider struct{}
 
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
@@ -103,15 +102,13 @@ func buildSet() []types.BlockID {
 	return s
 }
 
-type mockIDProvider struct {
-}
+type mockIDProvider struct{}
 
 func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeID, error) {
 	return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, nil
 }
 
-type mockStateQuerier struct {
-}
+type mockStateQuerier struct{}
 
 func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
 	return true, nil
@@ -132,7 +129,12 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	log.Info("initializing P2P services")
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
+
+	cmdp.Mu.RLock()
+	ctx := cmdp.Ctx
+	cmdp.Mu.RUnlock()
+
+	swarm, err := p2p.New(ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
 	app.p2p = swarm
 	if err != nil {
 		log.With().Panic("error starting p2p services", log.Err(err))
@@ -161,10 +163,11 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
 	log.Info("starting hare service")
 	app.ha = hareI
-	if err = app.ha.Start(cmdp.Ctx); err != nil {
+
+	if err = app.ha.Start(ctx); err != nil {
 		log.With().Panic("error starting hare", log.Err(err))
 	}
-	if err = app.p2p.Start(cmdp.Ctx); err != nil {
+	if err = app.p2p.Start(ctx); err != nil {
 		log.With().Panic("error starting p2p", log.Err(err))
 	}
 	if gTime.After(time.Now()) {

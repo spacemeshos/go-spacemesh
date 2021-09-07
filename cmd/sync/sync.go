@@ -45,10 +45,12 @@ var cmd = &cobra.Command{
 
 // ////////////////////////////
 
-var expectedLayers uint32
-var bucket string
-var version string
-var remote bool
+var (
+	expectedLayers uint32
+	bucket         string
+	version        string
+	remote         bool
+)
 
 func init() {
 	// path to remote storage
@@ -98,9 +100,12 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		log.Uint32("hdist", app.Config.Hdist),
 	)
 
-	path := app.Config.DataDir()
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
+	cmdp.Mu.RLock()
+	ctx := cmdp.Ctx
+	cmdp.Mu.RUnlock()
 
+	path := app.Config.DataDir()
+	swarm, err := p2p.New(ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
 	if err != nil {
 		panic("something got fudged while creating p2p service ")
 	}
@@ -169,7 +174,8 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		ValidationDelta: 30 * time.Second,
 	}
 	app.sync = createSyncer(syncerConf, msh, layerFetch, types.NewLayerID(expectedLayers), app.logger)
-	if err = swarm.Start(cmdp.Ctx); err != nil {
+
+	if err = swarm.Start(ctx); err != nil {
 		log.With().Panic("error starting p2p", log.Err(err))
 	}
 
@@ -187,14 +193,21 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 			}
 		} else {
 			lg.With().Info("loaded layer from disk", types.NewLayerID(i))
-			msh.ValidateLayer(cmdp.Ctx, lyr)
+
+			cmdp.Mu.RLock()
+			cmdCtx := cmdp.Ctx
+			cmdp.Mu.RUnlock()
+
+			msh.ValidateLayer(cmdCtx, lyr)
 		}
 	}
 
 	sleep := time.Duration(10) * time.Second
 	lg.Info("wait %v sec", sleep)
 	time.Sleep(sleep)
-	go app.sync.Start(cmdp.Ctx)
+
+	go app.sync.Start(ctx)
+
 	for msh.ProcessedLayer().Before(types.NewLayerID(expectedLayers)) {
 		lg.Info("sleep for %v sec", 30)
 		app.sync.ForceSync(context.TODO())
@@ -265,7 +278,7 @@ func getData(path, prefix string, lg log.Log) error {
 		}
 		lg.Info("downloading: %v to %v", attrs.Name, dest)
 
-		err = ioutil.WriteFile(dest, data, 0644)
+		err = ioutil.WriteFile(dest, data, 0o644)
 		if err != nil {
 			lg.Error("%v", err)
 			return err
