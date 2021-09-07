@@ -50,12 +50,14 @@ func (mc *mockCon) ReadFrom(p []byte) (n int, addr net.Addr, err error) {
 		<-mc.releaseCount
 	}
 
-	mc.mu.RLock()
+	mc.mu.Lock()
+	defer mc.mu.Unlock()
+
 	readResult := mc.readResult
-	mc.mu.RUnlock()
 
 	copy(p, readResult.buf)
 	atomic.AddInt32(&mc.readCount, 1)
+
 	return mc.readResult.n, mc.readResult.addr, mc.readResult.err
 }
 

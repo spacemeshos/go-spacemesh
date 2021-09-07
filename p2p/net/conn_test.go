@@ -182,7 +182,7 @@ func TestDoubleClose(t *testing.T) {
 	assert.EqualValues(t, 1, rwcam.CloseCount())
 	err := conn.Close()
 	assert.Equal(t, ErrAlreadyClosed, err)
-	assert.Equal(t, 1, atomic.LoadInt64(&rwcam.closeCnt))
+	assert.EqualValues(t, 1, atomic.LoadInt64(&rwcam.closeCnt))
 
 	time.Sleep(100 * time.Millisecond) // just check that we don't panic
 }
