@@ -228,20 +228,31 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	broker.Register(context.TODO(), instanceID2)
 	broker.Register(context.TODO(), instanceID3)
 	broker.Register(context.TODO(), instanceID4)
+
+	broker.mu.RLock()
 	assert.Equal(t, 4, len(broker.outbox))
+	broker.mu.RUnlock()
 
 	// this statement should cause inbox1 to be unregistered
 	inbox5, _ := broker.Register(context.TODO(), instanceID5)
+	broker.mu.RLock()
 	assert.Equal(t, 4, len(broker.outbox))
+	broker.mu.RUnlock()
 
 	serMsg := createMessage(t, instanceID5)
 	n2.Broadcast(context.TODO(), protoName, serMsg)
 	waitForMessages(t, inbox5, instanceID5, 1)
+	broker.mu.RLock()
 	assert.Nil(t, broker.outbox[instanceID1.Uint32()])
+	broker.mu.RUnlock()
 
 	inbox6, _ := broker.Register(context.TODO(), instanceID6)
+	broker.mu.RLock()
 	assert.Equal(t, 4, len(broker.outbox))
+	broker.mu.RUnlock()
+	broker.mu.RLock()
 	assert.Nil(t, broker.outbox[instanceID2.Uint32()])
+	broker.mu.RUnlock()
 
 	serMsg = createMessage(t, instanceID6)
 	n2.Broadcast(context.TODO(), protoName, serMsg)
@@ -327,9 +338,15 @@ func TestBroker_RegisterUnregister(t *testing.T) {
 	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 	broker.Register(context.TODO(), instanceID1)
+
+	broker.mu.RLock()
 	assert.Equal(t, 1, len(broker.outbox))
+	broker.mu.RUnlock()
+
 	broker.Unregister(context.TODO(), instanceID1)
+	broker.mu.RLock()
 	assert.Nil(t, broker.outbox[instanceID1.Uint32()])
+	broker.mu.RUnlock()
 }
 
 type mockGossipMessage struct {
@@ -410,10 +427,17 @@ func TestBroker_Register(t *testing.T) {
 	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil)
+
+	broker.mu.Lock()
 	broker.pending[instanceID1.Uint32()] = []*Msg{msg, msg}
+	broker.mu.Unlock()
+
 	broker.Register(context.TODO(), instanceID1)
+
+	broker.mu.RLock()
 	assert.Equal(t, 2, len(broker.outbox[instanceID1.Uint32()]))
 	assert.Equal(t, 0, len(broker.pending[instanceID1.Uint32()]))
+	broker.mu.RUnlock()
 }
 
 func assertMsg(t *testing.T, msg *mockGossipMessage) (m service.MessageValidation) {
@@ -551,7 +575,10 @@ func TestBroker_Register4(t *testing.T) {
 	b.isNodeSynced = trueFunc
 	c, e := b.Register(context.TODO(), types.NewLayerID(1))
 	r.Nil(e)
+
+	broker.mu.RLock()
 	r.Equal(b.outbox[1], c)
+	broker.mu.RUnlock()
 
 	b.isNodeSynced = falseFunc
 	_, e = b.Register(context.TODO(), types.NewLayerID(2))
@@ -569,7 +596,10 @@ func TestBroker_eventLoop(t *testing.T) {
 	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
 	b.inbox <- msg
+
+	broker.mu.RLock()
 	_, ok := b.outbox[instanceID1.Uint32()]
+	broker.mu.RUnlock()
 	r.False(ok)
 
 	// register to invalid should error
@@ -612,7 +642,11 @@ func TestBroker_eventLoop2(t *testing.T) {
 	m.InnerMsg.InstanceID = instanceID4
 	msg := newMockGossipMsg(m)
 	b.inbox <- msg
+
+	b.mu.RLock()
 	v, ok := b.syncState[instanceID4.Uint32()]
+	b.mu.RUnlock()
+
 	r.True(ok)
 	r.NotEqual(true, v)
 
@@ -620,7 +654,10 @@ func TestBroker_eventLoop2(t *testing.T) {
 	m.InnerMsg.InstanceID = instanceID6
 	msg = newMockGossipMsg(m)
 	b.inbox <- msg
+
+	broker.mu.RLock()
 	_, ok = b.outbox[instanceID6.Uint32()]
+	broker.mu.RUnlock()
 	r.False(ok)
 }
 
@@ -643,12 +680,19 @@ func Test_validate(t *testing.T) {
 	r.EqualError(e, errEarlyMsg.Error())
 
 	m.InnerMsg.InstanceID = types.NewLayerID(2)
+
+	b.mu.Lock()
 	b.outbox[2] = make(chan *Msg)
 	b.syncState[2] = false
+	b.mu.Unlock()
+
 	e = b.validate(context.TODO(), m.Message)
 	r.EqualError(e, errNotSynced.Error())
 
+	b.mu.Lock()
 	b.syncState[2] = true
+	b.mu.Unlock()
+
 	e = b.validate(context.TODO(), m.Message)
 	r.Nil(e)
 }
@@ -659,18 +703,31 @@ func TestBroker_clean(t *testing.T) {
 
 	ten := types.NewLayerID(10)
 	for i := types.NewLayerID(1); i.Before(ten); i = i.Add(1) {
+		b.mu.Lock()
 		b.syncState[i.Uint32()] = true
+		b.mu.Unlock()
 	}
 
 	b.setLatestLayer(ten.Sub(1))
+
+	b.mu.Lock()
 	b.outbox[5] = make(chan *Msg)
+	b.mu.Unlock()
+
 	b.cleanOldLayers()
 	r.Equal(types.NewLayerID(4), b.minDeleted)
+	b.mu.RLock()
 	r.Equal(5, len(b.syncState))
+	b.mu.RUnlock()
 
+	b.mu.Lock()
 	delete(b.outbox, 5)
+	b.mu.Unlock()
+
 	b.cleanOldLayers()
+	b.mu.RLock()
 	r.Equal(1, len(b.syncState))
+	b.mu.RUnlock()
 }
 
 func TestBroker_Flow(t *testing.T) {

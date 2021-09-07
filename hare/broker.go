@@ -28,6 +28,7 @@ type validator interface {
 type Broker struct {
 	util.Closer
 	log.Log
+	mu             sync.RWMutex
 	network        NetworkService
 	eValidator     validator     // provides eligibility validation
 	stateQuerier   StateQuerier  // provides activeness check
@@ -81,8 +82,10 @@ func (b *Broker) Start(ctx context.Context) error {
 func (b *Broker) startWithInbox(ctx context.Context, inbox chan service.GossipMessage) error {
 	b.isStarted = true
 	b.inbox = inbox
+
 	go b.queueLoop(log.WithNewSessionID(ctx))
 	go b.eventLoop(log.WithNewSessionID(ctx))
+
 	return nil
 }
 
@@ -99,7 +102,9 @@ var (
 func (b *Broker) validate(ctx context.Context, m *Message) error {
 	msgInstID := m.InnerMsg.InstanceID
 
+	b.mu.RLock()
 	_, exist := b.outbox[msgInstID.Uint32()]
+	b.mu.RUnlock()
 
 	if !exist {
 		// prev layer, must be unregistered
@@ -254,23 +259,33 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			msgLogger.With().Debug("broker reported hare message as valid", hareMsg)
 
 			if isEarly {
+				b.mu.Lock()
 				if _, exist := b.pending[msgInstID.Uint32()]; !exist { // create buffer if first msg
 					b.pending[msgInstID.Uint32()] = make([]*Msg, 0)
 				}
+				b.mu.Unlock()
+
 				// we want to write all buffered messages to a chan with InboxCapacity len
 				// hence, we limit the buffer for pending messages
-				if len(b.pending[msgInstID.Uint32()]) == inboxCapacity {
+				b.mu.RLock()
+				chCount := len(b.pending[msgInstID.Uint32()])
+				b.mu.RUnlock()
+				if chCount == inboxCapacity {
 					msgLogger.With().Error("too many pending messages, ignoring message",
 						log.Int("inbox_capacity", inboxCapacity),
 						log.String("sender_id", iMsg.PubKey.ShortString()))
 					continue
 				}
+				b.mu.Lock()
 				b.pending[msgInstID.Uint32()] = append(b.pending[msgInstID.Uint32()], iMsg)
+				b.mu.Unlock()
 				continue
 			}
 
 			// has instance, just send
+			b.mu.RLock()
 			out, exist := b.outbox[msgInstID.Uint32()]
+			b.mu.RUnlock()
 			if !exist {
 				msgLogger.With().Panic("missing broker instance for layer")
 			}
@@ -302,8 +317,13 @@ func (b *Broker) updateLatestLayer(ctx context.Context, id types.LayerID) {
 }
 
 func (b *Broker) cleanOldLayers() {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	for i := b.minDeleted.Add(1); i.Before(b.getLatestLayer()); i = i.Add(1) {
-		if _, exist := b.outbox[i.Uint32()]; !exist { // unregistered
+		_, exist := b.outbox[i.Uint32()]
+
+		if !exist { // unregistered
 			delete(b.syncState, i.Uint32()) // clean sync state
 			b.minDeleted = b.minDeleted.Add(1)
 		} else { // encountered first still running layer
@@ -313,6 +333,9 @@ func (b *Broker) cleanOldLayers() {
 }
 
 func (b *Broker) updateSynchronicity(ctx context.Context, id types.LayerID) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	if _, ok := b.syncState[id.Uint32()]; ok { // already has result
 		return
 	}
@@ -331,7 +354,9 @@ func (b *Broker) updateSynchronicity(ctx context.Context, id types.LayerID) {
 func (b *Broker) isSynced(ctx context.Context, id types.LayerID) bool {
 	b.updateSynchronicity(ctx, id)
 
+	b.mu.RLock()
 	synced, ok := b.syncState[id.Uint32()]
+	b.mu.RUnlock()
 	if !ok { // not exist means unknown
 		b.WithContext(ctx).Panic("syncState doesn't contain a value after call to updateSynchronicity")
 	}
@@ -355,26 +380,38 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 			// executed sequentially and synchronously. There is still the concern that two or more
 			// calls to Register will be executed out of order, but Register is only called
 			// on a new layer tick, and anyway updateLatestLayer would panic in this case.
-			if len(b.outbox) >= b.limit {
+			b.mu.RLock()
+			outboxLen := len(b.outbox)
+			b.mu.RUnlock()
+			if outboxLen >= b.limit {
 				// unregister the earliest layer to make space for the new layer
 				// cannot call unregister here because unregister blocks and this would cause a deadlock
+				b.mu.RLock()
 				instance := b.minDeleted.Add(1)
+				b.mu.RUnlock()
 				b.cleanState(instance)
 				b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(instance))
 			}
 
-			b.outbox[id.Uint32()] = make(chan *Msg, inboxCapacity)
+			outboxCh := make(chan *Msg, inboxCapacity)
 
+			b.mu.Lock()
+			b.outbox[id.Uint32()] = outboxCh
 			pendingForInstance := b.pending[id.Uint32()]
+			b.mu.Unlock()
+
 			if pendingForInstance != nil {
 				for _, mOut := range pendingForInstance {
-					b.outbox[id.Uint32()] <- mOut
+					outboxCh <- mOut
 				}
+				b.mu.Lock()
 				delete(b.pending, id.Uint32())
+				b.mu.Unlock()
 			}
 
 			resErr <- nil
-			resCh <- b.outbox[id.Uint32()]
+			resCh <- outboxCh
+
 			return
 		}
 
@@ -398,7 +435,10 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 }
 
 func (b *Broker) cleanState(id types.LayerID) {
+	b.mu.Lock()
 	delete(b.outbox, id.Uint32())
+	b.mu.Unlock()
+
 	b.cleanOldLayers()
 }
 
