@@ -301,11 +301,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 
 // AddZeroBlockLayer tags lyr as a layer without blocks
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
-	err := m.layers.Put(index.Bytes(), nil)
-	if err == nil {
-		m.persistLayerHash(index, types.EmptyLayerHash)
-	}
-	return err
+	return m.layers.Put(index.Bytes(), nil)
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
@@ -409,31 +405,16 @@ func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blk
 	return m.inputVector.Put(id.Bytes(), buf)
 }
 
-func (m *DB) persistProcessedLayer(lyr *ProcessedLayer) error {
-	data, err := types.InterfaceToBytes(lyr)
-	if err != nil {
-		return err
-	}
-	if err := m.general.Put(constPROCESSED, data); err != nil {
-		return err
-	}
-	m.With().Debug("persisted processed layer",
-		lyr.ID,
-		log.String("layer_hash", lyr.Hash.ShortString()))
-	return nil
+func (m *DB) persistProcessedLayer(layerID types.LayerID) error {
+	return m.general.Put(constPROCESSED, layerID.Bytes())
 }
 
-func (m *DB) recoverProcessedLayer() (*ProcessedLayer, error) {
-	processed, err := m.general.Get(constPROCESSED)
+func (m *DB) recoverProcessedLayer() (types.LayerID, error) {
+	data, err := m.general.Get(constPROCESSED)
 	if err != nil {
-		return nil, err
+		return types.NewLayerID(0), err
 	}
-	var data ProcessedLayer
-	err = types.BytesToInterface(processed, &data)
-	if err != nil {
-		return nil, err
-	}
-	return &data, nil
+	return types.BytesToLayerID(data), nil
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
@@ -472,11 +453,12 @@ func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
 	return h, nil
 }
 
-func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
-	if err := m.general.Put(getLayerHashKey(layerID), hash.Bytes()); err != nil {
-		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
-			log.String("layer_hash", hash.ShortString()))
-	}
+func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) error {
+	return m.general.Put(getLayerHashKey(layerID), hash.Bytes())
+}
+
+func (m *DB) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) error {
+	return m.general.Put(getAggregatedLayerHashKey(layerID), hash.Bytes())
 }
 
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {

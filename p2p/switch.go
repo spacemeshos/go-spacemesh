@@ -26,6 +26,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"golang.org/x/sync/errgroup"
 )
 
 // ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
@@ -63,7 +64,7 @@ type Switch struct {
 	lNode node.LocalNode
 
 	// map between protocol names to listening protocol handlers
-	// NOTE: maybe let more than one handler register on a protocol ?
+	// NOTE: maybe let more than one handler register on a protocol?
 	directProtocolHandlers map[string]chan service.DirectMessage
 	gossipProtocolHandlers map[string]chan service.GossipMessage
 
@@ -102,6 +103,8 @@ type Switch struct {
 
 	// function to release upnp port when shutting down
 	releaseUpnp func()
+
+	eg errgroup.Group
 }
 
 func (s *Switch) waitForBoot() error {
@@ -284,13 +287,13 @@ func (s *Switch) Start(ctx context.Context) error {
 	// TODO : insert new addresses to discovery
 
 	if s.config.SwarmConfig.Bootstrap {
-		go func() {
+		s.eg.Go(func() error {
 			b := time.Now()
 			if err := s.discover.Bootstrap(s.shutdownCtx); err != nil {
 				s.bootErr = err
 				close(s.bootChan)
 				s.Shutdown()
-				return
+				return nil
 			}
 			close(s.bootChan)
 			size := s.discover.Size()
@@ -298,7 +301,8 @@ func (s *Switch) Start(ctx context.Context) error {
 				log.Bool("success", size >= s.config.SwarmConfig.RandomConnections && s.bootErr == nil),
 				log.Int("size", size),
 				log.Duration("time_elapsed", time.Since(b)))
-		}()
+			return nil
+		})
 	}
 
 	// todo: maybe reset peers that connected us while bootstrapping
@@ -306,10 +310,10 @@ func (s *Switch) Start(ctx context.Context) error {
 	if s.config.SwarmConfig.Gossip {
 		// start gossip before starting to collect peers
 		s.gossip.Start(log.WithNewSessionID(ctx))
-		go func() {
+		s.eg.Go(func() error {
 			if s.config.SwarmConfig.Bootstrap {
 				if s.waitForBoot() != nil {
-					return
+					return nil
 				}
 			}
 			//todo:maybe start listening only after we got enough outbound neighbors?
@@ -318,11 +322,16 @@ func (s *Switch) Start(ctx context.Context) error {
 			if s.gossipErr != nil {
 				close(s.gossipC)
 				s.Shutdown()
-				return
+				return nil
 			}
-			<-s.initial
-			close(s.gossipC)
-		}() // todo handle error async
+			select {
+			case <-s.initial:
+				close(s.gossipC)
+			case <-s.shutdownCtx.Done():
+				return nil
+			}
+			return nil
+		}) // todo handle error async
 	}
 
 	return nil
@@ -463,6 +472,9 @@ func (s *Switch) Shutdown() {
 		if s.releaseUpnp != nil {
 			s.releaseUpnp()
 		}
+		s.logger.Info("waiting for switch goroutines to finish")
+		s.eg.Wait()
+		s.logger.Info("switch goroutines finished")
 	})
 }
 
@@ -513,7 +525,7 @@ func (s *Switch) isShuttingDown() bool {
 	return false
 }
 
-// listenToNetworkMessages is listening on new messages from the opened connections and processes them.
+// listenToNetworkMessages listens on new messages from the opened connections and processes them.
 func (s *Switch) listenToNetworkMessages(ctx context.Context) {
 	// We listen to each of the messages queues we get from `net`
 	// It's net's responsibility to distribute the messages to the queues
@@ -522,20 +534,21 @@ func (s *Switch) listenToNetworkMessages(ctx context.Context) {
 	netqueues := s.network.IncomingMessages()
 	for nq := range netqueues { // run a separate worker for each queue.
 		ctx := log.WithNewSessionID(ctx)
-		go func(c chan net.IncomingMessageEvent) {
+		ch := netqueues[nq]
+		s.eg.Go(func() error {
 			for {
 				select {
-				case msg := <-c:
+				case msg := <-ch:
 					if s.isShuttingDown() {
-						return
+						return nil
 					}
 					// requestID will be restored from the saved message, no need to generate one here
 					s.processMessage(ctx, msg)
 				case <-s.shutdownCtx.Done():
-					return
+					return nil
 				}
 			}
-		}(netqueues[nq])
+		})
 	}
 }
 
@@ -722,7 +735,10 @@ func (s *Switch) startNeighborhood(ctx context.Context) error {
 	s.logger.WithContext(ctx).Info("neighborhood service started")
 
 	// initial request for peers
-	go s.peersLoop(ctx)
+	s.eg.Go(func() error {
+		s.peersLoop(ctx)
+		return nil
+	})
 	s.morePeersReq <- struct{}{}
 
 	return nil
@@ -851,16 +867,19 @@ func (s *Switch) getMorePeers(ctx context.Context, numpeers int) int {
 		if s.isShuttingDown() {
 			break
 		}
-		go func(nd *node.Info, reportChan chan cnErr) {
+		nd := nds[i]
+		reportChan := res
+		s.eg.Go(func() error {
 			if nd.PublicKey() == s.lNode.PublicKey() {
 				reportChan <- cnErr{nd, errors.New("connection to self")}
-				return
+				return nil
 			}
 			s.discover.Attempt(nd.PublicKey())
 			addr := inet.TCPAddr{IP: inet.ParseIP(nd.IP.String()), Port: int(nd.ProtocolPort)}
 			_, err := s.cPool.GetConnection(ctx, &addr, nd.PublicKey())
 			reportChan <- cnErr{nd, err}
-		}(nds[i], res)
+			return nil
+		})
 	}
 
 	total, bad := 0, 0
