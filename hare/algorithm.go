@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -177,6 +178,7 @@ type consensusProcess struct {
 	log.Log
 	State
 	util.Closer
+	mu                sync.RWMutex
 	instanceID        types.LayerID
 	oracle            Rolacle // the roles oracle provider
 	signing           Signer
@@ -719,7 +721,10 @@ func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error
 		return nil, err
 	}
 	builder.SetRoleProof(proof)
+
+	proc.mu.RLock()
 	builder.SetEligibilityCount(proc.eligibilityCount)
+	proc.mu.RUnlock()
 
 	return builder, nil
 }
@@ -862,11 +867,15 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 		return false
 	}
 
+	proc.mu.RLock()
+	eligibilityCount := proc.eligibilityCount
+	proc.mu.RUnlock()
+
 	// should participate
 	logger.With().Info("should participate",
-		log.Uint32("current_k", proc.getK()), types.LayerID(proc.instanceID),
+		log.Uint32("current_k", proc.getK()), proc.instanceID,
 		log.Bool("leader", currentRole == leader),
-		log.Uint32("eligibility_count", uint32(proc.eligibilityCount)),
+		log.Uint32("eligibility_count", uint32(eligibilityCount)),
 	)
 	return true
 }
@@ -889,7 +898,10 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 		return passive
 	}
 
+	proc.mu.Lock()
 	proc.eligibilityCount = eligibilityCount
+	proc.mu.Unlock()
+
 	if eligibilityCount > 0 { // eligible
 		if proc.currentRound() == proposalRound {
 			return leader

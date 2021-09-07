@@ -243,7 +243,9 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	}
 
 	// retrieve set from orphan blocks
+	h.layerLock.RLock()
 	blocks, err := h.mesh.LayerBlockIds(h.lastLayer)
+	h.layerLock.RUnlock()
 	if err != nil {
 		logger.With().Error("no blocks found for hare, using empty set", log.Err(err))
 		// just fail here, it will end hare with empty set result
