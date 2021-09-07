@@ -65,6 +65,7 @@ type Switch struct {
 
 	// map between protocol names to listening protocol handlers
 	// NOTE: maybe let more than one handler register on a protocol?
+	mu                     sync.RWMutex
 	directProtocolHandlers map[string]chan service.DirectMessage
 	gossipProtocolHandlers map[string]chan service.GossipMessage
 
@@ -423,7 +424,11 @@ func (s *Switch) RegisterDirectProtocol(protocol string) chan service.DirectMess
 		log.Panic("attempt to register direct protocol after p2p has started")
 	}
 	mchan := make(chan service.DirectMessage, s.config.BufferSize)
+
+	s.mu.Lock()
 	s.directProtocolHandlers[protocol] = mchan
+	s.mu.Unlock()
+
 	return mchan
 }
 
@@ -434,7 +439,11 @@ func (s *Switch) RegisterGossipProtocol(protocol string, prio priorityq.Priority
 	}
 	mchan := make(chan service.GossipMessage, s.config.BufferSize)
 	s.gossip.SetPriority(protocol, prio)
+
+	s.mu.Lock()
 	s.gossipProtocolHandlers[protocol] = mchan
+	s.mu.Unlock()
+
 	return mchan
 }
 
@@ -450,14 +459,16 @@ func (s *Switch) Shutdown() {
 		s.peersWatcher.Close()
 		s.gossip.Close()
 
+		s.mu.Lock()
 		for i := range s.directProtocolHandlers {
 			delete(s.directProtocolHandlers, i)
-			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan.)
+			// close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan.)
 		}
 		for i := range s.gossipProtocolHandlers {
 			delete(s.gossipProtocolHandlers, i)
-			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan.)
+			// close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan.)
 		}
+		s.mu.Unlock()
 
 		s.peerLock.Lock()
 		for _, ch := range s.newPeerSub {
@@ -512,7 +523,11 @@ func (s *Switch) RegisterDirectProtocolWithChannel(protocol string, ingressChann
 	if s.started == 1 {
 		log.Panic("attempting to register direct protocol with channel after p2p has started")
 	}
+
+	s.mu.Lock()
 	s.directProtocolHandlers[protocol] = ingressChannel
+	s.mu.Unlock()
+
 	return ingressChannel
 }
 
@@ -611,7 +626,9 @@ func (s *Switch) onRemoteClientMessage(ctx context.Context, msg net.IncomingMess
 	// Add metadata collected from p2p message (todo: maybe pass sender and protocol inside metadata)
 	p2pmeta := service.P2PMetadata{FromAddress: msg.Conn.RemoteAddr()}
 
+	s.mu.RLock()
 	_, ok := s.gossipProtocolHandlers[pm.Metadata.NextProtocol]
+	s.mu.RUnlock()
 
 	s.logger.WithContext(ctx).With().Debug("handle incoming message",
 		log.String("protocol", pm.Metadata.NextProtocol),
@@ -630,7 +647,10 @@ func (s *Switch) onRemoteClientMessage(ctx context.Context, msg net.IncomingMess
 
 // ProcessDirectProtocolMessage passes an already decrypted message to a protocol. if protocol does not exist, return and error.
 func (s *Switch) ProcessDirectProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, protocol string, data service.Data, metadata service.P2PMetadata) error {
+	s.mu.RLock()
 	msgchan := s.directProtocolHandlers[protocol]
+	s.mu.RUnlock()
+
 	if msgchan == nil {
 		return ErrNoProtocol
 	}
@@ -651,7 +671,10 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 	h := types.CalcMessageHash12(data.Bytes(), protocol)
 
 	// route authenticated message to the registered protocol
+	s.mu.RLock()
 	msgchan := s.gossipProtocolHandlers[protocol]
+	s.mu.RUnlock()
+
 	if msgchan == nil {
 		return ErrNoProtocol
 	}

@@ -301,9 +301,20 @@ func TestSwarm_RoundTrip(t *testing.T) {
 	p2 := p2pTestNoStart(t, configWithPort(0))
 
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
-	require.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
+
+	p1.mu.RLock()
+	ch1 := p1.directProtocolHandlers[exampleProtocol]
+	p1.mu.RUnlock()
+
+	require.Equal(t, exchan1, ch1)
+
 	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
-	require.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
+
+	p2.mu.RLock()
+	ch2 := p2.directProtocolHandlers[exampleProtocol]
+	p2.mu.RUnlock()
+
+	require.Equal(t, exchan2, ch2)
 
 	require.NoError(t, p1.Start(context.TODO()))
 	require.NoError(t, p2.Start(context.TODO()))
@@ -327,7 +338,12 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 	defer p2.Shutdown()
 
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
-	require.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
+
+	p1.mu.RLock()
+	ch1 := p1.directProtocolHandlers[exampleProtocol]
+	p1.mu.RUnlock()
+
+	require.Equal(t, exchan1, ch1)
 
 	require.NoError(t, p1.Start(context.TODO()))
 	require.NoError(t, p2.Start(context.TODO()))
@@ -385,7 +401,12 @@ func TestSwarm_MultipleMessagesFromMultipleSenders(t *testing.T) {
 	p1 := p2pTestNoStart(t, cfg)
 
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
-	assert.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
+
+	p1.mu.RLock()
+	ch1 := p1.directProtocolHandlers[exampleProtocol]
+	p1.mu.RUnlock()
+
+	assert.Equal(t, exchan1, ch1)
 
 	p1.Start(context.TODO())
 
@@ -512,7 +533,10 @@ func TestSwarm_RegisterProtocol(t *testing.T) {
 	}
 	count := 0
 	for i := range nods {
+		nods[i].mu.RLock()
 		_, ok := nods[i].directProtocolHandlers[exampleProtocol]
+		nods[i].mu.RUnlock()
+
 		require.True(t, ok)
 		count++
 	}
@@ -858,9 +882,19 @@ func Test_Swarm_callCpoolCloseCon(t *testing.T) {
 	p1 := p2pTestNoStart(t, cfg)
 	p2 := p2pTestNoStart(t, cfg)
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
-	require.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
+
+	p1.mu.RLock()
+	ch1 := p1.directProtocolHandlers[exampleProtocol]
+	p1.mu.RUnlock()
+
+	require.Equal(t, exchan1, ch1)
 	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
-	require.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
+
+	p2.mu.RLock()
+	ch2 := p2.directProtocolHandlers[exampleProtocol]
+	p2.mu.RUnlock()
+
+	require.Equal(t, exchan2, ch2)
 
 	require.NoError(t, p1.Start(context.TODO()))
 	require.NoError(t, p2.Start(context.TODO()))
