@@ -46,4 +46,8 @@ require (
 	nanomsg.org/go-mangos v1.4.0
 )
 
+replace (
+	github.com/spacemeshos/post => ../post
+)
+
 go 1.15
