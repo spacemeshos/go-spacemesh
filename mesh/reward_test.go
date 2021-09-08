@@ -2,17 +2,16 @@ package mesh
 
 import (
 	"context"
-	"github.com/stretchr/testify/require"
 	"math/big"
 	"strconv"
 	"testing"
-
-	"github.com/stretchr/testify/assert"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var goldenATXID = types.ATXID(types.HexToHash32("77777"))
@@ -153,20 +152,25 @@ func NewTestRewardParams() Config {
 	}
 }
 
-func createLayer(t testing.TB, mesh *Mesh, id types.LayerID, numOfBlocks, maxTransactions int, atxDB *AtxDbMock) (totalRewards int64, blocks []*types.Block) {
-	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
-		nodeID := types.NodeID{Key: strconv.Itoa(i), VRFPublicKey: []byte("bbbbb")}
-		coinbase := types.HexToAddress(nodeID.Key)
-		atx := newActivationTx(nodeID, 0, goldenATXID, types.NewLayerID(1), 0, goldenATXID, coinbase, 10, []types.BlockID{}, &types.NIPost{})
-		atxDB.AddAtx(atx.ID(), atx)
-		block1.ATXID = atx.ID()
+func createBlock(t testing.TB, mesh *Mesh, lyrID types.LayerID, nodeID types.NodeID, maxTransactions int, atxDB *AtxDbMock) (*types.Block, int64) {
+	blk := types.NewExistingBlock(lyrID, []byte(rand.String(8)), nil)
+	coinbase := types.HexToAddress(nodeID.Key)
+	atx := newActivationTx(nodeID, 0, goldenATXID, types.NewLayerID(1), 0, goldenATXID, coinbase, 10, []types.BlockID{}, &types.NIPost{})
+	atxDB.AddAtx(atx.ID(), atx)
+	blk.ATXID = atx.ID()
+	reward := addTransactionsWithFee(t, mesh.DB, blk, rand.Intn(maxTransactions), rand.Int63n(100))
+	blk.Initialize()
+	err := mesh.AddBlock(blk)
+	assert.NoError(t, err)
+	return blk, reward
+}
 
-		totalRewards += addTransactionsWithFee(t, mesh.DB, block1, rand.Intn(maxTransactions), rand.Int63n(100))
-		block1.Initialize()
-		err := mesh.AddBlock(block1)
-		assert.NoError(t, err)
-		blocks = append(blocks, block1)
+func createLayer(t testing.TB, mesh *Mesh, lyrID types.LayerID, numOfBlocks, maxTransactions int, atxDB *AtxDbMock) (totalRewards int64, blocks []*types.Block) {
+	for i := 0; i < numOfBlocks; i++ {
+		nodeID := types.NodeID{Key: strconv.Itoa(i), VRFPublicKey: []byte("bbbbb")}
+		blk, reward := createBlock(t, mesh, lyrID, nodeID, maxTransactions, atxDB)
+		blocks = append(blocks, blk)
+		totalRewards += reward
 	}
 	return totalRewards, blocks
 }
@@ -197,99 +201,190 @@ func TestMesh_integration(t *testing.T) {
 	assert.True(t, totalPayout-s.TotalReward < int64(numOfBlocks), " rewards : %v, total %v blocks %v", totalPayout, s.TotalReward, int64(numOfBlocks))
 }
 
-func TestMesh_updateStateWithLayer(t *testing.T) {
-	// test states are the same when one input is from tortoise and the other from hare
-	// test state is the same if receiving result from tortoise after same result from hare received
-	// test state is the same after late block
-	// test panic after block from hare was not found in mesh
-	// test that state does not advance when layer x+2 is received before layer x+1, and then test that all layers are pushed
-	numOfLayers := 10
+func createMeshFromSyncing(t *testing.T, finalLyr types.LayerID, msh *Mesh, atxDB *AtxDbMock) {
 	numOfBlocks := 10
 	maxTxs := 20
-
-	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	mesh, atxDB := getMeshWithMapState(t, "t1", s)
-	defer mesh.Close()
-
-	startLayer := types.GetEffectiveGenesis()
-
-	for i := 0; i < numOfLayers; i++ {
-		layerID := startLayer.Add(uint32(i))
-		createLayer(t, mesh, layerID, numOfBlocks, maxTxs, atxDB)
-		l, err := mesh.GetLayer(layerID)
+	gLyr := types.GetEffectiveGenesis()
+	for i := types.NewLayerID(1); !i.After(finalLyr); i = i.Add(1) {
+		if i.After(gLyr) {
+			createLayer(t, msh, i, numOfBlocks, maxTxs, atxDB)
+		}
+		lyr, err := msh.GetLayer(i)
 		require.NoError(t, err)
-		mesh.ValidateLayer(context.TODO(), l)
+		msh.ValidateLayer(context.TODO(), lyr)
 	}
+}
 
+func createMeshFromHareOutput(t *testing.T, finalLyr types.LayerID, msh *Mesh, atxDB *AtxDbMock) {
+	numOfBlocks := 10
+	maxTxs := 20
+	gLyr := types.GetEffectiveGenesis()
+	for i := types.NewLayerID(1); !i.After(finalLyr); i = i.Add(1) {
+		if i.After(gLyr) {
+			createLayer(t, msh, i, numOfBlocks, maxTxs, atxDB)
+		}
+		lyr, err := msh.GetLayer(i)
+		require.NoError(t, err)
+		msh.HandleValidatedLayer(context.TODO(), i, lyr.BlocksIDs())
+	}
+}
+
+// test states are the same when one input is data polled from peers and the other from hare's output
+func TestMesh_updateStateWithLayer_SyncingAndHareReachSameState(t *testing.T) {
+	gLyr := types.GetEffectiveGenesis()
+	finalLyr := gLyr.Add(10)
+
+	// s1 is the state where a node advance its state via syncing with peers
+	s1 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
+	msh1, atxDB := getMeshWithMapState(t, "t1", s1)
+	t.Cleanup(func() {
+		msh1.Close()
+	})
+	createMeshFromSyncing(t, finalLyr, msh1, atxDB)
+
+	// s2 is the state where the node advances its state via hare output
 	s2 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	mesh2, atxDB2 := getMeshWithMapState(t, "t2", s2)
+	msh2, atxDB2 := getMeshWithMapState(t, "t2", s2)
+	t.Cleanup(func() {
+		msh2.Close()
+	})
 
-	// this should be played until numOfLayers-1 if we want to compare states
-	for i := 0; i < numOfLayers-1; i++ {
-		layerID := startLayer.Add(uint32(i))
-		blockIds := copyLayer(t, mesh, mesh2, atxDB2, layerID)
-		mesh2.HandleValidatedLayer(context.TODO(), layerID, blockIds)
+	// use hare output to advance state to finalLyr
+	for i := gLyr.Add(1); !i.After(finalLyr); i = i.Add(1) {
+		blockIds := copyLayer(t, msh1, msh2, atxDB2, i)
+		msh2.HandleValidatedLayer(context.TODO(), i, blockIds)
 	}
 
-	// test states are the same when one input is from tortoise and the other from hare
-	require.NotEqual(t, s.Txs, s2.Txs)
+	// s1 (sync from peers) and s2 (advance via hare output) should have the same state
+	require.Equal(t, s1.Txs, s2.Txs)
+	require.Greater(t, len(s1.Txs), 0)
+}
 
-	layerIDFinal := startLayer.Add(uint32(numOfLayers - 1))
-	copyLayer(t, mesh, mesh2, atxDB2, layerIDFinal)
-	l, err := mesh.GetLayer(layerIDFinal)
+// test state is the same after same result received from hare
+func TestMesh_updateStateWithLayer_SameInputFromHare(t *testing.T) {
+	gLyr := types.GetEffectiveGenesis()
+	finalLyr := gLyr.Add(10)
+
+	// s is the state where a node advance its state via syncing with peers
+	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
+	msh, atxDB := getMeshWithMapState(t, "t2", s)
+	t.Cleanup(func() {
+		msh.Close()
+	})
+	createMeshFromSyncing(t, finalLyr, msh, atxDB)
+	oldTxs := make([]*types.Transaction, len(s.Txs))
+	copy(oldTxs, s.Txs)
+	require.Greater(t, len(oldTxs), 0)
+
+	// then hare outputs the same result
+	lyr, err := msh.GetLayer(finalLyr)
 	require.NoError(t, err)
-	mesh2.ValidateLayer(context.TODO(), l)
+	msh.HandleValidatedLayer(context.TODO(), finalLyr, lyr.BlocksIDs())
 
-	// test states are the same when one input is from tortoise and the other from hare
-	require.Equal(t, s.Txs, s2.Txs)
+	// s2 state should be unchanged
+	require.Equal(t, oldTxs, s.Txs)
+}
 
-	// test state is the same if receiving result from tortoise after same result from hare received
-	assert.ObjectsAreEqualValues(s.Txs, s2.Txs)
+// test state is the same after same result received from syncing with peers
+func TestMesh_updateStateWithLayer_SameInputFromSyncing(t *testing.T) {
+	gLyr := types.GetEffectiveGenesis()
+	finalLyr := gLyr.Add(10)
 
-	// test state is the same after late block
-	layer4, err := mesh.GetLayer(startLayer.Add(4))
+	// s is the state where a node advance its state via syncing with peers
+	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
+	msh, atxDB := getMeshWithMapState(t, "t1", s)
+	t.Cleanup(func() {
+		msh.Close()
+	})
+	createMeshFromHareOutput(t, finalLyr, msh, atxDB)
+	oldTxs := make([]*types.Transaction, len(s.Txs))
+	copy(oldTxs, s.Txs)
+	require.Greater(t, len(oldTxs), 0)
+
+	// sync the last layer from peers
+	lyr, err := msh.GetLayer(finalLyr)
+	require.NoError(t, err)
+	msh.ValidateLayer(context.TODO(), lyr)
+
+	// s2 state should be unchanged
+	require.Equal(t, oldTxs, s.Txs)
+}
+
+func TestMesh_updateStateWithLayer_LateBlock(t *testing.T) {
+	gLyr := types.GetEffectiveGenesis()
+	finalLyr := gLyr.Add(10)
+
+	// s is the state where a node advance its state via syncing with peers
+	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
+	msh, atxDB := getMeshWithMapState(t, "t1", s)
+	t.Cleanup(func() {
+		msh.Close()
+	})
+	createMeshFromSyncing(t, finalLyr, msh, atxDB)
+	oldTxs := make([]*types.Transaction, len(s.Txs))
+	copy(oldTxs, s.Txs)
+	require.Greater(t, len(oldTxs), 0)
+
+	oldLyr, err := msh.GetLayer(finalLyr.Sub(4))
 	require.NoError(t, err)
 
-	blk := layer4.Blocks()[0]
-	mesh2.HandleLateBlock(context.TODO(), blk)
-	require.Equal(t, s.Txs, s2.Txs)
+	blk := oldLyr.Blocks()[0]
+	msh.HandleLateBlock(context.TODO(), blk)
+	// a seen late block should not change the state
+	require.Equal(t, oldTxs, s.Txs)
 
-	// test that state does not advance when layer x+2 is received before layer x+1,
-	// and then test that all layers are pushed
-	s3 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	mesh3, atxDB3 := getMeshWithMapState(t, "t3", s3)
+	// a not-before-seen late block should not change the state either
+	nodeID := types.NodeID{Key: strconv.Itoa(999), VRFPublicKey: []byte("ccccc")}
+	blk, _ = createBlock(t, msh, oldLyr.Index(), nodeID, 200, atxDB)
+	msh.HandleLateBlock(context.TODO(), blk)
+	// a late block we haven't seen should not the state
+	require.Equal(t, oldTxs, s.Txs)
+}
 
-	// this should be played until numOfLayers-1 if we want to compare states
-	for i := 0; i < numOfLayers-3; i++ {
-		layerID := startLayer.Add(uint32(i))
-		blockIds := copyLayer(t, mesh, mesh3, atxDB3, layerID)
-		mesh3.HandleValidatedLayer(context.TODO(), layerID, blockIds)
+func TestMesh_updateStateWithLayer_AdvanceInOrder(t *testing.T) {
+	gLyr := types.GetEffectiveGenesis()
+	finalLyr := gLyr.Add(10)
+
+	// s1 is the state where a node advance its state via syncing with peers
+	s1 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
+	msh1, atxDB := getMeshWithMapState(t, "t1", s1)
+	t.Cleanup(func() {
+		msh1.Close()
+	})
+	createMeshFromSyncing(t, finalLyr, msh1, atxDB)
+
+	// s2 is the state where the node advances its state via hare output
+	s2 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
+	msh2, atxDB2 := getMeshWithMapState(t, "t2", s2)
+	t.Cleanup(func() {
+		msh2.Close()
+	})
+
+	// use hare output to advance state to finalLyr-2
+	for i := gLyr.Add(1); i.Before(finalLyr.Sub(1)); i = i.Add(1) {
+		blockIds := copyLayer(t, msh1, msh2, atxDB2, i)
+		msh2.HandleValidatedLayer(context.TODO(), i, blockIds)
 	}
-	s3Len := len(s3.Txs)
-	blockIds := copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-2))
-	// layer arrived early, gets queued for state processing (no new txs processed)
-	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-2), blockIds)
-	require.Equal(t, s3Len, len(s3.Txs))
+	// s1 is at finalLyr, s2 is at finalLyr-2
+	require.NotEqual(t, s1.Txs, s2.Txs)
 
-	blockIds = copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-3))
-	// this is the next layer, it's processed along with layer n-2
-	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-3), blockIds)
-	require.Greater(t, len(s3.Txs), s3Len)
-	s3Len = len(s3.Txs)
+	finalMinus2Txs := make([]*types.Transaction, len(s2.Txs))
+	copy(finalMinus2Txs, s2.Txs)
+	require.Greater(t, len(finalMinus2Txs), 0)
 
-	// re-validate layer n-2: no change, it should already have been processed
-	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-2), blockIds)
-	require.Equal(t, s3Len, len(s3.Txs))
+	finalMinus1BlockIds := copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
+	//copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
+	finalBlockIds := copyLayer(t, msh1, msh2, atxDB2, finalLyr)
 
-	// validate layer n-1
-	blockIds = copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-1))
-	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-1), blockIds)
-	require.Greater(t, len(s3.Txs), s3Len) // expect txs from layer n-1 to have been applied
+	// now advance s2 to finalLyr
+	msh2.HandleValidatedLayer(context.TODO(), finalLyr, finalBlockIds)
+	// s2 should be unchanged because finalLyr-1 has not been processed
+	require.Equal(t, finalMinus2Txs, s2.Txs)
 
-	// now everything should have been applied
-	blockIds = copyLayer(t, mesh, mesh3, atxDB3, startLayer.Add(uint32(numOfLayers)-2))
-	mesh3.HandleValidatedLayer(context.TODO(), startLayer.Add(uint32(numOfLayers)-2), blockIds)
-	require.Equal(t, s.Txs, s3.Txs)
+	// advancing s2 to finalLyr-1 should bring s2 to finalLyr
+	msh2.HandleValidatedLayer(context.TODO(), finalLyr.Sub(1), finalMinus1BlockIds)
+	// s2 should be the same as s1 (at finalLyr)
+	require.Equal(t, s1.Txs, s2.Txs)
 }
 
 func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id types.LayerID) []types.BlockID {
