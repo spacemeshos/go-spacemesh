@@ -478,7 +478,7 @@ func TestBroker_Register3(t *testing.T) {
 	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m)
 	broker.inbox <- msg
-	time.Sleep(1)
+	time.Sleep(1 * time.Millisecond)
 	client := mockClient{instanceID1}
 	ch, _ := broker.Register(context.TODO(), client.id)
 	timer := time.NewTimer(2 * time.Second)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"time"
 
@@ -20,8 +21,6 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-
-	_ "net/http/pprof"
 )
 
 // Cmd the command of the hare app
@@ -153,6 +152,11 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	hareOracle := newHareOracleFromClient(app.oracle)
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
+	if err != nil {
+		log.With().Error("Failed to parse genesis time as RFC3339",
+			log.String("genesis_time", app.Config.GenesisTime))
+	}
+	// TODO: consider uncommenting
 	/*if err != nil {
 		log.Panic("error parsing config err=%v", err)
 	}*/

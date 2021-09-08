@@ -1723,7 +1723,8 @@ func TestVerifyLayers(t *testing.T) {
 	alg.trtl.GoodBlocksIndex[l3Blocks[1].ID()] = false
 	alg.trtl.GoodBlocksIndex[l3Blocks[2].ID()] = false
 
-	var l2BlockIDs, l3BlockIDs, l4BlockIDs, l5BlockIDs []types.BlockID
+	// TODO(nkryuchkov): uncomment when it's used
+	var /*l2BlockIDs,*/ l3BlockIDs, l4BlockIDs, l5BlockIDs []types.BlockID
 	for _, block := range l3Blocks {
 		r.NoError(mdb.AddBlock(block))
 		l3BlockIDs = append(l3BlockIDs, block.ID())
@@ -1736,9 +1737,10 @@ func TestVerifyLayers(t *testing.T) {
 
 	// mark local opinion of L2 good so verified layer advances
 	// do the reverse for L3: local opinion is good, global opinion is undecided
-	for _, block := range l2Blocks {
-		l2BlockIDs = append(l2BlockIDs, block.ID())
-	}
+	// TODO(nkryuchkov): remove or uncomment when it's used
+	//for _, block := range l2Blocks {
+	//	l2BlockIDs = append(l2BlockIDs, block.ID())
+	//}
 	mdbWrapper.inputVectorBackupFn = mdb.LayerBlockIds
 	mdbWrapper.saveContextualValidityFn = nil
 	alg.trtl.bdp = mdbWrapper
@@ -2716,15 +2718,16 @@ func TestMultiTortoise(t *testing.T) {
 		// now simulate a rejoin
 		// send each tortoise's blocks to the other (simulated resync)
 		// (of layers 18-40)
-		var forkBlockIDsA, forkBlockIDsB []types.BlockID
+		// TODO(nkryuchkov): remove or uncomment when it's used
+		// var forkBlockIDsA, forkBlockIDsB []types.BlockID
 		for _, block := range forkBlocksA {
-			forkBlockIDsA = append(forkBlockIDsA, block.ID())
+			// forkBlockIDsA = append(forkBlockIDsA, block.ID())
 			r.NoError(mdb2.AddBlock(block))
 		}
 		alg2.HandleLateBlocks(context.TODO(), forkBlocksA)
 
 		for _, block := range forkBlocksB {
-			forkBlockIDsB = append(forkBlockIDsB, block.ID())
+			// forkBlockIDsB = append(forkBlockIDsB, block.ID())
 			r.NoError(mdb1.AddBlock(block))
 		}
 		alg1.HandleLateBlocks(context.TODO(), forkBlocksB)
