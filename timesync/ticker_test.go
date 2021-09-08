@@ -101,7 +101,9 @@ func TestTicker_Notify(t *testing.T) {
 	missed, e := tr.Notify() // should send only to one
 
 	tr.m.Lock() // make sure done notify
+	t.Log("notify is done")
 	tr.m.Unlock()
+
 	r.Equal(errMissedTicks, e)
 	r.Equal(1, missed)
 
@@ -117,9 +119,13 @@ func TestTicker_Notify(t *testing.T) {
 		<-s2
 	}()
 	wg.Wait()
+
 	missed, e = tr.Notify() // should send to all
-	tr.m.Lock()             // make sure done notify
+
+	tr.m.Lock() // make sure done notify
+	t.Log("notify is done")
 	tr.m.Unlock()
+
 	r.Equal(0, missed)
 	r.NoError(e)
 }

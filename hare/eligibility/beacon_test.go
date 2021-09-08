@@ -38,12 +38,12 @@ func TestBeacon_Value(t *testing.T) {
 	r.Equal(1, c.numAdd)
 
 	// test cache
-	val, err = b.Value(context.TODO(), 100)
+	_, err = b.Value(context.TODO(), 100)
 	r.NoError(err)
 	r.Equal(2, c.numGet)
 	r.Equal(1, c.numAdd)
 
-	val, err = b.Value(context.TODO(), 1)
+	_, err = b.Value(context.TODO(), 1)
 	r.NoError(err)
 }
 
