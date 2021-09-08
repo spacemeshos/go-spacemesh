@@ -822,7 +822,7 @@ func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) (*big.Float, 
 		return big.NewFloat(0), ErrZeroEpochWeight
 	}
 
-	// threshold(k, q, W) = 1 - (2 ^ (- (k/((1-q)*W))
+	// threshold(k, q, W) = 1 - (2 ^ (- (k/((1-q)*W))))
 	// Floating point: 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(epochWeight))))
 	// Fixed point:
 	v := new(big.Float).Sub(
