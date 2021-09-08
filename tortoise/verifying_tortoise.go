@@ -565,6 +565,12 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	logger.With().Debug("block adds support for",
 		log.Int("count", len(block.BlockHeader.ForDiff)),
 		types.BlockIdsField(block.BlockHeader.ForDiff))
+	logger.With().Debug("block adds against for",
+		log.Int("count", len(block.BlockHeader.AgainstDiff)),
+		types.BlockIdsField(block.BlockHeader.AgainstDiff))
+	logger.With().Debug("block adds abstain for",
+		log.Int("count", len(block.BlockHeader.NeutralDiff)),
+		types.BlockIdsField(block.BlockHeader.NeutralDiff))
 	logger.With().Debug("checking base block", baseBlock.Fields()...)
 
 	layerOpinions, ok := t.BlockOpinionsByLayer[baseBlock.LayerIndex]
@@ -597,7 +603,9 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		}
 		// this could only happen in malicious blocks, and they should not pass a syntax check, but check here just
 		// to be extra safe
-		if _, alreadyVoted := opinion[blk.LayerIndex][blockID]; alreadyVoted && !allowConflict {
+		if _, alreadyVoted := opinion[blk.LayerIndex][blockID]; alreadyVoted && allowConflict {
+			return nil
+		} else if alreadyVoted && !allowConflict {
 			return fmt.Errorf("%s %v", errstrConflictingVotes, blockID)
 		}
 		if _, ok := opinion[blk.LayerIndex]; !ok {

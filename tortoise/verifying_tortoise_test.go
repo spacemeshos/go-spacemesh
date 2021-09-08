@@ -1430,6 +1430,13 @@ func TestProcessBlock(t *testing.T) {
 	r.Error(err)
 	r.Contains(err.Error(), errstrBaseBlockNotFoundInLayer)
 
+	// these must be in the mesh or we'll get an error when processing a block (l3Blocks[0])
+	// with a base block (l2Blocks[0]) that contains an opinion on them
+	// first block in layer already added, above
+	r.NoError(mdb.AddBlock(l1Blocks[1]))
+	r.NoError(mdb.AddBlock(l1Blocks[2]))
+	r.NoError(mdb.AddBlock(l1Blocks[3]))
+
 	// malicious (conflicting) voting pattern
 	l2Blocks[0].BaseBlock = mesh.GenesisBlock().ID()
 	l2Blocks[0].ForDiff = []types.BlockID{l1Blocks[1].ID()}
@@ -1438,7 +1445,7 @@ func TestProcessBlock(t *testing.T) {
 	r.Error(err)
 	r.Contains(err.Error(), errstrConflictingVotes)
 
-	// add vote diffs: make sure that base block votes flow through, but that block votes override them, and that the
+	// add vote diffs: make sure that base block votes flow through, but that block votes override them, that the
 	// data structure is correctly updated, and that weights are calculated correctly
 
 	// add base block to DB
@@ -1466,11 +1473,6 @@ func TestProcessBlock(t *testing.T) {
 		l1Blocks[0].ID(),
 	}
 	alg.trtl.BlockOpinionsByLayer[l3ID] = make(map[types.BlockID]Opinion, blocksPerLayer)
-	// these must be in the mesh or we'll get an error when processing a block (l3Blocks[0])
-	// with a base block (l2Blocks[0]) that contains an opinion on them
-	r.NoError(mdb.AddBlock(l1Blocks[1]))
-	r.NoError(mdb.AddBlock(l1Blocks[2]))
-	r.NoError(mdb.AddBlock(l1Blocks[3]))
 	r.NoError(alg.trtl.processBlock(context.TODO(), l3Blocks[0]))
 	expectedOpinionVector := Opinion{
 		l1ID: {
