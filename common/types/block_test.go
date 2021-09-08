@@ -15,16 +15,22 @@ func genByte32() [32]byte {
 	return x
 }
 
-var txid1 = TransactionID(genByte32())
-var txid2 = TransactionID(genByte32())
+var (
+	txid1 = TransactionID(genByte32())
+	txid2 = TransactionID(genByte32())
+)
 
-var one = CalcHash32([]byte("1"))
-var two = CalcHash32([]byte("2"))
-var three = CalcHash32([]byte("3"))
+var (
+	one   = CalcHash32([]byte("1"))
+	two   = CalcHash32([]byte("2"))
+	three = CalcHash32([]byte("3"))
+)
 
-var atx1 = ATXID(one)
-var atx2 = ATXID(two)
-var atx3 = ATXID(three)
+var (
+	atx1 = ATXID(one)
+	atx2 = ATXID(two)
+	atx3 = ATXID(three)
+)
 
 // Make sure we can print out all the relevant log fields for a block
 func TestFields(t *testing.T) {
@@ -140,8 +146,8 @@ func TestLayerIDComparison(t *testing.T) {
 		require.True(t, !NewLayerID(5).Before(NewLayerID(3)))
 	})
 	t.Run("Equal", func(t *testing.T) {
-		require.True(t, NewLayerID(1) == NewLayerID(1))
-		require.True(t, NewLayerID(1) != NewLayerID(10))
+		require.Equal(t, NewLayerID(1), NewLayerID(1))
+		require.NotEqual(t, NewLayerID(1), NewLayerID(10))
 	})
 }
 
@@ -354,4 +360,14 @@ func TestLayerID_FirstInEpoch(t *testing.T) {
 			require.EqualValues(t, tc.isFirst, NewLayerID(tc.layer).FirstInEpoch())
 		})
 	}
+}
+
+func TestBlockIDSize(t *testing.T) {
+	var id BlockID
+	require.Len(t, id.Bytes(), BlockIDSize)
+}
+
+func TestLayerIDSize(t *testing.T) {
+	var id LayerID
+	require.Len(t, id.Bytes(), LayerIDSize)
 }

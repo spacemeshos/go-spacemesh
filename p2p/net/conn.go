@@ -25,6 +25,12 @@ var (
 	ErrAlreadyClosed = errors.New("p2p: connection is already closed")
 	// ErrClosed is returned when connection already closed.
 	ErrClosed = errors.New("p2p: connection closed")
+	// ErrQueueFull is returned when the outbound message queue is full.
+	ErrQueueFull = errors.New("p2p: outbound message queue is full, dropping peer")
+	// ErrTriedToSetupExistingConn occurs when handshake packet is sent twice on a connection
+	ErrTriedToSetupExistingConn = errors.New("p2p: tried to setup existing connection")
+	// ErrMsgExceededLimit occurs when a received message size exceeds the defined message size
+	ErrMsgExceededLimit = errors.New("p2p: message size exceeded limit")
 )
 
 // ConnectionSource specifies the connection originator - local or remote node.
@@ -123,11 +129,35 @@ type fmtConnection interface {
 }
 
 // Create a new connection wrapping a net.Conn with a provided connection manager
-func newConnection(conn readWriteCloseAddresser, netw networker,
-	remotePub p2pcrypto.PublicKey, session NetworkSession, msgSizeLimit int, deadline time.Duration, log log.Log) fmtConnection {
+func newConnection(
+	conn readWriteCloseAddresser,
+	netw networker,
+	remotePub p2pcrypto.PublicKey,
+	session NetworkSession,
+	msgSizeLimit int,
+	deadline time.Duration,
+	log log.Log) fmtConnection {
+	messages := make(chan msgToSend, MessageQueueSize)
+	connection := newConnectionWithMessagesChan(conn, netw, remotePub, session, msgSizeLimit, deadline, messages, log)
+	connection.wg.Add(1)
+	go func() {
+		connection.sendListener()
+		connection.wg.Done()
+	}()
+	return connection
+}
 
+func newConnectionWithMessagesChan(
+	conn readWriteCloseAddresser,
+	netw networker,
+	remotePub p2pcrypto.PublicKey,
+	session NetworkSession,
+	msgSizeLimit int,
+	deadline time.Duration,
+	messages chan msgToSend,
+	log log.Log) *FormattedConnection {
 	// todo parametrize channel size - hard-coded for now
-	connection := &FormattedConnection{
+	return &FormattedConnection{
 		logger:       log,
 		id:           crypto.UUIDString(),
 		created:      time.Now(),
@@ -140,16 +170,10 @@ func newConnection(conn readWriteCloseAddresser, netw networker,
 		deadliner:    conn,
 		networker:    netw,
 		session:      session,
-		messages:     make(chan msgToSend, MessageQueueSize),
+		messages:     messages,
 		stopSending:  make(chan struct{}),
 		msgSizeLimit: msgSizeLimit,
 	}
-	connection.wg.Add(1)
-	go func() {
-		connection.sendListener()
-		connection.wg.Done()
-	}()
-	return connection
 }
 
 // ID returns the channel's ID
@@ -195,8 +219,7 @@ func (c *FormattedConnection) Created() time.Time {
 func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
 	// Print a log line to establish a link between the originating sessionID and this requestID,
 	// before the sessionID disappears.
-
-	//todo: re insert if log loss is fixed
+	// This causes issues with the p2p system test, but leaving here for debugging purposes.
 	//c.logger.WithContext(ctx).Debug("connection: enqueuing incoming message")
 
 	// Rather than store the context on the heap, which is an antipattern, we instead extract the sessionID and store
@@ -276,12 +299,19 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 		c.logger.WithContext(ctx).With().Warning("connection: outbound send queue backlog",
 			log.Int("queue_length", len(c.messages)))
 	}
+
+	// perform a non-blocking send and drop the peer if the channel is full
+	// otherwise, the entire gossip stack will get blocked
 	select {
 	case c.messages <- msgToSend{m, reqID, peerID}:
+		return nil
 	case <-c.stopSending:
 		return ErrClosed
+	default:
+		c.networker.publishClosingConnection(ConnectionWithErr{c, ErrQueueFull}) //
+		_ = c.closeNoWait()
+		return ErrQueueFull
 	}
-	return nil
 }
 
 // sendSock sends a message directly on the socket without waiting for the queue.
@@ -322,27 +352,20 @@ func (c *FormattedConnection) Close() error {
 	return err
 }
 
-var (
-	// ErrTriedToSetupExistingConn occurs when handshake packet is sent twice on a connection
-	ErrTriedToSetupExistingConn = errors.New("tried to setup existing connection")
-	// ErrMsgExceededLimit occurs when a received message size exceeds the defined message size
-	ErrMsgExceededLimit = errors.New("message size exceeded limit")
-)
-
 func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Duration) error {
 	err := c.deadliner.SetReadDeadline(time.Now().Add(timeout))
 	if err != nil {
-		c.closeNoWait()
+		_ = c.closeNoWait()
 		return err
 	}
 	msg, err := c.r.Next()
 	if err != nil {
-		c.closeNoWait()
+		_ = c.closeNoWait()
 		return err
 	}
 	err = c.deadliner.SetReadDeadline(time.Time{})
 	if err != nil {
-		c.closeNoWait()
+		_ = c.closeNoWait()
 		return fmt.Errorf("failed to set read dealine: %w", err)
 	}
 
@@ -354,13 +377,13 @@ func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Du
 	}
 
 	if c.session != nil {
-		c.closeNoWait()
+		_ = c.closeNoWait()
 		return errors.New("setup connection twice")
 	}
 
 	err = c.networker.HandlePreSessionIncomingMessage(c, msg)
 	if err != nil {
-		c.closeNoWait()
+		_ = c.closeNoWait()
 		return err
 	}
 

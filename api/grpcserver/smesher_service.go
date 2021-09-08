@@ -2,6 +2,7 @@ package grpcserver
 
 import (
 	"fmt"
+
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -42,7 +43,6 @@ func (s SmesherService) IsSmeshing(context.Context, *empty.Empty) (*pb.IsSmeshin
 // StartSmeshing requests that the node begin smeshing
 func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StartSmeshing")
-
 	if in.Coinbase == nil {
 		return nil, status.Errorf(codes.InvalidArgument, "`Coinbase` must be provided")
 	}
@@ -63,7 +63,6 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		return nil, status.Error(codes.InvalidArgument, "`Opts.NumFiles` must be provided")
 	}
 
-	coinbaseAddr := types.BytesToAddress(in.Coinbase.Address)
 	opts := activation.PostSetupOpts{
 		DataDir:           in.Opts.DataDir,
 		NumUnits:          uint(in.Opts.NumUnits),
@@ -72,6 +71,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		Throttle:          in.Opts.Throttle,
 	}
 
+	coinbaseAddr := types.BytesToAddress(in.Coinbase.Address)
 	if err := s.smeshingProvider.StartSmeshing(ctx, coinbaseAddr, opts); err != nil {
 		err := fmt.Sprintf("failed to start smeshing: %v", err)
 		log.Error(err)

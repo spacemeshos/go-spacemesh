@@ -46,8 +46,7 @@ func (mockSyncer) GetPoetProof(context.Context, types.Hash32) error { return nil
 
 func (m mockSyncer) IsSynced(context.Context) bool { return !m.notSynced }
 
-type MockProjector struct {
-}
+type MockProjector struct{}
 
 func (p *MockProjector) GetProjection(types.Address) (nonce uint64, balance uint64, err error) {
 	return 1, 1000, nil
@@ -194,7 +193,6 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	case <-time.After(1 * time.Minute):
 		assert.Fail(t, "timeout on receiving block")
 	}
-
 }
 
 func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
@@ -232,7 +230,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 
 	assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
 
-	//test create second block
+	// test create second block
 	bl, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, nil)
 	assert.NoError(t, err)
 
@@ -289,55 +287,6 @@ var (
 	atx4 = types.ATXID(four)
 	atx5 = types.ATXID(five)
 )
-
-var (
-	b1 = types.NewExistingBlock(types.NewLayerID(1), []byte{1}, nil)
-	b2 = types.NewExistingBlock(types.NewLayerID(1), []byte{2}, nil)
-	b3 = types.NewExistingBlock(types.NewLayerID(1), []byte{3}, nil)
-	b4 = types.NewExistingBlock(types.NewLayerID(1), []byte{4}, nil)
-	b5 = types.NewExistingBlock(types.NewLayerID(1), []byte{5}, nil)
-	b6 = types.NewExistingBlock(types.NewLayerID(1), []byte{6}, nil)
-	b7 = types.NewExistingBlock(types.NewLayerID(1), []byte{7}, nil)
-)
-
-func genBlockIds() []types.BlockID {
-	bids := []types.BlockID{b1.ID(), b2.ID(), b3.ID(), b4.ID(), b5.ID(), b6.ID(), b7.ID()}
-	for i := 0; i < len(bids)*2; i++ {
-		l := rand.Int() % len(bids)
-		j := rand.Int() % len(bids)
-		bids[l], bids[j] = bids[j], bids[l]
-	}
-
-	return bids
-}
-
-type mockResult struct {
-	err error
-	ids map[types.LayerID][]types.BlockID
-}
-
-func newMockResult() *mockResult {
-	m := &mockResult{}
-	m.ids = make(map[types.LayerID][]types.BlockID)
-	return m
-}
-
-func (m *mockResult) set(id types.LayerID) []types.BlockID {
-	bids := genBlockIds()
-	m.ids[id] = bids
-
-	return bids
-}
-
-func (m *mockResult) GetResult(id types.LayerID) ([]types.BlockID, error) {
-	bl, ok := m.ids[id]
-	if ok {
-		return bl, nil
-	}
-	return nil, m.err
-}
-
-var errExample = errors.New("example errExample")
 
 type mockMesh struct {
 	b   []*types.Block
@@ -396,7 +345,7 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	st := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	builder1 := createBlockBuilder(t, "a", n1, bs)
 	builder1.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
-		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, []types.BlockID{}, st}, nil
+		return types.BlockID{0}, [][]types.BlockID{{}, {}, st}, nil
 	}}
 
 	b, err := builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
@@ -404,7 +353,7 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	r.Equal(st, b.NeutralDiff)
 
 	builder1.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
-		return types.BlockID{0}, [][]types.BlockID{[]types.BlockID{}, nil, st}, nil
+		return types.BlockID{0}, [][]types.BlockID{{}, nil, st}, nil
 	}}
 
 	b, err = builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
@@ -413,7 +362,7 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	emptyID := types.BlockID{}
 	r.NotEqual(b.ID(), emptyID)
 
-	b, err = builder1.createBlock(context.TODO(), types.NewLayerID(5), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	_, err = builder1.createBlock(context.TODO(), types.NewLayerID(5), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
 	r.EqualError(err, "cannot create blockBytes in genesis layer")
 }
 
@@ -431,7 +380,10 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	builder.syncer = ms
 	builder.blockOracle = mbo
 	builder.beginRoundEvent = beginRound
-	go builder.createBlockLoop(context.TODO())
+	require.NoError(t, builder.Start(context.TODO()))
+	t.Cleanup(func() {
+		builder.Close()
+	})
 	beginRound <- types.NewLayerID(1)
 	beginRound <- types.NewLayerID(2)
 	r.Equal(0, mbo.calls)

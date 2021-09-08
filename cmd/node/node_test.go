@@ -1,5 +1,7 @@
 package node
 
+// Hide deprecated protobuf version error.
+// nolint: staticcheck
 import (
 	"bytes"
 	"context"
@@ -445,7 +447,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 	c := pb.NewNodeServiceClient(conn)
 
 	// We expect this one to fail
-	response, err := c.Echo(context.Background(), &pb.EchoRequest{
+	_, err = c.Echo(context.Background(), &pb.EchoRequest{
 		Msg: &pb.SimpleString{Value: message},
 	})
 	r.Error(err)
@@ -476,7 +478,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 
 	// call echo and validate result
 	// We expect this one to succeed
-	response, err = c.Echo(context.Background(), &pb.EchoRequest{
+	response, err := c.Echo(context.Background(), &pb.EchoRequest{
 		Msg: &pb.SimpleString{Value: message},
 	})
 	r.NoError(err)
@@ -561,11 +563,10 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
 	localNet := service.NewSimulator()
-	cfg := getTestDefaultConfig(1)
+	cfg := getTestDefaultConfig()
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	require.NoError(t, err)
-
 	edSgn := signing.NewEdSigner()
 	app, err := InitSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(logtest.New(t)), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
 	require.NoError(t, err)

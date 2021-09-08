@@ -38,7 +38,7 @@ func (m mockNet) Close() {
 func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) ([]byte, error)) {
 }
 
-func (m mockNet) Start(ctx context.Context) error {
+func (m mockNet) Start(context.Context) error {
 	return nil
 }
 
@@ -60,7 +60,7 @@ func (m mockNet) SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p
 	return nil, nil
 }
 
-func (m mockNet) Broadcast(ctx context.Context, protocol string, payload []byte) error {
+func (m mockNet) Broadcast(_ context.Context, protocol string, payload []byte) error {
 	return nil
 }
 
@@ -71,15 +71,20 @@ func (m mockNet) RegisterDirectProtocolWithChannel(protocol string, ingressChann
 	return nil
 }
 
-func (m mockNet) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
+func (m mockNet) SendWrappedMessage(_ context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
 	return nil
+}
+
+func (m mockNet) PeerCount() uint64 {
+	return 1
 }
 
 func (m mockNet) GetPeers() []peers.Peer {
 	_, pub1, _ := p2pcrypto.GenerateKeyPair()
 	return []peers.Peer{pub1}
 }
-func (m *mockNet) SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
+
+func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
 	m.TotalBatchCalls++
 	if m.ReturnError {
 		if m.AckChannel != nil {
@@ -161,7 +166,7 @@ func TestFetch_GetHash(t *testing.T) {
 	hint := Hint("db")
 	hint2 := Hint("db2")
 
-	//test hash aggregation
+	// test hash aggregation
 	f.GetHash(h1, hint, false)
 	f.GetHash(h1, hint, false)
 
@@ -272,7 +277,7 @@ func TestFetch_GetHash_failNetwork(t *testing.T) {
 		priority:             0,
 		validateResponseHash: false,
 		hint:                 hint,
-		returnChan:           make(chan HashDataPromiseResult, f.cfg.MaxRetiresForPeer),
+		returnChan:           make(chan HashDataPromiseResult, f.cfg.MaxRetriesForPeer),
 	}
 	f.activeRequests[h1] = []*request{&request1, &request1, &request1}
 	f.requestHashBatchFromPeers()
@@ -288,7 +293,7 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 	h3 := randomHash()
 	f, net := customFetch(t, Config{
 		BatchTimeout:      1,
-		MaxRetiresForPeer: 2,
+		MaxRetriesForPeer: 2,
 		BatchSize:         2,
 	})
 
@@ -314,12 +319,12 @@ func TestFetch_Loop_BatchRequestMax(t *testing.T) {
 
 	defer f.Stop()
 	f.Start()
-	//test hash aggregation
+	// test hash aggregation
 	r1 := f.GetHash(h1, hint, false)
 	r2 := f.GetHash(h2, hint, false)
 	r3 := f.GetHash(h3, hint, false)
 
-	//since we have a batch of 2 we should call send twice - of not we should fail
+	// since we have a batch of 2 we should call send twice - of not we should fail
 	select {
 	case <-net.AckChannel:
 		break
@@ -372,7 +377,7 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 	req5 := makeRequest(hash3, High, hint)
 	f, net := customFetch(t, Config{
 		BatchTimeout:      1,
-		MaxRetiresForPeer: 2,
+		MaxRetriesForPeer: 2,
 		BatchSize:         2,
 	})
 
@@ -434,24 +439,24 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 			} else {
 				assert.Equal(t, resp3.Data, resp.Data)
 			}
-			break
 		case <-time.After(2 * time.Second):
 			assert.Fail(t, "timeout getting resp for %v", req)
 		}
-
 	}
 	assert.Equal(t, 2, net.TotalBatchCalls)
 }
 
 func TestFetch_GetRandomPeer(t *testing.T) {
-	peers := make([]peers.Peer, 1000)
-	for i := 0; i < len(peers); i++ {
+	myPeers := make([]peers.Peer, 1000)
+	for i := 0; i < len(myPeers); i++ {
 		_, pub, _ := p2pcrypto.GenerateKeyPair()
-		peers[i] = pub
+		myPeers[i] = pub
 	}
 	allTheSame := true
 	for i := 0; i < 20; i++ {
-		if GetRandomPeer(peers) != GetRandomPeer(peers) {
+		peer1 := GetRandomPeer(myPeers)
+		peer2 := GetRandomPeer(myPeers)
+		if peer1 != peer2 {
 			allTheSame = false
 		}
 	}

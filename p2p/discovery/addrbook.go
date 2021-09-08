@@ -523,12 +523,11 @@ func (a *addrBook) Start() {
 // Stop gracefully shuts down the address manager by stopping the main handler.
 func (a *addrBook) Stop() {
 	if atomic.AddInt32(&a.shutdown, 1) != 1 {
-		a.logger.Warning("Address manager is already in the process of " +
-			"shutting down")
+		a.logger.Warning("address manager is already in the process of shutting down")
 		return
 	}
 
-	a.logger.Info("Address manager shutting down")
+	a.logger.Info("address manager shutting down")
 	close(a.quit)
 	a.wg.Wait()
 	return

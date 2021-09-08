@@ -224,7 +224,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	obj1 := createAccount(s.processor, SignerToAddr(signer), 25, 0)
 	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 02}), 1, 10)
 	obj3 := createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
-	s.processor.Commit()
+	_, err = s.processor.Commit()
+	assert.NoError(s.T(), err)
 
 	transactions := []*types.Transaction{
 		createTransaction(s.T(), obj1.Nonce()+3, obj3.address, 1, 5, signer),
@@ -363,8 +364,10 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	testCycles := 100
 	maxTransactions := 20
 	minTransactions := 1
+	maxAmount := uint64(1000)
+	requiredBalance := int64(int(maxAmount) * testCycles * maxTransactions)
 
-	lg := logtest.New(s.T()).WithName("proc_logger")
+	lg := logtest.New(s.T())
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
 	processor := NewTransactionProcessor(db, txDb, s.projector, NewTxMemPool(), lg)
@@ -378,11 +381,10 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		signing.NewEdSigner(),
 	}
 	accounts := []*Object{
-		createAccount(processor, toAddr(signers[0].PublicKey().Bytes()), 5218762487624, 0),
-		createAccount(processor, toAddr(signers[1].PublicKey().Bytes()), 341578872634786, 10),
-		createAccount(processor, toAddr(signers[2].PublicKey().Bytes()), 1044987234, 0),
+		createAccount(processor, toAddr(signers[0].PublicKey().Bytes()), requiredBalance, 0),
+		createAccount(processor, toAddr(signers[1].PublicKey().Bytes()), requiredBalance, 10),
+		createAccount(processor, toAddr(signers[2].PublicKey().Bytes()), requiredBalance, 0),
 	}
-
 	processor.Commit()
 
 	written := db.Len()
@@ -390,10 +392,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	var want string
 	for i := 0; i < testCycles; i++ {
 		numOfTransactions := rand.Intn(maxTransactions-minTransactions) + minTransactions
-		trns := []*types.Transaction{}
+		var trns []*types.Transaction
 		nonceTrack := make(map[*Object]int)
 		for j := 0; j < numOfTransactions; j++ {
-
 			src := int(rand.Uint32() % (uint32(len(accounts) - 1)))
 			srcAccount := accounts[src]
 			dstAccount := accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
@@ -407,13 +408,18 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			for dstAccount == srcAccount {
 				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 			}
-			t := createTransaction(s.T(), processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]), dstAccount.address, (rand.Uint64()%srcAccount.Balance())/100, 5, signers[src])
+			t := createTransaction(s.T(),
+				processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]),
+				dstAccount.address,
+				rand.Uint64()%maxAmount,
+				5, signers[src])
 			trns = append(trns, t)
 
 		}
 		failed, err := processor.ApplyTransactions(types.NewLayerID(uint32(i)), trns)
-		assert.NoError(s.T(), err)
-		assert.True(s.T(), failed == 0)
+
+		s.Require().NoError(err)
+		s.Require().Zero(failed)
 
 		if i == revertToLayer {
 			want = string(processor.Dump())
@@ -421,19 +427,13 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 
 		if i == revertToLayer+revertAfterLayer {
 			err = processor.LoadState(types.NewLayerID(uint32(revertToLayer)))
-			assert.NoError(s.T(), err)
+			s.Require().NoError(err)
 			got := string(processor.Dump())
-
-			if got != want {
-				s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-			}
+			s.Require().Equal(string(want), string(got))
 		}
-
 	}
 
-	writtenMore := db.Len()
-
-	assert.True(s.T(), writtenMore > written)
+	s.Require().LessOrEqual(written, db.Len())
 }
 
 func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *types.Transaction {
@@ -526,7 +526,7 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 	r.NotEqual(types.Hash32{}, proc.rootHash)
 
 	expectedRoot := types.Hash32{1, 2, 3}
-	r.NoError(proc.addState(expectedRoot, types.NewLayerID(1)))
+	r.NoError(proc.saveStateRoot(expectedRoot, types.NewLayerID(1)))
 
 	actualRoot := proc.GetStateRoot()
 	r.Equal(expectedRoot, actualRoot)
@@ -548,7 +548,8 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	obj1 := createAccount(processor, SignerToAddr(signer), 21, 0)
 	obj2 := createAccount(processor, toAddr([]byte{0x01, 02}), 1, 10)
 	createAccount(processor, toAddr([]byte{0x02}), 44, 0)
-	processor.Commit()
+	_, err = processor.Commit()
+	assert.NoError(t, err)
 
 	transactions := []*types.Transaction{
 		createTransaction(t, obj1.Nonce(), obj2.address, 1, 5, signer),

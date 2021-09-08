@@ -124,7 +124,7 @@ func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.
 
 func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload []byte) error {
 	msg, _ := MessageFromBuffer(payload)
-	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != -1 {
+	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != preRound {
 		return m.err
 	}
 
@@ -141,15 +141,15 @@ func (trueOracle) Register(bool, string) {
 func (trueOracle) Unregister(bool, string) {
 }
 
-func (trueOracle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+func (trueOracle) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
 }
 
-func (trueOracle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
+func (trueOracle) CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error) {
 	return 1, nil
 }
 
-func (trueOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
+func (trueOracle) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	x := make([]byte, 100)
 	return x, nil
 }
@@ -181,10 +181,6 @@ func Test_consensusIterations(t *testing.T) {
 	test.Create(totalNodes, creationFunc)
 	test.Start()
 	test.WaitForTimedTermination(t, 30*time.Second)
-}
-
-func validateBlock([]types.BlockID) bool {
-	return true
 }
 
 func isSynced(context.Context) bool {
@@ -222,11 +218,14 @@ type mockBlockProvider struct {
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
 
-func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
-	return buildSet(), nil
+func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
 }
 
-func (mbp *mockBlockProvider) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
+func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
+}
+
+func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
+	return buildSet(), nil
 }
 
 func createMaatuf(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string) *Hare {
@@ -237,7 +236,7 @@ func createMaatuf(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID
 		panic("failed to create vrf signer")
 	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
-	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
+	hare := New(tcfg, p2p, ed, nodeID, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, layersCh, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare
@@ -281,6 +280,9 @@ func Test_multipleCPs(t *testing.T) {
 
 // Test - run multiple CPs where one of them runs more than one iteration
 func Test_multipleCPsAndIterations(t *testing.T) {
+	logtest.SetupGlobal(t)
+
+	types.SetLayersPerEpoch(4)
 	r := require.New(t)
 	totalCp := uint32(4)
 	test := newHareWrapper(totalCp)

@@ -39,14 +39,15 @@ type TerminationOutput interface {
 }
 
 type meshProvider interface {
+	// LayerBlockIds returns the block IDs stored for a layer
 	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
+	// HandleValidatedLayer receives Hare output when it succeeds
 	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
+	// InvalidateLayer receives the signal that Hare failed for a layer
+	InvalidateLayer(ctx context.Context, layerID types.LayerID)
 	// RecordCoinflip records the weak coinflip result for a layer
 	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
 }
-
-// checks if the collected output is valid
-type outputValidationFunc func(blocks []types.BlockID) bool
 
 // Hare is the orchestrator that starts new consensus processes and collects their output.
 type Hare struct {
@@ -61,7 +62,7 @@ type Hare struct {
 
 	sign Signer
 
-	msh     meshProvider
+	mesh    meshProvider
 	rolacle Rolacle
 
 	networkDelta time.Duration
@@ -77,18 +78,26 @@ type Hare struct {
 
 	factory consensusFactory
 
-	validate outputValidationFunc
-
 	nid types.NodeID
 
 	totalCPs int32
 }
 
 // New returns a new Hare struct.
-func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, validate outputValidationFunc,
-	syncState syncStateFunc, obp meshProvider, rolacle Rolacle,
-	layersPerEpoch uint16, idProvider identityProvider, stateQ StateQuerier,
-	beginLayer chan types.LayerID, logger log.Log) *Hare {
+func New(
+	conf config.Config,
+	p2p NetworkService,
+	sign Signer,
+	nid types.NodeID,
+	syncState syncStateFunc,
+	mesh meshProvider,
+	rolacle Rolacle,
+	layersPerEpoch uint16,
+	idProvider identityProvider,
+	stateQ StateQuerier,
+	beginLayer chan types.LayerID,
+	logger log.Log,
+) *Hare {
 	h := new(Hare)
 
 	h.Closer = util.NewCloser()
@@ -101,7 +110,8 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
 	h.broker = newBroker(p2p, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
 	h.sign = sign
-	h.msh = obp
+
+	h.mesh = mesh
 	h.rolacle = rolacle
 
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
@@ -113,7 +123,6 @@ func New(conf config.Config, p2p NetworkService, sign Signer, nid types.NodeID, 
 		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, logger)
 	}
 
-	h.validate = validate
 	h.nid = nid
 
 	return h
@@ -163,13 +172,9 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		i++
 	}
 
-	// check validity of the collected output
-	if !h.validate(blocks) {
-		h.WithContext(ctx).Error("failed to validate the collected output set")
-	}
-
 	id := output.ID()
-	h.msh.HandleValidatedLayer(ctx, types.LayerID(id), blocks)
+	h.mesh.HandleValidatedLayer(ctx, id, blocks)
+
 	if h.outOfBufferRange(id) {
 		return ErrTooLate
 	}
@@ -179,7 +184,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	if uint32(len(h.outputs)) >= h.bufferSize {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
-	h.outputs[types.LayerID(id)] = blocks
+	h.outputs[id] = blocks
 
 	return nil
 }
@@ -187,15 +192,12 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new consensus processes.
 func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
-
 	logger := h.WithContext(ctx).WithFields(id)
 	h.layerLock.Lock()
 	if id.After(h.lastLayer) {
 		h.lastLayer = id
 	} else {
-		logger.With().Error("received out of order layer tick",
-			log.FieldNamed("last_layer", h.lastLayer),
-			log.FieldNamed("this_layer", id))
+		logger.With().Error("received out of order layer tick", log.FieldNamed("last_layer", h.lastLayer))
 	}
 
 	h.layerLock.Unlock()
@@ -218,33 +220,30 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		// this is called only for its side effects, but at least print the error if it returns one
 		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(ctx, h.nid.Key, id); err != nil {
 			logger.With().Error("error checking if identity is active",
-				log.Bool("isActive", isActive), log.Err(err))
+				log.Bool("is_active", isActive),
+				log.Err(err))
 		}
 	}()
 
-	logger.With().Debug("hare got tick, sleeping",
-		log.String("delta", fmt.Sprint(h.networkDelta)))
+	logger.With().Debug("hare got tick, sleeping", log.String("delta", fmt.Sprint(h.networkDelta)))
 
 	ti := time.NewTimer(h.networkDelta)
 	select {
 	case <-ti.C:
-		break // keep going
+		break
 	case <-h.CloseChannel():
-		// closed while waiting the delta
-		err = errors.New("closed while waiting the delta")
+		err = errors.New("closed while waiting for hare delta")
 		return
 	}
 
-	if !h.broker.Synced(ctx, id) { // if not synced don't start consensus
-		err = errors.New("not starting hare since node is not synced")
-		logger.Error(err.Error())
+	if !h.broker.Synced(ctx, id) {
+		// if not currently synced don't start consensus process
+		logger.Info("not processing hare tick since node is not synced")
 		return
 	}
-
-	logger.Debug("get hare results")
 
 	// retrieve set from orphan blocks
-	blocks, err := h.msh.LayerBlockIds(h.lastLayer)
+	blocks, err := h.mesh.LayerBlockIds(h.lastLayer)
 	if err != nil {
 		logger.With().Error("no blocks found for hare, using empty set", log.Err(err))
 		// just fail here, it will end hare with empty set result
@@ -253,11 +252,8 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		// TODO:   and achieve consensus on empty set
 	}
 
-	logger.With().Debug("received new blocks", log.Int("count", len(blocks)))
-	set := NewEmptySet(len(blocks))
-	for _, b := range blocks {
-		set.Add(b)
-	}
+	logger.With().Debug("hare received layer blocks", log.Int("count", len(blocks)))
+	set := NewSet(blocks)
 
 	instID := id
 	c, err := h.broker.Register(ctx, instID)
@@ -272,7 +268,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		h.broker.Unregister(ctx, cp.ID())
 		return
 	}
-	logger.With().Info("number of consensus processes (after +1)",
+	logger.With().Info("number of consensus processes (after register)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	metrics.TotalConsensusProcesses.With("layer", id.String()).Add(1)
 	return
@@ -284,7 +280,7 @@ var (
 )
 
 // GetResult returns the hare output for the provided range.
-// Returns error iff the request for the upper is too old.
+// Returns error if the requested layer is too old.
 func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 	if h.outOfBufferRange(lid) {
 		return nil, errTooOld
@@ -296,7 +292,6 @@ func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 	if !ok {
 		return nil, errNoResult
 	}
-
 	return blks, nil
 }
 
@@ -305,23 +300,28 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 	for {
 		select {
 		case out := <-h.outputChan:
-			layerID := types.LayerID(out.ID())
+			layerID := out.ID()
 			coin := out.Coinflip()
+			ctx := log.WithNewSessionID(ctx)
 			logger := h.WithContext(ctx).WithFields(layerID)
 
 			// collect coinflip, regardless of success
 			logger.With().Info("recording weak coinflip result for layer",
 				log.Bool("coinflip", coin))
-			h.msh.RecordCoinflip(ctx, layerID, coin)
+			h.mesh.RecordCoinflip(ctx, layerID, coin)
 
 			if out.Completed() { // CP completed, collect the output
 				logger.With().Info("collecting results for completed hare instance", layerID)
 				if err := h.collectOutput(ctx, out); err != nil {
 					logger.With().Warning("error collecting output from hare", log.Err(err))
 				}
+			} else {
+				// Notify the mesh that Hare failed
+				h.WithContext(ctx).With().Info("recording hare instance failure", layerID)
+				h.mesh.InvalidateLayer(ctx, layerID)
 			}
 			h.broker.Unregister(ctx, out.ID())
-			logger.With().Info("number of consensus processes (after -1)",
+			logger.With().Info("number of consensus processes (after unregister)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
 			metrics.TotalConsensusProcesses.With("layer", out.ID().String()).Add(-1)
 		case <-h.CloseChannel():
@@ -335,7 +335,11 @@ func (h *Hare) tickLoop(ctx context.Context) {
 	for {
 		select {
 		case layer := <-h.beginLayer:
-			go h.onTick(ctx, layer)
+			go func() {
+				if err := h.onTick(ctx, layer); err != nil {
+					h.WithContext(ctx).With().Error("error processing hare tick", log.Err(err))
+				}
+			}()
 		case <-h.CloseChannel():
 			return
 		}
