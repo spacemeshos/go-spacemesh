@@ -364,6 +364,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	testCycles := 100
 	maxTransactions := 20
 	minTransactions := 1
+	maxAmount := uint64(1000)
+	requiredBalance := int64(int(maxAmount) * testCycles * maxTransactions)
 
 	lg := logtest.New(s.T())
 	txDb := database.NewMemDatabase()
@@ -379,13 +381,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		signing.NewEdSigner(),
 	}
 	accounts := []*Object{
-		createAccount(processor, toAddr(signers[0].PublicKey().Bytes()), 5218762487624, 0),
-		createAccount(processor, toAddr(signers[1].PublicKey().Bytes()), 341578872634786, 10),
-		createAccount(processor, toAddr(signers[2].PublicKey().Bytes()), 1044987234, 0),
-	}
-	maxAmmount := map[types.Address]uint64{}
-	for _, acc := range accounts {
-		maxAmmount[acc.address] = acc.Balance() / uint64(testCycles*maxTransactions)
+		createAccount(processor, toAddr(signers[0].PublicKey().Bytes()), requiredBalance, 0),
+		createAccount(processor, toAddr(signers[1].PublicKey().Bytes()), requiredBalance, 10),
+		createAccount(processor, toAddr(signers[2].PublicKey().Bytes()), requiredBalance, 0),
 	}
 	processor.Commit()
 
@@ -410,11 +408,10 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			for dstAccount == srcAccount {
 				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 			}
-			amount := rand.Uint64() % maxAmmount[srcAccount.address]
 			t := createTransaction(s.T(),
 				processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]),
 				dstAccount.address,
-				amount,
+				rand.Uint64()%maxAmount,
 				5, signers[src])
 			trns = append(trns, t)
 
