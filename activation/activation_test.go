@@ -107,8 +107,7 @@ func (n *NetMock) hookToAtxPool(transmission []byte) {
 	}
 }
 
-type MockSigning struct {
-}
+type MockSigning struct{}
 
 func (ms *MockSigning) Sign(m []byte) []byte {
 	return m
@@ -328,7 +327,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	builder := newBuilder(t, activationDb)
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
+	require.NoError(t, builder.StartSmeshing(context.TODO(), coinbase, PostSetupOpts{}))
 	t.Cleanup(func() { builder.StopSmeshing(true) })
 	require.Equal(t, coinbase, builder.Coinbase())
 }
@@ -573,9 +572,13 @@ func TestBuilder_PublishActivationTx_Serialize(t *testing.T) {
 
 	bt, err := types.InterfaceToBytes(act)
 	assert.NoError(t, err)
+
 	a, err := types.BytesToAtx(bt)
 	assert.NoError(t, err)
+
 	bt2, err := types.InterfaceToBytes(a)
+	assert.NoError(t, err)
+
 	assert.Equal(t, bt, bt2)
 }
 
@@ -639,7 +642,6 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 	ok := signing.Verify(signing.NewPublicKey(util.Hex2Bytes(atx.NodeID.Key)), atxBytes, atx.Sig)
 	assert.True(t, ok)
-
 }
 
 func TestBuilder_NIPostPublishRecovery(t *testing.T) {

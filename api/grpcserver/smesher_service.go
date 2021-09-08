@@ -63,7 +63,6 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		return nil, status.Error(codes.InvalidArgument, "`Opts.NumFiles` must be provided")
 	}
 
-	coinbaseAddr := types.BytesToAddress(in.Coinbase.Address)
 	opts := activation.PostSetupOpts{
 		DataDir:           in.Opts.DataDir,
 		NumUnits:          uint(in.Opts.NumUnits),
@@ -72,7 +71,8 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 		Throttle:          in.Opts.Throttle,
 	}
 
-	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
+	coinbaseAddr := types.BytesToAddress(in.Coinbase.Address)
+	if err := s.smeshingProvider.StartSmeshing(ctx, coinbaseAddr, opts); err != nil {
 		err := fmt.Sprintf("failed to start smeshing: %v", err)
 		log.Error(err)
 		return nil, status.Error(codes.Internal, err)

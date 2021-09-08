@@ -364,9 +364,11 @@ func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer
 				BlockHeader: types.BlockHeader{
 					ATXID:      atxHeader.ID(),
 					LayerIndex: layerID,
-					Data:       []byte(strconv.Itoa(i))},
+					Data:       []byte(strconv.Itoa(i)),
+				},
 				TxIDs: nil,
-			}}
+			},
+		}
 		blk.BaseBlock = baseBlockID
 		blk.AgainstDiff = lists[0]
 		blk.ForDiff = lists[1]
@@ -626,11 +628,13 @@ func TestAbstainsInMiddle(t *testing.T) {
 	// self-healing will not run because the layers aren't old enough.
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(uint32(initialNumGood)).Uint32()), int(trtl.Verified.Uint32()),
 		"verification should advance after hare finishes")
-	//todo: also check votes with requireVote
+	// todo: also check votes with requireVote
 }
 
-type baseBlockProvider func(context.Context) (types.BlockID, [][]types.BlockID, error)
-type inputVectorProvider func(types.LayerID) ([]types.BlockID, error)
+type (
+	baseBlockProvider   func(context.Context) (types.BlockID, [][]types.BlockID, error)
+	inputVectorProvider func(types.LayerID) ([]types.BlockID, error)
+)
 
 func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider, atxdb atxDataWriter, weight uint) (blocks []*types.Block) {
 	logger := logtest.New(t)
@@ -654,9 +658,11 @@ func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider,
 				BlockHeader: types.BlockHeader{
 					ATXID:      atx.ID(),
 					LayerIndex: l,
-					Data:       []byte(strconv.Itoa(i))},
+					Data:       []byte(strconv.Itoa(i)),
+				},
 				TxIDs: nil,
-			}}
+			},
+		}
 		blk.BaseBlock = b
 		blk.AgainstDiff = lists[0]
 		blk.ForDiff = lists[1]
@@ -682,9 +688,11 @@ func generateBlock(t *testing.T, l types.LayerID, bbp baseBlockProvider, atxdb a
 			BlockHeader: types.BlockHeader{
 				ATXID:      atx.ID(),
 				LayerIndex: l,
-				Data:       []byte{0}},
+				Data:       []byte{0},
+			},
 			TxIDs: nil,
-		}}
+		},
+	}
 	blk.BaseBlock = b
 	blk.AgainstDiff = lists[0]
 	blk.ForDiff = lists[1]
@@ -763,7 +771,6 @@ func TestEviction(t *testing.T) {
 	logger.Debug("count blocks on blocks blocks ", count)
 	require.Equal(t, int(trtl.WindowSize+2)*avgPerLayer, len(trtl.GoodBlocksIndex)) // all blocks should be good
 	logger.Debug("count good blocks ", len(trtl.GoodBlocksIndex))
-
 }
 
 func TestEviction2(t *testing.T) {
@@ -1312,6 +1319,7 @@ func TestCalculateExceptions(t *testing.T) {
 		expectVotes(votes, 0, 2*defaultTestLayerSize, 0)
 	})
 }
+
 func TestDetermineBlockGoodness(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh(t)
@@ -1641,7 +1649,7 @@ func TestProcessNewBlocks(t *testing.T) {
 }
 
 func TestHandleLateBlocks(t *testing.T) {
-	//r := require.New(t)
+	// r := require.New(t)
 	mdb := getInMemMesh(t)
 	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
@@ -1737,7 +1745,8 @@ func TestVerifyLayers(t *testing.T) {
 	alg.trtl.GoodBlocksIndex[l3Blocks[1].ID()] = false
 	alg.trtl.GoodBlocksIndex[l3Blocks[2].ID()] = false
 
-	var l2BlockIDs, l3BlockIDs, l4BlockIDs, l5BlockIDs []types.BlockID
+	// TODO(nkryuchkov): uncomment when it's used
+	var /*l2BlockIDs,*/ l3BlockIDs, l4BlockIDs, l5BlockIDs []types.BlockID
 	for _, block := range l3Blocks {
 		r.NoError(mdb.AddBlock(block))
 		l3BlockIDs = append(l3BlockIDs, block.ID())
@@ -1750,9 +1759,10 @@ func TestVerifyLayers(t *testing.T) {
 
 	// mark local opinion of L2 good so verified layer advances
 	// do the reverse for L3: local opinion is good, global opinion is undecided
-	for _, block := range l2Blocks {
-		l2BlockIDs = append(l2BlockIDs, block.ID())
-	}
+	// TODO(nkryuchkov): remove or uncomment when it's used
+	//for _, block := range l2Blocks {
+	//	l2BlockIDs = append(l2BlockIDs, block.ID())
+	//}
 	mdbWrapper.inputVectorBackupFn = mdb.LayerBlockIds
 	mdbWrapper.saveContextualValidityFn = nil
 	alg.trtl.bdp = mdbWrapper
@@ -2162,7 +2172,7 @@ func TestHealing(t *testing.T) {
 
 		// reducing hdist will allow verification to start happening
 		alg.trtl.Hdist = 1
-		//alg.trtl.Last = l2ID
+		// alg.trtl.Last = l2ID
 		alg.trtl.heal(context.TODO(), l2ID)
 		checkVerifiedLayer(t, alg.trtl, l1ID)
 	})
@@ -2765,15 +2775,16 @@ func TestMultiTortoise(t *testing.T) {
 		// now simulate a rejoin
 		// send each tortoise's blocks to the other (simulated resync)
 		// (of layers 18-40)
-		var forkBlockIDsA, forkBlockIDsB []types.BlockID
+		// TODO(nkryuchkov): remove or uncomment when it's used
+		// var forkBlockIDsA, forkBlockIDsB []types.BlockID
 		for _, block := range forkBlocksA {
-			forkBlockIDsA = append(forkBlockIDsA, block.ID())
+			// forkBlockIDsA = append(forkBlockIDsA, block.ID())
 			r.NoError(mdb2.AddBlock(block))
 		}
 		alg2.HandleLateBlocks(context.TODO(), forkBlocksA)
 
 		for _, block := range forkBlocksB {
-			forkBlockIDsB = append(forkBlockIDsB, block.ID())
+			// forkBlockIDsB = append(forkBlockIDsB, block.ID())
 			r.NoError(mdb1.AddBlock(block))
 		}
 		alg1.HandleLateBlocks(context.TODO(), forkBlocksB)

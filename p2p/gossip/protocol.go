@@ -88,6 +88,8 @@ func (p *Protocol) Start(ctx context.Context) {
 // Close stops the protocol and waits for background workers to exit.
 func (p *Protocol) Close() {
 	p.cancel()
+	p.pq.Close()
+	p.peers.Close()
 	p.wg.Wait()
 }
 
@@ -249,8 +251,6 @@ func (p *Protocol) propagationEventLoop(ctx context.Context) {
 			metrics.PropagationQueueLen.Set(float64(len(p.propagateQ)))
 
 		case <-p.shutdownCtx.Done():
-			p.pq.Close()
-			p.peers.Close()
 			p.WithContext(ctx).Error("propagate event loop stopped: protocol shutdown")
 			return
 		}
