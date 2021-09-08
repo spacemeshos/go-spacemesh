@@ -235,7 +235,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
-		b.stop()
+		close(exited)
 		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
 	go func() {
