@@ -22,6 +22,8 @@
 // additional padding.  There are no checksums or compression.
 package delimited
 
+// Hide deprecated protobuf version error.
+// nolint: staticcheck
 import (
 	"bufio"
 	"encoding/binary"

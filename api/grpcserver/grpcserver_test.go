@@ -1,11 +1,12 @@
 package grpcserver
 
+// Hide deprecated protobuf version error.
+// nolint: staticcheck
 import (
 	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"io"
 	"io/ioutil"
 	"math"
@@ -20,26 +21,26 @@ import (
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
+	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+
+	"github.com/stretchr/testify/require"
 	"google.golang.org/genproto/googleapis/rpc/code"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/stretchr/testify/require"
-
-	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"google.golang.org/grpc"
 )
 
 const (
@@ -345,7 +346,7 @@ func (t *TxAPIMock) AddressExists(addr types.Address) bool {
 }
 
 func (t *TxAPIMock) ProcessedLayer() types.LayerID {
-	return types.LayerID(layerVerified)
+	return layerVerified
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
@@ -594,6 +595,8 @@ func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 func TestNewServersConfig(t *testing.T) {
 	logtest.SetupGlobal(t)
 	port1, err := node.GetUnboundedPort("tcp", 0)
+	require.NoError(t, err, "Should be able to establish a connection on a port")
+
 	port2, err := node.GetUnboundedPort("tcp", 0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
@@ -633,7 +636,8 @@ func TestNodeService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			const message = "Hello World"
 			res, err := c.Echo(context.Background(), &pb.EchoRequest{
-				Msg: &pb.SimpleString{Value: message}})
+				Msg: &pb.SimpleString{Value: message},
+			})
 			require.NoError(t, err)
 			require.Equal(t, message, res.Msg.Value)
 
@@ -931,7 +935,7 @@ func TestGlobalStateService(t *testing.T) {
 					}),
 				},
 
-				//These tests should be successful
+				// These tests should be successful
 				{
 					name: "valid address",
 					run: generateRunFn(&pb.SmesherRewardStreamRequest{
@@ -939,7 +943,7 @@ func TestGlobalStateService(t *testing.T) {
 					}),
 				},
 			}
-			//Run sub-subtests
+			// Run sub-subtests
 			for _, r := range subtests {
 				t.Run(r.name, r.run)
 			}
@@ -2221,7 +2225,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 		// look for EOF
 		// third and fourth events streamed should not be received! they should be
 		// filtered out
-		res, err = stream.Recv()
+		_, err = stream.Recv()
 		require.Equal(t, io.EOF, err, "expected EOF from stream")
 	}()
 
@@ -2306,7 +2310,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		// look for EOF
 		// the next two events streamed should not be received! they should be
 		// filtered out
-		res, err = stream.Recv()
+		_, err = stream.Recv()
 		require.Equal(t, io.EOF, err, "expected EOF from stream")
 	}()
 
@@ -2401,7 +2405,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		// look for EOF
 		// the next two events streamed should not be received! they should be
 		// filtered out
-		res, err = stream.Recv()
+		_, err = stream.Recv()
 		require.Equal(t, io.EOF, err, "expected EOF from stream")
 	}()
 
@@ -2686,7 +2690,8 @@ func TestMultiService(t *testing.T) {
 	// call endpoints and validate results
 	const message = "Hello World"
 	res1, err1 := c1.Echo(context.Background(), &pb.EchoRequest{
-		Msg: &pb.SimpleString{Value: message}})
+		Msg: &pb.SimpleString{Value: message},
+	})
 	require.NoError(t, err1)
 	require.Equal(t, message, res1.Msg.Value)
 	res2, err2 := c2.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
@@ -2697,13 +2702,14 @@ func TestMultiService(t *testing.T) {
 	shutDown()
 
 	// Make sure NodeService is off
-	res1, err1 = c1.Echo(context.Background(), &pb.EchoRequest{
-		Msg: &pb.SimpleString{Value: message}})
+	_, err1 = c1.Echo(context.Background(), &pb.EchoRequest{
+		Msg: &pb.SimpleString{Value: message},
+	})
 	require.Error(t, err1)
 	require.Contains(t, err1.Error(), "rpc error: code = Unavailable")
 
 	// Make sure MeshService is off
-	res2, err2 = c2.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
+	_, err2 = c2.GenesisTime(context.Background(), &pb.GenesisTimeRequest{})
 	require.Error(t, err2)
 	require.Contains(t, err2.Error(), "rpc error: code = Unavailable")
 }
