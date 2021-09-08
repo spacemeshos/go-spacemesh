@@ -121,7 +121,8 @@ func (s *state) Recover() error {
 
 	it = s.db.Find([]byte(namespaceOpinons))
 	for it.Next() {
-		layer1 := decodeLayerKey(it.Key())
+		// first byte is namespace
+		layer1 := decodeLayerKey(it.Key()[1:])
 		offset1 := 1 + types.LayerIDSize
 		offset2 := offset1 + types.BlockIDSize + types.LayerIDSize
 		block1 := decodeBlock(it.Key()[offset1 : offset1+types.BlockIDSize])
@@ -154,7 +155,8 @@ func (s *state) Evict() error {
 		b     bytes.Buffer
 	)
 	for it.Next() {
-		layer := decodeLayerKey(it.Key())
+		// first byte is namespace
+		layer := decodeLayerKey(it.Key()[1:])
 		if layer.After(s.LastEvicted) {
 			break
 		}
@@ -183,5 +185,5 @@ func encodeLayerKey(layer types.LayerID) []byte {
 }
 
 func decodeLayerKey(key []byte) types.LayerID {
-	return types.NewLayerID(util.BytesToUint32BE((key[1 : 1+types.LayerIDSize])))
+	return types.NewLayerID(util.BytesToUint32BE(key[:types.LayerIDSize]))
 }
