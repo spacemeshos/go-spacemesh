@@ -62,11 +62,12 @@ func (cp *cpoolMock) Shutdown() {
 
 func p2pTestInstance(t testing.TB, config config.Config) *Switch {
 	p := p2pTestNoStart(t, config)
-	err := p.Start(context.TODO())
-	if err != nil {
+	if err := p.Start(context.TODO()); err != nil {
 		t.Fatal(err)
 	}
-
+	t.Cleanup(func() {
+		p.Shutdown()
+	})
 	return p
 }
 
@@ -318,25 +319,34 @@ func TestSwarm_RoundTrip(t *testing.T) {
 }
 
 func TestSwarm_MultipleMessages(t *testing.T) {
+	numMessagesToSendConcurrently := 250
+
 	p1 := p2pTestNoStart(t, configWithPort(0))
 	p2 := p2pTestNoStart(t, configWithPort(0))
+	defer p1.Shutdown()
+	defer p2.Shutdown()
 
 	exchan1 := p1.RegisterDirectProtocol(exampleProtocol)
 	require.Equal(t, exchan1, p1.directProtocolHandlers[exampleProtocol])
-	exchan2 := p2.RegisterDirectProtocol(exampleProtocol)
-	require.Equal(t, exchan2, p2.directProtocolHandlers[exampleProtocol])
 
 	require.NoError(t, p1.Start(context.TODO()))
 	require.NoError(t, p2.Start(context.TODO()))
 
 	err := p2.SendMessage(context.TODO(), p1.lNode.PublicKey(), exampleProtocol, []byte(examplePayload))
-	require.Error(t, err, "ERR") // should'nt be in routing table
+	require.Error(t, err, "ERR") // shouldn't be in routing table
 
 	_, err = p2.cPool.GetConnection(context.TODO(), p1.network.LocalAddr(), p1.lNode.PublicKey())
 	require.NoError(t, err)
+	conn, err := p2.cPool.GetConnectionIfExists(p1.lNode.PublicKey())
+	require.NotNil(t, conn)
+	require.NoError(t, err)
+
+	// number of messages sent concurrently must be less than the outbound message queue size
+	require.LessOrEqual(t, numMessagesToSendConcurrently, net.MessageQueueSize,
+		"attempt to send more concurrent messages than outbound queue can handle")
 
 	var wg sync.WaitGroup
-	for i := 0; i < 500; i++ {
+	for i := 0; i < numMessagesToSendConcurrently; i++ {
 		wg.Add(1)
 		go func() {
 			sendDirectMessage(t, p2, p1.lNode.PublicKey(), exchan1, false)
@@ -344,9 +354,6 @@ func TestSwarm_MultipleMessages(t *testing.T) {
 		}()
 	}
 	wg.Wait()
-
-	p1.Shutdown()
-	p2.Shutdown()
 }
 
 type swarmArray struct {
@@ -861,9 +868,6 @@ func Test_Swarm_callCpoolCloseCon(t *testing.T) {
 	cpm := newCpoolMock()
 	p1.cPool = cpm
 
-	wg := sync.WaitGroup{}
-	wg.Add(2)
-
 	_, err := p2.cPool.GetConnection(context.TODO(), p1.network.LocalAddr(), p1.lNode.PublicKey())
 	require.NoError(t, err)
 
@@ -922,7 +926,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 	case <-p.initial:
 		break
 	case <-ti:
-		t.Error("Start succeded")
+		t.Error("start succeeded")
 	}
 
 	p.Shutdown()
@@ -1072,7 +1076,7 @@ func TestNeighborhood_ReportConnectionResult(t *testing.T) {
 
 	cm.f = func(address inet.Addr, pk p2pcrypto.PublicKey) (connection net.Connection, e error) {
 		atomicIncOne(&getConnCount)
-		return nil, errors.New("coudln't create connection")
+		return nil, errors.New("couldn't create connection")
 	}
 
 	n.cPool = cm

@@ -38,12 +38,10 @@ type DB struct {
 	general               database.Database
 	unappliedTxs          database.Database
 	inputVector           database.Database
-	unappliedTxsMutex     sync.Mutex
 	blockMutex            sync.RWMutex
 	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
 	invalidatedLayers     map[types.LayerID]struct{} // layers for which Hare has failed
 	coinflips             map[types.LayerID]bool     // weak coinflip results from Hare
-	layerMutex            map[types.LayerID]*layerMutex
 	lhMutex               sync.Mutex
 	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
 	exit                  chan struct{}
@@ -93,7 +91,6 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		invalidatedLayers:  make(map[types.LayerID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
-		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
 	for _, blk := range GenesisLayer().Blocks() {
@@ -136,7 +133,6 @@ func NewMemMeshDB(logger log.Log) *DB {
 		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		invalidatedLayers:  make(map[types.LayerID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
-		layerMutex:         make(map[types.LayerID]*layerMutex),
 		exit:               make(chan struct{}),
 	}
 	for _, blk := range GenesisLayer().Blocks() {
@@ -303,16 +299,9 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return nil, database.ErrNotFound
 }
 
-// EmptyLayerHash is the layer hash for an empty layer
-var EmptyLayerHash = types.Hash32{}
-
 // AddZeroBlockLayer tags lyr as a layer without blocks
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
-	err := m.layers.Put(index.Bytes(), nil)
-	if err == nil {
-		m.persistLayerHash(index, EmptyLayerHash)
-	}
-	return err
+	return m.layers.Put(index.Bytes(), nil)
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
@@ -376,19 +365,6 @@ func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) 
 	return coin, exists
 }
 
-// GetLayerInputVector gets the input vote vector for a layer (hare results)
-func (m *DB) GetLayerInputVector(hash types.Hash32) ([]types.BlockID, error) {
-	buf, err := m.inputVector.Get(hash.Bytes())
-	if err != nil {
-		return nil, err
-	}
-	var ids []types.BlockID
-	if err := codec.Decode(buf, &ids); err != nil {
-		return nil, err
-	}
-	return ids, nil
-}
-
 // InputVectorBackupFunc specifies a backup function for testing
 type InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
 
@@ -397,11 +373,15 @@ func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, er
 	if m.InputVectorBackupFunc != nil {
 		return m.InputVectorBackupFunc(layerID)
 	}
-	// check if this layer was marked invalid
-	if _, ok := m.invalidatedLayers[layerID]; ok {
-		return nil, ErrInvalidLayer
+	buf, err := m.inputVector.Get(layerID.Bytes())
+	if err != nil {
+		return nil, err
 	}
-	return m.GetLayerInputVector(types.CalcHash32(layerID.Bytes()))
+	var ids []types.BlockID
+	if err := codec.Decode(buf, &ids); err != nil {
+		return nil, err
+	}
+	return ids, nil
 }
 
 // SetInputVectorBackupFunc sets the backup function for testing
@@ -416,44 +396,25 @@ func (m *DB) GetInputVectorBackupFunc() InputVectorBackupFunc {
 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
 func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error {
-	hash := types.CalcHash32(id.Bytes())
-	m.WithContext(ctx).With().Info("saving input vector",
-		id,
-		log.String("iv_hash", hash.ShortString()))
-
+	m.WithContext(ctx).With().Debug("saving input vector", id)
 	// NOTE(dshulyak) there is an implicit dependency in fetcher
 	buf, err := codec.Encode(blks)
 	if err != nil {
 		return err
 	}
-	return m.inputVector.Put(hash.Bytes(), buf)
+	return m.inputVector.Put(id.Bytes(), buf)
 }
 
-func (m *DB) persistProcessedLayer(lyr *ProcessedLayer) error {
-	data, err := types.InterfaceToBytes(lyr)
-	if err != nil {
-		return err
-	}
-	if err := m.general.Put(constPROCESSED, data); err != nil {
-		return err
-	}
-	m.With().Debug("persisted processed layer",
-		lyr.ID,
-		log.String("layer_hash", lyr.Hash.ShortString()))
-	return nil
+func (m *DB) persistProcessedLayer(layerID types.LayerID) error {
+	return m.general.Put(constPROCESSED, layerID.Bytes())
 }
 
-func (m *DB) recoverProcessedLayer() (*ProcessedLayer, error) {
-	processed, err := m.general.Get(constPROCESSED)
+func (m *DB) recoverProcessedLayer() (types.LayerID, error) {
+	data, err := m.general.Get(constPROCESSED)
 	if err != nil {
-		return nil, err
+		return types.NewLayerID(0), err
 	}
-	var data ProcessedLayer
-	err = types.BytesToInterface(processed, &data)
-	if err != nil {
-		return nil, err
-	}
-	return &data, nil
+	return types.BytesToLayerID(data), nil
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
@@ -483,27 +444,21 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 }
 
 func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
-	h := EmptyLayerHash
+	h := types.EmptyLayerHash
 	bts, err := m.general.Get(getLayerHashKey(layerID))
 	if err != nil {
-		return EmptyLayerHash, err
+		return types.EmptyLayerHash, err
 	}
 	h.SetBytes(bts)
 	return h, nil
 }
 
-func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
-	if err := m.general.Put(getLayerHashKey(layerID), hash.Bytes()); err != nil {
-		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
-			log.String("layer_hash", hash.ShortString()))
-	}
+func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) error {
+	return m.general.Put(getLayerHashKey(layerID), hash.Bytes())
+}
 
-	// we store a double index here because most of the code uses layer ID as key, currently only sync reads layer by hash
-	// when this changes we can simply point to the layes
-	if err := m.general.Put(hash.Bytes(), layerID.Bytes()); err != nil {
-		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
-			log.String("layer_hash", hash.ShortString()))
-	}
+func (m *DB) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) error {
+	return m.general.Put(getAggregatedLayerHashKey(layerID), hash.Bytes())
 }
 
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
@@ -787,29 +742,34 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 
 func (m *DB) addToUnappliedTxs(txs []*types.Transaction, layer types.LayerID) error {
 	groupedTxs := groupByOrigin(txs)
-
 	for addr, accountTxs := range groupedTxs {
-		if err := m.addToAccountTxs(addr, accountTxs, layer); err != nil {
+		if err := m.addUnapplied(addr, accountTxs, layer); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (m *DB) addToAccountTxs(addr types.Address, accountTxs []*types.Transaction, layer types.LayerID) error {
-	m.unappliedTxsMutex.Lock()
-	defer m.unappliedTxsMutex.Unlock()
+func (m *DB) addUnapplied(addr types.Address, txs []*types.Transaction, layer types.LayerID) error {
+	var (
+		batch = m.unappliedTxs.NewBatch()
+		b     bytes.Buffer
+	)
+	for _, tx := range txs {
+		mtx := types.MeshTransaction{Transaction: *tx, LayerID: layer}
+		buf, err := codec.Encode(mtx)
+		if err != nil {
+			m.Log.With().Panic("can't encode tx", log.Err(err))
+		}
 
-	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
-	pending, err := m.getAccountPendingTxs(addr)
-	if err != nil {
-		return err
+		b.Write(addr.Bytes())
+		b.Write(tx.ID().Bytes())
+		if err := batch.Put(b.Bytes(), buf); err != nil {
+			return err
+		}
+		b.Reset()
 	}
-	pending.Add(layer, accountTxs...)
-	if err := m.storeAccountPendingTxs(addr, pending); err != nil {
-		return err
-	}
-	return nil
+	return batch.Write()
 }
 
 func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction) (grouped map[types.Address][]*types.Transaction, accounts map[types.Address]struct{}) {
@@ -824,70 +784,43 @@ func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction) (grouped map[
 	return
 }
 
-func (m *DB) removeFromAccountTxs(account types.Address, gAccepted map[types.Address][]*types.Transaction) {
-	m.unappliedTxsMutex.Lock()
-	defer m.unappliedTxsMutex.Unlock()
-
-	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
-	pending, err := m.getAccountPendingTxs(account)
-	if err != nil {
-		m.With().Error("failed to get account pending txs",
-			log.String("address", account.Short()), log.Err(err))
-		return
-	}
-	pending.RemoveAccepted(gAccepted[account])
-	if err := m.storeAccountPendingTxs(account, pending); err != nil {
-		m.With().Error("failed to store account pending txs",
-			log.String("address", account.Short()), log.Err(err))
-	}
+func (m *DB) removeFromAccountTxs(account types.Address, accepted map[types.Address][]*types.Transaction) error {
+	return m.removePending(account, accepted[account])
 }
 
-func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction, layer types.LayerID) {
-	m.unappliedTxsMutex.Lock()
-	defer m.unappliedTxsMutex.Unlock()
-
-	// TODO: instead of storing a list, use LevelDB's prefixed keys and then iterate all relevant keys
-	pending, err := m.getAccountPendingTxs(account)
-	if err != nil {
-		m.With().Error("failed to get account pending txs",
-			layer, log.String("address", account.Short()), log.Err(err))
-		return
-	}
-	pending.RemoveRejected(rejected[account], layer)
-	if err := m.storeAccountPendingTxs(account, pending); err != nil {
-		m.With().Error("failed to store account pending txs",
-			layer, log.String("address", account.Short()), log.Err(err))
-	}
+func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction, layer types.LayerID) error {
+	return m.removePending(account, rejected[account])
 }
 
-func (m *DB) storeAccountPendingTxs(account types.Address, pending *pendingtxs.AccountPendingTxs) error {
-	if pending.IsEmpty() {
-		if err := m.unappliedTxs.Delete(account.Bytes()); err != nil {
-			return fmt.Errorf("failed to delete empty pending txs for account %v: %v", account.Short(), err)
+func (m *DB) removePending(addr types.Address, txs []*types.Transaction) error {
+	var (
+		batch = m.unappliedTxs.NewBatch()
+		b     bytes.Buffer
+	)
+	for _, tx := range txs {
+		b.Write(addr.Bytes())
+		b.Write(tx.ID().Bytes())
+		if err := batch.Delete(b.Bytes()); err != nil {
+			return err
 		}
-		return nil
+		b.Reset()
 	}
-	if accountTxsBytes, err := types.InterfaceToBytes(&pending); err != nil {
-		return fmt.Errorf("failed to marshal account pending txs: %v", err)
-	} else if err := m.unappliedTxs.Put(account.Bytes(), accountTxsBytes); err != nil {
-		return fmt.Errorf("failed to store mesh txs for address %s", account.Short())
-	}
-	return nil
+	return batch.Write()
 }
 
 func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendingTxs, error) {
-	accountTxsBytes, err := m.unappliedTxs.Get(addr.Bytes())
-	if err != nil && err != database.ErrNotFound {
-		return nil, fmt.Errorf("failed to get mesh txs for account %s", addr.Short())
+	var (
+		it      = m.unappliedTxs.Find(addr[:])
+		pending = pendingtxs.NewAccountPendingTxs()
+	)
+	for it.Next() {
+		var mtx types.MeshTransaction
+		if err := codec.Decode(it.Value(), &mtx); err != nil {
+			return nil, err
+		}
+		pending.Add(mtx.LayerID, &mtx.Transaction)
 	}
-	if err == database.ErrNotFound {
-		return pendingtxs.NewAccountPendingTxs(), nil
-	}
-	var pending pendingtxs.AccountPendingTxs
-	if err := types.BytesToInterface(accountTxsBytes, &pending); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal account pending txs: %v", err)
-	}
-	return &pending, nil
+	return pending, nil
 }
 
 func groupByOrigin(txs []*types.Transaction) map[types.Address][]*types.Transaction {
@@ -1053,34 +986,6 @@ func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.Layer
 			log.String("errors", fmt.Sprint(cvErrors)))
 	}
 	return validBlks, nil
-}
-
-// Persist persists an item v into the database using key as its id
-func (m *DB) Persist(key []byte, v interface{}) error {
-	buf, err := types.InterfaceToBytes(v)
-	if err != nil {
-		panic(err)
-	}
-	return m.general.Put(key, buf)
-}
-
-// Retrieve retrieves item by key into v
-func (m *DB) Retrieve(key []byte, v interface{}) (interface{}, error) {
-	val, err := m.general.Get(key)
-	if err != nil {
-		m.Warning("failed retrieving object from db ", err)
-		return nil, err
-	}
-
-	if val == nil {
-		return nil, fmt.Errorf("no such value in database db ")
-	}
-
-	if err := types.BytesToInterface(val, v); err != nil {
-		return nil, fmt.Errorf("failed decoding object from db %v", err)
-	}
-
-	return v, nil
 }
 
 func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {

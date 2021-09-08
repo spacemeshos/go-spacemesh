@@ -36,7 +36,6 @@ func NewNodeIdentity() (LocalNode, error) {
 
 // Creates a new node from persisted NodeData.
 func newLocalNodeFromFile(d *nodeFileData) (LocalNode, error) {
-
 	priv, err := p2pcrypto.NewPrivateKeyFromBase58(d.PrivKey)
 	if err != nil {
 		return emptyNode, err

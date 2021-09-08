@@ -621,9 +621,15 @@ func (app *App) initServices(ctx context.Context,
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
+	trtlStateDB, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "turtle"), 0, 0, app.addLogger(StateDbLogger, lg))
+	if err != nil {
+		return err
+	}
+	app.closers = append(app.closers, trtlStateDB)
 	trtlCfg := tortoise.Config{
 		LayerSize:       int(layerSize),
-		Database:        mdb,
+		Database:        trtlStateDB,
+		MeshDatabase:    mdb,
 		ATXDB:           atxDB,
 		Clock:           clock,
 		Hdist:           app.Config.Hdist,
@@ -633,13 +639,12 @@ func (app *App) initServices(ctx context.Context,
 		GlobalThreshold: app.Config.GlobalThreshold,
 		LocalThreshold:  app.Config.LocalThreshold,
 		Log:             app.addLogger(TrtlLogger, lg),
-		Recovered:       mdb.PersistentData(),
 		RerunInterval:   time.Minute * time.Duration(app.Config.TortoiseRerunInterval),
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
 
-	if trtlCfg.Recovered {
+	if mdb.PersistentData() {
 		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
@@ -866,7 +871,7 @@ func (app *App) startServices(ctx context.Context) error {
 	if app.Config.SMESHING.Start {
 		coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 		go func() {
-			if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
+			if err := app.atxBuilder.StartSmeshing(ctx, coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
 				log.Panic("failed to start smeshing: %v", err)
 			}
 		}()
@@ -911,7 +916,7 @@ func (app *App) startAPIServices(ctx context.Context, net api.NetworkAPI) {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.txPool))
 	}
 	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.txPool, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
+		registerService(grpcserver.NewMeshService(app.mesh, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
 	}
 	if apiConf.StartNodeService {
 		nodeService := grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer, app.atxBuilder)
@@ -1225,12 +1230,13 @@ func (app *App) Start() error {
 		return fmt.Errorf("error starting services: %w", err)
 	}
 
+	app.startAPIServices(ctx, app.P2P)
+
 	// P2P must start last to not block when sending messages to protocols
 	if err := app.P2P.Start(ctx); err != nil {
 		return fmt.Errorf("error starting p2p services: %w", err)
 	}
 
-	app.startAPIServices(ctx, app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())
 	logger.Info("app started")
 

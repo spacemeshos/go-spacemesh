@@ -323,6 +323,16 @@ func publishAtx(b *Builder, meshLayer types.LayerID, clockEpoch types.EpochID, b
 
 // ========== Tests ==========
 
+func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
+	activationDb := newActivationDb(t)
+	builder := newBuilder(t, activationDb)
+
+	coinbase := types.Address{1, 1, 1}
+	require.NoError(t, builder.StartSmeshing(context.TODO(), coinbase, PostSetupOpts{}))
+	t.Cleanup(func() { builder.StopSmeshing(true) })
+	require.Equal(t, coinbase, builder.Coinbase())
+}
+
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)

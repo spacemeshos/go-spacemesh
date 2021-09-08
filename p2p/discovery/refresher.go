@@ -3,12 +3,13 @@ package discovery
 import (
 	"context"
 	"errors"
+	"net"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"net"
-	"time"
 )
 
 // XXX TODO: move this impl to the upper protocol struct
@@ -74,9 +75,12 @@ func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 	// using the results as servers to query. every failed loop will wait a backoff
 	// to let other nodes populate before flooding with queries.
 	size := r.book.NumAddresses()
+	wanted := numpeers
 	if size == 0 {
 		r.book.AddAddresses(r.bootNodes, r.localAddress)
 		size = len(r.bootNodes)
+		// bootnodes will be removed afterwards, so we want to request this many more peers
+		wanted = wanted + size
 		defer func() {
 			// currently we only have  the discovery address of bootnodes in the configuration so let them pick their own neighbors.
 			for _, b := range r.bootNodes {
@@ -85,22 +89,21 @@ func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 		}()
 	}
 
-	r.logger.Info("Bootstrap: starting with %v sized table", size)
+	r.logger.Info("Bootstrap: starting with %v sized table (including %v bootnodes), wanted %v", size, wanted-numpeers, wanted)
 
 loop:
 	for {
 		srv := r.book.AddressCache() // get fresh members to query
-		servers = srv[:util.Min(numpeers, len(srv))]
+		servers = srv[:util.Min(wanted, len(srv))]
 		res := r.requestAddresses(ctx, servers)
 		tries++
 
 		newsize := r.book.NumAddresses()
-		wanted := numpeers
 
 		r.logger.With().Info("bootstrap attempt finished", log.Int("tries", tries), log.Int("results", len(res)), log.Int("addbook_size", newsize))
 
 		if newsize-size >= wanted {
-			r.logger.Info("Achieved bootstrap objective, got %v needed %v", newsize-size, wanted)
+			r.logger.Info("Achieved bootstrap objective, got %v new, needed %v, total %v", newsize-size, wanted, newsize)
 			break
 		}
 

@@ -132,16 +132,16 @@ func New(
 
 type vrfMessage struct {
 	Beacon uint32
-	Round  int32
+	Round  uint32
 	Layer  types.LayerID
 }
 
-func buildKey(l types.LayerID, r int32) [2]uint64 {
+func buildKey(l types.LayerID, r uint32) [2]uint64 {
 	return [2]uint64{uint64(l.Uint32()), uint64(r)}
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round)
-func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round int32) ([]byte, error) {
+func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	key := buildKey(layer, round)
 
 	o.lock.Lock()
@@ -159,7 +159,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 			log.Err(err),
 			layer,
 			layer.GetEpoch(),
-			log.Int32("round", round))
+			log.Uint32("round", round))
 		return nil, err
 	}
 
@@ -210,12 +210,12 @@ func calcVrfFrac(vrfSig []byte) fixed.Fixed {
 	return fixed.FracFromBytes(vrfSig[:8])
 }
 
-func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round int32, committeeSize int,
+func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
 	id types.NodeID, vrfSig []byte) (n int, p fixed.Fixed, vrfFrac fixed.Fixed, done bool, err error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
 		id,
-		log.Int32("round", round),
+		log.Uint32("round", round),
 		log.Int("committee_size", committeeSize))
 
 	if committeeSize < 1 {
@@ -287,7 +287,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 // Validate validates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is the role
 // proof and assuming commSize as the expected committee size.
-func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
 	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, sig)
 	if done || err != nil {
 		return false, err
@@ -311,7 +311,7 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round int32,
 	}
 	o.WithContext(ctx).With().Warning("eligibility: node did not pass vrf eligibility threshold",
 		layer,
-		log.Int32("round", round),
+		log.Uint32("round", round),
 		log.Int("committee_size", committeeSize),
 		id,
 		log.Uint64("eligibility_count", uint64(eligibilityCount)),
@@ -325,7 +325,7 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round int32,
 
 // CalcEligibility calculates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is
 // the role proof and assuming commSize as the expected committee size.
-func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round int32, committeeSize int,
+func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
 	id types.NodeID, vrfSig []byte) (uint16, error) {
 	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, vrfSig)
 	if done {
@@ -335,7 +335,7 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 	defer func() {
 		if msg := recover(); msg != nil {
 			o.With().Error("panic in calc eligibility",
-				layer, layer.GetEpoch(), log.Int32("round_id", round),
+				layer, layer.GetEpoch(), log.Uint32("round_id", round),
 				log.String("msg", fmt.Sprint(msg)),
 				log.Int("committee_size", committeeSize),
 				log.Int("n", n),
@@ -347,7 +347,7 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 	}()
 
 	o.With().Info("params",
-		layer, layer.GetEpoch(), log.Int32("round_id", round),
+		layer, layer.GetEpoch(), log.Uint32("round_id", round),
 		log.Int("committee_size", committeeSize),
 		log.Int("n", n),
 		log.String("p", fmt.Sprintf("%g", p.Float())),
@@ -363,7 +363,7 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 }
 
 // Proof returns the role proof for the current Layer & Round
-func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error) {
+func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
 		o.WithContext(ctx).With().Error("proof: could not build vrf message", log.Err(err))

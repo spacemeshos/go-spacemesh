@@ -31,9 +31,6 @@ var (
 	constPROCESSED = []byte("processed")
 )
 
-// TORTOISE key for tortoise persistence in database
-var TORTOISE = []byte("tortoise")
-
 // VERIFIED refers to layers we pushed into the state
 var VERIFIED = []byte("verified")
 
@@ -77,13 +74,6 @@ type AtxDB interface {
 	SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) error
 }
 
-// ProcessedLayer represents the last processed layer in mesh.
-// This struct is used to for data serialization.
-type ProcessedLayer struct {
-	ID   types.LayerID
-	Hash types.Hash32
-}
-
 // Mesh is the logic layer above our mesh.DB database
 type Mesh struct {
 	log.Log
@@ -91,13 +81,16 @@ type Mesh struct {
 	AtxDB
 	txProcessor
 	Validator
-	trtl                tortoise
-	txPool              txMemPool
-	config              Config
-	latestLayer         types.LayerID
-	latestLayerInState  types.LayerID
-	processedLayer      ProcessedLayer
-	nextProcessedLayers map[types.LayerID]*types.Layer
+	trtl   tortoise
+	txPool txMemPool
+	config Config
+	// latestLayer is the latest layer this node had seen from blocks
+	latestLayer types.LayerID
+	// latestLayerInState is the latest layer whose contents have been applied to the state
+	latestLayerInState types.LayerID
+	// processedLayer is the latest layer whose votes have been processed
+	processedLayer      types.LayerID
+	nextProcessedLayers map[types.LayerID]struct{}
 	maxProcessedLayer   types.LayerID
 	mutex               sync.RWMutex
 	done                chan struct{}
@@ -117,13 +110,22 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 		DB:                  db,
 		config:              rewardConfig,
 		AtxDB:               atxDb,
-		nextProcessedLayers: make(map[types.LayerID]*types.Layer),
+		nextProcessedLayers: make(map[types.LayerID]struct{}),
 		nextValidLayers:     make(map[types.LayerID]*types.Layer),
 		latestLayer:         types.GetEffectiveGenesis(),
 		latestLayerInState:  types.GetEffectiveGenesis(),
 	}
 
 	msh.Validator = &validator{Mesh: msh}
+	gLyr := types.GetEffectiveGenesis()
+	for i := types.NewLayerID(1); i.Before(gLyr); i = i.Add(1) {
+		if err := msh.SetZeroBlockLayer(i); err != nil {
+			msh.With().Panic("failed to set zero-block for genesis layer", i, log.Err(err))
+		}
+	}
+	if err := msh.persistLayerHashes(context.Background(), types.NewLayerID(1), gLyr); err != nil {
+		msh.With().Panic("failed to persist hashes for genesis layers", log.Err(err))
+	}
 	return msh
 }
 
@@ -133,37 +135,43 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 
 	latest, err := db.general.Get(constLATEST)
 	if err != nil {
-		logger.Panic("could not recover latest layer: %v", err)
+		logger.With().Panic("failed to recover latest layer", log.Err(err))
 	}
 	msh.setLatestLayer(types.BytesToLayerID(latest))
 
 	lyr, err := msh.recoverProcessedLayer()
 	if err != nil {
-		logger.Panic("could not recover processed layer: %v", err)
+		logger.With().Panic("failed to recover processed layer", log.Err(err))
 	}
 	msh.setProcessedLayerFromRecoveredData(lyr)
 
 	verified, err := db.general.Get(VERIFIED)
 	if err != nil {
-		logger.Panic("could not recover latest verified layer: %v", err)
+		logger.With().Panic("failed to recover latest verified layer", log.Err(err))
 	}
-	msh.setLatestLayerInState(types.BytesToLayerID(verified))
+	if err = msh.setLatestLayerInState(types.BytesToLayerID(verified)); err != nil {
+		logger.With().Panic("failed to recover latest layer in state", log.Err(err))
+	}
 
 	err = pr.LoadState(msh.LatestLayerInState())
 	if err != nil {
-		logger.Panic("cannot load state for layer %v, message: %v", msh.LatestLayerInState(), err)
+		logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 	}
 	// in case we load a state that was not fully played
-	if msh.LatestLayerInState().Add(1).Before(msh.trtl.LatestComplete()) {
+	nextLayer := msh.LatestLayerInState().Add(1)
+	lastComplete := msh.trtl.LatestComplete()
+	if nextLayer.Before(msh.trtl.LatestComplete()) {
 		// todo: add test for this case, or add random kill test on node
-		logger.Info("playing layers %v to %v to state", msh.LatestLayerInState().Add(1), msh.trtl.LatestComplete())
-		msh.pushLayersToState(ctx, msh.LatestLayerInState().Add(1), msh.trtl.LatestComplete())
+		logger.With().Info("playing layers to state",
+			log.FieldNamed("from_layer", nextLayer),
+			log.FieldNamed("to_layer", lastComplete))
+		msh.pushLayersToState(ctx, nextLayer, lastComplete)
 	}
 
 	msh.With().Info("recovered mesh from disk",
 		log.FieldNamed("latest", msh.LatestLayer()),
 		log.FieldNamed("processed", msh.ProcessedLayer()),
-		log.String("layer_hash", msh.ProcessedLayerHash().ShortString()),
+		log.FieldNamed("verified", msh.trtl.LatestComplete()),
 		log.String("root_hash", pr.GetStateRoot().String()))
 
 	return msh
@@ -241,68 +249,30 @@ func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 			return lyr.Hash()
 		}
 	}
-	return EmptyLayerHash
+	return types.EmptyLayerHash
 }
 
 // ProcessedLayer returns the last processed layer ID
 func (msh *Mesh) ProcessedLayer() types.LayerID {
-	return msh.getProcessedLayer().ID
-}
-
-// ProcessedLayerHash returns the aggregated hash of the last processed layer
-func (msh *Mesh) ProcessedLayerHash() types.Hash32 {
-	return msh.getProcessedLayer().Hash
-}
-
-func (msh *Mesh) getProcessedLayer() ProcessedLayer {
 	msh.mutex.RLock()
 	defer msh.mutex.RUnlock()
 	return msh.processedLayer
 }
 
-func (msh *Mesh) setProcessedLayerFromRecoveredData(pLayer *ProcessedLayer) {
+func (msh *Mesh) setProcessedLayerFromRecoveredData(pLayer types.LayerID) {
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
-	msh.processedLayer = *pLayer
-	msh.Event().Info("processed layer set from recovered data",
-		pLayer.ID,
-		log.String("layer_hash", pLayer.Hash.ShortString()))
+	msh.processedLayer = pLayer
+	msh.Event().Info("processed layer set from recovered data", pLayer)
 }
 
 func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
-	msh.persistLayerHash(layer.Index(), msh.calcSimpleLayerHash(layer))
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
-	if !layer.Index().After(msh.processedLayer.ID) {
+	if !layer.Index().After(msh.processedLayer) {
 		msh.With().Info("trying to set processed layer to an older layer",
-			log.FieldNamed("processed", msh.processedLayer.ID),
-			log.FieldNamed("old_layer", layer.Index()))
-		for i := layer.Index(); !i.After(msh.processedLayer.ID); i = i.Add(1) {
-			lyr, err := msh.GetLayer(i)
-			if err != nil {
-				msh.With().Error("failed to get layer", i, log.Err(err))
-				return
-			}
-			prevHash, err := msh.getAggregatedLayerHash(i.Sub(1))
-			if err != nil {
-				msh.With().Error("failed to get previous aggregated hash", i, log.Err(err))
-				return
-			}
-			newAggHash := msh.calcAggregatedLayerHash(lyr, prevHash)
-			msh.persistAggregatedLayerHash(i, newAggHash)
-			msh.With().Info("aggregated hash updated for layer",
-				log.FieldNamed("updated_layer", i),
-				log.String("updated_hash", newAggHash.ShortString()))
-			if i == msh.processedLayer.ID {
-				msh.processedLayer.Hash = newAggHash
-			}
-		}
-		if err := msh.persistProcessedLayer(&msh.processedLayer); err != nil {
-			msh.With().Error("failed to persist processed layer",
-				log.FieldNamed("processed", msh.processedLayer.ID),
-				log.String("processed_layer_hash", msh.processedLayer.Hash.ShortString()),
-				log.Err(err))
-		}
+			log.FieldNamed("processed", msh.processedLayer),
+			layer.Index())
 		return
 	}
 
@@ -310,42 +280,37 @@ func (msh *Mesh) setProcessedLayer(layer *types.Layer) {
 		msh.maxProcessedLayer = layer.Index()
 	}
 
-	if layer.Index() != msh.processedLayer.ID.Add(1) {
+	if layer.Index() != msh.processedLayer.Add(1) {
 		msh.With().Info("trying to set processed layer out of order",
-			log.FieldNamed("processed", msh.processedLayer.ID),
-			log.FieldNamed("new_layer", layer.Index()))
-		msh.nextProcessedLayers[layer.Index()] = layer
+			log.FieldNamed("processed", msh.processedLayer),
+			layer.Index())
+		msh.nextProcessedLayers[layer.Index()] = struct{}{}
 		return
 	}
 
-	msh.nextProcessedLayers[layer.Index()] = layer
-	// first persist all aggregated hashes
+	msh.nextProcessedLayers[layer.Index()] = struct{}{}
 	lastProcessed := msh.processedLayer
 	for i := layer.Index(); !i.After(msh.maxProcessedLayer); i = i.Add(1) {
-		lyr, ok := msh.nextProcessedLayers[i]
+		_, ok := msh.nextProcessedLayers[i]
 		if !ok {
 			break
 		}
-		aggHash := msh.calcAggregatedLayerHash(lyr, lastProcessed.Hash)
-		msh.persistAggregatedLayerHash(i, aggHash)
-		msh.With().Info("aggregated hash set for layer",
-			i,
-			log.String("layer_hash", aggHash.ShortString()))
-		lastProcessed = ProcessedLayer{ID: i, Hash: aggHash}
+		lastProcessed = i
 		delete(msh.nextProcessedLayers, i)
 	}
 	msh.processedLayer = lastProcessed
 	events.ReportNodeStatusUpdate()
-	msh.Event().Info("processed layer set",
-		msh.processedLayer.ID,
-		log.String("layer_hash", msh.processedLayer.Hash.ShortString()))
+	msh.Event().Info("processed layer set", msh.processedLayer)
 
-	if err := msh.persistProcessedLayer(&lastProcessed); err != nil {
+	if err := msh.persistProcessedLayer(msh.processedLayer); err != nil {
 		msh.With().Error("failed to persist processed layer",
-			log.FieldNamed("processed", lastProcessed.ID),
-			log.String("processed_layer_hash", lastProcessed.Hash.ShortString()),
+			log.FieldNamed("processed", lastProcessed),
 			log.Err(err))
 	}
+}
+
+type validator struct {
+	*Mesh
 }
 
 // ValidateLayer performs fairly heavy lifting: it triggers tortoise to process the full contents of the layer (i.e.,
@@ -370,7 +335,7 @@ func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 	// state be reverted and reapplied. pushLayersToState, below, will handle the reapplication.
 	if reverted {
 		if err := vl.revertState(ctx, oldPbase); err != nil {
-			logger.Error("state reversion failed, unable to validate layer")
+			logger.With().Error("failed to revert state, unable to validate layer", log.Err(err))
 			return
 		}
 	}
@@ -379,6 +344,11 @@ func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 		logger.With().Error("could not persist tortoise", log.Err(err))
 	}
 	vl.pushLayersToState(ctx, oldPbase, newPbase)
+	if newPbase.After(oldPbase) {
+		if err := vl.persistLayerHashes(ctx, oldPbase.Add(1), newPbase); err != nil {
+			logger.With().Error("failed to persist layer hashes", log.Err(err))
+		}
+	}
 	vl.setProcessedLayer(lyr)
 	for newlyVerifiedLayer := oldPbase.Add(1); !newlyVerifiedLayer.After(newPbase); newlyVerifiedLayer = newlyVerifiedLayer.Add(1) {
 		events.ReportLayerUpdate(events.LayerUpdate{
@@ -387,6 +357,74 @@ func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 		})
 	}
 	logger.Info("done validating layer")
+}
+
+func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID) error {
+	logger := msh.WithContext(ctx)
+	if to.Before(from) {
+		logger.With().Panic("verified layer went backward",
+			log.FieldNamed("fromLayer", from),
+			log.FieldNamed("toLayer", to))
+	}
+
+	logger.With().Debug("persisting layer hashes",
+		log.FieldNamed("from_layer", from),
+		log.FieldNamed("to_layer", to))
+	for i := from; !i.After(to); i = i.Add(1) {
+		validBlockIDs, err := msh.getValidBlockIDs(ctx, i)
+		if err != nil {
+			logger.With().Error("failed to get valid block IDs", i, log.Err(err))
+			return err
+		}
+		hash := types.EmptyLayerHash
+		if len(validBlockIDs) > 0 {
+			hash = types.CalcBlocksHash32(validBlockIDs, nil)
+		}
+		if err := msh.persistLayerHash(i, hash); err != nil {
+			logger.With().Error("failed to persist layer hash", i, log.Err(err))
+			return err
+		}
+
+		prevHash, err := msh.getAggregatedLayerHash(i.Sub(1))
+		if err != nil {
+			logger.With().Debug("failed to get previous aggregated hash", i, log.Err(err))
+			return err
+		}
+		logger.With().Debug("got previous aggregatedHash", i, log.String("prevAggHash", prevHash.ShortString()))
+		newAggHash := types.CalcBlocksHash32(validBlockIDs, prevHash.Bytes())
+		if err := msh.persistAggregatedLayerHash(i, newAggHash); err != nil {
+			logger.With().Error("failed to persist aggregated layer hash", i, log.Err(err))
+			return err
+		}
+		logger.With().Info("aggregated hash updated for layer",
+			i,
+			log.String("hash", hash.ShortString()),
+			log.String("aggHash", newAggHash.ShortString()))
+	}
+	return nil
+}
+
+func (msh *Mesh) getValidBlockIDs(ctx context.Context, layerID types.LayerID) ([]types.BlockID, error) {
+	logger := msh.WithContext(ctx)
+	lyr, err := msh.GetLayer(layerID)
+	if err != nil {
+		logger.With().Error("failed to get layer", layerID, log.Err(err))
+		return nil, err
+	}
+	var validBlockIDs []types.BlockID
+	for _, bID := range lyr.BlocksIDs() {
+		valid, err := msh.ContextualValidity(bID)
+		if err != nil {
+			// block contextual validity is determined by layer. if one block in the layer is not determined,
+			// the whole layer is not yet verified.
+			logger.With().Warning("block contextual validity not yet determined", layerID, bID, log.Err(err))
+			return nil, err
+		}
+		if valid {
+			validBlockIDs = append(validBlockIDs, bID)
+		}
+	}
+	return validBlockIDs, nil
 }
 
 // HandleLateBlock process a late (contextually invalid) block.
@@ -398,10 +436,6 @@ func (msh *Mesh) HandleLateBlock(ctx context.Context, b *types.Block) {
 		msh.WithContext(ctx).With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
 	}
 	msh.pushLayersToState(ctx, oldPbase, newPbase)
-}
-
-type validator struct {
-	*Mesh
 }
 
 // apply the state of a range of layers, including re-adding transactions from invalid blocks to the mempool
@@ -438,8 +472,10 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 		}
 		validBlocks, invalidBlocks := msh.BlocksByValidity(l.Blocks())
 		msh.updateStateWithLayer(ctx, types.NewExistingLayer(layerID, validBlocks))
-		msh.logStateRoot(l.Index())
-		msh.persistLayerHash(l.Index(), msh.calcSimpleLayerHash(l))
+		msh.Event().Info("end of layer state root",
+			layerID,
+			log.String("state_root", util.Bytes2Hex(msh.txProcessor.GetStateRoot().Bytes())),
+		)
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
 }
@@ -559,60 +595,31 @@ func (msh *Mesh) updateStateWithLayer(ctx context.Context, layer *types.Layer) {
 	}
 }
 
-func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) {
+func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
 	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
 	msh.mutex.Lock()
+	defer msh.mutex.Unlock()
 	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
 		// can happen if database already closed
 		msh.Error("could not persist validated layer index %d: %v", lyr, err.Error())
-		// TODO: return here without setting latestLayerInState ?
+		return err
 	}
 	msh.latestLayerInState = lyr
-	msh.mutex.Unlock()
-}
-
-func (msh *Mesh) logStateRoot(layerID types.LayerID) {
-	msh.Event().Info("end of layer state root",
-		layerID,
-		log.String("state_root", util.Bytes2Hex(msh.txProcessor.GetStateRoot().Bytes())),
-	)
-}
-
-// calcAggregatedLayerHash calculates the aggregated hash up to the specified layer
-func (msh *Mesh) calcAggregatedLayerHash(layer *types.Layer, prevHash types.Hash32) types.Hash32 {
-	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
-	return types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(validBlocks)), prevHash.Bytes())
-}
-
-func (msh *Mesh) calcSimpleLayerHash(layer *types.Layer) types.Hash32 {
-	if len(layer.Blocks()) == 0 {
-		return EmptyLayerHash
-	}
-	validBlocks, _ := msh.BlocksByValidity(layer.Blocks())
-	return types.CalcBlocksHash32(types.SortBlockIDs(types.BlockIDs(validBlocks)), nil)
-}
-
-func (msh *Mesh) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) {
-	if err := msh.general.Put(getAggregatedLayerHashKey(layerID), hash.Bytes()); err != nil {
-		msh.With().Error("failed to persist running layer hash",
-			log.Err(err),
-			msh.ProcessedLayer(),
-			log.String("layer_hash", hash.ShortString()))
-	}
+	return nil
 }
 
 // GetAggregatedLayerHash returns the aggregated layer hash up to the specified layer
 func (msh *Mesh) GetAggregatedLayerHash(layerID types.LayerID) types.Hash32 {
 	h, err := msh.getAggregatedLayerHash(layerID)
 	if err != nil {
-		return EmptyLayerHash
+		return types.EmptyLayerHash
 	}
 	return h
 }
 
 func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, error) {
 	if layerID.Before(types.NewLayerID(1)) {
-		return EmptyLayerHash, nil
+		return types.EmptyLayerHash, nil
 	}
 	var hash types.Hash32
 	bts, err := msh.general.Get(getAggregatedLayerHashKey(layerID))
@@ -621,21 +628,6 @@ func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, er
 		return hash, nil
 	}
 	return hash, err
-}
-
-// GetLayerHashBlocks returns blocks for given hash
-func (msh *Mesh) GetLayerHashBlocks(h types.Hash32) []types.BlockID {
-	layerIDBytes, err := msh.general.Get(h.Bytes())
-	if err != nil {
-		msh.With().Warning("requested unknown layer hash", log.String("hash", h.ShortString()))
-		return []types.BlockID{}
-	}
-	l := types.BytesToLayerID(layerIDBytes)
-	mBlocks, err := msh.LayerBlockIds(l)
-	if err != nil {
-		return []types.BlockID{}
-	}
-	return mBlocks
 }
 
 func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs []*types.Transaction) {
