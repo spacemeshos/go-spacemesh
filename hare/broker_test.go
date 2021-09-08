@@ -576,9 +576,9 @@ func TestBroker_Register4(t *testing.T) {
 	c, e := b.Register(context.TODO(), types.NewLayerID(1))
 	r.Nil(e)
 
-	broker.mu.RLock()
+	b.mu.RLock()
 	r.Equal(b.outbox[1], c)
-	broker.mu.RUnlock()
+	b.mu.RUnlock()
 
 	b.isNodeSynced = falseFunc
 	_, e = b.Register(context.TODO(), types.NewLayerID(2))
@@ -597,9 +597,9 @@ func TestBroker_eventLoop(t *testing.T) {
 	msg := newMockGossipMsg(m)
 	b.inbox <- msg
 
-	broker.mu.RLock()
+	b.mu.RLock()
 	_, ok := b.outbox[instanceID1.Uint32()]
-	broker.mu.RUnlock()
+	b.mu.RUnlock()
 	r.False(ok)
 
 	// register to invalid should error
@@ -655,9 +655,9 @@ func TestBroker_eventLoop2(t *testing.T) {
 	msg = newMockGossipMsg(m)
 	b.inbox <- msg
 
-	broker.mu.RLock()
+	b.mu.RLock()
 	_, ok = b.outbox[instanceID6.Uint32()]
-	broker.mu.RUnlock()
+	b.mu.RUnlock()
 	r.False(ok)
 }
 

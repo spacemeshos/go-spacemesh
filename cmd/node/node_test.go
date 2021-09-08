@@ -884,10 +884,6 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	r.NoError(swarm.Start(context.TODO()))
 	defer swarm.Shutdown()
 
-	cmdp.Mu.RLock()
-	ctx := cmdp.Ctx
-	cmdp.Mu.RUnlock()
-
 	// Try to connect again: this should succeed
 	conn, err := p2pnet.Dial(ctx, &tcpAddr, l.PublicKey())
 	r.NoError(err)
