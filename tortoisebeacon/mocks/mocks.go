@@ -227,34 +227,6 @@ func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
 	return m.recorder
 }
 
-// AwaitLayer mocks base method.
-func (m *MocklayerClock) AwaitLayer(arg0 types.LayerID) chan struct{} {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AwaitLayer", arg0)
-	ret0, _ := ret[0].(chan struct{})
-	return ret0
-}
-
-// AwaitLayer indicates an expected call of AwaitLayer.
-func (mr *MocklayerClockMockRecorder) AwaitLayer(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), arg0)
-}
-
-// GetCurrentLayer mocks base method.
-func (m *MocklayerClock) GetCurrentLayer() types.LayerID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentLayer")
-	ret0, _ := ret[0].(types.LayerID)
-	return ret0
-}
-
-// GetCurrentLayer indicates an expected call of GetCurrentLayer.
-func (mr *MocklayerClockMockRecorder) GetCurrentLayer() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).GetCurrentLayer))
-}
-
 // LayerToTime mocks base method.
 func (m *MocklayerClock) LayerToTime(arg0 types.LayerID) time.Time {
 	m.ctrl.T.Helper()

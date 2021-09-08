@@ -108,9 +108,9 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				valid: [][]byte{sig},
 			}
 
-			tb.consensusMu.RLock()
+			tb.mu.RLock()
 			r.EqualValues(expectedProposals, tb.incomingProposals)
-			tb.consensusMu.RUnlock()
+			tb.mu.RUnlock()
 		})
 	}
 }
@@ -226,9 +226,9 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			err = tb.handleFirstVotingMessage(context.TODO(), tc.message)
 			r.NoError(err)
 
-			tb.consensusMu.RLock()
+			tb.mu.RLock()
 			r.EqualValues(tc.expected, tb.firstRoundIncomingVotes)
-			tb.consensusMu.RUnlock()
+			tb.mu.RUnlock()
 		})
 	}
 }

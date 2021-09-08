@@ -64,8 +64,6 @@ type (
 type layerClock interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timesync.LayerTimer)
-	AwaitLayer(types.LayerID) chan struct{}
-	GetCurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }
 
@@ -135,31 +133,22 @@ type TortoiseBeacon struct {
 	vrfVerifier      signing.Verifier
 	weakCoin         coin
 
-	seenEpochsMu sync.Mutex
-	seenEpochs   map[types.EpochID]struct{}
-
 	clock       layerClock
 	layerTicker chan types.LayerID
-	layerMu     sync.RWMutex
-	lastLayer   types.LayerID
 
-	consensusMu sync.RWMutex
+	mu         sync.RWMutex
+	seenEpochs map[types.EpochID]struct{}
+	lastLayer  types.LayerID
 	// TODO(nkryuchkov): have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
 	incomingProposals       proposals
 	firstRoundIncomingVotes map[string]proposals // sorted votes for bit vector decoding
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
-	votesMargin map[string]*big.Int
-	hasVoted    []map[string]struct{}
-
-	proposalPhaseFinishedTimeMu sync.RWMutex
-	proposalPhaseFinishedTime   time.Time
-
-	beaconsMu sync.RWMutex
-	beacons   map[types.EpochID]types.Hash32
-
-	proposalChansMu sync.Mutex
-	proposalChans   map[types.EpochID]chan *proposalMessageWithReceiptData
+	votesMargin               map[string]*big.Int
+	hasVoted                  []map[string]struct{}
+	proposalPhaseFinishedTime time.Time
+	beacons                   map[types.EpochID]types.Hash32
+	proposalChans             map[types.EpochID]chan *proposalMessageWithReceiptData
 }
 
 // SetSyncState updates sync state provider. Must be executed only once.
@@ -243,8 +232,8 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 		return types.HexToHash32(genesisBeacon).Bytes(), nil
 	}
 
-	tb.beaconsMu.RLock()
-	defer tb.beaconsMu.RUnlock()
+	tb.mu.RLock()
+	defer tb.mu.RUnlock()
 
 	beacon, ok := tb.beacons[epochID-1]
 	if !ok {
@@ -277,17 +266,13 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 }
 
 func (tb *TortoiseBeacon) cleanupVotes() {
-	tb.consensusMu.Lock()
-	defer tb.consensusMu.Unlock()
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
 
 	tb.incomingProposals = proposals{}
 	tb.firstRoundIncomingVotes = map[string]proposals{}
 	tb.votesMargin = map[string]*big.Int{}
 	tb.hasVoted = make([]map[string]struct{}, tb.config.RoundsNumber)
-
-	tb.proposalPhaseFinishedTimeMu.Lock()
-	defer tb.proposalPhaseFinishedTimeMu.Unlock()
-
 	tb.proposalPhaseFinishedTime = time.Time{}
 }
 
@@ -316,15 +301,13 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new CPs.
 func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) {
-	tb.layerMu.Lock()
+	tb.mu.Lock()
 	if layer.After(tb.lastLayer) {
 		tb.Log.WithContext(ctx).With().Debug("updating layer",
 			log.Uint32("old_value", tb.lastLayer.Uint32()),
 			log.Uint32("new_value", layer.Uint32()))
 		tb.lastLayer = layer
 	}
-
-	tb.layerMu.Unlock()
 
 	epoch := layer.GetEpoch()
 
@@ -339,19 +322,18 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 	tb.Log.WithContext(ctx).With().Info("layer is first in epoch, proceeding",
 		log.Uint32("layer", layer.Uint32()))
 
-	tb.seenEpochsMu.Lock()
 	if _, ok := tb.seenEpochs[epoch]; ok {
 		tb.Log.WithContext(ctx).With().Error("already seen this epoch",
 			log.Uint32("epoch_id", uint32(epoch)),
 			log.Uint32("layer_id", layer.Uint32()))
 
-		tb.seenEpochsMu.Unlock()
+		tb.mu.Unlock()
 
 		return
 	}
 
 	tb.seenEpochs[epoch] = struct{}{}
-	tb.seenEpochsMu.Unlock()
+	tb.mu.Unlock()
 
 	tb.Log.WithContext(ctx).With().Debug("tortoise beacon got tick, waiting until other nodes have the same epoch",
 		log.Uint32("layer", layer.Uint32()),
@@ -386,13 +368,13 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	defer tb.cleanupVotes()
 
-	tb.proposalChansMu.Lock()
+	tb.mu.Lock()
 	if epoch > 0 {
 		// close channel for previous epoch
 		tb.closeProposalChannel(epoch - 1)
 	}
 	ch := tb.getOrCreateProposalChannel(epoch)
-	tb.proposalChansMu.Unlock()
+	tb.mu.Unlock()
 
 	err := tb.tg.Go(func(ctx context.Context) error {
 		tb.readProposalMessagesLoop(ctx, ch)
@@ -556,8 +538,8 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 		log.Uint32("epoch_id", uint32(epoch)),
 		log.String("message", m.String()))
 
-	tb.consensusMu.Lock()
-	defer tb.consensusMu.Unlock()
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
 
 	tb.incomingProposals.valid = append(tb.incomingProposals.valid, proposedSignature)
 
@@ -693,18 +675,16 @@ func (tb *TortoiseBeacon) fininshWeakCoinEpoch() {
 
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {
 	finishedAt := time.Now()
-
-	tb.proposalPhaseFinishedTimeMu.Lock()
+	tb.mu.Lock()
 	tb.proposalPhaseFinishedTime = finishedAt
-	tb.proposalPhaseFinishedTimeMu.Unlock()
-
+	tb.mu.Unlock()
 	tb.Debug("marked proposal phase for epoch %v finished at %v", epoch, finishedAt.String())
 }
 
 func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochID, receivedAt time.Time) bool {
-	tb.proposalPhaseFinishedTimeMu.RLock()
+	tb.mu.RLock()
 	finishedAt := tb.proposalPhaseFinishedTime
-	tb.proposalPhaseFinishedTimeMu.RUnlock()
+	tb.mu.RUnlock()
 	hasFinished := !finishedAt.IsZero()
 
 	tb.Debug("checking if timestamp %v was received before proposal phase finished in epoch %v, is phase finished: %v, finished at: %v", receivedAt.String(), epoch, hasFinished, finishedAt.String())
@@ -776,9 +756,9 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 }
 
 func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
-	tb.consensusMu.RLock()
+	tb.mu.RLock()
 	bitVector := tb.encodeVotes(ownCurrentRoundVotes, tb.incomingProposals)
-	tb.consensusMu.RUnlock()
+	tb.mu.RUnlock()
 
 	mb := FollowingVotingMessageBody{
 		RoundID:        round,
