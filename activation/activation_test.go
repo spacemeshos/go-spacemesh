@@ -329,7 +329,7 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 
 	coinbase := types.Address{1, 1, 1}
 	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
-	t.Cleanup(func() { builder.StopSmeshing(context.TODO(), true) })
+	t.Cleanup(func() { builder.StopSmeshing(true) })
 	require.Equal(t, coinbase, builder.Coinbase())
 }
 
@@ -352,9 +352,9 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 		require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
 		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediatly,
 		// but proper test requires adding quite a lot of additional mocking and general refactoring.
-		time.Sleep(200 * time.Microsecond)
+		time.Sleep(400 * time.Microsecond)
 		require.True(t, builder.Smeshing())
-		require.NoError(t, builder.StopSmeshing(context.Background(), true))
+		require.NoError(t, builder.StopSmeshing(true))
 		require.False(t, builder.Smeshing())
 	}
 }

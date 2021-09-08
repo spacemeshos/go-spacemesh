@@ -95,7 +95,7 @@ type syncer interface {
 type SmeshingProvider interface {
 	Smeshing() bool
 	StartSmeshing(types.Address, PostSetupOpts) error
-	StopSmeshing(context.Context, bool) error
+	StopSmeshing(bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
@@ -217,8 +217,14 @@ func (b *Builder) Smeshing() bool {
 func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
 	b.mtx.Lock()
 	if b.exited != nil {
-		b.mtx.Unlock()
-		return errors.New("already started")
+		select {
+		case <-b.exited:
+			// we are here if StartSession failed and method returned with error
+			// in this case it is expected that the user may call StartSmeshing without StopSmeshing first
+		default:
+			b.mtx.Unlock()
+			return errors.New("already started")
+		}
 	}
 	b.coinbaseAccount = coinbase
 	var ctx context.Context
@@ -229,25 +235,32 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
+		b.stop()
 		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
 	go func() {
-		<-doneChan
+		// false after closing exited. otherwise IsSmeshing may return False but StartSmeshing return already started
+		defer b.started.Store(false)
 		defer close(exited)
+		select {
+		case <-ctx.Done():
+			return
+		case <-doneChan:
+		}
+
 		if s := b.postSetupProvider.Status(); s.State != postSetupStateComplete {
 			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
 			return
 		}
 		b.started.Store(true)
 		b.loop(ctx)
-		b.started.Store(false)
 	}()
 
 	return nil
 }
 
 // StopSmeshing stops the atx builder.
-func (b *Builder) StopSmeshing(ctx context.Context, deleteFiles bool) error {
+func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
 	if b.exited == nil {
@@ -259,12 +272,8 @@ func (b *Builder) StopSmeshing(ctx context.Context, deleteFiles bool) error {
 	}
 
 	b.stop()
-	select {
-	case <-b.exited:
-		b.exited = nil
-	case <-ctx.Done():
-		return ctx.Err()
-	}
+	<-b.exited
+	b.exited = nil
 	return nil
 }
 

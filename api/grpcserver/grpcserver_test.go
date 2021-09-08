@@ -447,7 +447,7 @@ func (*SmeshingAPIMock) StartSmeshing(types.Address, activation.PostSetupOpts) e
 	return nil
 }
 
-func (*SmeshingAPIMock) StopSmeshing(context.Context, bool) error {
+func (*SmeshingAPIMock) StopSmeshing(bool) error {
 	return nil
 }
 
