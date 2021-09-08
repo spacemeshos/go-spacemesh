@@ -33,7 +33,7 @@ func simNodeWithDHT(t *testing.T, sc config.SwarmConfig, sim *service.Simulator)
 	ln, ninfo := node.GenerateTestNode(t)
 	n := sim.NewNodeFrom(ninfo)
 	dht := New(context.TODO(), ln, sc, n, "", logtest.New(t).WithName("dhttest"+uuid.New().String()))
-	//n.AttachDHT(discovery)
+	// n.AttachDHT(discovery)
 
 	return n, dht
 }
@@ -96,7 +96,7 @@ func TestKadDHT_VerySmallBootstrap(t *testing.T) {
 	cfg.Gossip = false
 	cfg.Bootstrap = true
 	cfg.RandomConnections = connections
-	//cfg.RoutingTableBucketSize = 2
+	// cfg.RoutingTableBucketSize = 2
 	cfg.BootstrapNodes = append(cfg.BootstrapNodes, bninfo.String())
 
 	ln, lninfo := node.GenerateTestNode(t)
@@ -118,9 +118,9 @@ func TestKadDHT_VerySmallBootstrap(t *testing.T) {
 	require.Equal(t, res.ProtocolPort, lninfo.ProtocolPort)
 
 	res2, _ := dht.rt.Lookup(bn.PublicKey())
-	//require.Error(t, err2)
+	// require.Error(t, err2)
 	require.NotEqual(t, res2, bn)
-	//bootstrap nodes are removed at the end of bootstrap
+	// bootstrap nodes are removed at the end of bootstrap
 }
 
 func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
@@ -151,7 +151,7 @@ func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
 	for i := 0; i < numPeers; i++ {
 		ln, lninfo := node.GenerateTestNode(t)
 		n := sim.NewNodeFrom(lninfo)
-		//dht := New(context.TODO(), ln, cfg, n, "", logtest.New(t, zapcore.InfoLevel).WithName("dht"+strconv.Itoa(i)))
+		// dht := New(context.TODO(), ln, cfg, n, "", logtest.New(t, zapcore.InfoLevel).WithName("dht"+strconv.Itoa(i)))
 		dht := New(context.TODO(), ln, cfg, n, "", logtest.New(t).WithName("dht"+strconv.Itoa(i)))
 		dht.SetLocalAddresses(int(lninfo.ProtocolPort), int(lninfo.DiscoveryPort))
 		nods[i] = lninfo
@@ -173,7 +173,6 @@ func TestKadDHT_BootstrapSingleBoot(t *testing.T) {
 	for i := 0; i < numPeers; i++ {
 		select {
 		case <-donech:
-			break
 		case <-tm.C:
 			t.Fatal("didn't boot successfully")
 		}
@@ -239,7 +238,6 @@ func TestKadDHT_Bootstrap(t *testing.T) {
 	for i := 0; i < numPeers; i++ {
 		select {
 		case <-donech:
-			break
 		case <-tm.C:
 			t.Fatal("didn't boot successfully")
 		}
