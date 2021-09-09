@@ -87,14 +87,14 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				config:      UnitTestConfig(),
-				Log:         logtest.New(t).WithName("TortoiseBeacon"),
-				nodeID:      nodeID,
-				atxDB:       mockDB,
-				vrfVerifier: signing.VRFVerifier{},
-				vrfSigner:   vrfSigner,
-				clock:       clock,
-				lastLayer:   types.NewLayerID(epoch),
+				config:          UnitTestConfig(),
+				Log:             logtest.New(t).WithName("TortoiseBeacon"),
+				nodeID:          nodeID,
+				atxDB:           mockDB,
+				vrfVerifier:     signing.VRFVerifier{},
+				vrfSigner:       vrfSigner,
+				clock:           clock,
+				epochInProgress: epoch,
 			}
 
 			sig, err := tb.getSignedProposal(context.TODO(), epoch)
@@ -108,9 +108,9 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				valid: [][]byte{sig},
 			}
 
-			tb.consensusMu.RLock()
+			tb.mu.RLock()
 			r.EqualValues(expectedProposals, tb.incomingProposals)
-			tb.consensusMu.RUnlock()
+			tb.mu.RUnlock()
 		})
 	}
 }
@@ -226,9 +226,9 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			err = tb.handleFirstVotingMessage(context.TODO(), tc.message)
 			r.NoError(err)
 
-			tb.consensusMu.RLock()
+			tb.mu.RLock()
 			r.EqualValues(tc.expected, tb.firstRoundIncomingVotes)
-			tb.consensusMu.RUnlock()
+			tb.mu.RUnlock()
 		})
 	}
 }
@@ -341,9 +341,9 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 						potentiallyValid: [][]byte{hash3.Bytes()},
 					},
 				},
-				lastLayer:   types.NewLayerID(epoch),
-				hasVoted:    make([]map[string]struct{}, round+1),
-				votesMargin: map[string]*big.Int{},
+				epochInProgress: epoch,
+				hasVoted:        make([]map[string]struct{}, round+1),
+				votesMargin:     map[string]*big.Int{},
 			}
 
 			sig, err := tb.signMessage(tc.message.FollowingVotingMessageBody)

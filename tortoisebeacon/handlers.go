@@ -61,9 +61,9 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 		return
 	}
 
-	tb.proposalChansMu.Lock()
+	tb.mu.Lock()
 	ch := tb.getOrCreateProposalChannel(message.EpochID)
-	tb.proposalChansMu.Unlock()
+	tb.mu.Unlock()
 
 	proposalWithReceipt := &proposalMessageWithReceiptData{
 		message:      message,
@@ -312,8 +312,8 @@ func (tb *TortoiseBeacon) verifyFirstVotingMessage(ctx context.Context, message 
 		return nil, types.ATXID{}, ErrMalformedSignature
 	}
 
-	tb.consensusMu.Lock()
-	defer tb.consensusMu.Unlock()
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
 
 	if tb.hasVoted[firstRound] == nil {
 		tb.hasVoted[firstRound] = make(map[string]struct{})
@@ -341,8 +341,8 @@ func (tb *TortoiseBeacon) verifyFirstVotingMessage(ctx context.Context, message 
 }
 
 func (tb *TortoiseBeacon) storeFirstVotes(message FirstVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) {
-	tb.consensusMu.Lock()
-	defer tb.consensusMu.Unlock()
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
 
 	for _, vote := range message.ValidProposals {
 		if _, ok := tb.votesMargin[string(vote)]; !ok {
@@ -460,8 +460,8 @@ func (tb *TortoiseBeacon) verifyFollowingVotingMessage(ctx context.Context, mess
 		return nil, types.ATXID{}, ErrMalformedSignature
 	}
 
-	tb.consensusMu.Lock()
-	defer tb.consensusMu.Unlock()
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
 
 	if tb.hasVoted[message.RoundID-firstRound] == nil {
 		tb.hasVoted[message.RoundID-firstRound] = make(map[string]struct{})
@@ -481,8 +481,8 @@ func (tb *TortoiseBeacon) verifyFollowingVotingMessage(ctx context.Context, mess
 }
 
 func (tb *TortoiseBeacon) storeFollowingVotes(message FollowingVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) {
-	tb.consensusMu.Lock()
-	defer tb.consensusMu.Unlock()
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
 
 	thisRoundVotes := tb.decodeVotes(message.VotesBitVector, tb.firstRoundIncomingVotes[string(minerPK.Bytes())])
 
@@ -506,12 +506,7 @@ func (tb *TortoiseBeacon) storeFollowingVotes(message FollowingVotingMessage, mi
 }
 
 func (tb *TortoiseBeacon) currentEpoch() types.EpochID {
-	return tb.currentLayer().GetEpoch()
-}
-
-func (tb *TortoiseBeacon) currentLayer() types.LayerID {
-	tb.layerMu.RLock()
-	defer tb.layerMu.RUnlock()
-
-	return tb.lastLayer
+	tb.mu.RLock()
+	defer tb.mu.RUnlock()
+	return tb.epochInProgress
 }
