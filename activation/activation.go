@@ -226,6 +226,8 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 			return errors.New("already started")
 		}
 	}
+
+	b.started.Store(true)
 	b.coinbaseAccount = coinbase
 	var ctx context.Context
 	exited := make(chan struct{})
@@ -236,10 +238,11 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
 		close(exited)
+		b.started.Store(false)
 		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
 	go func() {
-		// false after closing exited. otherwise IsSmeshing may return False but StartSmeshing return already started
+		// false after closing exited. otherwise IsSmeshing may return False but StartSmeshing return "already started"
 		defer b.started.Store(false)
 		defer close(exited)
 		select {
@@ -252,7 +255,6 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
 			return
 		}
-		b.started.Store(true)
 		b.loop(ctx)
 	}()
 
