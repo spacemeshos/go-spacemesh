@@ -26,10 +26,7 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, l
 
 	events.ReportCalculatedTortoiseBeacon(epoch, beacon.ShortString())
 
-	tb.mu.Lock()
-	tb.beacons[epoch] = beacon
-	tb.mu.Unlock()
-
+	tb.setBeacon(epoch, beacon)
 	if tb.tortoiseBeaconDB != nil {
 		tb.Log.WithContext(ctx).With().Info("writing beacon to database",
 			log.Uint32("epoch_id", uint32(epoch)),

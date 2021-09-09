@@ -506,12 +506,7 @@ func (tb *TortoiseBeacon) storeFollowingVotes(message FollowingVotingMessage, mi
 }
 
 func (tb *TortoiseBeacon) currentEpoch() types.EpochID {
-	return tb.currentLayer().GetEpoch()
-}
-
-func (tb *TortoiseBeacon) currentLayer() types.LayerID {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
-
-	return tb.lastLayer
+	return tb.epochInProgress
 }

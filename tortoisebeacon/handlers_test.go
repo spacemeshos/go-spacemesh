@@ -87,14 +87,14 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				config:      UnitTestConfig(),
-				Log:         logtest.New(t).WithName("TortoiseBeacon"),
-				nodeID:      nodeID,
-				atxDB:       mockDB,
-				vrfVerifier: signing.VRFVerifier{},
-				vrfSigner:   vrfSigner,
-				clock:       clock,
-				lastLayer:   types.NewLayerID(epoch),
+				config:          UnitTestConfig(),
+				Log:             logtest.New(t).WithName("TortoiseBeacon"),
+				nodeID:          nodeID,
+				atxDB:           mockDB,
+				vrfVerifier:     signing.VRFVerifier{},
+				vrfSigner:       vrfSigner,
+				clock:           clock,
+				epochInProgress: epoch,
 			}
 
 			sig, err := tb.getSignedProposal(context.TODO(), epoch)
@@ -341,9 +341,9 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 						potentiallyValid: [][]byte{hash3.Bytes()},
 					},
 				},
-				lastLayer:   types.NewLayerID(epoch),
-				hasVoted:    make([]map[string]struct{}, round+1),
-				votesMargin: map[string]*big.Int{},
+				epochInProgress: epoch,
+				hasVoted:        make([]map[string]struct{}, round+1),
+				votesMargin:     map[string]*big.Int{},
 			}
 
 			sig, err := tb.signMessage(tc.message.FollowingVotingMessageBody)
