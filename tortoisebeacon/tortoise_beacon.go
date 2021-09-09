@@ -744,6 +744,10 @@ func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.Epoc
 	// TODO(nkryuchkov): also send a bit vector
 	// TODO(nkryuchkov): initialize margin vector to initial votes
 	// TODO(nkryuchkov): use weight
+
+	tb.consensusMu.RLock()
+	defer tb.consensusMu.RUnlock()
+
 	return tb.sendFirstRoundVote(ctx, epoch, tb.incomingProposals)
 }
 
