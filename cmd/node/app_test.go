@@ -131,6 +131,9 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	suite.NoError(err, "failed creating poet client harness: %v", err)
 	suite.poetCleanup = poetHarness.Teardown
 
+	errorRegexp, err := regexp.Compile(`\bERROR\b`)
+	require.NoError(suite.T(), err)
+
 	// Scan and print the poet output, and catch errors early
 	failChan := make(chan struct{})
 	go func() {
@@ -138,13 +141,12 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		scanner := bufio.NewScanner(io.MultiReader(poetHarness.Stdout, poetHarness.Stderr))
 		for scanner.Scan() {
 			line := scanner.Text()
-			matched, err := regexp.MatchString(`\bERROR\b`, line)
-			suite.NoError(err)
+			matched := errorRegexp.MatchString(line)
 			// Fail fast if we encounter a poet error
 			// Must use a channel since we're running inside a goroutine
 			if matched {
+				suite.T().Errorf("got error from poet: %s", line)
 				close(failChan)
-				suite.T().Fatalf("got error from poet: %s", line)
 			}
 			poetLog.Debug(line)
 		}
@@ -258,7 +260,7 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 			}
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
-			_, err = suite.apps[0].txService.SubmitTransaction(nil, pbMsg)
+			_, err = suite.apps[0].txService.SubmitTransaction(context.TODO(), pbMsg)
 			suite.Error(err)
 			suite.log.With().Info("got expected error submitting tx with out of order nonce", log.Err(err))
 		}
@@ -298,7 +300,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 	setup := func(suite *AppTestSuite, t *testing.T) {
 		accountRequest := &pb.AccountRequest{AccountId: &pb.AccountId{Address: addr.Bytes()}}
 		getNonce := func() int {
-			accountResponse, err := suite.apps[0].globalstateSvc.Account(nil, accountRequest)
+			accountResponse, err := suite.apps[0].globalstateSvc.Account(context.TODO(), accountRequest)
 			assert.NoError(suite.T(), err)
 			// Check the projected state. We just want to know that the tx has entered
 			// the mempool successfully.
@@ -319,7 +321,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 			suite.NoError(err, "failed to create signed tx: %s", err)
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
-			_, err = suite.apps[0].txService.SubmitTransaction(nil, pbMsg)
+			_, err = suite.apps[0].txService.SubmitTransaction(context.TODO(), pbMsg)
 			suite.NoError(err, "error submitting transaction")
 		}
 	}

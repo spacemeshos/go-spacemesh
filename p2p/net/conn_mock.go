@@ -3,11 +3,12 @@ package net
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
 	"sync/atomic"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // ConnectionMock mocks connections.
@@ -49,8 +50,8 @@ func (cm ConnectionMock) Created() time.Time {
 	return cm.created
 }
 
-// SetCreated mutate the mock.
-func (cm ConnectionMock) SetCreated(time2 time.Time) {
+// SetCreated mutates the mock.
+func (cm *ConnectionMock) SetCreated(time2 time.Time) {
 	cm.created = time2
 }
 
@@ -134,8 +135,8 @@ func (cm ConnectionMock) String() string {
 	return cm.id
 }
 
-// SendSock mocks the interface
-func (cm *ConnectionMock) SendSock([]byte) error {
+// sendSock mocks the interface
+func (cm *ConnectionMock) sendSock([]byte) error {
 	panic("not implemented")
 }
 

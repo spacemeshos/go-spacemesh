@@ -15,8 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-type ContextualValidityMock struct {
-}
+type ContextualValidityMock struct{}
 
 func (m *ContextualValidityMock) Has([]byte) (bool, error) {
 	return true, nil
@@ -43,7 +42,6 @@ func (m *ContextualValidityMock) Delete([]byte) error {
 }
 
 func (m *ContextualValidityMock) Close() {
-
 }
 
 type MeshValidatorMock struct {
@@ -144,7 +142,6 @@ func (m *MockTxMemPool) Put(ID types.TransactionID, t *types.Transaction) {
 }
 
 func (MockTxMemPool) Invalidate(types.TransactionID) {
-
 }
 
 func getMesh(tb testing.TB, id string) *Mesh {
