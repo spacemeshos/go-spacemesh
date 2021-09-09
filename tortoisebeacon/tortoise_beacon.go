@@ -16,9 +16,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/taskgroup"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -111,7 +111,7 @@ func New(
 // TortoiseBeacon represents Tortoise Beacon.
 type TortoiseBeacon struct {
 	closed uint64
-	tg     *taskgroup.Group
+	eg     errgroup.Group
 	cancel context.CancelFunc
 
 	log.Log
@@ -165,20 +165,15 @@ func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	tb.tg = taskgroup.New(taskgroup.WithContext(ctx))
 	tb.cancel = cancel
 
 	tb.initGenesisBeacons()
 	tb.layerTicker = tb.clock.Subscribe()
 
-	err := tb.tg.Go(func(ctx context.Context) error {
+	tb.eg.Go(func() error {
 		tb.listenLayers(ctx)
 		return fmt.Errorf("context error: %w", ctx.Err())
 	})
-	if err != nil {
-		tb.Log.Warning("taskgroup: Go returned an error",
-			log.Err(err))
-	}
 
 	return nil
 }
@@ -190,10 +185,11 @@ func (tb *TortoiseBeacon) Close() {
 	}
 	tb.Log.Info("closing %v", protoName)
 	tb.cancel()
-	if err := tb.tg.Wait(); err != nil {
-		tb.Log.Warning("taskgroup: Wait returned an error",
-			log.Err(err))
+	tb.Info("waiting for tortoise beacon goroutines to finish")
+	if err := tb.eg.Wait(); err != nil {
+		tb.With().Info("received error waiting for goroutines to finish", log.Err(err))
 	}
+	tb.Info("tortoise beacon goroutines finished")
 	tb.clock.Unsubscribe(tb.layerTicker)
 }
 
@@ -283,14 +279,10 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 			return
 		case layer := <-tb.layerTicker:
 			tb.Log.With().Debug("received tick", layer)
-			err := tb.tg.Go(func(ctx context.Context) error {
+			tb.eg.Go(func() error {
 				tb.handleLayer(ctx, layer)
 				return nil
 			})
-			if err != nil {
-				tb.Log.Warning("taskgroup: Go returned an error",
-					log.Err(err))
-			}
 		}
 	}
 }
@@ -352,13 +344,10 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	ch := tb.getOrCreateProposalChannel(epoch)
 	tb.mu.Unlock()
 
-	err := tb.tg.Go(func(ctx context.Context) error {
+	tb.eg.Go(func() error {
 		tb.readProposalMessagesLoop(ctx, ch)
 		return nil
 	})
-	if err != nil {
-		logger.With().Warning("taskgroup: Go returned an error", log.Err(err))
-	}
 
 	tb.runProposalPhase(ctx, epoch)
 	lastRoundOwnVotes, err := tb.runConsensusPhase(ctx, epoch)
@@ -430,7 +419,7 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 	ctx, cancel = context.WithTimeout(ctx, tb.config.ProposalDuration)
 	defer cancel()
 
-	err := tb.tg.Go(func(ctx context.Context) error {
+	tb.eg.Go(func() error {
 		logger.Debug("starting proposal message sender")
 
 		if err := tb.proposalPhaseImpl(ctx, epoch); err != nil {
@@ -440,9 +429,6 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 		logger.Debug("proposal message sender finished")
 		return nil
 	})
-	if err != nil {
-		logger.With().Warning("taskgroup: Go returned an error", log.Err(err))
-	}
 
 	<-ctx.Done()
 	tb.markProposalPhaseFinished(epoch)
@@ -531,7 +517,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		// round 1 is running without coinflip (e.g. value is false) intentionally
 		round := round
 		previousCoinFlip := coinFlip
-		err := tb.tg.Go(func(ctx context.Context) error {
+		tb.eg.Go(func() error {
 			if round == firstRound {
 				if err := tb.sendProposalVote(ctx, epoch); err != nil {
 					logger.With().Error("Failed to send proposal vote",
@@ -571,17 +557,11 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 
 			return nil
 		})
-		if err != nil {
-			logger.With().Warning("taskgroup: Go returned an error", log.Err(err))
-		}
 
-		err = tb.tg.Go(func(ctx context.Context) error {
+		tb.eg.Go(func() error {
 			tb.startWeakCoinRound(ctx, epoch, round)
 			return nil
 		})
-		if err != nil {
-			logger.With().Warning("taskgroup: Go returned an error", log.Err(err))
-		}
 
 		select {
 		case <-timer.C:
