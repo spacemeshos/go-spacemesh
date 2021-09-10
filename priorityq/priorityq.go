@@ -2,6 +2,7 @@ package priorityq
 
 import (
 	"errors"
+	"sync"
 )
 
 var (
@@ -33,6 +34,7 @@ const (
 
 // Queue is the priority queue
 type Queue struct {
+	mu     sync.Mutex
 	waitCh chan struct{}      // the channel that indicates if there is a message ready in the queue
 	queues []chan interface{} // the queues where the index is the priority
 }
@@ -68,8 +70,11 @@ func (pq *Queue) Write(prio Priority, m interface{}) error {
 		return ErrUnknownPriority
 	}
 
+	pq.mu.Lock()
 	pq.queues[prio] <- m
 	pq.waitCh <- struct{}{}
+	pq.mu.Unlock()
+
 	return nil
 }
 
@@ -92,6 +97,7 @@ func (pq *Queue) Read() (interface{}, error) {
 				return nil, ErrQueueClosed
 			}
 			return m, nil
+
 		default: // empty, try next
 			continue
 		}
@@ -114,8 +120,13 @@ func (pq *Queue) Length() (length int) {
 func (pq *Queue) Close() {
 	for _, q := range pq.queues {
 		if q != nil {
+			pq.mu.Lock()
 			close(q)
+			pq.mu.Unlock()
 		}
 	}
+
+	pq.mu.Lock()
 	close(pq.waitCh)
+	pq.mu.Unlock()
 }
