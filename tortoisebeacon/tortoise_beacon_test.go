@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"math/big"
-	"sync"
 	"testing"
 	"time"
 
@@ -18,9 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	servicemocks "github.com/spacemeshos/go-spacemesh/p2p/service/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
@@ -518,141 +515,4 @@ func TestTortoiseBeacon_signAndVerifyVRF(t *testing.T) {
 	signature := signer.Sign(message)
 	ok := verifier.Verify(signer.PublicKey(), message, signature)
 	r.True(ok)
-}
-
-func broadcastedMessage(tb testing.TB, ctrl *gomock.Controller, buf []byte) *servicemocks.MockGossipMessage {
-	tb.Helper()
-	msg := servicemocks.NewMockGossipMessage(ctrl)
-	msg.EXPECT().Sender().Return(p2pcrypto.NewRandomPubkey()).AnyTimes()
-	msg.EXPECT().Bytes().Return(buf).AnyTimes()
-	msg.EXPECT().ReportValidation(gomock.Any(), gomock.Any()).AnyTimes()
-	return msg
-}
-
-func votesBroadcaster(tb testing.TB, ctrl *gomock.Controller, i int, instances []*TortoiseBeacon) *mocks.Mockbroadcaster {
-	broadcaster := mocks.NewMockbroadcaster(ctrl)
-	broadcaster.EXPECT().Broadcast(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
-		DoAndReturn(func(_ context.Context, protocol string, data []byte) error {
-			switch protocol {
-			case TBProposalProtocol:
-				for j := range instances {
-					if i != j {
-						instances[j].HandleSerializedProposalMessage(context.TODO(), broadcastedMessage(tb, ctrl, data), nil)
-					}
-				}
-			case TBFirstVotingProtocol:
-				for j := range instances {
-					if i != j {
-						instances[j].HandleSerializedFirstVotingMessage(context.TODO(), broadcastedMessage(tb, ctrl, data), nil)
-					}
-				}
-			case TBFollowingVotingProtocol:
-				for j := range instances {
-					if i != j {
-						instances[j].HandleSerializedFollowingVotingMessage(context.TODO(), broadcastedMessage(tb, ctrl, data), nil)
-					}
-				}
-			default:
-				require.FailNowf(tb, "unknown protocol %s", protocol)
-			}
-			return nil
-		}).AnyTimes()
-	return broadcaster
-}
-
-func balancedAtxDB(tb testing.TB, ctrl *gomock.Controller, units, total, endTick uint64, timestamp time.Time) *mocks.MockactivationDB {
-	tb.Helper()
-	atxDB := mocks.NewMockactivationDB(ctrl)
-	atxDB.EXPECT().GetEpochWeight(gomock.Any()).
-		Return(total, nil, nil).AnyTimes()
-	atxDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
-		Return(types.ATXID{}, nil).AnyTimes()
-	atxDB.EXPECT().GetAtxHeader(gomock.Any()).
-		Return(&types.ActivationTxHeader{
-			NumUnits:        uint(units),
-			NIPostChallenge: types.NIPostChallenge{EndTick: endTick},
-		}, nil).AnyTimes()
-	atxDB.EXPECT().GetAtxTimestamp(gomock.Any()).
-		Return(timestamp, nil).AnyTimes()
-	return atxDB
-}
-
-func TestTortoiseBeacon_LastRoundCounted(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	types.SetLayersPerEpoch(3) // can be anything but not zero
-	var (
-		n            = 4
-		units uint64 = 1
-		// initialize config per instance. otherwise tehere is a race in big.Rat
-		conf = func() Config {
-			return Config{
-				Kappa:        400000,
-				Q:            big.NewRat(1, 3),
-				RoundsNumber: 2,
-				// TODO(dshulyak) time needs to be mocked or factored out from core protocol
-				ProposalDuration:         100 * time.Millisecond,
-				FirstVotingRoundDuration: 100 * time.Millisecond,
-				VotingRoundDuration:      100 * time.Millisecond,
-				Theta:                    big.NewRat(1, 2),
-				GracePeriodDuration:      20 * time.Second,
-				VotesLimit:               100,
-			}
-		}
-		instances                  = make([]*TortoiseBeacon, n)
-		atxTimestamp               = time.Unix(100, 0)
-		epoch        types.EpochID = 10
-		commonBeacon []byte
-	)
-
-	for i := range instances {
-		signer := signing.NewEdSigner()
-		vrfSigner, vrfPub, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
-		require.NoError(t, err)
-
-		layerClock := mocks.NewMocklayerClock(ctrl)
-		if i >= n/2 {
-			layerClock.EXPECT().LayerToTime(gomock.Any()).Return(atxTimestamp.Add(1)).AnyTimes()
-		} else {
-			layerClock.EXPECT().LayerToTime(gomock.Any()).Return(atxTimestamp.Add(-1)).AnyTimes()
-		}
-
-		instances[i] = New(
-			conf(),
-			types.NodeID{Key: signer.PublicKey().String(), VRFPublicKey: vrfPub},
-			// custom broadcaster is used instead of simulator so that messages to experiment
-			// with dropping messages (in particular following vote messages)
-			votesBroadcaster(t, ctrl, i, instances),
-			balancedAtxDB(t, ctrl, units, units*uint64(n), 1, atxTimestamp),
-			newMemDB(t),
-			signer,
-			signing.EDVerifier{},
-			vrfSigner,
-			signing.VRFVerifier{},
-			coinValueMock(t, false),
-			layerClock,
-			logtest.New(t).Named(fmt.Sprintf("instance=%d", i)),
-		)
-		instances[i].SetSyncState(testSyncState(true))
-		instances[i].closed = 1
-	}
-
-	var wg sync.WaitGroup
-	for _, tb := range instances {
-		wg.Add(1)
-		go func(tb *TortoiseBeacon) {
-			tb.handleLayer(context.TODO(), epoch.FirstLayer())
-			wg.Done()
-		}(tb)
-	}
-	wg.Wait()
-	for i, tb := range instances {
-		beacon, err := tb.GetBeacon(epoch + 1)
-		require.NoError(t, err)
-		if commonBeacon == nil {
-			commonBeacon = beacon
-		} else {
-			require.Equal(t, commonBeacon, beacon, "instance=%d", i)
-		}
-	}
 }
