@@ -45,7 +45,6 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, coinFlip
 	positiveVotingThreshold := tb.votingThreshold(epochWeight)
 	negativeThreshold := new(big.Int).Neg(positiveVotingThreshold)
 
-	// TODO(nkryuchkov): should happen after weak coin for this round is calculated; consider calculating in two steps
 	for vote, weightCount := range tb.votesMargin {
 		switch {
 		case weightCount.Cmp(positiveVotingThreshold) >= 0:

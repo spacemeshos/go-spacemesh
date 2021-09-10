@@ -352,7 +352,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	tb.runProposalPhase(ctx, epoch)
 	lastRoundOwnVotes, err := tb.runConsensusPhase(ctx, epoch)
 	if err != nil {
-		logger.With().Warning("Consensus execution cancelled", log.Err(err))
+		logger.With().Warning("consensus execution canceled", log.Err(err))
 		return
 	}
 
@@ -503,65 +503,38 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	// For next rounds,
 	// wait for δ time, and construct a message that points to all messages from previous round received by δ.
 	// rounds 1 to K
-	timer := time.NewTimer(tb.config.FirstVotingRoundDuration + tb.config.WeakCoinRoundDuration)
+	timer := time.NewTimer(tb.config.FirstVotingRoundDuration)
 	defer timer.Stop()
 
 	var (
-		coinFlip            bool
-		ownLastRoundVotesMu sync.RWMutex
-		ownLastRoundVotes   allVotes
+		ownVotes allVotes
+		err      error
 	)
-
 	for round := firstRound; round <= tb.lastRound(); round++ {
-		// always use coinflip from the previous round for current round.
-		// round 1 is running without coinflip (e.g. value is false) intentionally
 		round := round
-		previousCoinFlip := coinFlip
+		votes := ownVotes
 		tb.eg.Go(func() error {
 			if round == firstRound {
 				if err := tb.sendProposalVote(ctx, epoch); err != nil {
-					logger.With().Error("Failed to send proposal vote",
+					logger.With().Error("failed to send proposal vote",
 						log.Uint32("round_id", uint32(round)),
 						log.Err(err))
-
-					return fmt.Errorf("failed to send proposal vote: %w", err)
 				}
-
+			} else {
+				if err := tb.sendFollowingVote(ctx, epoch, round, votes); err != nil {
+					logger.With().Error("failed to send following vote",
+						log.Uint32("round_id", uint32(round)),
+						log.Err(err))
+				}
+			}
+			return nil
+		})
+		if round != firstRound {
+			tb.eg.Go(func() error {
+				tb.startWeakCoinRound(ctx, epoch, round)
 				return nil
-			}
-
-			// next rounds, send vote
-			// construct a message that points to all messages from previous round received by δ
-			ownCurrentRoundVotes, err := tb.calcVotes(epoch, round, previousCoinFlip)
-			if err != nil {
-				logger.With().Error("Failed to calculate votes",
-					log.Uint32("round_id", uint32(round)),
-					log.Err(err))
-
-				return fmt.Errorf("calculate votes: %w", err)
-			}
-
-			if round == tb.lastRound() {
-				ownLastRoundVotesMu.Lock()
-				ownLastRoundVotes = ownCurrentRoundVotes
-				ownLastRoundVotesMu.Unlock()
-			}
-
-			if err := tb.sendFollowingVote(ctx, epoch, round, ownCurrentRoundVotes); err != nil {
-				logger.With().Error("Failed to send following vote",
-					log.Uint32("round_id", uint32(round)),
-					log.Err(err))
-
-				return fmt.Errorf("send following vote: %w", err)
-			}
-
-			return nil
-		})
-
-		tb.eg.Go(func() error {
-			tb.startWeakCoinRound(ctx, epoch, round)
-			return nil
-		})
+			})
+		}
 
 		select {
 		case <-timer.C:
@@ -569,18 +542,22 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		case <-ctx.Done():
 			return allVotes{}, ctx.Err()
 		}
+		var coinFlip bool
+		if round != firstRound {
+			tb.weakCoin.FinishRound()
+			coinFlip = tb.weakCoin.Get(epoch, round)
+		}
 
-		tb.weakCoin.FinishRound()
-
-		coinFlip = tb.weakCoin.Get(epoch, round)
+		ownVotes, err = tb.calcVotes(epoch, round, coinFlip)
+		if err != nil {
+			logger.With().Error("failed to calculate votes",
+				log.Uint32("round_id", uint32(round)),
+				log.Err(err))
+		}
 	}
 
-	logger.Debug("Consensus phase finished")
-
-	ownLastRoundVotesMu.RLock()
-	defer ownLastRoundVotesMu.RUnlock()
-
-	return ownLastRoundVotes, nil
+	logger.Debug("consensus phase finished")
+	return ownVotes, nil
 }
 
 func (tb *TortoiseBeacon) startWeakCoinEpoch(epoch types.EpochID) {
@@ -626,22 +603,14 @@ func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochI
 }
 
 func (tb *TortoiseBeacon) startWeakCoinRound(ctx context.Context, epoch types.EpochID, round types.RoundID) {
-	timeout := tb.config.FirstVotingRoundDuration
-	if round > firstRound {
-		timeout = tb.config.VotingRoundDuration
-	}
-	t := time.NewTimer(timeout)
+	t := time.NewTimer(tb.config.VotingRoundDuration)
 	defer t.Stop()
-
 	select {
 	case <-t.C:
 		break
 	case <-ctx.Done():
 		return
 	}
-
-	// TODO(nkryuchkov):
-	// should be published only after we should have received them
 	if err := tb.weakCoin.StartRound(ctx, round); err != nil {
 		tb.Log.WithContext(ctx).With().Error("failed to publish weak coin proposal",
 			epoch,
