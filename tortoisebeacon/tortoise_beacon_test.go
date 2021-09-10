@@ -529,7 +529,7 @@ func broadcastedMessage(tb testing.TB, ctrl *gomock.Controller, buf []byte) *ser
 	return msg
 }
 
-func reliableBroadcaster(tb testing.TB, ctrl *gomock.Controller, i int, instances []*TortoiseBeacon) *mocks.Mockbroadcaster {
+func votesBroadcaster(tb testing.TB, ctrl *gomock.Controller, i int, instances []*TortoiseBeacon) *mocks.Mockbroadcaster {
 	broadcaster := mocks.NewMockbroadcaster(ctrl)
 	broadcaster.EXPECT().Broadcast(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
 		DoAndReturn(func(_ context.Context, protocol string, data []byte) error {
@@ -592,10 +592,9 @@ func TestTortoiseBeacon_LastRoundCounted(t *testing.T) {
 			ProposalDuration:         100 * time.Millisecond,
 			FirstVotingRoundDuration: 100 * time.Millisecond,
 			VotingRoundDuration:      100 * time.Millisecond,
-			// theta is tuned so that half of miner weight is required for consensus
-			Theta:               big.NewRat(1, int64(n/2)),
-			GracePeriodDuration: 20 * time.Second,
-			VotesLimit:          100,
+			Theta:                    big.NewRat(1, 2),
+			GracePeriodDuration:      20 * time.Second,
+			VotesLimit:               100,
 		}
 		instances                  = make([]*TortoiseBeacon, n)
 		atxTimestamp               = time.Unix(100, 0)
@@ -618,7 +617,9 @@ func TestTortoiseBeacon_LastRoundCounted(t *testing.T) {
 		instances[i] = New(
 			conf,
 			types.NodeID{Key: signer.PublicKey().String(), VRFPublicKey: vrfPub},
-			reliableBroadcaster(t, ctrl, i, instances),
+			// custom broadcasted is used instead of simulator so that messages to experiment
+			// with dropping messages (in particular following vote messages)
+			votesBroadcaster(t, ctrl, i, instances),
 			balancedAtxDB(t, ctrl, units, units*uint64(n), 1, atxTimestamp),
 			newMemDB(t),
 			signer,
