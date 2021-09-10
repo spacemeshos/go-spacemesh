@@ -240,7 +240,10 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	h.outputChan <- mo
 	time.Sleep(1 * time.Second)
+
+	h.broker.mu.RLock()
 	assert.Nil(t, h.broker.outbox[mo.ID().Uint32()])
+	h.broker.mu.RUnlock()
 }
 
 func TestHare_onTick(t *testing.T) {

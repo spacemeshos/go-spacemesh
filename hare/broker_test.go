@@ -358,10 +358,8 @@ type mockGossipMessage struct {
 
 func (mgm *mockGossipMessage) Bytes() []byte {
 	mgm.mu.RLock()
-	message := mgm.msg.Message
+	buf, err := types.InterfaceToBytes(mgm.msg.Message)
 	mgm.mu.RUnlock()
-
-	buf, err := types.InterfaceToBytes(message)
 	if err != nil {
 		return nil
 	}
