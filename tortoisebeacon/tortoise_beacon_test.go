@@ -584,17 +584,20 @@ func TestTortoiseBeacon_LastRoundCounted(t *testing.T) {
 	var (
 		n            = 4
 		units uint64 = 1
-		conf         = Config{
-			Kappa:        400000,
-			Q:            big.NewRat(1, 3),
-			RoundsNumber: 2,
-			// TODO(dshulyak) time needs to be mocked or factored out from core protocol
-			ProposalDuration:         100 * time.Millisecond,
-			FirstVotingRoundDuration: 100 * time.Millisecond,
-			VotingRoundDuration:      100 * time.Millisecond,
-			Theta:                    big.NewRat(1, 2),
-			GracePeriodDuration:      20 * time.Second,
-			VotesLimit:               100,
+		// initialize config per instance. otherwise tehere is a race in big.Rat
+		conf = func() Config {
+			return Config{
+				Kappa:        400000,
+				Q:            big.NewRat(1, 3),
+				RoundsNumber: 2,
+				// TODO(dshulyak) time needs to be mocked or factored out from core protocol
+				ProposalDuration:         100 * time.Millisecond,
+				FirstVotingRoundDuration: 100 * time.Millisecond,
+				VotingRoundDuration:      100 * time.Millisecond,
+				Theta:                    big.NewRat(1, 2),
+				GracePeriodDuration:      20 * time.Second,
+				VotesLimit:               100,
+			}
 		}
 		instances                  = make([]*TortoiseBeacon, n)
 		atxTimestamp               = time.Unix(100, 0)
@@ -615,9 +618,9 @@ func TestTortoiseBeacon_LastRoundCounted(t *testing.T) {
 		}
 
 		instances[i] = New(
-			conf,
+			conf(),
 			types.NodeID{Key: signer.PublicKey().String(), VRFPublicKey: vrfPub},
-			// custom broadcasted is used instead of simulator so that messages to experiment
+			// custom broadcaster is used instead of simulator so that messages to experiment
 			// with dropping messages (in particular following vote messages)
 			votesBroadcaster(t, ctrl, i, instances),
 			balancedAtxDB(t, ctrl, units, units*uint64(n), 1, atxTimestamp),
