@@ -95,6 +95,7 @@ func New(
 		config:                  conf,
 		layerDuration:           layerDuration,
 		nodeID:                  nodeID,
+		theta:                   new(big.Float).SetRat(conf.Theta),
 		net:                     net,
 		atxDB:                   atxDB,
 		tortoiseBeaconDB:        tortoiseBeaconDB,
@@ -124,6 +125,7 @@ type TortoiseBeacon struct {
 	config        Config
 	layerDuration time.Duration
 	nodeID        types.NodeID
+	theta         *big.Float
 
 	sync             SyncState
 	net              broadcaster
@@ -813,7 +815,7 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 
 func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) *big.Int {
 	v, _ := new(big.Float).Mul(
-		new(big.Float).SetRat(tb.config.Theta),
+		tb.theta,
 		new(big.Float).SetUint64(epochWeight),
 	).Int(nil)
 

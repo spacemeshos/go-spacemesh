@@ -70,8 +70,8 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 			tb := TortoiseBeacon{
 				config: Config{
 					RoundsNumber: rounds,
-					Theta:        big.NewRat(1, 1),
 				},
+				theta:     new(big.Float).SetRat(big.NewRat(1, 1)),
 				lastLayer: types.NewLayerID(epoch),
 				Log:       logtest.New(t).WithName("TortoiseBeacon"),
 				beacons:   make(map[types.EpochID]types.Hash32),
