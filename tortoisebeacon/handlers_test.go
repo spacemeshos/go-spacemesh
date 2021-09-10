@@ -97,8 +97,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				epochInProgress: epoch,
 			}
 
-			sig, err := tb.getSignedProposal(context.TODO(), epoch)
-			r.NoError(err)
+			sig := tb.getSignedProposal(context.TODO(), epoch)
 			tc.message.VRFSignature = sig
 
 			err = tb.handleProposalMessage(context.TODO(), tc.message, time.Now())
@@ -219,8 +218,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				hasVoted:                make([]map[string]struct{}, round+1),
 			}
 
-			sig, err := tb.signMessage(tc.message.FirstVotingMessageBody)
-			r.NoError(err)
+			sig := tb.signMessage(tc.message.FirstVotingMessageBody)
 			tc.message.Signature = sig
 
 			err = tb.handleFirstVotingMessage(context.TODO(), tc.message)
@@ -346,8 +344,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				votesMargin:     map[string]*big.Int{},
 			}
 
-			sig, err := tb.signMessage(tc.message.FollowingVotingMessageBody)
-			r.NoError(err)
+			sig := tb.signMessage(tc.message.FollowingVotingMessageBody)
 			tc.message.Signature = sig
 
 			err = tb.handleFollowingVotingMessage(context.TODO(), tc.message)

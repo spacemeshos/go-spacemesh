@@ -391,8 +391,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 				Log: logtest.New(t).WithName("TortoiseBeacon"),
 			}
 
-			result, err := tb.buildProposal(tc.epoch)
-			r.NoError(err)
+			result := tb.buildProposal(tc.epoch)
 			r.Equal(tc.result, string(result))
 		})
 	}
@@ -432,8 +431,7 @@ func TestTortoiseBeacon_signMessage(t *testing.T) {
 				edSigner: edSgn,
 			}
 
-			result, err := tb.signMessage(tc.message)
-			r.NoError(err)
+			result := tb.signMessage(tc.message)
 			r.Equal(string(tc.result), string(result))
 		})
 	}
@@ -477,8 +475,7 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 				vrfSigner: vrfSigner,
 			}
 
-			result, err := tb.getSignedProposal(context.TODO(), tc.epoch)
-			r.NoError(err)
+			result := tb.getSignedProposal(context.TODO(), tc.epoch)
 			r.Equal(string(tc.result), string(result))
 		})
 	}

@@ -77,6 +77,31 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 	}
 }
 
+func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan *proposalMessageWithReceiptData) {
+	for {
+		select {
+		case <-ctx.Done():
+			return
+
+		case em := <-ch:
+			if em == nil {
+				return
+			}
+
+			if err := tb.handleProposalMessage(ctx, em.message, em.receivedTime); err != nil {
+				tb.Log.WithContext(ctx).With().Error("failed to handle proposal message",
+					log.String("sender", em.gossip.Sender().String()),
+					log.String("message", em.message.String()),
+					log.Err(err))
+
+				return
+			}
+
+			em.gossip.ReportValidation(ctx, TBProposalProtocol)
+		}
+	}
+}
+
 func (tb *TortoiseBeacon) handleProposalMessage(ctx context.Context, m ProposalMessage, receivedTime time.Time) error {
 	currentEpoch := tb.currentEpoch()
 
@@ -154,11 +179,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(ctx context.Context, m Proposa
 }
 
 func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalMessage, currentEpoch types.EpochID) (types.ATXID, error) {
-	currentEpochProposal, err := tb.buildProposal(currentEpoch)
-	if err != nil {
-		return types.ATXID{}, fmt.Errorf("calculate proposal: %w", err)
-	}
-
+	currentEpochProposal := tb.buildProposal(currentEpoch)
 	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(m.NodeID, currentEpoch-1)
 	if errors.Is(err, database.ErrNotFound) {
 		tb.Log.WithContext(ctx).With().Warning("miner has no atxs in the previous epoch",
@@ -281,7 +302,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 func (tb *TortoiseBeacon) verifyFirstVotingMessage(ctx context.Context, message FirstVotingMessage, currentEpoch types.EpochID) (*signing.PublicKey, types.ATXID, error) {
 	messageBytes, err := types.InterfaceToBytes(message.FirstVotingMessageBody)
 	if err != nil {
-		return nil, types.ATXID{}, fmt.Errorf("unmarshal first voting message: %w", err)
+		tb.With().Panic("failed to serialize first voting message", log.Err(err))
 	}
 
 	minerPK, err := tb.edVerifier.Extract(messageBytes, message.Signature)
@@ -431,7 +452,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, mess
 func (tb *TortoiseBeacon) verifyFollowingVotingMessage(ctx context.Context, message FollowingVotingMessage, currentEpoch types.EpochID) (*signing.PublicKey, types.ATXID, error) {
 	messageBytes, err := types.InterfaceToBytes(message.FollowingVotingMessageBody)
 	if err != nil {
-		return nil, types.ATXID{}, fmt.Errorf("unmarshal first voting message: %w", err)
+		tb.With().Panic("failed to serialize voting message", log.Err(err))
 	}
 
 	minerPK, err := tb.edVerifier.Extract(messageBytes, message.Signature)

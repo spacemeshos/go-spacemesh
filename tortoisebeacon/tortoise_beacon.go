@@ -365,31 +365,6 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	logger.With().Debug("finished handling epoch")
 }
 
-func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan *proposalMessageWithReceiptData) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-
-		case em := <-ch:
-			if em == nil {
-				return
-			}
-
-			if err := tb.handleProposalMessage(ctx, em.message, em.receivedTime); err != nil {
-				tb.Log.WithContext(ctx).With().Error("failed to handle proposal message",
-					log.String("sender", em.gossip.Sender().String()),
-					log.String("message", em.message.String()),
-					log.Err(err))
-
-				return
-			}
-
-			em.gossip.ReportValidation(ctx, TBProposalProtocol)
-		}
-	}
-}
-
 func (tb *TortoiseBeacon) closeProposalChannel(epoch types.EpochID) {
 	if ch, ok := tb.proposalChans[epoch]; ok {
 		select {
@@ -438,10 +413,7 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 
 func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.EpochID) error {
 	logger := tb.Log.WithContext(ctx).WithFields(epoch)
-	proposedSignature, err := tb.getSignedProposal(ctx, epoch)
-	if err != nil {
-		return fmt.Errorf("calculate signed proposal: %w", err)
-	}
+	proposedSignature := tb.getSignedProposal(ctx, epoch)
 
 	logger.With().Debug("calculated proposal signature",
 		log.String("signature", string(proposedSignature)))
@@ -499,7 +471,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	tb.startWeakCoinEpoch(epoch)
 	defer tb.fininshWeakCoinEpoch()
 
-	// For K rounds: In each round that lasts δ, wait for proposals to come in.
+	// For K rounds: In each round that lasts δ, wait for votes to come in.
 	// For next rounds,
 	// wait for δ time, and construct a message that points to all messages from previous round received by δ.
 	// rounds 1 to K
@@ -666,10 +638,7 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		PotentiallyValidProposals: proposals.potentiallyValid,
 	}
 
-	sig, err := tb.signMessage(mb)
-	if err != nil {
-		return fmt.Errorf("signMessage: %w", err)
-	}
+	sig := tb.signMessage(mb)
 
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
@@ -698,10 +667,7 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 		VotesBitVector: bitVector,
 	}
 
-	sig, err := tb.signMessage(mb)
-	if err != nil {
-		return fmt.Errorf("getSignedProposal: %w", err)
-	}
+	sig := tb.signMessage(mb)
 
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,
@@ -783,31 +749,26 @@ func (tb *TortoiseBeacon) atxThreshold(epochWeight uint64) (*big.Int, error) {
 	return threshold, nil
 }
 
-func (tb *TortoiseBeacon) getSignedProposal(ctx context.Context, epoch types.EpochID) ([]byte, error) {
-	p, err := tb.buildProposal(epoch)
-	if err != nil {
-		return nil, fmt.Errorf("calculate proposal: %w", err)
-	}
-
+func (tb *TortoiseBeacon) getSignedProposal(ctx context.Context, epoch types.EpochID) []byte {
+	p := tb.buildProposal(epoch)
 	signature := tb.vrfSigner.Sign(p)
 	tb.Log.WithContext(ctx).With().Debug("calculated signature",
 		epoch,
 		log.String("proposal", util.Bytes2Hex(p)),
 		log.String("signature", string(signature)))
 
-	return signature, nil
+	return signature
 }
 
-func (tb *TortoiseBeacon) signMessage(message interface{}) ([]byte, error) {
+func (tb *TortoiseBeacon) signMessage(message interface{}) []byte {
 	encoded, err := types.InterfaceToBytes(message)
 	if err != nil {
-		return nil, fmt.Errorf("InterfaceToBytes: %w", err)
+		tb.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-
-	return tb.edSigner.Sign(encoded), nil
+	return tb.edSigner.Sign(encoded)
 }
 
-func (tb *TortoiseBeacon) buildProposal(epoch types.EpochID) ([]byte, error) {
+func (tb *TortoiseBeacon) buildProposal(epoch types.EpochID) []byte {
 	message := &struct {
 		Prefix string
 		Epoch  uint32
@@ -818,10 +779,9 @@ func (tb *TortoiseBeacon) buildProposal(epoch types.EpochID) ([]byte, error) {
 
 	b, err := types.InterfaceToBytes(message)
 	if err != nil {
-		return nil, fmt.Errorf("InterfaceToBytes: %w", err)
+		tb.With().Panic("failed to serialize proposal", log.Err(err))
 	}
-
-	return b, nil
+	return b
 }
 
 func ceilDuration(duration, multiple time.Duration) time.Duration {
@@ -836,7 +796,7 @@ func ceilDuration(duration, multiple time.Duration) time.Duration {
 func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data interface{}) error {
 	serialized, err := types.InterfaceToBytes(data)
 	if err != nil {
-		return fmt.Errorf("serializing: %w", err)
+		tb.With().Panic("failed to serialize message for gossip", log.Err(err))
 	}
 
 	if err := tb.net.Broadcast(ctx, channel, serialized); err != nil {

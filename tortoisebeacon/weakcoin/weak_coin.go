@@ -230,7 +230,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (b
 			}
 			msg, err := types.InterfaceToBytes(message)
 			if err != nil {
-				wc.logger.Panic("can't serialize weak coin message", log.Err(err))
+				wc.logger.Panic("failed to serialize weak coin message", log.Err(err))
 			}
 
 			broadcast = msg
