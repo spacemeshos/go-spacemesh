@@ -529,20 +529,69 @@ func broadcastedMessage(tb testing.TB, ctrl *gomock.Controller, buf []byte) *ser
 	return msg
 }
 
+func reliableBroadcaster(tb testing.TB, ctrl *gomock.Controller, i int, instances []*TortoiseBeacon) *mocks.Mockbroadcaster {
+	broadcaster := mocks.NewMockbroadcaster(ctrl)
+	broadcaster.EXPECT().Broadcast(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
+		DoAndReturn(func(_ context.Context, protocol string, data []byte) error {
+			switch protocol {
+			case TBProposalProtocol:
+				for j := range instances {
+					if i != j {
+						instances[j].HandleSerializedProposalMessage(context.TODO(), broadcastedMessage(tb, ctrl, data), nil)
+					}
+				}
+			case TBFirstVotingProtocol:
+				for j := range instances {
+					if i != j {
+						instances[j].HandleSerializedFirstVotingMessage(context.TODO(), broadcastedMessage(tb, ctrl, data), nil)
+					}
+				}
+			case TBFollowingVotingProtocol:
+				for j := range instances {
+					if i != j {
+						instances[j].HandleSerializedFollowingVotingMessage(context.TODO(), broadcastedMessage(tb, ctrl, data), nil)
+					}
+				}
+			default:
+				require.FailNowf(tb, "unknown protocol %s", protocol)
+			}
+			return nil
+		}).AnyTimes()
+	return broadcaster
+}
+
+func balancedAtxDB(tb testing.TB, ctrl *gomock.Controller, units, total, endTick uint64, timestamp time.Time) *mocks.MockactivationDB {
+	tb.Helper()
+	atxDB := mocks.NewMockactivationDB(ctrl)
+	atxDB.EXPECT().GetEpochWeight(gomock.Any()).
+		Return(total, nil, nil).AnyTimes()
+	atxDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
+		Return(types.ATXID{}, nil).AnyTimes()
+	atxDB.EXPECT().GetAtxHeader(gomock.Any()).
+		Return(&types.ActivationTxHeader{
+			NumUnits:        uint(units),
+			NIPostChallenge: types.NIPostChallenge{EndTick: endTick},
+		}, nil).AnyTimes()
+	atxDB.EXPECT().GetAtxTimestamp(gomock.Any()).
+		Return(timestamp, nil).AnyTimes()
+	return atxDB
+}
+
 func TestTortoiseBeacon_LastRoundCounted(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	types.SetLayersPerEpoch(3) // can be anything but not zero
 	var (
-		n          = 4
-		units uint = 1
-		conf       = Config{
-			Kappa:                    400000,
-			Q:                        big.NewRat(1, 3),
-			RoundsNumber:             2,
-			ProposalDuration:         20 * time.Millisecond,
-			FirstVotingRoundDuration: 20 * time.Millisecond,
-			VotingRoundDuration:      20 * time.Millisecond,
+		n            = 4
+		units uint64 = 1
+		conf         = Config{
+			Kappa:        400000,
+			Q:            big.NewRat(1, 3),
+			RoundsNumber: 2,
+			// TODO(dshulyak) time needs to be mocked or factored out from core protocol
+			ProposalDuration:         100 * time.Millisecond,
+			FirstVotingRoundDuration: 100 * time.Millisecond,
+			VotingRoundDuration:      100 * time.Millisecond,
 			// theta is tuned so that half of miner weight is required for consensus
 			Theta:               big.NewRat(1, int64(n/2)),
 			GracePeriodDuration: 20 * time.Second,
@@ -553,21 +602,8 @@ func TestTortoiseBeacon_LastRoundCounted(t *testing.T) {
 		epoch        types.EpochID = 10
 		commonBeacon []byte
 	)
-	atxDB := mocks.NewMockactivationDB(ctrl)
-	atxDB.EXPECT().GetEpochWeight(gomock.Any()).
-		Return(uint64(n)*uint64(units), nil, nil).AnyTimes()
-	atxDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
-		Return(types.ATXID{}, nil).AnyTimes()
-	atxDB.EXPECT().GetAtxHeader(gomock.Any()).
-		Return(&types.ActivationTxHeader{
-			NumUnits:        units,
-			NIPostChallenge: types.NIPostChallenge{EndTick: 1},
-		}, nil).AnyTimes()
-	atxDB.EXPECT().GetAtxTimestamp(gomock.Any()).
-		Return(atxTimestamp, nil).AnyTimes()
 
 	for i := range instances {
-		i := i
 		signer := signing.NewEdSigner()
 		vrfSigner, vrfPub, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
 		require.NoError(t, err)
@@ -578,39 +614,12 @@ func TestTortoiseBeacon_LastRoundCounted(t *testing.T) {
 		} else {
 			layerClock.EXPECT().LayerToTime(gomock.Any()).Return(atxTimestamp.Add(-1)).AnyTimes()
 		}
-		broadcaster := mocks.NewMockbroadcaster(ctrl)
-		broadcaster.EXPECT().Broadcast(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
-			DoAndReturn(func(_ context.Context, protocol string, data []byte) error {
-				switch protocol {
-				case TBProposalProtocol:
-					for j := range instances {
-						if i != j {
-							instances[j].HandleSerializedProposalMessage(context.TODO(), broadcastedMessage(t, ctrl, data), nil)
-						}
-					}
-				case TBFirstVotingProtocol:
-					for j := range instances {
-						if i != j {
-							instances[j].HandleSerializedFirstVotingMessage(context.TODO(), broadcastedMessage(t, ctrl, data), nil)
-						}
-					}
-				case TBFollowingVotingProtocol:
-					for j := range instances {
-						if i != j {
-							instances[j].HandleSerializedFollowingVotingMessage(context.TODO(), broadcastedMessage(t, ctrl, data), nil)
-						}
-					}
-				default:
-					require.FailNowf(t, "unknown protocol %s", protocol)
-				}
-				return nil
-			}).AnyTimes()
 
 		instances[i] = New(
 			conf,
 			types.NodeID{Key: signer.PublicKey().String(), VRFPublicKey: vrfPub},
-			broadcaster,
-			atxDB,
+			reliableBroadcaster(t, ctrl, i, instances),
+			balancedAtxDB(t, ctrl, units, units*uint64(n), 1, atxTimestamp),
 			newMemDB(t),
 			signer,
 			signing.EDVerifier{},
