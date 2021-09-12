@@ -129,41 +129,41 @@ func (m *Mockcoin) EXPECT() *MockcoinMockRecorder {
 }
 
 // FinishEpoch mocks base method.
-func (m *Mockcoin) FinishEpoch() {
+func (m *Mockcoin) FinishEpoch(arg0 context.Context, arg1 types.EpochID) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "FinishEpoch")
+	m.ctrl.Call(m, "FinishEpoch", arg0, arg1)
 }
 
 // FinishEpoch indicates an expected call of FinishEpoch.
-func (mr *MockcoinMockRecorder) FinishEpoch() *gomock.Call {
+func (mr *MockcoinMockRecorder) FinishEpoch(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishEpoch", reflect.TypeOf((*Mockcoin)(nil).FinishEpoch))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishEpoch", reflect.TypeOf((*Mockcoin)(nil).FinishEpoch), arg0, arg1)
 }
 
 // FinishRound mocks base method.
-func (m *Mockcoin) FinishRound() {
+func (m *Mockcoin) FinishRound(arg0 context.Context) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "FinishRound")
+	m.ctrl.Call(m, "FinishRound", arg0)
 }
 
 // FinishRound indicates an expected call of FinishRound.
-func (mr *MockcoinMockRecorder) FinishRound() *gomock.Call {
+func (mr *MockcoinMockRecorder) FinishRound(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishRound", reflect.TypeOf((*Mockcoin)(nil).FinishRound))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishRound", reflect.TypeOf((*Mockcoin)(nil).FinishRound), arg0)
 }
 
 // Get mocks base method.
-func (m *Mockcoin) Get(arg0 types.EpochID, arg1 types.RoundID) bool {
+func (m *Mockcoin) Get(arg0 context.Context, arg1 types.EpochID, arg2 types.RoundID) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", arg0, arg1)
+	ret := m.ctrl.Call(m, "Get", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockcoinMockRecorder) Get(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockcoinMockRecorder) Get(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*Mockcoin)(nil).Get), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*Mockcoin)(nil).Get), arg0, arg1, arg2)
 }
 
 // HandleSerializedMessage mocks base method.
@@ -179,15 +179,15 @@ func (mr *MockcoinMockRecorder) HandleSerializedMessage(arg0, arg1, arg2 interfa
 }
 
 // StartEpoch mocks base method.
-func (m *Mockcoin) StartEpoch(arg0 types.EpochID, arg1 weakcoin.UnitAllowances) {
+func (m *Mockcoin) StartEpoch(arg0 context.Context, arg1 types.EpochID, arg2 weakcoin.UnitAllowances) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartEpoch", arg0, arg1)
+	m.ctrl.Call(m, "StartEpoch", arg0, arg1, arg2)
 }
 
 // StartEpoch indicates an expected call of StartEpoch.
-func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*Mockcoin)(nil).StartEpoch), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*Mockcoin)(nil).StartEpoch), arg0, arg1, arg2)
 }
 
 // StartRound mocks base method.

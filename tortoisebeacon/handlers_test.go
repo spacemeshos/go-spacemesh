@@ -88,7 +88,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				config:          UnitTestConfig(),
-				Log:             logtest.New(t).WithName("TortoiseBeacon"),
+				logger:          logtest.New(t).WithName("TortoiseBeacon"),
 				nodeID:          nodeID,
 				atxDB:           mockDB,
 				vrfVerifier:     signing.VRFVerifier{},
@@ -206,7 +206,7 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:                     logtest.New(t).WithName("TortoiseBeacon"),
+				logger:                  logtest.New(t).WithName("TortoiseBeacon"),
 				atxDB:                   mockDB,
 				vrfVerifier:             signing.VRFVerifier{},
 				vrfSigner:               vrfSigner,
@@ -326,7 +326,7 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				config: Config{
 					RoundsNumber: round + 1,
 				},
-				Log:         logtest.New(t).WithName("TortoiseBeacon"),
+				logger:      logtest.New(t).WithName("TortoiseBeacon"),
 				atxDB:       mockDB,
 				vrfVerifier: signing.VRFVerifier{},
 				vrfSigner:   vrfSigner,

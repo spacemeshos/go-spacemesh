@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/stretchr/testify/require"
-
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -21,6 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
+	"github.com/stretchr/testify/require"
 )
 
 type validatorMock struct{}
@@ -37,6 +37,26 @@ type testSyncState bool
 
 func (ss testSyncState) IsSynced(context.Context) bool {
 	return bool(ss)
+}
+
+func coinValueMock(tb testing.TB, value bool) coin {
+	ctrl := gomock.NewController(tb)
+	coinMock := mocks.NewMockcoin(ctrl)
+	coinMock.EXPECT().StartEpoch(
+		gomock.Any(),
+		gomock.AssignableToTypeOf(types.EpochID(0)),
+		gomock.AssignableToTypeOf(weakcoin.UnitAllowances{}),
+	).AnyTimes()
+	coinMock.EXPECT().FinishEpoch(gomock.Any(), gomock.AssignableToTypeOf(types.EpochID(0))).AnyTimes()
+	coinMock.EXPECT().StartRound(gomock.Any(), gomock.AssignableToTypeOf(types.RoundID(0))).
+		AnyTimes().Return(nil)
+	coinMock.EXPECT().FinishRound(gomock.Any()).AnyTimes()
+	coinMock.EXPECT().Get(
+		gomock.Any(),
+		gomock.AssignableToTypeOf(types.EpochID(0)),
+		gomock.AssignableToTypeOf(types.RoundID(0)),
+	).AnyTimes().Return(value)
+	return coinMock
 }
 
 func TestTortoiseBeacon(t *testing.T) {
@@ -148,7 +168,7 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log: logtest.New(t).WithName("TortoiseBeacon"),
+				logger: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Theta: tc.theta,
 				},
@@ -203,7 +223,7 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log: logtest.New(t).WithName("TortoiseBeacon"),
+				logger: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Kappa: tc.kappa,
 					Q:     tc.q,
@@ -264,7 +284,7 @@ func TestTortoiseBeacon_atxThreshold(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log: logtest.New(t).WithName("TortoiseBeacon"),
+				logger: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Kappa: tc.kappa,
 					Q:     tc.q,
@@ -314,7 +334,7 @@ func TestTortoiseBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log: logtest.New(t).WithName("TortoiseBeacon"),
+				logger: logtest.New(t).WithName("TortoiseBeacon"),
 				config: Config{
 					Kappa: tc.kappa,
 					Q:     tc.q,
@@ -388,7 +408,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log: logtest.New(t).WithName("TortoiseBeacon"),
+				logger: logtest.New(t).WithName("TortoiseBeacon"),
 			}
 
 			result := tb.buildProposal(tc.epoch)
@@ -427,7 +447,7 @@ func TestTortoiseBeacon_signMessage(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:      logtest.New(t).WithName("TortoiseBeacon"),
+				logger:   logtest.New(t).WithName("TortoiseBeacon"),
 				edSigner: edSgn,
 			}
 
@@ -471,7 +491,7 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				Log:       logtest.New(t).WithName("TortoiseBeacon"),
+				logger:    logtest.New(t).WithName("TortoiseBeacon"),
 				vrfSigner: vrfSigner,
 			}
 
