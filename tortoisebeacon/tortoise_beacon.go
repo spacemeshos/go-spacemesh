@@ -24,7 +24,6 @@ import (
 const (
 	protoName            = "TORTOISE_BEACON_PROTOCOL"
 	proposalPrefix       = "TBP"
-	firstRound           = types.RoundID(0)
 	genesisBeacon        = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
 	proposalChanCapacity = 1024
 )
@@ -484,13 +483,13 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		ownLastRoundVotes   allVotes
 	)
 
-	for round := firstRound; round <= tb.lastRound(); round++ {
+	for round := types.FirstRound; round <= tb.lastRound(); round++ {
 		// always use coinflip from the previous round for current round.
 		// round 1 is running without coinflip (e.g. value is false) intentionally
 		round := round
 		previousCoinFlip := coinFlip
 		tb.eg.Go(func() error {
-			if round == firstRound {
+			if round == types.FirstRound {
 				if err := tb.sendProposalVote(ctx, epoch); err != nil {
 					logger.With().Error("Failed to send proposal vote",
 						log.Uint32("round_id", uint32(round)),
@@ -599,7 +598,7 @@ func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochI
 
 func (tb *TortoiseBeacon) startWeakCoinRound(ctx context.Context, epoch types.EpochID, round types.RoundID) {
 	timeout := tb.config.FirstVotingRoundDuration
-	if round > firstRound {
+	if round > 0 {
 		timeout = tb.config.VotingRoundDuration
 	}
 	t := time.NewTimer(timeout)
@@ -647,7 +646,7 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 
 	tb.Log.WithContext(ctx).With().Debug("sending first round vote",
 		epoch,
-		log.Uint32("round_id", uint32(firstRound)),
+		types.FirstRound,
 		log.String("message", m.String()))
 
 	if err := tb.sendToGossip(ctx, TBFirstVotingProtocol, m); err != nil {

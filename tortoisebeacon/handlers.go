@@ -290,9 +290,9 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
 
 	tb.Log.WithContext(ctx).With().Debug("received first voting message, storing its votes",
-		log.String("miner_id", minerPK.ShortString()),
-		log.Uint32("epoch_id", uint32(currentEpoch)),
-		log.Uint32("round_id", uint32(firstRound)))
+		currentEpoch,
+		types.FirstRound,
+		log.String("miner_id", minerPK.ShortString()))
 
 	tb.storeFirstVotes(message, minerPK, voteWeight)
 
@@ -336,17 +336,17 @@ func (tb *TortoiseBeacon) verifyFirstVotingMessage(ctx context.Context, message 
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
-	if tb.hasVoted[firstRound] == nil {
-		tb.hasVoted[firstRound] = make(map[string]struct{})
+	if tb.hasVoted[0] == nil {
+		tb.hasVoted[0] = make(map[string]struct{})
 	}
 
 	// TODO(nkryuchkov): consider having a separate table for an epoch with one bit in it if atx/miner is voted already
-	if _, ok := tb.hasVoted[firstRound][string(minerPK.Bytes())]; ok {
+	if _, ok := tb.hasVoted[0][string(minerPK.Bytes())]; ok {
 		tb.Log.WithContext(ctx).With().Warning("received malformed first voting message, "+
 			"already received a voting message for this pk and round",
-			log.String("miner_id", minerPK.ShortString()),
-			log.Uint32("epoch_id", uint32(currentEpoch)),
-			log.Uint32("round_id", uint32(firstRound)))
+			currentEpoch,
+			types.FirstRound,
+			log.String("miner_id", minerPK.ShortString()))
 
 		// TODO(nkryuchkov): report this miner through gossip
 		// TODO(nkryuchkov): store evidence, generate malfeasance proof: union of two whole voting messages
@@ -381,7 +381,7 @@ func (tb *TortoiseBeacon) storeFirstVotes(message FirstVotingMessage, minerPK *s
 		}
 	}
 
-	tb.hasVoted[firstRound][string(minerPK.Bytes())] = struct{}{}
+	tb.hasVoted[0][string(minerPK.Bytes())] = struct{}{}
 
 	// this is used for bit vector calculation
 	// TODO(nkryuchkov): store sorted mixed valid+potentiallyValid
@@ -477,24 +477,22 @@ func (tb *TortoiseBeacon) verifyFollowingVotingMessage(ctx context.Context, mess
 		tb.Log.WithContext(ctx).With().Warning("received malformed following voting message, bad signature",
 			log.String("miner_id", minerPK.ShortString()),
 			log.Uint32("epoch_id", uint32(currentEpoch)))
-
 		return nil, types.ATXID{}, ErrMalformedSignature
 	}
 
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
-	if tb.hasVoted[message.RoundID-firstRound] == nil {
-		tb.hasVoted[message.RoundID-firstRound] = make(map[string]struct{})
+	if tb.hasVoted[message.RoundID] == nil {
+		tb.hasVoted[message.RoundID] = make(map[string]struct{})
 	}
 
-	if _, ok := tb.hasVoted[message.RoundID-firstRound][string(minerPK.Bytes())]; ok {
+	if _, ok := tb.hasVoted[message.RoundID][string(minerPK.Bytes())]; ok {
 		tb.Log.WithContext(ctx).With().Warning("received malformed following voting message, "+
 			"already received a voting message for this pk and round",
-			log.String("miner_id", minerPK.ShortString()),
-			log.Uint32("epoch_id", uint32(currentEpoch)),
-			log.Uint32("round_id", uint32(message.RoundID-firstRound)))
-
+			currentEpoch,
+			message.RoundID,
+			log.String("miner_id", minerPK.ShortString()))
 		return nil, types.ATXID{}, ErrAlreadyVoted
 	}
 
@@ -523,7 +521,7 @@ func (tb *TortoiseBeacon) storeFollowingVotes(message FollowingVotingMessage, mi
 		}
 	}
 
-	tb.hasVoted[message.RoundID-firstRound][string(minerPK.Bytes())] = struct{}{}
+	tb.hasVoted[message.RoundID][string(minerPK.Bytes())] = struct{}{}
 }
 
 func (tb *TortoiseBeacon) currentEpoch() types.EpochID {

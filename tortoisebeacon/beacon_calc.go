@@ -49,5 +49,5 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, l
 }
 
 func (tb *TortoiseBeacon) lastRound() types.RoundID {
-	return tb.config.RoundsNumber - 1 + firstRound
+	return tb.config.RoundsNumber - 1
 }
