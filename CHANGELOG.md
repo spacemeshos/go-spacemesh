@@ -9,19 +9,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- zip file now includes the node, smrepl and gpu support
+- Zip file now includes the node, smrepl and gpu support
 
 ### Fixed
 
-- smeshing can now start after being stopped
-- waiting before validating blocks from the future
-- AccontMeshDataQuery returns an internal error
+- Smeshing can now start after being stopped
+- Waiting before validating blocks from the future
+- AccountMeshDataQuery returns an internal error
 - Smesher coinbase update API endpoint
-- solved "requested unknown layer hash"
-- fix a memory leak in post
+- Solved "requested unknown layer hash"
+- Fix a memory leak in post
 
 
 ### Changed
 
-- shorten API server startup time
-- remove bottlenecks from connection send queue
+- Shorten API server startup time
+- Remove bottlenecks from connection send queue
