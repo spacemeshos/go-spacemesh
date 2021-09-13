@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -101,7 +101,7 @@ func (p *PoetDbIMock) storeProof(proofMessage *types.PoetProofMessage) error { r
 func TestNewPoetListener(t *testing.T) {
 	r := require.New(t)
 
-	lg := log.NewDefault("poet")
+	lg := logtest.New(t)
 	svc := &ServiceMock{}
 	svc.ch = make(chan service.GossipMessage)
 	poetDb := PoetDbIMock{}

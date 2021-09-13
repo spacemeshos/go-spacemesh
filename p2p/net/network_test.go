@@ -2,19 +2,18 @@ package net
 
 import (
 	"context"
-	"encoding/hex"
-	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"math/rand"
 	"net"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_sumByteArray(t *testing.T) {
@@ -29,7 +28,7 @@ func TestNet_EnqueueMessage(t *testing.T) {
 	cfg := config.DefaultConfig()
 	ln, err := node.NewNodeIdentity()
 	assert.NoError(t, err)
-	n, err := NewNet(context.TODO(), cfg, ln, log.NewDefault(t.Name()))
+	n, err := NewNet(context.TODO(), cfg, ln, logtest.New(t).WithName(t.Name()))
 	require.NoError(t, err)
 
 	var rndmtx sync.Mutex
@@ -51,18 +50,14 @@ func TestNet_EnqueueMessage(t *testing.T) {
 			sum := sumByteArray(rnode.PublicKey().Bytes())
 			msg := make([]byte, 10)
 			randmsg(msg)
-			fmt.Printf("pushing %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
 			n.EnqueueMessage(context.TODO(), IncomingMessageEvent{Conn: NewConnectionMock(rnode.PublicKey()), Message: msg})
-			fmt.Printf("pushed %v to %v \r\n", hex.EncodeToString(msg), sum%n.queuesCount)
 			tx := time.NewTimer(time.Second * 2)
 			defer wg.Done()
 			select {
 			case <-n.IncomingMessages()[sum%n.queuesCount]:
-				fmt.Printf("got %v \r\n", hex.EncodeToString(msg))
 				//assert.Equal(t, s.Message, msg)
 				//assert.Equal(t, s.Conn.RemotePublicKey(), rnode.PublicKey())
 			case <-tx.C:
-				fmt.Println("didn't get ", hex.EncodeToString(msg))
 				atomic.AddInt32(&timedout, 1)
 				return
 
@@ -129,7 +124,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 
 	ln, err := node.NewNodeIdentity()
 	require.NoError(t, err)
-	n, err := NewNet(context.TODO(), cfg, ln, log.NewDefault(t.Name()))
+	n, err := NewNet(context.TODO(), cfg, ln, logtest.New(t).WithName(t.Name()))
 	//n.SubscribeOnNewRemoteConnections(counter)
 	require.NoError(t, err)
 	listener := newMockListener()
@@ -164,7 +159,7 @@ func TestHandlePreSessionIncomingMessage2(t *testing.T) {
 	bobsAliceConn := NewConnectionMock(aliceNode.PublicKey())
 	bobsAliceConn.Addr = &net.TCPAddr{IP: aliceNodeInfo.IP, Port: int(aliceNodeInfo.ProtocolPort)}
 
-	bobsNet, err := NewNet(context.TODO(), config.DefaultConfig(), bobNode, log.NewDefault(t.Name()))
+	bobsNet, err := NewNet(context.TODO(), config.DefaultConfig(), bobNode, logtest.New(t).WithName(t.Name()))
 	r.NoError(err)
 	bobsNet.SubscribeOnNewRemoteConnections(func(event NewConnectionEvent) {
 		r.Equal(aliceNode.PublicKey().String(), event.Conn.Session().ID().String(), "wrong session received")
@@ -199,7 +194,7 @@ func TestMaxPendingConnections(t *testing.T) {
 
 	ln, err := node.NewNodeIdentity()
 	require.NoError(t, err)
-	n, err := NewNet(context.TODO(), cfg, ln, log.NewDefault(t.Name()))
+	n, err := NewNet(context.TODO(), cfg, ln, logtest.New(t).WithName(t.Name()))
 	require.NoError(t, err)
 
 	// Create many new connections

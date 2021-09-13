@@ -4,6 +4,11 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+	"time"
+
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -16,12 +21,7 @@ import (
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"net/http"
-	"os"
-	"time"
 )
-
-import _ "net/http/pprof"
 
 // Cmd the command of the hare app
 var Cmd = &cobra.Command{
@@ -48,17 +48,19 @@ func init() {
 	cmdp.AddCommands(Cmd)
 }
 
-type mockBlockProvider struct {
+type mockBlockProvider struct{}
+
+func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
 
-func (mbp *mockBlockProvider) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
+func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
+}
+
+func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
 }
 
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
-}
-
-func (mbp *mockBlockProvider) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
 }
 
 // HareApp represents an Hare application
@@ -93,28 +95,22 @@ func buildSet() []types.BlockID {
 	s := make([]types.BlockID, 200, 200)
 
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.NewExistingBlock(types.GetEffectiveGenesis()+1, util.Uint64ToBytes(i), nil).ID())
+		s = append(s, types.NewExistingBlock(types.GetEffectiveGenesis().Add(1), util.Uint64ToBytes(i), nil).ID())
 	}
 
 	return s
 }
 
-type mockIDProvider struct {
-}
+type mockIDProvider struct{}
 
 func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeID, error) {
 	return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, nil
 }
 
-type mockStateQuerier struct {
-}
+type mockStateQuerier struct{}
 
 func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
 	return true, nil
-}
-
-func validateBlocks(blocks []types.BlockID) bool {
-	return true
 }
 
 // Start the app
@@ -130,7 +126,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 			}
 		}()
 	}
-	types.SetLayersPerEpoch(int32(app.Config.LayersPerEpoch))
+	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	log.Info("initializing P2P services")
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
 	app.p2p = swarm
@@ -151,6 +147,11 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	hareOracle := newHareOracleFromClient(app.oracle)
 
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
+	if err != nil {
+		log.With().Error("Failed to parse genesis time as RFC3339",
+			log.String("genesis_time", app.Config.GenesisTime))
+	}
+	// TODO: consider uncommenting
 	/*if err != nil {
 		log.Panic("error parsing config err=%v", err)
 	}*/
@@ -158,7 +159,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	//app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
 	lt := make(timesync.LayerTimer)
 
-	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, validateBlocks, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
+	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
 	log.Info("starting hare service")
 	app.ha = hareI
 	if err = app.ha.Start(cmdp.Ctx); err != nil {
@@ -171,8 +172,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		log.Info("sleeping until %v", gTime)
 		time.Sleep(gTime.Sub(time.Now()))
 	}
-	startLayer := types.GetEffectiveGenesis() + 1
-	lt <- startLayer
+	lt <- types.GetEffectiveGenesis().Add(1)
 }
 
 func main() {

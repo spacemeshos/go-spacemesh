@@ -1,13 +1,14 @@
 package discovery
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"io/ioutil"
 	"os"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // assertAddr ensures that the two addresses match. The timestamp is not
@@ -58,7 +59,7 @@ func assertAddrs(t *testing.T, addrMgr *addrBook,
 // deserialize the manager's current address cache.
 func TestAddrManagerSerialization(t *testing.T) {
 
-	lg := log.NewDefault("addrbook_serialize_test")
+	lg := logtest.New(t).WithName("addrbook_serialize_test")
 	cfg := config.DefaultConfig()
 
 	// We'll start by creating our address manager backed by a temporary

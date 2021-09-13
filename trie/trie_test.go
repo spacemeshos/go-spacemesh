@@ -21,9 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -31,6 +28,10 @@ import (
 	"reflect"
 	"testing"
 	"testing/quick"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/rlp"
@@ -519,7 +520,7 @@ const benchElemCount = 20000
 func benchGet(b *testing.B, commit bool) {
 	trie := new(Trie)
 	if commit {
-		_, tmpdb := tempDB()
+		_, tmpdb := tempDB(b)
 		trie, _ = New(types.Hash32{}, tmpdb)
 	}
 	k := make([]byte, 32)
@@ -590,12 +591,12 @@ func BenchmarkHash(b *testing.B) {
 	trie.Hash()
 }
 
-func tempDB() (string, *Database) {
+func tempDB(tb testing.TB) (string, *Database) {
 	dir, err := ioutil.TempDir("", "trie-bench")
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
 	}
-	diskdb, err := database.NewLDBDatabase(dir, 256, 0, log.NewDefault("trie.diskDb"))
+	diskdb, err := database.NewLDBDatabase(dir, 256, 0, logtest.New(tb).WithName("trie.diskDb"))
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}

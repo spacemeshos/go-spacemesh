@@ -1,22 +1,24 @@
 package mesh
 
 import (
+	"context"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // AtxDbMock is a mock of an activation DB
 type AtxDbMock struct {
 	db      map[types.ATXID]*types.ActivationTx
-	nipsts  map[types.ATXID]*types.NIPST
+	niposts map[types.ATXID]*types.NIPost
 	ProcCnt int
 }
 
 // NewAtxDbMock returns a new AtxDbMock
 func NewAtxDbMock() *AtxDbMock {
 	return &AtxDbMock{
-		db:     make(map[types.ATXID]*types.ActivationTx),
-		nipsts: make(map[types.ATXID]*types.NIPST),
+		db:      make(map[types.ATXID]*types.ActivationTx),
+		niposts: make(map[types.ATXID]*types.NIPost),
 	}
 }
 
@@ -40,16 +42,16 @@ func (t *AtxDbMock) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 // AddAtx stores an ATX for later retrieval
 func (t *AtxDbMock) AddAtx(id types.ATXID, atx *types.ActivationTx) {
 	t.db[id] = atx
-	t.nipsts[id] = atx.Nipst
+	t.niposts[id] = atx.NIPost
 }
 
 // ProcessAtxs counts how many ATXs were processed
-func (t *AtxDbMock) ProcessAtxs(atxs []*types.ActivationTx) error {
+func (t *AtxDbMock) ProcessAtxs(_ context.Context, atxs []*types.ActivationTx) error {
 	t.ProcCnt += len(atxs)
 	return nil
 }
 
 // SyntacticallyValidateAtx always returns no error
-func (AtxDbMock) SyntacticallyValidateAtx(*types.ActivationTx) error {
+func (AtxDbMock) SyntacticallyValidateAtx(context.Context, *types.ActivationTx) error {
 	return nil
 }

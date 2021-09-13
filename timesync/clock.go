@@ -1,9 +1,10 @@
 package timesync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // Clock defines the functionality needed from any clock type
@@ -36,7 +37,7 @@ func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger
 	}
 
 	t := &TimeClock{
-		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: genesisTime}),
+		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: genesisTime}, WithLog(logger)),
 		tickInterval: tickInterval,
 		startEpoch:   genesisTime,
 		stop:         make(chan struct{}),
@@ -51,8 +52,8 @@ func (t *TimeClock) startClock() {
 	t.log.Info("starting global clock now=%v genesis=%v %p", t.clock.Now(), t.startEpoch, t)
 
 	for {
-		currLayer := t.Ticker.TimeToLayer(t.clock.Now())    // get current layer
-		nextTickTime := t.Ticker.LayerToTime(currLayer + 1) // get next tick time for the next layer
+		currLayer := t.Ticker.TimeToLayer(t.clock.Now())       // get current layer
+		nextTickTime := t.Ticker.LayerToTime(currLayer.Add(1)) // get next tick time for the next layer
 		diff := nextTickTime.Sub(t.clock.Now())
 		tmr := time.NewTimer(diff)
 		t.log.With().Info("global clock going to sleep before next layer",
@@ -60,6 +61,9 @@ func (t *TimeClock) startClock() {
 			log.FieldNamed("curr_layer", currLayer))
 		select {
 		case <-tmr.C:
+			t.log.With().Info("clock notifying subscribers of new layer tick",
+				log.Int("subscriber_count", len(t.subscribers)),
+				t.TimeToLayer(t.clock.Now()))
 			// notify subscribers
 			if missed, err := t.Notify(); err != nil {
 				t.log.With().Error("could not notify subscribers",

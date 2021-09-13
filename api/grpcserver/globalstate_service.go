@@ -37,7 +37,7 @@ func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHash
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
 		RootHash: s.Mesh.GetStateRoot().Bytes(),
-		Layer:    &pb.LayerNumber{Number: uint32(s.Mesh.LatestLayerInState())},
+		Layer:    &pb.LayerNumber{Number: s.Mesh.LatestLayerInState().Uint32()},
 	}}, nil
 }
 
@@ -111,17 +111,17 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 	}
 
 	// Read the filter flags
-	filterTxReceipt := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT) != 0
+	// filterTxReceipt := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT) != 0
+	_ = in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT) != 0
 	filterReward := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD) != 0
 	filterAccount := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT) != 0
 
 	addr := types.BytesToAddress(in.Filter.AccountId.Address)
 	res := &pb.AccountDataQueryResponse{}
 
-	if filterTxReceipt {
-		// TODO: Implement this. The node does not implement tx receipts yet.
-		// See https://github.com/spacemeshos/go-spacemesh/issues/2072
-	}
+	// TODO: Implement this. The node does not implement tx receipts yet.
+	// See https://github.com/spacemeshos/go-spacemesh/issues/2072
+	// if filterTxReceipt {}
 
 	if filterReward {
 		dbRewards, err := s.Mesh.GetRewards(addr)
@@ -131,12 +131,12 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 		for _, r := range dbRewards {
 			res.AccountItem = append(res.AccountItem, &pb.AccountData{Datum: &pb.AccountData_Reward{
 				Reward: &pb.Reward{
-					Layer:       &pb.LayerNumber{Number: uint32(r.Layer)},
+					Layer:       &pb.LayerNumber{Number: r.Layer.Uint32()},
 					Total:       &pb.Amount{Value: r.TotalReward},
 					LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
 					// Leave this out for now as this is changing
 					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
-					//LayerComputed: 0,
+					// LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: addr.Bytes()},
 					Smesher:  &pb.SmesherId{Id: r.SmesherID.ToBytes()},
 				},
@@ -213,11 +213,11 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 	res := &pb.SmesherDataQueryResponse{}
 	for _, r := range dbRewards {
 		res.Rewards = append(res.Rewards, &pb.Reward{
-			Layer:       &pb.LayerNumber{Number: uint32(r.Layer)},
+			Layer:       &pb.LayerNumber{Number: r.Layer.Uint32()},
 			Total:       &pb.Amount{Value: r.TotalReward},
 			LayerReward: &pb.Amount{Value: r.LayerRewardEstimate},
 			// Leave this out for now as this is changing
-			//LayerComputed: 0,
+			// LayerComputed: 0,
 			Coinbase: &pb.AccountId{Address: r.Coinbase.Bytes()},
 			Smesher:  &pb.SmesherId{Id: r.SmesherID.ToBytes()},
 		})
@@ -323,12 +323,12 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			if reward.Coinbase == addr {
 				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
 					Reward: &pb.Reward{
-						Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
+						Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
 						Total:       &pb.Amount{Value: reward.Total},
 						LayerReward: &pb.Amount{Value: reward.LayerReward},
 						// Leave this out for now as this is changing
 						// See https://github.com/spacemeshos/go-spacemesh/issues/2275
-						//LayerComputed: 0,
+						// LayerComputed: 0,
 						Coinbase: &pb.AccountId{Address: addr.Bytes()},
 						Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 					},
@@ -350,12 +350,12 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Receipt{
 					Receipt: &pb.TransactionReceipt{
 						Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
-						//Result:      receipt.Result,
+						// Result:      receipt.Result,
 						GasUsed: receipt.GasUsed,
 						Fee:     &pb.Amount{Value: receipt.Fee},
-						Layer:   &pb.LayerNumber{Number: uint32(receipt.Layer)},
+						Layer:   &pb.LayerNumber{Number: receipt.Layer.Uint32()},
 						Index:   receipt.Index,
-						//SvmData: nil,
+						// SvmData: nil,
 					},
 				}}}); err != nil {
 					return err
@@ -390,19 +390,19 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 		select {
 		case reward, ok := <-channelReward:
 			if !ok {
-				//shut down the reward channel
+				// shut down the reward channel
 				log.Info("Reward channel closed, shutting down")
 				return nil
 			}
-			//filter on the smesherID
+			// filter on the smesherID
 			if comp := bytes.Compare(reward.Smesher.ToBytes(), smesherIDBytes); comp == 0 {
 				if err := stream.Send(&pb.SmesherRewardStreamResponse{
 					Reward: &pb.Reward{
-						Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
+						Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
 						Total:       &pb.Amount{Value: reward.Total},
 						LayerReward: &pb.Amount{Value: reward.LayerReward},
 						// Leave this out for now as this is changing
-						//LayerComputed: 0,
+						// LayerComputed: 0,
 						Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
 						Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 					},
@@ -445,7 +445,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		channelAccount chan types.Address
 		channelReward  chan events.Reward
 		channelReceipt chan events.TxReceipt
-		channelLayer   chan events.NewLayer
+		channelLayer   chan events.LayerUpdate
 	)
 	if filterAccount {
 		channelAccount = events.GetAccountChannel()
@@ -497,12 +497,12 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			}
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
-					Layer:       &pb.LayerNumber{Number: uint32(reward.Layer)},
+					Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
 					Total:       &pb.Amount{Value: reward.Total},
 					LayerReward: &pb.Amount{Value: reward.LayerReward},
 					// Leave this out for now as this is changing
 					// See https://github.com/spacemeshos/go-spacemesh/issues/2275
-					//LayerComputed: 0,
+					// LayerComputed: 0,
 					Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
 					Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 				},
@@ -521,12 +521,12 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Receipt{
 				Receipt: &pb.TransactionReceipt{
 					Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
-					//Result:      receipt.Result,
+					// Result:      receipt.Result,
 					GasUsed: receipt.GasUsed,
 					Fee:     &pb.Amount{Value: receipt.Fee},
-					Layer:   &pb.LayerNumber{Number: uint32(receipt.Layer)},
+					Layer:   &pb.LayerNumber{Number: receipt.Layer.Uint32()},
 					Index:   receipt.Index,
-					//SvmData: nil,
+					// SvmData: nil,
 				},
 			}}}); err != nil {
 				return err
@@ -540,7 +540,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Info("layer channel closed, shutting down")
 				return nil
 			}
-			root, err := s.Mesh.GetLayerStateRoot(layer.Layer.Index())
+			root, err := s.Mesh.GetLayerStateRoot(layer.LayerID)
 			if err != nil {
 				log.Error("error retrieving layer data: %s", err)
 				return status.Errorf(codes.Internal, "error retrieving layer data")
@@ -548,7 +548,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
 				GlobalState: &pb.GlobalStateHash{
 					RootHash: root.Bytes(),
-					Layer:    &pb.LayerNumber{Number: uint32(layer.Layer.Index())},
+					Layer:    &pb.LayerNumber{Number: layer.LayerID.Uint32()},
 				},
 			}}}); err != nil {
 				return err

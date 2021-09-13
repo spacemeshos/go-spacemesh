@@ -5,13 +5,14 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"io"
 	"math/big"
 	"net/http"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const register = "register"
@@ -116,7 +117,7 @@ type validList struct {
 	IDs []string `json:"IDs"`
 }
 
-func hashInstanceAndK(instanceID types.LayerID, K int32) uint32 {
+func hashInstanceAndK(instanceID types.LayerID, K uint32) uint32 {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(K))
 	h := newHasherU32()
@@ -125,7 +126,7 @@ func hashInstanceAndK(instanceID types.LayerID, K int32) uint32 {
 }
 
 // Eligible checks whether a given ID is in the eligible list or not. it fetches the list once and gives answers locally after that.
-func (oc *oracleClient) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+func (oc *oracleClient) Eligible(layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	instID := hashInstanceAndK(layer, round)
 	// make special instance ID
 	oc.eMtx.Lock()

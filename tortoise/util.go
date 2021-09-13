@@ -1,102 +1,107 @@
 package tortoise
 
 import (
+	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type vec [2]int
-
-const (
-	globalThreshold = 0.6
-)
+var errOverflow = errors.New("vector overflow")
 
 var ( //correction vectors type
 	// Opinion vectors
-	support = vec{1, 0}
-	against = vec{0, 1}
-	abstain = vec{0, 0}
+	support = vec{Support: 1, Against: 0}
+	against = vec{Support: 0, Against: 1}
+	abstain = vec{Support: 0, Against: 0}
 )
+
+type vec struct {
+	Support, Against uint64
+	Flushed          bool
+}
 
 // Field returns a log field. Implements the LoggableField interface.
 func (a vec) Field() log.Field {
-	return log.String("vote_vector", fmt.Sprint(a))
+	return log.String("vote_vector", fmt.Sprintf("(+%d, -%d)", a.Support, a.Against))
+}
+
+func (a vec) netVote() int64 {
+	// prevent overflow/wraparound
+	one := int64(a.Support)
+	two := int64(a.Against)
+	if one < 0 || two < 0 {
+		panic(errOverflow)
+	}
+	return one - two
 }
 
 func (a vec) Add(v vec) vec {
-	return vec{a[0] + v[0], a[1] + v[1]}
-}
-
-func (a vec) Negate() vec {
-	a[0] = a[0] * -1
-	a[1] = a[1] * -1
+	a.Support += v.Support
+	a.Against += v.Against
+	a.Flushed = false
+	if a.Support < v.Support || a.Against < v.Against {
+		panic(errOverflow)
+	}
 	return a
 }
 
-func (a vec) Multiply(x int) vec {
-	a[0] = a[0] * x
-	a[1] = a[1] * x
+func (a vec) Multiply(x uint64) vec {
+	one := a.Support * x
+	two := a.Against * x
+	if x != 0 && (one/x != a.Support || two/x != a.Against) {
+		panic(errOverflow)
+	}
+	a.Flushed = false
+	a.Support = one
+	a.Against = two
 	return a
 }
 
 func simplifyVote(v vec) vec {
-	if v[0] > v[1] {
+	if v.Support > v.Against {
 		return support
 	}
 
-	if v[1] > v[0] {
+	if v.Against > v.Support {
 		return against
 	}
-
 	return abstain
 }
 
 func (a vec) String() string {
 	v := simplifyVote(a)
-
 	if v == support {
 		return "support"
 	}
-
 	if v == against {
 		return "against"
 	}
-
 	return "abstain"
 }
 
-func calculateGlobalOpinion(logger log.Log, v vec, layerSize int, delta float64) vec {
-	threshold := globalThreshold * delta * float64(layerSize)
-	logger.With().Debug("global opinion", v, log.String("threshold", fmt.Sprint(threshold)))
-	if float64(v[0]) > threshold {
+func calculateOpinionWithThreshold(logger log.Log, v vec, layerSize int, theta uint8, delta float64) vec {
+	threshold := float64(theta) / 100 * delta * float64(layerSize)
+	netVote := float64(v.netVote())
+	logger.With().Debug("threshold opinion",
+		v,
+		log.Int("theta", int(theta)),
+		log.Int("layer_size", layerSize),
+		log.String("delta", fmt.Sprint(delta)),
+		log.String("threshold", fmt.Sprint(threshold)),
+		log.String("net_vote", fmt.Sprint(netVote)))
+	if netVote > threshold {
+		// try net positive vote
 		return support
-	} else if float64(v[1]) > threshold {
+	} else if netVote < -1*threshold {
+		// try net negative vote
 		return against
 	} else {
+		// neither threshold was crossed, so abstain
 		return abstain
 	}
 }
 
-type blockIDLayerTuple struct {
-	types.BlockID
-	types.LayerID
-}
-
-func (blt blockIDLayerTuple) layer() types.LayerID {
-	return blt.LayerID
-}
-
-func (blt blockIDLayerTuple) id() types.BlockID {
-	return blt.BlockID
-}
-
-// Opinion is a tuple of block and layer id and its opinions on other blocks.
-type Opinion struct {
-	BILT          blockIDLayerTuple
-	BlocksOpinion map[types.BlockID]vec
-}
-
-type retriever interface {
-	Retrieve(key []byte, v interface{}) (interface{}, error)
-}
+// Opinion is opinions on other blocks.
+type Opinion map[types.BlockID]vec

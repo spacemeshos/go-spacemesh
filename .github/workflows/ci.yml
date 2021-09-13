@@ -66,6 +66,30 @@ jobs:
           make test-tidy
           make test-fmt
           make lint
+
+  golangci-lint:
+    runs-on: ubuntu-latest
+    needs: filter-changes
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
+    # should not take more than 4-6 mins
+    timeout-minutes: 10
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: set up go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.go-version }}
+      - name: setup env
+        run: make
+      - name: golangci-lint (fast and strict)
+        run: make golangci-lint-fast-github-action
+      - name: golangci-lint (slow and tolerant)
+        # TODO(nkryuchkov): If many of linters (less important) are enabled, there's a lot of linter errors.
+        # Therefore, CI should not fail because of less important linters for now.
+        # This needs to be fixed at some point.
+        run: make golangci-lint-github-action || true
+
   unittests:
     runs-on: ubuntu-latest
     needs: filter-changes
@@ -83,6 +107,8 @@ jobs:
         run: make
       - name: unit tests (except app test)
         run: make test-no-app-test
+        env: 
+          TEST_LOG_LEVEL: debug
   apptests:
     runs-on: ubuntu-latest
     needs: filter-changes
@@ -100,6 +126,8 @@ jobs:
         run: make
       - name: app test
         run: make test-only-app-test
+        env: 
+          TEST_LOG_LEVEL: debug
   # checkpoint and print a single, clean status message to slack
   ci-stage1:
     # run regardless of status of previous jobs but skip if the required secret is not accessible
@@ -107,12 +135,13 @@ jobs:
     needs:
       - filter-changes
       - quicktests
+      - golangci-lint
       - unittests
       - apptests
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success')) && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.quicktests.result == 'success' && needs.golangci-lint.result == 'success' && needs.unittests.result == 'success' && needs.apptests.result == 'success')) && 'success' || 'failure' }}
     # this is the easiest way to access success/failure state of previous jobs in this workflow
     steps:
       - uses: act10ns/slack@v1

@@ -39,20 +39,21 @@ type meshValidatorMock struct {
 }
 
 func (m *meshValidatorMock) LatestComplete() types.LayerID { return m.vl }
-func (m *meshValidatorMock) Persist() error                { return nil }
-func (m *meshValidatorMock) HandleIncomingLayer(lyr *types.Layer) (types.LayerID, types.LayerID) {
+func (m *meshValidatorMock) Persist(context.Context) error { return nil }
+func (m *meshValidatorMock) HandleIncomingLayer(_ context.Context, lyr types.LayerID) (types.LayerID, types.LayerID, bool) {
 	m.countValidate++
 	m.calls++
-	m.vl = lyr.Index()
+	m.vl = lyr
 	if m.validatedLayers == nil {
 		m.validatedLayers = make(map[types.LayerID]struct{})
 	}
-	m.validatedLayers[lyr.Index()] = struct{}{}
+	m.validatedLayers[lyr] = struct{}{}
 	time.Sleep(m.delay)
-	return lyr.Index(), lyr.Index() - 1
+	return lyr, lyr.Sub(1), false
 }
-func (m *meshValidatorMock) HandleLateBlock(bl *types.Block) (types.LayerID, types.LayerID) {
-	return bl.Layer(), bl.Layer() - 1
+
+func (m *meshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
+	return blocks[0].Layer(), blocks[0].Layer().Sub(1)
 }
 
 type mockState struct{}
@@ -79,10 +80,10 @@ func (*mockIStore) GetIdentity(string) (types.NodeID, error) {
 
 type validatorMock struct{}
 
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPST, uint64, types.Hash32) error {
+func (*validatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) error {
 	return nil
 }
-func (*validatorMock) VerifyPost(signing.PublicKey, *types.PostProof, uint64) error { return nil }
+func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint) error { return nil }
 
 type mockClock struct {
 	ch         map[timesync.LayerTimer]int
@@ -146,7 +147,7 @@ func createMeshWithMock(dbs *allDbs, txpool *state.TxMempool, lg log.Log) *mesh.
 	var msh *mesh.Mesh
 	if dbs.mshdb.PersistentData() {
 		lg.Info("persistent data found")
-		msh = mesh.NewRecoveredMesh(dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
+		msh = mesh.NewRecoveredMesh(context.TODO(), dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	} else {
 		lg.Info("no persistent data found")
 		msh = mesh.NewMesh(dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
@@ -167,7 +168,7 @@ func createFetcherWithMock(dbs *allDbs, msh *mesh.Mesh, swarm service.Service, l
 }
 
 func createSyncer(conf syncer.Configuration, msh *mesh.Mesh, layerFetch *layerfetcher.Logic, expectedLayers types.LayerID, lg log.Log) *syncer.Syncer {
-	clock := mockClock{Layer: expectedLayers + 1}
+	clock := mockClock{Layer: expectedLayers.Add(1)}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 
 	layerFetch.Start()

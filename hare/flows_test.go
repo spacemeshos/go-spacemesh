@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -18,21 +18,21 @@ import (
 )
 
 type HareWrapper struct {
-	totalCP     int
+	totalCP     uint32
 	termination util.Closer
 	lCh         []chan types.LayerID
 	hare        []*Hare
 	initialSets []*Set // all initial sets
-	outputs     map[instanceID][]*Set
+	outputs     map[types.LayerID][]*Set
 	name        string
 }
 
-func newHareWrapper(totalCp int) *HareWrapper {
+func newHareWrapper(totalCp uint32) *HareWrapper {
 	hs := new(HareWrapper)
 	hs.lCh = make([]chan types.LayerID, 0)
 	hs.totalCP = totalCp
 	hs.termination = util.NewCloser()
-	hs.outputs = make(map[instanceID][]*Set, 0)
+	hs.outputs = make(map[types.LayerID][]*Set, 0)
 
 	return hs
 }
@@ -47,7 +47,7 @@ func (his *HareWrapper) waitForTermination() {
 	for {
 		count := 0
 		for _, p := range his.hare {
-			for i := types.LayerID(types.GetEffectiveGenesis() + 1); i <= types.GetEffectiveGenesis()+types.LayerID(his.totalCP); i++ {
+			for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(his.totalCP)); i = i.Add(1) {
 				blks, _ := p.GetResult(i)
 				if len(blks) > 0 {
 					count++
@@ -55,24 +55,21 @@ func (his *HareWrapper) waitForTermination() {
 			}
 		}
 
-		// log.Info("count is %v", count)
-		if count == his.totalCP*len(his.hare) {
+		if count == int(his.totalCP)*len(his.hare) {
 			break
 		}
 
 		time.Sleep(300 * time.Millisecond)
 	}
 
-	log.Info("Terminating. Validating outputs")
-
 	for _, p := range his.hare {
-		for i := types.LayerID(types.GetEffectiveGenesis() + 1); i <= types.GetEffectiveGenesis()+types.LayerID(his.totalCP); i++ {
+		for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(his.totalCP)); i = i.Add(1) {
 			s := NewEmptySet(10)
 			blks, _ := p.GetResult(i)
 			for _, b := range blks {
 				s.Add(b)
 			}
-			his.outputs[instanceID(i)] = append(his.outputs[instanceID(i)], s)
+			his.outputs[i] = append(his.outputs[i], s)
 		}
 	}
 
@@ -82,19 +79,20 @@ func (his *HareWrapper) waitForTermination() {
 func (his *HareWrapper) WaitForTimedTermination(t *testing.T, timeout time.Duration) {
 	timer := time.After(timeout)
 	go his.waitForTermination()
+	total := types.NewLayerID(his.totalCP)
 	select {
 	case <-timer:
 		t.Fatal("Timeout")
 		return
 	case <-his.termination.CloseChannel():
-		for i := 1; i <= his.totalCP; i++ {
-			his.checkResult(t, instanceID(i))
+		for i := types.NewLayerID(1); !i.After(total); i = i.Add(1) {
+			his.checkResult(t, i)
 		}
 		return
 	}
 }
 
-func (his *HareWrapper) checkResult(t *testing.T, id instanceID) {
+func (his *HareWrapper) checkResult(t *testing.T, id types.LayerID) {
 	// check consistency
 	out := his.outputs[id]
 	for i := 0; i < len(out)-1; i++ {
@@ -106,7 +104,7 @@ func (his *HareWrapper) checkResult(t *testing.T, id instanceID) {
 
 type p2pManipulator struct {
 	nd           *service.Node
-	stalledLayer instanceID
+	stalledLayer types.LayerID
 	err          error
 }
 
@@ -126,8 +124,7 @@ func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.
 
 func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload []byte) error {
 	msg, _ := MessageFromBuffer(payload)
-	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != -1 {
-		log.Warning("Not broadcasting in manipulator")
+	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != preRound {
 		return m.err
 	}
 
@@ -144,15 +141,15 @@ func (trueOracle) Register(bool, string) {
 func (trueOracle) Unregister(bool, string) {
 }
 
-func (trueOracle) Validate(context.Context, types.LayerID, int32, int, types.NodeID, []byte, uint16) (bool, error) {
+func (trueOracle) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
 }
 
-func (trueOracle) CalcEligibility(context.Context, types.LayerID, int32, int, types.NodeID, []byte) (uint16, error) {
+func (trueOracle) CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error) {
 	return 1, nil
 }
 
-func (trueOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
+func (trueOracle) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	x := make([]byte, 100)
 	return x, nil
 }
@@ -176,18 +173,14 @@ func Test_consensusIterations(t *testing.T) {
 	i := 0
 	creationFunc := func() {
 		s := sim.NewNode()
-		p2pm := &p2pManipulator{nd: s, stalledLayer: 1, err: errors.New("fake err")}
-		proc := createConsensusProcess(true, cfg, oracle, p2pm, test.initialSets[i], 1, t.Name())
+		p2pm := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
+		proc := createConsensusProcess(t, true, cfg, oracle, p2pm, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
 	test.Create(totalNodes, creationFunc)
 	test.Start()
 	test.WaitForTimedTermination(t, 30*time.Second)
-}
-
-func validateBlock([]types.BlockID) bool {
-	return true
 }
 
 func isSynced(context.Context) bool {
@@ -225,14 +218,17 @@ type mockBlockProvider struct {
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
 
+func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
+}
+
+func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
+}
+
 func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
 	return buildSet(), nil
 }
 
-func (mbp *mockBlockProvider) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
-}
-
-func createMaatuf(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string) *Hare {
+func createMaatuf(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))
@@ -240,17 +236,20 @@ func createMaatuf(tcfg config.Config, layersCh chan types.LayerID, p2p NetworkSe
 		panic("failed to create vrf signer")
 	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
-	hare := New(tcfg, p2p, ed, nodeID, validateBlock, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, layersCh, log.NewDefault(name+"_"+ed.PublicKey().ShortString()))
+	hare := New(tcfg, p2p, ed, nodeID, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
+		&MockStateQuerier{true, nil}, layersCh, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare
 }
 
 // Test - run multiple CPs simultaneously
 func Test_multipleCPs(t *testing.T) {
+	// NOTE(dshulyak) spams with overwriting sessionID in context
+	logtest.SetupGlobal(t)
+
 	types.SetLayersPerEpoch(4)
 	r := require.New(t)
-	totalCp := 3
+	totalCp := uint32(3)
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
@@ -261,17 +260,15 @@ func Test_multipleCPs(t *testing.T) {
 		s := sim.NewNode()
 		// p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(cfg, test.lCh[i], s, oracle, t.Name())
+		h := createMaatuf(t, cfg, test.lCh[i], s, oracle, t.Name())
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
 
 	go func() {
-		for j := types.LayerID(types.GetEffectiveGenesis() + 1); j <= types.GetEffectiveGenesis()+types.LayerID(totalCp); j++ {
-			log.Info("sending for layer %v", j)
+		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 			for i := 0; i < len(test.lCh); i++ {
-				log.Info("sending for instance %v", i)
 				test.lCh[i] <- j
 			}
 			time.Sleep(250 * time.Millisecond)
@@ -283,8 +280,11 @@ func Test_multipleCPs(t *testing.T) {
 
 // Test - run multiple CPs where one of them runs more than one iteration
 func Test_multipleCPsAndIterations(t *testing.T) {
+	logtest.SetupGlobal(t)
+
+	types.SetLayersPerEpoch(4)
 	r := require.New(t)
-	totalCp := 4
+	totalCp := uint32(4)
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
@@ -293,19 +293,17 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	oracle := &trueOracle{}
 	for i := 0; i < totalNodes; i++ {
 		s := sim.NewNode()
-		mp2p := &p2pManipulator{nd: s, stalledLayer: 1, err: errors.New("fake err")}
+		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(cfg, test.lCh[i], mp2p, oracle, t.Name())
+		h := createMaatuf(t, cfg, test.lCh[i], mp2p, oracle, t.Name())
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
 
 	go func() {
-		for j := types.LayerID(types.GetEffectiveGenesis() + 1); j <= types.GetEffectiveGenesis()+types.LayerID(totalCp); j++ {
-			log.Info("sending for layer %v", j)
+		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 			for i := 0; i < len(test.lCh); i++ {
-				log.Info("sending for instance %v", i)
 				test.lCh[i] <- j
 			}
 			time.Sleep(500 * time.Millisecond)

@@ -69,7 +69,7 @@ func NewEventPublisher(eventURL string) (*EventPublisher, error) {
 	return &EventPublisher{p}, nil
 }
 
-// PublishEvent publishes the provided event on pubsub infra. It encodes messages using XDR protocol.
+// PublishEvent publishes the provided event on pubsub infra.
 func (p *EventPublisher) PublishEvent(event Event) error {
 	bytes, err := types.InterfaceToBytes(event)
 	if err != nil {
@@ -86,7 +86,7 @@ func (p *EventPublisher) Close() error {
 // NewBlock is sent when a new block is created by this miner
 type NewBlock struct {
 	ID    string
-	Layer uint64
+	Layer uint32
 	Atx   string
 }
 
@@ -98,7 +98,7 @@ func (NewBlock) GetChannel() ChannelID {
 // DoneCreatingBlock signals that this miner has created a block
 type DoneCreatingBlock struct {
 	Eligible bool
-	Layer    uint64
+	Layer    uint32
 	Error    string
 }
 
@@ -121,7 +121,7 @@ func (ValidBlock) GetChannel() ChannelID {
 // NewAtx signals that a new ATX has been received
 type NewAtx struct {
 	ID      string
-	LayerID uint64
+	EpochID uint32
 }
 
 // GetChannel gets the message type which means on which this message should be sent
@@ -181,7 +181,7 @@ func (RewardReceived) GetChannel() ChannelID {
 type AtxCreated struct {
 	Created bool
 	ID      string
-	Layer   uint64
+	Epoch   uint32
 }
 
 // GetChannel gets the message type which means on which this message should be sent

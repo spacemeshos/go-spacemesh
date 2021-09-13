@@ -3,16 +3,16 @@
 package connectionpool
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	inet "net"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	inet "net"
-
-	"bytes"
-	"errors"
-	"sync"
 )
 
 type dialResult struct {
@@ -43,19 +43,14 @@ type ConnectionPool struct {
 
 // NewConnectionPool creates new ConnectionPool
 func NewConnectionPool(ctx context.Context, dialFunc DialFunc, lPub p2pcrypto.PublicKey, logger log.Log) *ConnectionPool {
-	cPool := &ConnectionPool{
+	return &ConnectionPool{
 		localPub:    lPub,
 		dialFunc:    dialFunc,
 		connections: make(map[p2pcrypto.PublicKey]net.Connection),
-		connMutex:   sync.RWMutex{},
 		pending:     make(map[p2pcrypto.PublicKey][]chan dialResult),
-		pendMutex:   sync.Mutex{},
-		dialWait:    sync.WaitGroup{},
 		logger:      logger,
 		shutdownCtx: ctx,
 	}
-
-	return cPool
 }
 
 // OnNewConnection is an exported method used to handle new connection events
