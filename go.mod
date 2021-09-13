@@ -18,7 +18,6 @@ require (
 	github.com/huin/goupnp v1.0.0
 	github.com/kr/pretty v0.2.1 // indirect
 	github.com/mitchellh/mapstructure v1.3.2
-	github.com/nullstyle/go-xdr v0.0.0-20180726165426-f4c839f75077
 	github.com/prometheus/client_golang v1.10.0
 	github.com/prometheus/common v0.18.0
 	github.com/pyroscope-io/pyroscope v0.0.30

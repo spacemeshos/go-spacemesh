@@ -2,7 +2,7 @@ package activation
 
 import (
 	"fmt"
-	"os"
+	"io/ioutil"
 	"path/filepath"
 	"testing"
 	"time"
@@ -20,12 +20,11 @@ func TestPoetDbHappyFlow(t *testing.T) {
 
 	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
 
-	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
+	data, err := ioutil.ReadFile(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
 
 	var poetProof types.PoetProof
-	_, err = codec.DecodeFrom(file, &poetProof)
-	r.NoError(err)
+	r.NoError(codec.Decode(data, &poetProof))
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
 	poetID := []byte("poet_id_123456")
 	roundID := "1337"
@@ -61,11 +60,12 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 
 	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
 
-	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
+	data, err := ioutil.ReadFile(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
 
 	var poetProof types.PoetProof
-	_, err = codec.DecodeFrom(file, &poetProof)
+	r.NoError(codec.Decode(data, &poetProof))
+
 	r.NoError(err)
 	r.EqualValues([][]byte{[]byte("1"), []byte("2"), []byte("3")}, poetProof.Members)
 	poetID := []byte("poet_id_123456")
@@ -109,12 +109,11 @@ func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	case <-time.After(2 * time.Millisecond):
 	}
 
-	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
+	data, err := ioutil.ReadFile(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
 
 	var poetProof types.PoetProof
-	_, err = codec.DecodeFrom(file, &poetProof)
-	r.NoError(err)
+	r.NoError(codec.Decode(data, &poetProof))
 
 	err = poetDb.Validate(poetProof, poetID, "0", nil)
 	r.NoError(err)
