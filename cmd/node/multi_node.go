@@ -131,6 +131,8 @@ func getTestDefaultConfig() *config.Config {
 		log.Error("cannot load config from file")
 		return nil
 	}
+	// is set to 0 to make sync start immediatly when node starts
+	cfg.P2P.SwarmConfig.RandomConnections = 0
 
 	cfg.POST = activation.DefaultPostConfig()
 	cfg.POST.LabelsPerUnit = 32
