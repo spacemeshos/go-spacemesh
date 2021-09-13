@@ -497,7 +497,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	logger.Debug("starting consensus phase")
 
 	tb.startWeakCoinEpoch(epoch)
-	defer tb.fininshWeakCoinEpoch()
+	defer tb.weakCoin.FinishEpoch()
 
 	// For K rounds: In each round that lasts δ, wait for proposals to come in.
 	// For next rounds,
@@ -589,10 +589,6 @@ func (tb *TortoiseBeacon) startWeakCoinEpoch(epoch types.EpochID) {
 	tb.weakCoin.StartEpoch(epoch, ua)
 }
 
-func (tb *TortoiseBeacon) fininshWeakCoinEpoch() {
-	tb.weakCoin.FinishEpoch()
-}
-
 func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {
 	finishedAt := time.Now()
 	tb.mu.Lock()
@@ -610,10 +606,6 @@ func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochI
 	tb.Debug("checking if timestamp %v was received before proposal phase finished in epoch %v, is phase finished: %v, finished at: %v", receivedAt.String(), epoch, hasFinished, finishedAt.String())
 
 	return !hasFinished || receivedAt.Before(finishedAt)
-}
-
-func (tb *TortoiseBeacon) startWeakCoinRound(ctx context.Context, epoch types.EpochID, round types.RoundID) {
-
 }
 
 func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.EpochID) error {
