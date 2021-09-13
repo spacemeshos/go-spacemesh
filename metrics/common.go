@@ -13,9 +13,6 @@ const (
 	ResultLabel = "result"
 )
 
-// Enabled variable is used to turn on or of the metrics server. when set to false nop metrics are used.
-var Enabled = false
-
 // Gauge is a metric type used to represent a numeric value
 type Gauge metrics.Gauge
 
@@ -30,33 +27,21 @@ type Summary prmkit.Summary
 
 // NewCounter creates a Counter metrics under the global namespace returns nop if metrics are disabled.
 func NewCounter(name, subsystem, help string, labels []string) Counter {
-	if !Enabled {
-		return nopCounter{}
-	}
 	return prmkit.NewCounterFrom(prometheus.CounterOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
 }
 
 // NewGauge creates a Gauge metrics under the global namespace returns nop if metrics are disabled.
 func NewGauge(name, subsystem, help string, labels []string) Gauge {
-	if !Enabled {
-		return nopGauge{}
-	}
 	return prmkit.NewGaugeFrom(prometheus.GaugeOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
 }
 
 // NewHistogram creates a Histogram metrics under the global namespace returns nop if metrics are disabled.
 func NewHistogram(name, subsystem, help string, labels []string) Histogram {
-	if !Enabled {
-		return nopHistogram{}
-	}
 	return prmkit.NewHistogramFrom(prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
 }
 
 // NewSummary creates a Summary metrics under the global namespace returns nop if metrics are disabled.
 func NewSummary(name, subsystem, help string, labels []string, objectives map[float64]float64) Histogram {
-	if !Enabled {
-		return nopSummary{}
-	}
 	// TODO github.com/go-kit/kit use Histogram instead of Summary
 	return prmkit.NewSummaryFrom(prometheus.SummaryOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help, Objectives: objectives}, labels)
 }
@@ -107,49 +92,4 @@ func (m *MeteredCache) Get(key interface{}) (value interface{}, ok bool) {
 		m.miss.Add(1)
 	}
 	return v, k
-}
-
-// Nops
-
-type nopCounter struct {
-}
-
-func (n nopCounter) With(labelValues ...string) metrics.Counter {
-	return n
-}
-
-func (n nopCounter) Add(value float64) {
-}
-
-type nopGauge struct {
-}
-
-func (n nopGauge) With(labelValues ...string) metrics.Gauge {
-	return n
-}
-
-func (n nopGauge) Set(value float64) {
-}
-
-func (n nopGauge) Add(value float64) {
-}
-
-type nopHistogram struct {
-}
-
-func (n nopHistogram) With(labelValues ...string) metrics.Histogram {
-	return n
-}
-
-func (n nopHistogram) Observe(value float64) {
-}
-
-type nopSummary struct {
-}
-
-func (n nopSummary) With(labelValues ...string) metrics.Histogram {
-	return n
-}
-
-func (n nopSummary) Observe(value float64) {
 }
