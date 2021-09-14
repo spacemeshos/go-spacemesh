@@ -348,6 +348,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	}
 	if epochWeight == 0 {
 		logger.With().Error("zero weight targeting epoch", log.Err(ErrZeroEpochWeight))
+		return
 	}
 
 	tb.mu.Lock()

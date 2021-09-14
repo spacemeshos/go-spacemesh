@@ -9,17 +9,15 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -59,63 +57,68 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	return coinMock
 }
 
-func TestTortoiseBeacon(t *testing.T) {
-	t.Parallel()
-
-	requirer := require.New(t)
+func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64) (*TortoiseBeacon, *timesync.TimeClock) {
 	conf := UnitTestConfig()
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(10), nil, nil).AnyTimes()
-
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(mockEpochWeight, nil, nil).AnyTimes()
 	mwc := coinValueMock(t, true)
 
+	types.SetLayersPerEpoch(1)
 	logger := logtest.New(t).WithName("TortoiseBeacon")
-
 	genesisTime := time.Now().Add(100 * time.Millisecond)
 	ld := 100 * time.Millisecond
-
-	types.SetLayersPerEpoch(1)
-
 	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
 	clock.StartNotifying()
 
-	sim := service.NewSimulator()
-	n1 := sim.NewNode()
-
-	layer := types.NewLayerID(3)
-
 	edSgn := signing.NewEdSigner()
 	edPubkey := edSgn.PublicKey()
-
 	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
-	requirer.NoError(err)
+	require.NoError(t, err)
 
+	node := service.NewSimulator().NewNode()
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
-	lg := logtest.New(t).WithName(minerID.Key[:5])
-	idStore := activation.NewIdentityStore(database.NewMemDatabase())
-	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	goldenATXID := types.ATXID(types.HexToHash32("11111"))
-
-	atxdb := activation.NewDB(database.NewMemDatabase(), idStore, memesh, 3, goldenATXID, &validatorMock{}, lg.WithName("atxDB"))
-	_ = atxdb
-
-	tb := New(conf, minerID, n1, mockDB, nil, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, clock, logger)
-	requirer.NotNil(tb)
+	tb := New(conf, minerID, node, mockDB, nil, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, clock, logger)
+	require.NotNil(t, tb)
 	tb.SetSyncState(testSyncState(true))
+	return tb, clock
+}
 
-	err = tb.Start(context.TODO())
-	requirer.NoError(err)
+func TestTortoiseBeacon(t *testing.T) {
+	t.Parallel()
+
+	tb, clock := setUpTortoiseBeacon(t, uint64(10))
+	layer := types.NewLayerID(3)
+	err := tb.Start(context.TODO())
+	require.NoError(t, err)
 
 	t.Logf("Awaiting epoch %v", layer)
 	awaitLayer(clock, layer)
 
 	v, err := tb.GetBeacon(layer.GetEpoch())
-	requirer.NoError(err)
+	require.NoError(t, err)
 
 	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-	requirer.Equal(expected, types.BytesToHash(v).String())
+	assert.Equal(t, expected, types.BytesToHash(v).String())
+
+	tb.Close()
+}
+
+func TestTortoiseBeaconZeroWeightEpoch(t *testing.T) {
+	t.Parallel()
+
+	tb, clock := setUpTortoiseBeacon(t, uint64(0))
+	layer := types.NewLayerID(3)
+	err := tb.Start(context.TODO())
+	require.NoError(t, err)
+
+	t.Logf("Awaiting epoch %v", layer)
+	awaitLayer(clock, layer)
+
+	v, err := tb.GetBeacon(layer.GetEpoch())
+	assert.Equal(t, ErrBeaconNotCalculated, err)
+	assert.Nil(t, v)
 
 	tb.Close()
 }
