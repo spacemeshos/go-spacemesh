@@ -113,9 +113,9 @@ func New(
 
 // TortoiseBeacon represents Tortoise Beacon.
 type TortoiseBeacon struct {
-	closed uint64
-	eg     errgroup.Group
-	cancel context.CancelFunc
+	running uint64
+	eg      errgroup.Group
+	cancel  context.CancelFunc
 
 	logger log.Log
 
@@ -160,7 +160,7 @@ func (tb *TortoiseBeacon) SetSyncState(sync SyncState) {
 
 // Start starts listening for layers and outputs.
 func (tb *TortoiseBeacon) Start(ctx context.Context) error {
-	if !atomic.CompareAndSwapUint64(&tb.closed, 0, 1) {
+	if !atomic.CompareAndSwapUint64(&tb.running, 0, 1) {
 		tb.logger.WithContext(ctx).Warning("attempt to start tortoise beacon more than once")
 		return nil
 	}
@@ -185,7 +185,7 @@ func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 
 // Close closes TortoiseBeacon.
 func (tb *TortoiseBeacon) Close() {
-	if !atomic.CompareAndSwapUint64(&tb.closed, 1, 0) {
+	if !atomic.CompareAndSwapUint64(&tb.running, 1, 0) {
 		return
 	}
 	tb.logger.Info("closing %v", protoName)
@@ -200,7 +200,7 @@ func (tb *TortoiseBeacon) Close() {
 
 // IsClosed returns true if background workers are not running.
 func (tb *TortoiseBeacon) IsClosed() bool {
-	return atomic.LoadUint64(&tb.closed) == 0
+	return atomic.LoadUint64(&tb.running) == 0
 }
 
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
@@ -263,7 +263,19 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 	}
 }
 
-func (tb *TortoiseBeacon) cleanupVotes() {
+func (tb *TortoiseBeacon) setupEpoch(epochWeight uint64, logger log.Log) chan *proposalMessageWithReceiptData {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	tb.epochWeight = epochWeight
+	tb.proposalChecker = createProposalChecker(tb.config.Kappa, tb.config.Q, epochWeight, logger)
+	ch := tb.getOrCreateProposalChannel(tb.epochInProgress)
+	// allow proposals for the next epoch to come in early
+	_ = tb.getOrCreateProposalChannel(tb.epochInProgress + 1)
+	return ch
+}
+
+func (tb *TortoiseBeacon) cleanupEpoch() {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -272,6 +284,11 @@ func (tb *TortoiseBeacon) cleanupVotes() {
 	tb.votesMargin = map[string]*big.Int{}
 	tb.hasVoted = make([]map[string]struct{}, tb.config.RoundsNumber)
 	tb.proposalPhaseFinishedTime = time.Time{}
+
+	if ch, ok := tb.proposalChans[tb.epochInProgress]; ok {
+		close(ch)
+		delete(tb.proposalChans, tb.epochInProgress)
+	}
 }
 
 // listens to new layers.
@@ -329,9 +346,6 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	}
 
 	logger.Info("handling epoch")
-
-	defer tb.cleanupVotes()
-
 	epochWeight, atxs, err := tb.atxDB.GetEpochWeight(epoch)
 	if err != nil {
 		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
@@ -342,23 +356,16 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		return
 	}
 
-	tb.startWeakCoinEpoch(ctx, epoch, atxs)
-	defer tb.weakCoin.FinishEpoch(ctx, epoch)
-
-	tb.mu.Lock()
-	tb.epochWeight = epochWeight
-	tb.proposalChecker = createProposalChecker(tb.config.Kappa, tb.config.Q, epochWeight, logger)
-	if epoch > 0 {
-		// close channel for previous epoch
-		tb.closeProposalChannel(epoch - 1)
-	}
-	ch := tb.getOrCreateProposalChannel(epoch)
-	tb.mu.Unlock()
+	ch := tb.setupEpoch(epochWeight, logger)
+	defer tb.cleanupEpoch()
 
 	tb.eg.Go(func() error {
 		tb.readProposalMessagesLoop(ctx, ch)
 		return nil
 	})
+
+	tb.startWeakCoinEpoch(ctx, epoch, atxs)
+	defer tb.weakCoin.FinishEpoch(ctx, epoch)
 
 	tb.runProposalPhase(ctx, epoch)
 	lastRoundOwnVotes, err := tb.runConsensusPhase(ctx, epoch)
@@ -374,17 +381,6 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	}
 
 	logger.With().Debug("finished handling epoch")
-}
-
-func (tb *TortoiseBeacon) closeProposalChannel(epoch types.EpochID) {
-	if ch, ok := tb.proposalChans[epoch]; ok {
-		select {
-		case <-ch:
-		default:
-			close(ch)
-			delete(tb.proposalChans, epoch)
-		}
-	}
 }
 
 func (tb *TortoiseBeacon) getOrCreateProposalChannel(epoch types.EpochID) chan *proposalMessageWithReceiptData {
@@ -417,12 +413,17 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 	})
 
 	<-ctx.Done()
+
 	tb.markProposalPhaseFinished(epoch)
 
 	logger.Debug("proposal phase finished")
 }
 
 func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.EpochID) error {
+	if tb.IsClosed() {
+		return nil
+	}
+
 	logger := tb.logger.WithContext(ctx).WithFields(epoch)
 	proposedSignature := buildSignedProposal(ctx, tb.vrfSigner, epoch, tb.logger)
 
@@ -461,6 +462,39 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 
 	tb.incomingProposals.valid = append(tb.incomingProposals.valid, proposedSignature)
 
+	return nil
+}
+
+func (tb *TortoiseBeacon) getProposalChannel(ctx context.Context, epoch types.EpochID) chan *proposalMessageWithReceiptData {
+	tb.mu.RLock()
+	defer tb.mu.RUnlock()
+
+	if epoch < tb.epochInProgress {
+		tb.logger.WithContext(ctx).With().Debug("proposal too old, do not accept",
+			log.Uint32("proposal_epoch", uint32(epoch)))
+		return nil
+	}
+	if epoch == tb.epochInProgress {
+		ongoing := tb.proposalPhaseFinishedTime == time.Time{}
+		if !ongoing {
+			tb.logger.WithContext(ctx).With().Debug("proposal phase ended, do not accept",
+				log.Uint32("proposal_epoch", uint32(epoch)))
+			return nil
+		}
+		return tb.getOrCreateProposalChannel(epoch)
+	}
+	// always accept proposals for the next epoch, but not too far in the future
+	if epoch == tb.epochInProgress+1 {
+		ch := tb.getOrCreateProposalChannel(epoch)
+		if len(ch) == proposalChanCapacity {
+			// the reader loop is not started for the next epoch yet. drop old messages if it's already full
+			msg := <-ch
+			tb.logger.WithContext(ctx).With().Warning("proposal channel for next epoch is full, dropping oldest msg",
+				log.String("sender", msg.gossip.Sender().String()),
+				log.String("message", msg.message.String()))
+		}
+		return ch
+	}
 	return nil
 }
 

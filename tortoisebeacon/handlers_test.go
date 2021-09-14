@@ -4,20 +4,110 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	p2pMocks "github.com/spacemeshos/go-spacemesh/p2p/service/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
-	"github.com/stretchr/testify/require"
 )
 
 func clockNeverNotify(t *testing.T) layerClock {
 	return timesync.NewClock(timesync.RealClock{}, time.Hour, time.Now(), logtest.New(t).WithName("clock"))
+}
+
+func TestTortoiseBeacon_HandleSerializedProposalMessage(t *testing.T) {
+	t.Parallel()
+
+	r := require.New(t)
+	const epoch = types.EpochID(3)
+	types.SetLayersPerEpoch(1)
+
+	edSgn := signing.NewEdSigner()
+	edPubkey := edSgn.PublicKey()
+	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
+	r.NoError(err)
+
+	nodeID := types.NodeID{
+		Key:          edPubkey.String(),
+		VRFPublicKey: vrfSigner.PublicKey().Bytes(),
+	}
+	sig := buildSignedProposal(context.TODO(), vrfSigner, epoch, logtest.New(t))
+	message := ProposalMessage{
+		NodeID:       nodeID,
+		EpochID:      epoch,
+		VRFSignature: sig,
+	}
+	msgBytes, err := types.InterfaceToBytes(message)
+	r.NoError(err)
+	tt := []struct {
+		name        string
+		shutdown    bool
+		reject      bool
+		corruptData bool
+		expected    int
+	}{
+		{
+			name:     "shutdown",
+			shutdown: true,
+		},
+		{
+			name:        "mal formed proposal",
+			corruptData: true,
+		},
+		{
+			name:   "proposal rejected",
+			reject: true,
+		},
+		{
+			name:     "proposal accepted",
+			expected: 1,
+		},
+	}
+	for i, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			// don't run these tests in parallel. somehow all cases end up using the same TortoiseBeacon instance
+			// t.Parallel()
+
+			tb := TortoiseBeacon{
+				logger:          logtest.New(t).WithName(fmt.Sprintf("TortoiseBeacon-%v", i)),
+				config:          UnitTestConfig(),
+				proposalChans:   make(map[types.EpochID]chan *proposalMessageWithReceiptData),
+				epochInProgress: epoch,
+				running:         1,
+			}
+			if tc.shutdown {
+				atomic.StoreUint64(&tb.running, 0)
+			}
+			if tc.reject {
+				tb.epochInProgress = epoch + 2
+			}
+			ctrl := gomock.NewController(t)
+			mockGossip := p2pMocks.NewMockGossipMessage(ctrl)
+			mockGossip.EXPECT().Sender().Return(p2pcrypto.NewRandomPubkey()).AnyTimes()
+			if tc.corruptData {
+				mockGossip.EXPECT().Bytes().Return(msgBytes[1:]).Times(1)
+			} else {
+				mockGossip.EXPECT().Bytes().Return(msgBytes).Times(1)
+			}
+
+			tb.HandleSerializedProposalMessage(context.TODO(), mockGossip, nil)
+			tb.mu.RLock()
+			ch := tb.getProposalChannel(context.TODO(), epoch)
+			assert.Equal(t, tc.expected, len(ch))
+			tb.mu.RUnlock()
+		})
+	}
 }
 
 func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {

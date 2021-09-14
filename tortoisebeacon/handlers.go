@@ -53,18 +53,10 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, d
 		return
 	}
 
-	currentEpoch := tb.currentEpoch()
-	if message.EpochID < currentEpoch {
-		logger.With().Debug("ignoring proposal message from previous epoch",
-			log.Uint32("message_epoch", uint32(message.EpochID)),
-			log.Uint32("current_epoch", uint32(currentEpoch)))
-
+	ch := tb.getProposalChannel(ctx, message.EpochID)
+	if ch == nil {
 		return
 	}
-
-	tb.mu.Lock()
-	ch := tb.getOrCreateProposalChannel(message.EpochID)
-	tb.mu.Unlock()
 
 	proposalWithReceipt := &proposalMessageWithReceiptData{
 		message:      message,
@@ -85,7 +77,7 @@ func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan 
 			return
 
 		case em := <-ch:
-			if em == nil {
+			if em == nil || tb.IsClosed() {
 				return
 			}
 

@@ -12,7 +12,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	p2pMocks "github.com/spacemeshos/go-spacemesh/p2p/service/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
@@ -20,16 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type validatorMock struct{}
-
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) error {
-	return nil
-}
-
-func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint) error {
-	return nil
-}
 
 type testSyncState bool
 
@@ -132,6 +124,91 @@ func awaitLayer(clock *timesync.TimeClock, epoch types.LayerID) {
 		if layer.After(epoch) {
 			return
 		}
+	}
+}
+
+func TestTortoiseBeacon_getProposalChannel(t *testing.T) {
+	t.Parallel()
+
+	currentEpoch := types.EpochID(10)
+
+	tt := []struct {
+		name            string
+		epoch           types.EpochID
+		proposalEndTime time.Time
+		makeNextChFull  bool
+		expected        bool
+	}{
+		{
+			name:     "old epoch",
+			epoch:    currentEpoch - 1,
+			expected: false,
+		},
+		{
+			name:     "on time",
+			epoch:    currentEpoch,
+			expected: true,
+		},
+		{
+			name:            "proposal phase ended",
+			epoch:           currentEpoch,
+			proposalEndTime: time.Now(),
+			expected:        false,
+		},
+		{
+			name:     "accept next epoch",
+			epoch:    currentEpoch + 1,
+			expected: true,
+		},
+		{
+			name:           "next epoch full",
+			epoch:          currentEpoch + 1,
+			makeNextChFull: true,
+			expected:       true,
+		},
+		{
+			name:     "no future epoch beyond next",
+			epoch:    currentEpoch + 2,
+			expected: false,
+		},
+	}
+
+	for i, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			// don't run these tests in parallel. somehow all cases end up using the same TortoiseBeacon instance
+			// t.Parallel()
+			tb := TortoiseBeacon{
+				logger:                    logtest.New(t).WithName(fmt.Sprintf("TortoiseBeacon-%v", i)),
+				proposalChans:             make(map[types.EpochID]chan *proposalMessageWithReceiptData),
+				epochInProgress:           currentEpoch,
+				proposalPhaseFinishedTime: tc.proposalEndTime,
+			}
+
+			if tc.makeNextChFull {
+				ctrl := gomock.NewController(t)
+				tb.mu.Lock()
+				nextCh := tb.getOrCreateProposalChannel(currentEpoch + 1)
+				for i := 0; i < proposalChanCapacity; i++ {
+					mockGossip := p2pMocks.NewMockGossipMessage(ctrl)
+					if i == 0 {
+						mockGossip.EXPECT().Sender().Return(p2pcrypto.NewRandomPubkey()).Times(1)
+					}
+					nextCh <- &proposalMessageWithReceiptData{
+						gossip:  mockGossip,
+						message: ProposalMessage{},
+					}
+				}
+				tb.mu.Unlock()
+			}
+
+			ch := tb.getProposalChannel(context.TODO(), tc.epoch)
+			if tc.expected {
+				assert.NotNil(t, ch)
+			} else {
+				assert.Nil(t, ch)
+			}
+		})
 	}
 }
 
@@ -330,11 +407,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
-				logger: logtest.New(t).WithName("TortoiseBeacon"),
-			}
-
-			result := buildProposal(tc.epoch, tb.logger)
+			result := buildProposal(tc.epoch, logtest.New(t))
 			r.Equal(tc.result, string(result))
 		})
 	}
