@@ -197,23 +197,20 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 		q         *big.Rat
 		w         uint64
 		threshold *big.Float
-		err       error
 	}{
 		{
-			name:      "Case 1",
+			name:      "with epoch weight",
 			kappa:     40,
 			q:         big.NewRat(1, 3),
 			w:         60,
 			threshold: theta1,
-			err:       nil,
 		},
 		{
-			name:      "Case 2",
+			name:      "zero epoch weight",
 			kappa:     40,
 			q:         big.NewRat(1, 3),
 			w:         0,
 			threshold: theta2,
-			err:       ErrZeroEpochWeight,
 		},
 	}
 
@@ -222,16 +219,7 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
-				logger: logtest.New(t).WithName("TortoiseBeacon"),
-				config: Config{
-					Kappa: tc.kappa,
-					Q:     tc.q,
-				},
-			}
-
-			threshold, err := tb.atxThresholdFraction(tc.w)
-			r.Equal(tc.err, err)
+			threshold := atxThresholdFraction(tc.kappa, tc.q, tc.w)
 			r.Equal(tc.threshold.String(), threshold.String())
 		})
 	}
@@ -241,13 +229,6 @@ func TestTortoiseBeacon_atxThreshold(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
-
-	edSgn := signing.NewEdSigner()
-	edPubkey := edSgn.PublicKey()
-
-	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
-	r.NoError(err)
-
 	tt := []struct {
 		name      string
 		kappa     uint64
@@ -283,17 +264,7 @@ func TestTortoiseBeacon_atxThreshold(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
-				logger: logtest.New(t).WithName("TortoiseBeacon"),
-				config: Config{
-					Kappa: tc.kappa,
-					Q:     tc.q,
-				},
-				vrfSigner: vrfSigner,
-			}
-
-			threshold, err := tb.atxThreshold(tc.w)
-			r.NoError(err)
+			threshold := atxThreshold(tc.kappa, tc.q, tc.w)
 			r.EqualValues(tc.threshold, fmt.Sprintf("%#x", threshold))
 		})
 	}
@@ -303,13 +274,6 @@ func TestTortoiseBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
-
-	edSgn := signing.NewEdSigner()
-	edPubkey := edSgn.PublicKey()
-
-	vrfSigner, _, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
-	r.NoError(err)
-
 	tt := []struct {
 		name     string
 		kappa    uint64
@@ -333,54 +297,9 @@ func TestTortoiseBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
-				logger: logtest.New(t).WithName("TortoiseBeacon"),
-				config: Config{
-					Kappa: tc.kappa,
-					Q:     tc.q,
-				},
-				vrfSigner: vrfSigner,
-			}
-
-			passes, err := tb.proposalPassesEligibilityThreshold(tc.proposal, tc.w)
-			r.NoError(err)
+			checker := createProposalChecker(tc.kappa, tc.q, tc.w, logtest.New(t).WithName("proposal checker"))
+			passes := checker.IsProposalEligible(tc.proposal)
 			r.EqualValues(tc.passes, passes)
-		})
-	}
-}
-
-func Test_ceilDuration(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	tt := []struct {
-		name     string
-		duration time.Duration
-		multiple time.Duration
-		result   time.Duration
-	}{
-		{
-			name:     "Case 1",
-			duration: 7 * time.Second,
-			multiple: 5 * time.Second,
-			result:   10 * time.Second,
-		},
-		{
-			name:     "Case 2",
-			duration: 5 * time.Second,
-			multiple: 5 * time.Second,
-			result:   5 * time.Second,
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			result := ceilDuration(tc.duration, tc.multiple)
-			r.Equal(tc.result, result)
 		})
 	}
 }
@@ -411,7 +330,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 				logger: logtest.New(t).WithName("TortoiseBeacon"),
 			}
 
-			result := tb.buildProposal(tc.epoch)
+			result := buildProposal(tc.epoch, tb.logger)
 			r.Equal(tc.result, string(result))
 		})
 	}
@@ -446,12 +365,7 @@ func TestTortoiseBeacon_signMessage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
-				logger:   logtest.New(t).WithName("TortoiseBeacon"),
-				edSigner: edSgn,
-			}
-
-			result := tb.signMessage(tc.message)
+			result := signMessage(edSgn, tc.message, logtest.New(t))
 			r.Equal(string(tc.result), string(result))
 		})
 	}
@@ -490,12 +404,7 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
-				logger:    logtest.New(t).WithName("TortoiseBeacon"),
-				vrfSigner: vrfSigner,
-			}
-
-			result := tb.getSignedProposal(context.TODO(), tc.epoch)
+			result := buildSignedProposal(context.TODO(), vrfSigner, tc.epoch, logtest.New(t))
 			r.Equal(string(tc.result), string(result))
 		})
 	}

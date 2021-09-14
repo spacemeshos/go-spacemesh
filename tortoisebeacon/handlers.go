@@ -170,7 +170,7 @@ func (tb *TortoiseBeacon) classifyProposalMessage(ctx context.Context, m Proposa
 
 func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalMessage, currentEpoch types.EpochID) (types.ATXID, error) {
 	logger := tb.logger.WithContext(ctx).WithFields(currentEpoch, log.String("miner_id", m.NodeID.ShortString()))
-	currentEpochProposal := tb.buildProposal(currentEpoch)
+	currentEpochProposal := buildProposal(currentEpoch, logger)
 	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(m.NodeID, currentEpoch-1)
 	if errors.Is(err, database.ErrNotFound) {
 		logger.Warning("miner has no atxs in the previous epoch")
@@ -186,24 +186,12 @@ func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalM
 		// TODO(nkryuchkov): attach telemetry
 		logger.Warning("received malformed proposal message: vrf is not verified")
 
-		// TODO(nkryuchkov): add a test for this case
 		return types.ATXID{}, ErrMalformedProposal
-	}
-
-	epochWeight, _, err := tb.atxDB.GetEpochWeight(currentEpoch)
-	if err != nil {
-		return types.ATXID{}, fmt.Errorf("get epoch %v weight: %w", currentEpoch, err)
 	}
 
 	proposalShortString := types.BytesToHash(m.VRFSignature).ShortString()
 
-	passes, err := tb.proposalPassesEligibilityThreshold(m.VRFSignature, epochWeight)
-	if err != nil {
-		logger.Info("failed to determine sender's eligibility for proposal")
-		return types.ATXID{}, fmt.Errorf("proposalPassesEligibilityThreshold: proposal=%v, weight=%v: %w",
-			proposalShortString, epochWeight, err)
-	}
-
+	passes := tb.proposalChecker.IsProposalEligible(m.VRFSignature)
 	if !passes {
 		// the peer may have different total weight from us so that it passes threshold for the peer
 		// but does not pass here

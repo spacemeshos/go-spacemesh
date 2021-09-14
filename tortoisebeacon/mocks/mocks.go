@@ -204,6 +204,43 @@ func (mr *MockcoinMockRecorder) StartRound(arg0, arg1 interface{}) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRound", reflect.TypeOf((*Mockcoin)(nil).StartRound), arg0, arg1)
 }
 
+// MockeligibilityChecker is a mock of eligibilityChecker interface.
+type MockeligibilityChecker struct {
+	ctrl     *gomock.Controller
+	recorder *MockeligibilityCheckerMockRecorder
+}
+
+// MockeligibilityCheckerMockRecorder is the mock recorder for MockeligibilityChecker.
+type MockeligibilityCheckerMockRecorder struct {
+	mock *MockeligibilityChecker
+}
+
+// NewMockeligibilityChecker creates a new mock instance.
+func NewMockeligibilityChecker(ctrl *gomock.Controller) *MockeligibilityChecker {
+	mock := &MockeligibilityChecker{ctrl: ctrl}
+	mock.recorder = &MockeligibilityCheckerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockeligibilityChecker) EXPECT() *MockeligibilityCheckerMockRecorder {
+	return m.recorder
+}
+
+// IsProposalEligible mocks base method.
+func (m *MockeligibilityChecker) IsProposalEligible(proposal []byte) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsProposalEligible", proposal)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsProposalEligible indicates an expected call of IsProposalEligible.
+func (mr *MockeligibilityCheckerMockRecorder) IsProposalEligible(proposal interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsProposalEligible", reflect.TypeOf((*MockeligibilityChecker)(nil).IsProposalEligible), proposal)
+}
+
 // MocklayerClock is a mock of layerClock interface.
 type MocklayerClock struct {
 	ctrl     *gomock.Controller

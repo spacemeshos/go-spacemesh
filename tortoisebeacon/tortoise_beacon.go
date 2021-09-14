@@ -55,6 +55,10 @@ type coin interface {
 	HandleSerializedMessage(context.Context, service.GossipMessage, service.Fetcher)
 }
 
+type eligibilityChecker interface {
+	IsProposalEligible(proposal []byte) bool
+}
+
 type (
 	proposals = struct{ valid, potentiallyValid [][]byte }
 	allVotes  = struct{ valid, invalid proposalSet }
@@ -132,6 +136,7 @@ type TortoiseBeacon struct {
 
 	mu              sync.RWMutex
 	epochInProgress types.EpochID
+	epochWeight     uint64
 	// TODO(nkryuchkov): have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
 	incomingProposals       proposals
@@ -142,6 +147,7 @@ type TortoiseBeacon struct {
 	proposalPhaseFinishedTime time.Time
 	beacons                   map[types.EpochID]types.Hash32
 	proposalChans             map[types.EpochID]chan *proposalMessageWithReceiptData
+	proposalChecker           eligibilityChecker
 }
 
 // SetSyncState updates sync state provider. Must be executed only once.
@@ -335,7 +341,18 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	defer tb.cleanupVotes()
 
+	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
+	if err != nil {
+		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
+		return
+	}
+	if epochWeight == 0 {
+		logger.With().Error("zero weight targeting epoch", log.Err(ErrZeroEpochWeight))
+	}
+
 	tb.mu.Lock()
+	tb.epochWeight = epochWeight
+	tb.proposalChecker = createProposalChecker(tb.config.Kappa, tb.config.Q, epochWeight, logger)
 	if epoch > 0 {
 		// close channel for previous epoch
 		tb.closeProposalChannel(epoch - 1)
@@ -412,32 +429,21 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 
 func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.EpochID) error {
 	logger := tb.logger.WithContext(ctx).WithFields(epoch)
-	proposedSignature := tb.getSignedProposal(ctx, epoch)
+	proposedSignature := buildSignedProposal(ctx, tb.vrfSigner, epoch, tb.logger)
 
 	logger.With().Debug("calculated proposal signature",
 		log.String("signature", string(proposedSignature)))
 
-	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
-	if err != nil {
-		return fmt.Errorf("get epoch weight: %w", err)
-	}
-
-	passes, err := tb.proposalPassesEligibilityThreshold(proposedSignature, epochWeight)
-	if err != nil {
-		return fmt.Errorf("proposalPassesEligibilityThreshold: %w", err)
-	}
-
+	passes := tb.proposalChecker.IsProposalEligible(proposedSignature)
 	if !passes {
 		logger.With().Debug("proposal to be sent doesn't pass threshold",
-			log.String("proposal", string(proposedSignature)),
-			log.Uint64("weight", epochWeight))
+			log.String("proposal", string(proposedSignature)))
 		// proposal is not sent
 		return nil
 	}
 
 	logger.With().Debug("Proposal to be sent passes threshold",
-		log.String("proposal", string(proposedSignature)),
-		log.Uint64("weight", epochWeight))
+		log.String("proposal", string(proposedSignature)))
 
 	// concat them into a single proposal message
 	m := ProposalMessage{
@@ -627,7 +633,7 @@ func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 		PotentiallyValidProposals: proposals.potentiallyValid,
 	}
 
-	sig := tb.signMessage(mb)
+	sig := signMessage(tb.edSigner, mb, tb.logger)
 
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
@@ -656,7 +662,7 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 		VotesBitVector: bitVector,
 	}
 
-	sig := tb.signMessage(mb)
+	sig := signMessage(tb.edSigner, mb, tb.logger)
 
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,
@@ -684,10 +690,30 @@ func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) *big.Int {
 	return v
 }
 
-// TODO(nkryuchkov): Consider replacing github.com/ALTree/bigfloat.
-func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) (*big.Float, error) {
+type proposalChecker struct {
+	threshold *big.Int
+}
+
+func createProposalChecker(kappa uint64, q *big.Rat, epochWeight uint64, logger log.Log) *proposalChecker {
 	if epochWeight == 0 {
-		return big.NewFloat(0), ErrZeroEpochWeight
+		logger.Panic("creating proposal checker with zero weight")
+	}
+
+	threshold := atxThreshold(kappa, q, epochWeight)
+	logger.With().Debug("created proposal checker with ATX threshold",
+		log.String("threshold", threshold.String()))
+	return &proposalChecker{threshold: threshold}
+}
+
+func (pc *proposalChecker) IsProposalEligible(proposal []byte) bool {
+	proposalInt := new(big.Int).SetBytes(proposal)
+	return proposalInt.Cmp(pc.threshold) == -1
+}
+
+// TODO(nkryuchkov): Consider replacing github.com/ALTree/bigfloat.
+func atxThresholdFraction(kappa uint64, q *big.Rat, epochWeight uint64) *big.Float {
+	if epochWeight == 0 {
+		return big.NewFloat(0)
 	}
 
 	// threshold(k, q, W) = 1 - (2 ^ (- (k/((1-q)*W))
@@ -700,11 +726,11 @@ func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) (*big.Float, 
 			new(big.Float).SetRat(
 				new(big.Rat).Neg(
 					new(big.Rat).Quo(
-						new(big.Rat).SetUint64(tb.config.Kappa),
+						new(big.Rat).SetUint64(kappa),
 						new(big.Rat).Mul(
 							new(big.Rat).Sub(
 								new(big.Rat).SetInt64(1.0),
-								tb.config.Q,
+								q,
 							),
 							new(big.Rat).SetUint64(epochWeight),
 						),
@@ -714,18 +740,14 @@ func (tb *TortoiseBeacon) atxThresholdFraction(epochWeight uint64) (*big.Float, 
 		),
 	)
 
-	return v, nil
+	return v
 }
 
 // TODO(nkryuchkov): Consider having a generic function for probabilities.
-func (tb *TortoiseBeacon) atxThreshold(epochWeight uint64) (*big.Int, error) {
+func atxThreshold(kappa uint64, q *big.Rat, epochWeight uint64) *big.Int {
 	const signatureLength = 64 * 8
 
-	fraction, err := tb.atxThresholdFraction(epochWeight)
-	if err != nil {
-		return nil, err
-	}
-
+	fraction := atxThresholdFraction(kappa, q, epochWeight)
 	two := big.NewInt(2)
 	signatureLengthBigInt := big.NewInt(signatureLength)
 
@@ -735,13 +757,13 @@ func (tb *TortoiseBeacon) atxThreshold(epochWeight uint64) (*big.Int, error) {
 	thresholdBigFloat := new(big.Float).Mul(maxPossibleNumberBigFloat, fraction)
 	threshold, _ := thresholdBigFloat.Int(nil)
 
-	return threshold, nil
+	return threshold
 }
 
-func (tb *TortoiseBeacon) getSignedProposal(ctx context.Context, epoch types.EpochID) []byte {
-	p := tb.buildProposal(epoch)
-	signature := tb.vrfSigner.Sign(p)
-	tb.logger.WithContext(ctx).With().Debug("calculated signature",
+func buildSignedProposal(ctx context.Context, signer signing.Signer, epoch types.EpochID, logger log.Log) []byte {
+	p := buildProposal(epoch, logger)
+	signature := signer.Sign(p)
+	logger.WithContext(ctx).With().Debug("calculated signature",
 		epoch,
 		log.String("proposal", util.Bytes2Hex(p)),
 		log.String("signature", string(signature)))
@@ -749,15 +771,15 @@ func (tb *TortoiseBeacon) getSignedProposal(ctx context.Context, epoch types.Epo
 	return signature
 }
 
-func (tb *TortoiseBeacon) signMessage(message interface{}) []byte {
+func signMessage(signer signing.Signer, message interface{}, logger log.Log) []byte {
 	encoded, err := types.InterfaceToBytes(message)
 	if err != nil {
-		tb.logger.With().Panic("failed to serialize message for signing", log.Err(err))
+		logger.With().Panic("failed to serialize message for signing", log.Err(err))
 	}
-	return tb.edSigner.Sign(encoded)
+	return signer.Sign(encoded)
 }
 
-func (tb *TortoiseBeacon) buildProposal(epoch types.EpochID) []byte {
+func buildProposal(epoch types.EpochID, logger log.Log) []byte {
 	message := &struct {
 		Prefix string
 		Epoch  uint32
@@ -768,18 +790,9 @@ func (tb *TortoiseBeacon) buildProposal(epoch types.EpochID) []byte {
 
 	b, err := types.InterfaceToBytes(message)
 	if err != nil {
-		tb.logger.With().Panic("failed to serialize proposal", log.Err(err))
+		logger.With().Panic("failed to serialize proposal", log.Err(err))
 	}
 	return b
-}
-
-func ceilDuration(duration, multiple time.Duration) time.Duration {
-	result := duration.Truncate(multiple)
-	if duration%multiple != 0 {
-		result += multiple
-	}
-
-	return result
 }
 
 func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data interface{}) error {
@@ -793,19 +806,4 @@ func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data
 	}
 
 	return nil
-}
-
-func (tb *TortoiseBeacon) proposalPassesEligibilityThreshold(proposal []byte, epochWeight uint64) (bool, error) {
-	proposalInt := new(big.Int).SetBytes(proposal)
-
-	threshold, err := tb.atxThreshold(epochWeight)
-	if err != nil {
-		return false, fmt.Errorf("atxThreshold: %w", err)
-	}
-
-	tb.logger.With().Debug("checking proposal for atx threshold",
-		log.String("proposal", proposalInt.String()),
-		log.String("threshold", threshold.String()))
-
-	return proposalInt.Cmp(threshold) == -1, nil
 }
