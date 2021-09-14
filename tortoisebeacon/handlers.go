@@ -196,7 +196,8 @@ func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalM
 		// the peer may have different total weight from us so that it passes threshold for the peer
 		// but does not pass here
 		logger.With().Warning("rejected proposal that doesn't pass threshold",
-			log.String("proposal", proposalShortString))
+			log.String("proposal", proposalShortString),
+			log.Uint64("total_weight", tb.epochWeight))
 
 		return types.ATXID{}, ErrProposalDoesntPassThreshold
 	}

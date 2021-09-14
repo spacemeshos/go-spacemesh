@@ -312,16 +312,7 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 	tb.epochInProgress = epoch
 	tb.mu.Unlock()
 
-	logger.With().Debug("tortoise beacon got tick, waiting until other nodes have the same epoch",
-		log.Duration("wait_time", tb.config.WaitAfterEpochStart))
-
-	epochStartTimer := time.NewTimer(tb.config.WaitAfterEpochStart)
-	defer epochStartTimer.Stop()
-	select {
-	case <-ctx.Done():
-	case <-epochStartTimer.C:
-		tb.handleEpoch(ctx, epoch)
-	}
+	tb.handleEpoch(ctx, epoch)
 }
 
 func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) {
@@ -341,7 +332,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	defer tb.cleanupVotes()
 
-	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
+	epochWeight, atxs, err := tb.atxDB.GetEpochWeight(epoch)
 	if err != nil {
 		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
 		return
@@ -350,6 +341,9 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		logger.With().Error("zero weight targeting epoch", log.Err(ErrZeroEpochWeight))
 		return
 	}
+
+	tb.startWeakCoinEpoch(ctx, epoch, atxs)
+	defer tb.weakCoin.FinishEpoch(ctx, epoch)
 
 	tb.mu.Lock()
 	tb.epochWeight = epochWeight
@@ -433,7 +427,8 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	proposedSignature := buildSignedProposal(ctx, tb.vrfSigner, epoch, tb.logger)
 
 	logger.With().Debug("calculated proposal signature",
-		log.String("signature", string(proposedSignature)))
+		log.String("signature", string(proposedSignature)),
+		log.Uint64("total_weight", tb.epochWeight))
 
 	passes := tb.proposalChecker.IsProposalEligible(proposedSignature)
 	if !passes {
@@ -473,9 +468,6 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.EpochID) (allVotes, error) {
 	logger := tb.logger.WithContext(ctx).WithFields(epoch)
 	logger.Debug("starting consensus phase")
-
-	tb.startWeakCoinEpoch(ctx, epoch)
-	defer tb.weakCoin.FinishEpoch(ctx, epoch)
 
 	// For K rounds: In each round that lasts δ, wait for votes to come in.
 	// For next rounds,
@@ -540,13 +532,8 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 	return ownVotes, nil
 }
 
-func (tb *TortoiseBeacon) startWeakCoinEpoch(ctx context.Context, epoch types.EpochID) {
+func (tb *TortoiseBeacon) startWeakCoinEpoch(ctx context.Context, epoch types.EpochID, atxs []types.ATXID) {
 	// we need to pass a map with spacetime unit allowances before any round is started
-	_, atxs, err := tb.atxDB.GetEpochWeight(epoch)
-	if err != nil {
-		tb.logger.WithContext(ctx).With().Panic("unable to load list of atxs", log.Err(err))
-	}
-
 	ua := weakcoin.UnitAllowances{}
 	for _, id := range atxs {
 		header, err := tb.atxDB.GetAtxHeader(id)
