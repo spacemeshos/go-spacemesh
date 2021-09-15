@@ -535,6 +535,9 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 			return allVotes{}, ctx.Err()
 		}
 
+		// note that votes after this calcVotes() call will _not_ be counted towards our votes
+		// for this round, as the late votes can be cast after the weak coin is revealed. we
+		// count them towards our votes in the next round.
 		ownVotes, undecided, err = tb.calcVotes(ctx, epoch, round)
 		if err != nil {
 			logger.With().Error("failed to calculate votes", log.Err(err))

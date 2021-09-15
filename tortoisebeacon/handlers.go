@@ -469,6 +469,8 @@ func (tb *TortoiseBeacon) storeFollowingVotes(message FollowingVotingMessage, mi
 		}
 	}
 
+	// TODO(kimmy): keep later rounds votes in a separate buffer so we don't count them prematurely
+	// tho i am not sure whether counting votes for later rounds early is a security concern.
 	for vote := range thisRoundVotes.invalid {
 		if _, ok := tb.votesMargin[vote]; !ok {
 			tb.votesMargin[vote] = new(big.Int).Neg(voteWeight)
