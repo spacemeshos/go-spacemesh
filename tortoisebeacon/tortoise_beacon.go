@@ -611,6 +611,7 @@ func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.Epoc
 
 func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.EpochID, proposals proposals) error {
 	mb := FirstVotingMessageBody{
+		EpochID:                   epoch,
 		ValidProposals:            proposals.valid,
 		PotentiallyValidProposals: proposals.potentiallyValid,
 	}
@@ -640,6 +641,7 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 	tb.mu.RUnlock()
 
 	mb := FollowingVotingMessageBody{
+		EpochID:        epoch,
 		RoundID:        round,
 		VotesBitVector: bitVector,
 	}
