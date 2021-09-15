@@ -58,7 +58,7 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64) (*TortoiseBeacon,
 	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(mockEpochWeight, nil, nil).MaxTimes(3)
 	mwc := coinValueMock(t, true)
 
-	types.SetLayersPerEpoch(1)
+	types.SetLayersPerEpoch(3)
 	logger := logtest.New(t).WithName("TortoiseBeacon")
 	genesisTime := time.Now().Add(100 * time.Millisecond)
 	ld := 100 * time.Millisecond
@@ -82,14 +82,14 @@ func TestTortoiseBeacon(t *testing.T) {
 	t.Parallel()
 
 	tb, clock := setUpTortoiseBeacon(t, uint64(10))
-	layer := types.NewLayerID(3)
+	epoch := types.EpochID(3)
 	err := tb.Start(context.TODO())
 	require.NoError(t, err)
 
-	t.Logf("Awaiting epoch %v", layer)
-	awaitLayer(clock, layer)
+	t.Logf("Awaiting epoch %v", epoch)
+	awaitEpoch(clock, epoch)
 
-	v, err := tb.GetBeacon(layer.GetEpoch())
+	v, err := tb.GetBeacon(epoch)
 	require.NoError(t, err)
 
 	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -102,26 +102,26 @@ func TestTortoiseBeaconZeroWeightEpoch(t *testing.T) {
 	t.Parallel()
 
 	tb, clock := setUpTortoiseBeacon(t, uint64(0))
-	layer := types.NewLayerID(3)
+	epoch := types.EpochID(3)
 	err := tb.Start(context.TODO())
 	require.NoError(t, err)
 
-	t.Logf("Awaiting epoch %v", layer)
-	awaitLayer(clock, layer)
+	t.Logf("Awaiting epoch %v", epoch)
+	awaitEpoch(clock, epoch)
 
-	v, err := tb.GetBeacon(layer.GetEpoch())
+	v, err := tb.GetBeacon(epoch)
 	assert.Equal(t, ErrBeaconNotCalculated, err)
 	assert.Nil(t, v)
 
 	tb.Close()
 }
 
-func awaitLayer(clock *timesync.TimeClock, epoch types.LayerID) {
+func awaitEpoch(clock *timesync.TimeClock, epoch types.EpochID) {
 	layerTicker := clock.Subscribe()
 
 	for layer := range layerTicker {
 		// Wait until required epoch passes.
-		if layer.After(epoch) {
+		if layer.GetEpoch() > epoch {
 			return
 		}
 	}

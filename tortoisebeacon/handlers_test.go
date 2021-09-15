@@ -126,6 +126,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 		Key:          edPubkey.String(),
 		VRFPublicKey: vrfSigner.PublicKey().Bytes(),
 	}
+	vrfPK := signing.NewPublicKey(nodeID.VRFPublicKey)
 
 	ctrl := gomock.NewController(t)
 	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
@@ -137,22 +138,23 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(
 		nodeID,
 		epoch-1).
-		Return(types.ATXID(types.HexToHash32("0x12345678")), nil).Times(3)
+		Return(types.ATXID(types.HexToHash32("0x12345678")), nil).Times(4)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 1,
 			EndTick:   3,
 		},
 		NumUnits: 5,
-	}, nil).Times(2)
-	mockDB.EXPECT().GetAtxTimestamp(gomock.Any()).Return(time.Now(), nil).Times(2)
+	}, nil).Times(3)
+	mockDB.EXPECT().GetAtxTimestamp(gomock.Any()).Return(time.Now(), nil).Times(3)
 
 	sig := buildSignedProposal(context.TODO(), vrfSigner, epoch, logtest.New(t))
 	tt := []struct {
-		name        string
-		message     ProposalMessage
-		eligible    bool
-		expectedErr error
+		name           string
+		message        ProposalMessage
+		eligible       bool
+		doubleProposed bool
+		expectedErr    error
 	}{
 		{
 			name: "bad signature",
@@ -163,6 +165,16 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 			},
 			eligible:    false,
 			expectedErr: ErrMalformedProposal,
+		},
+		{
+			name: "double proposals",
+			message: ProposalMessage{
+				NodeID:       nodeID,
+				EpochID:      epoch,
+				VRFSignature: sig,
+			},
+			doubleProposed: true,
+			expectedErr:    ErrAlreadyProposed,
 		},
 		{
 			name: "proposal eligible",
@@ -201,6 +213,13 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				clock:           clockNeverNotify(t),
 				epochInProgress: epoch,
 				proposalChecker: mockChecker,
+				hasProposed:     make(map[string]struct{}),
+			}
+
+			if tc.doubleProposed {
+				tb.mu.Lock()
+				tb.hasProposed[string(vrfPK.Bytes())] = struct{}{}
+				tb.mu.Unlock()
 			}
 
 			err = tb.handleProposalMessage(context.TODO(), tc.message, time.Now())
@@ -367,23 +386,22 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 		},
 	}
 	msg.Signature = signMessage(edSgn, msg.FirstVotingMessageBody, logtest.New(t))
+	edPubkey := edSgn.PublicKey()
 
 	tt := []struct {
-		name     string
-		message  FirstVotingMessage
-		expected map[string]proposals
+		name        string
+		message     FirstVotingMessage
+		doubleVoted bool
+		expected    map[string]proposals
 	}{
 		{
-			name:    "Current round and message round equal",
-			message: msg,
-			expected: map[string]proposals{
-				string(edSgn.PublicKey().Bytes()): {
-					valid: [][]byte{hash.Bytes()},
-				},
-			},
+			name:        "double votes",
+			message:     msg,
+			doubleVoted: true,
+			expected:    map[string]proposals{},
 		},
 		{
-			name:    "Current round and message round differ",
+			name:    "vote accepted",
 			message: msg,
 			expected: map[string]proposals{
 				string(edSgn.PublicKey().Bytes()): {
@@ -406,6 +424,13 @@ func TestTortoiseBeacon_handleFirstVotingMessage(t *testing.T) {
 				firstRoundIncomingVotes: map[string]proposals{},
 				votesMargin:             map[string]*big.Int{},
 				hasVoted:                make([]map[string]struct{}, round+1),
+			}
+
+			if tc.doubleVoted {
+				tb.mu.Lock()
+				tb.hasVoted[round] = make(map[string]struct{})
+				tb.hasVoted[round][string(edPubkey.Bytes())] = struct{}{}
+				tb.mu.Unlock()
 			}
 
 			err := tb.handleFirstVotingMessage(context.TODO(), tc.message)
@@ -570,23 +595,22 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 		},
 	}
 	msg.Signature = signMessage(edSgn, msg.FollowingVotingMessageBody, logtest.New(t))
+	edPubkey := edSgn.PublicKey()
 
 	tt := []struct {
-		name     string
-		message  FollowingVotingMessage
-		expected map[string]*big.Int
+		name        string
+		message     FollowingVotingMessage
+		doubleVoted bool
+		expected    map[string]*big.Int
 	}{
 		{
-			name:    "Current round and message round equal",
-			message: msg,
-			expected: map[string]*big.Int{
-				string(hash1.Bytes()): big.NewInt(1),
-				string(hash2.Bytes()): big.NewInt(-1),
-				string(hash3.Bytes()): big.NewInt(1),
-			},
+			name:        "double votes",
+			message:     msg,
+			doubleVoted: true,
+			expected:    map[string]*big.Int{},
 		},
 		{
-			name:    "Current round and message round differ",
+			name:    "vote accepted",
 			message: msg,
 			expected: map[string]*big.Int{
 				string(hash1.Bytes()): big.NewInt(1),
@@ -618,6 +642,13 @@ func TestTortoiseBeacon_handleFollowingVotingMessage(t *testing.T) {
 				epochInProgress: epoch,
 				hasVoted:        make([]map[string]struct{}, round+1),
 				votesMargin:     map[string]*big.Int{},
+			}
+
+			if tc.doubleVoted {
+				tb.mu.Lock()
+				tb.hasVoted[round] = make(map[string]struct{})
+				tb.hasVoted[round][string(edPubkey.Bytes())] = struct{}{}
+				tb.mu.Unlock()
 			}
 
 			err := tb.handleFollowingVotingMessage(context.TODO(), tc.message)

@@ -104,6 +104,7 @@ func New(
 		weakCoin:                weakCoin,
 		clock:                   clock,
 		beacons:                 make(map[types.EpochID]types.Hash32),
+		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, conf.RoundsNumber),
 		firstRoundIncomingVotes: make(map[string]proposals),
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
@@ -143,6 +144,7 @@ type TortoiseBeacon struct {
 	firstRoundIncomingVotes map[string]proposals // sorted votes for bit vector decoding
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin               map[string]*big.Int
+	hasProposed               map[string]struct{}
 	hasVoted                  []map[string]struct{}
 	proposalPhaseFinishedTime time.Time
 	beacons                   map[types.EpochID]types.Hash32
@@ -282,6 +284,7 @@ func (tb *TortoiseBeacon) cleanupEpoch() {
 	tb.incomingProposals = proposals{}
 	tb.firstRoundIncomingVotes = map[string]proposals{}
 	tb.votesMargin = map[string]*big.Int{}
+	tb.hasProposed = make(map[string]struct{})
 	tb.hasVoted = make([]map[string]struct{}, tb.config.RoundsNumber)
 	tb.proposalPhaseFinishedTime = time.Time{}
 

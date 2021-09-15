@@ -32,7 +32,9 @@ var (
 	// ErrMalformedSignature is returned when signature is malformed.
 	ErrMalformedSignature = errors.New("malformed signature")
 
-	// ErrAlreadyVoted is returned when miner has already voted.
+	// ErrAlreadyProposed is returned when miner doubly proposed for the same epoch.
+	ErrAlreadyProposed = errors.New("already proposed")
+	// ErrAlreadyVoted is returned when miner doubly voted for the same epoch/round.
 	ErrAlreadyVoted = errors.New("already voted")
 )
 
@@ -191,6 +193,10 @@ func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalM
 		logger.Warning("received malformed proposal message: vrf is not verified")
 
 		return types.ATXID{}, ErrMalformedProposal
+	}
+
+	if err := tb.registerProposed(vrfPK, logger); err != nil {
+		return types.ATXID{}, err
 	}
 
 	proposalShortString := types.BytesToHash(m.VRFSignature).ShortString()
@@ -476,6 +482,21 @@ func (tb *TortoiseBeacon) currentEpoch() types.EpochID {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 	return tb.epochInProgress
+}
+
+func (tb *TortoiseBeacon) registerProposed(minerPK *signing.PublicKey, logger log.Log) error {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	minerID := string(minerPK.Bytes())
+	if _, ok := tb.hasProposed[minerID]; ok {
+		// see TODOs for registerVoted()
+		logger.Warning("already received proposal from miner")
+		return ErrAlreadyProposed
+	}
+
+	tb.hasProposed[minerID] = struct{}{}
+	return nil
 }
 
 func (tb *TortoiseBeacon) registerVoted(minerPK *signing.PublicKey, round types.RoundID, logger log.Log) error {
