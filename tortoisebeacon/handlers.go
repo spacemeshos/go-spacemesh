@@ -147,17 +147,29 @@ func (tb *TortoiseBeacon) classifyProposalMessage(ctx context.Context, m Proposa
 	switch {
 	case tb.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		logger.Debug("received valid proposal message")
-		tb.incomingProposals.valid = append(tb.incomingProposals.valid, m.VRFSignature)
+		tb.addValidProposal(m.VRFSignature)
 
 	case tb.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		logger.Debug("received potentially valid proposal message")
-		tb.incomingProposals.potentiallyValid = append(tb.incomingProposals.potentiallyValid, m.VRFSignature)
+		tb.addPotentiallyValidProposal(m.VRFSignature)
 
 	default:
 		logger.Warning("received invalid proposal message")
 	}
 
 	return nil
+}
+
+func (tb *TortoiseBeacon) addValidProposal(proposal []byte) {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+	tb.incomingProposals.valid = append(tb.incomingProposals.valid, proposal)
+}
+
+func (tb *TortoiseBeacon) addPotentiallyValidProposal(proposal []byte) {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+	tb.incomingProposals.potentiallyValid = append(tb.incomingProposals.potentiallyValid, proposal)
 }
 
 func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalMessage, currentEpoch types.EpochID) (types.ATXID, error) {

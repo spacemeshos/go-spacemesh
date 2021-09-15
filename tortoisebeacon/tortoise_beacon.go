@@ -456,12 +456,6 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	}
 
 	logger.With().Info("sent proposal", log.String("message", m.String()))
-
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
-
-	tb.incomingProposals.valid = append(tb.incomingProposals.valid, proposedSignature)
-
 	return nil
 }
 
