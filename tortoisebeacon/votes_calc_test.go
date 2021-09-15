@@ -1,6 +1,7 @@
 package tortoisebeacon
 
 import (
+	"context"
 	"math/big"
 	"sort"
 	"testing"
@@ -9,27 +10,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/stretchr/testify/require"
 )
-
-func coinValueMock(tb testing.TB, value bool) coin {
-	ctrl := gomock.NewController(tb)
-	coinMock := mocks.NewMockcoin(ctrl)
-	coinMock.EXPECT().StartEpoch(
-		gomock.AssignableToTypeOf(types.EpochID(0)),
-		gomock.AssignableToTypeOf(weakcoin.UnitAllowances{}),
-	).AnyTimes()
-	coinMock.EXPECT().FinishEpoch().AnyTimes()
-	coinMock.EXPECT().StartRound(gomock.Any(), gomock.AssignableToTypeOf(types.RoundID(0))).
-		AnyTimes().Return(nil)
-	coinMock.EXPECT().FinishRound().AnyTimes()
-	coinMock.EXPECT().Get(
-		gomock.AssignableToTypeOf(types.EpochID(0)),
-		gomock.AssignableToTypeOf(types.RoundID(0)),
-	).AnyTimes().Return(value)
-	return coinMock
-}
 
 func TestTortoiseBeacon_calcVotes(t *testing.T) {
 	t.Parallel()
@@ -91,12 +73,12 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 				config: Config{
 					Theta: big.NewRat(1, 1),
 				},
-				Log:         logtest.New(t).WithName("TortoiseBeacon"),
+				logger:      logtest.New(t).WithName("TortoiseBeacon"),
 				atxDB:       mockDB,
 				votesMargin: tc.votesMargin,
 			}
 
-			result, undecided, err := tb.calcVotes(tc.epoch, tc.round)
+			result, undecided, err := tb.calcVotes(context.TODO(), tc.epoch, tc.round)
 			require.NoError(t, err)
 			sort.Strings(undecided)
 			require.Equal(t, tc.undecided, undecided)
@@ -188,7 +170,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				config: Config{
 					Theta: big.NewRat(1, 1),
 				},
-				Log:         logtest.New(t).WithName("TortoiseBeacon"),
+				logger:      logtest.New(t).WithName("TortoiseBeacon"),
 				atxDB:       mockDB,
 				votesMargin: tc.votesCount,
 			}
