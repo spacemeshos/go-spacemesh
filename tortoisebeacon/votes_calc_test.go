@@ -3,6 +3,7 @@ package tortoisebeacon
 import (
 	"context"
 	"math/big"
+	"sort"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -14,8 +15,6 @@ import (
 
 func TestTortoiseBeacon_calcVotes(t *testing.T) {
 	t.Parallel()
-
-	r := require.New(t)
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
@@ -38,6 +37,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 		votesMargin   map[string]*big.Int
 		incomingVotes []map[string]allVotes
 		expected      allVotes
+		undecided     []string
 	}{
 		{
 			name:  "Case 1",
@@ -49,7 +49,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 				"0x3": big.NewInt(0),
 				"0x4": big.NewInt(1),
 				"0x5": big.NewInt(0),
-				"0x6": big.NewInt(0),
+				"0x6": big.NewInt(-2),
 			},
 			expected: allVotes{
 				valid: proposalSet{
@@ -57,12 +57,10 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 					"0x4": {},
 				},
 				invalid: proposalSet{
-					"0x2": {},
-					"0x3": {},
-					"0x5": {},
 					"0x6": {},
 				},
 			},
+			undecided: []string{"0x2", "0x3", "0x5"},
 		},
 	}
 
@@ -80,17 +78,17 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 				votesMargin: tc.votesMargin,
 			}
 
-			result, err := tb.calcVotes(context.TODO(), tc.epoch, tc.round, false)
-			r.NoError(err)
-			r.EqualValues(tc.expected, result)
+			result, undecided, err := tb.calcVotes(context.TODO(), tc.epoch, tc.round)
+			require.NoError(t, err)
+			sort.Strings(undecided)
+			require.Equal(t, tc.undecided, undecided)
+			require.EqualValues(t, tc.expected, result)
 		})
 	}
 }
 
 func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 	t.Parallel()
-
-	r := require.New(t)
 
 	const threshold = 3
 
@@ -111,8 +109,8 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 		round              types.RoundID
 		ownFirstRoundVotes allVotes
 		votesCount         map[string]*big.Int
-		weakCoin           bool
 		result             allVotes
+		undecided          []string
 	}{
 		{
 			name:  "Case 1",
@@ -132,16 +130,15 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				"0x2": big.NewInt(-threshold * 3),
 				"0x3": big.NewInt(threshold / 2),
 			},
-			weakCoin: true,
 			result: allVotes{
 				valid: proposalSet{
 					"0x1": {},
-					"0x3": {},
 				},
 				invalid: proposalSet{
 					"0x2": {},
 				},
 			},
+			undecided: []string{"0x3"},
 		},
 		{
 			name:  "Case 2",
@@ -152,16 +149,15 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				"0x2": big.NewInt(-threshold * 3),
 				"0x3": big.NewInt(threshold / 2),
 			},
-			weakCoin: false,
 			result: allVotes{
 				valid: proposalSet{
 					"0x1": {},
 				},
 				invalid: proposalSet{
 					"0x2": {},
-					"0x3": {},
 				},
 			},
+			undecided: []string{"0x3"},
 		},
 	}
 
@@ -179,9 +175,54 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				votesMargin: tc.votesCount,
 			}
 
-			result, err := tb.calcOwnCurrentRoundVotes(tc.epoch, tc.weakCoin)
-			r.NoError(err)
-			r.EqualValues(tc.result, result)
+			result, undecided, err := tb.calcOwnCurrentRoundVotes(tc.epoch)
+			require.NoError(t, err)
+			sort.Strings(undecided)
+			require.Equal(t, tc.undecided, undecided)
+			require.EqualValues(t, tc.result, result)
+		})
+	}
+}
+func TestTallyUndecided(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		desc      string
+		expected  allVotes
+		undecided []string
+		coinFlip  bool
+	}{
+		{
+			desc: "Valid",
+			expected: allVotes{
+				valid: proposalSet{
+					"1": struct{}{},
+					"2": struct{}{},
+				},
+				invalid: proposalSet{},
+			},
+			undecided: []string{"1", "2"},
+			coinFlip:  true,
+		},
+		{
+			desc: "Invalid",
+			expected: allVotes{
+				invalid: proposalSet{
+					"1": struct{}{},
+					"2": struct{}{},
+				},
+				valid: proposalSet{},
+			},
+			undecided: []string{"1", "2"},
+			coinFlip:  false,
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			t.Parallel()
+
+			votes := allVotes{valid: proposalSet{}, invalid: proposalSet{}}
+			tallyUndecided(&votes, tc.undecided, tc.coinFlip)
+			require.Equal(t, tc.expected, votes)
 		})
 	}
 }

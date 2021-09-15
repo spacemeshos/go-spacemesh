@@ -9,26 +9,26 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (tb *TortoiseBeacon) calcVotes(ctx context.Context, epoch types.EpochID, round types.RoundID, coinFlip bool) (allVotes, error) {
-	logger := tb.logger.WithContext(ctx).WithFields(epoch, round, log.Bool("weak_coin", coinFlip))
+func (tb *TortoiseBeacon) calcVotes(ctx context.Context, epoch types.EpochID, round types.RoundID) (allVotes, []string, error) {
+	logger := tb.logger.WithContext(ctx).WithFields(epoch, round)
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
 	logger.With().Debug("calculating votes", log.String("vote_margins", fmt.Sprint(tb.votesMargin)))
 
-	ownCurrentRoundVotes, err := tb.calcOwnCurrentRoundVotes(epoch, coinFlip)
+	ownCurrentRoundVotes, undecided, err := tb.calcOwnCurrentRoundVotes(epoch)
 	if err != nil {
-		return allVotes{}, fmt.Errorf("calc own current round votes: %w", err)
+		return allVotes{}, nil, fmt.Errorf("calc own current round votes: %w", err)
 	}
 
 	logger.With().Debug("calculated votes for one round",
 		log.String("for_votes", fmt.Sprint(ownCurrentRoundVotes.valid)),
 		log.String("against_votes", fmt.Sprint(ownCurrentRoundVotes.invalid)))
 
-	return ownCurrentRoundVotes, nil
+	return ownCurrentRoundVotes, undecided, nil
 }
 
-func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, coinFlip bool) (allVotes, error) {
+func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID) (allVotes, []string, error) {
 	ownCurrentRoundVotes := allVotes{
 		valid:   make(proposalSet),
 		invalid: make(proposalSet),
@@ -36,25 +36,32 @@ func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID, coinFlip
 
 	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
 	if err != nil {
-		return allVotes{}, fmt.Errorf("get epoch weight: %w", err)
+		return allVotes{}, nil, fmt.Errorf("get epoch weight: %w", err)
 	}
 
 	positiveVotingThreshold := tb.votingThreshold(epochWeight)
 	negativeThreshold := new(big.Int).Neg(positiveVotingThreshold)
 
-	// TODO(nkryuchkov): should happen after weak coin for this round is calculated; consider calculating in two steps
+	var undecided []string
 	for vote, weightCount := range tb.votesMargin {
 		switch {
 		case weightCount.Cmp(positiveVotingThreshold) >= 0:
 			ownCurrentRoundVotes.valid[vote] = struct{}{}
 		case weightCount.Cmp(negativeThreshold) <= 0:
 			ownCurrentRoundVotes.invalid[vote] = struct{}{}
-		case coinFlip:
-			ownCurrentRoundVotes.valid[vote] = struct{}{}
-		case !coinFlip:
-			ownCurrentRoundVotes.invalid[vote] = struct{}{}
+		default:
+			undecided = append(undecided, vote)
 		}
 	}
+	return ownCurrentRoundVotes, undecided, nil
+}
 
-	return ownCurrentRoundVotes, nil
+func tallyUndecided(votes *allVotes, undecided []string, coinFlip bool) {
+	for _, vote := range undecided {
+		if coinFlip {
+			votes.valid[vote] = struct{}{}
+		} else {
+			votes.invalid[vote] = struct{}{}
+		}
+	}
 }
