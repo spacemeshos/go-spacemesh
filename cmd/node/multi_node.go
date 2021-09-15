@@ -162,7 +162,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HareEligibility.EpochOffset = 0
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
-	cfg.SyncValidationDelta = 5
 
 	cfg.FETCH.RequestTimeout = 10
 	cfg.FETCH.MaxRetriesForPeer = 5
