@@ -485,10 +485,14 @@ func (tb *TortoiseBeacon) getProposalChannel(ctx context.Context, epoch types.Ep
 		ch := tb.getOrCreateProposalChannel(epoch)
 		if len(ch) == proposalChanCapacity {
 			// the reader loop is not started for the next epoch yet. drop old messages if it's already full
-			msg := <-ch
-			tb.logger.WithContext(ctx).With().Warning("proposal channel for next epoch is full, dropping oldest msg",
-				log.String("sender", msg.gossip.Sender().String()),
-				log.String("message", msg.message.String()))
+			// channel receive is not synchronous with length check, use select+default here to prevent potential blocking
+			select {
+			case msg := <-ch:
+				tb.logger.WithContext(ctx).With().Warning("proposal channel for next epoch is full, dropping oldest msg",
+					log.String("sender", msg.gossip.Sender().String()),
+					log.String("message", msg.message.String()))
+			default:
+			}
 		}
 		return ch
 	}
