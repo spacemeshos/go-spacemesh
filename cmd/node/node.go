@@ -45,6 +45,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -312,6 +313,7 @@ type App struct {
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
 	edSgn          *signing.EdSigner
+	watchPeers     *peers.Peers
 	tortoiseBeacon TortoiseBeaconService
 	closers        []interface{ Close() }
 	log            log.Log
@@ -603,10 +605,8 @@ func (app *App) initServices(ctx context.Context,
 		weakcoin.WithMaxRound(app.Config.TortoiseBeacon.RoundsNumber),
 	)
 
-	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	tBeacon := tortoisebeacon.New(
 		app.Config.TortoiseBeacon,
-		ld,
 		nodeID,
 		swarm,
 		atxDB,
@@ -682,9 +682,8 @@ func (app *App) initServices(ctx context.Context,
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector(), tBeaconDBStore)
 
 	syncerConf := syncer.Configuration{
-		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
-		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
-		AlwaysListen:    app.Config.AlwaysListen,
+		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
+		AlwaysListen: app.Config.AlwaysListen,
 	}
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
@@ -774,6 +773,7 @@ func (app *App) initServices(ctx context.Context,
 	app.state = processor
 	app.hare = rabbit
 	app.P2P = swarm
+	app.watchPeers = peers.Start(swarm)
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
@@ -1034,6 +1034,10 @@ func (app *App) stopServices() {
 		app.log.Debug("peer timesync stopped")
 	}
 
+	if app.watchPeers != nil {
+		app.watchPeers.Close()
+	}
+
 	events.CloseEventReporter()
 	events.CloseEventPubSub()
 
@@ -1113,7 +1117,10 @@ func (app *App) startSyncer(ctx context.Context) {
 	if app.P2P == nil {
 		app.log.Error("syncer started before p2p is initialized")
 	} else {
-		<-app.P2P.GossipReady()
+		_, err := app.watchPeers.WaitPeers(ctx, app.Config.P2P.SwarmConfig.RandomConnections)
+		if err != nil {
+			return
+		}
 	}
 	app.syncer.Start(ctx)
 }
@@ -1230,12 +1237,13 @@ func (app *App) Start() error {
 		return fmt.Errorf("error starting services: %w", err)
 	}
 
+	app.startAPIServices(ctx, app.P2P)
+
 	// P2P must start last to not block when sending messages to protocols
 	if err := app.P2P.Start(ctx); err != nil {
 		return fmt.Errorf("error starting p2p services: %w", err)
 	}
 
-	app.startAPIServices(ctx, app.P2P)
 	events.SubscribeToLayers(clock.Subscribe())
 	logger.Info("app started")
 

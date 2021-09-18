@@ -72,10 +72,10 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 					RoundsNumber: rounds,
 					Theta:        big.NewRat(1, 1),
 				},
-				lastLayer: types.NewLayerID(epoch),
-				Log:       logtest.New(t).WithName("TortoiseBeacon"),
-				beacons:   make(map[types.EpochID]types.Hash32),
-				atxDB:     mockDB,
+				epochInProgress: epoch,
+				logger:          logtest.New(t).WithName("TortoiseBeacon"),
+				beacons:         make(map[types.EpochID]types.Hash32),
+				atxDB:           mockDB,
 			}
 
 			tb.initGenesisBeacons()

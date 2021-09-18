@@ -46,15 +46,6 @@ func RestoreConfig(execPath string, bucketName string, filename string) *ServerC
 	return cfg
 }
 
-// genArgs generates a slice of command line arguments from ServerConfig instance.
-func (cfg *ServerConfig) genArgs() []string {
-	var args []string
-
-	args = append(args)
-
-	return args
-}
-
 // server houses the necessary state required to configure, launch,
 // and manage node server process.
 type server struct {
@@ -79,13 +70,8 @@ func newServer(cfg *ServerConfig) (*server, error) {
 }
 
 // start launches a new running process of node server.
-func (s *server) start(addArgs []string) error {
+func (s *server) start(args []string) error {
 	s.quit = make(chan struct{})
-
-	args := s.cfg.genArgs()
-	// adding additional full go-spacemesh node arguments origin in
-	// yaml specification files, starting from index 1 to remove exec path
-	args = append(args, addArgs...)
 
 	s.cmd = exec.Command(s.cfg.exe, args...)
 	// Redirect stderr and stdout output to current harness buffers

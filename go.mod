@@ -35,6 +35,7 @@ require (
 	github.com/spf13/viper v1.4.0
 	github.com/stretchr/testify v1.7.0
 	github.com/syndtr/goleveldb v1.0.1-0.20190318030020-c3a204f8e965
+	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.15.0
 	golang.org/x/crypto v0.0.0-20200622213623-75b288015ac9
 	golang.org/x/net v0.0.0-20201021035429-f5854403a974

@@ -116,7 +116,7 @@ func main() {
 				log.Error("harness: the err is: %s", h.server.buff.String())
 			case <-h.server.quit:
 				log.With().Info("harness: got a quit signal from subprocess")
-				break
+				return
 			}
 		}
 	}()
