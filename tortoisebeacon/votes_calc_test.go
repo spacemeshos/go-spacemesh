@@ -18,7 +18,6 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(1), nil, nil).AnyTimes()
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 0,
@@ -76,6 +75,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 				logger:      logtest.New(t).WithName("TortoiseBeacon"),
 				atxDB:       mockDB,
 				votesMargin: tc.votesMargin,
+				epochWeight: uint64(1),
 			}
 
 			result, undecided, err := tb.calcVotes(context.TODO(), tc.epoch, tc.round)
@@ -94,7 +94,6 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(threshold), nil, nil).AnyTimes()
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 0,
@@ -173,9 +172,10 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 				logger:      logtest.New(t).WithName("TortoiseBeacon"),
 				atxDB:       mockDB,
 				votesMargin: tc.votesCount,
+				epochWeight: uint64(threshold),
 			}
 
-			result, undecided, err := tb.calcOwnCurrentRoundVotes(tc.epoch)
+			result, undecided, err := tb.calcOwnCurrentRoundVotes()
 			require.NoError(t, err)
 			sort.Strings(undecided)
 			require.Equal(t, tc.undecided, undecided)
@@ -183,6 +183,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 		})
 	}
 }
+
 func TestTallyUndecided(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {

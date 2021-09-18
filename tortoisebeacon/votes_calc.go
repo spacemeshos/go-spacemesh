@@ -16,7 +16,7 @@ func (tb *TortoiseBeacon) calcVotes(ctx context.Context, epoch types.EpochID, ro
 
 	logger.With().Debug("calculating votes", log.String("vote_margins", fmt.Sprint(tb.votesMargin)))
 
-	ownCurrentRoundVotes, undecided, err := tb.calcOwnCurrentRoundVotes(epoch)
+	ownCurrentRoundVotes, undecided, err := tb.calcOwnCurrentRoundVotes()
 	if err != nil {
 		return allVotes{}, nil, fmt.Errorf("calc own current round votes: %w", err)
 	}
@@ -28,18 +28,13 @@ func (tb *TortoiseBeacon) calcVotes(ctx context.Context, epoch types.EpochID, ro
 	return ownCurrentRoundVotes, undecided, nil
 }
 
-func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes(epoch types.EpochID) (allVotes, []string, error) {
+func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes() (allVotes, []string, error) {
 	ownCurrentRoundVotes := allVotes{
 		valid:   make(proposalSet),
 		invalid: make(proposalSet),
 	}
 
-	epochWeight, _, err := tb.atxDB.GetEpochWeight(epoch)
-	if err != nil {
-		return allVotes{}, nil, fmt.Errorf("get epoch weight: %w", err)
-	}
-
-	positiveVotingThreshold := tb.votingThreshold(epochWeight)
+	positiveVotingThreshold := tb.votingThreshold(tb.epochWeight)
 	negativeThreshold := new(big.Int).Neg(positiveVotingThreshold)
 
 	var undecided []string
