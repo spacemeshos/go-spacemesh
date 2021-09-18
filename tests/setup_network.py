@@ -38,5 +38,4 @@ def setup_network_with_state(init_session, add_elk, add_node_pool, add_curl, set
     network_deployment = NetworkInfoState(namespace=init_session,
                                           bs_deployment_info=setup_bootstrap,
                                           cl_deployment_infos=setup_clients_with_state)
-    wait_genesis(get_genesis_time_delta(testconfig['genesis_delta']), testconfig['genesis_delta'])
     return network_deployment

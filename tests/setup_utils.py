@@ -3,7 +3,6 @@ import multiprocessing as mp
 import time
 
 from tests import config as conf
-from tests.config import get_state_bucket
 import tests.conftest as conftest
 from tests.pod import search_phrase_in_pod_log
 from tests.misc import CoreV1ApiClient, ContainerSpec
@@ -124,7 +123,7 @@ def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config
 
     if "data-dir" in cspec.args:
         data_dir = cspec.args.pop("data-dir")
-        state_bucket = get_state_bucket()
+        state_bucket = conf.get_state_bucket()
         # add state-bucket to the specs arguments dictionary
         cspec.args["state-bucket"] = state_bucket
         all_files = list_files_in_path(state_bucket, data_dir)
