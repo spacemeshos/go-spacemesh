@@ -466,22 +466,21 @@ func (tb *TortoiseBeacon) getProposalChannel(ctx context.Context, epoch types.Ep
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 
-	if epoch < tb.epochInProgress {
+	switch {
+	case epoch < tb.epochInProgress:
 		tb.logger.WithContext(ctx).With().Debug("proposal too old, do not accept",
 			log.Uint32("proposal_epoch", uint32(epoch)))
 		return nil
-	}
-	if epoch == tb.epochInProgress {
+	case epoch == tb.epochInProgress:
 		ongoing := tb.proposalPhaseFinishedTime == time.Time{}
-		if !ongoing {
-			tb.logger.WithContext(ctx).With().Debug("proposal phase ended, do not accept",
-				log.Uint32("proposal_epoch", uint32(epoch)))
-			return nil
+		if ongoing {
+			return tb.getOrCreateProposalChannel(epoch)
 		}
-		return tb.getOrCreateProposalChannel(epoch)
-	}
-	// always accept proposals for the next epoch, but not too far in the future
-	if epoch == tb.epochInProgress+1 {
+		tb.logger.WithContext(ctx).With().Debug("proposal phase ended, do not accept",
+			log.Uint32("proposal_epoch", uint32(epoch)))
+		return nil
+	case epoch == tb.epochInProgress+1:
+		// always accept proposals for the next epoch, but not too far in the future
 		ch := tb.getOrCreateProposalChannel(epoch)
 		if len(ch) == proposalChanCapacity {
 			// the reader loop is not started for the next epoch yet. drop old messages if it's already full
@@ -495,8 +494,9 @@ func (tb *TortoiseBeacon) getProposalChannel(ctx context.Context, epoch types.Ep
 			}
 		}
 		return ch
+	default:
+		return nil
 	}
-	return nil
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
