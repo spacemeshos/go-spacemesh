@@ -80,7 +80,7 @@ jobs:
       - name: Upload zip
         uses: google-github-actions/upload-cloud-storage@main
         with:
-          path: $TARGET.zip
+          path: ${{ env.TARGET }}.zip
           destination: ${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/
   
   release:
