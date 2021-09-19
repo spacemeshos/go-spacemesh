@@ -111,7 +111,9 @@ jobs:
           body: |
             ${{ steps.changelog_reader.outputs.changes }}
 
-            _extract from the_ [change log](CHANGELOG.md) _version_ ${{ steps.changelog_reader.outputs.version }}
+            #### source
+            [change log](https://github.com/spacemeshos/go-spacemesh/blob/develop/CHANGELOG.md)
+            _version_ ${{ steps.changelog_reader.outputs.version }}
 
             ## Zip Files
             - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Windows.zip
