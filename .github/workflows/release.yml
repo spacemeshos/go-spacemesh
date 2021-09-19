@@ -7,7 +7,7 @@ env:
 on:  
   push:
     tags:
-      - '*'
+      - 'v*'
 
 jobs:
   build-and-upload:
@@ -20,7 +20,7 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v1
         with:
-          go-version: '1.15.13'
+          go-version: '1.17.1'
       
       - if: matrix.os == 'windows-latest'
         name: Install dependencies in windows
@@ -94,6 +94,12 @@ jobs:
         with:
           path: ./version.txt
       
+      - name: Get Latest Changelog Version
+        id: changelog_reader
+        uses: mindsers/changelog-reader-action@v2
+        with:
+          path: ./CHANGELOG.md
+
       - name: Create Release
         uses: actions/create-release@v1
         id: create_release
@@ -103,6 +109,10 @@ jobs:
           tag_name:  ${{ github.ref }}
           release_name: Release ${{ steps.version.outputs.content }}
           body: |
+            ${{ steps.changelog_reader.outputs.changes }}
+
+            _For complete log check the_ [change log](CHANGELOG.md)
+
             ## Zip Files
             - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Windows.zip
             - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macOS.zip
