@@ -59,7 +59,7 @@ jobs:
         shell: bash
         run: |
           mkdir $TARGET
-          unzip libgpu-setup-*.zip -d $TARGERT
+          unzip libgpu-setup-*.zip -d $TARGET
 
           #Download latest smrepl release
           wget https://github.com/spacemeshos/smrepl/releases/download/v0.1.32/${{ runner.os }}.zip
