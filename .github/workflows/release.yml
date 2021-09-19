@@ -111,7 +111,7 @@ jobs:
           body: |
             ${{ steps.changelog_reader.outputs.changes }}
 
-            _For complete log check the_ [change log](CHANGELOG.md)
+            _extract from the_ [change log](CHANGELOG.md) _version_ ${{ steps.changelog_reader.outputs.version }}
 
             ## Zip Files
             - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Windows.zip
