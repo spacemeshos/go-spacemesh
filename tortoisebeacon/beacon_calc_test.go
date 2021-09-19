@@ -73,7 +73,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 					Theta:        big.NewRat(1, 1),
 				},
 				epochInProgress: epoch,
-				Log:             logtest.New(t).WithName("TortoiseBeacon"),
+				logger:          logtest.New(t).WithName("TortoiseBeacon"),
 				beacons:         make(map[types.EpochID]types.Hash32),
 				atxDB:           mockDB,
 			}

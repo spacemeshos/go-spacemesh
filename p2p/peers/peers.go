@@ -101,6 +101,9 @@ func (p *Peers) PeerCount() uint64 {
 // WaitPeers returns with atleast N peers or when context is terminated.
 // Nil slice is returned if Peers is closing.
 func (p *Peers) WaitPeers(ctx context.Context, n int) ([]Peer, error) {
+	if n == 0 {
+		return nil, nil
+	}
 	req := waitPeersReq{min: n, ch: make(chan []Peer, 1)}
 	select {
 	case <-ctx.Done():
