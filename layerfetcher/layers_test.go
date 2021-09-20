@@ -74,12 +74,14 @@ func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, _ [
 func (mockNet) Close() {}
 
 type layerDBMock struct {
-	layers       map[types.LayerID][]types.BlockID
-	vectors      map[types.LayerID][]types.BlockID
-	hashes       map[types.LayerID]types.Hash32
-	aggHashes    map[types.LayerID]types.Hash32
-	processed    types.LayerID
-	getBlocksErr error
+	layers                map[types.LayerID][]types.BlockID
+	vectors               map[types.LayerID][]types.BlockID
+	hashes                map[types.LayerID]types.Hash32
+	aggHashes             map[types.LayerID]types.Hash32
+	processed             types.LayerID
+	getBlockIdsErr        error
+	numGetBlockCalls      int
+	theGetBlockCallToFail int
 }
 
 func newLayerDBMock() *layerDBMock {
@@ -102,10 +104,17 @@ func (l *layerDBMock) ProcessedLayer() types.LayerID                        { re
 func (l *layerDBMock) GetLayerHash(ID types.LayerID) types.Hash32           { return l.hashes[ID] }
 func (l *layerDBMock) GetAggregatedLayerHash(ID types.LayerID) types.Hash32 { return l.aggHashes[ID] }
 func (l *layerDBMock) LayerBlockIds(ID types.LayerID) ([]types.BlockID, error) {
-	if l.getBlocksErr != nil {
-		return nil, l.getBlocksErr
+	if l.getBlockIdsErr != nil {
+		return nil, l.getBlockIdsErr
 	}
 	return l.layers[ID], nil
+}
+func (l *layerDBMock) GetBlock(_ types.BlockID) (*types.Block, error) {
+	l.numGetBlockCalls++
+	if l.theGetBlockCallToFail == l.numGetBlockCalls {
+		return nil, ErrInternal
+	}
+	return nil, nil
 }
 
 type mockFetcher struct{}
@@ -142,7 +151,7 @@ func NewMockLogic(net *mockNet, layers layerDB, blocks blockHandler, atxs atxHan
 		log:            log,
 		fetcher:        fetcher,
 		net:            net,
-		layerBlocksRes: make(map[types.LayerID]map[peers.Peer]*peerResult),
+		layerBlocksRes: make(map[types.LayerID]*layerResult),
 		layerBlocksChs: make(map[types.LayerID][]chan LayerPromiseResult),
 		atxs:           atxs,
 		blockHandler:   blocks,
@@ -151,7 +160,7 @@ func NewMockLogic(net *mockNet, layers layerDB, blocks blockHandler, atxs atxHan
 	return l
 }
 
-func TestLayerHashBlocksReqReceiver(t *testing.T) {
+func TestLayerBlocksReqReceiver(t *testing.T) {
 	db := newLayerDBMock()
 	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	lyrID := types.NewLayerID(100)
@@ -173,7 +182,7 @@ func TestLayerHashBlocksReqReceiver(t *testing.T) {
 	assert.Equal(t, db.aggHashes[lyrID], got.AggregatedHash)
 }
 
-func TestLayerHashBlocksReqReceiverEmptyLayer(t *testing.T) {
+func TestLayerBlocksReqReceiverEmptyLayer(t *testing.T) {
 	db := newLayerDBMock()
 	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	lyrID := types.NewLayerID(100)
@@ -194,11 +203,11 @@ func TestLayerHashBlocksReqReceiverEmptyLayer(t *testing.T) {
 	assert.Equal(t, db.aggHashes[lyrID], got.AggregatedHash)
 }
 
-func TestLayerHashBlocksReqReceiverLayerNotPresent(t *testing.T) {
+func TestLayerBlocksReqReceiverLayerNotPresent(t *testing.T) {
 	db := newLayerDBMock()
 	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	lyrID := types.NewLayerID(100)
-	db.getBlocksErr = database.ErrNotFound
+	db.getBlockIdsErr = database.ErrNotFound
 	db.aggHashes[lyrID] = randomHash()
 
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
@@ -213,11 +222,11 @@ func TestLayerHashBlocksReqReceiverLayerNotPresent(t *testing.T) {
 	assert.Equal(t, db.aggHashes[lyrID], got.AggregatedHash)
 }
 
-func TestLayerHashBlocksReqReceiverUnknownError(t *testing.T) {
+func TestLayerBlocksReqReceiverUnknownError(t *testing.T) {
 	db := newLayerDBMock()
 	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	lyrID := types.NewLayerID(100)
-	db.getBlocksErr = errors.New("unknown")
+	db.getBlockIdsErr = errors.New("unknown")
 
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
 	assert.Nil(t, out)
@@ -273,6 +282,24 @@ func TestPollLayerBlocks_AllHaveBlockData(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	res := <-l.PollLayerContent(context.TODO(), layerID)
 	assert.Nil(t, res.Err)
+	assert.Equal(t, layerID, res.Layer)
+}
+
+func TestPollLayerBlocks_OneBlockNotFetched(t *testing.T) {
+	db := newLayerDBMock()
+	net := newMockNet()
+	numPeers := 4
+	for i := 0; i < numPeers; i++ {
+		peer := p2pcrypto.NewRandomPubkey()
+		net.peers = append(net.peers, peer)
+		net.layerBlocks[peer] = generateLayerBlocks()
+	}
+	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
+
+	layerID := types.NewLayerID(10)
+	db.theGetBlockCallToFail = 2
+	res := <-l.PollLayerContent(context.TODO(), layerID)
+	assert.Equal(t, ErrBlockNotFetched, res.Err)
 	assert.Equal(t, layerID, res.Layer)
 }
 
