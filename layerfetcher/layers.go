@@ -42,6 +42,7 @@ type layerDB interface {
 	GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error)
 	SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error
 	ProcessedLayer() types.LayerID
+	GetBlock(types.BlockID) (*types.Block, error)
 }
 
 type atxIDsDB interface {
@@ -75,16 +76,22 @@ var ErrZeroLayer = errors.New("zero layer")
 // ErrNoPeers is returned when node has no peers.
 var ErrNoPeers = errors.New("no peers")
 
-// ErrTooManyPeerErrors is returned when too many (> 1/2) peers return error
-var ErrTooManyPeerErrors = errors.New("too many peers returned error")
-
 // ErrInternal is returned from the peer when the peer encounters an internal error
 var ErrInternal = errors.New("unspecified error returned by peer")
+
+// ErrBlockNotFetched is returned when at least one block is not fetched successfully
+var ErrBlockNotFetched = errors.New("block not fetched")
 
 // peerResult captures the response from each peer.
 type peerResult struct {
 	data *layerBlocks
 	err  error
+}
+
+// layerResult captures expected content of a layer across peers
+type layerResult struct {
+	blockIDs  map[types.BlockID]struct{}
+	responses map[peers.Peer]*peerResult
 }
 
 // LayerPromiseResult is the result of trying to fetch data for an entire layer.
@@ -99,7 +106,7 @@ type Logic struct {
 	fetcher        fetch.Fetcher
 	net            network
 	mutex          sync.Mutex
-	layerBlocksRes map[types.LayerID]map[peers.Peer]*peerResult
+	layerBlocksRes map[types.LayerID]*layerResult
 	layerBlocksChs map[types.LayerID][]chan LayerPromiseResult
 	poetProofs     poetDB
 	atxs           atxHandler
@@ -129,7 +136,7 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		log:            log,
 		fetcher:        fetcher,
 		net:            srv,
-		layerBlocksRes: make(map[types.LayerID]map[peers.Peer]*peerResult),
+		layerBlocksRes: make(map[types.LayerID]*layerResult),
 		layerBlocksChs: make(map[types.LayerID][]chan LayerPromiseResult),
 		poetProofs:     poet,
 		atxs:           atxs,
@@ -238,6 +245,23 @@ func (l *Logic) tortoiseBeaconReqReceiver(ctx context.Context, data []byte) ([]b
 	return beacon.Bytes(), nil
 }
 
+// initLayerPolling returns false if there is an ongoing polling of the given layer content,
+// otherwise it initializes the polling and returns true
+func (l *Logic) initLayerPolling(layerID types.LayerID, ch chan LayerPromiseResult) bool {
+	l.mutex.Lock()
+	defer l.mutex.Unlock()
+	l.layerBlocksChs[layerID] = append(l.layerBlocksChs[layerID], ch)
+	if _, ok := l.layerBlocksRes[layerID]; ok {
+		// polling of block IDs of this layerID is ongoing, just wait for the polling to finish and get notified
+		return false
+	}
+	l.layerBlocksRes[layerID] = &layerResult{
+		blockIDs:  make(map[types.BlockID]struct{}),
+		responses: make(map[peers.Peer]*peerResult),
+	}
+	return true
+}
+
 // PollLayerContent polls peers for the content of a given layer ID.
 // it returns a channel for the caller to be notified when responses are received from all peers.
 func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) chan LayerPromiseResult {
@@ -250,15 +274,9 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 		return resChannel
 	}
 
-	l.mutex.Lock()
-	l.layerBlocksChs[layerID] = append(l.layerBlocksChs[layerID], resChannel)
-	if _, ok := l.layerBlocksRes[layerID]; ok {
-		// polling of block IDs of this layerID is ongoing, just wait for the polling to finish and get notified
-		l.mutex.Unlock()
+	if !l.initLayerPolling(layerID, resChannel) {
 		return resChannel
 	}
-	l.layerBlocksRes[layerID] = make(map[peers.Peer]*peerResult)
-	l.mutex.Unlock()
 
 	// send a request to the first peer of the list to get blocks data.
 	// todo: think if we should aggregate or ask from multiple peers to have some redundancy in requests
@@ -335,19 +353,25 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	l.layerBlocksRes[layerID][peer] = &peerRes
+	lyrResult := l.layerBlocksRes[layerID]
+	lyrResult.responses[peer] = &peerRes
+	if peerRes.data != nil {
+		for _, bID := range peerRes.data.Blocks {
+			lyrResult.blockIDs[bID] = struct{}{}
+		}
+	}
 
 	// check if we have all responses from peers
 	result := l.layerBlocksRes[layerID]
-	if len(result) < expectedResults {
+	if len(result.responses) < expectedResults {
 		l.log.WithContext(ctx).With().Debug("not yet received layer blocks from all peers",
-			log.Int("received", len(result)),
+			log.Int("received", len(result.responses)),
 			log.Int("expected", expectedResults))
 		return
 	}
 
 	// make a copy of data and channels to avoid holding a lock while notifying
-	go notifyLayerBlocksResult(layerID, l.layerBlocksChs[layerID], result, l.log.WithContext(ctx))
+	go notifyLayerBlocksResult(layerID, l.layerDB, l.layerBlocksChs[layerID], result, l.log.WithContext(ctx).WithFields(layerID))
 	delete(l.layerBlocksChs, layerID)
 	delete(l.layerBlocksRes, layerID)
 }
@@ -355,11 +379,11 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 // notifyLayerBlocksResult determines the final result for the layer, and notifies subscribed channels when
 // all blocks are fetched for a given layer.
 // it deliberately doesn't hold any lock while notifying channels.
-func notifyLayerBlocksResult(layerID types.LayerID, channels []chan LayerPromiseResult, peerResult map[peers.Peer]*peerResult, logger log.Log) {
+func notifyLayerBlocksResult(layerID types.LayerID, lyrDB layerDB, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
 	var result *LayerPromiseResult
 	hasZeroBlockHash := false
 	var firstErr error
-	for _, res := range peerResult {
+	for _, res := range lyrResult.responses {
 		if res.err == nil && res.data != nil {
 			// at least one layer hash contains blocks. not a zero block layer
 			result = &LayerPromiseResult{Layer: layerID, Err: nil}
@@ -371,7 +395,16 @@ func notifyLayerBlocksResult(layerID types.LayerID, channels []chan LayerPromise
 			firstErr = res.err
 		}
 	}
-	if result == nil { // no block data available
+
+	if result != nil {
+		// check if we have all the block IDs fetched
+		// we do not rely on fetchLayerBlocks to return error and check here instead because fetchLayerBlocks
+		// is called when each peer responded. while one call of fetchLayerBlocks fails, others may succeed.
+		// we want to double-check that we really don't have the block data before we fail sync
+		if !ensureBlocksFetched(lyrDB, lyrResult, logger) {
+			result.Err = ErrBlockNotFetched
+		}
+	} else { // no block data available
 		result = &LayerPromiseResult{Layer: layerID, Err: nil}
 		if hasZeroBlockHash {
 			// all other non-empty layer hashes returned errors. use the best information we've got
@@ -381,10 +414,21 @@ func notifyLayerBlocksResult(layerID types.LayerID, channels []chan LayerPromise
 			result.Err = firstErr
 		}
 	}
-	logger.With().Debug("notifying layer blocks result", layerID, log.String("blocks", fmt.Sprintf("%+v", *result)))
+	logger.With().Debug("notifying layer blocks result", log.String("blocks", fmt.Sprintf("%+v", *result)))
 	for _, ch := range channels {
 		ch <- *result
 	}
+}
+
+func ensureBlocksFetched(lyrDB layerDB, lyrResult *layerResult, logger log.Log) bool {
+	for bID := range lyrResult.blockIDs {
+		_, err := lyrDB.GetBlock(bID)
+		if err != nil {
+			logger.With().Warning("block not fetched for layer", bID)
+			return false
+		}
+	}
+	return true
 }
 
 type epochAtxRes struct {
