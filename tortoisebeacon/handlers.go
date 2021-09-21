@@ -24,16 +24,15 @@ const TBFirstVotingProtocol = "TBFirstVotingGossip"
 const TBFollowingVotingProtocol = "TBFollowingVotingGossip"
 
 var (
-	// ErrMalformedProposal is returned if proposal message is malformed.
-	ErrMalformedProposal = errors.New("malformed proposal message")
+	// ErrVRFNotVerified is returned if proposal message fails VRF verification.
+	ErrVRFNotVerified = errors.New("proposal failed vrf verification")
 
 	// ErrProposalDoesntPassThreshold is returned if proposal message doesn't pass threshold.
 	ErrProposalDoesntPassThreshold = errors.New("proposal doesn't pass threshold")
-	// ErrMalformedSignature is returned when signature is malformed.
-	ErrMalformedSignature = errors.New("malformed signature")
 
 	// ErrAlreadyProposed is returned when miner doubly proposed for the same epoch.
 	ErrAlreadyProposed = errors.New("already proposed")
+
 	// ErrAlreadyVoted is returned when miner doubly voted for the same epoch/round.
 	ErrAlreadyVoted = errors.New("already voted")
 )
@@ -192,7 +191,7 @@ func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalM
 		// TODO(nkryuchkov): attach telemetry
 		logger.Warning("received malformed proposal message: vrf is not verified")
 
-		return types.ATXID{}, ErrMalformedProposal
+		return types.ATXID{}, ErrVRFNotVerified
 	}
 
 	if err := tb.registerProposed(vrfPK, logger); err != nil {
@@ -266,7 +265,7 @@ func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message 
 	currentEpoch := tb.currentEpoch()
 
 	minerPK, atxID, err := tb.verifyFirstVotingMessage(ctx, message, currentEpoch)
-	if errors.Is(err, database.ErrNotFound) || errors.Is(err, ErrMalformedSignature) || errors.Is(err, ErrAlreadyVoted) {
+	if errors.Is(err, database.ErrNotFound) || errors.Is(err, ErrAlreadyVoted) {
 		return nil
 	}
 
@@ -318,11 +317,6 @@ func (tb *TortoiseBeacon) verifyFirstVotingMessage(ctx context.Context, message 
 
 	if err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("get node ATXID for epoch (miner ID %v): %w", minerPK.ShortString(), err)
-	}
-
-	if !signing.Verify(minerPK, messageBytes, message.Signature) {
-		logger.Warning("received malformed first voting message, bad signature")
-		return nil, types.ATXID{}, ErrMalformedSignature
 	}
 
 	return minerPK, atxID, nil
@@ -396,7 +390,7 @@ func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, mess
 	currentEpoch := tb.currentEpoch()
 
 	minerPK, atxID, err := tb.verifyFollowingVotingMessage(ctx, message, currentEpoch)
-	if errors.Is(err, database.ErrNotFound) || errors.Is(err, ErrMalformedSignature) || errors.Is(err, ErrAlreadyVoted) {
+	if errors.Is(err, database.ErrNotFound) || errors.Is(err, ErrAlreadyVoted) {
 		return nil
 	}
 
@@ -445,11 +439,6 @@ func (tb *TortoiseBeacon) verifyFollowingVotingMessage(ctx context.Context, mess
 
 	if err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("get node ATXID for epoch (miner ID %v): %w", minerPK.ShortString(), err)
-	}
-
-	if !signing.Verify(minerPK, messageBytes, message.Signature) {
-		logger.Warning("received malformed following voting message, bad signature")
-		return nil, types.ATXID{}, ErrMalformedSignature
 	}
 
 	return minerPK, atxID, nil

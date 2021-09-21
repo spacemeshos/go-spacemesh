@@ -164,7 +164,7 @@ func TestTortoiseBeacon_handleProposalMessage(t *testing.T) {
 				VRFSignature: sig[1:], // missing the first byte
 			},
 			eligible:    false,
-			expectedErr: ErrMalformedProposal,
+			expectedErr: ErrVRFNotVerified,
 		},
 		{
 			name: "double proposals",
