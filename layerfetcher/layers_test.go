@@ -5,8 +5,6 @@ import (
 	"errors"
 	"testing"
 
-	"go.uber.org/zap/zapcore"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -283,7 +281,7 @@ func TestPollLayerBlocks_AllHaveBlockData(t *testing.T) {
 		net.peers = append(net.peers, peer)
 		net.layerBlocks[peer] = generateLayerBlocks(i + 1)
 	}
-	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t, zapcore.DebugLevel))
+	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 
 	layerID := types.NewLayerID(10)
 	res := <-l.PollLayerContent(context.TODO(), layerID)
@@ -304,7 +302,7 @@ func TestPollLayerBlocks_FetchBlockError(t *testing.T) {
 		net.peers = append(net.peers, peer)
 		net.layerBlocks[peer] = generateLayerBlocks(i + 1)
 	}
-	l := NewMockLogic(net, newLayerDBMock(), &mockBlocks{}, &mockAtx{}, &mockFetcher{fetchError: ErrInternal}, logtest.New(t, zapcore.DebugLevel))
+	l := NewMockLogic(net, newLayerDBMock(), &mockBlocks{}, &mockAtx{}, &mockFetcher{fetchError: ErrInternal}, logtest.New(t))
 
 	layerID := types.NewLayerID(10)
 	res := <-l.PollLayerContent(context.TODO(), layerID)
