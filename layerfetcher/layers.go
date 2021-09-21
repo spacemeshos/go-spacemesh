@@ -42,7 +42,6 @@ type layerDB interface {
 	GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error)
 	SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error
 	ProcessedLayer() types.LayerID
-	GetBlock(types.BlockID) (*types.Block, error)
 }
 
 type atxIDsDB interface {
@@ -90,8 +89,10 @@ type peerResult struct {
 
 // layerResult captures expected content of a layer across peers
 type layerResult struct {
-	blockIDs  map[types.BlockID]struct{}
-	responses map[peers.Peer]*peerResult
+	layerID     types.LayerID
+	blocks      map[types.BlockID]struct{}
+	inputVector []types.BlockID
+	responses   map[peers.Peer]*peerResult
 }
 
 // LayerPromiseResult is the result of trying to fetch data for an entire layer.
@@ -256,7 +257,8 @@ func (l *Logic) initLayerPolling(layerID types.LayerID, ch chan LayerPromiseResu
 		return false
 	}
 	l.layerBlocksRes[layerID] = &layerResult{
-		blockIDs:  make(map[types.BlockID]struct{}),
+		layerID:   layerID,
+		blocks:    make(map[types.BlockID]struct{}),
 		responses: make(map[peers.Peer]*peerResult),
 	}
 	return true
@@ -297,26 +299,30 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 }
 
 // fetchLayerBlocks fetches the content of the block IDs in the specified layerBlocks
-func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blocks *layerBlocks) {
-	l.log.WithContext(ctx).With().Debug("fetching layer blocks", layerID, log.Int("numBlocks", len(blocks.Blocks)))
-	if err := l.GetBlocks(ctx, blocks.Blocks); err != nil {
-		// if there is an error this means that the entire layerID cannot be validated and therefore sync should fail
-		// TODO: fail sync?
-		l.log.WithContext(ctx).With().Debug("error fetching layer blocks", layerID, log.Err(err))
+func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blocks *layerBlocks) error {
+	logger := l.log.WithContext(ctx).WithFields(layerID, log.Int("num_blocks", len(blocks.Blocks)))
+	l.mutex.Lock()
+	lyrResult := l.layerBlocksRes[layerID]
+	var toFetch []types.BlockID
+	for _, blkID := range blocks.Blocks {
+		if _, ok := lyrResult.blocks[blkID]; !ok {
+			// not yet fetched
+			lyrResult.blocks[blkID] = struct{}{}
+			toFetch = append(toFetch, blkID)
+		}
 	}
+	// save the largest input vector from peers
+	if len(blocks.InputVector) > len(lyrResult.inputVector) {
+		lyrResult.inputVector = blocks.InputVector
+	}
+	l.mutex.Unlock()
 
-	if len(blocks.InputVector) > 0 {
-		l.log.WithContext(ctx).With().Debug("saving input vector from peer blocks", layerID)
-		err := l.layerDB.SaveLayerInputVectorByID(ctx, layerID, blocks.InputVector)
-		if err == nil {
-			return
-		}
-		l.log.WithContext(ctx).With().Error("failed to save input vector", layerID, log.Err(err))
-	} else if !layerID.GetEpoch().IsGenesis() {
-		if err := l.GetInputVector(ctx, layerID); err != nil {
-			l.log.WithContext(ctx).With().Debug("error getting input vector", layerID, log.Err(err))
-		}
+	logger.With().Debug("fetching new blocks", log.Int("to_fetch", len(toFetch)))
+	if err := l.GetBlocks(ctx, toFetch); err != nil {
+		// fail sync for the entire layer
+		return err
 	}
+	return nil
 }
 
 func extractPeerResult(logger log.Log, layerID types.LayerID, data []byte, peerErr error) (result peerResult) {
@@ -347,27 +353,27 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	l.log.WithContext(ctx).With().Debug("received layer content from peer", log.String("peer", peer.String()))
 	peerRes := extractPeerResult(l.log.WithContext(ctx), layerID, data, peerErr)
 	if peerRes.err == nil {
-		l.fetchLayerBlocks(ctx, layerID, peerRes.data)
+		if err := l.fetchLayerBlocks(ctx, layerID, peerRes.data); err != nil {
+			peerRes.err = ErrBlockNotFetched
+		}
 	}
 
 	l.mutex.Lock()
 	defer l.mutex.Unlock()
 
-	lyrResult := l.layerBlocksRes[layerID]
-	lyrResult.responses[peer] = &peerRes
-	if peerRes.data != nil {
-		for _, bID := range peerRes.data.Blocks {
-			lyrResult.blockIDs[bID] = struct{}{}
-		}
-	}
-
 	// check if we have all responses from peers
 	result := l.layerBlocksRes[layerID]
+	result.responses[peer] = &peerRes
 	if len(result.responses) < expectedResults {
 		l.log.WithContext(ctx).With().Debug("not yet received layer blocks from all peers",
 			log.Int("received", len(result.responses)),
 			log.Int("expected", expectedResults))
 		return
+	}
+
+	// save the input vector
+	if len(result.inputVector) > 0 {
+		l.layerDB.SaveLayerInputVectorByID(ctx, layerID, result.inputVector)
 	}
 
 	// make a copy of data and channels to avoid holding a lock while notifying
@@ -396,15 +402,7 @@ func notifyLayerBlocksResult(layerID types.LayerID, lyrDB layerDB, channels []ch
 		}
 	}
 
-	if result != nil {
-		// check if we have all the block IDs fetched
-		// we do not rely on fetchLayerBlocks to return error and check here instead because fetchLayerBlocks
-		// is called when each peer responded. while one call of fetchLayerBlocks fails, others may succeed.
-		// we want to double-check that we really don't have the block data before we fail sync
-		if !ensureBlocksFetched(lyrDB, lyrResult, logger) {
-			result.Err = ErrBlockNotFetched
-		}
-	} else { // no block data available
+	if result == nil { // no block data available
 		result = &LayerPromiseResult{Layer: layerID, Err: nil}
 		if hasZeroBlockHash {
 			// all other non-empty layer hashes returned errors. use the best information we've got
@@ -418,17 +416,6 @@ func notifyLayerBlocksResult(layerID types.LayerID, lyrDB layerDB, channels []ch
 	for _, ch := range channels {
 		ch <- *result
 	}
-}
-
-func ensureBlocksFetched(lyrDB layerDB, lyrResult *layerResult, logger log.Log) bool {
-	for bID := range lyrResult.blockIDs {
-		_, err := lyrDB.GetBlock(bID)
-		if err != nil {
-			logger.With().Warning("block not fetched for layer", bID)
-			return false
-		}
-	}
-	return true
 }
 
 type epochAtxRes struct {
@@ -596,11 +583,10 @@ func (l *Logic) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
 		}
 		if res.Err != nil {
 			l.log.WithContext(ctx).With().Error("cannot find block", log.String("hash", hash.String()), log.Err(res.Err))
-			continue
+			return res.Err
 		}
 		if !res.IsLocal {
-			err := l.blockReceiveFunc(ctx, res.Data)
-			if err != nil {
+			if err := l.blockReceiveFunc(ctx, res.Data); err != nil {
 				return err
 			}
 		}
