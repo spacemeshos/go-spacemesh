@@ -172,12 +172,11 @@ func (l *Logic) Close() {
 }
 
 // AddDBs adds dbs that will be queried when sync requests are received. these databases will be exposed to external callers
-func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB, tbDB database.Getter) {
+func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, tbDB database.Getter) {
 	l.fetcher.AddDB(fetch.BlockDB, blockDB)
 	l.fetcher.AddDB(fetch.ATXDB, AtxDB)
 	l.fetcher.AddDB(fetch.TXDB, TxDB)
 	l.fetcher.AddDB(fetch.POETDB, poetDB)
-	l.fetcher.AddDB(fetch.IVDB, IvDB)
 	l.fetcher.AddDB(fetch.TBDB, tbDB)
 }
 
@@ -627,25 +626,6 @@ func (l *Logic) GetPoetProof(ctx context.Context, id types.Hash32) error {
 	// if result is local we don't need to process it again
 	if !res.IsLocal {
 		return l.getPoetResult(ctx, res.Hash, res.Data)
-	}
-	return nil
-}
-
-// GetInputVector gets input vector data from remote peer
-func (l *Logic) GetInputVector(ctx context.Context, id types.LayerID) error {
-	res := <-l.fetcher.GetHash(types.CalcHash32(id.Bytes()), fetch.IVDB, false)
-	if res.Err != nil {
-		return res.Err
-	}
-	// if result is local we don't need to process it again
-	if !res.IsLocal {
-		l.log.WithContext(ctx).With().Debug("saving input vector from peer", id, res.Hash)
-		var blocks []types.BlockID
-		if err := types.BytesToInterface(res.Data, &blocks); err != nil {
-			l.log.WithContext(ctx).With().Error("got invalid input vector from peer", id, log.Err(err))
-			return err
-		}
-		return l.layerDB.SaveLayerInputVectorByID(ctx, id, blocks)
 	}
 	return nil
 }

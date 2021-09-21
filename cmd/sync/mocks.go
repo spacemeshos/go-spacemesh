@@ -163,7 +163,7 @@ func createFetcherWithMock(dbs *allDbs, msh *mesh.Mesh, swarm service.Service, l
 
 	lCfg := layerfetcher.Config{RequestTimeout: 20}
 	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, dbs.atxdb, dbs.poetDb, dbs.atxdb, mockTxProcessor{}, swarm, fetcher, msh, dbs.tbDB, lg)
-	layerFetch.AddDBs(dbs.mshdb.Blocks(), dbs.atxdbStore, dbs.mshdb.Transactions(), dbs.poetStorage, dbs.mshdb.InputVector(), dbs.tbDBStore)
+	layerFetch.AddDBs(dbs.mshdb.Blocks(), dbs.atxdbStore, dbs.mshdb.Transactions(), dbs.poetStorage, dbs.tbDBStore)
 	return layerFetch
 }
 
