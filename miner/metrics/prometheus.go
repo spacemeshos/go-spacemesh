@@ -9,6 +9,7 @@ const (
 	Subsystem = "miner"
 )
 
+// BlockBuildDuration checks block build duration (milliseconds).
 var BlockBuildDuration = metrics.NewHistogram(
 	"block_build_duration",
 	Subsystem,

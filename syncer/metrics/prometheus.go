@@ -9,6 +9,7 @@ const (
 	Subsystem = "syncer"
 )
 
+// LayerNumBlocks checks how network disagrees on layer content.
 var LayerNumBlocks = metrics.NewHistogram(
 	"layer_num_blocks",
 	Subsystem,

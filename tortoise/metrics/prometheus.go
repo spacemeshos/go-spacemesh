@@ -9,6 +9,7 @@ const (
 	Subsystem = "tortoise"
 )
 
+// LayerDistanceToBaseBlock checks how far back a node needs to find a good block.
 var LayerDistanceToBaseBlock = metrics.NewHistogram(
 	"layer_distance_to_base_block",
 	Subsystem,
