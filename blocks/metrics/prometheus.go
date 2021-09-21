@@ -15,32 +15,32 @@ const (
 	BlockIDLabel = "block_id"
 )
 
-// AvgLayerBlockSize checks average block size.
-var AvgLayerBlockSize = metrics.NewHistogram(
-	"avg_layer_block_size",
+// LayerBlockSize checks average block size.
+var LayerBlockSize = metrics.NewHistogram(
+	"layer_block_size",
 	subsystem,
-	"Average block size",
+	"Block size",
 	[]string{
 		LayerIDLabel,
 		BlockIDLabel,
 	},
 )
 
-// AvgNumTxsInBlock checks average transaction count in block.
-var AvgNumTxsInBlock = metrics.NewHistogram(
-	"avg_num_txs_in_block",
+// NumTxsInBlock checks average transaction count in block.
+var NumTxsInBlock = metrics.NewHistogram(
+	"num_txs_in_block",
 	subsystem,
-	"Average number of transactions in block",
+	"Number of transactions in block",
 	[]string{
 		LayerIDLabel,
 		BlockIDLabel,
 	},
 )
 
-var avgBaseBlockExceptionLength = metrics.NewHistogram(
-	"avg_base_block_exception_length",
+var baseBlockExceptionLength = metrics.NewHistogram(
+	"base_block_exception_length",
 	subsystem,
-	"Average base block exception length",
+	"Base block exception length",
 	[]string{
 		LayerIDLabel,
 		BlockIDLabel,
@@ -48,9 +48,9 @@ var avgBaseBlockExceptionLength = metrics.NewHistogram(
 	},
 )
 
-// Average blocks diff lengths.
+// Blocks diff lengths.
 var (
-	AvgForDiffLength     = avgBaseBlockExceptionLength.With(diffTypeLabel, "for_diff")
-	AvgAgainstDiffLength = avgBaseBlockExceptionLength.With(diffTypeLabel, "against_diff")
-	AvgNeutralDiffLength = avgBaseBlockExceptionLength.With(diffTypeLabel, "neutral_diff")
+	ForDiffLength     = baseBlockExceptionLength.With(diffTypeLabel, "for_diff")
+	AgainstDiffLength = baseBlockExceptionLength.With(diffTypeLabel, "against_diff")
+	NeutralDiffLength = baseBlockExceptionLength.With(diffTypeLabel, "neutral_diff")
 )

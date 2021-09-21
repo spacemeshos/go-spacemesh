@@ -137,23 +137,23 @@ func (bh *BlockHandler) saveMetrics(blk types.Block) {
 
 	metricList := []metric{
 		{
-			hist:  metrics.AvgLayerBlockSize,
+			hist:  metrics.LayerBlockSize,
 			value: float64(len(blk.Bytes())),
 		},
 		{
-			hist:  metrics.AvgNumTxsInBlock,
+			hist:  metrics.NumTxsInBlock,
 			value: float64(len(blk.TxIDs)),
 		},
 		{
-			hist:  metrics.AvgForDiffLength,
+			hist:  metrics.ForDiffLength,
 			value: float64(len(blk.ForDiff)),
 		},
 		{
-			hist:  metrics.AvgNeutralDiffLength,
+			hist:  metrics.NeutralDiffLength,
 			value: float64(len(blk.NeutralDiff)),
 		},
 		{
-			hist:  metrics.AvgAgainstDiffLength,
+			hist:  metrics.AgainstDiffLength,
 			value: float64(len(blk.AgainstDiff)),
 		},
 	}
