@@ -9,13 +9,19 @@ const (
 	Subsystem = "miner"
 )
 
+// Metrics labels.
+const (
+	LayerIDLabel = "layer_id"
+	BlockIDLabel = "block_id"
+)
+
 // BlockBuildDuration checks block build duration (milliseconds).
 var BlockBuildDuration = metrics.NewHistogram(
 	"block_build_duration",
 	Subsystem,
 	"How long it takes to build a block (milliseconds)",
 	[]string{
-		"layer_id",
-		"block_id",
+		LayerIDLabel,
+		BlockIDLabel,
 	},
 )

@@ -9,14 +9,20 @@ const (
 	diffTypeLabel = "diff_type"
 )
 
+// Metrics labels.
+const (
+	LayerIDLabel = "layer_id"
+	BlockIDLabel = "block_id"
+)
+
 // AvgLayerBlockSize checks average block size.
 var AvgLayerBlockSize = metrics.NewHistogram(
 	"avg_layer_block_size",
 	subsystem,
 	"Average block size",
 	[]string{
-		"layer_id",
-		"block_id",
+		LayerIDLabel,
+		BlockIDLabel,
 	},
 )
 
@@ -26,8 +32,8 @@ var AvgNumTxsInBlock = metrics.NewHistogram(
 	subsystem,
 	"Average number of transactions in block",
 	[]string{
-		"layer_id",
-		"block_id",
+		LayerIDLabel,
+		BlockIDLabel,
 	},
 )
 
@@ -36,8 +42,8 @@ var avgBaseBlockExceptionLength = metrics.NewHistogram(
 	subsystem,
 	"Average base block exception length",
 	[]string{
-		"layer_id",
-		"block_id",
+		LayerIDLabel,
+		BlockIDLabel,
 		diffTypeLabel,
 	},
 )

@@ -360,7 +360,7 @@ func (t *BlockBuilder) saveBlockBuildDurationMetric(ctx context.Context, started
 	}
 
 	metrics.BlockBuildDuration.
-		With("layer_id", layerID.String()).
-		With("block_id", blockID.String()).
+		With(metrics.LayerIDLabel, layerID.String()).
+		With(metrics.BlockIDLabel, blockID.String()).
 		Observe(float64(elapsed / time.Millisecond))
 }

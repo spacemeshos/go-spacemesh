@@ -379,7 +379,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		}
 
 		metrics.LayerNumBlocks.
-			With("layer_id", layerID.String()).
+			With(metrics.LayerIDLabel, layerID.String()).
 			Observe(float64(len(layer.Blocks())))
 
 		if len(layer.Blocks()) == 0 {
