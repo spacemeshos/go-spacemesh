@@ -38,6 +38,7 @@ var avgBaseBlockExceptionLength = metrics.NewHistogram(
 	[]string{
 		"layer_id",
 		"block_id",
+		diffTypeLabel,
 	},
 )
 
