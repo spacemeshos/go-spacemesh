@@ -28,7 +28,7 @@ const (
 // AtxsPerBlockLimit indicates the maximum number of atxs a block can reference
 const AtxsPerBlockLimit = 100
 
-const blockBuildDurationErrorThreshold = 2 * time.Second
+const blockBuildDurationErrorThreshold = 10 * time.Second
 
 type signer interface {
 	Sign(m []byte) []byte
