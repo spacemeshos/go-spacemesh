@@ -110,7 +110,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 		return fmt.Errorf("failed to validate block %v", err)
 	}
 
-	bh.saveMetrics(blk)
+	saveMetrics(blk)
 
 	if err := bh.mesh.AddBlockWithTxs(ctx, &blk); err != nil {
 		logger.With().Error("failed to add block to database", log.Err(err))
@@ -129,7 +129,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 	return nil
 }
 
-func (bh *BlockHandler) saveMetrics(blk types.Block) {
+func saveMetrics(blk types.Block) {
 	type metric struct {
 		hist  commonMetrics.Histogram
 		value float64
