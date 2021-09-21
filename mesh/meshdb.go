@@ -172,11 +172,6 @@ func (m *DB) Transactions() database.Getter {
 	return m.transactions
 }
 
-// InputVector exports the inputvector DB
-func (m *DB) InputVector() database.Getter {
-	return m.inputVector
-}
-
 // ErrAlreadyExist error returned when adding an existing value to the database
 var ErrAlreadyExist = errors.New("block already exists in database")
 

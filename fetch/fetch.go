@@ -30,7 +30,6 @@ const (
 	ATXDB   Hint = "ATXDB"
 	TXDB    Hint = "TXDB"
 	POETDB  Hint = "POETDB"
-	IVDB    Hint = "IVDB"
 	TBDB    Hint = "TBDB"
 )
 
