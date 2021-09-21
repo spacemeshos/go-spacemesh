@@ -13,7 +13,7 @@ const (
 var AvgLayerBlockSize = metrics.NewHistogram(
 	"avg_layer_block_size",
 	subsystem,
-	"Detect abnormal size not caused by num of TXs",
+	"Average block size",
 	[]string{
 		"layer_id",
 		"block_id",
@@ -24,7 +24,7 @@ var AvgLayerBlockSize = metrics.NewHistogram(
 var AvgNumTxsInBlock = metrics.NewHistogram(
 	"avg_num_txs_in_block",
 	subsystem,
-	"Detect abnormal size not caused by num of TXs",
+	"Average number of transactions in block",
 	[]string{
 		"layer_id",
 		"block_id",
@@ -34,7 +34,7 @@ var AvgNumTxsInBlock = metrics.NewHistogram(
 var avgBaseBlockExceptionLength = metrics.NewHistogram(
 	"avg_base_block_exception_length",
 	subsystem,
-	"Detect abnormal diff size",
+	"Average base block exception length",
 	[]string{
 		"layer_id",
 		"block_id",
