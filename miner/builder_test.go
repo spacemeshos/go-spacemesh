@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -410,7 +411,10 @@ func createBlockBuilder(tb testing.TB, ID string, n *service.Node, meshBlocks []
 		LayersPerEpoch: 3,
 		TxsPerBlock:    selectCount,
 	}
-	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
+
+	// TODO(nkryuchkov): mock metrics
+	m := metrics.NewPrometheus(logtest.New(tb))
+	bb := NewBlockBuilder(cfg, m, signing.NewEdSigner(), n, beginRound, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{}, [][]types.BlockID{{}, {}, {}}, nil
 	}}, &mockBlockOracle{}, &mockSyncer{}, mockProjector, nil, logtest.New(tb).WithName(ID))
 	return bb

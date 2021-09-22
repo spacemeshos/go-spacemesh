@@ -97,6 +97,7 @@ const (
 	Fetcher              = "fetcher"
 	LayerFetcher         = "layerFetcher"
 	TimeSyncLogger       = "timesync"
+	MetricsLogger        = "metrics"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -486,6 +487,8 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
 	case TimeSyncLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TimeSyncLoggerLevel))
+	case MetricsLogger:
+		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.MetricsLoggerLevel))
 	default:
 		lvl.SetLevel(log.Level())
 	}
@@ -525,7 +528,10 @@ func (app *App) initServices(ctx context.Context,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner signing.Signer,
-	layersPerEpoch uint32, clock TickProvider) error {
+	layersPerEpoch uint32,
+	clock TickProvider,
+	metrics metrics.Metrics,
+) error {
 
 	app.nodeID = nodeID
 
@@ -639,16 +645,17 @@ func (app *App) initServices(ctx context.Context,
 		GlobalThreshold: app.Config.GlobalThreshold,
 		LocalThreshold:  app.Config.LocalThreshold,
 		Log:             app.addLogger(TrtlLogger, lg),
+		Metrics:         metrics,
 		RerunInterval:   time.Minute * time.Duration(app.Config.TortoiseRerunInterval),
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
 
 	if mdb.PersistentData() {
-		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewRecoveredMesh(ctx, metrics, mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
-		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewMesh(mdb, metrics, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		if err := app.setupGenesis(processor, msh); err != nil {
 			return err
 		}
@@ -674,7 +681,7 @@ func (app *App) initServices(ctx context.Context,
 		Depth:       app.Config.Hdist,
 		GoldenATXID: goldenATXID,
 	}
-	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, app.addLogger(BlockListenerLogger, lg))
+	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, app.addLogger(BlockListenerLogger, lg), metrics)
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
@@ -717,6 +724,7 @@ func (app *App) initServices(ctx context.Context,
 	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
 	blockProducer := miner.NewBlockBuilder(
 		minerCfg,
+		metrics,
 		sgn,
 		swarm,
 		clock.Subscribe(),
@@ -1209,6 +1217,8 @@ func (app *App) Start() error {
 		return fmt.Errorf("error starting p2p services: %w", err)
 	}
 
+	prometheus := metrics.NewPrometheus(app.addLogger(MetricsLogger, lg))
+
 	if err = app.initServices(ctx,
 		nodeID,
 		swarm,
@@ -1220,16 +1230,18 @@ func (app *App) Start() error {
 		poetClient,
 		vrfSigner,
 		app.Config.LayersPerEpoch,
-		clock); err != nil {
+		clock,
+		prometheus,
+	); err != nil {
 		return fmt.Errorf("cannot start services: %w", err)
 	}
 
 	if app.Config.CollectMetrics {
-		metrics.StartMetricsServer(app.Config.MetricsPort)
+		prometheus.StartMetricsServer(app.Config.MetricsPort)
 	}
 
 	if app.Config.MetricsPush != "" {
-		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
+		prometheus.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
 			swarm.LocalNode().PublicKey().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
 	}
 

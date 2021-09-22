@@ -146,6 +146,7 @@ type LoggerConfig struct {
 	AtxBuilderLoggerLevel     string `mapstructure:"atx-builder"`
 	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
 	TimeSyncLoggerLevel       string `mapstructure:"timesync"`
+	MetricsLoggerLevel        string `mapstructure:"metrics"`
 }
 
 // SmeshingConfig defines configuration for the node's smeshing (mining).

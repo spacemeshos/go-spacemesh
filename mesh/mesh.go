@@ -13,12 +13,13 @@ import (
 	"sync"
 
 	"github.com/seehuhn/mt19937"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
 const (
@@ -82,9 +83,10 @@ type Mesh struct {
 	AtxDB
 	txProcessor
 	Validator
-	trtl   tortoise
-	txPool txMemPool
-	config Config
+	metrics metrics.Metrics
+	trtl    tortoise
+	txPool  txMemPool
+	config  Config
 	// latestLayer is the latest layer this node had seen from blocks
 	latestLayer types.LayerID
 	// latestLayerInState is the latest layer whose contents have been applied to the state
@@ -101,9 +103,10 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
+func NewMesh(db *DB, metrics metrics.Metrics, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
 	msh := &Mesh{
 		Log:                 logger,
+		metrics:             metrics,
 		trtl:                trtl,
 		txPool:              txPool,
 		txProcessor:         pr,
@@ -131,8 +134,8 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 }
 
 // NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database
-func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
-	msh := NewMesh(db, atxDb, rewardConfig, trtl, txPool, pr, logger)
+func NewRecoveredMesh(ctx context.Context, metrics metrics.Metrics, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
+	msh := NewMesh(db, metrics, atxDb, rewardConfig, trtl, txPool, pr, logger)
 
 	latest, err := db.general.Get(constLATEST)
 	if err != nil {
@@ -528,9 +531,7 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		blocks = append(blocks, block)
 	}
 
-	metrics.LayerNumBlocks.
-		With(metrics.LayerIDLabel, validatedLayer.String()).
-		Observe(float64(len(layer)))
+	msh.metrics.LayerNumBlocks(validatedLayer, layer)
 
 	// report that hare "approved" this layer
 	events.ReportLayerUpdate(events.LayerUpdate{

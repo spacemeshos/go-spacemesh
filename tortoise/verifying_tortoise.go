@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -60,7 +60,8 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 
 type turtle struct {
 	state
-	logger log.Log
+	logger  log.Log
+	metrics metrics.Metrics
 
 	atxdb atxDataProvider
 	bdp   blockDataProvider
@@ -96,6 +97,7 @@ type turtle struct {
 // newTurtle creates a new verifying tortoise algorithm instance
 func newTurtle(
 	lg log.Log,
+	metrics metrics.Metrics,
 	db database.Database,
 	bdp blockDataProvider,
 	atxdb atxDataProvider,
@@ -118,6 +120,7 @@ func newTurtle(
 			BlockOpinionsByLayer: map[types.LayerID]map[types.BlockID]Opinion{},
 		},
 		logger:          lg.Named("turtle"),
+		metrics:         metrics,
 		Hdist:           hdist,
 		Zdist:           zdist,
 		ConfidenceParam: confidenceParam,
@@ -137,6 +140,7 @@ func newTurtle(
 func (t *turtle) cloneTurtleParams() *turtle {
 	return newTurtle(
 		t.log,
+		t.metrics,
 		t.db,
 		t.bdp,
 		t.atxdb,
@@ -371,10 +375,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 				log.Int("support_count", len(exceptionVectorMap[1])),
 				log.Int("neutral_count", len(exceptionVectorMap[2])))
 
-			metrics.LayerDistanceToBaseBlock.
-				With("last_layer", t.Last.String()).
-				With("block_id", blockID.String()).
-				Observe(float64(t.Last.Value - layerID.Value))
+			t.metrics.LayerDistanceToBaseBlock(t.Last, layerID, blockID)
 
 			return blockID, [][]types.BlockID{
 				blockMapToArray(exceptionVectorMap[0]),

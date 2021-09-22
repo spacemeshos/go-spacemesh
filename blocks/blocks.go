@@ -6,10 +6,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/blocks/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	commonMetrics "github.com/spacemeshos/go-spacemesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
@@ -45,6 +44,7 @@ type BlockHandler struct {
 	mesh        mesh
 	validator   blockValidator
 	goldenATXID types.ATXID
+	metrics     metrics.Metrics
 }
 
 // Config defines configuration for block handler
@@ -54,7 +54,7 @@ type Config struct {
 }
 
 // NewBlockHandler creates new BlockHandler
-func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHandler {
+func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log, metrics metrics.Metrics) *BlockHandler {
 	return &BlockHandler{
 		Log:         lg,
 		traverse:    m.ForBlockInView,
@@ -62,6 +62,7 @@ func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHan
 		mesh:        m,
 		validator:   v,
 		goldenATXID: cfg.GoldenATXID,
+		metrics:     metrics,
 	}
 }
 
@@ -110,7 +111,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 		return fmt.Errorf("failed to validate block %v", err)
 	}
 
-	saveMetrics(blk)
+	bh.saveMetrics(blk)
 
 	if err := bh.mesh.AddBlockWithTxs(ctx, &blk); err != nil {
 		logger.With().Error("failed to add block to database", log.Err(err))
@@ -129,41 +130,12 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 	return nil
 }
 
-func saveMetrics(blk types.Block) {
-	type metric struct {
-		hist  commonMetrics.Histogram
-		value float64
-	}
-
-	metricList := []metric{
-		{
-			hist:  metrics.LayerBlockSize,
-			value: float64(len(blk.Bytes())),
-		},
-		{
-			hist:  metrics.NumTxsInBlock,
-			value: float64(len(blk.TxIDs)),
-		},
-		{
-			hist:  metrics.ForDiffLength,
-			value: float64(len(blk.ForDiff)),
-		},
-		{
-			hist:  metrics.NeutralDiffLength,
-			value: float64(len(blk.NeutralDiff)),
-		},
-		{
-			hist:  metrics.AgainstDiffLength,
-			value: float64(len(blk.AgainstDiff)),
-		},
-	}
-
-	for _, m := range metricList {
-		m.hist.
-			With(metrics.LayerIDLabel, blk.LayerIndex.String()).
-			With(metrics.BlockIDLabel, blk.ID().String()).
-			Observe(m.value)
-	}
+func (bh *BlockHandler) saveMetrics(blk types.Block) {
+	bh.metrics.LayerBlockSize(blk)
+	bh.metrics.NumTxsInBlock(blk)
+	bh.metrics.BaseBlockExceptionForLength(blk)
+	bh.metrics.BaseBlockExceptionAgainstLength(blk)
+	bh.metrics.BaseBlockExceptionNeutralLength(blk)
 }
 
 func combineBlockDiffs(blk types.Block) []types.BlockID {

@@ -72,9 +72,11 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	}
 	app.p2p = swarm
 
+	prometheus := metrics.NewPrometheus(logger)
+
 	// Testing stuff
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
-	metrics.StartMetricsServer(app.Config.MetricsPort)
+	prometheus.StartMetricsServer(app.Config.MetricsPort)
 
 	// start the node
 

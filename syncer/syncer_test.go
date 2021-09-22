@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -146,7 +147,10 @@ func newMemMesh(lg log.Log) *mesh.Mesh {
 	atxStore := database.NewMemDatabase()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
 	atxdb := activation.NewDB(atxStore, activation.NewIdentityStore(database.NewMemDatabase()), memdb, layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
-	return mesh.NewMesh(memdb, atxdb, mesh.Config{}, &mockValidator{}, nil, nil, lg.WithName("mesh"))
+
+	// TODO(nkryuchkov): mock metrics
+	m := metrics.NewPrometheus(lg.WithName("metrics"))
+	return mesh.NewMesh(memdb, m, atxdb, mesh.Config{}, &mockValidator{}, nil, nil, lg.WithName("mesh"))
 }
 
 var conf = Configuration{

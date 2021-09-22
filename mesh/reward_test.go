@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
@@ -67,7 +68,10 @@ func getMeshWithMapState(tb testing.TB, id string, s txProcessor) (*Mesh, *AtxDb
 	lg := logtest.New(tb)
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
-	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), s, lg), atxDb
+
+	// TODO(nkryuchkov): mock metrics
+	m := metrics.NewPrometheus(lg.WithName("metrics"))
+	return NewMesh(mshDb, m, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), s, lg), atxDb
 }
 
 func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs int, fee int64) int64 {
@@ -143,7 +147,6 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	remainder := totalRewardsCost % 4
 
 	assert.Equal(t, totalRewardsCost, s.TotalReward+remainder)
-
 }
 
 func NewTestRewardParams() Config {
@@ -373,7 +376,7 @@ func TestMesh_updateStateWithLayer_AdvanceInOrder(t *testing.T) {
 	require.Greater(t, len(finalMinus2Txs), 0)
 
 	finalMinus1BlockIds := copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
-	//copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
+	// copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
 	finalBlockIds := copyLayer(t, msh1, msh2, atxDB2, finalLyr)
 
 	// now advance s2 to finalLyr

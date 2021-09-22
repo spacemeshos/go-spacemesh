@@ -16,7 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/miner/metrics"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
@@ -60,6 +60,7 @@ type baseBlockProvider interface {
 type BlockBuilder struct {
 	log.Log
 	signer
+	metrics         metrics.Metrics
 	minerID         types.NodeID
 	rnd             *rand.Rand
 	hdist           uint32
@@ -93,6 +94,7 @@ type Config struct {
 // NewBlockBuilder creates a struct of block builder type.
 func NewBlockBuilder(
 	config Config,
+	metrics metrics.Metrics,
 	sgn signer,
 	net p2p.Service,
 	beginRoundEvent chan types.LayerID,
@@ -354,8 +356,5 @@ func (t *BlockBuilder) saveBlockBuildDurationMetric(ctx context.Context, started
 			Error("block building took too long ", log.Duration("elapsed", elapsed))
 	}
 
-	metrics.BlockBuildDuration.
-		With(metrics.LayerIDLabel, layerID.String()).
-		With(metrics.BlockIDLabel, blockID.String()).
-		Observe(float64(elapsed / time.Millisecond))
+	t.metrics.BlockBuildDuration(layerID, blockID, elapsed)
 }

@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/state"
@@ -97,6 +98,7 @@ type mockClock struct {
 func (m *mockClock) LayerToTime(types.LayerID) time.Time {
 	return time.Now().Add(1000 * time.Hour) // hack so this wont take affect in the mock
 }
+
 func (m *mockClock) Tick() {
 	l := m.GetCurrentLayer()
 	log.Info("tick %v", l)
@@ -118,11 +120,13 @@ func (m *mockClock) Subscribe() timesync.LayerTimer {
 
 	return newCh
 }
+
 func (m *mockClock) Unsubscribe(timer timesync.LayerTimer) {
 	m.countUnsub++
 	delete(m.ids, m.ch[timer])
 	delete(m.ch, timer)
 }
+
 func configTst() mesh.Config {
 	return mesh.Config{
 		BaseReward: big.NewInt(5000),
@@ -144,19 +148,24 @@ type allDbs struct {
 }
 
 func createMeshWithMock(dbs *allDbs, txpool *state.TxMempool, lg log.Log) *mesh.Mesh {
+	// TODO(nkryuchkov): mock metrics
+	m := metrics.NewPrometheus(lg.WithName("metrics"))
+
 	var msh *mesh.Mesh
 	if dbs.mshdb.PersistentData() {
 		lg.Info("persistent data found")
-		msh = mesh.NewRecoveredMesh(context.TODO(), dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
+		msh = mesh.NewRecoveredMesh(context.TODO(), m, dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	} else {
 		lg.Info("no persistent data found")
-		msh = mesh.NewMesh(dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
+		msh = mesh.NewMesh(dbs.mshdb, m, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
 	}
 	return msh
 }
 
 func createFetcherWithMock(dbs *allDbs, msh *mesh.Mesh, swarm service.Service, lg log.Log) *layerfetcher.Logic {
-	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, msh, blockEligibilityValidatorMock{}, lg)
+	// TODO(nkryuchkov): mock metrics
+	m := metrics.NewPrometheus(lg.WithName("metrics"))
+	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, msh, blockEligibilityValidatorMock{}, lg, m)
 
 	fCfg := fetch.DefaultConfig()
 	fetcher := fetch.NewFetch(context.TODO(), fCfg, swarm, lg)

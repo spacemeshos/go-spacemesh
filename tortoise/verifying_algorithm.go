@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
 // ThreadSafeVerifyingTortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
@@ -35,6 +36,7 @@ type Config struct {
 	LocalThreshold  uint8  // threshold that determines whether a node votes based on local or global opinion (0-100)
 	WindowSize      uint32 // tortoise sliding window: how many layers we store data for
 	Log             log.Log
+	Metrics         metrics.Metrics
 	RerunInterval   time.Duration // how often to rerun from genesis
 }
 
@@ -49,6 +51,7 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 	alg := &ThreadSafeVerifyingTortoise{
 		trtl: newTurtle(
 			cfg.Log.WithFields(log.String("tortoise_rerun", "false")),
+			cfg.Metrics,
 			cfg.Database,
 			cfg.MeshDatabase,
 			cfg.ATXDB,

@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/require"
 )
@@ -1058,8 +1059,11 @@ func defaultClock(tb testing.TB) layerClock {
 
 func defaultTurtle(tb testing.TB) *turtle {
 	mdb := getInMemMesh(tb)
+	// TODO(nkryuchkov): mock metrics
+	prometheus := metrics.NewPrometheus(logtest.New(tb))
 	return newTurtle(
 		logtest.New(tb),
+		prometheus,
 		database.NewMemDatabase(),
 		mdb,
 		getAtxDB(),
