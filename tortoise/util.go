@@ -19,6 +19,8 @@ var (
 	abstain = vec{Support: 0, Against: 0}
 )
 
+var hundred = big.NewInt(100) // just to avoid computing it below every time
+
 type vec struct {
 	Support, Against uint64
 	Flushed          bool
@@ -74,14 +76,9 @@ func (a vec) String() string {
 }
 
 func calculateOpinionWithThreshold(logger log.Log, v vec, layerSize int, theta uint8, delta uint32) vec {
-	// TODO(dshulyak) both delta and layerSize are much smaller values then uint32
 	threshold := big.NewInt(int64(theta))
 	threshold.Mul(threshold, big.NewInt(int64(delta)))
 	threshold.Mul(threshold, big.NewInt(int64(layerSize)))
-
-	hundred := big.NewInt(100)
-	quo := new(big.Int).Div(threshold, hundred)
-	rem := new(big.Int).Mod(threshold, hundred)
 
 	logger.With().Debug("threshold opinion",
 		v,
@@ -92,9 +89,8 @@ func calculateOpinionWithThreshold(logger log.Log, v vec, layerSize int, theta u
 
 	greater := func(val uint64) bool {
 		v := new(big.Int).SetUint64(val)
-		return v.Cmp(quo) == 1 || v.Cmp(quo) == 0 && rem.Int64() > 0
+		return v.Mul(v, hundred).Cmp(threshold) == 1
 	}
-
 	if v.Support > v.Against && greater(v.Support-v.Against) {
 		return support
 	} else if v.Against > v.Support && greater(v.Against-v.Support) {
