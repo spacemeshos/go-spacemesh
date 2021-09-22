@@ -45,7 +45,7 @@ type layerDB interface {
 }
 
 type atxIDsDB interface {
-	GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID)
+	GetEpochAtxs(epochID types.EpochID) ([]types.ATXID, error)
 }
 
 // poetDB is an interface to reading and storing poet proofs
@@ -176,7 +176,10 @@ func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB, IvDB, tbDB database.Getter)
 // epochATXsReqReceiver returns the ATXs for the specified epoch.
 func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) ([]byte, error) {
 	epoch := types.EpochID(util.BytesToUint32(msg))
-	atxs := l.atxIds.GetEpochAtxs(epoch)
+	atxs, err := l.atxIds.GetEpochAtxs(epoch)
+	if err != nil {
+		return nil, err
+	}
 	l.log.WithContext(ctx).With().Debug("responded to epoch atxs request",
 		epoch,
 		log.Int("count", len(atxs)))

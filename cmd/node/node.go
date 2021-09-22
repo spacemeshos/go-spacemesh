@@ -706,6 +706,7 @@ func (app *App) initServices(ctx context.Context,
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
+		DBPath:         filepath.Join(dbStorepath, "builder"),
 		Hdist:          app.Config.Hdist,
 		MinerID:        nodeID,
 		AtxsPerBlock:   app.Config.AtxsPerBlock,
@@ -713,7 +714,6 @@ func (app *App) initServices(ctx context.Context,
 		TxsPerBlock:    app.Config.TxsPerBlock,
 	}
 
-	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
 	blockProducer := miner.NewBlockBuilder(
 		minerCfg,
 		sgn,

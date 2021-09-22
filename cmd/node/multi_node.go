@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -288,7 +287,6 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
-		database.SwitchCreationContext(dbStorepath, string(name))
 		edSgn := signing.NewEdSigner()
 		smApp, err := InitSingleInstance(logger, *cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
 		if err != nil {
