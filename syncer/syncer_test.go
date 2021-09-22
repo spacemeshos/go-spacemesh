@@ -150,9 +150,8 @@ func newMemMesh(lg log.Log) *mesh.Mesh {
 }
 
 var conf = Configuration{
-	SyncInterval:    time.Second * 60 * 60 * 24, // long enough that it doesn't kick in during testing
-	ValidationDelta: 30 * time.Millisecond,
-	AlwaysListen:    false,
+	SyncInterval: time.Second * 60 * 60 * 24, // long enough that it doesn't kick in during testing
+	AlwaysListen: false,
 }
 
 func newSyncerWithoutSyncTimer(ctx context.Context, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, logger log.Log) *Syncer {
@@ -657,26 +656,6 @@ func TestMultipleForceSync(t *testing.T) {
 
 	// node already shutdown
 	assert.False(t, false, syncer.ForceSync(context.TODO()))
-}
-
-func TestShouldValidateLayer(t *testing.T) {
-	lg := logtest.New(t).WithName("syncer")
-	ticker := newMockLayerTicker()
-	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
-	syncer.Start(context.TODO())
-	assert.False(t, syncer.shouldValidateLayer(types.NewLayerID(0)))
-
-	ticker.advanceToLayer(types.NewLayerID(3))
-	assert.False(t, syncer.shouldValidateLayer(types.NewLayerID(0)))
-	assert.True(t, syncer.shouldValidateLayer(types.NewLayerID(1)))
-	assert.True(t, syncer.shouldValidateLayer(types.NewLayerID(2)))
-	// current layer
-	ticker.layerStartTime = time.Now()
-	assert.False(t, syncer.shouldValidateLayer(types.NewLayerID(3)))
-	// but if current layer has elapsed ValidationDelta ms, we will validate
-	ticker.layerStartTime = time.Now().Add(-conf.ValidationDelta)
-	assert.True(t, syncer.shouldValidateLayer(types.NewLayerID(3)))
-	syncer.Close()
 }
 
 func TestGetATXsCurrentEpoch(t *testing.T) {

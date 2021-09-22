@@ -12,7 +12,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	p2pMocks "github.com/spacemeshos/go-spacemesh/p2p/service/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
@@ -20,16 +22,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-type validatorMock struct{}
-
-func (*validatorMock) Validate(signing.PublicKey, *types.NIPost, types.Hash32, uint) error {
-	return nil
-}
-
-func (*validatorMock) ValidatePost([]byte, *types.Post, *types.PostMetadata, uint) error {
-	return nil
-}
 
 type testSyncState bool
 
@@ -62,10 +54,11 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64) (*TortoiseBeacon,
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(mockEpochWeight, nil, nil).AnyTimes()
+	// epoch 2, 3, and 4 (since we waited til epoch 3 in each test)
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(mockEpochWeight, nil, nil).MaxTimes(3)
 	mwc := coinValueMock(t, true)
 
-	types.SetLayersPerEpoch(1)
+	types.SetLayersPerEpoch(3)
 	logger := logtest.New(t).WithName("TortoiseBeacon")
 	genesisTime := time.Now().Add(100 * time.Millisecond)
 	ld := 100 * time.Millisecond
@@ -89,14 +82,14 @@ func TestTortoiseBeacon(t *testing.T) {
 	t.Parallel()
 
 	tb, clock := setUpTortoiseBeacon(t, uint64(10))
-	layer := types.NewLayerID(3)
+	epoch := types.EpochID(3)
 	err := tb.Start(context.TODO())
 	require.NoError(t, err)
 
-	t.Logf("Awaiting epoch %v", layer)
-	awaitLayer(clock, layer)
+	t.Logf("Awaiting epoch %v", epoch)
+	awaitEpoch(clock, epoch)
 
-	v, err := tb.GetBeacon(layer.GetEpoch())
+	v, err := tb.GetBeacon(epoch)
 	require.NoError(t, err)
 
 	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
@@ -109,28 +102,113 @@ func TestTortoiseBeaconZeroWeightEpoch(t *testing.T) {
 	t.Parallel()
 
 	tb, clock := setUpTortoiseBeacon(t, uint64(0))
-	layer := types.NewLayerID(3)
+	epoch := types.EpochID(3)
 	err := tb.Start(context.TODO())
 	require.NoError(t, err)
 
-	t.Logf("Awaiting epoch %v", layer)
-	awaitLayer(clock, layer)
+	t.Logf("Awaiting epoch %v", epoch)
+	awaitEpoch(clock, epoch)
 
-	v, err := tb.GetBeacon(layer.GetEpoch())
+	v, err := tb.GetBeacon(epoch)
 	assert.Equal(t, ErrBeaconNotCalculated, err)
 	assert.Nil(t, v)
 
 	tb.Close()
 }
 
-func awaitLayer(clock *timesync.TimeClock, epoch types.LayerID) {
+func awaitEpoch(clock *timesync.TimeClock, epoch types.EpochID) {
 	layerTicker := clock.Subscribe()
 
 	for layer := range layerTicker {
 		// Wait until required epoch passes.
-		if layer.After(epoch) {
+		if layer.GetEpoch() > epoch {
 			return
 		}
+	}
+}
+
+func TestTortoiseBeacon_getProposalChannel(t *testing.T) {
+	t.Parallel()
+
+	currentEpoch := types.EpochID(10)
+
+	tt := []struct {
+		name            string
+		epoch           types.EpochID
+		proposalEndTime time.Time
+		makeNextChFull  bool
+		expected        bool
+	}{
+		{
+			name:     "old epoch",
+			epoch:    currentEpoch - 1,
+			expected: false,
+		},
+		{
+			name:     "on time",
+			epoch:    currentEpoch,
+			expected: true,
+		},
+		{
+			name:            "proposal phase ended",
+			epoch:           currentEpoch,
+			proposalEndTime: time.Now(),
+			expected:        false,
+		},
+		{
+			name:     "accept next epoch",
+			epoch:    currentEpoch + 1,
+			expected: true,
+		},
+		{
+			name:           "next epoch full",
+			epoch:          currentEpoch + 1,
+			makeNextChFull: true,
+			expected:       true,
+		},
+		{
+			name:     "no future epoch beyond next",
+			epoch:    currentEpoch + 2,
+			expected: false,
+		},
+	}
+
+	for i, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			// don't run these tests in parallel. somehow all cases end up using the same TortoiseBeacon instance
+			// t.Parallel()
+			tb := TortoiseBeacon{
+				logger:                    logtest.New(t).WithName(fmt.Sprintf("TortoiseBeacon-%v", i)),
+				proposalChans:             make(map[types.EpochID]chan *proposalMessageWithReceiptData),
+				epochInProgress:           currentEpoch,
+				proposalPhaseFinishedTime: tc.proposalEndTime,
+			}
+
+			if tc.makeNextChFull {
+				ctrl := gomock.NewController(t)
+				tb.mu.Lock()
+				nextCh := tb.getOrCreateProposalChannel(currentEpoch + 1)
+				for i := 0; i < proposalChanCapacity; i++ {
+					mockGossip := p2pMocks.NewMockGossipMessage(ctrl)
+					if i == 0 {
+						mockGossip.EXPECT().Sender().Return(p2pcrypto.NewRandomPubkey()).Times(1)
+					}
+					nextCh <- &proposalMessageWithReceiptData{
+						gossip:  mockGossip,
+						message: ProposalMessage{},
+					}
+				}
+				tb.mu.Unlock()
+			}
+
+			ch := tb.getProposalChannel(context.TODO(), tc.epoch)
+			if tc.expected {
+				assert.NotNil(t, ch)
+			} else {
+				assert.Nil(t, ch)
+			}
+		})
 	}
 }
 
@@ -329,11 +407,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
-				logger: logtest.New(t).WithName("TortoiseBeacon"),
-			}
-
-			result := buildProposal(tc.epoch, tb.logger)
+			result := buildProposal(tc.epoch, logtest.New(t))
 			r.Equal(tc.result, string(result))
 		})
 	}
