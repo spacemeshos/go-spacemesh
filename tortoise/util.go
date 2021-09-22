@@ -3,6 +3,7 @@ package tortoise
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -73,18 +74,25 @@ func (a vec) String() string {
 }
 
 func calculateOpinionWithThreshold(logger log.Log, v vec, layerSize int, theta uint8, delta uint32) vec {
-	threshold := uint64(theta) * uint64(delta) * uint64(layerSize)
-	quo, rem := threshold/100, threshold%100
+	// TODO(dshulyak) both delta and layerSize are much smaller values then uint32
+	threshold := big.NewInt(int64(theta))
+	threshold.Mul(threshold, big.NewInt(int64(delta)))
+	threshold.Mul(threshold, big.NewInt(int64(layerSize)))
+
+	hundred := big.NewInt(100)
+	quo := new(big.Int).Div(threshold, hundred)
+	rem := new(big.Int).Mod(threshold, hundred)
 
 	logger.With().Debug("threshold opinion",
 		v,
 		log.Int("theta", int(theta)),
 		log.Int("layer_size", layerSize),
 		log.Uint32("delta", delta),
-		log.Uint64("threshold", threshold))
+		log.String("threshold", threshold.String()))
 
 	greater := func(val uint64) bool {
-		return val > quo || val == quo && rem > 0
+		v := new(big.Int).SetUint64(val)
+		return v.Cmp(quo) == 1 || v.Cmp(quo) == 0 && rem.Int64() > 0
 	}
 
 	if v.Support > v.Against && greater(v.Support-v.Against) {
