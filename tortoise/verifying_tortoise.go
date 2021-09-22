@@ -858,7 +858,7 @@ candidateLayerLoop:
 
 			// check that the total weight exceeds the global threshold
 			globalOpinionOnBlock := calculateOpinionWithThreshold(
-				t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last.Difference(candidateLayerID)))
+				t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, t.Last.Difference(candidateLayerID))
 			logger.With().Debug("verifying tortoise calculated global opinion on block",
 				log.FieldNamed("block_voted_on", blockID),
 				candidateLayerID,
@@ -1206,7 +1206,7 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 			}
 
 			// check that the total weight exceeds the global threshold
-			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last.Difference(candidateLayerID)))
+			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, t.Last.Difference(candidateLayerID))
 			logger.With().Debug("self healing calculated global opinion on candidate block",
 				log.FieldNamed("global_opinion", globalOpinionOnBlock),
 				sum)

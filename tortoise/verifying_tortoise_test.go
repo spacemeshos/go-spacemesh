@@ -437,7 +437,7 @@ func TestLayerPatterns(t *testing.T) {
 			netVote := vec{Against: uint64(i * blocksPerLayer)}
 			// Zdist + ConfidenceParam (+ a margin of one due to the math) layers have already passed, so that's our
 			// delta
-			vote = calculateOpinionWithThreshold(trtl.logger, netVote, blocksPerLayer, trtl.GlobalThreshold, float64(uint32(i+1)+trtl.Zdist+trtl.ConfidenceParam))
+			vote = calculateOpinionWithThreshold(trtl.logger, netVote, blocksPerLayer, trtl.GlobalThreshold, uint32(i+1)+trtl.Zdist+trtl.ConfidenceParam)
 			// safety cutoff
 			if i > 100 {
 				panic("failed to accumulate enough votes")
@@ -2068,7 +2068,7 @@ func TestSumWeightedVotesForBlock(t *testing.T) {
 		// check
 		sum, err := alg.trtl.sumVotesForBlock(context.TODO(), genesisBlockID, l1ID, filterPassAll)
 		r.NoError(err)
-		r.Equal(int(netWeight), int(sum.netVote()))
+		r.EqualValues(netWeight, sum.Support-sum.Against)
 	}
 }
 
@@ -2456,57 +2456,41 @@ func TestVectorArithmetic(t *testing.T) {
 	r.PanicsWithError(errOverflow.Error(), func() { bigVec.Multiply(2) })
 	r.NotPanics(func() { support.Multiply(math.MaxUint64) })
 	r.PanicsWithError(errOverflow.Error(), func() { support.Add(support).Multiply(math.MaxUint64) })
-
-	// test netvote
-	r.Equal(int64(0), abstain.netVote())
-	r.Equal(int64(1), support.netVote())
-	r.Equal(int64(-1), against.netVote())
-	r.Equal(int64(0), support.Add(against).netVote())
-	r.Equal(int64(10), vec{Support: 25, Against: 15}.netVote())
-	r.Equal(int64(-10), vec{Support: 15, Against: 25}.netVote())
-	r.NotPanics(func() { vec{Support: math.MaxInt64}.netVote() })
-	r.NotPanics(func() { vec{Against: math.MaxInt64}.netVote() })
-	r.PanicsWithError(errOverflow.Error(), func() { bigVec.netVote() })
-	r.PanicsWithError(errOverflow.Error(), func() { vec{Against: math.MaxUint64}.netVote() })
-	r.PanicsWithError(errOverflow.Error(), func() { vec{Against: math.MaxInt64 + 1}.netVote() })
-	r.PanicsWithError(errOverflow.Error(), func() { vec{Support: math.MaxInt64 + 1}.netVote() })
-	r.Equal(int64(math.MaxInt64), vec{Support: math.MaxInt64}.netVote())
-	r.Equal(int64(-math.MaxInt64), vec{Against: math.MaxInt64}.netVote())
 }
 
 func TestCalculateOpinionWithThreshold(t *testing.T) {
 	r := require.New(t)
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 1, 1, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 10, 1, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 1, 10, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 1, 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 1, 10, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 10, 10, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 10, 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, abstain, 10, 10, 10))
-	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 1, 1, 1))
-	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 10, 1, 1))
-	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 1, 10, 1))
-	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 1, 1, 10))
-	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 10, 1, 10))
-	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 10, 10, 1))
-	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 1, 10, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, support.Multiply(10), 10, 10, 10))
-	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, support.Multiply(11), 10, 10, 10))
-	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 1, 1, 1))
-	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 10, 1, 1))
-	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 1, 10, 1))
-	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 1, 1, 10))
-	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 10, 1, 10))
-	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 10, 10, 1))
-	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 1, 10, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, against.Multiply(10), 10, 10, 10))
-	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, against.Multiply(11), 10, 10, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 1, 1, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 10, 1, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 1, 10, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 1, 1, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 1, 10, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 10, 10, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 10, 1, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 10, 10, 10))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 1, 1, 1))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 10, 1, 1))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 1, 10, 1))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 1, 1, 10))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 10, 1, 10))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 10, 10, 1))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 1, 10, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 10, 10, 10))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(11), 10, 10, 10))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 1, 1, 1))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 10, 1, 1))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 1, 10, 1))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 1, 1, 10))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 10, 1, 10))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 10, 10, 1))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 1, 10, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 10, 10, 10))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(11), 10, 10, 10))
 
 	// a more realistic example
-	r.Equal(support, calculateOpinionWithThreshold(log.AppLog, vec{Support: 72, Against: 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
-	r.Equal(abstain, calculateOpinionWithThreshold(log.AppLog, vec{Support: 12, Against: 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
-	r.Equal(against, calculateOpinionWithThreshold(log.AppLog, vec{Support: 9, Against: 18}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 72, Against: 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 12, Against: 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 9, Against: 18}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
 }
 
 func TestMultiTortoise(t *testing.T) {
