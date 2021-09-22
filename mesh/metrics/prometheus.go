@@ -14,11 +14,11 @@ const (
 	LayerIDLabel = "layer_id"
 )
 
-// LayerNumBlocks checks how network disagrees on layer content.
+// LayerNumBlocks is number of blocks in layer.
 var LayerNumBlocks = metrics.NewIntegerHistogram(
 	"layer_num_blocks",
 	Subsystem,
-	"How network disagrees on layer content",
+	"Number of blocks in layer",
 	[]string{
 		LayerIDLabel,
 	},
