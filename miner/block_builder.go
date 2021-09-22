@@ -292,13 +292,11 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to check for block eligibility")
-				t.saveBlockBuildDurationMetric(ctx, started, layerID, types.BlockID{})
 				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
 				events.ReportDoneCreatingBlock(false, layerID.Uint32(), "")
-				t.saveBlockBuildDurationMetric(ctx, started, layerID, types.BlockID{})
 				logger.With().Info("not eligible for blocks in layer", layerID, layerID.GetEpoch())
 				continue
 			}
@@ -309,24 +307,23 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
 					events.ReportDoneCreatingBlock(false, layerID.Uint32(), "failed to get txs for block")
-					t.saveBlockBuildDurationMetric(ctx, started, layerID, types.BlockID{})
 					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
 				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot create new block")
-					t.saveBlockBuildDurationMetric(ctx, started, layerID, blk.ID())
 					logger.With().Error("failed to create new block", log.Err(err))
 					continue
 				}
+
+				t.saveBlockBuildDurationMetric(ctx, started, layerID, blk.ID())
 
 				if t.stopped() {
 					return
 				}
 				if err := t.meshProvider.AddBlockWithTxs(ctx, blk); err != nil {
 					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to store block")
-					t.saveBlockBuildDurationMetric(ctx, started, layerID, blk.ID())
 					logger.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
@@ -335,7 +332,6 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					if err != nil {
 						logger.With().Error("failed to serialize block", log.Err(err))
 						events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot serialize block")
-						t.saveBlockBuildDurationMetric(ctx, started, layerID, blk.ID())
 						return
 					}
 
@@ -345,7 +341,6 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 						logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
 					}
 					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "")
-					t.saveBlockBuildDurationMetric(ctx, started, layerID, blk.ID())
 				}()
 			}
 		}
