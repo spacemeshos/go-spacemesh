@@ -74,9 +74,10 @@ func (a vec) String() string {
 }
 
 func calculateOpinionWithThreshold(logger log.Log, v vec, layerSize int, theta uint8, delta uint32) vec {
-	threshold := big.NewFloat(float64(theta))
+	threshold := new(big.Float).SetUint64(uint64(theta))
 	threshold = threshold.Quo(threshold, big.NewFloat(100))
-	threshold = threshold.Mul(threshold, big.NewFloat(float64(delta)*float64(layerSize)))
+	threshold = threshold.Mul(threshold, new(big.Float).SetUint64(uint64(delta)))
+	threshold = threshold.Mul(threshold, new(big.Float).SetUint64(uint64(layerSize)))
 
 	logger.With().Debug("threshold opinion",
 		v,
