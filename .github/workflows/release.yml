@@ -94,6 +94,12 @@ jobs:
         with:
           path: ./version.txt
       
+      - name: Get Latest Changelog Version
+        id: changelog_reader
+        uses: mindsers/changelog-reader-action@v2
+        with:
+          path: ./CHANGELOG.md
+
       - name: Create Release
         uses: actions/create-release@v1
         id: create_release
@@ -103,6 +109,12 @@ jobs:
           tag_name:  ${{ github.ref }}
           release_name: Release ${{ steps.version.outputs.content }}
           body: |
+            ${{ steps.changelog_reader.outputs.changes }}
+
+            _extracted from the_
+            [changelog](https://github.com/spacemeshos/go-spacemesh/blob/develop/CHANGELOG.md)
+            _for version_ ${{ steps.changelog_reader.outputs.version }}
+
             ## Zip Files
             - Windows: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/Windows.zip
             - macOS: https://storage.googleapis.com/${{ secrets.GCP_BUCKET }}/${{ steps.version.outputs.content }}/macOS.zip
