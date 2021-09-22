@@ -26,7 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -77,7 +76,6 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 		if i == 0 {
 			firstDir = dbStorepath
 		}
-		database.SwitchCreationContext(dbStorepath, string(name))
 		edSgn := signing.NewEdSigner()
 		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network, edSgn)
 		suite.NoError(err)
@@ -674,7 +672,8 @@ func calcTotalWeight(
 }
 
 func (suite *AppTestSuite) validateLastATXTotalWeight(app *App, numberOfEpochs int, expectedTotalWeight uint64) {
-	atxs := app.atxDb.GetEpochAtxs(types.EpochID(numberOfEpochs - 1))
+	atxs, err := app.atxDb.GetEpochAtxs(types.EpochID(numberOfEpochs - 1))
+	suite.Require().NoError(err)
 	suite.Len(atxs, len(suite.apps), "node: %v", app.nodeID.ShortString())
 
 	totalWeight := uint64(0)

@@ -75,15 +75,15 @@ func (m *mockActiveSetProvider) GetMinerWeightsInEpochFromView(targetEpoch types
 	return createMapWithSize(m.size), nil
 }
 
-func (m *mockActiveSetProvider) GetEpochAtxs(epoch types.EpochID) []types.ATXID {
+func (m *mockActiveSetProvider) GetEpochAtxs(epoch types.EpochID) ([]types.ATXID, error) {
 	if m.getEpochAtxsFn != nil {
-		return m.getEpochAtxsFn(epoch)
+		return m.getEpochAtxsFn(epoch), nil
 	}
 	atxList := make([]types.ATXID, m.size)
 	for i := 0; i < m.size; i++ {
 		atxList[i] = types.ATXID{}
 	}
-	return atxList
+	return atxList, nil
 }
 
 func (m *mockActiveSetProvider) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
@@ -106,7 +106,7 @@ func (m *mockBufferedActiveSetProvider) GetMinerWeightsInEpochFromView(targetEpo
 	return createMapWithSize(v), nil
 }
 
-func (m *mockBufferedActiveSetProvider) GetEpochAtxs(types.EpochID) []types.ATXID {
+func (m *mockBufferedActiveSetProvider) GetEpochAtxs(types.EpochID) ([]types.ATXID, error) {
 	panic("not implemented")
 }
 

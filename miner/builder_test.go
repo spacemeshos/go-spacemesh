@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -53,7 +52,6 @@ func (p *MockProjector) GetProjection(types.Address) (nonce uint64, balance uint
 }
 
 func init() {
-	database.SwitchToMemCreationContext()
 	types.SetLayersPerEpoch(3)
 }
 
