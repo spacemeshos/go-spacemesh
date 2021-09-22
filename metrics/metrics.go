@@ -21,6 +21,8 @@ const (
 	LastLayerLabel = "last_layer"
 )
 
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./metrics.go
+
 // Metrics defines an interface for metrics.
 type Metrics interface {
 	StartPushingMetrics(url string, periodSec int, nodeID, networkID string)
