@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/syncer/metrics"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -377,10 +376,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		if layer, err = s.getLayerFromPeers(ctx, layerID); err != nil {
 			return nil, err
 		}
-
-		metrics.LayerNumBlocks.
-			With(metrics.LayerIDLabel, layerID.String()).
-			Observe(float64(len(layer.Blocks())))
 
 		if len(layer.Blocks()) == 0 {
 			s.logger.WithContext(ctx).With().Info("setting layer to zero-block", layerID)
