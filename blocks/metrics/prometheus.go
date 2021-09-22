@@ -50,7 +50,7 @@ var baseBlockExceptionLength = metrics.NewIntegerHistogram(
 
 // Blocks diff lengths.
 var (
-	ForDiffLength     = baseBlockExceptionLength.With(diffTypeLabel, "for_diff")
-	AgainstDiffLength = baseBlockExceptionLength.With(diffTypeLabel, "against_diff")
-	NeutralDiffLength = baseBlockExceptionLength.With(diffTypeLabel, "neutral_diff")
+	ForDiffLength     = baseBlockExceptionLength.With(diffTypeLabel, "diff_for")
+	AgainstDiffLength = baseBlockExceptionLength.With(diffTypeLabel, "diff_against")
+	NeutralDiffLength = baseBlockExceptionLength.With(diffTypeLabel, "diff_neutral")
 )
