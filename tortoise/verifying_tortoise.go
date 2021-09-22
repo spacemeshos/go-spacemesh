@@ -779,6 +779,11 @@ func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) e
 	if err != nil {
 		return fmt.Errorf("unable to read contents of layer %v: %w", layerID, err)
 	}
+
+	metrics.LayerNumBlocks.
+		With(metrics.LayerIDLabel, layerID.String()).
+		Observe(float64(len(layerBlocks)))
+
 	if len(layerBlocks) == 0 {
 		// nothing to do
 		t.logger.WithContext(ctx).Warning("cannot process empty layer block list")

@@ -13,6 +13,7 @@ const (
 const (
 	LastLayerLabel = "last_layer"
 	BlockIDLabel   = "block_id"
+	LayerIDLabel   = "layer_id"
 )
 
 // LayerDistanceToBaseBlock checks how far back a node needs to find a good block.
@@ -23,5 +24,15 @@ var LayerDistanceToBaseBlock = metrics.NewIntegerHistogram(
 	[]string{
 		LastLayerLabel,
 		BlockIDLabel,
+	},
+)
+
+// LayerNumBlocks checks how network disagrees on layer content.
+var LayerNumBlocks = metrics.NewIntegerHistogram(
+	"layer_num_blocks",
+	Subsystem,
+	"How network disagrees on layer content",
+	[]string{
+		LayerIDLabel,
 	},
 )
