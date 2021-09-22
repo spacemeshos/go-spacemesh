@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
@@ -15,11 +16,12 @@ const (
 )
 
 // LayerNumBlocks is number of blocks in layer.
-var LayerNumBlocks = metrics.NewIntegerHistogram(
+var LayerNumBlocks = metrics.NewHistogramWithBuckets(
 	"layer_num_blocks",
 	Subsystem,
 	"Number of blocks in layer",
 	[]string{
 		LayerIDLabel,
 	},
+	prometheus.ExponentialBuckets(1, 2, 16),
 )

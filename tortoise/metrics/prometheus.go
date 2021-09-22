@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
@@ -16,7 +17,7 @@ const (
 )
 
 // LayerDistanceToBaseBlock checks how far back a node needs to find a good block.
-var LayerDistanceToBaseBlock = metrics.NewIntegerHistogram(
+var LayerDistanceToBaseBlock = metrics.NewHistogramWithBuckets(
 	"layer_distance_to_base_block",
 	Subsystem,
 	"How far back a node needs to find a good block",
@@ -24,4 +25,5 @@ var LayerDistanceToBaseBlock = metrics.NewIntegerHistogram(
 		LastLayerLabel,
 		BlockIDLabel,
 	},
+	prometheus.ExponentialBuckets(1, 2, 16),
 )

@@ -40,15 +40,8 @@ func NewHistogram(name, subsystem, help string, labels []string) Histogram {
 	return prmkit.NewHistogramFrom(prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
 }
 
-// NewIntegerHistogram creates a Histogram metrics for integer numbers.
-func NewIntegerHistogram(name, subsystem, help string, labels []string) Histogram {
-	buckets := []float64{0, 1, 2, 5, 10, 20, 50, 100, 500}
-	return prmkit.NewHistogramFrom(prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help, Buckets: buckets}, labels)
-}
-
-// NewDurationMsHistogram creates a Histogram metrics for durations in milliseconds.
-func NewDurationMsHistogram(name, subsystem, help string, labels []string) Histogram {
-	buckets := []float64{10, 100, 1000, 5 * 1000, 10 * 1000, 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000}
+// NewHistogramWithBuckets creates a Histogram metrics with custom buckets.
+func NewHistogramWithBuckets(name, subsystem, help string, labels []string, buckets []float64) Histogram {
 	return prmkit.NewHistogramFrom(prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help, Buckets: buckets}, labels)
 }
 
