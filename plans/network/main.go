@@ -12,6 +12,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	p2pcfg "github.com/spacemeshos/go-spacemesh/p2p/config"
 	node2 "github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 	"github.com/spacemeshos/post/initialization"
@@ -22,16 +23,44 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd/node"
 	"github.com/spacemeshos/go-spacemesh/plans/network/poet"
 	"github.com/testground/sdk-go/run"
+	"github.com/testground/sdk-go/network"
 	"github.com/testground/sdk-go/runtime"
 )
 
 /*
-// default poets=1 default gateways = 1
-testground run single --plan=plans/network --testcase=start_network --builder=docker:generic --runner=local:docker --instances=5
+	default: poets=1 default gateways=1
+	testground plan import --source $YOUR_SPACEMESH_DIR/plans --name plans
+	testground run single --plan=plans/network --testcase=start_network --builder=docker:generic --runner=local:docker --instances=5
 */
 
 var testcases = map[string]interface{}{
 	"start_network": run.InitializedTestCaseFn(StartNetwork),
+}
+
+
+
+// MustSetupNetworking activates the required networking configuration for the network
+//  this is still very simple and eventually will control latency and such.
+//  panics if there's an error
+func MustSetupNetworking(ctx context.Context, netclient *network.Client)  {
+	netcfg := network.Config{
+		// Control the "default" network. At the moment, this is the only network.
+		Network: "default",
+
+		// Enable this network. Setting this to false will disconnect this test
+		// instance from this network. You probably don't want to do that.
+		Enable:  true,
+
+		RoutingPolicy: network.AllowAll,
+		// Set what state the sidecar should signal back to you when it's done.
+		CallbackState: "network-configured",
+	}
+
+	netclient.MustConfigureNetwork(ctx, &netcfg)
+
+	if err := netclient.WaitNetworkInitialized(ctx); err != nil {
+		panic(err)
+	}
 }
 
 // StartNetwork creates a basic spacemesh layout of instances.
@@ -45,20 +74,20 @@ var testcases = map[string]interface{}{
 func StartNetwork(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	// TODO: extract a lot of constants/params
 
-	poets_topic := sync.NewTopic("poets", string(""))
-	gateways_topic := sync.NewTopic("gateways", node2.Info{})
-
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	client := initCtx.SyncClient
 	netclient := initCtx.NetClient
+
+	MustSetupNetworking(ctx, netclient)
+
+
+	poets_topic := sync.NewTopic("poets", string(""))
+	gateways_topic := sync.NewTopic("gateways", node2.Info{})
+
 	// role-allocation assigns a sequence number to each instance and distributes roles
 	poets := env.IntParam("poets")
 	gateways := env.IntParam("gateways")
-
-	if err := netclient.WaitNetworkInitialized(ctx); err != nil {
-		env.RecordFailure(err)
-	}
 
 	ra := &roleAllocator{}
 
@@ -90,12 +119,12 @@ func StartNetwork(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		}
 
 	}, func(obj interface{}) {
-		env.RecordMessage("done starting poet %v", obj.(string))
+		env.RecordMessage("done starting poet")
 	})
 
 	ra.Add("gateway", gateways, func(r *role) {
 		env.RecordMessage("hello im gateway")
-		nd, err := InitNode(ctx)
+		nd, err := InitNode(ctx, createMinerConfig())
 
 		if err != nil {
 			env.RecordFailure(err)
@@ -105,6 +134,8 @@ func StartNetwork(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		env.RecordMessage("gateway waiting for poet message")
 		poetch := make(chan string)
 		client.MustSubscribe(ctx, poets_topic, poetch)
+
+		// TODO(y0sher): multiple poets
 		poetaddr := <-poetch
 
 		nd.Config.PoETServer = poetaddr
@@ -128,10 +159,8 @@ func StartNetwork(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		bs_info := node2.NewNode(info.PublicKey(), ip, port, port)
 
 		client.MustPublish(ctx, gateways_topic, bs_info)
-
-		r.storage = string("LOL")
-	}, func(obj interface{}) {
-		env.RecordMessage("done gateways %v", obj.(string))
+		}, func(obj interface{}) {
+		env.RecordMessage("done gateways")
 	})
 
 	ra.Add("miner", env.TestInstanceCount-poets-gateways, func(r *role) {
@@ -225,9 +254,9 @@ func createMinerConfig() *config.Config {
 	return &cfg
 }
 
-
-func InitNode(ctx context.Context) (*node.App, error) {
-	nd := node.New(node.WithConfig(createMinerConfig()),
+// InitNode creates a spacemesh node instance and initializes it.
+func InitNode(ctx context.Context, cfg *config.Config) (*node.App, error) {
+	nd := node.New(node.WithConfig(cfg),
 		node.WithLog(log.RegisterHooks(
 			log.NewWithLevel("", zap.NewAtomicLevelAt(zapcore.DebugLevel)),
 			events.EventHook())),
