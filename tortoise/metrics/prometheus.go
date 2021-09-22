@@ -11,10 +11,8 @@ const (
 
 // Metrics labels.
 const (
-	LastLayerLabel      = "last_layer"
-	LastEvictedLabel    = "last_evicted"
-	BaseBlockLayerLabel = "base_block_layer"
-	BlockIDLabel        = "block_id"
+	LastLayerLabel = "last_layer"
+	BlockIDLabel   = "block_id"
 )
 
 // LayerDistanceToBaseBlock checks how far back a node needs to find a good block.
@@ -24,8 +22,6 @@ var LayerDistanceToBaseBlock = metrics.NewHistogram(
 	"How far back a node needs to find a good block",
 	[]string{
 		LastLayerLabel,
-		LastEvictedLabel,
-		BaseBlockLayerLabel,
 		BlockIDLabel,
 	},
 )

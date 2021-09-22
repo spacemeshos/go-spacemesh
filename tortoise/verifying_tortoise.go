@@ -373,8 +373,6 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 
 			metrics.LayerDistanceToBaseBlock.
 				With("last_layer", t.Last.String()).
-				With("last_evicted", t.LastEvicted.String()).
-				With("base_block_layer", layerID.String()).
 				With("block_id", blockID.String()).
 				Observe(float64(t.Last.Value - layerID.Value))
 
