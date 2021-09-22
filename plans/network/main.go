@@ -29,12 +29,12 @@ import (
 
 /*
 	default: poets=1 default gateways=1
-	testground plan import --source $YOUR_SPACEMESH_DIR/plans --name plans
-	testground run single --plan=plans/network --testcase=start_network --builder=docker:generic --runner=local:docker --instances=5
+	testground plan import --from ./plans/network --name network
+	testground run single --plan=network --testcase=start --builder=docker:generic --runner=local:docker --instances=5
 */
 
 var testcases = map[string]interface{}{
-	"start_network": run.InitializedTestCaseFn(StartNetwork),
+	"start": run.InitializedTestCaseFn(Start),
 }
 
 
@@ -63,7 +63,7 @@ func MustSetupNetworking(ctx context.Context, netclient *network.Client)  {
 	}
 }
 
-// StartNetwork creates a basic spacemesh layout of instances.
+// Start creates a basic spacemesh layout of instances.
 // 	it first creates poet instances shares their addresses with gateways and miners
 // 	gateway nodes function as bootstrap nodes and gateways for poets, their addresses
 //  are distributed to miners.
@@ -71,7 +71,7 @@ func MustSetupNetworking(ctx context.Context, netclient *network.Client)  {
 // 	gateways - the number of bootstrap nodes and poet gateways
 // 	poets - the number of poets
 // 	the rest of the instances are miners
-func StartNetwork(env *runtime.RunEnv, initCtx *run.InitContext) error {
+func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	// TODO: extract a lot of constants/params
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
@@ -167,7 +167,7 @@ func StartNetwork(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		env.RecordMessage("hello im miner")
 		r.storage = string("LOL")
 	}, func(obj interface{}) {
-		env.RecordMessage("done miner %v", obj.(string))
+		env.RecordMessage("done miner %v")
 	})
 
 	seq := int(client.MustSignalAndWait(ctx, "role-allocation", env.TestInstanceCount))
@@ -219,6 +219,9 @@ func createMinerConfig() *config.Config {
 	cfg.LAYERS.RequestTimeout = 10
 	cfg.SMESHING.CoinbaseAccount = "0x123"
 	cfg.GoldenATXID = "0x5678"
+
+
+	cfg.P2P = p2pcfg.DefaultConfig()
 
 	cfg.LOGGING.AppLoggerLevel = "info"
 	cfg.LOGGING.P2PLoggerLevel = "info"

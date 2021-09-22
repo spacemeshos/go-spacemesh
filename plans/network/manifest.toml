@@ -25,7 +25,7 @@ enable_go_build_cache = true
 enabled = true
 
 [[testcases]]
-name = "start_network"
+name = "start"
 instances = { min = 3, max = 5, default = 5 }
 
   [testcases.params]
