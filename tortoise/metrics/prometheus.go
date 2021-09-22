@@ -16,7 +16,7 @@ const (
 )
 
 // LayerDistanceToBaseBlock checks how far back a node needs to find a good block.
-var LayerDistanceToBaseBlock = metrics.NewHistogram(
+var LayerDistanceToBaseBlock = metrics.NewIntegerHistogram(
 	"layer_distance_to_base_block",
 	Subsystem,
 	"How far back a node needs to find a good block",

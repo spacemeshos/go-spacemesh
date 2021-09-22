@@ -16,7 +16,7 @@ const (
 )
 
 // LayerBlockSize checks average block size.
-var LayerBlockSize = metrics.NewHistogram(
+var LayerBlockSize = metrics.NewIntegerHistogram(
 	"layer_block_size",
 	subsystem,
 	"Block size",
@@ -27,7 +27,7 @@ var LayerBlockSize = metrics.NewHistogram(
 )
 
 // NumTxsInBlock checks average transaction count in block.
-var NumTxsInBlock = metrics.NewHistogram(
+var NumTxsInBlock = metrics.NewIntegerHistogram(
 	"num_txs_in_block",
 	subsystem,
 	"Number of transactions in block",
@@ -37,7 +37,7 @@ var NumTxsInBlock = metrics.NewHistogram(
 	},
 )
 
-var baseBlockExceptionLength = metrics.NewHistogram(
+var baseBlockExceptionLength = metrics.NewIntegerHistogram(
 	"base_block_exception_length",
 	subsystem,
 	"Base block exception length",

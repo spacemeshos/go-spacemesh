@@ -6,7 +6,7 @@ import (
 
 const (
 	// Subsystem is a subsystem shared by all metrics exposed by this package.
-	Subsystem = "syncer"
+	Subsystem = "mesh"
 )
 
 // LayerIDLabel is metric label for layer ID.
@@ -15,7 +15,7 @@ const (
 )
 
 // LayerNumBlocks checks how network disagrees on layer content.
-var LayerNumBlocks = metrics.NewHistogram(
+var LayerNumBlocks = metrics.NewIntegerHistogram(
 	"layer_num_blocks",
 	Subsystem,
 	"How network disagrees on layer content",

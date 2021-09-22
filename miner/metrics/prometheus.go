@@ -16,7 +16,7 @@ const (
 )
 
 // BlockBuildDuration checks block build duration (milliseconds).
-var BlockBuildDuration = metrics.NewHistogram(
+var BlockBuildDuration = metrics.NewDurationMsHistogram(
 	"block_build_duration",
 	Subsystem,
 	"How long it takes to build a block (milliseconds)",

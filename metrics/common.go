@@ -40,6 +40,18 @@ func NewHistogram(name, subsystem, help string, labels []string) Histogram {
 	return prmkit.NewHistogramFrom(prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
 }
 
+// NewIntegerHistogram creates a Histogram metrics for integer numbers.
+func NewIntegerHistogram(name, subsystem, help string, labels []string) Histogram {
+	buckets := []float64{0, 1, 2, 5, 10, 20, 50, 100, 500}
+	return prmkit.NewHistogramFrom(prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help, Buckets: buckets}, labels)
+}
+
+// NewDurationMsHistogram creates a Histogram metrics for durations in milliseconds.
+func NewDurationMsHistogram(name, subsystem, help string, labels []string) Histogram {
+	buckets := []float64{10, 100, 1000, 5000, 10000}
+	return prmkit.NewHistogramFrom(prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help, Buckets: buckets}, labels)
+}
+
 // NewSummary creates a Summary metrics under the global namespace returns nop if metrics are disabled.
 func NewSummary(name, subsystem, help string, labels []string, objectives map[float64]float64) Histogram {
 	// TODO github.com/go-kit/kit use Histogram instead of Summary
