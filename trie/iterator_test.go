@@ -19,10 +19,11 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -121,9 +122,11 @@ func TestNodeIteratorCoverage(t *testing.T) {
 			}
 		}
 	}
-	for _, key := range db.diskdb.(*database.MemDatabase).Keys() {
-		if _, ok := hashes[types.BytesToHash(key)]; !ok {
-			t.Errorf("state entry not reported %x", key)
+	it := db.diskdb.Find(nil)
+	defer it.Release()
+	for it.Next() {
+		if _, ok := hashes[types.BytesToHash(it.Key())]; !ok {
+			t.Errorf("state entry not reported %x", it.Key())
 		}
 	}
 }
@@ -310,7 +313,11 @@ func testIteratorContinueAfterError(t *testing.T, memonly bool) {
 	if memonly {
 		memKeys = triedb.Nodes()
 	} else {
-		diskKeys = diskdb.Keys()
+		it := diskdb.Find(nil)
+		defer it.Release()
+		for it.Next() {
+			diskKeys = append(diskKeys, it.Key())
+		}
 	}
 	for i := 0; i < 20; i++ {
 		// Create trie that will load all nodes from DB.

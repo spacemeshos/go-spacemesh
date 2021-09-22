@@ -77,6 +77,7 @@ type BlockBuilder struct {
 
 // Config is the block builders configuration struct
 type Config struct {
+	DBPath         string
 	MinerID        types.NodeID
 	Hdist          uint32
 	AtxsPerBlock   int
@@ -100,9 +101,15 @@ func NewBlockBuilder(
 ) *BlockBuilder {
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
-	db, err := database.Create("builder", 16, 16, logger)
-	if err != nil {
-		logger.With().Panic("cannot create block builder database", log.Err(err))
+	var db *database.LDBDatabase
+	if len(config.DBPath) == 0 {
+		db = database.NewMemDatabase()
+	} else {
+		var err error
+		db, err = database.NewLDBDatabase(config.DBPath, 16, 16, logger)
+		if err != nil {
+			logger.With().Panic("cannot create block builder database", log.Err(err))
+		}
 	}
 
 	return &BlockBuilder{

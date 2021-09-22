@@ -555,6 +555,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12), 0, 100, coinbase, 100, &types.NIPost{})
 	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeID).Bytes())
+	defer iter.Release()
 	for iter.Next() {
 		err = atxdb.atxs.Delete(iter.Key())
 		assert.NoError(t, err)
