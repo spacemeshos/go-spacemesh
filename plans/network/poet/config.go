@@ -7,9 +7,7 @@ package poet
 import (
 	"fmt"
 	"github.com/btcsuite/btcutil"
-	"github.com/jessevdk/go-flags"
 	"github.com/spacemeshos/poet/service"
-	"github.com/spacemeshos/smutil/log"
 	"net"
 	"os"
 	"os/user"
@@ -83,38 +81,7 @@ type Config struct {
 // 	2) Pre-parse the command line to check for an alternative Config file
 // 	3) Load configuration file overwriting defaults with any specified options
 // 	4) Parse CLI options and overwrite/add any specified options
-func loadConfig() (*Config, error) {
-	defaultCfg := Config{
-		PoetDir:         defaultPoetDir,
-		ConfigFile:      defaultConfigFile,
-		DataDir:         defaultDataDir,
-		LogDir:          defaultLogDir,
-		MaxLogFiles:     defaultMaxLogFiles,
-		MaxLogFileSize:  defaultMaxLogFileSize,
-		RawRPCListener:  fmt.Sprintf("localhost:%d", defaultRPCPort),
-		RawRESTListener: fmt.Sprintf("localhost:%d", defaultRESTPort),
-		Service: &service.Config{
-			N:                        defaultN,
-			MemoryLayers:             defaultMemoryLayers,
-			InitialRoundDuration:     defaultInitialRoundDuration,
-			ExecuteEmpty:             defaultExecuteEmpty,
-			ConnAcksThreshold:        defaultConnAcksThreshold,
-			BroadcastAcksThreshold:   defaultBroadcastAcksThreshold,
-			BroadcastNumRetries:      defaultBroadcastNumRetries,
-			BroadcastRetriesInterval: defaultBroadcastRetriesInterval,
-		},
-		CoreService: &coreServiceConfig{
-			N:            defaultN,
-			MemoryLayers: defaultMemoryLayers,
-		},
-	}
-
-	// Pre-parse the command line options to pick up an alternative Config
-	// file.
-	preCfg := defaultCfg
-	if _, err := flags.Parse(&preCfg); err != nil {
-		return nil, err
-	}
+func loadConfig(preCfg Config) (*Config, error) {
 
 	appName := filepath.Base(os.Args[0])
 	appName = strings.TrimSuffix(appName, filepath.Ext(appName))
@@ -135,25 +102,7 @@ func loadConfig() (*Config, error) {
 		}
 	}
 
-	// Next, load any additional configuration options from the file.
-	var configFileError error
 	cfg := preCfg
-	if err := flags.IniParse(preCfg.ConfigFile, &cfg); err != nil {
-		// If it's a parsing related error, then we'll return
-		// immediately, otherwise we can proceed as possibly the Config
-		// file doesn't exist which is OK.
-		if _, ok := err.(*flags.IniError); ok {
-			return nil, err
-		}
-
-		configFileError = err
-	}
-
-	// Finally, parse the remaining command line options again to ensure
-	// they take precedence.
-	if _, err := flags.Parse(&cfg); err != nil {
-		return nil, err
-	}
 
 	// If the provided poet directory is not the default, we'll modify the
 	// path to all of the files and directories that will live within it.
@@ -209,12 +158,6 @@ func loadConfig() (*Config, error) {
 	}
 	cfg.RESTListener = addr
 
-	// Warn about missing Config file only after all other configuration is
-	// done.  This prevents the warning on help messages and invalid
-	// options.  Note this should go directly before the return.
-	if configFileError != nil {
-		log.Warning("%v", configFileError)
-	}
 
 	return &cfg, nil
 }

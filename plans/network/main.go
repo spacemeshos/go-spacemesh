@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"go.uber.org/zap"
@@ -22,8 +21,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/cmd/node"
 	"github.com/spacemeshos/go-spacemesh/plans/network/poet"
-	"github.com/testground/sdk-go/run"
 	"github.com/testground/sdk-go/network"
+	"github.com/testground/sdk-go/run"
 	"github.com/testground/sdk-go/runtime"
 )
 
@@ -92,12 +91,16 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	ra := &roleAllocator{}
 
 	ra.Add("poet", poets, func(r *role) {
-
+		env.RecordMessage("Getting poet ip")
 		poet_ip := netclient.MustGetDataNetworkIP()
+		env.RecordMessage("starting poet")
 		_, err := poet.StartPoet(func(c *poet.Config) {
 			//['--rpclisten', '0.0.0.0:50002', '--restlisten', '0.0.0.0:80', "--n", "19"
-			c.RawRPCListener = fmt.Sprintf("%v:50002", poet_ip.String())
-			c.RawRESTListener = fmt.Sprintf("%v:80", poet_ip.String())
+			c.RawRPCListener = "0.0.0.0:50002"
+			c.RawRESTListener ="0.0.0.0:80"
+			c.DataDir = "poetdata"
+			c.PoetDir = "poet"
+			c.LogDir = "log"
 			c.Service.N = 19
 		})
 		if err != nil {
@@ -112,6 +115,7 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		gatewaylist := make([]string, 0)
 
 		for g := range gatewaych {
+			env.RecordMessage("Added poet gatweway %v", g.IP.String()+":9092")
 			gatewaylist = append(gatewaylist, g.IP.String()+":9092")
 		}
 		if err := poetHarness.Start(ctx, gatewaylist); err != nil {
@@ -130,6 +134,9 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 			env.RecordFailure(err)
 			return
 		}
+
+		ip := netclient.MustGetDataNetworkIP()
+
 
 		env.RecordMessage("gateway waiting for poet message")
 		poetch := make(chan string)
@@ -154,7 +161,6 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		info := nd.P2P.(*p2p.Switch).LocalNode()
 		env.RecordMessage("gateway P2P is ready, p2pid :", info.PublicKey().String())
 
-		ip := netclient.MustGetDataNetworkIP()
 		port := uint16(7513)
 		bs_info := node2.NewNode(info.PublicKey(), ip, port, port)
 
@@ -165,7 +171,47 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 
 	ra.Add("miner", env.TestInstanceCount-poets-gateways, func(r *role) {
 		env.RecordMessage("hello im miner")
-		r.storage = string("LOL")
+		minercfg := createMinerConfig()
+		pcfg := &minercfg.P2P
+		pcfg.SwarmConfig.Bootstrap = true
+
+		env.RecordMessage("miner waiting for poet message")
+		poetch := make(chan string)
+		client.MustSubscribe(ctx, poets_topic, poetch)
+		poetaddr := <-poetch
+
+		minercfg.PoETServer = poetaddr
+
+		env.RecordMessage("miner waiting for bootstrap message")
+		gatewaych := make(chan node2.Info)
+		client.MustSubscribe(ctx, gateways_topic, gatewaych)
+		gatewaylist := make([]string, 0)
+
+		for g := range gatewaych {
+			env.RecordMessage("miner adding gateway %v", g.String())
+			gatewaylist = append(gatewaylist, g.String())
+		}
+
+		pcfg.SwarmConfig.BootstrapNodes = gatewaylist
+
+		minercfg.P2P = *pcfg
+		env.RecordMessage("starting miner node")
+
+		nd, err := InitNode(ctx, minercfg)
+
+		if err != nil {
+			env.RecordFailure(err)
+			return
+		}
+
+		go func(app *node.App) {
+			err := app.Start()
+			if err != nil {
+				env.RecordFailure(err)
+				return
+			}
+
+			}(nd)
 	}, func(obj interface{}) {
 		env.RecordMessage("done miner %v")
 	})
@@ -221,7 +267,10 @@ func createMinerConfig() *config.Config {
 	cfg.GoldenATXID = "0x5678"
 
 
-	cfg.P2P = p2pcfg.DefaultConfig()
+	ppcfg := p2pcfg.DefaultConfig()
+	mppcfg := &ppcfg
+	mppcfg.SwarmConfig.RandomConnections = 2
+	cfg.P2P = *mppcfg
 
 	cfg.LOGGING.AppLoggerLevel = "info"
 	cfg.LOGGING.P2PLoggerLevel = "info"

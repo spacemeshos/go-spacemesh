@@ -24,5 +24,5 @@ ifeq ($(TESTGROUND_PLAN),1)
 endif
 	go build -a -o $(BUILDDIR)testplan $(LDFLAGS) $(GOTAGS) .
 
-get: get-gpu-setup
-	go build -a -o $(BUILDDIR)testplan $(LDFLAGS) $(GOTAGS) .
+test: get-gpu-setup
+	go test $(LDFLAGS) $(GOTAGS) .

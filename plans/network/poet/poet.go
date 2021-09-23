@@ -62,6 +62,11 @@ func StartPoet(opts ...Option) (<-chan struct{}, error) {
 		opt(cfg)
 	}
 
+	cfg,err := loadConfig(*cfg)
+	if err != nil {
+		return nil, err
+	}
+
 	sig := signal.NewSignal()
 	ctx := context.Background()
 	ctx, cancel := context.WithCancel(ctx)
