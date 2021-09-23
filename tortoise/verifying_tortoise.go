@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -82,10 +83,10 @@ type turtle struct {
 	WindowSize uint32
 
 	// thresholds used for determining finality, and whether to use local or global results, respectively
-	GlobalThreshold uint8
-	LocalThreshold  uint8
+	GlobalThreshold *big.Rat
+	LocalThreshold  *big.Rat
 
-	AvgLayerSize  int
+	AvgLayerSize  uint32
 	MaxExceptions int
 
 	// how often we want to rerun from genesis
@@ -103,9 +104,9 @@ func newTurtle(
 	zdist,
 	confidenceParam,
 	windowSize uint32,
-	avgLayerSize int,
+	avgLayerSize uint32,
 	globalThreshold,
-	localThreshold uint8,
+	localThreshold *big.Rat,
 	rerun time.Duration,
 ) *turtle {
 	return &turtle{
@@ -127,7 +128,7 @@ func newTurtle(
 		atxdb:           atxdb,
 		clock:           clock,
 		AvgLayerSize:    avgLayerSize,
-		MaxExceptions:   int(hdist) * avgLayerSize * 100,
+		MaxExceptions:   int(hdist) * int(avgLayerSize) * 100,
 		RerunInterval:   rerun,
 	}
 }
@@ -858,7 +859,7 @@ candidateLayerLoop:
 
 			// check that the total weight exceeds the global threshold
 			globalOpinionOnBlock := calculateOpinionWithThreshold(
-				t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, t.Last.Difference(candidateLayerID))
+				t.logger, sum, t.GlobalThreshold, t.AvgLayerSize, t.Last.Difference(candidateLayerID))
 			logger.With().Debug("verifying tortoise calculated global opinion on block",
 				log.FieldNamed("block_voted_on", blockID),
 				candidateLayerID,
@@ -1024,7 +1025,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 				// TODO: should delta here represent layer depth, or should it always be 1?
 				//   votes are counted for all layers!
 				//   see https://github.com/spacemeshos/go-spacemesh/issues/2677
-				localOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.LocalThreshold, 1)
+				localOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.LocalThreshold, t.AvgLayerSize, 1)
 				logger.With().Debug("local opinion on block in old layer",
 					sum,
 					log.FieldNamed("local_opinion", localOpinionOnBlock))
@@ -1206,7 +1207,7 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 			}
 
 			// check that the total weight exceeds the global threshold
-			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, t.Last.Difference(candidateLayerID))
+			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.GlobalThreshold, t.AvgLayerSize, t.Last.Difference(candidateLayerID))
 			logger.With().Debug("self healing calculated global opinion on candidate block",
 				log.FieldNamed("global_opinion", globalOpinionOnBlock),
 				sum)

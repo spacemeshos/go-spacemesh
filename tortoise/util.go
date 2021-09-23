@@ -19,8 +19,6 @@ var (
 	abstain = vec{Support: 0, Against: 0}
 )
 
-var hundred = big.NewInt(100) // just to avoid computing it below every time
-
 type vec struct {
 	Support, Against uint64
 	Flushed          bool
@@ -75,25 +73,28 @@ func (a vec) String() string {
 	return "abstain"
 }
 
-func calculateOpinionWithThreshold(logger log.Log, v vec, layerSize int, theta uint8, delta uint32) vec {
-	threshold := big.NewInt(int64(theta))
-	threshold.Mul(threshold, big.NewInt(int64(delta)))
-	threshold.Mul(threshold, big.NewInt(int64(layerSize)))
+// calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
+// and theta, layer size and delta
+func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, layerSize uint32, delta uint32) vec {
+	threshold := new(big.Int).Set(theta.Num())
+	threshold.
+		Mul(threshold, big.NewInt(int64(delta))).
+		Mul(threshold, big.NewInt(int64(layerSize)))
 
 	logger.With().Debug("threshold opinion",
 		v,
-		log.Int("theta", int(theta)),
-		log.Int("layer_size", layerSize),
+		log.String("theta", theta.String()),
+		log.Uint32("layer_size", layerSize),
 		log.Uint32("delta", delta),
 		log.String("threshold", threshold.String()))
 
-	greater := func(val uint64) bool {
+	exceedsThreshold := func(val uint64) bool {
 		v := new(big.Int).SetUint64(val)
-		return v.Mul(v, hundred).Cmp(threshold) == 1
+		return v.Mul(v, theta.Denom()).Cmp(threshold) == 1
 	}
-	if v.Support > v.Against && greater(v.Support-v.Against) {
+	if v.Support > v.Against && exceedsThreshold(v.Support-v.Against) {
 		return support
-	} else if v.Against > v.Support && greater(v.Against-v.Support) {
+	} else if v.Against > v.Support && exceedsThreshold(v.Against-v.Support) {
 		return against
 	}
 	return abstain

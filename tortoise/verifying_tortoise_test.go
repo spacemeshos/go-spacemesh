@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"math"
+	"math/big"
 	"strconv"
 	"testing"
 	"time"
@@ -128,13 +129,16 @@ func randomBlockID() types.BlockID {
 	return types.BlockID(types.CalcHash32(b).ToHash20())
 }
 
+const (
+	defaultTestLayerSize  = 3
+	defaultTestWindowSize = 30
+)
+
 var (
-	defaultTestLayerSize       = 3
 	defaultTestHdist           = config.DefaultConfig().Hdist
 	defaultTestZdist           = config.DefaultConfig().Zdist
-	defaultTestWindowSize      = uint32(30)
-	defaultTestGlobalThreshold = uint8(60)
-	defaultTestLocalThreshold  = uint8(20)
+	defaultTestGlobalThreshold = big.NewRat(6, 10)
+	defaultTestLocalThreshold  = big.NewRat(2, 10)
 	defaultTestRerunInterval   = time.Hour
 	defaultTestConfidenceParam = config.DefaultConfig().ConfidenceParam
 )
@@ -170,7 +174,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 				sum = sum.Add(opinionVote.Multiply(weight))
 			}
 		}
-		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.AvgLayerSize, trtl.GlobalThreshold, 1)
+		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.GlobalThreshold, trtl.AvgLayerSize, 1)
 		require.Equal(t, vote, globalOpinion, "test block %v expected vote %v but got %v", i, vote, sum)
 	}
 }
@@ -178,11 +182,11 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 func TestHandleIncomingLayer(t *testing.T) {
 	t.Run("HappyFlow", func(t *testing.T) {
 		topLayer := types.GetEffectiveGenesis().Add(28)
-		avgPerLayer := 10
+		const avgPerLayer = 10
 		// no negative votes, no abstain votes
 		trtl, _, _ := turtleSanity(t, topLayer, avgPerLayer, 0, 0)
 		require.Equal(t, int(topLayer.Sub(1).Uint32()), int(trtl.Verified.Uint32()))
-		blkids := make([]types.BlockID, 0, avgPerLayer*int(topLayer.Uint32()))
+		blkids := make([]types.BlockID, 0, avgPerLayer*topLayer.Uint32())
 		for l := types.NewLayerID(0); l.Before(topLayer); l = l.Add(1) {
 			lids, _ := trtl.bdp.LayerBlockIds(l)
 			blkids = append(blkids, lids...)
@@ -193,7 +197,7 @@ func TestHandleIncomingLayer(t *testing.T) {
 	t.Run("VoteNegative", func(t *testing.T) {
 		lyrsAfterGenesis := types.NewLayerID(10)
 		layers := types.GetEffectiveGenesis().Add(lyrsAfterGenesis.Uint32())
-		avgPerLayer := 10
+		const avgPerLayer = 10
 		voteNegative := 2
 		// just a couple of negative votes
 		trtl, negs, abs := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
@@ -219,7 +223,7 @@ func TestHandleIncomingLayer(t *testing.T) {
 
 	t.Run("VoteAbstain", func(t *testing.T) {
 		layers := types.NewLayerID(10)
-		avgPerLayer := 10
+		const avgPerLayer = 10
 		trtl, _, abs := turtleSanity(t, layers, avgPerLayer, 0, 10)
 		require.Equal(t, int(types.GetEffectiveGenesis().Uint32()), int(trtl.Verified.Uint32()), "when all votes abstain verification should stay at first layer")
 		requireVote(t, trtl, abstain, abs...)
@@ -237,7 +241,7 @@ func inArr(id types.BlockID, list []types.BlockID) bool {
 
 // voteNegative - the number of blocks to vote negative per layer
 // voteAbstain - the number of layers to vote abstain because we always abstain on a whole layer
-func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNegative, voteAbstain int) (trtl *turtle, negative, abstain []types.BlockID) {
+func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer int, voteNegative, voteAbstain int) (trtl *turtle, negative, abstain []types.BlockID) {
 	msh := getInMemMesh(t)
 	logger := logtest.New(t)
 	newlyrs := make(map[types.LayerID]struct{})
@@ -283,7 +287,7 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer, voteNeg
 	}
 
 	trtl = defaultTurtle(t)
-	trtl.AvgLayerSize = blocksPerLayer
+	trtl.AvgLayerSize = uint32(blocksPerLayer)
 	trtl.bdp = msh
 	trtl.init(context.TODO(), mesh.GenesisLayer())
 
@@ -397,7 +401,7 @@ func testLayerPattern(t *testing.T, atxdb atxDataWriter, db blockDataWriter, trt
 }
 
 func TestLayerPatterns(t *testing.T) {
-	blocksPerLayer := 10 // more blocks means a longer test
+	const blocksPerLayer = 10 // more blocks means a longer test
 	t.Run("many good layers", func(t *testing.T) {
 		msh := getInMemMesh(t)
 		atxdb := getAtxDB()
@@ -437,7 +441,7 @@ func TestLayerPatterns(t *testing.T) {
 			netVote := vec{Against: uint64(i * blocksPerLayer)}
 			// Zdist + ConfidenceParam (+ a margin of one due to the math) layers have already passed, so that's our
 			// delta
-			vote = calculateOpinionWithThreshold(trtl.logger, netVote, blocksPerLayer, trtl.GlobalThreshold, uint32(i+1)+trtl.Zdist+trtl.ConfidenceParam)
+			vote = calculateOpinionWithThreshold(trtl.logger, netVote, trtl.GlobalThreshold, blocksPerLayer, uint32(i+1)+trtl.Zdist+trtl.ConfidenceParam)
 			// safety cutoff
 			if i > 100 {
 				panic("failed to accumulate enough votes")
@@ -604,7 +608,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 	}
 
 	trtl := defaultTurtle(t)
-	trtl.AvgLayerSize = blocksPerLayer
+	trtl.AvgLayerSize = uint32(blocksPerLayer)
 	trtl.bdp = msh
 	gen := mesh.GenesisLayer()
 	trtl.init(context.TODO(), gen)
@@ -1638,7 +1642,7 @@ func TestHandleLateBlocks(t *testing.T) {
 	l2ID := l1ID.Add(1)
 
 	// increase the layer size so a few blocks won't finalize a layer
-	testLayerSize := 10
+	const testLayerSize = 10
 	alg.trtl.AvgLayerSize = testLayerSize
 	checkVerifiedLayer(t, alg.trtl, types.GetEffectiveGenesis())
 
@@ -2195,7 +2199,7 @@ func TestHealingAfterPartition(t *testing.T) {
 	l0ID := types.GetEffectiveGenesis()
 
 	// use a larger number of blocks per layer to give us more scope for testing
-	goodLayerSize := defaultTestLayerSize * 10
+	const goodLayerSize = defaultTestLayerSize * 10
 	alg.trtl.AvgLayerSize = goodLayerSize
 
 	// create several good layers
@@ -2460,44 +2464,44 @@ func TestVectorArithmetic(t *testing.T) {
 
 func TestCalculateOpinionWithThreshold(t *testing.T) {
 	r := require.New(t)
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 1, 1, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 10, 1, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 1, 10, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 1, 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 1, 10, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 10, 10, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 10, 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, 10, 10, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 1, 1, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 10, 1, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 1, 10, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 1, 1, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 10, 1, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 10, 10, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 1, 10, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), 10, 10, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(11), 10, 10, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 1, 1, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 10, 1, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 1, 10, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 1, 1, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 10, 1, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 10, 10, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 1, 10, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), 10, 10, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(11), 10, 10, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 100), 1, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 100), 10, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 1, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 1, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 1, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 10, 1))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 100), 1, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 10, 10))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 1, 1))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 10, 1))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 1, 1))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 1, 10))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 10, 10))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 10, 1))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 1, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 10, 10))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(11), big.NewRat(1, 10), 10, 10))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 1, 1))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 10, 1))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 1, 1))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 1, 10))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 10, 10))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 10, 1))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 1, 10))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 10, 10))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(11), big.NewRat(1, 10), 10, 10))
 
 	// a more realistic example
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 72, Against: 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 12, Against: 9}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 9, Against: 18}, defaultTestLayerSize, defaultTestGlobalThreshold, 3))
+	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 72, Against: 9}, defaultTestGlobalThreshold, defaultTestLayerSize, 3))
+	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 12, Against: 9}, defaultTestGlobalThreshold, defaultTestLayerSize, 3))
+	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 9, Against: 18}, defaultTestGlobalThreshold, defaultTestLayerSize, 3))
 }
 
 func TestMultiTortoise(t *testing.T) {
 	r := require.New(t)
 
 	t.Run("happy path", func(t *testing.T) {
-		layerSize := defaultTestLayerSize * 2
+		const layerSize = defaultTestLayerSize * 2
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
@@ -2552,7 +2556,7 @@ func TestMultiTortoise(t *testing.T) {
 	})
 
 	t.Run("unequal partition and rejoin", func(t *testing.T) {
-		layerSize := 10
+		const layerSize = 10
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
@@ -2773,7 +2777,7 @@ func TestMultiTortoise(t *testing.T) {
 	})
 
 	t.Run("equal partition", func(t *testing.T) {
-		layerSize := 10
+		const layerSize = 10
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
@@ -2909,7 +2913,7 @@ func TestMultiTortoise(t *testing.T) {
 	})
 
 	t.Run("three-way partition", func(t *testing.T) {
-		layerSize := 12
+		const layerSize = 12
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
