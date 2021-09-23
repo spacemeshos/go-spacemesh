@@ -45,6 +45,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -312,6 +313,7 @@ type App struct {
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
 	edSgn          *signing.EdSigner
+	watchPeers     *peers.Peers
 	tortoiseBeacon TortoiseBeaconService
 	closers        []interface{ Close() }
 	log            log.Log
@@ -677,12 +679,11 @@ func (app *App) initServices(ctx context.Context,
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
 	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
-	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector(), tBeaconDBStore)
+	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, tBeaconDBStore)
 
 	syncerConf := syncer.Configuration{
-		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
-		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
-		AlwaysListen:    app.Config.AlwaysListen,
+		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
+		AlwaysListen: app.Config.AlwaysListen,
 	}
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
@@ -706,6 +707,7 @@ func (app *App) initServices(ctx context.Context,
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
+		DBPath:         filepath.Join(dbStorepath, "builder"),
 		Hdist:          app.Config.Hdist,
 		MinerID:        nodeID,
 		AtxsPerBlock:   app.Config.AtxsPerBlock,
@@ -713,7 +715,6 @@ func (app *App) initServices(ctx context.Context,
 		TxsPerBlock:    app.Config.TxsPerBlock,
 	}
 
-	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
 	blockProducer := miner.NewBlockBuilder(
 		minerCfg,
 		sgn,
@@ -772,6 +773,7 @@ func (app *App) initServices(ctx context.Context,
 	app.state = processor
 	app.hare = rabbit
 	app.P2P = swarm
+	app.watchPeers = peers.Start(swarm)
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
@@ -1032,6 +1034,10 @@ func (app *App) stopServices() {
 		app.log.Debug("peer timesync stopped")
 	}
 
+	if app.watchPeers != nil {
+		app.watchPeers.Close()
+	}
+
 	events.CloseEventReporter()
 	events.CloseEventPubSub()
 
@@ -1111,7 +1117,10 @@ func (app *App) startSyncer(ctx context.Context) {
 	if app.P2P == nil {
 		app.log.Error("syncer started before p2p is initialized")
 	} else {
-		<-app.P2P.GossipReady()
+		_, err := app.watchPeers.WaitPeers(ctx, app.Config.P2P.SwarmConfig.RandomConnections)
+		if err != nil {
+			return
+		}
 	}
 	app.syncer.Start(ctx)
 }

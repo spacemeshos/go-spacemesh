@@ -40,6 +40,11 @@ func NewHistogram(name, subsystem, help string, labels []string) Histogram {
 	return prmkit.NewHistogramFrom(prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
 }
 
+// NewHistogramWithBuckets creates a Histogram metrics with custom buckets.
+func NewHistogramWithBuckets(name, subsystem, help string, labels []string, buckets []float64) Histogram {
+	return prmkit.NewHistogramFrom(prometheus.HistogramOpts{Namespace: Namespace, Subsystem: subsystem, Name: name, Help: help, Buckets: buckets}, labels)
+}
+
 // NewSummary creates a Summary metrics under the global namespace returns nop if metrics are disabled.
 func NewSummary(name, subsystem, help string, labels []string, objectives map[float64]float64) Histogram {
 	// TODO github.com/go-kit/kit use Histogram instead of Summary

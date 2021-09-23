@@ -15,7 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -131,6 +130,8 @@ func getTestDefaultConfig() *config.Config {
 		log.Error("cannot load config from file")
 		return nil
 	}
+	// is set to 0 to make sync start immediatly when node starts
+	cfg.P2P.SwarmConfig.RandomConnections = 0
 
 	cfg.POST = activation.DefaultPostConfig()
 	cfg.POST.LabelsPerUnit = 32
@@ -160,7 +161,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HareEligibility.EpochOffset = 0
 	cfg.SyncRequestTimeout = 500
 	cfg.SyncInterval = 2
-	cfg.SyncValidationDelta = 5
 
 	cfg.FETCH.RequestTimeout = 10
 	cfg.FETCH.MaxRetriesForPeer = 5
@@ -288,7 +288,6 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
-		database.SwitchCreationContext(dbStorepath, string(name))
 		edSgn := signing.NewEdSigner()
 		smApp, err := InitSingleInstance(logger, *cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
 		if err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -272,24 +273,32 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 ) bool {
 	logger := t.logger.WithContext(ctx)
 	for _, exceptionBlockID := range diffList {
-		if exceptionBlock, err := t.bdp.GetBlock(exceptionBlockID); err != nil {
+		exceptionBlock, err := t.bdp.GetBlock(exceptionBlockID)
+		if err != nil {
 			logger.With().Error("inconsistent state: can't find block from diff list",
 				log.FieldNamed("exception_block_id", exceptionBlockID))
 			return false
-		} else if exceptionBlock.LayerIndex.Before(baseBlockLayer) {
+		}
+
+		if exceptionBlock.LayerIndex.Before(baseBlockLayer) {
 			logger.With().Error("good block candidate contains exception for block older than its base block",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
 				log.FieldNamed("base_block_layer", baseBlockLayer))
 			return false
-		} else if v, err := t.getLocalBlockOpinion(ctx, exceptionBlock.LayerIndex, exceptionBlockID); err != nil {
+		}
+
+		v, err := t.getLocalBlockOpinion(ctx, exceptionBlock.LayerIndex, exceptionBlockID)
+		if err != nil {
 			logger.With().Error("unable to get single block opinion for block in exception list",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
 				log.FieldNamed("base_block_layer", baseBlockLayer),
 				log.Err(err))
 			return false
-		} else if v != voteVector {
+		}
+
+		if v != voteVector {
 			logger.With().Debug("not adding block to good blocks because its vote differs from local opinion",
 				log.FieldNamed("older_block", exceptionBlock.ID()),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
@@ -362,6 +371,11 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 				log.Int("against_count", len(exceptionVectorMap[0])),
 				log.Int("support_count", len(exceptionVectorMap[1])),
 				log.Int("neutral_count", len(exceptionVectorMap[2])))
+
+			metrics.LayerDistanceToBaseBlock.
+				With("last_layer", t.Last.String()).
+				With("block_id", blockID.String()).
+				Observe(float64(t.Last.Value - layerID.Value))
 
 			return blockID, [][]types.BlockID{
 				blockMapToArray(exceptionVectorMap[0]),
@@ -507,7 +521,7 @@ func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block) (uint
 	// check if the ATX was received on time
 	// TODO: add an exception for sync, when we expect everything to be received late
 	//   see https://github.com/spacemeshos/go-spacemesh/issues/2540
-	//if atxTimestamp.Before(nextEpochStart) {
+	// if atxTimestamp.Before(nextEpochStart) {
 	blockWeight := atxHeader.GetWeight()
 	logger.With().Debug("voting block atx was timely",
 		log.FieldNamed("next_epoch", atxEpoch+1),

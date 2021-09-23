@@ -31,9 +31,7 @@ type layerFetcher interface {
 // Configuration is the config params for syncer
 type Configuration struct {
 	SyncInterval time.Duration
-	// the sync process will try validate the current layer if ValidationDelta has elapsed.
-	ValidationDelta time.Duration
-	AlwaysListen    bool
+	AlwaysListen bool
 }
 
 const (
@@ -315,9 +313,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			return false
 		}
 
-		if s.shouldValidateLayer(layerID) {
-			vQueue <- layer
-		}
+		vQueue <- layer
 		logger.With().Debug("finished data sync", layerID)
 	}
 	logger.With().Debug("data is synced, waiting for validation",
@@ -380,6 +376,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		if layer, err = s.getLayerFromPeers(ctx, layerID); err != nil {
 			return nil, err
 		}
+
 		if len(layer.Blocks()) == 0 {
 			s.logger.WithContext(ctx).With().Info("setting layer to zero-block", layerID)
 			if err := s.mesh.SetZeroBlockLayer(layerID); err != nil {
@@ -468,16 +465,6 @@ func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) e
 		}
 	}
 	return nil
-}
-
-// always returns true if layerID is an old layer.
-// for current layer, only returns true if current layer already elapsed ValidationDelta
-func (s *Syncer) shouldValidateLayer(layerID types.LayerID) bool {
-	if layerID == types.NewLayerID(0) {
-		return false
-	}
-	current := s.ticker.GetCurrentLayer()
-	return layerID.Before(current) || time.Now().Sub(s.ticker.LayerToTime(current)) > s.conf.ValidationDelta
 }
 
 // start a dedicated process to validate layers one by one

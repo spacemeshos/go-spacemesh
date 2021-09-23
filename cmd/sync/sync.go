@@ -165,8 +165,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	layerFetch := createFetcherWithMock(dbs, msh, swarm, app.logger)
 	layerFetch.Start()
 	syncerConf := syncer.Configuration{
-		SyncInterval:    2 * 60 * time.Millisecond,
-		ValidationDelta: 30 * time.Second,
+		SyncInterval: 2 * 60 * time.Millisecond,
 	}
 	app.sync = createSyncer(syncerConf, msh, layerFetch, types.NewLayerID(expectedLayers), app.logger)
 	if err = swarm.Start(cmdp.Ctx); err != nil {
