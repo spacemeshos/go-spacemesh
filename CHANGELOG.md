@@ -11,6 +11,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Improved handling of congested and flaky networks (#2797)
 
+
+### Added
+
+- Metrics for improved investigation (#2802)
+
 ## [0.2.1] - 2021/9/13
 
 ### Added
