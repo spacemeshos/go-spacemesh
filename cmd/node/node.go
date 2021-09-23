@@ -627,7 +627,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, trtlStateDB)
 	trtlCfg := tortoise.Config{
-		LayerSize:       int(layerSize),
+		LayerSize:       layerSize,
 		Database:        trtlStateDB,
 		MeshDatabase:    mdb,
 		ATXDB:           atxDB,
