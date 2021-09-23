@@ -186,6 +186,7 @@ func (m *DB) AddBlock(bl *types.Block) error {
 	if err := m.writeBlock(bl); err != nil {
 		return err
 	}
+
 	return nil
 }
 

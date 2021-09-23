@@ -376,6 +376,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		if layer, err = s.getLayerFromPeers(ctx, layerID); err != nil {
 			return nil, err
 		}
+
 		if len(layer.Blocks()) == 0 {
 			s.logger.WithContext(ctx).With().Info("setting layer to zero-block", layerID)
 			if err := s.mesh.SetZeroBlockLayer(layerID); err != nil {
