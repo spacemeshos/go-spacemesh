@@ -18,7 +18,7 @@ import (
 
 type ProcessorStateSuite struct {
 	suite.Suite
-	db        *database.MemDatabase
+	db        *database.LDBDatabase
 	processor *TransactionProcessor
 	projector *ProjectorMock
 }
@@ -387,8 +387,6 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	}
 	processor.Commit()
 
-	written := db.Len()
-
 	var want string
 	for i := 0; i < testCycles; i++ {
 		numOfTransactions := rand.Intn(maxTransactions-minTransactions) + minTransactions
@@ -433,7 +431,6 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 		}
 	}
 
-	s.Require().LessOrEqual(written, db.Len())
 }
 
 func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *types.Transaction {
