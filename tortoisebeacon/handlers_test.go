@@ -378,7 +378,7 @@ func TestTB_handleProposalMessage_BadSignature(t *testing.T) {
 	tb.proposalChecker = mockChecker
 
 	err = tb.handleProposalMessage(context.TODO(), *msg, time.Now())
-	assert.ErrorIs(t, err, ErrVRFNotVerified)
+	assert.ErrorIs(t, err, errVRFNotVerified)
 
 	checkProposed(t, tb, vrfSigner, false)
 	checkProposals(t, tb, proposals{})
@@ -413,7 +413,7 @@ func TestTB_handleProposalMessage_AlreadyProposed(t *testing.T) {
 	// now make the same proposal again
 	setMockAtxDbExpectations(mockDB)
 	err = tb.handleProposalMessage(context.TODO(), *msg, time.Now())
-	assert.ErrorIs(t, err, ErrAlreadyProposed)
+	assert.ErrorIs(t, err, errAlreadyProposed)
 	checkProposed(t, tb, vrfSigner, true)
 	checkProposals(t, tb, expectedProposals)
 }
@@ -437,7 +437,7 @@ func TestTB_handleProposalMessage_ProposalNotEligible(t *testing.T) {
 	tb.proposalChecker = mockChecker
 
 	err = tb.handleProposalMessage(context.TODO(), *msg, time.Now())
-	assert.ErrorIs(t, err, ErrProposalDoesntPassThreshold)
+	assert.ErrorIs(t, err, errProposalDoesntPassThreshold)
 
 	checkProposed(t, tb, vrfSigner, true)
 	checkProposals(t, tb, proposals{})
@@ -655,7 +655,7 @@ func TestTB_handleFirstVotingMessage_AlreadyVoted(t *testing.T) {
 
 	// now vote again
 	err = tb.handleFirstVotingMessage(context.TODO(), *msg)
-	assert.ErrorIs(t, err, ErrAlreadyVoted)
+	assert.ErrorIs(t, err, errAlreadyVoted)
 
 	checkVoted(t, tb, signer, types.FirstRound, true)
 	checkFirstIncomingVotes(t, tb, expected)
@@ -883,7 +883,7 @@ func TestTB_handleFollowingVotingMessage_AlreadyVoted(t *testing.T) {
 
 	// now vote again
 	err = tb.handleFollowingVotingMessage(context.TODO(), *msg)
-	assert.ErrorIs(t, err, ErrAlreadyVoted)
+	assert.ErrorIs(t, err, errAlreadyVoted)
 
 	checkVoted(t, tb, signer, round, true)
 	checkVoteMargins(t, tb, expected)

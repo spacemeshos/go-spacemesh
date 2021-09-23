@@ -24,17 +24,20 @@ const TBFirstVotingProtocol = "TBFirstVotingGossip"
 const TBFollowingVotingProtocol = "TBFollowingVotingGossip"
 
 var (
-	// ErrVRFNotVerified is returned if proposal message fails VRF verification.
-	ErrVRFNotVerified = errors.New("proposal failed vrf verification")
+	// errVRFNotVerified is returned if proposal message fails VRF verification.
+	errVRFNotVerified = errors.New("proposal failed vrf verification")
 
-	// ErrProposalDoesntPassThreshold is returned if proposal message doesn't pass threshold.
-	ErrProposalDoesntPassThreshold = errors.New("proposal doesn't pass threshold")
+	// errProposalDoesntPassThreshold is returned if proposal message doesn't pass threshold.
+	errProposalDoesntPassThreshold = errors.New("proposal doesn't pass threshold")
 
-	// ErrAlreadyProposed is returned when miner doubly proposed for the same epoch.
-	ErrAlreadyProposed = errors.New("already proposed")
+	// errAlreadyProposed is returned when miner doubly proposed for the same epoch.
+	errAlreadyProposed = errors.New("already proposed")
 
-	// ErrAlreadyVoted is returned when miner doubly voted for the same epoch/round.
-	ErrAlreadyVoted = errors.New("already voted")
+	// errAlreadyVoted is returned when miner doubly voted for the same epoch/round.
+	errAlreadyVoted = errors.New("already voted")
+
+	// errMinerATXNotFound is returned when miner has no ATXs in the previous epoch.
+	errMinerATXNotFound = errors.New("miner ATX not found in previous epoch")
 )
 
 // HandleSerializedProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
@@ -173,8 +176,6 @@ func (tb *TortoiseBeacon) addPotentiallyValidProposal(proposal []byte) {
 	tb.incomingProposals.potentiallyValid = append(tb.incomingProposals.potentiallyValid, proposal)
 }
 
-var errMinerATXNotFound = errors.New("miner ATX not found in previous epoch")
-
 func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalMessage, currentEpoch types.EpochID) (types.ATXID, error) {
 	minerID := m.NodeID.ShortString()
 	logger := tb.logger.WithContext(ctx).WithFields(currentEpoch, log.String("miner_id", minerID))
@@ -195,7 +196,7 @@ func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalM
 	if !tb.vrfVerifier.Verify(vrfPK, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.Warning("[proposal] failed to verify VRF signature")
-		return types.ATXID{}, fmt.Errorf("[proposal] failed to verify VRF signature (miner ID %v): %w", minerID, ErrVRFNotVerified)
+		return types.ATXID{}, fmt.Errorf("[proposal] failed to verify VRF signature (miner ID %v): %w", minerID, errVRFNotVerified)
 	}
 
 	if err := tb.registerProposed(vrfPK, logger); err != nil {
@@ -210,7 +211,7 @@ func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalM
 		logger.With().Warning("rejected proposal that doesn't pass threshold",
 			log.String("proposal", proposalShortString),
 			log.Uint64("total_weight", tb.epochWeight))
-		return types.ATXID{}, fmt.Errorf("[proposal] not eligible (miner ID %v): %w", minerID, ErrProposalDoesntPassThreshold)
+		return types.ATXID{}, fmt.Errorf("[proposal] not eligible (miner ID %v): %w", minerID, errProposalDoesntPassThreshold)
 	}
 
 	return atxID, nil
@@ -483,7 +484,7 @@ func (tb *TortoiseBeacon) registerProposed(minerPK *signing.PublicKey, logger lo
 	if _, ok := tb.hasProposed[minerID]; ok {
 		// see TODOs for registerVoted()
 		logger.Warning("already received proposal from miner")
-		return fmt.Errorf("already made proposal (miner ID %v): %w", minerID, ErrAlreadyProposed)
+		return fmt.Errorf("already made proposal (miner ID %v): %w", minerID, errAlreadyProposed)
 	}
 
 	tb.hasProposed[minerID] = struct{}{}
@@ -510,7 +511,7 @@ func (tb *TortoiseBeacon) registerVoted(minerPK *signing.PublicKey, round types.
 		// TODO(nkryuchkov): ban id forever globally across packages since this epoch
 		// TODO(nkryuchkov): (not tortoise beacon) do the same for ATXs
 
-		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerID, ErrAlreadyVoted)
+		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerID, errAlreadyVoted)
 	}
 
 	tb.hasVoted[round][minerID] = struct{}{}
