@@ -169,13 +169,11 @@ func createP2pInstance(t testing.TB, config config.Config, loggerName string) *S
 func (its *IntegrationTestSuite) WaitForGossip(ctx context.Context) error {
 	g, _ := errgroup.WithContext(ctx)
 	for _, b := range its.boot {
-		b := b
 		g.Go(func() error {
 			return b.waitForGossip()
 		})
 	}
 	for _, i := range its.Instances {
-		i := i
 		g.Go(func() error {
 			return i.waitForGossip()
 		})
