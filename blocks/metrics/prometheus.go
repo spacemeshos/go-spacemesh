@@ -23,7 +23,6 @@ var LayerBlockSize = metrics.NewHistogramWithBuckets(
 	"Block size",
 	[]string{
 		LayerIDLabel,
-		BlockIDLabel,
 	},
 	prometheus.ExponentialBuckets(100, 2, 8),
 )
@@ -35,7 +34,6 @@ var NumTxsInBlock = metrics.NewHistogramWithBuckets(
 	"Number of transactions in block",
 	[]string{
 		LayerIDLabel,
-		BlockIDLabel,
 	},
 	prometheus.ExponentialBuckets(1, 2, 8),
 )
@@ -46,7 +44,6 @@ var baseBlockExceptionLength = metrics.NewHistogramWithBuckets(
 	"Base block exception length",
 	[]string{
 		LayerIDLabel,
-		BlockIDLabel,
 		diffTypeLabel,
 	},
 	prometheus.ExponentialBuckets(1, 2, 8),

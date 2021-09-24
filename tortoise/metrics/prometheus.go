@@ -23,7 +23,6 @@ var LayerDistanceToBaseBlock = metrics.NewHistogramWithBuckets(
 	"How far back a node needs to find a good block",
 	[]string{
 		LastLayerLabel,
-		BlockIDLabel,
 	},
 	prometheus.ExponentialBuckets(1, 2, 16),
 )

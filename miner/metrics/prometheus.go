@@ -22,7 +22,6 @@ var BlockBuildDuration = metrics.NewHistogramWithBuckets(
 	"How long it takes to build a block (milliseconds)",
 	[]string{
 		LayerIDLabel,
-		BlockIDLabel,
 	},
 	[]float64{10, 100, 1000, 5 * 1000, 10 * 1000, 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000},
 )

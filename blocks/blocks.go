@@ -148,20 +148,11 @@ func saveMetrics(blk types.Block) {
 			hist:  metrics.ForDiffLength,
 			value: float64(len(blk.ForDiff)),
 		},
-		{
-			hist:  metrics.NeutralDiffLength,
-			value: float64(len(blk.NeutralDiff)),
-		},
-		{
-			hist:  metrics.AgainstDiffLength,
-			value: float64(len(blk.AgainstDiff)),
-		},
 	}
 
 	for _, m := range metricList {
 		m.hist.
 			With(metrics.LayerIDLabel, blk.LayerIndex.String()).
-			With(metrics.BlockIDLabel, blk.ID().String()).
 			Observe(m.value)
 	}
 }
