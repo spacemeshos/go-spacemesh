@@ -39,7 +39,7 @@ type mockActivationDB struct {
 	activeSetAtxs       []types.ATXID
 }
 
-func (a mockActivationDB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
+func (a mockActivationDB) GetEpochAtxs(_ types.EpochID) (atxs []types.ATXID) {
 	if a.activeSetAtxs == nil {
 		return activeSetAtxs
 	}
@@ -94,11 +94,11 @@ func TestBlockOracle(t *testing.T) {
 	testBlockOracleAndValidator(t, r, 2, 2)
 }
 
-func testBlockOracleAndValidator(tb testing.TB, r *require.Assertions, committeeSize uint32, layersPerEpoch uint32) {
+func testBlockOracleAndValidator(t *testing.T, r *require.Assertions, committeeSize uint32, layersPerEpoch uint32) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	activationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(0)}
-	beaconProvider := &EpochBeaconProvider{}
-	lg := logtest.New(tb).WithName(nodeID.Key[:5])
+	beaconProvider := mockTortoiseBeacon(t)
+	lg := logtest.New(t).WithName(nodeID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider, validateVRF, nil, lg.WithName("blkElgValidator"))
 	numberOfEpochsToTest := uint32(2)
@@ -137,7 +137,7 @@ func TestBlockOracleInGenesisReturnsNoAtx(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	activationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(0)}
-	beaconProvider := &EpochBeaconProvider{}
+	beaconProvider := mockTortoiseBeacon(t)
 	lg := logtest.New(t).WithName(nodeID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 	for layer := uint32(0); layer < layersPerEpoch; layer++ {
@@ -157,7 +157,7 @@ func TestBlockOracleEmptyActiveSet(t *testing.T) {
 	layersPerEpoch := uint32(10)
 
 	activationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(layersPerEpoch), activeSetAtxs: []types.ATXID{}}
-	beaconProvider := &EpochBeaconProvider{}
+	beaconProvider := mockTortoiseBeacon(t)
 	lg := logtest.New(t).WithName(nodeID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
@@ -174,7 +174,7 @@ func TestBlockOracleEmptyActiveSetValidation(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	activationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(layersPerEpoch)}
-	beaconProvider := &EpochBeaconProvider{}
+	beaconProvider := mockTortoiseBeacon(t)
 
 	lg := logtest.New(t).WithName(nodeID.Key[:5])
 	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, beaconProvider, validateVRF, nil, lg.WithName("blkElgValidator"))
@@ -201,7 +201,7 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	} // This guy has no activations 🧐
 
 	activationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(layersPerEpoch)}
-	beaconProvider := &EpochBeaconProvider{}
+	beaconProvider := mockTortoiseBeacon(t)
 	lg := logtest.New(t).WithName(nID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nID, func() bool { return true }, lg.WithName("blockOracle"))
 
@@ -218,7 +218,7 @@ func TestBlockOracleValidatorInvalidProof(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	activationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(layersPerEpoch)}
-	beaconProvider := &EpochBeaconProvider{}
+	beaconProvider := mockTortoiseBeacon(t)
 	lg := logtest.New(t).WithName(nodeID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
@@ -255,7 +255,7 @@ func TestBlockOracleValidatorInvalidProof2(t *testing.T) {
 	validatorActivationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(layersPerEpoch), activeSetAtxs: activeSetAtxs}
 	// validatorActivationDB := &mockActivationDB{totalWeight: 10 * defaultAtxWeight, atxPublicationLayer: types.NewLayerID(layersPerEpoch), atxs: map[string]map[types.LayerID]types.ATXID{}}
 
-	beaconProvider := &EpochBeaconProvider{}
+	beaconProvider := mockTortoiseBeacon(t)
 	lg := logtest.New(t).WithName(nodeID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, minerActivationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
@@ -285,7 +285,7 @@ func TestBlockOracleValidatorInvalidProof3(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	activationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(layersPerEpoch)}
-	beaconProvider := &EpochBeaconProvider{}
+	beaconProvider := mockTortoiseBeacon(t)
 	lg := logtest.New(t).WithName(nodeID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
@@ -340,7 +340,7 @@ func TestBlockEligibility_calc(t *testing.T) {
 	r := require.New(t)
 	atxH := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, nil, 0, nil)
 	atxDb := &mockAtxDB{atxH: atxH.ActivationTxHeader}
-	o := NewMinerBlockOracle(10, 1, atxDb, &EpochBeaconProvider{}, vrfsgn, nodeID, func() bool { return true }, logtest.New(t).WithName(t.Name()))
+	o := NewMinerBlockOracle(10, 1, atxDb, mockTortoiseBeacon(t), vrfsgn, nodeID, func() bool { return true }, logtest.New(t).WithName(t.Name()))
 	_, err := o.calcEligibilityProofs(1)
 	r.EqualError(err, "zero total weight not allowed") // a hack to make sure we got genesis active set size on genesis
 }
@@ -352,7 +352,7 @@ func TestMinerBlockOracle_GetEligibleLayers(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	activationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(0)}
-	beaconProvider := &EpochBeaconProvider{}
+	beaconProvider := mockTortoiseBeacon(t)
 	lg := logtest.New(t).WithName(nodeID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 	numberOfEpochsToTest := 1 // this test supports only 1 epoch
