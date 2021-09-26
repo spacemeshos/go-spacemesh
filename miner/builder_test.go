@@ -13,11 +13,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/state"
 )
 
 const selectCount = 100
@@ -67,7 +67,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	block3 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
 	block4 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
 
-	txMempool := state.NewTxMemPool()
+	txMempool := mempool.NewTxMemPool()
 
 	bs := []*types.Block{block1, block2, block3, block4}
 	builder := createBlockBuilder(t, "a", n, bs)
@@ -140,7 +140,7 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 
 	blockset := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 
-	txPool := state.NewTxMemPool()
+	txPool := mempool.NewTxMemPool()
 
 	atxPool := activation.NewAtxMemPool()
 

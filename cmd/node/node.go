@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/svm/state"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -41,6 +42,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -50,7 +52,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -317,7 +318,7 @@ type App struct {
 	tortoiseBeacon TortoiseBeaconService
 	closers        []interface{ Close() }
 	log            log.Log
-	txPool         *state.TxMempool
+	txPool         *mempool.TxMempool
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
 	loggers        map[string]*zap.AtomicLevel
@@ -578,7 +579,7 @@ func (app *App) initServices(ctx context.Context,
 		return err
 	}
 
-	app.txPool = state.NewTxMemPool()
+	app.txPool = mempool.NewTxMemPool()
 	meshAndPoolProjector := pendingtxs.NewMeshAndPoolProjector(mdb, app.txPool)
 
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))

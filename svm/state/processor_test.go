@@ -2,6 +2,7 @@ package state
 
 import (
 	crand "crypto/rand"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"math/big"
 	"math/rand"
 	"testing"
@@ -46,7 +47,7 @@ func (s *ProcessorStateSuite) SetupTest() {
 	lg := logtest.New(s.T()).WithName("proc_logger")
 	s.db = database.NewMemDatabase()
 	s.projector = &ProjectorMock{}
-	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, s.projector, NewTxMemPool(), lg)
+	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, s.projector, mempool.NewTxMemPool(), lg)
 }
 
 func createAccount(state *TransactionProcessor, addr types.Address, balance int64, nonce uint64) *Object {
@@ -268,7 +269,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	lg := logtest.New(s.T()).WithName("proc_logger")
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
-	processor := NewTransactionProcessor(db, txDb, s.projector, NewTxMemPool(), lg)
+	processor := NewTransactionProcessor(db, txDb, s.projector, mempool.NewTxMemPool(), lg)
 
 	signer1Buf := []byte("22222222222222222222222222222222")
 	signer1Buf = append(signer1Buf, []byte{
@@ -370,7 +371,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	lg := logtest.New(s.T())
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
-	processor := NewTransactionProcessor(db, txDb, s.projector, NewTxMemPool(), lg)
+	processor := NewTransactionProcessor(db, txDb, s.projector, mempool.NewTxMemPool(), lg)
 
 	revertToLayer := rand.Intn(testCycles)
 	revertAfterLayer := rand.Intn(testCycles - revertToLayer) //rand.Intn(min(testCycles - revertToLayer,maxPas.processors))
@@ -495,7 +496,7 @@ func createSignerTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transa
 func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
 	lg := logtest.New(t).WithName("proc_logger")
-	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, NewTxMemPool(), lg)
+	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
@@ -518,7 +519,7 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 
 	db := database.NewMemDatabase()
 	lg := logtest.New(t).WithName("proc_logger")
-	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, NewTxMemPool(), lg)
+	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
 
 	r.NotEqual(types.Hash32{}, proc.rootHash)
 
@@ -533,7 +534,7 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	lg := logtest.New(t).WithName("proc_logger")
 	db := database.NewMemDatabase()
 	projector := &ProjectorMock{}
-	processor := NewTransactionProcessor(db, db, projector, NewTxMemPool(), lg)
+	processor := NewTransactionProcessor(db, db, projector, mempool.NewTxMemPool(), lg)
 
 	signerBuf := []byte("22222222222222222222222222222222")
 	signerBuf = append(signerBuf, []byte{
