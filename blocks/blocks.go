@@ -159,8 +159,7 @@ func saveMetrics(blk types.Block) {
 	}
 
 	for _, m := range metricList {
-		m.hist.
-			Observe(m.value)
+		m.hist.Observe(m.value)
 	}
 }
 
