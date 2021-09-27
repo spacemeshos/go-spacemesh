@@ -238,7 +238,7 @@ def setup_clients_preset_data_dir(namespace, bs_deployment_info, client_config, 
     processes = []
     k8s_file, k8s_create_func = select_k8s_deployment_type(client_config, dep_file_path, ss_file_path, True)
     data_dir = cspec.args.pop("data-dir")
-    state_bucket = get_state_bucket()
+    state_bucket = conf.get_state_bucket()
     all_files = list_files_in_path(state_bucket, data_dir)
     manager = mp.Manager()
     return_list = manager.list()

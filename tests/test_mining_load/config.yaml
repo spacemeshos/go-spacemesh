@@ -22,7 +22,7 @@ bootstrap:
       memory: '2048M'
       cpu: '2'
   args:
-    data-dir: '49nodes-3epochs'
+    data-dir: '49nodes-3epochs-1'
     randcon: '8'
     hare-committee-size: '800'
     hare-max-adversaries: '399'
@@ -68,7 +68,7 @@ client:
       memory: '2048M'
       cpu: '2'
   args:
-    data-dir: '49nodes-3epochs'
+    data-dir: '49nodes-3epochs-1'
     randcon: '8'
     hare-committee-size: '800'
     hare-max-adversaries: '399'

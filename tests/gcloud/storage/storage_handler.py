@@ -67,7 +67,7 @@ def upload_sm_from_pod_to_gcloud_storage(namespace, pod_name, data_path=SM_NODE_
 
     :param namespace: string, namespace name
     :param pod_name: string, the pod name, the one that contains the data
-    :param data_path: string, path to data inside the pod
+    :param data_path: string, path to the data inside the pod
     :param bucket_name: string, the bucket name on google storage
     :param bucket_dir: string, the name of the directory to create inside the bucket
     :param bucket_file: string, file name to create inside the directory

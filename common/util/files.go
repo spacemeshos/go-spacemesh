@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 )
 
-// tarxzf downloads a tar.gz file from gcloud an extract it in root
+// tarxzf downloads a tar.gz file from gcloud and extract it in root
 func Tarxzf(bucketName string, filename string) {
 	ctx := context.Background()
 
