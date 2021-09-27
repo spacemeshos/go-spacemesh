@@ -626,20 +626,14 @@ func (app *App) initServices(ctx context.Context,
 		return err
 	}
 	app.closers = append(app.closers, trtlStateDB)
-	trtlCfg := tortoise.Config{
-		LayerSize:       layerSize,
-		Database:        trtlStateDB,
-		MeshDatabase:    mdb,
-		ATXDB:           atxDB,
-		Clock:           clock,
-		Hdist:           app.Config.Hdist,
-		Zdist:           app.Config.Zdist,
-		ConfidenceParam: app.Config.ConfidenceParam,
-		WindowSize:      app.Config.WindowSize,
-		GlobalThreshold: app.Config.GlobalThreshold,
-		LocalThreshold:  app.Config.LocalThreshold,
-		Log:             app.addLogger(TrtlLogger, lg),
-		RerunInterval:   time.Minute * time.Duration(app.Config.TortoiseRerunInterval),
+	trtlCfg := tortoise.Configuration{
+		Config:       app.Config.Tortoise,
+		LayerSize:    layerSize,
+		Database:     trtlStateDB,
+		MeshDatabase: mdb,
+		ATXDB:        atxDB,
+		Clock:        clock,
+		Log:          app.addLogger(TrtlLogger, lg),
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
@@ -671,7 +665,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	bCfg := blocks.Config{
-		Depth:       app.Config.Hdist,
+		Depth:       app.Config.Tortoise.Hdist,
 		GoldenATXID: goldenATXID,
 	}
 	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, app.addLogger(BlockListenerLogger, lg))
@@ -699,7 +693,7 @@ func (app *App) initServices(ctx context.Context,
 		// regular oracle, build and use it
 		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
 		hOracle = eligibility.New(beacon, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
-		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
+		// TODO: genesisMinerWeight is set to app.Configuration.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
 	gossipListener := service.NewListener(swarm, layerFetch, newSyncer.ListenToGossip, app.addLogger(GossipListener, lg))
@@ -708,7 +702,7 @@ func (app *App) initServices(ctx context.Context,
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
 		DBPath:         filepath.Join(dbStorepath, "builder"),
-		Hdist:          app.Config.Hdist,
+		Hdist:          app.Config.Tortoise.Hdist,
 		MinerID:        nodeID,
 		AtxsPerBlock:   app.Config.AtxsPerBlock,
 		LayersPerEpoch: layersPerEpoch,
@@ -816,7 +810,7 @@ func (app *App) checkTimeDrifts() {
 	}
 }
 
-// HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare
+// HareFactory returns a hare consensus algorithm according to the parameters in app.Configuration.Hare.SuperHare
 func (app *App) HareFactory(
 	ctx context.Context,
 	mdb *mesh.DB,
@@ -1163,7 +1157,7 @@ func (app *App) Start() error {
 	if app.Config.ProfilerURL != "" {
 		p, err := profiler.Start(profiler.Config{
 			ApplicationName: app.Config.ProfilerName,
-			// app.Config.ProfilerURL should be the pyroscope server address
+			// app.Configuration.ProfilerURL should be the pyroscope server address
 			// TODO: AuthToken? no need right now since server isn't public
 			ServerAddress: app.Config.ProfilerURL,
 			// by default all profilers are enabled,

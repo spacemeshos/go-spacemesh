@@ -154,7 +154,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
 	cfg.TxsPerBlock = 100
-	cfg.Hdist = 5
+	cfg.Tortoise.Hdist = 5
 
 	cfg.LayerDurationSec = 20
 	cfg.HareEligibility.ConfidenceParam = 4

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/big"
 	"sync"
 	"time"
 
@@ -22,25 +21,19 @@ type ThreadSafeVerifyingTortoise struct {
 	mutex     sync.RWMutex
 }
 
-// Config holds the arguments and dependencies to create a verifying tortoise instance.
-type Config struct {
-	LayerSize       uint32
-	Database        database.Database
-	MeshDatabase    blockDataProvider
-	ATXDB           atxDataProvider
-	Clock           layerClock
-	Hdist           uint32   // hare lookback distance: the distance over which we use the input vector/hare results
-	Zdist           uint32   // hare result wait distance: the distance over which we're willing to wait for hare results
-	ConfidenceParam uint32   // confidence wait distance: how long we wait for global consensus to be established
-	GlobalThreshold *big.Rat // threshold required to finalize blocks and layers
-	LocalThreshold  *big.Rat // threshold that determines whether a node votes based on local or global opinion
-	WindowSize      uint32   // tortoise sliding window: how many layers we store data for
-	Log             log.Log
-	RerunInterval   time.Duration // how often to rerun from genesis
+// Configuration holds the arguments and dependencies to create a verifying tortoise instance.
+type Configuration struct {
+	Config
+	LayerSize    uint32
+	Database     database.Database
+	MeshDatabase blockDataProvider
+	ATXDB        atxDataProvider
+	Clock        layerClock
+	Log          log.Log
 }
 
 // NewVerifyingTortoise creates ThreadSafeVerifyingTortoise instance.
-func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingTortoise {
+func NewVerifyingTortoise(ctx context.Context, cfg Configuration) *ThreadSafeVerifyingTortoise {
 	if cfg.Hdist < cfg.Zdist {
 		cfg.Log.With().Panic("hdist must be >= zdist", log.Uint32("hdist", cfg.Hdist), log.Uint32("zdist", cfg.Zdist))
 	}

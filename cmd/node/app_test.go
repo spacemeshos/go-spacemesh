@@ -723,7 +723,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.LayerAvgSize = 5
 	smApp.Config.LayersPerEpoch = 3
 	smApp.Config.TxsPerBlock = 100
-	smApp.Config.Hdist = 5
+	smApp.Config.Tortoise.Hdist = 5
 	smApp.Config.GenesisTime = genesisTime.Format(time.RFC3339)
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3

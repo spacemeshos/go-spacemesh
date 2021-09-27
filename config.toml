@@ -14,7 +14,6 @@ oracle_server_worldid = 0
 genesis-time = "2019-02-13T17:02:00+00:00"
 layer-duration-sec = "5"
 block-cache-size = "20"
-hdist = "5"
 coinbase = "0x1234"
 golden-atx = "0x5678"
 
@@ -64,6 +63,16 @@ hare-round-duration-sec = "5"
 hare-committee-size = 800
 hare-max-adversaries = 399
 hare-wakeup-delta = 5
+
+# Tortoise Config
+[tortoise]
+hdist = "10"
+zdist = "5"
+confidence-param = "5"
+window-size = "100"
+global-threshold = "60/100"
+local-threshold = "20/100"
+rerun-interval = "20m"
 
 # Tortoise Beacon Config
 [tortoise-beacon]

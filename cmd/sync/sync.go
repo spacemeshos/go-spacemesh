@@ -95,7 +95,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		log.Int("request_timeout", app.Config.SyncRequestTimeout),
 		log.String("data_version", version),
 		log.Uint32("layers_per_epoch", app.Config.LayersPerEpoch),
-		log.Uint32("hdist", app.Config.Hdist),
+		log.Uint32("hdist", app.Config.Tortoise.Hdist),
 	)
 
 	path := app.Config.DataDir()

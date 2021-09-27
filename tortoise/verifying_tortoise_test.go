@@ -14,7 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -135,12 +134,12 @@ const (
 )
 
 var (
-	defaultTestHdist           = config.DefaultConfig().Hdist
-	defaultTestZdist           = config.DefaultConfig().Zdist
+	defaultTestHdist           = DefaultConfig().Hdist
+	defaultTestZdist           = DefaultConfig().Zdist
 	defaultTestGlobalThreshold = big.NewRat(6, 10)
 	defaultTestLocalThreshold  = big.NewRat(2, 10)
 	defaultTestRerunInterval   = time.Hour
-	defaultTestConfidenceParam = config.DefaultConfig().ConfidenceParam
+	defaultTestConfidenceParam = DefaultConfig().ConfidenceParam
 )
 
 func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) {
@@ -1097,21 +1096,15 @@ func TestCloneTurtle(t *testing.T) {
 	r.NotEqual(trtl.Last, trtl2.Last)
 }
 
-func defaultConfig(t *testing.T, mdb *mesh.DB) Config {
-	return Config{
-		LayerSize:       defaultTestLayerSize,
-		Database:        database.NewMemDatabase(),
-		MeshDatabase:    mdb,
-		ATXDB:           getAtxDB(),
-		Clock:           defaultClock(t),
-		Hdist:           defaultTestHdist,
-		Zdist:           defaultTestZdist,
-		ConfidenceParam: defaultTestConfidenceParam,
-		WindowSize:      defaultTestWindowSize,
-		GlobalThreshold: defaultTestGlobalThreshold,
-		LocalThreshold:  defaultTestLocalThreshold,
-		RerunInterval:   defaultTestRerunInterval,
-		Log:             logtest.New(t),
+func defaultConfig(t *testing.T, mdb *mesh.DB) Configuration {
+	return Configuration{
+		Config:       DefaultConfig(),
+		LayerSize:    defaultTestLayerSize,
+		Database:     database.NewMemDatabase(),
+		MeshDatabase: mdb,
+		ATXDB:        getAtxDB(),
+		Clock:        defaultClock(t),
+		Log:          logtest.New(t),
 	}
 }
 

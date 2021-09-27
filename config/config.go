@@ -3,7 +3,7 @@ package config
 
 import (
 	"fmt"
-	"math/big"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"path/filepath"
 	"time"
 
@@ -43,6 +43,7 @@ type Config struct {
 	API             apiConfig.Config         `mapstructure:"api"`
 	HARE            hareConfig.Config        `mapstructure:"hare"`
 	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
+	Tortoise        tortoise.Config          `mapstructure:"tortoise"`
 	TortoiseBeacon  tortoisebeacon.Config    `mapstructure:"tortoise-beacon"`
 	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
 	REWARD          mesh.Config              `mapstructure:"reward"`
@@ -79,19 +80,10 @@ type BaseConfig struct {
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
-	GenesisTime      string   `mapstructure:"genesis-time"`
-	LayerDurationSec int      `mapstructure:"layer-duration-sec"`
-	LayerAvgSize     int      `mapstructure:"layer-average-size"`
-	LayersPerEpoch   uint32   `mapstructure:"layers-per-epoch"`
-	Hdist            uint32   `mapstructure:"hdist"`                     // hare/input vector lookback distance
-	Zdist            uint32   `mapstructure:"zdist"`                     // hare result wait distance
-	ConfidenceParam  uint32   `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
-	WindowSize       uint32   `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
-	GlobalThreshold  *big.Rat `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
-	LocalThreshold   *big.Rat `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
-
-	// how often we rerun tortoise from scratch, in minutes
-	TortoiseRerunInterval uint32 `mapstructure:"tortoise-rerun-interval"`
+	GenesisTime      string `mapstructure:"genesis-time"`
+	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
+	LayerAvgSize     int    `mapstructure:"layer-average-size"`
+	LayersPerEpoch   uint32 `mapstructure:"layers-per-epoch"`
 
 	PoETServer string `mapstructure:"poet-server"`
 
@@ -165,6 +157,7 @@ func DefaultConfig() Config {
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
 		TortoiseBeacon:  tortoisebeacon.DefaultConfig(),
+		Tortoise:        tortoise.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          mesh.DefaultMeshConfig(),
 		POST:            activation.DefaultPostConfig(),
@@ -186,34 +179,27 @@ func DefaultTestConfig() Config {
 // DefaultBaseConfig returns a default configuration for spacemesh
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
-		DataDirParent:         defaultDataDir,
-		ConfigFile:            defaultConfigFileName,
-		TestMode:              false,
-		CollectMetrics:        false,
-		MetricsPort:           1010,
-		MetricsPush:           "", // "" = doesn't push
-		MetricsPushPeriod:     60,
-		ProfilerURL:           "",
-		ProfilerName:          "gp-spacemesh",
-		OracleServer:          "http://localhost:3030",
-		OracleServerWorldID:   0,
-		GenesisTime:           time.Now().Format(time.RFC3339),
-		LayerDurationSec:      30,
-		LayersPerEpoch:        3,
-		PoETServer:            "127.0.0.1",
-		GoldenATXID:           "0x5678", // TODO: Change the value
-		Hdist:                 10,
-		Zdist:                 5,
-		ConfidenceParam:       5,
-		WindowSize:            100,                 // should be "a few thousand layers" in production
-		GlobalThreshold:       big.NewRat(60, 100), // fraction
-		LocalThreshold:        big.NewRat(20, 100), // fraction
-		TortoiseRerunInterval: 60 * 24,             // in minutes, once per day
-		BlockCacheSize:        20,
-		SyncRequestTimeout:    2000,
-		SyncInterval:          10,
-		AtxsPerBlock:          100,
-		TxsPerBlock:           100,
+		DataDirParent:       defaultDataDir,
+		ConfigFile:          defaultConfigFileName,
+		TestMode:            false,
+		CollectMetrics:      false,
+		MetricsPort:         1010,
+		MetricsPush:         "", // "" = doesn't push
+		MetricsPushPeriod:   60,
+		ProfilerURL:         "",
+		ProfilerName:        "gp-spacemesh",
+		OracleServer:        "http://localhost:3030",
+		OracleServerWorldID: 0,
+		GenesisTime:         time.Now().Format(time.RFC3339),
+		LayerDurationSec:    30,
+		LayersPerEpoch:      3,
+		PoETServer:          "127.0.0.1",
+		GoldenATXID:         "0x5678", // TODO: Change the value
+		BlockCacheSize:      20,
+		SyncRequestTimeout:  2000,
+		SyncInterval:        10,
+		AtxsPerBlock:        100,
+		TxsPerBlock:         100,
 	}
 }
 

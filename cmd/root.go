@@ -42,8 +42,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayerDurationSec, "Duration between layers in seconds")
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerAvgSize, "Layer Avg size")
-	cmd.PersistentFlags().Uint32Var(&config.Hdist, "hdist",
-		config.Hdist, "hdist")
+	cmd.PersistentFlags().Uint32Var(&config.Tortoise.Hdist, "hdist",
+		config.Tortoise.Hdist, "hdist")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
