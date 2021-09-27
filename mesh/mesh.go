@@ -528,9 +528,7 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		blocks = append(blocks, block)
 	}
 
-	metrics.LayerNumBlocks.
-		With(metrics.LayerIDLabel, validatedLayer.String()).
-		Observe(float64(len(layer)))
+	metrics.LayerNumBlocks.Observe(float64(len(layer)))
 
 	// report that hare "approved" this layer
 	events.ReportLayerUpdate(events.LayerUpdate{

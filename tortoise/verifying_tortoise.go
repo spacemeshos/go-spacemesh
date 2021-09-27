@@ -372,10 +372,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 				log.Int("support_count", len(exceptionVectorMap[1])),
 				log.Int("neutral_count", len(exceptionVectorMap[2])))
 
-			metrics.LayerDistanceToBaseBlock.
-				With("last_layer", t.Last.String()).
-				With("block_id", blockID.String()).
-				Observe(float64(t.Last.Value - layerID.Value))
+			metrics.LayerDistanceToBaseBlock.Observe(float64(t.Last.Value - layerID.Value))
 
 			return blockID, [][]types.BlockID{
 				blockMapToArray(exceptionVectorMap[0]),
