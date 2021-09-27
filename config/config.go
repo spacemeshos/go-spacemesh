@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"math/big"
 	"path/filepath"
 	"time"
 
@@ -78,16 +79,16 @@ type BaseConfig struct {
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
-	GenesisTime      string `mapstructure:"genesis-time"`
-	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
-	LayerAvgSize     int    `mapstructure:"layer-average-size"`
-	LayersPerEpoch   uint32 `mapstructure:"layers-per-epoch"`
-	Hdist            uint32 `mapstructure:"hdist"`                     // hare/input vector lookback distance
-	Zdist            uint32 `mapstructure:"zdist"`                     // hare result wait distance
-	ConfidenceParam  uint32 `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
-	WindowSize       uint32 `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
-	GlobalThreshold  uint8  `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
-	LocalThreshold   uint8  `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
+	GenesisTime      string   `mapstructure:"genesis-time"`
+	LayerDurationSec int      `mapstructure:"layer-duration-sec"`
+	LayerAvgSize     int      `mapstructure:"layer-average-size"`
+	LayersPerEpoch   uint32   `mapstructure:"layers-per-epoch"`
+	Hdist            uint32   `mapstructure:"hdist"`                     // hare/input vector lookback distance
+	Zdist            uint32   `mapstructure:"zdist"`                     // hare result wait distance
+	ConfidenceParam  uint32   `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
+	WindowSize       uint32   `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
+	GlobalThreshold  *big.Rat `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
+	LocalThreshold   *big.Rat `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
 
 	// how often we rerun tortoise from scratch, in minutes
 	TortoiseRerunInterval uint32 `mapstructure:"tortoise-rerun-interval"`
@@ -204,10 +205,10 @@ func defaultBaseConfig() BaseConfig {
 		Hdist:                 10,
 		Zdist:                 5,
 		ConfidenceParam:       5,
-		WindowSize:            100,     // should be "a few thousand layers" in production
-		GlobalThreshold:       60,      // in percentage terms, must be in interval [0, 100]
-		LocalThreshold:        20,      // in percentage terms, must be in interval [0, 100]
-		TortoiseRerunInterval: 60 * 24, // in minutes, once per day
+		WindowSize:            100,                 // should be "a few thousand layers" in production
+		GlobalThreshold:       big.NewRat(60, 100), // fraction
+		LocalThreshold:        big.NewRat(20, 100), // fraction
+		TortoiseRerunInterval: 60 * 24,             // in minutes, once per day
 		BlockCacheSize:        20,
 		SyncRequestTimeout:    2000,
 		SyncInterval:          10,

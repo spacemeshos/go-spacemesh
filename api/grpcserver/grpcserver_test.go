@@ -263,9 +263,9 @@ func (t *TxAPIMock) GetRewardsBySmesherID(types.NodeID) (rewards []types.Reward,
 	}, nil
 }
 
-func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID) {
+func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
 	if l != txReturnLayer {
-		return nil
+		return nil, nil
 	}
 	for _, tx := range t.returnTx {
 		if tx.Recipient.String() == account.String() {
@@ -275,9 +275,9 @@ func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.
 	return
 }
 
-func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID) {
+func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
 	if l != txReturnLayer {
-		return nil
+		return nil, nil
 	}
 	for _, tx := range t.returnTx {
 		if tx.Origin().String() == account.String() {

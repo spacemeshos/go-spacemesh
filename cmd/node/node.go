@@ -627,7 +627,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, trtlStateDB)
 	trtlCfg := tortoise.Config{
-		LayerSize:       int(layerSize),
+		LayerSize:       layerSize,
 		Database:        trtlStateDB,
 		MeshDatabase:    mdb,
 		ATXDB:           atxDB,
@@ -679,7 +679,7 @@ func (app *App) initServices(ctx context.Context,
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
 	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
-	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector(), tBeaconDBStore)
+	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, tBeaconDBStore)
 
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
@@ -707,6 +707,7 @@ func (app *App) initServices(ctx context.Context,
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
+		DBPath:         filepath.Join(dbStorepath, "builder"),
 		Hdist:          app.Config.Hdist,
 		MinerID:        nodeID,
 		AtxsPerBlock:   app.Config.AtxsPerBlock,
@@ -714,7 +715,6 @@ func (app *App) initServices(ctx context.Context,
 		TxsPerBlock:    app.Config.TxsPerBlock,
 	}
 
-	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
 	blockProducer := miner.NewBlockBuilder(
 		minerCfg,
 		sgn,

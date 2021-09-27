@@ -466,28 +466,30 @@ func (tb *TortoiseBeacon) getProposalChannel(ctx context.Context, epoch types.Ep
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 
+	logger := tb.logger.WithContext(ctx).WithFields(
+		log.FieldNamed("current_epoch", tb.epochInProgress),
+		log.FieldNamed("proposal_epoch", epoch))
 	switch {
 	case epoch < tb.epochInProgress:
-		tb.logger.WithContext(ctx).With().Debug("proposal too old, do not accept",
-			log.Uint32("proposal_epoch", uint32(epoch)))
+		logger.With().Debug("proposal too old, do not accept")
 		return nil
 	case epoch == tb.epochInProgress:
 		ongoing := tb.proposalPhaseFinishedTime == time.Time{}
 		if ongoing {
 			return tb.getOrCreateProposalChannel(epoch)
 		}
-		tb.logger.WithContext(ctx).With().Debug("proposal phase ended, do not accept",
-			log.Uint32("proposal_epoch", uint32(epoch)))
+		logger.With().Debug("proposal phase ended, do not accept")
 		return nil
 	case epoch == tb.epochInProgress+1:
 		// always accept proposals for the next epoch, but not too far in the future
+		logger.Debug("accepting proposal for the next epoch")
 		ch := tb.getOrCreateProposalChannel(epoch)
 		if len(ch) == proposalChanCapacity {
 			// the reader loop is not started for the next epoch yet. drop old messages if it's already full
 			// channel receive is not synchronous with length check, use select+default here to prevent potential blocking
 			select {
 			case msg := <-ch:
-				tb.logger.WithContext(ctx).With().Warning("proposal channel for next epoch is full, dropping oldest msg",
+				logger.With().Warning("proposal channel for next epoch is full, dropping oldest msg",
 					log.String("sender", msg.gossip.Sender().String()),
 					log.String("message", msg.message.String()))
 			default:

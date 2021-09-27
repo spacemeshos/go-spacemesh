@@ -3,6 +3,7 @@ package tortoise
 import (
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -10,7 +11,8 @@ import (
 
 var errOverflow = errors.New("vector overflow")
 
-var ( //correction vectors type
+var (
+	// correction vectors type
 	// Opinion vectors
 	support = vec{Support: 1, Against: 0}
 	against = vec{Support: 0, Against: 1}
@@ -25,16 +27,6 @@ type vec struct {
 // Field returns a log field. Implements the LoggableField interface.
 func (a vec) Field() log.Field {
 	return log.String("vote_vector", fmt.Sprintf("(+%d, -%d)", a.Support, a.Against))
-}
-
-func (a vec) netVote() int64 {
-	// prevent overflow/wraparound
-	one := int64(a.Support)
-	two := int64(a.Against)
-	if one < 0 || two < 0 {
-		panic(errOverflow)
-	}
-	return one - two
 }
 
 func (a vec) Add(v vec) vec {
@@ -81,26 +73,31 @@ func (a vec) String() string {
 	return "abstain"
 }
 
-func calculateOpinionWithThreshold(logger log.Log, v vec, layerSize int, theta uint8, delta float64) vec {
-	threshold := float64(theta) / 100 * delta * float64(layerSize)
-	netVote := float64(v.netVote())
+// calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
+// and theta, layer size and delta
+func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, layerSize uint32, delta uint32) vec {
+	threshold := new(big.Int).Set(theta.Num())
+	threshold.
+		Mul(threshold, big.NewInt(int64(delta))).
+		Mul(threshold, big.NewInt(int64(layerSize)))
+
 	logger.With().Debug("threshold opinion",
 		v,
-		log.Int("theta", int(theta)),
-		log.Int("layer_size", layerSize),
-		log.String("delta", fmt.Sprint(delta)),
-		log.String("threshold", fmt.Sprint(threshold)),
-		log.String("net_vote", fmt.Sprint(netVote)))
-	if netVote > threshold {
-		// try net positive vote
-		return support
-	} else if netVote < -1*threshold {
-		// try net negative vote
-		return against
-	} else {
-		// neither threshold was crossed, so abstain
-		return abstain
+		log.String("theta", theta.String()),
+		log.Uint32("layer_size", layerSize),
+		log.Uint32("delta", delta),
+		log.String("threshold", threshold.String()))
+
+	exceedsThreshold := func(val uint64) bool {
+		v := new(big.Int).SetUint64(val)
+		return v.Mul(v, theta.Denom()).Cmp(threshold) == 1
 	}
+	if v.Support > v.Against && exceedsThreshold(v.Support-v.Against) {
+		return support
+	} else if v.Against > v.Support && exceedsThreshold(v.Against-v.Support) {
+		return against
+	}
+	return abstain
 }
 
 // Opinion is opinions on other blocks.
