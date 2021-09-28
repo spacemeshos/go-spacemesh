@@ -11,6 +11,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -49,11 +50,16 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	return coinMock
 }
 
-func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64) (*TortoiseBeacon, *timesync.TimeClock) {
+func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64, hasATX bool) (*TortoiseBeacon, *timesync.TimeClock) {
 	conf := UnitTestConfig()
 
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
+	if hasATX {
+		mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).MaxTimes(3)
+	} else {
+		mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, database.ErrNotFound).MaxTimes(3)
+	}
 	// epoch 2, 3, and 4 (since we waited til epoch 3 in each test)
 	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(mockEpochWeight, nil, nil).MaxTimes(3)
 	mwc := coinValueMock(t, true)
@@ -81,7 +87,7 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64) (*TortoiseBeacon,
 func TestTortoiseBeacon(t *testing.T) {
 	t.Parallel()
 
-	tb, clock := setUpTortoiseBeacon(t, uint64(10))
+	tb, clock := setUpTortoiseBeacon(t, uint64(10), true)
 	epoch := types.EpochID(3)
 	err := tb.Start(context.TODO())
 	require.NoError(t, err)
@@ -101,7 +107,25 @@ func TestTortoiseBeacon(t *testing.T) {
 func TestTortoiseBeaconZeroWeightEpoch(t *testing.T) {
 	t.Parallel()
 
-	tb, clock := setUpTortoiseBeacon(t, uint64(0))
+	tb, clock := setUpTortoiseBeacon(t, uint64(0), true)
+	epoch := types.EpochID(3)
+	err := tb.Start(context.TODO())
+	require.NoError(t, err)
+
+	t.Logf("Awaiting epoch %v", epoch)
+	awaitEpoch(clock, epoch)
+
+	v, err := tb.GetBeacon(epoch)
+	assert.Equal(t, ErrBeaconNotCalculated, err)
+	assert.Nil(t, v)
+
+	tb.Close()
+}
+
+func TestTortoiseBeaconNoATXInPreviousEpoch(t *testing.T) {
+	t.Parallel()
+
+	tb, clock := setUpTortoiseBeacon(t, uint64(0), false)
 	epoch := types.EpochID(3)
 	err := tb.Start(context.TODO())
 	require.NoError(t, err)

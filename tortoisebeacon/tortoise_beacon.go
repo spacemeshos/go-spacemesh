@@ -348,6 +348,12 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		return
 	}
 
+	// make sure this node has ATX in the last epoch and is eligible to participate in tortoise beacon
+	if _, err := tb.atxDB.GetNodeAtxIDForEpoch(tb.nodeID, epoch-1); err != nil {
+		logger.Info("node has no ATX in last epoch. not participating in tortoise beacon")
+		return
+	}
+
 	logger.Info("handling epoch")
 	epochWeight, atxs, err := tb.atxDB.GetEpochWeight(epoch)
 	if err != nil {

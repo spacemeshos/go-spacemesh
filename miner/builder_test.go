@@ -132,20 +132,34 @@ var (
 	}
 )
 
+func prepareBuildingBlocks(t *testing.T) (*state.TxMempool, []types.TransactionID) {
+	recipient := types.BytesToAddress([]byte{0x01})
+	signer := signing.NewEdSigner()
+	txPool := state.NewTxMemPool()
+	trans := []*types.Transaction{
+		NewTx(t, 1, recipient, signer),
+		NewTx(t, 2, recipient, signer),
+		NewTx(t, 3, recipient, signer),
+	}
+	txIDs := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
+	txPool.Put(trans[0].ID(), trans[0])
+	txPool.Put(trans[1].ID(), trans[1])
+	txPool.Put(trans[2].ID(), trans[2])
+
+	return txPool, txIDs
+}
+
 func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	net := service.NewSimulator()
 	beginRound := make(chan types.LayerID)
 	n := net.NewNode()
 	receiver := net.NewNode()
 
-	blockset := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
-
-	txPool := state.NewTxMemPool()
-
-	atxPool := activation.NewAtxMemPool()
+	txPool, txIDs := prepareBuildingBlocks(t)
 
 	st := []*types.Block{block1, block2, block3}
 	builder := createBlockBuilder(t, "a", n, st, nil)
+	blockset := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{{}, blockset, {}}, nil
 	}}
@@ -156,25 +170,6 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	err := builder.Start(context.TODO())
 	assert.NoError(t, err)
 
-	recipient := types.BytesToAddress([]byte{0x01})
-	signer := signing.NewEdSigner()
-
-	trans := []*types.Transaction{
-		NewTx(t, 1, recipient, signer),
-		NewTx(t, 2, recipient, signer),
-		NewTx(t, 3, recipient, signer),
-	}
-
-	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
-
-	txPool.Put(trans[0].ID(), trans[0])
-	txPool.Put(trans[1].ID(), trans[1])
-	txPool.Put(trans[2].ID(), trans[2])
-
-	atxPool.Put(atxs[0])
-	atxPool.Put(atxs[1])
-	atxPool.Put(atxs[2])
-
 	go func() { beginRound <- types.GetEffectiveGenesis().Add(1) }()
 	select {
 	case output := <-gossipMessages:
@@ -183,13 +178,46 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 
 		assert.Equal(t, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, b.ForDiff)
 
-		assert.True(t, ContainsTx(b.TxIDs, transids[0]))
-		assert.True(t, ContainsTx(b.TxIDs, transids[1]))
-		assert.True(t, ContainsTx(b.TxIDs, transids[2]))
+		assert.True(t, ContainsTx(b.TxIDs, txIDs[0]))
+		assert.True(t, ContainsTx(b.TxIDs, txIDs[1]))
+		assert.True(t, ContainsTx(b.TxIDs, txIDs[2]))
 
 		assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
-	case <-time.After(1 * time.Minute):
+	case <-time.After(500 * time.Millisecond):
 		assert.Fail(t, "timeout on receiving block")
+	}
+}
+
+func TestBlockBuilder_CreateBlockFlowNoATX(t *testing.T) {
+	net := service.NewSimulator()
+	beginRound := make(chan types.LayerID)
+	n := net.NewNode()
+	receiver := net.NewNode()
+
+	txPool, _ := prepareBuildingBlocks(t)
+
+	st := []*types.Block{block1, block2, block3}
+	builder := createBlockBuilder(t, "a", n, st, nil)
+	blockset := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
+	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
+		return types.BlockID{0}, [][]types.BlockID{{}, blockset, {}}, nil
+	}}
+	builder.TransactionPool = txPool
+	builder.beginRoundEvent = beginRound
+
+	mbo := &mockBlockOracle{}
+	mbo.err = blocks.ErrMinerHasNoATXInPreviousEpoch
+	builder.blockOracle = mbo
+
+	gossipMessages := receiver.RegisterGossipProtocol(blocks.NewBlockProtocol, priorityq.High)
+	err := builder.Start(context.TODO())
+	assert.NoError(t, err)
+
+	go func() { beginRound <- types.GetEffectiveGenesis().Add(1) }()
+	select {
+	case <-gossipMessages:
+		assert.Fail(t, "miner should not produce blocks")
+	case <-time.After(500 * time.Millisecond):
 	}
 }
 
@@ -411,7 +439,6 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	ms := &mockSyncer{}
 	ms.notSynced = true
 	mbo := &mockBlockOracle{}
-	mbo.err = errors.New("err")
 
 	builder := createBlockBuilder(t, "a", n1, bs, nil)
 	builder.syncer = ms
