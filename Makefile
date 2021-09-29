@@ -95,11 +95,11 @@ install:
 build: go-spacemesh
 .PHONY: build
 
-hare p2p sync: get-gpu-setup
+hare p2p sync: svm-setup get-gpu-setup
 	cd cmd/$@ ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
-go-spacemesh: get-gpu-setup
-	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) $(GOTAGS) .
-harness: get-gpu-setup
+go-spacemesh: svm-setup get-gpu-setup
+	go build -o $(BIN_DIR)$@$(EXE) $(CGO_CFLAGS) $(LDFLAGS) $(GOTAGS) .
+harness: svm-setup get-gpu-setup
 	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
 .PHONY: hare p2p sync harness go-spacemesh
 
@@ -132,20 +132,20 @@ docker-local-build: go-spacemesh hare p2p sync harness
 endif
 
 # TODO(nkryuchkov): Add -race flag to the `test` target and remove `test-race` after all data races are fixed.
-test-race: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -race ./...
+test-race: svm-setup get-gpu-setup
+	$(ULIMIT) CGO_CFLAGS="$(CGO_TEST_CFLAGS)" CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -race ./...
 .PHONY: test
 
-test test-all: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 ./...
+test test-all: svm-setup get-gpu-setup
+	$(ULIMIT) CGO_CFLAGS="$(CGO_TEST_CFLAGS)" CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 ./...
 .PHONY: test
 
-test-no-app-test: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -timeout 0 -p 1 -tags exclude_app_test ./...
+test-no-app-test: svm-setup get-gpu-setup
+	$(ULIMIT) CGO_CFLAGS="$(CGO_TEST_CFLAGS)" CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test-no-app-test
 
-test-only-app-test: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
+test-only-app-test: svm-setup get-gpu-setup
+	$(ULIMIT) CGO_CFLAGS="$(CGO_TEST_CFLAGS)" CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
 .PHONY: test-only-app-test
 
 test-tidy:
@@ -186,6 +186,7 @@ golangci-lint-fast-github-action:
 
 cover:
 	@echo "mode: count" > cover-all.out
+	@export CGO_CFLAGS="$(CGO_TEST_CFLAGS)"
 	@export CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)";\
 	  $(foreach pkg,$(PKGS),\
 		go test -coverprofile=cover.out -covermode=count $(pkg);\

@@ -17,8 +17,10 @@ endif
 
 GOTAGS = # -tags ...
 export CGO_LDFLAGS := -L$(BIN_DIR)
+export CGO_CFLAGS := -I$(BIN_DIR)
 
 CGO_TEST_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$(BIN_DIR)
+CGO_TEST_CFLAGS := $(CGO_CFLAGS)
 
 ifeq ($(GOOS),windows)
   platform := windows
@@ -39,6 +41,26 @@ endif
 ifneq ($(VERBOSE),)
   $(info "OS: $(OS), HOST_OS: $(HOST_OS), GOOS: $(GOOS), GOARCH: $(GOARH), BIN_DIR: $(BIN_DIR), platform: $(platform)")
 endif
+
+SVM_ARTIFACTS_V = 0.0.0
+SVM_ARTIFACTS_URL_ZIP = https://github.com/spacemeshos/svm/releases/download/v$(SVM_ARTIFACTS_V)/svm-$(platform).zip
+SVM_ARTIFACTS_ZIP = svm-$(platform).zip
+ifeq ($(platform), windows)
+  SVM_LIBS = svm.lib
+else
+  SVM_LIBS = libsvm.a
+endif
+
+BINDIR_SVM_LIBS = $(foreach X,$(SVM_LIBS),$(BIN_DIR)$(X))
+$(BINDIR_SVM_LIBS): $(PROJ_DIR)$(SVM_ARTIFACTS_ZIP)
+	mkdir -p $(dir $@)
+	unzip -o $(PROJ_DIR)$(SVM_ARTIFACTS_ZIP) -d $(dir $@) $(notdir $@)
+	touch $@
+$(PROJ_DIR)$(SVM_ARTIFACTS_ZIP):
+	curl -L $(SVM_ARTIFACTS_URL_ZIP) -o $(PROJ_DIR)$(SVM_ARTIFACTS_ZIP)
+
+svm-setup: $(PROJ_DIR)$(SVM_ARTIFACTS_ZIP) $(BINDIR_SVM_LIBS)
+.PHONY: svm-setup
 
 GPU_SETUP_REV = 0.1.21
 GPU_SETUP_ZIP = libgpu-setup-$(platform)-$(GPU_SETUP_REV).zip
@@ -95,18 +117,26 @@ print-test-targets:
 	done
 .PHONY: $(SUBDIRS_ALL) $(SUBDIRS_LVL2) $(SUBDIRS_ONLY) print-test-targets
 
-go-env: get-gpu-setup
+go-env: svm-setup get-gpu-setup
 	go env -w CGO_LDFLAGS="$(CGO_LDFLAGS)"
 .PHONY: go-env
 
-go-env-test: get-gpu-setup
+go-env-test: svm-setup get-gpu-setup
 	go env -w CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)"
 .PHONY: go-env-test
 
-print-ldflags: get-gpu-setup
+print-ldflags: svm-setup get-gpu-setup
 	@echo $(CGO_LDFLAGS)
 .PHONY: print-ldflags
 
-print-test-ldflags: get-gpu-setup
+print-test-ldflags: svm-setup get-gpu-setup
 	@echo $(CGO_TEST_LDFLAGS)
 .PHONY: print-test-ldflags
+
+print-cflags: svm-setup get-gpu-setup
+	@echo $(CGO_CFLAGS)
+.PHONY: print-cflags
+
+print-test-cflags: svm-setup get-gpu-setup
+	@echo $(CGO_TEST_CFLAGS)
+.PHONY: print-test-cflags
