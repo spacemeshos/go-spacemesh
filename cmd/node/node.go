@@ -321,6 +321,7 @@ type App struct {
 	closers        []interface{ Close() }
 	log            log.Log
 	txPool         *mempool.TxMempool
+	svm            *svm.SVM
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
 	loggers        map[string]*zap.AtomicLevel
@@ -618,14 +619,13 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
+	svm := svm.New(processor, app.addLogger(SVMLogger, lg))
 
 	if mdb.PersistentData() {
 		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
-		svm := svm.New(app.state, app.addLogger(SVMLogger, lg))
-
 		if err := svm.SetupGenesis(app.Config.Genesis); err != nil {
 			return err
 		}
@@ -760,6 +760,7 @@ func (app *App) initServices(ctx context.Context,
 	app.atxDb = atxDB
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
+	app.svm = svm
 	if !app.Config.TIME.Peersync.Disable {
 		conf := app.Config.TIME.Peersync
 		conf.ResponsesBufferSize = app.Config.P2P.BufferSize
