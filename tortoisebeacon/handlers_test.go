@@ -47,6 +47,7 @@ func createTortoiseBeacon(t *testing.T, epoch types.EpochID) (*TortoiseBeacon, *
 		hasVoted:                make([]map[string]struct{}, 10),
 		epochInProgress:         epoch,
 		running:                 1,
+		inProtocol:              1,
 	}
 	return tb, mockDB
 }
@@ -247,6 +248,21 @@ func TestTB_HandleSerializedProposalMessage_Shutdown(t *testing.T) {
 	mockGossip := createProposalGossip(t, signer, epoch, false)
 
 	atomic.StoreUint64(&tb.running, 0)
+	tb.HandleSerializedProposalMessage(context.TODO(), mockGossip, nil)
+	checkProposalQueueSize(t, tb, epoch, 0)
+}
+
+func TestTB_HandleSerializedProposalMessage_NotInProtocol(t *testing.T) {
+	t.Parallel()
+
+	const epoch = types.EpochID(10)
+	types.SetLayersPerEpoch(1)
+
+	tb, _ := createTortoiseBeacon(t, epoch)
+	signer := signing.NewEdSigner()
+	mockGossip := createProposalGossip(t, signer, epoch, false)
+
+	atomic.StoreUint64(&tb.inProtocol, 0)
 	tb.HandleSerializedProposalMessage(context.TODO(), mockGossip, nil)
 	checkProposalQueueSize(t, tb, epoch, 0)
 }
@@ -557,6 +573,25 @@ func TestTB_HandleSerializedFirstVotingMessage_Shutdown(t *testing.T) {
 	checkFirstIncomingVotes(t, tb, map[string]proposals{})
 }
 
+func TestTB_HandleSerializedFirstVotingMessage_NotInProtocol(t *testing.T) {
+	t.Parallel()
+
+	const epoch = types.EpochID(10)
+	types.SetLayersPerEpoch(1)
+	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+
+	tb, _ := createTortoiseBeacon(t, epoch)
+	atomic.StoreUint64(&tb.inProtocol, 0)
+
+	signer := signing.NewEdSigner()
+	mockGossip := createFirstVoteGossip(t, signer, epoch, valid, pValid, false)
+
+	tb.HandleSerializedFirstVotingMessage(context.TODO(), mockGossip, nil)
+	checkVoted(t, tb, signer, types.FirstRound, false)
+	checkFirstIncomingVotes(t, tb, map[string]proposals{})
+}
+
 func TestTB_HandleSerializedFirstVotingMessage_CorruptedGossipMsg(t *testing.T) {
 	t.Parallel()
 
@@ -765,6 +800,24 @@ func TestTB_HandleSerializedFollowingVotingMessage_Shutdown(t *testing.T) {
 	signer := signing.NewEdSigner()
 	tb, _, _ := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
 	atomic.StoreUint64(&tb.running, 0)
+	// this msg will contain a bit vector that set bit 0 and 2
+	mockGossip := createFollowingVoteGossip(t, signer, epoch, round, []uint64{0b101}, false)
+
+	tb.HandleSerializedFollowingVotingMessage(context.TODO(), mockGossip, nil)
+	checkVoted(t, tb, signer, round, false)
+	checkVoteMargins(t, tb, map[string]*big.Int{})
+}
+
+func TestTB_HandleSerializedFollowingVotingMessage_NotInProtocol(t *testing.T) {
+	t.Parallel()
+
+	const epoch = types.EpochID(10)
+	const round = types.RoundID(5)
+	types.SetLayersPerEpoch(1)
+
+	signer := signing.NewEdSigner()
+	tb, _, _ := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
+	atomic.StoreUint64(&tb.inProtocol, 0)
 	// this msg will contain a bit vector that set bit 0 and 2
 	mockGossip := createFollowingVoteGossip(t, signer, epoch, round, []uint64{0b101}, false)
 

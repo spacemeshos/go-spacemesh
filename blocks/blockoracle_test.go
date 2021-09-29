@@ -11,6 +11,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -39,6 +40,7 @@ type mockActivationDB struct {
 	atxPublicationLayer types.LayerID
 	atxs                map[string]map[types.LayerID]types.ATXID
 	activeSetAtxs       []types.ATXID
+	atxErr              error
 }
 
 func (a mockActivationDB) GetEpochAtxs(_ types.EpochID) (atxs []types.ATXID) {
@@ -54,7 +56,7 @@ func (a mockActivationDB) GetIdentity(edID string) (types.NodeID, error) {
 
 func (a mockActivationDB) GetNodeAtxIDForEpoch(nID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error) {
 	if nID.Key != nodeID.Key || targetEpoch == 0 {
-		return *types.EmptyATXID, errors.New("not found")
+		return *types.EmptyATXID, a.atxErr
 	}
 	return atxID, nil
 }
@@ -211,7 +213,32 @@ func TestBlockOracleNoActivationsForNode(t *testing.T) {
 	beaconProvider := mockTortoiseBeacon(t)
 	lg := logtest.New(t).WithName(nID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nID, func() bool { return true }, lg.WithName("blockOracle"))
+	activationDB.atxErr = database.ErrNotFound
+	_, proofs, _, err := blockOracle.BlockEligible(types.NewLayerID(layersPerEpoch * 2))
+	r.Equal(ErrMinerHasNoATXInPreviousEpoch, err)
+	r.Nil(proofs)
+}
 
+func TestBlockOracleATXLookupError(t *testing.T) {
+	r := require.New(t)
+
+	committeeSize := uint32(200)
+	layersPerEpoch := uint32(10)
+	types.SetLayersPerEpoch(layersPerEpoch)
+	seed := make([]byte, 32)
+	rand.Read(seed)
+	_, publicKey, err := signing.NewVRFSigner(seed)
+	r.NoError(err)
+	nID := types.NodeID{
+		Key:          "other key",
+		VRFPublicKey: publicKey,
+	} // This guy has no activations 🧐
+
+	activationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(layersPerEpoch)}
+	beaconProvider := mockTortoiseBeacon(t)
+	lg := logtest.New(t).WithName(nID.Key[:5])
+	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nID, func() bool { return true }, lg.WithName("blockOracle"))
+	activationDB.atxErr = errors.New("not found")
 	_, proofs, _, err := blockOracle.BlockEligible(types.NewLayerID(layersPerEpoch * 2))
 	r.EqualError(err, "failed to get latest atx for node in epoch 2: failed to get atx id for target epoch 2: not found")
 	r.Nil(proofs)
@@ -460,6 +487,7 @@ func TestBlockEligibility_calc(t *testing.T) {
 	atxH := types.NewActivationTx(types.NIPostChallenge{}, types.Address{}, nil, 0, nil)
 	atxDb := &mockAtxDB{atxH: atxH.ActivationTxHeader}
 	o := NewMinerBlockOracle(10, 1, atxDb, mockTortoiseBeacon(t), vrfsgn, nodeID, func() bool { return true }, logtest.New(t).WithName(t.Name()))
+	o.atx = atxH.ActivationTxHeader
 	_, err := o.calcEligibilityProofs(1)
 	r.EqualError(err, "zero total weight not allowed") // a hack to make sure we got genesis active set size on genesis
 }

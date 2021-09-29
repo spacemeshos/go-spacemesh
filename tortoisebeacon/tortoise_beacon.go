@@ -114,9 +114,10 @@ func New(
 
 // TortoiseBeacon represents Tortoise Beacon.
 type TortoiseBeacon struct {
-	running uint64
-	eg      errgroup.Group
-	cancel  context.CancelFunc
+	running    uint64
+	inProtocol uint64
+	eg         errgroup.Group
+	cancel     context.CancelFunc
 
 	logger log.Log
 
@@ -200,8 +201,8 @@ func (tb *TortoiseBeacon) Close() {
 	tb.clock.Unsubscribe(tb.layerTicker)
 }
 
-// IsClosed returns true if background workers are not running.
-func (tb *TortoiseBeacon) IsClosed() bool {
+// isClosed returns true if background workers are not running.
+func (tb *TortoiseBeacon) isClosed() bool {
 	return atomic.LoadUint64(&tb.running) == 0
 }
 
@@ -265,19 +266,37 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 	}
 }
 
-func (tb *TortoiseBeacon) setupEpoch(epochWeight uint64, logger log.Log) chan *proposalMessageWithReceiptData {
+func (tb *TortoiseBeacon) setBeginProtocol(ctx context.Context) {
+	if !atomic.CompareAndSwapUint64(&tb.inProtocol, 0, 1) {
+		tb.logger.WithContext(ctx).Error("attempt to begin tortoise beacon protocol more than once")
+	}
+}
+
+func (tb *TortoiseBeacon) setEndProtocol(ctx context.Context) {
+	if !atomic.CompareAndSwapUint64(&tb.inProtocol, 1, 0) {
+		tb.logger.WithContext(ctx).Error("attempt to end tortoise beacon protocol more than once")
+	}
+}
+
+func (tb *TortoiseBeacon) isInProtocol() bool {
+	return atomic.LoadUint64(&tb.inProtocol) == 1
+}
+
+func (tb *TortoiseBeacon) setupEpoch(epoch types.EpochID, epochWeight uint64, logger log.Log) chan *proposalMessageWithReceiptData {
+	tb.cleanupEpoch(epoch - 1) // just in case we processed any gossip messages before the protocol started
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
 	tb.epochWeight = epochWeight
 	tb.proposalChecker = createProposalChecker(tb.config.Kappa, tb.config.Q, epochWeight, logger)
-	ch := tb.getOrCreateProposalChannel(tb.epochInProgress)
+	ch := tb.getOrCreateProposalChannel(epoch)
 	// allow proposals for the next epoch to come in early
-	_ = tb.getOrCreateProposalChannel(tb.epochInProgress + 1)
+	_ = tb.getOrCreateProposalChannel(epoch + 1)
 	return ch
 }
 
-func (tb *TortoiseBeacon) cleanupEpoch() {
+func (tb *TortoiseBeacon) cleanupEpoch(epoch types.EpochID) {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -288,9 +307,9 @@ func (tb *TortoiseBeacon) cleanupEpoch() {
 	tb.hasVoted = make([]map[string]struct{}, tb.config.RoundsNumber)
 	tb.proposalPhaseFinishedTime = time.Time{}
 
-	if ch, ok := tb.proposalChans[tb.epochInProgress]; ok {
+	if ch, ok := tb.proposalChans[epoch]; ok {
 		close(ch)
-		delete(tb.proposalChans, tb.epochInProgress)
+		delete(tb.proposalChans, epoch)
 	}
 }
 
@@ -322,6 +341,10 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 		logger.Debug("not first layer in epoch, skipping")
 		return
 	}
+	if tb.isInProtocol() {
+		logger.Error("last beacon protocol is still running, skipping")
+		return
+	}
 	logger.Info("first layer in epoch, proceeding")
 
 	tb.mu.Lock()
@@ -348,6 +371,12 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		return
 	}
 
+	// make sure this node has ATX in the last epoch and is eligible to participate in tortoise beacon
+	if _, err := tb.atxDB.GetNodeAtxIDForEpoch(tb.nodeID, epoch-1); err != nil {
+		logger.Info("node has no ATX in last epoch, not participating in tortoise beacon")
+		return
+	}
+
 	logger.Info("handling epoch")
 	epochWeight, atxs, err := tb.atxDB.GetEpochWeight(epoch)
 	if err != nil {
@@ -359,8 +388,11 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		return
 	}
 
-	ch := tb.setupEpoch(epochWeight, logger)
-	defer tb.cleanupEpoch()
+	tb.setBeginProtocol(ctx)
+	defer tb.setEndProtocol(ctx)
+
+	ch := tb.setupEpoch(epoch, epochWeight, logger)
+	defer tb.cleanupEpoch(epoch)
 
 	tb.eg.Go(func() error {
 		tb.readProposalMessagesLoop(ctx, ch)
@@ -423,7 +455,7 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 }
 
 func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.EpochID) error {
-	if tb.IsClosed() {
+	if tb.isClosed() {
 		return nil
 	}
 
@@ -690,7 +722,8 @@ func createProposalChecker(kappa uint64, q *big.Rat, epochWeight uint64, logger 
 	}
 
 	threshold := atxThreshold(kappa, q, epochWeight)
-	logger.With().Debug("created proposal checker with ATX threshold",
+	logger.With().Info("created proposal checker with ATX threshold",
+		log.Uint64("epoch_weight", epochWeight),
 		log.String("threshold", threshold.String()))
 	return &proposalChecker{threshold: threshold}
 }

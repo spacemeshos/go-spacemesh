@@ -306,6 +306,11 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
+				if errors.Is(err, blocks.ErrMinerHasNoATXInPreviousEpoch) {
+					logger.With().Info("node has no ATX in previous epoch and is not eligible for blocks")
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "not eligible to produce block")
+					continue
+				}
 				events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to check for block eligibility")
 				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
