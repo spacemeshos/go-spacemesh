@@ -172,11 +172,6 @@ func (m *DB) Transactions() database.Getter {
 	return m.transactions
 }
 
-// InputVector exports the inputvector DB
-func (m *DB) InputVector() database.Getter {
-	return m.inputVector
-}
-
 // ErrAlreadyExist error returned when adding an existing value to the database
 var ErrAlreadyExist = errors.New("block already exists in database")
 
@@ -191,6 +186,7 @@ func (m *DB) AddBlock(bl *types.Block) error {
 	if err := m.writeBlock(bl); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -283,7 +279,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	zero := false
 	ids := []types.BlockID{}
 	it := m.layers.Find(layerBuf)
-	// TODO(dshulyak) iterator must be able to return an error
+	defer it.Release()
 	for it.Next() {
 		if len(it.Key()) == len(layerBuf) {
 			zero = true
@@ -293,6 +289,9 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 		copy(id[:], it.Key()[len(layerBuf):])
 		ids = append(ids, id)
 	}
+	if it.Error() != nil {
+		return nil, it.Error()
+	}
 	if zero || len(ids) > 0 {
 		return ids, nil
 	}
@@ -301,11 +300,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 
 // AddZeroBlockLayer tags lyr as a layer without blocks
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
-	err := m.layers.Put(index.Bytes(), nil)
-	if err == nil {
-		m.persistLayerHash(index, types.EmptyLayerHash)
-	}
-	return err
+	return m.layers.Put(index.Bytes(), nil)
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
@@ -409,31 +404,16 @@ func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blk
 	return m.inputVector.Put(id.Bytes(), buf)
 }
 
-func (m *DB) persistProcessedLayer(lyr *ProcessedLayer) error {
-	data, err := types.InterfaceToBytes(lyr)
-	if err != nil {
-		return err
-	}
-	if err := m.general.Put(constPROCESSED, data); err != nil {
-		return err
-	}
-	m.With().Debug("persisted processed layer",
-		lyr.ID,
-		log.String("layer_hash", lyr.Hash.ShortString()))
-	return nil
+func (m *DB) persistProcessedLayer(layerID types.LayerID) error {
+	return m.general.Put(constPROCESSED, layerID.Bytes())
 }
 
-func (m *DB) recoverProcessedLayer() (*ProcessedLayer, error) {
-	processed, err := m.general.Get(constPROCESSED)
+func (m *DB) recoverProcessedLayer() (types.LayerID, error) {
+	data, err := m.general.Get(constPROCESSED)
 	if err != nil {
-		return nil, err
+		return types.NewLayerID(0), err
 	}
-	var data ProcessedLayer
-	err = types.BytesToInterface(processed, &data)
-	if err != nil {
-		return nil, err
-	}
-	return &data, nil
+	return types.BytesToLayerID(data), nil
 }
 
 func (m *DB) writeBlock(bl *types.Block) error {
@@ -472,11 +452,12 @@ func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
 	return h, nil
 }
 
-func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) {
-	if err := m.general.Put(getLayerHashKey(layerID), hash.Bytes()); err != nil {
-		m.With().Error("failed to persist layer hash", log.Err(err), layerID,
-			log.String("layer_hash", hash.ShortString()))
-	}
+func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) error {
+	return m.general.Put(getLayerHashKey(layerID), hash.Bytes())
+}
+
+func (m *DB) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) error {
+	return m.general.Put(getAggregatedLayerHashKey(layerID), hash.Bytes())
 }
 
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
@@ -706,6 +687,7 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 // GetRewards retrieves account's rewards by address
 func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err error) {
 	it := m.transactions.Find(getRewardKeyPrefix(account))
+	defer it.Release()
 	for it.Next() {
 		if it.Key() == nil {
 			break
@@ -724,12 +706,14 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 			Coinbase:            reward.Coinbase,
 		})
 	}
+	err = it.Error()
 	return
 }
 
 // GetRewardsBySmesherID retrieves rewards by smesherID
 func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Reward, err error) {
 	it := m.transactions.Find(getSmesherRewardKeyPrefix(smesherID))
+	defer it.Release()
 	for it.Next() {
 		if it.Key() == nil {
 			break
@@ -755,6 +739,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 			Coinbase:            reward.Coinbase,
 		})
 	}
+	err = it.Error()
 	return
 }
 
@@ -831,12 +816,16 @@ func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendin
 		it      = m.unappliedTxs.Find(addr[:])
 		pending = pendingtxs.NewAccountPendingTxs()
 	)
+	defer it.Release()
 	for it.Next() {
 		var mtx types.MeshTransaction
 		if err := codec.Decode(it.Value(), &mtx); err != nil {
 			return nil, err
 		}
 		pending.Add(mtx.LayerID, &mtx.Transaction)
+	}
+	if it.Error() != nil {
+		return nil, it.Error()
 	}
 	return pending, nil
 }
@@ -907,8 +896,9 @@ func (m *DB) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction,
 }
 
 // GetTransactionsByDestination retrieves txs by destination and layer
-func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID) {
+func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
 	it := m.transactions.Find(getTransactionDestKeyPrefix(l, account))
+	defer it.Release()
 	for it.Next() {
 		if it.Key() == nil {
 			break
@@ -917,12 +907,14 @@ func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address
 		copy(id[:], it.Value())
 		txs = append(txs, id)
 	}
+	err = it.Error()
 	return
 }
 
 // GetTransactionsByOrigin retrieves txs by origin and layer
-func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID) {
+func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
 	it := m.transactions.Find(getTransactionOriginKeyPrefix(l, account))
+	defer it.Release()
 	for it.Next() {
 		if it.Key() == nil {
 			break
@@ -931,6 +923,7 @@ func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (tx
 		copy(id[:], it.Value())
 		txs = append(txs, id)
 	}
+	err = it.Error()
 	return
 }
 

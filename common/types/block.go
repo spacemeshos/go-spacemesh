@@ -239,9 +239,6 @@ type BlockEligibilityProof struct {
 
 	// Sig is the VRF signature from which the block's LayerID is derived.
 	Sig []byte
-
-	// TortoiseBeacon is the tortoise beacon value for this block.
-	TortoiseBeacon []byte
 }
 
 // BlockHeader includes all of a block's fields, except the list of transaction IDs, activation transaction IDs and the
@@ -275,9 +272,10 @@ func (b BlockHeader) Layer() LayerID {
 // produce the block signature.
 type MiniBlock struct {
 	BlockHeader
-	TxIDs     []TransactionID
-	ActiveSet *[]ATXID
-	RefBlock  *BlockID
+	TxIDs          []TransactionID
+	ActiveSet      *[]ATXID
+	RefBlock       *BlockID
+	TortoiseBeacon []byte
 }
 
 // Block includes all of a block's fields, including signature and a cache of the BlockID and MinerID.

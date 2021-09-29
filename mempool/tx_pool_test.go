@@ -1,7 +1,8 @@
-package state
+package mempool
 
 import (
 	"encoding/binary"
+	"github.com/stretchr/testify/assert"
 	"sync"
 	"testing"
 	"time"
@@ -178,4 +179,16 @@ func createBatch(t testing.TB, signer *signing.EdSigner) ([]*types.Transaction, 
 		txIDBatch = append(txIDBatch, tx.ID())
 	}
 	return txBatch, txIDBatch
+}
+
+func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *types.Transaction {
+	feeAmount := uint64(1)
+	rec := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
+	return createTransaction(t, nonce, rec, totalAmount-feeAmount, feeAmount, signer)
+}
+
+func createTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+	tx, err := types.NewSignedTx(nonce, destination, amount, 100, fee, signer)
+	assert.NoError(t, err)
+	return tx
 }

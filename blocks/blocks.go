@@ -4,11 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
+	"github.com/spacemeshos/go-spacemesh/blocks/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	commonMetrics "github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"time"
 )
 
 // NewBlockProtocol is the protocol indicator for gossip blocks
@@ -93,6 +95,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 
 	// set the block id when received
 	blk.Initialize()
+
 	logger = logger.WithFields(blk.ID(), blk.Layer())
 
 	// check if known
@@ -106,6 +109,8 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 		logger.With().Error("failed to validate block", log.Err(err))
 		return fmt.Errorf("failed to validate block %v", err)
 	}
+
+	saveMetrics(blk)
 
 	if err := bh.mesh.AddBlockWithTxs(ctx, &blk); err != nil {
 		logger.With().Error("failed to add block to database", log.Err(err))
@@ -122,6 +127,40 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 
 	logger.With().Debug("time to process block", log.Duration("duration", time.Since(start)))
 	return nil
+}
+
+func saveMetrics(blk types.Block) {
+	type metric struct {
+		hist  commonMetrics.Histogram
+		value float64
+	}
+
+	metricList := []metric{
+		{
+			hist:  metrics.LayerBlockSize,
+			value: float64(len(blk.Bytes())),
+		},
+		{
+			hist:  metrics.NumTxsInBlock,
+			value: float64(len(blk.TxIDs)),
+		},
+		{
+			hist:  metrics.ForDiffLength,
+			value: float64(len(blk.ForDiff)),
+		},
+		{
+			hist:  metrics.NeutralDiffLength,
+			value: float64(len(blk.NeutralDiff)),
+		},
+		{
+			hist:  metrics.AgainstDiffLength,
+			value: float64(len(blk.AgainstDiff)),
+		},
+	}
+
+	for _, m := range metricList {
+		m.hist.Observe(m.value)
+	}
 }
 
 func combineBlockDiffs(blk types.Block) []types.BlockID {

@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
@@ -82,10 +84,10 @@ type turtle struct {
 	WindowSize uint32
 
 	// thresholds used for determining finality, and whether to use local or global results, respectively
-	GlobalThreshold uint8
-	LocalThreshold  uint8
+	GlobalThreshold *big.Rat
+	LocalThreshold  *big.Rat
 
-	AvgLayerSize  int
+	AvgLayerSize  uint32
 	MaxExceptions int
 
 	// how often we want to rerun from genesis
@@ -103,9 +105,9 @@ func newTurtle(
 	zdist,
 	confidenceParam,
 	windowSize uint32,
-	avgLayerSize int,
+	avgLayerSize uint32,
 	globalThreshold,
-	localThreshold uint8,
+	localThreshold *big.Rat,
 	rerun time.Duration,
 ) *turtle {
 	return &turtle{
@@ -127,7 +129,7 @@ func newTurtle(
 		atxdb:           atxdb,
 		clock:           clock,
 		AvgLayerSize:    avgLayerSize,
-		MaxExceptions:   int(hdist) * avgLayerSize * 100,
+		MaxExceptions:   int(hdist) * int(avgLayerSize) * 100,
 		RerunInterval:   rerun,
 	}
 }
@@ -271,24 +273,32 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 ) bool {
 	logger := t.logger.WithContext(ctx)
 	for _, exceptionBlockID := range diffList {
-		if exceptionBlock, err := t.bdp.GetBlock(exceptionBlockID); err != nil {
+		exceptionBlock, err := t.bdp.GetBlock(exceptionBlockID)
+		if err != nil {
 			logger.With().Error("inconsistent state: can't find block from diff list",
 				log.FieldNamed("exception_block_id", exceptionBlockID))
 			return false
-		} else if exceptionBlock.LayerIndex.Before(baseBlockLayer) {
+		}
+
+		if exceptionBlock.LayerIndex.Before(baseBlockLayer) {
 			logger.With().Error("good block candidate contains exception for block older than its base block",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
 				log.FieldNamed("base_block_layer", baseBlockLayer))
 			return false
-		} else if v, err := t.getLocalBlockOpinion(ctx, exceptionBlock.LayerIndex, exceptionBlockID); err != nil {
+		}
+
+		v, err := t.getLocalBlockOpinion(ctx, exceptionBlock.LayerIndex, exceptionBlockID)
+		if err != nil {
 			logger.With().Error("unable to get single block opinion for block in exception list",
 				log.FieldNamed("older_block", exceptionBlockID),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
 				log.FieldNamed("base_block_layer", baseBlockLayer),
 				log.Err(err))
 			return false
-		} else if v != voteVector {
+		}
+
+		if v != voteVector {
 			logger.With().Debug("not adding block to good blocks because its vote differs from local opinion",
 				log.FieldNamed("older_block", exceptionBlock.ID()),
 				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
@@ -361,6 +371,8 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 				log.Int("against_count", len(exceptionVectorMap[0])),
 				log.Int("support_count", len(exceptionVectorMap[1])),
 				log.Int("neutral_count", len(exceptionVectorMap[2])))
+
+			metrics.LayerDistanceToBaseBlock.Observe(float64(t.Last.Value - layerID.Value))
 
 			return blockID, [][]types.BlockID{
 				blockMapToArray(exceptionVectorMap[0]),
@@ -506,7 +518,7 @@ func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block) (uint
 	// check if the ATX was received on time
 	// TODO: add an exception for sync, when we expect everything to be received late
 	//   see https://github.com/spacemeshos/go-spacemesh/issues/2540
-	//if atxTimestamp.Before(nextEpochStart) {
+	// if atxTimestamp.Before(nextEpochStart) {
 	blockWeight := atxHeader.GetWeight()
 	logger.With().Debug("voting block atx was timely",
 		log.FieldNamed("next_epoch", atxEpoch+1),
@@ -858,7 +870,7 @@ candidateLayerLoop:
 
 			// check that the total weight exceeds the global threshold
 			globalOpinionOnBlock := calculateOpinionWithThreshold(
-				t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last.Difference(candidateLayerID)))
+				t.logger, sum, t.GlobalThreshold, t.AvgLayerSize, t.Last.Difference(candidateLayerID))
 			logger.With().Debug("verifying tortoise calculated global opinion on block",
 				log.FieldNamed("block_voted_on", blockID),
 				candidateLayerID,
@@ -1024,7 +1036,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 				// TODO: should delta here represent layer depth, or should it always be 1?
 				//   votes are counted for all layers!
 				//   see https://github.com/spacemeshos/go-spacemesh/issues/2677
-				localOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.LocalThreshold, 1)
+				localOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.LocalThreshold, t.AvgLayerSize, 1)
 				logger.With().Debug("local opinion on block in old layer",
 					sum,
 					log.FieldNamed("local_opinion", localOpinionOnBlock))
@@ -1206,7 +1218,7 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 			}
 
 			// check that the total weight exceeds the global threshold
-			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.AvgLayerSize, t.GlobalThreshold, float64(t.Last.Difference(candidateLayerID)))
+			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.GlobalThreshold, t.AvgLayerSize, t.Last.Difference(candidateLayerID))
 			logger.With().Debug("self healing calculated global opinion on candidate block",
 				log.FieldNamed("global_opinion", globalOpinionOnBlock),
 				sum)

@@ -9,20 +9,26 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"time"
 
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/miner/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
-const defaultGasLimit = 10
-const defaultFee = 1
+const (
+	defaultGasLimit = 10
+	defaultFee      = 1
+)
 
 // AtxsPerBlockLimit indicates the maximum number of atxs a block can reference
 const AtxsPerBlockLimit = 100
+
+const blockBuildDurationErrorThreshold = 10 * time.Second
 
 type signer interface {
 	Sign(m []byte) []byte
@@ -65,6 +71,7 @@ type BlockBuilder struct {
 	meshProvider    meshProvider
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
+	beaconProvider  blocks.BeaconGetter
 	syncer          syncer
 	wg              sync.WaitGroup
 	started         bool
@@ -77,6 +84,7 @@ type BlockBuilder struct {
 
 // Config is the block builders configuration struct
 type Config struct {
+	DBPath         string
 	MinerID        types.NodeID
 	Hdist          uint32
 	AtxsPerBlock   int
@@ -93,6 +101,7 @@ func NewBlockBuilder(
 	orph meshProvider,
 	bbp baseBlockProvider,
 	blockOracle blockOracle,
+	beaconProvider blocks.BeaconGetter,
 	syncer syncer,
 	projector projector,
 	txPool txPool,
@@ -100,9 +109,15 @@ func NewBlockBuilder(
 ) *BlockBuilder {
 	seed := binary.BigEndian.Uint64(md5.New().Sum([]byte(config.MinerID.Key)))
 
-	db, err := database.Create("builder", 16, 16, logger)
-	if err != nil {
-		logger.With().Panic("cannot create block builder database", log.Err(err))
+	var db *database.LDBDatabase
+	if len(config.DBPath) == 0 {
+		db = database.NewMemDatabase()
+	} else {
+		var err error
+		db, err = database.NewLDBDatabase(config.DBPath, 16, 16, logger)
+		if err != nil {
+			logger.With().Panic("cannot create block builder database", log.Err(err))
+		}
 	}
 
 	return &BlockBuilder{
@@ -118,6 +133,7 @@ func NewBlockBuilder(
 		meshProvider:    orph,
 		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
+		beaconProvider:  beaconProvider,
 		syncer:          syncer,
 		started:         false,
 		atxsPerBlock:    config.AtxsPerBlock,
@@ -224,6 +240,7 @@ func (t *BlockBuilder) createBlock(
 		},
 		TxIDs: txids,
 	}
+
 	epoch := id.GetEpoch()
 	refBlock, err := t.getRefBlock(epoch)
 	if err != nil {
@@ -233,6 +250,11 @@ func (t *BlockBuilder) createBlock(
 			log.Err(err))
 		atxs := activeSet
 		b.ActiveSet = &atxs
+		beacon, bErr := t.beaconProvider.GetBeacon(epoch)
+		if bErr != nil {
+			return nil, bErr
+		}
+		b.TortoiseBeacon = beacon
 	} else {
 		logger.With().Debug("creating block with reference block (no active set)",
 			log.Int("active_set_size", len(activeSet)),
@@ -253,7 +275,7 @@ func (t *BlockBuilder) createBlock(
 		logger.With().Debug("storing ref block", epoch, bl.ID())
 		if err := t.storeRefBlock(epoch, bl.ID()); err != nil {
 			logger.With().Error("cannot store ref block", epoch, log.Err(err))
-			//todo: panic?
+			// todo: panic?
 		}
 	}
 
@@ -280,8 +302,15 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 				continue
 			}
 
+			started := time.Now()
+
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
+				if errors.Is(err, blocks.ErrMinerHasNoATXInPreviousEpoch) {
+					logger.With().Info("node has no ATX in previous epoch and is not eligible for blocks")
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "not eligible to produce block")
+					continue
+				}
 				events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to check for block eligibility")
 				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
@@ -297,7 +326,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
-					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to get txs for block")
+					events.ReportDoneCreatingBlock(false, layerID.Uint32(), "failed to get txs for block")
 					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
@@ -307,6 +336,9 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					logger.With().Error("failed to create new block", log.Err(err))
 					continue
 				}
+
+				t.saveBlockBuildDurationMetric(ctx, started, layerID, blk.ID())
+
 				if t.stopped() {
 					return
 				}
@@ -333,4 +365,14 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			}
 		}
 	}
+}
+
+func (t *BlockBuilder) saveBlockBuildDurationMetric(ctx context.Context, started time.Time, layerID types.LayerID, blockID types.BlockID) {
+	elapsed := time.Since(started)
+	if elapsed > blockBuildDurationErrorThreshold {
+		t.WithContext(ctx).WithFields(layerID, layerID.GetEpoch()).With().
+			Error("block building took too long ", log.Duration("elapsed", elapsed))
+	}
+
+	metrics.BlockBuildDuration.Observe(float64(elapsed / time.Millisecond))
 }

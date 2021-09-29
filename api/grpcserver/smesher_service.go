@@ -72,7 +72,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	}
 
 	coinbaseAddr := types.BytesToAddress(in.Coinbase.Address)
-	if err := s.smeshingProvider.StartSmeshing(ctx, coinbaseAddr, opts); err != nil {
+	if err := s.smeshingProvider.StartSmeshing(coinbaseAddr, opts); err != nil {
 		err := fmt.Sprintf("failed to start smeshing: %v", err)
 		log.Error(err)
 		return nil, status.Error(codes.Internal, err)
@@ -87,12 +87,20 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StopSmeshing")
 
-	if err := s.smeshingProvider.StopSmeshing(in.DeleteFiles); err != nil {
-		err := fmt.Sprintf("failed to stop smeshing: %v", err)
-		log.Error(err)
-		return nil, status.Error(codes.Internal, err)
+	errchan := make(chan error, 1)
+	go func() {
+		errchan <- s.smeshingProvider.StopSmeshing(in.DeleteFiles)
+	}()
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case err := <-errchan:
+		if err != nil {
+			err := fmt.Sprintf("failed to stop smeshing: %v", err)
+			log.Error(err)
+			return nil, status.Error(codes.Internal, err)
+		}
 	}
-
 	return &pb.StopSmeshingResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil

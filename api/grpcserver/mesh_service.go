@@ -105,7 +105,10 @@ func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactio
 // QUERIES
 
 func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr types.Address) ([]*types.MeshTransaction, error) {
-	meshTxIds := s.getTxIdsFromMesh(startLayer, addr)
+	meshTxIds, err := s.getTxIdsFromMesh(startLayer, addr)
+	if err != nil {
+		return nil, err
+	}
 	txs, missing := s.Mesh.GetMeshTransactions(meshTxIds)
 	// FIXME(dshulyak) this call should never return missing transactions, since we got the list of transactions
 	// couple of lines above. and index should be written atomically with transaction body
@@ -241,15 +244,21 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 	return res, nil
 }
 
-func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) []types.TransactionID {
+func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) ([]types.TransactionID, error) {
 	var txIDs []types.TransactionID
 	for layerID := minLayer; layerID.Before(s.Mesh.LatestLayer()); layerID = layerID.Add(1) {
-		destTxIDs := s.Mesh.GetTransactionsByDestination(layerID, addr)
+		destTxIDs, err := s.Mesh.GetTransactionsByDestination(layerID, addr)
+		if err != nil {
+			return nil, err
+		}
 		txIDs = append(txIDs, destTxIDs...)
-		originTxIds := s.Mesh.GetTransactionsByOrigin(layerID, addr)
+		originTxIds, err := s.Mesh.GetTransactionsByOrigin(layerID, addr)
+		if err != nil {
+			return nil, err
+		}
 		txIDs = append(txIDs, originTxIds...)
 	}
-	return txIDs
+	return txIDs, nil
 }
 
 func convertTransaction(t *types.Transaction) *pb.Transaction {

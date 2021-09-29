@@ -23,9 +23,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 )
 
@@ -141,7 +141,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		return
 	}
 
-	txpool := state.NewTxMemPool()
+	txpool := mempool.NewTxMemPool()
 
 	app.logger = log.NewDefault("sync_test")
 	app.logger.Info("new sync tester")
@@ -165,8 +165,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	layerFetch := createFetcherWithMock(dbs, msh, swarm, app.logger)
 	layerFetch.Start()
 	syncerConf := syncer.Configuration{
-		SyncInterval:    2 * 60 * time.Millisecond,
-		ValidationDelta: 30 * time.Second,
+		SyncInterval: 2 * 60 * time.Millisecond,
 	}
 	app.sync = createSyncer(syncerConf, msh, layerFetch, types.NewLayerID(expectedLayers), app.logger)
 	if err = swarm.Start(cmdp.Ctx); err != nil {

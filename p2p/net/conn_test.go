@@ -25,7 +25,7 @@ func TestSendReceiveMessage(t *testing.T) {
 	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
 	go conn.beginEventProcessing(context.TODO())
 	msg := "hello"
-	err := conn.SendSock([]byte(msg))
+	err := conn.sendSock([]byte(msg))
 	assert.NoError(t, err)
 	assert.Equal(t, len(msg)+1, len(rwcam.WriteOut())) // the +1 is because of the delimited wire format
 	rwcam.SetReadResult(rwcam.WriteOut(), nil)
@@ -54,6 +54,58 @@ func TestSendMessage(t *testing.T) {
 	}
 }
 
+func TestSendMutex(t *testing.T) {
+	netw := NewNetworkMock(t)
+	rwcam := NewReadWriteCloseAddresserMock()
+	rPub := p2pcrypto.NewRandomPubkey()
+	rwcam.writeWaitChan = make(chan []byte) // unbuffered channel, write is blocking
+	conn := newConnection(rwcam, netw, rPub, &networkSessionImpl{}, msgSizeLimit, time.Second, netw.logger)
+	go conn.beginEventProcessing(context.TODO())
+	msg := "hello"
+
+	// Send an initial message
+	err := conn.Send(context.TODO(), []byte(msg))
+	assert.NoError(t, err)
+
+	// Make sure sendSock received the message and tried to send it (and is blocking on Write)
+	timeout := time.After(1 * time.Second)
+	for rwcam.WriteCount() < 1 {
+		select {
+		case <-timeout:
+			assert.Fail(t, "timed out waiting for sendSock to call Write")
+		case <-time.After(100 * time.Millisecond):
+			continue
+		}
+	}
+
+	// Now try sending another message and make sure it doesn't block
+	done := make(chan struct{})
+	go func() {
+		err := conn.Send(context.TODO(), []byte(msg))
+		assert.NoError(t, err)
+		close(done)
+	}()
+	select {
+	case <-done:
+		// success
+		break
+	case <-time.After(time.Second):
+		assert.Fail(t, "timed out waiting for message to be sent")
+	}
+
+	// make sure we can read both messages
+	for i := 0; i < 2; i++ {
+		select {
+		// both messages should already be queued, so we should be able to read them immediately
+		case <-rwcam.writeWaitChan:
+			rcvmsg := <-rwcam.writeWaitChan
+			assert.Equal(t, rcvmsg, []byte(msg))
+		case <-time.After(time.Second):
+			assert.Fail(t, "timed out waiting for message")
+		}
+	}
+}
+
 func TestReceiveError(t *testing.T) {
 	runtime.GOMAXPROCS(1)
 	netw := NewNetworkMock(t)
@@ -72,7 +124,6 @@ func TestReceiveError(t *testing.T) {
 
 	rwcam.SetReadResult([]byte{}, fmt.Errorf("fail"))
 	wg.Wait()
-
 }
 
 func TestSendError(t *testing.T) {
@@ -84,7 +135,7 @@ func TestSendError(t *testing.T) {
 
 	rwcam.SetWriteResult(fmt.Errorf("fail"))
 	msg := "hello"
-	err := conn.SendSock([]byte(msg))
+	err := conn.sendSock([]byte(msg))
 	assert.Error(t, err)
 	assert.Equal(t, "fail", err.Error())
 }

@@ -11,46 +11,37 @@ import (
 )
 
 func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, lastRoundVotes allVotes) error {
-	tb.Log.WithContext(ctx).With().Info("calculating beacon", log.Uint32("epoch_id", uint32(epoch)))
+	logger := tb.logger.WithContext(ctx).WithFields(epoch)
+	logger.Info("calculating beacon")
 
 	allHashes := lastRoundVotes.valid.sort()
-
-	tb.Log.WithContext(ctx).With().Debug("calculating tortoise beacon from this hash list",
-		log.Uint32("epoch_id", uint32(epoch)),
-		log.String("hashes", strings.Join(allHashes, ", ")))
+	allHashHexes := make([]string, len(allHashes))
+	for i, h := range allHashes {
+		allHashHexes[i] = types.BytesToHash([]byte(h)).ShortString()
+	}
+	logger.With().Debug("calculating tortoise beacon from this hash list",
+		log.String("hashes", strings.Join(allHashHexes, ", ")))
 
 	beacon := allHashes.hash()
 
-	tb.Log.WithContext(ctx).With().Info("calculated beacon", log.Uint32("epoch_id", uint32(epoch)),
-		log.String("beacon", beacon.ShortString()))
+	logger = logger.WithFields(log.String("beacon", beacon.ShortString()))
+	logger.With().Info("calculated beacon", log.Int("num_hashes", len(allHashes)))
 
 	events.ReportCalculatedTortoiseBeacon(epoch, beacon.ShortString())
 
-	tb.beaconsMu.Lock()
-	tb.beacons[epoch] = beacon
-	tb.beaconsMu.Unlock()
-
+	tb.setBeacon(epoch, beacon)
 	if tb.tortoiseBeaconDB != nil {
-		tb.Log.WithContext(ctx).With().Info("writing beacon to database",
-			log.Uint32("epoch_id", uint32(epoch)),
-			log.String("beacon", beacon.ShortString()))
-
+		logger.Info("writing beacon to database")
 		if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epoch, beacon); err != nil {
-			tb.Log.WithContext(ctx).With().Error("failed to write tortoise beacon to database",
-				log.Uint32("epoch_id", uint32(epoch)),
-				log.String("beacon", beacon.ShortString()))
-
+			logger.With().Error("failed to write tortoise beacon to database", log.Err(err))
 			return fmt.Errorf("write tortoise beacon to DB: %w", err)
 		}
 	}
 
-	tb.Log.WithContext(ctx).With().Debug("beacon updated for this epoch",
-		log.Uint32("epoch_id", uint32(epoch)),
-		log.String("beacon", beacon.ShortString()))
-
+	logger.Debug("beacon updated for this epoch")
 	return nil
 }
 
 func (tb *TortoiseBeacon) lastRound() types.RoundID {
-	return tb.config.RoundsNumber - 1 + firstRound
+	return tb.config.RoundsNumber - 1
 }

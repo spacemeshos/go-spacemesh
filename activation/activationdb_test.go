@@ -111,6 +111,7 @@ func (MockState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 func (MockState) GetBalance(types.Address) uint64 {
 	panic("implement me")
 }
+
 func (MockState) GetNonce(types.Address) uint64 {
 	panic("implement me")
 }
@@ -243,9 +244,9 @@ func TestATX_ActiveSetForLayerView(t *testing.T) {
 	assert.NoError(t, err)
 	// TODO: check this test failure
 	_ = actives
-	//assert.Len(t, actives, 2)
-	//assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
-	//assert.Equal(t, uint64(20000), actives[id2.Key], "actives[id2.Key] (%d) != %d", actives[id2.Key], 20000)
+	// assert.Len(t, actives, 2)
+	// assert.Equal(t, uint64(10000), actives[id1.Key], "actives[id1.Key] (%d) != %d", actives[id1.Key], 10000)
+	// assert.Equal(t, uint64(20000), actives[id2.Key], "actives[id2.Key] (%d) != %d", actives[id2.Key], 20000)
 }
 
 func TestMesh_ActiveSetForLayerView2(t *testing.T) {
@@ -418,7 +419,7 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 
 	blocks := createLayerWithAtx(t, layers, atxdb, types.NewLayerID(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
 	blocks = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(10), 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
+	_ = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
 
 	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase1, 100, &types.NIPost{})
 	hash, err := prevAtx.NIPostChallenge.Hash()
@@ -463,7 +464,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 
 	blocks := createLayerWithAtx(t, layers, atxdb, types.NewLayerID(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
 	blocks = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(10), 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
+	_ = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xba, 0xbe}
@@ -554,6 +555,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	atx = newActivationTx(idx1, 1, prevAtx.ID(), posAtx.ID(), types.NewLayerID(12), 0, 100, coinbase, 100, &types.NIPost{})
 	iter := atxdb.atxs.Find(getNodeAtxPrefix(atx.NodeID).Bytes())
+	defer iter.Release()
 	for iter.Next() {
 		err = atxdb.atxs.Delete(iter.Key())
 		assert.NoError(t, err)
@@ -639,24 +641,20 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	blocks := createLayerWithAtx(t, layers, atxdb, types.NewLayerID(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
 	blocks = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(10), 10, []*types.ActivationTx{}, blocks, blocks)
-	blocks = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
+	_ = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x56, 0xbe}
 	npst := NewNIPostWithChallenge(&chlng, poetRef)
 	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, npst)
 
-	var nodeAtxIds []types.ATXID
-
 	err := atxdb.StoreAtx(context.TODO(), 1, prevAtx)
 	assert.NoError(t, err)
-	nodeAtxIds = append(nodeAtxIds, prevAtx.ID())
 
 	// wrong sequnce
 	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 	err = atxdb.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
-	nodeAtxIds = append(nodeAtxIds, atx.ID())
 
 	atx = newActivationTx(idx1, 2, atx.ID(), atx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 	assert.NoError(t, err)
@@ -666,7 +664,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 	err = atxdb.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
-	nodeAtxIds = append(nodeAtxIds, atx.ID())
 	atx2id := atx.ID()
 
 	atx = newActivationTx(idx1, 4, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
@@ -680,7 +677,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	err = atxdb.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
-	id4 := atx.ID()
 
 	atx = newActivationTx(idx1, 3, atx2id, prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
@@ -688,8 +684,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	err = atxdb.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
-	nodeAtxIds = append(nodeAtxIds, atx.ID())
-	nodeAtxIds = append(nodeAtxIds, id4)
 
 	id, err := atxdb.GetNodeLastAtxID(idx1)
 	assert.NoError(t, err)
@@ -722,7 +716,6 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 
 	err = atxdb.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
-
 }
 
 func TestActivationDb_ProcessAtx(t *testing.T) {
@@ -832,7 +825,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 			prevAtxs[miner] = atx.ID()
 			storeAtx(r, atxdb, atx, lg.WithName("storeAtx"))
 		}
-		//noinspection GoNilness
+		// noinspection GoNilness
 		posAtx = atx.ID()
 		layer = layer.Add(layersPerEpoch)
 		if epoch%batchSize == batchSize-1 {
@@ -931,7 +924,6 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	signedAtx.Sig = []byte("anton")
 	_, err = ExtractPublicKey(signedAtx)
 	r.Error(err)
-
 }
 
 func createAndStoreAtx(atxdb *DB, layer types.LayerID) (*types.ActivationTx, error) {
