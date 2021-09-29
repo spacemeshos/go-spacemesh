@@ -674,7 +674,7 @@ func (app *App) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else {
 		// regular oracle, build and use it
-		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
+		beacon := eligibility.NewBeacon(tBeacon, app.addLogger(HareBeaconLogger, lg))
 		hOracle = eligibility.New(beacon, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}

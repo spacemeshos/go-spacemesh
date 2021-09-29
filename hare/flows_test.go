@@ -158,6 +158,10 @@ func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types
 	return true, nil
 }
 
+func (trueOracle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
+	return true
+}
+
 // Test - runs a single CP for more than one iteration
 func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()

@@ -36,3 +36,7 @@ func (bo *hareOracle) CalcEligibility(_ context.Context, layer types.LayerID, ro
 func (bo *hareOracle) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	return []byte{}, nil
 }
+
+func (bo *hareOracle) IsEpochBeaconReady(ctx context.Context, epoch types.EpochID) bool {
+	return true
+}
