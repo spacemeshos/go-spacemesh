@@ -13,10 +13,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
@@ -143,7 +143,7 @@ type allDbs struct {
 	tbDBStore   *database.LDBDatabase
 }
 
-func createMeshWithMock(dbs *allDbs, txpool *state.TxMempool, lg log.Log) *mesh.Mesh {
+func createMeshWithMock(dbs *allDbs, txpool *mempool.TxMempool, lg log.Log) *mesh.Mesh {
 	var msh *mesh.Mesh
 	if dbs.mshdb.PersistentData() {
 		lg.Info("persistent data found")

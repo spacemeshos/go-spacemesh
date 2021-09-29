@@ -1,4 +1,4 @@
-package state
+package mempool
 
 import (
 	"errors"
