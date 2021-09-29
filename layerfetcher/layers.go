@@ -716,7 +716,7 @@ func (l *Logic) GetTortoiseBeacon(ctx context.Context, id types.EpochID) error {
 		resHash := types.BytesToHash(res)
 		l.log.WithContext(ctx).With().Info("received tortoise beacon",
 			id,
-			log.String("beacon", resHash.String()))
+			log.String("beacon", resHash.ShortString()))
 		return l.tbDB.SetTortoiseBeacon(id, resHash)
 	}
 }

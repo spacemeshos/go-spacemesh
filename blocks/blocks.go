@@ -159,10 +159,7 @@ func saveMetrics(blk types.Block) {
 	}
 
 	for _, m := range metricList {
-		m.hist.
-			With(metrics.LayerIDLabel, blk.LayerIndex.String()).
-			With(metrics.BlockIDLabel, blk.ID().String()).
-			Observe(m.value)
+		m.hist.Observe(m.value)
 	}
 }
 

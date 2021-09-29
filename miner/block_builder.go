@@ -71,6 +71,7 @@ type BlockBuilder struct {
 	meshProvider    meshProvider
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
+	beaconProvider  blocks.BeaconGetter
 	syncer          syncer
 	wg              sync.WaitGroup
 	started         bool
@@ -100,6 +101,7 @@ func NewBlockBuilder(
 	orph meshProvider,
 	bbp baseBlockProvider,
 	blockOracle blockOracle,
+	beaconProvider blocks.BeaconGetter,
 	syncer syncer,
 	projector projector,
 	txPool txPool,
@@ -131,6 +133,7 @@ func NewBlockBuilder(
 		meshProvider:    orph,
 		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
+		beaconProvider:  beaconProvider,
 		syncer:          syncer,
 		started:         false,
 		atxsPerBlock:    config.AtxsPerBlock,
@@ -247,6 +250,11 @@ func (t *BlockBuilder) createBlock(
 			log.Err(err))
 		atxs := activeSet
 		b.ActiveSet = &atxs
+		beacon, bErr := t.beaconProvider.GetBeacon(epoch)
+		if bErr != nil {
+			return nil, bErr
+		}
+		b.TortoiseBeacon = beacon
 	} else {
 		logger.With().Debug("creating block with reference block (no active set)",
 			log.Int("active_set_size", len(activeSet)),
@@ -298,6 +306,11 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
+				if errors.Is(err, blocks.ErrMinerHasNoATXInPreviousEpoch) {
+					logger.With().Info("node has no ATX in previous epoch and is not eligible for blocks")
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "not eligible to produce block")
+					continue
+				}
 				events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to check for block eligibility")
 				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
@@ -361,8 +374,5 @@ func (t *BlockBuilder) saveBlockBuildDurationMetric(ctx context.Context, started
 			Error("block building took too long ", log.Duration("elapsed", elapsed))
 	}
 
-	metrics.BlockBuildDuration.
-		With(metrics.LayerIDLabel, layerID.String()).
-		With(metrics.BlockIDLabel, blockID.String()).
-		Observe(float64(elapsed / time.Millisecond))
+	metrics.BlockBuildDuration.Observe(float64(elapsed / time.Millisecond))
 }
