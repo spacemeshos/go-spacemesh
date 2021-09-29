@@ -9,6 +9,7 @@ cmd/tmp
 */**/.DS_Store
 /build
 libgpu-setup-*
+svm-*.zip
 
 .project
 .settings
