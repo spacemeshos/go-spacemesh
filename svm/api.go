@@ -7,6 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
 
@@ -48,4 +49,7 @@ func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 		return fmt.Errorf("cannot commit genesis state: %w", err)
 	}
 	return nil
+}
+
+func (s *SVM) ApplyLayer(msh *mesh.Mesh, config config.Config, index types.LayerID, transactions []types.Transaction, rewards []types.Reward) {
 }
