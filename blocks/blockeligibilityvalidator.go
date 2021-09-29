@@ -10,10 +10,6 @@ import (
 // VRFValidationFunction is the VRF validation function.
 type VRFValidationFunction func(publicKey, message, signature []byte) bool
 
-type blockDB interface {
-	GetBlock(ID types.BlockID) (*types.Block, error)
-}
-
 // BlockEligibilityValidator holds all the dependencies for validating block eligibility.
 type BlockEligibilityValidator struct {
 	committeeSize  uint32
@@ -55,10 +51,13 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			// block should be present because we've synced it in the calling function
 			return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
 		}
-
 	}
 	if activeSetBlock.ActiveSet == nil {
-		return false, fmt.Errorf("cannot get active set from block %v", activeSetBlock.ID())
+		return false, fmt.Errorf("failed to get active set from block %v", activeSetBlock.ID())
+	}
+	epochBeacon := activeSetBlock.TortoiseBeacon
+	if epochBeacon == nil {
+		return false, fmt.Errorf("failed to get tortoise beacon from block %v", activeSetBlock.ID())
 	}
 	// todo: optimise by using reference to active set size and cache active set size to not load all atxsIDs from db
 	for _, atxID := range *activeSetBlock.ActiveSet {
@@ -89,8 +88,6 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		return false, fmt.Errorf("proof counter (%d) must be less than number of eligible blocks (%d), totalWeight (%v)", counter,
 			numberOfEligibleBlocks, totalWeight)
 	}
-
-	epochBeacon := block.EligibilityProof.TortoiseBeacon
 
 	message, err := serializeVRFMessage(epochBeacon, epochNumber, counter)
 	if err != nil {

@@ -172,11 +172,6 @@ func (m *DB) Transactions() database.Getter {
 	return m.transactions
 }
 
-// InputVector exports the inputvector DB
-func (m *DB) InputVector() database.Getter {
-	return m.inputVector
-}
-
 // ErrAlreadyExist error returned when adding an existing value to the database
 var ErrAlreadyExist = errors.New("block already exists in database")
 
@@ -191,6 +186,7 @@ func (m *DB) AddBlock(bl *types.Block) error {
 	if err := m.writeBlock(bl); err != nil {
 		return err
 	}
+
 	return nil
 }
 
@@ -283,7 +279,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	zero := false
 	ids := []types.BlockID{}
 	it := m.layers.Find(layerBuf)
-	// TODO(dshulyak) iterator must be able to return an error
+	defer it.Release()
 	for it.Next() {
 		if len(it.Key()) == len(layerBuf) {
 			zero = true
@@ -292,6 +288,9 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 		var id types.BlockID
 		copy(id[:], it.Key()[len(layerBuf):])
 		ids = append(ids, id)
+	}
+	if it.Error() != nil {
+		return nil, it.Error()
 	}
 	if zero || len(ids) > 0 {
 		return ids, nil
@@ -688,6 +687,7 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 // GetRewards retrieves account's rewards by address
 func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err error) {
 	it := m.transactions.Find(getRewardKeyPrefix(account))
+	defer it.Release()
 	for it.Next() {
 		if it.Key() == nil {
 			break
@@ -706,12 +706,14 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 			Coinbase:            reward.Coinbase,
 		})
 	}
+	err = it.Error()
 	return
 }
 
 // GetRewardsBySmesherID retrieves rewards by smesherID
 func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Reward, err error) {
 	it := m.transactions.Find(getSmesherRewardKeyPrefix(smesherID))
+	defer it.Release()
 	for it.Next() {
 		if it.Key() == nil {
 			break
@@ -737,6 +739,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 			Coinbase:            reward.Coinbase,
 		})
 	}
+	err = it.Error()
 	return
 }
 
@@ -813,12 +816,16 @@ func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendin
 		it      = m.unappliedTxs.Find(addr[:])
 		pending = pendingtxs.NewAccountPendingTxs()
 	)
+	defer it.Release()
 	for it.Next() {
 		var mtx types.MeshTransaction
 		if err := codec.Decode(it.Value(), &mtx); err != nil {
 			return nil, err
 		}
 		pending.Add(mtx.LayerID, &mtx.Transaction)
+	}
+	if it.Error() != nil {
+		return nil, it.Error()
 	}
 	return pending, nil
 }
@@ -889,8 +896,9 @@ func (m *DB) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction,
 }
 
 // GetTransactionsByDestination retrieves txs by destination and layer
-func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID) {
+func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
 	it := m.transactions.Find(getTransactionDestKeyPrefix(l, account))
+	defer it.Release()
 	for it.Next() {
 		if it.Key() == nil {
 			break
@@ -899,12 +907,14 @@ func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address
 		copy(id[:], it.Value())
 		txs = append(txs, id)
 	}
+	err = it.Error()
 	return
 }
 
 // GetTransactionsByOrigin retrieves txs by origin and layer
-func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID) {
+func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
 	it := m.transactions.Find(getTransactionOriginKeyPrefix(l, account))
+	defer it.Release()
 	for it.Next() {
 		if it.Key() == nil {
 			break
@@ -913,6 +923,7 @@ func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (tx
 		copy(id[:], it.Value())
 		txs = append(txs, id)
 	}
+	err = it.Error()
 	return
 }
 

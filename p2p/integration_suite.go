@@ -89,7 +89,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 
 	tm := time.Now()
 	its.logger.Info("Started up %d swarms", its.BootstrappedNodeCount)
-	//var wg sync.WaitGroup
+	// var wg sync.WaitGroup
 	totalTimeout := time.NewTimer((time.Second * 5) * time.Duration(len(swarm)))
 	finchan := make(chan error)
 	for i := 0; i < len(swarm); i++ {
@@ -108,7 +108,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 			if err != nil {
 				finchan <- err
 				return
-				//its.T().Fatal(fmt.Sprintf("failed to start a node, %v", err))
+				// its.T().Fatal(fmt.Sprintf("failed to start a node, %v", err))
 			}
 			err = swarm[i].waitForBoot()
 			if err != nil {
@@ -234,7 +234,7 @@ func StringIdentifiers(boot ...*Switch) []string {
 		tcp := boot[i].network.LocalAddr().(*net.TCPAddr)
 		udp := boot[i].udpnetwork.LocalAddr().(*net.UDPAddr)
 		nodeinfo := node.NewNode(pk, net.IPv6loopback, uint16(tcp.Port), uint16(udp.Port))
-		s[i] = nodeinfo.String() //node.StringFromNode(node.New(boot[i].LocalNode().Node.PublicKey(), boot[i].udpnetwork.LocalAddr().String())) )
+		s[i] = nodeinfo.String() // node.StringFromNode(node.New(boot[i].LocalNode().Node.PublicKey(), boot[i].udpnetwork.LocalAddr().String())) )
 	}
 	return s
 }

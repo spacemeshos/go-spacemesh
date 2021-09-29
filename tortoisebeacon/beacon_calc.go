@@ -15,8 +15,12 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, l
 	logger.Info("calculating beacon")
 
 	allHashes := lastRoundVotes.valid.sort()
+	allHashHexes := make([]string, len(allHashes))
+	for i, h := range allHashes {
+		allHashHexes[i] = types.BytesToHash([]byte(h)).ShortString()
+	}
 	logger.With().Debug("calculating tortoise beacon from this hash list",
-		log.String("hashes", strings.Join(allHashes, ", ")))
+		log.String("hashes", strings.Join(allHashHexes, ", ")))
 
 	beacon := allHashes.hash()
 

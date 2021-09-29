@@ -112,11 +112,16 @@ func (s *state) Recover() error {
 	s.LastEvicted = types.BytesToLayerID(buf)
 
 	it := s.db.Find([]byte(namespaceGood))
+	defer it.Release()
 	for it.Next() {
 		s.GoodBlocksIndex[decodeBlock(it.Key()[1:])] = true
 	}
+	if it.Error() != nil {
+		return it.Error()
+	}
 
 	it = s.db.Find([]byte(namespaceOpinons))
+	defer it.Release()
 	for it.Next() {
 		layer := decodeLayerKey(it.Key())
 		offset := 1 + types.LayerIDSize
@@ -136,7 +141,7 @@ func (s *state) Recover() error {
 		}
 		s.BlockOpinionsByLayer[layer][block1][block2] = opinion
 	}
-	return nil
+	return it.Error()
 }
 
 func (s *state) Evict() error {
@@ -145,6 +150,7 @@ func (s *state) Evict() error {
 		it    = s.db.Find([]byte(namespaceOpinons))
 		b     bytes.Buffer
 	)
+	defer it.Release()
 	for it.Next() {
 		layer := decodeLayerKey(it.Key())
 		if layer.After(s.LastEvicted) {
@@ -160,6 +166,9 @@ func (s *state) Evict() error {
 		if err := batch.Delete(it.Key()); err != nil {
 			return err
 		}
+	}
+	if it.Error() != nil {
+		return it.Error()
 	}
 	return batch.Write()
 }

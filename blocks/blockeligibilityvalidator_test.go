@@ -4,8 +4,10 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
@@ -37,11 +39,18 @@ func (m mockAtxDB) GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error) 
 	return 0, nil, nil
 }
 
+func mockTortoiseBeacon(t *testing.T) BeaconGetter {
+	ctrl := gomock.NewController(t)
+	mockTB := mocks.NewMockBeaconGetter(ctrl)
+	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(types.HexToHash32("0x94812631").Bytes(), nil).AnyTimes()
+	return mockTB
+}
+
 func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	types.SetLayersPerEpoch(5)
 	r := require.New(t)
 	atxdb := &mockAtxDB{err: errFoo}
-	v := NewBlockEligibilityValidator(10, 5, atxdb, &EpochBeaconProvider{}, validateVRF, nil, logtest.New(t))
+	v := NewBlockEligibilityValidator(10, 5, atxdb, mockTortoiseBeacon(t), validateVRF, nil, logtest.New(t))
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: types.NewLayerID(20)}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())

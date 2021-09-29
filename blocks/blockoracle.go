@@ -9,6 +9,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -25,6 +26,9 @@ type vrfSigner interface {
 // DefaultProofsEpoch is set such that it will never equal the current epoch
 const DefaultProofsEpoch = ^types.EpochID(0)
 
+// ErrMinerHasNoATXInPreviousEpoch is returned when miner has no ATXs in previous epoch.
+var ErrMinerHasNoATXInPreviousEpoch = errors.New("miner has no ATX in previous epoch")
+
 // Oracle is the oracle that provides block eligibility proofs for the miner.
 type Oracle struct {
 	committeeSize  uint32
@@ -37,7 +41,7 @@ type Oracle struct {
 	proofsEpoch       types.EpochID
 	epochAtxs         []types.ATXID
 	eligibilityProofs map[types.LayerID][]types.BlockEligibilityProof
-	atxID             types.ATXID
+	atx               *types.ActivationTxHeader
 	isSynced          func() bool
 	eligibilityMutex  sync.RWMutex
 	log               log.Log
@@ -66,6 +70,15 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 	}
 
 	epochNumber := layerID.GetEpoch()
+	atx, err := bo.getValidAtxForEpoch(epochNumber)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			return types.ATXID{}, nil, nil, ErrMinerHasNoATXInPreviousEpoch
+		}
+		return types.ATXID{}, nil, nil, fmt.Errorf("failed to get latest atx for node in epoch %d: %w", epochNumber, err)
+	}
+	bo.atx = atx
+
 	var cachedEpochDescription log.Field
 	if bo.proofsEpoch == DefaultProofsEpoch {
 		cachedEpochDescription = log.Int("cached_epoch_id", -1)
@@ -96,7 +109,7 @@ func (bo *Oracle) BlockEligible(layerID types.LayerID) (types.ATXID, []types.Blo
 		bo.nodeID, layerID, layerID.GetEpoch(),
 		log.Int("num_blocks", len(proofs)))
 
-	return bo.atxID, proofs, bo.epochAtxs, nil
+	return bo.atx.ID(), proofs, bo.epochAtxs, nil
 }
 
 func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.LayerID][]types.BlockEligibilityProof, error) {
@@ -114,21 +127,12 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 		log.Uint64("epoch_id", uint64(epochNumber)),
 		log.String("epoch_beacon", beaconDbgStr))
 
-	var weight uint64
 	// get the previous epoch's total weight
 	totalWeight, activeSet, err := bo.atxDB.GetEpochWeight(epochNumber)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get epoch %v weight: %w", epochNumber, err)
 	}
-	atx, err := bo.getValidAtxForEpoch(epochNumber)
-	if err != nil {
-		if !epochNumber.IsGenesis() {
-			return nil, fmt.Errorf("failed to get latest atx for node in epoch %d: %w", epochNumber, err)
-		}
-	} else {
-		weight = atx.GetWeight()
-		bo.atxID = atx.ID()
-	}
+
 	bo.log.With().Info("calculating eligibility",
 		epochNumber,
 		log.Uint64("total_weight", totalWeight))
@@ -136,6 +140,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 		epochNumber,
 		log.String("epoch_beacon", beaconDbgStr))
 
+	weight := bo.atx.GetWeight()
 	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(weight, totalWeight, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {
 		bo.log.With().Error("failed to get number of eligible blocks", log.Err(err))
@@ -155,9 +160,8 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 
 		eligibleLayer := calcEligibleLayer(epochNumber, bo.layersPerEpoch, vrfSig)
 		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.BlockEligibilityProof{
-			J:              counter,
-			Sig:            vrfSig,
-			TortoiseBeacon: epochBeacon,
+			J:   counter,
+			Sig: vrfSig,
 		})
 	}
 

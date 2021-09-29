@@ -263,9 +263,9 @@ func (t *TxAPIMock) GetRewardsBySmesherID(types.NodeID) (rewards []types.Reward,
 	}, nil
 }
 
-func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID) {
+func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
 	if l != txReturnLayer {
-		return nil
+		return nil, nil
 	}
 	for _, tx := range t.returnTx {
 		if tx.Recipient.String() == account.String() {
@@ -275,9 +275,9 @@ func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.
 	return
 }
 
-func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID) {
+func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
 	if l != txReturnLayer {
-		return nil
+		return nil, nil
 	}
 	for _, tx := range t.returnTx {
 		if tx.Origin().String() == account.String() {
@@ -507,7 +507,7 @@ func (a *ActivationAPIMock) UpdatePoETServer(context.Context, string) error {
 }
 
 type MempoolMock struct {
-	// In the real state.TxMempool struct, there are multiple data structures and they're more complex,
+	// In the real mempool.TxMempool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data
 	poolByAddress map[types.Address]types.TransactionID
 	poolByTxid    map[types.TransactionID]*types.Transaction

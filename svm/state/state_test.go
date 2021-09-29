@@ -26,7 +26,7 @@ import (
 )
 
 type StateSuite struct {
-	db    *database.MemDatabase
+	db    *database.LDBDatabase
 	state *DB
 }
 

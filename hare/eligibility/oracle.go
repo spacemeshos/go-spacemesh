@@ -31,7 +31,7 @@ type atxProvider interface {
 	// GetMinerWeightsInEpochFromView gets the active set (node IDs) for a set of blocks
 	GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error)
 	// GetEpochAtxs is used to get the tortoise active set for an epoch
-	GetEpochAtxs(types.EpochID) []types.ATXID
+	GetEpochAtxs(types.EpochID) ([]types.ATXID, error)
 	// GetAtxHeader returns the ATX header for an ATX ID
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 }
@@ -461,7 +461,10 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 		logger.With().Warning("no hare active set for layer range, reading tortoise set for epoch instead",
 			targetLayer.GetEpoch())
 	}
-	atxs := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)
+	atxs, err := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)
+	if err != nil {
+		return nil, fmt.Errorf("can't get atxs for an epoch %d: %w", targetLayer.GetEpoch()-1, err)
+	}
 	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxs)))
 	if len(atxs) == 0 {
 		return nil, fmt.Errorf("empty active set for layer %v in epoch %v",

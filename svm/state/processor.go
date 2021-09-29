@@ -4,6 +4,7 @@ import (
 	"container/list"
 	"context"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"math/big"
 	"sync"
 
@@ -36,7 +37,7 @@ type Projector interface {
 type TransactionProcessor struct {
 	log.Log
 	*DB
-	pool         *TxMempool
+	pool         *mempool.TxMempool
 	processorDb  database.Database
 	currentLayer types.LayerID
 	rootHash     types.Hash32
@@ -50,7 +51,7 @@ type TransactionProcessor struct {
 const newRootKey = "root"
 
 // NewTransactionProcessor returns a new state processor
-func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, txPool *TxMempool, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, txPool *mempool.TxMempool, logger log.Log) *TransactionProcessor {
 	stateDb, err := New(types.Hash32{}, NewDatabase(allStates))
 	if err != nil {
 		log.With().Panic("cannot load state db", log.Err(err))
