@@ -25,6 +25,7 @@ require (
 	github.com/spacemeshos/api/release/go v1.3.1-0.20210726064428-9474f58a4ace
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
+	github.com/spacemeshos/go-svm v0.0.0-20210927143832-5b4b345fcc77 // indirect
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
 	github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d
 	github.com/spacemeshos/post v0.0.0-20210831040706-7255a25137a2
