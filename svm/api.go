@@ -10,15 +10,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
 
+// SVM is an entry point for all SVM operations.
 type SVM struct {
 	state *state.TransactionProcessor
 	log   log.Logger
 }
 
+// New creates a new `SVM` instance from the given `state` and `logger`.
 func New(state *state.TransactionProcessor, logger log.Log) *SVM {
 	return &SVM{state, log.NewDefault("svm")}
 }
 
+// SetupGenesis creates new accounts and adds balances as dictated by `conf`.
 func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 	if conf == nil {
 		conf = config.DefaultGenesisConfig()
