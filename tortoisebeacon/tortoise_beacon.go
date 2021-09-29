@@ -268,13 +268,13 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 
 func (tb *TortoiseBeacon) setBeginProtocol(ctx context.Context) {
 	if !atomic.CompareAndSwapUint64(&tb.inProtocol, 0, 1) {
-		tb.logger.WithContext(ctx).Warning("attempt to begin tortoise beacon protocol more than once")
+		tb.logger.WithContext(ctx).Error("attempt to begin tortoise beacon protocol more than once")
 	}
 }
 
 func (tb *TortoiseBeacon) setEndProtocol(ctx context.Context) {
 	if !atomic.CompareAndSwapUint64(&tb.inProtocol, 1, 0) {
-		tb.logger.WithContext(ctx).Warning("attempt to end tortoise beacon protocol more than once")
+		tb.logger.WithContext(ctx).Error("attempt to end tortoise beacon protocol more than once")
 	}
 }
 
@@ -341,6 +341,10 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 		logger.Debug("not first layer in epoch, skipping")
 		return
 	}
+	if tb.isInProtocol() {
+		logger.Error("last beacon protocol is still running, skipping")
+		return
+	}
 	logger.Info("first layer in epoch, proceeding")
 
 	tb.mu.Lock()
@@ -369,7 +373,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	// make sure this node has ATX in the last epoch and is eligible to participate in tortoise beacon
 	if _, err := tb.atxDB.GetNodeAtxIDForEpoch(tb.nodeID, epoch-1); err != nil {
-		logger.Info("node has no ATX in last epoch. not participating in tortoise beacon")
+		logger.Info("node has no ATX in last epoch, not participating in tortoise beacon")
 		return
 	}
 

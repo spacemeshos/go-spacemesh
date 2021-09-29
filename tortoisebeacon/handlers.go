@@ -218,16 +218,15 @@ func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalM
 	}
 
 	passes := tb.proposalChecker.IsProposalEligible(m.VRFSignature)
-	proposalShortString := types.BytesToHash(m.VRFSignature).ShortString()
 	if !passes {
 		// the peer may have different total weight from us so that it passes threshold for the peer
 		// but does not pass here
+		proposalShortString := types.BytesToHash(m.VRFSignature).ShortString()
 		logger.With().Warning("rejected proposal that doesn't pass threshold",
 			log.String("proposal", proposalShortString),
 			log.Uint64("total_weight", tb.epochWeight))
 		return types.ATXID{}, fmt.Errorf("[proposal] not eligible (miner ID %v): %w", minerID, errProposalDoesntPassThreshold)
 	}
-	logger.Info("accepted proposal from (miner ID %v)", minerID)
 
 	return atxID, nil
 }
