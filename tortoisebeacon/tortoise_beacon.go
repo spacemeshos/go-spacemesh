@@ -12,7 +12,6 @@ import (
 	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -33,18 +32,10 @@ var (
 	ErrBeaconNotCalculated = errors.New("beacon is not calculated for this epoch")
 	ErrZeroEpochWeight     = errors.New("zero epoch weight provided")
 	ErrZeroEpoch           = errors.New("zero epoch provided")
-
-	// ErrNotEnoughBeaconRecordedFromBlocks is returned when there are no beacon recorded from blocks
-	ErrNotEnoughBeaconRecordedFromBlocks = errors.New("no beacon from blocks recorded for epoch")
 )
 
 type broadcaster interface {
 	Broadcast(ctx context.Context, channel string, data []byte) error
-}
-
-type tortoiseBeaconDB interface {
-	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, error)
-	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
 }
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./tortoise_beacon.go
@@ -88,7 +79,6 @@ func New(
 	nodeID types.NodeID,
 	net broadcaster,
 	atxDB activationDB,
-	tortoiseBeaconDB tortoiseBeaconDB,
 	edSigner signing.Signer,
 	edVerifier signing.VerifyExtractor,
 	vrfSigner signing.Signer,
@@ -103,7 +93,6 @@ func New(
 		nodeID:                  nodeID,
 		net:                     net,
 		atxDB:                   atxDB,
-		tortoiseBeaconDB:        tortoiseBeaconDB,
 		edSigner:                edSigner,
 		edVerifier:              edVerifier,
 		vrfSigner:               vrfSigner,
@@ -129,17 +118,16 @@ type TortoiseBeacon struct {
 
 	logger log.Log
 
-	config           Config
-	nodeID           types.NodeID
-	sync             SyncState
-	net              broadcaster
-	atxDB            activationDB
-	tortoiseBeaconDB tortoiseBeaconDB
-	edSigner         signing.Signer
-	edVerifier       signing.VerifyExtractor
-	vrfSigner        signing.Signer
-	vrfVerifier      signing.Verifier
-	weakCoin         coin
+	config      Config
+	nodeID      types.NodeID
+	sync        SyncState
+	net         broadcaster
+	atxDB       activationDB
+	edSigner    signing.Signer
+	edVerifier  signing.VerifyExtractor
+	vrfSigner   signing.Signer
+	vrfVerifier signing.Verifier
+	weakCoin    coin
 
 	clock       layerClock
 	layerTicker chan types.LayerID
@@ -305,19 +293,6 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 		return nil, ErrZeroEpoch
 	}
 
-	if tb.tortoiseBeaconDB != nil {
-		val, err := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID - 1)
-		if err == nil {
-			return val.Bytes(), nil
-		}
-
-		if !errors.Is(err, database.ErrNotFound) {
-			tb.logger.Error("failed to get tortoise beacon for epoch %v from DB: %v", epochID-1, err)
-
-			return nil, fmt.Errorf("get beacon from DB: %w", err)
-		}
-	}
-
 	beaconEpoch := epochID - 1
 	if beaconEpoch.IsGenesis() {
 		return types.HexToHash32(genesisBeacon).Bytes(), nil
@@ -349,14 +324,6 @@ func (tb *TortoiseBeacon) initGenesisBeacons() {
 	for epoch := types.EpochID(0); epoch.IsGenesis(); epoch++ {
 		genesis := types.HexToHash32(genesisBeacon)
 		tb.beacons[epoch] = genesis
-
-		if tb.tortoiseBeaconDB != nil {
-			if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epoch, genesis); err != nil {
-				tb.logger.With().Error("failed to write tortoise beacon to DB",
-					log.Uint32("epoch_id", uint32(epoch)),
-					log.String("beacon", genesis.String()))
-			}
-		}
 	}
 }
 

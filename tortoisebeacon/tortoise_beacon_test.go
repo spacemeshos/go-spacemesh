@@ -79,7 +79,7 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64, hasATX bool) (*To
 
 	node := service.NewSimulator().NewNode()
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
-	tb := New(conf, minerID, node, mockDB, nil, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, clock, logger)
+	tb := New(conf, minerID, node, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, clock, logger)
 	require.NotNil(t, tb)
 	tb.SetSyncState(testSyncState(true))
 	return tb, clock

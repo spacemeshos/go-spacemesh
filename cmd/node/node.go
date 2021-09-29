@@ -73,8 +73,6 @@ const (
 	StateDbLogger        = "stateDbStore"
 	StateLogger          = "state"
 	AtxDbStoreLogger     = "atxDbStore"
-	TBeaconDbStoreLogger = "tbDbStore"
-	TBeaconDbLogger      = "tbDb"
 	TBeaconLogger        = "tBeacon"
 	WeakCoinLogger       = "weakCoin"
 	PoetDbStoreLogger    = "poetDbStore"
@@ -416,10 +414,6 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StateLoggerLevel))
 	case AtxDbStoreLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxDbStoreLoggerLevel))
-	case TBeaconDbStoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconDbStoreLoggerLevel))
-	case TBeaconDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconDbLoggerLevel))
 	case TBeaconLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconLoggerLevel))
 	case WeakCoinLogger:
@@ -522,12 +516,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, atxdbstore)
 
-	tBeaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "tbeacon"), 0, 0, app.addLogger(TBeaconDbStoreLogger, lg))
-	if err != nil {
-		return err
-	}
-	app.closers = append(app.closers, tBeaconDBStore)
-
 	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
 		return err
@@ -570,7 +558,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	atxDB := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
-	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
 	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
@@ -586,7 +573,6 @@ func (app *App) initServices(ctx context.Context,
 		nodeID,
 		swarm,
 		atxDB,
-		tBeaconDB,
 		sgn,
 		edVerifier,
 		vrfSigner,
@@ -655,8 +641,8 @@ func (app *App) initServices(ctx context.Context,
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
-	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, tBeaconDBStore)
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, app.addLogger(LayerFetcher, lg))
+	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
 
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
