@@ -16,21 +16,21 @@ type BlockEligibilityValidator struct {
 	layersPerEpoch uint32
 	activationDb   activationDB
 	blocks         blockDB
-	beaconProvider BeaconGetter
+	beacons        beaconCollector
 	validateVRF    VRFValidationFunction
 	log            log.Log
 }
 
 // NewBlockEligibilityValidator returns a new BlockEligibilityValidator.
 func NewBlockEligibilityValidator(
-	committeeSize uint32, layersPerEpoch uint32, activationDb activationDB, beaconProvider BeaconGetter,
+	committeeSize uint32, layersPerEpoch uint32, activationDb activationDB, beacons beaconCollector,
 	validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
 
 	return &BlockEligibilityValidator{
 		committeeSize:  committeeSize,
 		layersPerEpoch: layersPerEpoch,
 		activationDb:   activationDb,
-		beaconProvider: beaconProvider,
+		beacons:        beacons,
 		validateVRF:    validateVRF,
 		blocks:         blockDB,
 		log:            log,
@@ -108,6 +108,11 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	if block.LayerIndex != eligibleLayer {
 		return false, fmt.Errorf("block layer (%v) does not match eligibility layer (%v)",
 			block.LayerIndex, eligibleLayer)
+	}
+
+	if block.RefBlock == nil {
+		// first block of the epoch
+		v.beacons.ReportBeaconFromBlock(epochNumber, block.ID(), epochBeacon, weight)
 	}
 	return true, nil
 }
