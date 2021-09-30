@@ -34,7 +34,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 		rounds = 3
 	)
 
-	types.SetLayersPerEpoch(1)
+	types.SetLayersPerEpoch(3)
 
 	tt := []struct {
 		name  string

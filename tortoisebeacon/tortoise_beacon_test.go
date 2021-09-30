@@ -226,7 +226,9 @@ func randomBlockID() types.BlockID {
 }
 
 func TestTortoiseBeacon_ReportBeaconFromBlock(t *testing.T) {
-	types.SetLayersPerEpoch(5)
+	t.Parallel()
+
+	types.SetLayersPerEpoch(3)
 	tb := &TortoiseBeacon{
 		logger:            logtest.New(t).WithName("TortoiseBeacon"),
 		config:            UnitTestConfig(),
@@ -254,7 +256,9 @@ func TestTortoiseBeacon_ReportBeaconFromBlock(t *testing.T) {
 }
 
 func TestTortoiseBeacon_ReportBeaconFromBlock_SameBlock(t *testing.T) {
-	types.SetLayersPerEpoch(5)
+	t.Parallel()
+
+	types.SetLayersPerEpoch(3)
 	tb := &TortoiseBeacon{
 		logger:            logtest.New(t).WithName("TortoiseBeacon"),
 		config:            UnitTestConfig(),
@@ -283,6 +287,8 @@ func TestTortoiseBeacon_ReportBeaconFromBlock_SameBlock(t *testing.T) {
 }
 
 func TestTortoiseBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
+	t.Parallel()
+
 	epoch := types.EpochID(3)
 	beacon := randomHash()
 	beaconFromBlocks := randomHash().Bytes()
@@ -310,8 +316,9 @@ func TestTortoiseBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.
 }
 
 func TestTortoiseBeacon_findMostWeightedBeaconForEpoch(t *testing.T) {
-	types.SetLayersPerEpoch(5)
+	t.Parallel()
 
+	types.SetLayersPerEpoch(3)
 	beacon1 := randomHash().Bytes()
 	beacon2 := randomHash().Bytes()
 	beacon3 := randomHash().Bytes()
@@ -343,8 +350,9 @@ func TestTortoiseBeacon_findMostWeightedBeaconForEpoch(t *testing.T) {
 }
 
 func TestTortoiseBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testing.T) {
-	types.SetLayersPerEpoch(5)
+	t.Parallel()
 
+	types.SetLayersPerEpoch(3)
 	beacon1 := randomHash().Bytes()
 	beacon2 := randomHash().Bytes()
 	beacon3 := randomHash().Bytes()
@@ -376,7 +384,9 @@ func TestTortoiseBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testin
 }
 
 func TestTortoiseBeacon_findMostWeightedBeaconForEpoch_NoBeacon(t *testing.T) {
-	types.SetLayersPerEpoch(5)
+	t.Parallel()
+
+	types.SetLayersPerEpoch(3)
 	tb := &TortoiseBeacon{
 		logger:            logtest.New(t).WithName("TortoiseBeacon"),
 		config:            UnitTestConfig(),
