@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/svm"
 )
 
 const (
@@ -68,19 +69,19 @@ type txMemPool interface {
 	Put(id types.TransactionID, tx *types.Transaction)
 }
 
-// AtxDB holds logic for working with atxs
+// AtxDB holds logic for working with atxs.
 type AtxDB interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
 	GetFullAtx(id types.ATXID) (*types.ActivationTx, error)
 	SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) error
 }
 
-// Mesh is the logic layer above our mesh.DB database
+// Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
 	log.Log
 	*DB
 	AtxDB
-	txProcessor
+	svm svm.SVM
 	Validator
 	trtl   tortoise
 	txPool txMemPool
@@ -100,13 +101,13 @@ type Mesh struct {
 	txMutex             sync.Mutex
 }
 
-// NewMesh creates a new instant of a mesh
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
+// NewMesh creates a new instance of a mesh.
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, svm svm.SVM, logger log.Log) *Mesh {
 	msh := &Mesh{
 		Log:                 logger,
 		trtl:                trtl,
 		txPool:              txPool,
-		txProcessor:         pr,
+		svm:                 svm,
 		done:                make(chan struct{}),
 		DB:                  db,
 		config:              rewardConfig,
@@ -130,7 +131,7 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 	return msh
 }
 
-// NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database
+// NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database.
 func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
 	msh := NewMesh(db, atxDb, rewardConfig, trtl, txPool, pr, logger)
 
@@ -475,7 +476,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 		msh.updateStateWithLayer(ctx, types.NewExistingLayer(layerID, validBlocks))
 		msh.Event().Info("end of layer state root",
 			layerID,
-			log.String("state_root", util.Bytes2Hex(msh.txProcessor.GetStateRoot().Bytes())),
+			log.String("state_root", util.Bytes2Hex(msh.svm.TxProcessor().GetStateRoot().Bytes())),
 		)
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
@@ -485,7 +486,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 func (msh *Mesh) revertState(ctx context.Context, layerID types.LayerID) error {
 	logger := msh.WithContext(ctx).WithFields(layerID)
 	logger.Info("attempting to roll back state to previous layer")
-	if err := msh.LoadState(layerID); err != nil {
+	if err := msh.svm.TxProcessor().LoadState(layerID); err != nil {
 		return fmt.Errorf("failed to revert state to layer %v: %w", layerID, err)
 	}
 	return nil
@@ -500,7 +501,7 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 		msh.removeRejectedFromAccountTxs(account, grouped, l)
 	}
 	for _, tx := range returnedTxs {
-		if err := msh.ValidateAndAddTxToPool(tx); err == nil {
+		if err := msh.svm.TxProcessor().ValidateAndAddTxToPool(tx); err == nil {
 			// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
 			msh.With().Info("transaction from contextually invalid block re-added to mempool", tx.ID())
 		}
@@ -688,7 +689,7 @@ func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.T
 
 func (msh *Mesh) pushTransactions(l *types.Layer) {
 	validBlockTxs := msh.extractUniqueOrderedTransactions(l)
-	numFailedTxs, err := msh.ApplyTransactions(l.Index(), validBlockTxs)
+	numFailedTxs, err := msh.svm.TxProcessor().ApplyTransactions(l.Index(), validBlockTxs)
 	if err != nil {
 		msh.With().Error("failed to apply transactions",
 			l.Index(), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
@@ -912,7 +913,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	// Applying rewards (here), reporting them, and adding them to the database (below) should be atomic. Right now,
 	// they're not. Also, ApplyRewards does not return an error if it fails.
 	// TODO: fix this.
-	msh.ApplyRewards(l.Index(), coinbases, blockTotalReward)
+	msh.svm.TxProcessor().ApplyRewards(l.Index(), coinbases, blockTotalReward)
 
 	blockLayerReward, blockLayerRewardMod := calculateActualRewards(l.Index(), layerReward, numBlocks)
 	msh.With().Info("reward calculated",

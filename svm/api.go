@@ -2,12 +2,12 @@ package svm
 
 import (
 	"fmt"
+	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
 
@@ -15,6 +15,10 @@ import (
 type SVM struct {
 	state *state.TransactionProcessor
 	log   log.Logger
+}
+
+func (s *SVM) TxProcessor() *state.TransactionProcessor {
+	return s.state
 }
 
 // New creates a new `SVM` instance from the given `state` and `logger`.
@@ -38,7 +42,7 @@ func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 		}
 		addr := types.BytesToAddress(bytes)
 		svm.state.CreateAccount(addr)
-		svm.state.AddBalance(addr, balance)
+		svm.AddBalance(addr, balance)
 		svm.log.With().Info("genesis account created",
 			log.String("address", addr.Hex()),
 			log.Uint64("balance", balance))
@@ -51,5 +55,38 @@ func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 	return nil
 }
 
-func (s *SVM) ApplyLayer(msh *mesh.Mesh, config config.Config, index types.LayerID, transactions []types.Transaction, rewards []types.Reward) {
+func (s *SVM) AddBalance(addr types.Address, amount uint64) {
+	s.state.AddBalance(addr, amount)
+}
+
+func txsGetPointers(transactions []types.Transaction) []*types.Transaction {
+	txs := make([]*types.Transaction, 0)
+	for _, t := range transactions {
+		txs = append(txs, &t)
+	}
+
+	return txs
+}
+
+// ApplyLayer should be called when a layer is applied, i.e. after Hare/Tortoise
+// verification.
+func (s *SVM) ApplyLayer(layerID types.LayerID, transactions []types.Transaction, rewards []types.Reward) error {
+	txs := txsGetPointers(transactions)
+	_, err := s.state.ApplyTransactions(layerID, txs)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (s *SVM) writeTransactionRewards(l types.LayerID, accountBlockCount map[types.Address]map[string]uint64, totalReward, layerReward *big.Int) error {
+	for account, smesherAccountEntry := range accountBlockCount {
+		for _, cnt := range smesherAccountEntry {
+			reward := cnt * totalReward.Uint64()
+			s.AddBalance(account, reward)
+		}
+	}
+
+	return nil
 }
