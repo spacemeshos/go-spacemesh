@@ -20,7 +20,7 @@ func (mbp mockBeaconProvider) GetBeacon(types.EpochID) ([]byte, error) {
 
 func TestBeacon_Value(t *testing.T) {
 	beaconValue := []byte{1, 2, 3, 4}
-	encodedValue := uint32(67305985) // binary.LittleEndian.Uint32(beaconValue)
+	encodedValue := uint32(0x4030201) // binary.LittleEndian.Uint32(beaconValue)
 	b := NewBeacon(&mockBeaconProvider{beaconValue}, logtest.New(t))
 
 	val, err := b.Value(context.TODO(), 100)

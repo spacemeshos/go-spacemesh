@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/ALTree/bigfloat"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -84,10 +86,11 @@ func New(
 	vrfSigner signing.Signer,
 	vrfVerifier signing.Verifier,
 	weakCoin coin,
+	dbPath string,
 	clock layerClock,
 	logger log.Log,
-) *TortoiseBeacon {
-	return &TortoiseBeacon{
+) (*TortoiseBeacon, error) {
+	tb := &TortoiseBeacon{
 		logger:                  logger,
 		config:                  conf,
 		nodeID:                  nodeID,
@@ -107,6 +110,14 @@ func New(
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 		votesMargin:             map[string]*big.Int{},
 	}
+	if dbPath != "" {
+		db, err := database.NewLDBDatabase(filepath.Join(dbPath, "tbeacon"), 0, 0, logger)
+		if err != nil {
+			return nil, err
+		}
+		tb.db = db
+	}
+	return tb, nil
 }
 
 // TortoiseBeacon represents Tortoise Beacon.
@@ -131,6 +142,7 @@ type TortoiseBeacon struct {
 
 	clock       layerClock
 	layerTicker chan types.LayerID
+	db          database.Database
 
 	mu              sync.RWMutex
 	epochInProgress types.EpochID
@@ -197,6 +209,9 @@ func (tb *TortoiseBeacon) Close() {
 		tb.logger.With().Info("received error waiting for goroutines to finish", log.Err(err))
 	}
 	tb.logger.Info("tortoise beacon goroutines finished")
+	if tb.db != nil {
+		tb.db.Close()
+	}
 }
 
 // isClosed returns true if background workers are not running.
@@ -213,7 +228,7 @@ func (tb *TortoiseBeacon) ReportBeaconFromBlock(epoch types.EpochID, blockID typ
 		return
 	}
 
-	if epochBeacon := tb.findMostWeightedBeaconBeaconForEpoch(epoch); epochBeacon != nil {
+	if epochBeacon := tb.findMostWeightedBeaconForEpoch(epoch); epochBeacon != nil {
 		tb.setBeacon(epoch-1, types.BytesToHash(epochBeacon))
 	}
 }
@@ -255,7 +270,7 @@ func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types
 		log.Uint64("weight", weight))
 }
 
-func (tb *TortoiseBeacon) findMostWeightedBeaconBeaconForEpoch(epoch types.EpochID) []byte {
+func (tb *TortoiseBeacon) findMostWeightedBeaconForEpoch(epoch types.EpochID) []byte {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 	epochBeacons, ok := tb.beaconsFromBlocks[epoch]
@@ -298,24 +313,61 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 		return types.HexToHash32(genesisBeacon).Bytes(), nil
 	}
 
-	tb.mu.RLock()
-	defer tb.mu.RUnlock()
-
-	beacon, ok := tb.beacons[beaconEpoch]
-	if !ok {
-		tb.logger.With().Warning("beacon is not calculated",
-			epochID,
-			log.Uint32("beacon_epoch", uint32(beaconEpoch)))
-		return nil, ErrBeaconNotCalculated
+	beacon := tb.getBeacon(beaconEpoch)
+	if beacon != nil {
+		return beacon, nil
 	}
 
-	return beacon.Bytes(), nil
+	beacon = tb.getPersistedBeacon(beaconEpoch)
+	if beacon != nil {
+		return beacon, nil
+	}
+
+	tb.logger.With().Warning("beacon not available",
+		epochID,
+		log.Uint32("beacon_epoch", uint32(beaconEpoch)))
+	return nil, ErrBeaconNotCalculated
+}
+
+func (tb *TortoiseBeacon) getBeacon(epoch types.EpochID) []byte {
+	tb.mu.RLock()
+	defer tb.mu.RUnlock()
+	if beacon, ok := tb.beacons[epoch]; ok {
+		return beacon.Bytes()
+	}
+	return nil
 }
 
 func (tb *TortoiseBeacon) setBeacon(epoch types.EpochID, beacon types.Hash32) {
+	tb.persistBeacon(epoch, beacon)
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	tb.beacons[epoch] = beacon
+}
+
+func (tb *TortoiseBeacon) persistBeacon(epoch types.EpochID, beacon types.Hash32) {
+	if tb.db == nil {
+		return
+	}
+	err := tb.db.Put(epoch.ToBytes(), beacon.Bytes())
+	if err != nil {
+		// persisting beacon is only best-effort basis.
+		// if the node goes offline and back online in the middle of the same epoch, it simply waits
+		// enough blocks that reports beacon, or till the next epoch.
+		tb.logger.With().Error("failed to persist beacon",
+			epoch,
+			log.String("beacon", beacon.ShortString()), log.Err(err))
+	}
+}
+
+func (tb *TortoiseBeacon) getPersistedBeacon(epoch types.EpochID) []byte {
+	if tb.db == nil {
+		return nil
+	}
+	if beacon, err := tb.db.Get(epoch.ToBytes()); err == nil {
+		return beacon
+	}
+	return nil
 }
 
 func (tb *TortoiseBeacon) initGenesisBeacons() {

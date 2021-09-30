@@ -568,7 +568,7 @@ func (app *App) initServices(ctx context.Context,
 		weakcoin.WithMaxRound(app.Config.TortoiseBeacon.RoundsNumber),
 	)
 
-	tBeacon := tortoisebeacon.New(
+	tBeacon, err := tortoisebeacon.New(
 		app.Config.TortoiseBeacon,
 		nodeID,
 		swarm,
@@ -578,8 +578,12 @@ func (app *App) initServices(ctx context.Context,
 		vrfSigner,
 		vrfVerifier,
 		wc,
+		dbStorepath,
 		clock,
 		app.addLogger(TBeaconLogger, lg))
+	if err != nil {
+		return fmt.Errorf("failed to create tortoise beacon: %w", err)
+	}
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
