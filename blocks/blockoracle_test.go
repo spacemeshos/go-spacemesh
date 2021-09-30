@@ -410,7 +410,7 @@ func TestBlockOracleValidatorRefBlock(t *testing.T) {
 	mockBlocksDB.EXPECT().GetBlock(refBlockID).Return(refBlock, nil).Times(1)
 	mockBC := mocks.NewMockbeaconCollector(ctrl)
 	// the block is not the first block in epoch, so no reporting is done
-	mockBC.EXPECT().ReportBeaconFromBlock(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	mockBC.EXPECT().ReportBeaconFromBlock(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(1)
 
 	validator := NewBlockEligibilityValidator(committeeSize, layersPerEpoch, activationDB, mockBC, validateVRF, mockBlocksDB, lg.WithName("blkElgValidator"))
 	eligible, err := validator.BlockSignedAndEligible(block)

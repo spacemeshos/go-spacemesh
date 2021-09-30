@@ -110,10 +110,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			block.LayerIndex, eligibleLayer)
 	}
 
-	if block.RefBlock == nil {
-		// first block of the epoch
-		v.beacons.ReportBeaconFromBlock(epochNumber, block.ID(), epochBeacon, weight)
-	}
+	v.beacons.ReportBeaconFromBlock(epochNumber, block.ID(), epochBeacon, weight)
 	return true, nil
 }
 
