@@ -247,8 +247,6 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		return
 	}
 
-	logger.Info("starting hare consensus")
-
 	// retrieve set from orphan blocks
 	blocks, err := h.mesh.LayerBlockIds(h.lastLayer)
 	if err != nil {
@@ -259,7 +257,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		// TODO:   and achieve consensus on empty set
 	}
 
-	logger.With().Info("hare received layer blocks", log.Int("count", len(blocks)))
+	logger.With().Info("starting hare consensus with blocks", log.Int("num_blocks", len(blocks)))
 	set := NewSet(blocks)
 
 	instID := id

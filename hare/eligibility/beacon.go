@@ -31,7 +31,7 @@ func (b *Beacon) Value(ctx context.Context, epochID types.EpochID) (uint32, erro
 	}
 
 	value := binary.LittleEndian.Uint32(v)
-	b.WithContext(ctx).With().Info("hare eligibility beacon value for epoch",
+	b.WithContext(ctx).With().Debug("hare eligibility beacon value for epoch",
 		epochID,
 		log.String("beacon", types.BytesToHash(v).ShortString()),
 		log.Uint32("beacon_dec", value))

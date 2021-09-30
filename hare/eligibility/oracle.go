@@ -325,7 +325,6 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32
 		log.Uint32("round", round),
 		log.Int("committee_size", committeeSize),
 		id,
-		id,
 		log.Uint64("eligibility_count", uint64(eligibilityCount)),
 		log.Int("n", n),
 		log.String("p", p.String()),

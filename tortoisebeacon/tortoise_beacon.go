@@ -349,8 +349,7 @@ func (tb *TortoiseBeacon) persistBeacon(epoch types.EpochID, beacon types.Hash32
 	if tb.db == nil {
 		return
 	}
-	err := tb.db.Put(epoch.ToBytes(), beacon.Bytes())
-	if err != nil {
+	if err := tb.db.Put(epoch.ToBytes(), beacon.Bytes()); err != nil {
 		// persisting beacon is only best-effort basis.
 		// if the node goes offline and back online in the middle of the same epoch, it simply waits
 		// enough blocks that reports beacon, or till the next epoch.
@@ -435,7 +434,7 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case layer := <-tb.layerTicker:
-			tb.logger.With().Info("received tick", layer)
+			tb.logger.With().Debug("received tick", layer)
 			tb.eg.Go(func() error {
 				tb.handleLayer(ctx, layer)
 				return nil
