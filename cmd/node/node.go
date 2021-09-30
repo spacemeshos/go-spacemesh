@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/svm/state"
 	"io/ioutil"
 	"math/big"
 	"net/http"
@@ -18,6 +17,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/svm"
+	"github.com/spacemeshos/go-spacemesh/svm/state"
+
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spf13/cobra"
@@ -27,7 +29,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
-	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
@@ -98,6 +99,7 @@ const (
 	Fetcher              = "fetcher"
 	LayerFetcher         = "layerFetcher"
 	TimeSyncLogger       = "timesync"
+	SVMLogger            = "SVM"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -319,6 +321,7 @@ type App struct {
 	closers        []interface{ Close() }
 	log            log.Log
 	txPool         *mempool.TxMempool
+	svm            *svm.SVM
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
 	loggers        map[string]*zap.AtomicLevel
@@ -392,34 +395,6 @@ func (app *App) Cleanup() {
 	app.stopServices()
 	// add any other Cleanup tasks here....
 	log.Info("app cleanup completed")
-}
-
-func (app *App) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) error {
-	if app.Config.Genesis == nil {
-		app.Config.Genesis = apiCfg.DefaultGenesisConfig()
-	}
-	for id, balance := range app.Config.Genesis.Accounts {
-		bytes := util.FromHex(id)
-		if len(bytes) == 0 {
-			return fmt.Errorf("cannot decode entry %s for genesis account", id)
-		}
-		// just make it explicit that we want address and not a public key
-		if len(bytes) != types.AddressLength {
-			return fmt.Errorf("%s must be an address of size %d", id, types.AddressLength)
-		}
-		addr := types.BytesToAddress(bytes)
-		state.CreateAccount(addr)
-		state.AddBalance(addr, balance)
-		app.log.With().Info("genesis account created",
-			log.String("address", addr.Hex()),
-			log.Uint64("balance", balance))
-	}
-
-	_, err := state.Commit()
-	if err != nil {
-		return fmt.Errorf("cannot commit genesis state: %w", err)
-	}
-	return nil
 }
 
 // Wrap the top-level logger to add context info and set the level for a
@@ -644,13 +619,14 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
+	svm := svm.New(processor, app.addLogger(SVMLogger, lg))
 
 	if mdb.PersistentData() {
 		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
-		if err := app.setupGenesis(processor, msh); err != nil {
+		if err := svm.SetupGenesis(app.Config.Genesis); err != nil {
 			return err
 		}
 	}
@@ -784,6 +760,7 @@ func (app *App) initServices(ctx context.Context,
 	app.atxDb = atxDB
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
+	app.svm = svm
 	if !app.Config.TIME.Peersync.Disable {
 		conf := app.Config.TIME.Peersync
 		conf.ResponsesBufferSize = app.Config.P2P.BufferSize
