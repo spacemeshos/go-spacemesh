@@ -161,8 +161,6 @@ func TestTortoiseBeacon_BeaconsWithDatabase(t *testing.T) {
 
 	tb := &TortoiseBeacon{
 		logger:  logtest.New(t).WithName("TortoiseBeacon"),
-		clock:   clockNeverNotify(t),
-		config:  UnitTestConfig(),
 		beacons: make(map[types.EpochID]types.Hash32),
 		db:      database.NewMemDatabase(),
 	}
@@ -202,6 +200,37 @@ func TestTortoiseBeacon_BeaconsWithDatabase(t *testing.T) {
 	got, err = tb.GetBeacon(epoch5 - 1)
 	assert.Equal(t, ErrBeaconNotCalculated, err)
 	assert.Empty(t, got)
+}
+
+func TestTortoiseBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
+	t.Parallel()
+
+	tb := &TortoiseBeacon{
+		logger:            logtest.New(t).WithName("TortoiseBeacon"),
+		beacons:           make(map[types.EpochID]types.Hash32),
+		beaconsFromBlocks: make(map[types.EpochID]map[string]*epochBeacon),
+	}
+
+	epoch := types.EpochID(5)
+	for i := 0; i < numEpochsToKeep; i++ {
+		e := epoch + types.EpochID(i)
+		tb.setBeacon(e, randomHash())
+		tb.recordBlockBeacon(e, randomBlockID(), randomHash().Bytes(), 10)
+		tb.cleanupEpoch(e)
+		assert.Equal(t, i+1, len(tb.beacons))
+		assert.Equal(t, i+1, len(tb.beaconsFromBlocks))
+	}
+	assert.Equal(t, numEpochsToKeep, len(tb.beacons))
+	assert.Equal(t, numEpochsToKeep, len(tb.beaconsFromBlocks))
+
+	epoch = epoch + numEpochsToKeep
+	tb.setBeacon(epoch, randomHash())
+	tb.recordBlockBeacon(epoch, randomBlockID(), randomHash().Bytes(), 10)
+	assert.Equal(t, numEpochsToKeep+1, len(tb.beacons))
+	assert.Equal(t, numEpochsToKeep+1, len(tb.beaconsFromBlocks))
+	tb.cleanupEpoch(epoch)
+	assert.Equal(t, numEpochsToKeep, len(tb.beacons))
+	assert.Equal(t, numEpochsToKeep, len(tb.beaconsFromBlocks))
 }
 
 func randomHash() types.Hash32 {

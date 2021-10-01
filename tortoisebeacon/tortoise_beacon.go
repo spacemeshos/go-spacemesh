@@ -27,6 +27,7 @@ const (
 	proposalPrefix       = "TBP"
 	genesisBeacon        = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
 	proposalChanCapacity = 1024
+	numEpochsToKeep      = 10
 )
 
 // Tortoise Beacon errors.
@@ -156,11 +157,10 @@ type TortoiseBeacon struct {
 	hasProposed               map[string]struct{}
 	hasVoted                  []map[string]struct{}
 	proposalPhaseFinishedTime time.Time
-	// TODO: only keep a buffer of epochs
-	beacons           map[types.EpochID]types.Hash32
-	beaconsFromBlocks map[types.EpochID]map[string]*epochBeacon
-	proposalChans     map[types.EpochID]chan *proposalMessageWithReceiptData
-	proposalChecker   eligibilityChecker
+	beacons                   map[types.EpochID]types.Hash32
+	beaconsFromBlocks         map[types.EpochID]map[string]*epochBeacon
+	proposalChans             map[types.EpochID]chan *proposalMessageWithReceiptData
+	proposalChecker           eligibilityChecker
 }
 
 // SetSyncState updates sync state provider. Must be executed only once.
@@ -422,6 +422,17 @@ func (tb *TortoiseBeacon) cleanupEpoch(epoch types.EpochID) {
 	if ch, ok := tb.proposalChans[epoch]; ok {
 		close(ch)
 		delete(tb.proposalChans, epoch)
+	}
+
+	if epoch <= numEpochsToKeep {
+		return
+	}
+	oldest := epoch - numEpochsToKeep
+	if _, ok := tb.beacons[oldest]; ok {
+		delete(tb.beacons, oldest)
+	}
+	if _, ok := tb.beaconsFromBlocks[oldest]; ok {
+		delete(tb.beaconsFromBlocks, oldest)
 	}
 }
 
