@@ -28,7 +28,9 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, l
 
 	events.ReportCalculatedTortoiseBeacon(epoch, beacon.ShortString())
 
-	tb.setBeacon(epoch, beacon)
+	if err := tb.setBeacon(epoch, beacon); err != nil {
+		return err
+	}
 
 	logger.Debug("beacon updated for this epoch")
 	return nil

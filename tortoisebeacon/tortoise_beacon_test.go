@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
+	dbMocks "github.com/spacemeshos/go-spacemesh/database/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -79,8 +80,7 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64, hasATX bool) (*To
 
 	node := service.NewSimulator().NewNode()
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
-	tb, err := New(conf, minerID, node, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, "", clock, logger)
-	require.NoError(t, err)
+	tb := New(conf, minerID, node, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
 	require.NotNil(t, tb)
 	tb.SetSyncState(testSyncState(true))
 	return tb, clock
@@ -168,8 +168,10 @@ func TestTortoiseBeacon_BeaconsWithDatabase(t *testing.T) {
 	beacon2 := types.HexToHash32("0x12345678")
 	epoch5 := types.EpochID(5)
 	beacon4 := types.HexToHash32("0x23456789")
-	tb.setBeacon(epoch3-1, beacon2)
-	tb.setBeacon(epoch5-1, beacon4)
+	err := tb.setBeacon(epoch3-1, beacon2)
+	require.NoError(t, err)
+	err = tb.setBeacon(epoch5-1, beacon4)
+	require.NoError(t, err)
 
 	got, err := tb.GetBeacon(epoch3)
 	assert.NoError(t, err)
@@ -202,11 +204,36 @@ func TestTortoiseBeacon_BeaconsWithDatabase(t *testing.T) {
 	assert.Empty(t, got)
 }
 
+func TestTortoiseBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
+	t.Parallel()
+
+	ctrl := gomock.NewController(t)
+	mockDB := dbMocks.NewMockDatabase(ctrl)
+	tb := &TortoiseBeacon{
+		logger:  logtest.New(t).WithName("TortoiseBeacon"),
+		beacons: make(map[types.EpochID]types.Hash32),
+		db:      mockDB,
+	}
+	epoch := types.EpochID(3)
+	beacon := types.HexToHash32("0x12345678")
+	mockDB.EXPECT().Put(epoch.ToBytes(), beacon.Bytes()).Return(errUnknown).Times(1)
+	err := tb.persistBeacon(epoch, beacon)
+	assert.Equal(t, err, errUnknown)
+
+	mockDB.EXPECT().Get(epoch.ToBytes()).Return(nil, errUnknown).Times(1)
+	got, errGet := tb.getPersistedBeacon(epoch)
+	assert.Nil(t, got)
+	assert.Equal(t, errGet, errUnknown)
+
+	ctrl.Finish()
+}
+
 func TestTortoiseBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	t.Parallel()
 
 	tb := &TortoiseBeacon{
 		logger:            logtest.New(t).WithName("TortoiseBeacon"),
+		db:                database.NewMemDatabase(),
 		beacons:           make(map[types.EpochID]types.Hash32),
 		beaconsFromBlocks: make(map[types.EpochID]map[string]*epochBeacon),
 	}
@@ -214,7 +241,8 @@ func TestTortoiseBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	epoch := types.EpochID(5)
 	for i := 0; i < numEpochsToKeep; i++ {
 		e := epoch + types.EpochID(i)
-		tb.setBeacon(e, randomHash())
+		err := tb.setBeacon(e, randomHash())
+		require.NoError(t, err)
 		tb.recordBlockBeacon(e, randomBlockID(), randomHash().Bytes(), 10)
 		tb.cleanupEpoch(e)
 		assert.Equal(t, i+1, len(tb.beacons))
@@ -224,7 +252,8 @@ func TestTortoiseBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	assert.Equal(t, numEpochsToKeep, len(tb.beaconsFromBlocks))
 
 	epoch = epoch + numEpochsToKeep
-	tb.setBeacon(epoch, randomHash())
+	err := tb.setBeacon(epoch, randomHash())
+	require.NoError(t, err)
 	tb.recordBlockBeacon(epoch, randomBlockID(), randomHash().Bytes(), 10)
 	assert.Equal(t, numEpochsToKeep+1, len(tb.beacons))
 	assert.Equal(t, numEpochsToKeep+1, len(tb.beaconsFromBlocks))
@@ -261,9 +290,9 @@ func TestTortoiseBeacon_ReportBeaconFromBlock(t *testing.T) {
 	tb := &TortoiseBeacon{
 		logger:            logtest.New(t).WithName("TortoiseBeacon"),
 		config:            UnitTestConfig(),
+		db:                database.NewMemDatabase(),
 		beacons:           make(map[types.EpochID]types.Hash32),
 		beaconsFromBlocks: make(map[types.EpochID]map[string]*epochBeacon),
-		running:           1,
 	}
 	tb.config.BeaconSyncNumBlocks = 3
 
@@ -291,9 +320,9 @@ func TestTortoiseBeacon_ReportBeaconFromBlock_SameBlock(t *testing.T) {
 	tb := &TortoiseBeacon{
 		logger:            logtest.New(t).WithName("TortoiseBeacon"),
 		config:            UnitTestConfig(),
+		db:                database.NewMemDatabase(),
 		beacons:           make(map[types.EpochID]types.Hash32),
 		beaconsFromBlocks: make(map[types.EpochID]map[string]*epochBeacon),
-		running:           1,
 	}
 	tb.config.BeaconSyncNumBlocks = 2
 

@@ -73,6 +73,7 @@ const (
 	StateDbLogger        = "stateDbStore"
 	StateLogger          = "state"
 	AtxDbStoreLogger     = "atxDbStore"
+	TBeaconDbStoreLogger = "tbDbStore"
 	TBeaconLogger        = "tBeacon"
 	WeakCoinLogger       = "weakCoin"
 	PoetDbStoreLogger    = "poetDbStore"
@@ -516,6 +517,12 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, atxdbstore)
 
+	tBeaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "tbeacon"), 0, 0, app.addLogger(TBeaconDbStoreLogger, lg))
+	if err != nil {
+		return err
+	}
+	app.closers = append(app.closers, tBeaconDBStore)
+
 	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
 		return err
@@ -568,7 +575,7 @@ func (app *App) initServices(ctx context.Context,
 		weakcoin.WithMaxRound(app.Config.TortoiseBeacon.RoundsNumber),
 	)
 
-	tBeacon, err := tortoisebeacon.New(
+	tBeacon := tortoisebeacon.New(
 		app.Config.TortoiseBeacon,
 		nodeID,
 		swarm,
@@ -578,12 +585,9 @@ func (app *App) initServices(ctx context.Context,
 		vrfSigner,
 		vrfVerifier,
 		wc,
-		dbStorepath,
+		tBeaconDBStore,
 		clock,
 		app.addLogger(TBeaconLogger, lg))
-	if err != nil {
-		return fmt.Errorf("failed to create tortoise beacon: %w", err)
-	}
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
