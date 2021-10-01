@@ -29,8 +29,6 @@ const (
 	LayerBlocksMsg
 	// AtxIDsMsg is used to fetch ATXs for a given epoch
 	AtxIDsMsg
-	// TortoiseBeaconMsg is used to fetch tortoise beacon messages for a given epoch
-	TortoiseBeaconMsg
 	// Fetch is used to fetch data for a given hash
 	Fetch
 	// RequestTimeSync is used for time synchronization with peers.

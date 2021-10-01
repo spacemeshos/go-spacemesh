@@ -20,6 +20,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 )
 
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
+
 // IdealBatchSize is the best batch size
 // Code using batches should try to add this much data to the batch.
 // The value was determined empirically.

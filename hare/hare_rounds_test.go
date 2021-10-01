@@ -68,6 +68,9 @@ func (h *testHare) CalcEligibility(ctx context.Context, layer types.LayerID, rou
 
 func (testHare) Register(bool, string)   {}
 func (testHare) Unregister(bool, string) {}
+func (testHare) IsEpochBeaconReady(context.Context, types.EpochID) bool {
+	return true
+}
 func (testHare) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
 }
