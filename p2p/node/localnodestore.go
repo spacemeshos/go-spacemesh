@@ -100,10 +100,7 @@ func getLocalNodes(path string) ([]string, error) {
 }
 
 // ReadFirstNodeData reads node data from the data folder.
-// Reads a random node from the data folder if more than one node data file is persisted.
-// To load a specific node on startup - users need to pass the node id using a cli arg.
-//
-// TODO(josebalius): verify that "reads a random node" is actually happening
+// It reads the first node from the data folder.
 func ReadFirstNodeData(path string) (ln LocalNode, err error) {
 	nds, err := getLocalNodes(path)
 	if err != nil {
