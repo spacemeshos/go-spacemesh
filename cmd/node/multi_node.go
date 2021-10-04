@@ -152,11 +152,11 @@ func getTestDefaultConfig() *config.Config {
 	cfg.HARE.ExpectedLeaders = 5
 	cfg.HARE.SuperHare = true
 	cfg.LayerAvgSize = 5
-	cfg.LayersPerEpoch = 2
-	cfg.TxsPerBlock = 10
+	cfg.LayersPerEpoch = 3
+	cfg.TxsPerBlock = 100
 	cfg.Hdist = 5
 
-	cfg.LayerDurationSec = 20
+	cfg.LayerDurationSec = 30
 	cfg.HareEligibility.ConfidenceParam = 4
 	cfg.HareEligibility.EpochOffset = 0
 	cfg.SyncRequestTimeout = 500
