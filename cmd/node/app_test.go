@@ -249,7 +249,7 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 	addr := types.Address{}
 	addr.SetBytes(acc1Signer.PublicKey().Bytes())
 	dst := types.BytesToAddress([]byte{0x09})
-	txsSent := 5
+	txsSent := 25
 	setup := func(suite *AppTestSuite, t *testing.T) {
 		for i := 0; i < txsSent; i++ {
 			tx, err := types.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
@@ -294,7 +294,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 	addr := types.Address{}
 	addr.SetBytes(acc1Signer.PublicKey().Bytes())
 	dst := types.BytesToAddress([]byte{0x02})
-	txsSent := 5
+	txsSent := 25
 	setup := func(suite *AppTestSuite, t *testing.T) {
 		accountRequest := &pb.AccountRequest{AccountId: &pb.AccountId{Address: addr.Bytes()}}
 		getNonce := func() int {

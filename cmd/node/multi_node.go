@@ -156,7 +156,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.TxsPerBlock = 100
 	cfg.Hdist = 5
 
-	cfg.LayerDurationSec = 30
+	cfg.LayerDurationSec = 20
 	cfg.HareEligibility.ConfidenceParam = 4
 	cfg.HareEligibility.EpochOffset = 0
 	cfg.SyncRequestTimeout = 500
