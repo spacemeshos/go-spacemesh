@@ -164,7 +164,7 @@ linters:
   enable:
     - staticcheck
     - golint
-#    - wrapcheck
+    - wrapcheck
 #    - goimports
 #    - varcheck
 #    - unparam
