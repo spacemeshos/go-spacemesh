@@ -194,7 +194,7 @@ func (l *Logic) layerBlocksReqReceiver(ctx context.Context, req []byte) ([]byte,
 	lyrID := types.BytesToLayerID(req)
 	processed := l.layerDB.ProcessedLayer()
 	if lyrID.After(processed) {
-		return nil, fmt.Errorf("%w: requested layer %v is higher then processed %v", errLayerNotProcessed, lyrID, processed)
+		return nil, fmt.Errorf("%w: requested layer %v is higher than processed %v", errLayerNotProcessed, lyrID, processed)
 	}
 	b := &layerBlocks{
 		ProcessedLayer: processed,
