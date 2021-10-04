@@ -156,7 +156,7 @@ func (a *addrBook) deserializePeers(filePath string) error {
 		for _, val := range sam.NewBuckets[i] {
 			parsed, err := node.ParseNode(val)
 			if err != nil {
-				a.logger.Warning("a problem occured trying to load peer %v, err=%v", val, err)
+				a.logger.Warning("a problem occurred trying to load peer %v, err=%v", val, err)
 				continue
 			}
 			ka, ok := a.addrIndex[parsed.ID]
@@ -177,7 +177,7 @@ func (a *addrBook) deserializePeers(filePath string) error {
 		for _, val := range sam.TriedBuckets[i] {
 			parsed, err := node.ParseNode(val)
 			if err != nil {
-				a.logger.Warning("a problem occured trying to load peer %v, err=%v", val, err)
+				a.logger.Warning("a problem occurred trying to load peer %v, err=%v", val, err)
 				continue
 			}
 			ka, ok := a.addrIndex[parsed.ID]

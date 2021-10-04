@@ -90,7 +90,7 @@ func (st *statusTracker) buildUnionSet(expectedSize int) *Set {
 	return unionSet
 }
 
-// BuildSVP builds the SVP if avilable and returns it, it return false otherwise.
+// BuildSVP builds the SVP if available and returns it, it return false otherwise.
 func (st *statusTracker) BuildSVP() *aggregatedMessages {
 	if !st.IsSVPReady() {
 		return nil

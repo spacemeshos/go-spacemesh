@@ -904,7 +904,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 	ti := time.After(time.Millisecond)
 	select {
 	case <-p.initial:
-		t.Error("Start succeded")
+		t.Error("Start succeeded")
 	case <-ti:
 		break
 	}
@@ -950,7 +950,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	}
 	assert.False(t, n.hasIncomingPeer(rnd.PublicKey()))
 
-	// manualy add an incoming peer
+	// manually add an incoming peer
 	rnd2 := node.GenerateRandomNodeData()
 	n.outpeers[rnd2.PublicKey()] = struct{}{} // no need to lock nothing's happening
 	go n.Disconnect(rnd2.PublicKey())

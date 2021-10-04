@@ -50,7 +50,7 @@ func TestChance(t *testing.T) {
 			//Test case with several failed attempts.
 			TstNewKnownAddress(now.Add(-35*time.Second),
 				2, time.Now().Add(-30*time.Minute), time.Now(), false, 0),
-			1 * math.Pow(0.66, 2), // 2 attemps
+			1 * math.Pow(0.66, 2), // 2 attempts
 		},
 	}
 

@@ -157,7 +157,7 @@ func (db *LDBDatabase) Close() {
 	}
 }
 
-// LDB returns the actual inner leveldb struct refrence
+// LDB returns the actual inner leveldb struct reference
 func (db *LDBDatabase) LDB() *leveldb.DB {
 	return db.db
 }

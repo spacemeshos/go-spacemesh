@@ -36,7 +36,7 @@ func New(opts ...Option) *Group {
 
 // Group manages set of tasks.
 // Unlike errgroup.Group it is safe to call Go after Wait. If Group didn't terminate yet
-// the behavior will be the same as for errgroup.Group, if it did Go will exit immediatly.
+// the behavior will be the same as for errgroup.Group, if it did Go will exit immediately.
 //
 // Zero value is not a valid Group. Must be initialized using New.
 type Group struct {

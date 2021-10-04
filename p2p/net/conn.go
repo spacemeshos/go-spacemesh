@@ -250,7 +250,7 @@ func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
 //			}
 //			err := ioutil.WriteFile(fmt.Sprintf("/tmp/stacktrace%v", i), buf, 0644)
 //			if err != nil {
-//				c.logger.Error("ERR WIRTING FILE %v", err)
+//				c.logger.Error("ERR WRITING FILE %v", err)
 //			}
 //		case <-ctx.Done():
 //			return

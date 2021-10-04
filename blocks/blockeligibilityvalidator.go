@@ -49,7 +49,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		activeSetBlock, err = v.blocks.GetBlock(*block.RefBlock)
 		if err != nil {
 			// block should be present because we've synced it in the calling function
-			return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
+			return false, fmt.Errorf("cannot get reference block %v", *block.RefBlock)
 		}
 	}
 	if activeSetBlock.ActiveSet == nil {

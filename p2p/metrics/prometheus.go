@@ -68,7 +68,7 @@ var (
 	totalGossipMessages = metrics.NewCounter(
 		"total_gossip_messages",
 		MetricsSubsystem,
-		"Number of gossip messages recieved",
+		"Number of gossip messages received",
 		[]string{ProtocolLabel, messageTypeLabel},
 	)
 

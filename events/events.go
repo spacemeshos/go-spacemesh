@@ -52,7 +52,7 @@ type EventPublisher struct {
 	*Publisher
 }
 
-// Event defines the interface that each message sent by the EventPublisher needs to implemet for it to correctly
+// Event defines the interface that each message sent by the EventPublisher needs to implement for it to correctly
 // be routed by topic.
 type Event interface {
 	// GetChannel returns the channel on which this message will be published.
