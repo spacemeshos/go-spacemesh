@@ -175,7 +175,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	}
 	test.Create(totalNodes, creationFunc)
 	test.Start()
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 40*time.Second)
 }
 
 func TestSingleValueForHonestSet(t *testing.T) {
@@ -202,7 +202,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	}
 	test.Create(totalNodes, creationFunc)
 	test.Start()
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 40*time.Second)
 }
 
 func TestAllDifferentSet(t *testing.T) {
@@ -239,7 +239,7 @@ func TestAllDifferentSet(t *testing.T) {
 	}
 	test.Create(cfg.N, creationFunc)
 	test.Start()
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 40*time.Second)
 }
 
 func TestSndDelayedDishonest(t *testing.T) {
@@ -282,7 +282,7 @@ func TestSndDelayedDishonest(t *testing.T) {
 	test.Create(totalNodes/2-1, dishonestFunc)
 
 	test.Start()
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 40*time.Second)
 }
 
 func TestRecvDelayedDishonest(t *testing.T) {
@@ -325,5 +325,5 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	test.Create(totalNodes/2-1, dishonestFunc)
 
 	test.Start()
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 40*time.Second)
 }

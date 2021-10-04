@@ -132,8 +132,7 @@ func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload
 	return e
 }
 
-type trueOracle struct {
-}
+type trueOracle struct{}
 
 func (trueOracle) Register(bool, string) {
 }
@@ -184,7 +183,7 @@ func Test_consensusIterations(t *testing.T) {
 	}
 	test.Create(totalNodes, creationFunc)
 	test.Start()
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 40*time.Second)
 }
 
 func isSynced(context.Context) bool {
@@ -216,8 +215,7 @@ func newRandBlockID(rng *rand.Rand) (id types.BlockID) {
 	return id
 }
 
-type mockBlockProvider struct {
-}
+type mockBlockProvider struct{}
 
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
@@ -279,7 +277,7 @@ func Test_multipleCPs(t *testing.T) {
 		}
 	}()
 
-	test.WaitForTimedTermination(t, 60*time.Second)
+	test.WaitForTimedTermination(t, 80*time.Second)
 }
 
 // Test - run multiple CPs where one of them runs more than one iteration
@@ -314,5 +312,5 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}
 	}()
 
-	test.WaitForTimedTermination(t, 50*time.Second)
+	test.WaitForTimedTermination(t, 100*time.Second)
 }
