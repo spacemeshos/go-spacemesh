@@ -3,6 +3,7 @@ package discovery
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -34,10 +35,9 @@ func (p *protocol) newGetAddressesRequestHandler() func(context.Context, server.
 			}
 		}
 
-		//todo: limit results to message size
-		//todo: what to do if we have no addresses?
+		// todo: limit results to message size
+		// todo: what to do if we have no addresses?
 		resp, err := types.InterfaceToBytes(results)
-
 		if err != nil {
 			plogger.With().Panic("error marshaling response message (GetAddress)", log.Err(err))
 		}
@@ -64,7 +64,7 @@ func (p *protocol) GetAddresses(ctx context.Context, remoteID p2pcrypto.PublicKe
 	resHandler := func(msg []byte) {
 		nodes := make([]*node.Info, 0, getAddrMax)
 		err := types.BytesToInterface(msg, &nodes)
-		//todo: check that we're not pass max results ?
+		// todo: check that we're not pass max results ?
 		if err != nil {
 			plogger.With().Warning("could not deserialize bytes, skipping packet", log.Err(err))
 			return
@@ -82,7 +82,7 @@ func (p *protocol) GetAddresses(ctx context.Context, remoteID p2pcrypto.PublicKe
 
 	err = p.msgServer.SendRequest(ctx, server.GetAddresses, []byte(""), remoteID, resHandler, func(err error) {})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("send request: %w", err)
 	}
 
 	timeout := time.NewTimer(MessageTimeout)

@@ -102,7 +102,7 @@ func parseConfig() (*bc.Config, error) {
 	err := vip.Unmarshal(&conf)
 	if err != nil {
 		log.Error("Failed to parse config\n")
-		return nil, err
+		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
 	return &conf, nil
@@ -222,5 +222,9 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 		}
 	})
 	// check list of requested GRPC services (if any)
-	return appCFG.API.ParseServicesList()
+	if err := appCFG.API.ParseServicesList(); err != nil {
+		return fmt.Errorf("parse services list: %w", err)
+	}
+
+	return nil
 }

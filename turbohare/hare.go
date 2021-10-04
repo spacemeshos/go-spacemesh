@@ -4,11 +4,13 @@ package turbohare
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"sort"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"sort"
-	"time"
 )
 
 type meshProvider interface {
@@ -88,8 +90,9 @@ func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
 	blks, err := h.mesh.LayerBlockIds(id)
 	if err != nil {
 		h.logger.With().Error("superhare failed to read block ids for layer", id, log.Err(err))
-		return nil, err
+		return nil, fmt.Errorf("read layer block IDs: %w", err)
 	}
+
 	sort.Slice(blks, func(i, j int) bool { return bytes.Compare(blks[i].Bytes(), blks[j].Bytes()) == -1 })
 	return blks, nil
 }

@@ -131,14 +131,15 @@ var Cmd = &cobra.Command{
 		starter := func() error {
 			if err := app.Initialize(); err != nil {
 				log.With().Error("Failed to initialize node.", log.Err(err))
-				return err
+				return fmt.Errorf("init node: %w", err)
 			}
 			// This blocks until the context is finished or until an error is produced
-			err := app.Start()
-			if err != nil {
+			if err := app.Start(); err != nil {
 				log.With().Error("Failed to start the node. See logs for details.", log.Err(err))
+				return fmt.Errorf("start node: %w", err)
 			}
-			return err
+
+			return nil
 		}
 		err = starter()
 		app.Cleanup()
@@ -220,11 +221,11 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 	)
 
 	// load config if it was loaded to our viper
-	err := vip.Unmarshal(&conf, viper.DecodeHook(hook))
-	if err != nil {
+	if err := vip.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
 		log.With().Error("Failed to parse config", log.Err(err))
-		return nil, err
+		return nil, fmt.Errorf("unmarshal viper: %w", err)
 	}
+
 	return &conf, nil
 }
 
@@ -340,7 +341,7 @@ func (app *App) Initialize() (err error) {
 	// ensure all data folders exist
 	err = filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
-		return err
+		return fmt.Errorf("ensure folders exist: %w", err)
 	}
 
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
@@ -362,7 +363,7 @@ func (app *App) Initialize() (err error) {
 
 	drift, err := timesync.CheckSystemClockDrift()
 	if err != nil {
-		return err
+		return fmt.Errorf("check system clock drift: %w", err)
 	}
 
 	log.Info("System clock synchronized with ntp. drift: %s", drift)
@@ -475,14 +476,15 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 
 // SetLogLevel updates the log level of an existing logger
 func (app *App) SetLogLevel(name, loglevel string) error {
-	if lvl, ok := app.loggers[name]; ok {
-		err := lvl.UnmarshalText([]byte(loglevel))
-		if err != nil {
-			return err
-		}
-	} else {
+	lvl, ok := app.loggers[name]
+	if !ok {
 		return fmt.Errorf("cannot find logger %v", name)
 	}
+
+	if err := lvl.UnmarshalText([]byte(loglevel)); err != nil {
+		return fmt.Errorf("unmarshal text: %w", err)
+	}
+
 	return nil
 }
 
@@ -507,37 +509,37 @@ func (app *App) initServices(ctx context.Context,
 
 	db, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create state DB: %w", err)
 	}
 	app.closers = append(app.closers, db)
 
 	atxdbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create ATX DB: %w", err)
 	}
 	app.closers = append(app.closers, atxdbstore)
 
 	tBeaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "tbeacon"), 0, 0, app.addLogger(TBeaconDbStoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create tortoise beacon DB: %w", err)
 	}
 	app.closers = append(app.closers, tBeaconDBStore)
 
 	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create PoET DB: %w", err)
 	}
 	app.closers = append(app.closers, poetDbStore)
 
 	iddbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create IDs DB: %w", err)
 	}
 	app.closers = append(app.closers, iddbstore)
 
 	store, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "store"), 0, 0, app.addLogger(StoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create store DB: %w", err)
 	}
 	app.closers = append(app.closers, store)
 
@@ -546,7 +548,7 @@ func (app *App) initServices(ctx context.Context,
 	validator := activation.NewValidator(poetDb, app.Config.POST)
 	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(dbStorepath, "mesh"), app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create mesh DB: %w", err)
 	}
 
 	app.txPool = mempool.NewTxMemPool()
@@ -554,7 +556,7 @@ func (app *App) initServices(ctx context.Context,
 
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
 	if err != nil {
-		return err
+		return fmt.Errorf("create applies txs DB: %w", err)
 	}
 	app.closers = append(app.closers, appliedTxs)
 	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
@@ -593,7 +595,7 @@ func (app *App) initServices(ctx context.Context,
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
 	trtlStateDB, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "turtle"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create turtle DB: %w", err)
 	}
 	app.closers = append(app.closers, trtlStateDB)
 	trtlCfg := tortoise.Config{
@@ -621,7 +623,7 @@ func (app *App) initServices(ctx context.Context,
 	} else {
 		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		if err := svm.SetupGenesis(app.Config.Genesis); err != nil {
-			return err
+			return fmt.Errorf("setup genesis: %w", err)
 		}
 	}
 

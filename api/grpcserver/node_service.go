@@ -3,6 +3,7 @@ package grpcserver
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -154,7 +155,8 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 				return nil
 			}
 			curLayer, latestLayer, verifiedLayer := s.getLayers()
-			if err := stream.Send(&pb.StatusStreamResponse{
+
+			resp := &pb.StatusStreamResponse{
 				Status: &pb.NodeStatus{
 					ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
 					IsSynced:       s.Syncer.IsSynced(stream.Context()),    // whether the node is synced
@@ -162,8 +164,10 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 					TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
 					VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer
 				},
-			}); err != nil {
-				return err
+			}
+
+			if err := stream.Send(resp); err != nil {
+				return fmt.Errorf("send to stream: %w", err)
 			}
 		case <-stream.Context().Done():
 			log.Info("StatusStream closing stream, client disconnected")
@@ -186,12 +190,15 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 				log.Info("ErrorStream closed, shutting down")
 				return nil
 			}
-			if err := stream.Send(&pb.ErrorStreamResponse{Error: &pb.NodeError{
+
+			resp := &pb.ErrorStreamResponse{Error: &pb.NodeError{
 				Level:      convertErrorLevel(nodeError.Level),
 				Msg:        nodeError.Msg,
 				StackTrace: nodeError.Trace,
-			}}); err != nil {
-				return err
+			}}
+
+			if err := stream.Send(resp); err != nil {
+				return fmt.Errorf("send to stream: %w", err)
 			}
 		case <-stream.Context().Done():
 			log.Info("ErrorStream closing stream, client disconnected")

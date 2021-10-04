@@ -186,7 +186,11 @@ func getEpochKey(ID types.EpochID) []byte {
 }
 
 func (t *BlockBuilder) storeRefBlock(epoch types.EpochID, blockID types.BlockID) error {
-	return t.db.Put(getEpochKey(epoch), blockID.Bytes())
+	if err := t.db.Put(getEpochKey(epoch), blockID.Bytes()); err != nil {
+		return fmt.Errorf("put into DB: %w", err)
+	}
+
+	return nil
 }
 
 func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, err error) {
@@ -225,7 +229,7 @@ func (t *BlockBuilder) createBlock(
 	// get the most up-to-date base block, and a list of diffs versus local opinion
 	base, diffs, err := t.baseBlockP.BaseBlock(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get base block: %w", err)
 	}
 
 	b := types.MiniBlock{
@@ -261,7 +265,7 @@ func (t *BlockBuilder) createBlock(
 
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("serialize: %w", err)
 	}
 
 	bl := &types.Block{MiniBlock: b, Signature: t.signer.Sign(blockBytes)}

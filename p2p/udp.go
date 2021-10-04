@@ -160,16 +160,15 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 	var peer *node.Info
 
 	peer, err = mux.lookuper(peerPubkey)
-
 	if err != nil {
-		return err
+		return fmt.Errorf("lookup peer: %w", err)
 	}
 
 	addr := &net.UDPAddr{IP: net.ParseIP(peer.IP.String()), Port: int(peer.DiscoveryPort)}
 
 	conn, err := mux.cpool.GetConnection(ctx, addr, peer.PublicKey())
 	if err != nil {
-		return err
+		return fmt.Errorf("get connection: %w", err)
 	}
 
 	session := conn.Session()
@@ -208,7 +207,7 @@ func (mux *UDPMux) sendMessageImpl(ctx context.Context, peerPubkey p2pcrypto.Pub
 	realfinal := p2pcrypto.PrependPubkey(final, mux.local.PublicKey())
 
 	if err := conn.Send(ctx, realfinal); err != nil {
-		return err
+		return fmt.Errorf("send: %w", err)
 	}
 
 	mux.logger.WithContext(ctx).With().Debug("sent udp message",
@@ -256,7 +255,7 @@ func (mux *UDPMux) processUDPMessage(msg inet.IncomingMessageEvent) error {
 
 	rawmsg, _, err := p2pcrypto.ExtractPubkey(msg.Message)
 	if err != nil {
-		return err
+		return fmt.Errorf("extract pubkey: %w", err)
 	}
 
 	decPayload, err := session.OpenMessage(rawmsg)

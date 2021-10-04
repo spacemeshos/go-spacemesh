@@ -178,7 +178,12 @@ func (its *IntegrationTestSuite) WaitForGossip(ctx context.Context) error {
 			return i.waitForGossip()
 		})
 	}
-	return g.Wait()
+
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("errgroup: %w", err)
+	}
+
+	return nil
 }
 
 // ForAll executes f on all the node and returns error if it failed
@@ -223,7 +228,11 @@ func (its *IntegrationTestSuite) ForAllAsync(ctx context.Context, f func(idx int
 		})
 	}
 
-	return errs, group.Wait()
+	if err := group.Wait(); err != nil {
+		return errs, fmt.Errorf("errgroup: %w", err)
+	}
+
+	return errs, nil
 }
 
 // StringIdentifiers turns Switch into string representation node for use as bootnodes.

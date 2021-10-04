@@ -203,7 +203,8 @@ func (s *Sync) Wait() error {
 	if errors.Is(err, context.Canceled) {
 		return nil
 	}
-	return err
+
+	return fmt.Errorf("taskgroup: %w", err)
 }
 
 func (s *Sync) run(ctx context.Context) error {
@@ -216,7 +217,7 @@ func (s *Sync) run(ctx context.Context) error {
 	for {
 		prs, err := s.peersWatcher.WaitPeers(ctx, s.config.RequiredResponses)
 		if err != nil {
-			return err
+			return fmt.Errorf("wait peers: %w", err)
 		}
 		s.log.With().Info("starting time sync round with peers",
 			log.Uint64("round", round),
@@ -260,7 +261,7 @@ func (s *Sync) run(ctx context.Context) error {
 		}
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("context done: %w", ctx.Err())
 		case <-timer.C:
 		}
 	}

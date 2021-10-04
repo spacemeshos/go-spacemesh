@@ -174,16 +174,19 @@ func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) ([]byte, e
 	epoch := types.EpochID(util.BytesToUint32(msg))
 	atxs, err := l.atxIds.GetEpochAtxs(epoch)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get epoch ATXs: %w", err)
 	}
+
 	l.log.WithContext(ctx).With().Debug("responded to epoch atxs request",
 		epoch,
 		log.Int("count", len(atxs)))
 	bts, err := types.InterfaceToBytes(atxs)
 	if err != nil {
 		l.log.WithContext(ctx).With().Panic("failed to serialize epoch atxs", epoch, log.Err(err))
+		return bts, fmt.Errorf("serialize: %w", err)
 	}
-	return bts, err
+
+	return bts, nil
 }
 
 // layerBlocksReqReceiver returns the block IDs for the specified layer hash,
@@ -198,7 +201,7 @@ func (l *Logic) layerBlocksReqReceiver(ctx context.Context, req []byte) ([]byte,
 	var err error
 	b.Blocks, err = l.layerDB.LayerBlockIds(lyrID)
 	if err != nil {
-		if err != database.ErrNotFound {
+		if !errors.Is(err, database.ErrNotFound) {
 			l.log.WithContext(ctx).With().Debug("failed to get layer content", lyrID, log.Err(err))
 			return nil, ErrInternal
 		}
@@ -366,7 +369,7 @@ func notifyLayerBlocksResult(layerID types.LayerID, channels []chan LayerPromise
 			result = &LayerPromiseResult{Layer: layerID, Err: nil}
 			break
 		}
-		if res.err == ErrZeroLayer {
+		if errors.Is(res.err, ErrZeroLayer) {
 			hasZeroBlockHash = true
 		} else if firstErr == nil {
 			firstErr = res.err
@@ -416,16 +419,23 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	if l.net.PeerCount() == 0 {
 		return errors.New("no peers")
 	}
+
 	err := l.net.SendRequest(ctx, server.AtxIDsMsg, id.ToBytes(), fetch.GetRandomPeer(l.net.GetPeers()), receiveForPeerFunc, errFunc)
 	if err != nil {
-		return err
+		return fmt.Errorf("send net request: %w", err)
 	}
+
 	l.log.WithContext(ctx).With().Debug("waiting for epoch atx response", id)
 	res := <-resCh
 	if res.Error != nil {
 		return res.Error
 	}
-	return l.GetAtxs(ctx, res.Atxs)
+
+	if err := l.GetAtxs(ctx, res.Atxs); err != nil {
+		return fmt.Errorf("get ATXs: %w", err)
+	}
+
+	return nil
 }
 
 // getAtxResults is called when an ATX result is received
@@ -433,14 +443,24 @@ func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byt
 	l.log.WithContext(ctx).With().Debug("got response for ATX",
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
-	return l.atxs.HandleAtxData(ctx, data, l)
+
+	if err := l.atxs.HandleAtxData(ctx, data, l); err != nil {
+		return fmt.Errorf("handle ATX data: %w", err)
+	}
+
+	return nil
 }
 
 func (l *Logic) getTxResult(ctx context.Context, hash types.Hash32, data []byte) error {
 	l.log.WithContext(ctx).With().Debug("got response for TX",
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
-	return l.txs.HandleTxSyncData(data)
+
+	if err := l.txs.HandleTxSyncData(data); err != nil {
+		return fmt.Errorf("handle tx sync data: %w", err)
+	}
+
+	return nil
 }
 
 // getPoetResult is handler function to poet proof fetch result
@@ -448,12 +468,21 @@ func (l *Logic) getPoetResult(ctx context.Context, hash types.Hash32, data []byt
 	l.log.WithContext(ctx).Debug("got poet ref",
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
-	return l.poetProofs.ValidateAndStoreMsg(data)
+
+	if err := l.poetProofs.ValidateAndStoreMsg(data); err != nil {
+		return fmt.Errorf("validate and store message: %w", err)
+	}
+
+	return nil
 }
 
 // blockReceiveFunc handles blocks received via fetch
 func (l *Logic) blockReceiveFunc(ctx context.Context, data []byte) error {
-	return l.blockHandler.HandleBlockData(ctx, data, l)
+	if err := l.blockHandler.HandleBlockData(ctx, data, l); err != nil {
+		return fmt.Errorf("handle block data: %w", err)
+	}
+
+	return nil
 }
 
 // IsSynced indicates if this node is synced
@@ -506,7 +535,11 @@ func (l *Logic) FetchBlock(ctx context.Context, id types.BlockID) error {
 		return res.Err
 	}
 	if !res.IsLocal {
-		return l.blockHandler.HandleBlockData(ctx, res.Data, l)
+		if err := l.blockHandler.HandleBlockData(ctx, res.Data, l); err != nil {
+			return fmt.Errorf("handle block data: %w", err)
+		}
+
+		return nil
 	}
 	return res.Err
 }

@@ -77,7 +77,7 @@ func NewLDBDatabase(file string, cache int, handles int, logger log.Log) (*LDBDa
 	}
 	// (Re)check for errors and abort if opening of the db failed
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 	return &LDBDatabase{
 		fn:  file,
@@ -93,26 +93,39 @@ func (db *LDBDatabase) Path() string {
 
 // Put puts the given key / value to the queue
 func (db *LDBDatabase) Put(key []byte, value []byte) error {
-	return db.db.Put(key, value, nil)
+	if err := db.db.Put(key, value, nil); err != nil {
+		return fmt.Errorf("put value: %w", err)
+	}
+
+	return nil
 }
 
 // Has returns whether the db contains the key
 func (db *LDBDatabase) Has(key []byte) (bool, error) {
-	return db.db.Has(key, nil)
+	has, err := db.db.Has(key, nil)
+	if err != nil {
+		return false, fmt.Errorf("check value: %w", err)
+	}
+
+	return has, nil
 }
 
 // Get returns the given key if it's present.
 func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
 	dat, err := db.db.Get(key, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get value: %w", err)
 	}
 	return dat, nil
 }
 
 // Delete deletes the key from the queue and database
 func (db *LDBDatabase) Delete(key []byte) error {
-	return db.db.Delete(key, nil)
+	if err := db.db.Delete(key, nil); err != nil {
+		return fmt.Errorf("delete value: %w", err)
+	}
+
+	return nil
 }
 
 // NewIterator creates a new leveldb iterator struct compliant with Iterator interface
@@ -365,7 +378,11 @@ func (b *ldbBatch) Delete(key []byte) error {
 }
 
 func (b *ldbBatch) Write() error {
-	return b.db.Write(b.b, nil)
+	if err := b.db.Write(b.b, nil); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+
+	return nil
 }
 
 func (b *ldbBatch) ValueSize() int {

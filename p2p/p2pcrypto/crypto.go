@@ -6,10 +6,11 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io"
+
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/crypto/nacl/box"
-	"io"
 )
 
 const (
@@ -47,9 +48,11 @@ type key struct {
 	bytes [keySize]byte
 }
 
-var _ PrivateKey = (*key)(nil)
-var _ PublicKey = (*key)(nil)
-var _ SharedSecret = (*key)(nil)
+var (
+	_ PrivateKey   = (*key)(nil)
+	_ PublicKey    = (*key)(nil)
+	_ SharedSecret = (*key)(nil)
+)
 
 func (k key) raw() *[keySize]byte {
 	return &k.bytes
@@ -107,7 +110,7 @@ func (k key) Open(encryptedMessage []byte) (out []byte, err error) {
 func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	public, private, err := box.GenerateKey(rand.Reader)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("generate key: %w", err)
 	}
 
 	return key{*private}, key{*public}, nil

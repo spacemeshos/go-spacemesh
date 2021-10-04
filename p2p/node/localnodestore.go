@@ -4,13 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
+
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 )
 
 // nodeFileData defines persistent node data.
@@ -23,7 +24,6 @@ type nodeFileData struct {
 
 // PersistData save node's data to local disk in `path`.
 func (n *LocalNode) PersistData(path string) error {
-
 	data := nodeFileData{
 		PubKey:  n.publicKey.String(),
 		PrivKey: n.privKey.String(),
@@ -31,14 +31,14 @@ func (n *LocalNode) PersistData(path string) error {
 
 	finaldata, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return err
+		return fmt.Errorf("marshal JSON: %w", err)
 	}
 
 	datadir := filepath.Join(path, config.P2PDirectoryPath, config.NodesDirectoryName, n.publicKey.String())
 
 	err = filesystem.ExistOrCreate(datadir)
 	if err != nil {
-		return err
+		return fmt.Errorf("create dir: %w", err)
 	}
 
 	nodefile := filepath.Join(datadir, config.NodeDataFileName)
@@ -46,22 +46,22 @@ func (n *LocalNode) PersistData(path string) error {
 	// make sure our node file is written to the os filesystem.
 	f, err := os.Create(nodefile)
 	if err != nil {
-		return err
+		return fmt.Errorf("create file: %w", err)
 	}
 
 	_, err = f.Write(finaldata)
 	if err != nil {
-		return err
+		return fmt.Errorf("write file: %w", err)
 	}
 
 	err = f.Sync()
 	if err != nil {
-		return err
+		return fmt.Errorf("sync file: %w", err)
 	}
 
 	err = f.Close()
 	if err != nil {
-		return err
+		return fmt.Errorf("close file: %w", err)
 	}
 
 	log.Info("Saved p2p node information (%s),  Identity - %v", nodefile, n.publicKey.String())
@@ -81,7 +81,6 @@ func LoadIdentity(path, nodeid string) (LocalNode, error) {
 
 // Read node persisted data based on node id.
 func readNodeData(path string, nodeID string) (*nodeFileData, error) {
-
 	nodefile := filepath.Join(path, config.P2PDirectoryPath, config.NodesDirectoryName, nodeID, config.NodeDataFileName)
 
 	if !filesystem.PathExists(nodefile) {
@@ -92,25 +91,23 @@ func readNodeData(path string, nodeID string) (*nodeFileData, error) {
 
 	f, err := os.Open(nodefile)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 
 	_, err = io.Copy(data, f)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("io.Copy: %w", err)
 	}
 
 	err = f.Close()
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("close file: %w", err)
 	}
 
 	var nodeData nodeFileData
 	err = json.Unmarshal(data.Bytes(), &nodeData)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("unmarshal JSON: %w", err)
 	}
 
 	return &nodeData, nil
@@ -124,9 +121,8 @@ func getLocalNodes(path string) ([]string, error) {
 	}
 
 	fls, err := ioutil.ReadDir(nodesDir)
-
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read dir: %w", err)
 	}
 
 	keys := make([]string, len(fls))

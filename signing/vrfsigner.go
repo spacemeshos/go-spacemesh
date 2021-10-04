@@ -37,7 +37,7 @@ func NewVRFSigner(seed []byte) (*VRFSigner, []byte, error) {
 	}
 	vrfPub, vrfPriv, err := ed25519.GenerateKey(bytes.NewReader(seed))
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("generate ed25519 key: %w", err)
 	}
 
 	return &VRFSigner{privateKey: vrfPriv, pub: &PublicKey{pub: vrfPub}}, vrfPub, nil

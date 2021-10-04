@@ -84,13 +84,13 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	ev.identityProvider = &mockIDProvider{myErr}
 	res, err = ev.validateRole(context.TODO(), m)
 	assert.NotNil(t, err)
-	assert.Equal(t, myErr, err)
+	assert.ErrorIs(t, err, myErr)
 	assert.False(t, res)
 
 	oracle.err = myErr
 	res, err = ev.validateRole(context.TODO(), m)
 	assert.NotNil(t, err)
-	assert.Equal(t, myErr, err)
+	assert.ErrorIs(t, err, myErr)
 	assert.False(t, res)
 
 	ev.identityProvider = &mockIDProvider{nil}

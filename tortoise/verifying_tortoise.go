@@ -422,12 +422,12 @@ func (t *turtle) calculateExceptions(
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(layerID)
 		if err != nil {
-			if err != leveldb.ErrClosed {
+			if !errors.Is(err, leveldb.ErrClosed) {
 				// this should not happen! we only look at layers up to the last processed layer, and we only process
 				// layers with valid block data.
 				logger.With().Error("no block ids for layer in database", log.Err(err))
 			}
-			return nil, err
+			return nil, fmt.Errorf("layer block IDs: %w", err)
 		}
 
 		// helper function for adding diffs
@@ -506,12 +506,14 @@ func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block) (uint
 
 	atxHeader, err := t.atxdb.GetAtxHeader(votingBlock.ATXID)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get ATX header: %w", err)
 	}
+
 	atxTimestamp, err := t.atxdb.GetAtxTimestamp(votingBlock.ATXID)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get ATX timestamp: %w", err)
 	}
+
 	atxEpoch := atxHeader.PubLayerID.GetEpoch()
 	nextEpochStart := t.clock.LayerToTime((atxEpoch + 1).FirstLayer())
 
@@ -541,7 +543,7 @@ func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block) (uint
 func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID, blockVotedOn types.BlockID) (uint64, error) {
 	block, err := t.bdp.GetBlock(votingBlockID)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get block: %w", err)
 	}
 	return t.voteWeight(ctx, block)
 }
@@ -697,7 +699,7 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error
 func (t *turtle) scoreBlocksByLayerID(ctx context.Context, layerID types.LayerID) error {
 	blocks, err := t.bdp.LayerBlocks(layerID)
 	if err != nil {
-		return err
+		return fmt.Errorf("layer blocks: %w", err)
 	}
 	t.scoreBlocks(ctx, blocks)
 	return nil
@@ -1020,7 +1022,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 			logger.With().Debug("counting votes for and against blocks in old, unverified layer",
 				log.Int("num_blocks", len(layerBlockIds)))
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("layer block IDs: %w", err)
 			}
 			layerBlocks := make(map[types.BlockID]struct{}, len(layerBlockIds))
 			for _, blockID := range layerBlockIds {
@@ -1083,7 +1085,7 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
 		layerBlocks, err := t.bdp.LayerContextuallyValidBlocks(ctx, layerID)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("layer contextually valid blocks: %w", err)
 		}
 		logger.With().Debug("got contextually valid blocks for layer",
 			log.Int("count", len(layerBlocks)))

@@ -3,6 +3,8 @@ package grpcserver
 import (
 	"bytes"
 	"context"
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
@@ -66,22 +68,27 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
+
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		log.Error("failed to calculate tx origin: %v", err)
 		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
+
 	if !s.Mesh.AddressExists(tx.Origin()) {
 		log.With().Error("tx origin address not found in global state",
 			tx.ID(), log.String("origin", tx.Origin().Short()))
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` origin account not found")
 	}
+
 	if err := s.Mesh.ValidateNonceAndBalance(tx); err != nil {
 		log.Error("tx failed nonce and balance check: %v", err)
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` incorrect counter or insufficient balance")
 	}
+
 	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address: %x (len: %v), amount: %v, gas limit: %v, fee: %v, id: %v, nonce: %v",
 		tx.Recipient, len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
+
 	go func() {
 		if err := s.Network.Broadcast(ctx, state.IncomingTxProtocol, in.Transaction); err != nil {
 			log.Error("error broadcasting incoming tx: %v", err)
@@ -209,7 +216,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 						res.Transaction = convertTransaction(tx.Transaction)
 					}
 					if err := stream.Send(res); err != nil {
-						return err
+						return fmt.Errorf("send stream: %w", err)
 					}
 
 					// Don't match on any other transactions
@@ -284,8 +291,9 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 
 							res.Transaction = convertTransaction(&tx.Transaction)
 						}
+
 						if err := stream.Send(res); err != nil {
-							return err
+							return fmt.Errorf("send stream: %w", err)
 						}
 					}
 				}

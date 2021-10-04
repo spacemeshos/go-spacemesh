@@ -152,7 +152,7 @@ func processAtxs(db *DB, atxs []*types.ActivationTx) error {
 	for _, atx := range atxs {
 		err := db.ProcessAtx(context.TODO(), atx)
 		if err != nil {
-			return err
+			return fmt.Errorf("process ATX: %w", err)
 		}
 	}
 	return nil
@@ -334,7 +334,7 @@ func Test_DBSanity(t *testing.T) {
 	assert.Equal(t, atx3.ID(), id)
 
 	id, err = atxdb.GetNodeLastAtxID(id3)
-	assert.EqualError(t, err, fmt.Sprintf("atx for node %v does not exist", id3.ShortString()))
+	assert.EqualError(t, err, fmt.Sprintf("find ATX in DB: atx for node %v does not exist", id3.ShortString()))
 	assert.Equal(t, *types.EmptyATXID, id)
 }
 
@@ -564,7 +564,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err,
-		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", atx.NodeID.ShortString()))
+		fmt.Sprintf("could not fetch node last atx: find ATX in DB: atx for node %v does not exist", atx.NodeID.ShortString()))
 
 	// Prev atx not declared but initial Post not included.
 	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
@@ -993,7 +993,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, goldenATXID, types.LayerID{}), [20]byte{}, nil, 0, nil)
 	err = atxdb.ContextuallyValidateAtx(malformedAtx.ActivationTxHeader)
 	r.EqualError(err,
-		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", nodeID.ShortString()))
+		fmt.Sprintf("could not fetch node last atx: find ATX in DB: atx for node %v does not exist", nodeID.ShortString()))
 }
 
 func TestActivateDB_HandleAtxNilNipst(t *testing.T) {

@@ -19,7 +19,11 @@ type Message struct {
 // It returns an error if unmarshal of the provided byte slice failed.
 func MessageFromBuffer(buf []byte) (*Message, error) {
 	msg := &Message{}
-	return msg, types.BytesToInterface(buf, msg)
+	if err := types.BytesToInterface(buf, msg); err != nil {
+		return msg, fmt.Errorf("serialize: %w", err)
+	}
+
+	return msg, nil
 }
 
 func (m *Message) String() string {

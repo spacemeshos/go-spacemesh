@@ -1,6 +1,8 @@
 package node
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
@@ -26,8 +28,9 @@ var emptyNode LocalNode
 func NewNodeIdentity() (LocalNode, error) {
 	priv, pub, err := p2pcrypto.GenerateKeyPair()
 	if err != nil {
-		return emptyNode, err
+		return emptyNode, fmt.Errorf("generate keypair: %w", err)
 	}
+
 	return LocalNode{
 		publicKey: pub,
 		privKey:   priv,
@@ -38,12 +41,12 @@ func NewNodeIdentity() (LocalNode, error) {
 func newLocalNodeFromFile(d *nodeFileData) (LocalNode, error) {
 	priv, err := p2pcrypto.NewPrivateKeyFromBase58(d.PrivKey)
 	if err != nil {
-		return emptyNode, err
+		return emptyNode, fmt.Errorf("privkey from base58: %w", err)
 	}
 
 	pub, err := p2pcrypto.NewPublicKeyFromBase58(d.PubKey)
 	if err != nil {
-		return emptyNode, err
+		return emptyNode, fmt.Errorf("pubkey from base58: %w", err)
 	}
 
 	n := LocalNode{

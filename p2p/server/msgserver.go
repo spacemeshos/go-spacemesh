@@ -5,6 +5,7 @@ import (
 	"container/list"
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
@@ -98,7 +99,7 @@ func deserializeResponse(data []byte) (*response, error) {
 	var resp response
 	err := types.BytesToInterface(data, &resp)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 	return &resp, nil
 }
@@ -106,14 +107,14 @@ func deserializeResponse(data []byte) (*response, error) {
 // MessageServer is a request-response multiplexer on top of the p2p layer. it provides a way to register
 // message types on top of a protocol and declare request and response handlers. it matches incoming responses to requests.
 type MessageServer struct {
-	ReqID              uint64 //request id (must be declared first to ensure 8 byte alignment on 32-bit systems, required by atomic operations)
-	name               string //server name
+	ReqID              uint64 // request id (must be declared first to ensure 8 byte alignment on 32-bit systems, required by atomic operations)
+	name               string // server name
 	network            Service
 	pendMutex          sync.RWMutex
-	pendingQueue       *list.List                                                     //queue of pending messages
-	resHandlers        map[uint64]responseHandlers                                    //response handlers by request ReqID
-	msgRequestHandlers map[MessageType]func(context.Context, Message) ([]byte, error) //request handlers by request type
-	ingressChannel     chan service.DirectMessage                                     //chan to relay messages into the server
+	pendingQueue       *list.List                                                     // queue of pending messages
+	resHandlers        map[uint64]responseHandlers                                    // response handlers by request ReqID
+	msgRequestHandlers map[MessageType]func(context.Context, Message) ([]byte, error) // request handlers by request type
+	ingressChannel     chan service.DirectMessage                                     // chan to relay messages into the server
 	requestLifetime    time.Duration
 	workerLimiter      chan struct{}
 	eg                 errgroup.Group
@@ -166,7 +167,7 @@ func (p *MessageServer) readLoop(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("context done: %w", ctx.Err())
 		case <-timer.C:
 			p.eg.Go(func() error {
 				p.cleanStaleMessages()
@@ -188,7 +189,7 @@ func (p *MessageServer) readLoop(ctx context.Context) error {
 					return nil
 				})
 			case <-ctx.Done():
-				return ctx.Err()
+				return fmt.Errorf("context done: %w", ctx.Err())
 			}
 		}
 	}
@@ -336,7 +337,7 @@ func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, pa
 			log.Int("msglen", len(payload)),
 			log.Err(err))
 		p.removeFromPending(reqID)
-		return err
+		return fmt.Errorf("send wrapped message: %w", err)
 	}
 	p.WithContext(ctx).Debug("sent request")
 	return nil

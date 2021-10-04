@@ -22,7 +22,6 @@ func GenerateTestNode(t *testing.T) (LocalNode, *Info) {
 
 // GenerateTestNodeWithConfig creates a local test node without persisting data to local store.
 func GenerateTestNodeWithConfig(t *testing.T) (LocalNode, *Info) {
-
 	tcpPort, err := GetUnboundedPort("tcp", 0)
 	if err != nil {
 		t.Error("failed to get a port to bind", err)
@@ -68,7 +67,7 @@ func GetUnboundedPort(protocol string, optionalPort int) (int, error) {
 		if e != nil {
 			l, e = net.Listen("tcp", ":0")
 			if e != nil {
-				return 0, e
+				return 0, fmt.Errorf("listen TCP: %w", e)
 			}
 		}
 		defer l.Close()
@@ -79,7 +78,7 @@ func GetUnboundedPort(protocol string, optionalPort int) (int, error) {
 		if e != nil {
 			l, e = net.ListenUDP("udp", &net.UDPAddr{Port: 0})
 			if e != nil {
-				return 0, e
+				return 0, fmt.Errorf("listen UDP: %w", e)
 			}
 		}
 		defer l.Close()
