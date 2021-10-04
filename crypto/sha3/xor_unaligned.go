@@ -2,6 +2,7 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
+//go:build (amd64 || 386 || ppc64le) && !appengine
 // +build amd64 386 ppc64le
 // +build !appengine
 
@@ -9,6 +10,10 @@ package sha3
 
 import "unsafe"
 
+//go:nocheckptr
+// https://github.com/golang/crypto/commit/f7b00557c8c46a1ea4b035cae84f52028c2c0564
+// Without it, tests with -race flag fail with this error:
+// fatal error: checkptr: converted pointer straddles multiple allocations
 func xorInUnaligned(d *state, buf []byte) {
 	bw := (*[maxRate / 8]uint64)(unsafe.Pointer(&buf[0]))
 	n := len(buf)
