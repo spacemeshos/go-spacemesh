@@ -394,39 +394,33 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 // all blocks are fetched for a given layer.
 // it deliberately doesn't hold any lock while notifying channels.
 func notifyLayerBlocksResult(layerID types.LayerID, lyrDB layerDB, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
-	var result *LayerPromiseResult
-	hasZeroBlockHash := false
-	var err error
+	var (
+		missing, success bool
+		err              error
+	)
 	for _, res := range lyrResult.responses {
 		if res.err == nil && res.data != nil {
-			// at least one layer hash contains blocks. not a zero block layer
-			result = &LayerPromiseResult{Layer: layerID, Err: nil}
-			break
+			success = true
 		}
 		if errors.Is(res.err, ErrBlockNotFetched) {
+			missing = true
 			err = res.err
 			break
 		}
-		if res.err == ErrZeroLayer {
-			hasZeroBlockHash = true
-		} else if err == nil {
+		if errors.Is(res.err, ErrZeroLayer) {
+			err = res.err
+		}
+		if err == nil {
 			err = res.err
 		}
 	}
-
-	if result == nil { // no block data available
-		result = &LayerPromiseResult{Layer: layerID, Err: nil}
-		if hasZeroBlockHash {
-			// all other non-empty layer hashes returned errors. use the best information we've got
-			result.Err = ErrZeroLayer
-		} else {
-			// no usable result. just return the first error we received
-			result.Err = err
-		}
+	result := LayerPromiseResult{Layer: layerID}
+	if missing || !success {
+		result.Err = err
 	}
-	logger.With().Debug("notifying layer blocks result", log.String("blocks", fmt.Sprintf("%+v", *result)))
+	logger.With().Debug("notifying layer blocks result", log.String("blocks", fmt.Sprintf("%+v", result)))
 	for _, ch := range channels {
-		ch <- *result
+		ch <- result
 	}
 }
 
