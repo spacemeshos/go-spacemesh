@@ -53,6 +53,7 @@ var (
 	AppLog Log
 )
 
+// GetLogger gets logger.
 func GetLogger() Log {
 	mu.RLock()
 	defer mu.RUnlock()
@@ -60,6 +61,7 @@ func GetLogger() Log {
 	return AppLog
 }
 
+// SetLogger sets logger.
 func SetLogger(logger Log) {
 	mu.Lock()
 	defer mu.Unlock()
