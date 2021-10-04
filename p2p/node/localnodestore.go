@@ -1,12 +1,9 @@
 package node
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"os"
 	"path/filepath"
 
 	"github.com/spacemeshos/go-spacemesh/filesystem"
@@ -24,7 +21,6 @@ type nodeFileData struct {
 
 // PersistData save node's data to local disk in `path`.
 func (n *LocalNode) PersistData(path string) error {
-
 	data := nodeFileData{
 		PubKey:  n.publicKey.String(),
 		PrivKey: n.privKey.String(),
@@ -43,7 +39,7 @@ func (n *LocalNode) PersistData(path string) error {
 	nodefile := filepath.Join(datadir, config.NodeDataFileName)
 
 	// make sure our node file is written to the os filesystem.
-	if err := ioutil.WriteFile(nodefile, finaldata, 0666); err != nil {
+	if err := ioutil.WriteFile(nodefile, finaldata, 0o666); err != nil {
 		return fmt.Errorf("write file: %w", err)
 	}
 
