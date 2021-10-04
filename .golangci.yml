@@ -163,7 +163,8 @@ linters:
   # TODO(nkryuchkov): enable needed linters
   enable:
     - staticcheck
-#    - golint
+    - golint
+#    - wrapcheck
 #    - goimports
 #    - varcheck
 #    - unparam
