@@ -39,12 +39,12 @@ func NewNodeIdentity() (ln LocalNode, err error) {
 func newLocalNodeFromFile(d *nodeFileData) (ln LocalNode, err error) {
 	priv, err := p2pcrypto.NewPrivateKeyFromBase58(d.PrivKey)
 	if err != nil {
-		return ln, fmt.Errorf("failed to parse private key: %w", fmt.Errorf("privkey from base58: %w", err)
+		return ln, fmt.Errorf("privkey from base58: %w", err)
 	}
 
 	pub, err := p2pcrypto.NewPublicKeyFromBase58(d.PubKey)
 	if err != nil {
-		return ln, fmt.Errorf("failed to parse public key: %w", fmt.Errorf("pubkey from base58: %w", err)
+		return ln, fmt.Errorf("pubkey from base58: %w", err)
 	}
 
 	n := LocalNode{
