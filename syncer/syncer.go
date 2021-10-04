@@ -25,15 +25,12 @@ type layerTicker interface {
 type layerFetcher interface {
 	PollLayerContent(ctx context.Context, layerID types.LayerID) chan layerfetcher.LayerPromiseResult
 	GetEpochATXs(ctx context.Context, id types.EpochID) error
-	GetTortoiseBeacon(ctx context.Context, id types.EpochID) error
 }
 
 // Configuration is the config params for syncer
 type Configuration struct {
 	SyncInterval time.Duration
-	// the sync process will try validate the current layer if ValidationDelta has elapsed.
-	ValidationDelta time.Duration
-	AlwaysListen    bool
+	AlwaysListen bool
 }
 
 const (
@@ -315,9 +312,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			return false
 		}
 
-		if s.shouldValidateLayer(layerID) {
-			vQueue <- layer
-		}
+		vQueue <- layer
 		logger.With().Debug("finished data sync", layerID)
 	}
 	logger.With().Debug("data is synced, waiting for validation",
@@ -380,6 +375,7 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		if layer, err = s.getLayerFromPeers(ctx, layerID); err != nil {
 			return nil, err
 		}
+
 		if len(layer.Blocks()) == 0 {
 			s.logger.WithContext(ctx).With().Info("setting layer to zero-block", layerID)
 			if err := s.mesh.SetZeroBlockLayer(layerID); err != nil {
@@ -389,10 +385,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 	}
 
 	if err = s.getATXs(ctx, layerID); err != nil {
-		return nil, err
-	}
-
-	if err = s.getTortoiseBeacon(ctx, layerID); err != nil {
 		return nil, err
 	}
 
@@ -442,42 +434,6 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 		}
 	}
 	return nil
-}
-
-func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) error {
-	epoch := layerID.GetEpoch()
-	if epoch.IsGenesis() {
-		s.logger.WithContext(ctx).Info("skip getting tortoise beacons in genesis epoch")
-		return nil
-	}
-
-	currentEpoch := s.ticker.GetCurrentLayer().GetEpoch()
-	// only get tortoise beacon if
-	// - layerID is in the current epoch
-	// - layerID is the last layer of a previous epoch
-	// i.e. for older epochs we sync tortoise beacons once per epoch. for current epoch we sync tortoise beacons in every layer
-	if epoch == currentEpoch || ((epoch+1).FirstLayer().Value > 0 && layerID == (epoch+1).FirstLayer().Sub(1)) {
-		s.logger.WithContext(ctx).With().Debug("getting tortoise beacons", epoch, layerID)
-		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
-		if err := s.fetcher.GetTortoiseBeacon(ctx, epoch); err != nil {
-			s.logger.WithContext(ctx).With().Error("failed to fetch epoch tortoise beacons",
-				layerID,
-				epoch,
-				log.Err(err))
-			return err
-		}
-	}
-	return nil
-}
-
-// always returns true if layerID is an old layer.
-// for current layer, only returns true if current layer already elapsed ValidationDelta
-func (s *Syncer) shouldValidateLayer(layerID types.LayerID) bool {
-	if layerID == types.NewLayerID(0) {
-		return false
-	}
-	current := s.ticker.GetCurrentLayer()
-	return layerID.Before(current) || time.Now().Sub(s.ticker.LayerToTime(current)) > s.conf.ValidationDelta
 }
 
 // start a dedicated process to validate layers one by one

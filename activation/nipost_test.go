@@ -30,8 +30,9 @@ func init() {
 }
 
 type postSetupProviderMock struct {
-	called   int
-	setError bool
+	sessionChan chan struct{}
+	called      int
+	setError    bool
 }
 
 // A compile time check to ensure that postSetupProviderMock fully implements the PostProvider interface.
@@ -58,7 +59,7 @@ func (p *postSetupProviderMock) Benchmark(PostSetupComputeProvider) (int, error)
 }
 
 func (p *postSetupProviderMock) StartSession(opts PostSetupOpts) (chan struct{}, error) {
-	return nil, nil
+	return p.sessionChan, nil
 }
 
 func (p *postSetupProviderMock) StopSession(deleteFiles bool) error {

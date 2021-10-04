@@ -97,6 +97,11 @@ func (fo *FixedRolacle) Unregister(isHonest bool, client string) {
 	fo.mutex.Unlock()
 }
 
+// IsEpochBeaconReady returns true if the beacon value is known for the specified epoch
+func (fo *FixedRolacle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
+	return true
+}
+
 func cloneMap(m map[string]struct{}) map[string]struct{} {
 	c := make(map[string]struct{}, len(m))
 	for k, v := range m {

@@ -18,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh/metrics"
 )
 
 const (
@@ -526,6 +527,8 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		}
 		blocks = append(blocks, block)
 	}
+
+	metrics.LayerNumBlocks.Observe(float64(len(layer)))
 
 	// report that hare "approved" this layer
 	events.ReportLayerUpdate(events.LayerUpdate{

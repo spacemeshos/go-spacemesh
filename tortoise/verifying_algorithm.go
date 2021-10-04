@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -23,17 +24,17 @@ type ThreadSafeVerifyingTortoise struct {
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
 type Config struct {
-	LayerSize       int
+	LayerSize       uint32
 	Database        database.Database
 	MeshDatabase    blockDataProvider
 	ATXDB           atxDataProvider
 	Clock           layerClock
-	Hdist           uint32 // hare lookback distance: the distance over which we use the input vector/hare results
-	Zdist           uint32 // hare result wait distance: the distance over which we're willing to wait for hare results
-	ConfidenceParam uint32 // confidence wait distance: how long we wait for global consensus to be established
-	GlobalThreshold uint8  // threshold required to finalize blocks and layers (0-100)
-	LocalThreshold  uint8  // threshold that determines whether a node votes based on local or global opinion (0-100)
-	WindowSize      uint32 // tortoise sliding window: how many layers we store data for
+	Hdist           uint32   // hare lookback distance: the distance over which we use the input vector/hare results
+	Zdist           uint32   // hare result wait distance: the distance over which we're willing to wait for hare results
+	ConfidenceParam uint32   // confidence wait distance: how long we wait for global consensus to be established
+	GlobalThreshold *big.Rat // threshold required to finalize blocks and layers
+	LocalThreshold  *big.Rat // threshold that determines whether a node votes based on local or global opinion
+	WindowSize      uint32   // tortoise sliding window: how many layers we store data for
 	Log             log.Log
 	RerunInterval   time.Duration // how often to rerun from genesis
 }
@@ -42,9 +43,6 @@ type Config struct {
 func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingTortoise {
 	if cfg.Hdist < cfg.Zdist {
 		cfg.Log.With().Panic("hdist must be >= zdist", log.Uint32("hdist", cfg.Hdist), log.Uint32("zdist", cfg.Zdist))
-	}
-	if cfg.GlobalThreshold > 100 || cfg.LocalThreshold > 100 {
-		cfg.Log.With().Panic("global and local threshold values must be in the interval [0, 100]")
 	}
 	alg := &ThreadSafeVerifyingTortoise{
 		trtl: newTurtle(

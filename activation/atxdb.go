@@ -573,7 +573,8 @@ type ErrAtxNotFound error
 
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
-	nodeAtxsIterator := db.atxs.Find(getNodeAtxPrefix(nodeID).Bytes())
+	it := db.atxs.Find(getNodeAtxPrefix(nodeID).Bytes())
+	defer it.Release()
 	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
 	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
 	// added will always be the next ATX returned by this method.
@@ -581,15 +582,19 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	//   https://github.com/google/leveldb/blob/master/doc/index.md#comparators
 	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
 	// composing the key.
-	if exists := nodeAtxsIterator.Last(); !exists {
+	if exists := it.Last(); !exists {
 		return *types.EmptyATXID, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
 	}
-	return types.ATXID(types.BytesToHash(nodeAtxsIterator.Value())), nil
+	if it.Error() != nil {
+		return *types.EmptyATXID, it.Error()
+	}
+	return types.ATXID(types.BytesToHash(it.Value())), nil
 }
 
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID
-func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
+func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID, err error) {
 	it := db.atxs.Find(getEpochPrefix(epochID).Bytes())
+	defer it.Release()
 	for it.Next() {
 		if it.Key() == nil {
 			break
@@ -601,6 +606,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID) {
 	db.log.With().Debug("returned epoch atxs", epochID,
 		log.Int("count", len(atxs)),
 		log.String("atxs", fmt.Sprint(atxs)))
+	err = it.Error()
 	return
 }
 
@@ -637,7 +643,10 @@ func (db *DB) GetAtxTimestamp(atxid types.ATXID) (time.Time, error) {
 // GetEpochWeight returns the total weight of ATXs targeting the given epochID.
 func (db *DB) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error) {
 	weight := uint64(0)
-	activeSet := db.GetEpochAtxs(epochID - 1)
+	activeSet, err := db.GetEpochAtxs(epochID - 1)
+	if err != nil {
+		return 0, nil, err
+	}
 	for _, atxID := range activeSet {
 		atxHeader, err := db.GetAtxHeader(atxID)
 		if err != nil {

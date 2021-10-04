@@ -30,8 +30,6 @@ const (
 	ATXDB   Hint = "ATXDB"
 	TXDB    Hint = "TXDB"
 	POETDB  Hint = "POETDB"
-	IVDB    Hint = "IVDB"
-	TBDB    Hint = "TBDB"
 )
 
 // priority defines whether Data will be fetched at once or batched and waited for up to "batchTimeout"

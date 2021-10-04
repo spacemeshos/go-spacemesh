@@ -17,6 +17,9 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/svm"
+	"github.com/spacemeshos/go-spacemesh/svm/state"
+
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spf13/cobra"
@@ -26,7 +29,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
-	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
@@ -41,15 +43,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -71,7 +74,6 @@ const (
 	StateLogger          = "state"
 	AtxDbStoreLogger     = "atxDbStore"
 	TBeaconDbStoreLogger = "tbDbStore"
-	TBeaconDbLogger      = "tbDb"
 	TBeaconLogger        = "tBeacon"
 	WeakCoinLogger       = "weakCoin"
 	PoetDbStoreLogger    = "poetDbStore"
@@ -96,6 +98,7 @@ const (
 	Fetcher              = "fetcher"
 	LayerFetcher         = "layerFetcher"
 	TimeSyncLogger       = "timesync"
+	SVMLogger            = "SVM"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -312,10 +315,12 @@ type App struct {
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
 	edSgn          *signing.EdSigner
+	watchPeers     *peers.Peers
 	tortoiseBeacon TortoiseBeaconService
 	closers        []interface{ Close() }
 	log            log.Log
-	txPool         *state.TxMempool
+	txPool         *mempool.TxMempool
+	svm            *svm.SVM
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
 	loggers        map[string]*zap.AtomicLevel
@@ -396,34 +401,6 @@ func (app *App) Cleanup() {
 	log.Info("app cleanup completed")
 }
 
-func (app *App) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) error {
-	if app.Config.Genesis == nil {
-		app.Config.Genesis = apiCfg.DefaultGenesisConfig()
-	}
-	for id, balance := range app.Config.Genesis.Accounts {
-		bytes := util.FromHex(id)
-		if len(bytes) == 0 {
-			return fmt.Errorf("cannot decode entry %s for genesis account", id)
-		}
-		// just make it explicit that we want address and not a public key
-		if len(bytes) != types.AddressLength {
-			return fmt.Errorf("%s must be an address of size %d", id, types.AddressLength)
-		}
-		addr := types.BytesToAddress(bytes)
-		state.CreateAccount(addr)
-		state.AddBalance(addr, balance)
-		app.log.With().Info("genesis account created",
-			log.String("address", addr.Hex()),
-			log.Uint64("balance", balance))
-	}
-
-	_, err := state.Commit()
-	if err != nil {
-		return fmt.Errorf("cannot commit genesis state: %w", err)
-	}
-	return nil
-}
-
 // Wrap the top-level logger to add context info and set the level for a
 // specific module.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
@@ -443,10 +420,6 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StateLoggerLevel))
 	case AtxDbStoreLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxDbStoreLoggerLevel))
-	case TBeaconDbStoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconDbStoreLoggerLevel))
-	case TBeaconDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconDbLoggerLevel))
 	case TBeaconLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconLoggerLevel))
 	case WeakCoinLogger:
@@ -581,7 +554,7 @@ func (app *App) initServices(ctx context.Context,
 		return err
 	}
 
-	app.txPool = state.NewTxMemPool()
+	app.txPool = mempool.NewTxMemPool()
 	meshAndPoolProjector := pendingtxs.NewMeshAndPoolProjector(mdb, app.txPool)
 
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
@@ -597,7 +570,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	atxDB := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
-	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
 	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
@@ -608,19 +580,17 @@ func (app *App) initServices(ctx context.Context,
 		weakcoin.WithMaxRound(app.Config.TortoiseBeacon.RoundsNumber),
 	)
 
-	ld := time.Duration(app.Config.LayerDurationSec) * time.Second
 	tBeacon := tortoisebeacon.New(
 		app.Config.TortoiseBeacon,
-		ld,
 		nodeID,
 		swarm,
 		atxDB,
-		tBeaconDB,
 		sgn,
 		edVerifier,
 		vrfSigner,
 		vrfVerifier,
 		wc,
+		tBeaconDBStore,
 		clock,
 		app.addLogger(TBeaconLogger, lg))
 
@@ -632,7 +602,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, trtlStateDB)
 	trtlCfg := tortoise.Config{
-		LayerSize:       int(layerSize),
+		LayerSize:       layerSize,
 		Database:        trtlStateDB,
 		MeshDatabase:    mdb,
 		ATXDB:           atxDB,
@@ -648,13 +618,14 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
+	svm := svm.New(processor, app.addLogger(SVMLogger, lg))
 
 	if mdb.PersistentData() {
 		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
-		if err := app.setupGenesis(processor, msh); err != nil {
+		if err := svm.SetupGenesis(app.Config.Genesis); err != nil {
 			return err
 		}
 	}
@@ -683,13 +654,12 @@ func (app *App) initServices(ctx context.Context,
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
-	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, mdb.InputVector(), tBeaconDBStore)
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, app.addLogger(LayerFetcher, lg))
+	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
 
 	syncerConf := syncer.Configuration{
-		SyncInterval:    time.Duration(app.Config.SyncInterval) * time.Second,
-		ValidationDelta: time.Duration(app.Config.SyncValidationDelta) * time.Second,
-		AlwaysListen:    app.Config.AlwaysListen,
+		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
+		AlwaysListen: app.Config.AlwaysListen,
 	}
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
@@ -703,7 +673,7 @@ func (app *App) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else {
 		// regular oracle, build and use it
-		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
+		beacon := eligibility.NewBeacon(tBeacon, app.addLogger(HareBeaconLogger, lg))
 		hOracle = eligibility.New(beacon, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
@@ -713,6 +683,7 @@ func (app *App) initServices(ctx context.Context,
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
+		DBPath:         filepath.Join(dbStorepath, "builder"),
 		Hdist:          app.Config.Hdist,
 		MinerID:        nodeID,
 		AtxsPerBlock:   app.Config.AtxsPerBlock,
@@ -720,7 +691,6 @@ func (app *App) initServices(ctx context.Context,
 		TxsPerBlock:    app.Config.TxsPerBlock,
 	}
 
-	database.SwitchCreationContext(dbStorepath, "") // currently only blockbuilder uses this mechanism
 	blockProducer := miner.NewBlockBuilder(
 		minerCfg,
 		sgn,
@@ -729,6 +699,7 @@ func (app *App) initServices(ctx context.Context,
 		msh,
 		trtl,
 		blockOracle,
+		tBeacon,
 		newSyncer,
 		stateAndMeshProjector,
 		app.txPool,
@@ -779,6 +750,7 @@ func (app *App) initServices(ctx context.Context,
 	app.state = processor
 	app.hare = rabbit
 	app.P2P = swarm
+	app.watchPeers = peers.Start(swarm)
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
@@ -787,6 +759,7 @@ func (app *App) initServices(ctx context.Context,
 	app.atxDb = atxDB
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
+	app.svm = svm
 	if !app.Config.TIME.Peersync.Disable {
 		conf := app.Config.TIME.Peersync
 		conf.ResponsesBufferSize = app.Config.P2P.BufferSize
@@ -882,7 +855,7 @@ func (app *App) startServices(ctx context.Context) error {
 	if app.Config.SMESHING.Start {
 		coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 		go func() {
-			if err := app.atxBuilder.StartSmeshing(ctx, coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
+			if err := app.atxBuilder.StartSmeshing(coinbaseAddr, app.Config.SMESHING.Opts); err != nil {
 				log.Panic("failed to start smeshing: %v", err)
 			}
 		}()
@@ -1045,6 +1018,10 @@ func (app *App) stopServices() {
 		app.log.Debug("peer timesync stopped")
 	}
 
+	if app.watchPeers != nil {
+		app.watchPeers.Close()
+	}
+
 	events.CloseEventReporter()
 	events.CloseEventPubSub()
 
@@ -1124,7 +1101,10 @@ func (app *App) startSyncer(ctx context.Context) {
 	if app.P2P == nil {
 		app.log.Error("syncer started before p2p is initialized")
 	} else {
-		<-app.P2P.GossipReady()
+		_, err := app.watchPeers.WaitPeers(ctx, app.Config.P2P.SwarmConfig.RandomConnections)
+		if err != nil {
+			return
+		}
 	}
 	app.syncer.Start(ctx)
 }

@@ -7,15 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/post/shared"
+	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -94,8 +94,8 @@ type syncer interface {
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(context.Context, types.Address, PostSetupOpts) error
-	StopSmeshing(deleteFiles bool) error
+	StartSmeshing(types.Address, PostSetupOpts) error
+	StopSmeshing(bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
@@ -113,18 +113,13 @@ type Config struct {
 	LayersPerEpoch  uint32
 }
 
-type smeshingStatus int32
-
-const (
-	smeshingStatusIdle smeshingStatus = iota
-	smeshingStatusPendingPostSetup
-	smeshingStatusStarted
-)
-
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
 // calculate total weight and providing relevant view as proof
 type Builder struct {
+	pendingPoetClient atomic.UnsafePointer
+	started           atomic.Bool
+
 	signer
 	accountLock       sync.RWMutex
 	nodeID            types.NodeID
@@ -142,17 +137,15 @@ type Builder struct {
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
-	status                smeshingStatus
 	mu                    sync.RWMutex
 	store                 bytesStore
 	syncer                syncer
 	log                   log.Log
-	runCtx                context.Context
+	parentCtx             context.Context
 	stop                  func()
+	exited                chan struct{}
 	poetRetryInterval     time.Duration
 	poetClientInitializer PoETClientInitializer
-	// pendingPoetClient is modified using atomic operations on unsafe.Pointer
-	pendingPoetClient unsafe.Pointer
 }
 
 // BuilderOption ...
@@ -179,7 +172,7 @@ func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption 
 // WithContext modifies parent context for background job.
 func WithContext(ctx context.Context) BuilderOption {
 	return func(b *Builder) {
-		b.runCtx = ctx
+		b.parentCtx = ctx
 	}
 }
 
@@ -188,7 +181,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 	layersPerEpoch uint32, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
-		runCtx:            context.Background(),
+		parentCtx:         context.Background(),
 		signer:            signer,
 		nodeID:            nodeID,
 		coinbaseAccount:   conf.CoinbaseAccount,
@@ -204,18 +197,16 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 		syncer:            syncer,
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
-		status:            smeshingStatusIdle,
 	}
 	for _, opt := range opts {
 		opt(b)
 	}
-	b.runCtx, b.stop = context.WithCancel(b.runCtx)
 	return b
 }
 
 // Smeshing returns true iff atx builder started.
 func (b *Builder) Smeshing() bool {
-	return b.getStatus() == smeshingStatusStarted
+	return b.started.Load()
 }
 
 // StartSmeshing is the main entry point of the atx builder.
@@ -223,29 +214,48 @@ func (b *Builder) Smeshing() bool {
 // If the post data is incomplete or missing, data creation
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
-func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opts PostSetupOpts) error {
-	if b.getStatus() != smeshingStatusIdle {
-		return errors.New("already started")
+func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
+	b.mu.Lock()
+	if b.exited != nil {
+		select {
+		case <-b.exited:
+			// we are here if StartSession failed and method returned with error
+			// in this case it is expected that the user may call StartSmeshing without StopSmeshing first
+		default:
+			b.mu.Unlock()
+			return errors.New("already started")
+		}
 	}
+
+	b.started.Store(true)
 	b.coinbaseAccount = coinbase
-	b.setStatus(smeshingStatusPendingPostSetup)
+	var ctx context.Context
+	exited := make(chan struct{})
+	ctx, b.stop = context.WithCancel(b.parentCtx)
+	b.exited = exited
+	b.mu.Unlock()
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
-		b.setStatus(smeshingStatusIdle)
+		close(exited)
+		b.started.Store(false)
 		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
-
 	go func() {
-		<-doneChan
+		// false after closing exited. otherwise IsSmeshing may return False but StartSmeshing return "already started"
+		defer b.started.Store(false)
+		defer close(exited)
+		select {
+		case <-ctx.Done():
+			return
+		case <-doneChan:
+		}
+
 		if s := b.postSetupProvider.Status(); s.State != postSetupStateComplete {
-			b.setStatus(smeshingStatusIdle)
 			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
 			return
 		}
-
-		b.setStatus(smeshingStatusStarted)
-		go b.loop(b.runCtx)
+		b.loop(ctx)
 	}()
 
 	return nil
@@ -253,7 +263,10 @@ func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opt
 
 // StopSmeshing stops the atx builder.
 func (b *Builder) StopSmeshing(deleteFiles bool) error {
-	if b.getStatus() == smeshingStatusIdle {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.exited == nil {
 		return errors.New("not started")
 	}
 
@@ -262,8 +275,8 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 
 	b.stop()
-	b.setStatus(smeshingStatusIdle)
-
+	<-b.exited
+	b.exited = nil
 	return nil
 }
 
@@ -300,7 +313,6 @@ func (b *Builder) loop(ctx context.Context) {
 	b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 	if err != nil {
 		b.log.Error("post execution failed: %v", err)
-		b.setStatus(smeshingStatusIdle)
 		return
 	}
 
@@ -320,11 +332,11 @@ func (b *Builder) run(ctx context.Context) {
 	}()
 	defer b.log.Info("atx builder is stopped")
 	for {
-		client := atomic.LoadPointer(&b.pendingPoetClient)
+		client := b.pendingPoetClient.Load()
 		if client != nil {
 			b.nipostBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
 			// CaS here will not lose concurrent update
-			atomic.CompareAndSwapPointer(&b.pendingPoetClient, client, nil)
+			b.pendingPoetClient.CAS(client, nil)
 		}
 
 		if err := b.PublishActivationTx(ctx); err != nil {
@@ -367,7 +379,11 @@ func (b *Builder) run(ctx context.Context) {
 func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	syncedCh := make(chan struct{})
 	b.syncer.RegisterChForSynced(ctx, syncedCh)
-	<-syncedCh
+	select {
+	case <-ctx.Done():
+		return ErrStopRequested
+	case <-syncedCh:
+	}
 	challenge := &types.NIPostChallenge{NodeID: b.nodeID}
 	atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo()
 	if err != nil {
@@ -399,7 +415,7 @@ func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
 	}
-	atomic.StorePointer(&b.pendingPoetClient, unsafe.Pointer(&client))
+	b.pendingPoetClient.Store(unsafe.Pointer(&client))
 	return nil
 }
 
@@ -630,20 +646,6 @@ func (b *Builder) discardChallengeIfStale() bool {
 		return true
 	}
 	return false
-}
-
-func (b *Builder) getStatus() smeshingStatus {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
-
-	return b.status
-}
-
-func (b *Builder) setStatus(status smeshingStatus) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
-
-	b.status = status
 }
 
 // ExtractPublicKey extracts public key from message and verifies public key exists in idStore, this is how we validate
