@@ -3,6 +3,7 @@ package types
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -54,10 +55,14 @@ type Transaction struct {
 	Signature [64]byte
 	origin    *Address
 	id        *TransactionID
+	mu        sync.RWMutex
 }
 
 // Origin returns the transaction's origin address: the public key extracted from the transaction signature.
 func (t *Transaction) Origin() Address {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
 	if t.origin == nil {
 		panic("origin not set")
 	}
@@ -66,6 +71,9 @@ func (t *Transaction) Origin() Address {
 
 // SetOrigin sets the cache of the transaction's origin address.
 func (t *Transaction) SetOrigin(origin Address) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.origin = &origin
 }
 
@@ -81,13 +89,20 @@ func (t *Transaction) CalcAndSetOrigin() error {
 		return fmt.Errorf("failed to extract transaction pubkey: %v", err)
 	}
 
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	t.origin = &Address{}
 	t.origin.SetBytes(pubKey)
+
 	return nil
 }
 
 // ID returns the transaction's ID. If it's not cached, it's calculated, cached and returned.
 func (t *Transaction) ID() TransactionID {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if t.id != nil {
 		return *t.id
 	}
