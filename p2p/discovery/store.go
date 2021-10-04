@@ -197,12 +197,12 @@ func (a *addrBook) deserializePeers(filePath string) error {
 	// Sanity checking.
 	for k, v := range a.addrIndex {
 		if v.refs == 0 && !v.tried {
-			return fmt.Errorf("address %s after serialisation "+
+			return fmt.Errorf("address %s after serialization "+
 				"with no references", k)
 		}
 
 		if v.refs > 0 && v.tried {
-			return fmt.Errorf("address %s after serialisation "+
+			return fmt.Errorf("address %s after serialization "+
 				"which is both new and tried! ", k)
 		}
 	}

@@ -19,7 +19,7 @@ func BlockIdsToBytes(ids []BlockID) ([]byte, error) {
 	SortBlockIDs(ids)
 	buf, err := codec.Encode(&ids)
 	if err != nil {
-		return nil, errors.New("error marshalling block ids ")
+		return nil, errors.New("error marshaling block ids ")
 	}
 	return buf, nil
 }
@@ -47,7 +47,7 @@ func BytesToAtx(b []byte) (*ActivationTx, error) {
 func NIPostChallengeToBytes(challenge *NIPostChallenge) ([]byte, error) {
 	buf, err := codec.Encode(challenge)
 	if err != nil {
-		return nil, fmt.Errorf("error marshalling NIPost Challenge: %v", err)
+		return nil, fmt.Errorf("error marshaling NIPost Challenge: %v", err)
 	}
 	return buf, nil
 }
@@ -67,7 +67,7 @@ func ATXIdsToBytes(ids []ATXID) ([]byte, error) {
 	SortAtxIDs(ids)
 	buf, err := codec.Encode(&ids)
 	if err != nil {
-		return nil, errors.New("error marshalling block ids ")
+		return nil, errors.New("error marshaling block ids ")
 	}
 	return buf, nil
 }

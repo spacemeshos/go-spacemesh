@@ -69,7 +69,7 @@ const (
 	minBadDays = 7
 
 	// getAddrMax is the most addresses that we will send in response
-	// to a getAddr (in practise the most addresses we will return from a
+	// to a getAddr (in practice the most addresses we will return from a
 	// call to AddressCache()).
 	getAddrMax = 300
 

@@ -59,7 +59,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	if epochBeacon == nil {
 		return false, fmt.Errorf("failed to get tortoise beacon from block %v", activeSetBlock.ID())
 	}
-	// todo: optimise by using reference to active set size and cache active set size to not load all atxsIDs from db
+	// todo: optimize by using reference to active set size and cache active set size to not load all atxsIDs from db
 	for _, atxID := range *activeSetBlock.ActiveSet {
 		atxHeader, err := v.activationDb.GetAtxHeader(atxID)
 		if err != nil {

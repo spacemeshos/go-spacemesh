@@ -206,7 +206,7 @@ boots:
 	return e
 }
 
-// ForAllAsync executes f on all the nodes concurrently, it stops if ctx is cancelled.
+// ForAllAsync executes f on all the nodes concurrently, it stops if ctx is canceled.
 func (its *IntegrationTestSuite) ForAllAsync(ctx context.Context, f func(idx int, s NodeTestInstance) error) ([]error, error) {
 	var mtx sync.Mutex
 	errs := make([]error, len(its.Instances))

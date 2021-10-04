@@ -247,7 +247,7 @@ func (s *Switch) onNewConnection(nce net.NewConnectionEvent) {
 func (s *Switch) onClosedConnection(ctx context.Context, cwe net.ConnectionWithErr) {
 	// we don't want to block, we know this node's connection was closed.
 	// todo: pass on closing reason, if we closed the connection.
-	// 	mark address book or ban if malicious activity recognised
+	// 	mark address book or ban if malicious activity recognized
 	s.Disconnect(cwe.Conn.RemotePublicKey())
 }
 

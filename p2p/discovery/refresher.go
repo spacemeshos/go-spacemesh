@@ -63,7 +63,7 @@ func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAdd
 	}
 }
 
-// Bootstrap tries to collect `numpeers` new peers into the routing table. it stops if ctx is cancelled,
+// Bootstrap tries to collect `numpeers` new peers into the routing table. it stops if ctx is canceled,
 // otherwise it will keep trying. if the routing table is empty, bootnodes are loaded from provided config.
 func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 	var err error

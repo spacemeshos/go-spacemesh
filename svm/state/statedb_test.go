@@ -127,7 +127,7 @@ func TestCopy(t *testing.T) {
 		orig.updateStateObj(origObj)
 		copy.updateStateObj(copyObj)
 	}
-	// Finalise the changes on both concurrently
+	// Finalize the changes on both concurrently
 	done := make(chan struct{})
 	go func() {
 		close(done)

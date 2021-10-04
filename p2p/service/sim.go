@@ -109,7 +109,7 @@ func (s *Simulator) createdNode(n *Node) {
 	s.publishNewPeer(n.PublicKey())
 }
 
-// NewFaulty creates a node that can deploy faulty behaviour, broadcast delay, receive delay and randomness.
+// NewFaulty creates a node that can deploy faulty behavior, broadcast delay, receive delay and randomness.
 func (s *Simulator) NewFaulty(isRandBehaviour bool, maxBroadcastDelaySec uint32, maxReceiveDelaySec uint32) *Node {
 	n := s.NewNode()
 	n.randBehaviour = isRandBehaviour

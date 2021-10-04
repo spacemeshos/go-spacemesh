@@ -80,7 +80,7 @@ type Decoder interface {
 // must contain an element for each decoded field. Decode returns an
 // error if there are too few or too many elements.
 //
-// The decoding of struct fields honours certain struct tags, "tail",
+// The decoding of struct fields honors certain struct tags, "tail",
 // "nil" and "-".
 //
 // The "-" tag ignores fields.
