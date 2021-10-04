@@ -309,7 +309,6 @@ jobs:
       - systemtest-mining
       - systemtest-p2p
       - systemtest-hare
-      - systemtest-sync
       - systemtest-tortoise-beacon
     runs-on: ubuntu-latest
     env:
