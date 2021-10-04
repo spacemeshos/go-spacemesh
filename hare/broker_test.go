@@ -649,7 +649,10 @@ func TestBroker_eventLoop2(t *testing.T) {
 	r.NotEqual(true, v)
 
 	// valid but not early
+	msg.mu.Lock()
 	m.InnerMsg.InstanceID = instanceID6
+	msg.mu.Unlock()
+
 	msg = newMockGossipMsg(m)
 	b.inbox <- msg
 
