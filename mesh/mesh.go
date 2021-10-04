@@ -48,7 +48,7 @@ type Validator interface {
 }
 
 type SVM interface {
-	ApplyLayer(layerID types.LayerID, transactions []types.Transaction, rewards []types.Reward)
+	ApplyLayer(layerID types.LayerID, transactions []types.Transaction, rewards []types.Reward) error
 	TxProcessor() txProcessor
 }
 
