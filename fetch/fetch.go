@@ -56,6 +56,8 @@ type ErrCouldNotSend error
 // ErrExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch data for a hash and failed
 var ErrExceedMaxRetries = errors.New("fetch failed after max retries for request")
 
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./fetch.go
+
 // Fetcher is the general interface of the fetching unit, capable of requesting bytes that corresponds to a hash
 // from other remote peers.
 type Fetcher interface {
