@@ -29,16 +29,40 @@ var (
 
 	// Commit is the git commit used to build the app. Designed to be overwritten by make.
 	Commit string
-
-	// Mu is the mutex for accessing global variables in this package.
-	Mu sync.RWMutex
-
-	// Ctx is the node's main context.
-	Ctx, cancel = context.WithCancel(context.Background())
-
-	// Cancel is a function used to initiate graceful shutdown.
-	Cancel = cancel
 )
+
+var (
+	mu                      sync.RWMutex
+	globalCtx, globalCancel = context.WithCancel(context.Background())
+)
+
+func GetCtx() context.Context {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	return globalCtx
+}
+
+func SetCtx(ctx context.Context) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	globalCtx = ctx
+}
+
+func GetCancel() func() {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	return globalCancel
+}
+
+func SetCancel(cancelFunc func()) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	globalCancel = cancelFunc
+}
 
 // BaseApp is the base application command, provides basic init and flags for all executables and applications
 type BaseApp struct {
@@ -63,11 +87,7 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 		for range signalChan {
 			log.Info("Received an interrupt, stopping services...\n")
 
-			Mu.RLock()
-			cancelF := Cancel
-			Mu.RUnlock()
-
-			cancelF()
+			GetCancel()()
 		}
 	}()
 

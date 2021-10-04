@@ -129,10 +129,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	log.Info("initializing P2P services")
 
-	cmdp.Mu.RLock()
-	ctx := cmdp.Ctx
-	cmdp.Mu.RUnlock()
-
+	ctx := cmdp.GetCtx()
 	swarm, err := p2p.New(ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
 	app.p2p = swarm
 	if err != nil {

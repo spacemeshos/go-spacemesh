@@ -117,11 +117,7 @@ func (s NodeService) SyncStart(ctx context.Context, _ *pb.SyncStartRequest) (*pb
 func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	log.Info("GRPC NodeService.Shutdown")
 
-	cmd.Mu.RLock()
-	cancel := cmd.Cancel
-	cmd.Mu.RUnlock()
-
-	cancel()
+	cmd.GetCancel()()
 
 	return &pb.ShutdownResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},

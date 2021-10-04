@@ -219,10 +219,8 @@ func setup() {
 	// oof, globals make testing really difficult
 	ctx, cancel := context.WithCancel(context.Background())
 
-	cmdp.Mu.Lock()
-	cmdp.Ctx = ctx
-	cmdp.Cancel = cancel
-	cmdp.Mu.Unlock()
+	cmdp.SetCtx(ctx)
+	cmdp.SetCancel(cancel)
 
 	events.CloseEventReporter()
 	resetFlags()
@@ -677,11 +675,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
-	cmdp.Mu.RLock()
-	cancel := cmd.Cancel // stop the app
-	cmdp.Mu.RUnlock()
-
-	cancel()
+	cmd.GetCancel()() // stop the app
 
 	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
@@ -834,11 +828,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2.Wait()
 
 	// This stops the app
-	cmdp.Mu.RLock()
-	cancel := cmdp.Cancel
-	cmdp.Mu.RUnlock()
-
-	cancel()
+	cmdp.GetCancel()()
 
 	// Wait for it to stop
 	wg.Wait()
@@ -868,10 +858,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	// Try to connect before we start the P2P service: this should fail
 	tcpAddr := inet.TCPAddr{IP: inet.ParseIP(addr), Port: port}
 
-	cmdp.Mu.RLock()
-	ctx := cmdp.Ctx
-	cmdp.Mu.RUnlock()
-
+	ctx := cmdp.GetCtx()
 	_, err = p2pnet.Dial(ctx, &tcpAddr, l.PublicKey())
 	r.Error(err)
 

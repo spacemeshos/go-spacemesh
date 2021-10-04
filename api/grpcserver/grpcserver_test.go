@@ -708,9 +708,7 @@ func TestNodeService(t *testing.T) {
 			logtest.SetupGlobal(t)
 			called := false
 
-			cmd.Mu.Lock()
-			cmd.Cancel = func() { called = true }
-			cmd.Mu.Unlock()
+			cmd.SetCancel(func() { called = true })
 
 			require.Equal(t, false, called, "cmd.Shutdown() not yet called")
 			req := &pb.ShutdownRequest{}
