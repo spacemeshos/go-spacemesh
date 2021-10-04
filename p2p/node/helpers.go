@@ -21,7 +21,7 @@ func GenerateTestNode(t *testing.T) (LocalNode, *Info) {
 }
 
 // GenerateTestNodeWithConfig creates a local test node without persisting data to local store.
-func GenerateTestNodeWithConfig(t *testing.T) (LocalNode, *Info) {
+func GenerateTestNodeWithConfig(t *testing.T) (ln LocalNode, info *Info) {
 	tcpPort, err := GetUnboundedPort("tcp", 0)
 	if err != nil {
 		t.Error("failed to get a port to bind", err)
@@ -33,14 +33,12 @@ func GenerateTestNodeWithConfig(t *testing.T) (LocalNode, *Info) {
 
 	addr := net.TCPAddr{IP: net.ParseIP("0.0.0.0"), Port: tcpPort}
 
-	var localNode LocalNode
-
-	localNode, err = NewNodeIdentity()
+	ln, err = NewNodeIdentity()
 	if err != nil {
 		t.Error(ErrFailedToCreate)
-		return emptyNode, nil
+		return ln, nil
 	}
-	return localNode, &Info{localNode.PublicKey().Array(), addr.IP, uint16(tcpPort), uint16(udpPort)}
+	return ln, &Info{ln.PublicKey().Array(), addr.IP, uint16(tcpPort), uint16(udpPort)}
 }
 
 // GenerateRandomNodeData generates a remote random node data for testing.
