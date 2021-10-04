@@ -91,7 +91,7 @@ func newLayerDBMock() *layerDBMock {
 		vectors:   make(map[types.LayerID][]types.BlockID),
 		hashes:    make(map[types.LayerID]types.Hash32),
 		aggHashes: make(map[types.LayerID]types.Hash32),
-		processed: types.NewLayerID(10),
+		processed: types.NewLayerID(999),
 	}
 }
 func (l *layerDBMock) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
@@ -234,6 +234,14 @@ func TestLayerBlocksReqReceiverUnknownError(t *testing.T) {
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
 	assert.Nil(t, out)
 	assert.Equal(t, err, ErrInternal)
+}
+
+func TestLayerBlocksReqReceiverRequestedHigherLayer(t *testing.T) {
+	db := newLayerDBMock()
+	db.processed = types.NewLayerID(99)
+	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
+	_, err := l.layerBlocksReqReceiver(context.TODO(), db.processed.Add(1).Bytes())
+	require.ErrorIs(t, err, errLayerNotProcessed)
 }
 
 func generateLayerBlocks(numInputVector int) []byte {
