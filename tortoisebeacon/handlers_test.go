@@ -64,7 +64,8 @@ func createTortoiseBeaconWithFirstRoundVotes(t *testing.T, epoch types.EpochID, 
 		string(signer.PublicKey().Bytes()): {
 			valid:            [][]byte{hash1.Bytes(), hash2.Bytes()},
 			potentiallyValid: [][]byte{hash3.Bytes()},
-		}}
+		},
+	}
 	return tb, mockDB, []types.Hash32{hash1, hash2, hash3}
 }
 
@@ -348,7 +349,9 @@ func TestTB_handleProposalMessage_Success(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
 	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(true).Times(1)
+	tb.mu.Lock()
 	tb.proposalChecker = mockChecker
+	tb.mu.Unlock()
 
 	err = tb.handleProposalMessage(context.TODO(), *msg, time.Now())
 	assert.NoError(t, err)
@@ -373,7 +376,10 @@ func TestTB_handleProposalMessage_BadSignature(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
 	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(true).Times(1)
+
+	tb.mu.Lock()
 	tb.proposalChecker = mockChecker
+	tb.mu.Unlock()
 
 	err = tb.handleProposalMessage(context.TODO(), *msg, time.Now())
 	assert.ErrorIs(t, err, errVRFNotVerified)
@@ -396,7 +402,10 @@ func TestTB_handleProposalMessage_AlreadyProposed(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
 	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(true).Times(1)
+
+	tb.mu.Lock()
 	tb.proposalChecker = mockChecker
+	tb.mu.Unlock()
 
 	err = tb.handleProposalMessage(context.TODO(), *msg, time.Now())
 	assert.NoError(t, err)
@@ -428,7 +437,10 @@ func TestTB_handleProposalMessage_ProposalNotEligible(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
 	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(false).Times(1)
+
+	tb.mu.Lock()
 	tb.proposalChecker = mockChecker
+	tb.mu.Unlock()
 
 	err = tb.handleProposalMessage(context.TODO(), *msg, time.Now())
 	assert.ErrorIs(t, err, errProposalDoesntPassThreshold)
@@ -489,7 +501,10 @@ func TestTB_handleProposalMessage_ATXHeaderLookupError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
 	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(true).Times(1)
+
+	tb.mu.Lock()
 	tb.proposalChecker = mockChecker
+	tb.mu.Unlock()
 
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
@@ -610,7 +625,8 @@ func TestTB_handleFirstVotingMessage_Success(t *testing.T) {
 
 	checkVoted(t, tb, signer, types.FirstRound, true)
 	expected := map[string]proposals{
-		string(signer.PublicKey().Bytes()): {valid: valid, potentiallyValid: pValid}}
+		string(signer.PublicKey().Bytes()): {valid: valid, potentiallyValid: pValid},
+	}
 	checkFirstIncomingVotes(t, tb, expected)
 }
 
@@ -649,7 +665,8 @@ func TestTB_handleFirstVotingMessage_AlreadyVoted(t *testing.T) {
 
 	checkVoted(t, tb, signer, types.FirstRound, true)
 	expected := map[string]proposals{
-		string(signer.PublicKey().Bytes()): {valid: valid, potentiallyValid: pValid}}
+		string(signer.PublicKey().Bytes()): {valid: valid, potentiallyValid: pValid},
+	}
 	checkFirstIncomingVotes(t, tb, expected)
 
 	// now vote again

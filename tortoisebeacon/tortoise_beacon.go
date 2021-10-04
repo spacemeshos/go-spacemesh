@@ -585,11 +585,14 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	logger := tb.logger.WithContext(ctx).WithFields(epoch)
 	proposedSignature := buildSignedProposal(ctx, tb.vrfSigner, epoch, tb.logger)
 
+	tb.mu.RLock()
 	logger.With().Debug("calculated proposal signature",
 		log.String("signature", string(proposedSignature)),
 		log.Uint64("total_weight", tb.epochWeight))
 
 	passes := tb.proposalChecker.IsProposalEligible(proposedSignature)
+	tb.mu.RUnlock()
+
 	if !passes {
 		logger.With().Debug("proposal to be sent doesn't pass threshold",
 			log.String("proposal", string(proposedSignature)))
@@ -767,6 +770,9 @@ func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.Epoc
 	// TODO(nkryuchkov): also send a bit vector
 	// TODO(nkryuchkov): initialize margin vector to initial votes
 	// TODO(nkryuchkov): use weight
+
+	tb.mu.RLock()
+	defer tb.mu.RUnlock()
 
 	return tb.sendFirstRoundVote(ctx, epoch, tb.incomingProposals)
 }
