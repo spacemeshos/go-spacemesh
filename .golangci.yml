@@ -1,5 +1,3 @@
-# Few checks, exit code is 1 on errors.
-
 # This file contains all available configuration options
 # Modified for linting cmd/ and pkg/
 
