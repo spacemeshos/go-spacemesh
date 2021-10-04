@@ -163,6 +163,7 @@ linters:
   # TODO(nkryuchkov): enable needed linters
   enable:
     - staticcheck
+    - misspell
 #    - golint
 #    - goimports
 #    - varcheck
@@ -176,7 +177,6 @@ linters:
 #    - typecheck
 #    - gosec
 #    - megacheck
-#    - misspell
 #    - nakedret
 #    - depguard
   enable-all: false
