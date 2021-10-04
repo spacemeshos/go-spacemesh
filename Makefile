@@ -131,17 +131,12 @@ docker-local-build: go-spacemesh hare p2p sync harness
 .PHONY: docker-local-build
 endif
 
-# TODO(nkryuchkov): Add -race flag to the `test` target and remove `test-race` after all data races are fixed.
-test-race: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -race ./...
-.PHONY: test
-
 test test-all: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 ./...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -race -timeout 0 -p 1 ./...
 .PHONY: test
 
 test-no-app-test: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -timeout 0 -p 1 -tags exclude_app_test ./...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -race -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test-no-app-test
 
 test-only-app-test: get-gpu-setup
