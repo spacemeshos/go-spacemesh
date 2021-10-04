@@ -5,9 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
+	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
@@ -371,4 +374,47 @@ func TestPollLayerBlocks_ZeroLayer(t *testing.T) {
 	res := <-l.PollLayerContent(context.TODO(), layerID)
 	assert.Equal(t, ErrZeroLayer, res.Err)
 	assert.Equal(t, layerID, res.Layer)
+}
+
+func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	fetcher := mocks.NewMockFetcher(ctrl)
+	fetcher.EXPECT().GetHashes(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(hashes []types.Hash32, _ fetch.Hint, _ bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
+			rst := map[types.Hash32]chan fetch.HashDataPromiseResult{}
+			for _, hash := range hashes {
+				rst[hash] = make(chan fetch.HashDataPromiseResult, 1)
+				rst[hash] <- fetch.HashDataPromiseResult{
+					Hash: hash,
+					Err:  errors.New("failed request"),
+				}
+			}
+			return rst
+		},
+	)
+	fetcher.EXPECT().GetHashes(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(hashes []types.Hash32, _ fetch.Hint, _ bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
+			return nil
+		},
+	)
+
+	requested := types.NewLayerID(20)
+	blocks := &layerBlocks{
+		Blocks:         []types.BlockID{{1, 1, 1}, {2, 2, 2}, {3, 3, 3}},
+		ProcessedLayer: requested,
+	}
+	data, err := codec.Encode(blocks)
+	require.NoError(t, err)
+	net := newMockNet()
+	for i := 0; i < 2; i++ {
+		peer := p2pcrypto.NewRandomPubkey()
+		net.peers = append(net.peers, peer)
+		net.layerBlocks[peer] = data
+	}
+
+	l := NewMockLogic(net, newLayerDBMock(), &mockBlocks{}, &mockAtx{}, fetcher, logtest.New(t))
+	res := <-l.PollLayerContent(context.TODO(), requested)
+	require.ErrorIs(t, res.Err, ErrBlockNotFetched)
 }

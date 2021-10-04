@@ -390,17 +390,21 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 func notifyLayerBlocksResult(layerID types.LayerID, lyrDB layerDB, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
 	var result *LayerPromiseResult
 	hasZeroBlockHash := false
-	var firstErr error
+	var err error
 	for _, res := range lyrResult.responses {
 		if res.err == nil && res.data != nil {
 			// at least one layer hash contains blocks. not a zero block layer
 			result = &LayerPromiseResult{Layer: layerID, Err: nil}
 			break
 		}
+		if errors.Is(res.err, ErrBlockNotFetched) {
+			err = res.err
+			break
+		}
 		if res.err == ErrZeroLayer {
 			hasZeroBlockHash = true
-		} else if firstErr == nil {
-			firstErr = res.err
+		} else if err == nil {
+			err = res.err
 		}
 	}
 
@@ -411,7 +415,7 @@ func notifyLayerBlocksResult(layerID types.LayerID, lyrDB layerDB, channels []ch
 			result.Err = ErrZeroLayer
 		} else {
 			// no usable result. just return the first error we received
-			result.Err = firstErr
+			result.Err = err
 		}
 	}
 	logger.With().Debug("notifying layer blocks result", log.String("blocks", fmt.Sprintf("%+v", *result)))
