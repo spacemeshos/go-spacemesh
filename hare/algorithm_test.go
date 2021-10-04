@@ -65,6 +65,10 @@ func (mr *mockRolacle) Register(string) {
 func (mr *mockRolacle) Unregister(string) {
 }
 
+func (mr *mockRolacle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
+	return true
+}
+
 type mockP2p struct {
 	count int
 	err   error

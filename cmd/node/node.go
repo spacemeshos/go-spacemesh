@@ -74,7 +74,6 @@ const (
 	StateLogger          = "state"
 	AtxDbStoreLogger     = "atxDbStore"
 	TBeaconDbStoreLogger = "tbDbStore"
-	TBeaconDbLogger      = "tbDb"
 	TBeaconLogger        = "tBeacon"
 	WeakCoinLogger       = "weakCoin"
 	PoetDbStoreLogger    = "poetDbStore"
@@ -416,10 +415,6 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StateLoggerLevel))
 	case AtxDbStoreLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxDbStoreLoggerLevel))
-	case TBeaconDbStoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconDbStoreLoggerLevel))
-	case TBeaconDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconDbLoggerLevel))
 	case TBeaconLogger:
 		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconLoggerLevel))
 	case WeakCoinLogger:
@@ -570,7 +565,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	atxDB := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
-	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
 	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
@@ -586,12 +580,12 @@ func (app *App) initServices(ctx context.Context,
 		nodeID,
 		swarm,
 		atxDB,
-		tBeaconDB,
 		sgn,
 		edVerifier,
 		vrfSigner,
 		vrfVerifier,
 		wc,
+		tBeaconDBStore,
 		clock,
 		app.addLogger(TBeaconLogger, lg))
 
@@ -655,8 +649,8 @@ func (app *App) initServices(ctx context.Context,
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
-	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, tBeaconDBStore)
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, app.addLogger(LayerFetcher, lg))
+	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
 
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
@@ -674,7 +668,7 @@ func (app *App) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else {
 		// regular oracle, build and use it
-		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
+		beacon := eligibility.NewBeacon(tBeacon, app.addLogger(HareBeaconLogger, lg))
 		hOracle = eligibility.New(beacon, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}

@@ -124,8 +124,6 @@ type LoggerConfig struct {
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
 	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
-	TBeaconDbStoreLoggerLevel string `mapstructure:"tbDbStore"`
-	TBeaconDbLoggerLevel      string `mapstructure:"tbDb"`
 	TBeaconLoggerLevel        string `mapstructure:"tBeacon"`
 	WeakCoinLoggerLevel       string `mapstructure:"weakCoin"`
 	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`

@@ -35,18 +35,53 @@ func (m *MockBeaconGetter) EXPECT() *MockBeaconGetterMockRecorder {
 }
 
 // GetBeacon mocks base method.
-func (m *MockBeaconGetter) GetBeacon(epochNumber types.EpochID) ([]byte, error) {
+func (m *MockBeaconGetter) GetBeacon(arg0 types.EpochID) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBeacon", epochNumber)
+	ret := m.ctrl.Call(m, "GetBeacon", arg0)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBeacon indicates an expected call of GetBeacon.
-func (mr *MockBeaconGetterMockRecorder) GetBeacon(epochNumber interface{}) *gomock.Call {
+func (mr *MockBeaconGetterMockRecorder) GetBeacon(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBeacon", reflect.TypeOf((*MockBeaconGetter)(nil).GetBeacon), epochNumber)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBeacon", reflect.TypeOf((*MockBeaconGetter)(nil).GetBeacon), arg0)
+}
+
+// MockbeaconCollector is a mock of beaconCollector interface.
+type MockbeaconCollector struct {
+	ctrl     *gomock.Controller
+	recorder *MockbeaconCollectorMockRecorder
+}
+
+// MockbeaconCollectorMockRecorder is the mock recorder for MockbeaconCollector.
+type MockbeaconCollectorMockRecorder struct {
+	mock *MockbeaconCollector
+}
+
+// NewMockbeaconCollector creates a new mock instance.
+func NewMockbeaconCollector(ctrl *gomock.Controller) *MockbeaconCollector {
+	mock := &MockbeaconCollector{ctrl: ctrl}
+	mock.recorder = &MockbeaconCollectorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockbeaconCollector) EXPECT() *MockbeaconCollectorMockRecorder {
+	return m.recorder
+}
+
+// ReportBeaconFromBlock mocks base method.
+func (m *MockbeaconCollector) ReportBeaconFromBlock(arg0 types.EpochID, arg1 types.BlockID, arg2 []byte, arg3 uint64) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "ReportBeaconFromBlock", arg0, arg1, arg2, arg3)
+}
+
+// ReportBeaconFromBlock indicates an expected call of ReportBeaconFromBlock.
+func (mr *MockbeaconCollectorMockRecorder) ReportBeaconFromBlock(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportBeaconFromBlock", reflect.TypeOf((*MockbeaconCollector)(nil).ReportBeaconFromBlock), arg0, arg1, arg2, arg3)
 }
 
 // MockblockDB is a mock of blockDB interface.
@@ -73,16 +108,16 @@ func (m *MockblockDB) EXPECT() *MockblockDBMockRecorder {
 }
 
 // GetBlock mocks base method.
-func (m *MockblockDB) GetBlock(ID types.BlockID) (*types.Block, error) {
+func (m *MockblockDB) GetBlock(arg0 types.BlockID) (*types.Block, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlock", ID)
+	ret := m.ctrl.Call(m, "GetBlock", arg0)
 	ret0, _ := ret[0].(*types.Block)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // GetBlock indicates an expected call of GetBlock.
-func (mr *MockblockDBMockRecorder) GetBlock(ID interface{}) *gomock.Call {
+func (mr *MockblockDBMockRecorder) GetBlock(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlock", reflect.TypeOf((*MockblockDB)(nil).GetBlock), ID)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlock", reflect.TypeOf((*MockblockDB)(nil).GetBlock), arg0)
 }

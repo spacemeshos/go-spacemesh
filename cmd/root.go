@@ -205,6 +205,8 @@ func AddCommands(cmd *cobra.Command) {
 		"Ratio of votes for reaching consensus")
 	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",
 		config.TortoiseBeacon.VotesLimit, "Maximum allowed number of votes to be sent")
+	cmd.PersistentFlags().Uint32Var(&config.TortoiseBeacon.BeaconSyncNumBlocks, "tortoise-beacon-sync-num-blocks",
+		config.TortoiseBeacon.BeaconSyncNumBlocks, "Numbers of blocks to wait before determining beacon values from them.")
 
 	/**======================== Post Flags ========================== **/
 

@@ -34,6 +34,7 @@ type Rolacle interface {
 	CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
 	Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
+	IsEpochBeaconReady(ctx context.Context, epoch types.EpochID) bool
 }
 
 // NetworkService provides the registration and broadcast abilities in the network.

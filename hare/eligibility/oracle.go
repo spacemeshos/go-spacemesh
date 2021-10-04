@@ -27,6 +27,11 @@ type signer interface {
 	Sign(msg []byte) []byte
 }
 
+type addGet interface {
+	Add(key, value interface{}) (evicted bool)
+	Get(key interface{}) (value interface{}, ok bool)
+}
+
 type atxProvider interface {
 	// GetMinerWeightsInEpochFromView gets the active set (node IDs) for a set of blocks
 	GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error)
@@ -128,6 +133,12 @@ func New(
 		cfg:            cfg,
 		Log:            logger,
 	}
+}
+
+// IsEpochBeaconReady returns true if the beacon value is known for the specified epoch
+func (o *Oracle) IsEpochBeaconReady(ctx context.Context, epoch types.EpochID) bool {
+	_, err := o.beacon.Value(ctx, epoch)
+	return err == nil
 }
 
 type vrfMessage struct {
