@@ -66,7 +66,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 
 	log.Info("initializing p2p services")
 
-	ctx := cmdp.GetCtx()
+	ctx := cmdp.Ctx()
 	swarm, err := p2p.New(ctx, app.Config.P2P, logger, app.Config.DataDir())
 	if err != nil {
 		log.With().Panic("error init p2p services", log.Err(err))
@@ -142,7 +142,7 @@ func (app *P2PApp) startAPI() {
 
 		jsonSvc = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
 		jsonSvc.StartService(
-			cmdp.GetCtx(),
+			cmdp.Ctx(),
 			apiConf.StartDebugService,
 			apiConf.StartGatewayService,
 			apiConf.StartGlobalStateService,

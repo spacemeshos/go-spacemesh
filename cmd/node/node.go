@@ -353,7 +353,7 @@ func (app *App) Initialize() (err error) {
 		for range signalChan {
 			app.log.Info("Received an interrupt, stopping services...\n")
 
-			cmdp.GetCancel()()
+			cmdp.Cancel()()
 		}
 	}()
 
@@ -784,7 +784,7 @@ func (app *App) checkTimeDrifts() {
 			if err != nil {
 				app.log.With().Error("unable to synchronize system time", log.Err(err))
 
-				cmdp.GetCancel()()
+				cmdp.Cancel()()
 
 				return
 			}
@@ -1104,7 +1104,7 @@ func (app *App) startSyncer(ctx context.Context) {
 // Start starts the Spacemesh node and initializes all relevant services according to command line arguments provided.
 func (app *App) Start() error {
 	// we use the main app context
-	ctx := cmdp.GetCtx()
+	ctx := cmdp.Ctx()
 	// Create a contextual logger for local usage (lower-level modules will create their own contextual loggers
 	// using context passed down to them)
 	logger := app.log.WithContext(ctx)
@@ -1237,7 +1237,7 @@ func (app *App) Start() error {
 			syncErr <- app.ptimesync.Wait()
 			// if nil node was already stopped
 			if syncErr != nil {
-				cmdp.GetCancel()()
+				cmdp.Cancel()()
 			}
 		}()
 	}

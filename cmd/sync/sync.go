@@ -100,7 +100,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	)
 
 	path := app.Config.DataDir()
-	swarm, err := p2p.New(cmdp.GetCtx(), app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
+	swarm, err := p2p.New(cmdp.Ctx(), app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
 	if err != nil {
 		panic("something got fudged while creating p2p service ")
 	}
@@ -160,7 +160,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	}
 	app.sync = createSyncer(syncerConf, msh, layerFetch, types.NewLayerID(expectedLayers), app.logger)
 
-	if err = swarm.Start(cmdp.GetCtx()); err != nil {
+	if err = swarm.Start(cmdp.Ctx()); err != nil {
 		log.With().Panic("error starting p2p", log.Err(err))
 	}
 
@@ -179,7 +179,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		} else {
 			lg.With().Info("loaded layer from disk", types.NewLayerID(i))
 
-			msh.ValidateLayer(cmdp.GetCtx(), lyr)
+			msh.ValidateLayer(cmdp.Ctx(), lyr)
 		}
 	}
 
@@ -187,7 +187,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	lg.Info("wait %v sec", sleep)
 	time.Sleep(sleep)
 
-	go app.sync.Start(cmdp.GetCtx())
+	go app.sync.Start(cmdp.Ctx())
 
 	for msh.ProcessedLayer().Before(types.NewLayerID(expectedLayers)) {
 		lg.Info("sleep for %v sec", 30)

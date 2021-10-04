@@ -36,13 +36,15 @@ var (
 	globalCtx, globalCancel = context.WithCancel(context.Background())
 )
 
-func GetCtx() context.Context {
+// Ctx returns global context.
+func Ctx() context.Context {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	return globalCtx
 }
 
+// SetCtx sets global context.
 func SetCtx(ctx context.Context) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -50,13 +52,15 @@ func SetCtx(ctx context.Context) {
 	globalCtx = ctx
 }
 
-func GetCancel() func() {
+// Cancel returns global cancellation function.
+func Cancel() func() {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	return globalCancel
 }
 
+// SetCancel sets global cancellation function.
 func SetCancel(cancelFunc func()) {
 	mu.Lock()
 	defer mu.Unlock()
@@ -87,7 +91,7 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 		for range signalChan {
 			log.Info("Received an interrupt, stopping services...\n")
 
-			GetCancel()()
+			Cancel()()
 		}
 	}()
 

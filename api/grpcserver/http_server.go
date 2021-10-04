@@ -32,7 +32,7 @@ func (s *JSONHTTPServer) Close() error {
 	log.Debug("stopping new json-http service...")
 	server := s.getServer()
 	if server != nil {
-		ctx := cmdp.GetCtx()
+		ctx := cmdp.Ctx()
 
 		if err := server.Shutdown(ctx); err != nil {
 			return err

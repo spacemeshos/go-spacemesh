@@ -675,7 +675,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
-	cmd.GetCancel()() // stop the app
+	cmd.Cancel()() // stop the app
 
 	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
@@ -828,7 +828,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2.Wait()
 
 	// This stops the app
-	cmdp.GetCancel()()
+	cmdp.Cancel()()
 
 	// Wait for it to stop
 	wg.Wait()
@@ -858,7 +858,7 @@ func TestSpacemeshApp_P2PInterface(t *testing.T) {
 	// Try to connect before we start the P2P service: this should fail
 	tcpAddr := inet.TCPAddr{IP: inet.ParseIP(addr), Port: port}
 
-	ctx := cmdp.GetCtx()
+	ctx := cmdp.Ctx()
 	_, err = p2pnet.Dial(ctx, &tcpAddr, l.PublicKey())
 	r.Error(err)
 
