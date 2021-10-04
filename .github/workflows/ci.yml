@@ -260,23 +260,6 @@ jobs:
         uses: actions/checkout@v2
       - name: p2p system test
         run: make dockertest-p2p
-  systemtest-sync:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 270 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '270s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: sync system test
-        run: make dockertest-sync
   systemtest-hare:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
