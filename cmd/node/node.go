@@ -400,69 +400,43 @@ func (app *App) Cleanup() {
 // specific module.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
 	lvl := zap.NewAtomicLevel()
-	var err error
+	config := app.Config.LOGGING
+	level, ok := map[string]string{
+		AppLogger:            config.AppLoggerLevel,
+		P2PLogger:            config.P2PLoggerLevel,
+		PostLogger:           config.PostLoggerLevel,
+		StateDbLogger:        config.StateDbLoggerLevel,
+		StateLogger:          config.StateLoggerLevel,
+		AtxDbStoreLogger:     config.AtxDbStoreLoggerLevel,
+		TBeaconLogger:        config.TBeaconLoggerLevel,
+		WeakCoinLogger:       config.WeakCoinLoggerLevel,
+		PoetDbStoreLogger:    config.PoetDbStoreLoggerLevel,
+		StoreLogger:          config.StoreLoggerLevel,
+		PoetDbLogger:         config.PoetDbLoggerLevel,
+		MeshDBLogger:         config.MeshDBLoggerLevel,
+		TrtlLogger:           config.TrtlLoggerLevel,
+		AtxDbLogger:          config.AtxDbLoggerLevel,
+		BlkEligibilityLogger: config.BlkEligibilityLoggerLevel,
+		MeshLogger:           config.MeshLoggerLevel,
+		SyncLogger:           config.SyncLoggerLevel,
+		BlockOracle:          config.BlockOracleLevel,
+		HareOracleLogger:     config.HareOracleLoggerLevel,
+		HareBeaconLogger:     config.HareBeaconLoggerLevel,
+		HareLogger:           config.HareLoggerLevel,
+		BlockBuilderLogger:   config.BlockBuilderLoggerLevel,
+		BlockListenerLogger:  config.BlockListenerLoggerLevel,
+		PoetListenerLogger:   config.PoetListenerLoggerLevel,
+		NipostBuilderLogger:  config.NipostBuilderLoggerLevel,
+		AtxBuilderLogger:     config.AtxBuilderLoggerLevel,
+		TimeSyncLogger:       config.TimeSyncLoggerLevel,
+	}[name]
 
-	switch name {
-	case AppLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AppLoggerLevel))
-	case P2PLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.P2PLoggerLevel))
-	case PostLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PostLoggerLevel))
-	case StateDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StateDbLoggerLevel))
-	case StateLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StateLoggerLevel))
-	case AtxDbStoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxDbStoreLoggerLevel))
-	case TBeaconLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconLoggerLevel))
-	case WeakCoinLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.WeakCoinLoggerLevel))
-	case PoetDbStoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PoetDbStoreLoggerLevel))
-	case StoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StoreLoggerLevel))
-	case PoetDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PoetDbLoggerLevel))
-	case MeshDBLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.MeshDBLoggerLevel))
-	case TrtlLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TrtlLoggerLevel))
-	case AtxDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxDbLoggerLevel))
-	case BlkEligibilityLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlkEligibilityLoggerLevel))
-	case MeshLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.MeshLoggerLevel))
-	case SyncLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.SyncLoggerLevel))
-	case BlockOracle:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlockOracleLevel))
-	case HareOracleLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareOracleLoggerLevel))
-	case HareBeaconLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareBeaconLoggerLevel))
-	case HareLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareLoggerLevel))
-	case BlockBuilderLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlockBuilderLoggerLevel))
-	case BlockListenerLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlockListenerLoggerLevel))
-	case PoetListenerLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PoetListenerLoggerLevel))
-	case NipostBuilderLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.NipostBuilderLoggerLevel))
-	case AtxBuilderLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
-	case TimeSyncLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TimeSyncLoggerLevel))
-	default:
-		lvl.SetLevel(log.Level())
-	}
-
-	if err != nil {
-		app.log.Error("cannot parse logging for %v error %v", name, err)
+	if ok {
+		if err := lvl.UnmarshalText([]byte(level)); err != nil {
+			app.log.Error("cannot parse logging for %v error %v", name, err)
+			lvl.SetLevel(log.Level())
+		}
+	} else {
 		lvl.SetLevel(log.Level())
 	}
 
