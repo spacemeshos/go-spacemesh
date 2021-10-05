@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
 
@@ -17,7 +18,7 @@ type SVM struct {
 	log   log.Logger
 }
 
-func (s *SVM) TxProcessor() *state.TransactionProcessor {
+func (s *SVM) TxProcessor() mesh.TxProcessor {
 	return s.state
 }
 
