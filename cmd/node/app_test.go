@@ -96,7 +96,7 @@ var tests = []TestScenario{
 	sameRootTester([]int{0}),
 	reachedEpochTester([]int{}),
 	txWithUnorderedNonceGenerator([]int{1}),
-	//healingTester([]int{}), // run last as it kills some of the running apps!
+	healingTester([]int{}), // run last as it kills some of the running apps!
 }
 
 type sharedClock struct {
