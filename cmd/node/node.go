@@ -408,8 +408,6 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 		StateDbLogger:        config.StateDbLoggerLevel,
 		StateLogger:          config.StateLoggerLevel,
 		AtxDbStoreLogger:     config.AtxDbStoreLoggerLevel,
-		TBeaconDbStoreLogger: config.TBeaconDbStoreLoggerLevel,
-		TBeaconDbLogger:      config.TBeaconDbLoggerLevel,
 		TBeaconLogger:        config.TBeaconLoggerLevel,
 		WeakCoinLogger:       config.WeakCoinLoggerLevel,
 		PoetDbStoreLogger:    config.PoetDbStoreLoggerLevel,
