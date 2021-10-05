@@ -134,6 +134,11 @@ type InnerTransaction struct {
 	Amount       uint64
 }
 
+type AmountAndAddress struct {
+	Amount uint64
+	Address
+}
+
 // Reward is a virtual reward transaction, which the node keeps track of for the gRPC api.
 type Reward struct {
 	Layer               LayerID

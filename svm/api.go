@@ -70,14 +70,17 @@ func txsGetPointers(transactions []types.Transaction) []*types.Transaction {
 
 // ApplyLayer should be called when a layer is applied, i.e. after Hare/Tortoise
 // verification.
-func (s *SVM) ApplyLayer(layerID types.LayerID, transactions []types.Transaction, rewards []types.Reward) error {
-	txs := txsGetPointers(transactions)
-	_, err := s.state.ApplyTransactions(layerID, txs)
-	if err != nil {
-		return err
+func (s *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) (failed []*types.Transaction, err error) {
+	for _, reward := range rewards {
+		s.AddBalance(reward.Address, reward.Amount)
 	}
 
-	return nil
+	remainingTxs, err := s.state.ApplyTransactions(layerID, transactions)
+	if err != nil {
+		return remainingTxs, err
+	}
+
+	return remainingTxs, nil
 }
 
 func (s *SVM) writeTransactionRewards(l types.LayerID, accountBlockCount map[types.Address]map[string]uint64, totalReward, layerReward *big.Int) error {
