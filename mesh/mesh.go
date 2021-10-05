@@ -512,11 +512,37 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 	}
 }
 
-func (msh *Mesh) applyState(l *types.Layer) {
-	rewards := msh.calculateRewards(l, msh.config)
-	validBlockTxs := msh.extractUniqueOrderedTransactions(l)
+type layerRewards struct {
+	types.LayerID
+	Total       uint64
+	LayerReward uint64
+	LayerFees   uint64
+	Blocks      []types.AmountAndAddress
+}
 
-	msh.svm.ApplyLayer(l.Index(), validBlockTxs, rewards)
+func (lr *layerRewards) numBlocks() uint64 {
+	return uint64(len(lr.Blocks))
+}
+
+func (lr *layerRewards) LogFields() []log.LoggableField {
+	return []log.LoggableField{
+		lr.LayerID,
+		log.Int("num_blocks", len(lr.Blocks)),
+		log.Uint64("total_reward", lr.Total),
+		log.Uint64("layer_reward", lr.LayerReward),
+		log.Uint64("block_total_reward", lr.Total/lr.numBlocks()),
+		log.Uint64("block_layer_reward", lr.LayerReward/lr.numBlocks()),
+		log.Uint64("total_reward_remainder", lr.Total%lr.numBlocks()),
+		log.Uint64("layer_reward_remainder", lr.LayerReward%lr.numBlocks()),
+	}
+}
+
+func (msh *Mesh) applyState(l *types.Layer) {
+	validBlockTxs := msh.extractUniqueOrderedTransactions(l)
+	rewards := msh.calculateRewards(l, validBlockTxs, msh.config)
+	msh.With().Info("reward calculated", rewards.LogFields()...)
+	msh.pushTransactions(l, validBlockTxs, rewards.Blocks)
+
 	msh.removeFromUnappliedTxs(validBlockTxs)
 	msh.setLatestLayerInState(l.Index())
 }
@@ -694,7 +720,7 @@ func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.T
 	return txs
 }
 
-func (msh *Mesh) pushTransactions(l *types.Layer, transactions []*types.Transaction) {
+func (msh *Mesh) pushTransactions(l *types.Layer, transactions []*types.Transaction, rewards []types.AmountAndAddress) {
 	numFailedTxs, err := msh.svm.TxProcessor().ApplyTransactions(l.Index(), transactions)
 	if err != nil {
 		msh.With().Error("failed to apply transactions",
@@ -864,102 +890,54 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	return idArr, nil
 }
 
-func getSmeshersCoinbasesFromLayer(l *types.Layer, atxDB AtxDB) map[types.Address][]types.NodeID {
-	smeshers := make(map[types.Address][]types.NodeID)
+func (msh *Mesh) getSmeshersAndCoinbases(l *types.Layer) (smeshers map[types.Address][]types.NodeID, coinbases []types.Address) {
+	smeshers = map[types.Address][]types.NodeID{}
 	for _, bl := range l.Blocks() {
-		atx, err := atxDB.GetAtxHeader(bl.ATXID)
-		if err != nil {
-			continue
-		}
-		if _, exists := smeshers[atx.Coinbase]; !exists {
-			smeshers[atx.Coinbase] = []types.NodeID{}
-		}
-		smeshers[atx.Coinbase][atx.NodeID.String()]++
-	}
+		atx, err := msh.AtxDB.GetAtxHeader(bl.ATXID)
 
-	return smeshers
-}
-
-func (msh *Mesh) calculateRewards(l *types.Layer, params Config) []types.AmountAndAddress {
-	smeshers := getSmeshersCoinbasesFromLayer(l, msh.AtxDB)
-
-	for _, bl := range l.Blocks() {
 		if bl.ATXID == *types.EmptyATXID {
 			msh.With().Info("skipping reward distribution for block with no atx", bl.LayerIndex, bl.ID())
 			continue
+		} else if err != nil {
+			continue
+		} else if _, exists := smeshers[atx.Coinbase]; !exists {
+			smeshers[atx.Coinbase] = []types.NodeID{}
 		}
-		if _, err := msh.AtxDB.GetAtxHeader(bl.ATXID); err != nil {
-			msh.With().Warning("atx from block not found in db", log.Err(err), bl.ID(), bl.ATXID)
-		}
+
+		smeshers[atx.Coinbase] = append(smeshers[atx.Coinbase], atx.NodeID)
+		coinbases = append(coinbases, atx.Coinbase)
 	}
+
+	return smeshers, coinbases
+}
+
+func totalFees(transactions []*types.Transaction) uint64 {
+	sum := uint64(0)
+	for _, tx := range transactions {
+		sum += tx.Fee
+	}
+	return sum
+}
+
+func (msh *Mesh) calculateRewards(l *types.Layer, transactions []*types.Transaction, params Config) layerRewards {
+	rewards := layerRewards{}
+	smeshers, coinbases := msh.getSmeshersAndCoinbases(l)
+
+	rewards.LayerFees = totalFees(transactions)
+	rewards.LayerReward = calculateLayerReward(l.Index(), params)
+	rewards.Total = rewards.LayerFees + rewards.LayerReward
 
 	if len(coinbases) == 0 {
 		msh.With().Info("no valid blocks for layer", l.Index())
-		return []types.AmountAndAddress{}
+		return layerRewards{}
 	}
 
-	txs := msh.extractUniqueOrderedTransactions(l)
+	rewardPerBlock, _ := calculateActualRewards(l.Index(), rewards.LayerReward, uint64(len(coinbases)))
 
-	blockRewards := []types.AmountAndAddress{}
-	for _, tx := range txs {
-		blockRewards = append(blockRewards, types.AmountAndAddress{tx.Fee, tx.Origin()})
+	for smesher := range smeshers {
+		rewards.Blocks = append(rewards.Blocks, types.AmountAndAddress{Amount: rewardPerBlock, Address: smesher})
 	}
 
-	layerReward := calculateLayerReward(l.Index(), params)
-	totalReward.Add(totalReward, layerReward)
-
-	numBlocks := big.NewInt(int64(len(coinbases)))
-
-	blockTotalReward, blockTotalRewardMod := calculateActualRewards(l.Index(), totalReward, numBlocks)
-
-	// NOTE: We don't _report_ rewards when we apply them. This is because applying rewards just requires
-	// the recipient (i.e., coinbase) account, whereas reporting requires knowing the associated smesherid
-	// as well. We report rewards below once we unpack the data structure containing the association between
-	// rewards and smesherids.
-
-	// Applying rewards (here), reporting them, and adding them to the database (below) should be atomic. Right now,
-	// they're not. Also, ApplyRewards does not return an error if it fails.
-	// TODO: fix this.
-	msh.svm.TxProcessor().ApplyRewards(l.Index(), coinbases, blockTotalReward)
-
-	blockLayerReward, blockLayerRewardMod := calculateActualRewards(l.Index(), layerReward, numBlocks)
-	msh.With().Info("reward calculated",
-		l.Index(),
-		log.Uint64("num_blocks", numBlocks.Uint64()),
-		log.Uint64("total_reward", totalReward.Uint64()),
-		log.Uint64("layer_reward", layerReward.Uint64()),
-		log.Uint64("block_total_reward", blockTotalReward.Uint64()),
-		log.Uint64("block_layer_reward", blockLayerReward.Uint64()),
-		log.Uint64("total_reward_remainder", blockTotalRewardMod.Uint64()),
-		log.Uint64("layer_reward_remainder", blockLayerRewardMod.Uint64()),
-	)
-
-	// Report the rewards for each coinbase and each smesherID within each coinbase.
-	// This can be thought of as a partition of the reward amongst all the smesherIDs
-	// that added the coinbase into the block.
-	rewards := []types.AmountAndAddress{}
-	for account, smesherAccountEntry := range coinbasesAndSmeshers {
-		for smesherString, cnt := range smesherAccountEntry {
-			smesherEntry, err := types.StringToNodeID(smesherString)
-			if err != nil {
-				msh.With().Error("unable to convert bytes to nodeid", log.Err(err),
-					log.String("smesher_string", smesherString))
-				return []types.AmountAndAddress{}
-			}
-			events.ReportRewardReceived(events.Reward{
-				Layer:       l.Index(),
-				Total:       cnt * blockTotalReward.Uint64(),
-				LayerReward: cnt * blockLayerReward.Uint64(),
-				Coinbase:    account,
-				Smesher:     *smesherEntry,
-			})
-		}
-	}
-	if err := msh.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, blockTotalReward, blockLayerReward); err != nil {
-		msh.Error("cannot write reward to db")
-	}
-
-	// todo: should miner id be sorted in a deterministic order prior to applying rewards?
 	return rewards
 }
 
