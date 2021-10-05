@@ -31,6 +31,7 @@ services:
           "--tortoise-beacon-weak-coin-round-duration", "${SMESH_TORTOISE_BEACON_WEAK_COIN_ROUND_DURATION:?1m}",
           "--tortoise-beacon-theta", "${SMESH_TORTOISE_BEACON_THETA:?1/4}",
           "--tortoise-beacon-votes-limit", "${SMESH_TORTOISE_BEACON_VOTES_LIMIT:-100}",
+          "--tortoise-beacon-sync-num-blocks", "${SMESH_TORTOISE_BEACON_SYNC_NUM_BLOCKS:-1600}",
           "--sync-request-timeout", "${SMESH_SYNC_REQ_TIMEOUT:-60000}",
           "--post-labels", "${SMESH_POST_LABELS:-100}",
           "--max-inbound", "${SMESH_MAX_INBOUND:-12}",

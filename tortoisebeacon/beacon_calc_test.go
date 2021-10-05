@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 )
@@ -34,7 +35,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 		rounds = 3
 	)
 
-	types.SetLayersPerEpoch(1)
+	types.SetLayersPerEpoch(3)
 
 	tt := []struct {
 		name  string
@@ -76,6 +77,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 				logger:          logtest.New(t).WithName("TortoiseBeacon"),
 				beacons:         make(map[types.EpochID]types.Hash32),
 				atxDB:           mockDB,
+				db:              database.NewMemDatabase(),
 			}
 
 			tb.initGenesisBeacons()

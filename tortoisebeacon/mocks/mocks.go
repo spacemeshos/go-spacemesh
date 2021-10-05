@@ -53,58 +53,6 @@ func (mr *MockbroadcasterMockRecorder) Broadcast(ctx, channel, data interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Broadcast", reflect.TypeOf((*Mockbroadcaster)(nil).Broadcast), ctx, channel, data)
 }
 
-// MocktortoiseBeaconDB is a mock of tortoiseBeaconDB interface.
-type MocktortoiseBeaconDB struct {
-	ctrl     *gomock.Controller
-	recorder *MocktortoiseBeaconDBMockRecorder
-}
-
-// MocktortoiseBeaconDBMockRecorder is the mock recorder for MocktortoiseBeaconDB.
-type MocktortoiseBeaconDBMockRecorder struct {
-	mock *MocktortoiseBeaconDB
-}
-
-// NewMocktortoiseBeaconDB creates a new mock instance.
-func NewMocktortoiseBeaconDB(ctrl *gomock.Controller) *MocktortoiseBeaconDB {
-	mock := &MocktortoiseBeaconDB{ctrl: ctrl}
-	mock.recorder = &MocktortoiseBeaconDBMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocktortoiseBeaconDB) EXPECT() *MocktortoiseBeaconDBMockRecorder {
-	return m.recorder
-}
-
-// GetTortoiseBeacon mocks base method.
-func (m *MocktortoiseBeaconDB) GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTortoiseBeacon", epochID)
-	ret0, _ := ret[0].(types.Hash32)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetTortoiseBeacon indicates an expected call of GetTortoiseBeacon.
-func (mr *MocktortoiseBeaconDBMockRecorder) GetTortoiseBeacon(epochID interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTortoiseBeacon", reflect.TypeOf((*MocktortoiseBeaconDB)(nil).GetTortoiseBeacon), epochID)
-}
-
-// SetTortoiseBeacon mocks base method.
-func (m *MocktortoiseBeaconDB) SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTortoiseBeacon", epochID, beacon)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SetTortoiseBeacon indicates an expected call of SetTortoiseBeacon.
-func (mr *MocktortoiseBeaconDBMockRecorder) SetTortoiseBeacon(epochID, beacon interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTortoiseBeacon", reflect.TypeOf((*MocktortoiseBeaconDB)(nil).SetTortoiseBeacon), epochID, beacon)
-}
-
 // Mockcoin is a mock of coin interface.
 type Mockcoin struct {
 	ctrl     *gomock.Controller

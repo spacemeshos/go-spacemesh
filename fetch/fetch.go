@@ -30,7 +30,6 @@ const (
 	ATXDB   Hint = "ATXDB"
 	TXDB    Hint = "TXDB"
 	POETDB  Hint = "POETDB"
-	TBDB    Hint = "TBDB"
 )
 
 // priority defines whether Data will be fetched at once or batched and waited for up to "batchTimeout"
@@ -55,6 +54,8 @@ type ErrCouldNotSend error
 
 // ErrExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch data for a hash and failed
 var ErrExceedMaxRetries = errors.New("fetch failed after max retries for request")
+
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./fetch.go
 
 // Fetcher is the general interface of the fetching unit, capable of requesting bytes that corresponds to a hash
 // from other remote peers.

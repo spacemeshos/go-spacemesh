@@ -17,6 +17,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/svm"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 
 	"github.com/mitchellh/mapstructure"
@@ -28,7 +29,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
-	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
@@ -74,7 +74,6 @@ const (
 	StateLogger          = "state"
 	AtxDbStoreLogger     = "atxDbStore"
 	TBeaconDbStoreLogger = "tbDbStore"
-	TBeaconDbLogger      = "tbDb"
 	TBeaconLogger        = "tBeacon"
 	WeakCoinLogger       = "weakCoin"
 	PoetDbStoreLogger    = "poetDbStore"
@@ -99,6 +98,7 @@ const (
 	Fetcher              = "fetcher"
 	LayerFetcher         = "layerFetcher"
 	TimeSyncLogger       = "timesync"
+	SVMLogger            = "SVM"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it
@@ -320,6 +320,7 @@ type App struct {
 	closers        []interface{ Close() }
 	log            log.Log
 	txPool         *mempool.TxMempool
+	svm            *svm.SVM
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
 	loggers        map[string]*zap.AtomicLevel
@@ -393,34 +394,6 @@ func (app *App) Cleanup() {
 	app.stopServices()
 	// add any other Cleanup tasks here....
 	log.Info("app cleanup completed")
-}
-
-func (app *App) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) error {
-	if app.Config.Genesis == nil {
-		app.Config.Genesis = apiCfg.DefaultGenesisConfig()
-	}
-	for id, balance := range app.Config.Genesis.Accounts {
-		bytes := util.FromHex(id)
-		if len(bytes) == 0 {
-			return fmt.Errorf("cannot decode entry %s for genesis account", id)
-		}
-		// just make it explicit that we want address and not a public key
-		if len(bytes) != types.AddressLength {
-			return fmt.Errorf("%s must be an address of size %d", id, types.AddressLength)
-		}
-		addr := types.BytesToAddress(bytes)
-		state.CreateAccount(addr)
-		state.AddBalance(addr, balance)
-		app.log.With().Info("genesis account created",
-			log.String("address", addr.Hex()),
-			log.Uint64("balance", balance))
-	}
-
-	_, err := state.Commit()
-	if err != nil {
-		return fmt.Errorf("cannot commit genesis state: %w", err)
-	}
-	return nil
 }
 
 // Wrap the top-level logger to add context info and set the level for a
@@ -568,7 +541,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	atxDB := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
-	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
 	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
@@ -584,12 +556,12 @@ func (app *App) initServices(ctx context.Context,
 		nodeID,
 		swarm,
 		atxDB,
-		tBeaconDB,
 		sgn,
 		edVerifier,
 		vrfSigner,
 		vrfVerifier,
 		wc,
+		tBeaconDBStore,
 		clock,
 		app.addLogger(TBeaconLogger, lg))
 
@@ -617,13 +589,14 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
+	svm := svm.New(processor, app.addLogger(SVMLogger, lg))
 
 	if mdb.PersistentData() {
 		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
-		if err := app.setupGenesis(processor, msh); err != nil {
+		if err := svm.SetupGenesis(app.Config.Genesis); err != nil {
 			return err
 		}
 	}
@@ -652,8 +625,8 @@ func (app *App) initServices(ctx context.Context,
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
-	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, tBeaconDBStore)
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, app.addLogger(LayerFetcher, lg))
+	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
 
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
@@ -671,7 +644,7 @@ func (app *App) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else {
 		// regular oracle, build and use it
-		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
+		beacon := eligibility.NewBeacon(tBeacon, app.addLogger(HareBeaconLogger, lg))
 		hOracle = eligibility.New(beacon, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
@@ -757,6 +730,7 @@ func (app *App) initServices(ctx context.Context,
 	app.atxDb = atxDB
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
+	app.svm = svm
 	if !app.Config.TIME.Peersync.Disable {
 		conf := app.Config.TIME.Peersync
 		conf.ResponsesBufferSize = app.Config.P2P.BufferSize

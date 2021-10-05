@@ -207,6 +207,11 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		return
 	}
 
+	if !h.rolacle.IsEpochBeaconReady(ctx, id.GetEpoch()) {
+		logger.Info("not starting hare since beacon is not retrieved")
+		return
+	}
+
 	defer func() {
 		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
@@ -252,7 +257,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		// TODO:   and achieve consensus on empty set
 	}
 
-	logger.With().Debug("hare received layer blocks", log.Int("count", len(blocks)))
+	logger.With().Info("starting hare consensus with blocks", log.Int("num_blocks", len(blocks)))
 	set := NewSet(blocks)
 
 	instID := id

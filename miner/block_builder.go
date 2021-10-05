@@ -167,13 +167,13 @@ func (t *BlockBuilder) Start(ctx context.Context) error {
 func (t *BlockBuilder) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.db.Close()
 	if !t.started {
 		return fmt.Errorf("already stopped")
 	}
 	t.started = false
 	close(t.stopChan)
 	t.wg.Wait()
+	t.db.Close()
 	return nil
 }
 
@@ -215,6 +215,7 @@ func (t *BlockBuilder) createBlock(
 	eligibilityProof types.BlockEligibilityProof,
 	txids []types.TransactionID,
 	activeSet []types.ATXID,
+	beacon []byte,
 ) (*types.Block, error) {
 	logger := t.WithContext(ctx)
 	if !id.After(types.GetEffectiveGenesis()) {
@@ -250,10 +251,6 @@ func (t *BlockBuilder) createBlock(
 			log.Err(err))
 		atxs := activeSet
 		b.ActiveSet = &atxs
-		beacon, bErr := t.beaconProvider.GetBeacon(epoch)
-		if bErr != nil {
-			return nil, bErr
-		}
 		b.TortoiseBeacon = beacon
 	} else {
 		logger.With().Debug("creating block with reference block (no active set)",
@@ -301,6 +298,14 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			if layerID.GetEpoch().IsGenesis() {
 				continue
 			}
+			beacon, err := t.beaconProvider.GetBeacon(layerID.GetEpoch())
+			if err != nil {
+				logger.With().Info("beacon not available for epoch", log.Err(err))
+				continue
+			}
+
+			logger.With().Info("miner got beacon to build blocks",
+				log.String("beacon", types.BytesToHash(beacon).ShortString()))
 
 			started := time.Now()
 
@@ -322,7 +327,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			logger.With().Info("eligible for one or more blocks in layer", log.Int("count", len(proofs)))
+			logger.With().Info("eligible for one or more blocks in layer", atxID, log.Int("count", len(proofs)))
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
@@ -330,7 +335,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
-				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs)
+				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs, beacon)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot create new block")
 					logger.With().Error("failed to create new block", log.Err(err))
