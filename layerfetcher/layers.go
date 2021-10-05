@@ -62,17 +62,19 @@ type network interface {
 	Close()
 }
 
-// ErrZeroLayer is the error returned when an empty hash is received when polling for layer
-var ErrZeroLayer = errors.New("zero layer")
+var (
+	// ErrZeroLayer is the error returned when an empty hash is received when polling for layer
+	ErrZeroLayer = errors.New("zero layer")
+	// ErrNoPeers is returned when node has no peers.
+	ErrNoPeers = errors.New("no peers")
+	// ErrInternal is returned from the peer when the peer encounters an internal error
+	ErrInternal = errors.New("unspecified error returned by peer")
+	// ErrBlockNotFetched is returned when at least one block is not fetched successfully
+	ErrBlockNotFetched = errors.New("block not fetched")
 
-// ErrNoPeers is returned when node has no peers.
-var ErrNoPeers = errors.New("no peers")
-
-// ErrInternal is returned from the peer when the peer encounters an internal error
-var ErrInternal = errors.New("unspecified error returned by peer")
-
-// ErrBlockNotFetched is returned when at least one block is not fetched successfully
-var ErrBlockNotFetched = errors.New("block not fetched")
+	// errLayerNotProcessed is returned when requested layer was not yet processed.
+	errLayerNotProcessed = errors.New("requested layer is not yet processed")
+)
 
 // peerResult captures the response from each peer.
 type peerResult struct {
@@ -190,8 +192,12 @@ func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) ([]byte, e
 // it also returns the validation vector for this data and the latest blocks received in gossip
 func (l *Logic) layerBlocksReqReceiver(ctx context.Context, req []byte) ([]byte, error) {
 	lyrID := types.BytesToLayerID(req)
+	processed := l.layerDB.ProcessedLayer()
+	if lyrID.After(processed) {
+		return nil, fmt.Errorf("%w: requested layer %v is higher than processed %v", errLayerNotProcessed, lyrID, processed)
+	}
 	b := &layerBlocks{
-		ProcessedLayer: l.layerDB.ProcessedLayer(),
+		ProcessedLayer: processed,
 		Hash:           l.layerDB.GetLayerHash(lyrID),
 		AggregatedHash: l.layerDB.GetAggregatedLayerHash(lyrID),
 	}
@@ -357,35 +363,33 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 // all blocks are fetched for a given layer.
 // it deliberately doesn't hold any lock while notifying channels.
 func notifyLayerBlocksResult(layerID types.LayerID, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
-	var result *LayerPromiseResult
-	hasZeroBlockHash := false
-	var firstErr error
+	var (
+		missing, success bool
+		err              error
+	)
 	for _, res := range lyrResult.responses {
 		if res.err == nil && res.data != nil {
-			// at least one layer hash contains blocks. not a zero block layer
-			result = &LayerPromiseResult{Layer: layerID, Err: nil}
+			success = true
+		}
+		if errors.Is(res.err, ErrBlockNotFetched) {
+			missing = true
+			err = res.err
 			break
 		}
-		if res.err == ErrZeroLayer {
-			hasZeroBlockHash = true
-		} else if firstErr == nil {
-			firstErr = res.err
+		if errors.Is(res.err, ErrZeroLayer) {
+			err = res.err
+		}
+		if err == nil {
+			err = res.err
 		}
 	}
-
-	if result == nil { // no block data available
-		result = &LayerPromiseResult{Layer: layerID, Err: nil}
-		if hasZeroBlockHash {
-			// all other non-empty layer hashes returned errors. use the best information we've got
-			result.Err = ErrZeroLayer
-		} else {
-			// no usable result. just return the first error we received
-			result.Err = firstErr
-		}
+	result := LayerPromiseResult{Layer: layerID}
+	if missing || !success {
+		result.Err = err
 	}
-	logger.With().Debug("notifying layer blocks result", log.String("blocks", fmt.Sprintf("%+v", *result)))
+	logger.With().Debug("notifying layer blocks result", log.String("blocks", fmt.Sprintf("%+v", result)))
 	for _, ch := range channels {
-		ch <- *result
+		ch <- result
 	}
 }
 

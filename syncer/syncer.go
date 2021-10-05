@@ -367,6 +367,8 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		if err = s.mesh.SetZeroBlockLayer(layerID); err != nil {
 			s.logger.WithContext(ctx).With().Panic("failed to set zero-block for genesis layer", layerID, log.Err(err))
 		}
+	}
+	if !layerID.After(types.GetEffectiveGenesis()) {
 		if layer, err = s.mesh.GetLayer(layerID); err != nil {
 			s.logger.WithContext(ctx).With().Panic("failed to get genesis layer", layerID, log.Err(err))
 		}
