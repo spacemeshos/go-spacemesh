@@ -15,6 +15,7 @@ import (
 type meshProvider interface {
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
 	RecordCoinflip(context.Context, types.LayerID, bool)
+	SetZeroBlockLayer(types.LayerID) error
 	HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID)
 }
 
@@ -65,15 +66,19 @@ func (h *SuperHare) Start(ctx context.Context) error {
 					if layerID.GetEpoch().IsGenesis() {
 						logger.With().Info("not sending blocks to mesh for genesis layer")
 						return
-					} else {
-						layerBlocks, err := h.mesh.LayerBlockIds(layerID)
-						if err != nil {
-							logger.With().Warning("error reading block ids for layer, using empty set",
-								layerID,
-								log.Err(err))
-						}
-						h.mesh.HandleValidatedLayer(ctx, layerID, layerBlocks)
 					}
+					blocks, err := h.mesh.LayerBlockIds(layerID)
+					if err != nil {
+						logger.With().Warning("error reading block ids for layer, using empty set",
+							layerID,
+							log.Err(err))
+					}
+					if len(blocks) == 0 {
+						if err := h.mesh.SetZeroBlockLayer(layerID); err != nil {
+							logger.With().Error("failed to set layer as a zero", log.Err(err))
+						}
+					}
+					h.mesh.HandleValidatedLayer(ctx, layerID, blocks)
 				}()
 			}
 		}
