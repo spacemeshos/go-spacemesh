@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func generatePublicKey() p2pcrypto.PublicKey {
@@ -363,7 +364,6 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 	done := make(chan struct{}, i)
 
 	for j := 0; j < i; j++ {
-
 		go func() {
 			getcon, err := cPool.GetConnectionIfExists(pk)
 			require.NoError(t, err)
@@ -371,13 +371,11 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 			require.Equal(t, int(n.DialCount()), 0)
 			done <- struct{}{}
 		}()
-
 	}
 
 	for ; i > 0; i-- {
 		<-done
 	}
-
 }
 
 func TestConnectionPool_CloseConnection(t *testing.T) {

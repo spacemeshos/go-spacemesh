@@ -28,7 +28,7 @@ type peersManager interface {
 	Close()
 }
 
-// Interface for the underlying p2p layer
+// Interface for the underlying p2p layer.
 type baseNetwork interface {
 	SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
@@ -75,7 +75,7 @@ func NewProtocol(ctx context.Context, config config.SwarmConfig, base baseNetwor
 	}
 }
 
-// Start a loop that process peers events
+// Start a loop that process peers events.
 func (p *Protocol) Start(ctx context.Context) {
 	p.wg.Add(2)
 	go func() {
@@ -96,7 +96,7 @@ func (p *Protocol) Close() {
 	p.wg.Wait()
 }
 
-// Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues
+// Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues.
 func (p *Protocol) Broadcast(ctx context.Context, payload []byte, nextProt string) error {
 	p.WithContext(ctx).With().Debug("broadcasting message", log.String("from_type", nextProt))
 	return p.processMessage(ctx, p.localNodePubkey, true, nextProt, service.DataBytes{Payload: payload})
@@ -115,7 +115,7 @@ func (p *Protocol) SetPriority(protoName string, priority priorityq.Priority) {
 }
 
 // markMessageAsOld adds the message's hash to the old messages queue so that the message won't be processed in case received again.
-// Returns true if message was already processed before
+// Returns true if message was already processed before.
 func (p *Protocol) markMessageAsOld(h types.Hash12) bool {
 	return p.oldMessageQ.GetOrInsert(h)
 }
@@ -238,7 +238,7 @@ func (p *Protocol) isShuttingDown() bool {
 	return false
 }
 
-// pushes messages that passed validation into the priority queue
+// pushes messages that passed validation into the priority queue.
 func (p *Protocol) propagationEventLoop(ctx context.Context) {
 	for {
 		select {

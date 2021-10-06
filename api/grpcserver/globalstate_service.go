@@ -6,21 +6,22 @@ import (
 	"fmt"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-// GlobalStateService exposes global state data, output from the STF
+// GlobalStateService exposes global state data, output from the STF.
 type GlobalStateService struct {
 	Mesh    api.TxAPI
 	Mempool api.MempoolAPI
 }
 
-// RegisterService registers this service with a grpc server instance
+// RegisterService registers this service with a grpc server instance.
 func (s GlobalStateService) RegisterService(server *Server) {
 	pb.RegisterGlobalStateServiceServer(server.GrpcServer, s)
 }
@@ -33,7 +34,7 @@ func NewGlobalStateService(tx api.TxAPI, mempool api.MempoolAPI) *GlobalStateSer
 	}
 }
 
-// GlobalStateHash returns the latest layer and its computed global state hash
+// GlobalStateHash returns the latest layer and its computed global state hash.
 func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
@@ -71,7 +72,7 @@ func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, er
 	}, nil
 }
 
-// Account returns current and projected counter and balance for one account
+// Account returns current and projected counter and balance for one account.
 func (s GlobalStateService) Account(_ context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
 	log.Info("GRPC GlobalStateService.Account")
 
@@ -97,7 +98,7 @@ func (s GlobalStateService) Account(_ context.Context, in *pb.AccountRequest) (*
 	return &pb.AccountResponse{AccountWrapper: acct}, nil
 }
 
-// AccountDataQuery returns historical account data such as rewards and receipts
+// AccountDataQuery returns historical account data such as rewards and receipts.
 func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDataQueryRequest) (*pb.AccountDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.AccountDataQuery")
 
@@ -185,7 +186,7 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 	return res, nil
 }
 
-// SmesherDataQuery returns historical info on smesher rewards
+// SmesherDataQuery returns historical info on smesher rewards.
 func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.SmesherDataQuery")
 
@@ -249,7 +250,7 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 
 // STREAMS
 
-// AccountDataStream exposes a stream of account-related data
+// AccountDataStream exposes a stream of account-related data.
 func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, stream pb.GlobalStateService_AccountDataStreamServer) error {
 	log.Info("GRPC GlobalStateService.AccountDataStream")
 
@@ -375,7 +376,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 	}
 }
 
-// SmesherRewardStream exposes a stream of smesher rewards
+// SmesherRewardStream exposes a stream of smesher rewards.
 func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
 	log.Info("GRPC GlobalStateService.SmesherRewardStream")
 
@@ -422,7 +423,7 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 	}
 }
 
-// AppEventStream exposes a stream of emitted app events
+// AppEventStream exposes a stream of emitted app events.
 func (s GlobalStateService) AppEventStream(*pb.AppEventStreamRequest, pb.GlobalStateService_AppEventStreamServer) error {
 	log.Info("GRPC GlobalStateService.AppEventStream")
 
@@ -432,7 +433,7 @@ func (s GlobalStateService) AppEventStream(*pb.AppEventStreamRequest, pb.GlobalS
 	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
 
-// GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash
+// GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash.
 func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, stream pb.GlobalStateService_GlobalStateStreamServer) error {
 	log.Info("GRPC GlobalStateService.GlobalStateStream")
 

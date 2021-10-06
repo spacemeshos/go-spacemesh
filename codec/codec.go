@@ -38,7 +38,7 @@ func DecodeFrom(r io.Reader, value Decodable) (int, error) {
 // TODO(dshulyak) this is a temporary solution to improve encoder allocations.
 // if this will stay it must be changed to one of the:
 // - use buffer with allocations that can be adjusted using stats
-// - use multiple buffers that increase in size (e.g. 16, 32, 64, 128 bytes)
+// - use multiple buffers that increase in size (e.g. 16, 32, 64, 128 bytes).
 var encoderPool = sync.Pool{
 	New: func() interface{} {
 		b := new(bytes.Buffer)

@@ -10,12 +10,11 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"nanomsg.org/go-mangos/transport/tcp"
-
 	"nanomsg.org/go-mangos"
 	"nanomsg.org/go-mangos/protocol/pub"
 	"nanomsg.org/go-mangos/protocol/sub"
 	"nanomsg.org/go-mangos/transport/ipc"
+	"nanomsg.org/go-mangos/transport/tcp"
 )
 
 func die(format string, v ...interface{}) {
@@ -196,7 +195,7 @@ func TestPubSub_subscribeAll(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	//msg := append([]byte{byte(topics[0])}, payload...)
+	// msg := append([]byte{byte(topics[0])}, payload...)
 	tm := time.NewTimer(3 * time.Second)
 	counter := 0
 	allCounter := 0

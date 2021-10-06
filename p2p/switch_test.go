@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/nattraversal"
@@ -21,8 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type cpoolMock struct {
@@ -467,7 +468,6 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 				mu.Unlock()
 			}
 		}()
-
 	}
 
 	require.NoError(t, p1.Start(context.TODO()))
@@ -609,7 +609,6 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 			break
 		case <-ti:
 			t.Error("Didn't get message in time")
-
 		}
 	}()
 	wg.Add(1)
@@ -1338,7 +1337,6 @@ func testGetListenersScenario(
 	discoverUpnp func() (igd nattraversal.UPNPGateway, err error),
 	acquirePort bool,
 ) error {
-
 	r := require.New(t)
 
 	cfg := configWithPort(port)

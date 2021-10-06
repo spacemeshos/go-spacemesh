@@ -11,12 +11,13 @@ import (
 	"unsafe"
 
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/post/shared"
+	"go.uber.org/atomic"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/shared"
-	"go.uber.org/atomic"
 )
 
 var (
@@ -28,7 +29,7 @@ var (
 	ErrPoetServiceUnstable = errors.New("builder: poet service is unstable")
 )
 
-// AtxProtocol is the protocol id for broadcasting atxs over gossip
+// AtxProtocol is the protocol id for broadcasting atxs over gossip.
 const AtxProtocol = "AtxGossip"
 
 const defaultPoetRetryInterval = 5 * time.Second
@@ -105,7 +106,7 @@ type SmeshingProvider interface {
 // A compile time check to ensure that Builder fully implements the SmeshingProvider interface.
 var _ SmeshingProvider = (*Builder)(nil)
 
-// Config defines configuration for Builder
+// Config defines configuration for Builder.
 type Config struct {
 	CoinbaseAccount types.Address
 	GoldenATXID     types.ATXID
@@ -114,7 +115,7 @@ type Config struct {
 
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
-// calculate total weight and providing relevant view as proof
+// calculate total weight and providing relevant view as proof.
 type Builder struct {
 	pendingPoetClient atomic.UnsafePointer
 	started           atomic.Bool
@@ -278,13 +279,13 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	return nil
 }
 
-// SmesherID returns the ID of the smesher that created this activation
+// SmesherID returns the ID of the smesher that created this activation.
 func (b *Builder) SmesherID() types.NodeID {
 	return b.nodeID
 }
 
 // SignAtx signs the atx and assigns the signature into atx.Sig
-// this function returns an error if atx could not be converted to bytes
+// this function returns an error if atx could not be converted to bytes.
 func (b *Builder) SignAtx(atx *types.ActivationTx) error {
 	return SignAtx(b, atx)
 }
@@ -298,7 +299,7 @@ func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
 	}
 }
 
-// loop is the main loop that tries to create an atx per tick received from the global clock
+// loop is the main loop that tries to create an atx per tick received from the global clock.
 func (b *Builder) loop(ctx context.Context) {
 	err := b.loadChallenge()
 	if err != nil {
@@ -418,7 +419,7 @@ func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
 }
 
 // SetCoinbase sets the address rewardAddress to be the coinbase account written into the activation transaction
-// the rewards for blocks made by this miner will go to this address
+// the rewards for blocks made by this miner will go to this address.
 func (b *Builder) SetCoinbase(rewardAddress types.Address) {
 	b.accountLock.Lock()
 	defer b.accountLock.Unlock()
@@ -432,12 +433,12 @@ func (b *Builder) Coinbase() types.Address {
 	return b.coinbaseAccount
 }
 
-// MinGas [...]
+// MinGas [...].
 func (b *Builder) MinGas() uint64 {
 	panic("not implemented")
 }
 
-// SetMinGas [...]
+// SetMinGas [...].
 func (b *Builder) SetMinGas(value uint64) {
 	panic("not implemented")
 }
@@ -629,7 +630,7 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, uint64, e
 }
 
 // GetPrevAtx gets the last atx header of specified node Id, it returns error if no previous atx found or if no
-// AtxHeader struct in db
+// AtxHeader struct in db.
 func (b *Builder) GetPrevAtx(node types.NodeID) (*types.ActivationTxHeader, error) {
 	if id, err := b.db.GetNodeLastAtxID(node); err != nil {
 		return nil, fmt.Errorf("no prev atx found: %v", err)
@@ -653,7 +654,7 @@ func (b *Builder) discardChallengeIfStale() bool {
 }
 
 // ExtractPublicKey extracts public key from message and verifies public key exists in idStore, this is how we validate
-// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
+// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity.
 func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error) {
 	bts, err := signedAtx.InnerBytes()
 	if err != nil {
@@ -670,7 +671,7 @@ func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error)
 }
 
 // SignAtx signs the atx atx with specified signer and assigns the signature into atx.Sig
-// this function returns an error if atx could not be converted to bytes
+// this function returns an error if atx could not be converted to bytes.
 func SignAtx(signer signer, atx *types.ActivationTx) error {
 	bts, err := atx.InnerBytes()
 	if err != nil {

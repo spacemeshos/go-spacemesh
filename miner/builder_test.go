@@ -541,7 +541,6 @@ func createBlockBuilder(t *testing.T, ID string, n *service.Node, meshBlocks []*
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
 	startTick uint64, positioningATX types.ATXID, coinbase types.Address, nipst *types.NIPost) *types.ActivationTx {
-
 	nipstChallenge := types.NIPostChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,

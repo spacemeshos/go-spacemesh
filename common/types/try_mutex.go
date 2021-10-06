@@ -6,8 +6,10 @@ import (
 	"unsafe"
 )
 
-const mutexUnLocked = 0
-const mutexLocked = 1
+const (
+	mutexUnLocked = 0
+	mutexLocked   = 1
+)
 
 // TryMutex is a simple sync.Mutex with the ability to try to Lock.
 type TryMutex struct {

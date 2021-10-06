@@ -4,8 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func buildProposalMsg(signing Signer, s *Set, signature []byte) *Msg {

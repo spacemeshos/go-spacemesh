@@ -1,11 +1,12 @@
 package discovery
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/config"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 
-	"testing"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/config"
 )
 
 func testAddrBook(tb testing.TB, name string) *addrBook {

@@ -6,11 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/stretchr/testify/require"
 )
 
 type mockDisc struct {
@@ -28,7 +29,6 @@ func (md *mockDisc) GetAddresses(context.Context, p2pcrypto.PublicKey) ([]*node.
 }
 
 func (md *mockDisc) SetLocalAddresses(tcp, udp int) {
-
 }
 
 func Test_newRefresher(t *testing.T) {
@@ -45,7 +45,6 @@ func Test_newRefresher(t *testing.T) {
 }
 
 func Test_expire(t *testing.T) {
-
 	initial := time.Now()
 	m := make(map[p2pcrypto.PublicKey]time.Time)
 	for _, n := range generateDiscNodes(99) {
@@ -150,7 +149,7 @@ func TestRefresher_refresh2(t *testing.T) {
 }
 
 func TestRefresher_refresh3(t *testing.T) {
-	//test no duplicates
+	// test no duplicates
 	cfg := config.DefaultConfig()
 	local := generateDiscNode()
 	disc := &mockDisc{}
@@ -231,7 +230,7 @@ func TestRefresher_BootstrapAbort(t *testing.T) {
 }
 
 func TestRefresher_BootstrapTries(t *testing.T) {
-	//cfg := config.DefaultConfig()
+	// cfg := config.DefaultConfig()
 	local := generateDiscNode()
 	disc := &mockDisc{}
 
@@ -291,5 +290,4 @@ func TestRefresher_BootstrapTries(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, counter == maxTries) // we got more than maxtries because we have no preloaded peers
 	c2()
-
 }

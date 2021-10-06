@@ -39,10 +39,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/rand"
-
 	"github.com/huin/goupnp"
 	"github.com/huin/goupnp/dcps/internetgateway1"
+
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 // An IGD provides an interface to the most commonly used functions of an
@@ -69,7 +69,7 @@ func (d *IGD) ExternalIP() (string, error) {
 	return addr, nil
 }
 
-// IsForwardedTCP checks whether a specific TCP port is forwarded to this host
+// IsForwardedTCP checks whether a specific TCP port is forwarded to this host.
 func (d *IGD) IsForwardedTCP(port uint16) (bool, error) {
 	forwarded, err := d.checkForward(port, "TCP")
 	if err != nil {
@@ -79,7 +79,7 @@ func (d *IGD) IsForwardedTCP(port uint16) (bool, error) {
 	return forwarded, nil
 }
 
-// IsForwardedUDP checks whether a specific UDP port is forwarded to this host
+// IsForwardedUDP checks whether a specific UDP port is forwarded to this host.
 func (d *IGD) IsForwardedUDP(port uint16) (bool, error) {
 	forwarded, err := d.checkForward(port, "UDP")
 	if err != nil {
@@ -89,7 +89,7 @@ func (d *IGD) IsForwardedUDP(port uint16) (bool, error) {
 	return forwarded, nil
 }
 
-// checkForward checks whether a specific TCP or UDP port is forwarded to this host
+// checkForward checks whether a specific TCP or UDP port is forwarded to this host.
 func (d *IGD) checkForward(port uint16, proto string) (bool, error) {
 	time.Sleep(time.Millisecond)
 	_, _, enabled, _, _, err := d.client.GetSpecificPortMappingEntry("", port, proto)

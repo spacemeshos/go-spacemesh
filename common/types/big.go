@@ -18,7 +18,7 @@ package types
 
 import "math/big"
 
-// Common big integers often used
+// Common big integers often used.
 var (
 	Big1   = big.NewInt(1)
 	Big2   = big.NewInt(2)

@@ -8,8 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 const numOfClients = 100

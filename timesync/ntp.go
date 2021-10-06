@@ -10,22 +10,21 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
-
 	"github.com/spacemeshos/go-spacemesh/timesync/config"
 )
 
 const (
-	// MaxAllowedMessageDrift is the time we limit we receive and handle delivered messages within
+	// MaxAllowedMessageDrift is the time we limit we receive and handle delivered messages within.
 	MaxAllowedMessageDrift = 10 * time.Minute
-	// NtpOffset is 70 years in seconds since ntp counts from 1900 and unix from 1970
+	// NtpOffset is 70 years in seconds since ntp counts from 1900 and unix from 1970.
 	NtpOffset = 2208988800
-	// DefaultNtpPort is the ntp protocol port
+	// DefaultNtpPort is the ntp protocol port.
 	DefaultNtpPort = "123"
 	// MaxRequestTries is the number of times we try to query ntp before we give up when encountering errors.
 	MaxRequestTries = 3
-	// RequestTriesInterval is the interval to wait between tries to ask ntp for the time
+	// RequestTriesInterval is the interval to wait between tries to ask ntp for the time.
 	RequestTriesInterval = time.Second * 5
-	// MinResultsThreshold is the minimum number of successful ntp query results to calculate the drift
+	// MinResultsThreshold is the minimum number of successful ntp query results to calculate the drift.
 	MinResultsThreshold = 3
 )
 
@@ -40,12 +39,12 @@ var (
 
 type sortableDurations []time.Duration
 
-// implement sortable interface
+// implement sortable interface.
 func (sd sortableDurations) Len() int           { return len(sd) }
 func (sd sortableDurations) Less(i, j int) bool { return sd[i] < sd[j] }
 func (sd sortableDurations) Swap(i, j int)      { sd[i], sd[j] = sd[j], sd[i] }
 
-// remove extreme cases from the slice
+// remove extreme cases from the slice.
 func (sd *sortableDurations) RemoveExtremes() {
 	s := *sd
 	l := len(s)
@@ -53,7 +52,7 @@ func (sd *sortableDurations) RemoveExtremes() {
 	*sd = (*sd)[1 : l-1]
 }
 
-// Returns an average of all durations
+// Returns an average of all durations.
 func (sd sortableDurations) Average() time.Duration {
 	all := time.Duration(0)
 	for _, d := range sd {
@@ -177,7 +176,7 @@ func ntpTimeDrift() (time.Duration, error) {
 }
 
 // CheckSystemClockDrift is comparing our clock to the collected ntp data
-// return the drift and an error when drift reading failed or exceeds our preset MaxAllowedDrift
+// return the drift and an error when drift reading failed or exceeds our preset MaxAllowedDrift.
 func CheckSystemClockDrift() (time.Duration, error) {
 	// Read average drift from ntpTimeDrift
 	tries := 1
@@ -201,7 +200,7 @@ func CheckSystemClockDrift() (time.Duration, error) {
 }
 
 // CheckMessageDrift checks if a given message timestamp is too far from our local clock.
-// accepts a unix timestamp. can be created with Time.Now().Unix()
+// accepts a unix timestamp. can be created with Time.Now().Unix().
 func CheckMessageDrift(data int64) bool {
 	reqTime := time.Unix(data, 0)
 	drift := time.Now().Sub(reqTime)

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -54,7 +55,7 @@ const (
 	notCompleted = false
 )
 
-// procReport is the termination report of the CP
+// procReport is the termination report of the CP.
 type procReport struct {
 	id        types.LayerID // layer id
 	set       *Set          // agreed-upon set
@@ -225,7 +226,7 @@ func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, or
 	return proc
 }
 
-// Returns the iteration number from a given round counter
+// Returns the iteration number from a given round counter.
 func iterationFromCounter(roundCounter uint32) uint32 {
 	return roundCounter / 4
 }
@@ -268,7 +269,7 @@ func (proc *consensusProcess) SetInbox(inbox chan *Msg) {
 	proc.inbox = inbox
 }
 
-// runs the main loop of the protocol
+// runs the main loop of the protocol.
 func (proc *consensusProcess) eventLoop(ctx context.Context) {
 	logger := proc.WithContext(ctx)
 	logger.With().Info("consensus process started",
@@ -371,7 +372,7 @@ PreRound:
 	}
 }
 
-// handles a message that has arrived early
+// handles a message that has arrived early.
 func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 	logger := proc.WithContext(ctx)
 
@@ -400,7 +401,7 @@ func (proc *consensusProcess) onEarlyMessage(ctx context.Context, m *Msg) {
 	proc.pending[pub.String()] = m
 }
 
-// the very first step of handling a message
+// the very first step of handling a message.
 func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	logger := proc.WithContext(ctx).WithFields(
 		log.String("msg_type", m.InnerMsg.Type.String()),
@@ -456,7 +457,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	proc.processMsg(ctx, m)
 }
 
-// process the message by its type
+// process the message by its type.
 func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	proc.WithContext(ctx).With().Debug("processing message",
 		log.String("msg_type", m.InnerMsg.Type.String()),
@@ -510,7 +511,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 	return true
 }
 
-// logic of the end of a round by the round type
+// logic of the end of a round by the round type.
 func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 	logger := proc.WithContext(ctx).WithFields(
 		log.Uint32("current_k", proc.k),
@@ -537,7 +538,7 @@ func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 	}
 }
 
-// advances the state to the next round
+// advances the state to the next round.
 func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
 	proc.k++
 	if proc.k >= 4 && proc.k%4 == 0 {
@@ -594,7 +595,6 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 	proc.commitTracker = newCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
 	if proposedSet != nil { // has proposal to commit on
-
 		// check participation
 		if !proc.shouldParticipate(ctx) {
 			return
@@ -674,7 +674,7 @@ func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
 	}
 }
 
-// passes all pending messages to the inbox of the process so they will be handled
+// passes all pending messages to the inbox of the process so they will be handled.
 func (proc *consensusProcess) handlePending(pending map[string]*Msg) {
 	for _, m := range pending {
 		proc.inbox <- m
@@ -682,7 +682,7 @@ func (proc *consensusProcess) handlePending(pending map[string]*Msg) {
 }
 
 // runs the logic of the beginning of a round by its type
-// pending messages are passed for handling
+// pending messages are passed for handling.
 func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 	// reset trackers
 	switch proc.currentRound() {
@@ -708,7 +708,7 @@ func (proc *consensusProcess) onRoundBegin(ctx context.Context) {
 	go proc.handlePending(pendingProcess)
 }
 
-// init a new message builder with the current state (s, k, ki) for this instance
+// init a new message builder with the current state (s, k, ki) for this instance.
 func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error) {
 	builder := newMessageBuilder().SetInstanceID(proc.instanceID)
 	builder = builder.SetRoundCounter(proc.k).SetKi(proc.ki).SetValues(s)
@@ -795,7 +795,7 @@ func (proc *consensusProcess) currentRound() uint32 {
 	return proc.k % 4
 }
 
-// returns a function to validate status messages
+// returns a function to validate status messages.
 func (proc *consensusProcess) statusValidator() func(m *Msg) bool {
 	validate := func(m *Msg) bool {
 		s := NewSet(m.InnerMsg.Values)
@@ -837,7 +837,7 @@ func (proc *consensusProcess) endOfStatusRound() {
 }
 
 // checks if we should participate in the current round
-// returns true if we should participate, false otherwise
+// returns true if we should participate, false otherwise.
 func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	logger := proc.WithContext(ctx)
 
@@ -871,7 +871,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	return true
 }
 
-// Returns the role matching the current round if eligible for this round, false otherwise
+// Returns the role matching the current round if eligible for this round, false otherwise.
 func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	logger := proc.WithContext(ctx)
 	proof, err := proc.oracle.Proof(ctx, types.LayerID(proc.instanceID), proc.k)
@@ -898,7 +898,7 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	return passive
 }
 
-// Returns the expected committee size for the given round assuming maxExpActives is the default size
+// Returns the expected committee size for the given round assuming maxExpActives is the default size.
 func expectedCommitteeSize(k uint32, maxExpActive, expLeaders int) int {
 	if k%4 == proposalRound {
 		return expLeaders // expected number of leaders

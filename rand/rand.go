@@ -113,7 +113,7 @@ func NormFloat64() float64 { return globalRand.NormFloat64() }
 //
 func ExpFloat64() float64 { return globalRand.ExpFloat64() }
 
-// String returns an n sized random string
+// String returns an n sized random string.
 func String(n int) string {
 	b := make([]rune, n)
 	for i := range b {

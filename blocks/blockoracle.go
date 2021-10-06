@@ -23,7 +23,7 @@ type vrfSigner interface {
 	Sign(msg []byte) []byte
 }
 
-// DefaultProofsEpoch is set such that it will never equal the current epoch
+// DefaultProofsEpoch is set such that it will never equal the current epoch.
 const DefaultProofsEpoch = ^types.EpochID(0)
 
 // ErrMinerHasNoATXInPreviousEpoch is returned when miner has no ATXs in previous epoch.

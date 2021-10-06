@@ -16,7 +16,7 @@ type Beacon struct {
 	log.Log
 }
 
-// NewBeacon returns a new beacon
+// NewBeacon returns a new beacon.
 func NewBeacon(beaconGetter blocks.BeaconGetter, logger log.Log) *Beacon {
 	return &Beacon{
 		beaconGetter: beaconGetter,
@@ -24,7 +24,7 @@ func NewBeacon(beaconGetter blocks.BeaconGetter, logger log.Log) *Beacon {
 	}
 }
 
-// Value returns the beacon value for an epoch
+// Value returns the beacon value for an epoch.
 func (b *Beacon) Value(ctx context.Context, epochID types.EpochID) (uint32, error) {
 	v, err := b.beaconGetter.GetBeacon(epochID)
 	if err != nil {

@@ -9,6 +9,9 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -16,8 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -391,7 +392,7 @@ func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
 	syncer.Close()
 }
 
-// test the case where the node originally starts from notSynced and eventually becomes synced
+// test the case where the node originally starts from notSynced and eventually becomes synced.
 func TestFromNotSyncedToSynced(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
@@ -491,7 +492,7 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 }
 
 // test the case where the node was originally synced, and somehow gets out of sync, but
-// eventually become synced again
+// eventually become synced again.
 func TestFromSyncedToNotSynced(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()

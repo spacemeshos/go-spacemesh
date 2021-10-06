@@ -3,23 +3,23 @@ package grpcserver
 import (
 	"context"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
-
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// GatewayService exposes transaction data, and a submit tx endpoint
+// GatewayService exposes transaction data, and a submit tx endpoint.
 type GatewayService struct {
 	Network api.NetworkAPI // P2P Swarm
 }
 
-// RegisterService registers this service with a grpc server instance
+// RegisterService registers this service with a grpc server instance.
 func (s GatewayService) RegisterService(server *Server) {
 	pb.RegisterGatewayServiceServer(server.GrpcServer, s)
 }
@@ -31,7 +31,7 @@ func NewGatewayService(net api.NetworkAPI) *GatewayService {
 	}
 }
 
-// BroadcastPoet accepts a binary poet message to broadcast to the network
+// BroadcastPoet accepts a binary poet message to broadcast to the network.
 func (s GatewayService) BroadcastPoet(ctx context.Context, in *pb.BroadcastPoetRequest) (*pb.BroadcastPoetResponse, error) {
 	log.Info("GRPC GatewayService.BroadcastPoet")
 

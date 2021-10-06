@@ -29,11 +29,10 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 )
 
@@ -42,7 +41,7 @@ func init() {
 	// spew.Config.DisableMethods = false
 }
 
-// Used for testing
+// Used for testing.
 func newEmpty() *Trie {
 	trie, _ := New(types.Hash32{}, NewDatabase(database.NewMemDatabase()))
 	return trie

@@ -7,12 +7,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spacemeshos/sha256-simd"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/sha256-simd"
-	"github.com/stretchr/testify/require"
 )
 
 func TestPoetDbHappyFlow(t *testing.T) {

@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -32,16 +31,18 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
 	writePauseWarningThrottler = 1 * time.Minute
 )
 
-// ErrNotFound is special type error for not found in DB
+// ErrNotFound is special type error for not found in DB.
 var ErrNotFound = errors.ErrNotFound
 
-// LDBDatabase  is a wrapper for leveldb database with concurrent access
+// LDBDatabase  is a wrapper for leveldb database with concurrent access.
 type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
@@ -91,7 +92,7 @@ func (db *LDBDatabase) Path() string {
 	return db.fn
 }
 
-// Put puts the given key / value to the queue
+// Put puts the given key / value to the queue.
 func (db *LDBDatabase) Put(key []byte, value []byte) error {
 	if err := db.db.Put(key, value, nil); err != nil {
 		return fmt.Errorf("put value: %w", err)
@@ -100,7 +101,7 @@ func (db *LDBDatabase) Put(key []byte, value []byte) error {
 	return nil
 }
 
-// Has returns whether the db contains the key
+// Has returns whether the db contains the key.
 func (db *LDBDatabase) Has(key []byte) (bool, error) {
 	has, err := db.db.Has(key, nil)
 	if err != nil {
@@ -119,7 +120,7 @@ func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
 	return dat, nil
 }
 
-// Delete deletes the key from the queue and database
+// Delete deletes the key from the queue and database.
 func (db *LDBDatabase) Delete(key []byte) error {
 	if err := db.db.Delete(key, nil); err != nil {
 		return fmt.Errorf("delete value: %w", err)
@@ -128,13 +129,13 @@ func (db *LDBDatabase) Delete(key []byte) error {
 	return nil
 }
 
-// NewIterator creates a new leveldb iterator struct compliant with Iterator interface
+// NewIterator creates a new leveldb iterator struct compliant with Iterator interface.
 func (db *LDBDatabase) NewIterator() iterator.Iterator {
 	it := db.db.NewIterator(nil, nil)
 	return it
 }
 
-// Iterator returns iterator iterating over all database keys
+// Iterator returns iterator iterating over all database keys.
 func (db *LDBDatabase) Iterator() iterator.Iterator {
 	return db.db.NewIterator(nil, nil)
 }
@@ -144,12 +145,12 @@ func (db *LDBDatabase) NewIteratorWithPrefix(prefix []byte) iterator.Iterator {
 	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
 }
 
-// Find returns iterator to iterate over values with given prefix key
+// Find returns iterator to iterate over values with given prefix key.
 func (db *LDBDatabase) Find(key []byte) Iterator {
 	return db.db.NewIterator(util.BytesPrefix(key), nil)
 }
 
-// Close closes database, flushing writes and denying all new write requests
+// Close closes database, flushing writes and denying all new write requests.
 func (db *LDBDatabase) Close() {
 	// Stop the metrics collection to avoid internal database races
 	db.quitLock.Lock()
@@ -170,12 +171,12 @@ func (db *LDBDatabase) Close() {
 	}
 }
 
-// LDB returns the actual inner leveldb struct reference
+// LDB returns the actual inner leveldb struct reference.
 func (db *LDBDatabase) LDB() *leveldb.DB {
 	return db.db
 }
 
-// Meter configures the database metrics collectors and
+// Meter configures the database metrics collectors and.
 func (db *LDBDatabase) Meter(prefix string) {
 	// Initialize all the metrics collector at the requested prefix
 	// Create a quit channel for the periodic collector and run it
@@ -202,7 +203,7 @@ func (db *LDBDatabase) Meter(prefix string) {
 // DelayN:5 Delay:406.604657ms Paused: false
 //
 // This is how the iostats look like (currently):
-// Read(MB):3895.04860 Write(MB):3654.64712
+// Read(MB):3895.04860 Write(MB):3654.64712.
 func (db *LDBDatabase) meter(refresh time.Duration) {
 	// Create the counters to store current and previous compaction values
 	compactions := make([][]float64, 2)
@@ -354,7 +355,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	errc <- merr
 }
 
-// NewBatch creates a new batch write struct, able to add multiple values in a single operation
+// NewBatch creates a new batch write struct, able to add multiple values in a single operation.
 func (db *LDBDatabase) NewBatch() Batch {
 	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
 }
@@ -394,7 +395,7 @@ func (b *ldbBatch) Reset() {
 	b.size = 0
 }
 
-// NewMemDatabase returns a memory database instance
+// NewMemDatabase returns a memory database instance.
 func NewMemDatabase() *LDBDatabase {
 	backend := storage.NewMemStorage()
 	db, err := leveldb.Open(backend, nil)

@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -26,13 +28,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"golang.org/x/sync/errgroup"
 )
 
-// ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
+// ConnectingTimeout is the timeout we wait when trying to connect a neighborhood.
 const ConnectingTimeout = 20 * time.Second // todo: add to the config
 
-// UPNPRetries is the number of times to retry obtaining a port due to a UPnP failure
+// UPNPRetries is the number of times to retry obtaining a port due to a UPnP failure.
 const UPNPRetries = 20
 
 type cPool interface {
@@ -483,7 +484,7 @@ func (s *Switch) Shutdown() {
 	})
 }
 
-// process an incoming message
+// process an incoming message.
 func (s *Switch) processMessage(ctx context.Context, ime net.IncomingMessageEvent) {
 	// Extract request context and add to log
 	if ime.RequestID != "" {
@@ -512,7 +513,7 @@ func (s *Switch) processMessage(ctx context.Context, ime net.IncomingMessageEven
 	}
 }
 
-// RegisterDirectProtocolWithChannel registers a direct protocol with a given channel. NOTE: eventually should replace RegisterDirectProtocol
+// RegisterDirectProtocolWithChannel registers a direct protocol with a given channel. NOTE: eventually should replace RegisterDirectProtocol.
 func (s *Switch) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
 	if s.started == 1 {
 		log.Panic("attempting to register direct protocol with channel after p2p has started")
@@ -560,17 +561,17 @@ func (s *Switch) listenToNetworkMessages(ctx context.Context) {
 // onRemoteClientMessage possible errors
 
 var (
-	// ErrBadFormat1 could'nt deserialize the payload
+	// ErrBadFormat1 could'nt deserialize the payload.
 	ErrBadFormat1 = errors.New("bad msg format, couldn't deserialize 1")
-	// ErrBadFormat2 could'nt deserialize the protocol message payload
+	// ErrBadFormat2 could'nt deserialize the protocol message payload.
 	ErrBadFormat2 = errors.New("bad msg format, couldn't deserialize 2")
-	// ErrOutOfSync is returned when message timestamp was out of sync
+	// ErrOutOfSync is returned when message timestamp was out of sync.
 	ErrOutOfSync = errors.New("received out of sync msg")
-	// ErrFailDecrypt session cant decrypt
+	// ErrFailDecrypt session cant decrypt.
 	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
-	// ErrNoProtocol we don't have the protocol message
+	// ErrNoProtocol we don't have the protocol message.
 	ErrNoProtocol = errors.New("received msg to an unsupported protocol")
-	// ErrNoSession we don't have this session
+	// ErrNoSession we don't have this session.
 	ErrNoSession = errors.New("connection is missing a session")
 )
 
@@ -655,7 +656,7 @@ func (s *Switch) ProcessDirectProtocolMessage(ctx context.Context, sender p2pcry
 }
 
 // ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will
-// send the message syntactic validation result on the validationCompletedChan ASAP
+// send the message syntactic validation result on the validationCompletedChan ASAP.
 func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	h := types.CalcMessageHash12(data.Bytes(), protocol)
 
@@ -740,7 +741,7 @@ func (s *Switch) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
 	return in, del
 }
 
-// NoResultsInterval is the timeout we wait between requesting more peers repeatedly
+// NoResultsInterval is the timeout we wait between requesting more peers repeatedly.
 const NoResultsInterval = 1 * time.Second
 
 // startNeighborhood starts the peersLoop and send a request to start connecting peers.
@@ -955,7 +956,7 @@ loop:
 	return total - bad
 }
 
-// Disconnect removes a peer from the neighborhood. It requests more peers if our outbound peer count is less than configured
+// Disconnect removes a peer from the neighborhood. It requests more peers if our outbound peer count is less than configured.
 func (s *Switch) Disconnect(peer p2pcrypto.PublicKey) {
 	s.inpeersMutex.Lock()
 	if _, ok := s.inpeers[peer]; ok {
@@ -1032,7 +1033,6 @@ func (s *Switch) getListeners(
 	getUDPListener func(udpAddr *inet.UDPAddr) (net.UDPListener, error),
 	discoverUpnpGateway func() (nattraversal.UPNPGateway, error),
 ) (inet.Listener, net.UDPListener, error) {
-
 	port := s.config.TCPPort
 	randomPort := port == 0
 	var gateway nattraversal.UPNPGateway

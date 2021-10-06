@@ -73,7 +73,7 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 	return alg
 }
 
-// LatestComplete returns the latest verified layer
+// LatestComplete returns the latest verified layer.
 func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 	trtl.mutex.RLock()
 	verified := trtl.trtl.Verified
@@ -107,7 +107,7 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlocks(ctx context.Context, b
 }
 
 // HandleIncomingLayer processes all layer block votes
-// returns the old verified layer and new verified layer after taking into account the blocks votes
+// returns the old verified layer and new verified layer after taking into account the blocks votes.
 func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (oldVerified, newVerified types.LayerID, reverted bool) {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
@@ -154,13 +154,13 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 	return
 }
 
-// this wrapper monitors the tortoise rerun for database changes that would cause us to need to revert state
+// this wrapper monitors the tortoise rerun for database changes that would cause us to need to revert state.
 type bdpWrapper struct {
 	blockDataProvider
 	firstUpdatedLayer *types.LayerID
 }
 
-// SaveContextualValidity overrides the method in the embedded type to check if we've made changes
+// SaveContextualValidity overrides the method in the embedded type to check if we've made changes.
 func (bdp *bdpWrapper) SaveContextualValidity(bid types.BlockID, lid types.LayerID, validityNew bool) error {
 	// we only need to know about the first updated layer
 	if bdp.firstUpdatedLayer == nil {
@@ -181,7 +181,7 @@ func (bdp *bdpWrapper) SaveContextualValidity(bid types.BlockID, lid types.Layer
 	return nil
 }
 
-// trigger a rerun from genesis once in a while
+// trigger a rerun from genesis once in a while.
 func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (reverted bool, revertLayer types.LayerID) {
 	// TODO: should this happen "in the background" in a separate goroutine? Should it hold the mutex?
 	logger := trtl.logger.WithContext(ctx)
@@ -220,7 +220,7 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (
 	return
 }
 
-// Persist saves a copy of the current tortoise state to the database
+// Persist saves a copy of the current tortoise state to the database.
 func (trtl *ThreadSafeVerifyingTortoise) Persist(ctx context.Context) error {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()

@@ -8,6 +8,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
@@ -17,8 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type mockReport struct {
@@ -432,7 +433,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 }
 
 // make sure that Hare writes a weak coin value for a layer to the mesh after the CP completes,
-// regardless of whether it succeeds or fails
+// regardless of whether it succeeds or fails.
 func TestHare_WeakCoin(t *testing.T) {
 	r := require.New(t)
 	sim := service.NewSimulator()

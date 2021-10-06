@@ -1,9 +1,10 @@
 package metrics
 
 import (
+	"testing"
+
 	"github.com/go-kit/kit/metrics"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 type mockCache struct {
@@ -17,6 +18,7 @@ func (mc *mockCache) Add(key, value interface{}) bool {
 	}
 	return false
 }
+
 func (mc *mockCache) Get(key interface{}) (value interface{}, ok bool) {
 	if mc.GetFunc != nil {
 		return mc.GetFunc(key)

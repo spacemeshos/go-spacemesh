@@ -29,7 +29,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/syncer"
 )
 
-// Sync cmd
+// Sync cmd.
 var cmd = &cobra.Command{
 	Use:   "sync",
 	Short: "start sync",
@@ -203,7 +203,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	}
 }
 
-// GetData downloads data from remote storage
+// GetData downloads data from remote storage.
 func getData(path, prefix string, lg log.Log) error {
 	c := http.Client{
 		Transport: &http.Transport{

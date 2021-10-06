@@ -129,7 +129,7 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 	return nil
 }
 
-// separate listener routine that receives gossip messages and adds them to the priority queue
+// separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) queueLoop(ctx context.Context) {
 	for {
 		select {
@@ -168,7 +168,7 @@ func (b *Broker) queueLoop(ctx context.Context) {
 	}
 }
 
-// listens to incoming messages and incoming tasks
+// listens to incoming messages and incoming tasks.
 func (b *Broker) eventLoop(ctx context.Context) {
 	for {
 		b.WithContext(ctx).With().Debug("broker queue sizes",
@@ -335,7 +335,7 @@ func (b *Broker) isSynced(ctx context.Context, id types.LayerID) bool {
 }
 
 // Register a layer to receive messages
-// Note: the registering instance is assumed to be started and accepting messages
+// Note: the registering instance is assumed to be started and accepting messages.
 func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, error) {
 	resErr := make(chan error, 1)
 	resCh := make(chan chan *Msg, 1)
@@ -397,7 +397,7 @@ func (b *Broker) cleanState(id types.LayerID) {
 	b.cleanOldLayers()
 }
 
-// Unregister a layer from receiving messages
+// Unregister a layer from receiving messages.
 func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	wg := sync.WaitGroup{}
 
@@ -411,7 +411,7 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	wg.Wait()
 }
 
-// Synced returns true if the given layer is synced, false otherwise
+// Synced returns true if the given layer is synced, false otherwise.
 func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 	res := make(chan bool)
 	b.tasks <- func() {

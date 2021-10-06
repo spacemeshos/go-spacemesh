@@ -155,6 +155,26 @@ linters-settings:
     for-loops: false # Report preallocation suggestions on for loops, false by default
   goimports:
     local-prefixes: github.com/spacemeshos/go-spacemesh
+  gci:
+    local-prefixes: github.com/spacemeshos/go-spacemesh
+  godot:
+    # comments to be checked: `declarations`, `toplevel`, or `all`
+    scope: declarations
+    # list of regexps for excluding particular comment lines from check
+    exclude:
+    # example: exclude comments which contain numbers
+    # - '[0-9]+'
+    # check that each sentence starts with a capital letter
+    capital: false
+  gofumpt:
+    # Select the Go version to target. The default is `1.15`.
+    lang-version: "1.15"
+    # Choose whether or not to use the extra rules that are disabled
+    # by default
+    extra-rules: false
+  whitespace:
+    multi-if: false # Enforces newlines (or comments) after every multi-line if statement
+    multi-func: false # Enforces newlines (or comments) after every multi-line function signature
   wrapcheck:
     # An array of strings that specify substrings of signatures to ignore.
     # If this set, it will override the default set of ignored signatures.
@@ -179,11 +199,15 @@ linters-settings:
 linters:
   # TODO(nkryuchkov): enable needed linters
   enable:
-    - staticcheck
+    - gci
+    - godot
+    - gofmt
+    - gofumpt
     - golint
-    - wrapcheck
     - misspell
-#    - goimports
+    - staticcheck
+    - whitespace
+    - wrapcheck
 #    - varcheck
 #    - unparam
 #    - deadcode

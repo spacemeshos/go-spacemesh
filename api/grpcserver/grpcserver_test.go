@@ -23,6 +23,12 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/ed25519"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/genproto/googleapis/rpc/code"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/config"
@@ -35,12 +41,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-
-	"github.com/stretchr/testify/require"
-	"google.golang.org/genproto/googleapis/rpc/code"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 const (
@@ -212,7 +212,7 @@ func (t *TxAPIMock) GetProjection(_ types.Address, prevNonce, prevBalance uint64
 	return prevNonce, prevBalance, nil
 }
 
-// latest layer received
+// latest layer received.
 func (t *TxAPIMock) LatestLayer() types.LayerID {
 	return layerLatest
 }
@@ -525,7 +525,7 @@ func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
 }
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
-// unconfirmed or in the mempool that will update state
+// unconfirmed or in the mempool that will update state.
 func (m MempoolMock) GetProjection(types.Address, uint64, uint64) (nonce, balance uint64) {
 	nonce = accountCounter + 1
 	balance = accountBalance + 1

@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spacemeshos/post/initialization"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/collector"
@@ -24,10 +26,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
-	"github.com/spacemeshos/post/initialization"
 )
 
-// ManualClock is a clock that releases ticks on demand and not according to a real world clock
+// ManualClock is a clock that releases ticks on demand and not according to a real world clock.
 type ManualClock struct {
 	subs          map[timesync.LayerTimer]struct{}
 	layerChannels map[types.LayerID]chan struct{}
@@ -36,12 +37,12 @@ type ManualClock struct {
 	genesisTime   time.Time
 }
 
-// LayerToTime returns the time of the provided layer
+// LayerToTime returns the time of the provided layer.
 func (clk *ManualClock) LayerToTime(types.LayerID) time.Time {
 	return time.Now().Add(1000 * time.Hour) // hack so this wont take affect in the mock
 }
 
-// NewManualClock creates a new manual clock struct
+// NewManualClock creates a new manual clock struct.
 func NewManualClock(genesisTime time.Time) *ManualClock {
 	t := &ManualClock{
 		subs:          make(map[timesync.LayerTimer]struct{}),
@@ -51,14 +52,14 @@ func NewManualClock(genesisTime time.Time) *ManualClock {
 	return t
 }
 
-// Unsubscribe removes this channel ch from channels notified on tick
+// Unsubscribe removes this channel ch from channels notified on tick.
 func (clk *ManualClock) Unsubscribe(ch timesync.LayerTimer) {
 	clk.m.Lock()
 	delete(clk.subs, ch)
 	clk.m.Unlock()
 }
 
-// StartNotifying is empty because this clock is manual
+// StartNotifying is empty because this clock is manual.
 func (clk *ManualClock) StartNotifying() {
 }
 
@@ -69,7 +70,7 @@ func init() {
 	close(closedChannel)
 }
 
-// AwaitLayer implement the ability to notify a subscriber when a layer has ticked
+// AwaitLayer implement the ability to notify a subscriber when a layer has ticked.
 func (clk *ManualClock) AwaitLayer(layerID types.LayerID) chan struct{} {
 	clk.m.Lock()
 	defer clk.m.Unlock()
@@ -84,7 +85,7 @@ func (clk *ManualClock) AwaitLayer(layerID types.LayerID) chan struct{} {
 	return ch
 }
 
-// Subscribe allow subscribes to be notified when a layer ticks
+// Subscribe allow subscribes to be notified when a layer ticks.
 func (clk *ManualClock) Subscribe() timesync.LayerTimer {
 	ch := make(timesync.LayerTimer)
 	clk.m.Lock()
@@ -93,7 +94,7 @@ func (clk *ManualClock) Subscribe() timesync.LayerTimer {
 	return ch
 }
 
-// Tick notifies all subscribers to this clock
+// Tick notifies all subscribers to this clock.
 func (clk *ManualClock) Tick() {
 	clk.m.Lock()
 	defer clk.m.Unlock()
@@ -108,7 +109,7 @@ func (clk *ManualClock) Tick() {
 	}
 }
 
-// GetCurrentLayer gets the last ticked layer
+// GetCurrentLayer gets the last ticked layer.
 func (clk *ManualClock) GetCurrentLayer() types.LayerID {
 	clk.m.Lock()
 	defer clk.m.Unlock()
@@ -116,14 +117,14 @@ func (clk *ManualClock) GetCurrentLayer() types.LayerID {
 	return clk.currentLayer
 }
 
-// GetGenesisTime returns the set genesis time for this clock
+// GetGenesisTime returns the set genesis time for this clock.
 func (clk *ManualClock) GetGenesisTime() time.Time {
 	clk.m.Lock()
 	defer clk.m.Unlock()
 	return clk.genesisTime
 }
 
-// Close does nothing because this clock is manual
+// Close does nothing because this clock is manual.
 func (clk *ManualClock) Close() {}
 
 func getTestDefaultConfig() *config.Config {
@@ -179,7 +180,7 @@ func getTestDefaultConfig() *config.Config {
 	return cfg
 }
 
-// ActivateGrpcServer starts a grpc server on the provided node
+// ActivateGrpcServer starts a grpc server on the provided node.
 func ActivateGrpcServer(smApp *App) {
 	// Activate the API services used by app_test
 	smApp.Config.API.StartGatewayService = true
@@ -196,7 +197,7 @@ func ActivateGrpcServer(smApp *App) {
 	smApp.grpcAPIService.Start()
 }
 
-// GracefulShutdown stops the current services running in apps
+// GracefulShutdown stops the current services running in apps.
 func GracefulShutdown(apps []*App) {
 	log.Info("graceful shutdown begin")
 

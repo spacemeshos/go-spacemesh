@@ -18,31 +18,31 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
 )
 
-// DefaultQueueCount is the default number of messages queue we hold. messages queues are used to serialize message receiving
+// DefaultQueueCount is the default number of messages queue we hold. messages queues are used to serialize message receiving.
 const DefaultQueueCount uint = 6
 
-// DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
+// DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels).
 const DefaultMessageQueueSize uint = 5120
 
 const (
-	// ReadBufferSize const is the default value used to set the socket option SO_RCVBUF
+	// ReadBufferSize const is the default value used to set the socket option SO_RCVBUF.
 	ReadBufferSize = 5 * 1024 * 1024
-	// WriteBufferSize const is the default value used to set the socket option SO_SNDBUF
+	// WriteBufferSize const is the default value used to set the socket option SO_SNDBUF.
 	WriteBufferSize = 5 * 1024 * 1024
-	// TCPKeepAlive sets whether KeepAlive is active or not on the socket
+	// TCPKeepAlive sets whether KeepAlive is active or not on the socket.
 	TCPKeepAlive = true
-	// TCPKeepAlivePeriod sets the interval of KeepAlive
+	// TCPKeepAlivePeriod sets the interval of KeepAlive.
 	TCPKeepAlivePeriod = 10 * time.Second
 )
 
-// IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
+// IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message.
 type IncomingMessageEvent struct {
 	Conn      Connection
 	Message   []byte
 	RequestID string
 }
 
-// ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections
+// ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections.
 type ManagedConnection interface {
 	Connection
 	beginEventProcessing(ctx context.Context)
@@ -52,7 +52,7 @@ type ManagedConnection interface {
 // Net clients should register all callbacks
 // Connections may be initiated by Dial() or by remote clients connecting to the listen address
 // It provides full duplex messaging functionality over the same tcp/ip connection
-// Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
+// Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them.
 type Net struct {
 	networkID uint32
 	localNode node.LocalNode
@@ -108,7 +108,7 @@ func NewNet(ctx context.Context, conf config.Config, localEntity node.LocalNode,
 	return n, nil
 }
 
-// Start begins accepting connections from the listener socket
+// Start begins accepting connections from the listener socket.
 func (n *Net) Start(ctx context.Context, listener net.Listener) { // todo: maybe add context
 	n.listener = listener
 	n.listenAddress = listener.Addr().(*net.TCPAddr)
@@ -125,27 +125,27 @@ func (n *Net) Start(ctx context.Context, listener net.Listener) { // todo: maybe
 	go n.accept(ctx, listener, pending)
 }
 
-// LocalAddr returns the local listening address. panics before calling Start or if Start errored
+// LocalAddr returns the local listening address. panics before calling Start or if Start errored.
 func (n *Net) LocalAddr() net.Addr {
 	return n.listener.Addr()
 }
 
-// Logger returns a reference to logger
+// Logger returns a reference to logger.
 func (n *Net) Logger() log.Log {
 	return n.logger
 }
 
-// NetworkID retuers Net's network ID
+// NetworkID retuers Net's network ID.
 func (n *Net) NetworkID() uint32 {
 	return n.networkID
 }
 
-// LocalNode return's the local node descriptor
+// LocalNode return's the local node descriptor.
 func (n *Net) LocalNode() node.LocalNode {
 	return n.localNode
 }
 
-// sumByteArray sums all bytes in an array as uint
+// sumByteArray sums all bytes in an array as uint.
 func sumByteArray(b []byte) uint {
 	var sumOfChars uint
 
@@ -257,7 +257,7 @@ func createSession(privkey p2pcrypto.PrivateKey, remotePubkey p2pcrypto.PublicKe
 // Dial a remote server with provided time out
 // address:: net.Addr
 // Returns established connection that local clients can send messages to or error if failed
-// to establish a connection, currently only secured connections are supported
+// to establish a connection, currently only secured connections are supported.
 func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto.PublicKey) (Connection, error) {
 	if n.listenAddress == nil {
 		return nil, errors.New("net listenAddress must be set")
@@ -276,7 +276,7 @@ func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto
 	return conn, nil
 }
 
-// Shutdown initiate a graceful closing of the TCP listener and all other internal routines
+// Shutdown initiate a graceful closing of the TCP listener and all other internal routines.
 func (n *Net) Shutdown() {
 	if n.listener != nil {
 		err := n.listener.Close()
@@ -363,7 +363,7 @@ func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node *node.Info) 
 	n.regMutex.RUnlock()
 }
 
-// HandlePreSessionIncomingMessage establishes session with the remote peer and update the Connection with the new session
+// HandlePreSessionIncomingMessage establishes session with the remote peer and update the Connection with the new session.
 func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) error {
 	message, remotePubkey, err := p2pcrypto.ExtractPubkey(message)
 	if err != nil {

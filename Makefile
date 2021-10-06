@@ -172,6 +172,11 @@ golangci-lint:
 	golangci-lint run --config .golangci.yml
 .PHONY: golangci-lint
 
+# Auto-fixes golangci-lint issues where possible.
+golangci-lint-fix:
+	golangci-lint run --config .golangci.yml --fix
+.PHONY: golangci-lint-fix
+
 golangci-lint-github-action:
 	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
 .PHONY: golangci-lint-github-action

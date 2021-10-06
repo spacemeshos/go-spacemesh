@@ -10,8 +10,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-const defaultPeersFileName = "peers.json"
-const saveRoutineInterval = time.Minute * 10
+const (
+	defaultPeersFileName = "peers.json"
+	saveRoutineInterval  = time.Minute * 10
+)
 
 type serializedKnownAddress struct {
 	Addr        string
@@ -87,7 +89,7 @@ func (a *addrBook) savePeers(path string) {
 }
 
 // loadPeers loads the known address from the saved file.  If empty, missing, or
-// malformed file, just don't load anything and start fresh
+// malformed file, just don't load anything and start fresh.
 func (a *addrBook) loadPeers(filePath string) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
@@ -232,5 +234,4 @@ out:
 	a.logger.Debug("Saving peer before exit to file %v", filepath)
 	a.savePeers(filepath)
 	a.logger.Debug("Address handler done")
-
 }
