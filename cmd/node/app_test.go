@@ -1,3 +1,4 @@
+//go:build !exclude_app_test
 // +build !exclude_app_test
 
 package node
@@ -500,7 +501,7 @@ func setupTests(suite *AppTestSuite) {
 	}
 }
 
-// run test criterias after setup
+// run test criteria after setup
 func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	for i, test := range tests {
 		depsOk := true

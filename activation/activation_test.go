@@ -349,7 +349,7 @@ func TestBuilder_RestartSmeshing(t *testing.T) {
 
 	for i := 0; i < 100; i++ {
 		require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
-		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediatly,
+		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediately,
 		// but proper test requires adding quite a lot of additional mocking and general refactoring.
 		time.Sleep(400 * time.Microsecond)
 		require.True(t, builder.Smeshing())

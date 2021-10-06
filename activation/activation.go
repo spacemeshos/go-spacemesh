@@ -349,7 +349,7 @@ func (b *Builder) run(ctx context.Context) {
 
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
-				// can be retried immediatly with a new challenge
+				// can be retried immediately with a new challenge
 			case errors.Is(err, ErrPoetServiceUnstable):
 				if poetRetryTimer == nil {
 					poetRetryTimer = time.NewTimer(b.poetRetryInterval)

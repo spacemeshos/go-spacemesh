@@ -170,7 +170,7 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier State
 }
 
 // consensusProcess is an entity (a single participant) in the Hare protocol.
-// Once started, the CP iterates through the rounds until consensus is reached or the instance is cancelled.
+// Once started, the CP iterates through the rounds until consensus is reached or the instance is canceled.
 // The output is then written to the provided TerminationReport channel.
 // If the consensus process is canceled one should not expect the output to be written to the output channel.
 type consensusProcess struct {
@@ -231,7 +231,7 @@ func iterationFromCounter(roundCounter uint32) uint32 {
 }
 
 // Start the consensus process.
-// It starts the PreRound round and then iterates through the rounds until consensus is reached or the instance is cancelled.
+// It starts the PreRound round and then iterates through the rounds until consensus is reached or the instance is canceled.
 // It is assumed that the inbox is set before the call to Start.
 // It returns an error if Start has been called more than once, the set size is zero (no values) or the inbox is nil.
 func (proc *consensusProcess) Start(ctx context.Context) error {
