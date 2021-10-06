@@ -7,8 +7,6 @@ import (
 	"math/big"
 	"sync"
 
-	"github.com/spacemeshos/go-spacemesh/mempool"
-
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
