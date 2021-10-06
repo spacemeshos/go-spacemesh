@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"context"
-	"math/big"
 	"strconv"
 	"testing"
 
@@ -16,53 +15,55 @@ import (
 
 var goldenATXID = types.ATXID(types.HexToHash32("77777"))
 
-type MockMapState struct {
-	Rewards     map[types.Address]*big.Int
+type MockMapSVM struct {
+	Rewards     map[types.Address]uint64
 	Txs         []*types.Transaction
 	Pool        []*types.Transaction
 	TotalReward int64
 }
 
-func (s *MockMapState) GetAllAccounts() (*types.MultipleAccountsState, error) {
+func (s *MockMapSVM) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
-func (s *MockMapState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+func (s *MockMapSVM) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	s.Pool = append(s.Pool, tx)
 	return nil
 }
 
-func (s MockMapState) LoadState(types.LayerID) error                       { panic("implement me") }
-func (MockMapState) GetStateRoot() types.Hash32                            { return [32]byte{} }
-func (MockMapState) ValidateNonceAndBalance(*types.Transaction) error      { panic("implement me") }
-func (MockMapState) GetLayerApplied(types.TransactionID) *types.LayerID    { panic("implement me") }
-func (MockMapState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) { panic("implement me") }
-func (MockMapState) GetBalance(types.Address) uint64                       { panic("implement me") }
-func (MockMapState) GetNonce(types.Address) uint64                         { panic("implement me") }
+func (s MockMapSVM) LoadState(types.LayerID) error                       { panic("implement me") }
+func (MockMapSVM) GetStateRoot() types.Hash32                            { return [32]byte{} }
+func (MockMapSVM) ValidateNonceAndBalance(*types.Transaction) error      { panic("implement me") }
+func (MockMapSVM) GetLayerApplied(types.TransactionID) *types.LayerID    { panic("implement me") }
+func (MockMapSVM) GetLayerStateRoot(types.LayerID) (types.Hash32, error) { panic("implement me") }
+func (MockMapSVM) GetBalance(types.Address) uint64                       { panic("implement me") }
+func (MockMapSVM) GetNonce(types.Address) uint64                         { panic("implement me") }
 
-func (s *MockMapState) ApplyTransactions(_ types.LayerID, txs []*types.Transaction) (int, error) {
+func (s *MockMapSVM) ApplyTransactions(_ types.LayerID, txs []*types.Transaction) ([]*types.Transaction, error) {
 	s.Txs = append(s.Txs, txs...)
-	return 0, nil
+	return []*types.Transaction{}, nil
 }
 
-func (s *MockMapState) ApplyRewards(_ types.LayerID, miners []types.Address, reward *big.Int) {
-	for _, minerID := range miners {
-		s.Rewards[minerID] = reward
-		s.TotalReward += reward.Int64()
+func (s *MockMapSVM) ApplyLayer(l types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) ([]*types.Transaction, error) {
+	s.ApplyTransactions(l, transactions)
+	for _, reward := range rewards {
+		s.Rewards[reward.Address] = reward.Amount
+		s.TotalReward += int64(reward.Amount)
 	}
+	return []*types.Transaction{}, nil
 }
 
-func (s *MockMapState) AddressExists(types.Address) bool {
+func (s *MockMapSVM) AddressExists(types.Address) bool {
 	return true
 }
 
 func ConfigTst() Config {
 	return Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: uint64(5000),
 	}
 }
 
-func getMeshWithMapState(tb testing.TB, id string, s txProcessor) (*Mesh, *AtxDbMock) {
+func getMeshWithMapState(tb testing.TB, id string, s svm) (*Mesh, *AtxDbMock) {
 	atxDb := NewAtxDbMock()
 	lg := logtest.New(tb)
 	mshDb := NewMemMeshDB(lg)
@@ -91,55 +92,55 @@ func init() {
 	types.SetLayersPerEpoch(3)
 }
 
+type TestData struct {
+}
+
 func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
-	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	layers, atxDB := getMeshWithMapState(t, "t1", s)
-	defer layers.Close()
+	s := emptyMapSVM()
+	layers, atxDB := s.getMeshWithMapStateThenClose(t, "t1")
 
-	var totalFee int64
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
+	type NewBlockData struct {
+		coinbase string
+		numTxs   int
+		fee      int64
+	}
 
-	coinbase1 := types.HexToAddress("0xaaa")
-	atx := newActivationTx(types.NodeID{Key: "1", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, types.NewLayerID(1), 0, goldenATXID, coinbase1, 10, []types.BlockID{}, &types.NIPost{})
-	atxDB.AddAtx(atx.ID(), atx)
-	block1.ATXID = atx.ID()
-	totalFee += addTransactionsWithFee(t, layers.DB, block1, 15, 7)
+	blockData := []NewBlockData{
+		{"0xaaa", 15, 7},
+		{"0xbbb", 13, rand.Int63n(100)},
+		{"0xccc", 17, rand.Int63n(100)},
+		{"0xddd", 16, rand.Int63n(100)},
+	}
 
-	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
+	totalFee := int64(0)
+	blocks := []*types.Block{}
 
-	coinbase2 := types.HexToAddress("0xbbb")
-	atx = newActivationTx(types.NodeID{Key: "2", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, types.NewLayerID(1), 0, goldenATXID, coinbase2, 10, []types.BlockID{}, &types.NIPost{})
-	atxDB.AddAtx(atx.ID(), atx)
-	block2.ATXID = atx.ID()
-	totalFee += addTransactionsWithFee(t, layers.DB, block2, 13, rand.Int63n(100))
+	for i, data := range blockData {
+		key := strconv.Itoa(i)
+		coinbase := types.HexToAddress(data.coinbase)
+		nodeID := types.NodeID{Key: key, VRFPublicKey: []byte("bbbbb")}
 
-	block3 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
+		block := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
+		atx := newActivationTx(nodeID, 0, *types.EmptyATXID, types.NewLayerID(1), 0, goldenATXID, coinbase, 10, []types.BlockID{}, &types.NIPost{})
+		atxDB.AddAtx(atx.ID(), atx)
+		block.ATXID = atx.ID()
 
-	coinbase3 := types.HexToAddress("0xccc")
-	atx = newActivationTx(types.NodeID{Key: "3", VRFPublicKey: []byte("bbbbb")}, 0, goldenATXID, types.NewLayerID(1), 0, goldenATXID, coinbase3, 10, []types.BlockID{}, &types.NIPost{})
-	atxDB.AddAtx(atx.ID(), atx)
-	block3.ATXID = atx.ID()
-	totalFee += addTransactionsWithFee(t, layers.DB, block3, 17, rand.Int63n(100))
+		blocks = append(blocks, block)
+		totalFee += addTransactionsWithFee(t, layers.DB, block, data.numTxs, data.fee)
+	}
 
-	block4 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
-
-	coinbase4 := types.HexToAddress("0xddd")
-	atx = newActivationTx(types.NodeID{Key: "4", VRFPublicKey: []byte("bbbbb")}, 0, goldenATXID, types.NewLayerID(1), 0, goldenATXID, coinbase4, 10, []types.BlockID{}, &types.NIPost{})
-	atxDB.AddAtx(atx.ID(), atx)
-	block4.ATXID = atx.ID()
-	totalFee += addTransactionsWithFee(t, layers.DB, block4, 16, rand.Int63n(100))
-
-	_ = layers.AddBlock(block1)
-	_ = layers.AddBlock(block2)
-	_ = layers.AddBlock(block3)
-	_ = layers.AddBlock(block4)
+	for _, block := range blocks {
+		_ = layers.AddBlock(block)
+	}
 
 	params := NewTestRewardParams()
 
 	l, err := layers.GetLayer(types.NewLayerID(1))
 	assert.NoError(t, err)
-	layers.accumulateRewards(l, params)
-	totalRewardsCost := totalFee + params.BaseReward.Int64()
+	validBlockTxs := layers.extractUniqueOrderedTransactions(l)
+	rewards := layers.calculateRewards(l, validBlockTxs, params)
+	layers.writeRewards(rewards)
+	totalRewardsCost := totalFee + int64(params.BaseReward)
 	remainder := totalRewardsCost % 4
 
 	assert.Equal(t, totalRewardsCost, s.TotalReward+remainder)
@@ -148,7 +149,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 func NewTestRewardParams() Config {
 	return Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: uint64(5000),
 	}
 }
 
@@ -180,7 +181,7 @@ func TestMesh_integration(t *testing.T) {
 	numOfBlocks := 10
 	maxTxs := 20
 
-	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
+	s := &MockMapSVM{Rewards: make(map[types.Address]uint64)}
 	layers, atxDB := getMeshWithMapState(t, "t1", s)
 	defer layers.Close()
 
@@ -197,7 +198,7 @@ func TestMesh_integration(t *testing.T) {
 		layers.ValidateLayer(context.TODO(), l)
 	}
 	// since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
-	totalPayout := l3Rewards + ConfigTst().BaseReward.Int64()
+	totalPayout := l3Rewards + int64(ConfigTst().BaseReward)
 	assert.True(t, totalPayout-s.TotalReward < int64(numOfBlocks), " rewards : %v, total %v blocks %v", totalPayout, s.TotalReward, int64(numOfBlocks))
 }
 
@@ -229,25 +230,31 @@ func createMeshFromHareOutput(t *testing.T, finalLyr types.LayerID, msh *Mesh, a
 	}
 }
 
+func emptyMapSVM() *MockMapSVM {
+	return &MockMapSVM{Rewards: make(map[types.Address]uint64)}
+}
+
+func (s *MockMapSVM) getMeshWithMapStateThenClose(t *testing.T, id string) (*Mesh, *AtxDbMock) {
+	msh, atxDB := getMeshWithMapState(t, id, s)
+	t.Cleanup(func() {
+		msh.Close()
+	})
+	return msh, atxDB
+}
+
 // test states are the same when one input is data polled from peers and the other from hare's output
 func TestMesh_updateStateWithLayer_SyncingAndHareReachSameState(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)
 
 	// s1 is the state where a node advance its state via syncing with peers
-	s1 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	msh1, atxDB := getMeshWithMapState(t, "t1", s1)
-	t.Cleanup(func() {
-		msh1.Close()
-	})
+	s1 := emptyMapSVM()
+	msh1, atxDB := s1.getMeshWithMapStateThenClose(t, "t1")
 	createMeshFromSyncing(t, finalLyr, msh1, atxDB)
 
 	// s2 is the state where the node advances its state via hare output
-	s2 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	msh2, atxDB2 := getMeshWithMapState(t, "t2", s2)
-	t.Cleanup(func() {
-		msh2.Close()
-	})
+	s2 := emptyMapSVM()
+	msh2, atxDB2 := s2.getMeshWithMapStateThenClose(t, "t2")
 
 	// use hare output to advance state to finalLyr
 	for i := gLyr.Add(1); !i.After(finalLyr); i = i.Add(1) {
@@ -266,11 +273,8 @@ func TestMesh_updateStateWithLayer_SameInputFromHare(t *testing.T) {
 	finalLyr := gLyr.Add(10)
 
 	// s is the state where a node advance its state via syncing with peers
-	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	msh, atxDB := getMeshWithMapState(t, "t2", s)
-	t.Cleanup(func() {
-		msh.Close()
-	})
+	s := emptyMapSVM()
+	msh, atxDB := s.getMeshWithMapStateThenClose(t, "t1")
 	createMeshFromSyncing(t, finalLyr, msh, atxDB)
 	oldTxs := make([]*types.Transaction, len(s.Txs))
 	copy(oldTxs, s.Txs)
@@ -291,8 +295,8 @@ func TestMesh_updateStateWithLayer_SameInputFromSyncing(t *testing.T) {
 	finalLyr := gLyr.Add(10)
 
 	// s is the state where a node advance its state via syncing with peers
-	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	msh, atxDB := getMeshWithMapState(t, "t1", s)
+	s := emptyMapSVM()
+	msh, atxDB := s.getMeshWithMapStateThenClose(t, "t1")
 	t.Cleanup(func() {
 		msh.Close()
 	})
@@ -315,11 +319,8 @@ func TestMesh_updateStateWithLayer_LateBlock(t *testing.T) {
 	finalLyr := gLyr.Add(10)
 
 	// s is the state where a node advance its state via syncing with peers
-	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	msh, atxDB := getMeshWithMapState(t, "t1", s)
-	t.Cleanup(func() {
-		msh.Close()
-	})
+	s := emptyMapSVM()
+	msh, atxDB := s.getMeshWithMapStateThenClose(t, "t1")
 	createMeshFromSyncing(t, finalLyr, msh, atxDB)
 	oldTxs := make([]*types.Transaction, len(s.Txs))
 	copy(oldTxs, s.Txs)
@@ -346,19 +347,13 @@ func TestMesh_updateStateWithLayer_AdvanceInOrder(t *testing.T) {
 	finalLyr := gLyr.Add(10)
 
 	// s1 is the state where a node advance its state via syncing with peers
-	s1 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	msh1, atxDB := getMeshWithMapState(t, "t1", s1)
-	t.Cleanup(func() {
-		msh1.Close()
-	})
-	createMeshFromSyncing(t, finalLyr, msh1, atxDB)
+	s1 := emptyMapSVM()
+	msh1, atxDB1 := s1.getMeshWithMapStateThenClose(t, "t1")
+	createMeshFromSyncing(t, finalLyr, msh1, atxDB1)
 
 	// s2 is the state where the node advances its state via hare output
-	s2 := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
-	msh2, atxDB2 := getMeshWithMapState(t, "t2", s2)
-	t.Cleanup(func() {
-		msh2.Close()
-	})
+	s2 := emptyMapSVM()
+	msh2, atxDB2 := s2.getMeshWithMapStateThenClose(t, "t2")
 
 	// use hare output to advance state to finalLyr-2
 	for i := gLyr.Add(1); i.Before(finalLyr.Sub(1)); i = i.Add(1) {
@@ -438,7 +433,7 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	maxTxs := 20
 	batchSize := 6
 
-	s := &MockMapState{Rewards: make(map[types.Address]*big.Int)}
+	s := emptyMapSVM()
 	mesh, atxDb := getMeshWithMapState(t, "t1", s)
 	defer mesh.Close()
 
@@ -471,16 +466,16 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	mesh.ValidateLayer(context.TODO(), l6)
 
 	// When distributing rewards to blocks they are rounded down, so we have to allow up to numOfBlocks difference
-	totalPayout := firstLayerRewards + ConfigTst().BaseReward.Int64()
+	totalPayout := firstLayerRewards + int64(ConfigTst().BaseReward)
 	assert.True(t, totalPayout-s.TotalReward < int64(numOfBlocks),
 		"diff=%v, totalPayout=%v, s.TotalReward=%v, numOfBlocks=%v",
 		totalPayout-s.TotalReward-int64(numOfBlocks), totalPayout, s.TotalReward, int64(numOfBlocks))
 }
 
 func TestMesh_calcRewards(t *testing.T) {
-	reward, remainder := calculateActualRewards(types.NewLayerID(1), big.NewInt(10000), big.NewInt(10))
-	assert.Equal(t, int64(1000), reward.Int64())
-	assert.Equal(t, int64(0), remainder.Int64())
+	reward, remainder := calculateActualRewards(types.NewLayerID(1), uint64(10000), uint64(10))
+	assert.Equal(t, int64(1000), int64(reward))
+	assert.Equal(t, int64(0), int64(remainder))
 }
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,

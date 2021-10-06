@@ -50,10 +50,6 @@ func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 	return nil
 }
 
-func (svm *SVM) AddBalance(addr types.Address, amount uint64) {
-	svm.TransactionProcessor.AddBalance(addr, amount)
-}
-
 // ApplyLayer should be called when a layer is applied, i.e. after Hare/Tortoise
 // verification.
 func (svm *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) (failed []*types.Transaction, err error) {

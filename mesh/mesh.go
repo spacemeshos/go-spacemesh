@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"sync"
 
@@ -50,7 +49,6 @@ type Validator interface {
 type svm interface {
 	ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) ([]*types.Transaction, error)
 	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) ([]*types.Transaction, error)
-	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txID types.TransactionID) *types.LayerID
@@ -514,6 +512,7 @@ type layerRewards struct {
 	LayerReward uint64
 	LayerFees   uint64
 	Blocks      []types.AmountAndAddress
+	BySmesher   map[string][]int
 }
 
 func (lr *layerRewards) numBlocks() uint64 {
@@ -533,10 +532,61 @@ func (lr *layerRewards) LogFields() []log.LoggableField {
 	}
 }
 
+func (msh *Mesh) reportRewards(lr layerRewards) {
+	// Report the rewards for each coinbase and each smesherID within each coinbase.
+	// This can be thought of as a partition of the reward amongst all the smesherIDs
+	// that added the coinbase into the block.
+	for smesherString, blocks := range lr.BySmesher {
+		for i := range blocks {
+			smesher, err := types.StringToNodeID(smesherString)
+			if err != nil {
+				msh.With().Error("unable to convert bytes to nodeid", log.Err(err),
+					log.String("smesher_string", smesherString))
+				return
+			}
+			events.ReportRewardReceived(events.Reward{
+				Layer:       lr.LayerID,
+				Total:       lr.Total,
+				LayerReward: lr.LayerReward,
+				Coinbase:    lr.Blocks[i].Address,
+				Smesher:     *smesher,
+			})
+		}
+	}
+}
+
+func (msh *Mesh) writeRewards(lr layerRewards) {
+	// Report the rewards for each coinbase and each smesherID within each coinbase.
+	// This can be thought of as a partition of the reward amongst all the smesherIDs
+	// that added the coinbase into the block.
+	for smesherString, blocks := range lr.BySmesher {
+		for i := range blocks {
+			smesher, err := types.StringToNodeID(smesherString)
+			if err != nil {
+				msh.With().Error("unable to convert bytes to nodeid", log.Err(err),
+					log.String("smesher_string", smesherString))
+				return
+			}
+			events.ReportRewardReceived(events.Reward{
+				Layer:       lr.LayerID,
+				Total:       lr.Total,
+				LayerReward: lr.LayerReward,
+				Coinbase:    lr.Blocks[i].Address,
+				Smesher:     *smesher,
+			})
+		}
+	}
+}
+
 func (msh *Mesh) applyState(l *types.Layer) {
 	validBlockTxs := msh.extractUniqueOrderedTransactions(l)
 	rewards := msh.calculateRewards(l, validBlockTxs, msh.config)
 	msh.With().Info("reward calculated", rewards.LogFields()...)
+	// Applying rewards (here), reporting them, and adding them to the database (below) should be atomic. Right now,
+	// they're not. Also, ApplyRewards does not return an error if it fails.
+	// TODO: fix this.
+	msh.writeRewards(rewards)
+	msh.reportRewards(rewards)
 	msh.pushTransactions(l, validBlockTxs, rewards.Blocks)
 
 	msh.removeFromUnappliedTxs(validBlockTxs)

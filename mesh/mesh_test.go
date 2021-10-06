@@ -96,8 +96,12 @@ func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) {
-	return 0, nil
+func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) ([]*types.Transaction, error) {
+	return []*types.Transaction{}, nil
+}
+
+func (MockState) ApplyLayer(types.LayerID, []*types.Transaction, []types.AmountAndAddress) ([]*types.Transaction, error) {
+	return []*types.Transaction{}, nil
 }
 
 func (MockState) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
@@ -556,8 +560,8 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 
 	msh := getMesh(t, "mesh")
 
-	state := &MockMapState{}
-	msh.txProcessor = state
+	svm := &MockMapSVM{}
+	msh.svm = svm
 
 	layerID := types.GetEffectiveGenesis().Add(1)
 	signer, origin := newSignerAndAddress(r, "origin")
@@ -579,9 +583,9 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 	}
 
 	msh.pushLayersToState(context.TODO(), types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(1))
-	r.Equal(4, len(state.Txs))
+	r.Equal(4, len(svm.Txs))
 
-	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(state.Pool...))
+	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(svm.Pool...))
 
 	txns = getTxns(r, msh.DB, origin)
 	r.Empty(txns)
@@ -592,8 +596,8 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 
 	msh := getMesh(t, "mesh")
 
-	state := &MockMapState{}
-	msh.txProcessor = state
+	svm := &MockMapSVM{}
+	msh.svm = svm
 
 	layerID := types.NewLayerID(1)
 	signer, _ := newSignerAndAddress(r, "origin")
@@ -611,7 +615,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 	r.ElementsMatch(blocks[2:], invalid)
 
 	msh.reInsertTxsToPool(hareBlocks, invalid, layerID)
-	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(state.Pool...))
+	r.ElementsMatch(GetTransactionIds(tx5), GetTransactionIds(svm.Pool...))
 }
 
 func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
