@@ -5,7 +5,7 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 - Please make sure to scan the [open issues](https://github.com/spacemeshos/go-spacemesh/issues). 
 - Search the closed ones before reporting things, and help us with the open ones.
 - Make sure that you are able to contribute to MIT licensed free open software (no legal issues please).
-- Introduce yourself, ask questions about issues or talk about things in our [discord server](https://chat.spacemesh.io/).
+- Introduce yourself, ask questions about issues or talk about things on our [discord server](https://chat.spacemesh.io/).
 - We actively welcome major contributors to the Spacemesh core dev team.
 - **Have fun hacking away our blockchain future together with us!**
 
