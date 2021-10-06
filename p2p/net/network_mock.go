@@ -2,6 +2,7 @@ package net
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync/atomic"
 	"testing"
@@ -14,8 +15,7 @@ import (
 )
 
 // ReadWriteCloserMock is a mock of ReadWriteCloserMock
-type ReadWriteCloserMock struct {
-}
+type ReadWriteCloserMock struct{}
 
 // Read reads something
 func (m ReadWriteCloserMock) Read(p []byte) (n int, err error) {
@@ -32,7 +32,7 @@ func (m ReadWriteCloserMock) Close() error {
 	return nil
 }
 
-//RemoteAddr mocks remote addr return
+// RemoteAddr mocks remote addr return
 func (m ReadWriteCloserMock) RemoteAddr() net.Addr {
 	r, err := net.ResolveTCPAddr("tcp", "127.0.0.0")
 	if err != nil {
@@ -88,7 +88,7 @@ func (n *NetworkMock) Dial(ctx context.Context, address net.Addr, remotePublicKe
 	case <-time.After(time.Duration(n.dialDelayMs) * time.Millisecond):
 		break
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("context done: %w", ctx.Err())
 	}
 	sID := n.dialSessionID
 	if sID == nil {

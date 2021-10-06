@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"time"
 
@@ -31,7 +32,7 @@ func (p *protocol) newPingRequestHandler() func(context.Context, server.Message)
 			return nil, server.ErrBadRequest
 		}
 
-		//pong
+		// pong
 		payload, err := types.InterfaceToBytes(p.local)
 		// TODO: include the resolved To address
 		if err != nil {
@@ -49,10 +50,10 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.Info) error {
 	// todo: decide on best way to know our ext address
 
 	if err := pi.Valid(); err != nil {
-		return err
+		return fmt.Errorf("check validity: %w", err)
 	}
 
-	//TODO: only accept local (unspecified/loopback) IPs from other local ips.
+	// TODO: only accept local (unspecified/loopback) IPs from other local ips.
 	ipfrom, _, _ := net.SplitHostPort(from.String())
 	pi.IP = net.ParseIP(ipfrom)
 
@@ -68,14 +69,14 @@ func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 
 	data, err := types.InterfaceToBytes(p.local)
 	if err != nil {
-		return err
+		return fmt.Errorf("serialize: %w", err)
 	}
+
 	ch := make(chan []byte, 1)
 	foo := func(msg []byte) {
 		plogger.Debug("handle ping response")
 		sender := &node.Info{}
 		err := types.BytesToInterface(msg, sender)
-
 		if err != nil {
 			plogger.With().Warning("got unreadable pong", log.Err(err))
 			return
@@ -85,10 +86,8 @@ func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 		ch <- sender.ID.Bytes()
 	}
 
-	err = p.msgServer.SendRequest(ctx, server.PingPong, data, peer, foo, func(err error) {})
-
-	if err != nil {
-		return err
+	if err = p.msgServer.SendRequest(ctx, server.PingPong, data, peer, foo, func(err error) {}); err != nil {
+		return fmt.Errorf("send request: %w", err)
 	}
 
 	timeout := time.NewTimer(MessageTimeout) // todo: check whether this is useless because of `requestLifetime`

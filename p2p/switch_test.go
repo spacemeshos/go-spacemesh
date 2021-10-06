@@ -1178,10 +1178,12 @@ func TestSwarm_SendMessage(t *testing.T) {
 		return message
 	}
 
-	c.SetSendResult(errors.New("fail"))
+	expectedErr := errors.New("fail")
+	c.SetSendResult(expectedErr)
 
 	err = p.SendMessage(context.TODO(), someky, proto, []byte("LOL"))
-	require.Equal(t, err, errors.New("fail"))
+	fmt.Println(err)
+	require.ErrorIs(t, err, expectedErr)
 
 	c.SetSendResult(nil)
 

@@ -18,9 +18,11 @@ import (
 
 // TODO: we should remove this const. Should  not depend on the number of addresses.
 // TODO: the number of addresses should be derived from the limit provided in the config
-const maxMessageSize = 30000 // @see getAddrMax
-const maxUDPConn = 2048
-const maxUDPLife = time.Hour * 24
+const (
+	maxMessageSize = 30000 // @see getAddrMax
+	maxUDPConn     = 2048
+	maxUDPLife     = time.Hour * 24
+)
 
 // UDPMessageEvent is an event about a udp message. passed through a channel
 type UDPMessageEvent struct {
@@ -163,8 +165,10 @@ func (n *UDPNet) Send(to *node.Info, data []byte) error {
 	sealed := ns.SealMessage(data)
 	final := p2pcrypto.PrependPubkey(sealed, n.local.PublicKey())
 	addr := NodeAddr(to)
-	_, err := n.conn.WriteToUDP(final, addr)
-	return err
+	if _, err := n.conn.WriteToUDP(final, addr); err != nil {
+		return fmt.Errorf("write to UDP: %w", err)
+	}
+	return nil
 }
 
 // IncomingMessages is a channel where incoming UDPMessagesEvents will stream
@@ -177,7 +181,7 @@ func (n *UDPNet) IncomingMessages() chan IncomingMessageEvent {
 func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
 	udpcon, err := net.DialUDP("udp", nil, address.(*net.UDPAddr))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dial UDP: %w", err)
 	}
 
 	ns := n.cache.GetOrCreate(remotePublicKey)
@@ -245,7 +249,6 @@ func (n *UDPNet) listenToUDPNetworkMessages(ctx context.Context, listener net.Pa
 		if err != nil {
 			n.logger.Debug("creating new connection")
 			_, pk, err := p2pcrypto.ExtractPubkey(copybuf)
-
 			if err != nil {
 				n.logger.With().Warning("error can't extract public key from udp message",
 					log.String("addr", addr.String()),
@@ -408,7 +411,12 @@ func (ucw *udpConnWrapper) Read(b []byte) (int, error) {
 }
 
 func (ucw *udpConnWrapper) Write(b []byte) (int, error) {
-	return ucw.conn.WriteTo(b, ucw.remote)
+	n, err := ucw.conn.WriteTo(b, ucw.remote)
+	if err != nil {
+		return n, fmt.Errorf("write to remote: %w", err)
+	}
+
+	return n, nil
 }
 
 func (ucw *udpConnWrapper) Close() error {

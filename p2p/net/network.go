@@ -194,7 +194,7 @@ func (n *Net) dial(ctx context.Context, address net.Addr) (net.Conn, error) {
 		n.tcpSocketConfig(tcpconn)
 		return tcpconn, nil
 	}
-	return netConn, err
+	return netConn, fmt.Errorf("dial TCP: %w", err)
 }
 
 func (n *Net) tcpSocketConfig(tcpconn *net.TCPConn) {
@@ -233,17 +233,17 @@ func (n *Net) createSecuredConnection(ctx context.Context, address net.Addr, rem
 	session := createSession(n.localNode.PrivateKey(), remotePubkey)
 	conn, err := n.createConnection(ctx, address, remotePubkey, session)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create connection: %w", err)
 	}
 
 	handshakeMessage, err := generateHandshakeMessage(session, n.networkID, n.listenAddress.Port, n.localNode.PublicKey())
 	if err != nil {
 		conn.Close()
-		return nil, err
+		return nil, fmt.Errorf("generate handshake: %w", err)
 	}
 	if err := conn.Send(ctx, handshakeMessage); err != nil {
 		conn.Close()
-		return nil, err
+		return nil, fmt.Errorf("send handshake: %w", err)
 	}
 	return conn, nil
 }
@@ -367,8 +367,9 @@ func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node *node.Info) 
 func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) error {
 	message, remotePubkey, err := p2pcrypto.ExtractPubkey(message)
 	if err != nil {
-		return err
+		return fmt.Errorf("extract pubkey: %w", err)
 	}
+
 	c.SetRemotePublicKey(remotePubkey)
 	session := createSession(n.localNode.PrivateKey(), remotePubkey)
 	c.SetSession(session)
@@ -376,13 +377,12 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	// open message
 	protoMessage, err := session.OpenMessage(message)
 	if err != nil {
-		return err
+		return fmt.Errorf("open message: %w", err)
 	}
 
 	handshakeData := &HandshakeData{}
-	err = types.BytesToInterface(protoMessage, handshakeData)
-	if err != nil {
-		return err
+	if err = types.BytesToInterface(protoMessage, handshakeData); err != nil {
+		return fmt.Errorf("parse: %w", err)
 	}
 
 	err = verifyNetworkIDAndClientVersion(n.networkID, handshakeData)
@@ -427,7 +427,7 @@ func generateHandshakeMessage(session NetworkSession, networkID uint32, localInc
 	}
 	handshakeMessage, err := types.InterfaceToBytes(handshakeData)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("serialize: %w", err)
 	}
 	sealedMessage := session.SealMessage(handshakeMessage)
 	return p2pcrypto.PrependPubkey(sealedMessage, localPubkey), nil

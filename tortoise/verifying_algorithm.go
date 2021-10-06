@@ -173,7 +173,12 @@ func (bdp *bdpWrapper) SaveContextualValidity(bid types.BlockID, lid types.Layer
 			bdp.firstUpdatedLayer = &lid
 		}
 	}
-	return bdp.blockDataProvider.SaveContextualValidity(bid, lid, validityNew)
+
+	if err := bdp.blockDataProvider.SaveContextualValidity(bid, lid, validityNew); err != nil {
+		return fmt.Errorf("save contextual validity: %w", err)
+	}
+
+	return nil
 }
 
 // trigger a rerun from genesis once in a while

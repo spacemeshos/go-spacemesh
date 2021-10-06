@@ -228,7 +228,7 @@ func (msh *Mesh) setLatestLayer(idx types.LayerID) {
 func (msh *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
 	mBlocks, err := msh.LayerBlocks(i)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("layer blocks: %w", err)
 	}
 
 	l := types.NewLayer(i)
@@ -243,7 +243,7 @@ func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 	if err == nil {
 		return h
 	}
-	if err == database.ErrNotFound {
+	if errors.Is(err, database.ErrNotFound) {
 		// layer hash not persisted. i.e. contextual validity not yet determined
 		lyr, err := msh.GetLayer(layerID)
 		if err == nil {
@@ -605,7 +605,7 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
 	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
 		// can happen if database already closed
 		msh.Error("could not persist validated layer index %d: %v", lyr, err.Error())
-		return err
+		return fmt.Errorf("put into DB: %w", err)
 	}
 	msh.latestLayerInState = lyr
 	return nil
@@ -630,7 +630,7 @@ func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, er
 		hash.SetBytes(bts)
 		return hash, nil
 	}
-	return hash, err
+	return hash, fmt.Errorf("get from DB: %w", err)
 }
 
 func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs []*types.Transaction) {
@@ -711,7 +711,7 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	// check database for layer
 	if l, err := msh.GetLayer(lyr); err != nil {
 		// database error
-		if err != database.ErrNotFound {
+		if !errors.Is(err, database.ErrNotFound) {
 			msh.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
 			return err
 		}
@@ -743,7 +743,7 @@ func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
 
 	// Store block (delete if storing ATXs fails)
 	if err := msh.DB.AddBlock(blk); err != nil {
-		if err == ErrAlreadyExist {
+		if errors.Is(err, ErrAlreadyExist) {
 			return nil
 		}
 		logger.With().Error("failed to add block", log.Err(err))
@@ -778,12 +778,12 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 			// if the transaction is not in the pool it could have been
 			// invalidated by another block
 			if has, err := msh.transactions.Has(txID.Bytes()); !has {
-				return err
+				return fmt.Errorf("check if tx is in DB: %w", err)
 			}
 			continue
 		}
 		if err = tx.CalcAndSetOrigin(); err != nil {
-			return err
+			return fmt.Errorf("calc and set origin: %w", err)
 		}
 		txs = append(txs, tx)
 	}

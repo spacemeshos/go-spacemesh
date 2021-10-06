@@ -2,6 +2,7 @@ package codec
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"sync"
 
@@ -16,12 +17,22 @@ type Decodable interface{}
 
 // EncodeTo encodes value to a writer stream.
 func EncodeTo(w io.Writer, value Encodable) (int, error) {
-	return xdr.Marshal(w, value)
+	v, err := xdr.Marshal(w, value)
+	if err != nil {
+		return v, fmt.Errorf("marshal XDR: %w", err)
+	}
+
+	return v, nil
 }
 
 // DecodeFrom decodes a value using data from a reader stream.
 func DecodeFrom(r io.Reader, value Decodable) (int, error) {
-	return xdr.Unmarshal(r, value)
+	v, err := xdr.Unmarshal(r, value)
+	if err != nil {
+		return v, fmt.Errorf("unmarshal XDR: %w", err)
+	}
+
+	return v, nil
 }
 
 // TODO(dshulyak) this is a temporary solution to improve encoder allocations.
@@ -60,6 +71,9 @@ func Encode(value Encodable) ([]byte, error) {
 
 // Decode value from a byte buffer.
 func Decode(buf []byte, value Decodable) error {
-	_, err := DecodeFrom(bytes.NewBuffer(buf), value)
-	return err
+	if _, err := DecodeFrom(bytes.NewBuffer(buf), value); err != nil {
+		return fmt.Errorf("decode from buffer: %w", err)
+	}
+
+	return nil
 }

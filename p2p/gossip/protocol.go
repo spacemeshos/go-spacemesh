@@ -3,6 +3,7 @@ package gossip
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,8 +17,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
-const oldMessageCacheSize = 10000
-const propagateHandleBufferSize = 5000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
+const (
+	oldMessageCacheSize       = 10000
+	propagateHandleBufferSize = 5000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
+)
 
 type peersManager interface {
 	GetPeers() []peers.Peer
@@ -97,7 +100,7 @@ func (p *Protocol) Close() {
 func (p *Protocol) Broadcast(ctx context.Context, payload []byte, nextProt string) error {
 	p.WithContext(ctx).With().Debug("broadcasting message", log.String("from_type", nextProt))
 	return p.processMessage(ctx, p.localNodePubkey, true, nextProt, service.DataBytes{Payload: payload})
-	//todo: should this ever return error ? then when processMessage should return error ?. should it block?
+	// todo: should this ever return error ? then when processMessage should return error ?. should it block?
 }
 
 // Relay processes a message, if the message is new, it is passed for the protocol to validate and then propagated.
@@ -139,12 +142,17 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 
 	logger.Event().Debug("gossip message is new, processing")
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
-	return p.net.ProcessGossipProtocolMessage(ctx, sender, ownMessage, protocol, msg, p.propagateQ)
+
+	if err := p.net.ProcessGossipProtocolMessage(ctx, sender, ownMessage, protocol, msg, p.propagateQ); err != nil {
+		return fmt.Errorf("process gossip protocol message: %w", err)
+	}
+
+	return nil
 }
 
 // send a message to all the peers.
 func (p *Protocol) propagateMessage(ctx context.Context, payload []byte, nextProt string, exclude p2pcrypto.PublicKey) {
-	//TODO soon: don't wait for message to send and if we finished sending last message one of the peers send the next
+	// TODO soon: don't wait for message to send and if we finished sending last message one of the peers send the next
 	// message. limit the number of simultaneous sends. consider other messages (mainly sync).
 	var wg sync.WaitGroup
 	for _, peer := range p.peers.GetPeers() {

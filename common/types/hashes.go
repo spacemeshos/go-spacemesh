@@ -2,12 +2,13 @@ package types
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/sha256-simd"
 	"math/big"
 	"math/rand"
 	"reflect"
+
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/sha256-simd"
 )
 
 const (
@@ -58,17 +59,30 @@ func (h Hash20) Format(s fmt.State, c rune) {
 
 // UnmarshalText parses a hash in hex syntax.
 func (h *Hash20) UnmarshalText(input []byte) error {
-	return util.UnmarshalFixedText("Hash", input, h[:])
+	if err := util.UnmarshalFixedText("Hash", input, h[:]); err != nil {
+		return fmt.Errorf("unmarshal text: %w", err)
+	}
+
+	return nil
 }
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (h *Hash20) UnmarshalJSON(input []byte) error {
-	return util.UnmarshalFixedJSON(hashT, input, h[:])
+	if err := util.UnmarshalFixedJSON(hashT, input, h[:]); err != nil {
+		return fmt.Errorf("unmarshal JSON: %w", err)
+	}
+
+	return nil
 }
 
 // MarshalText returns the hex representation of h.
 func (h Hash20) MarshalText() ([]byte, error) {
-	return util.Bytes(h[:]).MarshalText()
+	data, err := util.Bytes(h[:]).MarshalText()
+	if err != nil {
+		return data, fmt.Errorf("marshal text: %w", err)
+	}
+
+	return data, nil
 }
 
 // SetBytes sets the hash to the value of b.
@@ -194,17 +208,30 @@ func (h Hash32) Format(s fmt.State, c rune) {
 
 // UnmarshalText parses a hash in hex syntax.
 func (h *Hash32) UnmarshalText(input []byte) error {
-	return util.UnmarshalFixedText("Hash", input, h[:])
+	if err := util.UnmarshalFixedText("Hash", input, h[:]); err != nil {
+		return fmt.Errorf("unmarshal text: %w", err)
+	}
+
+	return nil
 }
 
 // UnmarshalJSON parses a hash in hex syntax.
 func (h *Hash32) UnmarshalJSON(input []byte) error {
-	return util.UnmarshalFixedJSON(hashT, input, h[:])
+	if err := util.UnmarshalFixedJSON(hashT, input, h[:]); err != nil {
+		return fmt.Errorf("unmarshal JSON: %w", err)
+	}
+
+	return nil
 }
 
 // MarshalText returns the hex representation of h.
 func (h Hash32) MarshalText() ([]byte, error) {
-	return util.Bytes(h[:]).MarshalText()
+	data, err := util.Bytes(h[:]).MarshalText()
+	if err != nil {
+		return data, fmt.Errorf("marshal text: %w", err)
+	}
+
+	return data, nil
 }
 
 // SetBytes sets the hash to the value of b.

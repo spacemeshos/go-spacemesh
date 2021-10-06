@@ -3,13 +3,14 @@ package activation
 import (
 	"errors"
 	"fmt"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/post/config"
 	"github.com/spacemeshos/post/gpu"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/spacemeshos/post/proving"
-	"sync"
 )
 
 type (
@@ -199,7 +200,12 @@ func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
 
 // Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
 func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) {
-	return gpu.Benchmark(initialization.ComputeProvider(p))
+	score, err := gpu.Benchmark(initialization.ComputeProvider(p))
+	if err != nil {
+		return score, fmt.Errorf("benchmark GPU: %w", err)
+	}
+
+	return score, nil
 }
 
 // StartSession starts (or continues) a data creation session.
@@ -213,7 +219,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 	}
 	if mgr.state == postSetupStateComplete {
 		// Check whether the new request invalidates the current status.
-		var invalidate = opts.DataDir != mgr.lastOpts.DataDir || opts.NumUnits != mgr.lastOpts.NumUnits
+		invalidate := opts.DataDir != mgr.lastOpts.DataDir || opts.NumUnits != mgr.lastOpts.NumUnits
 		if !invalidate {
 			mgr.initStatusMtx.Unlock()
 
@@ -240,7 +246,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 	if err != nil {
 		mgr.state = postSetupStateError
 		mgr.lastErr = err
-		return nil, err
+		return nil, fmt.Errorf("new initializer: %w", err)
 	}
 
 	newInit.SetLogger(mgr.logger)
@@ -265,7 +271,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 		)
 
 		if err := newInit.Initialize(); err != nil {
-			if err == initialization.ErrStopped {
+			if errors.Is(err, initialization.ErrStopped) {
 				mgr.logger.Info("post setup session stopped")
 				mgr.state = postSetupStateNotStarted
 			} else {
@@ -297,7 +303,7 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 
 	if mgr.state == postSetupStateInProgress {
 		if err := mgr.init.Stop(); err != nil {
-			return err
+			return fmt.Errorf("stop: %w", err)
 		}
 
 		// Block until the current data creation session will be finished.
@@ -306,7 +312,7 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 
 	if deleteFiles {
 		if err := mgr.init.Reset(); err != nil {
-			return err
+			return fmt.Errorf("reset: %w", err)
 		}
 
 		// Reset internal state.
@@ -325,13 +331,13 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 
 	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.lastOpts.DataDir, mgr.id)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("new prover: %w", err)
 	}
 
 	prover.SetLogger(mgr.logger)
 	proof, proofMetadata, err := prover.GenerateProof(challenge)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("generate proof: %w", err)
 	}
 
 	m := new(types.PostMetadata)

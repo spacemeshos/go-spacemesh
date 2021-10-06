@@ -221,7 +221,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			msgLogger = msgLogger.WithFields(log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)))
 			isEarly := false
 			if err := b.validate(messageCtx, hareMsg); err != nil {
-				if err != errEarlyMsg {
+				if !errors.Is(err, errEarlyMsg) {
 					// not early, validation failed
 					msgLogger.With().Debug("broker received a message to a consensus process that is not registered",
 						log.Err(err))
@@ -351,8 +351,8 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 			// calls to Register will be executed out of order, but Register is only called
 			// on a new layer tick, and anyway updateLatestLayer would panic in this case.
 			if len(b.outbox) >= b.limit {
-				//unregister the earliest layer to make space for the new layer
-				//cannot call unregister here because unregister blocks and this would cause a deadlock
+				// unregister the earliest layer to make space for the new layer
+				// cannot call unregister here because unregister blocks and this would cause a deadlock
 				instance := b.minDeleted.Add(1)
 				b.cleanState(instance)
 				b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(instance))

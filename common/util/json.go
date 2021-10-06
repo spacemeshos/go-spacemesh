@@ -19,6 +19,7 @@ package util
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -255,7 +256,7 @@ func (b *Uint) UnmarshalJSON(input []byte) error {
 func (b *Uint) UnmarshalText(input []byte) error {
 	var u64 Uint64
 	err := u64.UnmarshalText(input)
-	if u64 > Uint64(^uint(0)) || err == ErrUint64Range {
+	if u64 > Uint64(^uint(0)) || errors.Is(err, ErrUint64Range) {
 		return ErrUintRange
 	} else if err != nil {
 		return err

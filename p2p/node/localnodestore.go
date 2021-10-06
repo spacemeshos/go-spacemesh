@@ -28,19 +28,19 @@ func (n *LocalNode) PersistData(path string) error {
 
 	finaldata, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
-		return fmt.Errorf("failed to marshal data: %w", err)
+		return fmt.Errorf("marshal JSON: %w", err)
 	}
 
 	datadir := filepath.Join(path, config.P2PDirectoryPath, config.NodesDirectoryName, n.publicKey.String())
 	if err = filesystem.ExistOrCreate(datadir); err != nil {
-		return fmt.Errorf("failed to check or create datadir: %w", err)
+		return fmt.Errorf("create datadir: %w", err)
 	}
 
 	nodefile := filepath.Join(datadir, config.NodeDataFileName)
 
 	// make sure our node file is written to the os filesystem.
-	if err := ioutil.WriteFile(nodefile, finaldata, 0666); err != nil {
-		return fmt.Errorf("failed to write file: %w", err)
+	if err := ioutil.WriteFile(nodefile, finaldata, 0o666); err != nil {
+		return fmt.Errorf("write file: %w", err)
 	}
 
 	// TODO(josebalius): should we accept a logger or otherwise not log directly
@@ -68,13 +68,13 @@ func readNodeData(path string, nodeID string) (*nodeFileData, error) {
 
 	b, err := ioutil.ReadFile(nodefile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+		return nil, fmt.Errorf("read file: %w", err)
 	}
 
 	var nodeData nodeFileData
 	err = json.Unmarshal(b, &nodeData)
 	if err != nil {
-		return nil, fmt.Errorf("failed to unmarshal data: %w", err)
+		return nil, fmt.Errorf("unmarshal JSON: %w", err)
 	}
 
 	return &nodeData, nil
@@ -88,7 +88,7 @@ func getLocalNodes(path string) ([]string, error) {
 
 	fls, err := ioutil.ReadDir(nodesDir)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read dir: %q: %w", nodesDir, err)
+		return nil, fmt.Errorf("read dir: %w", err)
 	}
 
 	keys := make([]string, len(fls))
