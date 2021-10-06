@@ -125,7 +125,6 @@ func (a *addrBook) IsLocalAddress(addr *node.Info) bool {
 
 func (a *addrBook) isLocalAddressUnlocked(addr *node.Info) bool {
 	for _, local := range a.localAddresses {
-
 		if bytes.Equal(local.ID.Bytes(), addr.ID.Bytes()) {
 			return true
 		}

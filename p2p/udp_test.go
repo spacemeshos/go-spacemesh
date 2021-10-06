@@ -297,6 +297,5 @@ func Test_RoundTrip(t *testing.T) {
 		require.Equal(t, msg.Bytes(), []byte(testStr))
 	case <-tm.C:
 		t.Fatal("message timeout")
-
 	}
 }

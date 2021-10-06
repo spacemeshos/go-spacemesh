@@ -234,6 +234,5 @@ func (r *refresher) requestAddresses(ctx context.Context, servers []*node.Info) 
 		case <-ctx.Done():
 			return nil
 		}
-
 	}
 }

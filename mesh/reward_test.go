@@ -485,7 +485,6 @@ func TestMesh_calcRewards(t *testing.T) {
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
 	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
 	nipost *types.NIPost) *types.ActivationTx {
-
 	nipostChallenge := types.NIPostChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,

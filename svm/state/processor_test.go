@@ -416,7 +416,6 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 				rand.Uint64()%maxAmount,
 				5, signers[src])
 			trns = append(trns, t)
-
 		}
 		failed, err := processor.ApplyTransactions(types.NewLayerID(uint32(i)), trns)
 

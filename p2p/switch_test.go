@@ -467,7 +467,6 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 				mu.Unlock()
 			}
 		}()
-
 	}
 
 	require.NoError(t, p1.Start(context.TODO()))
@@ -609,7 +608,6 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 			break
 		case <-ti:
 			t.Error("Didn't get message in time")
-
 		}
 	}()
 	wg.Add(1)
@@ -1338,7 +1336,6 @@ func testGetListenersScenario(
 	discoverUpnp func() (igd nattraversal.UPNPGateway, err error),
 	acquirePort bool,
 ) error {
-
 	r := require.New(t)
 
 	cfg := configWithPort(port)

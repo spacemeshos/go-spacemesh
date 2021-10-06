@@ -291,7 +291,6 @@ func waitForMessages(t *testing.T, inbox chan *Msg, instanceID types.LayerID, ms
 				return
 			}
 		}
-
 	}
 }
 

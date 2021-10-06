@@ -67,7 +67,6 @@ func (l *PoetListener) handlePoetProofMessage(ctx context.Context, gossipMessage
 	}
 	if err := l.poetDb.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
 		proofMessage.RoundID, proofMessage.Signature); err != nil {
-
 		if types.IsProcessingError(err) {
 			l.Log.Error("failed to validate poet proof: %v", err)
 		} else {

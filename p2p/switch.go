@@ -1032,7 +1032,6 @@ func (s *Switch) getListeners(
 	getUDPListener func(udpAddr *inet.UDPAddr) (net.UDPListener, error),
 	discoverUpnpGateway func() (nattraversal.UPNPGateway, error),
 ) (inet.Listener, net.UDPListener, error) {
-
 	port := s.config.TCPPort
 	randomPort := port == 0
 	var gateway nattraversal.UPNPGateway

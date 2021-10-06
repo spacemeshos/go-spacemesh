@@ -1057,7 +1057,6 @@ func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.Layer
 func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 	m.Info("warming up cache with layers %v to %v", from, to)
 	for i := from; i.Before(to); i = i.Add(1) {
-
 		select {
 		case <-m.exit:
 			m.Info("shutdown during cache warm up")
@@ -1077,7 +1076,6 @@ func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 			}
 			m.blockCache.put(block)
 		}
-
 	}
 	m.Info("done warming up cache")
 

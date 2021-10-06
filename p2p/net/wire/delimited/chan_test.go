@@ -43,7 +43,6 @@ func Test_Chan(t *testing.T) {
 			continue
 		case <-tx.C:
 			t.Fatal("timeout waiting for message")
-
 		}
 	}
 }

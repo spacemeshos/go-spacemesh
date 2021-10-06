@@ -127,7 +127,6 @@ Loop:
 			// Report msg was sent
 			msg.Result() <- nil
 		}
-
 	}
 
 	cou := len(s.outMsgChan)

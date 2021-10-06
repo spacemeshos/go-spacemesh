@@ -25,7 +25,6 @@ type BlockEligibilityValidator struct {
 func NewBlockEligibilityValidator(
 	committeeSize uint32, layersPerEpoch uint32, activationDb activationDB, beacons beaconCollector,
 	validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
-
 	return &BlockEligibilityValidator{
 		committeeSize:  committeeSize,
 		layersPerEpoch: layersPerEpoch,

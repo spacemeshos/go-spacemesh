@@ -60,7 +60,6 @@ func TestNet_EnqueueMessage(t *testing.T) {
 			case <-tx.C:
 				atomic.AddInt32(&timedout, 1)
 				return
-
 			}
 		}()
 	}

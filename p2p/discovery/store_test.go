@@ -34,7 +34,6 @@ func assertAddr(t *testing.T, got, expected *node.Info) {
 // expected addresses.
 func assertAddrs(t *testing.T, addrMgr *addrBook,
 	expectedAddrs map[p2pcrypto.PublicKey]*node.Info) {
-
 	t.Helper()
 
 	addrs := addrMgr.getAddresses()

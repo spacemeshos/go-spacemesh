@@ -473,7 +473,6 @@ func (app *App) initServices(ctx context.Context,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner signing.Signer,
 	layersPerEpoch uint32, clock TickProvider) error {
-
 	app.nodeID = nodeID
 
 	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)

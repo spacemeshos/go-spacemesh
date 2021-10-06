@@ -288,7 +288,6 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 	logger := t.WithContext(ctx)
 	for {
 		select {
-
 		case <-t.stopChan:
 			return
 

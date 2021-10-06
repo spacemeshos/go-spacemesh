@@ -594,7 +594,6 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 	proc.commitTracker = newCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
 	if proposedSet != nil { // has proposal to commit on
-
 		// check participation
 		if !proc.shouldParticipate(ctx) {
 			return
