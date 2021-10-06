@@ -179,11 +179,14 @@ linters-settings:
 linters:
   # TODO(nkryuchkov): enable needed linters
   enable:
-    - staticcheck
+    - godot
+#    - gofmt
+#    - gofumpt
     - golint
-    - wrapcheck
     - misspell
-#    - goimports
+    - staticcheck
+#    - whitespace
+    - wrapcheck
 #    - varcheck
 #    - unparam
 #    - deadcode
