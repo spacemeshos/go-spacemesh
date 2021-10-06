@@ -2,6 +2,8 @@ package net
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"net"
 	"sync"
@@ -131,7 +133,7 @@ func (c *MsgConnection) publish(ctx context.Context, message []byte) {
 	// Print a log line to establish a link between the originating sessionID and this requestID,
 	// before the sessionID disappears.
 	// This causes issues with the p2p system test, but leaving here for debugging purposes.
-	//c.logger.WithContext(ctx).Debug("msgconnection: enqueuing incoming message")
+	// c.logger.WithContext(ctx).Debug("msgconnection: enqueuing incoming message")
 
 	// Rather than store the context on the heap, which is an antipattern, we instead extract the relevant IDs and
 	// store those.
@@ -231,16 +233,16 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 // sendSock sends a message directly on the socket
 func (c *MsgConnection) sendSock(m []byte) error {
 	if err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline)); err != nil {
-		return err
+		return fmt.Errorf("set write deadline: %w", err)
 	}
 
 	// the underlying net.Conn object performs its own write locking and is goroutine safe, so no need for a
 	// mutex here. see https://github.com/spacemeshos/go-spacemesh/pull/2435#issuecomment-851039112.
 	if _, err := c.w.Write(m); err != nil {
-		if err := c.Close(); err != ErrAlreadyClosed {
+		if err := c.Close(); !errors.Is(err, ErrAlreadyClosed) {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
 		}
-		return err
+		return fmt.Errorf("write: %w", err)
 	}
 	metrics.PeerRecv.With(metrics.PeerIDLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
@@ -250,12 +252,19 @@ func (c *MsgConnection) sendSock(m []byte) error {
 func (c *MsgConnection) Close() error {
 	c.cmtx.Lock()
 	defer c.cmtx.Unlock()
+
 	if c.closed {
 		return ErrAlreadyClosed
 	}
+
 	c.closed = true
 	close(c.stopSending)
-	return c.closer.Close()
+
+	if err := c.closer.Close(); err != nil {
+		return fmt.Errorf("close: %w", err)
+	}
+
+	return nil
 }
 
 // Closed returns whether the connection is closed
@@ -275,7 +284,7 @@ func (c *MsgConnection) beginEventProcessing(ctx context.Context) {
 	)
 	for {
 		n, err = c.r.Read(buf)
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			break
 		}
 		if c.session == nil {
@@ -293,7 +302,7 @@ func (c *MsgConnection) beginEventProcessing(ctx context.Context) {
 			break
 		}
 	}
-	if cerr := c.Close(); cerr != ErrAlreadyClosed {
+	if cerr := c.Close(); !errors.Is(cerr, ErrAlreadyClosed) {
 		c.networker.publishClosingConnection(ConnectionWithErr{c, err})
 	}
 }

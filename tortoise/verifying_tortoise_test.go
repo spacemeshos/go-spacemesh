@@ -3,6 +3,7 @@ package tortoise
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math"
 	"math/big"
 	"strconv"
@@ -42,16 +43,36 @@ type meshWrapper struct {
 
 func (mw meshWrapper) SaveContextualValidity(bid types.BlockID, lid types.LayerID, valid bool) error {
 	if mw.saveContextualValidityFn != nil {
-		return mw.saveContextualValidityFn(bid, lid, valid)
+		if err := mw.saveContextualValidityFn(bid, lid, valid); err != nil {
+			return fmt.Errorf("save contextual validity fn: %w", err)
+		}
+
+		return nil
 	}
-	return mw.blockDataWriter.SaveContextualValidity(bid, lid, valid)
+
+	if err := mw.blockDataWriter.SaveContextualValidity(bid, lid, valid); err != nil {
+		return fmt.Errorf("get layer input vector by ID: %w", err)
+	}
+
+	return nil
 }
 
 func (mw meshWrapper) GetLayerInputVectorByID(lid types.LayerID) ([]types.BlockID, error) {
 	if mw.inputVectorBackupFn != nil {
-		return mw.inputVectorBackupFn(lid)
+		blocks, err := mw.inputVectorBackupFn(lid)
+		if err != nil {
+			return blocks, fmt.Errorf("input vector backup fn: %w", err)
+		}
+
+		return blocks, nil
 	}
-	return mw.blockDataWriter.GetLayerInputVectorByID(lid)
+
+	blocks, err := mw.blockDataWriter.GetLayerInputVectorByID(lid)
+	if err != nil {
+		return blocks, fmt.Errorf("get layer input vector by ID: %w", err)
+	}
+
+	return blocks, nil
 }
 
 func (mw meshWrapper) GetCoinflip(context.Context, types.LayerID) (bool, bool) {
@@ -112,7 +133,7 @@ func addLayerToMesh(m *mesh.DB, layer *types.Layer) error {
 	// add blocks to mDB
 	for _, bl := range layer.Blocks() {
 		if err := m.AddBlock(bl); err != nil {
-			return err
+			return fmt.Errorf("add block: %w", err)
 		}
 	}
 	return nil
@@ -586,7 +607,12 @@ func TestAbstainsInMiddle(t *testing.T) {
 	for i := 0; i <= initialNumGood; i++ {
 		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
 			logger.Debug("giving good results for layer", id)
-			return msh.LayerBlockIds(id)
+			ids, err = msh.LayerBlockIds(id)
+			if err != nil {
+				return ids, fmt.Errorf("layer block IDs: %w", err)
+			}
+
+			return ids, nil
 		})
 	}
 
@@ -603,7 +629,12 @@ func TestAbstainsInMiddle(t *testing.T) {
 	newlastlyr = types.NewLayerID(uint32(len(layerfuncs)))
 	for i := newlastlyr; i.Before(newlastlyr.Add(layers.Difference(newlastlyr))); i = i.Add(1) {
 		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
-			return msh.LayerBlockIds(id)
+			ids, err = msh.LayerBlockIds(id)
+			if err != nil {
+				return ids, fmt.Errorf("layer block IDs: %w", err)
+			}
+
+			return ids, nil
 		})
 	}
 
@@ -957,7 +988,7 @@ func TestLayerOpinionVector(t *testing.T) {
 	// if the layer isn't in the mesh, it's an error
 	alg.trtl.Last = types.NewLayerID(defaultTestHdist).Add(l2ID.Uint32()).Add(1)
 	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
-	r.Equal(database.ErrNotFound, err)
+	r.ErrorIs(err, database.ErrNotFound)
 	r.Nil(opinionVec)
 
 	// same layer in mesh, but no contextual validity info
@@ -1213,7 +1244,7 @@ func TestCalculateExceptions(t *testing.T) {
 
 	// missing layer data
 	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
-	r.Equal(database.ErrNotFound, err)
+	r.ErrorIs(err, database.ErrNotFound)
 	r.Nil(votes)
 
 	// layer opinion vector is nil (abstains): recent layer, in mesh, no input vector

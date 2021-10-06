@@ -3,6 +3,7 @@ package activation
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/proving"
@@ -69,10 +70,10 @@ func (v *Validator) Validate(minerID signing.PublicKey, nipost *types.NIPost, ex
 	return nil
 }
 
-// ValidatePost validates a Proof of Space-Time (Post). It returns nil if validation passed or an error indicating why
+// ValidatePost validates a Proof of Space-Time (PoST). It returns nil if validation passed or an error indicating why
 // validation failed.
-func (v *Validator) ValidatePost(id []byte, Post *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error {
-	p := (*proving.Proof)(Post)
+func (v *Validator) ValidatePost(id []byte, PoST *types.Post, PostMetadata *types.PostMetadata, numUnits uint) error {
+	p := (*proving.Proof)(PoST)
 
 	m := new(proving.ProofMetadata)
 	m.ID = id
@@ -83,5 +84,9 @@ func (v *Validator) ValidatePost(id []byte, Post *types.Post, PostMetadata *type
 	m.K1 = PostMetadata.K1
 	m.K2 = PostMetadata.K2
 
-	return verifying.Verify(p, m)
+	if err := verifying.Verify(p, m); err != nil {
+		return fmt.Errorf("verify PoST: %w", err)
+	}
+
+	return nil
 }

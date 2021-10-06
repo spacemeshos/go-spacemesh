@@ -17,11 +17,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-var atxID = types.ATXID([32]byte{1, 3, 3, 7})
-var nodeID, vrfsgn = generateNodeIDAndSigner()
-var validateVRF = signing.VRFVerify
-var edSigner = signing.NewEdSigner()
-var activeSetAtxs = []types.ATXID{atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID} // 10 ATXs
+var (
+	atxID          = types.ATXID([32]byte{1, 3, 3, 7})
+	nodeID, vrfsgn = generateNodeIDAndSigner()
+	validateVRF    = signing.VRFVerify
+	edSigner       = signing.NewEdSigner()
+	activeSetAtxs  = []types.ATXID{atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID, atxID} // 10 ATXs
+)
 
 const defaultAtxWeight = 1024
 
@@ -254,7 +256,7 @@ func TestBlockOracleATXLookupError(t *testing.T) {
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nID, func() bool { return true }, lg.WithName("blockOracle"))
 	activationDB.atxErr = errors.New("not found")
 	_, proofs, _, err := blockOracle.BlockEligible(types.NewLayerID(layersPerEpoch * 2))
-	r.EqualError(err, "failed to get latest atx for node in epoch 2: failed to get atx id for target epoch 2: not found")
+	r.EqualError(err, "failed to get latest atx for node in epoch 2: get atx id for target epoch 2: get ATX ID from DB: not found")
 	r.Nil(proofs)
 }
 

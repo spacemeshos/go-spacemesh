@@ -33,7 +33,7 @@ var _ PoetProvingServiceClient = (*HTTPPoetHarness)(nil)
 func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 	cfg, err := integration.DefaultConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("default integration config: %w", err)
 	}
 
 	cfg.DisableBroadcast = disableBroadcast
@@ -42,7 +42,7 @@ func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 
 	h, err := integration.NewHarness(cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new harness: %w", err)
 	}
 
 	return &HTTPPoetHarness{
@@ -79,7 +79,7 @@ func NewHTTPPoetClient(target string) *HTTPPoetClient {
 func (c *HTTPPoetClient) Start(ctx context.Context, gatewayAddresses []string) error {
 	reqBody := StartRequest{GatewayAddresses: gatewayAddresses}
 	if err := c.req(ctx, "POST", "/start", reqBody, nil); err != nil {
-		return err
+		return fmt.Errorf("request: %w", err)
 	}
 
 	return nil
@@ -115,7 +115,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, 
 	url := fmt.Sprintf("%s%s", c.baseURL, endURL)
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonReqBody))
 	if err != nil {
-		return err
+		return fmt.Errorf("create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
@@ -126,7 +126,7 @@ func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, 
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("perform request: %w", err)
 	}
 	defer res.Body.Close()
 

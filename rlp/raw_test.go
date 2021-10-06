@@ -18,6 +18,7 @@ package rlp
 
 import (
 	"bytes"
+	"errors"
 	"io"
 	"reflect"
 	"testing"
@@ -60,13 +61,13 @@ func TestCountValues(t *testing.T) {
 }
 
 func TestSplitTypes(t *testing.T) {
-	if _, _, err := SplitString(unhex("C100")); err != errExpectedString {
+	if _, _, err := SplitString(unhex("C100")); !errors.Is(err, errExpectedString) {
 		t.Errorf("SplitString returned %q, want %q", err, errExpectedString)
 	}
-	if _, _, err := SplitList(unhex("01")); err != errExpectedList {
+	if _, _, err := SplitList(unhex("01")); !errors.Is(err, errExpectedList) {
 		t.Errorf("SplitString returned %q, want %q", err, errExpectedList)
 	}
-	if _, _, err := SplitList(unhex("81FF")); err != errExpectedList {
+	if _, _, err := SplitList(unhex("81FF")); !errors.Is(err, errExpectedList) {
 		t.Errorf("SplitString returned %q, want %q", err, errExpectedList)
 	}
 }
@@ -147,7 +148,7 @@ func TestSplit(t *testing.T) {
 		if !bytes.Equal(rest, unhex(test.rest)) {
 			t.Errorf("test %d: rest mismatch: got %x, want %s", i, rest, test.rest)
 		}
-		if err != test.err {
+		if !errors.Is(err, test.err) {
 			t.Errorf("test %d: error mismatch: got %q, want %q", i, err, test.err)
 		}
 	}
@@ -185,7 +186,7 @@ func TestReadSize(t *testing.T) {
 
 	for _, test := range tests {
 		size, err := readSize(unhex(test.input), test.slen)
-		if err != test.err {
+		if !errors.Is(err, test.err) {
 			t.Errorf("readSize(%s, %d): error mismatch: got %q, want %q", test.input, test.slen, err, test.err)
 			continue
 		}

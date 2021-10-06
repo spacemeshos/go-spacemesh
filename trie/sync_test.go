@@ -18,9 +18,11 @@ package trie
 
 import (
 	"bytes"
+	"fmt"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -81,10 +83,16 @@ func checkTrieConsistency(db *Database, root types.Hash32) error {
 	if err != nil {
 		return nil // Consider a non existent state consistent
 	}
+
 	it := trie.NodeIterator(nil)
 	for it.Next(true) {
 	}
-	return it.Error()
+
+	if err := it.Error(); err != nil {
+		return fmt.Errorf("iterator: %w", err)
+	}
+
+	return nil
 }
 
 // Tests that an empty trie is not scheduled for syncing.

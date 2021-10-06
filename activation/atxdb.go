@@ -246,7 +246,7 @@ func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map
 	startTime := time.Now()
 	err := db.meshDb.ForBlockInView(view, firstLayerOfPrevEpoch, traversalFunc)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("traverse blocks in view: %w", err)
 	}
 	db.log.With().Info("done calculating miner weights",
 		log.Int("numMiners", len(minerWeight)),
@@ -451,21 +451,23 @@ func (db *DB) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.Activa
 func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 	atxHeaderBytes, err := types.InterfaceToBytes(atx.ActivationTxHeader)
 	if err != nil {
-		return err
+		return fmt.Errorf("serialize ATX: %w", err)
 	}
+
 	err = db.atxs.Put(getAtxHeaderKey(atx.ID()), atxHeaderBytes)
 	if err != nil {
-		return err
+		return fmt.Errorf("put ATX in DB: %w", err)
 	}
 
 	// todo: this changed so that a full atx will be written - inherently there will be double data with atx header
 	atxBytes, err := types.InterfaceToBytes(atx)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse ATX: %w", err)
 	}
+
 	err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBytes)
 	if err != nil {
-		return err
+		return fmt.Errorf("put ATX in DB: %w", err)
 	}
 
 	// notify subscribers
@@ -486,7 +488,7 @@ type atxIDAndLayer struct {
 // This function is not thread safe and needs to be called under a global lock.
 func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	currentTopAtx, err := db.getTopAtx()
-	if err != nil && err != database.ErrNotFound {
+	if err != nil && !errors.Is(err, database.ErrNotFound) {
 		return fmt.Errorf("failed to get current atx: %v", err)
 	}
 	if err == nil && !currentTopAtx.LayerID.Before(atx.PubLayerID) {
@@ -512,7 +514,7 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	topAtxBytes, err := db.atxs.Get([]byte(namespaceTop))
 	if err != nil {
-		if err == database.ErrNotFound {
+		if errors.Is(err, database.ErrNotFound) {
 			return atxIDAndLayer{
 				AtxID: db.goldenATXID,
 			}, nil
@@ -530,7 +532,7 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 func (db *DB) getAtxTimestamp(id types.ATXID) (time.Time, error) {
 	b, err := db.atxs.Get(getAtxTimestampKey(id))
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
 	ts := time.Unix(0, int64(binary.LittleEndian.Uint64(b)))
@@ -583,10 +585,11 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
 	// composing the key.
 	if exists := it.Last(); !exists {
-		return *types.EmptyATXID, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
+		err := ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
+		return *types.EmptyATXID, fmt.Errorf("find ATX in DB: %w", err)
 	}
 	if it.Error() != nil {
-		return *types.EmptyATXID, it.Error()
+		return *types.EmptyATXID, fmt.Errorf("iterator error: %w", it.Error())
 	}
 	return types.ATXID(types.BytesToHash(it.Value())), nil
 }
@@ -669,13 +672,15 @@ func (db *DB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
 	}
 	atxHeaderBytes, err := db.atxs.Get(getAtxHeaderKey(id))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
+
 	var atxHeader types.ActivationTxHeader
 	err = types.BytesToInterface(atxHeaderBytes, &atxHeader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse ATX header: %w", err)
 	}
+
 	atxHeader.SetID(&id)
 	db.atxHeaderCache.Add(id, &atxHeader)
 	return &atxHeader, nil
@@ -692,12 +697,14 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	atxBytes, err := db.atxs.Get(getAtxBodyKey(id))
 	db.RUnlock()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
+
 	atx, err := types.BytesToAtx(atxBytes)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse ATX: %w", err)
 	}
+
 	atx.ActivationTxHeader.SetID(&id)
 	db.atxHeaderCache.Add(id, atx.ActivationTxHeader)
 
@@ -781,14 +788,14 @@ func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
 		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
 		if err := f.FetchAtx(ctx, atx.PositioningATX); err != nil {
-			return err
+			return fmt.Errorf("fetch positioning ATX: %w", err)
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
 		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
 		if err := f.FetchAtx(ctx, atx.PrevATXID); err != nil {
-			return err
+			return fmt.Errorf("fetch previous ATX ID: %w", err)
 		}
 	}
 	logger.With().Debug("done fetching references for atx", atx.ID())

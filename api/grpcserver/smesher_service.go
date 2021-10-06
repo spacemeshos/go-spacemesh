@@ -93,7 +93,7 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 	}()
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("context done: %w", ctx.Err())
 	case err := <-errchan:
 		if err != nil {
 			err := fmt.Sprintf("failed to stop smeshing: %v", err)
@@ -176,7 +176,7 @@ func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherS
 				return nil
 			}
 			if err := stream.Send(&pb.PostSetupStatusStreamResponse{Status: statusToPbStatus(status)}); err != nil {
-				return err
+				return fmt.Errorf("send to stream: %w", err)
 			}
 		case <-stream.Context().Done():
 			return nil

@@ -30,9 +30,10 @@ func (s *JSONHTTPServer) Close() error {
 	log.Debug("stopping new json-http service...")
 	if s.server != nil {
 		if err := s.server.Shutdown(cmdp.Ctx); err != nil {
-			return err
+			return fmt.Errorf("shutdown: %w", err)
 		}
 	}
+
 	return nil
 }
 

@@ -3,6 +3,7 @@ package signing
 import (
 	"bytes"
 	"errors"
+	"fmt"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -137,7 +138,7 @@ func (EDVerifier) Verify(pub *PublicKey, msg, sig []byte) bool {
 func (EDVerifier) Extract(msg, sig []byte) (*PublicKey, error) {
 	pub, err := ed25519.ExtractPublicKey(msg, sig)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extract ed25519 pubkey: %w", err)
 	}
 	return &PublicKey{pub: pub}, nil
 }

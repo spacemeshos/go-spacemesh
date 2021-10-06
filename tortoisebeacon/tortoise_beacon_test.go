@@ -218,12 +218,12 @@ func TestTortoiseBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	beacon := types.HexToHash32("0x12345678")
 	mockDB.EXPECT().Put(epoch.ToBytes(), beacon.Bytes()).Return(errUnknown).Times(1)
 	err := tb.persistBeacon(epoch, beacon)
-	assert.Equal(t, err, errUnknown)
+	assert.ErrorIs(t, err, errUnknown)
 
 	mockDB.EXPECT().Get(epoch.ToBytes()).Return(nil, errUnknown).Times(1)
 	got, errGet := tb.getPersistedBeacon(epoch)
 	assert.Nil(t, got)
-	assert.Equal(t, errGet, errUnknown)
+	assert.ErrorIs(t, errGet, errUnknown)
 
 	ctrl.Finish()
 }
