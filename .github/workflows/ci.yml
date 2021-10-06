@@ -82,13 +82,8 @@ jobs:
           go-version: ${{ env.go-version }}
       - name: setup env
         run: make
-      - name: golangci-lint (fast and strict)
-        run: make golangci-lint-fast-github-action
-      - name: golangci-lint (slow and tolerant)
-        # TODO(nkryuchkov): If many of linters (less important) are enabled, there's a lot of linter errors.
-        # Therefore, CI should not fail because of less important linters for now.
-        # This needs to be fixed at some point.
-        run: make golangci-lint-github-action || true
+      - name: golangci-lint
+        run: make golangci-lint-github-action
 
   unittests:
     runs-on: ubuntu-latest
