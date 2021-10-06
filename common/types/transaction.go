@@ -134,6 +134,7 @@ type InnerTransaction struct {
 	Amount       uint64
 }
 
+// AmountAndAddress stores a uint64 amount together with an account's address.
 type AmountAndAddress struct {
 	Amount uint64
 	Address
