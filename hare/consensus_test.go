@@ -150,7 +150,7 @@ func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, ora
 	return proc
 }
 
-// TODO(nkryuchkov): fix data race
+// TODO(nkryuchkov): fix data race.
 func TestConsensusFixedOracle(t *testing.T) {
 	if skipBlackBox {
 		t.Skip()
