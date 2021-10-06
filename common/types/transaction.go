@@ -3,7 +3,8 @@ package types
 import (
 	"fmt"
 	"strings"
-	"sync"
+	"sync/atomic"
+	"unsafe"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -53,28 +54,23 @@ var EmptyTransactionID = TransactionID{}
 type Transaction struct {
 	InnerTransaction
 	Signature [64]byte
-	origin    *Address
-	id        *TransactionID
-	mu        sync.RWMutex
+	// TODO(nkryuchkov): Consider getting rid of unsafe.
+	origin unsafe.Pointer // *Address
+	id     unsafe.Pointer // *TransactionID
 }
 
 // Origin returns the transaction's origin address: the public key extracted from the transaction signature.
 func (t *Transaction) Origin() Address {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	if t.origin == nil {
+	if atomic.LoadPointer(&t.origin) == nil {
 		panic("origin not set")
 	}
-	return *t.origin
+
+	return *(*Address)(atomic.LoadPointer(&t.origin))
 }
 
 // SetOrigin sets the cache of the transaction's origin address.
 func (t *Transaction) SetOrigin(origin Address) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	t.origin = &origin
+	atomic.StorePointer(&t.origin, unsafe.Pointer(&origin))
 }
 
 // CalcAndSetOrigin extracts the public key from the transaction's signature and caches it as the transaction's origin
@@ -89,30 +85,32 @@ func (t *Transaction) CalcAndSetOrigin() error {
 		return fmt.Errorf("failed to extract transaction pubkey: %v", err)
 	}
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	addr := Address{}
+	addr.SetBytes(pubKey)
 
-	t.origin = &Address{}
-	t.origin.SetBytes(pubKey)
+	t.SetOrigin(addr)
 
 	return nil
 }
 
 // ID returns the transaction's ID. If it's not cached, it's calculated, cached and returned.
 func (t *Transaction) ID() TransactionID {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if t.id != nil {
-		return *t.id
+		return *(*TransactionID)(atomic.LoadPointer(&t.id))
+	}
+
+	if atomic.LoadPointer(&t.origin) != nil {
+		panic("origin not set")
 	}
 
 	txBytes, err := InterfaceToBytes(t)
 	if err != nil {
 		panic("failed to marshal transaction: " + err.Error())
 	}
+
 	id := TransactionID(CalcHash32(txBytes))
-	t.id = &id
+	atomic.StorePointer(&t.id, unsafe.Pointer(&id))
+
 	return id
 }
 

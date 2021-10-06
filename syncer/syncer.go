@@ -81,6 +81,7 @@ type Syncer struct {
 	isBusy    uint32
 	syncTimer *time.Ticker
 	// targetSyncedLayer is used to signal at which layer we can set this node to synced state
+	// TODO(nkryuchkov): Consider getting rid of unsafe.
 	targetSyncedLayer unsafe.Pointer
 
 	// awaitSyncedCh is the list of subscribers' channels to notify when this node enters synced state
