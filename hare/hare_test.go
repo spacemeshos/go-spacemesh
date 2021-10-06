@@ -276,7 +276,7 @@ func TestHare_onTick(t *testing.T) {
 	defer ctrl.Finish()
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(types.GetEffectiveGenesis().Add(1)).Times(1)
-	h := New(cfg, n1, signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, om, oracle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, log.AppLog.WithName("Hare"))
+	h := New(cfg, n1, signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, om, oracle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
 	h.networkDelta = 0
 	h.bufferSize = 1
 
@@ -292,29 +292,26 @@ func TestHare_onTick(t *testing.T) {
 
 	var wg sync.WaitGroup
 
-	wg.Add(2)
+	wg.Add(1)
 	go func() {
-		wg.Done()
 		layerTicker <- types.GetEffectiveGenesis().Add(1)
 		<-createdChan
 		<-nmcp.CloseChannel()
 		wg.Done()
 	}()
 
-	// collect output one more time
 	wg.Wait()
 	time.Sleep(100 * time.Millisecond)
-	res2, err := h.GetResult(types.GetEffectiveGenesis().Add(1))
+	res1, err := h.GetResult(types.GetEffectiveGenesis().Add(1))
 	require.NoError(t, err)
 
-	SortBlockIDs(res2)
+	SortBlockIDs(res1)
 	SortBlockIDs(blockset)
 
-	require.Equal(t, blockset, res2)
+	require.Equal(t, blockset, res1)
 
-	wg.Add(2)
+	wg.Add(1)
 	go func() {
-		wg.Done()
 		layerTicker <- types.GetEffectiveGenesis().Add(2)
 		h.Close()
 		wg.Done()
@@ -322,9 +319,62 @@ func TestHare_onTick(t *testing.T) {
 
 	// collect output one more time
 	wg.Wait()
-	res, err := h.GetResult(types.GetEffectiveGenesis().Add(2))
+	time.Sleep(100 * time.Millisecond)
+	res2, err := h.GetResult(types.GetEffectiveGenesis().Add(2))
 	require.Equal(t, errNoResult, err)
-	require.Equal(t, []types.BlockID(nil), res)
+	require.Equal(t, []types.BlockID(nil), res2)
+}
+
+func TestHare_onTick_NoBeacon(t *testing.T) {
+	types.SetLayersPerEpoch(4)
+	lyr := types.NewLayerID(199)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	moRolacle := mocks.NewMockRolacle(ctrl)
+	moRolacle.EXPECT().IsEpochBeaconReady(gomock.Any(), lyr.GetEpoch()).Return(false).Times(1)
+	moRolacle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyr).Return(true, nil).MaxTimes(1)
+
+	mp := mocks.NewMockmeshProvider(ctrl)
+	layerTicker := make(chan types.LayerID)
+	net := service.NewSimulator().NewNode()
+
+	patrol := mocks.NewMocklayerPatrol(ctrl)
+	patrol.EXPECT().SetHareInCharge(types.GetEffectiveGenesis().Add(1)).Times(1)
+	h := New(cfg, net, nil, types.NodeID{}, (&mockSyncer{false}).IsSynced, mp, moRolacle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
+	h.networkDelta = 0
+	require.NoError(t, h.broker.Start(context.TODO()))
+
+	started, err := h.onTick(context.TODO(), lyr)
+	assert.NoError(t, err)
+	assert.False(t, started)
+}
+
+func TestHare_onTick_NotSynced(t *testing.T) {
+	types.SetLayersPerEpoch(4)
+	lyr := types.NewLayerID(199)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	moRolacle := mocks.NewMockRolacle(ctrl)
+	moRolacle.EXPECT().IsEpochBeaconReady(gomock.Any(), lyr.GetEpoch()).Return(true).Times(1)
+	moRolacle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyr).Return(true, nil).MaxTimes(1)
+
+	mp := mocks.NewMockmeshProvider(ctrl)
+	layerTicker := make(chan types.LayerID)
+	net := service.NewSimulator().NewNode()
+
+	patrol := mocks.NewMocklayerPatrol(ctrl)
+	patrol.EXPECT().SetHareInCharge(types.GetEffectiveGenesis().Add(1)).Times(1)
+	h := New(cfg, net, nil, types.NodeID{}, (&mockSyncer{false}).IsSynced, mp, moRolacle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
+	h.networkDelta = 0
+	require.NoError(t, h.broker.Start(context.TODO()))
+
+	started, err := h.onTick(context.TODO(), lyr)
+	assert.NoError(t, err)
+	assert.False(t, started)
 }
 
 type BlockIDSlice []types.BlockID

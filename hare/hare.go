@@ -38,17 +38,6 @@ type TerminationOutput interface {
 	Completed() bool
 }
 
-type meshProvider interface {
-	// LayerBlockIds returns the block IDs stored for a layer
-	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
-	// HandleValidatedLayer receives Hare output when it succeeds
-	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
-	// InvalidateLayer receives the signal that Hare failed for a layer
-	InvalidateLayer(ctx context.Context, layerID types.LayerID)
-	// RecordCoinflip records the weak coinflip result for a layer
-	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
-}
-
 // Hare is the orchestrator that starts new consensus processes and collects their output.
 type Hare struct {
 	util.Closer
@@ -194,7 +183,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new consensus processes.
-func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
+func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	logger := h.WithContext(ctx).WithFields(id)
 	h.layerLock.Lock()
 	if id.After(h.lastLayer) {
@@ -202,19 +191,14 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	} else {
 		logger.With().Error("received out of order layer tick", log.FieldNamed("last_layer", h.lastLayer))
 	}
-
 	h.layerLock.Unlock()
 
 	if id.GetEpoch().IsGenesis() {
 		logger.Info("not starting hare since we are in genesis epoch")
-		return
+		return false, nil
 	}
 
-	if !h.rolacle.IsEpochBeaconReady(ctx, id.GetEpoch()) {
-		logger.Info("not starting hare since beacon is not retrieved")
-		return
-	}
-
+	var err error
 	defer func() {
 		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
@@ -222,6 +206,11 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 			h.outputChan <- procReport{id, &Set{}, false, notCompleted}
 		}
 	}()
+
+	if !h.rolacle.IsEpochBeaconReady(ctx, id.GetEpoch()) {
+		logger.Info("not starting hare since beacon is not retrieved")
+		return false, nil
+	}
 
 	// call to start the calculation of active set size beforehand
 	go func() {
@@ -240,14 +229,13 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	case <-ti.C:
 		break
 	case <-h.CloseChannel():
-		err = errors.New("closed while waiting for hare delta")
-		return
+		return false, errors.New("closed while waiting for hare delta")
 	}
 
 	if !h.broker.Synced(ctx, id) {
 		// if not currently synced don't start consensus process
 		logger.Info("not processing hare tick since node is not synced")
-		return
+		return false, nil
 	}
 
 	// retrieve set from orphan blocks
@@ -267,20 +255,20 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	c, err := h.broker.Register(ctx, instID)
 	if err != nil {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
-		return
+		return false, err
 	}
 	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.network, h.outputChan)
 	cp.SetInbox(c)
 	if err = cp.Start(ctx); err != nil {
 		logger.With().Error("could not start consensus process", log.Err(err))
 		h.broker.Unregister(ctx, cp.ID())
-		return
+		return false, err
 	}
 	h.patrol.SetHareInCharge(instID)
 	logger.With().Info("number of consensus processes (after register)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	metrics.TotalConsensusProcesses.With("layer", id.String()).Add(1)
-	return
+	return true, nil
 }
 
 var (
@@ -345,8 +333,11 @@ func (h *Hare) tickLoop(ctx context.Context) {
 		select {
 		case layer := <-h.beginLayer:
 			go func() {
-				if err := h.onTick(ctx, layer); err != nil {
+				started, err := h.onTick(ctx, layer)
+				if err != nil {
 					h.WithContext(ctx).With().Error("error processing hare tick", log.Err(err))
+				} else if !started {
+					h.WithContext(ctx).With().Warning("consensus not started for layer", layer)
 				}
 			}()
 		case <-h.CloseChannel():

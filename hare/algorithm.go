@@ -29,15 +29,6 @@ const ( // constants of the different roles
 	leader  = role(2)
 )
 
-// Rolacle is the roles oracle provider.
-type Rolacle interface {
-	Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
-	CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
-	Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error)
-	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
-	IsEpochBeaconReady(ctx context.Context, epoch types.EpochID) bool
-}
-
 // NetworkService provides the registration and broadcast abilities in the network.
 type NetworkService interface {
 	RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage
