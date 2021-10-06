@@ -37,7 +37,7 @@ var (
 // The empty slice marshals as "0x".
 type Bytes []byte
 
-// MarshalText implements encoding.TextMarshaler
+// MarshalText implements encoding.TextMarshaler.
 func (b Bytes) MarshalText() ([]byte, error) {
 	result := make([]byte, len(b)*2+2)
 	copy(result, `0x`)
@@ -133,7 +133,7 @@ func UnmarshalFixedUnprefixedText(typname string, input, out []byte) error {
 // marshaled without error.
 type Big big.Int
 
-// MarshalText implements encoding.TextMarshaler
+// MarshalText implements encoding.TextMarshaler.
 func (b Big) MarshalText() ([]byte, error) {
 	return []byte(EncodeBig((*big.Int)(&b))), nil
 }
@@ -146,7 +146,7 @@ func (b *Big) UnmarshalJSON(input []byte) error {
 	return wrapTypeError(b.UnmarshalText(input[1:len(input)-1]), bigT)
 }
 
-// UnmarshalText implements encoding.TextUnmarshaler
+// UnmarshalText implements encoding.TextUnmarshaler.
 func (b *Big) UnmarshalText(input []byte) error {
 	raw, err := checkNumberText(input)
 	if err != nil {
@@ -208,7 +208,7 @@ func (b *Uint64) UnmarshalJSON(input []byte) error {
 	return wrapTypeError(b.UnmarshalText(input[1:len(input)-1]), uint64T)
 }
 
-// UnmarshalText implements encoding.TextUnmarshaler
+// UnmarshalText implements encoding.TextUnmarshaler.
 func (b *Uint64) UnmarshalText(input []byte) error {
 	raw, err := checkNumberText(input)
 	if err != nil {

@@ -10,7 +10,7 @@ type recorder interface {
 	LogJSON()
 }
 
-// Monitor is a simple service to take samples
+// Monitor is a simple service to take samples.
 type Monitor struct {
 	updateTicker *time.Ticker
 	printTicker  *time.Ticker
@@ -18,7 +18,7 @@ type Monitor struct {
 	term         chan struct{}
 }
 
-// NewMonitor constructs a new monitor instance
+// NewMonitor constructs a new monitor instance.
 func NewMonitor(updateRate time.Duration, printRate time.Duration, updater recorder, termChannel chan struct{}) *Monitor {
 	m := new(Monitor)
 	m.updateTicker = time.NewTicker(updateRate)
@@ -45,7 +45,7 @@ func (m *Monitor) monitor() {
 	}
 }
 
-// Start monitoring
+// Start monitoring.
 func (m *Monitor) Start() {
 	go m.monitor()
 }

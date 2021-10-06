@@ -12,7 +12,7 @@ import (
 
 var localhost = net.IP{127, 0, 0, 1}
 
-// ErrFailedToCreate is returned when we fail to create a node
+// ErrFailedToCreate is returned when we fail to create a node.
 var ErrFailedToCreate = errors.New("failed to create local test node")
 
 // GenerateTestNode generates a local test node without persisting data to local store and with default config value.

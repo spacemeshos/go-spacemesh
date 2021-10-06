@@ -18,7 +18,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// TransactionService exposes transaction data, and a submit tx endpoint
+// TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
 	Network api.NetworkAPI // P2P Swarm
 	Mesh    api.TxAPI      // Mesh
@@ -26,7 +26,7 @@ type TransactionService struct {
 	syncer  api.Syncer
 }
 
-// RegisterService registers this service with a grpc server instance
+// RegisterService registers this service with a grpc server instance.
 func (s TransactionService) RegisterService(server *Server) {
 	pb.RegisterTransactionServiceServer(server.GrpcServer, s)
 }
@@ -46,7 +46,7 @@ func NewTransactionService(
 	}
 }
 
-// SubmitTransaction allows a new tx to be submitted
+// SubmitTransaction allows a new tx to be submitted.
 func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
 	log.Info("GRPC TransactionService.SubmitTransaction")
 
@@ -132,7 +132,7 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (r
 	return
 }
 
-// TransactionsState returns current tx data for one or more txs
+// TransactionsState returns current tx data for one or more txs.
 func (s TransactionService) TransactionsState(_ context.Context, in *pb.TransactionsStateRequest) (*pb.TransactionsStateResponse, error) {
 	log.Info("GRPC TransactionService.TransactionsState")
 
@@ -169,7 +169,7 @@ func (s TransactionService) TransactionsState(_ context.Context, in *pb.Transact
 
 // STREAMS
 
-// TransactionsStateStream exposes a stream of tx data
+// TransactionsStateStream exposes a stream of tx data.
 func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStreamRequest, stream pb.TransactionService_TransactionsStateStreamServer) error {
 	log.Info("GRPC TransactionService.TransactionsStateStream")
 

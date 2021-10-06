@@ -25,7 +25,7 @@ const (
 	defaultFee      = 1
 )
 
-// AtxsPerBlockLimit indicates the maximum number of atxs a block can reference
+// AtxsPerBlockLimit indicates the maximum number of atxs a block can reference.
 const AtxsPerBlockLimit = 100
 
 const blockBuildDurationErrorThreshold = 10 * time.Second
@@ -56,7 +56,7 @@ type baseBlockProvider interface {
 
 // BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
 // referencing txs and atxs from mem pool and referencing them in the created block
-// it is also responsible for listening to the clock and querying when a block should be created according to the block oracle
+// it is also responsible for listening to the clock and querying when a block should be created according to the block oracle.
 type BlockBuilder struct {
 	log.Log
 	signer
@@ -82,7 +82,7 @@ type BlockBuilder struct {
 	layersPerEpoch  uint32
 }
 
-// Config is the block builders configuration struct
+// Config is the block builders configuration struct.
 type Config struct {
 	DBPath         string
 	MinerID        types.NodeID
@@ -146,7 +146,7 @@ func NewBlockBuilder(
 }
 
 // Start starts the process of creating a block, it listens for txs and atxs received by gossip, and starts querying
-// block oracle when it should create a block. This function returns an error if Start was already called once
+// block oracle when it should create a block. This function returns an error if Start was already called once.
 func (t *BlockBuilder) Start(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -163,7 +163,7 @@ func (t *BlockBuilder) Start(ctx context.Context) error {
 	return nil
 }
 
-// Close stops listeners and stops trying to create block in layers
+// Close stops listeners and stops trying to create block in layers.
 func (t *BlockBuilder) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -202,7 +202,7 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 	return
 }
 
-// stopped returns if we should stop
+// stopped returns if we should stop.
 func (t *BlockBuilder) stopped() bool {
 	select {
 	case <-t.stopChan:

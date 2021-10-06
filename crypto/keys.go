@@ -60,7 +60,7 @@ func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	return &privateKeyImpl{privKey}, &publicKeyImpl{privKey.PubKey()}, nil
 }
 
-// NewPrivateKey creates a new private key from data
+// NewPrivateKey creates a new private key from data.
 func NewPrivateKey(data []byte) (PrivateKey, error) {
 	if len(data) != 32 {
 		return nil, errors.New("expected 32 bytes input")
@@ -76,23 +76,23 @@ func NewPrivateKeyFromString(s string) (PrivateKey, error) {
 	return NewPrivateKey(data)
 }
 
-// InternalKey gets the internal key associated with a private key
+// InternalKey gets the internal key associated with a private key.
 func (p *privateKeyImpl) InternalKey() *btcec.PrivateKey {
 	return p.k
 }
 
-// Bytes returns the private key binary data
+// Bytes returns the private key binary data.
 func (p *privateKeyImpl) Bytes() []byte {
 	return p.k.Serialize()
 }
 
-// String returns a base58 encoded string of the private key binary data
+// String returns a base58 encoded string of the private key binary data.
 func (p *privateKeyImpl) String() string {
 	bytes := p.Bytes()
 	return base58.Encode(bytes)
 }
 
-// GetPublicKey generates and returns the public key associated with a private key
+// GetPublicKey generates and returns the public key associated with a private key.
 func (p *privateKeyImpl) GetPublicKey() PublicKey {
 	pubKey := p.k.PubKey()
 	return &publicKeyImpl{k: pubKey}
@@ -117,7 +117,7 @@ func (p *privateKeyImpl) Sign(msg []byte) []byte {
 	return signature.Serialize()
 }
 
-// Decrypt decrypts data encrypted with a public key using its matching private key
+// Decrypt decrypts data encrypted with a public key using its matching private key.
 func (p *privateKeyImpl) Decrypt(in []byte) ([]byte, error) {
 	data, err := btcec.Decrypt(p.k, in)
 	if err != nil {
@@ -187,7 +187,7 @@ func (p *publicKeyImpl) VerifyString(data []byte, sig string) (bool, error) {
 
 // Verify verifies data was signed by provided signature.
 // It returns true iff data was signed using the private key matching this public key.
-/// sig: signature binary data
+/// sig: signature binary data.
 func (p *publicKeyImpl) Verify(data []byte, sig []byte) (bool, error) {
 	signature, err := btcec.ParseSignature(sig, btcec.S256())
 	if err != nil {

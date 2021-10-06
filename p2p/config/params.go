@@ -8,7 +8,7 @@ const (
 )
 
 // NetworkID represents the network that the node lives in
-// that indicates what nodes it can communicate with, and which bootstrap nodes to use
+// that indicates what nodes it can communicate with, and which bootstrap nodes to use.
 const (
 	MainNet = iota
 	TestNet

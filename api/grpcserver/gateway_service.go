@@ -14,12 +14,12 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// GatewayService exposes transaction data, and a submit tx endpoint
+// GatewayService exposes transaction data, and a submit tx endpoint.
 type GatewayService struct {
 	Network api.NetworkAPI // P2P Swarm
 }
 
-// RegisterService registers this service with a grpc server instance
+// RegisterService registers this service with a grpc server instance.
 func (s GatewayService) RegisterService(server *Server) {
 	pb.RegisterGatewayServiceServer(server.GrpcServer, s)
 }
@@ -31,7 +31,7 @@ func NewGatewayService(net api.NetworkAPI) *GatewayService {
 	}
 }
 
-// BroadcastPoet accepts a binary poet message to broadcast to the network
+// BroadcastPoet accepts a binary poet message to broadcast to the network.
 func (s GatewayService) BroadcastPoet(ctx context.Context, in *pb.BroadcastPoetRequest) (*pb.BroadcastPoetResponse, error) {
 	log.Info("GRPC GatewayService.BroadcastPoet")
 

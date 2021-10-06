@@ -18,7 +18,7 @@ const (
 
 	// minTimeBetweenQueries is a minimum time between attempts to query a peer.
 	minTimeBetweenQueries = 5 * time.Second
-	// lastQueriesCacheSiz9e is the maximum size of the query cache map
+	// lastQueriesCacheSiz9e is the maximum size of the query cache map.
 	lastQueriesCacheSize = 100
 
 	maxConcurrentRequests = 3
@@ -28,7 +28,7 @@ const (
 
 var defaultBackoffFunc = func(tries int) time.Duration { return time.Second * time.Duration(tries) }
 
-// ErrBootAbort is returned when when bootstrap is canceled by context cancel
+// ErrBootAbort is returned when when bootstrap is canceled by context cancel.
 var ErrBootAbort = errors.New("bootstrap canceled by signal")
 
 type pingerGetAddresser interface {
@@ -36,7 +36,7 @@ type pingerGetAddresser interface {
 	GetAddresses(context.Context, p2pcrypto.PublicKey) ([]*node.Info, error)
 }
 
-// refresher is used to bootstrap and requestAddresses peers in the addrbook
+// refresher is used to bootstrap and requestAddresses peers in the addrbook.
 type refresher struct {
 	logger       log.Log
 	localAddress *node.Info

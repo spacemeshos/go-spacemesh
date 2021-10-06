@@ -272,7 +272,7 @@ func randomHash() types.Hash32 {
 	return types.CalcHash32(b)
 }
 
-// RandomBlockID generates random block id
+// RandomBlockID generates random block id.
 func randomBlockID() types.BlockID {
 	b := make([]byte, 8)
 	_, err := rand.Read(b)

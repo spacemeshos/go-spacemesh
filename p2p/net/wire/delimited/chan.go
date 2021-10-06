@@ -24,7 +24,7 @@ type Chan struct {
 
 // Satisfy formatter.
 
-// In exposes the incoming message channel
+// In exposes the incoming message channel.
 func (s *Chan) In() chan []byte {
 	return s.inMsgChan
 }
@@ -64,7 +64,7 @@ func NewChan(chanSize int) *Chan {
 	}
 }
 
-// Pipe invokes the reader and writer flows, once it's ran Chan can start serving incoming/outgoing messages
+// Pipe invokes the reader and writer flows, once it's ran Chan can start serving incoming/outgoing messages.
 func (s *Chan) Pipe(rwc io.ReadWriteCloser) {
 	s.connection = rwc
 	go s.readFromReader(rwc)
@@ -137,7 +137,7 @@ Loop:
 	}
 }
 
-// Close the Chan
+// Close the Chan.
 func (s *Chan) Close() {
 	s.closeOnce.Do(func() {
 		s.cmtx.Lock()

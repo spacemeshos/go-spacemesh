@@ -178,7 +178,7 @@ func NewPublicKeyFromBase58(s string) (PublicKey, error) {
 	return newKeyFromBase58(s)
 }
 
-// NewRandomPubkey reads random bytes and creates a public key from them. used for testing
+// NewRandomPubkey reads random bytes and creates a public key from them. used for testing.
 func NewRandomPubkey() PublicKey {
 	k := newKey()
 	if _, err := io.ReadFull(rand.Reader, k.bytes[:]); err != nil {

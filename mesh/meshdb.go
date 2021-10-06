@@ -24,10 +24,10 @@ type layerMutex struct {
 	layerWorkers uint32
 }
 
-// ErrInvalidLayer signifies that hare has failed for a given layer, thus marking it invalid
+// ErrInvalidLayer signifies that hare has failed for a given layer, thus marking it invalid.
 var ErrInvalidLayer = errors.New("layer invalid")
 
-// DB represents a mesh database instance
+// DB represents a mesh database instance.
 type DB struct {
 	log.Log
 	blockCache            blockCache
@@ -47,7 +47,7 @@ type DB struct {
 	exit                  chan struct{}
 }
 
-// NewPersistentMeshDB creates an instance of a mesh database
+// NewPersistentMeshDB creates an instance of a mesh database.
 func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, error) {
 	bdb, err := database.NewLDBDatabase(filepath.Join(path, "blocks"), 0, 0, logger)
 	if err != nil {
@@ -108,7 +108,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 	return ll, err
 }
 
-// PersistentData checks to see if db is empty
+// PersistentData checks to see if db is empty.
 func (m *DB) PersistentData() bool {
 	if _, err := m.general.Get(constLATEST); err == nil {
 		m.Info("found data to recover on disk")
@@ -118,7 +118,7 @@ func (m *DB) PersistentData() bool {
 	return false
 }
 
-// NewMemMeshDB is a mock used for testing
+// NewMemMeshDB is a mock used for testing.
 func NewMemMeshDB(logger log.Log) *DB {
 	ll := &DB{
 		Log:                logger,
@@ -146,7 +146,7 @@ func NewMemMeshDB(logger log.Log) *DB {
 	return ll
 }
 
-// Close closes all resources
+// Close closes all resources.
 func (m *DB) Close() {
 	close(m.exit)
 	m.blocks.Close()
@@ -160,22 +160,22 @@ func (m *DB) Close() {
 
 // todo: for now, these methods are used to export dbs to sync, think about merging the two packages
 
-// Blocks exports the block database
+// Blocks exports the block database.
 func (m *DB) Blocks() database.Getter {
 	m.blockMutex.RLock()
 	defer m.blockMutex.RUnlock()
 	return NewBlockFetcherDB(m)
 }
 
-// Transactions exports the transactions DB
+// Transactions exports the transactions DB.
 func (m *DB) Transactions() database.Getter {
 	return m.transactions
 }
 
-// ErrAlreadyExist error returned when adding an existing value to the database
+// ErrAlreadyExist error returned when adding an existing value to the database.
 var ErrAlreadyExist = errors.New("block already exists in database")
 
-// AddBlock adds a block to the database
+// AddBlock adds a block to the database.
 func (m *DB) AddBlock(bl *types.Block) error {
 	m.blockMutex.Lock()
 	defer m.blockMutex.Unlock()
@@ -190,7 +190,7 @@ func (m *DB) AddBlock(bl *types.Block) error {
 	return nil
 }
 
-// GetBlock gets a block from the database by id
+// GetBlock gets a block from the database by id.
 func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 	if blkh := m.blockCache.Get(id); blkh != nil {
 		return blkh, nil
@@ -207,7 +207,7 @@ func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 	return mbk.ToBlock(), nil
 }
 
-// LayerBlocks retrieves all blocks from a layer by layer index
+// LayerBlocks retrieves all blocks from a layer by layer index.
 func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	ids, err := m.LayerBlockIds(index)
 	if err != nil {
@@ -228,7 +228,7 @@ func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 
 // ForBlockInView traverses all blocks in a view and uses blockHandler func on each block
 // The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
-// and an error indicating that an error occurred while handling the block, the traversing will stop in that case as well (error flow)
+// and an error indicating that an error occurred while handling the block, the traversing will stop in that case as well (error flow).
 func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
 	blocksToVisit := list.New()
 	for id := range view {
@@ -273,7 +273,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 	return nil
 }
 
-// LayerBlockIds retrieves all block ids from a layer by layer index
+// LayerBlockIds retrieves all block ids from a layer by layer index.
 func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	layerBuf := index.Bytes()
 	zero := false
@@ -298,7 +298,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 	return nil, database.ErrNotFound
 }
 
-// AddZeroBlockLayer tags lyr as a layer without blocks
+// AddZeroBlockLayer tags lyr as a layer without blocks.
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
 	if err := m.layers.Put(index.Bytes(), nil); err != nil {
 		return fmt.Errorf("put into DB: %w", err)
@@ -317,7 +317,7 @@ func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
 	return data, nil
 }
 
-// ContextualValidity retrieves opinion on block from the database
+// ContextualValidity retrieves opinion on block from the database.
 func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
 	b, err := m.contextualValidity.Get(id.Bytes())
 	if err != nil {
@@ -326,7 +326,7 @@ func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
 	return b[0] == 1, nil // bytes to bool
 }
 
-// SaveContextualValidity persists opinion on block to the database
+// SaveContextualValidity persists opinion on block to the database.
 func (m *DB) SaveContextualValidity(id types.BlockID, _ types.LayerID, valid bool) error {
 	var v []byte
 	if valid {
@@ -343,7 +343,7 @@ func (m *DB) SaveContextualValidity(id types.BlockID, _ types.LayerID, valid boo
 	return nil
 }
 
-// SaveLayerInputVector saves the input vote vector for a layer (hare results)
+// SaveLayerInputVector saves the input vote vector for a layer (hare results).
 func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) error {
 	data, err := types.InterfaceToBytes(vector)
 	if err != nil {
@@ -368,7 +368,7 @@ func (m *DB) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
 	m.invalidatedLayers[layerID] = struct{}{}
 }
 
-// RecordCoinflip saves the weak coinflip result to memory for the given layer
+// RecordCoinflip saves the weak coinflip result to memory for the given layer.
 func (m *DB) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
 	m.WithContext(ctx).With().Info("recording coinflip result for layer in mesh",
 		layerID,
@@ -376,16 +376,16 @@ func (m *DB) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip
 	m.coinflips[layerID] = coinflip
 }
 
-// GetCoinflip returns the weak coinflip result for the given layer
+// GetCoinflip returns the weak coinflip result for the given layer.
 func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) {
 	coin, exists := m.coinflips[layerID]
 	return coin, exists
 }
 
-// InputVectorBackupFunc specifies a backup function for testing
+// InputVectorBackupFunc specifies a backup function for testing.
 type InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
 
-// GetLayerInputVectorByID gets the input vote vector for a layer (hare results)
+// GetLayerInputVectorByID gets the input vote vector for a layer (hare results).
 func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, error) {
 	if m.InputVectorBackupFunc != nil {
 		return m.InputVectorBackupFunc(layerID)
@@ -401,17 +401,17 @@ func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, er
 	return ids, nil
 }
 
-// SetInputVectorBackupFunc sets the backup function for testing
+// SetInputVectorBackupFunc sets the backup function for testing.
 func (m *DB) SetInputVectorBackupFunc(fn InputVectorBackupFunc) {
 	m.InputVectorBackupFunc = fn
 }
 
-// GetInputVectorBackupFunc gets the backup function for testing
+// GetInputVectorBackupFunc gets the backup function for testing.
 func (m *DB) GetInputVectorBackupFunc() InputVectorBackupFunc {
 	return m.InputVectorBackupFunc
 }
 
-// SaveLayerInputVectorByID gets the input vote vector for a layer (hare results)
+// SaveLayerInputVectorByID gets the input vote vector for a layer (hare results).
 func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error {
 	m.WithContext(ctx).With().Debug("saving input vector", id)
 	// NOTE(dshulyak) there is an implicit dependency in fetcher
@@ -517,7 +517,7 @@ func getRewardKeyPrefix(account types.Address) []byte {
 }
 
 // This function gets the reward key for a particular smesherID
-// format for the index "s_<smesherid>_<accountid>_<layerid> -> r_<accountid>_<smesherid>_<layerid> -> the actual reward"
+// format for the index "s_<smesherid>_<accountid>_<layerid> -> r_<accountid>_<smesherid>_<layerid> -> the actual reward".
 func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.Address) []byte {
 	return new(keyBuilder).
 		WithSmesherRewardsPrefix().
@@ -527,7 +527,7 @@ func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.
 		Bytes()
 }
 
-// use r_ for one and s_ for the other so the namespaces can't collide
+// use r_ for one and s_ for the other so the namespaces can't collide.
 func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
 	return new(keyBuilder).
 		WithSmesherRewardsPrefix().
@@ -639,7 +639,7 @@ func getTransactionDestKeyPrefix(l types.LayerID, account types.Address) []byte 
 		Bytes()
 }
 
-// DbTransaction is the transaction type stored in DB
+// DbTransaction is the transaction type stored in DB.
 type DbTransaction struct {
 	*types.Transaction
 	Origin  types.Address
@@ -694,7 +694,7 @@ func (m *DB) writeTransactions(block *types.Block, txs ...*types.Transaction) er
 	return nil
 }
 
-// We're not using the existing reward type because the layer is implicit in the key
+// We're not using the existing reward type because the layer is implicit in the key.
 type dbReward struct {
 	TotalReward         uint64
 	LayerRewardEstimate uint64
@@ -729,7 +729,7 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 	return nil
 }
 
-// GetRewards retrieves account's rewards by address
+// GetRewards retrieves account's rewards by address.
 func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err error) {
 	it := m.transactions.Find(getRewardKeyPrefix(account))
 	defer it.Release()
@@ -755,7 +755,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 	return
 }
 
-// GetRewardsBySmesherID retrieves rewards by smesherID
+// GetRewardsBySmesherID retrieves rewards by smesherID.
 func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Reward, err error) {
 	it := m.transactions.Find(getSmesherRewardKeyPrefix(smesherID))
 	defer it.Release()
@@ -893,7 +893,7 @@ func groupByOrigin(txs []*types.Transaction) map[types.Address][]*types.Transact
 	return grouped
 }
 
-// GetProjection returns projection of address
+// GetProjection returns projection of address.
 func (m *DB) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
 	pending, err := m.getAccountPendingTxs(addr)
 	if err != nil {
@@ -903,7 +903,7 @@ func (m *DB) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (n
 	return nonce, balance, nil
 }
 
-// GetTransactions retrieves a list of txs by their id's
+// GetTransactions retrieves a list of txs by their id's.
 func (m *DB) GetTransactions(transactions []types.TransactionID) (txs []*types.Transaction, missing map[types.TransactionID]struct{}) {
 	missing = make(map[types.TransactionID]struct{})
 	txs = make([]*types.Transaction, 0, len(transactions))
@@ -936,7 +936,7 @@ func (m *DB) GetMeshTransactions(transactions []types.TransactionID) ([]*types.M
 	return txs, missing
 }
 
-// GetMeshTransaction retrieves a tx by its id
+// GetMeshTransaction retrieves a tx by its id.
 func (m *DB) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tBytes, err := m.transactions.Get(id[:])
 	if err != nil {
@@ -950,7 +950,7 @@ func (m *DB) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction,
 	return dbTx.getTransaction(), nil
 }
 
-// GetTransactionsByDestination retrieves txs by destination and layer
+// GetTransactionsByDestination retrieves txs by destination and layer.
 func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
 	it := m.transactions.Find(getTransactionDestKeyPrefix(l, account))
 	defer it.Release()
@@ -966,7 +966,7 @@ func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address
 	return
 }
 
-// GetTransactionsByOrigin retrieves txs by origin and layer
+// GetTransactionsByOrigin retrieves txs by origin and layer.
 func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
 	it := m.transactions.Find(getTransactionOriginKeyPrefix(l, account))
 	defer it.Release()
@@ -982,7 +982,7 @@ func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) (tx
 	return
 }
 
-// BlocksByValidity classifies a slice of blocks by validity
+// BlocksByValidity classifies a slice of blocks by validity.
 func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks []*types.Block) {
 	for _, b := range blocks {
 		valid, err := m.ContextualValidity(b.ID())
@@ -998,7 +998,7 @@ func (m *DB) BlocksByValidity(blocks []*types.Block) (validBlocks, invalidBlocks
 	return validBlocks, invalidBlocks
 }
 
-// LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer
+// LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer.
 func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	logger := m.WithContext(ctx)
 	if layer == types.NewLayerID(0) || layer == types.NewLayerID(1) {

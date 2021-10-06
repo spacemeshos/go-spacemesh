@@ -282,7 +282,7 @@ func (a *addrBook) GetAddress() *KnownAddress {
 	}
 }
 
-// Lookup searches for an address using a public key. returns *Info
+// Lookup searches for an address using a public key. returns *Info.
 func (a *addrBook) Lookup(addr p2pcrypto.PublicKey) (*node.Info, error) {
 	a.mtx.Lock()
 	d := a.lookup(addr)
@@ -339,7 +339,7 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	a.moveToTriedUnlocked(ka)
 }
 
-// moves a knownaddress to a tried bucket
+// moves a knownaddress to a tried bucket.
 func (a *addrBook) moveToTriedUnlocked(ka *KnownAddress) {
 	// move to tried set, optionally evicting other addresses if neeed.
 	if ka.tried {
@@ -440,7 +440,7 @@ func (a *addrBook) NumAddresses() int {
 
 // NeedNewAddresses returns whether or not the address manager needs more new
 // addresses. this means we have less new addresses than tried addresses and we don't
-// have more than half of the threshold
+// have more than half of the threshold.
 func (a *addrBook) NeedNewAddresses() bool {
 	a.mtx.Lock()
 	if a.nNew < a.nTried && a.nNew < needAddressThreshold/2 {
@@ -635,7 +635,7 @@ func (a *addrBook) AddAddress(addr, srcAddr *node.Info) {
 	a.updateAddress(addr, srcAddr)
 }
 
-// RemoveAddress
+// RemoveAddress.
 func (a *addrBook) RemoveAddress(key p2pcrypto.PublicKey) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()

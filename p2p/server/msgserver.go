@@ -22,15 +22,15 @@ import (
 type MessageType uint32
 
 const (
-	// PingPong is the ping protocol ID
+	// PingPong is the ping protocol ID.
 	PingPong MessageType = iota
-	// GetAddresses is the findnode protocol ID
+	// GetAddresses is the findnode protocol ID.
 	GetAddresses
-	// LayerBlocksMsg is used to fetch block IDs for a given layer hash
+	// LayerBlocksMsg is used to fetch block IDs for a given layer hash.
 	LayerBlocksMsg
-	// AtxIDsMsg is used to fetch ATXs for a given epoch
+	// AtxIDsMsg is used to fetch ATXs for a given epoch.
 	AtxIDsMsg
-	// Fetch is used to fetch data for a given hash
+	// Fetch is used to fetch data for a given hash.
 	Fetch
 	// RequestTimeSync is used for time synchronization with peers.
 	RequestTimeSync
@@ -58,13 +58,13 @@ type responseHandlers struct {
 	failCallBack func(err error)
 }
 
-// ErrShuttingDown is returned to the peer when the node is shutting down
+// ErrShuttingDown is returned to the peer when the node is shutting down.
 var ErrShuttingDown = errors.New("node is shutting down")
 
-// ErrBadRequest is returned to the peer upon failure to parse the request
+// ErrBadRequest is returned to the peer upon failure to parse the request.
 var ErrBadRequest = errors.New("unable to parse request")
 
-// ErrRequestTimeout is returned to the caller when the request times out
+// ErrRequestTimeout is returned to the caller when the request times out.
 var ErrRequestTimeout = errors.New("request timed out")
 
 type response struct {
@@ -81,7 +81,7 @@ func (r *response) getError() error {
 	return nil
 }
 
-// SerializeResponse serializes the response data returned by SendRequest
+// SerializeResponse serializes the response data returned by SendRequest.
 func SerializeResponse(data []byte, err error) []byte {
 	resp := response{Data: data}
 	if err != nil {
@@ -94,7 +94,7 @@ func SerializeResponse(data []byte, err error) []byte {
 	return bytes
 }
 
-// deserializeResponse deserializes the response data returned by SendRequest
+// deserializeResponse deserializes the response data returned by SendRequest.
 func deserializeResponse(data []byte) (*response, error) {
 	var resp response
 	err := types.BytesToInterface(data, &resp)
@@ -149,7 +149,7 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 	return p
 }
 
-// Close stops the MessageServer
+// Close stops the MessageServer.
 func (p *MessageServer) Close() {
 	p.With().Info("closing message server")
 	p.cancel()
@@ -195,7 +195,7 @@ func (p *MessageServer) readLoop(ctx context.Context) error {
 	}
 }
 
-// clean stale messages after request life time expires
+// clean stale messages after request life time expires.
 func (p *MessageServer) cleanStaleMessages() {
 	for {
 		p.pendMutex.RLock()
@@ -343,7 +343,7 @@ func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, pa
 	return nil
 }
 
-// TODO: make these longer, and random, to make it easier to find them in the logs
+// TODO: make these longer, and random, to make it easier to find them in the logs.
 func (p *MessageServer) newReqID() uint64 {
 	return atomic.AddUint64(&p.ReqID, 1)
 }

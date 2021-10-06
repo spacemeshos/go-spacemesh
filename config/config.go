@@ -35,7 +35,7 @@ var (
 	defaultDataDir = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
 )
 
-// Config defines the top level configuration for a spacemesh node
+// Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
 	Genesis         *apiConfig.GenesisConfig `mapstructure:"genesis"`
@@ -59,7 +59,7 @@ func (cfg *Config) DataDir() string {
 	return filepath.Join(filesystem.GetCanonicalPath(cfg.DataDirParent), fmt.Sprint(cfg.P2P.NetworkID))
 }
 
-// BaseConfig defines the default configuration options for spacemesh app
+// BaseConfig defines the default configuration options for spacemesh app.
 type BaseConfig struct {
 	DataDirParent string `mapstructure:"data-folder"`
 
@@ -154,7 +154,7 @@ type SmeshingConfig struct {
 	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
 }
 
-// DefaultConfig returns the default configuration for a spacemesh node
+// DefaultConfig returns the default configuration for a spacemesh node.
 func DefaultConfig() Config {
 	return Config{
 		BaseConfig:      defaultBaseConfig(),
@@ -181,7 +181,7 @@ func DefaultTestConfig() Config {
 	return conf
 }
 
-// DefaultBaseConfig returns a default configuration for spacemesh
+// DefaultBaseConfig returns a default configuration for spacemesh.
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:         defaultDataDir,
@@ -230,7 +230,7 @@ func defaultTestConfig() BaseConfig {
 	return conf
 }
 
-// LoadConfig load the config file
+// LoadConfig load the config file.
 func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 	if fileLocation == "" {
 		fileLocation = defaultConfigFileName
@@ -254,7 +254,7 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 	return nil
 }
 
-// SetConfigFile overrides the default config file path
+// SetConfigFile overrides the default config file path.
 func (cfg *BaseConfig) SetConfigFile(file string) {
 	cfg.ConfigFile = file
 }

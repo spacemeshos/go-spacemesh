@@ -52,11 +52,11 @@ var (
 	// the first genesis epoch and the following epoch in which ATXs are published.
 	effectiveGenesis uint32
 
-	// EmptyLayerHash is the layer hash for an empty layer
+	// EmptyLayerHash is the layer hash for an empty layer.
 	EmptyLayerHash = Hash32{}
 )
 
-// SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param
+// SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param.
 func SetLayersPerEpoch(layers uint32) {
 	atomic.StoreUint32(&layersPerEpoch, layers)
 	atomic.StoreUint32(&effectiveGenesis, layers*2-1)
@@ -66,7 +66,7 @@ func getLayersPerEpoch() uint32 {
 	return atomic.LoadUint32(&layersPerEpoch)
 }
 
-// GetEffectiveGenesis returns when actual blocks would be created
+// GetEffectiveGenesis returns when actual blocks would be created.
 func GetEffectiveGenesis() LayerID {
 	return NewLayerID(atomic.LoadUint32(&effectiveGenesis))
 }
@@ -296,7 +296,7 @@ func (b *Block) Bytes() []byte {
 	return blkBytes
 }
 
-// Fields returns an array of LoggableFields for logging
+// Fields returns an array of LoggableFields for logging.
 func (b *Block) Fields() []log.LoggableField {
 	activeSet := 0
 	if b.ActiveSet != nil {
@@ -386,7 +386,7 @@ func BlockIDs(blocks []*Block) []BlockID {
 	return ids
 }
 
-// BlockIdsField returns a list of loggable fields for a given list of BlockIDs
+// BlockIdsField returns a list of loggable fields for a given list of BlockIDs.
 func BlockIdsField(ids []BlockID) log.Field {
 	var strs []string
 	for _, a := range ids {

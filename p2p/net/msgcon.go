@@ -45,7 +45,7 @@ type msgConn interface {
 	beginEventProcessing(context.Context)
 }
 
-// Create a new connection wrapping a net.Conn with a provided connection manager
+// Create a new connection wrapping a net.Conn with a provided connection manager.
 func newMsgConnection(
 	conn readWriteCloseAddresser,
 	netw networker,
@@ -89,42 +89,42 @@ func newMsgConnectionWithMessagesChan(
 	}
 }
 
-// ID returns the channel's ID
+// ID returns the channel's ID.
 func (c *MsgConnection) ID() string {
 	return c.id
 }
 
-// RemoteAddr returns the channel's remote peer address
+// RemoteAddr returns the channel's remote peer address.
 func (c *MsgConnection) RemoteAddr() net.Addr {
 	return c.remoteAddr
 }
 
-// SetRemotePublicKey sets the remote peer's public key
+// SetRemotePublicKey sets the remote peer's public key.
 func (c *MsgConnection) SetRemotePublicKey(key p2pcrypto.PublicKey) {
 	c.remotePub = key
 }
 
-// RemotePublicKey returns the remote peer's public key
+// RemotePublicKey returns the remote peer's public key.
 func (c *MsgConnection) RemotePublicKey() p2pcrypto.PublicKey {
 	return c.remotePub
 }
 
-// SetSession sets the network session
+// SetSession sets the network session.
 func (c *MsgConnection) SetSession(session NetworkSession) {
 	c.session = session
 }
 
-// Session returns the network session
+// Session returns the network session.
 func (c *MsgConnection) Session() NetworkSession {
 	return c.session
 }
 
-// String returns a string describing the connection
+// String returns a string describing the connection.
 func (c *MsgConnection) String() string {
 	return c.id
 }
 
-// Created saves the time when the connection was created
+// Created saves the time when the connection was created.
 func (c *MsgConnection) Created() time.Time {
 	return c.created
 }
@@ -196,7 +196,7 @@ func (c *MsgConnection) sendListener() {
 	}
 }
 
-// Send pushes a message to the messages queue
+// Send pushes a message to the messages queue.
 func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 	c.cmtx.Lock()
 	if c.closed {
@@ -230,7 +230,7 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 	}
 }
 
-// sendSock sends a message directly on the socket
+// sendSock sends a message directly on the socket.
 func (c *MsgConnection) sendSock(m []byte) error {
 	if err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline)); err != nil {
 		return fmt.Errorf("set write deadline: %w", err)
@@ -267,7 +267,7 @@ func (c *MsgConnection) Close() error {
 	return nil
 }
 
-// Closed returns whether the connection is closed
+// Closed returns whether the connection is closed.
 func (c *MsgConnection) Closed() bool {
 	c.cmtx.Lock()
 	defer c.cmtx.Unlock()
@@ -275,7 +275,7 @@ func (c *MsgConnection) Closed() bool {
 }
 
 // Push outgoing message to the connections
-// Read from the incoming new messages and send down the connection
+// Read from the incoming new messages and send down the connection.
 func (c *MsgConnection) beginEventProcessing(ctx context.Context) {
 	var (
 		err error

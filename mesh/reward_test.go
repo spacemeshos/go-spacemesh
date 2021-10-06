@@ -229,7 +229,7 @@ func createMeshFromHareOutput(t *testing.T, finalLyr types.LayerID, msh *Mesh, a
 	}
 }
 
-// test states are the same when one input is data polled from peers and the other from hare's output
+// test states are the same when one input is data polled from peers and the other from hare's output.
 func TestMesh_updateStateWithLayer_SyncingAndHareReachSameState(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)
@@ -260,7 +260,7 @@ func TestMesh_updateStateWithLayer_SyncingAndHareReachSameState(t *testing.T) {
 	require.Greater(t, len(s1.Txs), 0)
 }
 
-// test state is the same after same result received from hare
+// test state is the same after same result received from hare.
 func TestMesh_updateStateWithLayer_SameInputFromHare(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)
@@ -285,7 +285,7 @@ func TestMesh_updateStateWithLayer_SameInputFromHare(t *testing.T) {
 	require.Equal(t, oldTxs, s.Txs)
 }
 
-// test state is the same after same result received from syncing with peers
+// test state is the same after same result received from syncing with peers.
 func TestMesh_updateStateWithLayer_SameInputFromSyncing(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)

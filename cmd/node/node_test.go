@@ -208,7 +208,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(true, app.Config.TestMode)
 }
 
-// This must be called in between each test that changes flags
+// This must be called in between each test that changes flags.
 func resetFlags() {
 	Cmd.ResetFlags()
 	cmdp.AddCommands(Cmd)
@@ -549,7 +549,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	require.Equal(t, message, msg.Msg.Value)
 }
 
-// E2E app test of the stream endpoints in the NodeService
+// E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
 	// errlog should be used only for testing.
 	logger := logtest.New(t)
@@ -679,7 +679,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	wg.Wait()
 }
 
-// E2E app test of the transaction service
+// E2E app test of the transaction service.
 func TestSpacemeshApp_TransactionService(t *testing.T) {
 	setup()
 	r := require.New(t)

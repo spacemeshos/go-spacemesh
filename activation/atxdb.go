@@ -85,7 +85,7 @@ type atxChan struct {
 }
 
 // DB hold the atxs received from all nodes and their validity status
-// it also stores identifications for all nodes e.g the coupling between ed id and bls id
+// it also stores identifications for all nodes e.g the coupling between ed id and bls id.
 type DB struct {
 	sync.RWMutex
 	// todo: think about whether we need one db or several(#1922)
@@ -102,7 +102,7 @@ type DB struct {
 }
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
-// their validity
+// their validity.
 func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:         idStore,
@@ -124,7 +124,7 @@ func init() {
 	close(closedChan)
 }
 
-// AwaitAtx returns a channel that will receive notification when the specified atx with id id is received via gossip
+// AwaitAtx returns a channel that will receive notification when the specified atx with id id is received via gossip.
 func (db *DB) AwaitAtx(id types.ATXID) chan struct{} {
 	db.Lock()
 	defer db.Unlock()
@@ -539,7 +539,7 @@ func (db *DB) getAtxTimestamp(id types.ATXID) (time.Time, error) {
 	return ts, nil
 }
 
-// addAtxToNodeID inserts activation atx id by node
+// addAtxToNodeID inserts activation atx id by node.
 func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
 	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.PubLayerID.GetEpoch()), atx.ID().Bytes())
 	if err != nil {
@@ -570,10 +570,10 @@ func (db *DB) addAtxTimestamp(ctx context.Context, timestamp time.Time, atx *typ
 	return nil
 }
 
-// ErrAtxNotFound is a specific error returned when no atx was found in DB
+// ErrAtxNotFound is a specific error returned when no atx was found in DB.
 type ErrAtxNotFound error
 
-// GetNodeLastAtxID returns the last atx id that was received for node nodeID
+// GetNodeLastAtxID returns the last atx id that was received for node nodeID.
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	it := db.atxs.Find(getNodeAtxPrefix(nodeID).Bytes())
 	defer it.Release()
@@ -594,7 +594,7 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	return types.ATXID(types.BytesToHash(it.Value())), nil
 }
 
-// GetEpochAtxs returns all valid ATXs received in the epoch epochID
+// GetEpochAtxs returns all valid ATXs received in the epoch epochID.
 func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID, err error) {
 	it := db.atxs.Find(getEpochPrefix(epochID).Bytes())
 	defer it.Release()
@@ -614,7 +614,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID, err error
 }
 
 // GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified publication epoch. meaning the atx
-// that the requested nodeID has published. it returns an error if no atx was found for provided nodeID
+// that the requested nodeID has published. it returns an error if no atx was found for provided nodeID.
 func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, publicationEpoch types.EpochID) (types.ATXID, error) {
 	id, err := db.atxs.Get(getNodeAtxKey(nodeID, publicationEpoch))
 	if err != nil {
@@ -624,7 +624,7 @@ func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, publicationEpoch types.E
 	return types.ATXID(types.BytesToHash(id)), nil
 }
 
-// GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id
+// GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id.
 func (db *DB) GetPosAtxID() (types.ATXID, error) {
 	idAndLayer, err := db.getTopAtx()
 	if err != nil {
@@ -687,7 +687,7 @@ func (db *DB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
 }
 
 // GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
-// in all databases
+// in all databases.
 func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	if id == *types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
@@ -712,7 +712,7 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 }
 
 // ValidateSignedAtx extracts public key from message and verifies public key exists in idStore, this is how we validate
-// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
+// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity.
 func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {
 	// this is the first occurrence of this identity, we cannot validate simply by extracting public key
 	// pass it down to Atx handling so that atx can be syntactically verified and identity could be registered.
@@ -728,7 +728,7 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 	return nil
 }
 
-// HandleGossipAtx handles the atx gossip data channel
+// HandleGossipAtx handles the atx gossip data channel.
 func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, fetcher service.Fetcher) {
 	if data == nil {
 		return
@@ -741,7 +741,7 @@ func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, f
 	data.ReportValidation(ctx, AtxProtocol)
 }
 
-// HandleAtxData handles atxs received either by gossip or sync
+// HandleAtxData handles atxs received either by gossip or sync.
 func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fetcher) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
@@ -782,7 +782,7 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 	return nil
 }
 
-// FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
+// FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db.
 func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f service.Fetcher) error {
 	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {

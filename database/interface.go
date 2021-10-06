@@ -70,5 +70,5 @@ type Batch interface {
 	Reset()
 }
 
-// Iterator defined basic iterator interface
+// Iterator defined basic iterator interface.
 type Iterator = iterator.Iterator

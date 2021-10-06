@@ -13,7 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
-// NewBlockProtocol is the protocol indicator for gossip blocks
+// NewBlockProtocol is the protocol indicator for gossip blocks.
 const NewBlockProtocol = "newBlock"
 
 var (
@@ -37,7 +37,7 @@ type blockValidator interface {
 	BlockSignedAndEligible(block *types.Block) (bool, error)
 }
 
-// BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip
+// BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip.
 type BlockHandler struct {
 	log.Log
 	traverse    forBlockInView
@@ -47,13 +47,13 @@ type BlockHandler struct {
 	goldenATXID types.ATXID
 }
 
-// Config defines configuration for block handler
+// Config defines configuration for block handler.
 type Config struct {
 	Depth       uint32
 	GoldenATXID types.ATXID
 }
 
-// NewBlockHandler creates new BlockHandler
+// NewBlockHandler creates new BlockHandler.
 func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHandler {
 	return &BlockHandler{
 		Log:         lg,
@@ -65,7 +65,7 @@ func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHan
 	}
 }
 
-// HandleBlock handles blocks from gossip
+// HandleBlock handles blocks from gossip.
 func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMessage, fetcher service.Fetcher) {
 	// restore the request ID and add context
 	if data.RequestID() != "" {
@@ -82,7 +82,7 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMess
 	data.ReportValidation(ctx, NewBlockProtocol)
 }
 
-// HandleBlockData handles blocks from gossip and sync
+// HandleBlockData handles blocks from gossip and sync.
 func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetcher service.Fetcher) error {
 	logger := bh.WithContext(ctx)
 	logger.Info("handling data for new block")

@@ -13,7 +13,7 @@ type proposalTrackerProvider interface {
 	ProposedSet() *Set
 }
 
-// proposalTracker tracks proposal messages
+// proposalTracker tracks proposal messages.
 type proposalTracker struct {
 	log.Log
 	proposal      *Msg // maps PubKey->Proposal

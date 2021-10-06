@@ -26,22 +26,22 @@ var (
 	ErrClosed = errors.New("p2p: connection closed")
 	// ErrQueueFull is returned when the outbound message queue is full.
 	ErrQueueFull = errors.New("p2p: outbound message queue is full, dropping peer")
-	// ErrTriedToSetupExistingConn occurs when handshake packet is sent twice on a connection
+	// ErrTriedToSetupExistingConn occurs when handshake packet is sent twice on a connection.
 	ErrTriedToSetupExistingConn = errors.New("p2p: tried to setup existing connection")
-	// ErrMsgExceededLimit occurs when a received message size exceeds the defined message size
+	// ErrMsgExceededLimit occurs when a received message size exceeds the defined message size.
 	ErrMsgExceededLimit = errors.New("p2p: message size exceeded limit")
 )
 
 // ConnectionSource specifies the connection originator - local or remote node.
 type ConnectionSource int
 
-// ConnectionSource values
+// ConnectionSource values.
 const (
 	Local ConnectionSource = iota
 	Remote
 )
 
-// MessageQueueSize is the size for queue of messages before pushing them on the socket
+// MessageQueueSize is the size for queue of messages before pushing them on the socket.
 const MessageQueueSize = 250
 
 type msgToSend struct {
@@ -50,7 +50,7 @@ type msgToSend struct {
 	peerID  string
 }
 
-// Connection is an interface stating the API of all secured connections in the system
+// Connection is an interface stating the API of all secured connections in the system.
 type Connection interface {
 	fmt.Stringer
 
@@ -70,7 +70,7 @@ type Connection interface {
 }
 
 // FormattedConnection is an io.Writer and an io.Closer
-// A network connection supporting full-duplex messaging
+// A network connection supporting full-duplex messaging.
 type FormattedConnection struct {
 	closed uint64
 	// metadata for logging / debugging
@@ -127,7 +127,7 @@ type fmtConnection interface {
 	beginEventProcessing(context.Context)
 }
 
-// Create a new connection wrapping a net.Conn with a provided connection manager
+// Create a new connection wrapping a net.Conn with a provided connection manager.
 func newConnection(
 	conn readWriteCloseAddresser,
 	netw networker,
@@ -175,42 +175,42 @@ func newConnectionWithMessagesChan(
 	}
 }
 
-// ID returns the channel's ID
+// ID returns the channel's ID.
 func (c *FormattedConnection) ID() string {
 	return c.id
 }
 
-// RemoteAddr returns the channel's remote peer address
+// RemoteAddr returns the channel's remote peer address.
 func (c *FormattedConnection) RemoteAddr() net.Addr {
 	return c.remoteAddr
 }
 
-// SetRemotePublicKey sets the remote peer's public key
+// SetRemotePublicKey sets the remote peer's public key.
 func (c *FormattedConnection) SetRemotePublicKey(key p2pcrypto.PublicKey) {
 	c.remotePub = key
 }
 
-// RemotePublicKey returns the remote peer's public key
+// RemotePublicKey returns the remote peer's public key.
 func (c *FormattedConnection) RemotePublicKey() p2pcrypto.PublicKey {
 	return c.remotePub
 }
 
-// SetSession sets the network session
+// SetSession sets the network session.
 func (c *FormattedConnection) SetSession(session NetworkSession) {
 	c.session = session
 }
 
-// Session returns the network session
+// Session returns the network session.
 func (c *FormattedConnection) Session() NetworkSession {
 	return c.session
 }
 
-// String returns a string describing the connection
+// String returns a string describing the connection.
 func (c *FormattedConnection) String() string {
 	return c.id
 }
 
-// Created is the time the connection was created
+// Created is the time the connection was created.
 func (c *FormattedConnection) Created() time.Time {
 	return c.created
 }
@@ -332,7 +332,7 @@ func (c *FormattedConnection) sendSock(m []byte) error {
 	return nil
 }
 
-// Closed returns whether the connection is closed
+// Closed returns whether the connection is closed.
 func (c *FormattedConnection) Closed() bool {
 	return atomic.LoadUint64(&c.closed) == 1
 }
@@ -398,7 +398,7 @@ func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Du
 	return nil
 }
 
-// Read from the incoming new messages and send down the connection
+// Read from the incoming new messages and send down the connection.
 func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 	// TODO: use a buffer pool
 	var (

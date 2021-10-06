@@ -17,13 +17,13 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// SmesherService exposes endpoints to manage smeshing
+// SmesherService exposes endpoints to manage smeshing.
 type SmesherService struct {
 	postSetupProvider api.PostSetupAPI
 	smeshingProvider  api.SmeshingAPI
 }
 
-// RegisterService registers this service with a grpc server instance
+// RegisterService registers this service with a grpc server instance.
 func (s SmesherService) RegisterService(server *Server) {
 	pb.RegisterSmesherServiceServer(server.GrpcServer, s)
 }
@@ -33,14 +33,14 @@ func NewSmesherService(post api.PostSetupAPI, smeshing api.SmeshingAPI) *Smesher
 	return &SmesherService{post, smeshing}
 }
 
-// IsSmeshing reports whether the node is smeshing
+// IsSmeshing reports whether the node is smeshing.
 func (s SmesherService) IsSmeshing(context.Context, *empty.Empty) (*pb.IsSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.IsSmeshing")
 
 	return &pb.IsSmeshingResponse{IsSmeshing: s.smeshingProvider.Smeshing()}, nil
 }
 
-// StartSmeshing requests that the node begin smeshing
+// StartSmeshing requests that the node begin smeshing.
 func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingRequest) (*pb.StartSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StartSmeshing")
 	if in.Coinbase == nil {
@@ -83,7 +83,7 @@ func (s SmesherService) StartSmeshing(ctx context.Context, in *pb.StartSmeshingR
 	}, nil
 }
 
-// StopSmeshing requests that the node stop smeshing
+// StopSmeshing requests that the node stop smeshing.
 func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingRequest) (*pb.StopSmeshingResponse, error) {
 	log.Info("GRPC SmesherService.StopSmeshing")
 
@@ -106,7 +106,7 @@ func (s SmesherService) StopSmeshing(ctx context.Context, in *pb.StopSmeshingReq
 	}, nil
 }
 
-// SmesherID returns the smesher ID of this node
+// SmesherID returns the smesher ID of this node.
 func (s SmesherService) SmesherID(context.Context, *empty.Empty) (*pb.SmesherIDResponse, error) {
 	log.Info("GRPC SmesherService.SmesherID")
 
@@ -114,7 +114,7 @@ func (s SmesherService) SmesherID(context.Context, *empty.Empty) (*pb.SmesherIDR
 	return &pb.SmesherIDResponse{AccountId: &pb.AccountId{Address: addr}}, nil
 }
 
-// Coinbase returns the current coinbase setting of this node
+// Coinbase returns the current coinbase setting of this node.
 func (s SmesherService) Coinbase(context.Context, *empty.Empty) (*pb.CoinbaseResponse, error) {
 	log.Info("GRPC SmesherService.Coinbase")
 
@@ -122,7 +122,7 @@ func (s SmesherService) Coinbase(context.Context, *empty.Empty) (*pb.CoinbaseRes
 	return &pb.CoinbaseResponse{AccountId: &pb.AccountId{Address: addr.Bytes()}}, nil
 }
 
-// SetCoinbase sets the current coinbase setting of this node
+// SetCoinbase sets the current coinbase setting of this node.
 func (s SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest) (*pb.SetCoinbaseResponse, error) {
 	log.Info("GRPC SmesherService.SetCoinbase")
 
@@ -138,25 +138,25 @@ func (s SmesherService) SetCoinbase(_ context.Context, in *pb.SetCoinbaseRequest
 	}, nil
 }
 
-// MinGas returns the current mingas setting of this node
+// MinGas returns the current mingas setting of this node.
 func (s SmesherService) MinGas(context.Context, *empty.Empty) (*pb.MinGasResponse, error) {
 	log.Info("GRPC SmesherService.MinGas")
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
-// SetMinGas sets the mingas setting of this node
+// SetMinGas sets the mingas setting of this node.
 func (s SmesherService) SetMinGas(context.Context, *pb.SetMinGasRequest) (*pb.SetMinGasResponse, error) {
 	log.Info("GRPC SmesherService.SetMinGas")
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
-// EstimatedRewards returns estimated smeshing rewards over the next epoch
+// EstimatedRewards returns estimated smeshing rewards over the next epoch.
 func (s SmesherService) EstimatedRewards(context.Context, *pb.EstimatedRewardsRequest) (*pb.EstimatedRewardsResponse, error) {
 	log.Info("GRPC SmesherService.EstimatedRewards")
 	return nil, status.Errorf(codes.Unimplemented, "this endpoint is not implemented")
 }
 
-// PostSetupStatus returns post data status
+// PostSetupStatus returns post data status.
 func (s SmesherService) PostSetupStatus(context.Context, *empty.Empty) (*pb.PostSetupStatusResponse, error) {
 	log.Info("GRPC SmesherService.PostSetupStatus")
 
@@ -164,7 +164,7 @@ func (s SmesherService) PostSetupStatus(context.Context, *empty.Empty) (*pb.Post
 	return &pb.PostSetupStatusResponse{Status: statusToPbStatus(status)}, nil
 }
 
-// PostSetupStatusStream exposes a stream of status updates during post setup
+// PostSetupStatusStream exposes a stream of status updates during post setup.
 func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherService_PostSetupStatusStreamServer) error {
 	log.Info("GRPC SmesherService.PostSetupStatusStream")
 
@@ -184,7 +184,7 @@ func (s SmesherService) PostSetupStatusStream(_ *empty.Empty, stream pb.SmesherS
 	}
 }
 
-// PostSetupComputeProviders returns a list of available Post setup compute providers
+// PostSetupComputeProviders returns a list of available Post setup compute providers.
 func (s SmesherService) PostSetupComputeProviders(ctx context.Context, in *pb.PostSetupComputeProvidersRequest) (*pb.PostSetupComputeProvidersResponse, error) {
 	log.Info("GRPC SmesherService.PostSetupComputeProviders")
 

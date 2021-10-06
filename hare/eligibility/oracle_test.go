@@ -672,7 +672,7 @@ func TestOracle_concurrentActives(t *testing.T) {
 	r.Equal(1, mc.numAdd)
 }
 
-// make sure the oracle collects blocks from all layers in the safe layer range
+// make sure the oracle collects blocks from all layers in the safe layer range.
 func TestOracle_MultipleLayerBlocks(t *testing.T) {
 	r := require.New(t)
 	confidenceParam := uint32(25)

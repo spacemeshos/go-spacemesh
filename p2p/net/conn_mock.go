@@ -130,12 +130,12 @@ func (cm *ConnectionMock) beginEventProcessing(context.Context) {
 	}
 }
 
-// String mocks the interface
+// String mocks the interface.
 func (cm ConnectionMock) String() string {
 	return cm.id
 }
 
-// sendSock mocks the interface
+// sendSock mocks the interface.
 func (cm *ConnectionMock) sendSock([]byte) error {
 	panic("not implemented")
 }

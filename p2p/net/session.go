@@ -34,7 +34,7 @@ func (n networkSessionImpl) String() string {
 	return n.peerPubkey.String()
 }
 
-// ID returns the session's unique id
+// ID returns the session's unique id.
 func (n networkSessionImpl) ID() p2pcrypto.PublicKey {
 	return n.peerPubkey
 }
@@ -61,7 +61,7 @@ func (n networkSessionImpl) OpenMessage(boxedMessage []byte) (message []byte, er
 	return message, nil
 }
 
-// NewNetworkSession creates a new network session based on provided data
+// NewNetworkSession creates a new network session based on provided data.
 func NewNetworkSession(sharedSecret p2pcrypto.SharedSecret, peerPubkey p2pcrypto.PublicKey) NetworkSession {
 	return &networkSessionImpl{
 		sharedSecret: sharedSecret,

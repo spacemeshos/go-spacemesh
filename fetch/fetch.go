@@ -19,12 +19,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
-// Hint marks which DB should be queried for a certain provided hash
+// Hint marks which DB should be queried for a certain provided hash.
 type Hint string
 
 var emptyHash = types.Hash32{}
 
-// DB hints per DB
+// DB hints per DB.
 const (
 	BlockDB Hint = "blocksDB"
 	ATXDB   Hint = "ATXDB"
@@ -33,14 +33,14 @@ const (
 )
 
 // priority defines whether Data will be fetched at once or batched and waited for up to "batchTimeout"
-// until fetched
+// until fetched.
 type priority uint16
 
-// Message priority constants
+// Message priority constants.
 const (
-	// Low will perform batched calls
+	// Low will perform batched calls.
 	Low priority = 0
-	// High will call fetch immediately
+	// High will call fetch immediately.
 	High priority = 1
 )
 
@@ -49,10 +49,10 @@ const (
 	batchMaxSize  = 20
 )
 
-// ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peers
+// ErrCouldNotSend is a special type of error indicating fetch could not be done because message could not be sent to peers.
 type ErrCouldNotSend error
 
-// ErrExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch data for a hash and failed
+// ErrExceedMaxRetries is returned when MaxRetriesForRequest attempts has been made to fetch data for a hash and failed.
 var ErrExceedMaxRetries = errors.New("fetch failed after max retries for request")
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./fetch.go
@@ -67,7 +67,7 @@ type Fetcher interface {
 	Start()
 }
 
-/// request contains all relevant Data for a single request for a specified hash
+/// request contains all relevant Data for a single request for a specified hash.
 type request struct {
 	hash                 types.Hash32               // hash is the hash of the Data requested
 	priority             priority                   // priority is for QoS
@@ -77,19 +77,19 @@ type request struct {
 	retries              int
 }
 
-// requestMessage is the on the wire message that will be send to the peer for hash query
+// requestMessage is the on the wire message that will be send to the peer for hash query.
 type requestMessage struct {
 	Hint Hint
 	Hash types.Hash32
 }
 
-// responseMessage is the on the wire message that will be send to the this node as response,
+// responseMessage is the on the wire message that will be send to the this node as response,.
 type responseMessage struct {
 	Hash types.Hash32
 	Data []byte
 }
 
-// requestBatch is a batch of requests and a hash of all requests as ID
+// requestBatch is a batch of requests and a hash of all requests as ID.
 type requestBatch struct {
 	ID       types.Hash32
 	Requests []requestMessage
@@ -100,7 +100,7 @@ type batchInfo struct {
 	peer peers.Peer
 }
 
-// SetID calculates the hash of all requests and sets it as this batches ID
+// SetID calculates the hash of all requests and sets it as this batches ID.
 func (b *batchInfo) SetID() {
 	bts, err := types.InterfaceToBytes(b.Requests)
 	if err != nil {
@@ -109,7 +109,7 @@ func (b *batchInfo) SetID() {
 	b.ID = types.CalcHash32(bts)
 }
 
-// ToMap converts the array of requests to map so it can be easily invalidated
+// ToMap converts the array of requests to map so it can be easily invalidated.
 func (b batchInfo) ToMap() map[types.Hash32]requestMessage {
 	m := make(map[types.Hash32]requestMessage)
 	for _, r := range b.Requests {
@@ -119,13 +119,13 @@ func (b batchInfo) ToMap() map[types.Hash32]requestMessage {
 }
 
 // responseBatch is the response struct send for a requestBatch. the responseBatch ID must be the same
-// as stated in requestBatch even if not all Data is present
+// as stated in requestBatch even if not all Data is present.
 type responseBatch struct {
 	ID        types.Hash32
 	Responses []responseMessage
 }
 
-// Config is the configuration file of the Fetch component
+// Config is the configuration file of the Fetch component.
 type Config struct {
 	BatchTimeout         int // in milliseconds
 	MaxRetriesForPeer    int
@@ -134,7 +134,7 @@ type Config struct {
 	MaxRetriesForRequest int
 }
 
-// DefaultConfig is the default config for the fetch component
+// DefaultConfig is the default config for the fetch component.
 func DefaultConfig() Config {
 	return Config{
 		BatchTimeout:         50,
@@ -151,20 +151,20 @@ type peersProvider interface {
 	Close()
 }
 
-// MessageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'
+// MessageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'.
 type MessageNetwork struct {
 	*server.MessageServer
 	peersProvider
 	log.Log
 }
 
-// Close closes the message network
+// Close closes the message network.
 func (mn MessageNetwork) Close() {
 	mn.MessageServer.Close()
 	mn.peersProvider.Close()
 }
 
-// NewMessageNetwork creates a new instance of the fetch network server
+// NewMessageNetwork creates a new instance of the fetch network server.
 func NewMessageNetwork(ctx context.Context, requestTimeOut int, net service.Service, protocol string, log log.Log) *MessageNetwork {
 	return &MessageNetwork{
 		server.NewMsgServer(ctx, net.(server.Service), protocol, time.Duration(requestTimeOut)*time.Second, make(chan service.DirectMessage, p2pconf.Values.BufferSize), log),
@@ -173,7 +173,7 @@ func NewMessageNetwork(ctx context.Context, requestTimeOut int, net service.Serv
 	}
 }
 
-// GetRandomPeer returns a random peer from current peer list
+// GetRandomPeer returns a random peer from current peer list.
 func GetRandomPeer(peers []peers.Peer) peers.Peer {
 	if len(peers) == 0 {
 		log.Panic("cannot send fetch: no peers found")
@@ -181,7 +181,7 @@ func GetRandomPeer(peers []peers.Peer) peers.Peer {
 	return peers[rand.Intn(len(peers))]
 }
 
-// GetPeers return active peers
+// GetPeers return active peers.
 func (mn MessageNetwork) GetPeers() []peers.Peer {
 	return mn.peersProvider.GetPeers()
 }
@@ -194,7 +194,7 @@ type network interface {
 	Close()
 }
 
-// Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch requests
+// Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch requests.
 type Fetch struct {
 	cfg Config
 	log log.Log
@@ -217,7 +217,7 @@ type Fetch struct {
 	dbLock               sync.RWMutex
 }
 
-// NewFetch creates a new Fetch struct
+// NewFetch creates a new Fetch struct.
 func NewFetch(ctx context.Context, cfg Config, network service.Service, logger log.Log) *Fetch {
 	srv := NewMessageNetwork(ctx, cfg.RequestTimeout, network, fetchProtocol, logger)
 
@@ -238,7 +238,7 @@ func NewFetch(ctx context.Context, cfg Config, network service.Service, logger l
 	return f
 }
 
-// Start starts handling fetch requests
+// Start starts handling fetch requests.
 func (f *Fetch) Start() {
 	f.onlyOnce.Do(func() {
 		f.net.RegisterBytesMsgHandler(server.Fetch, f.FetchRequestHandler)
@@ -246,7 +246,7 @@ func (f *Fetch) Start() {
 	})
 }
 
-// Stop stops handling fetch requests
+// Stop stops handling fetch requests.
 func (f *Fetch) Stop() {
 	f.log.Info("stopping fetch")
 	f.batchTimeout.Stop()
@@ -270,7 +270,7 @@ func (f *Fetch) Stop() {
 	f.log.Info("stopped fetch")
 }
 
-// stopped returns if we should stop
+// stopped returns if we should stop.
 func (f *Fetch) stopped() bool {
 	select {
 	case <-f.stop:
@@ -281,7 +281,7 @@ func (f *Fetch) stopped() bool {
 }
 
 // AddDB adds a DB with corresponding hint
-// all network peersProvider will be able to query this DB
+// all network peersProvider will be able to query this DB.
 func (f *Fetch) AddDB(hint Hint, db database.Getter) {
 	f.dbLock.Lock()
 	f.dbs[hint] = db
@@ -323,7 +323,7 @@ func (f *Fetch) handleNewRequest(req *request) bool {
 }
 
 // here we receive all requests for hashes for all DBs and batch them together before we send the request to peer
-// there can be a priority request that will not be batched
+// there can be a priority request that will not be batched.
 func (f *Fetch) loop() {
 	f.log.Info("starting fetch main loop")
 	for {
@@ -340,7 +340,7 @@ func (f *Fetch) loop() {
 }
 
 // FetchRequestHandler handles requests for sync from peersProvider, and basically reads Data from database and puts it
-// in a response batch
+// in a response batch.
 func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) ([]byte, error) {
 	if f.stopped() {
 		return nil, server.ErrShuttingDown
@@ -398,7 +398,7 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) ([]byte, e
 	return bts, nil
 }
 
-// receive Data from message server and call response handlers accordingly
+// receive Data from message server and call response handlers accordingly.
 func (f *Fetch) receiveResponse(data []byte) {
 	if f.stopped() {
 		return
@@ -496,7 +496,7 @@ func (f *Fetch) receiveResponse(data []byte) {
 	f.activeBatchM.Unlock()
 }
 
-// this is the main function that sends the hash request to the peer
+// this is the main function that sends the hash request to the peer.
 func (f *Fetch) requestHashBatchFromPeers() {
 	var requestList []requestMessage
 	f.activeReqM.Lock()
@@ -520,7 +520,7 @@ func (f *Fetch) requestHashBatchFromPeers() {
 	}
 }
 
-// sendBatch dispatches batched request messages
+// sendBatch dispatches batched request messages.
 func (f *Fetch) sendBatch(requests []requestMessage) {
 	// build list of batch messages
 	var batch batchInfo
@@ -586,7 +586,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	}
 }
 
-// handleHashError is called when an error occurred processing batches of the following hashes
+// handleHashError is called when an error occurred processing batches of the following hashes.
 func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 	f.log.With().Debug("cannot fetch message",
 		log.String("batchHash", batchHash.ShortString()),
@@ -622,7 +622,7 @@ func (f *Fetch) handleHashError(batchHash types.Hash32, err error) {
 	f.activeBatchM.Unlock()
 }
 
-// HashDataPromiseResult is the result strict when requesting Data corresponding to the Hash
+// HashDataPromiseResult is the result strict when requesting Data corresponding to the Hash.
 type HashDataPromiseResult struct {
 	Err     error
 	Hash    types.Hash32
@@ -630,7 +630,7 @@ type HashDataPromiseResult struct {
 	IsLocal bool
 }
 
-// GetHashes gets a list of hashes to be fetched and will return a map of hashes and their respective promise channels
+// GetHashes gets a list of hashes to be fetched and will return a map of hashes and their respective promise channels.
 func (f *Fetch) GetHashes(hashes []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult {
 	hashWaiting := make(map[types.Hash32]chan HashDataPromiseResult)
 	for _, id := range hashes {
@@ -642,7 +642,7 @@ func (f *Fetch) GetHashes(hashes []types.Hash32, hint Hint, validateHash bool) m
 }
 
 // GetHash is the regular buffered call to get a specific hash, using provided hash, h as hint the receiving end will
-// know where to look for the hash, this function returns HashDataPromiseResult channel that will hold Data received or error
+// know where to look for the hash, this function returns HashDataPromiseResult channel that will hold Data received or error.
 func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult {
 	resChan := make(chan HashDataPromiseResult, 1)
 

@@ -17,14 +17,14 @@ func bytesToMBFormmater(x uint64) string {
 	return fmt.Sprintf("%vMB", x/1024/1024)
 }
 
-// MemoryUpdater tracks mem stats provided by runtime.ReadMemStats such as Alloc, NumGoroutine etc
+// MemoryUpdater tracks mem stats provided by runtime.ReadMemStats such as Alloc, NumGoroutine etc.
 type MemoryUpdater struct {
 	memTracker   map[string]*Tracker
 	formatters   map[string]formatter
 	recordsCount int
 }
 
-// NewMemoryUpdater returns a new tracker instance
+// NewMemoryUpdater returns a new tracker instance.
 func NewMemoryUpdater() *MemoryUpdater {
 	mu := new(MemoryUpdater)
 	mu.memTracker = make(map[string]*Tracker)
@@ -40,7 +40,7 @@ func NewMemoryUpdater() *MemoryUpdater {
 	return mu
 }
 
-// Update takes a new sample and adds it to statistics
+// Update takes a new sample and adds it to statistics.
 func (mu *MemoryUpdater) Update() {
 	var rtm runtime.MemStats
 
@@ -67,7 +67,7 @@ func (mu *MemoryUpdater) Update() {
 	mu.recordsCount++
 }
 
-// Status returns a string description of the stats collected for the memory trackers <min, max, avg>
+// Status returns a string description of the stats collected for the memory trackers <min, max, avg>.
 func (mu *MemoryUpdater) Status() string {
 	s := fmt.Sprintf("Records count=%v\n", mu.recordsCount)
 
@@ -87,7 +87,7 @@ func (mu *MemoryUpdater) Status() string {
 	return s
 }
 
-// LogJSON returns a string description of the current status as JSON
+// LogJSON returns a string description of the current status as JSON.
 func (mu *MemoryUpdater) LogJSON() {
 	for _, name := range names {
 		max := mu.memTracker[name].Max()

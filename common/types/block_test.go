@@ -32,7 +32,7 @@ var (
 	atx3 = ATXID(three)
 )
 
-// Make sure we can print out all the relevant log fields for a block
+// Make sure we can print out all the relevant log fields for a block.
 func TestFields(t *testing.T) {
 	t.Skip("this is not a proper test")
 	SetLayersPerEpoch(3)

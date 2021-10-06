@@ -18,7 +18,7 @@ import (
 	"go.uber.org/zap"
 )
 
-// Cmd is the p2p cmd
+// Cmd is the p2p cmd.
 var Cmd = &cobra.Command{
 	Use:   "p2p",
 	Short: "start p2p",
@@ -35,19 +35,19 @@ func init() {
 	cmdp.AddCommands(Cmd)
 }
 
-// P2PApp is an app struct used to run only p2p functionality
+// P2PApp is an app struct used to run only p2p functionality.
 type P2PApp struct {
 	*cmdp.BaseApp
 	p2p     p2p.Service
 	closers []io.Closer
 }
 
-// NewP2PApp creates the base app
+// NewP2PApp creates the base app.
 func NewP2PApp() *P2PApp {
 	return &P2PApp{BaseApp: cmdp.NewBaseApp()}
 }
 
-// Cleanup closes all services
+// Cleanup closes all services.
 func (app *P2PApp) Cleanup() {
 	for _, c := range app.closers {
 		if err := c.Close(); err != nil {

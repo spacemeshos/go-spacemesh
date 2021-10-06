@@ -13,7 +13,7 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// MeshService exposes mesh data such as accounts, blocks, and transactions
+// MeshService exposes mesh data such as accounts, blocks, and transactions.
 type MeshService struct {
 	Mesh             api.TxAPI // Mesh
 	GenTime          api.GenesisTimeAPI
@@ -24,12 +24,12 @@ type MeshService struct {
 	TxsPerBlock      int
 }
 
-// RegisterService registers this service with a grpc server instance
+// RegisterService registers this service with a grpc server instance.
 func (s MeshService) RegisterService(server *Server) {
 	pb.RegisterMeshServiceServer(server.GrpcServer, s)
 }
 
-// NewMeshService creates a new service using config data
+// NewMeshService creates a new service using config data.
 func NewMeshService(
 	tx api.TxAPI, genTime api.GenesisTimeAPI,
 	layersPerEpoch uint32, networkID uint32, layerDurationSec int,
@@ -45,7 +45,7 @@ func NewMeshService(
 	}
 }
 
-// GenesisTime returns the network genesis time as UNIX time
+// GenesisTime returns the network genesis time as UNIX time.
 func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.GenesisTimeResponse, error) {
 	log.Info("GRPC MeshService.GenesisTime")
 	return &pb.GenesisTimeResponse{Unixtime: &pb.SimpleInt{
@@ -53,7 +53,7 @@ func (s MeshService) GenesisTime(context.Context, *pb.GenesisTimeRequest) (*pb.G
 	}}, nil
 }
 
-// CurrentLayer returns the current layer number
+// CurrentLayer returns the current layer number.
 func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb.CurrentLayerResponse, error) {
 	log.Info("GRPC MeshService.CurrentLayer")
 	return &pb.CurrentLayerResponse{Layernum: &pb.LayerNumber{
@@ -61,7 +61,7 @@ func (s MeshService) CurrentLayer(context.Context, *pb.CurrentLayerRequest) (*pb
 	}}, nil
 }
 
-// CurrentEpoch returns the current epoch number
+// CurrentEpoch returns the current epoch number.
 func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb.CurrentEpochResponse, error) {
 	log.Info("GRPC MeshService.CurrentEpoch")
 	curLayer := s.GenTime.GetCurrentLayer()
@@ -70,7 +70,7 @@ func (s MeshService) CurrentEpoch(context.Context, *pb.CurrentEpochRequest) (*pb
 	}}, nil
 }
 
-// NetID returns the network ID
+// NetID returns the network ID.
 func (s MeshService) NetID(context.Context, *pb.NetIDRequest) (*pb.NetIDResponse, error) {
 	log.Info("GRPC MeshService.NetId")
 	return &pb.NetIDResponse{Netid: &pb.SimpleInt{
@@ -78,7 +78,7 @@ func (s MeshService) NetID(context.Context, *pb.NetIDRequest) (*pb.NetIDResponse
 	}}, nil
 }
 
-// EpochNumLayers returns the number of layers per epoch (a network parameter)
+// EpochNumLayers returns the number of layers per epoch (a network parameter).
 func (s MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) (*pb.EpochNumLayersResponse, error) {
 	log.Info("GRPC MeshService.EpochNumLayers")
 	return &pb.EpochNumLayersResponse{Numlayers: &pb.SimpleInt{
@@ -86,7 +86,7 @@ func (s MeshService) EpochNumLayers(context.Context, *pb.EpochNumLayersRequest) 
 	}}, nil
 }
 
-// LayerDuration returns the layer duration in seconds (a network parameter)
+// LayerDuration returns the layer duration in seconds (a network parameter).
 func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*pb.LayerDurationResponse, error) {
 	log.Info("GRPC MeshService.LayerDuration")
 	return &pb.LayerDurationResponse{Duration: &pb.SimpleInt{
@@ -94,7 +94,7 @@ func (s MeshService) LayerDuration(context.Context, *pb.LayerDurationRequest) (*
 	}}, nil
 }
 
-// MaxTransactionsPerSecond returns the max number of tx per sec (a network parameter)
+// MaxTransactionsPerSecond returns the max number of tx per sec (a network parameter).
 func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactionsPerSecondRequest) (*pb.MaxTransactionsPerSecondResponse, error) {
 	log.Info("GRPC MeshService.MaxTransactionsPerSecond")
 	return &pb.MaxTransactionsPerSecondResponse{MaxTxsPerSecond: &pb.SimpleInt{
@@ -152,7 +152,7 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 	return
 }
 
-// AccountMeshDataQuery returns account data
+// AccountMeshDataQuery returns account data.
 func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMeshDataQueryRequest) (*pb.AccountMeshDataQueryResponse, error) {
 	log.Info("GRPC MeshService.AccountMeshDataQuery")
 
@@ -384,7 +384,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	}, nil
 }
 
-// LayersQuery returns all mesh data, layer by layer
+// LayersQuery returns all mesh data, layer by layer.
 func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest) (*pb.LayersQueryResponse, error) {
 	log.Info("GRPC MeshService.LayersQuery")
 
@@ -437,7 +437,7 @@ func (s MeshService) LayersQuery(ctx context.Context, in *pb.LayersQueryRequest)
 
 // STREAMS
 
-// AccountMeshDataStream exposes a stream of transactions and activations for an account
+// AccountMeshDataStream exposes a stream of transactions and activations for an account.
 func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, stream pb.MeshService_AccountMeshDataStreamServer) error {
 	log.Info("GRPC MeshService.AccountMeshDataStream")
 
@@ -530,7 +530,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 	}
 }
 
-// LayerStream exposes a stream of all mesh data per layer
+// LayerStream exposes a stream of all mesh data per layer.
 func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
 	log.Info("GRPC MeshService.LayerStream")
 	layerStream := events.GetLayerChannel()

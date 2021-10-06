@@ -42,7 +42,7 @@ func init() {
 	// spew.Config.DisableMethods = false
 }
 
-// Used for testing
+// Used for testing.
 func newEmpty() *Trie {
 	trie, _ := New(types.Hash32{}, NewDatabase(database.NewMemDatabase()))
 	return trie

@@ -31,7 +31,7 @@ func duration(duration string) (dur time.Duration) {
 	return dur
 }
 
-// DefaultConfig defines the default tymesync configuration
+// DefaultConfig defines the default tymesync configuration.
 func DefaultConfig() TimeConfig {
 
 	// TimeConfigValues defines default values for all time and ntp related params.

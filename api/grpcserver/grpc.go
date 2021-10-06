@@ -11,19 +11,19 @@ import (
 	"google.golang.org/grpc/reflection"
 )
 
-// ServiceAPI allows individual grpc services to register the grpc server
+// ServiceAPI allows individual grpc services to register the grpc server.
 type ServiceAPI interface {
 	RegisterService(*Server)
 }
 
-// Server is a very basic grpc server
+// Server is a very basic grpc server.
 type Server struct {
 	Port       int
 	Interface  string
 	GrpcServer *grpc.Server
 }
 
-// NewServerWithInterface creates and returns a new Server with port and interface
+// NewServerWithInterface creates and returns a new Server with port and interface.
 func NewServerWithInterface(port int, intfce string) *Server {
 	return &Server{
 		Port:       port,
@@ -32,7 +32,7 @@ func NewServerWithInterface(port int, intfce string) *Server {
 	}
 }
 
-// Start starts the server
+// Start starts the server.
 func (s *Server) Start() <-chan struct{} {
 	numServices := len(s.GrpcServer.GetServiceInfo())
 	log.Info("starting new grpc server with %d registered service(s)", numServices)
@@ -43,7 +43,7 @@ func (s *Server) Start() <-chan struct{} {
 	return started
 }
 
-// Blocking, should be called in a goroutine
+// Blocking, should be called in a goroutine.
 func (s *Server) startInternal(started chan<- struct{}) {
 	lis, err := net.Listen("tcp", fmt.Sprintf("%s:%d", s.Interface, s.Port))
 	if err != nil {
@@ -64,7 +64,7 @@ func (s *Server) startInternal(started chan<- struct{}) {
 	}
 }
 
-// Close stops the server
+// Close stops the server.
 func (s *Server) Close() error {
 	log.Info("stopping new grpc server")
 	s.GrpcServer.Stop()
@@ -73,7 +73,7 @@ func (s *Server) Close() error {
 	return nil
 }
 
-// ServerOptions are shared by all grpc servers
+// ServerOptions are shared by all grpc servers.
 var ServerOptions = []grpc.ServerOption{
 	// XXX: this is done to prevent routers from cleaning up our connections (e.g aws load balances..)
 	// TODO: these parameters work for now but we might need to revisit or add them as configuration

@@ -33,7 +33,7 @@ var (
 	// has been reached during streaming.
 	errEol = errors.New("rlp: end of list")
 
-	// Actual Errors
+	// Actual Errors.
 	errExpectedString   = errors.New("rlp: expected String or Byte")
 	errExpectedList     = errors.New("rlp: expected List")
 	errCanonInt         = errors.New("rlp: non-canonical integer format")
@@ -42,7 +42,7 @@ var (
 	errValueTooLarge    = errors.New("rlp: value size exceeds available input length")
 	errMoreThanOneValue = errors.New("rlp: input contains more than one value")
 
-	// internal errors
+	// internal errors.
 	errNotInList     = errors.New("rlp: call of ListEnd outside of any list")
 	errNotAtEOL      = errors.New("rlp: call of ListEnd not positioned at EOL")
 	errUintOverflow  = errors.New("rlp: uint overflow")
@@ -560,11 +560,11 @@ func decodeDecoder(s *Stream, val reflect.Value) error {
 type Kind int
 
 const (
-	// Byte : a byte
+	// Byte : a byte.
 	Byte Kind = iota
-	// String : a string
+	// String : a string.
 	String
-	// List : a list
+	// List : a list.
 	List
 )
 

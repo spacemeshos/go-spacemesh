@@ -144,12 +144,12 @@ func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, 
 	return nil
 }
 
-// SubmitRequest is the request object for the submit endpoint
+// SubmitRequest is the request object for the submit endpoint.
 type SubmitRequest struct {
 	Challenge []byte `json:"challenge,omitempty"`
 }
 
-// StartRequest is the request object for the start endpoint
+// StartRequest is the request object for the start endpoint.
 type StartRequest struct {
 	GatewayAddresses       []string `json:"gatewayAddresses,omitempty"`
 	DisableBroadcast       bool     `json:"disableBroadcast,omitempty"`
@@ -157,12 +157,12 @@ type StartRequest struct {
 	BroadcastAcksThreshold int      `json:"broadcastAcksThreshold,omitempty"`
 }
 
-// SubmitResponse is the response object for the submit endpoint
+// SubmitResponse is the response object for the submit endpoint.
 type SubmitResponse struct {
 	RoundID string
 }
 
-// GetInfoResponse is the response object for the get-info endpoint
+// GetInfoResponse is the response object for the get-info endpoint.
 type GetInfoResponse struct {
 	OpenRoundID        string
 	ExecutingRoundsIDs []string

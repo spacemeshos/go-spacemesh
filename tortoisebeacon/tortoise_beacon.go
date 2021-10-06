@@ -298,7 +298,7 @@ func (tb *TortoiseBeacon) findMostWeightedBeaconForEpoch(epoch types.EpochID) []
 }
 
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
-// TODO(nkryuchkov): consider not using (using DB instead)
+// TODO(nkryuchkov): consider not using (using DB instead).
 func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	if epochID == 0 {
 		return nil, ErrZeroEpoch

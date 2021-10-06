@@ -100,7 +100,7 @@ func (sub *Subscriber) route(payload []byte) {
 	}
 }
 
-// Close closes the socket which in turn will Close the listener func
+// Close closes the socket which in turn will Close the listener func.
 func (sub *Subscriber) Close() error {
 	select {
 	case <-sub.closer:
@@ -147,7 +147,7 @@ func (sub *Subscriber) SubscribeToAll() (chan []byte, error) {
 	return sub.allOutput, nil
 }
 
-// Publisher is a wrapper for mangos pubsub publisher socket
+// Publisher is a wrapper for mangos pubsub publisher socket.
 type Publisher struct {
 	sock mangos.Socket
 }
@@ -179,7 +179,7 @@ func (p *Publisher) publish(topic ChannelID, payload []byte) error {
 	return nil
 }
 
-// Close closes the publishers output socket
+// Close closes the publishers output socket.
 func (p *Publisher) Close() {
 	p.sock.Close()
 }

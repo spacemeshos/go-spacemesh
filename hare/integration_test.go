@@ -30,7 +30,7 @@ func newIntegrationSuite() *HareIntegrationSuite {
 	return his
 }
 
-// Test 1: 16 nodes sanity
+// Test 1: 16 nodes sanity.
 type hareIntegrationThreeNodes struct {
 	*HareIntegrationSuite
 }

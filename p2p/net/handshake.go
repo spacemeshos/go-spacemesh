@@ -1,6 +1,6 @@
 package net
 
-// HandshakeData is the handshake message struct
+// HandshakeData is the handshake message struct.
 type HandshakeData struct {
 	ClientVersion string
 	NetworkID     uint32

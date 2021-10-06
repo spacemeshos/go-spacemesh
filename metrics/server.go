@@ -8,7 +8,7 @@ import (
 	"net/http"
 )
 
-// StartMetricsServer begins listening and supplying metrics on localhost:`metricsPort`/metrics
+// StartMetricsServer begins listening and supplying metrics on localhost:`metricsPort`/metrics.
 func StartMetricsServer(metricsPort int) {
 	http.Handle("/metrics", promhttp.Handler())
 	go func() {

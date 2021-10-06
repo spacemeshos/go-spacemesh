@@ -212,7 +212,7 @@ func (t *TxAPIMock) GetProjection(_ types.Address, prevNonce, prevBalance uint64
 	return prevNonce, prevBalance, nil
 }
 
-// latest layer received
+// latest layer received.
 func (t *TxAPIMock) LatestLayer() types.LayerID {
 	return layerLatest
 }
@@ -525,7 +525,7 @@ func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
 }
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
-// unconfirmed or in the mempool that will update state
+// unconfirmed or in the mempool that will update state.
 func (m MempoolMock) GetProjection(types.Address, uint64, uint64) (nonce, balance uint64) {
 	nonce = accountCounter + 1
 	balance = accountBalance + 1

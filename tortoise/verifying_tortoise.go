@@ -94,7 +94,7 @@ type turtle struct {
 	RerunInterval time.Duration
 }
 
-// newTurtle creates a new verifying tortoise algorithm instance
+// newTurtle creates a new verifying tortoise algorithm instance.
 func newTurtle(
 	lg log.Log,
 	db database.Database,
@@ -134,7 +134,7 @@ func newTurtle(
 	}
 }
 
-// cloneTurtleParams creates a new verifying tortoise instance using the params of this instance
+// cloneTurtleParams creates a new verifying tortoise instance using the params of this instance.
 func (t *turtle) cloneTurtleParams() *turtle {
 	return newTurtle(
 		t.log,
@@ -312,7 +312,7 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 }
 
 // convert two vectors, of (1) raw candidate block IDs for a layer and (2) an opinion vector of blocks we believe belong
-// in the layer, into a map of votes for each of these blocks
+// in the layer, into a map of votes for each of these blocks.
 func (t *turtle) voteVectorForLayer(
 	candidateBlocks []types.BlockID, opinionVec []types.BlockID) (voteMap map[types.BlockID]vec) {
 	voteMap = make(map[types.BlockID]vec, len(candidateBlocks))
@@ -387,7 +387,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 }
 
 // calculate and return a list of exceptions, i.e., differences between the opinions of a base block and the local
-// opinion
+// opinion.
 func (t *turtle) calculateExceptions(
 	ctx context.Context,
 	baseBlockLayerID types.LayerID,
@@ -548,7 +548,7 @@ func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID, blockVotedOn
 	return t.voteWeight(ctx, block)
 }
 
-// Persist saves the current tortoise state to the database
+// Persist saves the current tortoise state to the database.
 func (t *turtle) persist() error {
 	return t.state.Persist()
 }
@@ -753,7 +753,7 @@ func (t *turtle) determineBlockGoodness(ctx context.Context, block *types.Block)
 }
 
 // HandleIncomingLayer processes all layer block votes
-// returns the old pbase and new pbase after taking into account block votes
+// returns the old pbase and new pbase after taking into account block votes.
 func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) error {
 	if err := t.handleLayerBlocks(ctx, layerID); err != nil {
 		return err
@@ -793,7 +793,7 @@ func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) e
 	return t.processBlocks(ctx, layerBlocks)
 }
 
-// loops over all layers from the last verified up to a new target layer and attempts to verify each in turn
+// loops over all layers from the last verified up to a new target layer and attempts to verify each in turn.
 func (t *turtle) verifyLayers(ctx context.Context) error {
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.FieldNamed("verification_target", t.Last),
@@ -993,7 +993,7 @@ candidateLayerLoop:
 	return nil
 }
 
-// for layers older than this point, we vote according to global opinion (rather than local opinion)
+// for layers older than this point, we vote according to global opinion (rather than local opinion).
 func (t *turtle) layerCutoff() types.LayerID {
 	// if we haven't seen at least Hdist layers yet, we always rely on local opinion
 	if t.Last.Before(types.NewLayerID(t.Hdist)) {

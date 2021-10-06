@@ -16,7 +16,7 @@ const (
 	requestFieldsKey
 	sessionFieldsKey
 
-	// PeerIDKey is used to store the peer ID in the p2p stack
+	// PeerIDKey is used to store the peer ID in the p2p stack.
 	PeerIDKey
 )
 
@@ -50,7 +50,7 @@ func WithNewRequestID(ctx context.Context, fields ...LoggableField) context.Cont
 	return WithRequestID(ctx, uuid.New().String(), fields...)
 }
 
-// ExtractSessionID extracts the session id from a context object
+// ExtractSessionID extracts the session id from a context object.
 func ExtractSessionID(ctx context.Context) (string, bool) {
 	if ctxSessionID, ok := ctx.Value(sessionIDKey).(string); ok {
 		return ctxSessionID, true
@@ -58,7 +58,7 @@ func ExtractSessionID(ctx context.Context) (string, bool) {
 	return "", false
 }
 
-// ExtractRequestID extracts the request id from a context object
+// ExtractRequestID extracts the request id from a context object.
 func ExtractRequestID(ctx context.Context) (string, bool) {
 	if ctxRequestID, ok := ctx.Value(requestIDKey).(string); ok {
 		return ctxRequestID, true
@@ -66,7 +66,7 @@ func ExtractRequestID(ctx context.Context) (string, bool) {
 	return "", false
 }
 
-// ExtractSessionFields extracts additional loggable fields associated with the session from a context object
+// ExtractSessionFields extracts additional loggable fields associated with the session from a context object.
 func ExtractSessionFields(ctx context.Context) (fields []LoggableField) {
 	if sessionFields, ok := ctx.Value(sessionFieldsKey).([]LoggableField); ok {
 		fields = sessionFields
@@ -74,7 +74,7 @@ func ExtractSessionFields(ctx context.Context) (fields []LoggableField) {
 	return
 }
 
-// ExtractRequestFields extracts additional loggable fields associated with the request from a context object
+// ExtractRequestFields extracts additional loggable fields associated with the request from a context object.
 func ExtractRequestFields(ctx context.Context) (fields []LoggableField) {
 	if requestFields, ok := ctx.Value(requestFieldsKey).([]LoggableField); ok {
 		fields = requestFields

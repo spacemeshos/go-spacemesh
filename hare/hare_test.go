@@ -432,7 +432,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 }
 
 // make sure that Hare writes a weak coin value for a layer to the mesh after the CP completes,
-// regardless of whether it succeeds or fails
+// regardless of whether it succeeds or fails.
 func TestHare_WeakCoin(t *testing.T) {
 	r := require.New(t)
 	sim := service.NewSimulator()

@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/post/verifying"
 )
 
-// Validator contains the dependencies required to validate NIPosts
+// Validator contains the dependencies required to validate NIPosts.
 type Validator struct {
 	poetDb poetDbAPI
 	cfg    PostConfig
@@ -19,7 +19,7 @@ type Validator struct {
 // A compile time check to ensure that Validator fully implements the nipostValidator interface.
 var _ nipostValidator = (*Validator)(nil)
 
-// NewValidator returns a new NIPost validator
+// NewValidator returns a new NIPost validator.
 func NewValidator(poetDb poetDbAPI, cfg PostConfig) *Validator {
 	return &Validator{poetDb, cfg}
 }

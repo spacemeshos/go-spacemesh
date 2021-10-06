@@ -87,7 +87,7 @@ func (a *addrBook) savePeers(path string) {
 }
 
 // loadPeers loads the known address from the saved file.  If empty, missing, or
-// malformed file, just don't load anything and start fresh
+// malformed file, just don't load anything and start fresh.
 func (a *addrBook) loadPeers(filePath string) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
