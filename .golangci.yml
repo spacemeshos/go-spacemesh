@@ -155,6 +155,25 @@ linters-settings:
     for-loops: false # Report preallocation suggestions on for loops, false by default
   goimports:
     local-prefixes: github.com/spacemeshos/go-spacemesh
+  wrapcheck:
+    # An array of strings that specify substrings of signatures to ignore.
+    # If this set, it will override the default set of ignored signatures.
+    # See https://github.com/tomarrell/wrapcheck#configuration for more information.
+    ignoreSigs:
+# Default sigs
+      - .Errorf(
+      - errors.New(
+      - errors.Unwrap(
+      - .Wrap(
+      - .Wrapf(
+      - .WithMessage(
+      - .WithMessagef(
+      - .WithStack(
+# Custom sigs
+      - status.Error(
+    ignorePackageGlobs:
+      - encoding/*
+      - github.com/pkg/*
 
 
 linters:
