@@ -185,7 +185,7 @@ linters:
     - golint
     - misspell
     - staticcheck
-#    - whitespace
+    - whitespace
     - wrapcheck
 #    - varcheck
 #    - unparam
