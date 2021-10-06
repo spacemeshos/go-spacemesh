@@ -44,6 +44,7 @@ type ConnectionPool struct {
 
 	shutdownCtx  context.Context
 	shutdownOnce sync.Once
+	isShutDown   bool
 }
 
 // NewConnectionPool creates new ConnectionPool
@@ -95,6 +96,7 @@ func (cp *ConnectionPool) Shutdown() {
 	cp.shutdownOnce.Do(func() {
 		cp.dialWaitMu.Lock()
 		cp.dialWait.Wait()
+		cp.isShutDown = true
 		cp.dialWaitMu.Unlock()
 
 		// we won't handle the closing connection events for these connections since we exit the loop once the teardown is done
@@ -233,6 +235,10 @@ func (cp *ConnectionPool) GetConnection(ctx context.Context, address inet.Addr, 
 	if !found {
 		// No one is waiting for a connection with the remote peer, need to call Dial
 		cp.dialWaitMu.Lock()
+		if cp.isShutDown {
+			cp.dialWaitMu.Unlock()
+			return nil, errors.New("connection pool is shut down")
+		}
 		cp.dialWait.Add(1) //  The first increment must be synchronized with Wait.
 		cp.dialWaitMu.Unlock()
 
