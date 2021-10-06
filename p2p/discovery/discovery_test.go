@@ -2,6 +2,7 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
@@ -59,7 +60,7 @@ func TestDHT_BootstrapAbort(t *testing.T) {
 	Cancel()
 	// Should return error after 2 seconds
 	err := dht.Bootstrap(Ctx)
-	require.EqualError(t, err, ErrBootAbort.Error(), "Should be able to abort bootstrap")
+	require.ErrorIs(t, err, ErrBootAbort, errors.New("Should be able to abort bootstrap"))
 }
 
 func TestKadDHT_VerySmallBootstrap(t *testing.T) {

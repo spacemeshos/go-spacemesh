@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"io"
 	"math/big"
 	"sync"
@@ -46,7 +47,11 @@ func (state *Object) EncodeRLP(w io.Writer) error {
 	state.mu.RLock()
 	defer state.mu.RUnlock()
 
-	return rlp.Encode(w, state.account)
+	if err := rlp.Encode(w, state.account); err != nil {
+		return fmt.Errorf("encode RLP: %w", err)
+	}
+
+	return nil
 }
 
 // AddBalance removes amount from c's balance.

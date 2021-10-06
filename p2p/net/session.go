@@ -1,6 +1,8 @@
 package net
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
@@ -50,7 +52,13 @@ func (n networkSessionImpl) OpenMessage(boxedMessage []byte) (message []byte, er
 	if n.sharedSecret == nil {
 		log.Panic("tried to open a message before initializing session with a shared secret")
 	}
-	return n.sharedSecret.Open(boxedMessage)
+
+	message, err = n.sharedSecret.Open(boxedMessage)
+	if err != nil {
+		return message, fmt.Errorf("open message: %w", err)
+	}
+
+	return message, nil
 }
 
 // NewNetworkSession creates a new network session based on provided data

@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -129,7 +130,7 @@ func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload
 	}
 
 	e := m.nd.Broadcast(ctx, protocol, payload)
-	return e
+	return fmt.Errorf("broadcast: %w", e)
 }
 
 type trueOracle struct{}

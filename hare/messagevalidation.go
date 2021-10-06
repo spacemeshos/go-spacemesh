@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -57,7 +58,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 		logger.With().Error("eligibility validator: GetIdentity failed (ignore if the safe layer is in genesis)",
 			log.Err(err),
 			log.String("sender_id", pub.ShortString()))
-		return false, err
+		return false, fmt.Errorf("get identity: %w", err)
 	}
 
 	// validate role
@@ -66,7 +67,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 		logger.With().Error("eligibility validator: could not retrieve eligibility result",
 			log.Err(err),
 			log.String("sender_id", pub.ShortString()))
-		return false, err
+		return false, fmt.Errorf("validate eligibility: %w", err)
 	}
 	if !res {
 		logger.With().Error("eligibility validator: sender is not eligible to participate",
@@ -329,7 +330,7 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		// extract public key
 		iMsg, err := newMsg(ctx, v.Log, innerMsg, v.stateQuerier)
 		if err != nil {
-			return err
+			return fmt.Errorf("new message: %w", err)
 		}
 
 		pub := iMsg.PubKey

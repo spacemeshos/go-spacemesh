@@ -35,9 +35,10 @@ func (s *JSONHTTPServer) Close() error {
 		ctx := cmdp.Ctx()
 
 		if err := server.Shutdown(ctx); err != nil {
-			return err
+			return fmt.Errorf("shutdown: %w", err)
 		}
 	}
+
 	return nil
 }
 

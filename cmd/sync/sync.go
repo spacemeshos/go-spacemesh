@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -231,22 +232,22 @@ func getData(path, prefix string, lg log.Log) error {
 	count := 0
 	for {
 		attrs, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("iterator: %w", err)
 		}
 
 		rc, err := client.Bucket(bucket).Object(attrs.Name).NewReader(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("create reader: %w", err)
 		}
 
 		data, err := ioutil.ReadAll(rc)
 		_ = rc.Close()
 		if err != nil {
-			return err
+			return fmt.Errorf("read all: %w", err)
 		}
 
 		// skip main folder
@@ -255,14 +256,13 @@ func getData(path, prefix string, lg log.Log) error {
 		}
 		dest := path + strings.TrimPrefix(attrs.Name, version)
 		if err := ensureDirExists(dest); err != nil {
-			return err
+			return fmt.Errorf("ensure dir exists: %w", err)
 		}
 		lg.Info("downloading: %v to %v", attrs.Name, dest)
 
-		err = ioutil.WriteFile(dest, data, 0o644)
-		if err != nil {
+		if err = ioutil.WriteFile(dest, data, 0o644); err != nil {
 			lg.Error("%v", err)
-			return err
+			return fmt.Errorf("write file: %w", err)
 		}
 		count++
 	}
@@ -273,7 +273,11 @@ func getData(path, prefix string, lg log.Log) error {
 
 func ensureDirExists(path string) error {
 	dir, _ := filepath.Split(path)
-	return filesystem.ExistOrCreate(dir)
+	if err := filesystem.ExistOrCreate(dir); err != nil {
+		return fmt.Errorf("create dir: %w", err)
+	}
+
+	return nil
 }
 
 func main() {

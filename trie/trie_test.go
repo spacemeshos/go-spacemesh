@@ -38,8 +38,8 @@ import (
 )
 
 func init() {
-	//spew.Config.Indent = "    "
-	//spew.Config.DisableMethods = false
+	// spew.Config.Indent = "    "
+	// spew.Config.DisableMethods = false
 }
 
 // Used for testing
@@ -324,7 +324,12 @@ type countingDB struct {
 
 func (db *countingDB) Get(key []byte) ([]byte, error) {
 	db.gets[string(key)]++
-	return db.Database.Get(key)
+	data, err := db.Database.Get(key)
+	if err != nil {
+		return data, fmt.Errorf("get from DB: %w", err)
+	}
+
+	return data, nil
 }
 
 // TestCacheUnload checks that decoded nodes are unloaded after a
@@ -483,8 +488,8 @@ func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool
 
 	errorf := func(format string, args ...interface{}) error {
 		msg := fmt.Sprintf(format, args...)
-		//msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
-		//msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
+		// msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
+		// msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
 		return errors.New(msg)
 	}
 	if flag.gen > parentCachegen {

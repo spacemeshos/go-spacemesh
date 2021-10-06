@@ -3,6 +3,7 @@ package eligibility
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -27,7 +28,7 @@ func NewBeacon(beaconGetter blocks.BeaconGetter, logger log.Log) *Beacon {
 func (b *Beacon) Value(ctx context.Context, epochID types.EpochID) (uint32, error) {
 	v, err := b.beaconGetter.GetBeacon(epochID)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("get beacon: %w", err)
 	}
 
 	value := binary.LittleEndian.Uint32(v)

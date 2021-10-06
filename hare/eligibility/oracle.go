@@ -171,7 +171,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 			layer,
 			layer.GetEpoch(),
 			log.Uint32("round", round))
-		return nil, err
+		return nil, fmt.Errorf("get beacon: %w", err)
 	}
 
 	// marshal message

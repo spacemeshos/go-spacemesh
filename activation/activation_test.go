@@ -405,7 +405,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	faultyNet := &FaultyNetMock{retErr: true}
 	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "failed to broadcast ATX: faulty")
+	r.EqualError(err, "sign and broadcast: failed to broadcast ATX: faulty")
 	r.False(published)
 
 	// create and attempt to publish ATX
@@ -446,7 +446,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	faultyNet := &FaultyNetMock{retErr: true}
 	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 	published, builtNIPost, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "failed to broadcast ATX: faulty")
+	r.EqualError(err, "sign and broadcast: failed to broadcast ATX: faulty")
 	r.False(published)
 	r.True(builtNIPost)
 
@@ -581,7 +581,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	storeAtx(r, activationDb, posAtx, logtest.New(t).WithName("storeAtx"))
 
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "failed to build NIPost: NIPost builder error")
+	r.EqualError(err, "create ATX: failed to build NIPost: NIPost builder error")
 	r.False(published)
 }
 
@@ -729,9 +729,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	err = b.SignAtx(act)
 	assert.NoError(t, err)
 	// TODO(moshababo): encoded atx comparison fail, although decoded atxs are equal.
-	//bts, err := types.InterfaceToBytes(act)
-	//assert.NoError(t, err)
-	//assert.Equal(t, bts, net.lastTransmission)
+	// bts, err := types.InterfaceToBytes(act)
+	// assert.NoError(t, err)
+	// assert.Equal(t, bts, net.lastTransmission)
 
 	b = NewBuilder(cfg, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, logtest.New(t).WithName("atxBuilder"))
 	err = b.buildNIPostChallenge(context.TODO())

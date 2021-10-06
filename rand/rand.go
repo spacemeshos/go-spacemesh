@@ -1,6 +1,7 @@
 package rand
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -151,7 +152,12 @@ func Read(p []byte) (n int, err error) {
 	randMu.Lock()
 	defer randMu.Unlock()
 
-	return globalRand.Read(p)
+	n, err = globalRand.Read(p)
+	if err != nil {
+		return n, fmt.Errorf("read: %w", err)
+	}
+
+	return n, nil
 }
 
 // NormFloat64 returns a normally distributed float64 in the range

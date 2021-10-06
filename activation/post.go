@@ -208,7 +208,12 @@ func (mgr *PostSetupManager) BestProvider() (*PostSetupComputeProvider, error) {
 
 // Benchmark runs a short benchmarking session for a given provider to evaluate its performance.
 func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) {
-	return gpu.Benchmark(initialization.ComputeProvider(p))
+	score, err := gpu.Benchmark(initialization.ComputeProvider(p))
+	if err != nil {
+		return score, fmt.Errorf("benchmark GPU: %w", err)
+	}
+
+	return score, nil
 }
 
 // StartSession starts (or continues) a data creation session.
@@ -245,7 +250,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 	if err != nil {
 		mgr.setState(postSetupStateError)
 		mgr.setLastErr(err)
-		return nil, err
+		return nil, fmt.Errorf("new initializer: %w", err)
 	}
 
 	newInit.SetLogger(mgr.logger)
@@ -278,7 +283,7 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 		)
 
 		if err := newInit.Initialize(); err != nil {
-			if err == initialization.ErrStopped {
+			if errors.Is(err, initialization.ErrStopped) {
 				mgr.logger.Info("post setup session stopped")
 				mgr.setState(postSetupStateNotStarted)
 			} else {
@@ -310,7 +315,7 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 
 	if mgr.getState() == postSetupStateInProgress {
 		if err := mgr.getInit().Stop(); err != nil {
-			return err
+			return fmt.Errorf("stop: %w", err)
 		}
 
 		// Block until the current data creation session will be finished.
@@ -319,7 +324,7 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 
 	if deleteFiles {
 		if err := mgr.getInit().Reset(); err != nil {
-			return err
+			return fmt.Errorf("reset: %w", err)
 		}
 
 		// Reset internal state.
@@ -338,13 +343,13 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 
 	prover, err := proving.NewProver(config.Config(mgr.cfg), mgr.LastOpts().DataDir, mgr.id)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("new prover: %w", err)
 	}
 
 	prover.SetLogger(mgr.logger)
 	proof, proofMetadata, err := prover.GenerateProof(challenge)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("generate proof: %w", err)
 	}
 
 	m := new(types.PostMetadata)

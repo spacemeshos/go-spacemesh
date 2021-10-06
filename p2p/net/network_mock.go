@@ -2,6 +2,7 @@ package net
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 	"sync/atomic"
@@ -104,7 +105,7 @@ func (n *NetworkMock) Dial(ctx context.Context, address net.Addr, remotePublicKe
 	case <-time.After(dialDelay):
 		break
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("context done: %w", ctx.Err())
 	}
 
 	n.mu.RLock()

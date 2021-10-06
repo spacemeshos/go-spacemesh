@@ -135,7 +135,7 @@ func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier State
 		logger.With().Error("newmsg construction failed: could not extract public key",
 			log.Err(err),
 			log.Int("sig_len", len(hareMsg.Sig)))
-		return nil, err
+		return nil, fmt.Errorf("extract ed25519 pubkey: %w", err)
 	}
 
 	// query if identity is active
@@ -427,7 +427,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 	// validate context
 	if err := proc.validator.ContextuallyValidateMessage(ctx, m, proc.getK()); err != nil {
 		// early message, keep for later
-		if err == errEarlyMsg {
+		if errors.Is(err, errEarlyMsg) {
 			logger.With().Debug("early message detected, keeping", log.Err(err))
 
 			// validate syntax for early messages
@@ -719,7 +719,7 @@ func (proc *consensusProcess) initDefaultBuilder(s *Set) (*messageBuilder, error
 	proof, err := proc.oracle.Proof(context.TODO(), proc.instanceID, proc.getK())
 	if err != nil {
 		proc.With().Error("could not initialize default builder", log.Err(err))
-		return nil, err
+		return nil, fmt.Errorf("init default builder:: %w", err)
 	}
 	builder.SetRoleProof(proof)
 

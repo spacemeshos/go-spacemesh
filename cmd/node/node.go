@@ -131,14 +131,15 @@ var Cmd = &cobra.Command{
 		starter := func() error {
 			if err := app.Initialize(); err != nil {
 				log.With().Error("Failed to initialize node.", log.Err(err))
-				return err
+				return fmt.Errorf("init node: %w", err)
 			}
 			// This blocks until the context is finished or until an error is produced
-			err := app.Start()
-			if err != nil {
+			if err := app.Start(); err != nil {
 				log.With().Error("Failed to start the node. See logs for details.", log.Err(err))
+				return fmt.Errorf("start node: %w", err)
 			}
-			return err
+
+			return nil
 		}
 		err = starter()
 		app.Cleanup()
@@ -220,11 +221,11 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 	)
 
 	// load config if it was loaded to our viper
-	err := vip.Unmarshal(&conf, viper.DecodeHook(hook))
-	if err != nil {
+	if err := vip.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
 		log.With().Error("Failed to parse config", log.Err(err))
-		return nil, err
+		return nil, fmt.Errorf("unmarshal viper: %w", err)
 	}
+
 	return &conf, nil
 }
 
@@ -340,7 +341,7 @@ func (app *App) Initialize() (err error) {
 	// ensure all data folders exist
 	err = filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
-		return err
+		return fmt.Errorf("ensure folders exist: %w", err)
 	}
 
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
@@ -363,7 +364,7 @@ func (app *App) Initialize() (err error) {
 
 	drift, err := timesync.CheckSystemClockDrift()
 	if err != nil {
-		return err
+		return fmt.Errorf("check system clock drift: %w", err)
 	}
 
 	log.Info("System clock synchronized with ntp. drift: %s", drift)
@@ -401,69 +402,43 @@ func (app *App) Cleanup() {
 // specific module.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
 	lvl := zap.NewAtomicLevel()
-	var err error
+	config := app.Config.LOGGING
+	level, ok := map[string]string{
+		AppLogger:            config.AppLoggerLevel,
+		P2PLogger:            config.P2PLoggerLevel,
+		PostLogger:           config.PostLoggerLevel,
+		StateDbLogger:        config.StateDbLoggerLevel,
+		StateLogger:          config.StateLoggerLevel,
+		AtxDbStoreLogger:     config.AtxDbStoreLoggerLevel,
+		TBeaconLogger:        config.TBeaconLoggerLevel,
+		WeakCoinLogger:       config.WeakCoinLoggerLevel,
+		PoetDbStoreLogger:    config.PoetDbStoreLoggerLevel,
+		StoreLogger:          config.StoreLoggerLevel,
+		PoetDbLogger:         config.PoetDbLoggerLevel,
+		MeshDBLogger:         config.MeshDBLoggerLevel,
+		TrtlLogger:           config.TrtlLoggerLevel,
+		AtxDbLogger:          config.AtxDbLoggerLevel,
+		BlkEligibilityLogger: config.BlkEligibilityLoggerLevel,
+		MeshLogger:           config.MeshLoggerLevel,
+		SyncLogger:           config.SyncLoggerLevel,
+		BlockOracle:          config.BlockOracleLevel,
+		HareOracleLogger:     config.HareOracleLoggerLevel,
+		HareBeaconLogger:     config.HareBeaconLoggerLevel,
+		HareLogger:           config.HareLoggerLevel,
+		BlockBuilderLogger:   config.BlockBuilderLoggerLevel,
+		BlockListenerLogger:  config.BlockListenerLoggerLevel,
+		PoetListenerLogger:   config.PoetListenerLoggerLevel,
+		NipostBuilderLogger:  config.NipostBuilderLoggerLevel,
+		AtxBuilderLogger:     config.AtxBuilderLoggerLevel,
+		TimeSyncLogger:       config.TimeSyncLoggerLevel,
+	}[name]
 
-	switch name {
-	case AppLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AppLoggerLevel))
-	case P2PLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.P2PLoggerLevel))
-	case PostLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PostLoggerLevel))
-	case StateDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StateDbLoggerLevel))
-	case StateLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StateLoggerLevel))
-	case AtxDbStoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxDbStoreLoggerLevel))
-	case TBeaconLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconLoggerLevel))
-	case WeakCoinLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.WeakCoinLoggerLevel))
-	case PoetDbStoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PoetDbStoreLoggerLevel))
-	case StoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StoreLoggerLevel))
-	case PoetDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PoetDbLoggerLevel))
-	case MeshDBLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.MeshDBLoggerLevel))
-	case TrtlLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TrtlLoggerLevel))
-	case AtxDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxDbLoggerLevel))
-	case BlkEligibilityLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlkEligibilityLoggerLevel))
-	case MeshLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.MeshLoggerLevel))
-	case SyncLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.SyncLoggerLevel))
-	case BlockOracle:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlockOracleLevel))
-	case HareOracleLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareOracleLoggerLevel))
-	case HareBeaconLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareBeaconLoggerLevel))
-	case HareLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareLoggerLevel))
-	case BlockBuilderLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlockBuilderLoggerLevel))
-	case BlockListenerLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlockListenerLoggerLevel))
-	case PoetListenerLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PoetListenerLoggerLevel))
-	case NipostBuilderLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.NipostBuilderLoggerLevel))
-	case AtxBuilderLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
-	case TimeSyncLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TimeSyncLoggerLevel))
-	default:
-		lvl.SetLevel(log.Level())
-	}
-
-	if err != nil {
-		app.log.Error("cannot parse logging for %v error %v", name, err)
+	if ok {
+		if err := lvl.UnmarshalText([]byte(level)); err != nil {
+			app.log.Error("cannot parse logging for %v error %v", name, err)
+			lvl.SetLevel(log.Level())
+		}
+	} else {
 		lvl.SetLevel(log.Level())
 	}
 
@@ -476,14 +451,15 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 
 // SetLogLevel updates the log level of an existing logger
 func (app *App) SetLogLevel(name, loglevel string) error {
-	if lvl, ok := app.loggers[name]; ok {
-		err := lvl.UnmarshalText([]byte(loglevel))
-		if err != nil {
-			return err
-		}
-	} else {
+	lvl, ok := app.loggers[name]
+	if !ok {
 		return fmt.Errorf("cannot find logger %v", name)
 	}
+
+	if err := lvl.UnmarshalText([]byte(loglevel)); err != nil {
+		return fmt.Errorf("unmarshal text: %w", err)
+	}
+
 	return nil
 }
 
@@ -508,37 +484,37 @@ func (app *App) initServices(ctx context.Context,
 
 	db, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create state DB: %w", err)
 	}
 	app.closers = append(app.closers, db)
 
 	atxdbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create ATX DB: %w", err)
 	}
 	app.closers = append(app.closers, atxdbstore)
 
 	tBeaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "tbeacon"), 0, 0, app.addLogger(TBeaconDbStoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create tortoise beacon DB: %w", err)
 	}
 	app.closers = append(app.closers, tBeaconDBStore)
 
 	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create PoET DB: %w", err)
 	}
 	app.closers = append(app.closers, poetDbStore)
 
 	iddbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create IDs DB: %w", err)
 	}
 	app.closers = append(app.closers, iddbstore)
 
 	store, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "store"), 0, 0, app.addLogger(StoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create store DB: %w", err)
 	}
 	app.closers = append(app.closers, store)
 
@@ -547,7 +523,7 @@ func (app *App) initServices(ctx context.Context,
 	validator := activation.NewValidator(poetDb, app.Config.POST)
 	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(dbStorepath, "mesh"), app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create mesh DB: %w", err)
 	}
 
 	app.txPool = mempool.NewTxMemPool()
@@ -555,7 +531,7 @@ func (app *App) initServices(ctx context.Context,
 
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
 	if err != nil {
-		return err
+		return fmt.Errorf("create applied txs DB: %w", err)
 	}
 	app.closers = append(app.closers, appliedTxs)
 	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
@@ -594,7 +570,7 @@ func (app *App) initServices(ctx context.Context,
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
 	trtlStateDB, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "turtle"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create turtle DB: %w", err)
 	}
 	app.closers = append(app.closers, trtlStateDB)
 	trtlCfg := tortoise.Config{
@@ -622,7 +598,7 @@ func (app *App) initServices(ctx context.Context,
 	} else {
 		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		if err := svm.SetupGenesis(app.Config.Genesis); err != nil {
-			return err
+			return fmt.Errorf("setup genesis: %w", err)
 		}
 	}
 

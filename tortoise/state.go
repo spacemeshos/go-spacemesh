@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -42,13 +43,13 @@ func (s *state) Persist() error {
 	batch := s.db.NewBatch()
 
 	if err := batch.Put([]byte(namespaceLast), s.Last.Bytes()); err != nil {
-		return err
+		return fmt.Errorf("put 'last' namespace into Dbatch: %w", err)
 	}
 	if err := batch.Put([]byte(namespaceEvict), s.LastEvicted.Bytes()); err != nil {
-		return err
+		return fmt.Errorf("put 'evict' namespace into batch: %w", err)
 	}
 	if err := batch.Put([]byte(namespaceVerified), s.Verified.Bytes()); err != nil {
-		return err
+		return fmt.Errorf("put 'verified' namespace into batch: %w", err)
 	}
 	var b bytes.Buffer
 	for id, flushed := range s.GoodBlocksIndex {
@@ -59,7 +60,7 @@ func (s *state) Persist() error {
 		b.WriteString(namespaceGood)
 		b.Write(id.Bytes())
 		if err := batch.Put(b.Bytes(), nil); err != nil {
-			return err
+			return fmt.Errorf("put into batch")
 		}
 		b.Reset()
 	}
@@ -82,13 +83,18 @@ func (s *state) Persist() error {
 					s.log.With().Panic("can't encode vec", log.Err(err))
 				}
 				if err := batch.Put(b.Bytes(), buf); err != nil {
-					return err
+					return fmt.Errorf("put into batch")
 				}
 				b.Reset()
 			}
 		}
 	}
-	return batch.Write()
+
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("write batch: %w", err)
+	}
+
+	return nil
 }
 
 func (s *state) Recover() error {
@@ -97,17 +103,19 @@ func (s *state) Recover() error {
 
 	buf, err := s.db.Get([]byte(namespaceLast))
 	if err != nil {
-		return err
+		return fmt.Errorf("get 'last' namespace from DB: %w", err)
 	}
 	s.Last = types.BytesToLayerID(buf)
+
 	buf, err = s.db.Get([]byte(namespaceVerified))
 	if err != nil {
-		return err
+		return fmt.Errorf("get 'verified' namespace from DB: %w", err)
 	}
 	s.Verified = types.BytesToLayerID(buf)
+
 	buf, err = s.db.Get([]byte(namespaceEvict))
 	if err != nil {
-		return err
+		return fmt.Errorf("get 'last evicted' namespace from DB: %w", err)
 	}
 	s.LastEvicted = types.BytesToLayerID(buf)
 
@@ -117,7 +125,7 @@ func (s *state) Recover() error {
 		s.GoodBlocksIndex[decodeBlock(it.Key()[1:])] = true
 	}
 	if it.Error() != nil {
-		return it.Error()
+		return fmt.Errorf("iterator: %w", it.Error())
 	}
 
 	it = s.db.Find([]byte(namespaceOpinons))
@@ -137,11 +145,15 @@ func (s *state) Recover() error {
 
 		var opinion vec
 		if err := codec.Decode(it.Value(), &opinion); err != nil {
-			return err
+			return fmt.Errorf("decode with codec: %w", err)
 		}
 		s.BlockOpinionsByLayer[layer][block1][block2] = opinion
 	}
-	return it.Error()
+	if err := it.Error(); err != nil {
+		return fmt.Errorf("iterator: %w", it.Error())
+	}
+
+	return nil
 }
 
 func (s *state) Evict() error {
@@ -160,17 +172,22 @@ func (s *state) Evict() error {
 		offset := 1 + types.LayerIDSize
 		b.Write(it.Key()[offset : offset+types.BlockIDSize])
 		if err := batch.Delete(b.Bytes()); err != nil {
-			return err
+			return fmt.Errorf("delete from batch: %w", err)
 		}
 		b.Reset()
 		if err := batch.Delete(it.Key()); err != nil {
-			return err
+			return fmt.Errorf("delete from batch: %w", err)
 		}
 	}
 	if it.Error() != nil {
-		return it.Error()
+		return fmt.Errorf("iterator: %w", it.Error())
 	}
-	return batch.Write()
+
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("write batch: %w", err)
+	}
+
+	return nil
 }
 
 func decodeBlock(key []byte) types.BlockID {

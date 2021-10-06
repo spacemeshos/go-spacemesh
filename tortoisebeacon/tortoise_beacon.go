@@ -331,7 +331,7 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 		epochID,
 		log.Uint32("beacon_epoch", uint32(beaconEpoch)),
 		log.Err(err))
-	return nil, err
+	return nil, fmt.Errorf("get beacon from DB: %w", err)
 }
 
 func (tb *TortoiseBeacon) getBeacon(epoch types.EpochID) []byte {
@@ -354,17 +354,23 @@ func (tb *TortoiseBeacon) setBeacon(epoch types.EpochID, beacon types.Hash32) er
 }
 
 func (tb *TortoiseBeacon) persistBeacon(epoch types.EpochID, beacon types.Hash32) error {
-	err := tb.db.Put(epoch.ToBytes(), beacon.Bytes())
-	if err != nil {
+	if err := tb.db.Put(epoch.ToBytes(), beacon.Bytes()); err != nil {
 		tb.logger.With().Error("failed to persist beacon",
 			epoch,
 			log.String("beacon", beacon.ShortString()), log.Err(err))
+		return fmt.Errorf("persist beacon: %w", err)
 	}
-	return err
+
+	return nil
 }
 
 func (tb *TortoiseBeacon) getPersistedBeacon(epoch types.EpochID) ([]byte, error) {
-	return tb.db.Get(epoch.ToBytes())
+	beacon, err := tb.db.Get(epoch.ToBytes())
+	if err != nil {
+		return beacon, fmt.Errorf("get from DB: %w", err)
+	}
+
+	return beacon, nil
 }
 
 func (tb *TortoiseBeacon) initGenesisBeacons() {
@@ -696,7 +702,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
-			return allVotes{}, ctx.Err()
+			return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
 		}
 
 		// note that votes after this calcVotes() call will _not_ be counted towards our votes
@@ -718,7 +724,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
-				return allVotes{}, ctx.Err()
+				return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
 			}
 			tb.weakCoin.FinishRound(ctx)
 			tallyUndecided(&ownVotes, undecided, tb.weakCoin.Get(ctx, epoch, round))

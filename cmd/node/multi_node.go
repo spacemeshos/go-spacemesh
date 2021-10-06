@@ -3,6 +3,8 @@ package node
 import (
 	"bufio"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -232,8 +234,9 @@ func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	pub := edSgn.PublicKey()
 	vrfSigner, vrfPub, err := signing.NewVRFSigner(pub.Bytes())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create VRF signer: %w", err)
 	}
+
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
 	swarm := net.NewNode()
@@ -310,7 +313,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 		r := bufio.NewReader(poetHarness.Stdout)
 		for {
 			line, _, err := r.ReadLine()
-			if err == io.EOF || err == os.ErrClosed {
+			if errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed) {
 				return
 			}
 			if err != nil {
@@ -325,7 +328,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 		r := bufio.NewReader(poetHarness.Stderr)
 		for {
 			line, _, err := r.ReadLine()
-			if err == io.EOF || err == os.ErrClosed {
+			if errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed) {
 				return
 			}
 			if err != nil {

@@ -184,7 +184,7 @@ func (m *DB) AddBlock(bl *types.Block) error {
 		return ErrAlreadyExist
 	}
 	if err := m.writeBlock(bl); err != nil {
-		return err
+		return fmt.Errorf("write block: %w", err)
 	}
 
 	return nil
@@ -202,7 +202,7 @@ func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 	}
 	mbk := &types.DBBlock{}
 	if err := types.BytesToInterface(b, mbk); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse block: %w", err)
 	}
 	return mbk.ToBlock(), nil
 }
@@ -211,7 +211,7 @@ func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	ids, err := m.LayerBlockIds(index)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("layer block IDs: %w", err)
 	}
 
 	blocks := make([]*types.Block, 0, len(ids))
@@ -238,7 +238,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 	for blocksToVisit.Len() > 0 {
 		block, err := m.GetBlock(blocksToVisit.Remove(blocksToVisit.Front()).(types.BlockID))
 		if err != nil {
-			return err
+			return fmt.Errorf("get block: %w", err)
 		}
 
 		// catch blocks that were referenced after more than one layer, and slipped through the stop condition
@@ -249,7 +249,7 @@ func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID
 		// execute handler
 		stop, err := blockHandler(block)
 		if err != nil {
-			return err
+			return fmt.Errorf("block handler: %w", err)
 		}
 
 		if stop {
@@ -290,7 +290,7 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 		ids = append(ids, id)
 	}
 	if it.Error() != nil {
-		return nil, it.Error()
+		return nil, fmt.Errorf("iterator: %w", it.Error())
 	}
 	if zero || len(ids) > 0 {
 		return ids, nil
@@ -300,19 +300,28 @@ func (m *DB) LayerBlockIds(index types.LayerID) ([]types.BlockID, error) {
 
 // AddZeroBlockLayer tags lyr as a layer without blocks
 func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
-	return m.layers.Put(index.Bytes(), nil)
+	if err := m.layers.Put(index.Bytes(), nil); err != nil {
+		return fmt.Errorf("put into DB: %w", err)
+	}
+
+	return nil
 }
 
 func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
 	// FIXME(dshulyak) key should be prefixed otherwise collisions are possible
-	return m.blocks.Get(id.Bytes())
+	data, err := m.blocks.Get(id.Bytes())
+	if err != nil {
+		return data, fmt.Errorf("get from DB: %w", err)
+	}
+
+	return data, nil
 }
 
 // ContextualValidity retrieves opinion on block from the database
 func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
 	b, err := m.contextualValidity.Get(id.Bytes())
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("get from DB: %w", err)
 	}
 	return b[0] == 1, nil // bytes to bool
 }
@@ -326,17 +335,26 @@ func (m *DB) SaveContextualValidity(id types.BlockID, _ types.LayerID, valid boo
 		v = constFalse
 	}
 	m.With().Debug("save block contextual validity", id, log.Bool("validity", valid))
-	return m.contextualValidity.Put(id.Bytes(), v)
+
+	if err := m.contextualValidity.Put(id.Bytes(), v); err != nil {
+		return fmt.Errorf("put into DB: %w", err)
+	}
+
+	return nil
 }
 
 // SaveLayerInputVector saves the input vote vector for a layer (hare results)
 func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) error {
-	bytes, err := types.InterfaceToBytes(vector)
+	data, err := types.InterfaceToBytes(vector)
 	if err != nil {
-		return err
+		return fmt.Errorf("serialize vector: %w", err)
 	}
 
-	return m.inputVector.Put(hash.Bytes(), bytes)
+	if err := m.inputVector.Put(hash.Bytes(), data); err != nil {
+		return fmt.Errorf("put into DB: %w", err)
+	}
+
+	return nil
 }
 
 // InvalidateLayer receives notification from Hare that it failed for a layer. If Hare explicitly fails for a
@@ -381,11 +399,11 @@ func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, er
 	}
 	buf, err := m.inputVector.Get(layerID.Bytes())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get from DB: %w", err)
 	}
 	var ids []types.BlockID
 	if err := codec.Decode(buf, &ids); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decode with codec: %w", err)
 	}
 	return ids, nil
 }
@@ -406,13 +424,22 @@ func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blk
 	// NOTE(dshulyak) there is an implicit dependency in fetcher
 	buf, err := codec.Encode(blks)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode with codec: %w", err)
 	}
-	return m.inputVector.Put(id.Bytes(), buf)
+
+	if err := m.inputVector.Put(id.Bytes(), buf); err != nil {
+		return fmt.Errorf("put into DB: %w", err)
+	}
+
+	return nil
 }
 
 func (m *DB) persistProcessedLayer(layerID types.LayerID) error {
-	return m.general.Put(constPROCESSED, layerID.Bytes())
+	if err := m.general.Put(constPROCESSED, layerID.Bytes()); err != nil {
+		return fmt.Errorf("put into DB: %w", err)
+	}
+
+	return nil
 }
 
 func (m *DB) recoverProcessedLayer() (types.LayerID, error) {
@@ -446,25 +473,38 @@ func (m *DB) updateLayerWithBlock(blk *types.Block) error {
 	var b bytes.Buffer
 	b.Write(blk.LayerIndex.Bytes())
 	b.Write(blk.ID().Bytes())
-	return m.layers.Put(b.Bytes(), nil)
+
+	if err := m.layers.Put(b.Bytes(), nil); err != nil {
+		return fmt.Errorf("put into DB: %w", err)
+	}
+
+	return nil
 }
 
 func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
 	h := types.EmptyLayerHash
 	bts, err := m.general.Get(getLayerHashKey(layerID))
 	if err != nil {
-		return types.EmptyLayerHash, err
+		return types.EmptyLayerHash, fmt.Errorf("get from DB: %w", err)
 	}
 	h.SetBytes(bts)
 	return h, nil
 }
 
 func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) error {
-	return m.general.Put(getLayerHashKey(layerID), hash.Bytes())
+	if err := m.general.Put(getLayerHashKey(layerID), hash.Bytes()); err != nil {
+		return fmt.Errorf("put into DB: %w", err)
+	}
+
+	return nil
 }
 
 func (m *DB) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) error {
-	return m.general.Put(getAggregatedLayerHashKey(layerID), hash.Bytes())
+	if err := m.general.Put(getAggregatedLayerHashKey(layerID), hash.Bytes()); err != nil {
+		return fmt.Errorf("put into DB: %w", err)
+	}
+
+	return nil
 }
 
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
@@ -688,7 +728,12 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 			}
 		}
 	}
-	return batch.Write()
+
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("write batch: %w", err)
+	}
+
+	return nil
 }
 
 // GetRewards retrieves account's rewards by address
@@ -754,7 +799,7 @@ func (m *DB) addToUnappliedTxs(txs []*types.Transaction, layer types.LayerID) er
 	groupedTxs := groupByOrigin(txs)
 	for addr, accountTxs := range groupedTxs {
 		if err := m.addUnapplied(addr, accountTxs, layer); err != nil {
-			return err
+			return fmt.Errorf("add unapplied: %w", err)
 		}
 	}
 	return nil
@@ -775,11 +820,16 @@ func (m *DB) addUnapplied(addr types.Address, txs []*types.Transaction, layer ty
 		b.Write(addr.Bytes())
 		b.Write(tx.ID().Bytes())
 		if err := batch.Put(b.Bytes(), buf); err != nil {
-			return err
+			return fmt.Errorf("put into batch: %w", err)
 		}
 		b.Reset()
 	}
-	return batch.Write()
+
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("write batch: %w", err)
+	}
+
+	return nil
 }
 
 func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction) (grouped map[types.Address][]*types.Transaction, accounts map[types.Address]struct{}) {
@@ -811,11 +861,16 @@ func (m *DB) removePending(addr types.Address, txs []*types.Transaction) error {
 		b.Write(addr.Bytes())
 		b.Write(tx.ID().Bytes())
 		if err := batch.Delete(b.Bytes()); err != nil {
-			return err
+			return fmt.Errorf("delete batch: %w", err)
 		}
 		b.Reset()
 	}
-	return batch.Write()
+
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("write batch: %w", err)
+	}
+
+	return nil
 }
 
 func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendingTxs, error) {
@@ -827,12 +882,12 @@ func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendin
 	for it.Next() {
 		var mtx types.MeshTransaction
 		if err := codec.Decode(it.Value(), &mtx); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("decode with codec: %w", err)
 		}
 		pending.Add(mtx.LayerID, &mtx.Transaction)
 	}
 	if it.Error() != nil {
-		return nil, it.Error()
+		return nil, fmt.Errorf("iterator: %w", it.Error())
 	}
 	return pending, nil
 }
@@ -1051,7 +1106,13 @@ func (db *BlockFetcherDB) Get(hash []byte) ([]byte, error) {
 	id := types.BlockID(types.BytesToHash(hash).ToHash20())
 	blk, err := db.mdb.GetBlock(id)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get block: %w", err)
 	}
-	return types.InterfaceToBytes(blk)
+
+	data, err := types.InterfaceToBytes(blk)
+	if err != nil {
+		return data, fmt.Errorf("serialize: %w", err)
+	}
+
+	return data, nil
 }

@@ -166,7 +166,7 @@ func (s *Syncer) Start(ctx context.Context) {
 				select {
 				case <-s.shutdownCtx.Done():
 					s.logger.WithContext(ctx).Info("stopping sync to shutdown")
-					return s.shutdownCtx.Err()
+					return fmt.Errorf("shutdown context done: %w", s.shutdownCtx.Err())
 				case <-s.syncTimer.C:
 					s.logger.WithContext(ctx).Debug("synchronize on tick")
 					s.synchronize(ctx)
@@ -368,6 +368,8 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		if err = s.mesh.SetZeroBlockLayer(layerID); err != nil {
 			s.logger.WithContext(ctx).With().Panic("failed to set zero-block for genesis layer", layerID, log.Err(err))
 		}
+	}
+	if !layerID.After(types.GetEffectiveGenesis()) {
 		if layer, err = s.mesh.GetLayer(layerID); err != nil {
 			s.logger.WithContext(ctx).With().Panic("failed to get genesis layer", layerID, log.Err(err))
 		}
@@ -396,7 +398,7 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 	bch := s.fetcher.PollLayerContent(ctx, layerID)
 	res := <-bch
 	if res.Err != nil {
-		if res.Err == layerfetcher.ErrZeroLayer {
+		if errors.Is(res.Err, layerfetcher.ErrZeroLayer) {
 			return types.NewLayer(layerID), nil
 		}
 		return nil, fmt.Errorf("PollLayerContent: %w", res.Err)
@@ -429,7 +431,7 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 			// dont fail sync if we cannot fetch atxs for the current epoch before the last layer
 			if !atCurrentEpoch || atLastLayerOfEpoch {
 				s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", layerID, epoch, log.Err(err))
-				return err
+				return fmt.Errorf("get epoch ATXs: %w", err)
 			}
 			s.logger.WithContext(ctx).With().Warning("failed to fetch epoch atxs", layerID, epoch, log.Err(err))
 		}

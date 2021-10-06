@@ -138,7 +138,7 @@ func TestSendError(t *testing.T) {
 	msg := "hello"
 	err := conn.sendSock([]byte(msg))
 	assert.Error(t, err)
-	assert.Equal(t, "fail", err.Error())
+	assert.Equal(t, "write record: write size: fail", err.Error())
 }
 
 func TestPreSessionMessage(t *testing.T) {

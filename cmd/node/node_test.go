@@ -241,7 +241,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		err := cmdp.EnsureCLIFlags(cmd, app.Config)
 		r.Error(err)
-		r.Equal("unrecognized GRPC service requested: illegal", err.Error())
+		r.Equal("parse services list: unrecognized GRPC service requested: illegal", err.Error())
 	}
 	str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "illegal")
 	r.NoError(err)
@@ -347,7 +347,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		err := cmdp.EnsureCLIFlags(cmd, app.Config)
 		r.Error(err)
-		r.Equal("must enable at least one GRPC service along with JSON gateway service", err.Error())
+		r.Equal("parse services list: must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
 	str, err := testArgs("--json-server")
 	r.NoError(err)

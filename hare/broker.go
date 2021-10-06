@@ -229,7 +229,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			msgLogger = msgLogger.WithFields(log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)))
 			isEarly := false
 			if err := b.validate(messageCtx, hareMsg); err != nil {
-				if err != errEarlyMsg {
+				if !errors.Is(err, errEarlyMsg) {
 					// not early, validation failed
 					msgLogger.With().Debug("broker received a message to a consensus process that is not registered",
 						log.Err(err))
