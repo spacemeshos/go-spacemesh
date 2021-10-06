@@ -378,13 +378,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		if layer, err = s.getLayerFromPeers(ctx, layerID); err != nil {
 			return nil, err
 		}
-
-		if len(layer.Blocks()) == 0 {
-			s.logger.WithContext(ctx).With().Info("setting layer to zero-block", layerID)
-			if err := s.mesh.SetZeroBlockLayer(layerID); err != nil {
-				s.logger.WithContext(ctx).With().Warning("failed to set zero-block for layer", layerID, log.Err(err))
-			}
-		}
 	}
 
 	if err = s.getATXs(ctx, layerID); err != nil {
@@ -398,9 +391,6 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 	bch := s.fetcher.PollLayerContent(ctx, layerID)
 	res := <-bch
 	if res.Err != nil {
-		if errors.Is(res.Err, layerfetcher.ErrZeroLayer) {
-			return types.NewLayer(layerID), nil
-		}
 		return nil, fmt.Errorf("PollLayerContent: %w", res.Err)
 	}
 

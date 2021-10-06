@@ -18,6 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./layers.go
+
 // atxHandler defines handling function for incoming ATXs.
 type atxHandler interface {
 	HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error
@@ -38,9 +40,10 @@ type layerDB interface {
 	GetLayerHash(types.LayerID) types.Hash32
 	GetAggregatedLayerHash(types.LayerID) types.Hash32
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
-	GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error)
-	SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error
+	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)
+	SaveLayerInputVectorByID(context.Context, types.LayerID, []types.BlockID) error
 	ProcessedLayer() types.LayerID
+	SetZeroBlockLayer(types.LayerID) error
 }
 
 type atxIDsDB interface {
@@ -63,8 +66,6 @@ type network interface {
 }
 
 var (
-	// ErrZeroLayer is the error returned when an empty hash is received when polling for layer.
-	ErrZeroLayer = errors.New("zero layer")
 	// ErrNoPeers is returned when node has no peers.
 	ErrNoPeers = errors.New("no peers")
 	// ErrInternal is returned from the peer when the peer encounters an internal error.
@@ -207,15 +208,15 @@ func (l *Logic) layerBlocksReqReceiver(ctx context.Context, req []byte) ([]byte,
 	var err error
 	b.Blocks, err = l.layerDB.LayerBlockIds(lyrID)
 	if err != nil {
-		if !errors.Is(err, database.ErrNotFound) {
-			l.log.WithContext(ctx).With().Debug("failed to get layer content", lyrID, log.Err(err))
-			return nil, ErrInternal
-		}
-	} else {
-		if b.InputVector, err = l.layerDB.GetLayerInputVectorByID(lyrID); err != nil {
-			// best effort with input vector
-			l.log.WithContext(ctx).With().Debug("failed to get input vector for layer", lyrID, log.Err(err))
-		}
+		// database.ErrNotFound should be considered a programming error since we are only responding for
+		// layers older than processed layer
+		l.log.WithContext(ctx).With().Warning("failed to get layer content", lyrID, log.Err(err))
+		return nil, ErrInternal
+	}
+
+	if b.InputVector, err = l.layerDB.GetLayerInputVectorByID(lyrID); err != nil {
+		l.log.WithContext(ctx).With().Warning("failed to get input vector for layer", lyrID, log.Err(err))
+		return nil, ErrInternal
 	}
 
 	out, err := types.InterfaceToBytes(b)
@@ -320,9 +321,6 @@ func extractPeerResult(logger log.Log, layerID types.LayerID, data []byte, peerE
 	}
 
 	result.data = &blocks
-	if len(blocks.Blocks) == 0 {
-		result.err = ErrZeroLayer
-	}
 	// TODO check layer hash to be consistent with the content. if not, blacklist the peer
 	return
 }
@@ -357,7 +355,7 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 	}
 
 	// make a copy of data and channels to avoid holding a lock while notifying
-	go notifyLayerBlocksResult(layerID, l.layerBlocksChs[layerID], result, l.log.WithContext(ctx).WithFields(layerID))
+	go notifyLayerBlocksResult(layerID, l.layerDB, l.layerBlocksChs[layerID], result, l.log.WithContext(ctx).WithFields(layerID))
 	delete(l.layerBlocksChs, layerID)
 	delete(l.layerBlocksRes, layerID)
 }
@@ -365,31 +363,40 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 // notifyLayerBlocksResult determines the final result for the layer, and notifies subscribed channels when
 // all blocks are fetched for a given layer.
 // it deliberately doesn't hold any lock while notifying channels.
-func notifyLayerBlocksResult(layerID types.LayerID, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
+func notifyLayerBlocksResult(layerID types.LayerID, layerDB layerDB, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
 	var (
-		missing, success bool
-		err              error
+		missing, success, hasBlocks bool
+		err                         error
 	)
 	for _, res := range lyrResult.responses {
 		if res.err == nil && res.data != nil {
 			success = true
+			if len(res.data.Blocks) > 0 {
+				hasBlocks = true
+			}
 		}
 		if errors.Is(res.err, ErrBlockNotFetched) {
+			// all fetches need to succeed
 			missing = true
 			err = res.err
 			break
-		}
-		if errors.Is(res.err, ErrZeroLayer) {
-			err = res.err
 		}
 		if err == nil {
 			err = res.err
 		}
 	}
 	result := LayerPromiseResult{Layer: layerID}
+	// we tolerate errors from peers as long as we fetched all known blocks in this layer.
 	if missing || !success {
 		result.Err = err
 	}
+	if result.Err == nil && !hasBlocks { // none of the successful peers has data
+		if err := layerDB.SetZeroBlockLayer(layerID); err != nil {
+			// this can happen when node actually had received blocks for this layer before. ok to ignore
+			logger.With().Warning("failed to set zero-block for layer", layerID, log.Err(err))
+		}
+	}
+
 	logger.With().Debug("notifying layer blocks result", log.String("blocks", fmt.Sprintf("%+v", result)))
 	for _, ch := range channels {
 		ch <- result
