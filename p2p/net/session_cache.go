@@ -2,9 +2,10 @@ package net
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // simple cache for storing sessions.
@@ -24,9 +25,11 @@ type sessionCache struct {
 }
 
 func newSessionCache(dialFunc dialSessionFunc) *sessionCache {
-	return &sessionCache{dialFunc: dialFunc,
+	return &sessionCache{
+		dialFunc: dialFunc,
 		sMtx:     sync.Mutex{},
-		sessions: make(map[p2pcrypto.PublicKey]*storedSession)}
+		sessions: make(map[p2pcrypto.PublicKey]*storedSession),
+	}
 }
 
 // GetIfExist gets a session from the cache based on address.

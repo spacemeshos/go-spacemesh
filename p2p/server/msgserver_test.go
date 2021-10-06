@@ -50,7 +50,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 	t.Cleanup(func() {
 		serv1.Close()
 	})
-	//handler that returns some bytes on request
+	// handler that returns some bytes on request
 
 	mockData := "some value to return"
 	handler := func(ctx context.Context, msg []byte) ([]byte, error) {
@@ -64,7 +64,7 @@ func TestProtocol_SendRequest(t *testing.T) {
 	t.Cleanup(func() {
 		serv2.Close()
 	})
-	//send request with handler that converts to string and sends via channel
+	// send request with handler that converts to string and sends via channel
 	respCh := make(chan []byte)
 	callback := func(resp []byte) {
 		respCh <- resp
@@ -128,7 +128,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	t.Cleanup(func() {
 		serv1.Close()
 	})
-	//handler that returns some bytes on request
+	// handler that returns some bytes on request
 
 	handler := func(ctx context.Context, msg []byte) ([]byte, error) {
 		time.Sleep(2 * time.Second)
@@ -142,7 +142,7 @@ func TestProtocol_CleanOldPendingMessages(t *testing.T) {
 	t.Cleanup(func() {
 		serv2.Close()
 	})
-	//send request with handler that converts to string and sends via channel
+	// send request with handler that converts to string and sends via channel
 	respCh := make(chan []byte)
 	callback := func(resp []byte) {
 		respCh <- resp

@@ -98,18 +98,16 @@ func (m *MockPeerStore) SelectPeers(ctx context.Context, qty int) []*node.Info {
 
 // SetLocalAddresses to satisfy the iface.
 func (m *MockPeerStore) SetLocalAddresses(tcp, udp int) {
-
 }
 
 // Size returns the size of peers in the discovery.
 func (m *MockPeerStore) Size() int {
-	//todo: set size
+	// todo: set size
 	return m.updateCount
 }
 
 // Shutdown is a mock.
 func (m *MockPeerStore) Shutdown() {
-
 }
 
 // Good is a mock.
@@ -151,11 +149,9 @@ type mockAddrBook struct {
 }
 
 func (m *mockAddrBook) Stop() {
-
 }
 
 func (m *mockAddrBook) Start() {
-
 }
 
 func (m *mockAddrBook) AddLocalAddress(info *node.Info) {
@@ -172,7 +168,6 @@ func (m *mockAddrBook) IsLocalAddress(info *node.Info) bool {
 }
 
 func (m *mockAddrBook) RemoveAddress(key p2pcrypto.PublicKey) {
-
 }
 
 func (m *mockAddrBook) Good(key p2pcrypto.PublicKey) {
@@ -180,6 +175,7 @@ func (m *mockAddrBook) Good(key p2pcrypto.PublicKey) {
 		m.GoodFunc(key)
 	}
 }
+
 func (m *mockAddrBook) Attempt(key p2pcrypto.PublicKey) {
 	if m.AttemptFunc != nil {
 		m.AttemptFunc(key)
@@ -246,7 +242,7 @@ func (m *mockAddrBook) GetAddress() *KnownAddress {
 
 // NumAddresses mock.
 func (m *mockAddrBook) NumAddresses() int {
-	//todo: mockAddrBook sizem
+	// todo: mockAddrBook sizem
 	if m.NumAddressesFunc != nil {
 		return m.NumAddressesFunc()
 	}

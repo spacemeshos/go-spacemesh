@@ -238,7 +238,7 @@ func simulatorMetadata() P2PMetadata {
 // ProcessDirectProtocolMessage passes a direct message to the protocol.
 func (sn *Node) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, protocol string, payload Data, _ P2PMetadata) error {
 	// TODO: fix this
-	//sn.sleep(sn.rcvDelay)
+	// sn.sleep(sn.rcvDelay)
 	sn.sim.mutex.RLock()
 	c, ok := sn.sim.protocolDirectHandler[sn.PublicKey()][protocol]
 	sn.sim.mutex.RUnlock()

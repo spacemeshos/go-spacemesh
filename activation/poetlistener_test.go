@@ -24,6 +24,7 @@ func (ServiceMock) Start(ctx context.Context) error { panic("implement me") }
 func (s *ServiceMock) RegisterGossipProtocol(protocol string, priority priorityq.Priority) chan service.GossipMessage {
 	return s.ch
 }
+
 func (s *ServiceMock) RegisterDirectProtocol(protocol string) chan service.DirectMessage {
 	panic("not implemented")
 }

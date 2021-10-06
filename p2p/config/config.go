@@ -71,9 +71,8 @@ type SwarmConfig struct {
 
 // DefaultConfig defines the default p2p configuration.
 func DefaultConfig() Config {
-
 	// SwarmConfigValues defines default values for swarm config params.
-	var SwarmConfigValues = SwarmConfig{
+	SwarmConfigValues := SwarmConfig{
 		Gossip:                 true,
 		Bootstrap:              false,
 		RoutingTableBucketSize: 20,

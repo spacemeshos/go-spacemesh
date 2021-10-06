@@ -10,9 +10,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var (
-	multiConfig = Config{}
-)
+var multiConfig = Config{}
 
 // Config is the configuration struct for multi node sim.
 type Config struct {

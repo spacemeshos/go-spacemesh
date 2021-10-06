@@ -27,7 +27,7 @@ func TestMinXY(t *testing.T) {
 	const FavouriteInt32 = int32(17)
 	const FavouriteInt64 = int64(17)
 
-	//int
+	// int
 	// biggest vs smallest
 	try := MinInt(MaxIntValue, MinIntValue)
 	assert.Equal(t, try, MinIntValue, fmt.Sprintf("big vs small should be %d, is %d", MinIntValue, try))
@@ -44,7 +44,7 @@ func TestMinXY(t *testing.T) {
 	try = MinInt(FavouriteInt, FavouriteInt)
 	assert.Equal(t, try, FavouriteInt, fmt.Sprintf("equal values should be %d, is %d", FavouriteInt, try))
 
-	//int32
+	// int32
 	// biggest vs smallest
 	try32 := MinInt32(MaxInt32Value, MinInt32Value)
 	assert.Equal(t, try32, MinInt32Value, fmt.Sprintf("int32 big vs small should be %d, is %d", MinInt32Value, try32))
@@ -61,7 +61,7 @@ func TestMinXY(t *testing.T) {
 	try32 = MinInt32(FavouriteInt32, FavouriteInt32)
 	assert.Equal(t, try32, FavouriteInt32, fmt.Sprintf("int32 equal values should be %d, is %d", FavouriteInt32, try32))
 
-	//int64
+	// int64
 	// biggest vs smallest
 	try64 := MinInt64(MaxInt64Value, MinInt64Value)
 	assert.Equal(t, try64, MinInt64Value, fmt.Sprintf("int64 big vs small should be %d, is %d", MinInt64Value, try64))
@@ -77,5 +77,4 @@ func TestMinXY(t *testing.T) {
 	// the same
 	try64 = MinInt64(FavouriteInt64, FavouriteInt64)
 	assert.Equal(t, try64, FavouriteInt64, fmt.Sprintf("int64 equal values should be %d, is %d", FavouriteInt64, try64))
-
 }

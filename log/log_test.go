@@ -100,6 +100,7 @@ func TestLogLevel(t *testing.T) {
 
 	r.Equal(hookedExpected, hooked, "hook function was not called the expected number of times")
 }
+
 func TestJsonLog(t *testing.T) {
 	r := require.New(t)
 

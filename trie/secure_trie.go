@@ -18,6 +18,7 @@ package trie
 
 import (
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 

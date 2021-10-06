@@ -2,10 +2,11 @@ package state
 
 import (
 	crand "crypto/rand"
-	"github.com/spacemeshos/go-spacemesh/mempool"
 	"math/big"
 	"math/rand"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/mempool"
 
 	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -65,11 +66,11 @@ func createTransaction(t *testing.T, nonce uint64, destination types.Address, am
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
-	//test happy flow
-	//test happy flow with underlying structures
-	//test insufficient funds
-	//test wrong nonce
-	//test account doesn't exist
+	// test happy flow
+	// test happy flow with underlying structures
+	// test insufficient funds
+	// test wrong nonce
+	// test account doesn't exist
 	signerBuf := []byte("22222222222222222222222222222222")
 	signerBuf = append(signerBuf, []byte{
 		94, 33, 44, 9, 128, 228, 179, 159, 192, 151, 33, 19, 74, 160, 33, 9,
@@ -78,7 +79,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	signer, err := signing.NewEdSignerFromBuffer(signerBuf)
 	assert.NoError(s.T(), err)
 	obj1 := createAccount(s.processor, SignerToAddr(signer), 21, 0)
-	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 02}), 1, 10)
+	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 0o2}), 1, 10)
 	createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
 	s.processor.Commit()
 
@@ -172,7 +173,7 @@ func SignerToAddr(signer *signing.EdSigner) types.Address {
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors() {
 	signer1 := signing.NewEdSigner()
 	obj1 := createAccount(s.processor, SignerToAddr(signer1), 21, 0)
-	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 02}), 1, 10)
+	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 0o2}), 1, 10)
 	createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
 	s.processor.Commit()
 
@@ -192,19 +193,21 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), errFunds)
 
-	//Test origin
+	// Test origin
 	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signing.NewEdSigner()), types.LayerID{})
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), errOrigin)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
-	s.processor.ApplyRewards(types.NewLayerID(1), []types.Address{types.HexToAddress("aaa"),
+	s.processor.ApplyRewards(types.NewLayerID(1), []types.Address{
+		types.HexToAddress("aaa"),
 		types.HexToAddress("bbb"),
 		types.HexToAddress("ccc"),
 		types.HexToAddress("ddd"),
 		types.HexToAddress("bbb"),
-		types.HexToAddress("aaa")},
+		types.HexToAddress("aaa"),
+	},
 		big.NewInt(int64(1000)),
 	)
 
@@ -223,7 +226,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	signer, err := signing.NewEdSignerFromBuffer(signerBuf)
 	assert.NoError(s.T(), err)
 	obj1 := createAccount(s.processor, SignerToAddr(signer), 25, 0)
-	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 02}), 1, 10)
+	obj2 := createAccount(s.processor, toAddr([]byte{0x01, 0o2}), 1, 10)
 	obj3 := createAccount(s.processor, toAddr([]byte{0x02}), 44, 0)
 	_, err = s.processor.Commit()
 	assert.NoError(s.T(), err)
@@ -236,7 +239,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	}
 
 	s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
-	//assert.Error(s.T(), err)
+	// assert.Error(s.T(), err)
 
 	got := string(s.processor.Dump())
 
@@ -293,7 +296,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 
 	transactions := []*types.Transaction{
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
-		//createTransaction(obj2.Nonce(),obj2.address, obj1.address, 1),
+		// createTransaction(obj2.Nonce(),obj2.address, obj1.address, 1),
 	}
 
 	failed, err := processor.ApplyTransactions(types.NewLayerID(1), transactions)
@@ -374,7 +377,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	processor := NewTransactionProcessor(db, txDb, s.projector, mempool.NewTxMemPool(), lg)
 
 	revertToLayer := rand.Intn(testCycles)
-	revertAfterLayer := rand.Intn(testCycles - revertToLayer) //rand.Intn(min(testCycles - revertToLayer,maxPas.processors))
+	revertAfterLayer := rand.Intn(testCycles - revertToLayer) // rand.Intn(min(testCycles - revertToLayer,maxPas.processors))
 
 	signers := []*signing.EdSigner{
 		signing.NewEdSigner(),
@@ -431,7 +434,6 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			s.Require().Equal(string(want), string(got))
 		}
 	}
-
 }
 
 func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *types.Transaction {
@@ -544,7 +546,7 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	signer, err := signing.NewEdSignerFromBuffer(signerBuf)
 	assert.NoError(t, err)
 	obj1 := createAccount(processor, SignerToAddr(signer), 21, 0)
-	obj2 := createAccount(processor, toAddr([]byte{0x01, 02}), 1, 10)
+	obj2 := createAccount(processor, toAddr([]byte{0x01, 0o2}), 1, 10)
 	createAccount(processor, toAddr([]byte{0x02}), 44, 0)
 	_, err = processor.Commit()
 	assert.NoError(t, err)
@@ -564,5 +566,4 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 
 	_, err = processor.GetLayerStateRoot(types.NewLayerID(3))
 	assert.NoError(t, err)
-
 }

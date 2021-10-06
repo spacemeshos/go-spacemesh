@@ -42,7 +42,6 @@ func (c *EventsCollector) Start(blocking bool) {
 	} else {
 		go c.collectEvents(c.url)
 	}
-
 }
 
 // Stop stops collecting events.

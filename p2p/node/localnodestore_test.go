@@ -1,10 +1,11 @@
 package node
 
 import (
-	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 	"os"
 	"testing"
+
+	"github.com/google/uuid"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNodeLocalStore(t *testing.T) {
@@ -23,5 +24,4 @@ func TestNodeLocalStore(t *testing.T) {
 	rnode, nerr := newLocalNodeFromFile(readNode)
 	require.NoError(t, nerr, "failed to parse node keys")
 	require.Equal(t, rnode.publicKey, node.publicKey)
-
 }

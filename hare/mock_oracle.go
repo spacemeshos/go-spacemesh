@@ -16,8 +16,7 @@ type registrable interface {
 	Unregister(isHonest bool, id string)
 }
 
-type hasherU32 struct {
-}
+type hasherU32 struct{}
 
 func newHasherU32() *hasherU32 {
 	h := new(hasherU32)

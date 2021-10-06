@@ -1,11 +1,12 @@
 package config
 
 import (
+	"path/filepath"
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
-	"path/filepath"
-	"testing"
 )
 
 func TestLoadConfig(t *testing.T) {

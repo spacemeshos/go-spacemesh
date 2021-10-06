@@ -196,7 +196,7 @@ func TestPubSub_subscribeAll(t *testing.T) {
 		assert.NoError(t, err)
 	}
 
-	//msg := append([]byte{byte(topics[0])}, payload...)
+	// msg := append([]byte{byte(topics[0])}, payload...)
 	tm := time.NewTimer(3 * time.Second)
 	counter := 0
 	allCounter := 0

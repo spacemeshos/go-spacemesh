@@ -10,8 +10,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-const defaultPeersFileName = "peers.json"
-const saveRoutineInterval = time.Minute * 10
+const (
+	defaultPeersFileName = "peers.json"
+	saveRoutineInterval  = time.Minute * 10
+)
 
 type serializedKnownAddress struct {
 	Addr        string
@@ -232,5 +234,4 @@ out:
 	a.logger.Debug("Saving peer before exit to file %v", filepath)
 	a.savePeers(filepath)
 	a.logger.Debug("Address handler done")
-
 }

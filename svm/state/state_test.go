@@ -93,7 +93,6 @@ func TestLookupPastState(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, oldSt.GetBalance(toAddr([]byte{0x01})), uint64(22))
 	assert.Equal(t, s.state.GetBalance(toAddr([]byte{0x01})), uint64(32))
-
 }
 
 func (s *StateSuite) SetUpTest(t *testing.T) {
@@ -111,5 +110,4 @@ func compareStateObjects(so0, so1 *Object, t *testing.T) {
 	if so0.Nonce() != so1.Nonce() {
 		t.Fatalf("Nonce mismatch: have %v, want %v", so0.Nonce(), so1.Nonce())
 	}
-
 }

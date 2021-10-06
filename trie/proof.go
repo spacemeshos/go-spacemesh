@@ -19,6 +19,7 @@ package trie
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 

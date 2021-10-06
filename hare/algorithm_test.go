@@ -174,8 +174,7 @@ func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) boo
 	return mev.valid
 }
 
-type mockOracle struct {
-}
+type mockOracle struct{}
 
 func (mo *mockOracle) Eligible(types.LayerID, int32, string, []byte) bool {
 	return true
@@ -407,7 +406,7 @@ func TestConsensusProcess_procProposal(t *testing.T) {
 	mpt := &mockProposalTracker{}
 	proc.proposalTracker = mpt
 	proc.handleMessage(context.TODO(), m)
-	//proc.processProposalMsg(m)
+	// proc.processProposalMsg(m)
 	assert.Equal(t, 1, mpt.countOnProposal)
 	proc.advanceToNextRound(context.TODO())
 	proc.handleMessage(context.TODO(), m)

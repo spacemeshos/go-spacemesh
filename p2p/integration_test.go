@@ -18,8 +18,10 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-var exampleGossipProto = "exampleGossip"
-var exampleDirectProto = "exampleDirect"
+var (
+	exampleGossipProto = "exampleGossip"
+	exampleDirectProto = "exampleDirect"
+)
 
 type P2PIntegrationSuite struct {
 	logger          log.Log

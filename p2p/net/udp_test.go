@@ -65,6 +65,7 @@ func (mc *mockCon) LocalAddr() net.Addr {
 func (mc *mockCon) SetDeadline(t time.Time) error {
 	return nil
 }
+
 func (mc *mockCon) SetReadDeadline(t time.Time) error {
 	return nil
 }
@@ -273,6 +274,7 @@ func (ucw *udpConnMock) Read(b []byte) (int, error) {
 	}
 	return 0, errors.New("not impl")
 }
+
 func (ucw *udpConnMock) Write(b []byte) (int, error) {
 	if ucw.WriteFunc != nil {
 		return ucw.WriteFunc(b)

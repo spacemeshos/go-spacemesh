@@ -15,9 +15,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const register = "register"
-const unregister = "unregister"
-const validate = "validatemap"
+const (
+	register   = "register"
+	unregister = "unregister"
+	validate   = "validatemap"
+)
 
 const defaultOracleServerAddress = "http://localhost:3030"
 
@@ -42,7 +44,7 @@ func newHTTPRequester(url string) *httpRequester {
 }
 
 func (hr *httpRequester) Get(api, data string) []byte {
-	var jsonStr = []byte(data)
+	jsonStr := []byte(data)
 	log.Debug("Sending oracle request : %s ", jsonStr)
 	req, err := http.NewRequest("POST", hr.url+"/"+api, bytes.NewBuffer(jsonStr))
 	if err != nil {
@@ -51,7 +53,6 @@ func (hr *httpRequester) Get(api, data string) []byte {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := hr.c.Do(req)
-
 	if err != nil {
 		log.Panic("httpRequester panicked: %v", err)
 	}

@@ -163,7 +163,7 @@ func Test_Concurrency(t *testing.T) {
 func TestOracle_Eligible2(t *testing.T) {
 	o := newOracleClient()
 	mr := &mockRequester{results: make(map[string][]byte)}
-	//id := generateID()
+	// id := generateID()
 	mr.SetResult(register, "myid", []byte(`{ "message": "ok" }"`))
 	o.client = mr
 	o.Register(true, "myid")

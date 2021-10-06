@@ -8,7 +8,7 @@ import (
 )
 
 func TestCheckNodeVersion(t *testing.T) {
-	//t.Skip("We should implement or import deep semantic version comparison")
+	// t.Skip("We should implement or import deep semantic version comparison")
 	type versionTest []struct {
 		version    string
 		minVersion string
@@ -71,5 +71,4 @@ func TestCheckNodeVersion(t *testing.T) {
 		assert.False(t, ok, "Should return false when version is older than min version")
 		assert.NoError(t, err, "Shuold'nt return error when client is older")
 	}
-
 }

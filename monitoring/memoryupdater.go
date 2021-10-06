@@ -2,12 +2,15 @@ package monitoring
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"runtime"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const formatStr = "Name=%20s\t\tMax=%12v\t\tMin=%12v\t\tAvg=%12v\n"
-const jsonFormat = "%v:{max:%v, min:%v, avg:%v},"
+const (
+	formatStr  = "Name=%20s\t\tMax=%12v\t\tMin=%12v\t\tAvg=%12v\n"
+	jsonFormat = "%v:{max:%v, min:%v, avg:%v},"
+)
 
 var names = []string{"NumGoroutine", "Alloc", "TotalAlloc", "Sys", "Mallocs", "Frees", "LiveObjects", "PauseTotalNs", "NumGC"}
 

@@ -8,7 +8,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-//var signer = signing.NewEdSigner()
+// var signer = signing.NewEdSigner()
 
 func newTx(t *testing.T, nonce, totalAmount, fee uint64) *types.Transaction {
 	inner := types.InnerTransaction{

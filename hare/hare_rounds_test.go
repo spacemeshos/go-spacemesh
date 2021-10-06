@@ -51,16 +51,18 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 	}
 }
 
-type funcOracle func(types.LayerID, uint32, int, types.NodeID, []byte, *testHare) (uint16, error)
-type funcLayers func(types.LayerID, *testHare) ([]types.BlockID, error)
-type funcValidate func(types.LayerID, []types.BlockID, *testHare)
-type testHare struct {
-	*Hare
-	oracle   funcOracle
-	layers   funcLayers
-	validate funcValidate
-	N        int
-}
+type (
+	funcOracle   func(types.LayerID, uint32, int, types.NodeID, []byte, *testHare) (uint16, error)
+	funcLayers   func(types.LayerID, *testHare) ([]types.BlockID, error)
+	funcValidate func(types.LayerID, []types.BlockID, *testHare)
+	testHare     struct {
+		*Hare
+		oracle   funcOracle
+		layers   funcLayers
+		validate funcValidate
+		N        int
+	}
+)
 
 func (h *testHare) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committee int, id types.NodeID, sig []byte) (uint16, error) {
 	return h.oracle(layer, round, committee, id, sig, h)
@@ -71,21 +73,27 @@ func (testHare) Unregister(bool, string) {}
 func (testHare) IsEpochBeaconReady(context.Context, types.EpochID) bool {
 	return true
 }
+
 func (testHare) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
 }
+
 func (testHare) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	return []byte{}, nil
 }
+
 func (testHare) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
+
 func (h *testHare) HandleValidatedLayer(ctx context.Context, layer types.LayerID, ids []types.BlockID) {
 	h.validate(layer, ids, h)
 }
+
 func (h *testHare) LayerBlockIds(layer types.LayerID) ([]types.BlockID, error) {
 	return h.layers(layer, h)
 }
+
 func (h *testHare) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
 	panic("implement me")
 }

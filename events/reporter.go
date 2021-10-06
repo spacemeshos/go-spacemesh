@@ -462,7 +462,7 @@ type Reward struct {
 	Coinbase    types.Address
 	// TODO: We don't currently have a way to get the Layer Computed.
 	// See https://github.com/spacemeshos/go-spacemesh/issues/2275
-	//LayerComputed
+	// LayerComputed
 	Smesher types.NodeID
 }
 

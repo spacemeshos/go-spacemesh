@@ -363,7 +363,6 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 	done := make(chan struct{}, i)
 
 	for j := 0; j < i; j++ {
-
 		go func() {
 			getcon, err := cPool.GetConnectionIfExists(pk)
 			require.NoError(t, err)
@@ -371,13 +370,11 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 			require.Equal(t, int(n.DialCount()), 0)
 			done <- struct{}{}
 		}()
-
 	}
 
 	for ; i > 0; i-- {
 		<-done
 	}
-
 }
 
 func TestConnectionPool_CloseConnection(t *testing.T) {

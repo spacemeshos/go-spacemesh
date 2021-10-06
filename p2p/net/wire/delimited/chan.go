@@ -3,9 +3,10 @@ package delimited
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"io"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // Chan is a delimited duplex channel. It is used to have a channel interface
@@ -74,7 +75,6 @@ func (s *Chan) Pipe(rwc io.ReadWriteCloser) {
 // ReadFrom wraps the given io.Reader with a delimited.Reader, reads all
 // messages, ands sends them down the channel.
 func (s *Chan) readFromReader(r io.Reader) {
-
 	mr := NewReader(r)
 	// single reader, no need for Mutex
 Loop:

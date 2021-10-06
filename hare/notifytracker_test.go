@@ -1,8 +1,9 @@
 package hare
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func BuildNotifyMsg(signing Signer, s *Set) *Msg {

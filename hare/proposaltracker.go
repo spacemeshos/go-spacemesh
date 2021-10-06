@@ -3,6 +3,7 @@ package hare
 import (
 	"bytes"
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 

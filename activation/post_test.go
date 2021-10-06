@@ -37,7 +37,7 @@ func TestPostSetupManager(t *testing.T) {
 	mgr, err := NewPostSetupManager(id, cfg, logtest.New(t))
 	req.NoError(err)
 
-	var lastStatus = &PostSetupStatus{}
+	lastStatus := &PostSetupStatus{}
 	go func() {
 		for status := range mgr.StatusChan() {
 			req.True(status.NumLabelsWritten >= lastStatus.NumLabelsWritten)
@@ -46,7 +46,7 @@ func TestPostSetupManager(t *testing.T) {
 
 			if uint(status.NumLabelsWritten) == opts.NumUnits*cfg.LabelsPerUnit {
 				// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
-				//req.Equal(postSetupStateComplete, status.State)
+				// req.Equal(postSetupStateComplete, status.State)
 			} else {
 				req.Equal(postSetupStateInProgress, status.State)
 			}
@@ -115,7 +115,7 @@ func TestPostSetupManager_InitialStatus(t *testing.T) {
 
 	// Compare the last status update to the status queried directly.
 	// TODO(moshababo): fix the following failure. `status.State` changes to `postSetupStateComplete` only after the channel event was triggered.
-	//req.Equal(lastStatus, mgr.Status())
+	// req.Equal(lastStatus, mgr.Status())
 
 	// Re-instantiate `PostSetupManager`.
 	mgr, err = NewPostSetupManager(id, cfg, logtest.New(t))
@@ -169,7 +169,7 @@ func TestPostSetupManager_StatusChan_BeforeSessionStarted(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		ch := mgr.StatusChan()
-		var prevStatus = (*PostSetupStatus)(nil)
+		prevStatus := (*PostSetupStatus)(nil)
 		for {
 			status, more := <-ch
 			if more {
@@ -212,7 +212,7 @@ func TestPostSetupManager_StatusChan_AfterSessionStarted(t *testing.T) {
 		time.Sleep(100 * time.Millisecond) // Short delay.
 
 		ch := mgr.StatusChan()
-		var prevStatus = (*PostSetupStatus)(nil)
+		prevStatus := (*PostSetupStatus)(nil)
 		for {
 			status, more := <-ch
 			if more {

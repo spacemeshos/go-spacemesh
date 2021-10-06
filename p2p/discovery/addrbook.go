@@ -142,13 +142,12 @@ func (a *addrBook) isLocalAddressUnlocked(addr *node.Info) bool {
 // updateAddress is a helper function to either update an address already known
 // to the address manager, or to add the address if not already known.
 func (a *addrBook) updateAddress(netAddr, srcAddr *node.Info) {
-
 	if a.IsLocalAddress(netAddr) {
 		a.logger.Debug("skipping adding a local address %v", netAddr.String())
 		return
 	}
-	//Filter out non-routable addresses. Note that non-routable
-	//also includes invalid and localNode addresses.
+	// Filter out non-routable addresses. Note that non-routable
+	// also includes invalid and localNode addresses.
 	if !IsRoutable(netAddr.IP) && IsRoutable(srcAddr.IP) {
 		a.logger.Debug("skipping adding non routable address%v", netAddr.String())
 		// XXX: this makes tests work with unroutable addresses(loopback)
@@ -177,8 +176,8 @@ func (a *addrBook) updateAddress(netAddr, srcAddr *node.Info) {
 
 		// The more entries we have, the less likely we are to add more.
 		// likelihood is 2N.
-		//factor := int32(2 * ka.refs)
-		//if a.rand.Int31n(factor) != 0 {
+		// factor := int32(2 * ka.refs)
+		// if a.rand.Int31n(factor) != 0 {
 		return
 		//}
 	}
@@ -420,7 +419,6 @@ func (a *addrBook) pickTried(bucket int) *KnownAddress {
 		if oldest == nil || oldest.lastSeen.After(ka.lastSeen) {
 			oldest = ka
 		}
-
 	}
 	return oldest
 }
@@ -455,7 +453,6 @@ func (a *addrBook) NeedNewAddresses() bool {
 // AddressCache returns the current address cache.  It must be treated as
 // read-only (but since it is a copy now, this is not as dangerous).
 func (a *addrBook) AddressCache() []*node.Info {
-
 	// TODO : take from buckets
 
 	allAddr := a.getAddresses()
@@ -667,7 +664,6 @@ func (a *addrBook) RemoveAddress(key p2pcrypto.PublicKey) {
 // reset resets the address manager by reinitialising the random source
 // and allocating fresh empty bucket storage.
 func (a *addrBook) reset() {
-
 	a.addrIndex = make(map[node.ID]*KnownAddress)
 
 	// fill key with bytes from a good random source.
@@ -687,7 +683,7 @@ func (a *addrBook) reset() {
 // newAddrBook returns a new address manager.
 // Use Start to begin processing asynchronous address updates.
 func newAddrBook(cfg config.SwarmConfig, path string, logger log.Log) *addrBook {
-	//TODO use config for const params.
+	// TODO use config for const params.
 	am := addrBook{
 		logger:        logger,
 		path:          path,

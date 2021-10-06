@@ -2,6 +2,7 @@ package api
 
 import (
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"

@@ -84,7 +84,7 @@ func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
 		if n.canUnload(h.cachegen, h.cachelimit) {
 			// Unload the node from cache. All of its subnodes will have a lower or equal
 			// cache generation number.
-			//cacheUnloadCounter.Inc(1)
+			// cacheUnloadCounter.Inc(1)
 			return hash, hash, nil
 		}
 		if !dirty {

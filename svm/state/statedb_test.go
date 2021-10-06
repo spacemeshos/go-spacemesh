@@ -17,12 +17,12 @@
 package state
 
 import (
+	"testing"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/stretchr/testify/require"
-
-	"testing"
-	//check "gopkg.in/check.v1".
+	// check "gopkg.in/check.v1".
 )
 
 // Tests that updating a state trie does not leak any database writes prior to

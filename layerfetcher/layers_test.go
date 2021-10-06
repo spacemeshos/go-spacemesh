@@ -94,9 +94,11 @@ func newLayerDBMock() *layerDBMock {
 		processed: types.NewLayerID(999),
 	}
 }
+
 func (l *layerDBMock) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
 	return l.vectors[id], nil
 }
+
 func (l *layerDBMock) SaveLayerInputVectorByID(_ context.Context, id types.LayerID, blocks []types.BlockID) error {
 	l.vectors[id] = blocks
 	return nil

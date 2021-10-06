@@ -143,7 +143,6 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	remainder := totalRewardsCost % 4
 
 	assert.Equal(t, totalRewardsCost, s.TotalReward+remainder)
-
 }
 
 func NewTestRewardParams() Config {
@@ -373,7 +372,7 @@ func TestMesh_updateStateWithLayer_AdvanceInOrder(t *testing.T) {
 	require.Greater(t, len(finalMinus2Txs), 0)
 
 	finalMinus1BlockIds := copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
-	//copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
+	// copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
 	finalBlockIds := copyLayer(t, msh1, msh2, atxDB2, finalLyr)
 
 	// now advance s2 to finalLyr

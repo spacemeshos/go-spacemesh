@@ -65,7 +65,7 @@ func TestPing_Ping(t *testing.T) {
 }
 
 func TestPing_Ping_Concurrency(t *testing.T) {
-	//TODO : bigger concurrency test
+	// TODO : bigger concurrency test
 	sim := service.NewSimulator()
 	node1 := newTestNode(t, sim)
 	node2 := newTestNode(t, sim)

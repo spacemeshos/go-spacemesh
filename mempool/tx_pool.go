@@ -72,7 +72,7 @@ func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Addres
 
 	var ret []types.TransactionID
 	for idx := range getRandIdxs(numOfTxs, len(txIds)) {
-		//noinspection GoNilness
+		// noinspection GoNilness
 		ret = append(ret, txIds[idx])
 	}
 

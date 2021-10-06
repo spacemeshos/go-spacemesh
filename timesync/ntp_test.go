@@ -98,5 +98,4 @@ func Test_queryNtpServerZeroTime(t *testing.T) {
 
 	require.Error(t, err)
 	require.Equal(t, d, zeroDuration)
-
 }
