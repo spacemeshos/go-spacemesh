@@ -99,10 +99,6 @@ func (t *Transaction) ID() TransactionID {
 		return *(*TransactionID)(atomic.LoadPointer(&t.id))
 	}
 
-	if atomic.LoadPointer(&t.origin) != nil {
-		panic("origin not set")
-	}
-
 	txBytes, err := InterfaceToBytes(t)
 	if err != nil {
 		panic("failed to marshal transaction: " + err.Error())
