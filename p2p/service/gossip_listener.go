@@ -9,12 +9,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
-// GossipDataHandler is the function type that will be called when data is
+// GossipDataHandler is the function type that will be called when data is.
 type GossipDataHandler func(ctx context.Context, data GossipMessage, fetcher Fetcher)
 
 type enableGossipFunc func() bool
 
-// Listener represents the main struct that reqisters delegates to gossip function
+// Listener represents the main struct that reqisters delegates to gossip function.
 type Listener struct {
 	*log.Log
 	net                  Service
@@ -25,7 +25,7 @@ type Listener struct {
 	shouldListenToGossip enableGossipFunc
 }
 
-// NewListener creates a new listener struct
+// NewListener creates a new listener struct.
 func NewListener(net Service, fetcher Fetcher, shouldListenToGossip enableGossipFunc, log log.Log) *Listener {
 	return &Listener{
 		Log:                  &log,
@@ -36,7 +36,7 @@ func NewListener(net Service, fetcher Fetcher, shouldListenToGossip enableGossip
 	}
 }
 
-// Fetcher is a general interface that defines a component capable of fetching data from remote peers
+// Fetcher is a general interface that defines a component capable of fetching data from remote peers.
 type Fetcher interface {
 	FetchBlock(context.Context, types.BlockID) error
 	FetchAtx(context.Context, types.ATXID) error
@@ -46,7 +46,7 @@ type Fetcher interface {
 	GetAtxs(context.Context, []types.ATXID) error
 }
 
-// AddListener adds a listener to a specific gossip channel
+// AddListener adds a listener to a specific gossip channel.
 func (l *Listener) AddListener(ctx context.Context, channel string, priority priorityq.Priority, dataHandler GossipDataHandler) {
 	ctx = log.WithNewSessionID(ctx, log.String("gossip_listener_channel", channel))
 	ch := l.net.RegisterGossipProtocol(channel, priority)
@@ -57,7 +57,7 @@ func (l *Listener) AddListener(ctx context.Context, channel string, priority pri
 	go l.listenToGossip(ctx, dataHandler, ch, stop, channel)
 }
 
-// Stop stops listening to all gossip channels
+// Stop stops listening to all gossip channels.
 func (l *Listener) Stop() {
 	for _, ch := range l.stoppers {
 		close(ch)

@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -15,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/require"
 )
 
 type HareWrapper struct {
@@ -162,7 +163,7 @@ func (trueOracle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
 	return true
 }
 
-// Test - runs a single CP for more than one iteration
+// Test - runs a single CP for more than one iteration.
 func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
 
@@ -245,7 +246,7 @@ func createMaatuf(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID
 	return hare
 }
 
-// Test - run multiple CPs simultaneously
+// Test - run multiple CPs simultaneously.
 func Test_multipleCPs(t *testing.T) {
 	// NOTE(dshulyak) spams with overwriting sessionID in context
 	logtest.SetupGlobal(t)
@@ -281,7 +282,7 @@ func Test_multipleCPs(t *testing.T) {
 	test.WaitForTimedTermination(t, 80*time.Second)
 }
 
-// Test - run multiple CPs where one of them runs more than one iteration
+// Test - run multiple CPs where one of them runs more than one iteration.
 func Test_multipleCPsAndIterations(t *testing.T) {
 	logtest.SetupGlobal(t)
 

@@ -126,7 +126,7 @@ func newSyntaxContextValidator(sgr Signer, threshold int, validator func(m *Msg)
 	return &syntaxContextValidator{sgr, threshold, validator, stateQuerier, layersPerEpoch, ev, validMsgsTracker, logger}
 }
 
-// contextual validation errors
+// contextual validation errors.
 var (
 	errNilMsg         = errors.New("nil message")
 	errNilInner       = errors.New("nil inner message")
@@ -469,7 +469,7 @@ func validateStatusType(m *Msg) bool {
 	return messageType(m.InnerMsg.Type) == status
 }
 
-// validate SVP for type A (where all Ki=-1)
+// validate SVP for type A (where all Ki=-1).
 func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) bool {
 	s := NewSet(m.InnerMsg.Values)
 	unionSet := NewEmptySet(len(m.InnerMsg.Values))
@@ -491,7 +491,7 @@ func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) b
 	return true
 }
 
-// validate SVP for type B (where exist Ki>=0)
+// validate SVP for type B (where exist Ki>=0).
 func (v *syntaxContextValidator) validateSVPTypeB(ctx context.Context, msg *Msg, maxSet *Set) bool {
 	// max set should be equal to the claimed set
 	s := NewSet(msg.InnerMsg.Values)

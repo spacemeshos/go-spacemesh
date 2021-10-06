@@ -6,6 +6,9 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -18,8 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func randomHash() types.Hash32 {
@@ -32,7 +33,7 @@ func randomHash() types.Hash32 {
 	return types.CalcHash32(b)
 }
 
-// RandomBlockID generates random block id
+// RandomBlockID generates random block id.
 func randomBlockID() types.BlockID {
 	b := make([]byte, 8)
 	_, err := rand.Read(b)
@@ -94,9 +95,11 @@ func newLayerDBMock() *layerDBMock {
 		processed: types.NewLayerID(999),
 	}
 }
+
 func (l *layerDBMock) GetLayerInputVectorByID(id types.LayerID) ([]types.BlockID, error) {
 	return l.vectors[id], nil
 }
+
 func (l *layerDBMock) SaveLayerInputVectorByID(_ context.Context, id types.LayerID, blocks []types.BlockID) error {
 	l.vectors[id] = blocks
 	return nil

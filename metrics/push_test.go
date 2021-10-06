@@ -36,7 +36,6 @@ func TestStartPushMetrics(t *testing.T) {
 		}
 
 		w.WriteHeader(202)
-
 	}))
 	defer ts.Close()
 
@@ -47,5 +46,4 @@ func TestStartPushMetrics(t *testing.T) {
 	if err != nil {
 		t.Fatal("can't push to server", err)
 	}
-
 }

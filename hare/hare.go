@@ -159,10 +159,10 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 	return lyr
 }
 
-// ErrTooLate means that the consensus was terminated too late
+// ErrTooLate means that the consensus was terminated too late.
 var ErrTooLate = errors.New("consensus process finished too late")
 
-// records the provided output
+// records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	set := output.Set()
 	blocks := make([]types.BlockID, set.len())

@@ -1,11 +1,13 @@
 package net
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/stretchr/testify/require"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 var dialErrFunc dialSessionFunc = func(pubkey p2pcrypto.PublicKey) (session NetworkSession) {
@@ -27,6 +29,7 @@ func Test_sessionCache_GetIfExist(t *testing.T) {
 	require.NoError(t, err2)
 	require.NotNil(t, b)
 }
+
 func Test_sessionCache_GetOrCreate(t *testing.T) {
 	sc := newSessionCache(dialErrFunc)
 	rnd := node.GenerateRandomNodeData().PublicKey()
@@ -41,7 +44,7 @@ func Test_sessionCache_GetOrCreate(t *testing.T) {
 	nds := node.GenerateRandomNodesData(maxSessions + 10)
 
 	for i := 0; i < len(nds); i++ {
-		//str := strconv.Itoa(i)
+		// str := strconv.Itoa(i)
 		e := sc.GetOrCreate(nds[i].PublicKey()) // we don't use address cause there might be dups
 		require.NotNil(t, e)
 	}
@@ -64,5 +67,4 @@ func Test_sessionCache_handleIncoming(t *testing.T) {
 	}
 
 	require.Equal(t, maxSessions, len(sc.sessions))
-
 }

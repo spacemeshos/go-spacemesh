@@ -13,7 +13,7 @@ import (
 
 type messageType byte
 
-// declare all known message types
+// declare all known message types.
 const (
 	status   messageType = 0
 	proposal messageType = 1
@@ -24,7 +24,7 @@ const (
 
 const preRound uint32 = math.MaxUint32
 
-// declare round identifiers
+// declare round identifiers.
 const (
 	statusRound uint32 = iota
 	proposalRound

@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net/http"
-	_ "net/http/pprof" // import for memory and network profiling
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -16,9 +15,6 @@ import (
 	"runtime"
 	"strconv"
 	"time"
-
-	"github.com/spacemeshos/go-spacemesh/svm"
-	"github.com/spacemeshos/go-spacemesh/svm/state"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
@@ -53,6 +49,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm"
+	"github.com/spacemeshos/go-spacemesh/svm/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -65,7 +63,7 @@ import (
 
 const edKeyFileName = "key.bin"
 
-// Logger names
+// Logger names.
 const (
 	AppLogger            = "app"
 	P2PLogger            = "p2p"
@@ -101,7 +99,7 @@ const (
 	SVMLogger            = "SVM"
 )
 
-// Cmd is the cobra wrapper for the node, that allows adding parameters to it
+// Cmd is the cobra wrapper for the node, that allows adding parameters to it.
 var Cmd = &cobra.Command{
 	Use:   "node",
 	Short: "start node",
@@ -149,7 +147,7 @@ var Cmd = &cobra.Command{
 	},
 }
 
-// VersionCmd returns the current version of spacemesh
+// VersionCmd returns the current version of spacemesh.
 var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version info",
@@ -168,13 +166,13 @@ func init() {
 	Cmd.AddCommand(VersionCmd)
 }
 
-// Service is a general service interface that specifies the basic start/stop functionality
+// Service is a general service interface that specifies the basic start/stop functionality.
 type Service interface {
 	Start(ctx context.Context) error
 	Close()
 }
 
-// HareService is basic definition of hare algorithm service, providing consensus results for a layer
+// HareService is basic definition of hare algorithm service, providing consensus results for a layer.
 type HareService interface {
 	Service
 	GetResult(types.LayerID) ([]types.BlockID, error)
@@ -189,7 +187,7 @@ type TortoiseBeaconService interface {
 	HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
 }
 
-// TickProvider is an interface to a glopbal system clock that releases ticks on each layer
+// TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
 type TickProvider interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timesync.LayerTimer)
@@ -201,7 +199,7 @@ type TickProvider interface {
 	AwaitLayer(types.LayerID) chan struct{}
 }
 
-// LoadConfigFromFile tries to load configuration file if the config parameter was specified
+// LoadConfigFromFile tries to load configuration file if the config parameter was specified.
 func LoadConfigFromFile() (*cfg.Config, error) {
 	fileLocation := viper.GetString("config")
 	vip := viper.New()
@@ -272,7 +270,7 @@ func WithConfig(conf *cfg.Config) Option {
 	}
 }
 
-// New creates an instance of the spacemesh app
+// New creates an instance of the spacemesh app.
 func New(opts ...Option) *App {
 	defaultConfig := cfg.DefaultConfig()
 	app := &App{
@@ -290,7 +288,7 @@ func New(opts ...Option) *App {
 	return app
 }
 
-// App is the cli app singleton
+// App is the cli app singleton.
 type App struct {
 	*cobra.Command
 	nodeID         types.NodeID
@@ -333,7 +331,7 @@ func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync
+// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
@@ -390,7 +388,7 @@ func (app *App) getAppInfo() string {
 		cmdp.Version, cmdp.Branch, cmdp.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-// Cleanup stops all app services
+// Cleanup stops all app services.
 func (app *App) Cleanup() {
 	log.Info("app cleanup starting...")
 	app.stopServices()
@@ -449,7 +447,7 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 	return logger.WithName(name).WithFields(log.String("module", name))
 }
 
-// SetLogLevel updates the log level of an existing logger
+// SetLogLevel updates the log level of an existing logger.
 func (app *App) SetLogLevel(name, loglevel string) error {
 	lvl, ok := app.loggers[name]
 	if !ok {
@@ -474,7 +472,6 @@ func (app *App) initServices(ctx context.Context,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner signing.Signer,
 	layersPerEpoch uint32, clock TickProvider) error {
-
 	app.nodeID = nodeID
 
 	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
@@ -745,7 +742,7 @@ func (app *App) initServices(ctx context.Context,
 	return nil
 }
 
-// periodically checks that our clock is sync
+// periodically checks that our clock is sync.
 func (app *App) checkTimeDrifts() {
 	checkTimeSync := time.NewTicker(app.Config.TIME.RefreshNtpInterval)
 	defer checkTimeSync.Stop() // close ticker
@@ -768,7 +765,7 @@ func (app *App) checkTimeDrifts() {
 	}
 }
 
-// HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare
+// HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare.
 func (app *App) HareFactory(
 	ctx context.Context,
 	mdb *mesh.DB,
@@ -1001,7 +998,7 @@ func (app *App) stopServices() {
 	}
 }
 
-// LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists
+// LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
 func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	log.Info("Looking for identity file at `%v`", filename)

@@ -8,9 +8,10 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"google.golang.org/grpc"
+
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"google.golang.org/grpc"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.

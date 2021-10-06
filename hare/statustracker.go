@@ -29,7 +29,7 @@ func newStatusTracker(threshold int, expectedSize int) *statusTracker {
 	return st
 }
 
-// RecordStatus records the given status message
+// RecordStatus records the given status message.
 func (st *statusTracker) RecordStatus(ctx context.Context, msg *Msg) {
 	pub := msg.PubKey
 	_, exist := st.statuses[pub.String()]
@@ -78,7 +78,7 @@ func (st *statusTracker) ProposalSet(expectedSize int) *Set {
 	return st.maxSet
 }
 
-// returns the union set of all status Messages collected
+// returns the union set of all status Messages collected.
 func (st *statusTracker) buildUnionSet(expectedSize int) *Set {
 	unionSet := NewEmptySet(expectedSize)
 	for _, m := range st.statuses {
@@ -90,7 +90,7 @@ func (st *statusTracker) buildUnionSet(expectedSize int) *Set {
 	return unionSet
 }
 
-// BuildSVP builds the SVP if avilable and returns it, it return false otherwise.
+// BuildSVP builds the SVP if available and returns it, it return false otherwise.
 func (st *statusTracker) BuildSVP() *aggregatedMessages {
 	if !st.IsSVPReady() {
 		return nil

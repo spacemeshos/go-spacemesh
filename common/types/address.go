@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	// AddressLength is the expected length of the address
+	// AddressLength is the expected length of the address.
 	AddressLength = 20
 )
 

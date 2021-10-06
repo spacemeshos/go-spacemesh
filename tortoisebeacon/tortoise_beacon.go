@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/ALTree/bigfloat"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -18,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -300,7 +301,7 @@ func (tb *TortoiseBeacon) findMostWeightedBeaconForEpoch(epoch types.EpochID) []
 }
 
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
-// TODO(nkryuchkov): consider not using (using DB instead)
+// TODO(nkryuchkov): consider not using (using DB instead).
 func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	if epochID == 0 {
 		return nil, ErrZeroEpoch

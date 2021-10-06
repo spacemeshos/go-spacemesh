@@ -8,17 +8,18 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 )
 
-// Cmd is the p2p cmd
+// Cmd is the p2p cmd.
 var Cmd = &cobra.Command{
 	Use:   "p2p",
 	Short: "start p2p",
@@ -35,19 +36,19 @@ func init() {
 	cmdp.AddCommands(Cmd)
 }
 
-// P2PApp is an app struct used to run only p2p functionality
+// P2PApp is an app struct used to run only p2p functionality.
 type P2PApp struct {
 	*cmdp.BaseApp
 	p2p     p2p.Service
 	closers []io.Closer
 }
 
-// NewP2PApp creates the base app
+// NewP2PApp creates the base app.
 func NewP2PApp() *P2PApp {
 	return &P2PApp{BaseApp: cmdp.NewBaseApp()}
 }
 
-// Cleanup closes all services
+// Cleanup closes all services.
 func (app *P2PApp) Cleanup() {
 	for _, c := range app.closers {
 		if err := c.Close(); err != nil {

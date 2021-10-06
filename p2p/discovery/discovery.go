@@ -14,7 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-// PeerStore is an interface to the discovery protocol
+// PeerStore is an interface to the discovery protocol.
 type PeerStore interface {
 	Remove(pubkey p2pcrypto.PublicKey)
 	Lookup(pubkey p2pcrypto.PublicKey) (*node.Info, error)
@@ -66,7 +66,7 @@ type bootstrapper interface {
 	Bootstrap(ctx context.Context, minPeers int) error
 }
 
-// ErrLookupFailed determines that we couldn't lookup this node in the routing table or network
+// ErrLookupFailed determines that we couldn't lookup this node in the routing table or network.
 var ErrLookupFailed = errors.New("failed to lookup node in the network")
 
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
@@ -91,7 +91,7 @@ func (d *Discovery) Good(key p2pcrypto.PublicKey) {
 	d.rt.Good(key)
 }
 
-// Attempt marks an attempt on the node in the addrBook
+// Attempt marks an attempt on the node in the addrBook.
 func (d *Discovery) Attempt(key p2pcrypto.PublicKey) {
 	d.rt.Attempt(key)
 }
@@ -105,7 +105,7 @@ func (d *Discovery) refresh(ctx context.Context, peersToGet int) error {
 	return nil
 }
 
-// SelectPeers asks routing table to randomly select a slice of nodes in size `qty`
+// SelectPeers asks routing table to randomly select a slice of nodes in size `qty`.
 func (d *Discovery) SelectPeers(ctx context.Context, qty int) []*node.Info {
 	if d.rt.NeedNewAddresses() {
 		err := d.refresh(ctx, qty) // TODO: use ctx with timeout, check errors
@@ -143,12 +143,12 @@ func (d *Discovery) Lookup(key p2pcrypto.PublicKey) (*node.Info, error) {
 	return node, nil
 }
 
-// Update adds an addr to the addrBook
+// Update adds an addr to the addrBook.
 func (d *Discovery) Update(addr, src *node.Info) {
 	d.rt.AddAddress(addr, src)
 }
 
-// New creates a new Discovery
+// New creates a new Discovery.
 func New(ctx context.Context, ln node.LocalNode, config config.SwarmConfig, service server.Service, path string, logger log.Log) *Discovery {
 	d := &Discovery{
 		config: config,
@@ -181,7 +181,7 @@ func New(ctx context.Context, ln node.LocalNode, config config.SwarmConfig, serv
 	return d
 }
 
-// Shutdown stops the discovery service
+// Shutdown stops the discovery service.
 func (d *Discovery) Shutdown() {
 	d.disc.Close()
 	d.rt.Stop()
@@ -198,7 +198,7 @@ func (d *Discovery) SetLocalAddresses(tcp, udp int) {
 	// TODO: lookup a protocol or just pass here our IP to the routing table
 }
 
-// Remove removes a record from the routing table
+// Remove removes a record from the routing table.
 func (d *Discovery) Remove(key p2pcrypto.PublicKey) {
 	d.rt.RemoveAddress(key) // we don't care about address when we remove
 }

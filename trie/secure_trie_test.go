@@ -27,6 +27,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/database"
 )
 
 func newEmptySecure() *SecureTrie {

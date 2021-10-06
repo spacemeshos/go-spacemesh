@@ -6,19 +6,20 @@ import (
 	"math/rand"
 	"reflect"
 
+	"github.com/spacemeshos/sha256-simd"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/sha256-simd"
 )
 
 const (
-	// Hash32Length is 32, the expected length of the hash
+	// Hash32Length is 32, the expected length of the hash.
 	Hash32Length = 32
 	hash20Length = 20
 	hash12Length = 12
 )
 
-// Hash12 represents the first 12 bytes of sha256, mostly used for internal caches
+// Hash12 represents the first 12 bytes of sha256, mostly used for internal caches.
 type Hash12 [hash12Length]byte
 
 // Hash32 represents the 32-byte sha256 hash of arbitrary data.
@@ -145,7 +146,7 @@ func CalcHash32(data []byte) Hash32 {
 	return sha256.Sum256(data)
 }
 
-// CalcAggregateHash32 returns the 32-byte sha256 sum of the given data aggregated with previous hash h
+// CalcAggregateHash32 returns the 32-byte sha256 sum of the given data aggregated with previous hash h.
 func CalcAggregateHash32(h Hash32, data []byte) Hash32 {
 	hash := sha256.New()
 	hash.Write(h.Bytes())
@@ -194,7 +195,7 @@ func (h Hash32) ShortString() string {
 	return Shorten(h.Hex()[util.Min(2, l):], 10)
 }
 
-// Shorten shortens a string to a specified length
+// Shorten shortens a string to a specified length.
 func Shorten(s string, maxlen int) string {
 	l := len(s)
 	return s[:util.Min(maxlen, l)]

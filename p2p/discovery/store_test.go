@@ -34,7 +34,6 @@ func assertAddr(t *testing.T, got, expected *node.Info) {
 // expected addresses.
 func assertAddrs(t *testing.T, addrMgr *addrBook,
 	expectedAddrs map[p2pcrypto.PublicKey]*node.Info) {
-
 	t.Helper()
 
 	addrs := addrMgr.getAddresses()
@@ -58,7 +57,6 @@ func assertAddrs(t *testing.T, addrMgr *addrBook,
 // TestAddrManagerSerialization ensures that we can properly serialize and
 // deserialize the manager's current address cache.
 func TestAddrManagerSerialization(t *testing.T) {
-
 	lg := logtest.New(t).WithName("addrbook_serialize_test")
 	cfg := config.DefaultConfig()
 

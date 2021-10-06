@@ -76,7 +76,7 @@ func (pm gossipProtocolMessage) ReportValidation(ctx context.Context, protocol s
 	}
 }
 
-// ProtocolMessageMetadata is a general p2p message wrapper
+// ProtocolMessageMetadata is a general p2p message wrapper.
 type ProtocolMessageMetadata struct {
 	NextProtocol  string
 	ClientVersion string

@@ -167,17 +167,14 @@ golangci-lint:
 	golangci-lint run --config .golangci.yml
 .PHONY: golangci-lint
 
-golangci-lint-fast:
-	golangci-lint run --config .golangci-fast.yml
-.PHONY: golangci-lint-fast
+# Auto-fixes golangci-lint issues where possible.
+golangci-lint-fix:
+	golangci-lint run --config .golangci.yml --fix
+.PHONY: golangci-lint-fix
 
 golangci-lint-github-action:
 	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
 .PHONY: golangci-lint-github-action
-
-golangci-lint-fast-github-action:
-	./bin/golangci-lint run --config .golangci-fast.yml --out-format=github-actions
-.PHONY: golangci-lint-fast-github-action
 
 cover:
 	@echo "mode: count" > cover-all.out

@@ -1,9 +1,10 @@
-//go-spacemesh is a golang implementation of the Spacemesh node.
-//See - https://spacemesh.io
+// go-spacemesh is a golang implementation of the Spacemesh node.
+// See - https://spacemesh.io
 package main
 
 import (
 	"fmt"
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/spacemeshos/go-spacemesh/cmd"

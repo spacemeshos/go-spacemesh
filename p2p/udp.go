@@ -18,7 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
 )
 
-// Lookuper is a service used to lookup for nodes we know already
+// Lookuper is a service used to lookup for nodes we know already.
 type Lookuper func(key p2pcrypto.PublicKey) (*node.Info, error)
 
 type udpNetwork interface {
@@ -44,7 +44,7 @@ type UDPMux struct {
 	shutdownCtx context.Context
 }
 
-// NewUDPMux creates a new udp protocol server
+// NewUDPMux creates a new udp protocol server.
 func NewUDPMux(ctx, shutdownCtx context.Context, localNode node.LocalNode, lookuper Lookuper, udpNet udpNetwork, networkid uint32, logger log.Log) *UDPMux {
 	cpool := connectionpool.NewConnectionPool(shutdownCtx, udpNet.Dial, localNode.PublicKey(), logger.WithName("udp_cpool"))
 
@@ -73,13 +73,13 @@ func NewUDPMux(ctx, shutdownCtx context.Context, localNode node.LocalNode, looku
 	return um
 }
 
-// Start starts the UDPMux
+// Start starts the UDPMux.
 func (mux *UDPMux) Start() error {
 	go mux.listenToNetworkMessage()
 	return nil
 }
 
-// Shutdown closes the server
+// Shutdown closes the server.
 func (mux *UDPMux) Shutdown() {
 	mux.network.Shutdown()
 	mux.cpool.Shutdown()
@@ -123,7 +123,7 @@ func (mux *UDPMux) listenToNetworkMessage() {
 // Note: for now udp is only direct.
 // todo: no need to return chan, but for now stay consistent with api
 
-// RegisterDirectProtocolWithChannel registers a protocol on a channel, should be done before `Start` was called. not thread-safe
+// RegisterDirectProtocolWithChannel registers a protocol on a channel, should be done before `Start` was called. not thread-safe.
 func (mux *UDPMux) RegisterDirectProtocolWithChannel(name string, c chan service.DirectMessage) chan service.DirectMessage {
 	mux.messages[name] = c
 	return c
@@ -143,7 +143,7 @@ func (mux *UDPMux) ProcessDirectProtocolMessage(sender p2pcrypto.PublicKey, prot
 	return nil
 }
 
-// SendWrappedMessage is a proxy method to the sendMessageImpl. it sends a wrapped message and used within MessageServer
+// SendWrappedMessage is a proxy method to the sendMessageImpl. it sends a wrapped message and used within MessageServer.
 func (mux *UDPMux) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
 	return mux.sendMessageImpl(ctx, nodeID, protocol, payload)
 }

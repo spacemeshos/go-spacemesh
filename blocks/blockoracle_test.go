@@ -539,7 +539,6 @@ func TestBlockOracleValidatorWrongBeacon(t *testing.T) {
 
 func newBlockWithEligibility(layerID types.LayerID, atxID types.ATXID, proof types.BlockEligibilityProof,
 	db *mockActivationDB, tBeacon []byte) *types.Block {
-
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{
 		LayerIndex:       layerID,
 		ATXID:            atxID,

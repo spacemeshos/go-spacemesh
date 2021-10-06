@@ -14,7 +14,7 @@ var errOverflow = errors.New("vector overflow")
 
 var (
 	// correction vectors type
-	// Opinion vectors
+	// Opinion vectors.
 	support = vec{Support: 1, Against: 0}
 	against = vec{Support: 0, Against: 1}
 	abstain = vec{Support: 0, Against: 0}
@@ -78,7 +78,7 @@ func (a vec) String() string {
 var thetaMu sync.Mutex
 
 // calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
-// and theta, layer size and delta
+// and theta, layer size and delta.
 func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, layerSize uint32, delta uint32) vec {
 	thetaMu.Lock()
 	defer thetaMu.Unlock()

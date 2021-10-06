@@ -9,12 +9,13 @@ import (
 	"time"
 	"unsafe"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"golang.org/x/sync/errgroup"
 )
 
 type layerTicker interface {
@@ -27,7 +28,7 @@ type layerFetcher interface {
 	GetEpochATXs(ctx context.Context, id types.EpochID) error
 }
 
-// Configuration is the config params for syncer
+// Configuration is the config params for syncer.
 type Configuration struct {
 	SyncInterval time.Duration
 	AlwaysListen bool
@@ -47,7 +48,7 @@ const (
 	// in the protocol. this is to protect the node from participating in the consensus without full information.
 	// for example, when a node wakes up in the middle of layer N, since it didn't receive all relevant messages and
 	// blocks of layer N, it shouldn't vote or produce blocks in layer N+1. it instead listens to gossip for all
-	// through layer N+1 and starts producing blocks and participates in hare committee in layer N+2
+	// through layer N+1 and starts producing blocks and participates in hare committee in layer N+2.
 	gossipSync
 	// synced is the state where the node is in sync with its peers.
 	synced
@@ -126,7 +127,7 @@ func (s *Syncer) Close() {
 	s.logger.With().Info("all syncer goroutines finished", log.Err(err))
 }
 
-// RegisterChForSynced registers ch for notification when the node enters synced state
+// RegisterChForSynced registers ch for notification when the node enters synced state.
 func (s *Syncer) RegisterChForSynced(ctx context.Context, ch chan struct{}) {
 	if s.IsSynced(ctx) {
 		close(ch)
@@ -137,12 +138,12 @@ func (s *Syncer) RegisterChForSynced(ctx context.Context, ch chan struct{}) {
 	s.awaitSyncedCh = append(s.awaitSyncedCh, ch)
 }
 
-// ListenToGossip returns true if the node is listening to gossip for blocks/TXs/ATXs data
+// ListenToGossip returns true if the node is listening to gossip for blocks/TXs/ATXs data.
 func (s *Syncer) ListenToGossip() bool {
 	return s.conf.AlwaysListen || s.getSyncState() >= gossipSync
 }
 
-// IsSynced returns true if the node is in synced state
+// IsSynced returns true if the node is in synced state.
 func (s *Syncer) IsSynced(ctx context.Context) bool {
 	// TODO: at startup, ctx contains no sessionId here
 	res := s.getSyncState() == synced
@@ -154,7 +155,7 @@ func (s *Syncer) IsSynced(ctx context.Context) bool {
 	return res
 }
 
-// Start starts the main sync loop that tries to sync data for every SyncInterval
+// Start starts the main sync loop that tries to sync data for every SyncInterval.
 func (s *Syncer) Start(ctx context.Context) {
 	s.syncOnce.Do(func() {
 		s.logger.WithContext(ctx).Info("Starting syncer loop")
@@ -241,7 +242,7 @@ func (s *Syncer) setSyncerIdle() {
 	atomic.StoreUint32(&s.isBusy, 0)
 }
 
-// targetSyncedLayer is used to signal at which layer we can set this node to synced state
+// targetSyncedLayer is used to signal at which layer we can set this node to synced state.
 func (s *Syncer) setTargetSyncedLayer(ctx context.Context, layerID types.LayerID) {
 	oldSyncLayer := *(*types.LayerID)(atomic.SwapPointer(&s.targetSyncedLayer, unsafe.Pointer(&layerID)))
 	s.logger.WithContext(ctx).With().Info("target synced layer changed",
@@ -439,7 +440,7 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 	return nil
 }
 
-// start a dedicated process to validate layers one by one
+// start a dedicated process to validate layers one by one.
 func (s *Syncer) startValidating(ctx context.Context, run uint64, queue chan *types.Layer, done chan struct{}) {
 	logger := s.logger.WithContext(ctx).WithName("validation")
 	logger.Debug("validation started for run #%v", run)

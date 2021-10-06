@@ -25,7 +25,6 @@ type BlockEligibilityValidator struct {
 func NewBlockEligibilityValidator(
 	committeeSize uint32, layersPerEpoch uint32, activationDb activationDB, beacons beaconCollector,
 	validateVRF VRFValidationFunction, blockDB blockDB, log log.Log) *BlockEligibilityValidator {
-
 	return &BlockEligibilityValidator{
 		committeeSize:  committeeSize,
 		layersPerEpoch: layersPerEpoch,
@@ -49,7 +48,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		activeSetBlock, err = v.blocks.GetBlock(*block.RefBlock)
 		if err != nil {
 			// block should be present because we've synced it in the calling function
-			return false, fmt.Errorf("cannot get refrence block %v", *block.RefBlock)
+			return false, fmt.Errorf("cannot get reference block %v", *block.RefBlock)
 		}
 	}
 	if activeSetBlock.ActiveSet == nil {
@@ -59,7 +58,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	if epochBeacon == nil {
 		return false, fmt.Errorf("failed to get tortoise beacon from block %v", activeSetBlock.ID())
 	}
-	// todo: optimise by using reference to active set size and cache active set size to not load all atxsIDs from db
+	// todo: optimize by using reference to active set size and cache active set size to not load all atxsIDs from db
 	for _, atxID := range *activeSetBlock.ActiveSet {
 		atxHeader, err := v.activationDb.GetAtxHeader(atxID)
 		if err != nil {

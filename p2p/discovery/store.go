@@ -10,8 +10,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-const defaultPeersFileName = "peers.json"
-const saveRoutineInterval = time.Minute * 10
+const (
+	defaultPeersFileName = "peers.json"
+	saveRoutineInterval  = time.Minute * 10
+)
 
 type serializedKnownAddress struct {
 	Addr        string
@@ -87,7 +89,7 @@ func (a *addrBook) savePeers(path string) {
 }
 
 // loadPeers loads the known address from the saved file.  If empty, missing, or
-// malformed file, just don't load anything and start fresh
+// malformed file, just don't load anything and start fresh.
 func (a *addrBook) loadPeers(filePath string) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
@@ -156,7 +158,7 @@ func (a *addrBook) deserializePeers(filePath string) error {
 		for _, val := range sam.NewBuckets[i] {
 			parsed, err := node.ParseNode(val)
 			if err != nil {
-				a.logger.Warning("a problem occured trying to load peer %v, err=%v", val, err)
+				a.logger.Warning("a problem occurred trying to load peer %v, err=%v", val, err)
 				continue
 			}
 			ka, ok := a.addrIndex[parsed.ID]
@@ -177,7 +179,7 @@ func (a *addrBook) deserializePeers(filePath string) error {
 		for _, val := range sam.TriedBuckets[i] {
 			parsed, err := node.ParseNode(val)
 			if err != nil {
-				a.logger.Warning("a problem occured trying to load peer %v, err=%v", val, err)
+				a.logger.Warning("a problem occurred trying to load peer %v, err=%v", val, err)
 				continue
 			}
 			ka, ok := a.addrIndex[parsed.ID]
@@ -197,12 +199,12 @@ func (a *addrBook) deserializePeers(filePath string) error {
 	// Sanity checking.
 	for k, v := range a.addrIndex {
 		if v.refs == 0 && !v.tried {
-			return fmt.Errorf("address %s after serialisation "+
+			return fmt.Errorf("address %s after serialization "+
 				"with no references", k)
 		}
 
 		if v.refs > 0 && v.tried {
-			return fmt.Errorf("address %s after serialisation "+
+			return fmt.Errorf("address %s after serialization "+
 				"which is both new and tried! ", k)
 		}
 	}
@@ -232,5 +234,4 @@ out:
 	a.logger.Debug("Saving peer before exit to file %v", filepath)
 	a.savePeers(filepath)
 	a.logger.Debug("Address handler done")
-
 }

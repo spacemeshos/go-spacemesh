@@ -7,20 +7,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Clock defines the functionality needed from any clock type
+// Clock defines the functionality needed from any clock type.
 type Clock interface {
 	Now() time.Time
 }
 
-// RealClock is the struct wrapping a local time struct
+// RealClock is the struct wrapping a local time struct.
 type RealClock struct{}
 
-// Now returns the current local time
+// Now returns the current local time.
 func (RealClock) Now() time.Time {
 	return time.Now()
 }
 
-// TimeClock is the struct holding a real clock
+// TimeClock is the struct holding a real clock.
 type TimeClock struct {
 	*Ticker
 	tickInterval time.Duration
@@ -30,7 +30,7 @@ type TimeClock struct {
 	log          log.Log
 }
 
-// NewClock return TimeClock struct that notifies tickInterval has passed
+// NewClock return TimeClock struct that notifies tickInterval has passed.
 func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger log.Log) *TimeClock {
 	if tickInterval == 0 {
 		logger.Panic("could not create new clock: bad configuration: tick interval is zero")
@@ -82,17 +82,17 @@ func (t *TimeClock) startClock() {
 	}
 }
 
-// GetGenesisTime returns at which time this clock has started (used to calculate current tick)
+// GetGenesisTime returns at which time this clock has started (used to calculate current tick).
 func (t *TimeClock) GetGenesisTime() time.Time {
 	return t.startEpoch
 }
 
-// GetInterval returns the time interval between clock ticks
+// GetInterval returns the time interval between clock ticks.
 func (t *TimeClock) GetInterval() time.Duration {
 	return t.tickInterval
 }
 
-// Close closes the clock ticker
+// Close closes the clock ticker.
 func (t *TimeClock) Close() {
 	t.log.Info("closing clock %p", t)
 	t.once.Do(func() {

@@ -22,7 +22,7 @@ type TimeConfig struct {
 	Peersync              peersync.Config `mapstructure:"peersync"`
 }
 
-//todo: this is a duplicate function found also in p2p config
+// todo: this is a duplicate function found also in p2p config
 func duration(duration string) (dur time.Duration) {
 	dur, err := time.ParseDuration(duration)
 	if err != nil {
@@ -31,11 +31,10 @@ func duration(duration string) (dur time.Duration) {
 	return dur
 }
 
-// DefaultConfig defines the default tymesync configuration
+// DefaultConfig defines the default tymesync configuration.
 func DefaultConfig() TimeConfig {
-
 	// TimeConfigValues defines default values for all time and ntp related params.
-	var TimeConfigValues = TimeConfig{
+	TimeConfigValues := TimeConfig{
 		MaxAllowedDrift:       duration("10s"),
 		NtpQueries:            5,
 		DefaultTimeoutLatency: duration("10s"),

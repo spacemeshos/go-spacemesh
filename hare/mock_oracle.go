@@ -16,8 +16,7 @@ type registrable interface {
 	Unregister(isHonest bool, id string)
 }
 
-type hasherU32 struct {
-}
+type hasherU32 struct{}
 
 func newHasherU32() *hasherU32 {
 	h := new(hasherU32)
@@ -77,7 +76,7 @@ func (mho *mockHashOracle) IsEpochBeaconReady(context.Context, types.EpochID) bo
 	return true
 }
 
-// Calculates the threshold for the given committee size
+// Calculates the threshold for the given committee size.
 func (mho *mockHashOracle) calcThreshold(committeeSize int) uint32 {
 	mho.mutex.RLock()
 	numClients := len(mho.clients)
@@ -105,7 +104,7 @@ func (mho *mockHashOracle) CalcEligibility(context.Context, types.LayerID, uint3
 	panic("implement me!")
 }
 
-// eligible if a proof is valid for a given committee size
+// eligible if a proof is valid for a given committee size.
 func (mho *mockHashOracle) eligible(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	if sig == nil {
 		log.Warning("Oracle query with proof=nil. Returning false")

@@ -17,14 +17,14 @@ import (
 )
 
 // TODO: we should remove this const. Should  not depend on the number of addresses.
-// TODO: the number of addresses should be derived from the limit provided in the config
+// TODO: the number of addresses should be derived from the limit provided in the config.
 const (
 	maxMessageSize = 30000 // @see getAddrMax
 	maxUDPConn     = 2048
 	maxUDPLife     = time.Hour * 24
 )
 
-// UDPMessageEvent is an event about a udp message. passed through a channel
+// UDPMessageEvent is an event about a udp message. passed through a channel.
 type UDPMessageEvent struct {
 	From     p2pcrypto.PublicKey
 	FromAddr net.Addr
@@ -57,7 +57,7 @@ func (cw connWrapper) Close() error {
 	return nil
 }
 
-// UDPNet is used to listen on or send udp messages
+// UDPNet is used to listen on or send udp messages.
 type UDPNet struct {
 	local   node.LocalNode
 	logger  log.Log
@@ -77,7 +77,7 @@ type UDPNet struct {
 	shutdownCtx context.Context
 }
 
-// NewUDPNet creates a UDPNet
+// NewUDPNet creates a UDPNet.
 func NewUDPNet(ctx context.Context, config config.Config, localEntity node.LocalNode, log log.Log) (*UDPNet, error) {
 	n := &UDPNet{
 		local:        localEntity,
@@ -123,7 +123,7 @@ func (n *UDPNet) publishNewRemoteConnectionEvent(conn Connection, node *node.Inf
 	n.regMutex.RUnlock()
 }
 
-// Start will start reading messages from the udp socket and pass them up the channels
+// Start will start reading messages from the udp socket and pass them up the channels.
 func (n *UDPNet) Start(ctx context.Context, listener UDPListener) {
 	n.conn = listener
 	n.logger.WithContext(ctx).With().Info("started udp server listening for messages",
@@ -131,12 +131,12 @@ func (n *UDPNet) Start(ctx context.Context, listener UDPListener) {
 	go n.listenToUDPNetworkMessages(ctx, listener)
 }
 
-// LocalAddr returns the local listening addr, will panic before running Start. or if start errored
+// LocalAddr returns the local listening addr, will panic before running Start. or if start errored.
 func (n *UDPNet) LocalAddr() net.Addr {
 	return n.conn.LocalAddr()
 }
 
-// Shutdown stops listening and closes the connection
+// Shutdown stops listening and closes the connection.
 func (n *UDPNet) Shutdown() {
 	if n.conn != nil {
 		n.conn.Close()
@@ -146,7 +146,7 @@ func (n *UDPNet) Shutdown() {
 	}
 }
 
-// IPv4LoopbackAddress is a local IPv4 loopback
+// IPv4LoopbackAddress is a local IPv4 loopback.
 var IPv4LoopbackAddress = net.IP{127, 0, 0, 1}
 
 func (n *UDPNet) initSession(remote p2pcrypto.PublicKey) NetworkSession {
@@ -154,12 +154,12 @@ func (n *UDPNet) initSession(remote p2pcrypto.PublicKey) NetworkSession {
 	return session
 }
 
-// NodeAddr makes a UDPAddr from a Info struct
+// NodeAddr makes a UDPAddr from a Info struct.
 func NodeAddr(info *node.Info) *net.UDPAddr {
 	return &net.UDPAddr{IP: info.IP, Port: int(info.DiscoveryPort)}
 }
 
-// Send writes a udp packet to the target with the given data
+// Send writes a udp packet to the target with the given data.
 func (n *UDPNet) Send(to *node.Info, data []byte) error {
 	ns := n.cache.GetOrCreate(to.PublicKey())
 	sealed := ns.SealMessage(data)
@@ -171,13 +171,13 @@ func (n *UDPNet) Send(to *node.Info, data []byte) error {
 	return nil
 }
 
-// IncomingMessages is a channel where incoming UDPMessagesEvents will stream
+// IncomingMessages is a channel where incoming UDPMessagesEvents will stream.
 func (n *UDPNet) IncomingMessages() chan IncomingMessageEvent {
 	return n.msgChan
 }
 
 // Dial creates a Connection interface which is wrapped around a udp socket with a session and start listening on messages from it.
-// it uses the `connect` syscall
+// it uses the `connect` syscall.
 func (n *UDPNet) Dial(ctx context.Context, address net.Addr, remotePublicKey p2pcrypto.PublicKey) (Connection, error) {
 	udpcon, err := net.DialUDP("udp", nil, address.(*net.UDPAddr))
 	if err != nil {
@@ -198,7 +198,7 @@ func (n *UDPNet) HandlePreSessionIncomingMessage(c Connection, msg []byte) error
 	return errors.New("not implemented")
 }
 
-// EnqueueMessage pushes an incoming message event into the queue
+// EnqueueMessage pushes an incoming message event into the queue.
 func (n *UDPNet) EnqueueMessage(ctx context.Context, ime IncomingMessageEvent) {
 	select {
 	case n.msgChan <- ime:
@@ -216,7 +216,7 @@ func (n *UDPNet) NetworkID() uint32 {
 	return 0
 }
 
-// main listening loop
+// main listening loop.
 func (n *UDPNet) listenToUDPNetworkMessages(ctx context.Context, listener net.PacketConn) {
 	n.logger.Info("listening for incoming udp connections")
 

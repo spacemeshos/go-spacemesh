@@ -10,17 +10,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/require"
+	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 func init() {
@@ -261,7 +261,7 @@ func inArr(id types.BlockID, list []types.BlockID) bool {
 }
 
 // voteNegative - the number of blocks to vote negative per layer
-// voteAbstain - the number of layers to vote abstain because we always abstain on a whole layer
+// voteAbstain - the number of layers to vote abstain because we always abstain on a whole layer.
 func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer int, voteNegative, voteAbstain int) (trtl *turtle, negative, abstain []types.BlockID) {
 	msh := getInMemMesh(t)
 	logger := logtest.New(t)
@@ -2221,7 +2221,7 @@ func TestHealing(t *testing.T) {
 
 // can heal when half of votes are missing (doesn't meet threshold)
 // this requires waiting an epoch or two before the active set size is reduced enough to cross the threshold
-// see https://github.com/spacemeshos/go-spacemesh/issues/2497 for an idea about making this faster
+// see https://github.com/spacemeshos/go-spacemesh/issues/2497 for an idea about making this faster.
 func TestHealingAfterPartition(t *testing.T) {
 	mdb := getInMemMesh(t)
 	atxdb := getAtxDB()

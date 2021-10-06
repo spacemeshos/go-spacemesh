@@ -17,12 +17,12 @@
 package state
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
+	"testing"
+
 	"github.com/stretchr/testify/require"
 
-	"testing"
-	//check "gopkg.in/check.v1"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -127,7 +127,7 @@ func TestCopy(t *testing.T) {
 		orig.updateStateObj(origObj)
 		copy.updateStateObj(copyObj)
 	}
-	// Finalise the changes on both concurrently
+	// Finalize the changes on both concurrently
 	done := make(chan struct{})
 	go func() {
 		close(done)

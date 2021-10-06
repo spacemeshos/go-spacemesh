@@ -15,13 +15,13 @@ import (
 // mainLoggerName is a name of the global logger.
 const mainLoggerName = "00000.defaultLogger"
 
-// should we format out logs in json
+// should we format out logs in json.
 var jsonLog = false
 
-// where logs go by default
+// where logs go by default.
 var logwriter io.Writer
 
-// default encoders
+// default encoders.
 var defaultEncoder = zap.NewDevelopmentEncoderConfig()
 
 // Level returns the zapcore level of logging.
@@ -85,7 +85,7 @@ func initLogging() {
 	SetLogger(NewDefault(mainLoggerName))
 }
 
-// JSONLog turns JSON format on or off
+// JSONLog turns JSON format on or off.
 func JSONLog(b bool) {
 	jsonLog = b
 
@@ -98,7 +98,7 @@ func NewNop() Log {
 	return NewFromLog(zap.NewNop())
 }
 
-// NewWithLevel creates a logger with a fixed level and with a set of (optional) hooks
+// NewWithLevel creates a logger with a fixed level and with a set of (optional) hooks.
 func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.Entry) error) Log {
 	consoleSyncer := zapcore.AddSync(logwriter)
 	enc := encoder()
@@ -113,7 +113,7 @@ func RegisterHooks(lg Log, hooks ...func(zapcore.Entry) error) Log {
 	return NewFromLog(zap.New(core))
 }
 
-// NewDefault creates a Log with the default log level
+// NewDefault creates a Log with the default log level.
 func NewDefault(module string) Log {
 	return NewWithLevel(module, zap.NewAtomicLevelAt(Level()))
 }

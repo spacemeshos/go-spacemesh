@@ -7,13 +7,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -81,7 +82,7 @@ func TestBroker_Start(t *testing.T) {
 	assert.Equal(t, "instance already started", err.Error())
 }
 
-// test that a InnerMsg to a specific set ID is delivered by the broker
+// test that a InnerMsg to a specific set ID is delivered by the broker.
 func TestBroker_Received(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -98,7 +99,7 @@ func TestBroker_Received(t *testing.T) {
 	waitForMessages(t, inbox, instanceID1, 1)
 }
 
-// test that self-generated (outbound) messages are handled before incoming messages
+// test that self-generated (outbound) messages are handled before incoming messages.
 func TestBroker_Priority(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -215,7 +216,7 @@ func TestBroker_Priority(t *testing.T) {
 }
 
 // test that after registering the maximum number of protocols,
-// the earliest one gets unregistered in favor of the newest one
+// the earliest one gets unregistered in favor of the newest one.
 func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -259,7 +260,7 @@ func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	waitForMessages(t, inbox6, instanceID6, 1)
 }
 
-// test that aborting the broker aborts
+// test that aborting the broker aborts.
 func TestBroker_Abort(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -303,11 +304,10 @@ func waitForMessages(t *testing.T, inbox chan *Msg, instanceID types.LayerID, ms
 				return
 			}
 		}
-
 	}
 }
 
-// test flow for multiple set ObjectID
+// test flow for multiple set ObjectID.
 func TestBroker_MultipleInstanceIds(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()

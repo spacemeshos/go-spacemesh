@@ -97,7 +97,7 @@ func (fo *FixedRolacle) Unregister(isHonest bool, client string) {
 	fo.mutex.Unlock()
 }
 
-// IsEpochBeaconReady returns true if the beacon value is known for the specified epoch
+// IsEpochBeaconReady returns true if the beacon value is known for the specified epoch.
 func (fo *FixedRolacle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
 	return true
 }

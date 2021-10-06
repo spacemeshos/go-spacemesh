@@ -2,7 +2,7 @@ package crypto
 
 import "github.com/google/uuid"
 
-// UUID is a 16-len byte array represnting a UUID
+// UUID is a 16-len byte array represnting a UUID.
 type UUID [16]byte
 
 // UUIDString returns a new random type-4 UUID string.

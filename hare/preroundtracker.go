@@ -34,7 +34,7 @@ func newPreRoundTracker(threshold int, expectedSize int, logger log.Log) *preRou
 	return pre
 }
 
-// OnPreRound tracks pre-round messages
+// OnPreRound tracks pre-round messages.
 func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 	logger := pre.logger.WithContext(ctx)
 
@@ -102,7 +102,7 @@ func (pre *preRoundTracker) CanProveSet(set *Set) bool {
 	return true
 }
 
-// FilterSet filters out non-provable values from the given set
+// FilterSet filters out non-provable values from the given set.
 func (pre *preRoundTracker) FilterSet(set *Set) {
 	for _, bid := range set.elements() {
 		if !pre.CanProveValue(bid) { // not enough witnesses

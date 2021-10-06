@@ -2,6 +2,7 @@ package hare
 
 import (
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 

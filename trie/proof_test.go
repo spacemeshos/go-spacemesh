@@ -21,11 +21,12 @@ import (
 	crand "crypto/rand"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	mrand "github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/require"
 )
 
 // makeProvers creates Merkle trie provers based on different implementations to

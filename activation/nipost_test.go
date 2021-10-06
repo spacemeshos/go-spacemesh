@@ -8,17 +8,20 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/post/initialization"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/initialization"
-	"github.com/stretchr/testify/require"
 )
 
-var minerID = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
-var postCfg PostConfig
-var postSetupOpts PostSetupOpts
+var (
+	minerID       = []byte{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31}
+	postCfg       PostConfig
+	postSetupOpts PostSetupOpts
+)
 
 func init() {
 	postCfg = DefaultPostConfig()
@@ -288,39 +291,39 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 	db := database.NewMemDatabase()
 	assert.Equal(builderState{NIPost: &types.NIPost{}}, *nb.state)
 
-	//fail after getting proof ref
+	// fail after getting proof ref
 	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
 	poetDb.errOn = true
 	nipost, err = nb.BuildNIPost(context.TODO(), &hash, nil)
 	assert.Nil(nipost)
 	assert.Error(err)
 
-	//check that proof ref is not called again
+	// check that proof ref is not called again
 	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
 	nipost, err = nb.BuildNIPost(context.TODO(), &hash, nil)
 	assert.Nil(nipost)
 	assert.Error(err)
 
-	//fail post exec
+	// fail post exec
 	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
 	poetDb.errOn = false
 	postProvider.setError = true
-	//check that proof ref is not called again
+	// check that proof ref is not called again
 	nipost, err = nb.BuildNIPost(context.TODO(), &hash, nil)
 	assert.Nil(nipost)
 	assert.Error(err)
 
-	//fail post exec
+	// fail post exec
 	nb = NewNIPostBuilder(minerID, postProvider, poetProvider, poetDb, db, logtest.New(t))
 	poetDb.errOn = false
 	postProvider.setError = false
-	//check that proof ref is not called again
+	// check that proof ref is not called again
 	nipost, err = nb.BuildNIPost(context.TODO(), &hash, nil)
 	assert.NotNil(nipost)
 	assert.NoError(err)
 
 	assert.Equal(3, postProvider.called)
-	//test state not loading if other challenge provided
+	// test state not loading if other challenge provided
 	poetProvider.EXPECT().PoetServiceID(gomock.Any()).Return([]byte{}, nil)
 	poetProvider.EXPECT().Submit(gomock.Any(), gomock.Any()).Return(&types.PoetRound{}, nil)
 	hash2 := types.BytesToHash([]byte("anton1"))
@@ -329,7 +332,6 @@ func TestNIPostBuilder_BuildNIPost(t *testing.T) {
 
 	assert.NotNil(nipost)
 	assert.NoError(err)
-
 }
 
 func TestValidator_Validate(t *testing.T) {

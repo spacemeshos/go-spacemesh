@@ -6,10 +6,11 @@ import (
 	"testing"
 
 	"github.com/btcsuite/btcutil/base58"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 const TestServerOnline = false
@@ -163,7 +164,7 @@ func Test_Concurrency(t *testing.T) {
 func TestOracle_Eligible2(t *testing.T) {
 	o := newOracleClient()
 	mr := &mockRequester{results: make(map[string][]byte)}
-	//id := generateID()
+	// id := generateID()
 	mr.SetResult(register, "myid", []byte(`{ "message": "ok" }"`))
 	o.client = mr
 	o.Register(true, "myid")

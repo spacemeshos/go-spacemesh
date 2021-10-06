@@ -20,7 +20,7 @@ type meshProvider interface {
 	HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID)
 }
 
-// SuperHare is a method to provide fast hare results without consensus based on received blocks from gossip
+// SuperHare is a method to provide fast hare results without consensus based on received blocks from gossip.
 type SuperHare struct {
 	mesh         meshProvider
 	conf         config.Config
@@ -29,12 +29,12 @@ type SuperHare struct {
 	logger       log.Log
 }
 
-// New creates a new instance of SuperHare
+// New creates a new instance of SuperHare.
 func New(_ context.Context, conf config.Config, mesh meshProvider, beginLayer chan types.LayerID, logger log.Log) *SuperHare {
 	return &SuperHare{mesh, conf, beginLayer, make(chan struct{}), logger}
 }
 
-// Start is a stub to support service API
+// Start is a stub to support service API.
 func (h *SuperHare) Start(ctx context.Context) error {
 	logger := h.logger.WithContext(ctx)
 
@@ -87,12 +87,12 @@ func (h *SuperHare) Start(ctx context.Context) error {
 	return nil
 }
 
-// Close is a stup to support service API
+// Close is a stup to support service API.
 func (h *SuperHare) Close() {
 	close(h.closeChannel)
 }
 
-// GetResult is the implementation for receiving consensus process result
+// GetResult is the implementation for receiving consensus process result.
 func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
 	blks, err := h.mesh.LayerBlockIds(id)
 	if err != nil {

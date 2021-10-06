@@ -19,7 +19,7 @@ const (
 	// GossipProtocol is weak coin Gossip protocol name.
 	GossipProtocol = "WeakCoinGossip"
 
-	// equal to 2^256 / 2
+	// equal to 2^256 / 2.
 	defaultThreshold = "0x8000000000000000000000000000000000000000000000000000000000000000"
 )
 

@@ -7,6 +7,7 @@ import (
 	"unsafe"
 
 	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -38,7 +39,7 @@ func (id TransactionID) Bytes() []byte {
 // Field returns a log field. Implements the LoggableField interface.
 func (id TransactionID) Field() log.Field { return log.FieldNamed("tx_id", id.Hash32()) }
 
-// TxIdsField returns a list of loggable fields for a given list of IDs
+// TxIdsField returns a list of loggable fields for a given list of IDs.
 func TxIdsField(ids []TransactionID) log.Field {
 	strs := []string{}
 	for _, a := range ids {
@@ -152,7 +153,7 @@ type Reward struct {
 	Coinbase            Address
 }
 
-// NewSignedTx is used in TESTS ONLY to generate signed txs
+// NewSignedTx is used in TESTS ONLY to generate signed txs.
 func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *signing.EdSigner) (*Transaction, error) {
 	inner := InnerTransaction{
 		AccountNonce: nonce,

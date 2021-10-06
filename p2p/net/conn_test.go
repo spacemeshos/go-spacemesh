@@ -11,10 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 var msgSizeLimit = config.DefaultTestConfig().P2P.MsgSizeLimit

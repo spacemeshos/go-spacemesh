@@ -39,7 +39,7 @@ var (
 	// errMinerATXNotFound is returned when miner has no ATXs in the previous epoch.
 	errMinerATXNotFound = errors.New("miner ATX not found in previous epoch")
 
-	// errProtocolNotRunning is returned when we are not in the middle of tortoise beacon protocol
+	// errProtocolNotRunning is returned when we are not in the middle of tortoise beacon protocol.
 	errProtocolNotRunning = errors.New("tortoise beacon protocol not running")
 )
 
