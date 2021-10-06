@@ -179,6 +179,7 @@ linters-settings:
 linters:
   # TODO(nkryuchkov): enable needed linters
   enable:
+    - gci
     - godot
     - gofmt
     - gofumpt
