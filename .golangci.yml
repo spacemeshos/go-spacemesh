@@ -181,7 +181,7 @@ linters:
   enable:
     - godot
     - gofmt
-#    - gofumpt
+    - gofumpt
     - golint
     - misspell
     - staticcheck
