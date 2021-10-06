@@ -182,6 +182,7 @@ linters:
     - staticcheck
     - golint
     - wrapcheck
+    - misspell
 #    - goimports
 #    - varcheck
 #    - unparam
@@ -194,7 +195,6 @@ linters:
 #    - typecheck
 #    - gosec
 #    - megacheck
-#    - misspell
 #    - nakedret
 #    - depguard
   enable-all: false
