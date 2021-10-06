@@ -3,6 +3,7 @@
 package main
 
 import (
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/spf13/cobra"

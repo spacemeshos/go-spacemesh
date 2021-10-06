@@ -1,7 +1,6 @@
 // Package node contains the main executable for go-spacemesh node
 package node
 
-// nolint: golint
 import (
 	"context"
 	"errors"
@@ -9,7 +8,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net/http"
-	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
