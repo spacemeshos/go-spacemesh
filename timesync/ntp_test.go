@@ -5,12 +5,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/timesync/config"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestCheckSystemClockDrift(t *testing.T) {

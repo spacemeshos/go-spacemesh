@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"

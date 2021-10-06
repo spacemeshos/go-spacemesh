@@ -5,10 +5,11 @@ import (
 	"net"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/reflection"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // ServiceAPI allows individual grpc services to register the grpc server.

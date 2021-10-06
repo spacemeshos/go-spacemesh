@@ -6,16 +6,16 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/mempool"
-
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/mempool"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 type ProcessorStateSuite struct {

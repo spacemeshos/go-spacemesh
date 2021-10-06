@@ -5,9 +5,9 @@ import (
 	"os"
 	"strings"
 
-	"github.com/spacemeshos/go-spacemesh/log"
-
 	"google.golang.org/grpc"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const execPathLabel = "executable-path"

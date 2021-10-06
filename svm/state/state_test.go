@@ -19,10 +19,10 @@ package state
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/stretchr/testify/assert"
-	//	checker "gopkg.in/check.v1"
 )
 
 type StateSuite struct {

@@ -6,9 +6,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 var (

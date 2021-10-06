@@ -8,6 +8,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/fixed"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"

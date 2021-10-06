@@ -1,6 +1,7 @@
 // Package node contains the main executable for go-spacemesh node
 package node
 
+// nolint: golint
 import (
 	"context"
 	"errors"
@@ -8,7 +9,7 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net/http"
-	_ "net/http/pprof" // import for memory and network profiling
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -16,9 +17,6 @@ import (
 	"runtime"
 	"strconv"
 	"time"
-
-	"github.com/spacemeshos/go-spacemesh/svm"
-	"github.com/spacemeshos/go-spacemesh/svm/state"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
@@ -53,6 +51,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm"
+	"github.com/spacemeshos/go-spacemesh/svm/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"

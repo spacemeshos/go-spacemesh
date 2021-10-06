@@ -11,12 +11,13 @@ import (
 	"unsafe"
 
 	"github.com/spacemeshos/ed25519"
+	"github.com/spacemeshos/post/shared"
+	"go.uber.org/atomic"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/shared"
-	"go.uber.org/atomic"
 )
 
 var (

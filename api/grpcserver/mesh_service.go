@@ -5,12 +5,13 @@ import (
 	"fmt"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.

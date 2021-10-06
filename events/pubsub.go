@@ -5,12 +5,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"nanomsg.org/go-mangos"
 	"nanomsg.org/go-mangos/protocol/pub"
 	"nanomsg.org/go-mangos/protocol/sub"
 	"nanomsg.org/go-mangos/transport/ipc"
 	"nanomsg.org/go-mangos/transport/tcp"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // channelBuffer defines the listening channel buffer size.

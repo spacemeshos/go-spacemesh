@@ -19,10 +19,10 @@ package state
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/stretchr/testify/require"
-	// check "gopkg.in/check.v1".
 )
 
 // Tests that updating a state trie does not leak any database writes prior to

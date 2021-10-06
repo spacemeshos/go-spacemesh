@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )

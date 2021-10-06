@@ -8,14 +8,15 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
 )
 
 // Cmd is the p2p cmd.

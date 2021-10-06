@@ -9,8 +9,9 @@ import (
 	"io"
 
 	"github.com/btcsuite/btcutil/base58"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"golang.org/x/crypto/nacl/box"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (

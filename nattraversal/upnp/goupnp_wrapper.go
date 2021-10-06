@@ -39,10 +39,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/rand"
-
 	"github.com/huin/goupnp"
 	"github.com/huin/goupnp/dcps/internetgateway1"
+
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 // An IGD provides an interface to the most commonly used functions of an

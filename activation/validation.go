@@ -4,10 +4,11 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/post/proving"
 	"github.com/spacemeshos/post/verifying"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // Validator contains the dependencies required to validate NIPosts.

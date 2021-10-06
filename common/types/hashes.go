@@ -6,9 +6,10 @@ import (
 	"math/rand"
 	"reflect"
 
+	"github.com/spacemeshos/sha256-simd"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/sha256-simd"
 )
 
 const (

@@ -5,8 +5,9 @@ import (
 	"crypto/rand"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type rpcPoetTestCase struct {

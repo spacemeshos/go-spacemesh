@@ -7,6 +7,7 @@ import (
 
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil/base58"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 

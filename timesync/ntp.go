@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rand"
-
 	"github.com/spacemeshos/go-spacemesh/timesync/config"
 )
 

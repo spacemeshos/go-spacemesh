@@ -5,8 +5,9 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
 func genByte32() [32]byte {

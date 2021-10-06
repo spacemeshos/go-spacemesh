@@ -5,6 +5,7 @@ import (
 
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 

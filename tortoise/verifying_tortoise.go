@@ -7,12 +7,13 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/syndtr/goleveldb/leveldb"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type blockDataProvider interface {

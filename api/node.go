@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )

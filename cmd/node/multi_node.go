@@ -12,6 +12,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spacemeshos/post/initialization"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/collector"
@@ -24,7 +26,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
-	"github.com/spacemeshos/post/initialization"
 )
 
 // ManualClock is a clock that releases ticks on demand and not according to a real world clock.

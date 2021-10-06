@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTortoiseBeacon_calcVotes(t *testing.T) {

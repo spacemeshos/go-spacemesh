@@ -32,7 +32,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/cmd"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -674,7 +673,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
-	cmd.Cancel() // stop the app
+	cmdp.Cancel() // stop the app
 	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
 }

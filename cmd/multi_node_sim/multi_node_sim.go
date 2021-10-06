@@ -5,9 +5,10 @@ package main
 import (
 	"os"
 
+	"github.com/spf13/cobra"
+
 	"github.com/spacemeshos/go-spacemesh/cmd/node"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spf13/cobra"
 )
 
 var multiConfig = Config{}

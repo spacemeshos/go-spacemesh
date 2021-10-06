@@ -4,9 +4,10 @@ import (
 	"os"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"go.uber.org/zap/zapcore"
 	"go.uber.org/zap/zaptest"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const testLogLevel = "TEST_LOG_LEVEL"

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/ALTree/bigfloat"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -18,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
-	"golang.org/x/sync/errgroup"
 )
 
 const (

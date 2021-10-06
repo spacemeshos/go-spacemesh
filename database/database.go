@@ -24,7 +24,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
@@ -32,6 +31,8 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/opt"
 	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (

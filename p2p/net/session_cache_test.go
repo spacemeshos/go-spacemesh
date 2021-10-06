@@ -4,9 +4,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/stretchr/testify/require"
 )
 
 var dialErrFunc dialSessionFunc = func(pubkey p2pcrypto.PublicKey) (session NetworkSession) {

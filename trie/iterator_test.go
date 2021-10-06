@@ -21,11 +21,10 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/rand"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestIterator(t *testing.T) {

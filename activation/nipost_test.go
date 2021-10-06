@@ -8,12 +8,13 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/post/initialization"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/initialization"
-	"github.com/stretchr/testify/require"
 )
 
 var (
