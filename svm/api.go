@@ -8,18 +8,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
 
 // SVM is an entry point for all SVM operations.
 type SVM struct {
-	state *state.TransactionProcessor
-	log   log.Logger
+	*state.TransactionProcessor
+	log log.Logger
 }
 
-func (s *SVM) TxProcessor() mesh.TxProcessor {
-	return s.state
+func (s *SVM) TxProcessor() *state.TransactionProcessor {
+	return s.TransactionProcessor
 }
 
 // New creates a new `SVM` instance from the given `state` and `logger`.
@@ -42,14 +41,14 @@ func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 			return fmt.Errorf("%s must be an address of size %d", id, types.AddressLength)
 		}
 		addr := types.BytesToAddress(bytes)
-		svm.state.CreateAccount(addr)
+		svm.TransactionProcessor.CreateAccount(addr)
 		svm.AddBalance(addr, balance)
 		svm.log.With().Info("genesis account created",
 			log.String("address", addr.Hex()),
 			log.Uint64("balance", balance))
 	}
 
-	_, err := svm.state.Commit()
+	_, err := svm.TransactionProcessor.Commit()
 	if err != nil {
 		return fmt.Errorf("cannot commit genesis state: %w", err)
 	}
@@ -57,7 +56,7 @@ func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 }
 
 func (s *SVM) AddBalance(addr types.Address, amount uint64) {
-	s.state.AddBalance(addr, amount)
+	s.TransactionProcessor.AddBalance(addr, amount)
 }
 
 func txsGetPointers(transactions []types.Transaction) []*types.Transaction {
@@ -76,7 +75,7 @@ func (s *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transactio
 		s.AddBalance(reward.Address, reward.Amount)
 	}
 
-	remainingTxs, err := s.state.ApplyTransactions(layerID, transactions)
+	remainingTxs, err := s.TransactionProcessor.ApplyTransactions(layerID, transactions)
 	if err != nil {
 		return remainingTxs, err
 	}

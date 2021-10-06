@@ -47,12 +47,8 @@ type Validator interface {
 	ValidateLayer(context.Context, *types.Layer)
 }
 
-type SVM interface {
+type svm interface {
 	ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) ([]*types.Transaction, error)
-	TxProcessor() TxProcessor
-}
-
-type TxProcessor interface {
 	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) ([]*types.Transaction, error)
 	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
 	AddressExists(addr types.Address) bool
@@ -85,7 +81,7 @@ type Mesh struct {
 	log.Log
 	*DB
 	AtxDB
-	svm SVM
+	svm
 	Validator
 	trtl   tortoise
 	txPool txMemPool
@@ -106,7 +102,7 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instance of a mesh.
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, svm SVM, logger log.Log) *Mesh {
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, svm svm, logger log.Log) *Mesh {
 	msh := &Mesh{
 		Log:                 logger,
 		trtl:                trtl,
@@ -136,7 +132,7 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 }
 
 // NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database.
-func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, svm SVM, logger log.Log) *Mesh {
+func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, svm svm, logger log.Log) *Mesh {
 	msh := NewMesh(db, atxDb, rewardConfig, trtl, txPool, svm, logger)
 
 	latest, err := db.general.Get(constLATEST)
@@ -159,7 +155,7 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 		logger.With().Panic("failed to recover latest layer in state", log.Err(err))
 	}
 
-	err = svm.TxProcessor().LoadState(msh.LatestLayerInState())
+	err = svm.LoadState(msh.LatestLayerInState())
 	if err != nil {
 		logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 	}
@@ -178,7 +174,7 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 		log.FieldNamed("latest", msh.LatestLayer()),
 		log.FieldNamed("processed", msh.ProcessedLayer()),
 		log.FieldNamed("verified", msh.trtl.LatestComplete()),
-		log.String("root_hash", svm.TxProcessor().GetStateRoot().String()))
+		log.String("root_hash", svm.GetStateRoot().String()))
 
 	return msh
 }
@@ -480,7 +476,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 		msh.updateStateWithLayer(ctx, types.NewExistingLayer(layerID, validBlocks))
 		msh.Event().Info("end of layer state root",
 			layerID,
-			log.String("state_root", util.Bytes2Hex(msh.svm.TxProcessor().GetStateRoot().Bytes())),
+			log.String("state_root", util.Bytes2Hex(msh.svm.GetStateRoot().Bytes())),
 		)
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
@@ -490,7 +486,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 func (msh *Mesh) revertState(ctx context.Context, layerID types.LayerID) error {
 	logger := msh.WithContext(ctx).WithFields(layerID)
 	logger.Info("attempting to roll back state to previous layer")
-	if err := msh.svm.TxProcessor().LoadState(layerID); err != nil {
+	if err := msh.svm.LoadState(layerID); err != nil {
 		return fmt.Errorf("failed to revert state to layer %v: %w", layerID, err)
 	}
 	return nil
@@ -505,7 +501,7 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 		msh.removeRejectedFromAccountTxs(account, grouped, l)
 	}
 	for _, tx := range returnedTxs {
-		if err := msh.svm.TxProcessor().ValidateAndAddTxToPool(tx); err == nil {
+		if err := msh.svm.ValidateAndAddTxToPool(tx); err == nil {
 			// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
 			msh.With().Info("transaction from contextually invalid block re-added to mempool", tx.ID())
 		}
@@ -721,7 +717,7 @@ func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.T
 }
 
 func (msh *Mesh) pushTransactions(l *types.Layer, transactions []*types.Transaction, rewards []types.AmountAndAddress) {
-	failedTxs, err := msh.svm.TxProcessor().ApplyTransactions(l.Index(), transactions)
+	failedTxs, err := msh.svm.ApplyTransactions(l.Index(), transactions)
 	if err != nil {
 		msh.With().Error("failed to apply transactions",
 			l.Index(), log.Int("num_failed_txs", len(failedTxs)), log.Err(err))

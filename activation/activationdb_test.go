@@ -67,52 +67,56 @@ func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.
 	return blocks[0].Layer().Sub(1), blocks[0].Layer()
 }
 
-type MockState struct{}
+type MockSVM struct{}
 
-func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
+func (MockSVM) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
-func (MockState) ValidateAndAddTxToPool(*types.Transaction) error {
+func (MockSVM) ValidateAndAddTxToPool(*types.Transaction) error {
 	panic("implement me")
 }
 
-func (MockState) LoadState(types.LayerID) error {
+func (MockSVM) LoadState(types.LayerID) error {
 	panic("implement me")
 }
 
-func (MockState) GetStateRoot() types.Hash32 {
+func (MockSVM) GetStateRoot() types.Hash32 {
 	panic("implement me")
 }
 
-func (MockState) ValidateNonceAndBalance(*types.Transaction) error {
+func (MockSVM) ValidateNonceAndBalance(*types.Transaction) error {
 	panic("implement me")
 }
 
-func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
+func (MockSVM) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) {
-	return 0, nil
+func (MockSVM) ApplyTransactions(types.LayerID, []*types.Transaction) ([]*types.Transaction, error) {
+	return []*types.Transaction{}, nil
 }
 
-func (MockState) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
+func (MockSVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) ([]*types.Transaction, error) {
+	return []*types.Transaction{}, nil
 }
 
-func (MockState) AddressExists(types.Address) bool {
+func (MockSVM) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
+}
+
+func (MockSVM) AddressExists(types.Address) bool {
 	return true
 }
 
-func (MockState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
+func (MockSVM) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 	panic("implement me")
 }
 
-func (MockState) GetBalance(types.Address) uint64 {
+func (MockSVM) GetBalance(types.Address) uint64 {
 	panic("implement me")
 }
 
-func (MockState) GetNonce(types.Address) uint64 {
+func (MockSVM) GetNonce(types.Address) uint64 {
 	panic("implement me")
 }
 
@@ -127,7 +131,7 @@ func (MockTxMemPool) Invalidate(types.TransactionID)              {}
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: uint64(5000),
 	}
 }
 
@@ -138,7 +142,7 @@ func getAtxDb(tb testing.TB, id string) (*DB, *mesh.Mesh, database.Database) {
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxStore := database.NewMemDatabase()
 	atxdb := NewDB(atxStore, NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
-	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockState{}, lg.WithName("mesh"))
+	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockSVM{}, lg.WithName("mesh"))
 	return atxdb, layers, atxStore
 }
 
