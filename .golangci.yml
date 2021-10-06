@@ -180,7 +180,7 @@ linters:
   # TODO(nkryuchkov): enable needed linters
   enable:
     - godot
-#    - gofmt
+    - gofmt
 #    - gofumpt
     - golint
     - misspell
