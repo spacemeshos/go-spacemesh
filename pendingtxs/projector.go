@@ -1,6 +1,8 @@
 package pendingtxs
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -24,8 +26,9 @@ type MeshAndPoolProjector struct {
 func (p *MeshAndPoolProjector) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
 	nonce, balance, err = p.mesh.GetProjection(addr, prevNonce, prevBalance)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("get mesh projection: %w", err)
 	}
+
 	nonce, balance = p.pool.GetProjection(addr, nonce, balance)
 	return nonce, balance, nil
 }
@@ -55,5 +58,10 @@ func NewStateAndMeshProjector(state globalState, mesh meshProjector) *StateAndMe
 // GetProjection returns a projected nonce and balance after applying transactions from the mesh on top of the global
 // state. Errors can stem from database errors in the mesh (IO or deserialization errors).
 func (p *StateAndMeshProjector) GetProjection(addr types.Address) (nonce, balance uint64, err error) {
-	return p.mesh.GetProjection(addr, p.state.GetNonce(addr), p.state.GetBalance(addr))
+	nonce, balance, err = p.mesh.GetProjection(addr, p.state.GetNonce(addr), p.state.GetBalance(addr))
+	if err != nil {
+		return nonce, balance, fmt.Errorf("get mesh projection: %w", err)
+	}
+
+	return nonce, balance, nil
 }

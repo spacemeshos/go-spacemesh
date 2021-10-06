@@ -44,6 +44,7 @@ func (s GatewayService) BroadcastPoet(ctx context.Context, in *pb.BroadcastPoetR
 		log.Error("failed to broadcast poet message: %s", err)
 		return nil, status.Errorf(codes.Internal, "failed to broadcast message")
 	}
+
 	log.Info("GRPC GatewayService.BroadcastPoet broadcast succeeded")
 
 	return &pb.BroadcastPoetResponse{Status: &rpcstatus.Status{Code: int32(code.Code_OK)}}, nil

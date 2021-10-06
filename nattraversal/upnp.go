@@ -3,9 +3,10 @@ package nattraversal
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/nattraversal/upnp"
 	"os"
 	"os/user"
+
+	"github.com/spacemeshos/go-spacemesh/nattraversal/upnp"
 )
 
 // GetExternalIP returns a string formatted external IP address from a UPnP-enabled NAT on the network, if such device
@@ -49,7 +50,12 @@ type UPNPGateway interface {
 // DiscoverUPNPGateway returns a UPNPGateway if one is found on the network. This process is long - about 30 seconds and
 // is expected to fail in some network setups.
 func DiscoverUPNPGateway() (UPNPGateway, error) {
-	return upnp.Discover()
+	gateway, err := upnp.Discover()
+	if err != nil {
+		return gateway, fmt.Errorf("discover UPNP: %w", err)
+	}
+
+	return gateway, nil
 }
 
 // AcquirePortFromGateway sets up UDP and TCP forwarding rules for the given port on the given gateway.

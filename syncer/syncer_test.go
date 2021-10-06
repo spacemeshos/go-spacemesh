@@ -235,7 +235,7 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
-	lyr := types.GetEffectiveGenesis()
+	lyr := types.GetEffectiveGenesis().Add(1)
 	ticker.advanceToLayer(lyr.Add(1))
 	syncer.Start(context.TODO())
 
@@ -402,7 +402,7 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
-	firstLayer := types.GetEffectiveGenesis()
+	firstLayer := types.GetEffectiveGenesis().Add(1)
 	current := firstLayer.Add(5)
 	ticker.advanceToLayer(current)
 	syncer.Start(context.TODO())
@@ -441,7 +441,7 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
-	firstLayer := types.GetEffectiveGenesis()
+	firstLayer := types.GetEffectiveGenesis().Add(1)
 	current := firstLayer.Add(5)
 	ticker.advanceToLayer(current)
 
@@ -517,7 +517,7 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	wg.Wait()
 
 	// cause the syncer to get out of synced and then wait again
-	firstLayer := types.GetEffectiveGenesis()
+	firstLayer := types.GetEffectiveGenesis().Add(1)
 	current := mm.LatestLayer().Add(outOfSyncThreshold)
 	ticker.advanceToLayer(current)
 	wg.Add(1)

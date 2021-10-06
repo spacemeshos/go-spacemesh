@@ -299,7 +299,7 @@ func TestMesh_SetZeroBlockLayer(t *testing.T) {
 
 	lyrID := types.GetEffectiveGenesis().Add(1)
 	lyr, err := msh.GetLayer(lyrID)
-	r.Equal(database.ErrNotFound, err)
+	r.ErrorIs(err, database.ErrNotFound)
 	r.Nil(lyr)
 	err = msh.SetZeroBlockLayer(lyrID)
 	assert.NoError(t, err)
@@ -327,7 +327,7 @@ func TestMesh_AddLayerGetLayer(t *testing.T) {
 
 	id := types.GetEffectiveGenesis().Add(1)
 	_, err := msh.GetLayer(id)
-	r.EqualError(err, database.ErrNotFound.Error())
+	r.ErrorIs(err, database.ErrNotFound)
 
 	txIDs1, _ := addManyTXsToPool(r, msh, 4)
 	txIDs2, _ := addManyTXsToPool(r, msh, 3)

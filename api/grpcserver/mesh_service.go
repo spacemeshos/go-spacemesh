@@ -249,15 +249,17 @@ func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address
 	for layerID := minLayer; layerID.Before(s.Mesh.LatestLayer()); layerID = layerID.Add(1) {
 		destTxIDs, err := s.Mesh.GetTransactionsByDestination(layerID, addr)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get txs by destination: %w", err)
 		}
+
 		txIDs = append(txIDs, destTxIDs...)
 		originTxIds, err := s.Mesh.GetTransactionsByOrigin(layerID, addr)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get txs by origin: %w", err)
 		}
 		txIDs = append(txIDs, originTxIds...)
 	}
+
 	return txIDs, nil
 }
 
@@ -275,7 +277,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 			// by the tx; GasLimit is the max gas. MeshService is concerned with the
 			// pre-STF tx, which includes a gas offer but not an amount of gas actually
 			// consumed.
-			//GasPrice:    nil,
+			// GasPrice:    nil,
 			GasProvided: t.GasLimit,
 		},
 		Amount:  &pb.Amount{Value: t.Amount},
@@ -308,7 +310,6 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 
 	// read layer blocks
 	layer, err := s.Mesh.GetLayer(layerID)
-
 	// TODO: Be careful with how we handle missing layers here.
 	// A layer that's newer than the currentLayer (defined above)
 	// is clearly an input error. A missing layer that's older than
@@ -486,14 +487,15 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 					log.With().Error(errmsg, log.Err(err))
 					return status.Errorf(codes.Internal, errmsg)
 				}
-				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
+				resp := &pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_Activation{
 							Activation: pbActivation,
 						},
 					},
-				}); err != nil {
-					return err
+				}
+				if err := stream.Send(resp); err != nil {
+					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
 		case tx, ok := <-txStream:
@@ -508,14 +510,15 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 			// Apply address filter
 			// TODO(dshulyak) include layerID when streamed too
 			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.Recipient == addr) {
-				if err := stream.Send(&pb.AccountMeshDataStreamResponse{
+				resp := &pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_MeshTransaction{
 							MeshTransaction: &pb.MeshTransaction{Transaction: convertTransaction(tx.Transaction)},
 						},
 					},
-				}); err != nil {
-					return err
+				}
+				if err := stream.Send(resp); err != nil {
+					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
 		case <-stream.Context().Done():
@@ -541,10 +544,11 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 			}
 			pbLayer, err := s.readLayer(stream.Context(), layer.LayerID, convertLayerStatus(layer.Status))
 			if err != nil {
-				return err
+				return fmt.Errorf("read layer: %w", err)
 			}
+
 			if err := stream.Send(&pb.LayerStreamResponse{Layer: pbLayer}); err != nil {
-				return err
+				return fmt.Errorf("send to stream: %w", err)
 			}
 		case <-stream.Context().Done():
 			log.Info("LayerStream closing stream, client disconnected")

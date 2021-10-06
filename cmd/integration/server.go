@@ -84,7 +84,7 @@ func (s *server) start(args []string) error {
 // all files/directories created by it.
 func (s *server) shutdown() error {
 	if err := s.stop(); err != nil {
-		return err
+		return fmt.Errorf("stop: %w", err)
 	}
 
 	return nil

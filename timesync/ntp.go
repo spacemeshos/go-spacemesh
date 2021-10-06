@@ -81,7 +81,7 @@ type NtpPacket struct {
 	TxTimeFrac     uint32 // transmit time frac
 }
 
-//TODO: implement ntp packet response validation. ( will require more verbose response obj)
+// TODO: implement ntp packet response validation. ( will require more verbose response obj)
 
 // Time makes a Time struct from NtpPacket data.
 func (n *NtpPacket) Time() time.Time {
@@ -92,10 +92,9 @@ func (n *NtpPacket) Time() time.Time {
 
 // ntpRequest requests a Ntp packet from a server and  request time, latency and a NtpPacket struct.
 func ntpRequest(server string, rq *NtpPacket) (time.Time, time.Duration, *NtpPacket, error) {
-
 	addr, err := net.ResolveUDPAddr("udp", net.JoinHostPort(server, DefaultNtpPort))
 	if err != nil {
-		return zeroTime, zeroDuration, nil, err
+		return zeroTime, zeroDuration, nil, fmt.Errorf("resolve UDP addr: %w", err)
 	}
 
 	conn, err := net.DialUDP("udp", nil, addr)
@@ -140,7 +139,6 @@ func queryNtpServer(server string) (time.Duration, error) {
 
 // ntpTimeDrift queries random servers from our list to calculate a drift average.
 func ntpTimeDrift() (time.Duration, error) {
-
 	// 00 011 011 = 0x1B
 	// Leap = 0
 	// Client mode = 3

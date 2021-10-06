@@ -4,16 +4,19 @@ package turbohare
 import (
 	"bytes"
 	"context"
+	"fmt"
+	"sort"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"sort"
-	"time"
 )
 
 type meshProvider interface {
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
 	RecordCoinflip(context.Context, types.LayerID, bool)
+	SetZeroBlockLayer(types.LayerID) error
 	HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID)
 }
 
@@ -64,13 +67,19 @@ func (h *SuperHare) Start(ctx context.Context) error {
 					if layerID.GetEpoch().IsGenesis() {
 						logger.With().Info("not sending blocks to mesh for genesis layer")
 						return
-					} else if layerBlocks, err := h.mesh.LayerBlockIds(layerID); err != nil {
-						logger.With().Error("error reading block ids for layer, not sending to mesh",
+					}
+					blocks, err := h.mesh.LayerBlockIds(layerID)
+					if err != nil {
+						logger.With().Warning("error reading block ids for layer, using empty set",
 							layerID,
 							log.Err(err))
-					} else {
-						h.mesh.HandleValidatedLayer(ctx, layerID, layerBlocks)
 					}
+					if len(blocks) == 0 {
+						if err := h.mesh.SetZeroBlockLayer(layerID); err != nil {
+							logger.With().Error("failed to set layer as a zero", log.Err(err))
+						}
+					}
+					h.mesh.HandleValidatedLayer(ctx, layerID, blocks)
 				}()
 			}
 		}
@@ -88,8 +97,9 @@ func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
 	blks, err := h.mesh.LayerBlockIds(id)
 	if err != nil {
 		h.logger.With().Error("superhare failed to read block ids for layer", id, log.Err(err))
-		return nil, err
+		return nil, fmt.Errorf("read layer block IDs: %w", err)
 	}
+
 	sort.Slice(blks, func(i, j int) bool { return bytes.Compare(blks[i].Bytes(), blks[j].Bytes()) == -1 })
 	return blks, nil
 }

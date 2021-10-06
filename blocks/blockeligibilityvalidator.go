@@ -63,7 +63,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	for _, atxID := range *activeSetBlock.ActiveSet {
 		atxHeader, err := v.activationDb.GetAtxHeader(atxID)
 		if err != nil {
-			return false, err
+			return false, fmt.Errorf("get ATX header: %w", err)
 		}
 		totalWeight += atxHeader.GetWeight()
 	}

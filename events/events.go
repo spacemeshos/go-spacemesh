@@ -2,6 +2,8 @@
 package events
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -73,14 +75,23 @@ func NewEventPublisher(eventURL string) (*EventPublisher, error) {
 func (p *EventPublisher) PublishEvent(event Event) error {
 	bytes, err := types.InterfaceToBytes(event)
 	if err != nil {
-		return err
+		return fmt.Errorf("serialize: %w", err)
 	}
-	return p.publish(event.GetChannel(), bytes)
+
+	if err := p.publish(event.GetChannel(), bytes); err != nil {
+		return fmt.Errorf("publish: %w", err)
+	}
+
+	return nil
 }
 
 // Close closes the published internal socket
 func (p *EventPublisher) Close() error {
-	return p.sock.Close()
+	if err := p.sock.Close(); err != nil {
+		return fmt.Errorf("close socket: %w", err)
+	}
+
+	return nil
 }
 
 // NewBlock is sent when a new block is created by this miner

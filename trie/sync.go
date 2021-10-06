@@ -224,7 +224,7 @@ func (s *Sync) Commit(dbw Putter) (int, error) {
 	// Dump the membatch into a database dbw
 	for i, key := range s.membatch.order {
 		if err := dbw.Put(key[:], s.membatch.batch[key]); err != nil {
-			return i, err
+			return i, fmt.Errorf("put into DB: %w", err)
 		}
 	}
 	written := len(s.membatch.order)

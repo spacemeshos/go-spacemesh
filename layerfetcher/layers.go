@@ -62,17 +62,19 @@ type network interface {
 	Close()
 }
 
-// ErrZeroLayer is the error returned when an empty hash is received when polling for layer
-var ErrZeroLayer = errors.New("zero layer")
+var (
+	// ErrZeroLayer is the error returned when an empty hash is received when polling for layer
+	ErrZeroLayer = errors.New("zero layer")
+	// ErrNoPeers is returned when node has no peers.
+	ErrNoPeers = errors.New("no peers")
+	// ErrInternal is returned from the peer when the peer encounters an internal error
+	ErrInternal = errors.New("unspecified error returned by peer")
+	// ErrBlockNotFetched is returned when at least one block is not fetched successfully
+	ErrBlockNotFetched = errors.New("block not fetched")
 
-// ErrNoPeers is returned when node has no peers.
-var ErrNoPeers = errors.New("no peers")
-
-// ErrInternal is returned from the peer when the peer encounters an internal error
-var ErrInternal = errors.New("unspecified error returned by peer")
-
-// ErrBlockNotFetched is returned when at least one block is not fetched successfully
-var ErrBlockNotFetched = errors.New("block not fetched")
+	// errLayerNotProcessed is returned when requested layer was not yet processed.
+	errLayerNotProcessed = errors.New("requested layer is not yet processed")
+)
 
 // peerResult captures the response from each peer.
 type peerResult struct {
@@ -174,31 +176,38 @@ func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) ([]byte, e
 	epoch := types.EpochID(util.BytesToUint32(msg))
 	atxs, err := l.atxIds.GetEpochAtxs(epoch)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get epoch ATXs: %w", err)
 	}
+
 	l.log.WithContext(ctx).With().Debug("responded to epoch atxs request",
 		epoch,
 		log.Int("count", len(atxs)))
 	bts, err := types.InterfaceToBytes(atxs)
 	if err != nil {
 		l.log.WithContext(ctx).With().Panic("failed to serialize epoch atxs", epoch, log.Err(err))
+		return bts, fmt.Errorf("serialize: %w", err)
 	}
-	return bts, err
+
+	return bts, nil
 }
 
 // layerBlocksReqReceiver returns the block IDs for the specified layer hash,
 // it also returns the validation vector for this data and the latest blocks received in gossip
 func (l *Logic) layerBlocksReqReceiver(ctx context.Context, req []byte) ([]byte, error) {
 	lyrID := types.BytesToLayerID(req)
+	processed := l.layerDB.ProcessedLayer()
+	if lyrID.After(processed) {
+		return nil, fmt.Errorf("%w: requested layer %v is higher than processed %v", errLayerNotProcessed, lyrID, processed)
+	}
 	b := &layerBlocks{
-		ProcessedLayer: l.layerDB.ProcessedLayer(),
+		ProcessedLayer: processed,
 		Hash:           l.layerDB.GetLayerHash(lyrID),
 		AggregatedHash: l.layerDB.GetAggregatedLayerHash(lyrID),
 	}
 	var err error
 	b.Blocks, err = l.layerDB.LayerBlockIds(lyrID)
 	if err != nil {
-		if err != database.ErrNotFound {
+		if !errors.Is(err, database.ErrNotFound) {
 			l.log.WithContext(ctx).With().Debug("failed to get layer content", lyrID, log.Err(err))
 			return nil, ErrInternal
 		}
@@ -357,35 +366,33 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 // all blocks are fetched for a given layer.
 // it deliberately doesn't hold any lock while notifying channels.
 func notifyLayerBlocksResult(layerID types.LayerID, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
-	var result *LayerPromiseResult
-	hasZeroBlockHash := false
-	var firstErr error
+	var (
+		missing, success bool
+		err              error
+	)
 	for _, res := range lyrResult.responses {
 		if res.err == nil && res.data != nil {
-			// at least one layer hash contains blocks. not a zero block layer
-			result = &LayerPromiseResult{Layer: layerID, Err: nil}
+			success = true
+		}
+		if errors.Is(res.err, ErrBlockNotFetched) {
+			missing = true
+			err = res.err
 			break
 		}
-		if res.err == ErrZeroLayer {
-			hasZeroBlockHash = true
-		} else if firstErr == nil {
-			firstErr = res.err
+		if errors.Is(res.err, ErrZeroLayer) {
+			err = res.err
+		}
+		if err == nil {
+			err = res.err
 		}
 	}
-
-	if result == nil { // no block data available
-		result = &LayerPromiseResult{Layer: layerID, Err: nil}
-		if hasZeroBlockHash {
-			// all other non-empty layer hashes returned errors. use the best information we've got
-			result.Err = ErrZeroLayer
-		} else {
-			// no usable result. just return the first error we received
-			result.Err = firstErr
-		}
+	result := LayerPromiseResult{Layer: layerID}
+	if missing || !success {
+		result.Err = err
 	}
-	logger.With().Debug("notifying layer blocks result", log.String("blocks", fmt.Sprintf("%+v", *result)))
+	logger.With().Debug("notifying layer blocks result", log.String("blocks", fmt.Sprintf("%+v", result)))
 	for _, ch := range channels {
-		ch <- *result
+		ch <- result
 	}
 }
 
@@ -416,16 +423,23 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	if l.net.PeerCount() == 0 {
 		return errors.New("no peers")
 	}
+
 	err := l.net.SendRequest(ctx, server.AtxIDsMsg, id.ToBytes(), fetch.GetRandomPeer(l.net.GetPeers()), receiveForPeerFunc, errFunc)
 	if err != nil {
-		return err
+		return fmt.Errorf("send net request: %w", err)
 	}
+
 	l.log.WithContext(ctx).With().Debug("waiting for epoch atx response", id)
 	res := <-resCh
 	if res.Error != nil {
 		return res.Error
 	}
-	return l.GetAtxs(ctx, res.Atxs)
+
+	if err := l.GetAtxs(ctx, res.Atxs); err != nil {
+		return fmt.Errorf("get ATXs: %w", err)
+	}
+
+	return nil
 }
 
 // getAtxResults is called when an ATX result is received
@@ -433,14 +447,24 @@ func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byt
 	l.log.WithContext(ctx).With().Debug("got response for ATX",
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
-	return l.atxs.HandleAtxData(ctx, data, l)
+
+	if err := l.atxs.HandleAtxData(ctx, data, l); err != nil {
+		return fmt.Errorf("handle ATX data: %w", err)
+	}
+
+	return nil
 }
 
 func (l *Logic) getTxResult(ctx context.Context, hash types.Hash32, data []byte) error {
 	l.log.WithContext(ctx).With().Debug("got response for TX",
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
-	return l.txs.HandleTxSyncData(data)
+
+	if err := l.txs.HandleTxSyncData(data); err != nil {
+		return fmt.Errorf("handle tx sync data: %w", err)
+	}
+
+	return nil
 }
 
 // getPoetResult is handler function to poet proof fetch result
@@ -448,12 +472,21 @@ func (l *Logic) getPoetResult(ctx context.Context, hash types.Hash32, data []byt
 	l.log.WithContext(ctx).Debug("got poet ref",
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
-	return l.poetProofs.ValidateAndStoreMsg(data)
+
+	if err := l.poetProofs.ValidateAndStoreMsg(data); err != nil {
+		return fmt.Errorf("validate and store message: %w", err)
+	}
+
+	return nil
 }
 
 // blockReceiveFunc handles blocks received via fetch
 func (l *Logic) blockReceiveFunc(ctx context.Context, data []byte) error {
-	return l.blockHandler.HandleBlockData(ctx, data, l)
+	if err := l.blockHandler.HandleBlockData(ctx, data, l); err != nil {
+		return fmt.Errorf("handle block data: %w", err)
+	}
+
+	return nil
 }
 
 // IsSynced indicates if this node is synced
@@ -506,7 +539,11 @@ func (l *Logic) FetchBlock(ctx context.Context, id types.BlockID) error {
 		return res.Err
 	}
 	if !res.IsLocal {
-		return l.blockHandler.HandleBlockData(ctx, res.Data, l)
+		if err := l.blockHandler.HandleBlockData(ctx, res.Data, l); err != nil {
+			return fmt.Errorf("handle block data: %w", err)
+		}
+
+		return nil
 	}
 	return res.Err
 }
