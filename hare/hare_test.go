@@ -79,7 +79,7 @@ func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeID, error) {
 	return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, mip.err
 }
 
-func newMockConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
+func newMockConsensusProcess(_ config.Config, instanceID types.LayerID, s *Set, _ Rolacle, _ Signer, _ NetworkService, outputChan chan TerminationOutput) *mockConsensusProcess {
 	mcp := new(mockConsensusProcess)
 	mcp.Closer = util.NewCloser()
 	mcp.id = instanceID
@@ -193,13 +193,13 @@ func TestHare_collectOutput(t *testing.T) {
 	set := NewSetFromValues(value1)
 
 	require.NoError(t, h.collectOutput(context.TODO(), mockReport{mockid, set, true, false}))
-	output, ok := h.outputs[types.LayerID(mockid)]
+	output, ok := h.outputs[mockid]
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
 
 	mockid = instanceID2
 
-	output, ok = h.outputs[types.LayerID(mockid)] // todo: replace with getresult if this yields a race
+	output, ok = h.outputs[mockid] // todo: replace with getresult if this yields a race
 	require.False(t, ok)
 	require.Nil(t, output)
 }
@@ -216,7 +216,7 @@ func TestHare_collectOutput2(t *testing.T) {
 	set := NewSetFromValues(value1)
 
 	require.NoError(t, h.collectOutput(context.TODO(), mockReport{mockid, set, true, false}))
-	output, ok := h.outputs[types.LayerID(mockid)]
+	output, ok := h.outputs[mockid]
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
 
@@ -240,9 +240,10 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 	n1 := sim.NewNode()
 
 	h := createHare(t, n1, logtest.New(t).WithName(t.Name()))
-	h.Start(context.TODO())
+	require.NoError(t, h.Start(context.TODO()))
 	mo := mockReport{types.NewLayerID(8), NewEmptySet(0), true, false}
-	h.broker.Register(context.TODO(), mo.ID())
+	_, err := h.broker.Register(context.TODO(), mo.ID())
+	require.NoError(t, err)
 	time.Sleep(1 * time.Second)
 	h.outputChan <- mo
 	time.Sleep(1 * time.Second)
@@ -351,7 +352,7 @@ func TestHare_outputBuffer(t *testing.T) {
 		mockid := i
 		set := NewSetFromValues(value1)
 		_ = h.collectOutput(context.TODO(), mockReport{mockid, set, true, false})
-		_, ok := h.outputs[types.LayerID(mockid)]
+		_, ok := h.outputs[mockid]
 		require.True(t, ok)
 		require.EqualValues(t, i.Add(1).Uint32(), len(h.outputs))
 		lasti = i
@@ -362,7 +363,7 @@ func TestHare_outputBuffer(t *testing.T) {
 	// add another output
 	mockid := lasti.Add(1)
 	set := NewSetFromValues(value1)
-	h.collectOutput(context.TODO(), mockReport{mockid, set, true, false})
+	require.NoError(t, h.collectOutput(context.TODO(), mockReport{mockid, set, true, false}))
 	_, ok := h.outputs[mockid]
 	require.True(t, ok)
 	require.EqualValues(t, h.bufferSize, len(h.outputs))
@@ -379,7 +380,7 @@ func TestHare_IsTooLate(t *testing.T) {
 		set := NewSetFromValues(value1)
 		h.lastLayer = i
 		_ = h.collectOutput(context.TODO(), mockReport{mockid, set, true, false})
-		_, ok := h.outputs[types.LayerID(mockid)]
+		_, ok := h.outputs[mockid]
 		require.True(t, ok)
 		exp := i.Add(1).Uint32()
 		if exp > h.bufferSize {
@@ -404,7 +405,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 		set := NewSetFromValues(value1)
 		h.lastLayer = i
 		_ = h.collectOutput(context.TODO(), mockReport{mockid, set, true, false})
-		_, ok := h.outputs[types.LayerID(mockid)]
+		_, ok := h.outputs[mockid]
 		require.True(t, ok)
 		exp := i.Add(1).Uint32()
 		if exp > h.bufferSize {
@@ -421,8 +422,8 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	mockid := lasti.Add(1)
 	set := NewSetFromValues(value1)
 	h.lastLayer = lasti.Add(1)
-	h.collectOutput(context.TODO(), mockReport{mockid, set, true, false})
-	_, ok := h.outputs[types.LayerID(mockid)]
+	require.NoError(t, h.collectOutput(context.TODO(), mockReport{mockid, set, true, false}))
+	_, ok := h.outputs[mockid]
 	require.True(t, ok)
 	require.EqualValues(t, h.bufferSize, len(h.outputs))
 
@@ -432,8 +433,8 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	mockid = lasti.Add(2)
 	set = NewSetFromValues(value1)
 	h.lastLayer = lasti.Add(2)
-	h.collectOutput(context.TODO(), mockReport{mockid, set, true, false})
-	_, ok = h.outputs[types.LayerID(mockid)]
+	require.NoError(t, h.collectOutput(context.TODO(), mockReport{mockid, set, true, false}))
+	_, ok = h.outputs[mockid]
 	require.True(t, ok)
 	require.EqualValues(t, h.bufferSize, len(h.outputs))
 
