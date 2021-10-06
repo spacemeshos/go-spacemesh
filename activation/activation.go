@@ -42,8 +42,7 @@ type broadcaster interface {
 	Broadcast(ctx context.Context, channel string, data []byte) error
 }
 
-type poetNumberOfTickProvider struct {
-}
+type poetNumberOfTickProvider struct{}
 
 func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 	return 1
@@ -450,22 +449,28 @@ func (b *Builder) getNIPostKey() []byte {
 func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
 	bts, err := types.InterfaceToBytes(ch)
 	if err != nil {
-		return err
+		return fmt.Errorf("serialize NIPost challenge: %w", err)
 	}
-	return b.store.Put(b.getNIPostKey(), bts)
+
+	if err := b.store.Put(b.getNIPostKey(), bts); err != nil {
+		return fmt.Errorf("put NIPost challenge to store: %w", err)
+	}
+
+	return nil
 }
 
 func (b *Builder) loadChallenge() error {
 	bts, err := b.store.Get(b.getNIPostKey())
 	if err != nil {
-		return err
+		return fmt.Errorf("get NIPost challenge from store: %w", err)
 	}
+
 	if len(bts) > 0 {
 		tp := &types.NIPostChallenge{}
-		err = types.BytesToInterface(bts, tp)
-		if err != nil {
-			return err
+		if err = types.BytesToInterface(bts, tp); err != nil {
+			return fmt.Errorf("parse NIPost challenge: %w", err)
 		}
+
 		b.challenge = tp
 	}
 	return nil
@@ -492,7 +497,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		b.pendingATX, err = b.createAtx(ctx)
 		if err != nil {
 			b.log.Error(err.Error())
-			return err
+			return fmt.Errorf("create ATX: %w", err)
 		}
 	}
 
@@ -502,7 +507,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	size, err := b.signAndBroadcast(ctx, atx)
 	if err != nil {
 		b.log.Error(err.Error())
-		return err
+		return fmt.Errorf("sign and broadcast: %w", err)
 	}
 
 	b.log.Event().Info(fmt.Sprintf("atx published %v", atx.ID().ShortString()), atx.Fields(size)...)
@@ -652,12 +657,12 @@ func (b *Builder) discardChallengeIfStale() bool {
 func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error) {
 	bts, err := signedAtx.InnerBytes()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("inner bytes of ATX: %w", err)
 	}
 
 	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extract ed25519 pubkey: %w", err)
 	}
 
 	pub := signing.NewPublicKey(pubKey)
@@ -669,7 +674,7 @@ func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error)
 func SignAtx(signer signer, atx *types.ActivationTx) error {
 	bts, err := atx.InnerBytes()
 	if err != nil {
-		return err
+		return fmt.Errorf("inner bytes of ATX: %w", err)
 	}
 	atx.Sig = signer.Sign(bts)
 	return nil

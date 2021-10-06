@@ -14,6 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
+	dbMocks "github.com/spacemeshos/go-spacemesh/database/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -62,15 +64,10 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 	net := service.NewSimulator()
 	n := net.NewNode()
 
-	block1 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
-	block2 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
-	block3 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
-	block4 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
-
 	txMempool := mempool.NewTxMemPool()
 
 	bs := []*types.Block{block1, block2, block3, block4}
-	builder := createBlockBuilder(t, "a", n, bs, nil)
+	builder := createBlockBuilder(t, "block-builder", n, bs)
 	builder.TransactionPool = txMempool
 
 	err := builder.Start(context.TODO())
@@ -84,9 +81,81 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 
 	err = builder.Close()
 	assert.Error(t, err)
+}
+
+func TestBlockBuilder_createBlockLoop_Beacon(t *testing.T) {
+	rand.Seed(0)
+	net := service.NewSimulator()
+	n := net.NewNode()
+	layerID := types.NewLayerID(7)
+	epoch := layerID.GetEpoch()
+
+	bs := []*types.Block{block1, block2, block3, block4}
+
+	builder := createBlockBuilder(t, "block-builder", n, bs)
+	txMempool := mempool.NewTxMemPool()
+	builder.TransactionPool = txMempool
+
+	ctrl := gomock.NewController(t)
+	mockTB := mocks.NewMockBeaconGetter(ctrl)
+	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(types.HexToHash32("0x94812631").Bytes(), nil).Times(1)
+	builder.beaconProvider = mockTB
+
+	mockDB := dbMocks.NewMockDatabase(ctrl)
+	mockDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
+	mockDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
+	mockDB.EXPECT().Close().Times(1)
+	builder.db = mockDB
+
+	err := builder.Start(context.TODO())
+	require.NoError(t, err)
 
 	tx1 := NewTx(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
 	txMempool.Put(tx1.ID(), tx1)
+
+	// causing it to build a block
+	builder.beginRoundEvent <- layerID
+
+	err = builder.Close()
+	assert.NoError(t, err)
+	ctrl.Finish()
+}
+
+func TestBlockBuilder_createBlockLoop_NoBeacon(t *testing.T) {
+	rand.Seed(0)
+	net := service.NewSimulator()
+	n := net.NewNode()
+	layerID := types.NewLayerID(7)
+	epoch := layerID.GetEpoch()
+
+	bs := []*types.Block{block1, block2, block3, block4}
+	builder := createBlockBuilder(t, "block-builder", n, bs)
+	txMempool := mempool.NewTxMemPool()
+	builder.TransactionPool = txMempool
+
+	ctrl := gomock.NewController(t)
+	mockTB := mocks.NewMockBeaconGetter(ctrl)
+	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(nil, database.ErrNotFound).Times(1)
+	builder.beaconProvider = mockTB
+
+	mockDB := dbMocks.NewMockDatabase(ctrl)
+	mockDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(0)
+	mockDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(0)
+	mockDB.EXPECT().Close().Times(1)
+	builder.db = mockDB
+
+	err := builder.Start(context.TODO())
+	assert.NoError(t, err)
+
+	tx1 := NewTx(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
+	txMempool.Put(tx1.ID(), tx1)
+
+	// causing it to build a block
+	builder.beginRoundEvent <- layerID
+
+	err = builder.Close()
+	assert.NoError(t, err)
+	ctrl.Finish()
 }
 
 func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
@@ -99,15 +168,16 @@ func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
 	block4 := types.NewExistingBlock(types.LayerID{}, []byte(rand.String(8)), nil)
 
 	st := []*types.Block{block2, block3, block4}
-	builder1 := createBlockBuilder(t, "a", n1, st, nil)
-	builder2 := createBlockBuilder(t, "b", n2, st, nil)
+	builder1 := createBlockBuilder(t, "a", n1, st)
+	builder2 := createBlockBuilder(t, "b", n2, st)
 
 	atxID1 := types.ATXID(types.HexToHash32("dead"))
 	atxID2 := types.ATXID(types.HexToHash32("beef"))
 
-	b1, err := builder1.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), atxID1, types.BlockEligibilityProof{}, nil, nil)
+	beacon := types.HexToHash32("0x94812631").Bytes()
+	b1, err := builder1.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), atxID1, types.BlockEligibilityProof{}, nil, nil, beacon)
 	assert.NoError(t, err)
-	b2, err := builder2.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), atxID2, types.BlockEligibilityProof{}, nil, nil)
+	b2, err := builder2.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), atxID2, types.BlockEligibilityProof{}, nil, nil, beacon)
 	assert.NoError(t, err)
 
 	assert.NotEqual(t, b1.ID(), b2.ID(), "ids are identical")
@@ -124,11 +194,11 @@ var (
 	poetRef = []byte{0xba, 0x38}
 	atxs    = []*types.ActivationTx{
 		newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{1}), types.NewLayerID(5),
-			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPostWithChallenge(&types.Hash32{}, poetRef)),
+			1, types.ATXID{}, coinbase, activation.NewNIPostWithChallenge(&types.Hash32{}, poetRef)),
 		newActivationTx(types.NodeID{Key: "bbbb", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{2}), types.NewLayerID(5),
-			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPostWithChallenge(&types.Hash32{}, poetRef)),
+			1, types.ATXID{}, coinbase, activation.NewNIPostWithChallenge(&types.Hash32{}, poetRef)),
 		newActivationTx(types.NodeID{Key: "cccc", VRFPublicKey: []byte("bbb")}, 1, types.ATXID(types.Hash32{3}), types.NewLayerID(5),
-			1, types.ATXID{}, coinbase, 5, []types.BlockID{block1.ID(), block2.ID(), block3.ID()}, activation.NewNIPostWithChallenge(&types.Hash32{}, poetRef)),
+			1, types.ATXID{}, coinbase, activation.NewNIPostWithChallenge(&types.Hash32{}, poetRef)),
 	}
 )
 
@@ -158,13 +228,19 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	txPool, txIDs := prepareBuildingBlocks(t)
 
 	st := []*types.Block{block1, block2, block3}
-	builder := createBlockBuilder(t, "a", n, st, nil)
+	builder := createBlockBuilder(t, "a", n, st)
 	blockset := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{{}, blockset, {}}, nil
 	}}
 	builder.TransactionPool = txPool
 	builder.beginRoundEvent = beginRound
+
+	beacon := types.HexToHash32("0x94812631").Bytes()
+	ctrl := gomock.NewController(t)
+	mockTB := mocks.NewMockBeaconGetter(ctrl)
+	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
+	builder.beaconProvider = mockTB
 
 	gossipMessages := receiver.RegisterGossipProtocol(blocks.NewBlockProtocol, priorityq.High)
 	err := builder.Start(context.TODO())
@@ -183,9 +259,12 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 		assert.True(t, ContainsTx(b.TxIDs, txIDs[2]))
 
 		assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
+		assert.Equal(t, beacon, b.TortoiseBeacon)
 	case <-time.After(500 * time.Millisecond):
 		assert.Fail(t, "timeout on receiving block")
 	}
+
+	ctrl.Finish()
 }
 
 func TestBlockBuilder_CreateBlockFlowNoATX(t *testing.T) {
@@ -197,13 +276,19 @@ func TestBlockBuilder_CreateBlockFlowNoATX(t *testing.T) {
 	txPool, _ := prepareBuildingBlocks(t)
 
 	st := []*types.Block{block1, block2, block3}
-	builder := createBlockBuilder(t, "a", n, st, nil)
+	builder := createBlockBuilder(t, "a", n, st)
 	blockset := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
 	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{{}, blockset, {}}, nil
 	}}
 	builder.TransactionPool = txPool
 	builder.beginRoundEvent = beginRound
+
+	beacon := types.HexToHash32("0x94812631").Bytes()
+	ctrl := gomock.NewController(t)
+	mockTB := mocks.NewMockBeaconGetter(ctrl)
+	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
+	builder.beaconProvider = mockTB
 
 	mbo := &mockBlockOracle{}
 	mbo.err = blocks.ErrMinerHasNoATXInPreviousEpoch
@@ -219,6 +304,8 @@ func TestBlockBuilder_CreateBlockFlowNoATX(t *testing.T) {
 		assert.Fail(t, "miner should not produce blocks")
 	case <-time.After(500 * time.Millisecond):
 	}
+
+	ctrl.Finish()
 }
 
 func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
@@ -228,12 +315,7 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
 
 	st := []*types.Block{block1, block2, block3}
-	ctrl := gomock.NewController(t)
-	tbp := mocks.NewMockBeaconGetter(ctrl)
-	tBeacon := types.HexToHash32("0x94812631").Bytes()
-	tbp.EXPECT().GetBeacon(gomock.Any()).Return(tBeacon, nil).Times(1)
-
-	builder := createBlockBuilder(t, "a", n, st, tbp)
+	builder := createBlockBuilder(t, "a", n, st)
 	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{{block4.ID()}, hareRes, {}}, nil
 	}}
@@ -247,8 +329,9 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 		NewTx(t, 3, recipient, signer),
 	}
 
+	beacon := types.HexToHash32("0x94812631").Bytes()
 	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
-	b, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(1), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, []types.ATXID{atx1, atx2, atx3, atx4, atx5})
+	b, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(1), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, beacon)
 	assert.NoError(t, err)
 
 	assert.Equal(t, hareRes, b.ForDiff)
@@ -259,10 +342,10 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	assert.True(t, ContainsTx(b.TxIDs, transids[2]))
 
 	assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
-	assert.Equal(t, tBeacon, b.TortoiseBeacon)
+	assert.Equal(t, beacon, b.TortoiseBeacon)
 
 	// test create second block
-	bl, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, nil)
+	bl, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, nil, beacon)
 	assert.NoError(t, err)
 
 	assert.Equal(t, hareRes, bl.ForDiff)
@@ -275,38 +358,6 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	assert.Equal(t, *bl.RefBlock, b.ID())
 	assert.Nil(t, bl.ActiveSet)
 	assert.Nil(t, bl.TortoiseBeacon)
-}
-
-func TestBlockBuilder_CreateBlockNoTortoiseBeacon(t *testing.T) {
-	net := service.NewSimulator()
-	n := net.NewNode()
-
-	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
-	st := []*types.Block{block1, block2, block3}
-
-	ctrl := gomock.NewController(t)
-	tbp := mocks.NewMockBeaconGetter(ctrl)
-	errUnknown := errors.New("unknown")
-	tbp.EXPECT().GetBeacon(gomock.Any()).Return(nil, errUnknown).Times(1)
-
-	builder := createBlockBuilder(t, "a", n, st, tbp)
-	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
-		return types.BlockID{0}, [][]types.BlockID{{block4.ID()}, hareRes, {}}, nil
-	}}
-
-	recipient := types.BytesToAddress([]byte{0x01})
-	signer := signing.NewEdSigner()
-
-	trans := []*types.Transaction{
-		NewTx(t, 1, recipient, signer),
-		NewTx(t, 2, recipient, signer),
-		NewTx(t, 3, recipient, signer),
-	}
-
-	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
-	b, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(1), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, []types.ATXID{atx1, atx2, atx3, atx4, atx5})
-	assert.Equal(t, errUnknown, err)
-	assert.Nil(t, b)
 }
 
 func NewTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
@@ -408,12 +459,13 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 	block3 := types.NewExistingBlock(types.NewLayerID(6), []byte(rand.String(8)), nil)
 	bs := []*types.Block{block1, block2, block3}
 	st := []types.BlockID{block1.ID(), block2.ID(), block3.ID()}
-	builder1 := createBlockBuilder(t, "a", n1, bs, nil)
+	builder1 := createBlockBuilder(t, "a", n1, bs)
 	builder1.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{0}, [][]types.BlockID{{}, {}, st}, nil
 	}}
 
-	b, err := builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	beacon := types.HexToHash32("0x94812631").Bytes()
+	b, err := builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil, beacon)
 	r.Nil(err)
 	r.Equal(st, b.NeutralDiff)
 
@@ -421,13 +473,13 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 		return types.BlockID{0}, [][]types.BlockID{{}, nil, st}, nil
 	}}
 
-	b, err = builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	b, err = builder1.createBlock(context.TODO(), types.NewLayerID(7), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil, beacon)
 	r.Nil(err)
 	r.Equal([]types.BlockID(nil), b.ForDiff)
 	emptyID := types.BlockID{}
 	r.NotEqual(b.ID(), emptyID)
 
-	_, err = builder1.createBlock(context.TODO(), types.NewLayerID(5), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil)
+	_, err = builder1.createBlock(context.TODO(), types.NewLayerID(5), types.ATXID{}, types.BlockEligibilityProof{}, nil, nil, beacon)
 	r.EqualError(err, "cannot create blockBytes in genesis layer")
 }
 
@@ -440,7 +492,7 @@ func TestBlockBuilder_notSynced(t *testing.T) {
 	ms.notSynced = true
 	mbo := &mockBlockOracle{}
 
-	builder := createBlockBuilder(t, "a", n1, bs, nil)
+	builder := createBlockBuilder(t, "a", n1, bs)
 	builder.syncer = ms
 	builder.blockOracle = mbo
 	builder.beginRoundEvent = beginRound
@@ -472,7 +524,7 @@ func mockTortoiseBeacon(t *testing.T) blocks.BeaconGetter {
 	return mockTB
 }
 
-func createBlockBuilder(t *testing.T, ID string, n *service.Node, meshBlocks []*types.Block, tbProvider blocks.BeaconGetter) *BlockBuilder {
+func createBlockBuilder(t *testing.T, ID string, n *service.Node, meshBlocks []*types.Block) *BlockBuilder {
 	beginRound := make(chan types.LayerID)
 	cfg := Config{
 		Hdist:          5,
@@ -481,18 +533,14 @@ func createBlockBuilder(t *testing.T, ID string, n *service.Node, meshBlocks []*
 		LayersPerEpoch: 3,
 		TxsPerBlock:    selectCount,
 	}
-	if tbProvider == nil {
-		tbProvider = mockTortoiseBeacon(t)
-	}
 	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{}, [][]types.BlockID{{}, {}, {}}, nil
-	}}, &mockBlockOracle{}, tbProvider, &mockSyncer{}, mockProjector, nil, logtest.New(t).WithName(ID))
+	}}, &mockBlockOracle{}, nil, &mockSyncer{}, mockProjector, nil, logtest.New(t).WithName(ID))
 	return bb
 }
 
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
-	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
-	nipst *types.NIPost) *types.ActivationTx {
+	startTick uint64, positioningATX types.ATXID, coinbase types.Address, nipst *types.NIPost) *types.ActivationTx {
 
 	nipstChallenge := types.NIPostChallenge{
 		NodeID:         nodeID,

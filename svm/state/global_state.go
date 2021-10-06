@@ -34,7 +34,7 @@ type DB struct {
 func New(root types.Hash32, db Database) (*DB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open trie: %w", err)
 	}
 	return &DB{
 		db:                db,
@@ -279,7 +279,10 @@ func (state *DB) Commit() (root types.Hash32, err error) {
 
 	// Write trie changes.
 	root, err = state.globalTrie.Commit(nil)
-	return root, err
+	if err != nil {
+		return root, fmt.Errorf("commit global trie: %w", err)
+	}
+	return root, nil
 }
 
 // IntermediateRoot computes the current root hash of the state trie.

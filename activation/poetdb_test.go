@@ -73,7 +73,7 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 	poetProof.Root = []byte("some other root")
 
 	err = poetDb.Validate(poetProof, poetID, roundID, nil)
-	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: merkle proof not valid",
+	r.EqualError(err, fmt.Sprintf("failed to validate poet proof for poetID %x round 1337: validate PoET: merkle proof not valid",
 		poetID[:5]))
 	r.False(types.IsProcessingError(err))
 }
@@ -87,11 +87,11 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 
 	key := makeKey(poetID, "0")
 	_, err := poetDb.getProofRef(key)
-	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for key %x: leveldb: not found", key[:5]))
+	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for key %x: get value: leveldb: not found", key[:5]))
 
 	ref := []byte("abcde")
 	_, err = poetDb.GetMembershipMap(ref)
-	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: leveldb: not found", ref[:5]))
+	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for ref %x: get proof from store: get value: leveldb: not found", ref[:5]))
 }
 
 func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {

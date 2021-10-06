@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+
 	"github.com/btcsuite/btcd/btcec"
 	"github.com/btcsuite/btcutil/base58"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -53,7 +54,7 @@ type privateKeyImpl struct {
 func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 	privKey, err := btcec.NewPrivateKey(btcec.S256())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("create new pubkey: %w", err)
 	}
 
 	return &privateKeyImpl{privKey}, &publicKeyImpl{privKey.PubKey()}, nil
@@ -61,7 +62,6 @@ func GenerateKeyPair() (PrivateKey, PublicKey, error) {
 
 // NewPrivateKey creates a new private key from data
 func NewPrivateKey(data []byte) (PrivateKey, error) {
-
 	if len(data) != 32 {
 		return nil, errors.New("expected 32 bytes input")
 	}
@@ -119,15 +119,20 @@ func (p *privateKeyImpl) Sign(msg []byte) []byte {
 
 // Decrypt decrypts data encrypted with a public key using its matching private key
 func (p *privateKeyImpl) Decrypt(in []byte) ([]byte, error) {
-	return btcec.Decrypt(p.k, in)
+	data, err := btcec.Decrypt(p.k, in)
+	if err != nil {
+		return data, fmt.Errorf("decrypt AES-256-CBC: %w", err)
+	}
+
+	return data, nil
 }
 
 // NewPublicKey creates a new public key from provided binary key data.
 func NewPublicKey(data []byte) (PublicKey, error) {
 	k, err := btcec.ParsePubKey(data, btcec.S256())
 	if err != nil {
-		log.Error("Failed to parse public key from binay data", err)
-		return nil, err
+		log.Error("Failed to parse public key from binary data", err)
+		return nil, fmt.Errorf("parse pubkey: %w", err)
 	}
 
 	return &publicKeyImpl{k}, nil
@@ -169,9 +174,15 @@ func (p *publicKeyImpl) Pretty() string {
 func (p *publicKeyImpl) VerifyString(data []byte, sig string) (bool, error) {
 	bin, err := hex.DecodeString(sig)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("parse hex string: %w", err)
 	}
-	return p.Verify(data, bin)
+
+	verified, err := p.Verify(data, bin)
+	if err != nil {
+		return verified, fmt.Errorf("verify signed data: %w", err)
+	}
+
+	return verified, nil
 }
 
 // Verify verifies data was signed by provided signature.
@@ -180,7 +191,7 @@ func (p *publicKeyImpl) VerifyString(data []byte, sig string) (bool, error) {
 func (p *publicKeyImpl) Verify(data []byte, sig []byte) (bool, error) {
 	signature, err := btcec.ParseSignature(sig, btcec.S256())
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("parse signature: %w", err)
 	}
 
 	verified := signature.Verify(data, p.k)
@@ -189,5 +200,10 @@ func (p *publicKeyImpl) Verify(data []byte, sig []byte) (bool, error) {
 
 // Encrypt encrypts data that can only be decrypted using the private key matching this public key.
 func (p *publicKeyImpl) Encrypt(in []byte) ([]byte, error) {
-	return btcec.Encrypt(p.k, in)
+	encrypted, err := btcec.Encrypt(p.k, in)
+	if err != nil {
+		return encrypted, fmt.Errorf("encrypt AES-256-CBC: %w", err)
+	}
+
+	return encrypted, nil
 }

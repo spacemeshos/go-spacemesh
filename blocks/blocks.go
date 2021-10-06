@@ -163,8 +163,12 @@ func saveMetrics(blk types.Block) {
 	}
 }
 
-func combineBlockDiffs(blk types.Block) []types.BlockID {
-	return append(blk.ForDiff, append(blk.AgainstDiff, blk.NeutralDiff...)...)
+func blockDependencies(blk *types.Block) []types.BlockID {
+	combined := []types.BlockID{blk.BaseBlock}
+	combined = append(combined, blk.ForDiff...)
+	combined = append(combined, blk.AgainstDiff...)
+	combined = append(combined, blk.NeutralDiff...)
+	return combined
 }
 
 func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block, fetcher service.Fetcher) error {
@@ -186,7 +190,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	// try fetch referenced ATXs
 	err := bh.fetchAllReferencedAtxs(ctx, block, fetcher)
 	if err != nil {
-		return err
+		return fmt.Errorf("fetch all referenced ATXs: %w", err)
 	}
 
 	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
@@ -195,7 +199,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	//   See https://github.com/spacemeshos/go-spacemesh/issues/2369
 	if err := bh.fastValidation(block); err != nil {
 		bh.WithContext(ctx).With().Error("failed fast validation", block.ID(), log.Err(err))
-		return err
+		return fmt.Errorf("fast validation: %w", err)
 	}
 
 	// get the TXs
@@ -207,7 +211,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	}
 
 	// get and validate blocks views using the fetch
-	err = fetcher.GetBlocks(ctx, combineBlockDiffs(*block))
+	err = fetcher.GetBlocks(ctx, blockDependencies(block))
 	if err != nil {
 		return fmt.Errorf("failed to fetch view %v e: %v", block.ID(), err)
 	}
@@ -234,8 +238,13 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 		}
 	}
 	if len(atxs) > 0 {
-		return fetcher.GetAtxs(ctx, atxs)
+		if err := fetcher.GetAtxs(ctx, atxs); err != nil {
+			return fmt.Errorf("get ATXs: %w", err)
+		}
+
+		return nil
 	}
+
 	return nil
 }
 
@@ -247,7 +256,7 @@ func (bh *BlockHandler) fastValidation(block *types.Block) error {
 
 	// validate unique tx atx
 	if err := validateUniqueTxAtx(block); err != nil {
-		return err
+		return fmt.Errorf("validate unique tx ATX: %w", err)
 	}
 	return nil
 }

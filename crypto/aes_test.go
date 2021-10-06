@@ -13,11 +13,11 @@ func TestAesCTRXORandPkcs7Pad(t *testing.T) {
 	msgData := []byte(msg)
 
 	dudtestkey := make([]byte, 17, 17)
-	var nb = []byte(nil)
+	nb := []byte(nil)
 	// dudtestkey is initially not a multiple of 16 so nil is returned
 	_, err := AesCTRXOR(dudtestkey, msgData, nb)
 	assert.NotNil(t, err, fmt.Sprintf("incorrect length should error <%v>", err))
-	assert.Equal(t, fmt.Sprintf("%s", err), "crypto/aes: invalid key size 17", fmt.Sprintf("incorrect length should error (%s)", err))
+	assert.Equal(t, fmt.Sprintf("%s", err), "new AES cipher: crypto/aes: invalid key size 17", fmt.Sprintf("incorrect length should error (%s)", err))
 	// Pkcs7Pad makes a good lengthed key from the bad one
 	happytestkey := Pkcs7Pad(dudtestkey)
 	assert.Equal(t, len(happytestkey), 32, fmt.Sprintf("Pkcs7Pad incorrect length %d", len(happytestkey)))
@@ -58,8 +58,8 @@ func TestPkcs7Unpad(t *testing.T) {
 	}
 	rightsize := Pkcs7Unpad(wrongsize)
 	assert.True(t, len(rightsize) > 0 && len(rightsize) == 26, fmt.Sprintf("should not be sized %d", len(rightsize)))
-
 }
+
 func TestPKCSPadding(t *testing.T) {
 	// 26 letters + 7 dots is 33 bytes
 	wrongsize := []byte("ABCDEFGHIJKLMNOPQRSTUVWXYZ.......")

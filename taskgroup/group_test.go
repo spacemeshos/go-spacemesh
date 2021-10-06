@@ -3,6 +3,7 @@ package taskgroup
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 
@@ -16,7 +17,7 @@ func TestGroupTerminate(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			g.Go(func(ctx context.Context) error {
 				<-ctx.Done()
-				return ctx.Err()
+				return fmt.Errorf("context done: %w", ctx.Err())
 			})
 		}
 		g.Go(func(ctx context.Context) error {
@@ -30,7 +31,7 @@ func TestGroupTerminate(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			g.Go(func(ctx context.Context) error {
 				<-ctx.Done()
-				return ctx.Err()
+				return fmt.Errorf("context done: %w", ctx.Err())
 			})
 		}
 		cancel()
@@ -57,14 +58,14 @@ func TestGroupNested(t *testing.T) {
 		for i := 0; i < 10; i++ {
 			g.Go(func(ctx context.Context) error {
 				<-ctx.Done()
-				return ctx.Err()
+				return fmt.Errorf("context done: %w", ctx.Err())
 			})
 			g.Go(func(ctx context.Context) error {
 				return testErr
 			})
 		}
 		<-ctx.Done()
-		return ctx.Err()
+		return fmt.Errorf("context done: %w", ctx.Err())
 	})
 
 	require.ErrorIs(t, g.Wait(), testErr)

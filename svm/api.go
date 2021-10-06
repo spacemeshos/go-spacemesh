@@ -17,10 +17,6 @@ type SVM struct {
 	log log.Logger
 }
 
-func (s *SVM) TxProcessor() *state.TransactionProcessor {
-	return s.TransactionProcessor
-}
-
 // New creates a new `SVM` instance from the given `state` and `logger`.
 func New(state *state.TransactionProcessor, logger log.Log) *SVM {
 	return &SVM{state, log.NewDefault("svm")}

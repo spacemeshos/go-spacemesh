@@ -33,8 +33,9 @@ type Subscriber struct {
 func NewSubscriber(url string) (*Subscriber, error) {
 	socket, err := sub.NewSocket()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create socket: %w", err)
 	}
+
 	socket.AddTransport(ipc.NewTransport())
 	socket.AddTransport(tcp.NewTransport())
 	socket.SetOption(mangos.OptionBestEffort, false)
@@ -42,7 +43,7 @@ func NewSubscriber(url string) (*Subscriber, error) {
 
 	err = socket.Dial(url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dial socket: %w", err)
 	}
 
 	return &Subscriber{
@@ -105,7 +106,11 @@ func (sub *Subscriber) Close() error {
 	case <-sub.closer:
 	default:
 		close(sub.closer)
-		return sub.sock.Close()
+		if err := sub.sock.Close(); err != nil {
+			return fmt.Errorf("close socket: %w", err)
+		}
+
+		return nil
 	}
 	return nil
 }
@@ -118,10 +123,12 @@ func (sub *Subscriber) Subscribe(topic ChannelID) (chan []byte, error) {
 	if _, ok := sub.output[topic]; !ok {
 		sub.output[topic] = make(chan []byte, channelBuffer)
 	}
+
 	err := sub.sock.SetOption(mangos.OptionSubscribe, []byte{byte(topic)})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("set subscribe socket option: %w", err)
 	}
+
 	return sub.output[topic], nil
 }
 
@@ -133,7 +140,7 @@ func (sub *Subscriber) SubscribeToAll() (chan []byte, error) {
 		allOutput := make(chan []byte, channelBuffer)
 		err := sub.sock.SetOption(mangos.OptionSubscribe, []byte(""))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("set subscribe socket option: %w", err)
 		}
 		sub.allOutput = allOutput
 	}
@@ -165,8 +172,11 @@ func newPublisher(url string) (*Publisher, error) {
 func (p *Publisher) publish(topic ChannelID, payload []byte) error {
 	msg := append([]byte{byte(topic)}, payload...)
 	log.With().Debug("sending msg", log.Binary("payload", payload))
-	err := p.sock.Send(msg)
-	return err
+	if err := p.sock.Send(msg); err != nil {
+		return fmt.Errorf("send to socket: %w", err)
+	}
+
+	return nil
 }
 
 // Close closes the publishers output socket

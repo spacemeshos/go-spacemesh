@@ -25,7 +25,6 @@ type layerTicker interface {
 type layerFetcher interface {
 	PollLayerContent(ctx context.Context, layerID types.LayerID) chan layerfetcher.LayerPromiseResult
 	GetEpochATXs(ctx context.Context, id types.EpochID) error
-	GetTortoiseBeacon(ctx context.Context, id types.EpochID) error
 }
 
 // Configuration is the config params for syncer
@@ -166,7 +165,7 @@ func (s *Syncer) Start(ctx context.Context) {
 				select {
 				case <-s.shutdownCtx.Done():
 					s.logger.WithContext(ctx).Info("stopping sync to shutdown")
-					return s.shutdownCtx.Err()
+					return fmt.Errorf("shutdown context done: %w", s.shutdownCtx.Err())
 				case <-s.syncTimer.C:
 					s.logger.WithContext(ctx).Debug("synchronize on tick")
 					s.synchronize(ctx)
@@ -368,6 +367,8 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		if err = s.mesh.SetZeroBlockLayer(layerID); err != nil {
 			s.logger.WithContext(ctx).With().Panic("failed to set zero-block for genesis layer", layerID, log.Err(err))
 		}
+	}
+	if !layerID.After(types.GetEffectiveGenesis()) {
 		if layer, err = s.mesh.GetLayer(layerID); err != nil {
 			s.logger.WithContext(ctx).With().Panic("failed to get genesis layer", layerID, log.Err(err))
 		}
@@ -389,10 +390,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.L
 		return nil, err
 	}
 
-	if err = s.getTortoiseBeacon(ctx, layerID); err != nil {
-		return nil, err
-	}
-
 	return layer, nil
 }
 
@@ -400,7 +397,7 @@ func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (
 	bch := s.fetcher.PollLayerContent(ctx, layerID)
 	res := <-bch
 	if res.Err != nil {
-		if res.Err == layerfetcher.ErrZeroLayer {
+		if errors.Is(res.Err, layerfetcher.ErrZeroLayer) {
 			return types.NewLayer(layerID), nil
 		}
 		return nil, fmt.Errorf("PollLayerContent: %w", res.Err)
@@ -433,35 +430,9 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 			// dont fail sync if we cannot fetch atxs for the current epoch before the last layer
 			if !atCurrentEpoch || atLastLayerOfEpoch {
 				s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", layerID, epoch, log.Err(err))
-				return err
+				return fmt.Errorf("get epoch ATXs: %w", err)
 			}
 			s.logger.WithContext(ctx).With().Warning("failed to fetch epoch atxs", layerID, epoch, log.Err(err))
-		}
-	}
-	return nil
-}
-
-func (s *Syncer) getTortoiseBeacon(ctx context.Context, layerID types.LayerID) error {
-	epoch := layerID.GetEpoch()
-	if epoch.IsGenesis() {
-		s.logger.WithContext(ctx).Info("skip getting tortoise beacons in genesis epoch")
-		return nil
-	}
-
-	currentEpoch := s.ticker.GetCurrentLayer().GetEpoch()
-	// only get tortoise beacon if
-	// - layerID is in the current epoch
-	// - layerID is the last layer of a previous epoch
-	// i.e. for older epochs we sync tortoise beacons once per epoch. for current epoch we sync tortoise beacons in every layer
-	if epoch == currentEpoch || ((epoch+1).FirstLayer().Value > 0 && layerID == (epoch+1).FirstLayer().Sub(1)) {
-		s.logger.WithContext(ctx).With().Debug("getting tortoise beacons", epoch, layerID)
-		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
-		if err := s.fetcher.GetTortoiseBeacon(ctx, epoch); err != nil {
-			s.logger.WithContext(ctx).With().Error("failed to fetch epoch tortoise beacons",
-				layerID,
-				epoch,
-				log.Err(err))
-			return err
 		}
 	}
 	return nil

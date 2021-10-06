@@ -330,7 +330,7 @@ func (tb *TortoiseBeacon) verifyFirstVotingMessage(ctx context.Context, message 
 	}
 
 	if err != nil {
-		logger.Error("failed to get ATX")
+		logger.With().Error("failed to get ATX", log.Err(err))
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] failed to get ATX for epoch (miner ID %v): %w", types.FirstRound, minerID, err)
 	}
 
@@ -459,7 +459,7 @@ func (tb *TortoiseBeacon) verifyFollowingVotingMessage(ctx context.Context, mess
 	}
 
 	if err != nil {
-		logger.Error("failed to get ATX")
+		logger.With().Error("failed to get ATX", log.Err(err))
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] failed to get ATX for epoch (miner ID %v): %w", round, minerID, err)
 	}
 
@@ -515,7 +515,7 @@ func (tb *TortoiseBeacon) registerProposed(minerPK *signing.PublicKey, logger lo
 	if _, ok := tb.hasProposed[minerID]; ok {
 		// see TODOs for registerVoted()
 		logger.Warning("already received proposal from miner")
-		return fmt.Errorf("already made proposal (miner ID %v): %w", minerID, errAlreadyProposed)
+		return fmt.Errorf("already made proposal (miner ID %v): %w", minerPK.ShortString(), errAlreadyProposed)
 	}
 
 	tb.hasProposed[minerID] = struct{}{}
@@ -547,7 +547,7 @@ func (tb *TortoiseBeacon) registerVoted(minerPK *signing.PublicKey, round types.
 		// TODO(nkryuchkov): ban id forever globally across packages since this epoch
 		// TODO(nkryuchkov): (not tortoise beacon) do the same for ATXs
 
-		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerID, errAlreadyVoted)
+		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerPK.ShortString(), errAlreadyVoted)
 	}
 
 	tb.hasVoted[round][minerID] = struct{}{}

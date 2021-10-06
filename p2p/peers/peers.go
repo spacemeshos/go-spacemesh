@@ -2,6 +2,7 @@ package peers
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"sync/atomic"
 
@@ -60,7 +61,6 @@ func New(opts ...Option) *Peers {
 		opt(p)
 	}
 	return p
-
 }
 
 // Peers is used by protocols to manage available peers.
@@ -104,17 +104,19 @@ func (p *Peers) WaitPeers(ctx context.Context, n int) ([]Peer, error) {
 	if n == 0 {
 		return nil, nil
 	}
+
 	req := waitPeersReq{min: n, ch: make(chan []Peer, 1)}
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("context done: %w", ctx.Err())
 	case <-p.exit:
 		return nil, nil
 	case p.requests <- &req:
 	}
+
 	select {
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("context done: %w", ctx.Err())
 	case <-p.exit:
 		return nil, nil
 	case prs := <-req.ch:

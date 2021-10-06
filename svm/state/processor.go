@@ -10,10 +10,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mempool"
 
 	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/trie"
@@ -140,19 +142,23 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 	if err != nil {
 		return remaining, fmt.Errorf("failed to commit global state: %w", err)
 	}
-	err = tp.addStateToHistory(layer, newHash)
-	return remaining, err
+
+	if err = tp.addStateToHistory(layer, newHash); err != nil {
+		return remaining, fmt.Errorf("add state to history: %w", err)
+	}
+
+	return remaining, nil
 }
 
 func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash types.Hash32) error {
 	tp.trie.Reference(newHash, types.Hash32{})
 	err := tp.trie.Commit(newHash, false)
 	if err != nil {
-		return err
+		return fmt.Errorf("commit trie: %w", err)
 	}
 	err = tp.saveStateRoot(newHash, layer)
 	if err != nil {
-		return err
+		return fmt.Errorf("save state root: %w", err)
 	}
 	tp.Log.With().Info("new state root", layer, log.FieldNamed("state_root", newHash))
 	return nil
@@ -164,7 +170,7 @@ func getStateRootLayerKey(layer types.LayerID) []byte {
 
 func (tp *TransactionProcessor) saveStateRoot(stateRoot types.Hash32, layer types.LayerID) error {
 	if err := tp.processorDb.Put(getStateRootLayerKey(layer), stateRoot.Bytes()); err != nil {
-		return err
+		return fmt.Errorf("put into DB: %w", err)
 	}
 	tp.rootMu.Lock()
 	tp.rootHash = stateRoot
@@ -176,7 +182,7 @@ func (tp *TransactionProcessor) saveStateRoot(stateRoot types.Hash32, layer type
 func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 	bts, err := tp.processorDb.Get(getStateRootLayerKey(layer))
 	if err != nil {
-		return types.Hash32{}, err
+		return types.Hash32{}, fmt.Errorf("get from DB: %w", err)
 	}
 	var x types.Hash32
 	x.SetBytes(bts)
@@ -321,9 +327,14 @@ func (tp *TransactionProcessor) HandleTxData(data []byte) error {
 	tx, err := types.BytesToTransaction(data)
 	if err != nil {
 		tp.With().Error("cannot parse incoming transaction", log.Err(err))
-		return err
+		return fmt.Errorf("parse: %w", err)
 	}
-	return tp.handleTransaction(tx)
+
+	if err := tp.handleTransaction(tx); err != nil {
+		return fmt.Errorf("handle tx: %w", err)
+	}
+
+	return nil
 }
 
 // HandleTxSyncData handles data received on TX sync
@@ -332,10 +343,10 @@ func (tp *TransactionProcessor) HandleTxSyncData(data []byte) error {
 	err := types.BytesToInterface(data, &tx)
 	if err != nil {
 		tp.With().Error("cannot parse incoming transaction", log.Err(err))
-		return err
+		return fmt.Errorf("parse: %w", err)
 	}
 	if err = tx.CalcAndSetOrigin(); err != nil {
-		return err
+		return fmt.Errorf("calc and set origin: %w", err)
 	}
 	// we don't validate the tx, todo: this is copied from old sync, unless I am wrong i think some validation is needed
 	tp.pool.Put(tx.Transaction.ID(), tx.Transaction)
@@ -345,7 +356,7 @@ func (tp *TransactionProcessor) HandleTxSyncData(data []byte) error {
 func (tp *TransactionProcessor) handleTransaction(tx *types.Transaction) error {
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		tp.With().Error("failed to calculate transaction origin", tx.ID(), log.Err(err))
-		return err
+		return fmt.Errorf("calc and set origin: %w", err)
 	}
 
 	tp.Log.With().Info("got new tx",

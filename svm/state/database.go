@@ -18,10 +18,11 @@ package state
 
 import (
 	"fmt"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/trie"
-	"sync"
 )
 
 // MaxTrieCacheGen is Trie cache generation limit after which to evict trie nodes from memory.
@@ -91,7 +92,7 @@ func (db *cachingDB) OpenTrie(root types.Hash32) (Trie, error) {
 	}
 	tr, err := trie.NewSecure(root, db.db, MaxTrieCacheGen)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new trie: %w", err)
 	}
 	return cachedTrie{tr, db}, nil
 }
@@ -110,7 +111,12 @@ func (db *cachingDB) pushTrie(t *trie.SecureTrie) {
 
 // OpenStorageTrie opens the storage trie of an account.
 func (db *cachingDB) OpenStorageTrie(addrHash, root types.Hash32) (Trie, error) {
-	return trie.NewSecure(root, db.db, 0)
+	t, err := trie.NewSecure(root, db.db, 0)
+	if err != nil {
+		return t, fmt.Errorf("new trie: %w", err)
+	}
+
+	return t, nil
 }
 
 // CopyTrie returns an independent copy of the given trie.
@@ -138,12 +144,18 @@ type cachedTrie struct {
 
 func (m cachedTrie) Commit(onleaf trie.LeafCallback) (types.Hash32, error) {
 	root, err := m.SecureTrie.Commit(onleaf)
-	if err == nil {
-		m.db.pushTrie(m.SecureTrie)
+	if err != nil {
+		return root, fmt.Errorf("commit trie: %w", err)
 	}
-	return root, err
+
+	m.db.pushTrie(m.SecureTrie)
+	return root, nil
 }
 
 func (m cachedTrie) Prove(key []byte, fromLevel uint, proofDb database.Putter) error {
-	return m.SecureTrie.Prove(key, fromLevel, proofDb)
+	if err := m.SecureTrie.Prove(key, fromLevel, proofDb); err != nil {
+		return fmt.Errorf("prove trie: %w", err)
+	}
+
+	return nil
 }

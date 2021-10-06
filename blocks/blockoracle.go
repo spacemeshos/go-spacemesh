@@ -119,7 +119,7 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 			log.Uint64("epoch_id", uint64(epochNumber)),
 			log.Err(err))
 
-		return nil, err
+		return nil, fmt.Errorf("get beacon: %w", err)
 	}
 
 	beaconDbgStr := types.BytesToHash(epochBeacon).ShortString()
@@ -199,13 +199,15 @@ func (bo *Oracle) calcEligibilityProofs(epochNumber types.EpochID) (map[types.La
 func (bo *Oracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.ActivationTxHeader, error) {
 	atxID, err := bo.getATXIDForEpoch(validForEpoch - 1)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get atx id for target epoch %v: %w", validForEpoch, err)
+		return nil, fmt.Errorf("get atx id for target epoch %v: %w", validForEpoch, err)
 	}
+
 	atx, err := bo.atxDB.GetAtxHeader(atxID)
 	if err != nil {
 		bo.log.With().Error("getting atx failed", log.Err(err))
-		return nil, err
+		return nil, fmt.Errorf("get ATX header: %w", err)
 	}
+
 	return atx, nil
 }
 
@@ -232,10 +234,10 @@ func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, erro
 		bo.log.With().Warning("did not find atx ids for node",
 			log.FieldNamed("atx_node_id", bo.nodeID),
 			log.Err(err))
-		return types.ATXID{}, err
+		return types.ATXID{}, fmt.Errorf("get ATX ID from DB: %w", err)
 	}
 	bo.log.With().Info("latest atx id found", latestATXID)
-	return latestATXID, err
+	return latestATXID, nil
 }
 
 type vrfMessage struct {

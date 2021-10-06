@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
@@ -129,11 +130,10 @@ func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload
 	}
 
 	e := m.nd.Broadcast(ctx, protocol, payload)
-	return e
+	return fmt.Errorf("broadcast: %w", e)
 }
 
-type trueOracle struct {
-}
+type trueOracle struct{}
 
 func (trueOracle) Register(bool, string) {
 }
@@ -156,6 +156,10 @@ func (trueOracle) Proof(context.Context, types.LayerID, uint32) ([]byte, error) 
 
 func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
+}
+
+func (trueOracle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
+	return true
 }
 
 // Test - runs a single CP for more than one iteration
@@ -212,8 +216,7 @@ func newRandBlockID(rng *rand.Rand) (id types.BlockID) {
 	return id
 }
 
-type mockBlockProvider struct {
-}
+type mockBlockProvider struct{}
 
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }

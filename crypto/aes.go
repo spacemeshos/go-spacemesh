@@ -6,13 +6,14 @@ import (
 	"crypto/aes"
 	"crypto/cipher"
 	"errors"
+	"fmt"
 )
 
 // AesCTRXOR is an AES cipher following https://leanpub.com/gocrypto/read#leanpub-auto-aes-cbc .
 func AesCTRXOR(key, input, nonce []byte) ([]byte, error) {
 	aesBlock, err := aes.NewCipher(key)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new AES cipher: %w", err)
 	}
 
 	stream := cipher.NewCTR(aesBlock, nonce)
