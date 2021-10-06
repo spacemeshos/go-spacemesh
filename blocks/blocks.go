@@ -163,8 +163,12 @@ func saveMetrics(blk types.Block) {
 	}
 }
 
-func combineBlockDiffs(blk types.Block) []types.BlockID {
-	return append(blk.ForDiff, append(blk.AgainstDiff, blk.NeutralDiff...)...)
+func blockDependencies(blk *types.Block) []types.BlockID {
+	combined := []types.BlockID{blk.BaseBlock}
+	combined = append(combined, blk.ForDiff...)
+	combined = append(combined, blk.AgainstDiff...)
+	combined = append(combined, blk.NeutralDiff...)
+	return combined
 }
 
 func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block, fetcher service.Fetcher) error {
@@ -207,7 +211,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	}
 
 	// get and validate blocks views using the fetch
-	err = fetcher.GetBlocks(ctx, combineBlockDiffs(*block))
+	err = fetcher.GetBlocks(ctx, blockDependencies(block))
 	if err != nil {
 		return fmt.Errorf("failed to fetch view %v e: %v", block.ID(), err)
 	}
