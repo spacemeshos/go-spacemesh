@@ -2,7 +2,6 @@ package svm
 
 import (
 	"fmt"
-	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -51,41 +50,21 @@ func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 	return nil
 }
 
-func (s *SVM) AddBalance(addr types.Address, amount uint64) {
-	s.TransactionProcessor.AddBalance(addr, amount)
-}
-
-func txsGetPointers(transactions []types.Transaction) []*types.Transaction {
-	txs := make([]*types.Transaction, 0)
-	for _, t := range transactions {
-		txs = append(txs, &t)
-	}
-
-	return txs
+func (svm *SVM) AddBalance(addr types.Address, amount uint64) {
+	svm.TransactionProcessor.AddBalance(addr, amount)
 }
 
 // ApplyLayer should be called when a layer is applied, i.e. after Hare/Tortoise
 // verification.
-func (s *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) (failed []*types.Transaction, err error) {
+func (svm *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) (failed []*types.Transaction, err error) {
 	for _, reward := range rewards {
-		s.AddBalance(reward.Address, reward.Amount)
+		svm.AddBalance(reward.Address, reward.Amount)
 	}
 
-	remainingTxs, err := s.TransactionProcessor.ApplyTransactions(layerID, transactions)
+	remainingTxs, err := svm.TransactionProcessor.ApplyTransactions(layerID, transactions)
 	if err != nil {
 		return remainingTxs, err
 	}
 
 	return remainingTxs, nil
-}
-
-func (s *SVM) writeTransactionRewards(l types.LayerID, accountBlockCount map[types.Address]map[string]uint64, totalReward, layerReward *big.Int) error {
-	for account, smesherAccountEntry := range accountBlockCount {
-		for _, cnt := range smesherAccountEntry {
-			reward := cnt * totalReward.Uint64()
-			s.AddBalance(account, reward)
-		}
-	}
-
-	return nil
 }
