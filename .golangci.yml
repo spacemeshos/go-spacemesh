@@ -1,5 +1,3 @@
-# All checks, exit code is 0 on errors.
-
 # This file contains all available configuration options
 # Modified for linting cmd/ and pkg/
 
@@ -157,12 +155,33 @@ linters-settings:
     for-loops: false # Report preallocation suggestions on for loops, false by default
   goimports:
     local-prefixes: github.com/spacemeshos/go-spacemesh
+  wrapcheck:
+    # An array of strings that specify substrings of signatures to ignore.
+    # If this set, it will override the default set of ignored signatures.
+    # See https://github.com/tomarrell/wrapcheck#configuration for more information.
+    ignoreSigs:
+# Default sigs
+      - .Errorf(
+      - errors.New(
+      - errors.Unwrap(
+      - .Wrap(
+      - .Wrapf(
+      - .WithMessage(
+      - .WithMessagef(
+      - .WithStack(
+# Custom sigs
+      - status.Error(
+    ignorePackageGlobs:
+      - encoding/*
+      - github.com/pkg/*
 
 
 linters:
-#  enable:
-#    - staticcheck
-#    - golint
+  # TODO(nkryuchkov): enable needed linters
+  enable:
+    - staticcheck
+    - golint
+    - wrapcheck
 #    - goimports
 #    - varcheck
 #    - unparam
@@ -178,23 +197,9 @@ linters:
 #    - misspell
 #    - nakedret
 #    - depguard
-  enable-all: true
-  disable:
-    - wsl
-    - lll
-    - unparam
-    - nlreturn
-    - gomnd
-    - goerr113
-    - exhaustivestruct
-    - testpackage
-    - thelper
-    - paralleltest
-    - godox
-    - gosec
-    - godot
-    - gci
-  disable-all: false
+  enable-all: false
+#  disable:
+  disable-all: true
 #  presets:
   fast: false
 
