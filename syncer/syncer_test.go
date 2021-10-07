@@ -96,19 +96,6 @@ func (mf *mockFetcher) getLayerResultChan(layerID types.LayerID) chan layerfetch
 	return mf.result[layerID]
 }
 
-func (mf *mockFetcher) feedLayerResult(from, to types.LayerID) {
-	for i := from; !i.After(to); i = i.Add(1) {
-		err := layerfetcher.ErrZeroLayer
-		if i == types.GetEffectiveGenesis() {
-			err = nil
-		}
-		mf.getLayerResultChan(i) <- layerfetcher.LayerPromiseResult{
-			Layer: i,
-			Err:   err,
-		}
-	}
-}
-
 func (mf *mockFetcher) setATXsErrors(epoch types.EpochID, err error) {
 	mf.mu.Lock()
 	defer mf.mu.Unlock()
@@ -125,6 +112,16 @@ func (mv *mockValidator) HandleIncomingLayer(_ context.Context, layerID types.La
 
 func (mv *mockValidator) HandleLateBlocks(_ context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
 	return blocks[0].Layer(), blocks[0].Layer().Sub(1)
+}
+
+func feedLayerResult(from, to types.LayerID, mf *mockFetcher, msh *mesh.Mesh) {
+	for i := from; !i.After(to); i = i.Add(1) {
+		msh.SetZeroBlockLayer(i)
+		mf.getLayerResultChan(i) <- layerfetcher.LayerPromiseResult{
+			Layer: i,
+			Err:   nil,
+		}
+	}
 }
 
 func newMemMesh(lg log.Log) *mesh.Mesh {
@@ -174,7 +171,8 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, newMemMesh(lg), mf, lg)
+	mm := newMemMesh(lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
 	ticker.advanceToLayer(types.NewLayerID(10))
 	syncer.Start(context.TODO())
 
@@ -196,7 +194,7 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	<-started
 	// allow synchronize to finish
 	current := ticker.GetCurrentLayer()
-	mf.feedLayerResult(types.NewLayerID(1), current.Sub(1))
+	feedLayerResult(types.GetEffectiveGenesis().Add(1), current.Sub(1), mf, mm)
 	wg.Wait()
 
 	// one of the synchronize calls should fail
@@ -211,7 +209,9 @@ func TestSynchronize_AllGood(t *testing.T) {
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
-	ticker.advanceToLayer(mm.LatestLayer())
+	glayer := types.GetEffectiveGenesis()
+	current := glayer.Add(10)
+	ticker.advanceToLayer(current)
 	syncer.Start(context.TODO())
 
 	var wg sync.WaitGroup
@@ -222,7 +222,7 @@ func TestSynchronize_AllGood(t *testing.T) {
 	}()
 
 	// allow synchronize to finish
-	mf.feedLayerResult(types.NewLayerID(0), mm.LatestLayer())
+	feedLayerResult(glayer.Add(1), current.Sub(1), mf, mm)
 	wg.Wait()
 
 	assert.True(t, syncer.ListenToGossip())
@@ -265,7 +265,7 @@ func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
 	mf := newMockFetcher()
 	mm := newMemMesh(lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
-	ticker.advanceToLayer(types.NewLayerID(numGossipSyncLayers * 2))
+	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 2))
 	syncer.Start(context.TODO())
 
 	var wg sync.WaitGroup
@@ -276,7 +276,7 @@ func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
 	}()
 
 	mf.setATXsErrors(0, errors.New("no ATXs. in epoch 0. should be ignored"))
-	mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
+	feedLayerResult(types.GetEffectiveGenesis().Add(1), ticker.GetCurrentLayer(), mf, mm)
 	wg.Wait()
 
 	assert.True(t, syncer.ListenToGossip())
@@ -301,7 +301,7 @@ func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
 	}()
 
 	mf.setATXsErrors(1, errors.New("no ATXs. should fail sync"))
-	mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
+	feedLayerResult(types.GetEffectiveGenesis().Add(1), ticker.GetCurrentLayer(), mf, mm)
 	wg.Wait()
 
 	assert.False(t, syncer.ListenToGossip())
@@ -325,15 +325,13 @@ func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
 	wg.Wait()
 
 	assert.True(t, syncer.ListenToGossip())
 	assert.True(t, syncer.IsSynced(context.TODO()))
 
 	mf.setATXsErrors(1, errors.New("no ATXs for current epoch. should fail sync at last layer"))
-	mf.feedLayerResult(types.NewLayerID(1), types.NewLayerID(2*layersPerEpoch-1))
-	for i := types.NewLayerID(layersPerEpoch); i.Before(types.NewLayerID(2 * layersPerEpoch)); i = i.Add(1) {
+	for i := types.NewLayerID(2); i.Before(types.NewLayerID(2 * layersPerEpoch)); i = i.Add(1) {
 		ticker.advanceToLayer(i)
 		wg.Add(1)
 		go func() {
@@ -346,49 +344,18 @@ func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
 		assert.True(t, syncer.IsSynced(context.TODO()))
 	}
 
-	ticker.advanceToLayer(types.NewLayerID(2 * layersPerEpoch))
+	lyr := types.NewLayerID(2 * layersPerEpoch)
+	ticker.advanceToLayer(lyr)
 	wg.Add(1)
 	go func() {
 		assert.False(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(types.NewLayerID(0), ticker.GetCurrentLayer())
+	feedLayerResult(lyr, lyr, mf, mm)
 	wg.Wait()
 
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
-	syncer.Close()
-}
-
-func TestSynchronize_SyncZeroBlockFailed(t *testing.T) {
-	lg := logtest.New(t).WithName("syncer")
-	ticker := newMockLayerTicker()
-	mf := newMockFetcher()
-	mm := newMemMesh(lg)
-	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
-	gLayer := types.GetEffectiveGenesis()
-	ticker.advanceToLayer(gLayer.Add(1))
-	syncer.Start(context.TODO())
-
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		assert.True(t, syncer.synchronize(context.TODO()))
-		wg.Done()
-	}()
-
-	mf.feedLayerResult(types.NewLayerID(0), gLayer.Sub(1))
-	// genesis block has data. this LayerPromiseResult will cause SetZeroBlockLayer() to fail
-	mf.getLayerResultChan(gLayer) <- layerfetcher.LayerPromiseResult{
-		Layer: gLayer,
-		Err:   layerfetcher.ErrZeroLayer,
-	}
-	wg.Wait()
-
-	assert.True(t, syncer.ListenToGossip())
-	assert.False(t, syncer.IsSynced(context.TODO()))
-
-	waitOutGossipSync(t, ticker.GetCurrentLayer(), syncer, ticker, mf)
 	syncer.Close()
 }
 
@@ -414,19 +381,19 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(firstLayer, firstLayer)
-	// wait till layer 1's content is requested to check whether sync state has changed
+	feedLayerResult(firstLayer, firstLayer, mf, mm)
+	// wait till firstLayer's content is requested to check whether sync state has changed
 	<-mf.getLayerPollChan(firstLayer)
 	// the node should remain not synced and not gossiping
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
-	mf.feedLayerResult(firstLayer.Add(1), current)
+	feedLayerResult(firstLayer.Add(1), current, mf, mm)
 	wg.Wait()
 	// node should be in gossip sync state
 	assert.True(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
-	waitOutGossipSync(t, current, syncer, ticker, mf)
+	waitOutGossipSync(t, current, syncer, ticker, mf, mm)
 	syncer.Close()
 }
 
@@ -453,13 +420,13 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(firstLayer, firstLayer)
-	// wait till layer 1's content is requested to check whether sync state has changed
+	feedLayerResult(firstLayer, firstLayer, mf, mm)
+	// wait till firstLayer's content is requested to check whether sync state has changed
 	<-mf.getLayerPollChan(firstLayer)
 	// the node should remain not synced and not gossiping
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
-	mf.feedLayerResult(firstLayer.Add(1), current.Sub(1))
+	feedLayerResult(firstLayer.Add(1), current.Sub(1), mf, mm)
 	wg.Wait()
 	// node should be in gossip sync state
 	assert.True(t, syncer.ListenToGossip())
@@ -473,21 +440,21 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(current, current)
+	feedLayerResult(current, current, mf, mm)
 	<-mf.getLayerPollChan(current)
 	// the node should fall to notSynced
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
 	// allow for sync to complete
-	mf.feedLayerResult(current.Add(1), newCurrent.Sub(1))
+	feedLayerResult(current.Add(1), newCurrent.Sub(1), mf, mm)
 	wg.Wait()
 
 	// the node should enter gossipSync again
 	assert.True(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
-	waitOutGossipSync(t, newCurrent, syncer, ticker, mf)
+	waitOutGossipSync(t, newCurrent, syncer, ticker, mf, mm)
 	syncer.Close()
 }
 
@@ -526,30 +493,29 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(firstLayer, firstLayer)
-	// wait till layer 1's content is requested to check whether sync state has changed
+	// wait till firstLayer's content is requested to check whether sync state has changed
 	<-mf.getLayerPollChan(firstLayer)
 	// the node should realize it's behind now and set the node to be notSynced
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
-	mf.feedLayerResult(types.NewLayerID(2), current.Sub(1))
+	feedLayerResult(firstLayer, current.Sub(1), mf, mm)
 	wg.Wait()
 	// node should be in gossip sync state
 	assert.True(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
-	waitOutGossipSync(t, current, syncer, ticker, mf)
+	waitOutGossipSync(t, current, syncer, ticker, mf, mm)
 	syncer.Close()
 }
 
-func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt *mockLayerTicker, mf *mockFetcher) {
+func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt *mockLayerTicker, mf *mockFetcher, mm *mesh.Mesh) {
 	assert.True(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 
 	// next layer will be still gossip syncing
-	assert.Equal(t, types.NewLayerID(2).Uint32(), numGossipSyncLayers)
-	assert.Equal(t, current.Add(numGossipSyncLayers), syncer.getTargetSyncedLayer())
+	require.Equal(t, types.NewLayerID(2).Uint32(), numGossipSyncLayers)
+	require.Equal(t, current.Add(numGossipSyncLayers), syncer.getTargetSyncedLayer())
 
 	var wg sync.WaitGroup
 	current = current.Add(1)
@@ -559,7 +525,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt 
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(syncer.mesh.ProcessedLayer().Add(1), current.Sub(1))
+	feedLayerResult(syncer.mesh.ProcessedLayer().Add(1), current.Sub(1), mf, mm)
 	wg.Wait()
 	assert.True(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
@@ -574,7 +540,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt 
 		assert.True(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	mf.feedLayerResult(syncer.mesh.ProcessedLayer().Add(1), current.Sub(1))
+	feedLayerResult(syncer.mesh.ProcessedLayer().Add(1), current.Sub(1), mf, mm)
 	<-syncedCh
 	assert.True(t, syncer.ListenToGossip())
 	assert.True(t, syncer.IsSynced(context.TODO()))
@@ -612,7 +578,6 @@ func TestMultipleForceSync(t *testing.T) {
 	assert.False(t, false, syncer.ForceSync(context.TODO()))
 
 	// allow synchronize to finish
-	mf.feedLayerResult(lyr, lyr)
 	syncer.Close()
 
 	// node already shutdown
