@@ -54,23 +54,23 @@ func (m *meshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.
 	return blocks[0].Layer(), blocks[0].Layer().Sub(1)
 }
 
-type mockState struct{}
+type mockSVM struct{}
 
-func (s mockState) ValidateAndAddTxToPool(_ *types.Transaction) error     { panic("implement me") }
-func (s mockState) LoadState(types.LayerID) error                         { return nil }
-func (s mockState) GetStateRoot() types.Hash32                            { return [32]byte{} }
-func (mockState) ValidateNonceAndBalance(*types.Transaction) error        { panic("implement me") }
-func (mockState) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error) { panic("implement me") }
-func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID      { panic("implement me") }
-func (mockState) ApplyRewards(types.LayerID, []types.Address, uint64)     {}
-func (mockState) GetBalance(types.Address) uint64                         { panic("implement me") }
-func (mockState) GetNonce(types.Address) uint64                           { panic("implement me") }
-func (mockState) AddressExists(types.Address) bool                        { return true }
-func (mockState) GetAllAccounts() (*types.MultipleAccountsState, error)   { panic("implement me") }
-func (mockState) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) ([]*types.Transaction, error) {
+func (s mockSVM) ValidateAndAddTxToPool(_ *types.Transaction) error     { panic("implement me") }
+func (s mockSVM) LoadState(types.LayerID) error                         { return nil }
+func (s mockSVM) GetStateRoot() types.Hash32                            { return [32]byte{} }
+func (mockSVM) ValidateNonceAndBalance(*types.Transaction) error        { panic("implement me") }
+func (mockSVM) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error) { panic("implement me") }
+func (mockSVM) GetLayerApplied(types.TransactionID) *types.LayerID      { panic("implement me") }
+func (mockSVM) ApplyRewards(types.LayerID, []types.Address, uint64)     {}
+func (mockSVM) GetBalance(types.Address) uint64                         { panic("implement me") }
+func (mockSVM) GetNonce(types.Address) uint64                           { panic("implement me") }
+func (mockSVM) AddressExists(types.Address) bool                        { return true }
+func (mockSVM) GetAllAccounts() (*types.MultipleAccountsState, error)   { panic("implement me") }
+func (mockSVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) ([]*types.Transaction, error) {
 	return []*types.Transaction{}, nil
 }
-func (mockState) ApplyTransactions(types.LayerID, []*types.Transaction) ([]*types.Transaction, error) {
+func (mockSVM) ApplyTransactions(types.LayerID, []*types.Transaction) ([]*types.Transaction, error) {
 	return []*types.Transaction{}, nil
 }
 
@@ -146,10 +146,10 @@ func createMeshWithMock(dbs *allDbs, txpool *mempool.TxMempool, lg log.Log) *mes
 	var msh *mesh.Mesh
 	if dbs.mshdb.PersistentData() {
 		lg.Info("persistent data found")
-		msh = mesh.NewRecoveredMesh(context.TODO(), dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
+		msh = mesh.NewRecoveredMesh(context.TODO(), dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockSVM{}, lg)
 	} else {
 		lg.Info("no persistent data found")
-		msh = mesh.NewMesh(dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
+		msh = mesh.NewMesh(dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockSVM{}, lg)
 	}
 	return msh
 }
