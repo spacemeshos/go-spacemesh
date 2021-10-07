@@ -131,7 +131,7 @@ func (MockTxMemPool) Invalidate(types.TransactionID)              {}
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
-		BaseReward: uint64(5000),
+		BaseReward: big.NewInt(5000),
 	}
 }
 
