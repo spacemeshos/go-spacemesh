@@ -585,21 +585,23 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 	// proposedSet may be nil, in such case the tracker will ignore Messages
 	proc.commitTracker = newCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
-	if proposedSet != nil { // has proposal to commit on
-		// check participation
-		if !proc.shouldParticipate(ctx) {
-			return
-		}
-
-		builder, err := proc.initDefaultBuilder(proposedSet)
-		if err != nil {
-			proc.WithContext(ctx).With().Error("init default builder failed", log.Err(err))
-			return
-		}
-		builder = builder.SetType(commit).Sign(proc.signing)
-		commitMsg := builder.Build()
-		proc.sendMessage(ctx, commitMsg)
+	if proposedSet == nil {
+		return
 	}
+
+	// check participation
+	if !proc.shouldParticipate(ctx) {
+		return
+	}
+
+	builder, err := proc.initDefaultBuilder(proposedSet)
+	if err != nil {
+		proc.WithContext(ctx).With().Error("init default builder failed", log.Err(err))
+		return
+	}
+	builder = builder.SetType(commit).Sign(proc.signing)
+	commitMsg := builder.Build()
+	proc.sendMessage(ctx, commitMsg)
 }
 
 func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {

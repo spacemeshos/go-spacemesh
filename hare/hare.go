@@ -255,14 +255,14 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	c, err := h.broker.Register(ctx, instID)
 	if err != nil {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
-		return false, err
+		return false, fmt.Errorf("broker registerr: %w", err)
 	}
 	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.network, h.outputChan)
 	cp.SetInbox(c)
 	if err = cp.Start(ctx); err != nil {
 		logger.With().Error("could not start consensus process", log.Err(err))
 		h.broker.Unregister(ctx, cp.ID())
-		return false, err
+		return false, fmt.Errorf("start consensus: %w", err)
 	}
 	h.patrol.SetHareInCharge(instID)
 	logger.With().Info("number of consensus processes (after register)",
