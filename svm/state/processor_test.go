@@ -2,7 +2,6 @@ package state
 
 import (
 	crand "crypto/rand"
-	"math/big"
 	"math/rand"
 	"testing"
 
@@ -206,7 +205,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
 		types.HexToAddress("ddd"),
 		types.HexToAddress("bbb"),
 		types.HexToAddress("aaa")},
-		big.NewInt(int64(1000)),
+		uint64(1000),
 	)
 
 	assert.Equal(s.T(), s.processor.GetBalance(types.HexToAddress("aaa")), uint64(2000))

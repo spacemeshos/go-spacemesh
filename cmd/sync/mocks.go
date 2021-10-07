@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"math/big"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/duration"
@@ -63,7 +62,7 @@ func (s mockState) GetStateRoot() types.Hash32                            { retu
 func (mockState) ValidateNonceAndBalance(*types.Transaction) error        { panic("implement me") }
 func (mockState) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error) { panic("implement me") }
 func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID      { panic("implement me") }
-func (mockState) ApplyRewards(types.LayerID, []types.Address, *big.Int)   {}
+func (mockState) ApplyRewards(types.LayerID, []types.Address, uint64)     {}
 func (mockState) GetBalance(types.Address) uint64                         { panic("implement me") }
 func (mockState) GetNonce(types.Address) uint64                           { panic("implement me") }
 func (mockState) AddressExists(types.Address) bool                        { return true }

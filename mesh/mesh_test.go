@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"context"
-	"math/big"
 	"testing"
 	"time"
 
@@ -104,7 +103,7 @@ func (MockState) ApplyLayer(types.LayerID, []*types.Transaction, []types.AmountA
 	return []*types.Transaction{}, nil
 }
 
-func (MockState) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
+func (MockState) ApplyRewards(types.LayerID, []types.Address, uint64) {
 }
 
 func (MockState) AddressExists(types.Address) bool {

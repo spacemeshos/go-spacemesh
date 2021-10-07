@@ -3,7 +3,6 @@ package activation
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -101,7 +100,7 @@ func (MockSVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transacti
 	return []*types.Transaction{}, nil
 }
 
-func (MockSVM) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
+func (MockSVM) ApplyRewards(types.LayerID, []types.Address, uint64) {
 }
 
 func (MockSVM) AddressExists(types.Address) bool {
