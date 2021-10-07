@@ -293,6 +293,7 @@ func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blo
 		}
 	}
 	// save the largest input vector from peers
+	// TODO: revisit this when mesh hash resolution with peers is implemented
 	if len(blocks.InputVector) > len(lyrResult.inputVector) {
 		lyrResult.inputVector = blocks.InputVector
 	}
@@ -349,13 +350,8 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 		return
 	}
 
-	// save the input vector
-	if len(result.inputVector) > 0 {
-		l.layerDB.SaveLayerInputVectorByID(ctx, layerID, result.inputVector)
-	}
-
 	// make a copy of data and channels to avoid holding a lock while notifying
-	go notifyLayerBlocksResult(layerID, l.layerDB, l.layerBlocksChs[layerID], result, l.log.WithContext(ctx).WithFields(layerID))
+	go notifyLayerBlocksResult(ctx, layerID, l.layerDB, l.layerBlocksChs[layerID], result, l.log.WithContext(ctx).WithFields(layerID))
 	delete(l.layerBlocksChs, layerID)
 	delete(l.layerBlocksRes, layerID)
 }
@@ -363,17 +359,14 @@ func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, 
 // notifyLayerBlocksResult determines the final result for the layer, and notifies subscribed channels when
 // all blocks are fetched for a given layer.
 // it deliberately doesn't hold any lock while notifying channels.
-func notifyLayerBlocksResult(layerID types.LayerID, layerDB layerDB, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
+func notifyLayerBlocksResult(ctx context.Context, layerID types.LayerID, layerDB layerDB, channels []chan LayerPromiseResult, lyrResult *layerResult, logger log.Log) {
 	var (
-		missing, success, hasBlocks bool
-		err                         error
+		missing, success bool
+		err              error
 	)
 	for _, res := range lyrResult.responses {
 		if res.err == nil && res.data != nil {
 			success = true
-			if len(res.data.Blocks) > 0 {
-				hasBlocks = true
-			}
 		}
 		if errors.Is(res.err, ErrBlockNotFetched) {
 			// all fetches need to succeed
@@ -385,15 +378,26 @@ func notifyLayerBlocksResult(layerID types.LayerID, layerDB layerDB, channels []
 			err = res.err
 		}
 	}
+
 	result := LayerPromiseResult{Layer: layerID}
 	// we tolerate errors from peers as long as we fetched all known blocks in this layer.
 	if missing || !success {
 		result.Err = err
 	}
-	if result.Err == nil && !hasBlocks { // none of the successful peers has data
-		if err := layerDB.SetZeroBlockLayer(layerID); err != nil {
-			// this can happen when node actually had received blocks for this layer before. ok to ignore
-			logger.With().Warning("failed to set zero-block for layer", layerID, log.Err(err))
+
+	if result.Err == nil {
+		// save the input vector
+		if len(lyrResult.inputVector) > 0 {
+			if err := layerDB.SaveLayerInputVectorByID(ctx, layerID, lyrResult.inputVector); err != nil {
+				logger.With().Error("failed to save input vector from peers", log.Err(err))
+				result.Err = err
+			}
+		}
+		if len(lyrResult.blocks) == 0 {
+			if err := layerDB.SetZeroBlockLayer(layerID); err != nil {
+				// this can happen when node actually had received blocks for this layer before. ok to ignore
+				logger.With().Warning("failed to set zero-block for layer", layerID, log.Err(err))
+			}
 		}
 	}
 

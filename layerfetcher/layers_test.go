@@ -329,7 +329,6 @@ func TestPollLayerBlocks_FetchBlockError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	db := lyrMocks.NewMocklayerDB(ctrl)
-	db.EXPECT().SaveLayerInputVectorByID(gomock.Any(), layerID, gomock.Any()).Return(nil).Times(1)
 
 	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{fetchError: ErrInternal}, logtest.New(t))
 	res := <-l.PollLayerContent(context.TODO(), layerID)
@@ -452,4 +451,47 @@ func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
 	l := NewMockLogic(net, lyrMocks.NewMocklayerDB(ctrl), &mockBlocks{}, &mockAtx{}, fetcher, logtest.New(t))
 	res := <-l.PollLayerContent(context.TODO(), requested)
 	require.ErrorIs(t, res.Err, ErrBlockNotFetched)
+}
+
+func TestPollLayerBlocks_FailureToSaveZeroLayerIgnored(t *testing.T) {
+	net := newMockNet()
+	numPeers := 4
+	for i := 0; i < numPeers; i++ {
+		peer := p2pcrypto.NewRandomPubkey()
+		net.peers = append(net.peers, peer)
+		net.layerBlocks[peer] = generateEmptyLayer()
+	}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	db := lyrMocks.NewMocklayerDB(ctrl)
+	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
+
+	layerID := types.NewLayerID(10)
+	errUnknown := errors.New("whatever")
+	db.EXPECT().SetZeroBlockLayer(layerID).Return(errUnknown).Times(1)
+	res := <-l.PollLayerContent(context.TODO(), layerID)
+	assert.NoError(t, res.Err)
+	assert.Equal(t, layerID, res.Layer)
+}
+
+func TestPollLayerBlocks_FailedToSaveInputVector(t *testing.T) {
+	net := newMockNet()
+	numPeers := 4
+	for i := 0; i < numPeers; i++ {
+		peer := p2pcrypto.NewRandomPubkey()
+		net.peers = append(net.peers, peer)
+		net.layerBlocks[peer] = generateLayerBlocks(i + 1)
+	}
+
+	layerID := types.NewLayerID(10)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	errUnknown := errors.New("whatever")
+	db := lyrMocks.NewMocklayerDB(ctrl)
+	db.EXPECT().SaveLayerInputVectorByID(gomock.Any(), layerID, gomock.Any()).Return(errUnknown).Times(1)
+
+	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
+	res := <-l.PollLayerContent(context.TODO(), layerID)
+	assert.Equal(t, errUnknown, res.Err)
+	assert.Equal(t, layerID, res.Layer)
 }
