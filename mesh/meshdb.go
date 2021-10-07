@@ -825,24 +825,12 @@ func (m *DB) addUnapplied(addr types.Address, txs []*types.Transaction, layer ty
 	return nil
 }
 
-func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction) (grouped map[types.Address][]*types.Transaction, accounts map[types.Address]struct{}) {
-	grouped = groupByOrigin(accepted)
-	accounts = make(map[types.Address]struct{})
+func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction) map[types.Address][]*types.Transaction {
+	grouped := groupByOrigin(accepted)
 	for account := range grouped {
-		accounts[account] = struct{}{}
+		m.removePending(account, grouped[account])
 	}
-	for account := range accounts {
-		m.removeFromAccountTxs(account, grouped)
-	}
-	return
-}
-
-func (m *DB) removeFromAccountTxs(account types.Address, accepted map[types.Address][]*types.Transaction) error {
-	return m.removePending(account, accepted[account])
-}
-
-func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction, layer types.LayerID) error {
-	return m.removePending(account, rejected[account])
+	return grouped
 }
 
 func (m *DB) removePending(addr types.Address, txs []*types.Transaction) error {

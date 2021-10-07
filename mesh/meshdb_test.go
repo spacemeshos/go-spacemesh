@@ -80,12 +80,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 }
 
 func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
-	p := rand.Perm(blocksInLayer)
-	indexes := make([]int, 0, patternSize)
-	for _, r := range p[:patternSize] {
-		indexes = append(indexes, r)
-	}
-	return indexes
+	return rand.Perm(blocksInLayer)[:patternSize]
 }
 
 func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksInLayer int, patternSize int, lg log.Log) *types.Layer {
