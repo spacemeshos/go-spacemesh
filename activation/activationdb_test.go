@@ -130,9 +130,7 @@ func (MockTxMemPool) Put(types.TransactionID, *types.Transaction) {}
 func (MockTxMemPool) Invalidate(types.TransactionID)              {}
 
 func ConfigTst() mesh.Config {
-	return mesh.Config{
-		BaseReward: big.NewInt(5000),
-	}
+	return mesh.Config{BaseReward: 5000}
 }
 
 const layersPerEpochBig = 1000

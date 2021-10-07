@@ -17,10 +17,10 @@ import (
 var goldenATXID = types.ATXID(types.HexToHash32("77777"))
 
 type MockMapSVM struct {
-	Rewards     map[types.Address]*big.Int
+	Rewards     map[types.Address]uint64
 	Txs         []*types.Transaction
 	Pool        []*types.Transaction
-	TotalReward *big.Int
+	TotalReward uint64
 }
 
 func (s *MockMapSVM) GetAllAccounts() (*types.MultipleAccountsState, error) {
@@ -49,7 +49,7 @@ func (s *MockMapSVM) ApplyLayer(l types.LayerID, transactions []*types.Transacti
 	s.ApplyTransactions(l, transactions)
 	for _, reward := range rewards {
 		s.Rewards[reward.Address] = reward.Amount
-		s.TotalReward.Add(s.TotalReward, reward.Amount)
+		s.TotalReward += reward.Amount
 	}
 	return []*types.Transaction{}, nil
 }
@@ -60,7 +60,7 @@ func (s *MockMapSVM) AddressExists(types.Address) bool {
 
 func ConfigTst() Config {
 	return Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: 5000,
 	}
 }
 
@@ -72,9 +72,9 @@ func getMeshWithMapState(tb testing.TB, id string, s svm) (*Mesh, *AtxDbMock) {
 	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), s, lg), atxDb
 }
 
-func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs int, fee int64) *big.Int {
-	var totalFee int64
-	var txs []*types.Transaction
+func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs int, fee uint64) uint64 {
+	totalFee := uint64(0)
+	txs := []*types.Transaction{}
 	for i := 0; i < numOfTxs; i++ {
 		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
 		assert.NoError(t, err)
@@ -86,7 +86,7 @@ func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs in
 	blk.LayerIndex = types.NewLayerID(0)
 	err := mesh.writeTransactions(blk, txs...)
 	assert.NoError(t, err)
-	return big.NewInt(totalFee)
+	return totalFee
 }
 
 func init() {
@@ -103,17 +103,17 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	type NewBlockData struct {
 		coinbase string
 		numTxs   int
-		fee      int64
+		fee      uint64
 	}
 
 	blockData := []NewBlockData{
 		{"0xaaa", 15, 7},
-		{"0xbbb", 13, rand.Int63n(100)},
-		{"0xccc", 17, rand.Int63n(100)},
-		{"0xddd", 16, rand.Int63n(100)},
+		{"0xbbb", 13, uint64(rand.Int63n(100))},
+		{"0xccc", 17, uint64(rand.Int63n(100))},
+		{"0xddd", 16, uint64(rand.Int63n(100))},
 	}
 
-	totalFee := big.NewInt(0)
+	totalFee := uint64(0)
 	blocks := []*types.Block{}
 
 	for i, data := range blockData {
@@ -127,7 +127,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 		block.ATXID = atx.ID()
 
 		blocks = append(blocks, block)
-		totalFee.Add(totalFee, addTransactionsWithFee(t, layers.DB, block, data.numTxs, data.fee))
+		totalFee += addTransactionsWithFee(t, layers.DB, block, data.numTxs, data.fee)
 	}
 
 	for _, block := range blocks {
@@ -141,41 +141,38 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	validBlockTxs := layers.extractUniqueOrderedTransactions(l)
 	rewards := layers.calculateRewards(l, validBlockTxs, params)
 	layers.writeRewards(rewards)
-	totalRewardsCost := big.NewInt(0)
-	totalRewardsCost.Add(totalFee, params.BaseReward)
-	remainder := big.NewInt(0)
-	remainder.Mod(totalRewardsCost, big.NewInt(4))
+	totalRewardsCost := totalFee + params.BaseReward
+	remainder := totalRewardsCost % 4
 
-	assert.Equal(t, totalRewardsCost, s.TotalReward.Add(s.TotalReward, remainder))
+	assert.Equal(t, totalRewardsCost, s.TotalReward+remainder)
 
 }
 
 func NewTestRewardParams() Config {
 	return Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: 5000,
 	}
 }
 
-func createBlock(t testing.TB, mesh *Mesh, lyrID types.LayerID, nodeID types.NodeID, maxTransactions int, atxDB *AtxDbMock) (*types.Block, *big.Int) {
+func createBlock(t testing.TB, mesh *Mesh, lyrID types.LayerID, nodeID types.NodeID, maxTransactions int, atxDB *AtxDbMock) (*types.Block, uint64) {
 	blk := types.NewExistingBlock(lyrID, []byte(rand.String(8)), nil)
 	coinbase := types.HexToAddress(nodeID.Key)
 	atx := newActivationTx(nodeID, 0, goldenATXID, types.NewLayerID(1), 0, goldenATXID, coinbase, 10, []types.BlockID{}, &types.NIPost{})
 	atxDB.AddAtx(atx.ID(), atx)
 	blk.ATXID = atx.ID()
-	reward := addTransactionsWithFee(t, mesh.DB, blk, rand.Intn(maxTransactions), rand.Int63n(100))
+	reward := addTransactionsWithFee(t, mesh.DB, blk, rand.Intn(maxTransactions), uint64(rand.Int63n(100)))
 	blk.Initialize()
 	err := mesh.AddBlock(blk)
 	assert.NoError(t, err)
 	return blk, reward
 }
 
-func createLayer(t testing.TB, mesh *Mesh, lyrID types.LayerID, numOfBlocks, maxTransactions int, atxDB *AtxDbMock) (totalRewards *big.Int, blocks []*types.Block) {
-	totalRewards = big.NewInt(0)
+func createLayer(t testing.TB, mesh *Mesh, lyrID types.LayerID, numOfBlocks, maxTransactions int, atxDB *AtxDbMock) (totalRewards uint64, blocks []*types.Block) {
 	for i := 0; i < numOfBlocks; i++ {
 		nodeID := types.NodeID{Key: strconv.Itoa(i), VRFPublicKey: []byte("bbbbb")}
 		blk, reward := createBlock(t, mesh, lyrID, nodeID, maxTransactions, atxDB)
 		blocks = append(blocks, blk)
-		totalRewards.Add(totalRewards, reward)
+		totalRewards += reward
 	}
 	return totalRewards, blocks
 }
@@ -189,12 +186,12 @@ func TestMesh_integration(t *testing.T) {
 	layers, atxDB := getMeshWithMapState(t, "t1", s)
 	defer layers.Close()
 
-	l3Rewards := big.NewInt(0)
+	l3Rewards := uint64(0)
 	for i := 1; i <= numOfLayers; i++ {
 		reward, _ := createLayer(t, layers, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDB)
 		// rewards are applied to layers in the past according to the reward maturity param
 		if i == 3 {
-			l3Rewards.Set(reward)
+			l3Rewards = reward
 		}
 
 		l, err := layers.GetLayer(types.NewLayerID(uint32(i)))
@@ -202,12 +199,13 @@ func TestMesh_integration(t *testing.T) {
 		layers.ValidateLayer(context.TODO(), l)
 	}
 	// since there can be a difference of up to x lerners where x is the number of blocks due to round up of penalties when distributed among all blocks
-	totalPayout := big.NewInt(0)
-	totalPayout.Add(l3Rewards, ConfigTst().BaseReward)
+	totalPayout := l3Rewards + ConfigTst().BaseReward
 
-	diff := big.NewInt(0)
-	diff.Sub(totalPayout, s.TotalReward)
-	assert.True(t, diff.Int64() < int64(numOfBlocks), " rewards : %v, total %v blocks %v", totalPayout, s.TotalReward, int64(numOfBlocks))
+	assert.True(
+		t,
+		int64(totalPayout)-int64(s.TotalReward) < int64(numOfBlocks),
+		" rewards : %v, total %v blocks %v", totalPayout, s.TotalReward, numOfBlocks,
+	)
 }
 
 func createMeshFromSyncing(t *testing.T, finalLyr types.LayerID, msh *Mesh, atxDB *AtxDbMock) {
@@ -239,10 +237,7 @@ func createMeshFromHareOutput(t *testing.T, finalLyr types.LayerID, msh *Mesh, a
 }
 
 func emptyMapSVM() *MockMapSVM {
-	return &MockMapSVM{
-		Rewards:     make(map[types.Address]*big.Int),
-		TotalReward: big.NewInt(0),
-	}
+	return &MockMapSVM{Rewards: make(map[types.Address]uint64)}
 }
 
 func (s *MockMapSVM) getMeshWithMapStateThenClose(t *testing.T, id string) (*Mesh, *AtxDbMock) {
@@ -450,11 +445,11 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 
 	mesh.Validator = &meshValidatorBatchMock{mesh: mesh, batchSize: uint32(batchSize)}
 
-	firstLayerRewards := big.NewInt(0)
+	firstLayerRewards := uint64(0)
 	for i := 0; i < numOfLayers; i++ {
 		reward, _ := createLayer(t, mesh, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDb)
 		if i == 0 {
-			firstLayerRewards.Set(reward)
+			firstLayerRewards = reward
 		}
 	}
 
@@ -477,17 +472,15 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	mesh.ValidateLayer(context.TODO(), l6)
 
 	// When distributing rewards to blocks they are rounded down, so we have to allow up to numOfBlocks difference
-	totalPayout := big.NewInt(0)
-	totalPayout.Add(firstLayerRewards, ConfigTst().BaseReward)
-	diff := big.NewInt(0)
-	diff.Sub(totalPayout, s.TotalReward)
-	assert.True(t, diff.Int64() < int64(numOfBlocks),
+	totalPayout := firstLayerRewards + ConfigTst().BaseReward
+	diff := int64(totalPayout) - int64(s.TotalReward)
+	assert.True(t, diff < int64(numOfBlocks),
 		"diff=%v, totalPayout=%v, s.TotalReward=%v, numOfBlocks=%v",
-		diff.Int64()-int64(numOfBlocks), totalPayout, s.TotalReward, int64(numOfBlocks))
+		diff-int64(numOfBlocks), totalPayout, s.TotalReward, int64(numOfBlocks))
 }
 
 func TestMesh_calcRewards(t *testing.T) {
-	reward, remainder := calculateActualRewards(types.NewLayerID(1), big.NewInt(10000), big.NewInt(10))
+	reward, remainder := calculateActualRewards(types.NewLayerID(1), 10000, 10)
 	assert.Equal(t, big.NewInt(1000), reward)
 	assert.Equal(t, big.NewInt(0), remainder)
 }

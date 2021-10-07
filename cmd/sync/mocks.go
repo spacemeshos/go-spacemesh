@@ -128,9 +128,7 @@ func (m *mockClock) Unsubscribe(timer timesync.LayerTimer) {
 	delete(m.ch, timer)
 }
 func configTst() mesh.Config {
-	return mesh.Config{
-		BaseReward: big.NewInt(5000),
-	}
+	return mesh.Config{BaseReward: 5000}
 }
 
 type mockTxProcessor struct{}

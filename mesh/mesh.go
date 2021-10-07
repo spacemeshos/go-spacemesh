@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"sync"
 
@@ -509,19 +508,15 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 
 type layerRewards struct {
 	types.LayerID
-	Total       *big.Int
-	LayerReward *big.Int
-	LayerFees   *big.Int
+	Total       uint64
+	LayerReward uint64
+	LayerFees   uint64
 	Blocks      []types.AmountAndAddress
 	BySmesher   map[string][]int
 }
 
 func newLayerRewards() layerRewards {
 	lr := layerRewards{}
-	lr.Total = big.NewInt(0)
-	lr.LayerReward = big.NewInt(0)
-	lr.LayerFees = big.NewInt(0)
-	lr.Blocks = []types.AmountAndAddress{}
 	lr.BySmesher = map[string][]int{}
 	return lr
 }
@@ -534,12 +529,12 @@ func (lr *layerRewards) LogFields() []log.LoggableField {
 	return []log.LoggableField{
 		lr.LayerID,
 		log.Int("num_blocks", len(lr.Blocks)),
-		log.Uint64("total_reward", lr.Total.Uint64()),
-		log.Uint64("layer_reward", lr.LayerReward.Uint64()),
-		log.Uint64("block_total_reward", lr.Total.Uint64()/lr.numBlocks()),
-		log.Uint64("block_layer_reward", lr.LayerReward.Uint64()/lr.numBlocks()),
-		log.Uint64("total_reward_remainder", lr.Total.Uint64()%lr.numBlocks()),
-		log.Uint64("layer_reward_remainder", lr.LayerReward.Uint64()%lr.numBlocks()),
+		log.Uint64("total_reward", lr.Total),
+		log.Uint64("layer_reward", lr.LayerReward),
+		log.Uint64("block_total_reward", lr.Total/lr.numBlocks()),
+		log.Uint64("block_layer_reward", lr.LayerReward/lr.numBlocks()),
+		log.Uint64("total_reward_remainder", lr.Total%lr.numBlocks()),
+		log.Uint64("layer_reward_remainder", lr.LayerReward%lr.numBlocks()),
 	}
 }
 
@@ -557,8 +552,8 @@ func (msh *Mesh) reportRewards(lr layerRewards) {
 			}
 			events.ReportRewardReceived(events.Reward{
 				Layer:       lr.LayerID,
-				Total:       lr.Total.Uint64(),
-				LayerReward: lr.LayerReward.Uint64(),
+				Total:       lr.Total,
+				LayerReward: lr.LayerReward,
 				Coinbase:    lr.Blocks[i].Address,
 				Smesher:     *smesher,
 			})
@@ -979,10 +974,10 @@ func (msh *Mesh) getSmeshersAndCoinbases(l *types.Layer) (smeshers map[types.Add
 	return smeshers, coinbases
 }
 
-func totalFees(transactions []*types.Transaction) *big.Int {
-	sum := big.NewInt(0)
+func totalFees(transactions []*types.Transaction) uint64 {
+	sum := uint64(0)
 	for _, tx := range transactions {
-		sum.Add(sum, big.NewInt(int64(tx.Fee)))
+		sum += tx.Fee
 	}
 	return sum
 }
@@ -993,14 +988,14 @@ func (msh *Mesh) calculateRewards(l *types.Layer, transactions []*types.Transact
 
 	rewards.LayerFees = totalFees(transactions)
 	rewards.LayerReward = calculateLayerReward(l.Index(), params)
-	rewards.Total.Add(rewards.LayerFees, rewards.LayerReward)
+	rewards.Total = rewards.LayerFees + rewards.LayerReward
 
 	if len(coinbases) == 0 {
 		msh.With().Info("no valid blocks for layer", l.Index())
 		return newLayerRewards()
 	}
 
-	rewardPerBlock, _ := calculateActualRewards(l.Index(), rewards.LayerReward, big.NewInt(int64(len(coinbases))))
+	rewardPerBlock, _ := calculateActualRewards(l.Index(), rewards.LayerReward, uint64(len(coinbases)))
 
 	for smesher := range smeshers {
 		rewards.Blocks = append(rewards.Blocks, types.AmountAndAddress{Amount: rewardPerBlock, Address: smesher})

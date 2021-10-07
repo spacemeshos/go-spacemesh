@@ -51,7 +51,7 @@ func TestMeshDB_AddBlock(t *testing.T) {
 
 	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data1"), nil)
 
-	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
+	addTransactionsWithFee(t, mdb, block1, 4, uint64(rand.Int63n(100)))
 
 	poetRef := []byte{0xba, 0x05}
 	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, types.NewLayerID(5), 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPost{
