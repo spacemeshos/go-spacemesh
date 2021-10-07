@@ -458,7 +458,7 @@ func (m *DB) writeBlock(bl *types.Block) error {
 		return fmt.Errorf("could not update layer %v with new block %v: %w", bl.Layer(), bl.ID(), err)
 	}
 
-	m.blockCache.put(bl)
+	m.blockCache.Put(bl)
 	return nil
 }
 
@@ -1063,7 +1063,7 @@ func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 			if blockErr != nil {
 				return fmt.Errorf("could not get bl %v from database %v", b, blockErr)
 			}
-			m.blockCache.put(block)
+			m.blockCache.Put(block)
 		}
 
 	}

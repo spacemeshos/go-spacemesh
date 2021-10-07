@@ -1,7 +1,7 @@
 package mesh
 
 import (
-	"github.com/hashicorp/golang-lru"
+	lru "github.com/hashicorp/golang-lru"
 	"github.com/prometheus/common/log"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -23,7 +23,7 @@ func (bc blockCache) Cap() int {
 	return bc.cap
 }
 
-func (bc blockCache) put(b *types.Block) {
+func (bc blockCache) Put(b *types.Block) {
 	bc.Cache.Add(b.ID(), *b)
 }
 

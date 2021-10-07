@@ -170,6 +170,7 @@ func createBlock(t testing.TB, mesh *Mesh, lyrID types.LayerID, nodeID types.Nod
 }
 
 func createLayer(t testing.TB, mesh *Mesh, lyrID types.LayerID, numOfBlocks, maxTransactions int, atxDB *AtxDbMock) (totalRewards *big.Int, blocks []*types.Block) {
+	totalRewards = big.NewInt(0)
 	for i := 0; i < numOfBlocks; i++ {
 		nodeID := types.NodeID{Key: strconv.Itoa(i), VRFPublicKey: []byte("bbbbb")}
 		blk, reward := createBlock(t, mesh, lyrID, nodeID, maxTransactions, atxDB)
@@ -184,7 +185,7 @@ func TestMesh_integration(t *testing.T) {
 	numOfBlocks := 10
 	maxTxs := 20
 
-	s := &MockMapSVM{Rewards: make(map[types.Address]*big.Int)}
+	s := emptyMapSVM()
 	layers, atxDB := getMeshWithMapState(t, "t1", s)
 	defer layers.Close()
 
@@ -238,7 +239,10 @@ func createMeshFromHareOutput(t *testing.T, finalLyr types.LayerID, msh *Mesh, a
 }
 
 func emptyMapSVM() *MockMapSVM {
-	return &MockMapSVM{Rewards: make(map[types.Address]*big.Int)}
+	return &MockMapSVM{
+		Rewards:     make(map[types.Address]*big.Int),
+		TotalReward: big.NewInt(0),
+	}
 }
 
 func (s *MockMapSVM) getMeshWithMapStateThenClose(t *testing.T, id string) (*Mesh, *AtxDbMock) {

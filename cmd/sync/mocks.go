@@ -129,7 +129,7 @@ func (m *mockClock) Unsubscribe(timer timesync.LayerTimer) {
 }
 func configTst() mesh.Config {
 	return mesh.Config{
-		BaseReward: uint64(5000),
+		BaseReward: big.NewInt(5000),
 	}
 }
 
