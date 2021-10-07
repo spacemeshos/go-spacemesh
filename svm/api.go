@@ -54,7 +54,7 @@ func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 // verification.
 func (svm *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) (failed []*types.Transaction, err error) {
 	for _, reward := range rewards {
-		svm.AddBalance(reward.Address, reward.Amount)
+		svm.AddBalance(reward.Address, reward.Amount.Uint64())
 	}
 
 	remainingTxs, err := svm.TransactionProcessor.ApplyTransactions(layerID, transactions)

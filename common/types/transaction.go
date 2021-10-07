@@ -2,6 +2,7 @@ package types
 
 import (
 	"fmt"
+	"math/big"
 	"strings"
 
 	"github.com/spacemeshos/ed25519"
@@ -134,9 +135,9 @@ type InnerTransaction struct {
 	Amount       uint64
 }
 
-// AmountAndAddress stores a uint64 amount together with an account's address.
+// AmountAndAddress stores an amount together with an account's address.
 type AmountAndAddress struct {
-	Amount uint64
+	Amount *big.Int
 	Address
 }
 

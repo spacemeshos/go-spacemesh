@@ -1,26 +1,30 @@
 package mesh
 
 import (
+	"math"
+	"math/big"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // Config defines the configuration options for Spacemesh rewards.
 type Config struct {
-	BaseReward uint64 `mapstructure:"base-reward"`
+	BaseReward *big.Int `mapstructure:"base-reward"`
 }
 
 // DefaultMeshConfig returns the default Config.
 func DefaultMeshConfig() Config {
 	return Config{
-		BaseReward: 50 * 10e12,
+		BaseReward: big.NewInt(50 * int64(math.Pow10(12))),
 	}
 }
 
-func calculateLayerReward(id types.LayerID, params Config) uint64 {
+func calculateLayerReward(id types.LayerID, params Config) *big.Int {
 	// todo: add inflation rules here
 	return params.BaseReward
 }
 
-func calculateActualRewards(layer types.LayerID, rewards uint64, numBlocks uint64) (uint64, uint64) {
-	return rewards / numBlocks, rewards % numBlocks
+func calculateActualRewards(layer types.LayerID, rewards *big.Int, numBlocks *big.Int) (*big.Int, *big.Int) {
+	div, mod := new(big.Int).DivMod(rewards, numBlocks, new(big.Int))
+	return div, mod
 }
