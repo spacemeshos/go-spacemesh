@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -187,9 +188,16 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
 	proc.s = NewSetFromValues(value1, value2)
 	proc.cfg.F = 2
-	go proc.eventLoop(context.TODO())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		proc.eventLoop(context.TODO())
+		wg.Done()
+	}()
 	time.Sleep(500 * time.Millisecond)
 	assert.Equal(t, 1, net.count)
+	proc.Close()
+	wg.Wait()
 }
 
 func TestConsensusProcess_handleMessage(t *testing.T) {
