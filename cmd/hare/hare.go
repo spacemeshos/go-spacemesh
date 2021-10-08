@@ -50,7 +50,9 @@ func init() {
 	cmdp.AddCommands(Cmd)
 }
 
-type mockBlockProvider struct{}
+type mockBlockProvider struct {
+	allBlocks map[types.BlockID]*types.Block
+}
 
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
@@ -61,8 +63,20 @@ func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
 func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
 }
 
-func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
-	return buildSet(), nil
+func (mbp *mockBlockProvider) LayerBlocks(types.LayerID) ([]*types.Block, error) {
+	blockSet, allBlocks := buildSet()
+	mbp.allBlocks = allBlocks
+	return blockSet, nil
+}
+
+func (mbp *mockBlockProvider) GetBlock(bID types.BlockID) (*types.Block, error) {
+	return mbp.allBlocks[bID], nil
+}
+
+type mockBeaconGetter struct{}
+
+func (mbg *mockBeaconGetter) GetBeacon(id types.EpochID) ([]byte, error) {
+	return id.ToBytes(), nil
 }
 
 // HareApp represents an Hare application.
@@ -93,14 +107,16 @@ func (app *HareApp) Cleanup() {
 	app.oracle.Unregister(true, app.sgn.PublicKey().String())
 }
 
-func buildSet() []types.BlockID {
-	s := make([]types.BlockID, 200, 200)
-
+func buildSet() ([]*types.Block, map[types.BlockID]*types.Block) {
+	s := make([]*types.Block, 200, 200)
+	allBlocks := make(map[types.BlockID]*types.Block, 200)
 	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.NewExistingBlock(types.GetEffectiveGenesis().Add(1), util.Uint64ToBytes(i), nil).ID())
+		blk := types.NewExistingBlock(types.GetEffectiveGenesis().Add(1), util.Uint64ToBytes(i), nil)
+		s = append(s, blk)
+		allBlocks[blk.ID()] = blk
 	}
 
-	return s
+	return s, allBlocks
 }
 
 type mockIDProvider struct{}
@@ -161,7 +177,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	//app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
 	lt := make(timesync.LayerTimer)
 
-	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
+	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, &mockBeaconGetter{}, hareOracle, layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
 	log.Info("starting hare service")
 	app.ha = hareI
 	if err = app.ha.Start(cmdp.Ctx); err != nil {

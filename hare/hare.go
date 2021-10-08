@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,8 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -52,6 +55,7 @@ type Hare struct {
 	sign Signer
 
 	mesh    meshProvider
+	beacons blocks.BeaconGetter
 	rolacle Rolacle
 	patrol  layerPatrol
 
@@ -81,6 +85,7 @@ func New(
 	nid types.NodeID,
 	syncState syncStateFunc,
 	mesh meshProvider,
+	beacons blocks.BeaconGetter,
 	rolacle Rolacle,
 	patrol layerPatrol,
 	layersPerEpoch uint16,
@@ -103,6 +108,7 @@ func New(
 	h.sign = sign
 
 	h.mesh = mesh
+	h.beacons = beacons
 	h.rolacle = rolacle
 	h.patrol = patrol
 
@@ -122,9 +128,8 @@ func New(
 
 func (h *Hare) getLastLayer() types.LayerID {
 	h.layerLock.RLock()
-	lyr := h.lastLayer
-	h.layerLock.RUnlock()
-	return lyr
+	defer h.layerLock.RUnlock()
+	return h.lastLayer
 }
 
 // checks if the provided id is too late/old to be requested.
@@ -185,6 +190,11 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 // this function triggers the start of new consensus processes.
 func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	logger := h.WithContext(ctx).WithFields(id)
+	if h.IsClosed() {
+		logger.Info("hare exiting")
+		return false, nil
+	}
+
 	h.layerLock.Lock()
 	if id.After(h.lastLayer) {
 		h.lastLayer = id
@@ -207,7 +217,8 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		}
 	}()
 
-	if !h.rolacle.IsEpochBeaconReady(ctx, id.GetEpoch()) {
+	beacon, err := h.beacons.GetBeacon(id.GetEpoch())
+	if err != nil {
 		logger.Info("not starting hare since beacon is not retrieved")
 		return false, nil
 	}
@@ -238,16 +249,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		return false, nil
 	}
 
-	// retrieve set from orphan blocks
-	blocks, err := h.mesh.LayerBlockIds(h.lastLayer)
-	if err != nil {
-		logger.With().Error("no blocks found for hare, using empty set", log.Err(err))
-		// just fail here, it will end hare with empty set result
-		// return // ?
-		// TODO: there can be a difference between just fail with empty set
-		// TODO:   and achieve consensus on empty set
-	}
-
+	blocks := h.getGoodBlocks(h.lastLayer, beacon, logger)
 	logger.With().Info("starting hare consensus with blocks", log.Int("num_blocks", len(blocks)))
 	set := NewSet(blocks)
 
@@ -269,6 +271,44 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	metrics.TotalConsensusProcesses.With("layer", id.String()).Add(1)
 	return true, nil
+}
+
+// getGoodBlocks finds the "good blocks" for the specified layer. a block is considered a good block if
+// it has the same beacon value as the node's beacon value.
+// any error encountered will be ignored and an empty set is returned.
+func (h *Hare) getGoodBlocks(lyrID types.LayerID, epochBeacon []byte, logger log.Log) []types.BlockID {
+	blocks, err := h.mesh.LayerBlocks(lyrID)
+	if err != nil {
+		if err != database.ErrNotFound {
+			logger.With().Error("no blocks found for hare, using empty set", log.Err(err))
+		}
+		return []types.BlockID{}
+	}
+
+	var goodBlocks []types.BlockID
+	for _, b := range blocks {
+		beacon := b.TortoiseBeacon
+		if b.RefBlock != nil {
+			refBlock, err := h.mesh.GetBlock(*b.RefBlock)
+			if err != nil {
+				logger.With().Error("failed to find ref block",
+					b.ID(),
+					log.String("ref_block_id", b.RefBlock.AsHash32().ShortString()))
+				return []types.BlockID{}
+			}
+			beacon = refBlock.TortoiseBeacon
+		}
+
+		if bytes.Equal(beacon, epochBeacon) {
+			goodBlocks = append(goodBlocks, b.ID())
+		} else {
+			logger.With().Warning("block has different beacon value",
+				b.ID(),
+				log.String("block_beacon", types.BytesToHash(beacon).ShortString()),
+				log.String("epoch_beacon", types.BytesToHash(epochBeacon).ShortString()))
+		}
+	}
+	return goodBlocks
 }
 
 var (

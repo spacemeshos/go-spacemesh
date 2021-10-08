@@ -18,12 +18,13 @@ type Rolacle interface {
 	CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
 	Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
-	IsEpochBeaconReady(ctx context.Context, epoch types.EpochID) bool
 }
 
 type meshProvider interface {
-	// LayerBlockIds returns the block IDs stored for a layer
-	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
+	// LayerBlocks returns the blocks in a layer
+	LayerBlocks(types.LayerID) ([]*types.Block, error)
+	// GetBlock returns the block with the specified block ID
+	GetBlock(types.BlockID) (*types.Block, error)
 	// HandleValidatedLayer receives Hare output when it succeeds
 	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
 	// InvalidateLayer receives the signal that Hare failed for a layer
