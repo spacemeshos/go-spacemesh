@@ -558,7 +558,6 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 	r := require.New(t)
 
 	msh := getMesh(t, "mesh")
-
 	svm := &MockMapSVM{}
 	msh.svm = svm
 

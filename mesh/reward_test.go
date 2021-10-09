@@ -142,7 +142,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	rewards := layers.calculateRewards(l, validBlockTxs, params)
 	layers.writeRewards(rewards)
 	totalRewardsCost := totalFee + params.BaseReward
-	remainder := totalRewardsCost % 4
+	remainder := totalRewardsCost % uint64(len(blockData))
 
 	assert.Equal(t, totalRewardsCost, s.TotalReward+remainder)
 
