@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
@@ -231,6 +232,10 @@ func (tb *TortoiseBeacon) ReportBeaconFromBlock(epoch types.EpochID, blockID typ
 }
 
 func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types.BlockID, beacon []byte, weight uint64) {
+	beaconStr := types.BytesToHash(beacon).ShortString()
+	metrics.ObservedBeaconCounter.With(metrics.LabelEpoch, epochID.String(), metrics.LabelBeacon, beaconStr).Add(1)
+	metrics.ObservedBeaconWeightCounter.With(metrics.LabelEpoch, epochID.String(), metrics.LabelBeacon, beaconStr).Add(float64(weight))
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -247,7 +252,7 @@ func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types
 		tb.logger.With().Debug("added beacon from block",
 			epochID,
 			blockID,
-			log.String("beacon", types.BytesToHash(beacon).ShortString()),
+			log.String("beacon", beaconStr),
 			log.Uint64("weight", weight))
 		return
 	}
@@ -263,7 +268,7 @@ func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types
 	tb.logger.With().Debug("added beacon from block",
 		epochID,
 		blockID,
-		log.String("beacon", types.BytesToHash(beacon).ShortString()),
+		log.String("beacon", beaconStr),
 		log.Uint64("weight", weight))
 }
 
