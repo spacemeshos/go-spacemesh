@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"sort"
-	"sync"
 	"testing"
 	"time"
 
@@ -87,7 +86,7 @@ func newMockConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set
 }
 
 func createHare(n1 p2p.Service, clock *mockClock, logger log.Log) *Hare {
-	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(logger), 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID),  clock, logger)
+	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, (&mockSyncer{true}).IsSynced, new(orphanMock), eligibility.New(logger), 10, &mockIDProvider{}, NewMockStateQuerier(), clock, logger)
 }
 
 var _ Consensus = (*mockConsensusProcess)(nil)
@@ -151,7 +150,7 @@ func TestHare_GetResult2(t *testing.T) {
 	}
 
 	clock := newMockClock()
-	h := createHare(n1, newMockClock(), logtest.New(t).WithName(t.Name()))
+	h := createHare(n1, clock, logtest.New(t).WithName(t.Name()))
 	h.mesh = om
 
 	h.networkDelta = 0
@@ -172,7 +171,6 @@ func TestHare_GetResult2(t *testing.T) {
 	require.NoError(t, err)
 
 	clock.advanceLayer()
-
 	time.Sleep(100 * time.Millisecond)
 
 	_, err = h.GetResult(types.LayerID{})
@@ -189,12 +187,12 @@ func TestHare_collectOutputCheckValidation(t *testing.T) {
 	set := NewSetFromValues(value1)
 
 	// default validation is true
-	h.collectOutput(context.TODO(), mockReport{mockid, set, true})
+	h.collectOutput(context.TODO(), mockReport{mockid, set, true, false})
 	output, ok := h.outputs[types.LayerID(mockid)]
 	require.True(t, ok)
 	require.Equal(t, output[0], value1)
 
-	err := h.collectOutput(context.TODO(), mockReport{mockid, set, true})
+	err := h.collectOutput(context.TODO(), mockReport{mockid, set, true, false})
 	require.NoError(t, err)
 	_, ok = h.outputs[mockid]
 	require.True(t, ok, "failure to validate should only log an error and succeed")
@@ -227,7 +225,7 @@ func TestHare_collectOutput2(t *testing.T) {
 
 	h := createHare(n1, newMockClock(), logtest.New(t).WithName(t.Name()))
 	h.bufferSize = 1
-	h.lastLayer = 0
+	h.lastLayer = types.LayerID{}
 	mockid := instanceID0
 	set := NewSetFromValues(value1)
 
@@ -238,14 +236,14 @@ func TestHare_collectOutput2(t *testing.T) {
 
 	h.lastLayer = types.NewLayerID(3)
 	newmockid := instanceID1
-	err := h.collectOutput(context.TODO(), mockReport{newmockid, set, true})
+	err := h.collectOutput(context.TODO(), mockReport{newmockid, set, true, false})
 	require.Equal(t, err, ErrTooLate)
 
 	newmockid2 := instanceID2
-	err = h.collectOutput(context.TODO(), mockReport{newmockid2, set, true})
+	err = h.collectOutput(context.TODO(), mockReport{newmockid2, set, true, false})
 	require.NoError(t, err)
 
-	_, ok = h.outputs[0]
+	_, ok = h.outputs[types.LayerID{}]
 
 	require.False(t, ok)
 }
@@ -298,18 +296,9 @@ func TestHare_onTick(t *testing.T) {
 		createdChan <- struct{}{}
 		return nmcp
 	}
+
 	require.NoError(t, h.Start(context.TODO()))
 
-	var wg sync.WaitGroup
-
-	wg.Add(2)
-	go func() {
-		wg.Done()
-		layerTicker <- types.GetEffectiveGenesis().Add(1)
-		<-createdChan
-		<-nmcp.CloseChannel()
-		wg.Done()
-	}()
 	clock.advanceLayer()
 	<-createdChan
 	<-nmcp.CloseChannel()
@@ -458,7 +447,6 @@ func TestHare_WeakCoin(t *testing.T) {
 	layerID := types.NewLayerID(10)
 
 	done := make(chan struct{})
-	layerTicker := make(chan types.LayerID)
 	oracle := newMockHashOracle(numOfClients)
 	signing := signing2.NewEdSigner()
 	om := &orphanMock{recordCoinflipsFn: func(_ context.Context, id types.LayerID, b bool) {
@@ -466,7 +454,7 @@ func TestHare_WeakCoin(t *testing.T) {
 		r.True(b)
 		done <- struct{}{}
 	}}
-	h := New(cfg, n1, signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, om, oracle, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
+	h := New(cfg, n1, signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, om, oracle, 10, &mockIDProvider{}, NewMockStateQuerier(), newMockClock(), logtest.New(t).WithName("Hare"))
 	defer h.Close()
 	h.lastLayer = layerID
 	set := NewSetFromValues(value1)

@@ -18,7 +18,7 @@ import (
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
 
-type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService,clock RoundClock, terminationReport chan TerminationOutput) Consensus
+type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, clock RoundClock, terminationReport chan TerminationOutput) Consensus
 
 // Consensus represents an item that acts like a consensus process.
 type Consensus interface {
@@ -49,9 +49,18 @@ type meshProvider interface {
 	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
 }
 
+// RoundClock is a timer interface.
 type RoundClock interface {
 	AwaitWakeup() <-chan struct{}
-	AwaitEndOfRound(round int32) <-chan struct{}
+	AwaitEndOfRound(round uint32) <-chan struct{}
+}
+
+// LayerClock provides a timer for the start of a given layer, as well as the current layer and allows converting a
+// layer number to a clock time.
+type LayerClock interface {
+	LayerToTime(id types.LayerID) time.Time
+	AwaitLayer(layerID types.LayerID) chan struct{}
+	GetCurrentLayer() types.LayerID
 }
 
 // Hare is the orchestrator that starts new consensus processes and collects their output.
@@ -117,7 +126,7 @@ func New(
 		layerTime := layerClock.LayerToTime(layerID)
 		wakeupDelta := time.Duration(conf.WakeupDelta) * time.Second
 		roundDuration := time.Duration(h.config.RoundDuration) * time.Second
-		h.With().Info("creating hare round clock",
+		h.With().Info("creating hare round clock", layerID,
 			log.String("layer_time", layerTime.String()),
 			log.Duration("wakeup_delta", wakeupDelta),
 			log.Duration("round_duration", roundDuration))
@@ -319,6 +328,7 @@ func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 
 // listens to outputs arriving from consensus processes.
 func (h *Hare) outputCollectionLoop(ctx context.Context) {
+	h.WithContext(ctx).With().Info("starting collection loop")
 	for {
 		select {
 		case out := <-h.outputChan:
@@ -354,7 +364,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 
 // listens to new layers.
 func (h *Hare) tickLoop(ctx context.Context) {
-	for layer := h.layerClock.GetCurrentLayer(); ; layer++ {
+	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-h.layerClock.AwaitLayer(layer):
 			if h.layerClock.LayerToTime(layer).Sub(time.Now()) > (time.Duration(h.config.WakeupDelta) * time.Second) {

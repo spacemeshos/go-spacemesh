@@ -233,7 +233,9 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 	mgr.state = postSetupStateInProgress
 	mgr.initStatusMtx.Unlock()
 
-	if opts.ComputeProviderID == config.BestProviderID {
+	if opts.ComputeProviderID == 0 /* conf.CPUProviderID */ {
+		opts.ComputeProviderID = initialization.CPUProviderID()
+	} else if opts.ComputeProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
 		if err != nil {
 			return nil, err

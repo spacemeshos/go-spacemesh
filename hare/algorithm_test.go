@@ -3,8 +3,6 @@ package hare
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"testing"
 	"time"
 
@@ -12,9 +10,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -190,7 +189,7 @@ func buildOracle(oracle Rolacle) Rolacle {
 func TestConsensusProcess_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 	proc := generateConsensusProcess(t)
 	inbox, _ := broker.Register(context.TODO(), proc.ID())
@@ -203,27 +202,29 @@ func TestConsensusProcess_Start(t *testing.T) {
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
-	p := generateConsensusProcess(t)
+	c := cfg
+	c.LimitConcurrent = 1
+	c.RoundDuration = 1
+	p := generateConsensusProcessWithConfig(t, c)
 	p.SetInbox(make(chan *Msg, 10))
-	p.cfg.LimitIterations = 1
-	p.cfg.RoundDuration = 1
 	p.Start(context.TODO())
-	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
-	assert.Equal(t, int32(1), p.k/4)
+	time.Sleep(time.Duration(6*c.RoundDuration) * time.Second)
+	assert.Equal(t, uint32(1), p.k/4)
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
 	net := &mockP2p{}
-	broker := buildBroker(net, t.Name())
+	broker := buildBroker(t, net, t.Name())
 	broker.Start(context.TODO())
-	proc := generateConsensusProcess(t)
+	c := cfg
+	c.F = 2
+	proc := generateConsensusProcessWithConfig(t, c)
 	proc.network = net
 	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 	oracle.isEligible = true
 	proc.oracle = oracle
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
 	proc.s = NewSetFromValues(value1, value2)
-	proc.cfg.F = 2
 	go proc.eventLoop(context.TODO())
 	time.Sleep(500 * time.Millisecond)
 	assert.Equal(t, 1, net.count)
@@ -232,7 +233,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 func TestConsensusProcess_handleMessage(t *testing.T) {
 	r := require.New(t)
 	net := &mockP2p{}
-	broker := buildBroker(net, t.Name())
+	broker := buildBroker(t, net, t.Name())
 	broker.Start(context.TODO())
 	proc := generateConsensusProcess(t)
 	proc.network = net
@@ -241,7 +242,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	mValidator := &mockMessageValidator{}
 	proc.validator = mValidator
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
-	msg := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1))
+	msg := BuildPreRoundMsg(generateSigning(t), NewSetFromValues(value1), []byte{1})
 	oracle.isEligible = true
 	mValidator.syntaxValid = false
 	proc.handleMessage(context.TODO(), msg)
@@ -268,24 +269,28 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 func TestConsensusProcess_nextRound(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(n1, t.Name())
+	broker := buildBroker(t, n1, t.Name())
 	broker.Start(context.TODO())
 	proc := generateConsensusProcess(t)
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
 	proc.advanceToNextRound(context.TODO())
 	proc.advanceToNextRound(context.TODO())
-	assert.Equal(t, int32(1), proc.k)
+	assert.Equal(t, uint32(1), proc.k)
 	proc.advanceToNextRound(context.TODO())
-	assert.Equal(t, int32(2), proc.k)
+	assert.Equal(t, uint32(2), proc.k)
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
+	return generateConsensusProcessWithConfig(t, cfg)
+}
+
+func generateConsensusProcessWithConfig(t *testing.T, cfg config.Config) *consensusProcess {
 	_, bninfo := node.GenerateTestNode(t)
 	sim := service.NewSimulator()
 	n1 := sim.NewNodeFrom(bninfo)
 
 	s := NewSetFromValues(value1)
-	oracle := eligibility.New()
+	oracle := eligibility.New(logtest.New(t))
 	edSigner := signing.NewEdSigner()
 	edPubkey := edSigner.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(edSigner.Sign(edPubkey.Bytes()))
@@ -293,7 +298,10 @@ func generateConsensusProcess(t *testing.T) *consensusProcess {
 	oracle.Register(true, edPubkey.String())
 	output := make(chan TerminationOutput, 1)
 
-	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}, n1, output, truer{}, log.NewDefault(edPubkey.String()))
+	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(),
+		10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub},
+		n1, output, truer{}, newRoundClockFromCfg(cfg),
+		logtest.New(t).WithName(edPubkey.String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -328,7 +336,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.Nil(t, verifier)
 	assert.Equal(t, builder.inner.K, proc.k)
 	assert.Equal(t, builder.inner.Ki, proc.ki)
-	assert.Equal(t, instanceID(builder.inner.InstanceID), proc.instanceID)
+	assert.Equal(t, builder.inner.InstanceID, proc.instanceID)
 }
 
 func TestConsensusProcess_isEligible(t *testing.T) {
@@ -372,7 +380,7 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 func TestConsensusProcess_procPre(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	s := NewDefaultEmptySet()
-	m := BuildPreRoundMsg(generateSigning(t), s)
+	m := BuildPreRoundMsg(generateSigning(t), s, []byte{1})
 	proc.processPreRoundMsg(context.TODO(), m)
 	assert.Equal(t, 1, len(proc.preRoundTracker.preRound))
 }
@@ -436,7 +444,6 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 }
 
 func TestConsensusProcess_Termination(t *testing.T) {
-
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound(context.TODO())
 	s := NewSetFromValues(value1)
@@ -471,7 +478,7 @@ func TestConsensusProcess_currentRound(t *testing.T) {
 func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	r := require.New(t)
 	proc := generateConsensusProcess(t)
-	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	m := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet(), nil)
 	proc.advanceToNextRound(context.TODO())
 	proc.onEarlyMessage(context.TODO(), buildMessage(nil))
 	r.Equal(0, len(proc.pending))
@@ -479,9 +486,9 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	r.Equal(1, len(proc.pending))
 	proc.onEarlyMessage(context.TODO(), m)
 	r.Equal(1, len(proc.pending))
-	m2 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	m2 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet(), nil)
 	proc.onEarlyMessage(context.TODO(), m2)
-	m3 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet())
+	m3 := BuildPreRoundMsg(generateSigning(t), NewDefaultEmptySet(), nil)
 	proc.onEarlyMessage(context.TODO(), m3)
 	r.Equal(3, len(proc.pending))
 	proc.onRoundBegin(context.TODO())
@@ -500,19 +507,19 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 }
 
 func TestProcOutput_Id(t *testing.T) {
-	po := procReport{instanceID1, nil, false}
+	po := procReport{instanceID1, nil, false, false}
 	assert.Equal(t, po.ID(), instanceID1)
 }
 
 func TestProcOutput_Set(t *testing.T) {
 	es := NewDefaultEmptySet()
-	po := procReport{instanceID1, es, false}
+	po := procReport{instanceID1, es, false, false}
 	assert.True(t, es.Equals(po.Set()))
 }
 
 func TestIterationFromCounter(t *testing.T) {
-	for i := 0; i < 10; i++ {
-		assert.Equal(t, int32(i/4), iterationFromCounter(int32(i)))
+	for i := uint32(0); i < 10; i++ {
+		assert.Equal(t, i/4, iterationFromCounter(i))
 	}
 }
 
@@ -525,7 +532,7 @@ func TestConsensusProcess_beginRound1(t *testing.T) {
 	oracle := &mockRolacle{MockStateQuerier: MockStateQuerier{true, nil}}
 	proc.oracle = oracle
 	s := NewDefaultEmptySet()
-	m := BuildPreRoundMsg(generateSigning(t), s)
+	m := BuildPreRoundMsg(generateSigning(t), s, nil)
 	proc.statusesTracker.RecordStatus(context.TODO(), m)
 
 	preStatusTracker := proc.statusesTracker

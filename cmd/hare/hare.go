@@ -134,7 +134,7 @@ func (m *mockClock) GetCurrentLayer() types.LayerID {
 	return types.GetEffectiveGenesis().Add(1)
 }
 
-// Start the app
+// Start the app.
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("starting hare main")
 
@@ -178,7 +178,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}*/
 	mockClock := &mockClock{
 		ch:        make(chan struct{}),
-		layerTime: time.Now(),
+		layerTime: gTime,
 	}
 	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, mockClock, lg)
 	log.Info("starting hare service")

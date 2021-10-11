@@ -23,7 +23,7 @@ type preRoundTracker struct {
 	logger    log.Log
 }
 
-func newPreRoundTracker(threshold int, expectedSize int, logger log.Log) *preRoundTracker {
+func newPreRoundTracker(threshold, expectedSize int, logger log.Log) *preRoundTracker {
 	pre := &preRoundTracker{}
 	pre.preRound = make(map[string]*Set, expectedSize)
 	pre.tracker = NewRefCountTracker()

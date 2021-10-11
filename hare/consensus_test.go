@@ -2,6 +2,9 @@ package hare
 
 import (
 	"context"
+	"testing"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
@@ -9,8 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
-	"testing"
-	"time"
 )
 
 // Test the consensus process as a whole
@@ -40,7 +41,7 @@ func newHareSuite() *HareSuite {
 	return hs
 }
 
-func (his *HareSuite) fill(set *Set, begin int, end int) {
+func (his *HareSuite) fill(set *Set, begin, end int) {
 	for i := begin; i <= end; i++ {
 		his.initialSets[i] = set
 	}
@@ -141,7 +142,7 @@ func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, ora
 	output := make(chan TerminationOutput, 1)
 	signing := signing2.NewEdSigner()
 	oracle.Register(isHonest, signing.PublicKey().String())
-	proc := newConsensusProcess(cfg, layer, initialSet, oracle, NewMockStateQuerier(), 10, signing, types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, truer{}, newRoundClockFromCfg(cfg), log.NewDefault(signing.PublicKey().ShortString()))
+	proc := newConsensusProcess(cfg, layer, initialSet, oracle, NewMockStateQuerier(), 10, signing, types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, truer{}, newRoundClockFromCfg(cfg), logtest.New(tb).WithName(signing.PublicKey().ShortString()))
 	c, _ := broker.Register(context.TODO(), proc.ID())
 	proc.SetInbox(c)
 

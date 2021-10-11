@@ -70,7 +70,9 @@ COPY scripts/* scripts/
 
 # does not required yet
 # RUN go run scripts/check-go-version.go --major 1 --minor 15
-RUN	go mod download
+
+# -insecure flag is a temporal solution to run tests
+RUN	GOFLAGS=-insecure go mod download
 RUN GO111MODULE=off go get golang.org/x/lint/golint
 
 # This image builds the go-spacemesh server

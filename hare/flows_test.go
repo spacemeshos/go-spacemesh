@@ -5,15 +5,16 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"sync"
 	"testing"
 	"time"
-	"sync"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -40,7 +41,7 @@ func newHareWrapper(totalCp uint32) *HareWrapper {
 	return hs
 }
 
-func (his *HareWrapper) fill(set *Set, begin int, end int) {
+func (his *HareWrapper) fill(set *Set, begin, end int) {
 	for i := begin; i <= end; i++ {
 		his.initialSets[i] = set
 	}
@@ -308,8 +309,8 @@ func (m *mockClock) advanceLayer() {
 }
 
 type SharedRoundClock struct {
-	currentRound     int32
-	rounds           map[int32]chan struct{}
+	currentRound     uint32
+	rounds           map[uint32]chan struct{}
 	minCount         int
 	processingDelay  time.Duration
 	sentMessages     uint16
@@ -321,8 +322,8 @@ func NewSharedClock(minCount int, totalCP uint32, processingDelay time.Duration)
 	m := make(map[types.LayerID]*SharedRoundClock)
 	for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(totalCP)); i = i.Add(1) {
 		m[i] = &SharedRoundClock{
-			currentRound:    -1,
-			rounds:          make(map[int32]chan struct{}),
+			currentRound:    preRound,
+			rounds:          make(map[uint32]chan struct{}),
 			minCount:        minCount,
 			processingDelay: processingDelay,
 			sentMessages:    0,
@@ -337,7 +338,7 @@ func (c *SharedRoundClock) AwaitWakeup() <-chan struct{} {
 	return ch
 }
 
-func (c *SharedRoundClock) AwaitEndOfRound(round int32) <-chan struct{} {
+func (c *SharedRoundClock) AwaitEndOfRound(round uint32) <-chan struct{} {
 	c.m.Lock()
 	defer c.m.Unlock()
 
@@ -392,7 +393,10 @@ func (c *SimRoundClock) Broadcast(ctx context.Context, protocol string, payload 
 	clock.IncMessages(cnt)
 	c.m.Unlock()
 
-	return c.s.Broadcast(ctx, protocol, payload)
+	if err := c.s.Broadcast(ctx, protocol, payload); err != nil {
+		return fmt.Errorf("failed to broadcast: %w", err)
+	}
+	return nil
 }
 
 func extractInstanceID(payload []byte) (types.LayerID, uint16) {
@@ -414,7 +418,7 @@ func NewSimRoundClock(s NetworkService, clocks map[types.LayerID]*SharedRoundClo
 	}
 }
 
-// Test - run multiple CPs simultaneously
+// Test - run multiple CPs simultaneously.
 func Test_multipleCPs(t *testing.T) {
 	// NOTE(dshulyak) spams with overwriting sessionID in context
 	logtest.SetupGlobal(t)
@@ -428,7 +432,7 @@ func Test_multipleCPs(t *testing.T) {
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
 	oracle := &trueOracle{}
-	scMap := NewSharedClock(totalNodes, int(totalCp), time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
+	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	for i := 0; i < totalNodes; i++ {
 		s := sim.NewNode()
 		src := NewSimRoundClock(s, scMap)
@@ -449,7 +453,7 @@ func Test_multipleCPs(t *testing.T) {
 	test.WaitForTimedTermination(t, 60*time.Second)
 }
 
-// Test - run multiple CPs where one of them runs more than one iteration
+// Test - run multiple CPs where one of them runs more than one iteration.
 func Test_multipleCPsAndIterations(t *testing.T) {
 	logtest.SetupGlobal(t)
 

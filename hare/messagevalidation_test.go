@@ -345,7 +345,7 @@ func TestMessageValidator_validateSVP(t *testing.T) {
 	assert.True(t, validator.validateSVP(context.TODO(), m))
 }
 
-func buildSVP(ki int32, S ...*Set) *aggregatedMessages {
+func buildSVP(ki uint32, S ...*Set) *aggregatedMessages {
 	msgs := make([]*Message, 0, len(S))
 	for _, s := range S {
 		msgs = append(msgs, buildStatusMsg(signing.NewEdSigner(), s, ki).Message)
@@ -356,10 +356,10 @@ func buildSVP(ki int32, S ...*Set) *aggregatedMessages {
 	return svp
 }
 
-func validateMatrix(t *testing.T, mType messageType, msgK int32, exp []error) {
+func validateMatrix(t *testing.T, mType messageType, msgK uint32, exp []error) {
 	r := require.New(t)
-	rounds := []int32{-1, 0, 1, 2, 3, 4, 5, 6, 7}
-	v := defaultValidator()
+	rounds := []uint32{preRound, 0, 1, 2, 3, 4, 5, 6, 7}
+	v := defaultValidator(t)
 	sgn := generateSigning(t)
 	set := NewEmptySet(1)
 	var m *Msg
