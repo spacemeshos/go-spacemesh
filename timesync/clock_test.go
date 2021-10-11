@@ -86,8 +86,8 @@ func TestClock_NewClock(t *testing.T) {
 	r := require.New(t)
 	tmr := &RealClock{}
 	ticker := NewClock(tmr, 100*time.Millisecond, tmr.Now().Add(-190*time.Millisecond), logtest.New(t).WithName(t.Name()))
-  defer ticker.Close()
-  
+	defer ticker.Close()
+
 	r.Equal(types.NewLayerID(2), ticker.lastTickedLayer)
 }
 
