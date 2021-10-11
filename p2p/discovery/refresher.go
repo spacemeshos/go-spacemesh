@@ -3,12 +3,13 @@ package discovery
 import (
 	"context"
 	"errors"
+	"net"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"net"
-	"time"
 )
 
 // XXX TODO: move this impl to the upper protocol struct
@@ -17,7 +18,7 @@ const (
 
 	// minTimeBetweenQueries is a minimum time between attempts to query a peer.
 	minTimeBetweenQueries = 5 * time.Second
-	// lastQueriesCacheSiz9e is the maximum size of the query cache map
+	// lastQueriesCacheSiz9e is the maximum size of the query cache map.
 	lastQueriesCacheSize = 100
 
 	maxConcurrentRequests = 3
@@ -27,7 +28,7 @@ const (
 
 var defaultBackoffFunc = func(tries int) time.Duration { return time.Second * time.Duration(tries) }
 
-// ErrBootAbort is returned when when bootstrap is canceled by context cancel
+// ErrBootAbort is returned when when bootstrap is canceled by context cancel.
 var ErrBootAbort = errors.New("bootstrap canceled by signal")
 
 type pingerGetAddresser interface {
@@ -35,7 +36,7 @@ type pingerGetAddresser interface {
 	GetAddresses(context.Context, p2pcrypto.PublicKey) ([]*node.Info, error)
 }
 
-// refresher is used to bootstrap and requestAddresses peers in the addrbook
+// refresher is used to bootstrap and requestAddresses peers in the addrbook.
 type refresher struct {
 	logger       log.Log
 	localAddress *node.Info
@@ -50,7 +51,7 @@ type refresher struct {
 }
 
 func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAddresser, bootnodes []*node.Info, logger log.Log) *refresher {
-	//todo: trigger requestAddresses every X with random nodes
+	// todo: trigger requestAddresses every X with random nodes
 	return &refresher{
 		logger:       logger,
 		localAddress: &node.Info{ID: local.Array(), IP: net.IPv4zero},
@@ -62,7 +63,7 @@ func newRefresher(local p2pcrypto.PublicKey, book addressBook, disc pingerGetAdd
 	}
 }
 
-// Bootstrap tries to collect `numpeers` new peers into the routing table. it stops if ctx is cancelled,
+// Bootstrap tries to collect `numpeers` new peers into the routing table. it stops if ctx is canceled,
 // otherwise it will keep trying. if the routing table is empty, bootnodes are loaded from provided config.
 func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 	var err error
@@ -74,9 +75,12 @@ func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 	// using the results as servers to query. every failed loop will wait a backoff
 	// to let other nodes populate before flooding with queries.
 	size := r.book.NumAddresses()
+	wanted := numpeers
 	if size == 0 {
 		r.book.AddAddresses(r.bootNodes, r.localAddress)
 		size = len(r.bootNodes)
+		// bootnodes will be removed afterwards, so we want to request this many more peers
+		wanted = wanted + size
 		defer func() {
 			// currently we only have  the discovery address of bootnodes in the configuration so let them pick their own neighbors.
 			for _, b := range r.bootNodes {
@@ -85,22 +89,21 @@ func (r *refresher) Bootstrap(ctx context.Context, numpeers int) error {
 		}()
 	}
 
-	r.logger.Info("Bootstrap: starting with %v sized table", size)
+	r.logger.Info("Bootstrap: starting with %v sized table (including %v bootnodes), wanted %v", size, wanted-numpeers, wanted)
 
 loop:
 	for {
 		srv := r.book.AddressCache() // get fresh members to query
-		servers = srv[:util.Min(numpeers, len(srv))]
+		servers = srv[:util.Min(wanted, len(srv))]
 		res := r.requestAddresses(ctx, servers)
 		tries++
 
 		newsize := r.book.NumAddresses()
-		wanted := numpeers
 
 		r.logger.With().Info("bootstrap attempt finished", log.Int("tries", tries), log.Int("results", len(res)), log.Int("addbook_size", newsize))
 
 		if newsize-size >= wanted {
-			r.logger.Info("Achieved bootstrap objective, got %v needed %v", newsize-size, wanted)
+			r.logger.Info("Achieved bootstrap objective, got %v new, needed %v, total %v", newsize-size, wanted, newsize)
 			break
 		}
 
@@ -112,7 +115,7 @@ loop:
 
 		timer := time.NewTimer(r.backoffFunc(tries)) // BACKOFF
 
-		//todo: stop refreshes with context
+		// todo: stop refreshes with context
 		select {
 		case <-ctx.Done():
 			err = ErrBootAbort
@@ -136,7 +139,7 @@ func expire(m map[p2pcrypto.PublicKey]time.Time) {
 		c++ // is better than go ?
 		if c >= lastQueriesCacheSize {
 			// delete last randomly selected key if none meet requirements
-			//todo: use slice to keep order? this might result with quite new peer deleted
+			// todo: use slice to keep order? this might result with quite new peer deleted
 			delete(m, k)
 			return
 		}
@@ -153,13 +156,11 @@ type queryResult struct {
 func pingThenGetAddresses(ctx context.Context, p pingerGetAddresser, addr *node.Info, qr chan queryResult) {
 	// TODO: check whether we pinged recently and maybe skip pinging
 	err := p.Ping(ctx, addr.PublicKey())
-
 	if err != nil {
 		qr <- queryResult{src: addr, err: err}
 		return
 	}
 	res, err := p.GetAddresses(ctx, addr.PublicKey())
-
 	if err != nil {
 		qr <- queryResult{src: addr, err: err}
 		return
@@ -169,7 +170,6 @@ func pingThenGetAddresses(ctx context.Context, p pingerGetAddresser, addr *node.
 
 // requestAddresses will crawl the network looking for new peer addresses.
 func (r *refresher) requestAddresses(ctx context.Context, servers []*node.Info) []*node.Info {
-
 	// todo: here we stop only after we've tried querying or queried all addrs
 	// 	maybe we should stop after we've reached a certain amount ? (needMoreAddresses..)
 	// todo: revisit this area to think about if lastQueries is even needed, since we're going
@@ -212,8 +212,8 @@ func (r *refresher) requestAddresses(ctx context.Context, servers []*node.Info) 
 		case cr := <-reschan:
 			pending--
 			if cr.err != nil {
-				//todo: consider error and maybe remove
-				//todo: count failed queries and remove not functioning
+				// todo: consider error and maybe remove
+				// todo: count failed queries and remove not functioning
 				r.logger.Warning("Peer %v didn't respond to protocol queries - err:%v", cr.src.String(), cr.err)
 				continue
 			}
@@ -234,6 +234,5 @@ func (r *refresher) requestAddresses(ctx context.Context, servers []*node.Info) 
 		case <-ctx.Done():
 			return nil
 		}
-
 	}
 }

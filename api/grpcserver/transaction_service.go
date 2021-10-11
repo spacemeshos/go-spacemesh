@@ -3,20 +3,22 @@ package grpcserver
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
 
-// TransactionService exposes transaction data, and a submit tx endpoint
+// TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
 	Network api.NetworkAPI // P2P Swarm
 	Mesh    api.TxAPI      // Mesh
@@ -24,7 +26,7 @@ type TransactionService struct {
 	syncer  api.Syncer
 }
 
-// RegisterService registers this service with a grpc server instance
+// RegisterService registers this service with a grpc server instance.
 func (s TransactionService) RegisterService(server *Server) {
 	pb.RegisterTransactionServiceServer(server.GrpcServer, s)
 }
@@ -44,7 +46,7 @@ func NewTransactionService(
 	}
 }
 
-// SubmitTransaction allows a new tx to be submitted
+// SubmitTransaction allows a new tx to be submitted.
 func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
 	log.Info("GRPC TransactionService.SubmitTransaction")
 
@@ -66,22 +68,27 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
+
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		log.Error("failed to calculate tx origin: %v", err)
 		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
+
 	if !s.Mesh.AddressExists(tx.Origin()) {
 		log.With().Error("tx origin address not found in global state",
 			tx.ID(), log.String("origin", tx.Origin().Short()))
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` origin account not found")
 	}
+
 	if err := s.Mesh.ValidateNonceAndBalance(tx); err != nil {
 		log.Error("tx failed nonce and balance check: %v", err)
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` incorrect counter or insufficient balance")
 	}
+
 	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address: %x (len: %v), amount: %v, gas limit: %v, fee: %v, id: %v, nonce: %v",
 		tx.Recipient, len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
+
 	go func() {
 		if err := s.Network.Broadcast(ctx, state.IncomingTxProtocol, in.Transaction); err != nil {
 			log.Error("error broadcasting incoming tx: %v", err)
@@ -100,16 +107,16 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 // Get transaction and status for a given txid. It's not an error if we cannot find the tx,
 // we just return all nils.
 func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (retTx *types.Transaction, state pb.TransactionState_TransactionState) {
-	tx, err := s.Mesh.GetTransaction(txID) // have we seen this transaction in a block?
-	retTx = tx
+	tx, err := s.Mesh.GetMeshTransaction(txID) // have we seen this transaction in a block?
 	if err != nil {
-		tx, err = s.Mempool.Get(txID) // do we have it in the mempool?
-		if err != nil {               // we don't know this transaction
+		retTx, err = s.Mempool.Get(txID) // do we have it in the mempool?
+		if err != nil {                  // we don't know this transaction
 			return
 		}
 		state = pb.TransactionState_TRANSACTION_STATE_MEMPOOL
 		return
 	}
+	retTx = &tx.Transaction
 
 	layer := s.Mesh.GetLayerApplied(txID)
 	if layer != nil {
@@ -125,7 +132,7 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (r
 	return
 }
 
-// TransactionsState returns current tx data for one or more txs
+// TransactionsState returns current tx data for one or more txs.
 func (s TransactionService) TransactionsState(_ context.Context, in *pb.TransactionsStateRequest) (*pb.TransactionsStateResponse, error) {
 	log.Info("GRPC TransactionService.TransactionsState")
 
@@ -162,7 +169,7 @@ func (s TransactionService) TransactionsState(_ context.Context, in *pb.Transact
 
 // STREAMS
 
-// TransactionsStateStream exposes a stream of tx data
+// TransactionsStateStream exposes a stream of tx data.
 func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStreamRequest, stream pb.TransactionService_TransactionsStateStreamServer) error {
 	log.Info("GRPC TransactionService.TransactionsStateStream")
 
@@ -209,7 +216,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 						res.Transaction = convertTransaction(tx.Transaction)
 					}
 					if err := stream.Send(res); err != nil {
-						return err
+						return fmt.Errorf("send stream: %w", err)
 					}
 
 					// Don't match on any other transactions
@@ -225,11 +232,25 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				log.Info("layer channel closed, shutting down")
 				return nil
 			}
+
+			// Transaction objects do not have an associated status. The status we assign them here is based on the
+			// status of the layer (really, the block) they're contained in. Here, we receive updates to layer status.
+			// In order to update tx status, we have to read every transaction in the layer.
+			// TODO: this is inefficient, come up with a more optimal way of doing this
+			// TODO: tx status should depend upon block status, not layer status
+
+			// In order to read transactions, we first need to read layer blocks
+			layerObj, err := s.Mesh.GetLayer(layer.LayerID)
+			if err != nil {
+				log.With().Error("error reading layer data for updated layer", layer.LayerID, log.Err(err))
+				return status.Error(codes.Internal, "error reading layer data")
+			}
+
 			// Filter for any matching transactions in the reported layer
-			for _, b := range layer.Layer.Blocks() {
+			for _, b := range layerObj.Blocks() {
 				blockTXIDSet := make(map[types.TransactionID]struct{})
 
-				//create a set for the block transaction IDs
+				// create a set for the block transaction IDs
 				for _, txid := range b.TxIDs {
 					blockTXIDSet[txid] = struct{}{}
 				}
@@ -262,16 +283,17 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 							},
 						}
 						if in.IncludeTransactions {
-							tx, err := s.Mesh.GetTransaction(txid)
+							tx, err := s.Mesh.GetMeshTransaction(txid)
 							if err != nil {
 								log.Error("could not find transaction %v from layer %v: %v", txid, layer, err)
 								return status.Error(codes.Internal, "error retrieving tx data")
 							}
 
-							res.Transaction = convertTransaction(tx)
+							res.Transaction = convertTransaction(&tx.Transaction)
 						}
+
 						if err := stream.Send(res); err != nil {
-							return err
+							return fmt.Errorf("send stream: %w", err)
 						}
 					}
 				}

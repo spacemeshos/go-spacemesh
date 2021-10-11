@@ -3,17 +3,18 @@
 package main
 
 import (
+	_ "net/http/pprof"
+	"os"
+
+	"github.com/spf13/cobra"
+
 	"github.com/spacemeshos/go-spacemesh/cmd/node"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spf13/cobra"
-	"os"
 )
 
-var (
-	multiConfig = Config{}
-)
+var multiConfig = Config{}
 
-// Config is the configuration struct for multi node sim
+// Config is the configuration struct for multi node sim.
 type Config struct {
 	NumberOfNodes  int
 	BlocksPerLayer int
@@ -21,24 +22,24 @@ type Config struct {
 	DbLocation     string
 }
 
-// AddCommands adds commands for multi node sim
+// AddCommands adds commands for multi node sim.
 func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVarP(&multiConfig.DbLocation,
 		"dir", "d", "tmp/data", "directory to store output db")
 	cmd.PersistentFlags().IntVarP(&multiConfig.BlocksPerLayer, "blocks", "b",
 		10, "blocks per layer")
 	cmd.PersistentFlags().IntVarP(&multiConfig.NumberOfNodes, "nodes", "n",
-		10, "number of nodes")
+		5, "number of nodes")
 	cmd.PersistentFlags().Uint32VarP(&multiConfig.RunUntilLayer, "layer", "l",
-		10, "run until layer")
+		50, "run until layer")
 }
 
-// Cmd is node simulator cmd
+// Cmd is node simulator cmd.
 var Cmd = &cobra.Command{
 	Use:   "run_sim",
 	Short: "start simulation",
 	Run: func(cmd *cobra.Command, args []string) {
-		node.StartMultiNode(multiConfig.NumberOfNodes, multiConfig.BlocksPerLayer, multiConfig.RunUntilLayer, multiConfig.DbLocation)
+		node.StartMultiNode(log.AppLog, multiConfig.NumberOfNodes, multiConfig.BlocksPerLayer, multiConfig.RunUntilLayer, multiConfig.DbLocation)
 	},
 }
 

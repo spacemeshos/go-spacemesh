@@ -4,15 +4,19 @@ package cmd
 import (
 	"context"
 	"fmt"
-	bc "github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
-	"github.com/spf13/viper"
+	"math/big"
 	"os"
 	"os/signal"
 	"reflect"
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+	"github.com/spf13/viper"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	bc "github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 var (
@@ -32,18 +36,18 @@ var (
 	Cancel = cancel
 )
 
-// BaseApp is the base application command, provides basic init and flags for all executables and applications
+// BaseApp is the base application command, provides basic init and flags for all executables and applications.
 type BaseApp struct {
 	Config *bc.Config
 }
 
-// NewBaseApp returns new basic application
+// NewBaseApp returns new basic application.
 func NewBaseApp() *BaseApp {
 	dc := bc.DefaultConfig()
 	return &BaseApp{Config: &dc}
 }
 
-// Initialize loads config, sets logger  and listens to Ctrl ^C
+// Initialize loads config, sets logger  and listens to Ctrl ^C.
 func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
@@ -79,7 +83,6 @@ func setupLogging(config *bc.Config) {
 	// setup logging early
 	err := filesystem.ExistOrCreate(config.DataDir())
 	if err != nil {
-		fmt.Printf("Failed to setup spacemesh data dir")
 		log.Panic("Failed to setup spacemesh data dir", err)
 	}
 }
@@ -99,13 +102,13 @@ func parseConfig() (*bc.Config, error) {
 	err := vip.Unmarshal(&conf)
 	if err != nil {
 		log.Error("Failed to parse config\n")
-		return nil, err
+		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
 	return &conf, nil
 }
 
-// EnsureCLIFlags checks flag types and converts them
+// EnsureCLIFlags checks flag types and converts them.
 func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
 		for i := 0; i < p.NumField(); i++ {
@@ -116,14 +119,22 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 					val = viper.GetBool(name)
 				case "string":
 					val = viper.GetString(name)
-				case "int", "int8", "int16":
+				case "int":
 					val = viper.GetInt(name)
+				case "int8":
+					val = int8(viper.GetInt(name))
+				case "int16":
+					val = int16(viper.GetInt(name))
 				case "int32":
 					val = viper.GetInt32(name)
 				case "int64":
 					val = viper.GetInt64(name)
-				case "uint", "uint8", "uint16":
+				case "uint":
 					val = viper.GetUint(name)
+				case "uint8":
+					val = uint8(viper.GetUint(name))
+				case "uint16":
+					val = uint16(viper.GetUint(name))
 				case "uint32":
 					val = viper.GetUint32(name)
 				case "uint64":
@@ -132,6 +143,16 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 					val = viper.GetFloat64(name)
 				case "[]string":
 					val = viper.GetStringSlice(name)
+				case "time.Duration":
+					val = viper.GetDuration(name)
+				case "*big.Rat":
+					v, ok := new(big.Rat).SetString(viper.GetString(name))
+					if !ok {
+						panic("bad string for *big.Rat provided")
+					}
+					val = v
+				case "types.RoundID":
+					val = types.RoundID(viper.GetUint64(name))
 				default:
 					val = viper.Get(name)
 				}
@@ -179,8 +200,20 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 			elem = reflect.ValueOf(&appCFG.HareEligibility).Elem()
 			assignFields(ff, elem, name)
 
+			ff = reflect.TypeOf(appCFG.TortoiseBeacon)
+			elem = reflect.ValueOf(&appCFG.TortoiseBeacon).Elem()
+			assignFields(ff, elem, name)
+
 			ff = reflect.TypeOf(appCFG.POST)
 			elem = reflect.ValueOf(&appCFG.POST).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appCFG.SMESHING)
+			elem = reflect.ValueOf(&appCFG.SMESHING).Elem()
+			assignFields(ff, elem, name)
+
+			ff = reflect.TypeOf(appCFG.SMESHING.Opts)
+			elem = reflect.ValueOf(&appCFG.SMESHING.Opts).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appCFG.LOGGING)
@@ -189,5 +222,9 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 		}
 	})
 	// check list of requested GRPC services (if any)
-	return appCFG.API.ParseServicesList()
+	if err := appCFG.API.ParseServicesList(); err != nil {
+		return fmt.Errorf("parse services list: %w", err)
+	}
+
+	return nil
 }

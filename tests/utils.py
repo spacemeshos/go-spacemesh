@@ -1,7 +1,9 @@
+from collections import defaultdict
 from datetime import datetime, timedelta
 from functools import wraps
 from kubernetes.client.rest import ApiException
 from kubernetes.stream import stream
+from kubernetes import client
 import functools
 import ntpath
 import os
@@ -19,6 +21,7 @@ import tests.queries as q
 
 ES_SS_NAME = "elasticsearch-master"
 LOGSTASH_SS_NAME = "logstash"
+KIBANA_DEP_NAME = "kibana"
 
 
 def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
@@ -26,7 +29,8 @@ def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
     while True:
         try:
             res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
-                         command=["curl", "-s", "--request", "POST", "--data", data, f"http://{client_ip}:{port}/{api}"],
+                         command=["curl", "-s", "--request", "POST", "--data", data,
+                                  f"http://{client_ip}:{port}/{api}"],
                          stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
         except ApiException as e:
             print(f"got an ApiException while streaming: {e}")
@@ -151,6 +155,56 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
     print("\nvalidation succeeded!\n")
 
 
+def validate_tortoise_beacons(log_messages):
+    epoch_messages = defaultdict(dict)
+
+    assert len(log_messages) > 0, f"no log messages"
+
+    for log in log_messages:
+        if log.epoch_id not in epoch_messages:
+            epoch_messages[log.epoch_id] = dict()
+
+        if log.beacon not in epoch_messages[log.epoch_id]:
+            epoch_messages[log.epoch_id][log.beacon] = 0
+
+        epoch_messages[log.epoch_id][log.beacon] += 1
+
+        assert log.beacon != '0x0000000000000000000000000000000000000000000000000000000000000000', \
+            f"beacon in epoch {log.epoch_id} is 0x00...00: {log.beacon}"
+
+        assert log.beacon != '0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', \
+            f"beacon in epoch {log.epoch_id} is sha256(0x00...00): {log.beacon}"
+
+    for epoch, beacons in epoch_messages.items():
+        assert len(beacons) == 1, f"all beacons in epoch {epoch} were not same, saw: {beacons}"
+        print(f"all beacons in epoch {epoch} were same, saw: {beacons}")
+
+    print(f"successfully validated beacons")
+
+
+def validate_tortoise_beacon_weak_coins(log_messages):
+    epoch_messages = defaultdict(dict)
+
+    assert len(log_messages) > 0, f"no log messages"
+
+    for log in log_messages:
+        epoch_round_pair = str(log.epoch_id) + "/" + str(log.round_id)
+
+        if epoch_round_pair  not in epoch_messages:
+            epoch_messages[epoch_round_pair] = dict()
+
+        if log.weak_coin not in epoch_messages[epoch_round_pair]:
+            epoch_messages[epoch_round_pair][log.weak_coin] = 0
+
+        epoch_messages[epoch_round_pair][log.weak_coin] += 1
+
+    for epoch_round, weak_coins in epoch_messages.items():
+        assert len(weak_coins) == 1, f"all weak coins in epoch/round {epoch_round} were not same, saw: {weak_coins}"
+        print(f"all beacons in epoch {epoch_round} were same, saw: {weak_coins}")
+
+    print(f"successfully validated beacons")
+
+
 def get_pod_id(ns, pod_name):
     hits = q.query_protocol_started(ns, pod_name, "HARE_PROTOCOL")
     if not hits:
@@ -167,7 +221,7 @@ def node_string(key, ip, port, discport):
 
 
 @functools.lru_cache(maxsize=1)
-def get_genesis_time_delta(genesis_time):
+def get_genesis_time_delta(genesis_time: float) -> datetime:
     return pytz.utc.localize(datetime.utcnow() + timedelta(seconds=genesis_time))
 
 
@@ -175,20 +229,22 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
     """
     get_conf gather specification information into one ContainerSpec object
 
+    :type bs_info: dict
+    :type client_config: dict
+    :type genesis_time: float
+    :type args: dict
     :param bs_info: DeploymentInfo, bootstrap info
     :param client_config: DeploymentInfo, client info
     :param genesis_time: string, genesis time as set in suite specification file
     :param setup_oracle: string, oracle ip
     :param setup_poet: string, poet ip
-    :param args: list of strings, arguments for appendage in specification
+    :param args: dictionary, arguments for appendage in specification
     :return: ContainerSpec
     """
     genesis_time_delta = get_genesis_time_delta(genesis_time)
-    client_args = {} if 'args' not in client_config else client_config['args']
+    client_args = client_config.get('args', {})
     # append client arguments
-    if args is not None:
-        for arg in args:
-            client_args[arg] = args[arg]
+    client_args.update(args or {})
 
     # create a new container spec with client configuration
     cspec = ContainerSpec(cname='client', specs=client_config)
@@ -233,8 +289,10 @@ def wait_genesis(genesis_time, genesis_delta):
         time.sleep(delta_from_genesis)
 
 
-def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstash_ss_name=LOGSTASH_SS_NAME):
-    es_timeout = 240
+def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME,
+                                                  logstash_ss_name=LOGSTASH_SS_NAME,
+                                                  kibana_dep_name=KIBANA_DEP_NAME):
+    es_timeout = 600
     try:
         print("waiting for ES to be ready")
         es_sleep_time = statefulset.wait_to_statefulset_to_be_ready(es_ss_name, namespace, time_out=es_timeout)
@@ -242,16 +300,49 @@ def wait_for_minimal_elk_cluster_ready(namespace, es_ss_name=ES_SS_NAME, logstas
         print("elasticsearch statefulset readiness check has failed with err:", e)
         raise Exception(f"elasticsearch took over than {es_timeout} to start")
 
-    ls_timeout = 240
+    kb_timeout = 240
     try:
-        print("waiting for logstash to be ready")
-        logstash_sleep_time = statefulset.wait_to_statefulset_to_be_ready(logstash_ss_name, namespace,
-                                                                          time_out=ls_timeout)
+        print("waiting for kibana to be ready")
+        kibana_sleep_time = deployment.wait_to_deployment_to_be_ready(kibana_dep_name, namespace, time_out=kb_timeout)
     except Exception as e:
-        print(f"got an exception while waiting for Logstash to be ready: {e}")
-        raise Exception(f"logstash took over than {ls_timeout} to start")
+        print(f"got an exception while waiting for kibana to be ready: {e}")
+    else:
+        kibana_ip = get_kibana_ip(kibana_dep_name, namespace)
+        print(f"kibana started successfully. ip: {kibana_ip}")
 
-    return logstash_sleep_time + es_sleep_time
+    return es_sleep_time + kibana_sleep_time
+
+
+def get_kibana_ip(kibana_dep_name, namespace, retries=240, sleep_interval=1):
+    def get_kibana_service(services_):
+        for serv in services_.items:
+            if serv.metadata.name == kibana_dep_name:
+                return serv
+        return None
+
+    k8s_client = client.CoreV1Api()
+
+    for attempt in range(retries):
+
+        services = k8s_client.list_namespaced_service(namespace=namespace)
+
+        if not services:
+            # list_namespaced_service sometimes gets stuck and return an empty result
+            # if not received namespaced services -> try again in {interval} time until reaching timeout
+            print(f"KIBANA: k8s client failed to get active services in {namespace},"
+                  f" attempt: {attempt}, retrying in {sleep_interval}")
+            time.sleep(sleep_interval)
+            continue
+
+        kibana_service = get_kibana_service(services)
+
+        if not kibana_service.status.load_balancer.ingress:
+            time.sleep(sleep_interval)
+            continue
+
+        return kibana_service.status.load_balancer.ingress[0].ip
+
+    print(f"KIBANA: max retries count expired")
 
 
 def exec_wait(cmd, retry=1, interval=1, is_print=True):
@@ -285,7 +376,7 @@ def exec_wait(cmd, retry=1, interval=1, is_print=True):
     if ret_code and ret_code != "0" and retry:
         print(f"return code: {ret_code}, failed, retrying in {interval} seconds (retries left: {retry})")
         time.sleep(interval)
-        ret_code = exec_wait(cmd, retry-1, interval, is_print=False)
+        ret_code = exec_wait(cmd, retry - 1, interval, is_print=False)
     else:
         print(f"return code: {ret_code}")
 
@@ -387,7 +478,8 @@ def timing(func):
         start = time.time()
         result = func(*args, **kwargs)
         end = time.time()
-        return result, end-start
+        return result, end - start
+
     return wrapper
 
 

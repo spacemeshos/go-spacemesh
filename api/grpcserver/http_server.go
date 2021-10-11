@@ -3,13 +3,14 @@ package grpcserver
 import (
 	"context"
 	"fmt"
+	"net/http"
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"google.golang.org/grpc"
+
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"google.golang.org/grpc"
-	"net/http"
 )
 
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
@@ -30,9 +31,10 @@ func (s *JSONHTTPServer) Close() error {
 	log.Debug("stopping new json-http service...")
 	if s.server != nil {
 		if err := s.server.Shutdown(cmdp.Ctx); err != nil {
-			return err
+			return fmt.Errorf("shutdown: %w", err)
 		}
 	}
+
 	return nil
 }
 
@@ -45,11 +47,14 @@ func (s *JSONHTTPServer) StartService(
 	startMeshService bool,
 	startNodeService bool,
 	startSmesherService bool,
-	startTransactionService bool) {
+	startTransactionService bool,
+) <-chan struct{} {
+	started := make(chan struct{})
 
 	// This will block, so run it in a goroutine
 	go s.startInternal(
 		ctx,
+		started,
 		startDebugService,
 		startGatewayService,
 		startGlobalStateService,
@@ -57,10 +62,13 @@ func (s *JSONHTTPServer) StartService(
 		startNodeService,
 		startSmesherService,
 		startTransactionService)
+
+	return started
 }
 
 func (s *JSONHTTPServer) startInternal(
 	ctx context.Context,
+	started chan<- struct{},
 	startDebugService bool,
 	startGatewayService bool,
 	startGlobalStateService bool,
@@ -137,6 +145,8 @@ func (s *JSONHTTPServer) startInternal(
 			log.Info("registered DebugService with grpc gateway server")
 		}
 	}
+
+	close(started)
 
 	// At least one service must be enabled
 	if serviceCount == 0 {

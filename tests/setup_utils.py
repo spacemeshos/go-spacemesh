@@ -78,6 +78,8 @@ def _setup_dep_ss_file_path(file_path, dep_type, node_type):
 
 def setup_bootstrap_in_namespace(namespace, bs_deployment_info, bootstrap_config, gen_time_del, oracle=None, poet=None,
                                  file_path=None, dep_time_out=180):
+
+    print(bootstrap_config)
     """
     adds a bootstrap node to a specific namespace
 
@@ -161,7 +163,7 @@ def setup_clients_in_namespace(namespace, bs_deployment_info, client_deployment_
                                name="client", file_path=None, oracle=None, poet=None, dep_time_out=120):
     # setting stateful and deployment configuration files
     # default deployment method is 'deployment'
-    dep_method = client_config["deployment_type"] if "deployment_type" in client_config.keys() else "deployment"
+    dep_method = client_config.get("deployment_type", "deployment")
     try:
         dep_file_path, ss_file_path = _setup_dep_ss_file_path(file_path, dep_method, 'client')
     except ValueError as e:

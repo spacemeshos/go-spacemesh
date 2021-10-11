@@ -1,13 +1,15 @@
 package hare
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func BuildCommitMsg(signing Signer, s *Set) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(commit).SetInstanceID(instanceID1).SetRoundCounter(commitRound).SetKi(ki).SetValues(s)
+	builder.SetEligibilityCount(1)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()

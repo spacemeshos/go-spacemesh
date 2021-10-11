@@ -2,20 +2,22 @@ package hare
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func buildStatusMsg(signing Signer, s *Set, ki int32) *Msg {
+func buildStatusMsg(signing Signer, s *Set, ki uint32) *Msg {
 	builder := newMessageBuilder()
 	builder.SetType(status).SetInstanceID(instanceID1).SetRoundCounter(statusRound).SetKi(ki).SetValues(s)
+	builder.SetEligibilityCount(1)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
 }
 
 func BuildStatusMsg(signing Signer, s *Set) *Msg {
-	return buildStatusMsg(signing, s, -1)
+	return buildStatusMsg(signing, s, preRound)
 }
 
 func validate(m *Msg) bool {
@@ -31,7 +33,7 @@ func TestStatusTracker_RecordStatus(t *testing.T) {
 	assert.False(t, tracker.IsSVPReady())
 
 	for i := 0; i < lowThresh10; i++ {
-		tracker.RecordStatus(context.TODO(), BuildPreRoundMsg(generateSigning(t), s))
+		tracker.RecordStatus(context.TODO(), BuildPreRoundMsg(generateSigning(t), s, nil))
 		assert.False(t, tracker.IsSVPReady())
 	}
 
@@ -77,8 +79,8 @@ func TestStatusTracker_ProposalSetTypeA(t *testing.T) {
 	tracker := newStatusTracker(2, 1)
 	s1 := NewSetFromValues(value1)
 	s2 := NewSetFromValues(value1, value2)
-	tracker.RecordStatus(context.TODO(), buildStatusMsg(generateSigning(t), s1, -1))
-	tracker.RecordStatus(context.TODO(), buildStatusMsg(generateSigning(t), s2, -1))
+	tracker.RecordStatus(context.TODO(), buildStatusMsg(generateSigning(t), s1, preRound))
+	tracker.RecordStatus(context.TODO(), buildStatusMsg(generateSigning(t), s2, preRound))
 	proposedSet := tracker.ProposalSet(2)
 	assert.NotNil(t, proposedSet)
 	assert.True(t, proposedSet.Equals(s1.Union(s2)))
@@ -104,5 +106,5 @@ func TestStatusTracker_AnalyzeStatuses(t *testing.T) {
 	tracker.RecordStatus(context.TODO(), buildStatusMsg(generateSigning(t), s2, 1))
 	tracker.RecordStatus(context.TODO(), buildStatusMsg(generateSigning(t), s2, 2))
 	tracker.AnalyzeStatuses(validate)
-	assert.Equal(t, 2, len(tracker.statuses))
+	assert.Equal(t, 3, int(tracker.count))
 }

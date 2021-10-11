@@ -2,18 +2,17 @@ package hare
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"hash/fnv"
+	"math"
 	"sort"
-)
 
-type instanceID types.LayerID
+	"github.com/spacemeshos/go-spacemesh/common/types"
+)
 
 type messageType byte
 
-// declare all known message types
+// declare all known message types.
 const (
 	status   messageType = 0
 	proposal messageType = 1
@@ -22,13 +21,14 @@ const (
 	pre      messageType = 10
 )
 
-// declare round identifiers
+const preRound uint32 = math.MaxUint32
+
+// declare round identifiers.
 const (
-	preRound      = -1
-	statusRound   = 0
-	proposalRound = 1
-	commitRound   = 2
-	notifyRound   = 3
+	statusRound uint32 = iota
+	proposalRound
+	commitRound
+	notifyRound
 )
 
 const defaultSetSize = 200
@@ -48,13 +48,6 @@ func (mType messageType) String() string {
 	default:
 		return "Unknown message type"
 	}
-}
-
-func (id instanceID) Bytes() []byte {
-	idInBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(idInBytes, uint32(id))
-
-	return idInBytes
 }
 
 // Set represents a unique set of values.

@@ -245,20 +245,25 @@ func (w *encbuf) toWriter(out io.Writer) (err error) {
 			n, err := out.Write(w.str[strpos:head.offset])
 			strpos += n
 			if err != nil {
-				return err
+				return fmt.Errorf("write data before header: %w", err)
 			}
 		}
 		// write the header
 		enc := head.encode(w.sizebuf)
 		if _, err = out.Write(enc); err != nil {
-			return err
+			return fmt.Errorf("write header: %w", err)
 		}
 	}
 	if strpos < len(w.str) {
 		// write string data after the last list header
 		_, err = out.Write(w.str[strpos:])
 	}
-	return err
+
+	if err != nil {
+		return fmt.Errorf("write after last list header: %w", err)
+	}
+
+	return nil
 }
 
 // encReader is the io.Reader returned by EncodeToReader.
@@ -460,7 +465,11 @@ func writeString(val reflect.Value, w *encbuf) error {
 }
 
 func writeEncoder(val reflect.Value, w *encbuf) error {
-	return val.Interface().(Encoder).EncodeRLP(w)
+	if err := val.Interface().(Encoder).EncodeRLP(w); err != nil {
+		return fmt.Errorf("encode RLP: %w", err)
+	}
+
+	return nil
 }
 
 // writeEncoderNoPtr handles non-pointer values that implement Encoder
@@ -476,7 +485,12 @@ func writeEncoderNoPtr(val reflect.Value, w *encbuf) error {
 		// interface. We don't want to handle it that way.
 		return fmt.Errorf("rlp: game over: unadressable value of type %v, EncodeRLP is pointer method", val.Type())
 	}
-	return val.Addr().Interface().(Encoder).EncodeRLP(w)
+
+	if err := val.Addr().Interface().(Encoder).EncodeRLP(w); err != nil {
+		return fmt.Errorf("encode RLP: %w", err)
+	}
+
+	return nil
 }
 
 func writeInterface(val reflect.Value, w *encbuf) error {

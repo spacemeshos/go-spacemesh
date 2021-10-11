@@ -69,7 +69,7 @@ const (
 	minBadDays = 7
 
 	// getAddrMax is the most addresses that we will send in response
-	// to a getAddr (in practise the most addresses we will return from a
+	// to a getAddr (in practice the most addresses we will return from a
 	// call to AddressCache()).
 	getAddrMax = 300
 
@@ -125,7 +125,6 @@ func (a *addrBook) IsLocalAddress(addr *node.Info) bool {
 
 func (a *addrBook) isLocalAddressUnlocked(addr *node.Info) bool {
 	for _, local := range a.localAddresses {
-
 		if bytes.Equal(local.ID.Bytes(), addr.ID.Bytes()) {
 			return true
 		}
@@ -142,13 +141,12 @@ func (a *addrBook) isLocalAddressUnlocked(addr *node.Info) bool {
 // updateAddress is a helper function to either update an address already known
 // to the address manager, or to add the address if not already known.
 func (a *addrBook) updateAddress(netAddr, srcAddr *node.Info) {
-
 	if a.IsLocalAddress(netAddr) {
 		a.logger.Debug("skipping adding a local address %v", netAddr.String())
 		return
 	}
-	//Filter out non-routable addresses. Note that non-routable
-	//also includes invalid and localNode addresses.
+	// Filter out non-routable addresses. Note that non-routable
+	// also includes invalid and localNode addresses.
 	if !IsRoutable(netAddr.IP) && IsRoutable(srcAddr.IP) {
 		a.logger.Debug("skipping adding non routable address%v", netAddr.String())
 		// XXX: this makes tests work with unroutable addresses(loopback)
@@ -177,8 +175,8 @@ func (a *addrBook) updateAddress(netAddr, srcAddr *node.Info) {
 
 		// The more entries we have, the less likely we are to add more.
 		// likelihood is 2N.
-		//factor := int32(2 * ka.refs)
-		//if a.rand.Int31n(factor) != 0 {
+		// factor := int32(2 * ka.refs)
+		// if a.rand.Int31n(factor) != 0 {
 		return
 		//}
 	}
@@ -282,7 +280,7 @@ func (a *addrBook) GetAddress() *KnownAddress {
 	}
 }
 
-// Lookup searches for an address using a public key. returns *Info
+// Lookup searches for an address using a public key. returns *Info.
 func (a *addrBook) Lookup(addr p2pcrypto.PublicKey) (*node.Info, error) {
 	a.mtx.Lock()
 	d := a.lookup(addr)
@@ -339,7 +337,7 @@ func (a *addrBook) Good(addr p2pcrypto.PublicKey) {
 	a.moveToTriedUnlocked(ka)
 }
 
-// moves a knownaddress to a tried bucket
+// moves a knownaddress to a tried bucket.
 func (a *addrBook) moveToTriedUnlocked(ka *KnownAddress) {
 	// move to tried set, optionally evicting other addresses if neeed.
 	if ka.tried {
@@ -420,7 +418,6 @@ func (a *addrBook) pickTried(bucket int) *KnownAddress {
 		if oldest == nil || oldest.lastSeen.After(ka.lastSeen) {
 			oldest = ka
 		}
-
 	}
 	return oldest
 }
@@ -440,7 +437,7 @@ func (a *addrBook) NumAddresses() int {
 
 // NeedNewAddresses returns whether or not the address manager needs more new
 // addresses. this means we have less new addresses than tried addresses and we don't
-// have more than half of the threshold
+// have more than half of the threshold.
 func (a *addrBook) NeedNewAddresses() bool {
 	a.mtx.Lock()
 	if a.nNew < a.nTried && a.nNew < needAddressThreshold/2 {
@@ -455,7 +452,6 @@ func (a *addrBook) NeedNewAddresses() bool {
 // AddressCache returns the current address cache.  It must be treated as
 // read-only (but since it is a copy now, this is not as dangerous).
 func (a *addrBook) AddressCache() []*node.Info {
-
 	// TODO : take from buckets
 
 	allAddr := a.getAddresses()
@@ -523,12 +519,11 @@ func (a *addrBook) Start() {
 // Stop gracefully shuts down the address manager by stopping the main handler.
 func (a *addrBook) Stop() {
 	if atomic.AddInt32(&a.shutdown, 1) != 1 {
-		a.logger.Warning("Address manager is already in the process of " +
-			"shutting down")
+		a.logger.Warning("address manager is already in the process of shutting down")
 		return
 	}
 
-	a.logger.Info("Address manager shutting down")
+	a.logger.Info("address manager shutting down")
 	close(a.quit)
 	a.wg.Wait()
 	return
@@ -636,7 +631,7 @@ func (a *addrBook) AddAddress(addr, srcAddr *node.Info) {
 	a.updateAddress(addr, srcAddr)
 }
 
-// RemoveAddress
+// RemoveAddress.
 func (a *addrBook) RemoveAddress(key p2pcrypto.PublicKey) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
@@ -668,7 +663,6 @@ func (a *addrBook) RemoveAddress(key p2pcrypto.PublicKey) {
 // reset resets the address manager by reinitialising the random source
 // and allocating fresh empty bucket storage.
 func (a *addrBook) reset() {
-
 	a.addrIndex = make(map[node.ID]*KnownAddress)
 
 	// fill key with bytes from a good random source.
@@ -688,7 +682,7 @@ func (a *addrBook) reset() {
 // newAddrBook returns a new address manager.
 // Use Start to begin processing asynchronous address updates.
 func newAddrBook(cfg config.SwarmConfig, path string, logger log.Log) *addrBook {
-	//TODO use config for const params.
+	// TODO use config for const params.
 	am := addrBook{
 		logger:        logger,
 		path:          path,

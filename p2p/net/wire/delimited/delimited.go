@@ -22,6 +22,8 @@
 // additional padding.  There are no checksums or compression.
 package delimited
 
+// Hide deprecated protobuf version error.
+// nolint: staticcheck
 import (
 	"bufio"
 	"encoding/binary"
@@ -37,7 +39,7 @@ import (
 //   rd := delimited.NewReader(r)
 //   for {
 //     rec, err := rd.Next()
-//     if err == io.EOF {
+//     if errors.Is(err, io.EOF) {
 //       break
 //     } else if err != nil {
 //       log.Fatal(err)
@@ -60,7 +62,7 @@ type Reader struct {
 func (r *Reader) Next() ([]byte, error) {
 	size, err := binary.ReadUvarint(r.buf)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read size: %w", err)
 	}
 	if cap(r.data) < int(size) {
 		r.data = make([]byte, size)
@@ -69,7 +71,7 @@ func (r *Reader) Next() ([]byte, error) {
 	}
 
 	if _, err := io.ReadFull(r.buf, r.data); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("read data: %w", err)
 	}
 	return r.data, nil
 }
@@ -79,9 +81,14 @@ func (r *Reader) Next() ([]byte, error) {
 func (r *Reader) NextProto(pb proto.Message) error {
 	rec, err := r.Next()
 	if err != nil {
-		return err
+		return fmt.Errorf("read next: %w", err)
 	}
-	return proto.Unmarshal(rec, pb)
+
+	if err := proto.Unmarshal(rec, pb); err != nil {
+		return fmt.Errorf("unmarshal protobuf: %w", err)
+	}
+
+	return nil
 }
 
 // NewReader constructs a new delimited Reader for the records in r.
@@ -104,15 +111,18 @@ type Writer struct {
 // Put writes the specified record to the writer.  It equivalent to
 // WriteRecord, but discards the number of bytes written.
 func (w Writer) Put(record []byte) error {
-	_, err := w.WriteRecord(record)
-	return err
+	if _, err := w.WriteRecord(record); err != nil {
+		return fmt.Errorf("write record: %w", err)
+	}
+
+	return nil
 }
 
 // PutProto encodes and writes the specified proto.Message to the writer.
 func (w Writer) PutProto(msg proto.Message) error {
 	rec, err := proto.Marshal(msg)
 	if err != nil {
-		return fmt.Errorf("error encoding proto: %v", err)
+		return fmt.Errorf("error encoding proto: %w", err)
 	}
 	return w.Put(rec)
 }
@@ -125,12 +135,14 @@ func (w Writer) WriteRecord(record []byte) (int, error) {
 
 	nw, err := w.w.Write(buf[:v])
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("write size: %w", err)
 	}
+
 	dw, err := w.w.Write(record)
 	if err != nil {
-		return nw, err
+		return nw, fmt.Errorf("write data: %w", err)
 	}
+
 	return nw + dw, nil
 }
 

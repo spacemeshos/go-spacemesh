@@ -4,10 +4,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 var errFoo = errors.New("some err")
@@ -17,30 +19,35 @@ type mockAtxDB struct {
 	err  error
 }
 
-func (m mockAtxDB) GetEpochAtxs(epochID types.EpochID) []types.ATXID {
+func (m mockAtxDB) GetEpochAtxs(types.EpochID) []types.ATXID {
 	return []types.ATXID{}
 }
 
 func (m mockAtxDB) GetIdentity(edID string) (types.NodeID, error) {
-	return types.NodeID{Key: edID, VRFPublicKey: vrfPubkey}, nil
+	return types.NodeID{Key: edID, VRFPublicKey: nodeID.VRFPublicKey}, nil
 }
 
 func (m mockAtxDB) GetNodeAtxIDForEpoch(types.NodeID, types.EpochID) (types.ATXID, error) {
 	return types.ATXID{}, m.err
 }
 
-func (m mockAtxDB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
+func (m mockAtxDB) GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error) {
 	return m.atxH, m.err
+}
+
+func (m mockAtxDB) GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error) {
+	return 0, nil, nil
 }
 
 func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	types.SetLayersPerEpoch(5)
 	r := require.New(t)
 	atxdb := &mockAtxDB{err: errFoo}
-	genActiveSetSize := uint32(5)
-	v := NewBlockEligibilityValidator(10, genActiveSetSize, 5, atxdb, &EpochBeaconProvider{}, validateVRF, nil, log.NewDefault(t.Name()))
+	mockBC := mocks.NewMockbeaconCollector(gomock.NewController(t))
+	mockBC.EXPECT().ReportBeaconFromBlock(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
+	v := NewBlockEligibilityValidator(10, 5, atxdb, mockBC, validateVRF, nil, logtest.New(t))
 
-	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: 20}}} // non-genesis
+	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: types.NewLayerID(20)}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())
 	block.Initialize()
 	_, err := v.getValidAtx(block)
@@ -50,9 +57,9 @@ func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	_, err = v.getValidAtx(block)
 	r.EqualError(err, "ATX target epoch (1) doesn't match block publication epoch (4)")
 
-	atxHeader := &types.ActivationTxHeader{NIPSTChallenge: types.NIPSTChallenge{
+	atxHeader := &types.ActivationTxHeader{NIPostChallenge: types.NIPostChallenge{
 		NodeID:     types.NodeID{Key: edSigner.PublicKey().String()},
-		PubLayerID: 18,
+		PubLayerID: types.NewLayerID(18),
 	}}
 	v.activationDb = &mockAtxDB{atxH: atxHeader}
 	atx, err := v.getValidAtx(block)

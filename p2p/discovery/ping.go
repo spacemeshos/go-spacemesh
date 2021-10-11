@@ -4,18 +4,19 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"fmt"
 	"net"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
-func (p *protocol) newPingRequestHandler() func(context.Context, server.Message) []byte {
-	return func(ctx context.Context, msg server.Message) []byte {
+func (p *protocol) newPingRequestHandler() func(context.Context, server.Message) ([]byte, error) {
+	return func(ctx context.Context, msg server.Message) ([]byte, error) {
 		plogger := p.logger.WithContext(ctx).WithFields(log.String("type", "ping"),
 			log.String("from", msg.Sender().String()))
 		plogger.Debug("handle request")
@@ -23,24 +24,23 @@ func (p *protocol) newPingRequestHandler() func(context.Context, server.Message)
 		err := types.BytesToInterface(msg.Bytes(), pinged)
 		if err != nil {
 			plogger.With().Error("failed to deserialize ping message", log.Err(err))
-			return nil
+			return nil, server.ErrBadRequest
 		}
 
 		if err := p.verifyPinger(msg.Metadata().FromAddress, pinged); err != nil {
 			plogger.With().Error("msg contents were not valid", log.Err(err))
-			return nil
+			return nil, server.ErrBadRequest
 		}
 
-		//pong
+		// pong
 		payload, err := types.InterfaceToBytes(p.local)
 		// TODO: include the resolved To address
 		if err != nil {
-			plogger.With().Error("error marshaling response message (ping)", log.Err(err))
-			return nil
+			plogger.With().Panic("error marshaling response message (ping)", log.Err(err))
 		}
 
 		plogger.Debug("sending pong message")
-		return payload
+		return payload, nil
 	}
 }
 
@@ -50,10 +50,10 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.Info) error {
 	// todo: decide on best way to know our ext address
 
 	if err := pi.Valid(); err != nil {
-		return err
+		return fmt.Errorf("check validity: %w", err)
 	}
 
-	//TODO: only accept local (unspecified/loopback) IPs from other local ips.
+	// TODO: only accept local (unspecified/loopback) IPs from other local ips.
 	ipfrom, _, _ := net.SplitHostPort(from.String())
 	pi.IP = net.ParseIP(ipfrom)
 
@@ -65,35 +65,29 @@ func (p *protocol) verifyPinger(from net.Addr, pi *node.Info) error {
 // Ping notifies `peer` about our p2p identity.
 func (p *protocol) Ping(ctx context.Context, peer p2pcrypto.PublicKey) error {
 	plogger := p.logger.WithFields(log.String("type", "ping"), log.String("to", peer.String()))
-
-	plogger.Debug("send request")
+	plogger.Debug("send ping request")
 
 	data, err := types.InterfaceToBytes(p.local)
 	if err != nil {
-		return err
+		return fmt.Errorf("serialize: %w", err)
 	}
-	ch := make(chan []byte)
+
+	ch := make(chan []byte, 1)
 	foo := func(msg []byte) {
-		defer close(ch)
-		plogger.Debug("handle response")
+		plogger.Debug("handle ping response")
 		sender := &node.Info{}
 		err := types.BytesToInterface(msg, sender)
-
 		if err != nil {
-			plogger.Warning("got unreadable pong. err=%v", err)
+			plogger.With().Warning("got unreadable pong", log.Err(err))
 			return
 		}
-
-		// todo: if we pinged it we already have id so no need to update
-		// todo : but what if id or listen address has changed ?
-
+		// TODO: if we pinged it we already have id so no need to update,
+		//   but what if id or listen address has changed?
 		ch <- sender.ID.Bytes()
 	}
 
-	err = p.msgServer.SendRequest(ctx, PingPong, data, peer, foo, func(err error) {})
-
-	if err != nil {
-		return err
+	if err = p.msgServer.SendRequest(ctx, server.PingPong, data, peer, foo, func(err error) {}); err != nil {
+		return fmt.Errorf("send request: %w", err)
 	}
 
 	timeout := time.NewTimer(MessageTimeout) // todo: check whether this is useless because of `requestLifetime`

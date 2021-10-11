@@ -5,11 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"testing"
+
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"testing"
 )
 
 type FakeNodeID struct {
@@ -99,6 +100,7 @@ func TestLogLevel(t *testing.T) {
 
 	r.Equal(hookedExpected, hooked, "hook function was not called the expected number of times")
 }
+
 func TestJsonLog(t *testing.T) {
 	r := require.New(t)
 

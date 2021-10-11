@@ -13,25 +13,27 @@ import (
 
 // FixedRolacle is an eligibility simulator with pre-determined honest and faulty participants.
 type FixedRolacle struct {
+	logger log.Log
+
+	mutex  sync.Mutex
+	mapRW  sync.RWMutex
 	honest map[string]struct{}
 	faulty map[string]struct{}
 	emaps  map[uint32]map[string]struct{}
-	mutex  sync.Mutex
-	mapRW  sync.RWMutex
 }
 
 // New initializes the oracle with no participants.
-func New() *FixedRolacle {
-	rolacle := &FixedRolacle{}
-	rolacle.honest = make(map[string]struct{})
-	rolacle.faulty = make(map[string]struct{})
-	rolacle.emaps = make(map[uint32]map[string]struct{})
-
-	return rolacle
+func New(logger log.Log) *FixedRolacle {
+	return &FixedRolacle{
+		logger: logger,
+		honest: make(map[string]struct{}),
+		faulty: make(map[string]struct{}),
+		emaps:  make(map[uint32]map[string]struct{}),
+	}
 }
 
 // IsIdentityActiveOnConsensusView is use to satisfy the API, currently always returns true.
-func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
+func (fo *FixedRolacle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -44,7 +46,7 @@ func (fo *FixedRolacle) Export(id uint32, committeeSize int) map[string]struct{}
 	// normalize committee size
 	size := committeeSize
 	if committeeSize > total {
-		log.AppLog.With().Warning("committee size bigger than the number of clients",
+		fo.logger.With().Warning("committee size bigger than the number of clients",
 			log.Int("committee_size", committeeSize),
 			log.Int("num_clients", total))
 		size = total
@@ -95,6 +97,11 @@ func (fo *FixedRolacle) Unregister(isHonest bool, client string) {
 	fo.mutex.Unlock()
 }
 
+// IsEpochBeaconReady returns true if the beacon value is known for the specified epoch.
+func (fo *FixedRolacle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
+	return true
+}
+
 func cloneMap(m map[string]struct{}) map[string]struct{} {
 	c := make(map[string]struct{}, len(m))
 	for k, v := range m {
@@ -118,7 +125,7 @@ func pickUnique(pickCount int, orig map[string]struct{}, dest map[string]struct{
 }
 
 func (fo *FixedRolacle) generateEligibility(ctx context.Context, expCom int) map[string]struct{} {
-	logger := log.AppLog.WithContext(ctx)
+	logger := fo.logger.WithContext(ctx)
 	emap := make(map[string]struct{}, expCom)
 
 	if expCom == 0 {
@@ -161,15 +168,15 @@ func (fo *FixedRolacle) generateEligibility(ctx context.Context, expCom int) map
 	return emap
 }
 
-func hashLayerAndRound(instanceID types.LayerID, round int32) uint32 {
+func hashLayerAndRound(logger log.Log, instanceID types.LayerID, round uint32) uint32 {
 	kInBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
+	binary.LittleEndian.PutUint32(kInBytes, round)
 	h := fnv.New32()
 	_, err := h.Write(instanceID.Bytes())
 	_, err2 := h.Write(kInBytes)
 
 	if err != nil || err2 != nil {
-		log.AppLog.With().Error("errors trying to create a hash",
+		logger.With().Error("errors trying to create a hash",
 			log.FieldNamed("err1", log.Err(err)),
 			log.FieldNamed("err2", log.Err(err2)))
 	}
@@ -177,8 +184,22 @@ func hashLayerAndRound(instanceID types.LayerID, round int32) uint32 {
 	return h.Sum32()
 }
 
-// Eligible returns whether the specific NodeID is eligible for layer in roudn and committee size.
-func (fo *FixedRolacle) Eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+// Validate is required to conform to the Rolacle interface, but should never be called.
+func (fo *FixedRolacle) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
+	panic("implement me!")
+}
+
+// CalcEligibility returns 1 if the miner is eligible in given layer, and 0 otherwise.
+func (fo *FixedRolacle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+	eligible, err := fo.eligible(ctx, layer, round, committeeSize, id, sig)
+	if eligible {
+		return 1, nil
+	}
+	return 0, err
+}
+
+// eligible returns whether the specific NodeID is eligible for layer in round and committee size.
+func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	fo.mapRW.RLock()
 	total := len(fo.honest) + len(fo.faulty) // safe since len >= 0
 	fo.mapRW.RUnlock()
@@ -186,13 +207,13 @@ func (fo *FixedRolacle) Eligible(ctx context.Context, layer types.LayerID, round
 	// normalize committee size
 	size := committeeSize
 	if committeeSize > total {
-		log.AppLog.WithContext(ctx).With().Warning("committee size bigger than the number of clients",
+		fo.logger.WithContext(ctx).With().Warning("committee size bigger than the number of clients",
 			log.Int("committee_size", committeeSize),
 			log.Int("num_clients", total))
 		size = total
 	}
 
-	instID := hashLayerAndRound(layer, round)
+	instID := hashLayerAndRound(fo.logger, layer, round)
 
 	fo.mapRW.Lock()
 	// generate if not exist for the requested K
@@ -207,16 +228,16 @@ func (fo *FixedRolacle) Eligible(ctx context.Context, layer types.LayerID, round
 }
 
 // Proof generates a proof for the round. used to satisfy interface.
-func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round int32) ([]byte, error) {
+func (fo *FixedRolacle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	kInBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(kInBytes, uint32(round))
+	binary.LittleEndian.PutUint32(kInBytes, round)
 	hash := fnv.New32()
 	if _, err := hash.Write(kInBytes); err != nil {
-		log.AppLog.WithContext(ctx).With().Error("error writing hash", log.Err(err))
+		fo.logger.WithContext(ctx).With().Error("error writing hash", log.Err(err))
 	}
 
 	hashBytes := make([]byte, 4)
-	binary.LittleEndian.PutUint32(hashBytes, uint32(hash.Sum32()))
+	binary.LittleEndian.PutUint32(hashBytes, hash.Sum32())
 
 	return hashBytes, nil
 }

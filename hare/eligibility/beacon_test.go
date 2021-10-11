@@ -2,52 +2,28 @@ package eligibility
 
 import (
 	"context"
-	"encoding/binary"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 type mockBeaconProvider struct {
 	value []byte
 }
 
-func (mbp mockBeaconProvider) GetBeacon(types.EpochID) []byte {
-	return mbp.value
+func (mbp mockBeaconProvider) GetBeacon(types.EpochID) ([]byte, error) {
+	return mbp.value, nil
 }
 
 func TestBeacon_Value(t *testing.T) {
-	r := require.New(t)
-
-	b := NewBeacon(nil, 0, log.NewDefault(t.Name()))
-	c := newMockCacher()
-	b.cache = c
-
 	beaconValue := []byte{1, 2, 3, 4}
-	b.beaconGetter = &mockBeaconProvider{beaconValue}
-	b.confidenceParam = cfg.ConfidenceParam
+	encodedValue := uint32(0x4030201) // binary.LittleEndian.Uint32(beaconValue)
+	b := NewBeacon(&mockBeaconProvider{beaconValue}, logtest.New(t))
+
 	val, err := b.Value(context.TODO(), 100)
-	r.NoError(err)
-	r.Equal(binary.LittleEndian.Uint32(beaconValue), val)
-	r.Equal(1, c.numGet)
-	r.Equal(1, c.numAdd)
-
-	// test cache
-	val, err = b.Value(context.TODO(), 100)
-	r.NoError(err)
-	r.Equal(2, c.numGet)
-	r.Equal(1, c.numAdd)
-
-	val, err = b.Value(context.TODO(), 1)
-	r.NoError(err)
-}
-
-func TestNewBeacon(t *testing.T) {
-	r := require.New(t)
-	p := &mockBeaconProvider{}
-	b := NewBeacon(p, 10, log.NewDefault(t.Name()))
-	r.Equal(p, b.beaconGetter)
-	r.Equal(uint64(10), b.confidenceParam)
-	r.NotNil(p, b.cache)
+	assert.NoError(t, err)
+	assert.Equal(t, encodedValue, val)
 }

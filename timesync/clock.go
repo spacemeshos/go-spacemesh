@@ -1,25 +1,26 @@
 package timesync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// Clock defines the functionality needed from any clock type
+// Clock defines the functionality needed from any clock type.
 type Clock interface {
 	Now() time.Time
 }
 
-// RealClock is the struct wrapping a local time struct
+// RealClock is the struct wrapping a local time struct.
 type RealClock struct{}
 
-// Now returns the current local time
+// Now returns the current local time.
 func (RealClock) Now() time.Time {
 	return time.Now()
 }
 
-// TimeClock is the struct holding a real clock
+// TimeClock is the struct holding a real clock.
 type TimeClock struct {
 	*Ticker
 	tickInterval time.Duration
@@ -29,14 +30,14 @@ type TimeClock struct {
 	log          log.Log
 }
 
-// NewClock return TimeClock struct that notifies tickInterval has passed
+// NewClock return TimeClock struct that notifies tickInterval has passed.
 func NewClock(c Clock, tickInterval time.Duration, genesisTime time.Time, logger log.Log) *TimeClock {
 	if tickInterval == 0 {
 		logger.Panic("could not create new clock: bad configuration: tick interval is zero")
 	}
 
 	t := &TimeClock{
-		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: genesisTime}),
+		Ticker:       NewTicker(c, LayerConv{duration: tickInterval, genesis: genesisTime}, WithLog(logger)),
 		tickInterval: tickInterval,
 		startEpoch:   genesisTime,
 		stop:         make(chan struct{}),
@@ -51,8 +52,8 @@ func (t *TimeClock) startClock() {
 	t.log.Info("starting global clock now=%v genesis=%v %p", t.clock.Now(), t.startEpoch, t)
 
 	for {
-		currLayer := t.Ticker.TimeToLayer(t.clock.Now())    // get current layer
-		nextTickTime := t.Ticker.LayerToTime(currLayer + 1) // get next tick time for the next layer
+		currLayer := t.Ticker.TimeToLayer(t.clock.Now())       // get current layer
+		nextTickTime := t.Ticker.LayerToTime(currLayer.Add(1)) // get next tick time for the next layer
 		diff := nextTickTime.Sub(t.clock.Now())
 		tmr := time.NewTimer(diff)
 		t.log.With().Info("global clock going to sleep before next layer",
@@ -60,6 +61,9 @@ func (t *TimeClock) startClock() {
 			log.FieldNamed("curr_layer", currLayer))
 		select {
 		case <-tmr.C:
+			t.log.With().Info("clock notifying subscribers of new layer tick",
+				log.Int("subscriber_count", len(t.subscribers)),
+				t.TimeToLayer(t.clock.Now()))
 			// notify subscribers
 			if missed, err := t.Notify(); err != nil {
 				t.log.With().Error("could not notify subscribers",
@@ -74,19 +78,21 @@ func (t *TimeClock) startClock() {
 	}
 }
 
-// GetGenesisTime returns at which time this clock has started (used to calculate current tick)
+// GetGenesisTime returns at which time this clock has started (used to calculate current tick).
 func (t *TimeClock) GetGenesisTime() time.Time {
 	return t.startEpoch
 }
 
-// GetInterval returns the time interval between clock ticks
+// GetInterval returns the time interval between clock ticks.
 func (t *TimeClock) GetInterval() time.Duration {
 	return t.tickInterval
 }
 
-// Close closes the clock ticker
+// Close closes the clock ticker.
 func (t *TimeClock) Close() {
+	t.log.Info("closing clock %p", t)
 	t.once.Do(func() {
+		t.log.Info("closed clock %p", t)
 		close(t.stop)
 	})
 }

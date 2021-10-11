@@ -2,6 +2,7 @@ package net
 
 import (
 	"errors"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 

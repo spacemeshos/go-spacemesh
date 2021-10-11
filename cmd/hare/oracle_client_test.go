@@ -2,13 +2,15 @@ package main
 
 import (
 	"fmt"
-	"github.com/btcsuite/btcutil/base58"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
+
+	"github.com/btcsuite/btcutil/base58"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 const TestServerOnline = false
@@ -73,14 +75,14 @@ func Test_MockOracleClientValidate(t *testing.T) {
 	oc.Register(true, id)
 	require.Equal(t, counter.reqCounter, 1)
 
-	mr.SetResult(validate, validateQuery(oc.world, hashInstanceAndK(0, 0), 2),
+	mr.SetResult(validate, validateQuery(oc.world, hashInstanceAndK(types.LayerID{}, 0), 2),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, id)))
 
-	valid, _ := oc.Eligible(0, 0, 2, types.NodeID{Key: id}, nil)
+	valid, _ := oc.Eligible(types.LayerID{}, 0, 2, types.NodeID{Key: id}, nil)
 
 	require.True(t, valid)
 
-	valid, _ = oc.Eligible(0, 0, 2, types.NodeID{Key: generateID()}, nil)
+	valid, _ = oc.Eligible(types.LayerID{}, 0, 2, types.NodeID{Key: generateID()}, nil)
 
 	require.Equal(t, counter.reqCounter, 2)
 	require.False(t, valid)
@@ -106,7 +108,7 @@ func Test_OracleClientValidate(t *testing.T) {
 	incommitte := 0
 
 	for i := 0; i < size; i++ {
-		res, _ := oc.Eligible(0, 0, committee, types.NodeID{Key: pks[i]}, nil)
+		res, _ := oc.Eligible(types.LayerID{}, 0, committee, types.NodeID{Key: pks[i]}, nil)
 		if res {
 			incommitte++
 		}
@@ -144,7 +146,7 @@ func Test_Concurrency(t *testing.T) {
 	oc.client = mc
 	mc.setCounting(true)
 	for i := 0; i < size; i++ {
-		res, _ := oc.Eligible(0, 0, committee, types.NodeID{Key: pks[i]}, nil)
+		res, _ := oc.Eligible(types.LayerID{}, 0, committee, types.NodeID{Key: pks[i]}, nil)
 		if res {
 			incommitte++
 		}
@@ -162,18 +164,19 @@ func Test_Concurrency(t *testing.T) {
 func TestOracle_Eligible2(t *testing.T) {
 	o := newOracleClient()
 	mr := &mockRequester{results: make(map[string][]byte)}
-	//id := generateID()
+	// id := generateID()
 	mr.SetResult(register, "myid", []byte(`{ "message": "ok" }"`))
 	o.client = mr
 	o.Register(true, "myid")
-	mr.SetResult(validate, validateQuery(o.world, hashInstanceAndK(1, 2), 0),
+	lid := types.NewLayerID(1)
+	mr.SetResult(validate, validateQuery(o.world, hashInstanceAndK(lid, 2), 0),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, "sheker")))
-	res, err := o.Eligible(1, 2, 0, types.NodeID{}, []byte{})
+	res, err := o.Eligible(lid, 2, 0, types.NodeID{}, []byte{})
 	assert.Nil(t, err)
 	assert.False(t, res)
-	mr.SetResult(validate, validateQuery(o.world, hashInstanceAndK(1, 3), 1),
+	mr.SetResult(validate, validateQuery(o.world, hashInstanceAndK(lid, 3), 1),
 		[]byte(fmt.Sprintf(`{ "IDs": [ "%v" ] }`, "sheker")))
-	res, err = o.Eligible(1, 3, 1, types.NodeID{}, []byte{})
+	res, err = o.Eligible(lid, 3, 1, types.NodeID{}, []byte{})
 	assert.Nil(t, err)
 	assert.False(t, res)
 }

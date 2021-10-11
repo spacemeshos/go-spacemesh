@@ -43,6 +43,8 @@ def wait_to_deployment_to_be_ready(deployment_name, name_space, time_out=None):
         if time_out and total_sleep_time > time_out:
             raise Exception("Timeout waiting for deployment to be ready")
 
+    return total_sleep_time
+
 
 def wait_for_service_to_be_ready(deployment_name, name_space, time_out=None):
     start = datetime.now()

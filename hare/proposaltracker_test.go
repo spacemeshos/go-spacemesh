@@ -2,14 +2,17 @@ package hare
 
 import (
 	"context"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func buildProposalMsg(signing Signer, s *Set, signature []byte) *Msg {
 	builder := newMessageBuilder().SetRoleProof(signature)
 	builder.SetType(proposal).SetInstanceID(instanceID1).SetRoundCounter(proposalRound).SetKi(ki).SetValues(s).SetSVP(buildSVP(ki, NewSetFromValues(value1)))
+	builder.SetEligibilityCount(1)
 	builder = builder.SetPubKey(signing.PublicKey()).Sign(signing)
 
 	return builder.Build()
@@ -24,7 +27,7 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 	verifier := generateSigning(t)
 
 	m1 := BuildProposalMsg(verifier, s)
-	tracker := newProposalTracker(log.NewDefault(verifier.PublicKey().String()))
+	tracker := newProposalTracker(logtest.New(t))
 	tracker.OnProposal(context.TODO(), m1)
 	assert.False(t, tracker.IsConflicting())
 	g := NewSetFromValues(value3)
@@ -36,7 +39,7 @@ func TestProposalTracker_OnProposalConflict(t *testing.T) {
 func TestProposalTracker_IsConflicting(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
-	tracker := newProposalTracker(log.NewDefault("ProposalTracker"))
+	tracker := newProposalTracker(logtest.New(t))
 
 	for i := 0; i < lowThresh10; i++ {
 		tracker.OnProposal(context.TODO(), BuildProposalMsg(generateSigning(t), s))
@@ -48,7 +51,7 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 	s := NewSetFromValues(value1, value2)
 	verifier := generateSigning(t)
 	m1 := BuildProposalMsg(verifier, s)
-	tracker := newProposalTracker(log.NewDefault(verifier.PublicKey().String()))
+	tracker := newProposalTracker(logtest.New(t))
 	tracker.OnProposal(context.TODO(), m1)
 	assert.False(t, tracker.IsConflicting())
 	g := NewSetFromValues(value3)
@@ -58,7 +61,7 @@ func TestProposalTracker_OnLateProposal(t *testing.T) {
 }
 
 func TestProposalTracker_ProposedSet(t *testing.T) {
-	tracker := newProposalTracker(log.NewDefault("ProposalTracker"))
+	tracker := newProposalTracker(logtest.New(t))
 	proposedSet := tracker.ProposedSet()
 	assert.Nil(t, proposedSet)
 	s1 := NewSetFromValues(value1, value2)

@@ -3,16 +3,16 @@
 package connectionpool
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	inet "net"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/net"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	inet "net"
-
-	"bytes"
-	"errors"
-	"sync"
 )
 
 type dialResult struct {
@@ -20,13 +20,13 @@ type dialResult struct {
 	err  error
 }
 
-// DialFunc is a function used to create an authenticated connection
+// DialFunc is a function used to create an authenticated connection.
 type DialFunc func(ctx context.Context, address inet.Addr, remotePublicKey p2pcrypto.PublicKey) (net.Connection, error)
 
 // ConnectionPool stores all net.Connections and make them available to all users of net.Connection.
 // There are two sources of connections -
 // - Local connections that were created by local node (by calling GetConnection)
-// - Remote connections that were provided by a networker impl. in a pub-sub manner
+// - Remote connections that were provided by a networker impl. in a pub-sub manner.
 type ConnectionPool struct {
 	localPub    p2pcrypto.PublicKey
 	dialFunc    DialFunc
@@ -37,32 +37,23 @@ type ConnectionPool struct {
 	dialWait    sync.WaitGroup
 	logger      log.Log
 
-	shutdownCtx    context.Context
-	shutdownCancel context.CancelFunc
-	shutdown       bool
+	shutdownCtx  context.Context
+	shutdownOnce sync.Once
 }
 
-// NewConnectionPool creates new ConnectionPool
-func NewConnectionPool(dialFunc DialFunc, lPub p2pcrypto.PublicKey, logger log.Log) *ConnectionPool {
-	shutdownCtx, cancel := context.WithCancel(context.Background())
-	cPool := &ConnectionPool{
-		localPub:       lPub,
-		dialFunc:       dialFunc,
-		connections:    make(map[p2pcrypto.PublicKey]net.Connection),
-		connMutex:      sync.RWMutex{},
-		pending:        make(map[p2pcrypto.PublicKey][]chan dialResult),
-		pendMutex:      sync.Mutex{},
-		dialWait:       sync.WaitGroup{},
-		logger:         logger,
-		shutdown:       false,
-		shutdownCtx:    shutdownCtx,
-		shutdownCancel: cancel,
+// NewConnectionPool creates new ConnectionPool.
+func NewConnectionPool(ctx context.Context, dialFunc DialFunc, lPub p2pcrypto.PublicKey, logger log.Log) *ConnectionPool {
+	return &ConnectionPool{
+		localPub:    lPub,
+		dialFunc:    dialFunc,
+		connections: make(map[p2pcrypto.PublicKey]net.Connection),
+		pending:     make(map[p2pcrypto.PublicKey][]chan dialResult),
+		logger:      logger,
+		shutdownCtx: ctx,
 	}
-
-	return cPool
 }
 
-// OnNewConnection is an exported method used to handle new connection events
+// OnNewConnection is an exported method used to handle new connection events.
 func (cp *ConnectionPool) OnNewConnection(ctx context.Context, nce net.NewConnectionEvent) error {
 	if cp.isShuttingDown() {
 		return errors.New("shutting down")
@@ -70,7 +61,7 @@ func (cp *ConnectionPool) OnNewConnection(ctx context.Context, nce net.NewConnec
 	return cp.handleNewConnection(ctx, nce.Conn.RemotePublicKey(), nce.Conn, net.Remote)
 }
 
-// OnClosedConnection is an exported method used to handle new closing connections events
+// OnClosedConnection is an exported method used to handle new closing connections events.
 func (cp *ConnectionPool) OnClosedConnection(ctx context.Context, cwe net.ConnectionWithErr) {
 	if cp.isShuttingDown() {
 		return
@@ -84,30 +75,23 @@ func (cp *ConnectionPool) OnClosedConnection(ctx context.Context, cwe net.Connec
 }
 
 func (cp *ConnectionPool) isShuttingDown() bool {
-	var isd bool
-	cp.connMutex.RLock()
-	isd = cp.shutdown
-	cp.connMutex.RUnlock()
-	return isd
+	select {
+	case <-cp.shutdownCtx.Done():
+		return true
+	default:
+	}
+	return false
 }
 
 // Shutdown gracefully shuts down the ConnectionPool:
 // - Closes all open connections
-// - Waits for all Dial routines to complete and unblock any routines waiting for GetConnection
+// - Waits for all Dial routines to complete and unblock any routines waiting for GetConnection.
 func (cp *ConnectionPool) Shutdown() {
-	cp.shutdownCancel()
-	cp.connMutex.Lock()
-	if cp.shutdown {
-		cp.connMutex.Unlock()
-		cp.logger.Error("shutdown was already called")
-		return
-	}
-	cp.shutdown = true
-	cp.connMutex.Unlock()
-
-	cp.dialWait.Wait()
-	// we won't handle the closing connection events for these connections since we exit the loop once the teardown is done
-	cp.closeConnections()
+	cp.shutdownOnce.Do(func() {
+		cp.dialWait.Wait()
+		// we won't handle the closing connection events for these connections since we exit the loop once the teardown is done
+		cp.closeConnections()
+	})
 }
 
 func (cp *ConnectionPool) closeConnections() {
@@ -218,14 +202,12 @@ func (cp *ConnectionPool) handleClosedConnection(ctx context.Context, conn net.C
 	cp.connMutex.Unlock()
 }
 
-// GetConnection fetches or creates if don't exist a connection to the address which is associated with the remote public key
+// GetConnection fetches or creates if don't exist a connection to the address which is associated with the remote public key.
 func (cp *ConnectionPool) GetConnection(ctx context.Context, address inet.Addr, remotePub p2pcrypto.PublicKey) (net.Connection, error) {
-	cp.connMutex.RLock()
-	if cp.shutdown {
-		cp.connMutex.RUnlock()
+	if cp.isShuttingDown() {
 		return nil, errors.New("ConnectionPool was shut down")
 	}
-
+	cp.connMutex.RLock()
 	// look for the connection in the pool
 	conn, found := cp.connections[remotePub]
 	if found {
@@ -259,13 +241,12 @@ func (cp *ConnectionPool) GetConnection(ctx context.Context, address inet.Addr, 
 	return res.conn, res.err
 }
 
-// GetConnectionIfExists checks if the connection is exists or pending
+// GetConnectionIfExists checks if the connection is exists or pending.
 func (cp *ConnectionPool) GetConnectionIfExists(remotePub p2pcrypto.PublicKey) (net.Connection, error) {
-	cp.connMutex.RLock()
-	if cp.shutdown {
-		cp.connMutex.RUnlock()
+	if cp.isShuttingDown() {
 		return nil, errors.New("ConnectionPool was shut down")
 	}
+	cp.connMutex.RLock()
 	// look for the connection in the pool
 	if conn, found := cp.connections[remotePub]; found {
 		cp.connMutex.RUnlock()

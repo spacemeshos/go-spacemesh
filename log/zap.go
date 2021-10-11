@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"reflect"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"go.uber.org/zap"
@@ -14,6 +15,7 @@ import (
 // Log is an exported type that embeds our logger.
 type Log struct {
 	logger *zap.Logger
+	name   string
 }
 
 // Exported from Log basic logging options.
@@ -46,13 +48,13 @@ func (l Log) Panic(format string, args ...interface{}) {
 
 // Wrap and export field logic
 
-// Field is a log field holding a name and value
+// Field is a log field holding a name and value.
 type Field zap.Field
 
-// Field satisfies loggable field interface
+// Field satisfies loggable field interface.
 func (f Field) Field() Field { return f }
 
-// FieldNamed returns a field with the provided name instead of the default
+// FieldNamed returns a field with the provided name instead of the default.
 func FieldNamed(name string, field LoggableField) Field {
 	if field == nil || (reflect.ValueOf(field).Kind() == reflect.Ptr && reflect.ValueOf(field).IsNil()) {
 		return String(name, "nil")
@@ -62,47 +64,62 @@ func FieldNamed(name string, field LoggableField) Field {
 	return f
 }
 
-// String returns a string Field
+// String returns a string Field.
 func String(name, val string) Field {
 	return Field(zap.String(name, val))
 }
 
-// Int returns an int Field
+// Binary will encode binary content in base64 when logged.
+func Binary(name string, val []byte) Field {
+	return Field(zap.Binary(name, val))
+}
+
+// Int returns an int Field.
 func Int(name string, val int) Field {
 	return Field(zap.Int(name, val))
 }
 
-// Int32 returns an int32 Field
+// Int32 returns an int32 Field.
 func Int32(name string, val int32) Field {
 	return Field(zap.Int32(name, val))
 }
 
-// Uint32 returns an uint32 Field
+// Uint16 returns an uint32 Field.
+func Uint16(name string, val uint16) Field {
+	return Field(zap.Uint16(name, val))
+}
+
+// Uint32 returns an uint32 Field.
 func Uint32(name string, val uint32) Field {
 	return Field(zap.Uint32(name, val))
 }
 
-// Uint64 returns an uint64 Field
+// Uint64 returns an uint64 Field.
 func Uint64(name string, val uint64) Field {
 	return Field(zap.Uint64(name, val))
 }
 
-// Namespace make next fields be inside a namespace
+// Namespace make next fields be inside a namespace.
 func Namespace(name string) Field {
 	return Field(zap.Namespace(name))
 }
 
-// Bool returns a bool field
+// Bool returns a bool field.
 func Bool(name string, val bool) Field {
 	return Field(zap.Bool(name, val))
 }
 
-// Duration returns a duration field
+// Time returns a field for time.Time struct value.
+func Time(name string, val time.Time) Field {
+	return Field(zap.Time(name, val))
+}
+
+// Duration returns a duration field.
 func Duration(name string, val time.Duration) Field {
 	return Field(zap.Duration(name, val))
 }
 
-// Err returns an error field
+// Err returns an error field.
 func Err(v error) Field {
 	return Field(zap.NamedError("errmsg", v))
 }
@@ -122,12 +139,13 @@ func unpack(fields []LoggableField) []zap.Field {
 
 // FieldLogger is a logger that only logs messages with fields. It does not support formatting.
 type FieldLogger struct {
-	l *zap.Logger
+	l    *zap.Logger
+	name string
 }
 
-// With returns a logger object that logs fields
+// With returns a logger object that logs fields.
 func (l Log) With() FieldLogger {
-	return FieldLogger{l.logger}
+	return FieldLogger{l.logger, l.name}
 }
 
 // SetLevel returns a logger with level as the log level derived from l.
@@ -138,24 +156,38 @@ func (l Log) SetLevel(level *zap.AtomicLevel) Log {
 			"log entries being dropped silently")
 	}
 	lgr := l.logger.WithOptions(zap.IncreaseLevel(level))
-	return Log{
-		lgr,
-	}
+	return Log{logger: lgr, name: l.name}
 }
 
-// WithName returns a logger with the given name
+// Check if following level is supported by the logger.
+func (l Log) Check(level zapcore.Level) bool {
+	return l.logger.Check(level, "") != nil
+}
+
+// WithName appends a name to a current name.
 func (l Log) WithName(prefix string) Log {
 	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix))
-	return Log{lgr}
+	var name string
+	if l.name == "" {
+		name = prefix
+	} else {
+		name = strings.Join([]string{l.name, prefix}, ".")
+	}
+	return Log{logger: lgr, name: name}
 }
 
-// WithFields returns a logger with fields permanently appended to it
+// Named overwrites name.
+func (l Log) Named(name string) Log {
+	return NewFromLog(l.logger.Named(name))
+}
+
+// WithFields returns a logger with fields permanently appended to it.
 func (l Log) WithFields(fields ...LoggableField) Log {
 	lgr := l.logger.With(unpack(fields)...)
-	return Log{logger: lgr}
+	return Log{logger: lgr, name: l.name}
 }
 
-// WithContext creates a Log from an existing log and a context object
+// WithContext creates a Log from an existing log and a context object.
 func (l Log) WithContext(ctx context.Context) Log {
 	var fields []LoggableField
 	if ctx != nil {
@@ -171,12 +203,12 @@ func (l Log) WithContext(ctx context.Context) Log {
 
 const eventKey = "event"
 
-// Event returns a logger with the Event field appended to it
+// Event returns a logger with the Event field appended to it.
 func (l Log) Event() FieldLogger {
-	return FieldLogger{l: l.logger.With(zap.Field(Bool(eventKey, true)))}
+	return FieldLogger{l: l.logger.With(zap.Field(Bool(eventKey, true))), name: l.name}
 }
 
-// Nop is an option that disables this logger
+// Nop is an option that disables this logger.
 var Nop = zap.WrapCore(func(zapcore.Core) zapcore.Core {
 	return zapcore.NewNopCore()
 })
@@ -185,30 +217,34 @@ var Nop = zap.WrapCore(func(zapcore.Core) zapcore.Core {
 // returns the resulting Logger. It's safe to use concurrently.
 func (l Log) WithOptions(opts ...zap.Option) Log {
 	lgr := l.logger.WithOptions(opts...)
-	return Log{logger: lgr}
+	return Log{logger: lgr, name: l.name}
 }
 
-// Info prints message with fields
+// note: we construct the fieldset on the fly, below, rather than simply adding `name' as a field since it may change
+// if a child logger is created from a parent. once a field has been added to a logger it cannot be changed or removed.
+// see WithName, above.
+
+// Info prints message with fields.
 func (fl FieldLogger) Info(msg string, fields ...LoggableField) {
-	fl.l.Info(msg, unpack(fields)...)
+	fl.l.Info(msg, unpack(append(fields, String("name", fl.name)))...)
 }
 
-// Debug prints message with fields
+// Debug prints message with fields.
 func (fl FieldLogger) Debug(msg string, fields ...LoggableField) {
-	fl.l.Debug(msg, unpack(fields)...)
+	fl.l.Debug(msg, unpack(append(fields, String("name", fl.name)))...)
 }
 
-// Error prints message with fields
+// Error prints message with fields.
 func (fl FieldLogger) Error(msg string, fields ...LoggableField) {
-	fl.l.Error(msg, unpack(fields)...)
+	fl.l.Error(msg, unpack(append(fields, String("name", fl.name)))...)
 }
 
-// Warning prints message with fields
+// Warning prints message with fields.
 func (fl FieldLogger) Warning(msg string, fields ...LoggableField) {
-	fl.l.Warn(msg, unpack(fields)...)
+	fl.l.Warn(msg, unpack(append(fields, String("name", fl.name)))...)
 }
 
-// Panic prints message with fields
+// Panic prints message with fields.
 func (fl FieldLogger) Panic(msg string, fields ...LoggableField) {
-	fl.l.Panic(msg, unpack(fields)...)
+	fl.l.Panic(msg, unpack(append(fields, String("name", fl.name)))...)
 }

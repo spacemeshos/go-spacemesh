@@ -1,11 +1,13 @@
 package timesync
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/stretchr/testify/require"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 var conv = LayerConv{
@@ -29,7 +31,7 @@ func newMockConv(l types.LayerID, t time.Time) *mockConv {
 
 func (m *mockConv) TimeToLayer(time.Time) types.LayerID {
 	defer func() {
-		m.next++
+		m.next = m.next.Add(1)
 		m.countToLayer++
 	}()
 	return m.next
@@ -66,7 +68,7 @@ func TestNewTicker(t *testing.T) {
 func TestTicker_StartNotifying(t *testing.T) {
 	r := require.New(t)
 	cl := newMockClock()
-	mc := newMockConv(1, cl.Now())
+	mc := newMockConv(types.NewLayerID(1), cl.Now())
 	tr := NewTicker(cl, mc)
 	_, e := tr.Notify()
 	r.Equal(1, mc.countToLayer)
@@ -81,13 +83,13 @@ func TestTicker_StartNotifying(t *testing.T) {
 func TestTicker_Notify(t *testing.T) {
 	r := require.New(t)
 	cl := newMockClock()
-	tr := NewTicker(cl, newMockConv(1, cl.Now()))
+	tr := NewTicker(cl, newMockConv(types.NewLayerID(1), cl.Now()))
 	tr.StartNotifying()
-	tr.lastTickedLayer = 3
+	tr.lastTickedLayer = types.NewLayerID(3)
 	_, e := tr.Notify() // should fail to send
 	r.Equal(errNotMonotonic, e)
 
-	tr.lastTickedLayer = 0
+	tr.lastTickedLayer = types.NewLayerID(0)
 	s1 := tr.Subscribe()
 	s2 := tr.Subscribe()
 	wg := sync.WaitGroup{} // higher probability that s2 is listening state before notify
@@ -100,7 +102,9 @@ func TestTicker_Notify(t *testing.T) {
 	missed, e := tr.Notify() // should send only to one
 
 	tr.m.Lock() // make sure done notify
+	t.Log("notify is done")
 	tr.m.Unlock()
+
 	r.Equal(errMissedTicks, e)
 	r.Equal(1, missed)
 
@@ -116,9 +120,13 @@ func TestTicker_Notify(t *testing.T) {
 		<-s2
 	}()
 	wg.Wait()
+
 	missed, e = tr.Notify() // should send to all
-	tr.m.Lock()             // make sure done notify
+
+	tr.m.Lock() // make sure done notify
+	t.Log("notify is done")
 	tr.m.Unlock()
+
 	r.Equal(0, missed)
 	r.NoError(e)
 }
@@ -155,7 +163,7 @@ func TestTicker_AwaitLayer(t *testing.T) {
 		genesis:  tmr.Now(),
 	})
 
-	l := ticker.GetCurrentLayer() + 1
+	l := ticker.GetCurrentLayer().Add(1)
 	ch := ticker.AwaitLayer(l)
 
 	select {
@@ -185,7 +193,7 @@ func TestTicker_AwaitLayer(t *testing.T) {
 		r.Fail("returned channel was not closed, despite awaiting past layer")
 	}
 
-	ch3 := ticker.AwaitLayer(l - 1)
+	ch3 := ticker.AwaitLayer(l.Sub(1))
 
 	r.Equal(ch2, ch3) // the same closedChannel should be returned for all past layers
 }
@@ -200,9 +208,9 @@ func TestTicker_AwaitLayerOldSubs(t *testing.T) {
 		genesis:  c.Now(),
 	})
 	tr.StartNotifying()
-	ch := tr.AwaitLayer(5) // sub to layer 5
-	c.advance(lDur * 2)    // clock advanced only two layers
-	tr.Notify()            // notify called (before layer 5)
+	ch := tr.AwaitLayer(types.NewLayerID(5)) // sub to layer 5
+	c.advance(lDur * 2)                      // clock advanced only two layers
+	tr.Notify()                              // notify called (before layer 5)
 	select {
 	case <-ch:
 		r.FailNow(t.Name() + "released before layer 5")

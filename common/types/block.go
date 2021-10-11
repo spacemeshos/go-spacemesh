@@ -5,15 +5,23 @@ import (
 	"bytes"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync/atomic"
-	"time"
 
 	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+)
+
+const (
+	// LayerIDSize in bytes.
+	LayerIDSize = 4
+	// BlockIDSize in bytes.
+	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
+	BlockIDSize = Hash32Length
 )
 
 // BlockID is a 20-byte sha256 sum of the serialized block, used to identify it.
@@ -39,54 +47,129 @@ func (id BlockID) AsHash32() Hash32 {
 	return Hash20(id).ToHash32()
 }
 
-var layersPerEpoch int32
+var (
+	layersPerEpoch uint32
+	// effectiveGenesis marks when actual blocks would start being created in the network. It takes into account
+	// the first genesis epoch and the following epoch in which ATXs are published.
+	effectiveGenesis uint32
 
-// EffectiveGenesis marks when actual blocks would start being crated in the network, this will take account the first
-// genesis epoch and the following epoch in which ATXs are published
-var EffectiveGenesis int32
+	// EmptyLayerHash is the layer hash for an empty layer.
+	EmptyLayerHash = Hash32{}
+)
 
-func getLayersPerEpoch() int32 {
-	return atomic.LoadInt32(&layersPerEpoch)
+// SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param.
+func SetLayersPerEpoch(layers uint32) {
+	atomic.StoreUint32(&layersPerEpoch, layers)
+	atomic.StoreUint32(&effectiveGenesis, layers*2-1)
 }
 
-// SetLayersPerEpoch sets global parameter of layers per epoch, all conversion from layer to epoch use this param
-func SetLayersPerEpoch(layers int32) {
-	atomic.StoreInt32(&layersPerEpoch, layers)
-	atomic.StoreInt32(&EffectiveGenesis, layers*2-1)
+func getLayersPerEpoch() uint32 {
+	return atomic.LoadUint32(&layersPerEpoch)
 }
 
-// LayerID is a uint64 representing a layer number. It is zero-based.
-type LayerID uint64
+// GetEffectiveGenesis returns when actual blocks would be created.
+func GetEffectiveGenesis() LayerID {
+	return NewLayerID(atomic.LoadUint32(&effectiveGenesis))
+}
+
+// NewLayerID creates LayerID from uint32.
+func NewLayerID(value uint32) LayerID {
+	return LayerID{Value: value}
+}
+
+// LayerID is representing a layer number. Zero value is safe to use, and means 0.
+// Internally it is a simple wrapper over uint32 and should be considered immutable
+// the same way as any integer.
+type LayerID struct {
+	// NOTE(dshulyak) it is made public for compatibility with encoding library.
+	// Don't modify it directly, as it will likely to be made private in the future.
+	Value uint32
+}
 
 // GetEpoch returns the epoch number of this LayerID.
 func (l LayerID) GetEpoch() EpochID {
-	return EpochID(uint64(l) / uint64(getLayersPerEpoch()))
+	return EpochID(l.Value / getLayersPerEpoch())
 }
 
-// GetEffectiveGenesis returns when actual blocks would be created
-func GetEffectiveGenesis() LayerID {
-	return LayerID(atomic.LoadInt32(&EffectiveGenesis))
+// Add layers to the layer. Panics on wraparound.
+func (l LayerID) Add(layers uint32) LayerID {
+	nl := l.Value + layers
+	if nl < l.Value {
+		panic("layer_id wraparound")
+	}
+	l.Value = nl
+	return l
 }
 
-// Add returns the LayerID that's layers (the param passed into this method) after l (this LayerID).
-func (l LayerID) Add(layers uint16) LayerID {
-	return LayerID(uint64(l) + uint64(layers))
+// Sub layers from the layer. Panics on wraparound.
+func (l LayerID) Sub(layers uint32) LayerID {
+	if layers > l.Value {
+		panic("layer_id wraparound")
+	}
+	l.Value -= layers
+	return l
 }
 
-// Uint64 returns the LayerID as a uint64.
-func (l LayerID) Uint64() uint64 {
-	return uint64(l)
+// OrdinalInEpoch returns layer ordinal in epoch.
+func (l LayerID) OrdinalInEpoch() uint32 {
+	return l.Value % getLayersPerEpoch()
+}
+
+// FirstInEpoch returns whether this LayerID is first in epoch.
+func (l LayerID) FirstInEpoch() bool {
+	return l.OrdinalInEpoch() == 0
+}
+
+// Mul layer by the layers. Panics on wraparound.
+func (l LayerID) Mul(layers uint32) LayerID {
+	if l.Value == 0 {
+		return l
+	}
+	nl := l.Value * layers
+	if nl/l.Value != layers {
+		panic("layer_id wraparound")
+	}
+	l.Value = nl
+	return l
+}
+
+// Uint32 returns the LayerID as a uint32.
+func (l LayerID) Uint32() uint32 {
+	return l.Value
+}
+
+// Before returns true if this layer is lower than the other.
+func (l LayerID) Before(other LayerID) bool {
+	return l.Value < other.Value
+}
+
+// After returns true if this layer is higher than the other.
+func (l LayerID) After(other LayerID) bool {
+	return l.Value > other.Value
+}
+
+// Difference returns the difference between current and other layer.
+func (l LayerID) Difference(other LayerID) uint32 {
+	if other.Value > l.Value {
+		panic(fmt.Sprintf("other (%d) must be before or equal to this layer (%d)", other.Value, l.Value))
+	}
+	return l.Value - other.Value
 }
 
 // Field returns a log field. Implements the LoggableField interface.
-func (l LayerID) Field() log.Field { return log.Uint64("layer_id", uint64(l)) }
+func (l LayerID) Field() log.Field { return log.Uint32("layer_id", l.Value) }
+
+// String returns string representation of the layer id numeric value.
+func (l LayerID) String() string {
+	return strconv.FormatUint(uint64(l.Value), 10)
+}
 
 // NodeID contains a miner's two public keys.
 type NodeID struct {
 	// Key is the miner's Edwards public key
 	Key string
 
-	// VRFPublicKey is the miner's public key used for VRF. The VRF scheme used is BLS.
+	// VRFPublicKey is the miner's public key used for VRF.
 	VRFPublicKey []byte
 }
 
@@ -126,7 +209,7 @@ func BytesToNodeID(b []byte) (*NodeID, error) {
 	}, nil
 }
 
-//StringToNodeID deserializes a string into a NodeID
+// StringToNodeID deserializes a string into a NodeID
 // TODO: length of the input will be made exact when the NodeID is compressed into
 // one single key (https://github.com/spacemeshos/go-spacemesh/issues/2269)
 func StringToNodeID(s string) (*NodeID, error) {
@@ -137,7 +220,7 @@ func StringToNodeID(s string) (*NodeID, error) {
 	if strLen > 128 {
 		return nil, fmt.Errorf("invalid length, input too long")
 	}
-	//portion of the string corresponding to the Edwards public key
+	// portion of the string corresponding to the Edwards public key
 	pubKey := s[:64]
 	vrfKey := s[64:]
 	return &NodeID{
@@ -167,13 +250,18 @@ type BlockHeader struct {
 	ATXID            ATXID
 	EligibilityProof BlockEligibilityProof
 	Data             []byte
-	Coin             bool
 
 	BaseBlock BlockID
 
-	AgainstDiff []BlockID
-	ForDiff     []BlockID
-	NeutralDiff []BlockID
+	AgainstDiff []BlockID // base block explicitly supports a block that we want to vote against
+	ForDiff     []BlockID // any additional blocks we want to support that base block doesn't (incl. in newer layers)
+	NeutralDiff []BlockID // blocks that the base block is explicitly for or against for which we are neutral.
+	// NOTE on neutral votes: a base block is by default neutral on all blocks and layers that come after it, so
+	// there's no need to explicitly add neutral votes for more recent layers.
+	// TODO: optimize this data structure in two ways:
+	//   - neutral votes are only ever for an entire layer, never for a subset of blocks.
+	//   - collapse AgainstDiff and ForDiff into a single list.
+	//   see https://github.com/spacemeshos/go-spacemesh/issues/2369.
 }
 
 // Layer returns the block's LayerID.
@@ -185,10 +273,10 @@ func (b BlockHeader) Layer() LayerID {
 // produce the block signature.
 type MiniBlock struct {
 	BlockHeader
-	TxIDs []TransactionID
-	//ATXIDs    []ATXID
-	ActiveSet *[]ATXID
-	RefBlock  *BlockID
+	TxIDs          []TransactionID
+	ActiveSet      *[]ATXID
+	RefBlock       *BlockID
+	TortoiseBeacon []byte
 }
 
 // Block includes all of a block's fields, including signature and a cache of the BlockID and MinerID.
@@ -209,7 +297,7 @@ func (b *Block) Bytes() []byte {
 	return blkBytes
 }
 
-// Fields returns an array of LoggableFields for logging
+// Fields returns an array of LoggableFields for logging.
 func (b *Block) Fields() []log.LoggableField {
 	activeSet := 0
 	if b.ActiveSet != nil {
@@ -219,7 +307,8 @@ func (b *Block) Fields() []log.LoggableField {
 	return []log.LoggableField{
 		b.ID(),
 		b.LayerIndex,
-		b.MinerID(),
+		b.LayerIndex.GetEpoch(),
+		log.FieldNamed("miner_id", b.MinerID()),
 		log.String("base_block", b.BaseBlock.String()),
 		log.Int("supports", len(b.ForDiff)),
 		log.Int("againsts", len(b.AgainstDiff)),
@@ -269,6 +358,26 @@ func (b *Block) MinerID() *signing.PublicKey {
 	return b.minerID
 }
 
+// DBBlock is a Block structure as it is stored in DB.
+type DBBlock struct {
+	MiniBlock
+	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
+	// to break if in future key for database will be changed
+	ID        BlockID
+	Signature []byte
+	MinerID   []byte // derived from signature when block is received
+}
+
+// ToBlock create Block instance from data that is stored locally.
+func (b *DBBlock) ToBlock() *Block {
+	return &Block{
+		id:        b.ID,
+		MiniBlock: b.MiniBlock,
+		Signature: b.Signature,
+		minerID:   signing.NewPublicKey(b.MinerID),
+	}
+}
+
 // BlockIDs returns a slice of BlockIDs corresponding to the given blocks.
 func BlockIDs(blocks []*Block) []BlockID {
 	ids := make([]BlockID, 0, len(blocks))
@@ -278,9 +387,9 @@ func BlockIDs(blocks []*Block) []BlockID {
 	return ids
 }
 
-// BlockIdsField returns a list of loggable fields for a given list of BlockIDs
+// BlockIdsField returns a list of loggable fields for a given list of BlockIDs.
 func BlockIdsField(ids []BlockID) log.Field {
-	strs := []string{}
+	var strs []string
 	for _, a := range ids {
 		strs = append(strs, a.String())
 	}
@@ -309,8 +418,21 @@ func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
-// Hash returns the 32-byte sha256 sum of the block IDs in this layer, sorted in lexicographic order.
+// BlocksIDs returns the list of IDs of blocks in this layer.
+func (l *Layer) BlocksIDs() []BlockID {
+	blockIDs := make([]BlockID, len(l.blocks))
+	for i := range l.blocks {
+		blockIDs[i] = l.blocks[i].ID()
+	}
+	return blockIDs
+}
+
+// Hash returns the 32-byte sha256 sum of the block IDs of both contextually valid and invalid blocks in this layer,
+// sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
+	if len(l.blocks) == 0 {
+		return EmptyLayerHash
+	}
 	return CalcBlocksHash32(SortBlockIDs(BlockIDs(l.blocks)), nil)
 }
 
@@ -344,9 +466,11 @@ func NewExistingBlock(layerIndex LayerID, data []byte, txs []TransactionID) *Blo
 		MiniBlock: MiniBlock{
 			BlockHeader: BlockHeader{
 				LayerIndex: layerIndex,
-				Data:       data},
+				Data:       data,
+			},
 			TxIDs: txs,
-		}}
+		},
+	}
 	b.Signature = signing.NewEdSigner().Sign(b.Bytes())
 	b.Initialize()
 	return &b
@@ -370,16 +494,4 @@ func SortBlockIDs(ids []BlockID) []BlockID {
 func SortBlocks(ids []*Block) []*Block {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].ID().Compare(ids[j].ID()) })
 	return ids
-}
-
-// RandomBlockID generates random block id
-func RandomBlockID() BlockID {
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, 8)
-	_, err := rand.Read(b)
-	// Note that err == nil only if we read len(b) bytes.
-	if err != nil {
-		return BlockID{}
-	}
-	return BlockID(CalcHash32(b).ToHash20())
 }

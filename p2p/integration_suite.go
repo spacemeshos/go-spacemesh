@@ -13,11 +13,12 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-// NodeTestInstance is an instance of a p2p node for testing
+// NodeTestInstance is an instance of a p2p node for testing.
 type NodeTestInstance interface {
 	Service
 	LocalNode() node.LocalNode // this holds the keys
@@ -28,6 +29,7 @@ type NodeTestInstance interface {
 // You must set the params before running the suite.
 type IntegrationTestSuite struct {
 	suite.Suite
+	logger log.Log
 
 	BootstrapNodesCount   int
 	BootstrappedNodeCount int
@@ -42,6 +44,7 @@ type IntegrationTestSuite struct {
 
 // SetupSuite setups the configured nodes, bootstraps and connects them.
 func (its *IntegrationTestSuite) SetupSuite() {
+	its.logger = logtest.New(its.T())
 	boot := make([]*Switch, its.BootstrapNodesCount)
 	swarm := make([]*Switch, its.BootstrappedNodeCount)
 
@@ -52,7 +55,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 
 	// start boot
 	for i := 0; i < len(boot); i++ {
-		boot[i] = createP2pInstance(its.T(), bootcfg)
+		boot[i] = createP2pInstance(its.T(), bootcfg, fmt.Sprintf("test-bootnode-%v", i))
 		if its.BeforeHook != nil {
 			its.BeforeHook(i, boot[i])
 		}
@@ -61,7 +64,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 		if its.AfterHook != nil {
 			its.AfterHook(i, boot[i])
 		}
-		testLog("BOOTNODE : %v", boot[i].LocalNode().PublicKey().String())
+		its.logger.Info("BOOTNODE : %v", boot[i].LocalNode().PublicKey().String())
 	}
 
 	for i := 0; i < len(boot); i++ {
@@ -85,12 +88,12 @@ func (its *IntegrationTestSuite) SetupSuite() {
 	cfg.SwarmConfig.BootstrapNodes = StringIdentifiers(boot...)
 
 	tm := time.Now()
-	testLog("Started up %d swarms", its.BootstrappedNodeCount)
-	//var wg sync.WaitGroup
+	its.logger.Info("Started up %d swarms", its.BootstrappedNodeCount)
+	// var wg sync.WaitGroup
 	totalTimeout := time.NewTimer((time.Second * 5) * time.Duration(len(swarm)))
 	finchan := make(chan error)
 	for i := 0; i < len(swarm); i++ {
-		swarm[i] = createP2pInstance(its.T(), cfg)
+		swarm[i] = createP2pInstance(its.T(), cfg, fmt.Sprintf("test-node-%v", i))
 		i := i
 		//	wg.Add(1)
 		go func() {
@@ -105,7 +108,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 			if err != nil {
 				finchan <- err
 				return
-				//its.T().Fatal(fmt.Sprintf("failed to start a node, %v", err))
+				// its.T().Fatal(fmt.Sprintf("failed to start a node, %v", err))
 			}
 			err = swarm[i].waitForBoot()
 			if err != nil {
@@ -119,7 +122,7 @@ func (its *IntegrationTestSuite) SetupSuite() {
 		}()
 	}
 
-	testLog("Launched all processes 🎉, now waiting...")
+	its.logger.Info("Launched all processes 🎉, now waiting...")
 
 	i := 0
 loop:
@@ -137,7 +140,7 @@ loop:
 			its.T().Fatal("timeout")
 		}
 	}
-	testLog("Took %s for all swarms to boot up", time.Since(tm))
+	its.logger.Info("Took %s for all swarms to boot up", time.Since(tm))
 
 	// go interfaces suck with slices
 	its.Instances = swarm
@@ -146,23 +149,23 @@ loop:
 
 // TearDownSuite shutdowns all nodes.
 func (its *IntegrationTestSuite) TearDownSuite() {
-	testLog("Shutting down all nodes" + its.T().Name())
+	its.logger.Info("Shutting down all nodes" + its.T().Name())
 	_ = its.ForAll(func(idx int, s NodeTestInstance) error {
 		s.Shutdown()
 		return nil
 	}, nil)
 }
 
-func createP2pInstance(t testing.TB, config config.Config) *Switch {
+func createP2pInstance(t testing.TB, config config.Config, loggerName string) *Switch {
 	config.TCPPort = 0
 	config.AcquirePort = false
-	p, err := newSwarm(context.TODO(), config, log.NewDefault("test instance"), "")
+	p, err := newSwarm(context.TODO(), config, logtest.New(t).WithName(loggerName), "")
 	require.NoError(t, err)
 	require.NotNil(t, p)
 	return p
 }
 
-// WaitForGossip waits that all nodes initialized gossip connections
+// WaitForGossip waits that all nodes initialized gossip connections.
 func (its *IntegrationTestSuite) WaitForGossip(ctx context.Context) error {
 	g, _ := errgroup.WithContext(ctx)
 	for _, b := range its.boot {
@@ -175,10 +178,15 @@ func (its *IntegrationTestSuite) WaitForGossip(ctx context.Context) error {
 			return i.waitForGossip()
 		})
 	}
-	return g.Wait()
+
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("errgroup: %w", err)
+	}
+
+	return nil
 }
 
-// ForAll executes f on all the node and returns error if it failed
+// ForAll executes f on all the node and returns error if it failed.
 func (its *IntegrationTestSuite) ForAll(f func(idx int, s NodeTestInstance) error, filter []int) []error {
 	e := make([]error, 0)
 swarms:
@@ -203,7 +211,7 @@ boots:
 	return e
 }
 
-// ForAllAsync executes f on all the nodes concurrently, it stops if ctx is cancelled.
+// ForAllAsync executes f on all the nodes concurrently, it stops if ctx is canceled.
 func (its *IntegrationTestSuite) ForAllAsync(ctx context.Context, f func(idx int, s NodeTestInstance) error) ([]error, error) {
 	var mtx sync.Mutex
 	errs := make([]error, len(its.Instances))
@@ -220,15 +228,11 @@ func (its *IntegrationTestSuite) ForAllAsync(ctx context.Context, f func(idx int
 		})
 	}
 
-	return errs, group.Wait()
-}
+	if err := group.Wait(); err != nil {
+		return errs, fmt.Errorf("errgroup: %w", err)
+	}
 
-func testLog(text string, args ...interface{}) {
-
-	fmt.Println("################################################################################################")
-	fmt.Println("Test Logger :")
-	fmt.Println(fmt.Sprintf(text, args...))
-	fmt.Println("################################################################################################")
+	return errs, nil
 }
 
 // StringIdentifiers turns Switch into string representation node for use as bootnodes.
@@ -239,7 +243,7 @@ func StringIdentifiers(boot ...*Switch) []string {
 		tcp := boot[i].network.LocalAddr().(*net.TCPAddr)
 		udp := boot[i].udpnetwork.LocalAddr().(*net.UDPAddr)
 		nodeinfo := node.NewNode(pk, net.IPv6loopback, uint16(tcp.Port), uint16(udp.Port))
-		s[i] = nodeinfo.String() //node.StringFromNode(node.New(boot[i].LocalNode().Node.PublicKey(), boot[i].udpnetwork.LocalAddr().String())) )
+		s[i] = nodeinfo.String() // node.StringFromNode(node.New(boot[i].LocalNode().Node.PublicKey(), boot[i].udpnetwork.LocalAddr().String())) )
 	}
 	return s
 }

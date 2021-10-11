@@ -1,27 +1,21 @@
 package hare
 
 import (
-	"bytes"
-	"github.com/nullstyle/go-xdr/xdr3"
-	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func marshallUnmarshall(t *testing.T, msg *Message) *Message {
-	var w bytes.Buffer
-	_, err := xdr.Marshal(&w, &msg)
-	if err != nil {
-		assert.Fail(t, "Failed to marshal data")
-	}
+	buf, err := types.InterfaceToBytes(&msg)
+	require.NoError(t, err)
 
 	m := &Message{}
-	r := bytes.NewReader(w.Bytes())
-	_, err = xdr.Unmarshal(r, m)
-	if err != nil {
-		assert.FailNow(t, "cant unmarshal")
-	}
-
+	require.NoError(t, types.BytesToInterface(buf, m))
 	return m
 }
 

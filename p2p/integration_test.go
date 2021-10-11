@@ -3,7 +3,6 @@ package p2p
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -13,15 +12,20 @@ import (
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
-var exampleGossipProto = "exampleGossip"
-var exampleDirectProto = "exampleDirect"
+var (
+	exampleGossipProto = "exampleGossip"
+	exampleDirectProto = "exampleDirect"
+)
 
 type P2PIntegrationSuite struct {
+	logger          log.Log
 	localMtx        sync.Mutex
 	gossipProtocols []chan service.GossipMessage
 	directProtocols []chan service.DirectMessage
@@ -39,6 +43,10 @@ func protocolsHelper(s *P2PIntegrationSuite) {
 		s.localMtx.Unlock()
 	}
 	// from now on there are only reads so no locking needed
+}
+
+func (its *P2PIntegrationSuite) SetupTest() {
+	its.logger = logtest.New(its.T())
 }
 
 func (its *P2PIntegrationSuite) Test_SendingMessage() {
@@ -76,7 +84,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 	MSGS := 10
 	MSGSIZE := 108692
 	tm := time.Now()
-	testLog("%v Sending %v messages with size %v to %v miners", its.T().Name(), MSGS, MSGSIZE, its.BootstrappedNodeCount+its.BootstrapNodesCount)
+	its.logger.Info("%v Sending %v messages with size %v to %v miners", its.T().Name(), MSGS, MSGSIZE, its.BootstrappedNodeCount+its.BootstrapNodesCount)
 	numgot := int32(0)
 	for i := 0; i < MSGS; i++ {
 		msg := []byte(RandString(MSGSIZE))
@@ -90,8 +98,7 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 				select {
 				case got := <-mc:
 					atomic.AddInt32(numgot, 1)
-					got.ReportValidation(exampleGossipProto)
-					log.Info("got back message %v", numgot)
+					got.ReportValidation(context.TODO(), exampleGossipProto)
 					return nil
 				case <-ctx.Done():
 					return errors.New("timed out")
@@ -100,12 +107,12 @@ func (its *P2PIntegrationSuite) Test_Gossiping() {
 		}
 	}
 
-	testLog("%v Waiting for all messages to pass", its.T().Name())
+	its.logger.Info("%v Waiting for all messages to pass", its.T().Name())
 	errs := errg.Wait()
 	its.T().Log(errs)
 	its.NoError(errs)
 	its.Equal((its.BootstrappedNodeCount+its.BootstrapNodesCount)*MSGS, int(numgot))
-	testLog("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
+	its.logger.Info("%v All nodes got all messages in %v", its.T().Name(), time.Since(tm))
 	cancel()
 }
 
@@ -117,7 +124,7 @@ func Test_ReallySmallP2PIntegrationSuite(t *testing.T) {
 
 	protocolsHelper(s)
 
-	s.BootstrappedNodeCount = 2
+	s.BootstrappedNodeCount = 3
 	s.BootstrapNodesCount = 1
 	s.NeighborsCount = 1
 

@@ -3,14 +3,17 @@ package discovery
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"os"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-const defaultPeersFileName = "peers.json"
-const saveRoutineInterval = time.Minute * 10
+const (
+	defaultPeersFileName = "peers.json"
+	saveRoutineInterval  = time.Minute * 10
+)
 
 type serializedKnownAddress struct {
 	Addr        string
@@ -74,19 +77,19 @@ func (a *addrBook) savePeers(path string) {
 
 	w, err := os.Create(path)
 	if err != nil {
-		log.Error("Error creating file: %v", err)
+		a.logger.Error("Error creating file: %v", err)
 		return
 	}
 	enc := json.NewEncoder(w)
 	defer w.Close()
 	if err := enc.Encode(&sam); err != nil {
-		log.Error("Failed to encode file %s: %v", path, err)
+		a.logger.Error("Failed to encode file %s: %v", path, err)
 		return
 	}
 }
 
 // loadPeers loads the known address from the saved file.  If empty, missing, or
-// malformed file, just don't load anything and start fresh
+// malformed file, just don't load anything and start fresh.
 func (a *addrBook) loadPeers(filePath string) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
@@ -95,12 +98,13 @@ func (a *addrBook) loadPeers(filePath string) {
 
 	err := a.deserializePeers(filePath)
 	if err != nil {
-		log.Error("Failed to parse file %s: %v", filePath, err)
+		a.logger.With().Error("failed to parse file", log.String("path", filePath), log.Err(err))
 		// if it is invalid we nuke the old one unconditionally.
 		err = os.Remove(filePath)
 		if err != nil {
-			log.Warning("Failed to remove corrupt peers file %s: %v",
-				filePath, err)
+			a.logger.With().Warning("failed to remove corrupt peers file",
+				log.String("path", filePath),
+				log.Err(err))
 		}
 		a.reset()
 		return
@@ -108,10 +112,10 @@ func (a *addrBook) loadPeers(filePath string) {
 }
 
 func (a *addrBook) deserializePeers(filePath string) error {
-
 	_, err := os.Stat(filePath)
 	if os.IsNotExist(err) {
-		a.logger.Warning("Peers not loaded to addrbook since file does not exist. file=%v", filePath)
+		a.logger.With().Warning("peers not loaded to addrbook since file does not exist",
+			log.String("path", filePath))
 		return nil
 	}
 	r, err := os.Open(filePath)
@@ -154,7 +158,7 @@ func (a *addrBook) deserializePeers(filePath string) error {
 		for _, val := range sam.NewBuckets[i] {
 			parsed, err := node.ParseNode(val)
 			if err != nil {
-				a.logger.Warning("a problem occured trying to load peer %v, err=%v", val, err)
+				a.logger.Warning("a problem occurred trying to load peer %v, err=%v", val, err)
 				continue
 			}
 			ka, ok := a.addrIndex[parsed.ID]
@@ -175,7 +179,7 @@ func (a *addrBook) deserializePeers(filePath string) error {
 		for _, val := range sam.TriedBuckets[i] {
 			parsed, err := node.ParseNode(val)
 			if err != nil {
-				a.logger.Warning("a problem occured trying to load peer %v, err=%v", val, err)
+				a.logger.Warning("a problem occurred trying to load peer %v, err=%v", val, err)
 				continue
 			}
 			ka, ok := a.addrIndex[parsed.ID]
@@ -195,12 +199,12 @@ func (a *addrBook) deserializePeers(filePath string) error {
 	// Sanity checking.
 	for k, v := range a.addrIndex {
 		if v.refs == 0 && !v.tried {
-			return fmt.Errorf("address %s after serialisation "+
+			return fmt.Errorf("address %s after serialization "+
 				"with no references", k)
 		}
 
 		if v.refs > 0 && v.tried {
-			return fmt.Errorf("address %s after serialisation "+
+			return fmt.Errorf("address %s after serialization "+
 				"which is both new and tried! ", k)
 		}
 	}
@@ -229,6 +233,5 @@ out:
 
 	a.logger.Debug("Saving peer before exit to file %v", filepath)
 	a.savePeers(filepath)
-	log.Debug("Address handler done")
-
+	a.logger.Debug("Address handler done")
 }

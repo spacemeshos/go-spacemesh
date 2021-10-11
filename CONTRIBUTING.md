@@ -5,7 +5,7 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 - Please make sure to scan the [open issues](https://github.com/spacemeshos/go-spacemesh/issues). 
 - Search the closed ones before reporting things, and help us with the open ones.
 - Make sure that you are able to contribute to MIT licensed free open software (no legal issues please).
-- Introduce yourself, ask questions about issues or talk about things in our [gitter dev channel](https://gitter.im/spacemesh-os/Lobby).
+- Introduce yourself, ask questions about issues or talk about things on our [discord server](https://chat.spacemesh.io/).
 - We actively welcome major contributors to the Spacemesh core dev team.
 - **Have fun hacking away our blockchain future together with us!**
 
@@ -24,14 +24,14 @@ Thank you for considering to contribute to the go-spacemesh open source project.
 - Add a comment in the issue that you are starting to work on it.
 - Ask for any information that you feel is missing from the issue for you to be able to work on it.
 - Clone branch `Develop` and not `Master` - we follow [gitflow](https://datasift.github.io/gitflow/IntroducingGitFlow.html).
-- Create a new PR (Pull Request) from your cloned and reference the issue number in it.
+- Create a new PR (Pull Request) from your clone and reference the issue number in it.
 - Submit your PR when you believe your code is ready for code review.
 - Follow up on code review comments by one of the project maintainers on your Pull Request (PR)
 - You may add your name and email to AUTHORS when submitting your Pull Request.
 
 # Creating a new issue
 - Scan both open and closed issues and verify that your new feature idea, improvement proposal or bug report is not already addressed in another issue.
-- Before starting to work on a large contribution please chat with the core dev team on our Gitter channel to get some initial feedback prior to doing lots of work.
+- Before starting to work on a large contribution please chat with the core dev team in the `#dev_discussion` channel on our [discord server](https://chat.spacemesh.io/) to get some initial feedback prior to doing lots of work.
 - If your feature idea is already discussed in an open issue then join the conversation on the issue and suggest your proposed design or approach. Coordinate with others who actively work on this issue.
 - If an existing closed or open issue not found then create a new repo issue. Describe your idea for new feature or for an improvement of an existing feature and the design of the code you'd like to contribute.
 - Wait for feedback from one of the maintainers before starting to work on the feature or the bug fix. We provide feedback on all issue comments in up to 24 hours.

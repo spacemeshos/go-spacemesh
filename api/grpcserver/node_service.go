@@ -2,19 +2,23 @@ package grpcserver
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/cmd"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"go.uber.org/zap/zapcore"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 )
 
 // NodeService is a grpc server that provides the NodeService, which exposes node-related
@@ -25,21 +29,23 @@ type NodeService struct {
 	GenTime     api.GenesisTimeAPI
 	PeerCounter api.PeerCounter
 	Syncer      api.Syncer
+	AtxAPI      api.ActivationAPI
 }
 
-// RegisterService registers this service with a grpc server instance
+// RegisterService registers this service with a grpc server instance.
 func (s NodeService) RegisterService(server *Server) {
 	pb.RegisterNodeServiceServer(server.GrpcServer, s)
 }
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI, syncer api.Syncer) *NodeService {
+	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI) *NodeService {
 	return &NodeService{
 		Mesh:        tx,
 		GenTime:     genTime,
-		PeerCounter: peers.NewPeers(net, log.NewDefault("grpcserver.NodeService")),
+		PeerCounter: peers.Start(net, peers.WithLog(log.NewDefault("grpcserver.NodeService"))),
 		Syncer:      syncer,
+		AtxAPI:      atxapi,
 	}
 }
 
@@ -52,7 +58,7 @@ func (s NodeService) Echo(_ context.Context, in *pb.EchoRequest) (*pb.EchoRespon
 	return nil, status.Errorf(codes.InvalidArgument, "Must include `Msg`")
 }
 
-// Version returns the version of the node software as a semver string
+// Version returns the version of the node software as a semver string.
 func (s NodeService) Version(context.Context, *empty.Empty) (*pb.VersionResponse, error) {
 	log.Info("GRPC NodeService.Version")
 	return &pb.VersionResponse{
@@ -60,7 +66,7 @@ func (s NodeService) Version(context.Context, *empty.Empty) (*pb.VersionResponse
 	}, nil
 }
 
-// Build returns the build of the node software
+// Build returns the build of the node software.
 func (s NodeService) Build(context.Context, *empty.Empty) (*pb.BuildResponse, error) {
 	log.Info("GRPC NodeService.Build")
 	return &pb.BuildResponse{
@@ -69,7 +75,7 @@ func (s NodeService) Build(context.Context, *empty.Empty) (*pb.BuildResponse, er
 }
 
 // Status returns a status object providing information about the connected peers, sync status,
-// current and verified layer
+// current and verified layer.
 func (s NodeService) Status(ctx context.Context, _ *pb.StatusRequest) (*pb.StatusResponse, error) {
 	log.Info("GRPC NodeService.Status")
 
@@ -89,18 +95,18 @@ func (s NodeService) getLayers() (curLayer, latestLayer, verifiedLayer uint32) {
 	// We cannot get meaningful data from the mesh during the genesis epochs since there are no blocks in these
 	// epochs, so just return the current layer instead
 	curLayerObj := s.GenTime.GetCurrentLayer()
-	curLayer = uint32(curLayerObj)
+	curLayer = curLayerObj.Uint32()
 	if curLayerObj.GetEpoch().IsGenesis() {
-		latestLayer = curLayer
-		verifiedLayer = curLayer
+		latestLayer = s.Mesh.LatestLayer().Uint32()
+		verifiedLayer = latestLayer
 	} else {
-		latestLayer = uint32(s.Mesh.LatestLayer())
-		verifiedLayer = uint32(s.Mesh.LatestLayerInState())
+		latestLayer = s.Mesh.LatestLayer().Uint32()
+		verifiedLayer = s.Mesh.LatestLayerInState().Uint32()
 	}
 	return
 }
 
-// SyncStart requests that the node start syncing the mesh (if it isn't already syncing)
+// SyncStart requests that the node start syncing the mesh (if it isn't already syncing).
 func (s NodeService) SyncStart(ctx context.Context, _ *pb.SyncStartRequest) (*pb.SyncStartResponse, error) {
 	log.Info("GRPC NodeService.SyncStart")
 	s.Syncer.Start(ctx)
@@ -109,7 +115,7 @@ func (s NodeService) SyncStart(ctx context.Context, _ *pb.SyncStartRequest) (*pb
 	}, nil
 }
 
-// Shutdown requests a graceful shutdown
+// Shutdown requests a graceful shutdown.
 func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	log.Info("GRPC NodeService.Shutdown")
 	cmd.Cancel()
@@ -118,9 +124,24 @@ func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.Shutdow
 	}, nil
 }
 
+// UpdatePoetServer update server that is used for generating PoETs.
+func (s NodeService) UpdatePoetServer(ctx context.Context, req *pb.UpdatePoetServerRequest) (*pb.UpdatePoetServerResponse, error) {
+	err := s.AtxAPI.UpdatePoETServer(ctx, req.Url)
+	if err == nil {
+		return &pb.UpdatePoetServerResponse{
+			Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
+		}, nil
+	}
+	switch {
+	case errors.Is(err, activation.ErrPoetServiceUnstable):
+		return nil, status.Errorf(codes.Unavailable, "can't reach server at %s. retry later", req.Url)
+	}
+	return nil, status.Errorf(codes.Internal, "failed to update poet server")
+}
+
 // STREAMS
 
-// StatusStream exposes a stream of node status updates
+// StatusStream exposes a stream of node status updates.
 func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
 	statusStream := events.GetStatusChannel()
@@ -135,7 +156,8 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 				return nil
 			}
 			curLayer, latestLayer, verifiedLayer := s.getLayers()
-			if err := stream.Send(&pb.StatusStreamResponse{
+
+			resp := &pb.StatusStreamResponse{
 				Status: &pb.NodeStatus{
 					ConnectedPeers: s.PeerCounter.PeerCount(),              // number of connected peers
 					IsSynced:       s.Syncer.IsSynced(stream.Context()),    // whether the node is synced
@@ -143,8 +165,10 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 					TopLayer:       &pb.LayerNumber{Number: curLayer},      // current layer, based on time
 					VerifiedLayer:  &pb.LayerNumber{Number: verifiedLayer}, // latest verified layer
 				},
-			}); err != nil {
-				return err
+			}
+
+			if err := stream.Send(resp); err != nil {
+				return fmt.Errorf("send to stream: %w", err)
 			}
 		case <-stream.Context().Done():
 			log.Info("StatusStream closing stream, client disconnected")
@@ -155,7 +179,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 	}
 }
 
-// ErrorStream exposes a stream of node errors
+// ErrorStream exposes a stream of node errors.
 func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
 	errorStream := events.GetErrorChannel()
@@ -167,12 +191,15 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 				log.Info("ErrorStream closed, shutting down")
 				return nil
 			}
-			if err := stream.Send(&pb.ErrorStreamResponse{Error: &pb.NodeError{
+
+			resp := &pb.ErrorStreamResponse{Error: &pb.NodeError{
 				Level:      convertErrorLevel(nodeError.Level),
 				Msg:        nodeError.Msg,
 				StackTrace: nodeError.Trace,
-			}}); err != nil {
-				return err
+			}}
+
+			if err := stream.Send(resp); err != nil {
+				return fmt.Errorf("send to stream: %w", err)
 			}
 		case <-stream.Context().Done():
 			log.Info("ErrorStream closing stream, client disconnected")
@@ -183,7 +210,12 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 	}
 }
 
-// Convert internal error level into level understood by the API
+// Close closes underlying services.
+func (s NodeService) Close() {
+	s.PeerCounter.Close()
+}
+
+// Convert internal error level into level understood by the API.
 func convertErrorLevel(level zapcore.Level) pb.LogLevel {
 	switch level {
 	case zapcore.DebugLevel:

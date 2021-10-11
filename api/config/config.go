@@ -20,7 +20,7 @@ const (
 	defaultStartTransactionService = false
 )
 
-// Config defines the api config params
+// Config defines the api config params.
 type Config struct {
 	StartGrpcServices   []string `mapstructure:"grpc"`
 	GrpcServerPort      int      `mapstructure:"grpc-port"`
@@ -41,7 +41,7 @@ func init() {
 	// todo: update default config params based on runtime env here
 }
 
-// DefaultConfig defines the default configuration options for api
+// DefaultConfig defines the default configuration options for api.
 func DefaultConfig() Config {
 	return Config{
 		// note: all bool flags default to false so don't set one of these to true here
@@ -60,7 +60,16 @@ func DefaultConfig() Config {
 	}
 }
 
-// ParseServicesList enables the requested services
+// DefaultTestConfig returns the default config for tests.
+func DefaultTestConfig() Config {
+	testPortOffset := 10000
+	conf := DefaultConfig()
+	conf.GrpcServerPort += testPortOffset
+	conf.JSONServerPort += testPortOffset
+	return conf
+}
+
+// ParseServicesList enables the requested services.
 func (s *Config) ParseServicesList() error {
 	// Make sure all enabled GRPC services are known
 	for _, svc := range s.StartGrpcServices {

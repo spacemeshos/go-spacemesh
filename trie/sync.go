@@ -19,6 +19,7 @@ package trie
 import (
 	"errors"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/prque"
@@ -44,7 +45,7 @@ type request struct {
 	raw  bool         // Whether this is a raw entry (code) or a trie node
 
 	parents []*request // Parent state nodes referencing this entry (notify all upon completion)
-	depth   int        // Depth level within the trie the node is located to prioritise DFS
+	depth   int        // Depth level within the trie the node is located to prioritize DFS
 	deps    int        // Number of dependencies before allowed to commit this node
 
 	callback LeafCallback // Callback to invoke if a leaf node it reached on this branch
@@ -72,7 +73,7 @@ func newSyncMemBatch() *syncMemBatch {
 	}
 }
 
-// Sync is the main state trie synchronisation scheduler, which provides yet
+// Sync is the main state trie synchronization scheduler, which provides yet
 // unknown trie hashes to retrieve, accepts node data associated with said hashes
 // and reconstructs the trie step by step until all is done.
 type Sync struct {
@@ -119,6 +120,7 @@ func (s *Sync) AddSubTrie(root types.Hash32, depth int, parent types.Hash32, cal
 		ancestor := s.requests[parent]
 		if ancestor == nil {
 			log.Panic(fmt.Sprintf("sub-trie ancestor not found: %x", parent))
+			panic("unreachable")
 		}
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
@@ -152,6 +154,7 @@ func (s *Sync) AddRawEntry(hash types.Hash32, depth int, parent types.Hash32) {
 		ancestor := s.requests[parent]
 		if ancestor == nil {
 			log.Panic(fmt.Sprintf("raw-entry ancestor not found: %x", parent))
+			panic("unreachable")
 		}
 		ancestor.deps++
 		req.parents = append(req.parents, ancestor)
@@ -221,7 +224,7 @@ func (s *Sync) Commit(dbw Putter) (int, error) {
 	// Dump the membatch into a database dbw
 	for i, key := range s.membatch.order {
 		if err := dbw.Put(key[:], s.membatch.batch[key]); err != nil {
-			return i, err
+			return i, fmt.Errorf("put into DB: %w", err)
 		}
 	}
 	written := len(s.membatch.order)

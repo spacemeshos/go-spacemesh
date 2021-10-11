@@ -5,43 +5,44 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	"strconv"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/version"
-	"net"
-	"strconv"
-	"sync"
-	"time"
 )
 
-// DefaultQueueCount is the default number of messages queue we hold. messages queues are used to serialize message receiving
+// DefaultQueueCount is the default number of messages queue we hold. messages queues are used to serialize message receiving.
 const DefaultQueueCount uint = 6
 
-// DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels)
+// DefaultMessageQueueSize is the buffer size of each queue mentioned above. (queues are buffered channels).
 const DefaultMessageQueueSize uint = 5120
 
 const (
-	// ReadBufferSize const is the default value used to set the socket option SO_RCVBUF
+	// ReadBufferSize const is the default value used to set the socket option SO_RCVBUF.
 	ReadBufferSize = 5 * 1024 * 1024
-	// WriteBufferSize const is the default value used to set the socket option SO_SNDBUF
+	// WriteBufferSize const is the default value used to set the socket option SO_SNDBUF.
 	WriteBufferSize = 5 * 1024 * 1024
-	// TCPKeepAlive sets whether KeepAlive is active or not on the socket
+	// TCPKeepAlive sets whether KeepAlive is active or not on the socket.
 	TCPKeepAlive = true
-	// TCPKeepAlivePeriod sets the interval of KeepAlive
+	// TCPKeepAlivePeriod sets the interval of KeepAlive.
 	TCPKeepAlivePeriod = 10 * time.Second
 )
 
-// IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message
+// IncomingMessageEvent is the event reported on new incoming message, it contains the message and the Connection carrying the message.
 type IncomingMessageEvent struct {
 	Conn      Connection
 	Message   []byte
 	RequestID string
 }
 
-// ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections
+// ManagedConnection in an interface extending Connection with some internal methods that are required for Net to manage Connections.
 type ManagedConnection interface {
 	Connection
 	beginEventProcessing(ctx context.Context)
@@ -51,16 +52,16 @@ type ManagedConnection interface {
 // Net clients should register all callbacks
 // Connections may be initiated by Dial() or by remote clients connecting to the listen address
 // It provides full duplex messaging functionality over the same tcp/ip connection
-// Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them
+// Net has no channel events processing loops - clients are responsible for polling these channels and popping events from them.
 type Net struct {
-	networkID int8
+	networkID uint32
 	localNode node.LocalNode
 	logger    log.Log
 
 	listener      net.Listener
 	listenAddress *net.TCPAddr // Address to open connection: localhost:9999
 
-	isShuttingDown bool
+	shutdownCtx context.Context
 
 	regMutex         sync.RWMutex
 	regNewRemoteConn []func(NewConnectionEvent)
@@ -84,7 +85,7 @@ type NewConnectionEvent struct {
 
 // NewNet creates a new network.
 // It attempts to tcp listen on address. e.g. localhost:1234 .
-func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Net, error) {
+func NewNet(ctx context.Context, conf config.Config, localEntity node.LocalNode, logger log.Log) (*Net, error) {
 	qcount := DefaultQueueCount      // todo : get from cfg
 	qsize := DefaultMessageQueueSize // todo : get from cfg
 
@@ -97,6 +98,7 @@ func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Ne
 		queuesCount:           qcount,
 		incomingMessagesQueue: make([]chan IncomingMessageEvent, qcount),
 		config:                conf,
+		shutdownCtx:           ctx,
 	}
 
 	for imq := range n.incomingMessagesQueue {
@@ -106,7 +108,7 @@ func NewNet(conf config.Config, localEntity node.LocalNode, logger log.Log) (*Ne
 	return n, nil
 }
 
-// Start begins accepting connections from the listener socket
+// Start begins accepting connections from the listener socket.
 func (n *Net) Start(ctx context.Context, listener net.Listener) { // todo: maybe add context
 	n.listener = listener
 	n.listenAddress = listener.Addr().(*net.TCPAddr)
@@ -123,31 +125,31 @@ func (n *Net) Start(ctx context.Context, listener net.Listener) { // todo: maybe
 	go n.accept(ctx, listener, pending)
 }
 
-// LocalAddr returns the local listening address. panics before calling Start or if Start errored
+// LocalAddr returns the local listening address. panics before calling Start or if Start errored.
 func (n *Net) LocalAddr() net.Addr {
 	return n.listener.Addr()
 }
 
-// Logger returns a reference to logger
+// Logger returns a reference to logger.
 func (n *Net) Logger() log.Log {
 	return n.logger
 }
 
-// NetworkID retuers Net's network ID
-func (n *Net) NetworkID() int8 {
+// NetworkID retuers Net's network ID.
+func (n *Net) NetworkID() uint32 {
 	return n.networkID
 }
 
-// LocalNode return's the local node descriptor
+// LocalNode return's the local node descriptor.
 func (n *Net) LocalNode() node.LocalNode {
 	return n.localNode
 }
 
-// sumByteArray sums all bytes in an array as uint
+// sumByteArray sums all bytes in an array as uint.
 func sumByteArray(b []byte) uint {
 	var sumOfChars uint
 
-	//take each byte in the string and add the values
+	// take each byte in the string and add the values
 	for i := 0; i < len(b); i++ {
 		byteVal := b[i]
 		sumOfChars += uint(byteVal)
@@ -192,7 +194,7 @@ func (n *Net) dial(ctx context.Context, address net.Addr) (net.Conn, error) {
 		n.tcpSocketConfig(tcpconn)
 		return tcpconn, nil
 	}
-	return netConn, err
+	return netConn, fmt.Errorf("dial TCP: %w", err)
 }
 
 func (n *Net) tcpSocketConfig(tcpconn *net.TCPConn) {
@@ -213,7 +215,7 @@ func (n *Net) tcpSocketConfig(tcpconn *net.TCPConn) {
 }
 
 func (n *Net) createConnection(ctx context.Context, address net.Addr, remotePub p2pcrypto.PublicKey, session NetworkSession) (ManagedConnection, error) {
-	if n.isShuttingDown {
+	if n.isShuttingDown() {
 		return nil, fmt.Errorf("can't dial because the connection is shutting down")
 	}
 
@@ -231,17 +233,17 @@ func (n *Net) createSecuredConnection(ctx context.Context, address net.Addr, rem
 	session := createSession(n.localNode.PrivateKey(), remotePubkey)
 	conn, err := n.createConnection(ctx, address, remotePubkey, session)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create connection: %w", err)
 	}
 
 	handshakeMessage, err := generateHandshakeMessage(session, n.networkID, n.listenAddress.Port, n.localNode.PublicKey())
 	if err != nil {
 		conn.Close()
-		return nil, err
+		return nil, fmt.Errorf("generate handshake: %w", err)
 	}
 	if err := conn.Send(ctx, handshakeMessage); err != nil {
 		conn.Close()
-		return nil, err
+		return nil, fmt.Errorf("send handshake: %w", err)
 	}
 	return conn, nil
 }
@@ -255,7 +257,7 @@ func createSession(privkey p2pcrypto.PrivateKey, remotePubkey p2pcrypto.PublicKe
 // Dial a remote server with provided time out
 // address:: net.Addr
 // Returns established connection that local clients can send messages to or error if failed
-// to establish a connection, currently only secured connections are supported
+// to establish a connection, currently only secured connections are supported.
 func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto.PublicKey) (Connection, error) {
 	if n.listenAddress == nil {
 		return nil, errors.New("net listenAddress must be set")
@@ -263,7 +265,7 @@ func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto
 
 	conn, err := n.createSecuredConnection(ctx, address, remotePubkey)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial, err: %v", err)
+		return nil, fmt.Errorf("failed to dial, err: %w", err)
 	}
 
 	// Add session ID to context
@@ -274,15 +276,23 @@ func (n *Net) Dial(ctx context.Context, address net.Addr, remotePubkey p2pcrypto
 	return conn, nil
 }
 
-// Shutdown initiate a graceful closing of the TCP listener and all other internal routines
+// Shutdown initiate a graceful closing of the TCP listener and all other internal routines.
 func (n *Net) Shutdown() {
-	n.isShuttingDown = true
 	if n.listener != nil {
 		err := n.listener.Close()
 		if err != nil {
 			n.logger.With().Error("error closing listener", log.Err(err))
 		}
 	}
+}
+
+func (n *Net) isShuttingDown() bool {
+	select {
+	case <-n.shutdownCtx.Done():
+		return true
+	default:
+	}
+	return false
 }
 
 func (n *Net) accept(ctx context.Context, listen net.Listener, pending chan struct{}) {
@@ -293,7 +303,7 @@ func (n *Net) accept(ctx context.Context, listen net.Listener, pending chan stru
 		<-pending
 		netConn, err := listen.Accept()
 		if err != nil {
-			if n.isShuttingDown {
+			if n.isShuttingDown() {
 				return
 			}
 			if !Temporary(err) {
@@ -353,12 +363,13 @@ func (n *Net) publishNewRemoteConnectionEvent(conn Connection, node *node.Info) 
 	n.regMutex.RUnlock()
 }
 
-// HandlePreSessionIncomingMessage establishes session with the remote peer and update the Connection with the new session
+// HandlePreSessionIncomingMessage establishes session with the remote peer and update the Connection with the new session.
 func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) error {
 	message, remotePubkey, err := p2pcrypto.ExtractPubkey(message)
 	if err != nil {
-		return err
+		return fmt.Errorf("extract pubkey: %w", err)
 	}
+
 	c.SetRemotePublicKey(remotePubkey)
 	session := createSession(n.localNode.PrivateKey(), remotePubkey)
 	c.SetSession(session)
@@ -366,13 +377,12 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	// open message
 	protoMessage, err := session.OpenMessage(message)
 	if err != nil {
-		return err
+		return fmt.Errorf("open message: %w", err)
 	}
 
 	handshakeData := &HandshakeData{}
-	err = types.BytesToInterface(protoMessage, handshakeData)
-	if err != nil {
-		return err
+	if err = types.BytesToInterface(protoMessage, handshakeData); err != nil {
+		return fmt.Errorf("parse: %w", err)
 	}
 
 	err = verifyNetworkIDAndClientVersion(n.networkID, handshakeData)
@@ -391,33 +401,33 @@ func (n *Net) HandlePreSessionIncomingMessage(c Connection, message []byte) erro
 	return nil
 }
 
-func verifyNetworkIDAndClientVersion(networkID int8, handshakeData *HandshakeData) error {
+func verifyNetworkIDAndClientVersion(networkID uint32, handshakeData *HandshakeData) error {
 	// compare that version to the min client version in config
 	ok, err := version.CheckNodeVersion(handshakeData.ClientVersion, config.MinClientVersion)
 	if err == nil && !ok {
 		return errors.New("unsupported client version")
 	}
 	if err != nil {
-		return fmt.Errorf("invalid client version, err: %v", err)
+		return fmt.Errorf("invalid client version, err: %w", err)
 	}
 
 	// make sure we're on the same network
-	if handshakeData.NetworkID != int32(networkID) {
+	if handshakeData.NetworkID != networkID {
 		return fmt.Errorf("request net id (%d) is different than local net id (%d)", handshakeData.NetworkID, networkID)
-		//TODO : drop and blacklist this sender
+		// TODO : drop and blacklist this sender
 	}
 	return nil
 }
 
-func generateHandshakeMessage(session NetworkSession, networkID int8, localIncomingPort int, localPubkey p2pcrypto.PublicKey) ([]byte, error) {
+func generateHandshakeMessage(session NetworkSession, networkID uint32, localIncomingPort int, localPubkey p2pcrypto.PublicKey) ([]byte, error) {
 	handshakeData := &HandshakeData{
 		ClientVersion: config.ClientVersion,
-		NetworkID:     int32(networkID),
+		NetworkID:     networkID,
 		Port:          uint16(localIncomingPort),
 	}
 	handshakeMessage, err := types.InterfaceToBytes(handshakeData)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("serialize: %w", err)
 	}
 	sealedMessage := session.SealMessage(handshakeMessage)
 	return p2pcrypto.PrependPubkey(sealedMessage, localPubkey), nil
@@ -426,7 +436,7 @@ func generateHandshakeMessage(session NetworkSession, networkID int8, localIncom
 func replacePort(addr string, newPort uint16) (string, error) {
 	addrWithoutPort, _, err := net.SplitHostPort(addr)
 	if err != nil {
-		return "", fmt.Errorf("invalid address format, (%v) err: %v", addr, err)
+		return "", fmt.Errorf("invalid address format, (%v) err: %w", addr, err)
 	}
 	return net.JoinHostPort(addrWithoutPort, strconv.Itoa(int(newPort))), nil
 }

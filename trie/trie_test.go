@@ -21,9 +21,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"io/ioutil"
 	"math/big"
 	"math/rand"
@@ -33,15 +30,18 @@ import (
 	"testing/quick"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 )
 
 func init() {
-	//spew.Config.Indent = "    "
-	//spew.Config.DisableMethods = false
+	// spew.Config.Indent = "    "
+	// spew.Config.DisableMethods = false
 }
 
-// Used for testing
+// Used for testing.
 func newEmpty() *Trie {
 	trie, _ := New(types.Hash32{}, NewDatabase(database.NewMemDatabase()))
 	return trie
@@ -323,7 +323,12 @@ type countingDB struct {
 
 func (db *countingDB) Get(key []byte) ([]byte, error) {
 	db.gets[string(key)]++
-	return db.Database.Get(key)
+	data, err := db.Database.Get(key)
+	if err != nil {
+		return data, fmt.Errorf("get from DB: %w", err)
+	}
+
+	return data, nil
 }
 
 // TestCacheUnload checks that decoded nodes are unloaded after a
@@ -482,8 +487,8 @@ func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool
 
 	errorf := func(format string, args ...interface{}) error {
 		msg := fmt.Sprintf(format, args...)
-		//msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
-		//msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
+		// msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
+		// msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
 		return errors.New(msg)
 	}
 	if flag.gen > parentCachegen {
@@ -519,7 +524,7 @@ const benchElemCount = 20000
 func benchGet(b *testing.B, commit bool) {
 	trie := new(Trie)
 	if commit {
-		_, tmpdb := tempDB()
+		_, tmpdb := tempDB(b)
 		trie, _ = New(types.Hash32{}, tmpdb)
 	}
 	k := make([]byte, 32)
@@ -590,12 +595,12 @@ func BenchmarkHash(b *testing.B) {
 	trie.Hash()
 }
 
-func tempDB() (string, *Database) {
+func tempDB(tb testing.TB) (string, *Database) {
 	dir, err := ioutil.TempDir("", "trie-bench")
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary directory: %v", err))
 	}
-	diskdb, err := database.NewLDBDatabase(dir, 256, 0, log.NewDefault("trie.diskDb"))
+	diskdb, err := database.NewLDBDatabase(dir, 256, 0, logtest.New(tb).WithName("trie.diskDb"))
 	if err != nil {
 		panic(fmt.Sprintf("can't create temporary database: %v", err))
 	}

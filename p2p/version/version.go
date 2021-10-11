@@ -4,12 +4,11 @@ package version
 import (
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"strconv"
 	"strings"
 )
 
-// CheckNodeVersion checks if a request version is more recent then the given min version. returns a bool and an error
+// CheckNodeVersion checks if a request version is more recent then the given min version. returns a bool and an error.
 func CheckNodeVersion(reqVersion string, minVersion string) (bool, error) {
 	// TODO : semantic versioning comparison is a pain, refine this or use a lib
 
@@ -56,7 +55,5 @@ func CheckNodeVersion(reqVersion string, minVersion string) (bool, error) {
 	}
 
 	// this should not happen, it means the versions perfectly match but we already tested that above
-	log.With().Error("error comparing node version strings",
-		log.String("reqVersion", reqVersion), log.String("minVersion", minVersion))
-	return false, errors.New("error comparing node version strings")
+	return false, fmt.Errorf("error comparing node version strings. req (%v) != min (%v)", reqVersion, minVersion)
 }

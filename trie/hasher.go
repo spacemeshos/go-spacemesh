@@ -17,12 +17,13 @@
 package trie
 
 import (
+	"hash"
+	"sync"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/rlp"
-	"hash"
-	"sync"
 )
 
 type hasher struct {
@@ -83,7 +84,7 @@ func (h *hasher) hash(n node, db *Database, force bool) (node, node, error) {
 		if n.canUnload(h.cachegen, h.cachelimit) {
 			// Unload the node from cache. All of its subnodes will have a lower or equal
 			// cache generation number.
-			//cacheUnloadCounter.Inc(1)
+			// cacheUnloadCounter.Inc(1)
 			return hash, hash, nil
 		}
 		if !dirty {
@@ -170,7 +171,7 @@ func (h *hasher) store(n node, db *Database, force bool) (node, error) {
 	}
 	// Generate the RLP encoding of the node
 	h.tmp.Reset()
-	if err := rlp.Encode(&h.tmp, n); err != nil { //  xdr_encoder.EncodeXDR(&h.tmp, n); err != nil {//
+	if err := rlp.Encode(&h.tmp, n); err != nil {
 		panic("encode error: " + err.Error())
 	}
 	if len(h.tmp) < 32 && !force {

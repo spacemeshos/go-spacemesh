@@ -1,8 +1,9 @@
 package hare
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func BuildNotifyMsg(signing Signer, s *Set) *Msg {
@@ -14,6 +15,7 @@ func BuildNotifyMsg(signing Signer, s *Set) *Msg {
 	cert.AggMsgs = &aggregatedMessages{}
 	cert.AggMsgs.Messages = []*Message{BuildCommitMsg(signing, s).Message}
 	builder.SetCertificate(cert)
+	builder.SetEligibilityCount(1)
 
 	return builder.Build()
 }

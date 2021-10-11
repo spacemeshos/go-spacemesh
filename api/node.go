@@ -4,39 +4,41 @@ import (
 	"context"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
-// NetworkAPI is an API to nodes gossip network
+// NetworkAPI is an API to nodes gossip network.
 type NetworkAPI interface {
 	Broadcast(ctx context.Context, channel string, data []byte) error
 	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
 }
 
-// MiningAPI is an API for controlling Post, setting coinbase account and getting mining stats
-type MiningAPI interface {
-	StartPost(ctx context.Context, address types.Address, datadir string, space uint64) error
-	SetCoinbaseAccount(rewardAddress types.Address)
-	// MiningStats returns state of post init, coinbase reward account and data directory path for post commitment
-	MiningStats() (postStatus int, remainingBytes uint64, coinbaseAccount string, postDatadir string)
-	GetSmesherID() types.NodeID
-	Stop()
-}
+// PostSetupAPI is an alias to PostSetupProvider.
+type PostSetupAPI = activation.PostSetupProvider
 
-// GenesisTimeAPI is an API to get genesis time and current layer of the system
+// SmeshingAPI is an alias to SmeshingProvider.
+type SmeshingAPI = activation.SmeshingProvider
+
+// GenesisTimeAPI is an API to get genesis time and current layer of the system.
 type GenesisTimeAPI interface {
 	GetGenesisTime() time.Time
 	GetCurrentLayer() types.LayerID
 }
 
-// Syncer is the API to get sync status and to start sync
+// LoggingAPI is an API to system loggers.
+type LoggingAPI interface {
+	SetLogLevel(loggerName, severity string) error
+}
+
+// Syncer is the API to get sync status and to start sync.
 type Syncer interface {
 	IsSynced(context.Context) bool
 	Start(context.Context)
 }
 
-// TxAPI is an api for getting transaction status
+// TxAPI is an api for getting transaction status.
 type TxAPI interface {
 	AddressExists(types.Address) bool
 	ValidateNonceAndBalance(*types.Transaction) error
@@ -44,11 +46,12 @@ type TxAPI interface {
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]types.Reward, error)
 	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
-	GetTransactionsByDestination(types.LayerID, types.Address) []types.TransactionID
-	GetTransactionsByOrigin(types.LayerID, types.Address) []types.TransactionID
+	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
+	GetTransactionsByDestination(types.LayerID, types.Address) ([]types.TransactionID, error)
+	GetTransactionsByOrigin(types.LayerID, types.Address) ([]types.TransactionID, error)
 	LatestLayer() types.LayerID
 	GetLayerApplied(types.TransactionID) *types.LayerID
-	GetTransaction(types.TransactionID) (*types.Transaction, error)
+	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 	GetProjection(types.Address, uint64, uint64) (uint64, uint64, error)
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
@@ -57,18 +60,24 @@ type TxAPI interface {
 	GetBalance(types.Address) uint64
 	GetNonce(types.Address) uint64
 	GetAllAccounts() (*types.MultipleAccountsState, error)
-	//TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
 	GetRewardsBySmesherID(types.NodeID) ([]types.Reward, error)
+	// TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
 }
 
-// PeerCounter is an api to get amount of connected peers
+// PeerCounter is an api to get amount of connected peers.
 type PeerCounter interface {
+	Close()
 	PeerCount() uint64
 }
 
-// MempoolAPI is an API for reading mempool data that's useful for API services
+// MempoolAPI is an API for reading mempool data that's useful for API services.
 type MempoolAPI interface {
 	Get(types.TransactionID) (*types.Transaction, error)
-	GetTxIdsByAddress(types.Address) []types.TransactionID
+	GetTxsByAddress(types.Address) []*types.Transaction
 	GetProjection(types.Address, uint64, uint64) (uint64, uint64)
+}
+
+// ActivationAPI is an API for activation module.
+type ActivationAPI interface {
+	UpdatePoETServer(context.Context, string) error
 }

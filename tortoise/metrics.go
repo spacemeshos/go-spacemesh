@@ -1,24 +1,36 @@
 package tortoise
 
 import (
-	"github.com/go-kit/kit/metrics"
-	prmkit "github.com/go-kit/kit/metrics/prometheus"
-	"github.com/prometheus/client_golang/prometheus"
+	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
 const (
-	namespace = "spacemesh"
-	subsystem = "consensus"
+	// MetricsSubsystem is a subsystem shared by all metrics exposed by this
+	// package.
+	MetricsSubsystem = "consensus"
 )
 
-func newGauge(name, help string, labels []string) metrics.Gauge {
-	return prmkit.NewGaugeFrom(prometheus.GaugeOpts{Namespace: namespace, Subsystem: subsystem, Name: name, Help: help}, labels)
-}
-
 var (
-	pbaseCount     = newGauge("pbase_counter", "pbase index", []string{})
-	processedCount = newGauge("processed_index", "number of layers processed", []string{})
-	blockVotes     = newGauge("block_votes", "block validity", []string{"validity"})
-	validBlocks    = blockVotes.With("validity", "valid")
-	invalidBlocks  = blockVotes.With("validity", "invalid")
+	pbaseCount = metrics.NewGauge(
+		"pbase_counter",
+		MetricsSubsystem,
+		"pbase index",
+		nil,
+	)
+
+	processedCount = metrics.NewGauge(
+		"processed_index",
+		MetricsSubsystem,
+		"Number of layers processed",
+		nil,
+	)
+
+	blockVotes = metrics.NewGauge(
+		"block_votes",
+		MetricsSubsystem,
+		"Block validity",
+		[]string{"validity"},
+	)
+	validBlocks   = blockVotes.With("validity", "valid")
+	invalidBlocks = blockVotes.With("validity", "invalid")
 )

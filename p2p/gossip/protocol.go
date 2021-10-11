@@ -3,6 +3,7 @@ package gossip
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,15 +17,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
-const oldMessageCacheSize = 10000
-const propagateHandleBufferSize = 5000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
+const (
+	oldMessageCacheSize       = 10000
+	propagateHandleBufferSize = 5000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
+)
 
 type peersManager interface {
 	GetPeers() []peers.Peer
 	PeerCount() uint64
+	Close()
 }
 
-// Interface for the underlying p2p layer
+// Interface for the underlying p2p layer.
 type baseNetwork interface {
 	SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
@@ -41,7 +45,9 @@ type Protocol struct {
 
 	peers peersManager
 
-	shutdown chan struct{}
+	wg          sync.WaitGroup
+	shutdownCtx context.Context
+	cancel      context.CancelFunc
 
 	oldMessageQ *types.DoubleCache
 
@@ -51,15 +57,17 @@ type Protocol struct {
 }
 
 // NewProtocol creates a new gossip protocol instance.
-func NewProtocol(config config.SwarmConfig, base baseNetwork, peersManager peersManager, localNodePubkey p2pcrypto.PublicKey, logger log.Log) *Protocol {
+func NewProtocol(ctx context.Context, config config.SwarmConfig, base baseNetwork, peersManager peersManager, localNodePubkey p2pcrypto.PublicKey, logger log.Log) *Protocol {
 	// intentionally not subscribing to peers events so that the channels won't block in case executing Start delays
+	ctx, cancel := context.WithCancel(ctx)
 	return &Protocol{
 		Log:             logger,
 		config:          config,
 		net:             base,
 		localNodePubkey: localNodePubkey,
 		peers:           peersManager,
-		shutdown:        make(chan struct{}),
+		shutdownCtx:     ctx,
+		cancel:          cancel,
 		oldMessageQ:     types.NewDoubleCache(oldMessageCacheSize), // todo : remember to drain this
 		propagateQ:      make(chan service.MessageValidation, propagateHandleBufferSize),
 		pq:              priorityq.New(propagateHandleBufferSize),
@@ -67,21 +75,32 @@ func NewProtocol(config config.SwarmConfig, base baseNetwork, peersManager peers
 	}
 }
 
-// Start a loop that process peers events
+// Start a loop that process peers events.
 func (p *Protocol) Start(ctx context.Context) {
-	go p.propagationEventLoop(ctx) // TODO consider running several consumers
+	p.wg.Add(2)
+	go func() {
+		p.propagationEventLoop(ctx)
+		p.wg.Done()
+	}()
+	go func() {
+		p.handlePQ(ctx)
+		p.wg.Done()
+	}()
 }
 
-// Close stops all protocol routines.
+// Close stops the protocol and waits for background workers to exit.
 func (p *Protocol) Close() {
-	close(p.shutdown)
+	p.cancel()
+	p.pq.Close()
+	p.peers.Close()
+	p.wg.Wait()
 }
 
-// Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues
+// Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues.
 func (p *Protocol) Broadcast(ctx context.Context, payload []byte, nextProt string) error {
 	p.WithContext(ctx).With().Debug("broadcasting message", log.String("from_type", nextProt))
 	return p.processMessage(ctx, p.localNodePubkey, true, nextProt, service.DataBytes{Payload: payload})
-	//todo: should this ever return error ? then when processMessage should return error ?. should it block?
+	// todo: should this ever return error ? then when processMessage should return error ?. should it block?
 }
 
 // Relay processes a message, if the message is new, it is passed for the protocol to validate and then propagated.
@@ -96,7 +115,7 @@ func (p *Protocol) SetPriority(protoName string, priority priorityq.Priority) {
 }
 
 // markMessageAsOld adds the message's hash to the old messages queue so that the message won't be processed in case received again.
-// Returns true if message was already processed before
+// Returns true if message was already processed before.
 func (p *Protocol) markMessageAsOld(h types.Hash12) bool {
 	return p.oldMessageQ.GetOrInsert(h)
 }
@@ -106,47 +125,55 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 	logger := p.WithContext(ctx).WithFields(
 		log.FieldNamed("msg_sender", sender),
 		log.String("protocol", protocol),
-		log.String("hash", util.Bytes2Hex(h[:])))
+		log.String("msghash", util.Bytes2Hex(h[:])),
+		log.Bool("own_message", ownMessage),
+	)
 	logger.Debug("checking gossip message newness")
 	if p.markMessageAsOld(h) {
 		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
 		// todo : - have some more metrics for termination
-		// todo	: - maybe tell the peer we got this message already?
-		// todo : - maybe block this peer since he sends us old messages
-		logger.Debug("gossip message is old, dropping")
+		if !ownMessage {
+			logger.Debug("gossip message is old, dropping")
+		} else {
+			logger.Warning("own message is marked as old")
+		}
 		return nil
 	}
 
 	logger.Event().Debug("gossip message is new, processing")
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
-	return p.net.ProcessGossipProtocolMessage(ctx, sender, ownMessage, protocol, msg, p.propagateQ)
+
+	if err := p.net.ProcessGossipProtocolMessage(ctx, sender, ownMessage, protocol, msg, p.propagateQ); err != nil {
+		return fmt.Errorf("process gossip protocol message: %w", err)
+	}
+
+	return nil
 }
 
 // send a message to all the peers.
 func (p *Protocol) propagateMessage(ctx context.Context, payload []byte, nextProt string, exclude p2pcrypto.PublicKey) {
-	//TODO soon: don't wait for message to send and if we finished sending last message one of the peers send the next
+	// TODO soon: don't wait for message to send and if we finished sending last message one of the peers send the next
 	// message. limit the number of simultaneous sends. consider other messages (mainly sync).
 	var wg sync.WaitGroup
-peerLoop:
 	for _, peer := range p.peers.GetPeers() {
 		if exclude == peer {
-			continue peerLoop
+			continue
 		}
 		wg.Add(1)
 		go func(pubkey p2pcrypto.PublicKey) {
-			// TODO: replace peer ?
-
+			defer wg.Done()
 			// Add recipient to context for logs
 			msgCtx := ctx
 			if reqID, ok := log.ExtractRequestID(ctx); ok {
 				// overwrite the existing reqID with the same and add the field
+				// (there is currently no easier way to add a field to log ctx)
 				msgCtx = log.WithRequestID(ctx, reqID, log.FieldNamed("to_id", pubkey))
 			}
 
+			p.WithContext(msgCtx).Debug("propagating gossip message to peer")
 			if err := p.net.SendMessage(msgCtx, pubkey, nextProt, payload); err != nil {
 				p.WithContext(msgCtx).With().Warning("failed sending", log.Err(err))
 			}
-			wg.Done()
 		}(peer)
 	}
 	wg.Wait()
@@ -154,6 +181,9 @@ peerLoop:
 
 func (p *Protocol) handlePQ(ctx context.Context) {
 	for {
+		if p.isShuttingDown() {
+			return
+		}
 		mi, err := p.pq.Read()
 		if err != nil {
 			p.WithContext(ctx).With().Info("priority queue was closed, exiting", log.Err(err))
@@ -178,8 +208,14 @@ func (p *Protocol) handlePQ(ctx context.Context) {
 		} else {
 			msgCtx = log.WithRequestID(ctx, m.RequestID(), extraFields...)
 		}
-		p.WithContext(msgCtx).Debug("new_gossip_message_relay")
+		p.WithContext(msgCtx).With().Debug("new_gossip_message_relay",
+			log.Int("priority_queue_length", p.pq.Length()))
+		if p.pq.Length() > 50 {
+			p.WithContext(msgCtx).With().Warning("outbound gossip message queue backlog",
+				log.Int("priority_queue_length", p.pq.Length()))
+		}
 		p.propagateMessage(msgCtx, m.Message(), m.Protocol(), m.Sender())
+		p.WithContext(msgCtx).With().Debug("finished propagating gossip message")
 	}
 }
 
@@ -193,22 +229,36 @@ func (p *Protocol) getPriority(protoName string) priorityq.Priority {
 	return v
 }
 
-// pushes messages that passed validation into the priority queue
-func (p *Protocol) propagationEventLoop(ctx context.Context) {
-	go p.handlePQ(ctx)
+func (p *Protocol) isShuttingDown() bool {
+	select {
+	case <-p.shutdownCtx.Done():
+		return true
+	default:
+	}
+	return false
+}
 
+// pushes messages that passed validation into the priority queue.
+func (p *Protocol) propagationEventLoop(ctx context.Context) {
 	for {
 		select {
 		case msgV := <-p.propagateQ:
+			if p.isShuttingDown() {
+				return
+			}
+			// Note: this will block iff the priority queue is full
 			if err := p.pq.Write(p.getPriority(msgV.Protocol()), msgV); err != nil {
 				p.WithContext(ctx).With().Error("could not write to priority queue",
 					log.Err(err),
 					log.String("protocol", msgV.Protocol()))
 			}
+			p.WithContext(ctx).With().Debug("wrote inbound message to priority queue",
+				log.String("protocol", msgV.Protocol()),
+				log.Int("priority_queue_length", p.pq.Length()),
+				log.Int("propagation_queue_length", len(p.propagateQ)))
 			metrics.PropagationQueueLen.Set(float64(len(p.propagateQ)))
 
-		case <-p.shutdown:
-			p.pq.Close()
+		case <-p.shutdownCtx.Done():
 			p.WithContext(ctx).Error("propagate event loop stopped: protocol shutdown")
 			return
 		}

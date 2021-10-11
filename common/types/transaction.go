@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -36,7 +37,7 @@ func (id TransactionID) Bytes() []byte {
 // Field returns a log field. Implements the LoggableField interface.
 func (id TransactionID) Field() log.Field { return log.FieldNamed("tx_id", id.Hash32()) }
 
-// TxIdsField returns a list of loggable fields for a given list of IDs
+// TxIdsField returns a list of loggable fields for a given list of IDs.
 func TxIdsField(ids []TransactionID) log.Field {
 	strs := []string{}
 	for _, a := range ids {
@@ -118,6 +119,13 @@ func (t *Transaction) String() string {
 		t.ID().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.Fee)
 }
 
+// MeshTransaction is stored in the mesh and included in the block.
+type MeshTransaction struct {
+	Transaction
+	LayerID LayerID
+	BlockID BlockID
+}
+
 // InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).
 type InnerTransaction struct {
 	AccountNonce uint64
@@ -136,7 +144,7 @@ type Reward struct {
 	Coinbase            Address
 }
 
-// NewSignedTx is used in TESTS ONLY to generate signed txs
+// NewSignedTx is used in TESTS ONLY to generate signed txs.
 func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *signing.EdSigner) (*Transaction, error) {
 	inner := InnerTransaction{
 		AccountNonce: nonce,

@@ -1,11 +1,12 @@
 package signing
 
 import (
-	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/spacemeshos/ed25519"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 func TestNewEdSignerFromBuffer(t *testing.T) {
@@ -30,7 +31,6 @@ func TestEdSigner_Sign(t *testing.T) {
 func TestNewEdSigner(t *testing.T) {
 	ed := NewEdSigner()
 	assert.Equal(t, []byte(ed.pubKey), []byte(ed.privKey[32:]))
-	log.Info("pub: %v priv: %x", ed.PublicKey().String(), ed.privKey)
 }
 
 func TestEdSigner_ToBuffer(t *testing.T) {

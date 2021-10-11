@@ -96,7 +96,7 @@ Since the project uses Go Modules it is best to place the code **outside** your 
 
 Building is supported on OS X, Linux, FreeBSD, and Windows.
 
-Install [Go 1.14 or later](https://golang.org/dl/) for your platform, if you haven't already.
+Install [Go 1.15 or later](https://golang.org/dl/) for your platform, if you haven't already.
 
 On Windows you need to install `make` via [msys2](https://www.msys2.org/), [MingGW-w64](http://mingw-w64.org/doku.php) or [mingw] (https://chocolatey.org/packages/mingw)
 
@@ -125,6 +125,19 @@ make darwin | linux | freebsd | windows
 ```
 
 Platform-specific binaries are saved to the `/build` directory.
+
+### Using `go build` and `go test` without `make`
+To build code without using `make` the `CGO_LDFLAGS` environment variable must be set
+appropriately. The required value can be obtained by running `make print-ldflags` or
+`make print-test-ldflags`.
+
+This can be done in 3 ways:
+1. Setting the variable in the shell environment (e.g., in bash run `CGO_LDFLAGS=$(make print-ldflags)`).
+2. Prefixing the key and value to the `go` command (e.g., `CGO_LDFLAGS=$(make print-ldflags) go build`).
+3. Using `go env -w CGO_LDFLAGS=$(make print-ldflags)`, which persistently adds this value to Go's
+   environment for any future runs.
+
+There's a handy shortcut for the 3rd method: `make go-env` or `make go-env-test`.
 
 ---
 

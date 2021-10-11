@@ -19,21 +19,22 @@ package database_test
 import (
 	"bytes"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"io/ioutil"
 	"os"
 	"strconv"
 	"sync"
 	"testing"
+
+	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
-func newTestLDB() (*database.LDBDatabase, func()) {
+func newTestLDB(tb testing.TB) (*database.LDBDatabase, func()) {
 	dirname, err := ioutil.TempDir(os.TempDir(), "ethdb_test_")
 	if err != nil {
 		panic("failed to create test file: " + err.Error())
 	}
-	db, err := database.NewLDBDatabase(dirname, 0, 0, log.NewDefault("db.db"))
+	db, err := database.NewLDBDatabase(dirname, 0, 0, logtest.New(tb))
 	if err != nil {
 		panic("failed to create test database: " + err.Error())
 	}
@@ -44,10 +45,10 @@ func newTestLDB() (*database.LDBDatabase, func()) {
 	}
 }
 
-var test_values = []string{"", "a", "1251", "\x00123\x00"}
+var testValues = []string{"", "a", "1251", "\x00123\x00"}
 
 func TestLDB_PutGet(t *testing.T) {
-	db, remove := newTestLDB()
+	db, remove := newTestLDB(t)
 	defer remove()
 	testPutGet(db, t)
 }
@@ -59,14 +60,14 @@ func TestMemoryDB_PutGet(t *testing.T) {
 func testPutGet(db database.Database, t *testing.T) {
 	t.Parallel()
 
-	for _, k := range test_values {
+	for _, k := range testValues {
 		err := db.Put([]byte(k), nil)
 		if err != nil {
 			t.Fatalf("put failed: %v", err)
 		}
 	}
 
-	for _, k := range test_values {
+	for _, k := range testValues {
 		data, err := db.Get([]byte(k))
 		if err != nil {
 			t.Fatalf("get failed: %v", err)
@@ -81,14 +82,14 @@ func testPutGet(db database.Database, t *testing.T) {
 		t.Fatalf("expect to return a not found error")
 	}
 
-	for _, v := range test_values {
+	for _, v := range testValues {
 		err := db.Put([]byte(v), []byte(v))
 		if err != nil {
 			t.Fatalf("put failed: %v", err)
 		}
 	}
 
-	for _, v := range test_values {
+	for _, v := range testValues {
 		data, err := db.Get([]byte(v))
 		if err != nil {
 			t.Fatalf("get failed: %v", err)
@@ -98,14 +99,14 @@ func testPutGet(db database.Database, t *testing.T) {
 		}
 	}
 
-	for _, v := range test_values {
+	for _, v := range testValues {
 		err := db.Put([]byte(v), []byte("?"))
 		if err != nil {
 			t.Fatalf("put override failed: %v", err)
 		}
 	}
 
-	for _, v := range test_values {
+	for _, v := range testValues {
 		data, err := db.Get([]byte(v))
 		if err != nil {
 			t.Fatalf("get failed: %v", err)
@@ -115,7 +116,7 @@ func testPutGet(db database.Database, t *testing.T) {
 		}
 	}
 
-	for _, v := range test_values {
+	for _, v := range testValues {
 		orig, err := db.Get([]byte(v))
 		if err != nil {
 			t.Fatalf("get failed: %v", err)
@@ -130,14 +131,14 @@ func testPutGet(db database.Database, t *testing.T) {
 		}
 	}
 
-	for _, v := range test_values {
+	for _, v := range testValues {
 		err := db.Delete([]byte(v))
 		if err != nil {
 			t.Fatalf("delete %q failed: %v", v, err)
 		}
 	}
 
-	for _, v := range test_values {
+	for _, v := range testValues {
 		_, err := db.Get([]byte(v))
 		if err == nil {
 			t.Fatalf("got deleted value %q", v)
@@ -146,7 +147,7 @@ func testPutGet(db database.Database, t *testing.T) {
 }
 
 func TestLDB_ParallelPutGet(t *testing.T) {
-	db, remove := newTestLDB()
+	db, remove := newTestLDB(t)
 	defer remove()
 	testParallelPutGet(db, t)
 }

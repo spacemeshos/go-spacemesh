@@ -33,19 +33,20 @@ var _ PoetProvingServiceClient = (*HTTPPoetHarness)(nil)
 func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 	cfg, err := integration.DefaultConfig()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("default integration config: %w", err)
 	}
+
 	cfg.DisableBroadcast = disableBroadcast
 	cfg.Reset = true
 	cfg.Duration = "4s"
 
 	h, err := integration.NewHarness(cfg)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("new harness: %w", err)
 	}
 
 	return &HTTPPoetHarness{
-		HTTPPoetClient: NewHTTPPoetClient(context.Background(), h.RESTListen()),
+		HTTPPoetClient: NewHTTPPoetClient(h.RESTListen()),
 		Teardown:       h.TearDown,
 		h:              h,
 		Stdout:         h.StdoutPipe(),
@@ -57,17 +58,17 @@ func NewHTTPPoetHarness(disableBroadcast bool) (*HTTPPoetHarness, error) {
 // HTTPPoetClient implements PoetProvingServiceClient interface.
 type HTTPPoetClient struct {
 	baseURL    string
-	ctxFactory func() (context.Context, context.CancelFunc)
+	ctxFactory func(ctx context.Context) (context.Context, context.CancelFunc)
 }
 
 // A compile time check to ensure that HTTPPoetClient fully implements PoetProvingServiceClient.
 var _ PoetProvingServiceClient = (*HTTPPoetClient)(nil)
 
 // NewHTTPPoetClient returns new instance of HTTPPoetClient for the specified target.
-func NewHTTPPoetClient(ctx context.Context, target string) *HTTPPoetClient {
+func NewHTTPPoetClient(target string) *HTTPPoetClient {
 	return &HTTPPoetClient{
 		baseURL: fmt.Sprintf("http://%s/v1", target),
-		ctxFactory: func() (context.Context, context.CancelFunc) {
+		ctxFactory: func(ctx context.Context) (context.Context, context.CancelFunc) {
 			return context.WithTimeout(ctx, 10*time.Second)
 		},
 	}
@@ -75,20 +76,20 @@ func NewHTTPPoetClient(ctx context.Context, target string) *HTTPPoetClient {
 
 // Start is an administrative endpoint of the proving service that tells it to start. This is mostly done in tests,
 // since it requires administrative permissions to the proving service.
-func (c *HTTPPoetClient) Start(gatewayAddresses []string) error {
+func (c *HTTPPoetClient) Start(ctx context.Context, gatewayAddresses []string) error {
 	reqBody := StartRequest{GatewayAddresses: gatewayAddresses}
-	if err := c.req("POST", "/start", reqBody, nil); err != nil {
-		return err
+	if err := c.req(ctx, "POST", "/start", reqBody, nil); err != nil {
+		return fmt.Errorf("request: %w", err)
 	}
 
 	return nil
 }
 
 // Submit registers a challenge in the proving service current open round.
-func (c *HTTPPoetClient) Submit(challenge types.Hash32) (*types.PoetRound, error) {
+func (c *HTTPPoetClient) Submit(ctx context.Context, challenge types.Hash32) (*types.PoetRound, error) {
 	reqBody := SubmitRequest{Challenge: challenge[:]}
 	resBody := &SubmitResponse{}
-	if err := c.req("POST", "/submit", reqBody, resBody); err != nil {
+	if err := c.req(ctx, "POST", "/submit", reqBody, resBody); err != nil {
 		return nil, err
 	}
 
@@ -96,16 +97,16 @@ func (c *HTTPPoetClient) Submit(challenge types.Hash32) (*types.PoetRound, error
 }
 
 // PoetServiceID returns the public key of the PoET proving service.
-func (c *HTTPPoetClient) PoetServiceID() ([]byte, error) {
+func (c *HTTPPoetClient) PoetServiceID(ctx context.Context) ([]byte, error) {
 	resBody := &GetInfoResponse{}
-	if err := c.req("GET", "/info", nil, resBody); err != nil {
+	if err := c.req(ctx, "GET", "/info", nil, resBody); err != nil {
 		return nil, err
 	}
 
 	return resBody.ServicePubKey, nil
 }
 
-func (c *HTTPPoetClient) req(method string, endURL string, reqBody interface{}, resBody interface{}) error {
+func (c *HTTPPoetClient) req(ctx context.Context, method string, endURL string, reqBody interface{}, resBody interface{}) error {
 	jsonReqBody, err := json.Marshal(reqBody)
 	if err != nil {
 		return fmt.Errorf("request json marshal failure: %v", err)
@@ -114,18 +115,18 @@ func (c *HTTPPoetClient) req(method string, endURL string, reqBody interface{}, 
 	url := fmt.Sprintf("%s%s", c.baseURL, endURL)
 	req, err := http.NewRequest(method, url, bytes.NewBuffer(jsonReqBody))
 	if err != nil {
-		return err
+		return fmt.Errorf("create request: %w", err)
 	}
 
 	req.Header.Set("Content-Type", "application/json")
 
-	ctx, cancel := c.ctxFactory()
+	ctx, cancel := c.ctxFactory(ctx)
 	defer cancel()
-	req.WithContext(ctx)
+	req = req.WithContext(ctx)
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return fmt.Errorf("perform request: %w", err)
 	}
 	defer res.Body.Close()
 
@@ -143,12 +144,12 @@ func (c *HTTPPoetClient) req(method string, endURL string, reqBody interface{}, 
 	return nil
 }
 
-// SubmitRequest is the request object for the submit endpoint
+// SubmitRequest is the request object for the submit endpoint.
 type SubmitRequest struct {
 	Challenge []byte `json:"challenge,omitempty"`
 }
 
-// StartRequest is the request object for the start endpoint
+// StartRequest is the request object for the start endpoint.
 type StartRequest struct {
 	GatewayAddresses       []string `json:"gatewayAddresses,omitempty"`
 	DisableBroadcast       bool     `json:"disableBroadcast,omitempty"`
@@ -156,12 +157,12 @@ type StartRequest struct {
 	BroadcastAcksThreshold int      `json:"broadcastAcksThreshold,omitempty"`
 }
 
-// SubmitResponse is the response object for the submit endpoint
+// SubmitResponse is the response object for the submit endpoint.
 type SubmitResponse struct {
 	RoundID string
 }
 
-// GetInfoResponse is the response object for the get-info endpoint
+// GetInfoResponse is the response object for the get-info endpoint.
 type GetInfoResponse struct {
 	OpenRoundID        string
 	ExecutingRoundsIDs []string

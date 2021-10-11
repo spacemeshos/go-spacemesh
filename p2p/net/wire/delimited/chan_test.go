@@ -5,8 +5,7 @@ import (
 	"time"
 )
 
-type mockc struct {
-}
+type mockc struct{}
 
 func (mockc) Write(b []byte) (int, error) {
 	return len(b), nil
@@ -28,7 +27,7 @@ func Test_Chan(t *testing.T) {
 	done := make(chan struct{}, 2000)
 
 	for i := 0; i < 2000; i++ {
-		//i:=i
+		// i:=i
 		go func() {
 			_ = c.Out([]byte("LALAL"))
 			done <- struct{}{}
@@ -44,7 +43,6 @@ func Test_Chan(t *testing.T) {
 			continue
 		case <-tx.C:
 			t.Fatal("timeout waiting for message")
-
 		}
 	}
 }

@@ -5,22 +5,25 @@ import (
 	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"io"
 	"math/big"
 	"net/http"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-const register = "register"
-const unregister = "unregister"
-const validate = "validatemap"
+const (
+	register   = "register"
+	unregister = "unregister"
+	validate   = "validatemap"
+)
 
 const defaultOracleServerAddress = "http://localhost:3030"
 
-// serverAddress is the oracle server we're using
+// serverAddress is the oracle server we're using.
 var serverAddress = defaultOracleServerAddress
 
 func setServerAddress(addr string) {
@@ -41,7 +44,7 @@ func newHTTPRequester(url string) *httpRequester {
 }
 
 func (hr *httpRequester) Get(api, data string) []byte {
-	var jsonStr = []byte(data)
+	jsonStr := []byte(data)
 	log.Debug("Sending oracle request : %s ", jsonStr)
 	req, err := http.NewRequest("POST", hr.url+"/"+api, bytes.NewBuffer(jsonStr))
 	if err != nil {
@@ -50,7 +53,6 @@ func (hr *httpRequester) Get(api, data string) []byte {
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := hr.c.Do(req)
-
 	if err != nil {
 		log.Panic("httpRequester panicked: %v", err)
 	}
@@ -86,7 +88,7 @@ func newOracleClient() *oracleClient {
 	return newClientWithWorldID(world)
 }
 
-// newClientWithWorldID creates a new client with a specific worldid
+// newClientWithWorldID creates a new client with a specific worldid.
 func newClientWithWorldID(world uint64) *oracleClient {
 	c := newHTTPRequester(serverAddress)
 	instMtx := make(map[uint32]*sync.Mutex)
@@ -102,12 +104,12 @@ func validateQuery(world uint64, instid uint32, committeeSize int) string {
 	return fmt.Sprintf(`{ "World": %d, "InstanceID": %d, "CommitteeSize": %d}`, world, instid, committeeSize)
 }
 
-// Register asks the oracle server to add this node to the active set
+// Register asks the oracle server to add this node to the active set.
 func (oc *oracleClient) Register(honest bool, id string) {
 	oc.client.Get(register, registerQuery(oc.world, id, honest))
 }
 
-// Unregister asks the oracle server to de-list this node from the active set
+// Unregister asks the oracle server to de-list this node from the active set.
 func (oc *oracleClient) Unregister(honest bool, id string) {
 	oc.client.Get(unregister, registerQuery(oc.world, id, honest))
 }
@@ -116,7 +118,7 @@ type validList struct {
 	IDs []string `json:"IDs"`
 }
 
-func hashInstanceAndK(instanceID types.LayerID, K int32) uint32 {
+func hashInstanceAndK(instanceID types.LayerID, K uint32) uint32 {
 	kInBytes := make([]byte, 4)
 	binary.LittleEndian.PutUint32(kInBytes, uint32(K))
 	h := newHasherU32()
@@ -125,7 +127,7 @@ func hashInstanceAndK(instanceID types.LayerID, K int32) uint32 {
 }
 
 // Eligible checks whether a given ID is in the eligible list or not. it fetches the list once and gives answers locally after that.
-func (oc *oracleClient) Eligible(layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+func (oc *oracleClient) Eligible(layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	instID := hashInstanceAndK(layer, round)
 	// make special instance ID
 	oc.eMtx.Lock()

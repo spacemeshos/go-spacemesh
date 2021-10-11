@@ -59,7 +59,7 @@ This will run the local python automation code with the compiled miners `develop
 ##### Using the `make` command
 For example:
 ```
-make dockertest-p2p-elk
+make dockertest-p2p
 ``` 
 When running a make command, a new compiled image of the local branch will be created and run by the automation code.
 
@@ -68,7 +68,7 @@ Logs can be viewed by accessing the ephemeral ELK cluster while the test is runn
 Kibana's IP can be resolved using a kubectl command: `kubectl get services -n YOUR_NAMESPACE`
 Logs will be dumped to a main ES server in two cases:
 * the test run has failed
-* 'is_dump: True' was added to the test config file
+* --dump=True was added to the test command line
 
 In any other case the logs will be discarded at the end of the run.
 

@@ -4,42 +4,102 @@ package turbohare
 import (
 	"bytes"
 	"context"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"fmt"
 	"sort"
+	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type blockProvider interface {
-	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
+type meshProvider interface {
+	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
+	RecordCoinflip(context.Context, types.LayerID, bool)
+	SetZeroBlockLayer(types.LayerID) error
+	HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID)
 }
 
-// SuperHare is a method to provide fast hare results without consensus based on received blocks from gossip
+// SuperHare is a method to provide fast hare results without consensus based on received blocks from gossip.
 type SuperHare struct {
-	blocks blockProvider
+	mesh         meshProvider
+	conf         config.Config
+	beginLayer   chan types.LayerID
+	closeChannel chan struct{}
+	logger       log.Log
 }
 
-// New creates a new instance of SuperHare
-func New(ctx context.Context, blocks blockProvider) *SuperHare {
-	return &SuperHare{blocks}
+// New creates a new instance of SuperHare.
+func New(_ context.Context, conf config.Config, mesh meshProvider, beginLayer chan types.LayerID, logger log.Log) *SuperHare {
+	return &SuperHare{mesh, conf, beginLayer, make(chan struct{}), logger}
 }
 
-// Start is a stub to support service API
+// Start is a stub to support service API.
 func (h *SuperHare) Start(ctx context.Context) error {
+	logger := h.logger.WithContext(ctx)
+
+	// simulate publishing weak coin values to the mesh
+	go func() {
+		logger.Info("superhare mocker running")
+		for {
+			select {
+			case <-h.closeChannel:
+				logger.Info("superhare shutting down")
+				return
+			case layerID := <-h.beginLayer:
+				go func() {
+					logger.With().Info("superhare got layer tick, simulating consensus process run", layerID)
+
+					// don't block here if Close was called
+					select {
+					case <-h.closeChannel:
+						logger.Info("superhare closing lingering goroutine")
+						return
+					case <-time.After(time.Second * time.Duration(h.conf.WakeupDelta+5*h.conf.RoundDuration)):
+					}
+
+					// use lowest-order bit
+					coinflip := layerID.Bytes()[0]&byte(1) == byte(1)
+					h.mesh.RecordCoinflip(ctx, layerID, coinflip)
+					logger.With().Info("superhare recorded coinflip", layerID, log.Bool("coinflip", coinflip))
+
+					// pass all blocks in the layer to the mesh
+					if layerID.GetEpoch().IsGenesis() {
+						logger.With().Info("not sending blocks to mesh for genesis layer")
+						return
+					}
+					blocks, err := h.mesh.LayerBlockIds(layerID)
+					if err != nil {
+						logger.With().Warning("error reading block ids for layer, using empty set",
+							layerID,
+							log.Err(err))
+					}
+					if len(blocks) == 0 {
+						if err := h.mesh.SetZeroBlockLayer(layerID); err != nil {
+							logger.With().Error("failed to set layer as a zero", log.Err(err))
+						}
+					}
+					h.mesh.HandleValidatedLayer(ctx, layerID, blocks)
+				}()
+			}
+		}
+	}()
 	return nil
 }
 
-// Close is a stup to support service API
+// Close is a stup to support service API.
 func (h *SuperHare) Close() {
-
+	close(h.closeChannel)
 }
 
-// GetResult is the implementation for receiving consensus process result
+// GetResult is the implementation for receiving consensus process result.
 func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
-	blks, err := h.blocks.LayerBlockIds(id)
+	blks, err := h.mesh.LayerBlockIds(id)
 	if err != nil {
-		log.Error("WTF SUPERHARE?? %v err: %v", id, err)
-		return nil, err
+		h.logger.With().Error("superhare failed to read block ids for layer", id, log.Err(err))
+		return nil, fmt.Errorf("read layer block IDs: %w", err)
 	}
+
 	sort.Slice(blks, func(i, j int) bool { return bytes.Compare(blks[i].Bytes(), blks[j].Bytes()) == -1 })
 	return blks, nil
 }

@@ -4,17 +4,19 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	net2 "net"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/net"
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 func generatePublicKey() p2pcrypto.PublicKey {
@@ -26,10 +28,10 @@ func generateIPAddress() string {
 }
 
 func TestGetConnectionWithNoConnection(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(50)
 	n.SetDialResult(nil)
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 	remotePub := generatePublicKey()
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	conn, err := cPool.GetConnection(context.TODO(), &addr, remotePub)
@@ -39,10 +41,10 @@ func TestGetConnectionWithNoConnection(t *testing.T) {
 }
 
 func TestGetConnectionWithConnection(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(50)
 	n.SetDialResult(nil)
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 	remotePub := generatePublicKey()
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	conn, err := cPool.GetConnection(context.TODO(), &addr, remotePub)
@@ -52,11 +54,11 @@ func TestGetConnectionWithConnection(t *testing.T) {
 }
 
 func TestGetConnectionWithError(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(50)
 	eErr := errors.New("err")
 	n.SetDialResult(eErr)
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 	remotePub := generatePublicKey()
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	conn, aErr := cPool.GetConnection(context.TODO(), &addr, remotePub)
@@ -66,13 +68,13 @@ func TestGetConnectionWithError(t *testing.T) {
 }
 
 func TestGetConnectionDuringDial(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	remotePub := generatePublicKey()
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 	waitCh := make(chan net.Connection)
 	// dispatch 2 GetConnection calls
 	dispatchF := func(ch chan net.Connection) {
@@ -105,13 +107,13 @@ Loop:
 }
 
 func TestRemoteConnectionWithNoConnection(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	remotePub := generatePublicKey()
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 	n.SetDialDelayMs(50)
 	n.SetDialResult(nil)
 
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 	rConn := net.NewConnectionMock(remotePub)
 	rConn.SetSession(net.NewSessionMock(remotePub))
 	err2 := cPool.OnNewConnection(context.TODO(), net.NewConnectionEvent{Conn: rConn})
@@ -126,9 +128,9 @@ func TestRemoteConnectionWithNoConnection(t *testing.T) {
 }
 
 func TestRemoteConnectionWithExistingConnection(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 
 	lowPubkey, err := p2pcrypto.NewPublicKeyFromBase58("7gd5cD8ZanFaqnMHZrgUsUjDeVxMTxfpnu4gDPS69pBU")
 	assert.NoError(t, err)
@@ -171,32 +173,36 @@ func TestRemoteConnectionWithExistingConnection(t *testing.T) {
 }
 
 func TestShutdown(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 	remotePub := generatePublicKey()
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	ctx, cancel := context.WithCancel(context.Background())
+	cPool := NewConnectionPool(ctx, n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 	newConns := make(chan net.Connection)
 	go func() {
 		conn, _ := cPool.GetConnection(context.TODO(), &addr, remotePub)
 		newConns <- conn
 	}()
 	time.Sleep(20 * time.Millisecond)
+	cancel()
 	cPool.Shutdown()
 	conn := <-newConns
 	require.Nil(t, conn)
 }
 
 func TestGetConnectionAfterShutdown(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 	remotePub := generatePublicKey()
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	ctx, cancel := context.WithCancel(context.Background())
+	cPool := NewConnectionPool(ctx, n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
+	cancel()
 	cPool.Shutdown()
 	conn, err := cPool.GetConnection(context.TODO(), &addr, remotePub)
 	assert.NotNil(t, err)
@@ -204,11 +210,12 @@ func TestGetConnectionAfterShutdown(t *testing.T) {
 }
 
 func TestShutdownWithMultipleDials(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	n.SetDialDelayMs(100)
 	n.SetDialResult(nil)
 
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	ctx, cancel := context.WithCancel(context.Background())
+	cPool := NewConnectionPool(ctx, n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 	newConns := make(chan net.Connection, 20)
 	iterCnt := 20
 	for i := 0; i < iterCnt; i++ {
@@ -220,6 +227,7 @@ func TestShutdownWithMultipleDials(t *testing.T) {
 		}()
 	}
 	time.Sleep(20 * time.Millisecond)
+	cancel()
 	cPool.Shutdown()
 	var cnt int
 	for conn := range newConns {
@@ -232,10 +240,10 @@ func TestShutdownWithMultipleDials(t *testing.T) {
 }
 
 func TestClosedConnection(t *testing.T) {
-	nMock := net.NewNetworkMock()
+	nMock := net.NewNetworkMock(t)
 	nMock.SetDialDelayMs(50)
 	nMock.SetDialResult(nil)
-	cPool := NewConnectionPool(nMock.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	cPool := NewConnectionPool(context.TODO(), nMock.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 	remotePub := generatePublicKey()
 	addr := net2.TCPAddr{IP: net2.ParseIP("1.1.1.1")}
 
@@ -265,10 +273,10 @@ func TestRandom(t *testing.T) {
 		peers = append(peers, Peer{generatePublicKey(), generateIPAddress()})
 	}
 
-	nMock := net.NewNetworkMock()
+	nMock := net.NewNetworkMock(t)
 	nMock.SetDialDelayMs(50)
 	nMock.SetDialResult(nil)
-	cPool := NewConnectionPool(nMock.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	cPool := NewConnectionPool(context.TODO(), nMock.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 	for {
 		r := rand.Int31n(3)
 		if r == 0 {
@@ -314,9 +322,9 @@ func TestRandom(t *testing.T) {
 }
 
 func TestConnectionPool_GetConnectionIfExists(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	addr := "1.1.1.1"
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 
 	pk, err := p2pcrypto.NewPublicKeyFromBase58("7gd5cD8ZanFaqnMHZrgUsUjDeVxMTxfpnu4gDPS69pBU")
 	assert.NoError(t, err)
@@ -337,9 +345,9 @@ func TestConnectionPool_GetConnectionIfExists(t *testing.T) {
 }
 
 func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	addr := "1.1.1.1"
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 
 	pk, err := p2pcrypto.NewPublicKeyFromBase58("7gd5cD8ZanFaqnMHZrgUsUjDeVxMTxfpnu4gDPS69pBU")
 	assert.NoError(t, err)
@@ -356,7 +364,6 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 	done := make(chan struct{}, i)
 
 	for j := 0; j < i; j++ {
-
 		go func() {
 			getcon, err := cPool.GetConnectionIfExists(pk)
 			require.NoError(t, err)
@@ -364,19 +371,17 @@ func TestConnectionPool_GetConnectionIfExists_Concurrency(t *testing.T) {
 			require.Equal(t, int(n.DialCount()), 0)
 			done <- struct{}{}
 		}()
-
 	}
 
 	for ; i > 0; i-- {
 		<-done
 	}
-
 }
 
 func TestConnectionPool_CloseConnection(t *testing.T) {
-	n := net.NewNetworkMock()
+	n := net.NewNetworkMock(t)
 	addr := "1.1.1.1"
-	cPool := NewConnectionPool(n.Dial, generatePublicKey(), log.NewDefault(t.Name()))
+	cPool := NewConnectionPool(context.TODO(), n.Dial, generatePublicKey(), logtest.New(t).WithName(t.Name()))
 
 	pk, err := p2pcrypto.NewPublicKeyFromBase58("7gd5cD8ZanFaqnMHZrgUsUjDeVxMTxfpnu4gDPS69pBU")
 	assert.NoError(t, err)

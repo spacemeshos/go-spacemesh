@@ -11,11 +11,11 @@ import (
 
 func TestDeriveKey(t *testing.T) {
 	// declared in scrypt.go
-	var dead = DefaultCypherParams
-	var good = DefaultCypherParams
+	dead := DefaultCypherParams
+	good := DefaultCypherParams
 	const pass = "beagles"
 
-	//test for hex decode error
+	// test for hex decode error
 	dead.Salt = "IJKL"
 	data, err := DeriveKeyFromPassword(pass, dead)
 	assert.True(t, bytes.Equal(data, []byte("")), fmt.Sprintf("hex decode error should give nil but gave %v", data))
@@ -31,7 +31,7 @@ func TestDeriveKey(t *testing.T) {
 	assert.Error(t, err, fmt.Sprint("scrypt.Key should give error"))
 
 	// test derivation without a valid set salt
-	data, err = DeriveKeyFromPassword(pass, good)
+	_, err = DeriveKeyFromPassword(pass, good)
 	assert.Error(t, err, "expected no salt error")
 
 	s, err := GetRandomBytes(good.SaltLen)
@@ -42,5 +42,4 @@ func TestDeriveKey(t *testing.T) {
 	data, err = DeriveKeyFromPassword(pass, good)
 	assert.Nil(t, err, fmt.Sprintf("scrypt good output error %v", err))
 	assert.True(t, len(data) == good.DKLen, fmt.Sprintf("return value size %d, %d expected", len(data), good.DKLen))
-
 }

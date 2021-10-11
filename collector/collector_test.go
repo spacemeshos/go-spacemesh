@@ -1,11 +1,12 @@
 package collector
 
 import (
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/events"
 )
 
 type MockDb struct {
@@ -67,6 +68,12 @@ func (m *MockDb) StoreAtxValid(event *events.ValidAtx) error {
 	return nil
 }
 
+func (m *MockDb) StoreTortoiseBeaconCalculated(event *events.TortoiseBeaconCalculated) error {
+	m.msgs[10]++
+	m.total++
+	return nil
+}
+
 func TestCollectEvents(t *testing.T) {
 	url := "tcp://localhost:56565"
 	m := &MockDb{make(map[byte]int), 0}
@@ -82,28 +89,27 @@ func TestCollectEvents(t *testing.T) {
 	time.Sleep(2 * time.Second)
 	for i := 0; i < 10010; i++ {
 		orig := events.NewBlock{Layer: 1, ID: "234"}
-		err = eventPublisher.PublishEvent(orig)
+		assert.NoError(t, eventPublisher.PublishEvent(orig))
 	}
 
 	orig1 := events.ValidBlock{ID: "234", Valid: true}
-	err = eventPublisher.PublishEvent(orig1)
+	assert.NoError(t, eventPublisher.PublishEvent(orig1))
 
 	orig2 := events.NewAtx{ID: "1234"}
-	err = eventPublisher.PublishEvent(orig2)
+	assert.NoError(t, eventPublisher.PublishEvent(orig2))
 
 	orig3 := events.ValidAtx{ID: "1234", Valid: true}
-	err = eventPublisher.PublishEvent(orig3)
+	assert.NoError(t, eventPublisher.PublishEvent(orig3))
 
 	orig4 := events.NewTx{ID: "4321", Amount: 400, Destination: "1234567", Origin: "876543"}
-	err = eventPublisher.PublishEvent(orig4)
+	assert.NoError(t, eventPublisher.PublishEvent(orig4))
 
 	orig5 := events.ValidTx{ID: "4321", Valid: true}
-	err = eventPublisher.PublishEvent(orig5)
+	assert.NoError(t, eventPublisher.PublishEvent(orig5))
 
 	time.Sleep(1 * time.Second)
 	c.Stop()
 
-	log.Info("got %v", len(m.msgs))
 	assert.Equal(t, 10015, m.total)
 	assert.Equal(t, 6, len(m.msgs))
 }

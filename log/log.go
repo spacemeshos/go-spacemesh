@@ -11,25 +11,20 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
+// mainLoggerName is a name of the global logger.
 const mainLoggerName = "00000.defaultLogger"
 
-// determine the level of messages we show.
-var debugMode = false
-
-// should we format out logs in json
+// should we format out logs in json.
 var jsonLog = false
 
-// where logs go by default
+// where logs go by default.
 var logwriter io.Writer
 
-// default encoders
+// default encoders.
 var defaultEncoder = zap.NewDevelopmentEncoderConfig()
 
 // Level returns the zapcore level of logging.
 func Level() zapcore.Level {
-	if debugMode {
-		return zapcore.DebugLevel
-	}
 	return zapcore.InfoLevel
 }
 
@@ -54,6 +49,11 @@ func encoder() zapcore.Encoder {
 // AppLog is the local app singleton logger.
 var AppLog Log
 
+// SetupGlobal overwrites global logger.
+func SetupGlobal(logger Log) {
+	AppLog = NewFromLog(logger.logger.Named(mainLoggerName))
+}
+
 func init() {
 	logwriter = os.Stdout
 
@@ -65,12 +65,7 @@ func initLogging() {
 	AppLog = NewDefault(mainLoggerName)
 }
 
-// DebugMode sets log debug level
-func DebugMode(mode bool) {
-	debugMode = mode
-}
-
-// JSONLog turns JSON format on or off
+// JSONLog turns JSON format on or off.
 func JSONLog(b bool) {
 	jsonLog = b
 
@@ -78,30 +73,34 @@ func JSONLog(b bool) {
 	initLogging()
 }
 
-// NewWithLevel creates a logger with a fixed level and with a set of (optional) hooks
+// NewNop creates silent logger.
+func NewNop() Log {
+	return NewFromLog(zap.NewNop())
+}
+
+// NewWithLevel creates a logger with a fixed level and with a set of (optional) hooks.
 func NewWithLevel(module string, level zap.AtomicLevel, hooks ...func(zapcore.Entry) error) Log {
 	consoleSyncer := zapcore.AddSync(logwriter)
 	enc := encoder()
-	consoleCore := zapcore.NewCore(enc, consoleSyncer, level)
-	core := zapcore.RegisterHooks(consoleCore, hooks...)
-	log := zap.New(core).Named(module)
+	core := zapcore.NewCore(enc, consoleSyncer, level)
+	log := zap.New(zapcore.RegisterHooks(core, hooks...)).Named(module)
 	return NewFromLog(log)
 }
 
-// NewDefault creates a Log with the default log level
+// RegisterHooks wraps provided loggers with hooks.
+func RegisterHooks(lg Log, hooks ...func(zapcore.Entry) error) Log {
+	core := zapcore.RegisterHooks(lg.logger.Core(), hooks...)
+	return NewFromLog(zap.New(core))
+}
+
+// NewDefault creates a Log with the default log level.
 func NewDefault(module string) Log {
 	return NewWithLevel(module, zap.NewAtomicLevelAt(Level()))
 }
 
 // NewFromLog creates a Log from an existing zap-compatible log.
 func NewFromLog(l *zap.Logger) Log {
-	return Log{l}
-}
-
-// InitSpacemeshLoggingSystemWithHooks sets up a logging system with one or more
-// registered hooks
-func InitSpacemeshLoggingSystemWithHooks(hooks ...func(zapcore.Entry) error) {
-	AppLog = NewWithLevel(mainLoggerName, zap.NewAtomicLevelAt(Level()), hooks...)
+	return Log{logger: l}
 }
 
 // public wrappers abstracting away logging lib impl
@@ -128,7 +127,7 @@ func Warning(msg string, args ...interface{}) {
 
 // With returns a FieldLogger which you can append fields to.
 func With() FieldLogger {
-	return FieldLogger{AppLog.logger}
+	return FieldLogger{AppLog.logger, AppLog.name}
 }
 
 // Event returns a field logger with the Event field set to true.

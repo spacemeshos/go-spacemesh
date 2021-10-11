@@ -3,11 +3,12 @@ package net
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"net"
 	"sync/atomic"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 // ConnectionMock mocks connections.
@@ -20,9 +21,9 @@ type ConnectionMock struct {
 
 	Addr net.Addr
 
-	sendDelayMs int
-	sendRes     error
-	sendCnt     int32
+	sendDelay time.Duration
+	sendRes   error
+	sendCnt   int32
 
 	closed bool
 
@@ -49,8 +50,8 @@ func (cm ConnectionMock) Created() time.Time {
 	return cm.created
 }
 
-// SetCreated mutate the mock.
-func (cm ConnectionMock) SetCreated(time2 time.Time) {
+// SetCreated mutates the mock.
+func (cm *ConnectionMock) SetCreated(time2 time.Time) {
 	cm.created = time2
 }
 
@@ -85,8 +86,8 @@ func (cm ConnectionMock) IncomingChannel() chan []byte {
 }
 
 // SetSendDelay mutates the mock.
-func (cm *ConnectionMock) SetSendDelay(delayMs int) {
-	cm.sendDelayMs = delayMs
+func (cm *ConnectionMock) SetSendDelay(delay time.Duration) {
+	cm.sendDelay = delay
 }
 
 // SetSendResult mutates the mock.
@@ -100,9 +101,9 @@ func (cm ConnectionMock) SendCount() int32 {
 }
 
 // Send mocks the interface.
-func (cm *ConnectionMock) Send(ctx context.Context, m []byte) error {
+func (cm *ConnectionMock) Send(context.Context, []byte) error {
 	atomic.AddInt32(&cm.sendCnt, int32(1))
-	time.Sleep(time.Duration(cm.sendDelayMs) * time.Millisecond)
+	time.Sleep(cm.sendDelay)
 	return cm.sendRes
 }
 
@@ -129,13 +130,13 @@ func (cm *ConnectionMock) beginEventProcessing(context.Context) {
 	}
 }
 
-// String mocks the interface
+// String mocks the interface.
 func (cm ConnectionMock) String() string {
 	return cm.id
 }
 
-// SendSock mocks the interface
-func (cm *ConnectionMock) SendSock([]byte) error {
+// sendSock mocks the interface.
+func (cm *ConnectionMock) sendSock([]byte) error {
 	panic("not implemented")
 }
 

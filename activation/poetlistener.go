@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -49,7 +50,7 @@ func (l *PoetListener) loop(ctx context.Context) {
 				l.Log.WithContext(ctx).Error("nil poet message received")
 				continue
 			}
-			go l.handlePoetProofMessage(poetProof)
+			go l.handlePoetProofMessage(ctx, poetProof)
 		case <-l.exit:
 			l.Log.WithContext(ctx).Info("listening stopped")
 			return
@@ -57,28 +58,27 @@ func (l *PoetListener) loop(ctx context.Context) {
 	}
 }
 
-func (l *PoetListener) handlePoetProofMessage(gossipMessage service.GossipMessage) {
+func (l *PoetListener) handlePoetProofMessage(ctx context.Context, gossipMessage service.GossipMessage) {
 	// ⚠️ IMPORTANT: We must not ensure that the node is synced! PoET messages must be propagated regardless.
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(gossipMessage.Bytes(), &proofMessage); err != nil {
-		l.Log.Error("failed to unmarshal PoET membership proof: %v", err)
+		l.Log.Error("failed to unmarshal poet membership proof: %v", err)
 		return
 	}
 	if err := l.poetDb.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
 		proofMessage.RoundID, proofMessage.Signature); err != nil {
-
 		if types.IsProcessingError(err) {
-			l.Log.Error("failed to validate PoET proof: %v", err)
+			l.Log.Error("failed to validate poet proof: %v", err)
 		} else {
-			l.Log.Warning("PoET proof not valid: %v", err)
+			l.Log.Warning("poet proof not valid: %v", err)
 		}
 		return
 	}
 
-	gossipMessage.ReportValidation(PoetProofProtocol)
+	gossipMessage.ReportValidation(ctx, PoetProofProtocol)
 
 	if err := l.poetDb.storeProof(&proofMessage); err != nil {
-		l.Log.Error("failed to store PoET proof: %v", err)
+		l.Log.Error("failed to store poet proof: %v", err)
 	}
 }
 

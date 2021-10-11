@@ -18,14 +18,15 @@ package trie
 
 import (
 	"fmt"
+	"io"
+	"sync"
+	"time"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
-	"io"
-	"sync"
-	"time"
 )
 
 // secureKeyPrefix is the database key prefix used to store trie node preimages.
@@ -98,7 +99,12 @@ func (n rawFullNode) EncodeRLP(w io.Writer) error {
 			nodes[i] = nilValueNode
 		}
 	}
-	return rlp.Encode(w, nodes)
+
+	if err := rlp.Encode(w, nodes); err != nil {
+		return fmt.Errorf("encode RLP: %w", err)
+	}
+
+	return nil
 }
 
 // rawShortNode represents only the useful data content of a short node, with the
@@ -150,9 +156,9 @@ func (n *cachedNode) obj(hash types.Hash32, cachegen uint16) node {
 	return expandNode(hash[:], n.node, cachegen)
 }
 
-// childs returns all the tracked children of this node, both the implicit ones
+// getChildren returns all the tracked children of this node, both the implicit ones
 // from inside the node as well as the explicit ones from outside the node.
-func (n *cachedNode) childs() []types.Hash32 {
+func (n *cachedNode) getChildren() []types.Hash32 {
 	children := make([]types.Hash32, 0, 16)
 	for child := range n.children {
 		children = append(children, child)
@@ -289,7 +295,7 @@ func (db *Database) insert(hash types.Hash32, blob []byte, node node) {
 		size:      uint16(len(blob)),
 		flushPrev: db.newest,
 	}
-	for _, child := range entry.childs() {
+	for _, child := range entry.getChildren() {
 		if c := db.nodes[child]; c != nil {
 			c.parents++
 		}
@@ -348,7 +354,12 @@ func (db *Database) Node(hash types.Hash32) ([]byte, error) {
 		return node.rlp(), nil
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
-	return db.diskdb.Get(hash[:])
+	data, err := db.diskdb.Get(hash[:])
+	if err != nil {
+		return data, fmt.Errorf("get from disk DB: %w", err)
+	}
+
+	return data, nil
 }
 
 // preimage retrieves a cached trie node pre-image from memory. If it cannot be
@@ -363,7 +374,12 @@ func (db *Database) preimage(hash types.Hash32) ([]byte, error) {
 		return preimage, nil
 	}
 	// Content unavailable in memory, attempt to retrieve from disk
-	return db.diskdb.Get(db.secureKey(hash[:]))
+	data, err := db.diskdb.Get(db.secureKey(hash[:]))
+	if err != nil {
+		return data, fmt.Errorf("get from disk DB: %w", err)
+	}
+
+	return data, nil
 }
 
 // secureKey returns the database key for the preimage of key, as an ephemeral
@@ -382,7 +398,7 @@ func (db *Database) Nodes() []types.Hash32 {
 	db.lock.RLock()
 	defer db.lock.RUnlock()
 
-	var hashes = make([]types.Hash32, 0, len(db.nodes))
+	hashes := make([]types.Hash32, 0, len(db.nodes))
 	for hash := range db.nodes {
 		if hash != (types.Hash32{}) { // Special case for "root" references/nodes
 			hashes = append(hashes, hash)
@@ -482,7 +498,7 @@ func (db *Database) dereference(child types.Hash32, parent types.Hash32) {
 			db.nodes[node.flushNext].flushPrev = node.flushPrev
 		}
 		// Dereference all children and delete the node
-		for _, hash := range node.childs() {
+		for _, hash := range node.getChildren() {
 			db.dereference(hash, child)
 		}
 		delete(db.nodes, child)
@@ -515,12 +531,12 @@ func (db *Database) Cap(limit types.StorageSize) error {
 			if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
 				log.With().Error("failed to commit preimage from trie database", log.Err(err))
 				db.lock.RUnlock()
-				return err
+				return fmt.Errorf("put batch: %w", err)
 			}
 			if batch.ValueSize() > database.IdealBatchSize {
 				if err := batch.Write(); err != nil {
 					db.lock.RUnlock()
-					return err
+					return fmt.Errorf("write batch: %w", err)
 				}
 				batch.Reset()
 			}
@@ -533,14 +549,14 @@ func (db *Database) Cap(limit types.StorageSize) error {
 		node := db.nodes[oldest]
 		if err := batch.Put(oldest[:], node.rlp()); err != nil {
 			db.lock.RUnlock()
-			return err
+			return fmt.Errorf("put batch: %w", err)
 		}
 		// If we exceeded the ideal batch size, commit and reset
 		if batch.ValueSize() >= database.IdealBatchSize {
 			if err := batch.Write(); err != nil {
 				log.With().Error("failed to write flush list to disk", log.Err(err))
 				db.lock.RUnlock()
-				return err
+				return fmt.Errorf("write batch: %w", err)
 			}
 			batch.Reset()
 		}
@@ -555,7 +571,7 @@ func (db *Database) Cap(limit types.StorageSize) error {
 	if err := batch.Write(); err != nil {
 		log.With().Error("failed to write flush list to disk", log.Err(err))
 		db.lock.RUnlock()
-		return err
+		return fmt.Errorf("write batch: %w", err)
 	}
 	db.lock.RUnlock()
 
@@ -613,11 +629,11 @@ func (db *Database) Commit(node types.Hash32, report bool) error {
 		if err := batch.Put(db.secureKey(hash[:]), preimage); err != nil {
 			log.With().Error("failed to commit preimage from trie database", log.Err(err))
 			db.lock.RUnlock()
-			return err
+			return fmt.Errorf("put batch: %w", err)
 		}
 		if batch.ValueSize() > database.IdealBatchSize {
 			if err := batch.Write(); err != nil {
-				return err
+				return fmt.Errorf("write batch: %w", err)
 			}
 			batch.Reset()
 		}
@@ -633,7 +649,7 @@ func (db *Database) Commit(node types.Hash32, report bool) error {
 	if err := batch.Write(); err != nil {
 		log.With().Error("failed to write trie to disk", log.Err(err))
 		db.lock.RUnlock()
-		return err
+		return fmt.Errorf("write batch: %w", err)
 	}
 	db.lock.RUnlock()
 
@@ -674,18 +690,18 @@ func (db *Database) commit(hash types.Hash32, batch database.Batch) error {
 	if !ok {
 		return nil
 	}
-	for _, child := range node.childs() {
+	for _, child := range node.getChildren() {
 		if err := db.commit(child, batch); err != nil {
 			return err
 		}
 	}
 	if err := batch.Put(hash[:], node.rlp()); err != nil {
-		return err
+		return fmt.Errorf("put batch: %w", err)
 	}
 	// If we've reached an optimal batch size, commit and start over
 	if batch.ValueSize() >= database.IdealBatchSize {
 		if err := batch.Write(); err != nil {
-			return err
+			return fmt.Errorf("write batch: %w", err)
 		}
 		batch.Reset()
 	}
@@ -715,7 +731,7 @@ func (db *Database) uncache(hash types.Hash32) {
 		db.nodes[node.flushNext].flushPrev = node.flushPrev
 	}
 	// Uncache the node's subtries and remove the node itself too
-	for _, child := range node.childs() {
+	for _, child := range node.getChildren() {
 		db.uncache(child)
 	}
 	delete(db.nodes, hash)
@@ -731,7 +747,7 @@ func (db *Database) Size() (types.StorageSize, types.StorageSize) {
 	// db.nodesSize only contains the useful data in the cache, but when reporting
 	// the total memory consumption, the maintenance metadata is also needed to be
 	// counted. For every useful node, we track 2 extra hashes as the flushlist.
-	var flushlistSize = types.StorageSize((len(db.nodes) - 1) * 2 * types.Hash32Length)
+	flushlistSize := types.StorageSize((len(db.nodes) - 1) * 2 * types.Hash32Length)
 	return db.nodesSize + flushlistSize, db.preimagesSize
 }
 
@@ -772,7 +788,7 @@ func (db *Database) accumulate(hash types.Hash32, reachable map[types.Hash32]str
 	reachable[hash] = struct{}{}
 
 	// Iterate over all the children and accumulate them too
-	for _, child := range node.childs() {
+	for _, child := range node.getChildren() {
 		db.accumulate(child, reachable)
 	}
 }

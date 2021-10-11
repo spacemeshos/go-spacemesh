@@ -3,11 +3,12 @@ package hare
 import (
 	"context"
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"hash/fnv"
 	"math"
 	"sync"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type registrable interface {
@@ -15,8 +16,7 @@ type registrable interface {
 	Unregister(isHonest bool, id string)
 }
 
-type hasherU32 struct {
-}
+type hasherU32 struct{}
 
 func newHasherU32() *hasherU32 {
 	h := new(hasherU32)
@@ -42,7 +42,7 @@ type mockHashOracle struct {
 	hasher  *hasherU32
 }
 
-func (mho *mockHashOracle) IsIdentityActiveOnConsensusView(edID string, layer types.LayerID) (bool, error) {
+func (mho *mockHashOracle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
 	return true, nil
 }
 
@@ -72,7 +72,11 @@ func (mho *mockHashOracle) Unregister(client string) {
 	mho.mutex.Unlock()
 }
 
-// Calculates the threshold for the given committee size
+func (mho *mockHashOracle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
+	return true
+}
+
+// Calculates the threshold for the given committee size.
 func (mho *mockHashOracle) calcThreshold(committeeSize int) uint32 {
 	mho.mutex.RLock()
 	numClients := len(mho.clients)
@@ -92,8 +96,16 @@ func (mho *mockHashOracle) calcThreshold(committeeSize int) uint32 {
 	return uint32(uint64(committeeSize) * uint64(mho.hasher.MaxValue()) / uint64(numClients))
 }
 
-// Eligible if a proof is valid for a given committee size
-func (mho *mockHashOracle) Eligible(ctx context.Context, layer types.LayerID, round int32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
+func (mho *mockHashOracle) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
+	panic("implement me!")
+}
+
+func (mho *mockHashOracle) CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error) {
+	panic("implement me!")
+}
+
+// eligible if a proof is valid for a given committee size.
+func (mho *mockHashOracle) eligible(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (bool, error) {
 	if sig == nil {
 		log.Warning("Oracle query with proof=nil. Returning false")
 		return false, errors.New("sig is nil")
@@ -108,6 +120,6 @@ func (mho *mockHashOracle) Eligible(ctx context.Context, layer types.LayerID, ro
 	return false, nil
 }
 
-func (mho *mockHashOracle) Proof(context.Context, types.LayerID, int32) ([]byte, error) {
+func (mho *mockHashOracle) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	return []byte{}, nil
 }

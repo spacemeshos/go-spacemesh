@@ -19,28 +19,30 @@ package database
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/log"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"github.com/syndtr/goleveldb/leveldb/filter"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
 	"github.com/syndtr/goleveldb/leveldb/opt"
+	"github.com/syndtr/goleveldb/leveldb/storage"
 	"github.com/syndtr/goleveldb/leveldb/util"
-	"runtime"
-	"strconv"
-	"strings"
-	"sync"
-	"time"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
 	writePauseWarningThrottler = 1 * time.Minute
 )
 
-// ErrNotFound is special type error for not found in DB
+// ErrNotFound is special type error for not found in DB.
 var ErrNotFound = errors.ErrNotFound
 
-// LDBDatabase  is a wrapper for leveldb database with concurrent access
+// LDBDatabase  is a wrapper for leveldb database with concurrent access.
 type LDBDatabase struct {
 	fn string      // filename for reporting
 	db *leveldb.DB // LevelDB instance
@@ -60,7 +62,7 @@ func NewLDBDatabase(file string, cache int, handles int, logger log.Log) (*LDBDa
 	if handles < 16 {
 		handles = 16
 	}
-	logger.With().Info("Allocated cache and file handles",
+	logger.With().Info("allocated cache and file handles",
 		log.Int("cache_size", cache),
 		log.Int("num_handles", handles))
 
@@ -76,7 +78,7 @@ func NewLDBDatabase(file string, cache int, handles int, logger log.Log) (*LDBDa
 	}
 	// (Re)check for errors and abort if opening of the db failed
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open file: %w", err)
 	}
 	return &LDBDatabase{
 		fn:  file,
@@ -90,38 +92,50 @@ func (db *LDBDatabase) Path() string {
 	return db.fn
 }
 
-// Put puts the given key / value to the queue
+// Put puts the given key / value to the queue.
 func (db *LDBDatabase) Put(key []byte, value []byte) error {
-	return db.db.Put(key, value, nil)
+	if err := db.db.Put(key, value, nil); err != nil {
+		return fmt.Errorf("put value: %w", err)
+	}
+
+	return nil
 }
 
-// Has returns whether the db contains the key
+// Has returns whether the db contains the key.
 func (db *LDBDatabase) Has(key []byte) (bool, error) {
-	return db.db.Has(key, nil)
+	has, err := db.db.Has(key, nil)
+	if err != nil {
+		return false, fmt.Errorf("check value: %w", err)
+	}
+
+	return has, nil
 }
 
 // Get returns the given key if it's present.
 func (db *LDBDatabase) Get(key []byte) ([]byte, error) {
 	dat, err := db.db.Get(key, nil)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get value: %w", err)
 	}
 	return dat, nil
 }
 
-// Delete deletes the key from the queue and database
+// Delete deletes the key from the queue and database.
 func (db *LDBDatabase) Delete(key []byte) error {
-	return db.db.Delete(key, nil)
+	if err := db.db.Delete(key, nil); err != nil {
+		return fmt.Errorf("delete value: %w", err)
+	}
+
+	return nil
 }
 
-// NewIterator creates a new leveldb iterator struct compliant with Iterator interface
+// NewIterator creates a new leveldb iterator struct compliant with Iterator interface.
 func (db *LDBDatabase) NewIterator() iterator.Iterator {
 	it := db.db.NewIterator(nil, nil)
-	runtime.SetFinalizer(it, func() { it.Release() })
 	return it
 }
 
-// Iterator returns iterator iterating over all database keys
+// Iterator returns iterator iterating over all database keys.
 func (db *LDBDatabase) Iterator() iterator.Iterator {
 	return db.db.NewIterator(nil, nil)
 }
@@ -131,12 +145,12 @@ func (db *LDBDatabase) NewIteratorWithPrefix(prefix []byte) iterator.Iterator {
 	return db.db.NewIterator(util.BytesPrefix(prefix), nil)
 }
 
-// Find returns iterator to iterate over values with given prefix key
+// Find returns iterator to iterate over values with given prefix key.
 func (db *LDBDatabase) Find(key []byte) Iterator {
 	return db.db.NewIterator(util.BytesPrefix(key), nil)
 }
 
-// Close closes database, flushing writes and denying all new write requests
+// Close closes database, flushing writes and denying all new write requests.
 func (db *LDBDatabase) Close() {
 	// Stop the metrics collection to avoid internal database races
 	db.quitLock.Lock()
@@ -157,12 +171,12 @@ func (db *LDBDatabase) Close() {
 	}
 }
 
-// LDB returns the actual inner leveldb struct refrence
+// LDB returns the actual inner leveldb struct reference.
 func (db *LDBDatabase) LDB() *leveldb.DB {
 	return db.db
 }
 
-// Meter configures the database metrics collectors and
+// Meter configures the database metrics collectors and.
 func (db *LDBDatabase) Meter(prefix string) {
 	// Initialize all the metrics collector at the requested prefix
 	// Create a quit channel for the periodic collector and run it
@@ -189,7 +203,7 @@ func (db *LDBDatabase) Meter(prefix string) {
 // DelayN:5 Delay:406.604657ms Paused: false
 //
 // This is how the iostats look like (currently):
-// Read(MB):3895.04860 Write(MB):3654.64712
+// Read(MB):3895.04860 Write(MB):3654.64712.
 func (db *LDBDatabase) meter(refresh time.Duration) {
 	// Create the counters to store current and previous compaction values
 	compactions := make([][]float64, 2)
@@ -341,7 +355,7 @@ func (db *LDBDatabase) meter(refresh time.Duration) {
 	errc <- merr
 }
 
-//NewBatch creates a new batch write struct, able to add multiple values in a single operation
+// NewBatch creates a new batch write struct, able to add multiple values in a single operation.
 func (db *LDBDatabase) NewBatch() Batch {
 	return &ldbBatch{db: db.db, b: new(leveldb.Batch)}
 }
@@ -365,7 +379,11 @@ func (b *ldbBatch) Delete(key []byte) error {
 }
 
 func (b *ldbBatch) Write() error {
-	return b.db.Write(b.b, nil)
+	if err := b.db.Write(b.b, nil); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+
+	return nil
 }
 
 func (b *ldbBatch) ValueSize() int {
@@ -377,74 +395,12 @@ func (b *ldbBatch) Reset() {
 	b.size = 0
 }
 
-type table struct {
-	db     Database
-	prefix string
-}
-
-// NewTable returns a Database object that prefixes all keys with a given
-// string.
-func NewTable(db Database, prefix string) Database {
-	return &table{
-		db:     db,
-		prefix: prefix,
+// NewMemDatabase returns a memory database instance.
+func NewMemDatabase() *LDBDatabase {
+	backend := storage.NewMemStorage()
+	db, err := leveldb.Open(backend, nil)
+	if err != nil {
+		panic("can't open in-memory leveldb: " + err.Error())
 	}
-}
-
-func (dt *table) Put(key []byte, value []byte) error {
-	return dt.db.Put(append([]byte(dt.prefix), key...), value)
-}
-
-func (dt *table) Has(key []byte) (bool, error) {
-	return dt.db.Has(append([]byte(dt.prefix), key...))
-}
-
-func (dt *table) Get(key []byte) ([]byte, error) {
-	return dt.db.Get(append([]byte(dt.prefix), key...))
-}
-
-func (dt *table) Delete(key []byte) error {
-	return dt.db.Delete(append([]byte(dt.prefix), key...))
-}
-
-func (dt *table) Find(key []byte) Iterator {
-	return dt.db.Find(key)
-}
-
-func (dt *table) Close() {
-	// Do nothing; don't close the underlying DB.
-}
-
-type tableBatch struct {
-	batch  Batch
-	prefix string
-}
-
-// NewTableBatch returns a Batch object which prefixes all keys with a given string.
-func NewTableBatch(db Database, prefix string) Batch {
-	return &tableBatch{db.NewBatch(), prefix}
-}
-
-func (dt *table) NewBatch() Batch {
-	return &tableBatch{dt.db.NewBatch(), dt.prefix}
-}
-
-func (tb *tableBatch) Put(key, value []byte) error {
-	return tb.batch.Put(append([]byte(tb.prefix), key...), value)
-}
-
-func (tb *tableBatch) Delete(key []byte) error {
-	return tb.batch.Delete(append([]byte(tb.prefix), key...))
-}
-
-func (tb *tableBatch) Write() error {
-	return tb.batch.Write()
-}
-
-func (tb *tableBatch) ValueSize() int {
-	return tb.batch.ValueSize()
-}
-
-func (tb *tableBatch) Reset() {
-	tb.batch.Reset()
+	return &LDBDatabase{db: db, log: log.NewNop()}
 }

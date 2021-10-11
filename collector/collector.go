@@ -2,25 +2,26 @@
 package collector
 
 import (
+	"unsafe"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"unsafe"
 )
 
-// EventsCollector collects events from node and writes them to DB
+// EventsCollector collects events from node and writes them to DB.
 type EventsCollector struct {
 	url  string
 	stop chan struct{}
 	db   DB
 }
 
-// NewCollector created a new instance of the collector listening on url for events and writing them to the provided DB
+// NewCollector created a new instance of the collector listening on url for events and writing them to the provided DB.
 func NewCollector(db DB, url string) *EventsCollector {
 	return &EventsCollector{url, make(chan struct{}), db}
 }
 
-// DB defines which events should be stores by any db that the collector uses
+// DB defines which events should be stores by any db that the collector uses.
 type DB interface {
 	StoreBlock(event *events.NewBlock) error
 	StoreBlockValid(event *events.ValidBlock) error
@@ -31,16 +32,16 @@ type DB interface {
 	StoreReward(event *events.RewardReceived) error
 	StoreBlockCreated(event *events.DoneCreatingBlock) error
 	StoreAtxCreated(event *events.AtxCreated) error
+	StoreTortoiseBeaconCalculated(event *events.TortoiseBeaconCalculated) error
 }
 
-// Start starts collecting events
+// Start starts collecting events.
 func (c *EventsCollector) Start(blocking bool) {
 	if blocking {
 		c.collectEvents(c.url)
 	} else {
 		go c.collectEvents(c.url)
 	}
-
 }
 
 // Stop stops collecting events.
@@ -98,6 +99,11 @@ func (c *EventsCollector) collectEvents(url string) {
 	createdAtx, err := sub.Subscribe(events.EventCreatedAtx)
 	if err != nil {
 		log.Error("cannot start subscriber %v", events.EventCreatedAtx)
+		return
+	}
+	tortoiseBeacons, err := sub.Subscribe(events.EventCalculatedTortoiseBeacon)
+	if err != nil {
+		log.Error("cannot start subscriber %v", events.EventCalculatedTortoiseBeacon)
 		return
 	}
 	sub.StartListening()
@@ -203,6 +209,17 @@ loop:
 			}
 			log.Debug("got new atx created %v", e)
 			err = c.db.StoreAtxCreated(&e)
+			if err != nil {
+				log.Error("cannot write message %v", err)
+			}
+		case data := <-tortoiseBeacons:
+			var e events.TortoiseBeaconCalculated
+			err := types.BytesToInterface(data[size:], &e)
+			if err != nil {
+				log.Error("cannot parse received message %v", err)
+			}
+			log.Debug("got new tortoise beacon calculated %v", e)
+			err = c.db.StoreTortoiseBeaconCalculated(&e)
 			if err != nil {
 				log.Error("cannot write message %v", err)
 			}

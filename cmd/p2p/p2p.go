@@ -3,20 +3,23 @@ package main
 
 import (
 	"fmt"
+	"io"
+	"net/http"
+	_ "net/http/pprof"
+	"os"
+
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spf13/cobra"
-	"io"
-	"net/http"
-	_ "net/http/pprof"
-	"os"
 )
 
-// Cmd is the p2p cmd
+// Cmd is the p2p cmd.
 var Cmd = &cobra.Command{
 	Use:   "p2p",
 	Short: "start p2p",
@@ -33,19 +36,19 @@ func init() {
 	cmdp.AddCommands(Cmd)
 }
 
-// P2PApp is an app struct used to run only p2p functionality
+// P2PApp is an app struct used to run only p2p functionality.
 type P2PApp struct {
 	*cmdp.BaseApp
 	p2p     p2p.Service
 	closers []io.Closer
 }
 
-// NewP2PApp creates the base app
+// NewP2PApp creates the base app.
 func NewP2PApp() *P2PApp {
 	return &P2PApp{BaseApp: cmdp.NewBaseApp()}
 }
 
-// Cleanup closes all services
+// Cleanup closes all services.
 func (app *P2PApp) Cleanup() {
 	for _, c := range app.closers {
 		if err := c.Close(); err != nil {
@@ -59,11 +62,10 @@ func (app *P2PApp) Cleanup() {
 func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	// init p2p services
 	log.JSONLog(true)
-	log.DebugMode(true)
+	logger := log.NewWithLevel("P2P_Test", zap.NewAtomicLevelAt(zap.InfoLevel))
+	log.SetupGlobal(logger)
 
 	log.Info("initializing p2p services")
-
-	logger := log.NewDefault("P2P_Test")
 
 	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, logger, app.Config.DataDir())
 	if err != nil {
@@ -73,7 +75,7 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 
 	// Testing stuff
 	api.ApproveAPIGossipMessages(cmdp.Ctx, app.p2p)
-	metrics.StartCollectingMetrics(app.Config.MetricsPort)
+	metrics.StartMetricsServer(app.Config.MetricsPort)
 
 	// start the node
 
