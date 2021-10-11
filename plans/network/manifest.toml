@@ -26,13 +26,13 @@ enabled = true
 
 [[testcases]]
 name = "start"
-instances = { min = 3, max = 5, default = 5 }
+instances = { min = 7, max = 10, default = 7 }
 
   [testcases.params]
   # test params
   poets = { type = "int", default = 1 }
   gateways = { type = "int", default = 1 }
-  genesis_timestamp_offset = { type = "int", default = 0 }
+  genesis_timestamp_offset = { type = "int", default = 60 }
   
   # miner params
   randcon = { type = "int", default = 8 }
