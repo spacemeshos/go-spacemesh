@@ -129,13 +129,17 @@ var errNotComplete = errors.New("not complete")
 // Status returns the setup current status.
 func (mgr *PostSetupManager) Status() *PostSetupStatus {
 	status := &PostSetupStatus{}
-	status.State = mgr.getState()
+
+	mgr.mu.Lock()
+	status.State = mgr.state
+	init := mgr.init
+	mgr.mu.Unlock()
 
 	if status.State == postSetupStateNotStarted {
 		return status
 	}
 
-	status.NumLabelsWritten = mgr.getInit().SessionNumLabelsWritten()
+	status.NumLabelsWritten = init.SessionNumLabelsWritten()
 	status.LastOpts = mgr.LastOpts()
 	status.LastError = mgr.LastError()
 
@@ -159,7 +163,11 @@ func (mgr *PostSetupManager) StatusChan() <-chan *PostSetupStatus {
 		initialStatus := mgr.Status()
 		statusChan <- initialStatus
 
-		ch := mgr.getInit().SessionNumLabelsWrittenChan()
+		mgr.mu.Lock()
+		init := mgr.init
+		mgr.mu.Unlock()
+
+		ch := init.SessionNumLabelsWrittenChan()
 		for numLabelsWritten := range ch {
 			status := *initialStatus
 			status.NumLabelsWritten = numLabelsWritten
@@ -217,10 +225,14 @@ func (mgr *PostSetupManager) Benchmark(p PostSetupComputeProvider) (int, error) 
 // It supports resuming a previously started session, as well as changing the Post setup options (e.g., number of units)
 // after initial setup.
 func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, error) {
-	if mgr.getState() == postSetupStateInProgress {
+	mgr.mu.Lock()
+	state := mgr.state
+	mgr.mu.Unlock()
+
+	if state == postSetupStateInProgress {
 		return nil, fmt.Errorf("post setup session in progress")
 	}
-	if mgr.getState() == postSetupStateComplete {
+	if state == postSetupStateComplete {
 		// Check whether the new request invalidates the current status.
 		lastOpts := mgr.LastOpts()
 		invalidate := opts.DataDir != lastOpts.DataDir || opts.NumUnits != lastOpts.NumUnits
@@ -228,10 +240,15 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 			// Already complete.
 			return mgr.doneChan, nil
 		}
+
+		mgr.mu.Lock()
 		mgr.initCompletedChan = make(chan struct{})
+		mgr.mu.Unlock()
 	}
 
-	mgr.setState(postSetupStateInProgress)
+	mgr.mu.Lock()
+	mgr.state = postSetupStateInProgress
+	mgr.mu.Unlock()
 
 	if opts.ComputeProviderID == config.BestProviderID {
 		p, err := mgr.BestProvider()
@@ -245,30 +262,32 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 
 	newInit, err := initialization.NewInitializer(config.Config(mgr.cfg), config.InitOpts(opts), mgr.id)
 	if err != nil {
-		mgr.setState(postSetupStateError)
-		mgr.setLastErr(err)
+		mgr.mu.Lock()
+		mgr.state = postSetupStateError
+		mgr.lastErr = err
+		mgr.mu.Unlock()
+
 		return nil, fmt.Errorf("new initializer: %w", err)
 	}
 
 	newInit.SetLogger(mgr.logger)
 
-	mgr.setInit(newInit)
-
-	mgr.setLastOpts(&opts)
-	mgr.setLastErr(nil)
-
 	mgr.mu.Lock()
+
+	mgr.init = newInit
+	mgr.lastOpts = &opts
+	mgr.lastErr = nil
 	close(mgr.startedChan)
+	mgr.doneChan = make(chan struct{})
+
 	mgr.mu.Unlock()
 
-	mgr.doneChan = make(chan struct{})
 	go func() {
 		defer func() {
 			mgr.mu.Lock()
 			mgr.startedChan = make(chan struct{})
-			mgr.mu.Unlock()
-
 			close(mgr.doneChan)
+			mgr.mu.Unlock()
 		}()
 
 		mgr.logger.With().Info("post setup session starting",
@@ -280,12 +299,15 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 		)
 
 		if err := newInit.Initialize(); err != nil {
+			mgr.mu.Lock()
+			defer mgr.mu.Unlock()
+
 			if errors.Is(err, initialization.ErrStopped) {
 				mgr.logger.Info("post setup session stopped")
-				mgr.setState(postSetupStateNotStarted)
+				mgr.state = postSetupStateNotStarted
 			} else {
-				mgr.setState(postSetupStateError)
-				mgr.setLastErr(err)
+				mgr.state = postSetupStateError
+				mgr.lastErr = err
 			}
 			return
 		}
@@ -297,8 +319,10 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 			log.String("bits_per_label", fmt.Sprintf("%d", mgr.cfg.BitsPerLabel)),
 		)
 
-		mgr.setState(postSetupStateComplete)
+		mgr.mu.Lock()
+		mgr.state = postSetupStateComplete
 		close(mgr.initCompletedChan)
+		mgr.mu.Unlock()
 	}()
 
 	return mgr.doneChan, nil
@@ -307,23 +331,31 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 // StopSession stops the current Post setup data creation session
 // and optionally attempts to delete the data file(s).
 func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
-	if mgr.getState() == postSetupStateInProgress {
-		if err := mgr.getInit().Stop(); err != nil {
+	mgr.mu.Lock()
+	state := mgr.state
+	init := mgr.init
+	doneChan := mgr.doneChan
+	mgr.mu.Unlock()
+
+	if state == postSetupStateInProgress {
+		if err := init.Stop(); err != nil {
 			return fmt.Errorf("stop: %w", err)
 		}
 
 		// Block until the current data creation session will be finished.
-		<-mgr.doneChan
+		<-doneChan
 	}
 
 	if deleteFiles {
-		if err := mgr.getInit().Reset(); err != nil {
+		if err := init.Reset(); err != nil {
 			return fmt.Errorf("reset: %w", err)
 		}
 
+		mgr.mu.Lock()
 		// Reset internal state.
-		mgr.setState(postSetupStateNotStarted)
+		mgr.state = postSetupStateNotStarted
 		mgr.initCompletedChan = make(chan struct{})
+		mgr.mu.Unlock()
 	}
 
 	return nil
@@ -331,7 +363,11 @@ func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
 
 // GenerateProof generates a new Post.
 func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *types.PostMetadata, error) {
-	if mgr.getState() != postSetupStateComplete {
+	mgr.mu.Lock()
+	state := mgr.state
+	mgr.mu.Unlock()
+
+	if state != postSetupStateComplete {
 		return nil, nil, errNotComplete
 	}
 
@@ -384,39 +420,4 @@ func (mgr *PostSetupManager) getState() postSetupState {
 	defer mgr.mu.Unlock()
 
 	return mgr.state
-}
-
-func (mgr *PostSetupManager) setState(state postSetupState) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	mgr.state = state
-}
-
-func (mgr *PostSetupManager) getInit() *initialization.Initializer {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	return mgr.init
-}
-
-func (mgr *PostSetupManager) setInit(newInit *initialization.Initializer) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	mgr.init = newInit
-}
-
-func (mgr *PostSetupManager) setLastOpts(opts *PostSetupOpts) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	mgr.lastOpts = opts
-}
-
-func (mgr *PostSetupManager) setLastErr(err error) {
-	mgr.mu.Lock()
-	defer mgr.mu.Unlock()
-
-	mgr.lastErr = err
 }
