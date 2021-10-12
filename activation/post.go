@@ -68,7 +68,7 @@ var _ PostSetupProvider = (*PostSetupManager)(nil)
 
 // PostSetupManager implements the PostProvider interface.
 type PostSetupManager struct {
-	mu sync.RWMutex
+	mu sync.Mutex
 
 	id     []byte
 	cfg    PostConfig
@@ -367,16 +367,16 @@ func (mgr *PostSetupManager) GenerateProof(challenge []byte) (*types.Post, *type
 
 // LastError returns the Post setup last error.
 func (mgr *PostSetupManager) LastError() error {
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
 
 	return mgr.lastErr
 }
 
 // LastOpts returns the Post setup last session options.
 func (mgr *PostSetupManager) LastOpts() *PostSetupOpts {
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
 
 	return mgr.lastOpts
 }
@@ -387,8 +387,8 @@ func (mgr *PostSetupManager) Config() PostConfig {
 }
 
 func (mgr *PostSetupManager) getState() postSetupState {
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
 
 	return mgr.state
 }
@@ -401,8 +401,8 @@ func (mgr *PostSetupManager) setState(state postSetupState) {
 }
 
 func (mgr *PostSetupManager) getInit() *initialization.Initializer {
-	mgr.mu.RLock()
-	defer mgr.mu.RUnlock()
+	mgr.mu.Lock()
+	defer mgr.mu.Unlock()
 
 	return mgr.init
 }

@@ -137,7 +137,7 @@ type Builder struct {
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
-	mu                    sync.RWMutex
+	mu                    sync.Mutex
 	store                 bytesStore
 	syncer                syncer
 	log                   log.Log
