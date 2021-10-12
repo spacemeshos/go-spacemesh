@@ -50,9 +50,7 @@ func init() {
 	cmdp.AddCommands(Cmd)
 }
 
-type mockBlockProvider struct {
-	allBlocks map[types.BlockID]*types.Block
-}
+type mockBlockProvider struct{}
 
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
@@ -63,14 +61,18 @@ func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
 func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
 }
 
-func (mbp *mockBlockProvider) LayerBlocks(types.LayerID) ([]*types.Block, error) {
-	blockSet, allBlocks := buildSet()
-	mbp.allBlocks = allBlocks
-	return blockSet, nil
+func (mbp *mockBlockProvider) LayerBlocks(lyr types.LayerID) ([]*types.Block, error) {
+	s := make([]*types.Block, 200)
+	for i := uint64(0); i < 200; i++ {
+		blk := types.NewExistingBlock(lyr, util.Uint64ToBytes(i), nil)
+		blk.TortoiseBeacon = lyr.GetEpoch().ToBytes()
+		s[i] = blk
+	}
+	return s, nil
 }
 
-func (mbp *mockBlockProvider) GetBlock(bID types.BlockID) (*types.Block, error) {
-	return mbp.allBlocks[bID], nil
+func (mbp *mockBlockProvider) GetBlock(types.BlockID) (*types.Block, error) {
+	return nil, nil
 }
 
 type mockBeaconGetter struct{}
@@ -105,18 +107,6 @@ func NewHareApp() *HareApp {
 func (app *HareApp) Cleanup() {
 	// TODO: move to array of cleanup functions and execute all here
 	app.oracle.Unregister(true, app.sgn.PublicKey().String())
-}
-
-func buildSet() ([]*types.Block, map[types.BlockID]*types.Block) {
-	s := make([]*types.Block, 200, 200)
-	allBlocks := make(map[types.BlockID]*types.Block, 200)
-	for i := uint64(0); i < 200; i++ {
-		blk := types.NewExistingBlock(types.GetEffectiveGenesis().Add(1), util.Uint64ToBytes(i), nil)
-		s = append(s, blk)
-		allBlocks[blk.ID()] = blk
-	}
-
-	return s, allBlocks
 }
 
 type mockIDProvider struct{}
