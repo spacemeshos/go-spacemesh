@@ -84,7 +84,6 @@ type PostSetupManager struct {
 	lastOpts *PostSetupOpts
 	lastErr  error
 
-	startedChanMu sync.RWMutex
 	// startedChan indicates whether a data creation session has started.
 	// The channel instance is replaced in the end of the session.
 	startedChan chan struct{}
@@ -147,9 +146,9 @@ func (mgr *PostSetupManager) Status() *PostSetupStatus {
 func (mgr *PostSetupManager) StatusChan() <-chan *PostSetupStatus {
 	// Wait for session to start because only then the initializer instance
 	// used for retrieving the progress updates is already set.
-	mgr.startedChanMu.RLock()
+	mgr.mu.Lock()
 	startedChan := mgr.startedChan
-	mgr.startedChanMu.RUnlock()
+	mgr.mu.Unlock()
 
 	<-startedChan
 
@@ -258,16 +257,16 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 	mgr.setLastOpts(&opts)
 	mgr.setLastErr(nil)
 
-	mgr.startedChanMu.Lock()
+	mgr.mu.Lock()
 	close(mgr.startedChan)
-	mgr.startedChanMu.Unlock()
+	mgr.mu.Unlock()
 
 	mgr.doneChan = make(chan struct{})
 	go func() {
 		defer func() {
-			mgr.startedChanMu.Lock()
+			mgr.mu.Lock()
 			mgr.startedChan = make(chan struct{})
-			mgr.startedChanMu.Unlock()
+			mgr.mu.Unlock()
 
 			close(mgr.doneChan)
 		}()
