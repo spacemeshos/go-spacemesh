@@ -74,8 +74,6 @@ type PostSetupManager struct {
 	cfg    PostConfig
 	logger log.Log
 
-	// stopMu  sync.Mutex
-
 	state             postSetupState
 	initCompletedChan chan struct{}
 
@@ -311,9 +309,6 @@ func (mgr *PostSetupManager) StartSession(opts PostSetupOpts) (chan struct{}, er
 // StopSession stops the current Post setup data creation session
 // and optionally attempts to delete the data file(s).
 func (mgr *PostSetupManager) StopSession(deleteFiles bool) error {
-	// mgr.stopMu.Lock()
-	// defer mgr.stopMu.Unlock()
-
 	if mgr.getState() == postSetupStateInProgress {
 		if err := mgr.getInit().Stop(); err != nil {
 			return fmt.Errorf("stop: %w", err)
