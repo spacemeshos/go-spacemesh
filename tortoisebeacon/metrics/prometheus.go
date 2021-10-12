@@ -1,37 +1,105 @@
 package metrics
 
-import "github.com/spacemeshos/go-spacemesh/metrics"
+import (
+	"github.com/prometheus/client_golang/prometheus"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/metrics"
+)
 
 const (
-	subsystem = "beacons"
-	// LabelEpoch is the metric label for the epoch value.
-	LabelEpoch = "epoch"
-	// LabelBeacon is the metric label for the beacon value.
-	LabelBeacon = "beacon"
+	subsystem   = "beacons"
+	labelEpoch  = "epoch"
+	labelBeacon = "beacon"
 )
 
-var (
-	// ObservedBeaconCounter is the total count of each beacon reported by blocks.
-	ObservedBeaconCounter = metrics.NewCounter(
-		"observed_beacon_count",
-		subsystem,
-		"Weight of each beacon collected from blocks for each epoch and value",
-		[]string{"epoch", "beacon"},
-	)
+// BeaconStats hold metadata for each beacon value.
+type BeaconStats struct {
+	Epoch  types.EpochID
+	Beacon string
+	Count  uint64
+	Weight uint64
+}
 
-	// ObservedBeaconWeightCounter is the total weight of each beacon reported by blocks.
-	ObservedBeaconWeightCounter = metrics.NewCounter(
-		"observed_beacon_weight",
-		subsystem,
-		"Weight of each beacon collected from blocks for each epoch and value",
-		[]string{"epoch", "beacon"},
-	)
+// GatherCB returns stats for the observed and calculated beacons.
+type GatherCB func() ([]*BeaconStats, *BeaconStats)
 
-	// CalculatedBeaconCounter is the weight of the beacon calculated by the node.
-	CalculatedBeaconCounter = metrics.NewCounter(
-		"calculated_beacon_weight",
-		subsystem,
-		"Weight of each beacon calculated by the node for each epoch",
-		[]string{"epoch", "beacon"},
-	)
-)
+// BeaconMetricsCollector is a prometheus Collector for beacon metrics.
+type BeaconMetricsCollector struct {
+	gather GatherCB
+	logger log.Logger
+
+	registry               *prometheus.Registry
+	observedBeaconCount    *prometheus.Desc
+	observedBeaconWeight   *prometheus.Desc
+	calculatedBeaconWeight *prometheus.Desc
+}
+
+// NewBeaconMetricsCollector creates a prometheus Collector for beacons.
+func NewBeaconMetricsCollector(cb GatherCB, logger log.Logger) *BeaconMetricsCollector {
+	bmc := &BeaconMetricsCollector{
+		gather: cb,
+		logger: logger,
+		observedBeaconCount: prometheus.NewDesc(
+			prometheus.BuildFQName(metrics.Namespace, subsystem, "beacon_observed_total"),
+			"Number of beacons collected from blocks for each epoch and value",
+			[]string{labelEpoch, labelBeacon}, nil),
+		observedBeaconWeight: prometheus.NewDesc(
+			prometheus.BuildFQName(metrics.Namespace, subsystem, "beacon_observed_weight"),
+			"Weight of beacons collected from blocks for each epoch and value",
+			[]string{labelEpoch, labelBeacon}, nil),
+		calculatedBeaconWeight: prometheus.NewDesc(
+			prometheus.BuildFQName(metrics.Namespace, subsystem, "beacon_calculated_weight"),
+			"Weight of the beacon calculated by the node for each epoch",
+			[]string{labelEpoch, labelBeacon}, nil),
+	}
+	return bmc
+}
+
+// Start registers the Collector with specified prometheus registry and starts the metrics collection.
+func (bmc *BeaconMetricsCollector) Start(registry *prometheus.Registry) {
+	if registry != nil {
+		registry.MustRegister(bmc)
+	} else {
+		// use Register instead of MustRegister because during app test, multiple instances
+		// will register the same set of metrics with the default registry and panic
+		if err := prometheus.Register(bmc); err != nil {
+			bmc.logger.With().Error("failed to register beacon metrics Collector", log.Err(err))
+		}
+	}
+	bmc.registry = registry
+}
+
+// Stop unregisters the Collector with specified prometheus registry and stops the metrics collection.
+func (bmc *BeaconMetricsCollector) Stop() {
+	if bmc.registry != nil {
+		bmc.registry.Unregister(bmc)
+	} else {
+		prometheus.Unregister(bmc)
+	}
+}
+
+// Describe implements Collector.
+func (bmc *BeaconMetricsCollector) Describe(ch chan<- *prometheus.Desc) {
+	ch <- bmc.observedBeaconCount
+	ch <- bmc.observedBeaconWeight
+	ch <- bmc.calculatedBeaconWeight
+}
+
+// Collect implements Collector.
+func (bmc *BeaconMetricsCollector) Collect(ch chan<- prometheus.Metric) {
+	observed, calculated := bmc.gather()
+	for _, ob := range observed {
+		epochStr := ob.Epoch.String()
+		ch <- prometheus.MustNewConstMetric(bmc.observedBeaconCount, prometheus.CounterValue, float64(ob.Count), epochStr, ob.Beacon)
+		ch <- prometheus.MustNewConstMetric(bmc.observedBeaconWeight, prometheus.CounterValue, float64(ob.Weight), epochStr, ob.Beacon)
+	}
+
+	if calculated == nil {
+		return
+	}
+	// export the calculated beacon for the target epoch for ease of monitoring along with the observed beacons
+	targetEpoch := (calculated.Epoch + 1).String()
+	ch <- prometheus.MustNewConstMetric(bmc.calculatedBeaconWeight, prometheus.CounterValue, float64(calculated.Weight), targetEpoch, calculated.Beacon)
+}

@@ -7,7 +7,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/metrics"
 )
 
 func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, lastRoundVotes allVotes) error {
@@ -29,7 +28,6 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, l
 	logger.With().Info("calculated beacon", log.Int("num_hashes", len(allHashes)))
 
 	events.ReportCalculatedTortoiseBeacon(epoch, beaconStr)
-	metrics.CalculatedBeaconCounter.With(metrics.LabelEpoch, epoch.String(), metrics.LabelBeacon, beaconStr).Add(1)
 
 	if err := tb.setBeacon(epoch, beacon); err != nil {
 		return err
