@@ -18,7 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
-// NodeTestInstance is an instance of a p2p node for testing
+// NodeTestInstance is an instance of a p2p node for testing.
 type NodeTestInstance interface {
 	Service
 	LocalNode() node.LocalNode // this holds the keys
@@ -165,7 +165,7 @@ func createP2pInstance(t testing.TB, config config.Config, loggerName string) *S
 	return p
 }
 
-// WaitForGossip waits that all nodes initialized gossip connections
+// WaitForGossip waits that all nodes initialized gossip connections.
 func (its *IntegrationTestSuite) WaitForGossip(ctx context.Context) error {
 	g, _ := errgroup.WithContext(ctx)
 	for _, b := range its.boot {
@@ -178,10 +178,15 @@ func (its *IntegrationTestSuite) WaitForGossip(ctx context.Context) error {
 			return i.waitForGossip()
 		})
 	}
-	return g.Wait()
+
+	if err := g.Wait(); err != nil {
+		return fmt.Errorf("errgroup: %w", err)
+	}
+
+	return nil
 }
 
-// ForAll executes f on all the node and returns error if it failed
+// ForAll executes f on all the node and returns error if it failed.
 func (its *IntegrationTestSuite) ForAll(f func(idx int, s NodeTestInstance) error, filter []int) []error {
 	e := make([]error, 0)
 swarms:
@@ -206,7 +211,7 @@ boots:
 	return e
 }
 
-// ForAllAsync executes f on all the nodes concurrently, it stops if ctx is cancelled.
+// ForAllAsync executes f on all the nodes concurrently, it stops if ctx is canceled.
 func (its *IntegrationTestSuite) ForAllAsync(ctx context.Context, f func(idx int, s NodeTestInstance) error) ([]error, error) {
 	var mtx sync.Mutex
 	errs := make([]error, len(its.Instances))
@@ -223,7 +228,11 @@ func (its *IntegrationTestSuite) ForAllAsync(ctx context.Context, f func(idx int
 		})
 	}
 
-	return errs, group.Wait()
+	if err := group.Wait(); err != nil {
+		return errs, fmt.Errorf("errgroup: %w", err)
+	}
+
+	return errs, nil
 }
 
 // StringIdentifiers turns Switch into string representation node for use as bootnodes.

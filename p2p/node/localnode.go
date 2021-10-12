@@ -1,6 +1,8 @@
 package node
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
@@ -10,7 +12,7 @@ type LocalNode struct {
 	privKey   p2pcrypto.PrivateKey
 }
 
-// PublicKey returns the node's public key
+// PublicKey returns the node's public key.
 func (n LocalNode) PublicKey() p2pcrypto.PublicKey {
 	return n.publicKey
 }
@@ -20,14 +22,13 @@ func (n LocalNode) PrivateKey() p2pcrypto.PrivateKey {
 	return n.privKey
 }
 
-var emptyNode LocalNode
-
 // NewNodeIdentity creates a new local node without attempting to restore node from local store.
-func NewNodeIdentity() (LocalNode, error) {
+func NewNodeIdentity() (ln LocalNode, err error) {
 	priv, pub, err := p2pcrypto.GenerateKeyPair()
 	if err != nil {
-		return emptyNode, err
+		return ln, fmt.Errorf("generate keypair: %w", err)
 	}
+
 	return LocalNode{
 		publicKey: pub,
 		privKey:   priv,
@@ -35,15 +36,15 @@ func NewNodeIdentity() (LocalNode, error) {
 }
 
 // Creates a new node from persisted NodeData.
-func newLocalNodeFromFile(d *nodeFileData) (LocalNode, error) {
+func newLocalNodeFromFile(d *nodeFileData) (ln LocalNode, err error) {
 	priv, err := p2pcrypto.NewPrivateKeyFromBase58(d.PrivKey)
 	if err != nil {
-		return emptyNode, err
+		return ln, fmt.Errorf("privkey from base58: %w", err)
 	}
 
 	pub, err := p2pcrypto.NewPublicKeyFromBase58(d.PubKey)
 	if err != nil {
-		return emptyNode, err
+		return ln, fmt.Errorf("pubkey from base58: %w", err)
 	}
 
 	n := LocalNode{

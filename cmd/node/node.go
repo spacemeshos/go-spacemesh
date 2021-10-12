@@ -8,7 +8,6 @@ import (
 	"io/ioutil"
 	"math/big"
 	"net/http"
-	_ "net/http/pprof" // import for memory and network profiling
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -26,7 +25,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
-	apiCfg "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
@@ -41,6 +39,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
@@ -50,7 +49,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/state"
+	"github.com/spacemeshos/go-spacemesh/svm"
+	"github.com/spacemeshos/go-spacemesh/svm/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
@@ -63,7 +63,7 @@ import (
 
 const edKeyFileName = "key.bin"
 
-// Logger names
+// Logger names.
 const (
 	AppLogger            = "app"
 	P2PLogger            = "p2p"
@@ -72,7 +72,6 @@ const (
 	StateLogger          = "state"
 	AtxDbStoreLogger     = "atxDbStore"
 	TBeaconDbStoreLogger = "tbDbStore"
-	TBeaconDbLogger      = "tbDb"
 	TBeaconLogger        = "tBeacon"
 	WeakCoinLogger       = "weakCoin"
 	PoetDbStoreLogger    = "poetDbStore"
@@ -97,9 +96,10 @@ const (
 	Fetcher              = "fetcher"
 	LayerFetcher         = "layerFetcher"
 	TimeSyncLogger       = "timesync"
+	SVMLogger            = "SVM"
 )
 
-// Cmd is the cobra wrapper for the node, that allows adding parameters to it
+// Cmd is the cobra wrapper for the node, that allows adding parameters to it.
 var Cmd = &cobra.Command{
 	Use:   "node",
 	Short: "start node",
@@ -129,14 +129,15 @@ var Cmd = &cobra.Command{
 		starter := func() error {
 			if err := app.Initialize(); err != nil {
 				log.With().Error("Failed to initialize node.", log.Err(err))
-				return err
+				return fmt.Errorf("init node: %w", err)
 			}
 			// This blocks until the context is finished or until an error is produced
-			err := app.Start()
-			if err != nil {
+			if err := app.Start(); err != nil {
 				log.With().Error("Failed to start the node. See logs for details.", log.Err(err))
+				return fmt.Errorf("start node: %w", err)
 			}
-			return err
+
+			return nil
 		}
 		err = starter()
 		app.Cleanup()
@@ -146,7 +147,7 @@ var Cmd = &cobra.Command{
 	},
 }
 
-// VersionCmd returns the current version of spacemesh
+// VersionCmd returns the current version of spacemesh.
 var VersionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Show version info",
@@ -165,13 +166,13 @@ func init() {
 	Cmd.AddCommand(VersionCmd)
 }
 
-// Service is a general service interface that specifies the basic start/stop functionality
+// Service is a general service interface that specifies the basic start/stop functionality.
 type Service interface {
 	Start(ctx context.Context) error
 	Close()
 }
 
-// HareService is basic definition of hare algorithm service, providing consensus results for a layer
+// HareService is basic definition of hare algorithm service, providing consensus results for a layer.
 type HareService interface {
 	Service
 	GetResult(types.LayerID) ([]types.BlockID, error)
@@ -186,7 +187,7 @@ type TortoiseBeaconService interface {
 	HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
 }
 
-// TickProvider is an interface to a glopbal system clock that releases ticks on each layer
+// TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
 type TickProvider interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timesync.LayerTimer)
@@ -198,7 +199,7 @@ type TickProvider interface {
 	AwaitLayer(types.LayerID) chan struct{}
 }
 
-// LoadConfigFromFile tries to load configuration file if the config parameter was specified
+// LoadConfigFromFile tries to load configuration file if the config parameter was specified.
 func LoadConfigFromFile() (*cfg.Config, error) {
 	fileLocation := viper.GetString("config")
 	vip := viper.New()
@@ -218,11 +219,11 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 	)
 
 	// load config if it was loaded to our viper
-	err := vip.Unmarshal(&conf, viper.DecodeHook(hook))
-	if err != nil {
+	if err := vip.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
 		log.With().Error("Failed to parse config", log.Err(err))
-		return nil, err
+		return nil, fmt.Errorf("unmarshal viper: %w", err)
 	}
+
 	return &conf, nil
 }
 
@@ -269,7 +270,7 @@ func WithConfig(conf *cfg.Config) Option {
 	}
 }
 
-// New creates an instance of the spacemesh app
+// New creates an instance of the spacemesh app.
 func New(opts ...Option) *App {
 	defaultConfig := cfg.DefaultConfig()
 	app := &App{
@@ -287,7 +288,7 @@ func New(opts ...Option) *App {
 	return app
 }
 
-// App is the cli app singleton
+// App is the cli app singleton.
 type App struct {
 	*cobra.Command
 	nodeID         types.NodeID
@@ -317,7 +318,8 @@ type App struct {
 	tortoiseBeacon TortoiseBeaconService
 	closers        []interface{ Close() }
 	log            log.Log
-	txPool         *state.TxMempool
+	txPool         *mempool.TxMempool
+	svm            *svm.SVM
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
 	loggers        map[string]*zap.AtomicLevel
@@ -329,7 +331,7 @@ func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
-// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync
+// Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
@@ -337,7 +339,7 @@ func (app *App) Initialize() (err error) {
 	// ensure all data folders exist
 	err = filesystem.ExistOrCreate(app.Config.DataDir())
 	if err != nil {
-		return err
+		return fmt.Errorf("ensure folders exist: %w", err)
 	}
 
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
@@ -359,7 +361,7 @@ func (app *App) Initialize() (err error) {
 
 	drift, err := timesync.CheckSystemClockDrift()
 	if err != nil {
-		return err
+		return fmt.Errorf("check system clock drift: %w", err)
 	}
 
 	log.Info("System clock synchronized with ntp. drift: %s", drift)
@@ -385,7 +387,7 @@ func (app *App) getAppInfo() string {
 		cmdp.Version, cmdp.Branch, cmdp.Commit, runtime.Version(), runtime.GOOS, runtime.GOARCH)
 }
 
-// Cleanup stops all app services
+// Cleanup stops all app services.
 func (app *App) Cleanup() {
 	log.Info("app cleanup starting...")
 	app.stopServices()
@@ -393,105 +395,47 @@ func (app *App) Cleanup() {
 	log.Info("app cleanup completed")
 }
 
-func (app *App) setupGenesis(state *state.TransactionProcessor, msh *mesh.Mesh) error {
-	if app.Config.Genesis == nil {
-		app.Config.Genesis = apiCfg.DefaultGenesisConfig()
-	}
-	for id, balance := range app.Config.Genesis.Accounts {
-		bytes := util.FromHex(id)
-		if len(bytes) == 0 {
-			return fmt.Errorf("cannot decode entry %s for genesis account", id)
-		}
-		// just make it explicit that we want address and not a public key
-		if len(bytes) != types.AddressLength {
-			return fmt.Errorf("%s must be an address of size %d", id, types.AddressLength)
-		}
-		addr := types.BytesToAddress(bytes)
-		state.CreateAccount(addr)
-		state.AddBalance(addr, balance)
-		app.log.With().Info("genesis account created",
-			log.String("address", addr.Hex()),
-			log.Uint64("balance", balance))
-	}
-
-	_, err := state.Commit()
-	if err != nil {
-		return fmt.Errorf("cannot commit genesis state: %w", err)
-	}
-	return nil
-}
-
 // Wrap the top-level logger to add context info and set the level for a
 // specific module.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
 	lvl := zap.NewAtomicLevel()
-	var err error
+	config := app.Config.LOGGING
+	level, ok := map[string]string{
+		AppLogger:            config.AppLoggerLevel,
+		P2PLogger:            config.P2PLoggerLevel,
+		PostLogger:           config.PostLoggerLevel,
+		StateDbLogger:        config.StateDbLoggerLevel,
+		StateLogger:          config.StateLoggerLevel,
+		AtxDbStoreLogger:     config.AtxDbStoreLoggerLevel,
+		TBeaconLogger:        config.TBeaconLoggerLevel,
+		WeakCoinLogger:       config.WeakCoinLoggerLevel,
+		PoetDbStoreLogger:    config.PoetDbStoreLoggerLevel,
+		StoreLogger:          config.StoreLoggerLevel,
+		PoetDbLogger:         config.PoetDbLoggerLevel,
+		MeshDBLogger:         config.MeshDBLoggerLevel,
+		TrtlLogger:           config.TrtlLoggerLevel,
+		AtxDbLogger:          config.AtxDbLoggerLevel,
+		BlkEligibilityLogger: config.BlkEligibilityLoggerLevel,
+		MeshLogger:           config.MeshLoggerLevel,
+		SyncLogger:           config.SyncLoggerLevel,
+		BlockOracle:          config.BlockOracleLevel,
+		HareOracleLogger:     config.HareOracleLoggerLevel,
+		HareBeaconLogger:     config.HareBeaconLoggerLevel,
+		HareLogger:           config.HareLoggerLevel,
+		BlockBuilderLogger:   config.BlockBuilderLoggerLevel,
+		BlockListenerLogger:  config.BlockListenerLoggerLevel,
+		PoetListenerLogger:   config.PoetListenerLoggerLevel,
+		NipostBuilderLogger:  config.NipostBuilderLoggerLevel,
+		AtxBuilderLogger:     config.AtxBuilderLoggerLevel,
+		TimeSyncLogger:       config.TimeSyncLoggerLevel,
+	}[name]
 
-	switch name {
-	case AppLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AppLoggerLevel))
-	case P2PLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.P2PLoggerLevel))
-	case PostLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PostLoggerLevel))
-	case StateDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StateDbLoggerLevel))
-	case StateLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StateLoggerLevel))
-	case AtxDbStoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxDbStoreLoggerLevel))
-	case TBeaconDbStoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconDbStoreLoggerLevel))
-	case TBeaconDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconDbLoggerLevel))
-	case TBeaconLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TBeaconLoggerLevel))
-	case WeakCoinLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.WeakCoinLoggerLevel))
-	case PoetDbStoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PoetDbStoreLoggerLevel))
-	case StoreLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.StoreLoggerLevel))
-	case PoetDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PoetDbLoggerLevel))
-	case MeshDBLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.MeshDBLoggerLevel))
-	case TrtlLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TrtlLoggerLevel))
-	case AtxDbLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxDbLoggerLevel))
-	case BlkEligibilityLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlkEligibilityLoggerLevel))
-	case MeshLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.MeshLoggerLevel))
-	case SyncLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.SyncLoggerLevel))
-	case BlockOracle:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlockOracleLevel))
-	case HareOracleLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareOracleLoggerLevel))
-	case HareBeaconLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareBeaconLoggerLevel))
-	case HareLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.HareLoggerLevel))
-	case BlockBuilderLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlockBuilderLoggerLevel))
-	case BlockListenerLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.BlockListenerLoggerLevel))
-	case PoetListenerLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.PoetListenerLoggerLevel))
-	case NipostBuilderLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.NipostBuilderLoggerLevel))
-	case AtxBuilderLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.AtxBuilderLoggerLevel))
-	case TimeSyncLogger:
-		err = lvl.UnmarshalText([]byte(app.Config.LOGGING.TimeSyncLoggerLevel))
-	default:
-		lvl.SetLevel(log.Level())
-	}
-
-	if err != nil {
-		app.log.Error("cannot parse logging for %v error %v", name, err)
+	if ok {
+		if err := lvl.UnmarshalText([]byte(level)); err != nil {
+			app.log.Error("cannot parse logging for %v error %v", name, err)
+			lvl.SetLevel(log.Level())
+		}
+	} else {
 		lvl.SetLevel(log.Level())
 	}
 
@@ -502,16 +446,17 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 	return logger.WithName(name).WithFields(log.String("module", name))
 }
 
-// SetLogLevel updates the log level of an existing logger
+// SetLogLevel updates the log level of an existing logger.
 func (app *App) SetLogLevel(name, loglevel string) error {
-	if lvl, ok := app.loggers[name]; ok {
-		err := lvl.UnmarshalText([]byte(loglevel))
-		if err != nil {
-			return err
-		}
-	} else {
+	lvl, ok := app.loggers[name]
+	if !ok {
 		return fmt.Errorf("cannot find logger %v", name)
 	}
+
+	if err := lvl.UnmarshalText([]byte(loglevel)); err != nil {
+		return fmt.Errorf("unmarshal text: %w", err)
+	}
+
 	return nil
 }
 
@@ -526,7 +471,6 @@ func (app *App) initServices(ctx context.Context,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner signing.Signer,
 	layersPerEpoch uint32, clock TickProvider) error {
-
 	app.nodeID = nodeID
 
 	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
@@ -536,37 +480,37 @@ func (app *App) initServices(ctx context.Context,
 
 	db, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create state DB: %w", err)
 	}
 	app.closers = append(app.closers, db)
 
 	atxdbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create ATX DB: %w", err)
 	}
 	app.closers = append(app.closers, atxdbstore)
 
 	tBeaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "tbeacon"), 0, 0, app.addLogger(TBeaconDbStoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create tortoise beacon DB: %w", err)
 	}
 	app.closers = append(app.closers, tBeaconDBStore)
 
 	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create PoET DB: %w", err)
 	}
 	app.closers = append(app.closers, poetDbStore)
 
 	iddbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create IDs DB: %w", err)
 	}
 	app.closers = append(app.closers, iddbstore)
 
 	store, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "store"), 0, 0, app.addLogger(StoreLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create store DB: %w", err)
 	}
 	app.closers = append(app.closers, store)
 
@@ -575,15 +519,15 @@ func (app *App) initServices(ctx context.Context,
 	validator := activation.NewValidator(poetDb, app.Config.POST)
 	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(dbStorepath, "mesh"), app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create mesh DB: %w", err)
 	}
 
-	app.txPool = state.NewTxMemPool()
+	app.txPool = mempool.NewTxMemPool()
 	meshAndPoolProjector := pendingtxs.NewMeshAndPoolProjector(mdb, app.txPool)
 
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
 	if err != nil {
-		return err
+		return fmt.Errorf("create applied txs DB: %w", err)
 	}
 	app.closers = append(app.closers, appliedTxs)
 	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
@@ -594,7 +538,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	atxDB := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
-	tBeaconDB := tortoisebeacon.NewDB(tBeaconDBStore, app.addLogger(TBeaconDbLogger, lg))
 
 	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
@@ -610,12 +553,12 @@ func (app *App) initServices(ctx context.Context,
 		nodeID,
 		swarm,
 		atxDB,
-		tBeaconDB,
 		sgn,
 		edVerifier,
 		vrfSigner,
 		vrfVerifier,
 		wc,
+		tBeaconDBStore,
 		clock,
 		app.addLogger(TBeaconLogger, lg))
 
@@ -623,7 +566,7 @@ func (app *App) initServices(ctx context.Context,
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
 	trtlStateDB, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "turtle"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
-		return err
+		return fmt.Errorf("create turtle DB: %w", err)
 	}
 	app.closers = append(app.closers, trtlStateDB)
 	trtlCfg := tortoise.Config{
@@ -643,14 +586,15 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
+	svm := svm.New(processor, app.addLogger(SVMLogger, lg))
 
 	if mdb.PersistentData() {
 		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, processor, app.addLogger(MeshLogger, lg))
-		if err := app.setupGenesis(processor, msh); err != nil {
-			return err
+		if err := svm.SetupGenesis(app.Config.Genesis); err != nil {
+			return fmt.Errorf("setup genesis: %w", err)
 		}
 	}
 
@@ -678,8 +622,8 @@ func (app *App) initServices(ctx context.Context,
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, tBeaconDB, app.addLogger(LayerFetcher, lg))
-	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore, tBeaconDBStore)
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, app.addLogger(LayerFetcher, lg))
+	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
 
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
@@ -697,7 +641,7 @@ func (app *App) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else {
 		// regular oracle, build and use it
-		beacon := eligibility.NewBeacon(tBeacon, app.Config.HareEligibility.ConfidenceParam, app.addLogger(HareBeaconLogger, lg))
+		beacon := eligibility.NewBeacon(tBeacon, app.addLogger(HareBeaconLogger, lg))
 		hOracle = eligibility.New(beacon, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
@@ -723,6 +667,7 @@ func (app *App) initServices(ctx context.Context,
 		msh,
 		trtl,
 		blockOracle,
+		tBeacon,
 		newSyncer,
 		stateAndMeshProjector,
 		app.txPool,
@@ -782,6 +727,7 @@ func (app *App) initServices(ctx context.Context,
 	app.atxDb = atxDB
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
+	app.svm = svm
 	if !app.Config.TIME.Peersync.Disable {
 		conf := app.Config.TIME.Peersync
 		conf.ResponsesBufferSize = app.Config.P2P.BufferSize
@@ -795,7 +741,7 @@ func (app *App) initServices(ctx context.Context,
 	return nil
 }
 
-// periodically checks that our clock is sync
+// periodically checks that our clock is sync.
 func (app *App) checkTimeDrifts() {
 	checkTimeSync := time.NewTicker(app.Config.TIME.RefreshNtpInterval)
 	defer checkTimeSync.Stop() // close ticker
@@ -816,7 +762,7 @@ func (app *App) checkTimeDrifts() {
 	}
 }
 
-// HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare
+// HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare.
 func (app *App) HareFactory(
 	ctx context.Context,
 	mdb *mesh.DB,
@@ -1049,7 +995,7 @@ func (app *App) stopServices() {
 	}
 }
 
-// LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists
+// LoadOrCreateEdSigner either loads a previously created ed identity for the node or creates a new one if not exists.
 func (app *App) LoadOrCreateEdSigner() (*signing.EdSigner, error) {
 	filename := filepath.Join(app.Config.SMESHING.Opts.DataDir, edKeyFileName)
 	log.Info("Looking for identity file at `%v`", filename)

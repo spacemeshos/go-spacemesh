@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/ALTree/bigfloat"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -18,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
-	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -26,6 +27,7 @@ const (
 	proposalPrefix       = "TBP"
 	genesisBeacon        = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
 	proposalChanCapacity = 1024
+	numEpochsToKeep      = 10
 )
 
 // Tortoise Beacon errors.
@@ -37,11 +39,6 @@ var (
 
 type broadcaster interface {
 	Broadcast(ctx context.Context, channel string, data []byte) error
-}
-
-type tortoiseBeaconDB interface {
-	GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, error)
-	SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error
 }
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./tortoise_beacon.go
@@ -60,8 +57,12 @@ type eligibilityChecker interface {
 }
 
 type (
-	proposals = struct{ valid, potentiallyValid [][]byte }
-	allVotes  = struct{ valid, invalid proposalSet }
+	proposals   = struct{ valid, potentiallyValid [][]byte }
+	allVotes    = struct{ valid, invalid proposalSet }
+	epochBeacon = struct {
+		weight uint64
+		blocks map[types.BlockID]struct{}
+	}
 )
 
 type layerClock interface {
@@ -81,12 +82,12 @@ func New(
 	nodeID types.NodeID,
 	net broadcaster,
 	atxDB activationDB,
-	tortoiseBeaconDB tortoiseBeaconDB,
 	edSigner signing.Signer,
 	edVerifier signing.VerifyExtractor,
 	vrfSigner signing.Signer,
 	vrfVerifier signing.Verifier,
 	weakCoin coin,
+	db database.Database,
 	clock layerClock,
 	logger log.Log,
 ) *TortoiseBeacon {
@@ -96,14 +97,15 @@ func New(
 		nodeID:                  nodeID,
 		net:                     net,
 		atxDB:                   atxDB,
-		tortoiseBeaconDB:        tortoiseBeaconDB,
 		edSigner:                edSigner,
 		edVerifier:              edVerifier,
 		vrfSigner:               vrfSigner,
 		vrfVerifier:             vrfVerifier,
 		weakCoin:                weakCoin,
+		db:                      db,
 		clock:                   clock,
 		beacons:                 make(map[types.EpochID]types.Hash32),
+		beaconsFromBlocks:       make(map[types.EpochID]map[string]*epochBeacon),
 		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, conf.RoundsNumber),
 		firstRoundIncomingVotes: make(map[string]proposals),
@@ -114,30 +116,40 @@ func New(
 
 // TortoiseBeacon represents Tortoise Beacon.
 type TortoiseBeacon struct {
-	running uint64
-	eg      errgroup.Group
-	cancel  context.CancelFunc
+	running    uint64
+	inProtocol uint64
+	eg         errgroup.Group
+	cancel     context.CancelFunc
 
 	logger log.Log
 
-	config           Config
-	nodeID           types.NodeID
-	sync             SyncState
-	net              broadcaster
-	atxDB            activationDB
-	tortoiseBeaconDB tortoiseBeaconDB
-	edSigner         signing.Signer
-	edVerifier       signing.VerifyExtractor
-	vrfSigner        signing.Signer
-	vrfVerifier      signing.Verifier
-	weakCoin         coin
+	config      Config
+	nodeID      types.NodeID
+	sync        SyncState
+	net         broadcaster
+	atxDB       activationDB
+	edSigner    signing.Signer
+	edVerifier  signing.VerifyExtractor
+	vrfSigner   signing.Signer
+	vrfVerifier signing.Verifier
+	weakCoin    coin
 
 	clock       layerClock
 	layerTicker chan types.LayerID
+	db          database.Database
 
 	mu              sync.RWMutex
 	epochInProgress types.EpochID
 	epochWeight     uint64
+
+	// beacons store calculated beacons as the result of the tortoise beacon protocol.
+	// the map key is the epoch when beacon is calculated. the beacon is used in the following epoch
+	beacons map[types.EpochID]types.Hash32
+	// beaconsFromBlocks store beacons collected from blocks.
+	// the map key is the epoch when the block is published. the beacon value is calculated in the
+	// previous epoch and used in the current epoch
+	beaconsFromBlocks map[types.EpochID]map[string]*epochBeacon
+
 	// TODO(nkryuchkov): have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
 	incomingProposals       proposals
@@ -147,7 +159,6 @@ type TortoiseBeacon struct {
 	hasProposed               map[string]struct{}
 	hasVoted                  []map[string]struct{}
 	proposalPhaseFinishedTime time.Time
-	beacons                   map[types.EpochID]types.Hash32
 	proposalChans             map[types.EpochID]chan *proposalMessageWithReceiptData
 	proposalChecker           eligibilityChecker
 }
@@ -192,92 +203,215 @@ func (tb *TortoiseBeacon) Close() {
 	}
 	tb.logger.Info("closing %v", protoName)
 	tb.cancel()
+	tb.clock.Unsubscribe(tb.layerTicker)
 	tb.logger.Info("waiting for tortoise beacon goroutines to finish")
 	if err := tb.eg.Wait(); err != nil {
 		tb.logger.With().Info("received error waiting for goroutines to finish", log.Err(err))
 	}
 	tb.logger.Info("tortoise beacon goroutines finished")
-	tb.clock.Unsubscribe(tb.layerTicker)
 }
 
-// IsClosed returns true if background workers are not running.
-func (tb *TortoiseBeacon) IsClosed() bool {
+// isClosed returns true if background workers are not running.
+func (tb *TortoiseBeacon) isClosed() bool {
 	return atomic.LoadUint64(&tb.running) == 0
 }
 
+// ReportBeaconFromBlock reports the beacon value in a block along with the miner's weight unit.
+func (tb *TortoiseBeacon) ReportBeaconFromBlock(epoch types.EpochID, blockID types.BlockID, beacon []byte, weight uint64) {
+	tb.recordBlockBeacon(epoch, blockID, beacon, weight)
+
+	if _, err := tb.GetBeacon(epoch); err == nil {
+		// already has beacon. i.e. we had participated in tortoise beacon protocol during last epoch
+		return
+	}
+
+	if epochBeacon := tb.findMostWeightedBeaconForEpoch(epoch); epochBeacon != nil {
+		tb.setBeacon(epoch-1, types.BytesToHash(epochBeacon))
+	}
+}
+
+func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types.BlockID, beacon []byte, weight uint64) {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+
+	if _, ok := tb.beaconsFromBlocks[epochID]; !ok {
+		tb.beaconsFromBlocks[epochID] = make(map[string]*epochBeacon)
+	}
+	key := string(beacon)
+	entry, ok := tb.beaconsFromBlocks[epochID][key]
+	if !ok {
+		tb.beaconsFromBlocks[epochID][key] = &epochBeacon{
+			weight: weight,
+			blocks: map[types.BlockID]struct{}{blockID: {}},
+		}
+		tb.logger.With().Debug("added beacon from block",
+			epochID,
+			blockID,
+			log.String("beacon", types.BytesToHash(beacon).ShortString()),
+			log.Uint64("weight", weight))
+		return
+	}
+
+	// checks if we have recorded this blockID before
+	if _, ok := entry.blocks[blockID]; ok {
+		tb.logger.With().Warning("block already reported beacon", epochID, blockID)
+		return
+	}
+
+	entry.blocks[blockID] = struct{}{}
+	entry.weight += weight
+	tb.logger.With().Debug("added beacon from block",
+		epochID,
+		blockID,
+		log.String("beacon", types.BytesToHash(beacon).ShortString()),
+		log.Uint64("weight", weight))
+}
+
+func (tb *TortoiseBeacon) findMostWeightedBeaconForEpoch(epoch types.EpochID) []byte {
+	tb.mu.RLock()
+	defer tb.mu.RUnlock()
+	epochBeacons, ok := tb.beaconsFromBlocks[epoch]
+	if !ok {
+		return nil
+	}
+	var mostWeight uint64
+	var beacon []byte
+	numBlocks := 0
+	for k, v := range epochBeacons {
+		if v.weight > mostWeight {
+			beacon = []byte(k)
+			mostWeight = v.weight
+		}
+		numBlocks += len(v.blocks)
+	}
+
+	logger := tb.logger.WithFields(epoch, log.Int("num_blocks", numBlocks))
+
+	if uint32(numBlocks) < tb.config.BeaconSyncNumBlocks {
+		logger.Debug("not enough blocks to determine beacon")
+		return nil
+	}
+
+	logger.With().Info("beacon determined for epoch",
+		log.String("beacon", types.BytesToHash(beacon).ShortString()),
+		log.Uint64("weight", mostWeight))
+	return beacon
+}
+
 // GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
-// TODO(nkryuchkov): consider not using (using DB instead)
+// TODO(nkryuchkov): consider not using (using DB instead).
 func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 	if epochID == 0 {
 		return nil, ErrZeroEpoch
 	}
 
-	if tb.tortoiseBeaconDB != nil {
-		val, err := tb.tortoiseBeaconDB.GetTortoiseBeacon(epochID - 1)
-		if err == nil {
-			return val.Bytes(), nil
-		}
-
-		if !errors.Is(err, database.ErrNotFound) {
-			tb.logger.Error("failed to get tortoise beacon for epoch %v from DB: %v", epochID-1, err)
-
-			return nil, fmt.Errorf("get beacon from DB: %w", err)
-		}
-	}
-
-	if (epochID - 1).IsGenesis() {
+	beaconEpoch := epochID - 1
+	if beaconEpoch.IsGenesis() {
 		return types.HexToHash32(genesisBeacon).Bytes(), nil
 	}
 
-	tb.mu.RLock()
-	defer tb.mu.RUnlock()
-
-	beacon, ok := tb.beacons[epochID-1]
-	if !ok {
-		tb.logger.With().Error("beacon is not calculated",
-			log.Uint32("target_epoch", uint32(epochID)),
-			log.Uint32("beacon_epoch", uint32(epochID-1)))
-
-		return nil, ErrBeaconNotCalculated
+	beacon := tb.getBeacon(beaconEpoch)
+	if beacon != nil {
+		return beacon, nil
 	}
 
-	return beacon.Bytes(), nil
+	beacon, err := tb.getPersistedBeacon(beaconEpoch)
+	if err == nil {
+		return beacon, nil
+	}
+
+	if errors.Is(err, database.ErrNotFound) {
+		tb.logger.With().Warning("beacon not available",
+			epochID,
+			log.Uint32("beacon_epoch", uint32(beaconEpoch)))
+		return nil, ErrBeaconNotCalculated
+	}
+	tb.logger.With().Error("failed to get beacon from db",
+		epochID,
+		log.Uint32("beacon_epoch", uint32(beaconEpoch)),
+		log.Err(err))
+	return nil, fmt.Errorf("get beacon from DB: %w", err)
 }
 
-func (tb *TortoiseBeacon) setBeacon(epoch types.EpochID, beacon types.Hash32) {
+func (tb *TortoiseBeacon) getBeacon(epoch types.EpochID) []byte {
+	tb.mu.RLock()
+	defer tb.mu.RUnlock()
+	if beacon, ok := tb.beacons[epoch]; ok {
+		return beacon.Bytes()
+	}
+	return nil
+}
+
+func (tb *TortoiseBeacon) setBeacon(epoch types.EpochID, beacon types.Hash32) error {
+	if err := tb.persistBeacon(epoch, beacon); err != nil {
+		return err
+	}
 	tb.mu.Lock()
+	defer tb.mu.Unlock()
 	tb.beacons[epoch] = beacon
-	tb.mu.Unlock()
+	return nil
+}
+
+func (tb *TortoiseBeacon) persistBeacon(epoch types.EpochID, beacon types.Hash32) error {
+	if err := tb.db.Put(epoch.ToBytes(), beacon.Bytes()); err != nil {
+		tb.logger.With().Error("failed to persist beacon",
+			epoch,
+			log.String("beacon", beacon.ShortString()), log.Err(err))
+		return fmt.Errorf("persist beacon: %w", err)
+	}
+
+	return nil
+}
+
+func (tb *TortoiseBeacon) getPersistedBeacon(epoch types.EpochID) ([]byte, error) {
+	beacon, err := tb.db.Get(epoch.ToBytes())
+	if err != nil {
+		return beacon, fmt.Errorf("get from DB: %w", err)
+	}
+
+	return beacon, nil
 }
 
 func (tb *TortoiseBeacon) initGenesisBeacons() {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
 	for epoch := types.EpochID(0); epoch.IsGenesis(); epoch++ {
 		genesis := types.HexToHash32(genesisBeacon)
 		tb.beacons[epoch] = genesis
-
-		if tb.tortoiseBeaconDB != nil {
-			if err := tb.tortoiseBeaconDB.SetTortoiseBeacon(epoch, genesis); err != nil {
-				tb.logger.With().Error("failed to write tortoise beacon to DB",
-					log.Uint32("epoch_id", uint32(epoch)),
-					log.String("beacon", genesis.String()))
-			}
-		}
 	}
 }
 
-func (tb *TortoiseBeacon) setupEpoch(epochWeight uint64, logger log.Log) chan *proposalMessageWithReceiptData {
+func (tb *TortoiseBeacon) setBeginProtocol(ctx context.Context) {
+	if !atomic.CompareAndSwapUint64(&tb.inProtocol, 0, 1) {
+		tb.logger.WithContext(ctx).Error("attempt to begin tortoise beacon protocol more than once")
+	}
+}
+
+func (tb *TortoiseBeacon) setEndProtocol(ctx context.Context) {
+	if !atomic.CompareAndSwapUint64(&tb.inProtocol, 1, 0) {
+		tb.logger.WithContext(ctx).Error("attempt to end tortoise beacon protocol more than once")
+	}
+}
+
+func (tb *TortoiseBeacon) isInProtocol() bool {
+	return atomic.LoadUint64(&tb.inProtocol) == 1
+}
+
+func (tb *TortoiseBeacon) setupEpoch(epoch types.EpochID, epochWeight uint64, logger log.Log) chan *proposalMessageWithReceiptData {
+	tb.cleanupEpoch(epoch - 1) // just in case we processed any gossip messages before the protocol started
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
 	tb.epochWeight = epochWeight
 	tb.proposalChecker = createProposalChecker(tb.config.Kappa, tb.config.Q, epochWeight, logger)
-	ch := tb.getOrCreateProposalChannel(tb.epochInProgress)
+	ch := tb.getOrCreateProposalChannel(epoch)
 	// allow proposals for the next epoch to come in early
-	_ = tb.getOrCreateProposalChannel(tb.epochInProgress + 1)
+	_ = tb.getOrCreateProposalChannel(epoch + 1)
 	return ch
 }
 
-func (tb *TortoiseBeacon) cleanupEpoch() {
+func (tb *TortoiseBeacon) cleanupEpoch(epoch types.EpochID) {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -288,9 +422,20 @@ func (tb *TortoiseBeacon) cleanupEpoch() {
 	tb.hasVoted = make([]map[string]struct{}, tb.config.RoundsNumber)
 	tb.proposalPhaseFinishedTime = time.Time{}
 
-	if ch, ok := tb.proposalChans[tb.epochInProgress]; ok {
+	if ch, ok := tb.proposalChans[epoch]; ok {
 		close(ch)
-		delete(tb.proposalChans, tb.epochInProgress)
+		delete(tb.proposalChans, epoch)
+	}
+
+	if epoch <= numEpochsToKeep {
+		return
+	}
+	oldest := epoch - numEpochsToKeep
+	if _, ok := tb.beacons[oldest]; ok {
+		delete(tb.beacons, oldest)
+	}
+	if _, ok := tb.beaconsFromBlocks[oldest]; ok {
+		delete(tb.beaconsFromBlocks, oldest)
 	}
 }
 
@@ -322,6 +467,10 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 		logger.Debug("not first layer in epoch, skipping")
 		return
 	}
+	if tb.isInProtocol() {
+		logger.Error("last beacon protocol is still running, skipping")
+		return
+	}
 	logger.Info("first layer in epoch, proceeding")
 
 	tb.mu.Lock()
@@ -348,7 +497,15 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		return
 	}
 
-	logger.Info("handling epoch")
+	// make sure this node has ATX in the last epoch and is eligible to participate in tortoise beacon
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(tb.nodeID, epoch-1)
+	if err != nil {
+		logger.With().Info("node has no ATX in last epoch, not participating in tortoise beacon", log.Err(err))
+		return
+	}
+
+	logger.With().Info("participating in tortoise beacon protocol with ATX", atxID)
+
 	epochWeight, atxs, err := tb.atxDB.GetEpochWeight(epoch)
 	if err != nil {
 		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
@@ -359,8 +516,11 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		return
 	}
 
-	ch := tb.setupEpoch(epochWeight, logger)
-	defer tb.cleanupEpoch()
+	tb.setBeginProtocol(ctx)
+	defer tb.setEndProtocol(ctx)
+
+	ch := tb.setupEpoch(epoch, epochWeight, logger)
+	defer tb.cleanupEpoch(epoch)
 
 	tb.eg.Go(func() error {
 		tb.readProposalMessagesLoop(ctx, ch)
@@ -423,7 +583,7 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 }
 
 func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.EpochID) error {
-	if tb.IsClosed() {
+	if tb.isClosed() {
 		return nil
 	}
 
@@ -538,7 +698,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		select {
 		case <-timer.C:
 		case <-ctx.Done():
-			return allVotes{}, ctx.Err()
+			return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
 		}
 
 		// note that votes after this calcVotes() call will _not_ be counted towards our votes
@@ -560,7 +720,7 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 			select {
 			case <-timer.C:
 			case <-ctx.Done():
-				return allVotes{}, ctx.Err()
+				return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
 			}
 			tb.weakCoin.FinishRound(ctx)
 			tallyUndecided(&ownVotes, undecided, tb.weakCoin.Get(ctx, epoch, round))
@@ -690,7 +850,8 @@ func createProposalChecker(kappa uint64, q *big.Rat, epochWeight uint64, logger 
 	}
 
 	threshold := atxThreshold(kappa, q, epochWeight)
-	logger.With().Debug("created proposal checker with ATX threshold",
+	logger.With().Info("created proposal checker with ATX threshold",
+		log.Uint64("epoch_weight", epochWeight),
 		log.String("threshold", threshold.String()))
 	return &proposalChecker{threshold: threshold}
 }

@@ -1,5 +1,3 @@
-# All checks, exit code is 0 on errors.
-
 # This file contains all available configuration options
 # Modified for linting cmd/ and pkg/
 
@@ -157,13 +155,59 @@ linters-settings:
     for-loops: false # Report preallocation suggestions on for loops, false by default
   goimports:
     local-prefixes: github.com/spacemeshos/go-spacemesh
+  gci:
+    local-prefixes: github.com/spacemeshos/go-spacemesh
+  godot:
+    # comments to be checked: `declarations`, `toplevel`, or `all`
+    scope: declarations
+    # list of regexps for excluding particular comment lines from check
+    exclude:
+    # example: exclude comments which contain numbers
+    # - '[0-9]+'
+    # check that each sentence starts with a capital letter
+    capital: false
+  gofumpt:
+    # Select the Go version to target. The default is `1.15`.
+    lang-version: "1.15"
+    # Choose whether or not to use the extra rules that are disabled
+    # by default
+    extra-rules: false
+  whitespace:
+    multi-if: false # Enforces newlines (or comments) after every multi-line if statement
+    multi-func: false # Enforces newlines (or comments) after every multi-line function signature
+  wrapcheck:
+    # An array of strings that specify substrings of signatures to ignore.
+    # If this set, it will override the default set of ignored signatures.
+    # See https://github.com/tomarrell/wrapcheck#configuration for more information.
+    ignoreSigs:
+# Default sigs
+      - .Errorf(
+      - errors.New(
+      - errors.Unwrap(
+      - .Wrap(
+      - .Wrapf(
+      - .WithMessage(
+      - .WithMessagef(
+      - .WithStack(
+# Custom sigs
+      - status.Error(
+    ignorePackageGlobs:
+      - encoding/*
+      - github.com/pkg/*
 
 
 linters:
-#  enable:
-#    - staticcheck
-#    - golint
-#    - goimports
+  # TODO(nkryuchkov): enable needed linters
+  enable:
+    - gci
+    - godot
+    - gofmt
+    - gofumpt
+    - golint
+    - misspell
+    - staticcheck
+    - whitespace
+    - wrapcheck
 #    - varcheck
 #    - unparam
 #    - deadcode
@@ -175,26 +219,11 @@ linters:
 #    - typecheck
 #    - gosec
 #    - megacheck
-#    - misspell
 #    - nakedret
 #    - depguard
-  enable-all: true
-  disable:
-    - wsl
-    - lll
-    - unparam
-    - nlreturn
-    - gomnd
-    - goerr113
-    - exhaustivestruct
-    - testpackage
-    - thelper
-    - paralleltest
-    - godox
-    - gosec
-    - godot
-    - gci
-  disable-all: false
+  enable-all: false
+#  disable:
+  disable-all: true
 #  presets:
   fast: false
 

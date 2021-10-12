@@ -8,11 +8,13 @@ import (
 	"strings"
 
 	"google.golang.org/grpc"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // Contains tells whether a contains x.
 // if it does it returns it's index otherwise -1
-// TODO: this should be a util function
+// TODO: this should be a util function.
 func Contains(a []string, x string) int {
 	for ind, n := range a {
 		if strings.Contains(n, x) {

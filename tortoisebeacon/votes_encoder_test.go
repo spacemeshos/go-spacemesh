@@ -3,9 +3,10 @@ package tortoisebeacon
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTortoiseBeacon_encodeVotes(t *testing.T) {

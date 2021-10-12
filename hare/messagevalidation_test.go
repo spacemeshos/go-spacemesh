@@ -5,11 +5,12 @@ import (
 	"errors"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type truer struct{}
@@ -84,13 +85,13 @@ func TestEligibilityValidator_validateRole(t *testing.T) {
 	ev.identityProvider = &mockIDProvider{myErr}
 	res, err = ev.validateRole(context.TODO(), m)
 	assert.NotNil(t, err)
-	assert.Equal(t, myErr, err)
+	assert.ErrorIs(t, err, myErr)
 	assert.False(t, res)
 
 	oracle.err = myErr
 	res, err = ev.validateRole(context.TODO(), m)
 	assert.NotNil(t, err)
-	assert.Equal(t, myErr, err)
+	assert.ErrorIs(t, err, myErr)
 	assert.False(t, res)
 
 	ev.identityProvider = &mockIDProvider{nil}

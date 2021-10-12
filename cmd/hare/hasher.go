@@ -7,8 +7,7 @@ import (
 
 // better little duplication then little dependency
 
-type hasherU32 struct {
-}
+type hasherU32 struct{}
 
 func newHasherU32() *hasherU32 {
 	h := new(hasherU32)

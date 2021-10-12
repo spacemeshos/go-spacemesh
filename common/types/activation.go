@@ -190,7 +190,7 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 	return InterfaceToBytes(atx.InnerActivationTx)
 }
 
-// Fields returns an array of LoggableFields for logging
+// Fields returns an array of LoggableFields for logging.
 func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 	initialPost := ""
 	if atx.InitialPost != nil {

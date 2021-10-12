@@ -1,6 +1,8 @@
 package net
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
@@ -32,7 +34,7 @@ func (n networkSessionImpl) String() string {
 	return n.peerPubkey.String()
 }
 
-// ID returns the session's unique id
+// ID returns the session's unique id.
 func (n networkSessionImpl) ID() p2pcrypto.PublicKey {
 	return n.peerPubkey
 }
@@ -50,10 +52,16 @@ func (n networkSessionImpl) OpenMessage(boxedMessage []byte) (message []byte, er
 	if n.sharedSecret == nil {
 		log.Panic("tried to open a message before initializing session with a shared secret")
 	}
-	return n.sharedSecret.Open(boxedMessage)
+
+	message, err = n.sharedSecret.Open(boxedMessage)
+	if err != nil {
+		return message, fmt.Errorf("open message: %w", err)
+	}
+
+	return message, nil
 }
 
-// NewNetworkSession creates a new network session based on provided data
+// NewNetworkSession creates a new network session based on provided data.
 func NewNetworkSession(sharedSecret p2pcrypto.SharedSecret, peerPubkey p2pcrypto.PublicKey) NetworkSession {
 	return &networkSessionImpl{
 		sharedSecret: sharedSecret,

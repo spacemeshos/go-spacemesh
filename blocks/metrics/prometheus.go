@@ -2,6 +2,7 @@ package metrics
 
 import (
 	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/spacemeshos/go-spacemesh/metrics"
 )
 
@@ -10,21 +11,12 @@ const (
 	diffTypeLabel = "diff_type"
 )
 
-// Metrics labels.
-const (
-	LayerIDLabel = "layer_id"
-	BlockIDLabel = "block_id"
-)
-
 // LayerBlockSize checks average block size.
 var LayerBlockSize = metrics.NewHistogramWithBuckets(
 	"layer_block_size",
 	subsystem,
 	"Block size",
-	[]string{
-		LayerIDLabel,
-		BlockIDLabel,
-	},
+	[]string{},
 	prometheus.ExponentialBuckets(100, 2, 8),
 )
 
@@ -33,10 +25,7 @@ var NumTxsInBlock = metrics.NewHistogramWithBuckets(
 	"num_txs_in_block",
 	subsystem,
 	"Number of transactions in block",
-	[]string{
-		LayerIDLabel,
-		BlockIDLabel,
-	},
+	[]string{},
 	prometheus.ExponentialBuckets(1, 2, 8),
 )
 
@@ -45,8 +34,6 @@ var baseBlockExceptionLength = metrics.NewHistogramWithBuckets(
 	subsystem,
 	"Base block exception length",
 	[]string{
-		LayerIDLabel,
-		BlockIDLabel,
 		diffTypeLabel,
 	},
 	prometheus.ExponentialBuckets(1, 2, 8),

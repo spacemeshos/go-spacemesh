@@ -13,7 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
-// NewBlockProtocol is the protocol indicator for gossip blocks
+// NewBlockProtocol is the protocol indicator for gossip blocks.
 const NewBlockProtocol = "newBlock"
 
 var (
@@ -37,7 +37,7 @@ type blockValidator interface {
 	BlockSignedAndEligible(block *types.Block) (bool, error)
 }
 
-// BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip
+// BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip.
 type BlockHandler struct {
 	log.Log
 	traverse    forBlockInView
@@ -47,13 +47,13 @@ type BlockHandler struct {
 	goldenATXID types.ATXID
 }
 
-// Config defines configuration for block handler
+// Config defines configuration for block handler.
 type Config struct {
 	Depth       uint32
 	GoldenATXID types.ATXID
 }
 
-// NewBlockHandler creates new BlockHandler
+// NewBlockHandler creates new BlockHandler.
 func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHandler {
 	return &BlockHandler{
 		Log:         lg,
@@ -65,7 +65,7 @@ func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHan
 	}
 }
 
-// HandleBlock handles blocks from gossip
+// HandleBlock handles blocks from gossip.
 func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMessage, fetcher service.Fetcher) {
 	// restore the request ID and add context
 	if data.RequestID() != "" {
@@ -82,7 +82,7 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMess
 	data.ReportValidation(ctx, NewBlockProtocol)
 }
 
-// HandleBlockData handles blocks from gossip and sync
+// HandleBlockData handles blocks from gossip and sync.
 func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetcher service.Fetcher) error {
 	logger := bh.WithContext(ctx)
 	logger.Info("handling data for new block")
@@ -159,15 +159,16 @@ func saveMetrics(blk types.Block) {
 	}
 
 	for _, m := range metricList {
-		m.hist.
-			With(metrics.LayerIDLabel, blk.LayerIndex.String()).
-			With(metrics.BlockIDLabel, blk.ID().String()).
-			Observe(m.value)
+		m.hist.Observe(m.value)
 	}
 }
 
-func combineBlockDiffs(blk types.Block) []types.BlockID {
-	return append(blk.ForDiff, append(blk.AgainstDiff, blk.NeutralDiff...)...)
+func blockDependencies(blk *types.Block) []types.BlockID {
+	combined := []types.BlockID{blk.BaseBlock}
+	combined = append(combined, blk.ForDiff...)
+	combined = append(combined, blk.AgainstDiff...)
+	combined = append(combined, blk.NeutralDiff...)
+	return combined
 }
 
 func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block, fetcher service.Fetcher) error {
@@ -189,7 +190,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	// try fetch referenced ATXs
 	err := bh.fetchAllReferencedAtxs(ctx, block, fetcher)
 	if err != nil {
-		return err
+		return fmt.Errorf("fetch all referenced ATXs: %w", err)
 	}
 
 	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
@@ -198,7 +199,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	//   See https://github.com/spacemeshos/go-spacemesh/issues/2369
 	if err := bh.fastValidation(block); err != nil {
 		bh.WithContext(ctx).With().Error("failed fast validation", block.ID(), log.Err(err))
-		return err
+		return fmt.Errorf("fast validation: %w", err)
 	}
 
 	// get the TXs
@@ -210,7 +211,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	}
 
 	// get and validate blocks views using the fetch
-	err = fetcher.GetBlocks(ctx, combineBlockDiffs(*block))
+	err = fetcher.GetBlocks(ctx, blockDependencies(block))
 	if err != nil {
 		return fmt.Errorf("failed to fetch view %v e: %v", block.ID(), err)
 	}
@@ -237,8 +238,13 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 		}
 	}
 	if len(atxs) > 0 {
-		return fetcher.GetAtxs(ctx, atxs)
+		if err := fetcher.GetAtxs(ctx, atxs); err != nil {
+			return fmt.Errorf("get ATXs: %w", err)
+		}
+
+		return nil
 	}
+
 	return nil
 }
 
@@ -250,7 +256,7 @@ func (bh *BlockHandler) fastValidation(block *types.Block) error {
 
 	// validate unique tx atx
 	if err := validateUniqueTxAtx(block); err != nil {
-		return err
+		return fmt.Errorf("validate unique tx ATX: %w", err)
 	}
 	return nil
 }

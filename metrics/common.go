@@ -13,7 +13,7 @@ const (
 	ResultLabel = "result"
 )
 
-// Gauge is a metric type used to represent a numeric value
+// Gauge is a metric type used to represent a numeric value.
 type Gauge metrics.Gauge
 
 // Counter is a metric type used to represent a monotonically increased/decreased numeric value.

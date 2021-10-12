@@ -1,9 +1,10 @@
 package discovery
 
 import (
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"math"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/p2p/node"
 )
 
 // KnownAddress tracks information about a known network address that is used

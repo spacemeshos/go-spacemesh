@@ -9,7 +9,6 @@ import (
 )
 
 func TestSha256(t *testing.T) {
-
 	// test vectors keys and values MUST be valid hex strings
 	// source: https://www.di-mgt.com.au/sha_testvectors.html#testvectors
 	testVectors := map[string]string{

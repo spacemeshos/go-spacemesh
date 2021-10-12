@@ -89,7 +89,7 @@ def test_add_delayed_nodes(init_session, add_elk, add_node_pool, add_curl, setup
 
     print("Done adding clients. Going to wait for two epochs")
     # wait two more epochs
-    wait_epochs = 3
+    wait_epochs = 4
     sleep_and_print(wait_epochs * epoch_duration)
 
     # total = bootstrap + first clients + added clients

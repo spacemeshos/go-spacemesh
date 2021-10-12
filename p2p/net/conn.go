@@ -3,21 +3,19 @@ package net
 import (
 	"context"
 	"errors"
+	"fmt"
+	"io"
+	"net"
+	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/net/wire/delimited"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-
-	"fmt"
-	"io"
-	"net"
-	"sync"
-
-	"github.com/spacemeshos/go-spacemesh/crypto"
 )
 
 var (
@@ -27,22 +25,22 @@ var (
 	ErrClosed = errors.New("p2p: connection closed")
 	// ErrQueueFull is returned when the outbound message queue is full.
 	ErrQueueFull = errors.New("p2p: outbound message queue is full, dropping peer")
-	// ErrTriedToSetupExistingConn occurs when handshake packet is sent twice on a connection
+	// ErrTriedToSetupExistingConn occurs when handshake packet is sent twice on a connection.
 	ErrTriedToSetupExistingConn = errors.New("p2p: tried to setup existing connection")
-	// ErrMsgExceededLimit occurs when a received message size exceeds the defined message size
+	// ErrMsgExceededLimit occurs when a received message size exceeds the defined message size.
 	ErrMsgExceededLimit = errors.New("p2p: message size exceeded limit")
 )
 
 // ConnectionSource specifies the connection originator - local or remote node.
 type ConnectionSource int
 
-// ConnectionSource values
+// ConnectionSource values.
 const (
 	Local ConnectionSource = iota
 	Remote
 )
 
-// MessageQueueSize is the size for queue of messages before pushing them on the socket
+// MessageQueueSize is the size for queue of messages before pushing them on the socket.
 const MessageQueueSize = 250
 
 type msgToSend struct {
@@ -51,7 +49,7 @@ type msgToSend struct {
 	peerID  string
 }
 
-// Connection is an interface stating the API of all secured connections in the system
+// Connection is an interface stating the API of all secured connections in the system.
 type Connection interface {
 	fmt.Stringer
 
@@ -71,7 +69,7 @@ type Connection interface {
 }
 
 // FormattedConnection is an io.Writer and an io.Closer
-// A network connection supporting full-duplex messaging
+// A network connection supporting full-duplex messaging.
 type FormattedConnection struct {
 	closed uint64
 	// metadata for logging / debugging
@@ -128,7 +126,7 @@ type fmtConnection interface {
 	beginEventProcessing(context.Context)
 }
 
-// Create a new connection wrapping a net.Conn with a provided connection manager
+// Create a new connection wrapping a net.Conn with a provided connection manager.
 func newConnection(
 	conn readWriteCloseAddresser,
 	netw networker,
@@ -176,42 +174,42 @@ func newConnectionWithMessagesChan(
 	}
 }
 
-// ID returns the channel's ID
+// ID returns the channel's ID.
 func (c *FormattedConnection) ID() string {
 	return c.id
 }
 
-// RemoteAddr returns the channel's remote peer address
+// RemoteAddr returns the channel's remote peer address.
 func (c *FormattedConnection) RemoteAddr() net.Addr {
 	return c.remoteAddr
 }
 
-// SetRemotePublicKey sets the remote peer's public key
+// SetRemotePublicKey sets the remote peer's public key.
 func (c *FormattedConnection) SetRemotePublicKey(key p2pcrypto.PublicKey) {
 	c.remotePub = key
 }
 
-// RemotePublicKey returns the remote peer's public key
+// RemotePublicKey returns the remote peer's public key.
 func (c *FormattedConnection) RemotePublicKey() p2pcrypto.PublicKey {
 	return c.remotePub
 }
 
-// SetSession sets the network session
+// SetSession sets the network session.
 func (c *FormattedConnection) SetSession(session NetworkSession) {
 	c.session = session
 }
 
-// Session returns the network session
+// Session returns the network session.
 func (c *FormattedConnection) Session() NetworkSession {
 	return c.session
 }
 
-// String returns a string describing the connection
+// String returns a string describing the connection.
 func (c *FormattedConnection) String() string {
 	return c.id
 }
 
-// Created is the time the connection was created
+// Created is the time the connection was created.
 func (c *FormattedConnection) Created() time.Time {
 	return c.created
 }
@@ -220,7 +218,7 @@ func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
 	// Print a log line to establish a link between the originating sessionID and this requestID,
 	// before the sessionID disappears.
 	// This causes issues with the p2p system test, but leaving here for debugging purposes.
-	//c.logger.WithContext(ctx).Debug("connection: enqueuing incoming message")
+	// c.logger.WithContext(ctx).Debug("connection: enqueuing incoming message")
 
 	// Rather than store the context on the heap, which is an antipattern, we instead extract the sessionID and store
 	// that.
@@ -250,7 +248,7 @@ func (c *FormattedConnection) publish(ctx context.Context, message []byte) {
 //			}
 //			err := ioutil.WriteFile(fmt.Sprintf("/tmp/stacktrace%v", i), buf, 0644)
 //			if err != nil {
-//				c.logger.Error("ERR WIRTING FILE %v", err)
+//				c.logger.Error("ERR WRITING FILE %v", err)
 //			}
 //		case <-ctx.Done():
 //			return
@@ -317,22 +315,23 @@ func (c *FormattedConnection) Send(ctx context.Context, m []byte) error {
 // sendSock sends a message directly on the socket without waiting for the queue.
 func (c *FormattedConnection) sendSock(m []byte) error {
 	if err := c.deadliner.SetWriteDeadline(time.Now().Add(c.deadline)); err != nil {
-		return err
+		return fmt.Errorf("set write deadline: %w", err)
 	}
 
 	// the underlying net.Conn object performs its own write locking and is goroutine safe, so no need for a
 	// mutex here. see https://github.com/spacemeshos/go-spacemesh/pull/2435#issuecomment-851039112.
 	if _, err := c.w.WriteRecord(m); err != nil {
-		if err := c.closeNoWait(); err != ErrAlreadyClosed {
+		if err := c.closeNoWait(); !errors.Is(err, ErrAlreadyClosed) {
 			c.networker.publishClosingConnection(ConnectionWithErr{c, err}) // todo: reconsider
 		}
-		return err
+		return fmt.Errorf("write record: %w", err)
 	}
+
 	metrics.PeerRecv.With(metrics.PeerIDLabel, c.remotePub.String()).Add(float64(len(m)))
 	return nil
 }
 
-// Closed returns whether the connection is closed
+// Closed returns whether the connection is closed.
 func (c *FormattedConnection) Closed() bool {
 	return atomic.LoadUint64(&c.closed) == 1
 }
@@ -341,8 +340,14 @@ func (c *FormattedConnection) closeNoWait() error {
 	if !atomic.CompareAndSwapUint64(&c.closed, 0, 1) {
 		return ErrAlreadyClosed
 	}
+
 	close(c.stopSending)
-	return c.close.Close()
+
+	if err := c.close.Close(); err != nil {
+		return fmt.Errorf("close: %w", err)
+	}
+
+	return nil
 }
 
 // Close closes the connection (implements io.Closer). It is go safe.
@@ -356,17 +361,19 @@ func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Du
 	err := c.deadliner.SetReadDeadline(time.Now().Add(timeout))
 	if err != nil {
 		_ = c.closeNoWait()
-		return err
+		return fmt.Errorf("set read deadline: %w", err)
 	}
+
 	msg, err := c.r.Next()
 	if err != nil {
 		_ = c.closeNoWait()
-		return err
+		return fmt.Errorf("next: %w", err)
 	}
+
 	err = c.deadliner.SetReadDeadline(time.Time{})
 	if err != nil {
 		_ = c.closeNoWait()
-		return fmt.Errorf("failed to set read dealine: %w", err)
+		return fmt.Errorf("set read dealine: %w", err)
 	}
 
 	if c.msgSizeLimit != config.UnlimitedMsgSize && len(msg) > c.msgSizeLimit {
@@ -384,22 +391,22 @@ func (c *FormattedConnection) setupIncoming(ctx context.Context, timeout time.Du
 	err = c.networker.HandlePreSessionIncomingMessage(c, msg)
 	if err != nil {
 		_ = c.closeNoWait()
-		return err
+		return fmt.Errorf("handle pre-session incoming message: %w", err)
 	}
 
 	return nil
 }
 
-// Read from the incoming new messages and send down the connection
+// Read from the incoming new messages and send down the connection.
 func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
-	//TODO: use a buffer pool
+	// TODO: use a buffer pool
 	var (
 		err error
 		buf []byte
 	)
 	for {
 		buf, err = c.r.Next()
-		if err != nil && err != io.EOF {
+		if err != nil && !errors.Is(err, io.EOF) {
 			break
 		}
 
@@ -419,7 +426,7 @@ func (c *FormattedConnection) beginEventProcessing(ctx context.Context) {
 		}
 	}
 
-	if cerr := c.closeNoWait(); cerr != ErrAlreadyClosed {
+	if cerr := c.closeNoWait(); !errors.Is(cerr, ErrAlreadyClosed) {
 		c.networker.publishClosingConnection(ConnectionWithErr{c, err})
 	}
 }

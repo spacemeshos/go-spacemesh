@@ -34,13 +34,15 @@ package upnp
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/rand"
+	"fmt"
 	"net"
 	"strings"
 	"time"
 
 	"github.com/huin/goupnp"
 	"github.com/huin/goupnp/dcps/internetgateway1"
+
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 // An IGD provides an interface to the most commonly used functions of an
@@ -59,30 +61,44 @@ type IGD struct {
 
 // ExternalIP returns the router's external IP.
 func (d *IGD) ExternalIP() (string, error) {
-	return d.client.GetExternalIPAddress()
+	addr, err := d.client.GetExternalIPAddress()
+	if err != nil {
+		return addr, fmt.Errorf("get external IP: %w", err)
+	}
+
+	return addr, nil
 }
 
-// IsForwardedTCP checks whether a specific TCP port is forwarded to this host
+// IsForwardedTCP checks whether a specific TCP port is forwarded to this host.
 func (d *IGD) IsForwardedTCP(port uint16) (bool, error) {
-	return d.checkForward(port, "TCP")
+	forwarded, err := d.checkForward(port, "TCP")
+	if err != nil {
+		return forwarded, fmt.Errorf("check if TCP forwarded: %w", err)
+	}
+
+	return forwarded, nil
 }
 
-// IsForwardedUDP checks whether a specific UDP port is forwarded to this host
+// IsForwardedUDP checks whether a specific UDP port is forwarded to this host.
 func (d *IGD) IsForwardedUDP(port uint16) (bool, error) {
-	return d.checkForward(port, "UDP")
+	forwarded, err := d.checkForward(port, "UDP")
+	if err != nil {
+		return forwarded, fmt.Errorf("check if UDP forwarded: %w", err)
+	}
+
+	return forwarded, nil
 }
 
-// checkForward checks whether a specific TCP or UDP port is forwarded to this host
+// checkForward checks whether a specific TCP or UDP port is forwarded to this host.
 func (d *IGD) checkForward(port uint16, proto string) (bool, error) {
 	time.Sleep(time.Millisecond)
 	_, _, enabled, _, _, err := d.client.GetSpecificPortMappingEntry("", port, proto)
-
 	if err != nil {
 		// 714 "NoSuchEntryInArray" means that there is no such forwarding
 		if strings.Contains(err.Error(), "<errorCode>714</errorCode>") {
 			return false, nil
 		}
-		return false, err
+		return false, fmt.Errorf("get specific port mapping entry: %w", err)
 	}
 
 	return enabled, nil
@@ -93,17 +109,22 @@ func (d *IGD) checkForward(port uint16, proto string) (bool, error) {
 func (d *IGD) Forward(port uint16, desc string) error {
 	ip, err := d.getInternalIP()
 	if err != nil {
-		return err
+		return fmt.Errorf("get internal IP: %w", err)
 	}
 
 	time.Sleep(time.Millisecond)
-	err = d.client.AddPortMapping("", port, "TCP", port, ip, true, desc, 0)
-	if err != nil {
-		return err
+
+	if err = d.client.AddPortMapping("", port, "TCP", port, ip, true, desc, 0); err != nil {
+		return fmt.Errorf("add port mapping: %w", err)
 	}
 
 	time.Sleep(time.Millisecond)
-	return d.client.AddPortMapping("", port, "UDP", port, ip, true, desc, 0)
+
+	if err = d.client.AddPortMapping("", port, "UDP", port, ip, true, desc, 0); err != nil {
+		return fmt.Errorf("add port mapping: %w", err)
+	}
+
+	return nil
 }
 
 // Clear un-forwards a port, removing it from the router's port mapping table.
@@ -115,7 +136,7 @@ func (d *IGD) Clear(port uint16) error {
 
 	// only return an error if both deletions failed
 	if tcpErr != nil && udpErr != nil {
-		return tcpErr
+		return fmt.Errorf("TCP error: %w", tcpErr)
 	}
 	return nil
 }
@@ -135,13 +156,13 @@ func (d *IGD) getInternalIP() (string, error) {
 
 	ifaces, err := net.Interfaces()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("get net interfaces: %w", err)
 	}
 
 	for _, iface := range ifaces {
 		addrs, err := iface.Addrs()
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("get interface addresses: %w", err)
 		}
 
 		for _, addr := range addrs {

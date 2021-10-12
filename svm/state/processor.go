@@ -8,35 +8,37 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/trie"
 )
 
-// IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p
+// IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p.
 const IncomingTxProtocol = "TxGossip"
 
-// PreImages is a struct that contains a root hash and the transactions that are in store of this root hash
+// PreImages is a struct that contains a root hash and the transactions that are in store of this root hash.
 type PreImages struct {
 	rootHash  types.Hash32
 	preImages []*types.Transaction
 }
 
 // Projector interface defines the interface for a struct that can project the state of an account by applying txs from
-// mem pool
+// mem pool.
 type Projector interface {
 	GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error)
 }
 
-// TransactionProcessor is the struct containing state db and is responsible for applying transactions into it
+// TransactionProcessor is the struct containing state db and is responsible for applying transactions into it.
 type TransactionProcessor struct {
 	log.Log
 	*DB
-	pool         *TxMempool
+	pool         *mempool.TxMempool
 	processorDb  database.Database
 	currentLayer types.LayerID
 	rootHash     types.Hash32
@@ -49,8 +51,8 @@ type TransactionProcessor struct {
 
 const newRootKey = "root"
 
-// NewTransactionProcessor returns a new state processor
-func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, txPool *TxMempool, logger log.Log) *TransactionProcessor {
+// NewTransactionProcessor returns a new state processor.
+func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, txPool *mempool.TxMempool, logger log.Log) *TransactionProcessor {
 	stateDb, err := New(types.Hash32{}, NewDatabase(allStates))
 	if err != nil {
 		log.With().Panic("cannot load state db", log.Err(err))
@@ -71,19 +73,19 @@ func NewTransactionProcessor(allStates, processorDb database.Database, projector
 	}
 }
 
-// PublicKeyToAccountAddress converts ed25519 public key to account address
+// PublicKeyToAccountAddress converts ed25519 public key to account address.
 func PublicKeyToAccountAddress(pub ed25519.PublicKey) types.Address {
 	var addr types.Address
 	addr.SetBytes(pub)
 	return addr
 }
 
-// AddressExists checks if an account address exists in this node's global state
+// AddressExists checks if an account address exists in this node's global state.
 func (tp *TransactionProcessor) AddressExists(addr types.Address) bool {
 	return tp.Exist(addr)
 }
 
-// GetLayerApplied gets the layer id at which this tx was applied
+// GetLayerApplied gets the layer id at which this tx was applied.
 func (tp *TransactionProcessor) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 	layerIDBytes, err := tp.processorDb.Get(txID.Bytes())
 	if err != nil {
@@ -94,7 +96,7 @@ func (tp *TransactionProcessor) GetLayerApplied(txID types.TransactionID) *types
 }
 
 // ValidateNonceAndBalance validates that the tx origin account has enough balance to apply the tx,
-// also, it checks that nonce in tx is correct, returns error otherwise
+// also, it checks that nonce in tx is correct, returns error otherwise.
 func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) error {
 	origin := tx.Origin()
 	nonce, balance, err := tp.projector.GetProjection(origin, tp.GetNonce(origin), tp.GetBalance(origin))
@@ -138,19 +140,23 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 	if err != nil {
 		return remainingCount, fmt.Errorf("failed to commit global state: %w", err)
 	}
-	err = tp.addStateToHistory(layer, newHash)
-	return remainingCount, err
+
+	if err = tp.addStateToHistory(layer, newHash); err != nil {
+		return remainingCount, fmt.Errorf("add state to history: %w", err)
+	}
+
+	return remainingCount, nil
 }
 
 func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash types.Hash32) error {
 	tp.trie.Reference(newHash, types.Hash32{})
 	err := tp.trie.Commit(newHash, false)
 	if err != nil {
-		return err
+		return fmt.Errorf("commit trie: %w", err)
 	}
 	err = tp.saveStateRoot(newHash, layer)
 	if err != nil {
-		return err
+		return fmt.Errorf("save state root: %w", err)
 	}
 	tp.Log.With().Info("new state root", layer, log.FieldNamed("state_root", newHash))
 	return nil
@@ -162,7 +168,7 @@ func getStateRootLayerKey(layer types.LayerID) []byte {
 
 func (tp *TransactionProcessor) saveStateRoot(stateRoot types.Hash32, layer types.LayerID) error {
 	if err := tp.processorDb.Put(getStateRootLayerKey(layer), stateRoot.Bytes()); err != nil {
-		return err
+		return fmt.Errorf("put into DB: %w", err)
 	}
 	tp.rootMu.Lock()
 	tp.rootHash = stateRoot
@@ -170,11 +176,11 @@ func (tp *TransactionProcessor) saveStateRoot(stateRoot types.Hash32, layer type
 	return nil
 }
 
-// GetLayerStateRoot returns the state root at a given layer
+// GetLayerStateRoot returns the state root at a given layer.
 func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 	bts, err := tp.processorDb.Get(getStateRootLayerKey(layer))
 	if err != nil {
-		return types.Hash32{}, err
+		return types.Hash32{}, fmt.Errorf("get from DB: %w", err)
 	}
 	var x types.Hash32
 	x.SetBytes(bts)
@@ -205,7 +211,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types
 	}
 }
 
-// LoadState loads the last state from persistent storage
+// LoadState loads the last state from persistent storage.
 func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
@@ -229,7 +235,7 @@ func (tp *TransactionProcessor) LoadState(layer types.LayerID) error {
 	return nil
 }
 
-// Process applies transaction vector to current state, it returns the remaining transactions that failed
+// Process applies transaction vector to current state, it returns the remaining transactions that failed.
 func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.LayerID) (remaining []*types.Transaction) {
 	for _, tx := range txs {
 		err := tp.ApplyTransaction(tx, layerID)
@@ -292,7 +298,7 @@ func (tp *TransactionProcessor) ApplyTransaction(tx *types.Transaction, layerID 
 	return nil
 }
 
-// GetStateRoot gets the current state root hash
+// GetStateRoot gets the current state root hash.
 func (tp *TransactionProcessor) GetStateRoot() types.Hash32 {
 	tp.rootMu.RLock()
 	defer tp.rootMu.RUnlock()
@@ -304,7 +310,7 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 	db.AddBalance(recipient, amount)
 }
 
-// HandleTxGossipData handles data sent from gossip
+// HandleTxGossipData handles data sent from gossip.
 func (tp *TransactionProcessor) HandleTxGossipData(ctx context.Context, data service.GossipMessage, syncer service.Fetcher) {
 	err := tp.HandleTxData(data.Bytes())
 	if err != nil {
@@ -314,26 +320,31 @@ func (tp *TransactionProcessor) HandleTxGossipData(ctx context.Context, data ser
 	data.ReportValidation(ctx, IncomingTxProtocol)
 }
 
-// HandleTxData handles data received on TX gossip channel
+// HandleTxData handles data received on TX gossip channel.
 func (tp *TransactionProcessor) HandleTxData(data []byte) error {
 	tx, err := types.BytesToTransaction(data)
 	if err != nil {
 		tp.With().Error("cannot parse incoming transaction", log.Err(err))
-		return err
+		return fmt.Errorf("parse: %w", err)
 	}
-	return tp.handleTransaction(tx)
+
+	if err := tp.handleTransaction(tx); err != nil {
+		return fmt.Errorf("handle tx: %w", err)
+	}
+
+	return nil
 }
 
-// HandleTxSyncData handles data received on TX sync
+// HandleTxSyncData handles data received on TX sync.
 func (tp *TransactionProcessor) HandleTxSyncData(data []byte) error {
 	var tx mesh.DbTransaction
 	err := types.BytesToInterface(data, &tx)
 	if err != nil {
 		tp.With().Error("cannot parse incoming transaction", log.Err(err))
-		return err
+		return fmt.Errorf("parse: %w", err)
 	}
 	if err = tx.CalcAndSetOrigin(); err != nil {
-		return err
+		return fmt.Errorf("calc and set origin: %w", err)
 	}
 	// we don't validate the tx, todo: this is copied from old sync, unless I am wrong i think some validation is needed
 	tp.pool.Put(tx.Transaction.ID(), tx.Transaction)
@@ -343,7 +354,7 @@ func (tp *TransactionProcessor) HandleTxSyncData(data []byte) error {
 func (tp *TransactionProcessor) handleTransaction(tx *types.Transaction) error {
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		tp.With().Error("failed to calculate transaction origin", tx.ID(), log.Err(err))
-		return err
+		return fmt.Errorf("calc and set origin: %w", err)
 	}
 
 	tp.Log.With().Info("got new tx",
@@ -372,7 +383,7 @@ func (tp *TransactionProcessor) handleTransaction(tx *types.Transaction) error {
 }
 
 // ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool
-// it returns an error if the provided tx is not valid
+// it returns an error if the provided tx is not valid.
 func (tp *TransactionProcessor) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	err := tp.ValidateNonceAndBalance(tx)
 	if err != nil {

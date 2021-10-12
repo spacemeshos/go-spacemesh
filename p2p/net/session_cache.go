@@ -2,12 +2,13 @@ package net
 
 import (
 	"errors"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"sync"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
-// simple cache for storing sessions
+// simple cache for storing sessions.
 const maxSessions = 2048
 
 type storedSession struct {
@@ -24,12 +25,14 @@ type sessionCache struct {
 }
 
 func newSessionCache(dialFunc dialSessionFunc) *sessionCache {
-	return &sessionCache{dialFunc: dialFunc,
+	return &sessionCache{
+		dialFunc: dialFunc,
 		sMtx:     sync.Mutex{},
-		sessions: make(map[p2pcrypto.PublicKey]*storedSession)}
+		sessions: make(map[p2pcrypto.PublicKey]*storedSession),
+	}
 }
 
-// GetIfExist gets a session from the cache based on address
+// GetIfExist gets a session from the cache based on address.
 func (s *sessionCache) GetIfExist(key p2pcrypto.PublicKey) (NetworkSession, error) {
 	s.sMtx.Lock()
 	ns, ok := s.sessions[key]
@@ -40,7 +43,7 @@ func (s *sessionCache) GetIfExist(key p2pcrypto.PublicKey) (NetworkSession, erro
 	return nil, errors.New("not found")
 }
 
-// expire removes the oldest entry from the cache. *NOTE*: not thread-safe
+// expire removes the oldest entry from the cache. *NOTE*: not thread-safe.
 func (s *sessionCache) expire() {
 	var key p2pcrypto.PublicKey
 	for k, v := range s.sessions {

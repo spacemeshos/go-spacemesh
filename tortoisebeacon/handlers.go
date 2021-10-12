@@ -38,11 +38,15 @@ var (
 
 	// errMinerATXNotFound is returned when miner has no ATXs in the previous epoch.
 	errMinerATXNotFound = errors.New("miner ATX not found in previous epoch")
+
+	// errProtocolNotRunning is returned when we are not in the middle of tortoise beacon protocol.
+	errProtocolNotRunning = errors.New("tortoise beacon protocol not running")
 )
 
 // HandleSerializedProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
 func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, data service.GossipMessage, _ service.Fetcher) {
-	if tb.IsClosed() {
+	if tb.isClosed() || !tb.isInProtocol() {
+		tb.logger.WithContext(ctx).Debug("tortoise beacon shutting down or not in protocol, dropping msg")
 		return
 	}
 
@@ -81,7 +85,7 @@ func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan 
 			return
 
 		case em := <-ch:
-			if em == nil || tb.IsClosed() {
+			if em == nil || tb.isClosed() || !tb.isInProtocol() {
 				return
 			}
 
@@ -165,12 +169,22 @@ func (tb *TortoiseBeacon) classifyProposalMessage(ctx context.Context, m Proposa
 }
 
 func (tb *TortoiseBeacon) addValidProposal(proposal []byte) {
+	if !tb.isInProtocol() {
+		tb.logger.Debug("tortoise beacon not in protocol, not adding valid proposals")
+		return
+	}
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	tb.incomingProposals.valid = append(tb.incomingProposals.valid, proposal)
 }
 
 func (tb *TortoiseBeacon) addPotentiallyValidProposal(proposal []byte) {
+	if !tb.isInProtocol() {
+		tb.logger.Debug("tortoise beacon not in protocol, not adding potentially valid proposals")
+		return
+	}
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	tb.incomingProposals.potentiallyValid = append(tb.incomingProposals.potentiallyValid, proposal)
@@ -233,7 +247,8 @@ func (tb *TortoiseBeacon) isValidProposalMessage(currentEpoch types.EpochID, atx
 
 // HandleSerializedFirstVotingMessage defines method to handle Tortoise Beacon first voting Messages from gossip.
 func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context, data service.GossipMessage, _ service.Fetcher) {
-	if tb.IsClosed() {
+	if tb.isClosed() || !tb.isInProtocol() {
+		tb.logger.WithContext(ctx).Debug("tortoise beacon shutting down or not in protocol, dropping msg")
 		return
 	}
 
@@ -315,7 +330,7 @@ func (tb *TortoiseBeacon) verifyFirstVotingMessage(ctx context.Context, message 
 	}
 
 	if err != nil {
-		logger.Error("failed to get ATX")
+		logger.With().Error("failed to get ATX", log.Err(err))
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] failed to get ATX for epoch (miner ID %v): %w", types.FirstRound, minerID, err)
 	}
 
@@ -323,6 +338,11 @@ func (tb *TortoiseBeacon) verifyFirstVotingMessage(ctx context.Context, message 
 }
 
 func (tb *TortoiseBeacon) storeFirstVotes(message FirstVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) {
+	if !tb.isInProtocol() {
+		tb.logger.Debug("tortoise beacon not in protocol, not storing first votes")
+		return
+	}
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -354,7 +374,8 @@ func (tb *TortoiseBeacon) storeFirstVotes(message FirstVotingMessage, minerPK *s
 
 // HandleSerializedFollowingVotingMessage defines method to handle Tortoise Beacon following voting Messages from gossip.
 func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, _ service.Fetcher) {
-	if tb.IsClosed() {
+	if tb.isClosed() || !tb.isInProtocol() {
+		tb.logger.WithContext(ctx).Debug("tortoise beacon shutting down or not in protocol, dropping msg")
 		return
 	}
 
@@ -438,7 +459,7 @@ func (tb *TortoiseBeacon) verifyFollowingVotingMessage(ctx context.Context, mess
 	}
 
 	if err != nil {
-		logger.Error("failed to get ATX")
+		logger.With().Error("failed to get ATX", log.Err(err))
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] failed to get ATX for epoch (miner ID %v): %w", round, minerID, err)
 	}
 
@@ -446,6 +467,11 @@ func (tb *TortoiseBeacon) verifyFollowingVotingMessage(ctx context.Context, mess
 }
 
 func (tb *TortoiseBeacon) storeFollowingVotes(message FollowingVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) {
+	if !tb.isInProtocol() {
+		tb.logger.Debug("tortoise beacon not in protocol, not storing following votes")
+		return
+	}
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -477,6 +503,11 @@ func (tb *TortoiseBeacon) currentEpoch() types.EpochID {
 }
 
 func (tb *TortoiseBeacon) registerProposed(minerPK *signing.PublicKey, logger log.Log) error {
+	if !tb.isInProtocol() {
+		tb.logger.Debug("tortoise beacon not in protocol, not registering proposal")
+		return errProtocolNotRunning
+	}
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -484,7 +515,7 @@ func (tb *TortoiseBeacon) registerProposed(minerPK *signing.PublicKey, logger lo
 	if _, ok := tb.hasProposed[minerID]; ok {
 		// see TODOs for registerVoted()
 		logger.Warning("already received proposal from miner")
-		return fmt.Errorf("already made proposal (miner ID %v): %w", minerID, errAlreadyProposed)
+		return fmt.Errorf("already made proposal (miner ID %v): %w", minerPK.ShortString(), errAlreadyProposed)
 	}
 
 	tb.hasProposed[minerID] = struct{}{}
@@ -492,6 +523,11 @@ func (tb *TortoiseBeacon) registerProposed(minerPK *signing.PublicKey, logger lo
 }
 
 func (tb *TortoiseBeacon) registerVoted(minerPK *signing.PublicKey, round types.RoundID, logger log.Log) error {
+	if !tb.isInProtocol() {
+		tb.logger.Debug("tortoise beacon not in protocol, not registering votes")
+		return errProtocolNotRunning
+	}
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -511,7 +547,7 @@ func (tb *TortoiseBeacon) registerVoted(minerPK *signing.PublicKey, round types.
 		// TODO(nkryuchkov): ban id forever globally across packages since this epoch
 		// TODO(nkryuchkov): (not tortoise beacon) do the same for ATXs
 
-		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerID, errAlreadyVoted)
+		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerPK.ShortString(), errAlreadyVoted)
 	}
 
 	tb.hasVoted[round][minerID] = struct{}{}

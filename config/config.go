@@ -7,21 +7,20 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
-
-	"github.com/spf13/viper"
 )
 
 const (
@@ -35,7 +34,7 @@ var (
 	defaultDataDir = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
 )
 
-// Config defines the top level configuration for a spacemesh node
+// Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
 	Genesis         *apiConfig.GenesisConfig `mapstructure:"genesis"`
@@ -59,7 +58,7 @@ func (cfg *Config) DataDir() string {
 	return filepath.Join(filesystem.GetCanonicalPath(cfg.DataDirParent), fmt.Sprint(cfg.P2P.NetworkID))
 }
 
-// BaseConfig defines the default configuration options for spacemesh app
+// BaseConfig defines the default configuration options for spacemesh app.
 type BaseConfig struct {
 	DataDirParent string `mapstructure:"data-folder"`
 
@@ -124,8 +123,6 @@ type LoggerConfig struct {
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
 	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
-	TBeaconDbStoreLoggerLevel string `mapstructure:"tbDbStore"`
-	TBeaconDbLoggerLevel      string `mapstructure:"tbDb"`
 	TBeaconLoggerLevel        string `mapstructure:"tBeacon"`
 	WeakCoinLoggerLevel       string `mapstructure:"weakCoin"`
 	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
@@ -156,7 +153,7 @@ type SmeshingConfig struct {
 	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
 }
 
-// DefaultConfig returns the default configuration for a spacemesh node
+// DefaultConfig returns the default configuration for a spacemesh node.
 func DefaultConfig() Config {
 	return Config{
 		BaseConfig:      defaultBaseConfig(),
@@ -183,7 +180,7 @@ func DefaultTestConfig() Config {
 	return conf
 }
 
-// DefaultBaseConfig returns a default configuration for spacemesh
+// DefaultBaseConfig returns a default configuration for spacemesh.
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:         defaultDataDir,
@@ -232,7 +229,7 @@ func defaultTestConfig() BaseConfig {
 	return conf
 }
 
-// LoadConfig load the config file
+// LoadConfig load the config file.
 func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 	if fileLocation == "" {
 		fileLocation = defaultConfigFileName
@@ -256,7 +253,7 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 	return nil
 }
 
-// SetConfigFile overrides the default config file path
+// SetConfigFile overrides the default config file path.
 func (cfg *BaseConfig) SetConfigFile(file string) {
 	cfg.ConfigFile = file
 }

@@ -6,12 +6,13 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var goldenATXID = types.ATXID(types.HexToHash32("77777"))
@@ -143,7 +144,6 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	remainder := totalRewardsCost % 4
 
 	assert.Equal(t, totalRewardsCost, s.TotalReward+remainder)
-
 }
 
 func NewTestRewardParams() Config {
@@ -229,7 +229,7 @@ func createMeshFromHareOutput(t *testing.T, finalLyr types.LayerID, msh *Mesh, a
 	}
 }
 
-// test states are the same when one input is data polled from peers and the other from hare's output
+// test states are the same when one input is data polled from peers and the other from hare's output.
 func TestMesh_updateStateWithLayer_SyncingAndHareReachSameState(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)
@@ -260,7 +260,7 @@ func TestMesh_updateStateWithLayer_SyncingAndHareReachSameState(t *testing.T) {
 	require.Greater(t, len(s1.Txs), 0)
 }
 
-// test state is the same after same result received from hare
+// test state is the same after same result received from hare.
 func TestMesh_updateStateWithLayer_SameInputFromHare(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)
@@ -285,7 +285,7 @@ func TestMesh_updateStateWithLayer_SameInputFromHare(t *testing.T) {
 	require.Equal(t, oldTxs, s.Txs)
 }
 
-// test state is the same after same result received from syncing with peers
+// test state is the same after same result received from syncing with peers.
 func TestMesh_updateStateWithLayer_SameInputFromSyncing(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)
@@ -373,7 +373,7 @@ func TestMesh_updateStateWithLayer_AdvanceInOrder(t *testing.T) {
 	require.Greater(t, len(finalMinus2Txs), 0)
 
 	finalMinus1BlockIds := copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
-	//copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
+	// copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
 	finalBlockIds := copyLayer(t, msh1, msh2, atxDB2, finalLyr)
 
 	// now advance s2 to finalLyr
@@ -486,7 +486,6 @@ func TestMesh_calcRewards(t *testing.T) {
 func newActivationTx(nodeID types.NodeID, sequence uint64, prevATX types.ATXID, pubLayerID types.LayerID,
 	startTick uint64, positioningATX types.ATXID, coinbase types.Address, activeSetSize uint32, view []types.BlockID,
 	nipost *types.NIPost) *types.ActivationTx {
-
 	nipostChallenge := types.NIPostChallenge{
 		NodeID:         nodeID,
 		Sequence:       sequence,

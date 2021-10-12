@@ -1,3 +1,4 @@
+//go:build !exclude_app_test
 // +build !exclude_app_test
 
 package node
@@ -366,7 +367,7 @@ func reachedEpochTester(dependencies []int) TestScenario {
 	return TestScenario{setup, test, dependencies}
 }
 
-// test that all nodes see the same weak coin value in each layer
+// test that all nodes see the same weak coin value in each layer.
 func (suite *AppTestSuite) healingWeakcoinTester() {
 	globalLayer := suite.apps[0].mesh.LatestLayer()
 	globalCoin := make(map[types.LayerID]bool)
@@ -493,14 +494,14 @@ func sameRootTester(dependencies []int) TestScenario {
 	return TestScenario{setup, test, dependencies}
 }
 
-// run setup on all tests
+// run setup on all tests.
 func setupTests(suite *AppTestSuite) {
 	for _, test := range tests {
 		test.Setup(suite, suite.T())
 	}
 }
 
-// run test criterias after setup
+// run test criteria after setup.
 func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	for i, test := range tests {
 		depsOk := true

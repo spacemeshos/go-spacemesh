@@ -11,7 +11,7 @@ import (
 )
 
 // DB is the struct that performs logging of all account states. It consists of a state trie that contains all
-// account data in its leaves. It also stores a dirty object list to dump when state is committed into db
+// account data in its leaves. It also stores a dirty object list to dump when state is committed into db.
 type DB struct {
 	globalTrie Trie
 	db         Database // todo: maybe remove
@@ -34,7 +34,7 @@ type DB struct {
 func New(root types.Hash32, db Database) (*DB, error) {
 	tr, err := db.OpenTrie(root)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("open trie: %w", err)
 	}
 	return &DB{
 		db:                db,
@@ -51,12 +51,12 @@ func (state *DB) setError(err error) {
 	}
 }
 
-// Error returns db error if it occurred
+// Error returns db error if it occurred.
 func (state *DB) Error() error {
 	return state.dbErr
 }
 
-// GetAllAccounts returns a dump of all accounts in global state
+// GetAllAccounts returns a dump of all accounts in global state.
 func (state *DB) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	// Commit state to store so accounts in memory are included
 	if _, err := state.Commit(); err != nil {
@@ -79,7 +79,7 @@ func (state *DB) Exist(addr types.Address) bool {
 }
 
 // Empty returns whether the state object is either non-existent
-// or empty according to the EIP161 specification (balance = nonce = code = 0)
+// or empty according to the EIP161 specification (balance = nonce = code = 0).
 func (state *DB) Empty(addr types.Address) bool {
 	state.lock.Lock()
 	defer state.lock.Unlock()
@@ -87,7 +87,7 @@ func (state *DB) Empty(addr types.Address) bool {
 	return so == nil || so.empty()
 }
 
-// GetBalance Retrieve the balance from the given address or 0 if object not found
+// GetBalance Retrieve the balance from the given address or 0 if object not found.
 func (state *DB) GetBalance(addr types.Address) uint64 {
 	StateObj := state.getStateObj(addr)
 	if StateObj != nil {
@@ -96,7 +96,7 @@ func (state *DB) GetBalance(addr types.Address) uint64 {
 	return 0
 }
 
-// GetNonce gets the current nonce of the given addr, if the address is not found it returns 0
+// GetNonce gets the current nonce of the given addr, if the address is not found it returns 0.
 func (state *DB) GetNonce(addr types.Address) uint64 {
 	StateObj := state.getStateObj(addr)
 	if StateObj != nil {
@@ -126,7 +126,7 @@ func (state *DB) SubBalance(addr types.Address, amount uint64) {
 	}
 }
 
-// SetBalance sets balance to the specific address, it does not return error if address was not found
+// SetBalance sets balance to the specific address, it does not return error if address was not found.
 func (state *DB) SetBalance(addr types.Address, amount uint64) {
 	stateObj := state.GetOrNewStateObj(addr)
 	if stateObj != nil {
@@ -134,7 +134,7 @@ func (state *DB) SetBalance(addr types.Address, amount uint64) {
 	}
 }
 
-// SetNonce sets nonce to the specific address, it does not return error if address was not found
+// SetNonce sets nonce to the specific address, it does not return error if address was not found.
 func (state *DB) SetNonce(addr types.Address, nonce uint64) {
 	stateObj := state.GetOrNewStateObj(addr)
 	if stateObj != nil {
@@ -279,7 +279,10 @@ func (state *DB) Commit() (root types.Hash32, err error) {
 
 	// Write trie changes.
 	root, err = state.globalTrie.Commit(nil)
-	return root, err
+	if err != nil {
+		return root, fmt.Errorf("commit global trie: %w", err)
+	}
+	return root, nil
 }
 
 // IntermediateRoot computes the current root hash of the state trie.

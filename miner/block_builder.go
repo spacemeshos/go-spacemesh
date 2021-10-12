@@ -25,7 +25,7 @@ const (
 	defaultFee      = 1
 )
 
-// AtxsPerBlockLimit indicates the maximum number of atxs a block can reference
+// AtxsPerBlockLimit indicates the maximum number of atxs a block can reference.
 const AtxsPerBlockLimit = 100
 
 const blockBuildDurationErrorThreshold = 10 * time.Second
@@ -56,7 +56,7 @@ type baseBlockProvider interface {
 
 // BlockBuilder is the struct that orchestrates the building of blocks, it is responsible for receiving hare results.
 // referencing txs and atxs from mem pool and referencing them in the created block
-// it is also responsible for listening to the clock and querying when a block should be created according to the block oracle
+// it is also responsible for listening to the clock and querying when a block should be created according to the block oracle.
 type BlockBuilder struct {
 	log.Log
 	signer
@@ -71,6 +71,7 @@ type BlockBuilder struct {
 	meshProvider    meshProvider
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
+	beaconProvider  blocks.BeaconGetter
 	syncer          syncer
 	wg              sync.WaitGroup
 	started         bool
@@ -81,7 +82,7 @@ type BlockBuilder struct {
 	layersPerEpoch  uint32
 }
 
-// Config is the block builders configuration struct
+// Config is the block builders configuration struct.
 type Config struct {
 	DBPath         string
 	MinerID        types.NodeID
@@ -100,6 +101,7 @@ func NewBlockBuilder(
 	orph meshProvider,
 	bbp baseBlockProvider,
 	blockOracle blockOracle,
+	beaconProvider blocks.BeaconGetter,
 	syncer syncer,
 	projector projector,
 	txPool txPool,
@@ -131,6 +133,7 @@ func NewBlockBuilder(
 		meshProvider:    orph,
 		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
+		beaconProvider:  beaconProvider,
 		syncer:          syncer,
 		started:         false,
 		atxsPerBlock:    config.AtxsPerBlock,
@@ -143,7 +146,7 @@ func NewBlockBuilder(
 }
 
 // Start starts the process of creating a block, it listens for txs and atxs received by gossip, and starts querying
-// block oracle when it should create a block. This function returns an error if Start was already called once
+// block oracle when it should create a block. This function returns an error if Start was already called once.
 func (t *BlockBuilder) Start(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -160,17 +163,17 @@ func (t *BlockBuilder) Start(ctx context.Context) error {
 	return nil
 }
 
-// Close stops listeners and stops trying to create block in layers
+// Close stops listeners and stops trying to create block in layers.
 func (t *BlockBuilder) Close() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	t.db.Close()
 	if !t.started {
 		return fmt.Errorf("already stopped")
 	}
 	t.started = false
 	close(t.stopChan)
 	t.wg.Wait()
+	t.db.Close()
 	return nil
 }
 
@@ -183,7 +186,11 @@ func getEpochKey(ID types.EpochID) []byte {
 }
 
 func (t *BlockBuilder) storeRefBlock(epoch types.EpochID, blockID types.BlockID) error {
-	return t.db.Put(getEpochKey(epoch), blockID.Bytes())
+	if err := t.db.Put(getEpochKey(epoch), blockID.Bytes()); err != nil {
+		return fmt.Errorf("put into DB: %w", err)
+	}
+
+	return nil
 }
 
 func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, err error) {
@@ -195,7 +202,7 @@ func (t *BlockBuilder) getRefBlock(epoch types.EpochID) (blockID types.BlockID, 
 	return
 }
 
-// stopped returns if we should stop
+// stopped returns if we should stop.
 func (t *BlockBuilder) stopped() bool {
 	select {
 	case <-t.stopChan:
@@ -212,6 +219,7 @@ func (t *BlockBuilder) createBlock(
 	eligibilityProof types.BlockEligibilityProof,
 	txids []types.TransactionID,
 	activeSet []types.ATXID,
+	beacon []byte,
 ) (*types.Block, error) {
 	logger := t.WithContext(ctx)
 	if !id.After(types.GetEffectiveGenesis()) {
@@ -221,7 +229,7 @@ func (t *BlockBuilder) createBlock(
 	// get the most up-to-date base block, and a list of diffs versus local opinion
 	base, diffs, err := t.baseBlockP.BaseBlock(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get base block: %w", err)
 	}
 
 	b := types.MiniBlock{
@@ -247,6 +255,7 @@ func (t *BlockBuilder) createBlock(
 			log.Err(err))
 		atxs := activeSet
 		b.ActiveSet = &atxs
+		b.TortoiseBeacon = beacon
 	} else {
 		logger.With().Debug("creating block with reference block (no active set)",
 			log.Int("active_set_size", len(activeSet)),
@@ -256,7 +265,7 @@ func (t *BlockBuilder) createBlock(
 
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("serialize: %w", err)
 	}
 
 	bl := &types.Block{MiniBlock: b, Signature: t.signer.Sign(blockBytes)}
@@ -279,7 +288,6 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 	logger := t.WithContext(ctx)
 	for {
 		select {
-
 		case <-t.stopChan:
 			return
 
@@ -293,11 +301,24 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			if layerID.GetEpoch().IsGenesis() {
 				continue
 			}
+			beacon, err := t.beaconProvider.GetBeacon(layerID.GetEpoch())
+			if err != nil {
+				logger.With().Info("beacon not available for epoch", log.Err(err))
+				continue
+			}
+
+			logger.With().Info("miner got beacon to build blocks",
+				log.String("beacon", types.BytesToHash(beacon).ShortString()))
 
 			started := time.Now()
 
 			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
+				if errors.Is(err, blocks.ErrMinerHasNoATXInPreviousEpoch) {
+					logger.With().Info("node has no ATX in previous epoch and is not eligible for blocks")
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "not eligible to produce block")
+					continue
+				}
 				events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to check for block eligibility")
 				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
 				continue
@@ -309,7 +330,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			logger.With().Info("eligible for one or more blocks in layer", log.Int("count", len(proofs)))
+			logger.With().Info("eligible for one or more blocks in layer", atxID, log.Int("count", len(proofs)))
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
@@ -317,7 +338,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
 					continue
 				}
-				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs)
+				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs, beacon)
 				if err != nil {
 					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot create new block")
 					logger.With().Error("failed to create new block", log.Err(err))
@@ -361,8 +382,5 @@ func (t *BlockBuilder) saveBlockBuildDurationMetric(ctx context.Context, started
 			Error("block building took too long ", log.Duration("elapsed", elapsed))
 	}
 
-	metrics.BlockBuildDuration.
-		With(metrics.LayerIDLabel, layerID.String()).
-		With(metrics.BlockIDLabel, blockID.String()).
-		Observe(float64(elapsed / time.Millisecond))
+	metrics.BlockBuildDuration.Observe(float64(elapsed / time.Millisecond))
 }

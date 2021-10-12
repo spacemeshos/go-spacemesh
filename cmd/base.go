@@ -36,18 +36,18 @@ var (
 	Cancel = cancel
 )
 
-// BaseApp is the base application command, provides basic init and flags for all executables and applications
+// BaseApp is the base application command, provides basic init and flags for all executables and applications.
 type BaseApp struct {
 	Config *bc.Config
 }
 
-// NewBaseApp returns new basic application
+// NewBaseApp returns new basic application.
 func NewBaseApp() *BaseApp {
 	dc := bc.DefaultConfig()
 	return &BaseApp{Config: &dc}
 }
 
-// Initialize loads config, sets logger  and listens to Ctrl ^C
+// Initialize loads config, sets logger  and listens to Ctrl ^C.
 func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
@@ -102,13 +102,13 @@ func parseConfig() (*bc.Config, error) {
 	err := vip.Unmarshal(&conf)
 	if err != nil {
 		log.Error("Failed to parse config\n")
-		return nil, err
+		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
 	return &conf, nil
 }
 
-// EnsureCLIFlags checks flag types and converts them
+// EnsureCLIFlags checks flag types and converts them.
 func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
 		for i := 0; i < p.NumField(); i++ {
@@ -222,5 +222,9 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 		}
 	})
 	// check list of requested GRPC services (if any)
-	return appCFG.API.ParseServicesList()
+	if err := appCFG.API.ParseServicesList(); err != nil {
+		return fmt.Errorf("parse services list: %w", err)
+	}
+
+	return nil
 }

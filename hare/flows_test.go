@@ -3,9 +3,12 @@ package hare
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -14,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/require"
 )
 
 type HareWrapper struct {
@@ -129,11 +131,10 @@ func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload
 	}
 
 	e := m.nd.Broadcast(ctx, protocol, payload)
-	return e
+	return fmt.Errorf("broadcast: %w", e)
 }
 
-type trueOracle struct {
-}
+type trueOracle struct{}
 
 func (trueOracle) Register(bool, string) {
 }
@@ -158,7 +159,11 @@ func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types
 	return true, nil
 }
 
-// Test - runs a single CP for more than one iteration
+func (trueOracle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
+	return true
+}
+
+// Test - runs a single CP for more than one iteration.
 func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
 
@@ -212,8 +217,7 @@ func newRandBlockID(rng *rand.Rand) (id types.BlockID) {
 	return id
 }
 
-type mockBlockProvider struct {
-}
+type mockBlockProvider struct{}
 
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
@@ -242,7 +246,7 @@ func createMaatuf(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID
 	return hare
 }
 
-// Test - run multiple CPs simultaneously
+// Test - run multiple CPs simultaneously.
 func Test_multipleCPs(t *testing.T) {
 	// NOTE(dshulyak) spams with overwriting sessionID in context
 	logtest.SetupGlobal(t)
@@ -278,7 +282,7 @@ func Test_multipleCPs(t *testing.T) {
 	test.WaitForTimedTermination(t, 60*time.Second)
 }
 
-// Test - run multiple CPs where one of them runs more than one iteration
+// Test - run multiple CPs where one of them runs more than one iteration.
 func Test_multipleCPsAndIterations(t *testing.T) {
 	logtest.SetupGlobal(t)
 

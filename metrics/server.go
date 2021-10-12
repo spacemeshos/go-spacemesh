@@ -3,12 +3,14 @@ package metrics
 
 import (
 	"fmt"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"net/http"
+
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// StartMetricsServer begins listening and supplying metrics on localhost:`metricsPort`/metrics
+// StartMetricsServer begins listening and supplying metrics on localhost:`metricsPort`/metrics.
 func StartMetricsServer(metricsPort int) {
 	http.Handle("/metrics", promhttp.Handler())
 	go func() {

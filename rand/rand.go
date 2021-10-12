@@ -1,6 +1,7 @@
 package rand
 
 import (
+	"fmt"
 	"math/rand"
 	"sync"
 	"time"
@@ -15,9 +16,11 @@ func init() {
  * Top-level convenience functions
  */
 
-var globalSource = lockedSource{src: rand.NewSource(time.Now().UnixNano()).(rand.Source64)}
-var globalRand = rand.New(&globalSource)
-var letterRunes = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+var (
+	globalSource = lockedSource{src: rand.NewSource(time.Now().UnixNano()).(rand.Source64)}
+	globalRand   = rand.New(&globalSource)
+	letterRunes  = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+)
 
 // Seed uses the provided seed value to initialize the default Source to a
 // deterministic state. If Seed is not called, the generator behaves as
@@ -80,7 +83,14 @@ func Shuffle(n int, swap func(i, j int)) { globalRand.Shuffle(n, swap) }
 // Read generates len(p) random bytes from the default Source and
 // writes them into p. It always returns len(p) and a nil error.
 // Read, unlike the Rand.Read method, is safe for concurrent use.
-func Read(p []byte) (n int, err error) { return globalRand.Read(p) }
+func Read(p []byte) (n int, err error) {
+	n, err = globalRand.Read(p)
+	if err != nil {
+		return n, fmt.Errorf("read: %w", err)
+	}
+
+	return n, nil
+}
 
 // NormFloat64 returns a normally distributed float64 in the range
 // [-math.MaxFloat64, +math.MaxFloat64] with
@@ -103,7 +113,7 @@ func NormFloat64() float64 { return globalRand.NormFloat64() }
 //
 func ExpFloat64() float64 { return globalRand.ExpFloat64() }
 
-// String returns an n sized random string
+// String returns an n sized random string.
 func String(n int) string {
 	b := make([]rune, n)
 	for i := range b {

@@ -20,6 +20,8 @@ import (
 	"bytes"
 	"container/heap"
 	"errors"
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
@@ -34,7 +36,7 @@ type Iterator struct {
 	Err   error
 }
 
-// NewIterator creates a new key-value iterator from a node iterator
+// NewIterator creates a new key-value iterator from a node iterator.
 func NewIterator(it NodeIterator) *Iterator {
 	return &Iterator{
 		nodeIt: it,
@@ -206,7 +208,7 @@ func (it *nodeIterator) Path() []byte {
 }
 
 func (it *nodeIterator) Error() error {
-	if it.err == errIteratorEnd {
+	if errors.Is(it.err, errIteratorEnd) {
 		return nil
 	}
 	if seek, ok := it.err.(seekError); ok {
@@ -220,7 +222,7 @@ func (it *nodeIterator) Error() error {
 // sets the Error field to the encountered failure. If `descend` is false,
 // skips iterating over any subnodes of the current node.
 func (it *nodeIterator) Next(descend bool) bool {
-	if it.err == errIteratorEnd {
+	if errors.Is(it.err, errIteratorEnd) {
 		return false
 	}
 	if seek, ok := it.err.(seekError); ok {
@@ -245,7 +247,7 @@ func (it *nodeIterator) seek(prefix []byte) error {
 	// Move forward until we're just before the closest match to key.
 	for {
 		state, parentIndex, path, err := it.peek(bytes.HasPrefix(key, it.path))
-		if err == errIteratorEnd {
+		if errors.Is(err, errIteratorEnd) {
 			return errIteratorEnd
 		} else if err != nil {
 			return seekError{prefix, err}
@@ -465,9 +467,14 @@ func (it *differenceIterator) Next(bool) bool {
 
 func (it *differenceIterator) Error() error {
 	if err := it.a.Error(); err != nil {
-		return err
+		return fmt.Errorf("a: %w", err)
 	}
-	return it.b.Error()
+
+	if err := it.b.Error(); err != nil {
+		return fmt.Errorf("b: %w", err)
+	}
+
+	return nil
 }
 
 type nodeIteratorHeap []NodeIterator
@@ -571,7 +578,7 @@ func (it *unionIterator) Next(descend bool) bool {
 func (it *unionIterator) Error() error {
 	for i := 0; i < len(*it.items); i++ {
 		if err := (*it.items)[i].Error(); err != nil {
-			return err
+			return fmt.Errorf("item: %w", err)
 		}
 	}
 	return nil

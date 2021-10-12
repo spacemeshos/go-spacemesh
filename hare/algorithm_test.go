@@ -6,6 +6,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
@@ -15,8 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
@@ -63,6 +64,10 @@ func (mr *mockRolacle) Register(string) {
 }
 
 func (mr *mockRolacle) Unregister(string) {
+}
+
+func (mr *mockRolacle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
+	return true
 }
 
 type mockP2p struct {
@@ -170,8 +175,7 @@ func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) boo
 	return mev.valid
 }
 
-type mockOracle struct {
-}
+type mockOracle struct{}
 
 func (mo *mockOracle) Eligible(types.LayerID, int32, string, []byte) bool {
 	return true
@@ -181,7 +185,7 @@ func buildOracle(oracle Rolacle) Rolacle {
 	return oracle
 }
 
-// test that a InnerMsg to a specific set ObjectID is delivered by the broker
+// test that a InnerMsg to a specific set ObjectID is delivered by the broker.
 func TestConsensusProcess_Start(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
@@ -403,7 +407,7 @@ func TestConsensusProcess_procProposal(t *testing.T) {
 	mpt := &mockProposalTracker{}
 	proc.proposalTracker = mpt
 	proc.handleMessage(context.TODO(), m)
-	//proc.processProposalMsg(m)
+	// proc.processProposalMsg(m)
 	assert.Equal(t, 1, mpt.countOnProposal)
 	proc.advanceToNextRound(context.TODO())
 	proc.handleMessage(context.TODO(), m)
