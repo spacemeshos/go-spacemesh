@@ -79,8 +79,7 @@ type PostSetupManager struct {
 
 	// init is the current initializer instance. It is being
 	// replaced at the beginning of every data creation session.
-	initMu sync.RWMutex
-	init   *initialization.Initializer
+	init *initialization.Initializer
 
 	lastOpts *PostSetupOpts
 	lastErr  error
