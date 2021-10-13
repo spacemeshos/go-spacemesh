@@ -8,14 +8,10 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/libp2p/go-libp2p-core/peer"
-	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p/mocks"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	servicemocks "github.com/spacemeshos/go-spacemesh/p2p/service/mocks"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/signing/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
@@ -28,15 +24,11 @@ func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublishe
 	return bc
 }
 
-func broadcastedMessage(tb testing.TB, ctrl *gomock.Controller, msg weakcoin.Message) *servicemocks.MockGossipMessage {
+func broadcastedMessage(tb testing.TB, msg weakcoin.Message) []byte {
 	tb.Helper()
-	mm := servicemocks.NewMockGossipMessage(ctrl)
-	mm.EXPECT().Sender().Return(p2pcrypto.NewRandomPubkey()).AnyTimes()
 	buf, err := types.InterfaceToBytes(&msg)
 	require.NoError(tb, err)
-	mm.EXPECT().Bytes().Return(buf).AnyTimes()
-	mm.EXPECT().ReportValidation(gomock.Any(), gomock.Any()).AnyTimes()
-	return mm
+	return buf
 }
 
 func staticSigner(tb testing.TB, ctrl *gomock.Controller, sig []byte) *smocks.MockSigner {
@@ -199,7 +191,7 @@ func TestWeakCoin(t *testing.T) {
 			require.NoError(t, wc.StartRound(context.TODO(), tc.startedRound))
 
 			for _, msg := range tc.messages {
-				wc.HandleProposal(context.TODO(), broadcastedMessage(t, ctrl, msg))
+				wc.HandleProposal(context.TODO(), "", broadcastedMessage(t, msg))
 			}
 			wc.FinishRound(context.TODO())
 
@@ -219,7 +211,7 @@ func TestWeakCoin(t *testing.T) {
 			wc.StartEpoch(context.TODO(), tc.startedEpoch, tc.allowances)
 
 			for _, msg := range tc.messages {
-				wc.HandleProposal(context.TODO(), broadcastedMessage(t, ctrl, msg))
+				wc.HandleProposal(context.TODO(), "", broadcastedMessage(t, msg))
 			}
 			require.NoError(t, wc.StartRound(context.TODO(), tc.startedRound))
 			wc.FinishRound(context.TODO())
@@ -242,7 +234,7 @@ func TestWeakCoin(t *testing.T) {
 
 			for _, msg := range tc.messages {
 				msg.Round++
-				wc.HandleProposal(context.TODO(), broadcastedMessage(t, ctrl, msg))
+				wc.HandleProposal(context.TODO(), "", broadcastedMessage(t, msg))
 			}
 
 			require.NoError(t, wc.StartRound(context.TODO(), tc.startedRound+1))
@@ -267,7 +259,7 @@ func TestWeakCoin(t *testing.T) {
 			wc.StartEpoch(context.TODO(), tc.startedEpoch+1, tc.allowances)
 			for _, msg := range tc.messages {
 				msg.Epoch++
-				wc.HandleProposal(context.TODO(), broadcastedMessage(t, ctrl, msg))
+				wc.HandleProposal(context.TODO(), "", broadcastedMessage(t, msg))
 			}
 
 			require.NoError(t, wc.StartRound(context.TODO(), tc.startedRound))
@@ -321,7 +313,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	wc.StartEpoch(context.TODO(), epoch, weakcoin.UnitAllowances{string(oneLSB): 1, string(zeroLSB): 1})
 	require.NoError(t, wc.StartRound(context.TODO(), round))
 	for i := 0; i < bufSize; i++ {
-		wc.HandleProposal(context.TODO(), broadcastedMessage(t, ctrl, weakcoin.Message{
+		wc.HandleProposal(context.TODO(), "", broadcastedMessage(t, weakcoin.Message{
 			Epoch:     epoch,
 			Round:     nextRound,
 			Unit:      1,
@@ -329,7 +321,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 			Signature: oneLSB,
 		}))
 	}
-	wc.HandleProposal(context.TODO(), broadcastedMessage(t, ctrl, weakcoin.Message{
+	wc.HandleProposal(context.TODO(), "", broadcastedMessage(t, weakcoin.Message{
 		Epoch:     epoch,
 		Round:     nextRound,
 		Unit:      1,
@@ -351,7 +343,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 		round types.RoundID = 1
 	)
 	broadcaster := mocks.NewMockPublisher(ctrl)
-	broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
+	broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
 		msg := weakcoin.Message{}
 		require.NoError(t, types.BytesToInterface(data, &msg))
 		sig = msg.Signature
@@ -389,15 +381,13 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 	for i := range instances {
 		i := i
 		broadcaster := mocks.NewMockPublisher(ctrl)
-		broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any()).AnyTimes().
+		broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().
 			DoAndReturn(func(_ context.Context, _ string, data []byte) error {
 				for j := range instances {
 					if i == j {
 						continue
 					}
-					msg := &pubsub.Message{}
-					msg.Data = data
-					instances[j].HandleProposal(context.TODO(), peer.ID(""), msg)
+					instances[j].HandleProposal(context.TODO(), "", data)
 				}
 				return nil
 			}).AnyTimes()
