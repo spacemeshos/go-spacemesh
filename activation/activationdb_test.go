@@ -96,7 +96,7 @@ func (MockSVM) ApplyTransactions(types.LayerID, []*types.Transaction) ([]*types.
 	return []*types.Transaction{}, nil
 }
 
-func (MockSVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) ([]*types.Transaction, error) {
+func (MockSVM) ApplyLayer(types.LayerID, []*types.Transaction, []types.AmountAndAddress) ([]*types.Transaction, error) {
 	return []*types.Transaction{}, nil
 }
 
