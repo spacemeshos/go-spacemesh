@@ -508,35 +508,36 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 
 type layerRewards struct {
 	types.LayerID
-	Total       uint64
-	LayerReward uint64
 	LayerFees   uint64
-	Blocks      []types.AmountAndAddress
-	BySmesher   map[string][]int
+	LayerReward uint64
+	NumBlocks   uint64
+	Smeshers    map[types.Address][]types.NodeID
 }
 
-func (lr *layerRewards) numBlocks() uint64 {
-	return uint64(len(lr.Blocks))
+func (lr layerRewards) Total() uint64 {
+	return lr.LayerFees + lr.LayerReward
+}
+
+func (lr layerRewards) CoinbasesWithRewards() []types.AmountAndAddress {
+	rewards := []types.AmountAndAddress{}
+	for coinbase := range lr.Smeshers {
+		rewards = append(rewards, types.AmountAndAddress{Amount: lr.LayerReward, Address: coinbase})
+	}
+	return rewards
 }
 
 func (msh *Mesh) reportRewards(lr layerRewards) {
 	// Report the rewards for each coinbase and each smesherID within each coinbase.
 	// This can be thought of as a partition of the reward amongst all the smesherIDs
 	// that added the coinbase into the block.
-	for smesherString, idxs := range lr.BySmesher {
-		for _, idx := range idxs {
-			smesher, err := types.StringToNodeID(smesherString)
-			if err != nil {
-				msh.With().Error("unable to convert bytes to nodeid", log.Err(err),
-					log.String("smesher_string", smesherString))
-				return
-			}
+	for coinbase, smeshers := range lr.Smeshers {
+		for _, smesher := range smeshers {
 			events.ReportRewardReceived(events.Reward{
 				Layer:       lr.LayerID,
-				Total:       lr.Total,
+				Total:       lr.Total(),
 				LayerReward: lr.LayerReward,
-				Coinbase:    lr.Blocks[idx].Address,
-				Smesher:     *smesher,
+				Coinbase:    coinbase,
+				Smesher:     smesher,
 			})
 		}
 	}
@@ -545,26 +546,20 @@ func (msh *Mesh) reportRewards(lr layerRewards) {
 func (msh *Mesh) writeRewards(lr layerRewards) error {
 	batch := msh.transactions.NewBatch()
 
-	for smesherString, idxs := range lr.BySmesher {
-		nodeID, err := types.StringToNodeID(smesherString)
-		if err != nil {
-			return fmt.Errorf("could not convert String to NodeID for %v: %v", smesherString, err)
-		}
-
-		for _, idx := range idxs {
-			account := lr.Blocks[idx].Address
+	for coinbase, smeshers := range lr.Smeshers {
+		for _, smesher := range smeshers {
 			reward := dbReward{
-				TotalReward:         lr.Total,
-				LayerRewardEstimate: lr.numBlocks() * lr.LayerReward,
-				SmesherID:           *nodeID,
-				Coinbase:            account,
+				TotalReward:         lr.Total(),
+				LayerRewardEstimate: lr.NumBlocks * lr.LayerReward,
+				SmesherID:           smesher,
+				Coinbase:            coinbase,
 			}
 			if b, err := types.InterfaceToBytes(&reward); err != nil {
-				return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
-			} else if err := batch.Put(getRewardKey(lr.LayerID, account, *nodeID), b); err != nil {
-				return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
-			} else if err := batch.Put(getSmesherRewardKey(lr.LayerID, *nodeID, account), getRewardKey(lr.LayerID, account, *nodeID)); err != nil {
-				return fmt.Errorf("could not write reward key for smesherID %v to database: %v", nodeID.ShortString(), err)
+				return fmt.Errorf("could not marshal reward for %v: %v", coinbase.Short(), err)
+			} else if err := batch.Put(getRewardKey(lr.LayerID, coinbase, smesher), b); err != nil {
+				return fmt.Errorf("could not write reward to %v to database: %v", coinbase.Short(), err)
+			} else if err := batch.Put(getSmesherRewardKey(lr.LayerID, smesher, coinbase), getRewardKey(lr.LayerID, coinbase, smesher)); err != nil {
+				return fmt.Errorf("could not write reward key for smesherID %v to database: %v", smesher.ShortString(), err)
 			}
 		}
 	}
@@ -579,13 +574,13 @@ func (msh *Mesh) writeRewards(lr layerRewards) error {
 func (msh *Mesh) logRewards(lr layerRewards) {
 	msh.With().Info("reward calculated",
 		lr.LayerID,
-		log.Uint64("num_blocks", lr.numBlocks()),
-		log.Uint64("total_reward", lr.Total),
+		log.Uint64("num_blocks", lr.NumBlocks),
+		log.Uint64("total_reward", lr.Total()),
 		log.Uint64("layer_reward", lr.LayerReward),
-		log.Uint64("block_total_reward", lr.Total/lr.numBlocks()),
-		log.Uint64("block_layer_reward", lr.LayerReward/lr.numBlocks()),
-		log.Uint64("total_reward_remainder", lr.Total%lr.numBlocks()),
-		log.Uint64("layer_reward_remainder", lr.LayerReward%lr.numBlocks()),
+		log.Uint64("block_total_reward", lr.Total()/lr.NumBlocks),
+		log.Uint64("block_layer_reward", lr.LayerReward/lr.NumBlocks),
+		log.Uint64("total_reward_remainder", lr.Total()%lr.NumBlocks),
+		log.Uint64("layer_reward_remainder", lr.LayerReward%lr.NumBlocks),
 	)
 }
 
@@ -593,14 +588,14 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	validBlockTxs := msh.extractUniqueOrderedTransactions(l)
 	rewards := msh.calculateRewards(l, validBlockTxs, msh.config)
 
-	if rewards.numBlocks() > 0 {
+	if rewards.NumBlocks > 0 {
 		// Applying rewards, reporting them, and adding them to the database should be atomic. Right now,
 		// it's not. Also, ApplyRewards does not return an error if it fails.
 		// TODO: fix this.
 		msh.logRewards(rewards)
 		msh.reportRewards(rewards)
 		msh.writeRewards(rewards)
-		msh.pushTransactions(l, validBlockTxs, rewards.Blocks)
+		msh.pushTransactions(l, validBlockTxs, rewards.CoinbasesWithRewards())
 		msh.removeFromUnappliedTxs(validBlockTxs)
 	}
 
@@ -981,21 +976,16 @@ func totalFees(transactions []*types.Transaction) uint64 {
 
 func (msh *Mesh) calculateRewards(l *types.Layer, transactions []*types.Transaction, params Config) layerRewards {
 	rewards := layerRewards{}
-	smeshers, coinbases := msh.getSmeshersAndCoinbases(l)
 
+	smeshers, coinbases := msh.getSmeshersAndCoinbases(l)
+	rewards.LayerID = l.Index()
 	rewards.LayerFees = totalFees(transactions)
 	rewards.LayerReward = calculateLayerReward(l.Index(), params)
-	rewards.Total = rewards.LayerFees + rewards.LayerReward
+	rewards.Smeshers = smeshers
 
 	if len(coinbases) == 0 {
 		msh.With().Info("no valid blocks for layer", l.Index())
 		return layerRewards{}
-	}
-
-	rewardPerBlock, _ := calculateActualRewards(l.Index(), rewards.LayerReward, uint64(len(coinbases)))
-
-	for smesher := range smeshers {
-		rewards.Blocks = append(rewards.Blocks, types.AmountAndAddress{Amount: rewardPerBlock, Address: smesher})
 	}
 
 	return rewards
