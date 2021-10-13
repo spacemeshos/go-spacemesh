@@ -29,7 +29,7 @@ func Default() Config {
 		LowPeers:           40,
 		HighPeers:          100,
 		GracePeersShutdown: 30 * time.Second,
-		BootstrapTimeout:   30 * time.Second,
+		BootstrapTimeout:   10 * time.Second,
 		MaxMessageSize:     200 << 10,
 	}
 }
@@ -57,6 +57,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	if err != nil {
 		return nil, err
 	}
+
 	cm := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, cfg.GracePeersShutdown)
 	for _, p := range cfg.Bootnodes {
 		addr, err := peer.AddrInfoFromString(p)
