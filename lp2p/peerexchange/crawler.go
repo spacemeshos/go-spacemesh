@@ -2,7 +2,6 @@ package peerexchange
 
 import (
 	"context"
-	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -82,8 +81,14 @@ func (r *crawler) query(ctx context.Context, servers []*addrInfo) ([]*addrInfo, 
 			pending++
 
 			go func() {
-				r.host.Peerstore().AddAddr(addr.ID, addr.Addr(), 30*time.Minute)
-				res, err := r.disc.Request(ctx, addr.ID)
+				ainfo, err := peer.AddrInfoFromP2pAddr(addr.Addr())
+				if err == nil {
+					err = r.host.Connect(ctx, *ainfo)
+				}
+				var res []*addrInfo
+				if err == nil {
+					res, err = r.disc.Request(ctx, addr.ID)
+				}
 				select {
 				case reschan <- queryResult{Src: addr, Result: res, Err: err}:
 				case <-ctx.Done():
