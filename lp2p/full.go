@@ -62,8 +62,8 @@ func Wrap(h host.Host, opts ...Opt) (*Host, error) {
 	}
 	fh.Peers = bootstrap.StartPeers(h, bootstrap.WithLog(fh.logger))
 	fh.bootstrap, err = bootstrap.NewBootstrap(fh.logger, bootstrap.Config{
-		DataPath:       cfg.DataPath,
-		Bootstrap:      cfg.Bootstrap,
+		DataPath:       cfg.DataDir,
+		Bootstrap:      cfg.Bootnodes,
 		TargetOutbound: cfg.TargetOutbound,
 		Timeout:        cfg.BootstrapTimeout,
 	}, h)

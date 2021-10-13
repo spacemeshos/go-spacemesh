@@ -67,18 +67,21 @@ func AddCommands(cmd *cobra.Command) {
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&config.P2P.Listen, "p2p-listen",
-		config.P2P.Listen, "multiaddr for listening")
-	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
-		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
+		config.P2P.Listen, "address for listening (example: /ip4/0.0.0.0/tcp/5052/")
+	cmd.PersistentFlags().BoolVar(&config.P2P.Flood, "p2p-flood",
+		config.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic reqiurements)")
+	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "p2p-network-id",
+		config.P2P.NetworkID, "network-id to participate int")
 	cmd.PersistentFlags().IntVar(&config.P2P.LowPeers, "p2p-low-peers",
-		config.P2P.LowPeers, "Low watermark for the number of connections")
+		config.P2P.LowPeers, "low watermark for the number of connections")
 	cmd.PersistentFlags().IntVar(&config.P2P.HighPeers, "p2p-high-peers",
 		config.P2P.HighPeers,
-		"High watermark for the number of connections. Once reached connections are pruned until low watermark remains")
-	cmd.PersistentFlags().IntVar(&config.P2P.TargetOutbound, "p2p-outbound",
-		config.P2P.TargetOutbound, "Number of random outbound connections")
-	cmd.PersistentFlags().StringSliceVar(&config.P2P.Bootstrap, "p2p-bootnodes",
-		config.P2P.Bootstrap, "Number of random connections")
+		"high watermark for the number of connections. Once reached connections are pruned until low watermark remains")
+	cmd.PersistentFlags().IntVar(&config.P2P.TargetOutbound, "p2p-target-outbound",
+		config.P2P.TargetOutbound, "target outbound connections")
+	cmd.PersistentFlags().StringSliceVar(&config.P2P.Bootnodes, "p2p-bootnodes",
+		config.P2P.Bootnodes, "entrypoints into the network")
+
 	/** ======================== TIME Flags ========================== **/
 
 	cmd.PersistentFlags().DurationVar(&config.TIME.MaxAllowedDrift, "max-allowed-time-drift",

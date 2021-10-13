@@ -24,6 +24,7 @@ type Peer = peer.ID
 func Default() Config {
 	return Config{
 		Listen:             "/ip4/0.0.0.0/tcp/5052/",
+		Flood:              true,
 		TargetOutbound:     5,
 		LowPeers:           40,
 		HighPeers:          100,
@@ -35,29 +36,29 @@ func Default() Config {
 
 // Config for all things related to p2p layer.
 type Config struct {
-	DataPath           string
+	DataDir            string
 	GracePeersShutdown time.Duration
 	BootstrapTimeout   time.Duration
 	MaxMessageSize     int
-	Flood              bool
 
-	Listen         string
-	NetworkID      uint32
-	Bootstrap      []string
-	TargetOutbound int
-	LowPeers       int
-	HighPeers      int
+	Flood          bool     `mapstructure:"flood"`
+	Listen         string   `mapstructure:"listen"`
+	NetworkID      uint32   `mapstructure:"network-id"`
+	Bootnodes      []string `mapstructure:"bootnodes"`
+	TargetOutbound int      `mapstructure:"target-outbound"`
+	LowPeers       int      `mapstructure:"low-peers"`
+	HighPeers      int      `mapstructure:"high-peers"`
 }
 
 // New initializes libp2p host configured for spacemesh.
 func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, error) {
 	logger.Info("starting libp2p host with config %+v", cfg)
-	key, err := ensureIdentity(cfg.DataPath)
+	key, err := ensureIdentity(cfg.DataDir)
 	if err != nil {
 		return nil, err
 	}
 	cm := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, cfg.GracePeersShutdown)
-	for _, p := range cfg.Bootstrap {
+	for _, p := range cfg.Bootnodes {
 		addr, err := peer.AddrInfoFromString(p)
 		if err != nil {
 			return nil, fmt.Errorf("can't create peer addr from %s: %w", p, err)
