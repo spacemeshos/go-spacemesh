@@ -7,6 +7,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
@@ -54,7 +55,9 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	log.SetupGlobal(logger)
 
 	log.Info("initializing p2p services")
-	host, err := lp2p.New(cmdp.Ctx, logger, app.Config.P2P)
+	cfg := app.Config.P2P
+	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
+	host, err := lp2p.New(cmdp.Ctx, logger, cfg)
 	if err != nil {
 		log.With().Panic("failed to create host", log.Err(err))
 	}

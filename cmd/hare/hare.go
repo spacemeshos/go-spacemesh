@@ -7,6 +7,7 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -129,7 +130,9 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	log.Info("initializing P2P services")
-	host, err := lp2p.New(cmdp.Ctx, log.NewDefault("p2p_haretest"), app.Config.P2P)
+	cfg := app.Config.P2P
+	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
+	host, err := lp2p.New(cmdp.Ctx, log.NewDefault("p2p_haretest"), cfg)
 	if err != nil {
 		log.With().Panic("error starting p2p services", log.Err(err))
 	}
