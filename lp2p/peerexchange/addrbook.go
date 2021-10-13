@@ -112,6 +112,9 @@ type addrBook struct {
 // updateAddress is a helper function to either update an address already known
 // to the address manager, or to add the address if not already known.
 func (a *addrBook) updateAddress(addr, src *addrInfo) {
+	if !IsRoutable(addr.IP) && IsRoutable(src.IP) {
+		return
+	}
 	ka := a.lookup(addr.ID)
 	if ka != nil {
 		// TODO: only update addresses periodically.

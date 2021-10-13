@@ -138,9 +138,6 @@ func parseAddrInfo(raw string) (*addrInfo, error) {
 	if len(pid) == 0 {
 		return nil, fmt.Errorf("address without peer id %v", raw)
 	}
-	if !IsRoutable(ip) {
-		return nil, fmt.Errorf("address is not routable %v", raw)
-	}
 	return &addrInfo{ID: pid, IP: ip, RawAddr: raw, addr: addr}, nil
 }
 
