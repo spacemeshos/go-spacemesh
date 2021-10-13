@@ -579,7 +579,7 @@ func (msh *Mesh) writeRewards(lr layerRewards) error {
 func (msh *Mesh) logRewards(lr layerRewards) {
 	msh.With().Info("reward calculated",
 		lr.LayerID,
-		log.Int("num_blocks", int(lr.numBlocks())),
+		log.Uint64("num_blocks", lr.numBlocks()),
 		log.Uint64("total_reward", lr.Total),
 		log.Uint64("layer_reward", lr.LayerReward),
 		log.Uint64("block_total_reward", lr.Total/lr.numBlocks()),
@@ -591,12 +591,11 @@ func (msh *Mesh) logRewards(lr layerRewards) {
 
 func (msh *Mesh) applyState(l *types.Layer) {
 	validBlockTxs := msh.extractUniqueOrderedTransactions(l)
-	fmt.Printf("CALLING APPLYSTATE with %d valid txs, layer %d \n", len(validBlockTxs), l.Index().Value)
 	rewards := msh.calculateRewards(l, validBlockTxs, msh.config)
 
 	if rewards.numBlocks() > 0 {
 		// Applying rewards, reporting them, and adding them to the database should be atomic. Right now,
-		// they're not. Also, ApplyRewards does not return an error if it fails.
+		// it's not. Also, ApplyRewards does not return an error if it fails.
 		// TODO: fix this.
 		msh.logRewards(rewards)
 		msh.reportRewards(rewards)
