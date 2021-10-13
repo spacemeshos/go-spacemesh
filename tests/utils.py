@@ -216,8 +216,8 @@ def get_pod_id(ns, pod_name):
 
 # ====================== tests_bs RIP ======================
 
-def node_string(key, ip, port, discport):
-    return "spacemesh://{0}@{1}:{2}?disc={3}".format(key, ip, port, discport)
+def node_string(ip, port, key):
+    return "/ip4/{0}/tcp/{1}/p2p/{2}".format(ip, port, key)
 
 
 @functools.lru_cache(maxsize=1)
@@ -257,7 +257,7 @@ def get_conf(bs_info, client_config, genesis_time, setup_oracle=None, setup_poet
     if setup_poet:
         client_args['poet_server'] = '{0}:{1}'.format(setup_poet, conf.POET_SERVER_PORT)
 
-    bootnodes = node_string(bs_info['key'], bs_info['pod_ip'], conf.BOOTSTRAP_PORT, conf.BOOTSTRAP_PORT)
+    bootnodes = node_string(bs_info['pod_ip'], conf.BOOTSTRAP_PORT, bs_info['identity'])
     cspec.append_args(bootnodes=bootnodes, genesis_time=genesis_time_delta.isoformat('T', 'seconds'))
     # append client config to ContainerSpec
     if len(client_args) > 0:

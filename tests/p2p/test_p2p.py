@@ -27,7 +27,7 @@ gossip_message_query_fields = {'M': 'api_test_gossip: got test gossip message'}
 def query_bootstrap_es(namespace, bootstrap_po_name):
     hits = poll_query_message(current_index, namespace, bootstrap_po_name, {"M": "local node identity"}, expected=1)
     for h in hits:
-        if getattr(h, 'key', None):
+        if getattr(h, 'identity', None):
             return h.key
     return None
 
@@ -103,8 +103,8 @@ def test_bootstrap(init_session, add_elk, add_node_pool, add_curl, setup_bootstr
     print("running test_bootstrap")
     sleep_print_backwards(10 * timeout_factor, "wait for the bootstrap logs to be available in ElasticSearch")
     bs_id = query_bootstrap_es(testconfig['namespace'], setup_bootstrap.pods[0]['name'])
-    ass_err = f"setup_bootstrap.pods[0]['key'] = {setup_bootstrap.pods[0]['key']}, bootstrap returned ID: {bs_id}"
-    assert setup_bootstrap.pods[0]['key'] == bs_id, ass_err
+    ass_err = f"setup_bootstrap.pods[0]['identity'] = {setup_bootstrap.pods[0]['identity']}, bootstrap returned ID: {bs_id}"
+    assert setup_bootstrap.pods[0]['identity'] == bs_id, ass_err
 
 
 def test_client(init_session, add_elk, add_node_pool, add_curl, setup_clients, save_log_on_exit):

@@ -23,7 +23,7 @@ type Peer = peer.ID
 // Default config.
 func Default() Config {
 	return Config{
-		Listen:             "/ip4/0.0.0.0/tcp/5052/",
+		Listen:             "/ip4/0.0.0.0/tcp/7513/",
 		Flood:              true,
 		TargetOutbound:     5,
 		LowPeers:           40,
