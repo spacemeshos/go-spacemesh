@@ -171,7 +171,7 @@ def test_gossip(init_session, add_elk, add_node_pool, setup_clients, add_curl):
                                findFails=False,
                                expected=total_expected_gossip)
 
-    assert total_expected_gossip == len(after), "test_gossip: Total gossip messages in ES is not as expected"
+    assert total_expected_gossip <= len(after), "test_gossip: Total gossip messages in ES is not as expected"
 
 
 def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
@@ -212,7 +212,7 @@ def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
                                    expected=total_expected_gossip)
 
         assertion_msg = "test_many_gossip_messages: Total gossip messages in ES is not as expected"
-        assert total_expected_gossip == len(after), assertion_msg
+        assert total_expected_gossip <= len(after), assertion_msg
 
 
 def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=20, num_of_msg=100,
@@ -272,7 +272,7 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
 
     err_msg = "msg_testing: Total gossip messages in ES is not as expected"
     err_msg += f"\nexpected {total_expected_gossip}, got {len(results)}"
-    assert total_expected_gossip == len(results), err_msg
+    assert total_expected_gossip <= len(results), err_msg
 
 
 # Deploy X peers

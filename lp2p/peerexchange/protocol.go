@@ -20,7 +20,7 @@ import (
 const (
 	protocolName = "/peerexchange/v1.0.0"
 	// messageTimeout is the timeout for the whole stream lifetime.
-	messageTimeout = time.Second * 5
+	messageTimeout = 10 * time.Second
 )
 
 type peerExchange struct {
@@ -94,13 +94,13 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, e
 	}
 	defer stream.Close()
 
-	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
 	info, err := BestHostAddress(p.h)
 	if err != nil {
 		logger.Error("failed to send request", log.Err(err))
 		return nil, nil
 	}
 
+	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
 	if _, err := codec.EncodeTo(stream, info.RawAddr); err != nil {
 		return nil, fmt.Errorf("failed to send GetAddress request: %w", err)
 	}

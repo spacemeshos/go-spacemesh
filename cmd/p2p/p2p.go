@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 
-	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
 
@@ -52,9 +51,8 @@ func NewP2PApp() *P2PApp {
 func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	// init p2p services
 	log.JSONLog(true)
-	logger := log.NewWithLevel("P2P_Test", zap.NewAtomicLevelAt(zap.DebugLevel))
+	logger := log.NewWithLevel("P2P_Test", zap.NewAtomicLevelAt(zap.InfoLevel))
 	log.SetupGlobal(logger)
-	lp2plog.SetupLogging(lp2plog.Config{Format: lp2plog.JSONOutput, Level: lp2plog.LevelDebug, Stderr: true})
 
 	log.Info("initializing p2p services")
 	cfg := app.Config.P2P
