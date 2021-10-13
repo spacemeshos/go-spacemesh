@@ -40,12 +40,6 @@ type config struct {
 	MaxRound            types.RoundID
 }
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./weak_coin.go
-
-type broadcaster interface {
-	Broadcast(ctx context.Context, channel string, data []byte) error
-}
-
 // UnitAllowances is a map from miner identifier to the number of units of spacetime.
 type UnitAllowances map[string]uint64
 
