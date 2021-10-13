@@ -158,8 +158,7 @@ def test_gossip(init_session, add_elk, add_node_pool, setup_clients, add_curl):
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
     # TODO: check frequently before timeout so we might be able to finish earlier.
-    gossip_propagation_sleep = len(
-        setup_clients.pods) * timeout_factor / 2  # currently we expect short propagation times.
+    gossip_propagation_sleep = 3 * timeout_factor # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
@@ -194,12 +193,16 @@ def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
         # grpc expects binary data as base64
         # it doesn't matter what the data contains as long as each is unique
         data = '{"data":"%s"}' % base64.b64encode(i.to_bytes(1, byteorder='big')).decode('utf-8')
-        out = api_call(client_ip, data, api, testconfig['namespace'])
+        retries = 3
+        out = ""
+        while retries > 0 and not out:
+            out = api_call(client_ip, data, api, testconfig['namespace'])
+            retries -= 1
         assert "{'status': {}}" in out
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
-        gossip_propagation_sleep = 15 * timeout_factor  # currently we expect short propagation times.
+        gossip_propagation_sleep = 3 * timeout_factor  # currently we expect short propagation times.
         print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
         time.sleep(gossip_propagation_sleep)
 
@@ -245,12 +248,16 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
         msg = "".join(choice(ascii_lowercase) for _ in range(msg_size))
         # TODO in the future this may be changed for a more generic function
         data = '{{"{msg_field}": "{msg}"}}'.format(msg_field=msg_field, msg=msg)
-        out = api_call(client_ip, data, api, testconfig['namespace'])
+        retries = 3
+        out = ""
+        while retries > 0 and not out:
+            out = api_call(client_ip, data, api, testconfig['namespace'])
+            retries -= 1
         ass_err = f"test_invalid_msg: expected \"{expected_ret}\" and got \"{out}\""
         assert expected_ret in out, ass_err
 
     # we expect short propagation times
-    gossip_propagation_sleep = (num_of_msg + prop_sleep_time) * timeout_factor
+    gossip_propagation_sleep = prop_sleep_time * timeout_factor
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
