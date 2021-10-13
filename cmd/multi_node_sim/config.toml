@@ -19,28 +19,9 @@ golden-atx = "0x5678"
 
 # Node Config
 [p2p]
-security-param = 20
-fast-sync = true
-tcp-port = 17513
-node-id = ""
-new-node= false
-dial-timeout = "1m"
-conn-keepalive = "48h"
-network-id = 1 # 0 - MainNet, 1 - TestNet
-response-timeout = "2s"
-session-timeout = "2s"
-max-pending-connections = 50
-target-outbound = 10
-max-inbound = 100
-buffer-size = 100
-peers-file = "peers.json" # located under data-dir/<publickey>/<peer-file> not loaded or save if empty string is given.
-
-# Node Swarm Config
-[p2p.swarm]
-bootstrap = false
-bucketsize = 20 # Routing table bucket size
-alpha = 3 # Routing table alpha
-randcon = 2 # Number of random connections
+listen = "/ip4/0.0.0.0/tcp/17513"
+network-id = 1
+target-outbound = 2
 bootnodes = [] # example : spacemesh://j7qWfWaJRVp25ZsnCu9rJ4PmhigZBtesB4YmQHqqPvt@0.0.0.0:7517?disc=7517
 
 # API Config

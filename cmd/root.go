@@ -67,7 +67,7 @@ func AddCommands(cmd *cobra.Command) {
 	/** ======================== P2P Flags ========================== **/
 
 	cmd.PersistentFlags().StringVar(&config.P2P.Listen, "p2p-listen",
-		config.P2P.Listen, "address for listening (example: /ip4/0.0.0.0/tcp/5052/")
+		config.P2P.Listen, "address for listening")
 	cmd.PersistentFlags().BoolVar(&config.P2P.Flood, "p2p-flood",
 		config.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic reqiurements)")
 	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "p2p-network-id",
@@ -76,7 +76,7 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.LowPeers, "low watermark for the number of connections")
 	cmd.PersistentFlags().IntVar(&config.P2P.HighPeers, "p2p-high-peers",
 		config.P2P.HighPeers,
-		"high watermark for the number of connections. Once reached connections are pruned until low watermark remains")
+		"high watermark for the number of connections. once reached connections are pruned until low watermark remains")
 	cmd.PersistentFlags().IntVar(&config.P2P.TargetOutbound, "target-outbound",
 		config.P2P.TargetOutbound, "target outbound connections")
 	cmd.PersistentFlags().StringSliceVar(&config.P2P.Bootnodes, "bootnodes",

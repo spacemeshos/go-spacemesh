@@ -22,7 +22,7 @@ bootstrap:
       memory: '2048M'
       cpu: '2'
   args:
-    randcon: '8'
+    target-outbound: '8'
     hare-committee-size: '50'
     hare-max-adversaries: '24'
     hare-round-duration-sec: '7'
@@ -68,7 +68,7 @@ client:
       memory: '2048M'
       cpu: '2'
   args:
-    randcon: '8'
+    target-outbound: '8'
     hare-committee-size: '50'
     hare-max-adversaries: '24'
     hare-round-duration-sec: '7'
