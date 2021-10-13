@@ -140,7 +140,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	assert.NoError(t, err)
 	validBlockTxs := layers.extractUniqueOrderedTransactions(l)
 	rewards := layers.calculateRewards(l, validBlockTxs, params)
-	layers.writeRewards(rewards)
+	layers.writeRewards(&rewards)
 	totalRewardsCost := totalFee + params.BaseReward
 	remainder := totalRewardsCost % uint64(len(blockData))
 

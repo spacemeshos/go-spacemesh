@@ -526,7 +526,7 @@ func (lr layerRewards) CoinbasesWithRewards() []types.AmountAndAddress {
 	return rewards
 }
 
-func (msh *Mesh) reportRewards(lr layerRewards) {
+func (msh *Mesh) reportRewards(lr *layerRewards) {
 	// Report the rewards for each coinbase and each smesherID within each coinbase.
 	// This can be thought of as a partition of the reward amongst all the smesherIDs
 	// that added the coinbase into the block.
@@ -543,7 +543,7 @@ func (msh *Mesh) reportRewards(lr layerRewards) {
 	}
 }
 
-func (msh *Mesh) writeRewards(lr layerRewards) error {
+func (msh *Mesh) writeRewards(lr *layerRewards) error {
 	batch := msh.transactions.NewBatch()
 
 	for coinbase, smeshers := range lr.Smeshers {
@@ -571,7 +571,7 @@ func (msh *Mesh) writeRewards(lr layerRewards) error {
 	return nil
 }
 
-func (msh *Mesh) logRewards(lr layerRewards) {
+func (msh *Mesh) logRewards(lr *layerRewards) {
 	msh.With().Info("reward calculated",
 		lr.LayerID,
 		log.Uint64("num_blocks", lr.NumBlocks),
@@ -592,9 +592,9 @@ func (msh *Mesh) applyState(l *types.Layer) {
 		// Applying rewards, reporting them, and adding them to the database should be atomic. Right now,
 		// it's not. Also, ApplyRewards does not return an error if it fails.
 		// TODO: fix this.
-		msh.logRewards(rewards)
-		msh.reportRewards(rewards)
-		msh.writeRewards(rewards)
+		msh.logRewards(&rewards)
+		msh.reportRewards(&rewards)
+		msh.writeRewards(&rewards)
 		msh.pushTransactions(l, validBlockTxs, rewards.CoinbasesWithRewards())
 		msh.removeFromUnappliedTxs(validBlockTxs)
 	}
