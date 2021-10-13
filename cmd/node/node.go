@@ -24,7 +24,6 @@ import (
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
@@ -39,19 +38,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/lp2p"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
-	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/svm"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
@@ -182,9 +180,9 @@ type HareService interface {
 type TortoiseBeaconService interface {
 	Service
 	GetBeacon(id types.EpochID) ([]byte, error)
-	HandleSerializedProposalMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
-	HandleSerializedFirstVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
-	HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher)
+	HandleSerializedProposalMessage(context.Context, lp2p.Peer, []byte) pubsub.ValidationResult
+	HandleSerializedFirstVotingMessage(context.Context, lp2p.Peer, []byte) pubsub.ValidationResult
+	HandleSerializedFollowingVotingMessage(context.Context, lp2p.Peer, []byte) pubsub.ValidationResult
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
@@ -229,7 +227,7 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 
 func bigRatDecodeFunc() mapstructure.DecodeHookFunc {
 	return func(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
-		if t != reflect.TypeOf(&big.Rat{}) {
+		if t != reflect.TypeOf(big.Rat{}) {
 			return data, nil
 		}
 
@@ -292,7 +290,6 @@ func New(opts ...Option) *App {
 type App struct {
 	*cobra.Command
 	nodeID         types.NodeID
-	P2P            p2p.Service
 	Config         *cfg.Config
 	grpcAPIService *grpcserver.Server
 	jsonAPIService *grpcserver.JSONHTTPServer
@@ -306,7 +303,6 @@ type App struct {
 	oracle         *blocks.Oracle
 	txProcessor    *state.TransactionProcessor
 	mesh           *mesh.Mesh
-	gossipListener *service.Listener
 	clock          TickProvider
 	hare           HareService
 	postSetupMgr   *activation.PostSetupManager
@@ -314,7 +310,6 @@ type App struct {
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
 	edSgn          *signing.EdSigner
-	watchPeers     *peers.Peers
 	tortoiseBeacon TortoiseBeaconService
 	closers        []interface{ Close() }
 	log            log.Log
@@ -322,9 +317,12 @@ type App struct {
 	svm            *svm.SVM
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
-	loggers        map[string]*zap.AtomicLevel
-	term           chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
-	started        chan struct{} // this channel is closed once the app has finished starting
+
+	host *lp2p.Host
+
+	loggers map[string]*zap.AtomicLevel
+	term    chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
+	started chan struct{} // this channel is closed once the app has finished starting
 }
 
 func (app *App) introduction() {
@@ -462,7 +460,6 @@ func (app *App) SetLogLevel(name, loglevel string) error {
 
 func (app *App) initServices(ctx context.Context,
 	nodeID types.NodeID,
-	swarm service.Service,
 	dbStorepath string,
 	sgn *signing.EdSigner,
 	isFixedOracle bool,
@@ -537,21 +534,25 @@ func (app *App) initServices(ctx context.Context,
 		return errors.New("invalid golden atx id")
 	}
 
-	atxDB := activation.NewDB(atxdbstore, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	fetcherWrapped := &layerFetcher{}
+	atxDB := activation.NewDB(atxdbstore, fetcherWrapped, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 
 	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
 
-	wc := weakcoin.New(swarm,
+	syncValidator := syncHandler{}
+
+	wc := weakcoin.New(app.host,
 		vrfSigner, vrfVerifier,
 		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
 		weakcoin.WithMaxRound(app.Config.TortoiseBeacon.RoundsNumber),
 	)
+	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncValidator.Handle, wc.HandleProposal))
 
 	tBeacon := tortoisebeacon.New(
 		app.Config.TortoiseBeacon,
 		nodeID,
-		swarm,
+		app.host,
 		atxDB,
 		sgn,
 		edVerifier,
@@ -561,6 +562,12 @@ func (app *App) initServices(ctx context.Context,
 		tBeaconDBStore,
 		clock,
 		app.addLogger(TBeaconLogger, lg))
+	app.host.Register(tortoisebeacon.TBProposalProtocol,
+		pubsub.ChainGossipHandler(syncValidator.Handle, tBeacon.HandleSerializedProposalMessage))
+	app.host.Register(tortoisebeacon.TBFirstVotingProtocol,
+		pubsub.ChainGossipHandler(syncValidator.Handle, tBeacon.HandleSerializedFirstVotingMessage))
+	app.host.Register(tortoisebeacon.TBFollowingVotingProtocol,
+		pubsub.ChainGossipHandler(syncValidator.Handle, tBeacon.HandleSerializedFollowingVotingMessage))
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
@@ -618,12 +625,13 @@ func (app *App) initServices(ctx context.Context,
 		Depth:       app.Config.Hdist,
 		GoldenATXID: goldenATXID,
 	}
-	blockListener := blocks.NewBlockHandler(bCfg, msh, eValidator, app.addLogger(BlockListenerLogger, lg))
+	blockListener := blocks.NewBlockHandler(bCfg, fetcherWrapped, msh, eValidator, app.addLogger(BlockListenerLogger, lg))
 
-	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, swarm, app.addLogger(Fetcher, lg))
+	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, app.host, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, app.addLogger(LayerFetcher, lg))
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, app.host, remoteFetchService, msh, app.addLogger(LayerFetcher, lg))
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
+	fetcherWrapped.Fetcher = layerFetch
 
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
@@ -631,6 +639,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
+	syncValidator.sync = newSyncer
 	tBeacon.SetSyncState(newSyncer)
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxDB, tBeacon, vrfSigner, nodeID, newSyncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
@@ -646,8 +655,7 @@ func (app *App) initServices(ctx context.Context,
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
-	gossipListener := service.NewListener(swarm, layerFetch, newSyncer.ListenToGossip, app.addLogger(GossipListener, lg))
-	rabbit := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, newSyncer, msh, hOracle, idStore, clock, lg)
+	rabbit := app.HareFactory(ctx, mdb, sgn, nodeID, newSyncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
@@ -662,7 +670,7 @@ func (app *App) initServices(ctx context.Context,
 	blockProducer := miner.NewBlockBuilder(
 		minerCfg,
 		sgn,
-		swarm,
+		app.host,
 		clock.Subscribe(),
 		msh,
 		trtl,
@@ -672,8 +680,9 @@ func (app *App) initServices(ctx context.Context,
 		stateAndMeshProjector,
 		app.txPool,
 		app.addLogger(BlockBuilderLogger, lg))
+	app.host.Register(blocks.NewBlockProtocol, pubsub.ChainGossipHandler(syncValidator.Handle, blockListener.HandleBlock))
 
-	poetListener := activation.NewPoetListener(swarm, poetDb, app.addLogger(PoetListenerLogger, lg))
+	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
 
 	postSetupMgr, err := activation.NewPostSetupManager(util.Hex2Bytes(nodeID.Key), app.Config.POST, app.addLogger(PostLogger, lg))
 	if err != nil {
@@ -694,31 +703,22 @@ func (app *App) initServices(ctx context.Context,
 		GoldenATXID:     goldenATXID,
 		LayersPerEpoch:  layersPerEpoch,
 	}
-
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn,
-		atxDB, swarm, msh, layersPerEpoch, nipostBuilder,
+		atxDB, app.host, msh, layersPerEpoch, nipostBuilder,
 		postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
 	)
-
-	gossipListener.AddListener(ctx, state.IncomingTxProtocol, priorityq.Low, processor.HandleTxGossipData)
-	gossipListener.AddListener(ctx, activation.AtxProtocol, priorityq.Low, atxDB.HandleGossipAtx)
-	gossipListener.AddListener(ctx, blocks.NewBlockProtocol, priorityq.High, blockListener.HandleBlock)
-	gossipListener.AddListener(ctx, tortoisebeacon.TBProposalProtocol, priorityq.Low, tBeacon.HandleSerializedProposalMessage)
-	gossipListener.AddListener(ctx, tortoisebeacon.TBFirstVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFirstVotingMessage)
-	gossipListener.AddListener(ctx, tortoisebeacon.TBFollowingVotingProtocol, priorityq.Low, tBeacon.HandleSerializedFollowingVotingMessage)
-	gossipListener.AddListener(ctx, weakcoin.GossipProtocol, priorityq.Low, wc.HandleSerializedMessage)
+	app.host.Register(activation.AtxProtocol, atxDB.HandleGossipAtx)
+	app.host.Register(state.IncomingTxProtocol, pubsub.ChainGossipHandler(syncValidator.Handle, processor.HandleTxGossipData))
+	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
-	app.gossipListener = gossipListener
 	app.mesh = msh
 	app.syncer = newSyncer
 	app.clock = clock
 	app.state = processor
 	app.hare = rabbit
-	app.P2P = swarm
-	app.watchPeers = peers.Start(swarm)
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
@@ -729,12 +729,11 @@ func (app *App) initServices(ctx context.Context,
 	app.tortoiseBeacon = tBeacon
 	app.svm = svm
 	if !app.Config.TIME.Peersync.Disable {
-		conf := app.Config.TIME.Peersync
-		conf.ResponsesBufferSize = app.Config.P2P.BufferSize
 		app.ptimesync = peersync.New(
-			swarm.(peersync.Network),
+			app.host,
+			app.host,
 			peersync.WithLog(app.addLogger(TimeSyncLogger, lg)),
-			peersync.WithConfig(conf),
+			peersync.WithConfig(app.Config.TIME.Peersync),
 		)
 	}
 
@@ -766,7 +765,6 @@ func (app *App) checkTimeDrifts() {
 func (app *App) HareFactory(
 	ctx context.Context,
 	mdb *mesh.DB,
-	swarm service.Service,
 	sgn hare.Signer,
 	nodeID types.NodeID,
 	syncer *syncer.Syncer,
@@ -784,7 +782,8 @@ func (app *App) HareFactory(
 
 	ha := hare.New(
 		app.Config.HARE,
-		swarm,
+		app.host.ID(),
+		app.host,
 		sgn,
 		nodeID,
 		syncer.IsSynced,
@@ -812,8 +811,6 @@ func (app *App) startServices(ctx context.Context) error {
 		return fmt.Errorf("cannot start block producer: %w", err)
 	}
 
-	app.poetListener.Start(ctx)
-
 	if app.Config.SMESHING.Start {
 		coinbaseAddr := types.HexToAddress(app.Config.SMESHING.CoinbaseAccount)
 		go func() {
@@ -833,7 +830,7 @@ func (app *App) startServices(ctx context.Context) error {
 	return nil
 }
 
-func (app *App) startAPIServices(ctx context.Context, net api.NetworkAPI) {
+func (app *App) startAPIServices(ctx context.Context) {
 	apiConf := &app.Config.API
 	layerDuration := app.Config.LayerDurationSec
 
@@ -856,7 +853,7 @@ func (app *App) startAPIServices(ctx context.Context, net api.NetworkAPI) {
 		registerService(grpcserver.NewDebugService(app.mesh))
 	}
 	if apiConf.StartGatewayService {
-		registerService(grpcserver.NewGatewayService(net))
+		registerService(grpcserver.NewGatewayService(app.host))
 	}
 	if apiConf.StartGlobalStateService {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.txPool))
@@ -865,7 +862,7 @@ func (app *App) startAPIServices(ctx context.Context, net api.NetworkAPI) {
 		registerService(grpcserver.NewMeshService(app.mesh, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
 	}
 	if apiConf.StartNodeService {
-		nodeService := grpcserver.NewNodeService(net, app.mesh, app.clock, app.syncer, app.atxBuilder)
+		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
 		registerService(nodeService)
 		app.closers = append(app.closers, nodeService)
 	}
@@ -873,7 +870,7 @@ func (app *App) startAPIServices(ctx context.Context, net api.NetworkAPI) {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(net, app.mesh, app.txPool, app.syncer))
+		registerService(grpcserver.NewTransactionService(app.host, app.mesh, app.txPool, app.syncer))
 	}
 
 	// Now that the services are registered, start the server.
@@ -931,18 +928,9 @@ func (app *App) stopServices() {
 		app.clock.Close()
 	}
 
-	if app.gossipListener != nil {
-		app.gossipListener.Stop()
-	}
-
 	if app.tortoiseBeacon != nil {
 		app.log.Info("stopping tortoise beacon")
 		app.tortoiseBeacon.Close()
-	}
-
-	if app.poetListener != nil {
-		app.log.Info("closing poet listener")
-		app.poetListener.Close()
 	}
 
 	if app.atxBuilder != nil {
@@ -953,11 +941,6 @@ func (app *App) stopServices() {
 	if app.hare != nil {
 		app.log.Info("closing hare")
 		app.hare.Close()
-	}
-
-	if app.P2P != nil {
-		app.log.Info("closing p2p")
-		app.P2P.Shutdown()
 	}
 
 	if app.layerFetch != nil {
@@ -978,10 +961,6 @@ func (app *App) stopServices() {
 	if app.ptimesync != nil {
 		app.ptimesync.Stop()
 		app.log.Debug("peer timesync stopped")
-	}
-
-	if app.watchPeers != nil {
-		app.watchPeers.Close()
 	}
 
 	events.CloseEventReporter()
@@ -1060,13 +1039,9 @@ func (app *App) getIdentityFile() (string, error) {
 }
 
 func (app *App) startSyncer(ctx context.Context) {
-	if app.P2P == nil {
-		app.log.Error("syncer started before p2p is initialized")
-	} else {
-		_, err := app.watchPeers.WaitPeers(ctx, app.Config.P2P.SwarmConfig.RandomConnections)
-		if err != nil {
-			return
-		}
+	_, err := app.host.WaitPeers(ctx, app.Config.P2P.TargetOutbound)
+	if err != nil {
+		return
 	}
 	app.syncer.Start(ctx)
 }
@@ -1150,14 +1125,15 @@ func (app *App) Start() error {
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, lg.WithName("clock"))
 
 	logger.Info("initializing p2p services")
-	swarm, err := p2p.New(ctx, app.Config.P2P, app.addLogger(P2PLogger, lg), dbStorepath)
+
+	app.host, err = lp2p.New(ctx, app.addLogger("p2p", logger), app.Config.P2P)
 	if err != nil {
-		return fmt.Errorf("error starting p2p services: %w", err)
+		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
+	defer app.host.Close()
 
 	if err = app.initServices(ctx,
 		nodeID,
-		swarm,
 		dbStorepath,
 		app.edSgn,
 		false,
@@ -1176,19 +1152,14 @@ func (app *App) Start() error {
 
 	if app.Config.MetricsPush != "" {
 		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
-			swarm.LocalNode().PublicKey().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
+			app.host.ID().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
 	}
 
 	if err := app.startServices(ctx); err != nil {
 		return fmt.Errorf("error starting services: %w", err)
 	}
 
-	app.startAPIServices(ctx, app.P2P)
-
-	// P2P must start last to not block when sending messages to protocols
-	if err := app.P2P.Start(ctx); err != nil {
-		return fmt.Errorf("error starting p2p services: %w", err)
-	}
+	app.startAPIServices(ctx)
 
 	events.SubscribeToLayers(clock.Subscribe())
 	logger.Info("app started")
@@ -1221,4 +1192,19 @@ func (app *App) Start() error {
 	case err := <-syncErr:
 		return err
 	}
+}
+
+type layerFetcher struct {
+	system.Fetcher
+}
+
+type syncHandler struct {
+	sync *syncer.Syncer
+}
+
+func (s *syncHandler) Handle(ctx context.Context, _ lp2p.Peer, _ []byte) pubsub.ValidationResult {
+	if s.sync.IsSynced(ctx) {
+		return pubsub.ValidationAccept
+	}
+	return pubsub.ValidationIgnore
 }

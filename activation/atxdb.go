@@ -9,16 +9,18 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/post/shared"
+	"github.com/libp2p/go-libp2p-core/peer"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system"
+	"github.com/spacemeshos/post/shared"
 )
 
 const (
@@ -100,11 +102,14 @@ type DB struct {
 	log             log.Log
 	processAtxMutex sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
+
+	// FIXME(dshulyak) this should not be defined in database
+	fetcher system.Fetcher
 }
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
-// their validity.
-func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
+// their validity
+func NewDB(dbStore database.Database, fetcher system.Fetcher, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:         idStore,
 		atxs:            dbStore,
@@ -115,6 +120,7 @@ func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPe
 		nipostValidator: nipostValidator,
 		log:             log,
 		atxChannels:     make(map[types.ATXID]*atxChan),
+		fetcher:         fetcher,
 	}
 	return db
 }
@@ -729,21 +735,18 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 	return nil
 }
 
-// HandleGossipAtx handles the atx gossip data channel.
-func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, fetcher service.Fetcher) {
-	if data == nil {
-		return
-	}
-	err := db.HandleAtxData(ctx, data.Bytes(), fetcher)
+// HandleGossipAtx handles the atx gossip data channel
+func (db *DB) HandleGossipAtx(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
+	err := db.HandleAtxData(ctx, msg)
 	if err != nil {
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
-		return
+		return pubsub.ValidationReject
 	}
-	data.ReportValidation(ctx, AtxProtocol)
+	return pubsub.ValidationAccept
 }
 
-// HandleAtxData handles atxs received either by gossip or sync.
-func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fetcher) error {
+// HandleAtxData handles atxs received either by gossip or sync
+func (db *DB) HandleAtxData(ctx context.Context, data []byte) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
 		return fmt.Errorf("cannot parse incoming atx")
@@ -757,12 +760,12 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 
-	if err := fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
+	if err := db.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
 	}
 
-	if err := db.FetchAtxReferences(ctx, atx, fetcher); err != nil {
+	if err := db.FetchAtxReferences(ctx, atx); err != nil {
 		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
@@ -784,18 +787,18 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 }
 
 // FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db.
-func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f service.Fetcher) error {
+func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
 	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
 		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		if err := f.FetchAtx(ctx, atx.PositioningATX); err != nil {
+		if err := db.fetcher.FetchAtx(ctx, atx.PositioningATX); err != nil {
 			return fmt.Errorf("fetch positioning ATX: %w", err)
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
 		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		if err := f.FetchAtx(ctx, atx.PrevATXID); err != nil {
+		if err := db.fetcher.FetchAtx(ctx, atx.PrevATXID); err != nil {
 			return fmt.Errorf("fetch previous ATX ID: %w", err)
 		}
 	}

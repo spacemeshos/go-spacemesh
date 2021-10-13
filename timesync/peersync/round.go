@@ -6,7 +6,7 @@ import (
 )
 
 type timedResponse struct {
-	Response
+	response
 	receiveTimestamp int64
 }
 
@@ -17,12 +17,12 @@ type round struct {
 	responses         []timedResponse
 }
 
-func (r *round) AddResponse(resp Response, timestamp int64) {
+func (r *round) AddResponse(resp response, timestamp int64) {
 	if resp.ID != r.ID {
 		return
 	}
 	r.responses = append(r.responses,
-		timedResponse{Response: resp, receiveTimestamp: timestamp})
+		timedResponse{response: resp, receiveTimestamp: timestamp})
 }
 
 func (r *round) Ready() bool {

@@ -7,10 +7,12 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/peer"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -44,38 +46,38 @@ var (
 )
 
 // HandleSerializedProposalMessage defines method to handle Tortoise Beacon proposal Messages from gossip.
-func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, data service.GossipMessage, _ service.Fetcher) {
+func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
 	if tb.isClosed() || !tb.isInProtocol() {
 		tb.logger.WithContext(ctx).Debug("tortoise beacon shutting down or not in protocol, dropping msg")
-		return
+		return pubsub.ValidationIgnore
 	}
-
 	receivedTime := time.Now()
 	logger := tb.logger.WithContext(ctx)
 
-	logger.With().Debug("new proposal message", log.String("sender", data.Sender().String()))
+	logger.With().Debug("new proposal message", log.String("sender", pid.String()))
 
 	var message ProposalMessage
-	if err := types.BytesToInterface(data.Bytes(), &message); err != nil {
+	if err := types.BytesToInterface(msg, &message); err != nil {
 		logger.With().Warning("received malformed proposal message", log.Err(err))
-		return
+		return pubsub.ValidationReject
 	}
 
 	ch := tb.getProposalChannel(ctx, message.EpochID)
 	if ch == nil {
-		return
+		return pubsub.ValidationIgnore
 	}
-
 	proposalWithReceipt := &proposalMessageWithReceiptData{
 		message:      message,
-		gossip:       data,
 		receivedTime: receivedTime,
 	}
-
+	// FIXME(dshulyak) buffer messages without channel.
+	// if message.EpochID == currentEpoch + 1 : buffer message in the slice. when epoch starts, check that slice
+	// if message.EpochID == currentEpoch     : validate without passing to the channel
 	select {
 	case <-ctx.Done():
 	case ch <- proposalWithReceipt:
 	}
+	return pubsub.ValidationAccept
 }
 
 func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan *proposalMessageWithReceiptData) {
@@ -83,7 +85,6 @@ func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan 
 		select {
 		case <-ctx.Done():
 			return
-
 		case em := <-ch:
 			if em == nil || tb.isClosed() || !tb.isInProtocol() {
 				return
@@ -91,14 +92,11 @@ func (tb *TortoiseBeacon) readProposalMessagesLoop(ctx context.Context, ch chan 
 
 			if err := tb.handleProposalMessage(ctx, em.message, em.receivedTime); err != nil {
 				tb.logger.WithContext(ctx).With().Error("failed to handle proposal message",
-					log.String("sender", em.gossip.Sender().String()),
 					log.String("message", em.message.String()),
 					log.Err(err))
 
 				return
 			}
-
-			em.gossip.ReportValidation(ctx, TBProposalProtocol)
 		}
 	}
 }
@@ -246,21 +244,21 @@ func (tb *TortoiseBeacon) isValidProposalMessage(currentEpoch types.EpochID, atx
 }
 
 // HandleSerializedFirstVotingMessage defines method to handle Tortoise Beacon first voting Messages from gossip.
-func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context, data service.GossipMessage, _ service.Fetcher) {
+func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
 	if tb.isClosed() || !tb.isInProtocol() {
 		tb.logger.WithContext(ctx).Debug("tortoise beacon shutting down or not in protocol, dropping msg")
-		return
+		return pubsub.ValidationIgnore
 	}
 
 	logger := tb.logger.WithContext(ctx).WithFields(
-		log.String("sender", data.Sender().String()),
-		log.String("message", string(data.Bytes())))
+		log.String("sender", pid.String()),
+		log.Binary("message", msg))
 	logger.Debug("new first voting message")
 
 	var m FirstVotingMessage
-	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
+	if err := types.BytesToInterface(msg, &m); err != nil {
 		logger.With().Warning("received invalid voting message", log.Err(err))
-		return
+		return pubsub.ValidationReject
 	}
 
 	currentEpoch := tb.currentEpoch()
@@ -268,15 +266,14 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 		logger.With().Debug("first voting message from different epoch",
 			log.Uint32("current_epoch", uint32(currentEpoch)),
 			log.Uint32("message_epoch", uint32(m.EpochID)))
-		return
+		return pubsub.ValidationIgnore
 	}
 
 	if err := tb.handleFirstVotingMessage(ctx, m); err != nil {
 		logger.With().Error("failed to handle first voting message", log.Err(err))
-		return
+		return pubsub.ValidationIgnore
 	}
-
-	data.ReportValidation(ctx, TBFirstVotingProtocol)
+	return pubsub.ValidationAccept
 }
 
 func (tb *TortoiseBeacon) handleFirstVotingMessage(ctx context.Context, message FirstVotingMessage) error {
@@ -373,22 +370,22 @@ func (tb *TortoiseBeacon) storeFirstVotes(message FirstVotingMessage, minerPK *s
 }
 
 // HandleSerializedFollowingVotingMessage defines method to handle Tortoise Beacon following voting Messages from gossip.
-func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Context, data service.GossipMessage, _ service.Fetcher) {
+func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
 	if tb.isClosed() || !tb.isInProtocol() {
 		tb.logger.WithContext(ctx).Debug("tortoise beacon shutting down or not in protocol, dropping msg")
-		return
+		return pubsub.ValidationIgnore
 	}
 
 	logger := tb.logger.WithContext(ctx).WithFields(
-		log.String("sender", data.Sender().String()),
-		log.String("message", string(data.Bytes())))
+		log.String("sender", pid.String()),
+		log.Binary("message", msg))
 
 	logger.Debug("new voting message")
 
 	var m FollowingVotingMessage
-	if err := types.BytesToInterface(data.Bytes(), &m); err != nil {
+	if err := types.BytesToInterface(msg, &m); err != nil {
 		logger.With().Warning("received invalid voting message", log.Err(err))
-		return
+		return pubsub.ValidationReject
 	}
 
 	currentEpoch := tb.currentEpoch()
@@ -396,15 +393,14 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 		logger.With().Debug("following voting message from different epoch",
 			log.Uint32("current_epoch", uint32(currentEpoch)),
 			log.Uint32("message_epoch", uint32(m.EpochID)))
-		return
+		return pubsub.ValidationIgnore
 	}
 
 	if err := tb.handleFollowingVotingMessage(ctx, m); err != nil {
 		logger.With().Error("failed to handle following voting message", log.Err(err))
-		return
+		return pubsub.ValidationReject
 	}
-
-	data.ReportValidation(ctx, TBFollowingVotingProtocol)
+	return pubsub.ValidationAccept
 }
 
 func (tb *TortoiseBeacon) handleFollowingVotingMessage(ctx context.Context, message FollowingVotingMessage) error {

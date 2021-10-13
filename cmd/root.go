@@ -66,47 +66,19 @@ func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== P2P Flags ========================== **/
 
-	cmd.PersistentFlags().IntVar(&config.P2P.TCPPort, "tcp-port",
-		config.P2P.TCPPort, "inet port for P2P listener")
-	cmd.PersistentFlags().StringVar(&config.P2P.TCPInterface, "tcp-interface",
-		config.P2P.TCPInterface, "inet interface for P2P listener, specify as IP address")
-	cmd.PersistentFlags().BoolVar(&config.P2P.AcquirePort, "acquire-port",
-		config.P2P.AcquirePort, "Should the node attempt to forward the port to this machine on a NAT?")
-	cmd.PersistentFlags().DurationVar(&config.P2P.DialTimeout, "dial-timeout",
-		config.P2P.DialTimeout, "Network dial timeout duration")
-	cmd.PersistentFlags().DurationVar(&config.P2P.ConnKeepAlive, "conn-keepalive",
-		config.P2P.ConnKeepAlive, "Network connection keep alive")
+	cmd.PersistentFlags().StringVar(&config.P2P.Listen, "p2p-listen",
+		config.P2P.Listen, "multiaddr for listening")
 	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "NetworkID to run on (0 - mainnet, 1 - testnet)")
-	cmd.PersistentFlags().DurationVar(&config.P2P.ResponseTimeout, "response-timeout",
-		config.P2P.ResponseTimeout, "Timeout for waiting on response message")
-	cmd.PersistentFlags().DurationVar(&config.P2P.SessionTimeout, "session-timeout",
-		config.P2P.SessionTimeout, "Timeout for waiting on session message")
-	cmd.PersistentFlags().StringVar(&config.P2P.NodeID, "node-id",
-		config.P2P.NodeID, "Load node data by id (pub key) from local store")
-	cmd.PersistentFlags().IntVar(&config.P2P.BufferSize, "buffer-size",
-		config.P2P.BufferSize, "Size of the messages handler's buffer")
-	cmd.PersistentFlags().IntVar(&config.P2P.MaxPendingConnections, "max-pending-connections",
-		config.P2P.MaxPendingConnections, "The maximum number of pending connections")
-	cmd.PersistentFlags().IntVar(&config.P2P.OutboundPeersTarget, "outbound-target",
-		config.P2P.OutboundPeersTarget, "The outbound peer target we're trying to connect")
-	cmd.PersistentFlags().IntVar(&config.P2P.MaxInboundPeers, "max-inbound",
-		config.P2P.MaxInboundPeers, "The maximum number of inbound peers ")
-	cmd.PersistentFlags().BoolVar(&config.P2P.SwarmConfig.Gossip, "gossip",
-		config.P2P.SwarmConfig.Gossip, "should we start a gossiping node?")
-	cmd.PersistentFlags().BoolVar(&config.P2P.SwarmConfig.Bootstrap, "bootstrap",
-		config.P2P.SwarmConfig.Bootstrap, "Bootstrap the swarm")
-	cmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RoutingTableBucketSize, "bucketsize",
-		config.P2P.SwarmConfig.RoutingTableBucketSize, "The rounding table bucket size")
-	cmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RoutingTableAlpha, "alpha",
-		config.P2P.SwarmConfig.RoutingTableAlpha, "The rounding table Alpha")
-	cmd.PersistentFlags().IntVar(&config.P2P.SwarmConfig.RandomConnections, "randcon",
-		config.P2P.SwarmConfig.RoutingTableAlpha, "Number of random connections")
-	cmd.PersistentFlags().StringSliceVar(&config.P2P.SwarmConfig.BootstrapNodes, "bootnodes",
-		config.P2P.SwarmConfig.BootstrapNodes, "Number of random connections")
-	cmd.PersistentFlags().StringVar(&config.P2P.SwarmConfig.PeersFile, "peers-file",
-		config.P2P.SwarmConfig.PeersFile, "addrbook peers file. located under data-dir/<publickey>/<peer-file> not loaded or saved if empty string is given.")
-
+	cmd.PersistentFlags().IntVar(&config.P2P.LowPeers, "p2p-low-peers",
+		config.P2P.LowPeers, "Low watermark for the number of connections")
+	cmd.PersistentFlags().IntVar(&config.P2P.HighPeers, "p2p-high-peers",
+		config.P2P.HighPeers,
+		"High watermark for the number of connections. Once reached connections are pruned until low watermark remains")
+	cmd.PersistentFlags().IntVar(&config.P2P.TargetOutbound, "p2p-outbound",
+		config.P2P.TargetOutbound, "Number of random outbound connections")
+	cmd.PersistentFlags().StringSliceVar(&config.P2P.Bootstrap, "p2p-bootnodes",
+		config.P2P.Bootstrap, "Number of random connections")
 	/** ======================== TIME Flags ========================== **/
 
 	cmd.PersistentFlags().DurationVar(&config.TIME.MaxAllowedDrift, "max-allowed-time-drift",
@@ -119,8 +91,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
 	cmd.PersistentFlags().StringSliceVar(&config.TIME.NTPServers,
 		"ntp-servers", config.TIME.NTPServers, "A list of NTP servers to query (e.g., 'time.google.com'). Overrides the list in config. Must contain more servers than the number of ntp-queries.")
-	cmd.PersistentFlags().IntVar(&config.P2P.MsgSizeLimit, "msg-size-limit",
-		config.P2P.MsgSizeLimit, "The message size limit in bytes for incoming messages")
 	cmd.PersistentFlags().BoolVar(&config.TIME.Peersync.Disable, "disable", config.TIME.Peersync.Disable,
 		"disable verification that local time is in sync with peers")
 	cmd.PersistentFlags().DurationVar(&config.TIME.Peersync.RoundRetryInterval, "peersync-round-retry-interval",

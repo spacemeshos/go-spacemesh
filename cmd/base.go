@@ -3,12 +3,14 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
 	"os/signal"
 	"reflect"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -99,7 +101,14 @@ func parseConfig() (*bc.Config, error) {
 
 	conf := bc.DefaultConfig()
 	// load config if it was loaded to our viper
-	err := vip.Unmarshal(&conf)
+	hook := mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToTimeDurationHookFunc(),
+		mapstructure.StringToSliceHookFunc(","),
+		bigRatDecodeFunc(),
+	)
+
+	// load config if it was loaded to our viper
+	err := vip.Unmarshal(&conf, viper.DecodeHook(hook))
 	if err != nil {
 		log.Error("Failed to parse config\n")
 		return nil, fmt.Errorf("parse config: %w", err)
@@ -108,7 +117,33 @@ func parseConfig() (*bc.Config, error) {
 	return &conf, nil
 }
 
-// EnsureCLIFlags checks flag types and converts them.
+func bigRatDecodeFunc() mapstructure.DecodeHookFunc {
+	return func(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
+		if t != reflect.TypeOf(big.Rat{}) {
+			return data, nil
+		}
+
+		switch f.Kind() {
+		case reflect.String:
+			v, ok := new(big.Rat).SetString(data.(string))
+			if !ok {
+				return nil, errors.New("malformed string representing big.Rat was provided")
+			}
+
+			return v, nil
+		case reflect.Float64:
+			return new(big.Rat).SetFloat64(data.(float64)), nil
+		case reflect.Int64:
+			return new(big.Rat).SetInt64(data.(int64)), nil
+		case reflect.Uint64:
+			return new(big.Rat).SetUint64(data.(uint64)), nil
+		default:
+			return data, nil
+		}
+	}
+}
+
+// EnsureCLIFlags checks flag types and converts them
 func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
 		for i := 0; i < p.NumField(); i++ {
@@ -182,10 +217,6 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 
 			ff = reflect.TypeOf(appCFG.P2P)
 			elem = reflect.ValueOf(&appCFG.P2P).Elem()
-			assignFields(ff, elem, name)
-
-			ff = reflect.TypeOf(appCFG.P2P.SwarmConfig)
-			elem = reflect.ValueOf(&appCFG.P2P.SwarmConfig).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appCFG.TIME)

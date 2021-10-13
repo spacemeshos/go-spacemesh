@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -37,6 +38,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/lp2p/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -2799,7 +2801,11 @@ func TestDebugService(t *testing.T) {
 
 func TestGatewayService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewGatewayService(&networkMock)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	publisher := mocks.NewMockPublisher(ctrl)
+
+	svc := NewGatewayService(publisher)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2823,10 +2829,10 @@ func TestGatewayService(t *testing.T) {
 	// This should work. Any nonzero byte string should work as we don't perform any additional validation.
 	poetMessage = []byte("123")
 	req.Data = poetMessage
+
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Eq(poetMessage)).Return(nil)
 	res, err = c.BroadcastPoet(context.Background(), req)
 	require.NotNil(t, res, "expected request to succeed")
 	require.Equal(t, int32(code.Code_OK), res.Status.Code)
 	require.NoError(t, err, "expected request to succeed")
-	require.Equal(t, networkMock.GetBroadcast(), poetMessage,
-		"expected network mock to broadcast input poet message")
 }

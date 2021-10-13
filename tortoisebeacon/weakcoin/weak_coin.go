@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -90,18 +91,18 @@ func WithNextRoundBufferSize(size int) Option {
 
 // New creates an instance of weak coin protocol.
 func New(
-	net broadcaster,
+	publisher pubsub.Publisher,
 	signer signing.Signer,
 	verifier signing.Verifier,
 	opts ...Option,
 ) *WeakCoin {
 	wc := &WeakCoin{
-		logger:   log.NewNop(),
-		config:   defaultConfig(),
-		signer:   signer,
-		verifier: verifier,
-		net:      net,
-		coins:    make(map[types.RoundID]bool),
+		logger:    log.NewNop(),
+		config:    defaultConfig(),
+		signer:    signer,
+		verifier:  verifier,
+		publisher: publisher,
+		coins:     make(map[types.RoundID]bool),
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -112,11 +113,11 @@ func New(
 
 // WeakCoin implementation of the protocol.
 type WeakCoin struct {
-	logger   log.Log
-	config   config
-	verifier signing.Verifier
-	signer   signing.Signer
-	net      broadcaster
+	logger    log.Log
+	config    config
+	verifier  signing.Verifier
+	signer    signing.Signer
+	publisher pubsub.Publisher
 
 	mu                         sync.RWMutex
 	epochStarted, roundStarted bool
@@ -243,14 +244,14 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (b
 }
 
 func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
-	broadcast, smallest := wc.prepareProposal(epoch, round)
+	msg, smallest := wc.prepareProposal(epoch, round)
 
 	// nothing to send is valid if all proposals are exceeding threshold
-	if broadcast == nil {
+	if msg == nil {
 		return nil
 	}
 
-	if err := wc.net.Broadcast(ctx, GossipProtocol, broadcast); err != nil {
+	if err := wc.publisher.Publish(ctx, GossipProtocol, msg); err != nil {
 		return fmt.Errorf("failed to broadcast weak coin message: %w", err)
 	}
 

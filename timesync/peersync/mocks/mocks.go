@@ -10,8 +10,7 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	p2pcrypto "github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	service "github.com/spacemeshos/go-spacemesh/p2p/service"
+	lp2p "github.com/spacemeshos/go-spacemesh/lp2p"
 )
 
 // MockTime is a mock of Time interface.
@@ -51,68 +50,40 @@ func (mr *MockTimeMockRecorder) Now() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Now", reflect.TypeOf((*MockTime)(nil).Now))
 }
 
-// MockNetwork is a mock of Network interface.
-type MockNetwork struct {
+// MockPeersWatcher is a mock of PeersWatcher interface.
+type MockPeersWatcher struct {
 	ctrl     *gomock.Controller
-	recorder *MockNetworkMockRecorder
+	recorder *MockPeersWatcherMockRecorder
 }
 
-// MockNetworkMockRecorder is the mock recorder for MockNetwork.
-type MockNetworkMockRecorder struct {
-	mock *MockNetwork
+// MockPeersWatcherMockRecorder is the mock recorder for MockPeersWatcher.
+type MockPeersWatcherMockRecorder struct {
+	mock *MockPeersWatcher
 }
 
-// NewMockNetwork creates a new mock instance.
-func NewMockNetwork(ctrl *gomock.Controller) *MockNetwork {
-	mock := &MockNetwork{ctrl: ctrl}
-	mock.recorder = &MockNetworkMockRecorder{mock}
+// NewMockPeersWatcher creates a new mock instance.
+func NewMockPeersWatcher(ctrl *gomock.Controller) *MockPeersWatcher {
+	mock := &MockPeersWatcher{ctrl: ctrl}
+	mock.recorder = &MockPeersWatcherMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockNetwork) EXPECT() *MockNetworkMockRecorder {
+func (m *MockPeersWatcher) EXPECT() *MockPeersWatcherMockRecorder {
 	return m.recorder
 }
 
-// RegisterDirectProtocolWithChannel mocks base method.
-func (m *MockNetwork) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
+// WaitPeers mocks base method.
+func (m *MockPeersWatcher) WaitPeers(arg0 context.Context, arg1 int) ([]lp2p.Peer, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "RegisterDirectProtocolWithChannel", protocol, ingressChannel)
-	ret0, _ := ret[0].(chan service.DirectMessage)
-	return ret0
-}
-
-// RegisterDirectProtocolWithChannel indicates an expected call of RegisterDirectProtocolWithChannel.
-func (mr *MockNetworkMockRecorder) RegisterDirectProtocolWithChannel(protocol, ingressChannel interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterDirectProtocolWithChannel", reflect.TypeOf((*MockNetwork)(nil).RegisterDirectProtocolWithChannel), protocol, ingressChannel)
-}
-
-// SendWrappedMessage mocks base method.
-func (m *MockNetwork) SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendWrappedMessage", ctx, nodeID, protocol, payload)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SendWrappedMessage indicates an expected call of SendWrappedMessage.
-func (mr *MockNetworkMockRecorder) SendWrappedMessage(ctx, nodeID, protocol, payload interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendWrappedMessage", reflect.TypeOf((*MockNetwork)(nil).SendWrappedMessage), ctx, nodeID, protocol, payload)
-}
-
-// SubscribePeerEvents mocks base method.
-func (m *MockNetwork) SubscribePeerEvents() (chan p2pcrypto.PublicKey, chan p2pcrypto.PublicKey) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SubscribePeerEvents")
-	ret0, _ := ret[0].(chan p2pcrypto.PublicKey)
-	ret1, _ := ret[1].(chan p2pcrypto.PublicKey)
+	ret := m.ctrl.Call(m, "WaitPeers", arg0, arg1)
+	ret0, _ := ret[0].([]lp2p.Peer)
+	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// SubscribePeerEvents indicates an expected call of SubscribePeerEvents.
-func (mr *MockNetworkMockRecorder) SubscribePeerEvents() *gomock.Call {
+// WaitPeers indicates an expected call of WaitPeers.
+func (mr *MockPeersWatcherMockRecorder) WaitPeers(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SubscribePeerEvents", reflect.TypeOf((*MockNetwork)(nil).SubscribePeerEvents))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitPeers", reflect.TypeOf((*MockPeersWatcher)(nil).WaitPeers), arg0, arg1)
 }

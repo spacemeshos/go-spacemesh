@@ -16,7 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
@@ -49,7 +49,6 @@ type coin interface {
 	FinishRound(context.Context)
 	Get(context.Context, types.EpochID, types.RoundID) bool
 	FinishEpoch(context.Context, types.EpochID)
-	HandleSerializedMessage(context.Context, service.GossipMessage, service.Fetcher)
 }
 
 type eligibilityChecker interface {
@@ -80,7 +79,7 @@ type SyncState interface {
 func New(
 	conf Config,
 	nodeID types.NodeID,
-	net broadcaster,
+	publisher pubsub.Publisher,
 	atxDB activationDB,
 	edSigner signing.Signer,
 	edVerifier signing.VerifyExtractor,
@@ -95,7 +94,7 @@ func New(
 		logger:                  logger,
 		config:                  conf,
 		nodeID:                  nodeID,
-		net:                     net,
+		publisher:               publisher,
 		atxDB:                   atxDB,
 		edSigner:                edSigner,
 		edVerifier:              edVerifier,
@@ -126,7 +125,7 @@ type TortoiseBeacon struct {
 	config      Config
 	nodeID      types.NodeID
 	sync        SyncState
-	net         broadcaster
+	publisher   pubsub.Publisher
 	atxDB       activationDB
 	edSigner    signing.Signer
 	edVerifier  signing.VerifyExtractor
@@ -650,7 +649,6 @@ func (tb *TortoiseBeacon) getProposalChannel(ctx context.Context, epoch types.Ep
 			select {
 			case msg := <-ch:
 				logger.With().Warning("proposal channel for next epoch is full, dropping oldest msg",
-					log.String("sender", msg.gossip.Sender().String()),
 					log.String("message", msg.message.String()))
 			default:
 			}
@@ -946,15 +944,18 @@ func buildProposal(epoch types.EpochID, logger log.Log) []byte {
 	return b
 }
 
-func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data interface{}) error {
+func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, protocol string, data interface{}) error {
 	serialized, err := types.InterfaceToBytes(data)
 	if err != nil {
 		tb.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
 	}
 
-	if err := tb.net.Broadcast(ctx, channel, serialized); err != nil {
-		return fmt.Errorf("broadcast: %w", err)
-	}
-
+	// NOTE(dshulyak) moved to goroutine because self-broadcast is applied synchronously
+	tb.eg.Go(func() error {
+		if err := tb.publisher.Publish(ctx, protocol, serialized); err != nil {
+			return fmt.Errorf("broadcast: %w", err)
+		}
+		return nil
+	})
 	return nil
 }

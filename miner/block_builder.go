@@ -16,8 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/miner/metrics"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 const (
@@ -67,7 +67,7 @@ type BlockBuilder struct {
 	stopChan        chan struct{}
 	TransactionPool txPool
 	mu              sync.Mutex
-	network         p2p.Service
+	publisher       pubsub.Publisher
 	meshProvider    meshProvider
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
@@ -96,7 +96,7 @@ type Config struct {
 func NewBlockBuilder(
 	config Config,
 	sgn signer,
-	net p2p.Service,
+	publisher pubsub.Publisher,
 	beginRoundEvent chan types.LayerID,
 	orph meshProvider,
 	bbp baseBlockProvider,
@@ -129,7 +129,7 @@ func NewBlockBuilder(
 		beginRoundEvent: beginRoundEvent,
 		stopChan:        make(chan struct{}),
 		mu:              sync.Mutex{},
-		network:         net,
+		publisher:       publisher,
 		meshProvider:    orph,
 		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
@@ -355,21 +355,19 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					logger.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
-				go func() {
-					bytes, err := types.InterfaceToBytes(blk)
-					if err != nil {
-						logger.With().Error("failed to serialize block", log.Err(err))
-						events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot serialize block")
-						return
-					}
+				bytes, err := types.InterfaceToBytes(blk)
+				if err != nil {
+					logger.With().Error("failed to serialize block", log.Err(err))
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot serialize block")
+					return
+				}
 
-					// generate a new requestID for the new block message
-					blockCtx := log.WithNewRequestID(ctx, layerID, blk.ID())
-					if err = t.network.Broadcast(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
-						logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
-					}
-					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "")
-				}()
+				// generate a new requestID for the new block message
+				blockCtx := log.WithNewRequestID(ctx, layerID, blk.ID())
+				if err = t.publisher.Publish(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
+					logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
+				}
+				events.ReportDoneCreatingBlock(true, layerID.Uint32(), "")
 			}
 		}
 	}

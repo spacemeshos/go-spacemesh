@@ -14,8 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -36,12 +35,6 @@ type Rolacle interface {
 	Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error)
 	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 	IsEpochBeaconReady(ctx context.Context, epoch types.EpochID) bool
-}
-
-// NetworkService provides the registration and broadcast abilities in the network.
-type NetworkService interface {
-	RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage
-	Broadcast(ctx context.Context, protocol string, payload []byte) error
 }
 
 // Signer provides signing and public-key getter.
@@ -182,7 +175,7 @@ type consensusProcess struct {
 	oracle            Rolacle // the roles oracle provider
 	signing           Signer
 	nid               types.NodeID
-	network           NetworkService
+	publisher         pubsub.Publisher
 	isStarted         bool
 	inbox             chan *Msg
 	terminationReport chan TerminationOutput
@@ -202,7 +195,7 @@ type consensusProcess struct {
 
 // newConsensusProcess creates a new consensus process instance.
 func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
-	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p NetworkService,
+	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p pubsub.Publisher,
 	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *consensusProcess {
 	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
@@ -212,7 +205,7 @@ func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, or
 		oracle:            oracle,
 		signing:           signing,
 		nid:               nid,
-		network:           p2p,
+		publisher:         p2p,
 		preRoundTracker:   newPreRoundTracker(cfg.F+1, cfg.N, logger),
 		notifyTracker:     newNotifyTracker(cfg.N),
 		cfg:               cfg,
@@ -502,7 +495,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 	)
 	logger := proc.WithContext(ctx)
 
-	if err := proc.network.Broadcast(ctx, protoName, msg.Bytes()); err != nil {
+	if err := proc.publisher.Publish(ctx, protoName, msg.Bytes()); err != nil {
 		logger.With().Error("could not broadcast round message", log.Err(err))
 		return false
 	}

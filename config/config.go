@@ -17,8 +17,8 @@ import (
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/lp2p"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
@@ -38,7 +38,7 @@ var (
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
 	Genesis         *apiConfig.GenesisConfig `mapstructure:"genesis"`
-	P2P             p2pConfig.Config         `mapstructure:"p2p"`
+	P2P             lp2p.Config              `mapstructure:"p2p"`
 	API             apiConfig.Config         `mapstructure:"api"`
 	HARE            hareConfig.Config        `mapstructure:"hare"`
 	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
@@ -157,7 +157,7 @@ type SmeshingConfig struct {
 func DefaultConfig() Config {
 	return Config{
 		BaseConfig:      defaultBaseConfig(),
-		P2P:             p2pConfig.DefaultConfig(),
+		P2P:             lp2p.Default(),
 		API:             apiConfig.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
@@ -175,7 +175,7 @@ func DefaultConfig() Config {
 func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.BaseConfig = defaultTestConfig()
-	conf.P2P = p2pConfig.DefaultTestConfig()
+	conf.P2P = lp2p.Default()
 	conf.API = apiConfig.DefaultTestConfig()
 	return conf
 }
