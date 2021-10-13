@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	dbMocks "github.com/spacemeshos/go-spacemesh/database/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -524,7 +525,7 @@ func mockTortoiseBeacon(t *testing.T) blocks.BeaconGetter {
 	return mockTB
 }
 
-func createBlockBuilder(t *testing.T, ID string, n *service.Node, meshBlocks []*types.Block) *BlockBuilder {
+func createBlockBuilder(t *testing.T, ID string, publisher pubsub.Publisher, meshBlocks []*types.Block) *BlockBuilder {
 	beginRound := make(chan types.LayerID)
 	cfg := Config{
 		Hdist:          5,
@@ -533,7 +534,7 @@ func createBlockBuilder(t *testing.T, ID string, n *service.Node, meshBlocks []*
 		LayersPerEpoch: 3,
 		TxsPerBlock:    selectCount,
 	}
-	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), n, beginRound, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
+	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), publisher, beginRound, &mockMesh{b: meshBlocks}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{}, [][]types.BlockID{{}, {}, {}}, nil
 	}}, &mockBlockOracle{}, nil, &mockSyncer{}, mockProjector, nil, logtest.New(t).WithName(ID))
 	return bb

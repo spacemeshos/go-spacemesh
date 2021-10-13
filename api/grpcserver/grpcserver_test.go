@@ -38,9 +38,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p/mocks"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -144,36 +143,8 @@ type NetworkMock struct {
 	broadcasted  []byte
 }
 
-func (s *NetworkMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
-	return make(chan p2pcrypto.PublicKey), make(chan p2pcrypto.PublicKey)
-}
-
-func (s *NetworkMock) Broadcast(_ context.Context, _ string, payload []byte) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	if s.broadCastErr {
-		return errors.New("error during broadcast")
-	}
-	s.broadcasted = payload
-	return nil
-}
-
-func (s *NetworkMock) GetBroadcast() []byte {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	return s.broadcasted
-}
-
-func (s *NetworkMock) SetErr(err bool) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	s.broadCastErr = err
-}
-
-func (s *NetworkMock) GetErr() bool {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	return s.broadCastErr
+func (s *NetworkMock) PeerCount() uint64 {
+	return 0
 }
 
 type TxAPIMock struct {
@@ -542,8 +513,6 @@ func (m MempoolMock) GetTxsByAddress(addr types.Address) (txs []*types.Transacti
 }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
-	err := networkMock.Broadcast(context.TODO(), "", []byte{0x00})
-	require.NoError(t, err)
 
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
@@ -1774,7 +1743,11 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	logtest.SetupGlobal(t)
 	req := require.New(t)
 	syncer := &SyncerMock{}
-	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, syncer)
+	ctrl := gomock.NewController(t)
+	publisher := mocks.NewMockPublisher(ctrl)
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	grpcService := NewTransactionService(publisher, txAPI, mempoolMock, syncer)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1816,7 +1789,14 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 func TestTransactionService(t *testing.T) {
 	logtest.SetupGlobal(t)
 
-	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	ctrl := gomock.NewController(t)
+	publisher := mocks.NewMockPublisher(ctrl)
+	received := []byte{}
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+		received = msg
+		return nil
+	})
+	grpcService := NewTransactionService(publisher, txAPI, mempoolMock, &SyncerMock{isSynced: true})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2041,9 +2021,7 @@ func TestTransactionService(t *testing.T) {
 				// Wait until the data is available
 				wgBroadcast.Wait()
 
-				// Read it
-				data := networkMock.GetBroadcast()
-
+				data := received
 				// Deserialize
 				tx, err := types.BytesToTransaction(data)
 				require.NotNil(t, tx, "expected transaction")
@@ -2830,7 +2808,7 @@ func TestGatewayService(t *testing.T) {
 	poetMessage = []byte("123")
 	req.Data = poetMessage
 
-	publisher.EXPECT().Publish(gomock.Any(), gomock.Eq(poetMessage)).Return(nil)
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Eq(poetMessage)).Return(nil)
 	res, err = c.BroadcastPoet(context.Background(), req)
 	require.NotNil(t, res, "expected request to succeed")
 	require.Equal(t, int32(code.Code_OK), res.Status.Code)

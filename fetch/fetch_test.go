@@ -140,7 +140,6 @@ func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
 	}
 	lg := logtest.New(tb)
 	f := NewFetch(context.TODO(), cfg, mckNet, lg)
-	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
 	f.AddDB("db2", database.NewMemDatabase())
 
@@ -154,7 +153,6 @@ func customFetch(tb testing.TB, cfg Config) (*Fetch, *mockNet) {
 	}
 	lg := logtest.New(tb)
 	f := NewFetch(context.TODO(), cfg, mckNet, lg)
-	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
 	return f, mckNet
 }

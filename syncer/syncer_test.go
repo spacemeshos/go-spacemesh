@@ -128,7 +128,7 @@ func newMemMesh(lg log.Log) *mesh.Mesh {
 	memdb := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxStore := database.NewMemDatabase()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
-	atxdb := activation.NewDB(atxStore, newMockFetcher(), activation.NewIdentityStore(database.NewMemDatabase()), memdb, layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
+	atxdb := activation.NewDB(atxStore, nil, activation.NewIdentityStore(database.NewMemDatabase()), memdb, layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
 	return mesh.NewMesh(memdb, atxdb, mesh.Config{}, &mockValidator{}, nil, nil, lg.WithName("mesh"))
 }
 

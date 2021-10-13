@@ -18,8 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/lp2p"
 	"github.com/spacemeshos/go-spacemesh/monitoring"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -67,7 +67,7 @@ func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, err
 // HareApp represents an Hare application.
 type HareApp struct {
 	*cmdp.BaseApp
-	p2p     p2p.Service
+	host    *lp2p.Host
 	oracle  *oracleClient
 	sgn     hare.Signer
 	ha      *hare.Hare
@@ -129,11 +129,12 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	log.Info("initializing P2P services")
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
-	app.p2p = swarm
+	host, err := lp2p.New(cmdp.Ctx, log.NewDefault("p2p_haretest"), app.Config.P2P)
 	if err != nil {
 		log.With().Panic("error starting p2p services", log.Err(err))
 	}
+	defer host.Stop()
+	app.host = host
 
 	pub := app.sgn.PublicKey()
 
@@ -160,14 +161,11 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	//app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
 	lt := make(timesync.LayerTimer)
 
-	hareI := hare.New(app.Config.HARE, "", nil, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
+	hareI := hare.New(app.Config.HARE, host.ID(), host, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
 	log.Info("starting hare service")
 	app.ha = hareI
 	if err = app.ha.Start(cmdp.Ctx); err != nil {
 		log.With().Panic("error starting hare", log.Err(err))
-	}
-	if err = app.p2p.Start(cmdp.Ctx); err != nil {
-		log.With().Panic("error starting p2p", log.Err(err))
 	}
 	if gTime.After(time.Now()) {
 		log.Info("sleeping until %v", gTime)
