@@ -1,6 +1,7 @@
 package peerexchange
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"net"
@@ -73,7 +74,12 @@ func (p *peerExchange) handler(stream network.Stream) {
 	// todo: limit results to message size
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
 	defer stream.SetDeadline(time.Time{})
-	if _, err := codec.EncodeTo(stream, response); err != nil {
+	wr := bufio.NewWriter(stream)
+	_, err = codec.EncodeTo(wr, response)
+	if err == nil {
+		err = wr.Flush()
+	}
+	if err != nil {
 		logger.Warning("failed to write response", log.Err(err))
 		return
 	}
@@ -108,7 +114,7 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, e
 	}
 
 	addrs := []string{}
-	if _, err := codec.DecodeFrom(stream, &addrs); err != nil {
+	if _, err := codec.DecodeFrom(bufio.NewReader(stream), &addrs); err != nil {
 		return nil, fmt.Errorf("failed to read addresses in response: %w", err)
 	}
 
