@@ -92,6 +92,6 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 		log.String("identity", h.ID().String()),
 	)
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
-	opts = append(opts, WithConfig(cfg))
+	opts = append(opts, WithConfig(cfg), WithLog(logger))
 	return Wrap(h, opts...)
 }

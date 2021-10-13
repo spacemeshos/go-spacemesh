@@ -114,8 +114,8 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 	)
 	defer ticker.Stop()
 
-	b.triggerBootstrap(ctx, limit, len(peers), outbound)
 	for {
+		b.triggerBootstrap(ctx, limit, len(peers), outbound)
 		select {
 		case evt := <-sub.Out():
 			hs, ok := evt.(handshake.EventHandshakeComplete)
@@ -158,7 +158,6 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 				delete(peers, pid)
 			}
 		case <-ticker.C:
-			b.triggerBootstrap(ctx, limit, len(peers), outbound)
 		case <-ctx.Done():
 			return ctx.Err()
 		}

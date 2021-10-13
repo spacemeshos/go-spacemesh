@@ -28,7 +28,7 @@ def query_bootstrap_es(namespace, bootstrap_po_name):
     hits = poll_query_message(current_index, namespace, bootstrap_po_name, {"M": "local node identity"}, expected=1)
     for h in hits:
         if getattr(h, 'identity', None):
-            return h.key
+            return h.identity
     return None
 
 # ==============================================================================
