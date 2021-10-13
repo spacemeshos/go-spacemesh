@@ -77,9 +77,9 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.P2P.HighPeers, "p2p-high-peers",
 		config.P2P.HighPeers,
 		"high watermark for the number of connections. Once reached connections are pruned until low watermark remains")
-	cmd.PersistentFlags().IntVar(&config.P2P.TargetOutbound, "p2p-target-outbound",
+	cmd.PersistentFlags().IntVar(&config.P2P.TargetOutbound, "target-outbound",
 		config.P2P.TargetOutbound, "target outbound connections")
-	cmd.PersistentFlags().StringSliceVar(&config.P2P.Bootnodes, "p2p-bootnodes",
+	cmd.PersistentFlags().StringSliceVar(&config.P2P.Bootnodes, "bootnodes",
 		config.P2P.Bootnodes, "entrypoints into the network")
 
 	/** ======================== TIME Flags ========================== **/
