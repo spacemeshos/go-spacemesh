@@ -80,7 +80,7 @@ func New(h host.Host, proto string, handler Handler, opts ...Opt) *Server {
 func (s *Server) streamHandler(stream network.Stream) {
 	defer stream.Close()
 	_ = stream.SetDeadline(time.Now().Add(s.timeout))
-
+	defer stream.SetDeadline(time.Time{})
 	rd := bufio.NewReader(stream)
 	size, err := binary.ReadUvarint(rd)
 	if err != nil {
@@ -120,6 +120,7 @@ func (s *Server) Request(ctx context.Context, p peer.ID, req []byte, resp func([
 	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 	go func() {
 		defer stream.Close()
+		defer stream.SetDeadline(time.Time{})
 
 		wr := bufio.NewWriter(stream)
 		sz := make([]byte, binary.MaxVarintLen64)

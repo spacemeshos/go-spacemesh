@@ -9,7 +9,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
-	protocol "github.com/libp2p/go-libp2p-protocol"
+	"github.com/libp2p/go-libp2p-core/protocol"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 
@@ -72,6 +72,7 @@ func (p *peerExchange) handler(stream network.Stream) {
 	}
 	// todo: limit results to message size
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
+	defer stream.SetDeadline(time.Time{})
 	if _, err := codec.EncodeTo(stream, response); err != nil {
 		logger.Warning("failed to write response", log.Err(err))
 		return
@@ -101,6 +102,7 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, e
 	}
 
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
+	defer stream.SetDeadline(time.Time{})
 	if _, err := codec.EncodeTo(stream, info.RawAddr); err != nil {
 		return nil, fmt.Errorf("failed to send GetAddress request: %w", err)
 	}

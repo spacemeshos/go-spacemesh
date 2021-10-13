@@ -10,7 +10,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
-	protocol "github.com/libp2p/go-libp2p-protocol"
+	"github.com/libp2p/go-libp2p-core/protocol"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -147,6 +147,7 @@ type Sync struct {
 func (s *Sync) streamHandler(stream network.Stream) {
 	defer stream.Close()
 	_ = stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
+	defer stream.SetDeadline(time.Time{})
 	var request request
 	if _, err := codec.DecodeFrom(stream, &request); err != nil {
 		s.log.With().Warning("can't decode request", log.Err(err))
@@ -269,6 +270,7 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []lp2p.Peer) (time.
 				return
 			}
 			_ = stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
+			defer stream.SetDeadline(time.Time{})
 			if _, err := stream.Write(buf); err != nil {
 				logger.Warning("failed to send a request", log.Err(err))
 				return

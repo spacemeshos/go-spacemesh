@@ -127,6 +127,7 @@ func (h *Handshake) Request(ctx context.Context, pid peer.ID) error {
 	}
 	defer stream.Close()
 	stream.SetDeadline(time.Now().Add(streamTimeout))
+	defer stream.SetDeadline(time.Time{})
 	if _, err = codec.EncodeTo(stream, &handshakeMessage{Network: h.netid}); err != nil {
 		return err
 	}
@@ -144,6 +145,7 @@ func (h *Handshake) Request(ctx context.Context, pid peer.ID) error {
 func (h *Handshake) handler(stream network.Stream) {
 	defer stream.Close()
 	stream.SetDeadline(time.Now().Add(streamTimeout))
+	defer stream.SetDeadline(time.Time{})
 	var msg handshakeMessage
 	if _, err := codec.DecodeFrom(stream, &msg); err != nil {
 		return
