@@ -25,7 +25,7 @@ func genRandomInfo(tb testing.TB, rng *rand.Rand) *addrInfo {
 	bytes, err := pk.Raw()
 	require.NoError(tb, err)
 
-	ip := net.IPv4(bytes[0], bytes[1], bytes[2], bytes[3])
+	ip := net.IPv4(169, 255, bytes[0], bytes[1])
 	port := binary.BigEndian.Uint64(bytes) % 65535
 	id, err := peer.IDFromPrivateKey(pk)
 	require.NoError(tb, err)
