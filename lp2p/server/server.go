@@ -64,6 +64,7 @@ type Server struct {
 // New server for the handler.
 func New(h host.Host, proto string, handler Handler, opts ...Opt) *Server {
 	srv := &Server{
+		ctx:      context.Background(),
 		logger:   log.NewNop(),
 		protocol: proto,
 		handler:  handler,

@@ -122,17 +122,22 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 			if !ok {
 				panic("event must be of type EventHandshakeComplete")
 			}
-			b.logger.With().Debug("notification on handshake completion is received", log.String("pid", hs.PID.Pretty()))
 			if _, exist := peers[hs.PID]; exist {
 				continue
 			}
 			peers[hs.PID] = hs.Direction
 			if hs.Direction == network.DirOutbound {
 				outbound++
+				// peer that is tagged as outbound will have higher weight then inbound peers.
+				// this is taken into account when conn manager high watermark is reached and subset of peers will be pruned.
+				b.host.ConnManager().TagPeer(hs.PID, "outbound", 100)
 			}
-			// peer that is tagged as outbound will have higher weight then inbound peers.
-			// this is taken into account when conn manager high watermark is reached and subset of peers will be pruned.
-			b.host.ConnManager().TagPeer(hs.PID, "outbound", 100)
+			b.logger.With().Info("successful connection with a peer",
+				log.String("pid", hs.PID.Pretty()),
+				log.Bool("outbound", hs.Direction == network.DirOutbound),
+				log.Int("total", len(peers)),
+				log.Int("outbound-total", outbound),
+			)
 			b.emitter.Emit(EventSpacemeshPeer{
 				PID:           hs.PID,
 				Direction:     hs.Direction,
