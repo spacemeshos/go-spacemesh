@@ -51,12 +51,14 @@ require (
 	go.uber.org/atomic v1.9.0
 	go.uber.org/zap v1.19.0
 	golang.org/x/crypto v0.0.0-20210817164053-32db794688a5
+	golang.org/x/lint v0.0.0-20210508222113-6edffad5e616 // indirect
 	golang.org/x/mod v0.5.0 // indirect
 	golang.org/x/net v0.0.0-20210825183410-e898025ed96a
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e // indirect
-	google.golang.org/genproto v0.0.0-20210831024726-fe130286e0e2
-	google.golang.org/grpc v1.41.0
+	golang.org/x/tools v0.1.5 // indirect
+	google.golang.org/genproto v0.0.0-20200825200019-8632dd797987
+	google.golang.org/grpc v1.40.0
 	nanomsg.org/go-mangos v1.4.0
 )
 
