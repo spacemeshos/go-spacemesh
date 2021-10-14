@@ -56,7 +56,7 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e // indirect
 	google.golang.org/genproto v0.0.0-20210831024726-fe130286e0e2
-	google.golang.org/grpc v1.40.0
+	google.golang.org/grpc v1.41.0
 	nanomsg.org/go-mangos v1.4.0
 )
 
