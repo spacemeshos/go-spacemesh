@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/btcsuite/btcutil/base58"
 	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	connmgr "github.com/libp2p/go-libp2p-connmgr"
@@ -87,13 +86,8 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	if err != nil {
 		return nil, err
 	}
-	pub, err := key.GetPublic().Raw()
-	if err != nil {
-		return nil, err
-	}
 
 	logger.With().Info("local node identity",
-		log.String("key", base58.Encode(pub)),
 		log.String("identity", h.ID().String()),
 	)
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
