@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/grpc-ecosystem/grpc-gateway/runtime"
+	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/grpc"
 
