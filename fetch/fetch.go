@@ -506,31 +506,29 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 		f.handleHashError(batch.ID, err)
 	}
 	// try sending batch to some random peer
-	var p lp2p.Peer
-	for {
-		if f.stopped() {
-			return
-		}
 
-		if f.net.PeerCount() == 0 {
-			f.log.With().Error("no peers found, unable to send request batch",
-				batch.ID,
-				log.Int("items", len(batch.Requests)))
-			return
-		}
-
-		// get random peer
-		p = GetRandomPeer(f.net.GetPeers())
-		f.log.With().Debug("sending request batch to peer",
-			log.String("batch_hash", batch.ID.ShortString()),
-			log.Int("num_requests", len(batch.Requests)),
-			log.String("peer", p.String()))
-		batch.peer = p
-		f.activeBatchM.Lock()
-		f.activeBatches[batch.ID] = batch
-		f.activeBatchM.Unlock()
-		f.net.Request(context.TODO(), p, bytes, f.receiveResponse, errorFunc)
+	if f.stopped() {
+		return
 	}
+
+	if f.net.PeerCount() == 0 {
+		f.log.With().Error("no peers found, unable to send request batch",
+			batch.ID,
+			log.Int("items", len(batch.Requests)))
+		return
+	}
+
+	// get random peer
+	p := GetRandomPeer(f.net.GetPeers())
+	f.log.With().Debug("sending request batch to peer",
+		log.String("batch_hash", batch.ID.ShortString()),
+		log.Int("num_requests", len(batch.Requests)),
+		log.String("peer", p.String()))
+	batch.peer = p
+	f.activeBatchM.Lock()
+	f.activeBatches[batch.ID] = batch
+	f.activeBatchM.Unlock()
+	f.net.Request(context.TODO(), p, bytes, f.receiveResponse, errorFunc)
 }
 
 // handleHashError is called when an error occurred processing batches of the following hashes.
