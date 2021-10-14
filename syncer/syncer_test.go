@@ -261,7 +261,7 @@ func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(ctx context.Context, layer *types.Layer) {
 				assert.Equal(t, l, layer.Index())
-			})
+			}).Times(1)
 	}
 	patrol.EXPECT().IsHareInCharge(lyr).Return(true).Times(1)
 
@@ -280,6 +280,69 @@ func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 
 	// allow synchronize to finish
 	feedLayerResult(gLayer.Add(1), lyr, mf, mm)
+	wg.Wait()
+
+	assert.True(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+}
+
+func TestSynchronize_ValidateLayersTooDelayed(t *testing.T) {
+	lg := logtest.New(t).WithName("syncer")
+	ticker := newMockLayerTicker()
+	mf := newMockFetcher()
+	mm := newMemMesh(lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	patrol := mocks.NewMocklayerPatrol(ctrl)
+	syncer.patrol = patrol
+	validator := mocks.NewMocklayerValidator(ctrl)
+	syncer.validator = validator
+
+	gLayer := types.GetEffectiveGenesis()
+	latestLyr := gLayer.Add(maxHareDelayLayers + 1)
+
+	// cause the latest layer to advance
+	blk := types.NewExistingBlock(latestLyr, []byte("data"), nil)
+	blk.Initialize()
+	err := mm.AddBlockWithTxs(context.TODO(), blk)
+	require.NoError(t, err)
+
+	// make sure hare has run for all layers after genesis
+	for l := types.NewLayerID(1); !l.After(gLayer); l = l.Add(1) {
+		l := l
+		patrol.EXPECT().IsHareInCharge(l).Return(false).Times(1)
+		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, layer *types.Layer) {
+				assert.Equal(t, l, layer.Index())
+			}).Times(1)
+	}
+	for l := gLayer.Add(1); l.Before(latestLyr); l = l.Add(1) {
+		patrol.EXPECT().IsHareInCharge(l).Return(true).Times(1)
+	}
+	// the 1st layer after genesis, despite having hare started consensus protocol for it,
+	// is too much delayed.
+	validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, layer *types.Layer) {
+			assert.Equal(t, gLayer.Add(1), layer.Index())
+		}).Times(1)
+
+	ticker.advanceToLayer(latestLyr)
+	syncer.Start(context.TODO())
+	t.Cleanup(func() {
+		syncer.Close()
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		assert.True(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+
+	// allow synchronize to finish
+	feedLayerResult(gLayer.Add(1), latestLyr.Sub(1), mf, mm)
 	wg.Wait()
 
 	assert.True(t, syncer.ListenToGossip())

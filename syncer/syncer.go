@@ -47,6 +47,9 @@ type Configuration struct {
 const (
 	outOfSyncThreshold  uint32 = 3 // see notSynced
 	numGossipSyncLayers uint32 = 2 // see gossipSync
+
+	// the max amount of layer delays syncer can tolerate before it tries to validate a layer.
+	maxHareDelayLayers uint32 = 10
 )
 
 type syncState uint32
@@ -459,6 +462,18 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 	return nil
 }
 
+// syncer should NOT validate a layer if hare protocol is already running for that layer.
+// however, hare can fail for various reasons, one of which is failure to fetch blocks for the hare output.
+// maxHareDelayLayers is used to safeguard such scenario and make sure layer data is synced and validated.
+func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
+	lag := s.mesh.LatestLayer().Sub(layerID.Uint32())
+	if s.patrol.IsHareInCharge(layerID) && lag.Value < maxHareDelayLayers {
+		s.logger.With().Debug("skip validating layer", layerID)
+		return false
+	}
+	return true
+}
+
 // start a dedicated process to validate layers one by one.
 func (s *Syncer) startValidating(ctx context.Context, run uint64, queue chan *types.Layer, done chan struct{}) {
 	logger := s.logger.WithContext(ctx).WithName("validation")
@@ -471,7 +486,7 @@ func (s *Syncer) startValidating(ctx context.Context, run uint64, queue chan *ty
 		if s.isClosed() {
 			return
 		}
-		if !s.patrol.IsHareInCharge(layer.Index()) {
+		if s.shouldValidate(layer.Index()) {
 			s.validateLayer(ctx, layer)
 		}
 	}
