@@ -42,7 +42,7 @@ func (s *JSONHTTPServer) Close() error {
 func (s *JSONHTTPServer) StartService(
 	ctx context.Context,
 	startDebugService bool,
-	startGatewayService bool,
+	gwservice gw.GatewayServiceServer,
 	startGlobalStateService bool,
 	startMeshService bool,
 	startNodeService bool,
@@ -56,7 +56,7 @@ func (s *JSONHTTPServer) StartService(
 		ctx,
 		started,
 		startDebugService,
-		startGatewayService,
+		gwservice,
 		startGlobalStateService,
 		startMeshService,
 		startNodeService,
@@ -70,7 +70,7 @@ func (s *JSONHTTPServer) startInternal(
 	ctx context.Context,
 	started chan<- struct{},
 	startDebugService bool,
-	startGatewayService bool,
+	gwservice gw.GatewayServiceServer,
 	startGlobalStateService bool,
 	startMeshService bool,
 	startNodeService bool,
@@ -89,8 +89,8 @@ func (s *JSONHTTPServer) startInternal(
 
 	// register each individual, enabled service
 	serviceCount := 0
-	if startGatewayService {
-		if err := gw.RegisterGatewayServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
+	if gwservice != nil {
+		if err := gw.RegisterGatewayServiceHandlerServer(ctx, mux, gwservice); err != nil {
 			log.Error("error registering GatewayService with grpc gateway", err)
 		} else {
 			serviceCount++

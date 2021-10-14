@@ -76,12 +76,13 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 		defer pprof.Close()
 	}
 	svc := grpcserver.NewServerWithInterface(app.Config.API.GrpcServerPort, app.Config.API.GrpcServerInterface)
-	grpcserver.NewGatewayService(host).RegisterService(svc)
+	gwsvc := grpcserver.NewGatewayService(host)
+	gwsvc.RegisterService(svc)
 	svc.Start()
 	defer svc.Close()
 
 	jsonSvc := grpcserver.NewJSONHTTPServer(app.Config.API.JSONServerPort, app.Config.API.GrpcServerPort)
-	jsonSvc.StartService(cmdp.Ctx, false, true, false, false, false, false, false)
+	jsonSvc.StartService(cmdp.Ctx, false, gwsvc, false, false, false, false, false)
 	defer jsonSvc.Close()
 
 	<-cmdp.Ctx.Done()

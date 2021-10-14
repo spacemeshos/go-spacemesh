@@ -888,7 +888,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		app.jsonAPIService.StartService(
 			ctx,
 			apiConf.StartDebugService,
-			apiConf.StartGatewayService,
+			grpcserver.NewGatewayService(app.host),
 			apiConf.StartGlobalStateService,
 			apiConf.StartMeshService,
 			apiConf.StartNodeService,
