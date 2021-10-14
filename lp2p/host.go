@@ -58,6 +58,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	if err != nil {
 		return nil, err
 	}
+	lp2plog.SetPrimaryCore(logger.Core())
 
 	cm := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, cfg.GracePeersShutdown)
 	for _, p := range cfg.Bootnodes {
@@ -67,6 +68,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 		}
 		cm.Protect(addr.ID, "bootstrap")
 	}
+
 	h, err := libp2p.New(ctx,
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
@@ -89,7 +91,6 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	if err != nil {
 		return nil, err
 	}
-	lp2plog.SetPrimaryCore(logger.Core())
 
 	logger.With().Info("local node identity",
 		log.String("key", base58.Encode(pub)),
