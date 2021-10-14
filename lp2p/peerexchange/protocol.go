@@ -77,7 +77,6 @@ func (p *peerExchange) handler(stream network.Stream) {
 			logger.Error("failed to parse created address", log.String("address", raw), log.Err(err))
 			return
 		}
-		fmt.Println(raw)
 		p.book.AddAddress(info, info)
 	}
 	results := p.book.AddressCache()
