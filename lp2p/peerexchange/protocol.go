@@ -27,15 +27,17 @@ const (
 type peerExchange struct {
 	h      host.Host
 	book   *addrBook
+	listen uint16
 	logger log.Log
 }
 
 // newPeerExchange is a constructor for a protocol protocol provider.
-func newPeerExchange(h host.Host, rt *addrBook, log log.Log) *peerExchange {
+func newPeerExchange(h host.Host, rt *addrBook, listen uint16, log log.Log) *peerExchange {
 	ga := &peerExchange{
 		h:      h,
 		book:   rt,
 		logger: log,
+		listen: listen,
 	}
 	h.SetStreamHandler(protocol.ID(protocolName), ga.handler)
 	return ga
@@ -47,15 +49,33 @@ func (p *peerExchange) handler(stream network.Stream) {
 	logger := p.logger.WithFields(log.String("type", "getaddresses"),
 		log.String("from", stream.Conn().RemotePeer().Pretty())).With()
 
-	var raw string
-	if _, err := codec.DecodeFrom(stream, &raw); err != nil {
+	var port uint16
+	if _, err := codec.DecodeFrom(stream, &port); err != nil {
 		logger.Warning("failed to decode request into address", log.Err(err))
 		return
 	}
-	logger.Debug("got request", log.String("address", raw))
-	info, err := parseAddrInfo(raw)
-	if err == nil {
-		// TODO(dshulyak) compare ip address
+	logger.Debug("got request", log.Uint16("listen-port", port))
+	if port != 0 {
+		ip, err := manet.ToIP(stream.Conn().RemoteMultiaddr())
+		if err != nil {
+			logger.Warning("failed to recover ip from the connection", log.Err(err))
+			return
+		}
+		ma, err := manet.FromNetAddr(&net.TCPAddr{
+			IP:   ip,
+			Port: int(port),
+		})
+		if err != nil {
+			logger.Error("failed to parse netaddr", log.Err(err))
+			return
+		}
+		raw := fmt.Sprintf("%s/p2p/%s", ma, stream.Conn().RemotePeer())
+		info, err := parseAddrInfo(raw)
+		if err != nil {
+			logger.Error("failed to parse created address", log.String("address", raw), log.Err(err))
+			return
+		}
+		fmt.Println(raw)
 		p.book.AddAddress(info, info)
 	}
 	results := p.book.AddressCache()
@@ -75,7 +95,7 @@ func (p *peerExchange) handler(stream network.Stream) {
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
 	defer stream.SetDeadline(time.Time{})
 	wr := bufio.NewWriter(stream)
-	_, err = codec.EncodeTo(wr, response)
+	_, err := codec.EncodeTo(wr, response)
 	if err == nil {
 		err = wr.Flush()
 	}
@@ -101,15 +121,9 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, e
 	}
 	defer stream.Close()
 
-	info, err := BestHostAddress(p.h)
-	if err != nil {
-		logger.Error("failed to send request", log.Err(err))
-		return nil, nil
-	}
-
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
 	defer stream.SetDeadline(time.Time{})
-	if _, err := codec.EncodeTo(stream, info.RawAddr); err != nil {
+	if _, err := codec.EncodeTo(stream, p.listen); err != nil {
 		return nil, fmt.Errorf("failed to send GetAddress request: %w", err)
 	}
 

@@ -66,15 +66,15 @@ func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== P2P Flags ========================== **/
 
-	cmd.PersistentFlags().StringVar(&config.P2P.Listen, "p2p-listen",
+	cmd.PersistentFlags().StringVar(&config.P2P.Listen, "listen",
 		config.P2P.Listen, "address for listening")
-	cmd.PersistentFlags().BoolVar(&config.P2P.Flood, "p2p-flood",
+	cmd.PersistentFlags().BoolVar(&config.P2P.Flood, "flood",
 		config.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic reqiurements)")
-	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "p2p-network-id",
+	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "network-id to participate int")
-	cmd.PersistentFlags().IntVar(&config.P2P.LowPeers, "p2p-low-peers",
+	cmd.PersistentFlags().IntVar(&config.P2P.LowPeers, "low-peers",
 		config.P2P.LowPeers, "low watermark for the number of connections")
-	cmd.PersistentFlags().IntVar(&config.P2P.HighPeers, "p2p-high-peers",
+	cmd.PersistentFlags().IntVar(&config.P2P.HighPeers, "high-peers",
 		config.P2P.HighPeers,
 		"high watermark for the number of connections. once reached connections are pruned until low watermark remains")
 	cmd.PersistentFlags().IntVar(&config.P2P.TargetOutbound, "target-outbound",

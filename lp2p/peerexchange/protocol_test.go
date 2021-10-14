@@ -20,14 +20,16 @@ func TestDiscovery_LearnAddress(t *testing.T) {
 	for _, h := range mesh.Hosts() {
 		require.NoError(t, err)
 		book := newAddrBook(Config{}, logger)
-		protocols = append(protocols, newPeerExchange(h, book, logger))
+		port, err := portFromAddress(h)
+		require.NoError(t, err)
+		protocols = append(protocols, newPeerExchange(h, book, port, logger))
 	}
 	for _, proto := range protocols {
 		for _, proto2 := range protocols {
 			if proto.h.ID() != proto2.h.ID() {
 				_, err := proto.Request(context.TODO(), proto2.h.ID())
 				require.NoError(t, err)
-				best, err := BestHostAddress(proto.h)
+				best, err := bestHostAddress(proto.h)
 				require.NoError(t, err)
 				found := proto2.book.Lookup(proto.h.ID())
 				require.Equal(t, best, found)

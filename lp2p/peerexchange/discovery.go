@@ -3,10 +3,10 @@ package peerexchange
 import (
 	"context"
 	"fmt"
+	"math"
 	"net"
+	"strconv"
 
-	"github.com/libp2p/go-eventbus"
-	"github.com/libp2p/go-libp2p-core/event"
 	"github.com/libp2p/go-libp2p-core/host"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
@@ -40,32 +40,6 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		cancel: cancel,
 		book:   newAddrBook(config, logger),
 	}
-	sub, err := h.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated), eventbus.BufSize(4))
-	if err != nil {
-		return nil, fmt.Errorf("failed to subscribe to eventbus: %w", err)
-	}
-	d.eg.Go(func() error {
-		defer sub.Close()
-		tryBest := func() {
-			best, err := BestHostAddress(h)
-			if err != nil {
-				logger.With().Warning("failed to select best address from host", log.Err(err))
-				return
-			}
-			if IsRoutable(best.IP) {
-				d.book.AddAddress(best, best)
-			}
-		}
-		tryBest()
-		for {
-			select {
-			case <-sub.Out():
-				tryBest()
-			case <-ctx.Done():
-				return ctx.Err()
-			}
-		}
-	})
 	d.eg.Go(func() error {
 		d.book.Persist(ctx)
 		return ctx.Err()
@@ -80,13 +54,16 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		bootnodes = append(bootnodes, info)
 	}
 
-	best, err := BestHostAddress(h)
+	best, err := bestHostAddress(h)
 	if err != nil {
 		return nil, err
 	}
 	d.book.AddAddresses(bootnodes, best)
-
-	d.crawl = newCrawler(h, d.book, newPeerExchange(h, d.book, logger), logger)
+	port, err := portFromAddress(h)
+	if err != nil {
+		return nil, err
+	}
+	d.crawl = newCrawler(h, d.book, newPeerExchange(h, d.book, port, logger), logger)
 	return d, nil
 }
 
@@ -101,8 +78,8 @@ func (d *Discovery) Bootstrap(ctx context.Context) error {
 	return d.crawl.Bootstrap(ctx)
 }
 
-// BestHostAddress returns routable address if exists, otherwise it returns first available address.
-func BestHostAddress(h host.Host) (*addrInfo, error) {
+// bestHostAddress returns routable address if exists, otherwise it returns first available address.
+func bestHostAddress(h host.Host) (*addrInfo, error) {
 	var (
 		infos = make([]*addrInfo, 0, len(h.Addrs()))
 		best  *addrInfo
@@ -137,4 +114,26 @@ func BestHostAddress(h host.Host) (*addrInfo, error) {
 		}
 	}
 	return best, nil
+}
+
+func portFromAddress(h host.Host) (uint16, error) {
+	for _, addr := range h.Addrs() {
+		netaddr, err := manet.ToNetAddr(addr)
+		if err != nil {
+			return 0, fmt.Errorf("failed to case addr %s to netaddr: %w", addr, err)
+		}
+		_, portStr, err := net.SplitHostPort(netaddr.String())
+		if err != nil {
+			return 0, fmt.Errorf("parsed netaddr %s is not in expected format: %w", netaddr, err)
+		}
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			return 0, fmt.Errorf("failed to convert port %s to int", portStr)
+		}
+		if int(uint16(port)) < port {
+			return 0, fmt.Errorf("port %d cant fit into uint16 %d", port, math.MaxUint16)
+		}
+		return uint16(port), nil
+	}
+	return 0, nil
 }
