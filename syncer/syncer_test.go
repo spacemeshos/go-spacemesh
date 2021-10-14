@@ -354,6 +354,88 @@ func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
 	feedLayerResult(lyr, lyr, mf, mm)
 	wg.Wait()
 
+	assert.True(t, syncer.ListenToGossip())
+	assert.True(t, syncer.IsSynced(context.TODO()))
+	syncer.Close()
+}
+
+func TestSynchronize_StaySyncedUponFailure(t *testing.T) {
+	lg := logtest.New(t)
+	ticker := newMockLayerTicker()
+	mf := newMockFetcher()
+	mm := newMemMesh(lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer.Start(context.TODO())
+
+	// brings the node to synced state
+	ticker.advanceToLayer(types.NewLayerID(1))
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		assert.True(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+	wg.Wait()
+
+	assert.True(t, syncer.ListenToGossip())
+	assert.True(t, syncer.IsSynced(context.TODO()))
+
+	lyr := types.GetEffectiveGenesis().Add(1)
+	// now make the second synchronize fail by causing getLayerFromPeers to return an error
+	mf.getLayerResultChan(lyr) <- layerfetcher.LayerPromiseResult{
+		Layer: lyr,
+		Err:   errors.New("something baaahhhhhhd"),
+	}
+	ticker.advanceToLayer(lyr.Add(1))
+	wg.Add(1)
+	go func() {
+		assert.False(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+	wg.Wait()
+
+	assert.True(t, syncer.ListenToGossip())
+	assert.True(t, syncer.IsSynced(context.TODO()))
+	syncer.Close()
+}
+
+func TestSynchronize_BecomeNotSyncedUponFailureIfNoGossip(t *testing.T) {
+	lg := logtest.New(t)
+	ticker := newMockLayerTicker()
+	mf := newMockFetcher()
+	mm := newMemMesh(lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), conf, ticker, mm, mf, lg)
+	syncer.Start(context.TODO())
+
+	// brings the node to synced state
+	ticker.advanceToLayer(types.NewLayerID(1))
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		assert.True(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+	wg.Wait()
+
+	assert.True(t, syncer.ListenToGossip())
+	assert.True(t, syncer.IsSynced(context.TODO()))
+
+	gLyr := types.GetEffectiveGenesis()
+	// in test the latest layer is always genesis layer if we don't add blocks
+	lyr := gLyr.Add(outOfSyncThreshold)
+	// now make the second synchronize fail by causing getLayerFromPeers to return an error
+	mf.getLayerResultChan(gLyr.Add(1)) <- layerfetcher.LayerPromiseResult{
+		Layer: lyr,
+		Err:   errors.New("something baaahhhhhhd"),
+	}
+	ticker.advanceToLayer(lyr.Add(1))
+	wg.Add(1)
+	go func() {
+		assert.False(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+	wg.Wait()
+
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 	syncer.Close()

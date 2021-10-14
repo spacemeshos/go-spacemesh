@@ -324,6 +324,17 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	return true
 }
 
+func isTooFarBehind(current, latest types.LayerID, logger log.Logger) bool {
+	if current.After(latest) && current.Difference(latest) >= outOfSyncThreshold {
+		logger.With().Info("node is too far behind",
+			log.FieldNamed("current", current),
+			log.FieldNamed("latest", latest),
+			log.Uint32("behind_threshold", outOfSyncThreshold))
+		return true
+	}
+	return false
+}
+
 func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	current := s.ticker.GetCurrentLayer()
 	if current.Uint32() <= 1 {
@@ -331,29 +342,34 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 		return
 	}
 	latest := s.mesh.LatestLayer()
-	if current.After(latest) && current.Difference(latest) >= outOfSyncThreshold {
-		s.logger.WithContext(ctx).With().Info("node is too far behind",
-			log.FieldNamed("current", current),
-			log.FieldNamed("latest", latest),
-			log.Uint32("behind_threshold", outOfSyncThreshold))
+	if isTooFarBehind(current, latest, s.logger.WithContext(ctx)) {
 		s.setSyncState(ctx, notSynced)
 	}
 }
 
 func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
-	if !success {
-		s.setSyncState(ctx, notSynced)
-		return
-	}
 	currSyncState := s.getSyncState()
 	current := s.ticker.GetCurrentLayer()
-	// if we have gossip-synced to the target synced layer, we are ready to participate in consensus
-	if currSyncState == gossipSync && !s.getTargetSyncedLayer().After(current) {
-		s.setSyncState(ctx, synced)
-	} else if currSyncState == notSynced {
-		// wait till s.ticker.GetCurrentLayer() + numGossipSyncLayers to participate in consensus
-		s.setSyncState(ctx, gossipSync)
-		s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
+
+	switch currSyncState {
+	case synced:
+		// while synced, gossip+hare+tortoise will be in charge of advancing processed/verified layers.
+		// syncer is just auxiliary that fetches data in case of a temporary network outage.
+		latest := s.mesh.LatestLayer()
+		if !success && isTooFarBehind(current, latest, s.logger.WithContext(ctx)) {
+			s.setSyncState(ctx, notSynced)
+		}
+	case gossipSync:
+		// if we have gossip-synced to the target synced layer, we are ready to participate in consensus
+		if success && !s.getTargetSyncedLayer().After(current) {
+			s.setSyncState(ctx, synced)
+		}
+	case notSynced:
+		if success {
+			// wait till s.ticker.GetCurrentLayer() + numGossipSyncLayers to participate in consensus
+			s.setSyncState(ctx, gossipSync)
+			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
+		}
 	}
 }
 
