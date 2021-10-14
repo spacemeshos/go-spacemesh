@@ -193,11 +193,7 @@ def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
         # grpc expects binary data as base64
         # it doesn't matter what the data contains as long as each is unique
         data = '{"data":"%s"}' % base64.b64encode(i.to_bytes(1, byteorder='big')).decode('utf-8')
-        retries = 3
-        out = ""
-        while retries > 0 and not out:
-            out = api_call(client_ip, data, api, testconfig['namespace'])
-            retries -= 1
+        out = api_call(client_ip, data, api, testconfig['namespace'])
         assert "{'status': {}}" in out
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
@@ -248,11 +244,7 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
         msg = "".join(choice(ascii_lowercase) for _ in range(msg_size))
         # TODO in the future this may be changed for a more generic function
         data = '{{"{msg_field}": "{msg}"}}'.format(msg_field=msg_field, msg=msg)
-        retries = 3
-        out = ""
-        while retries > 0 and not out:
-            out = api_call(client_ip, data, api, testconfig['namespace'])
-            retries -= 1
+        out = api_call(client_ip, data, api, testconfig['namespace'])
         ass_err = f"test_invalid_msg: expected \"{expected_ret}\" and got \"{out}\""
         assert expected_ret in out, ass_err
 
@@ -270,7 +262,7 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
                                expected=total_expected_gossip)
 
     # run some additional queries to make debugging easier
-    if total_expected_gossip != len(results):
+    if total_expected_gossip > len(results):
         for pod in setup_clients.pods:
             # query_fields = headers.copy()
             # query_fields['kubernetes.pod_name'] = pod['name']
