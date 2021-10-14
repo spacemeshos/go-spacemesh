@@ -194,7 +194,7 @@ def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
         # it doesn't matter what the data contains as long as each is unique
         data = '{"data":"%s"}' % base64.b64encode(i.to_bytes(1, byteorder='big')).decode('utf-8')
         out = api_call(client_ip, data, api, testconfig['namespace'])
-        assert "{'status': {}}" in out
+        assert "{'status': {'code': 0, 'message': '', 'details': []}}" in out
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
@@ -215,7 +215,7 @@ def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
 
 
 def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=20, num_of_msg=100,
-              expected_ret="{'status': {}}", msg_field="data"):
+              expected_ret="{'status': {'code': 0, 'message': '', 'details': []}}", msg_field="data"):
     """
     sends a protocol message to a random node and asserts its propagation
 

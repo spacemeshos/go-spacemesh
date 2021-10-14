@@ -32,8 +32,8 @@ def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
                          command=["curl", "-s", "--request", "POST", "--data", data,
                                   f"http://{client_ip}:{port}/{api}"],
                          stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
-        except ApiException as e:
-            print(f"got an ApiException while streaming: {e}")
+        except Exception as e:
+            print(f"got an Exception while streaming: {e}")
             print(f"sleeping for {interval} seconds before trying again")
             time.sleep(interval)
             retry -= 1
