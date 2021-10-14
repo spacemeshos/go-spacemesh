@@ -13,6 +13,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/protocol"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
+	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -25,9 +26,10 @@ const (
 )
 
 type peerExchange struct {
+	listen *atomic.Uint32
+
 	h      host.Host
 	book   *addrBook
-	listen uint16
 	logger log.Log
 }
 
@@ -37,7 +39,7 @@ func newPeerExchange(h host.Host, rt *addrBook, listen uint16, log log.Log) *pee
 		h:      h,
 		book:   rt,
 		logger: log,
-		listen: listen,
+		listen: atomic.NewUint32(uint32(listen)),
 	}
 	h.SetStreamHandler(protocol.ID(protocolName), ga.handler)
 	return ga
@@ -108,6 +110,11 @@ func (p *peerExchange) handler(stream network.Stream) {
 		log.Duration("time_to_make", time.Since(t)))
 }
 
+// UpdateExternalPort updates port that is used for advertisement.
+func (p *peerExchange) UpdateExternalPort(port uint16) {
+	p.listen.Store(uint32(port))
+}
+
 // Request addresses from a remote node, it will block and return the results returned from the node.
 func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, error) {
 	logger := p.logger.WithContext(ctx).WithFields(
@@ -123,7 +130,7 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, e
 
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
 	defer stream.SetDeadline(time.Time{})
-	if _, err := codec.EncodeTo(stream, p.listen); err != nil {
+	if _, err := codec.EncodeTo(stream, uint16(p.listen.Load())); err != nil {
 		return nil, fmt.Errorf("failed to send GetAddress request: %w", err)
 	}
 

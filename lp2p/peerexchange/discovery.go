@@ -7,6 +7,8 @@ import (
 	"net"
 	"strconv"
 
+	"github.com/libp2p/go-eventbus"
+	"github.com/libp2p/go-libp2p-core/event"
 	"github.com/libp2p/go-libp2p-core/host"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
@@ -63,7 +65,32 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 	if err != nil {
 		return nil, err
 	}
-	d.crawl = newCrawler(h, d.book, newPeerExchange(h, d.book, port, logger), logger)
+	protocol := newPeerExchange(h, d.book, port, logger)
+	d.crawl = newCrawler(h, d.book, protocol, logger)
+	sub, err := h.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated), eventbus.BufSize(4))
+	if err != nil {
+		return nil, fmt.Errorf("failed to subscribe to eventbus: %w", err)
+	}
+	d.eg.Go(func() error {
+		defer sub.Close()
+		tryBest := func() {
+			port, err := portFromAddress(h)
+			if err != nil {
+				logger.Debug("failed to find port from host", log.Err(err))
+				return
+			}
+			protocol.UpdateExternalPort(port)
+		}
+		tryBest()
+		for {
+			select {
+			case <-sub.Out():
+				tryBest()
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	})
 	return d, nil
 }
 
