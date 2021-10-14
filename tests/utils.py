@@ -30,6 +30,10 @@ def api_call(client_ip, data, api, namespace, port="9093", retry=3, interval=1):
         try:
             res = stream(CoreV1ApiClient().connect_post_namespaced_pod_exec, name="curl", namespace=namespace,
                          command=["curl", "-s", "--request", "POST", "--data", data,
+                                  "--retry", 5,
+                                  "--retry-all-errors",
+                                  "--retry-delay", 0,
+                                  "--connection-timeout", 10,
                                   f"http://{client_ip}:{port}/{api}"],
                          stderr=True, stdin=False, stdout=True, tty=False, _request_timeout=90)
         except ApiException as e:
