@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/btcsuite/btcutil/base58"
+	lp2plog "github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	connmgr "github.com/libp2p/go-libp2p-connmgr"
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -88,6 +89,8 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	if err != nil {
 		return nil, err
 	}
+	lp2plog.SetPrimaryCore(logger.Core())
+
 	logger.With().Info("local node identity",
 		log.String("key", base58.Encode(pub)),
 		log.String("identity", h.ID().String()),
