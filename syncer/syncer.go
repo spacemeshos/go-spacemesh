@@ -18,6 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./syncer.go
+
 type layerTicker interface {
 	GetCurrentLayer() types.LayerID
 	LayerToTime(types.LayerID) time.Time
@@ -26,6 +28,14 @@ type layerTicker interface {
 type layerFetcher interface {
 	PollLayerContent(ctx context.Context, layerID types.LayerID) chan layerfetcher.LayerPromiseResult
 	GetEpochATXs(ctx context.Context, id types.EpochID) error
+}
+
+type layerPatrol interface {
+	IsHareInCharge(types.LayerID) bool
+}
+
+type layerValidator interface {
+	ValidateLayer(context.Context, *types.Layer)
 }
 
 // Configuration is the config params for syncer.
@@ -71,11 +81,13 @@ func (s syncState) String() string {
 type Syncer struct {
 	logger log.Log
 
-	conf     Configuration
-	ticker   layerTicker
-	mesh     *mesh.Mesh
-	fetcher  layerFetcher
-	syncOnce sync.Once
+	conf      Configuration
+	ticker    layerTicker
+	mesh      *mesh.Mesh
+	validator layerValidator
+	fetcher   layerFetcher
+	patrol    layerPatrol
+	syncOnce  sync.Once
 	// access via atomic.[Load|Store]Uint32
 	syncState syncState
 	// access via atomic.[Load|Store]Uint32
@@ -99,14 +111,16 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new Syncer instance.
-func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, logger log.Log) *Syncer {
+func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
 	return &Syncer{
 		logger:            logger,
 		conf:              conf,
 		ticker:            ticker,
 		mesh:              mesh,
+		validator:         mesh,
 		fetcher:           fetcher,
+		patrol:            patrol,
 		syncState:         notSynced,
 		syncTimer:         time.NewTicker(conf.SyncInterval),
 		targetSyncedLayer: unsafe.Pointer(&types.LayerID{}),
@@ -280,7 +294,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	s.setStateBeforeSync(ctx)
 	// start a dedicated process for validation.
-	// do not use a unbuffered channel for vQueue. we don't want it to block if the receiver isn't ready. i.e.
+	// do not use an unbuffered channel for vQueue. we don't want it to block if the receiver isn't ready. i.e.
 	// if validation for the last layer is still running
 	vQueue := make(chan *types.Layer, s.ticker.GetCurrentLayer().Uint32())
 	vDone := make(chan struct{})
@@ -457,7 +471,9 @@ func (s *Syncer) startValidating(ctx context.Context, run uint64, queue chan *ty
 		if s.isClosed() {
 			return
 		}
-		s.validateLayer(ctx, layer)
+		if !s.patrol.IsHareInCharge(layer.Index()) {
+			s.validateLayer(ctx, layer)
+		}
 	}
 }
 
@@ -475,5 +491,5 @@ func (s *Syncer) validateLayer(ctx context.Context, layer *types.Layer) {
 	//   It should be sufficient to call GetLayer (above), and maybe, to queue a request to tortoise to analyze this
 	//   layer (without waiting for this to finish -- it should be able to run async).
 	//   See https://github.com/spacemeshos/go-spacemesh/issues/2415
-	s.mesh.ValidateLayer(ctx, layer)
+	s.validator.ValidateLayer(ctx, layer)
 }
