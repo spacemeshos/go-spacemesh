@@ -141,7 +141,7 @@ func DefaultConfig() Config {
 		MaxRetriesForPeer:    2,
 		BatchSize:            20,
 		RequestTimeout:       10,
-		MaxRetriesForRequest: 20,
+		MaxRetriesForRequest: 100,
 	}
 }
 

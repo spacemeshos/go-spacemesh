@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/monitoring"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -160,7 +161,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	//app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
 	lt := make(timesync.LayerTimer)
 
-	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
+	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
 	log.Info("starting hare service")
 	app.ha = hareI
 	if err = app.ha.Start(cmdp.Ctx); err != nil {

@@ -38,6 +38,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -625,11 +626,12 @@ func (app *App) initServices(ctx context.Context,
 	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, swarm, remoteFetchService, msh, app.addLogger(LayerFetcher, lg))
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
 
+	patrol := layerpatrol.New()
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
 		AlwaysListen: app.Config.AlwaysListen,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	tBeacon.SetSyncState(newSyncer)
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxDB, tBeacon, vrfSigner, nodeID, newSyncer.ListenToGossip, app.addLogger(BlockOracle, lg))
@@ -647,7 +649,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	gossipListener := service.NewListener(swarm, layerFetch, newSyncer.ListenToGossip, app.addLogger(GossipListener, lg))
-	rabbit := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, newSyncer, msh, hOracle, idStore, clock, lg)
+	rabbit := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, patrol, newSyncer, msh, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
@@ -769,6 +771,7 @@ func (app *App) HareFactory(
 	swarm service.Service,
 	sgn hare.Signer,
 	nodeID types.NodeID,
+	patrol *layerpatrol.LayerPatrol,
 	syncer *syncer.Syncer,
 	msh *mesh.Mesh,
 	hOracle hare.Rolacle,
@@ -790,6 +793,7 @@ func (app *App) HareFactory(
 		syncer.IsSynced,
 		msh,
 		hOracle,
+		patrol,
 		uint16(app.Config.LayersPerEpoch),
 		idStore,
 		hOracle,
