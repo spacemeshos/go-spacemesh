@@ -32,7 +32,7 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 		if bootnode == nil {
 			bootnode = best
 		} else {
-			cfg.BootstrapNodes = append(cfg.BootstrapNodes, bootnode.RawAddr)
+			cfg.Bootnodes = append(cfg.Bootnodes, bootnode.RawAddr)
 		}
 		instance, err := New(logger, h, cfg)
 		require.NoError(t, err)

@@ -2,7 +2,7 @@ package bootstrap
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/event"
@@ -13,7 +13,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/lp2p/handshake"
-	"github.com/spacemeshos/go-spacemesh/lp2p/peerexchange"
 )
 
 // EventSpacemeshPeer is emitted when peer is connected after handshake or disconnected.
@@ -25,43 +24,39 @@ type EventSpacemeshPeer struct {
 
 // Config for bootstrap.
 type Config struct {
-	DataPath       string
-	Bootstrap      []string
 	TargetOutbound int
 	Timeout        time.Duration
 }
 
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./bootstrap.go
+
+// Discovery is an interface that actively searches for peers when Bootstrap is called.
+type Discovery interface {
+	Bootstrap(context.Context) error
+}
+
 // NewBootstrap create Bootstrap instance.
-func NewBootstrap(logger log.Log, cfg Config, h host.Host) (*Bootstrap, error) {
-	discovery, err := peerexchange.New(logger, h, peerexchange.Config{
-		DataDir:        cfg.DataPath,
-		BootstrapNodes: cfg.Bootstrap,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize peerexchange %w", err)
+func NewBootstrap(logger log.Log, cfg Config, h host.Host, discovery Discovery) (*Bootstrap, error) {
+	// TODO(dshulyak) refactor to option and merge Bootstrap with Peers to avoid unnecessary event
+	ctx, cancel := context.WithCancel(context.Background())
+	b := &Bootstrap{
+		cancel:    cancel,
+		logger:    logger,
+		cfg:       cfg,
+		host:      h,
+		discovery: discovery,
 	}
 	emitter, err := h.EventBus().Emitter(new(EventSpacemeshPeer))
 	if err != nil {
-		panic(err)
+		logger.With().Panic("failed to create emitter for EventSpacemeshPeer", log.Err(err))
+	}
+	sub, err := h.EventBus().Subscribe(new(handshake.EventHandshakeComplete))
+	if err != nil {
+		logger.With().Panic("failed to subscribe for events", log.Err(err))
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	b := &Bootstrap{
-		ctx:              ctx,
-		cancel:           cancel,
-		logger:           logger,
-		target:           cfg.TargetOutbound,
-		bootstrapTimeout: cfg.Timeout,
-		host:             h,
-		discovery:        discovery,
-		emitter:          emitter,
-	}
-	sub, err := b.host.EventBus().Subscribe(new(handshake.EventHandshakeComplete))
-	if err != nil {
-		b.logger.With().Panic("failed to subscribe for events", log.Err(err))
-	}
 	b.eg.Go(func() error {
-		return b.run(b.ctx, sub)
+		return b.run(ctx, sub, emitter)
 	})
 	return b, nil
 }
@@ -69,16 +64,11 @@ func NewBootstrap(logger log.Log, cfg Config, h host.Host) (*Bootstrap, error) {
 // Bootstrap enforces required number of outbound connections.
 type Bootstrap struct {
 	logger log.Log
-
-	target           int
-	bootstrapTimeout time.Duration
+	cfg    Config
 
 	host      host.Host
-	discovery *peerexchange.Discovery
+	discovery Discovery
 
-	emitter event.Emitter
-
-	ctx    context.Context
 	cancel context.CancelFunc
 	eg     errgroup.Group
 }
@@ -89,8 +79,8 @@ func (b *Bootstrap) Stop() error {
 	return b.eg.Wait()
 }
 
-func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
-	defer b.emitter.Close()
+func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter event.Emitter) error {
+	defer emitter.Close()
 	defer sub.Close()
 
 	disconnected := make(chan peer.ID, 10)
@@ -110,11 +100,11 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 		discoveryBootstrap bool
 		peers              = map[peer.ID]network.Direction{}
 		limit              = make(chan struct{}, 1)
-		ticker             = time.NewTicker(b.bootstrapTimeout)
+		ticker             = time.NewTicker(b.cfg.Timeout)
 	)
 	defer ticker.Stop()
 
-	bootctx, cancel := context.WithTimeout(ctx, b.bootstrapTimeout)
+	bootctx, cancel := context.WithTimeout(ctx, b.cfg.Timeout)
 	b.triggerBootstrap(bootctx, limit, len(peers), outbound)
 	for {
 		select {
@@ -132,7 +122,7 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 				// peer that is tagged as outbound will have higher weight then inbound peers.
 				// this is taken into account when conn manager high watermark is reached and subset of peers will be pruned.
 				b.host.ConnManager().TagPeer(hs.PID, "outbound", 100)
-				if outbound >= b.target {
+				if outbound >= b.cfg.TargetOutbound {
 					// cancel bootctx to terminate bootstrap
 					cancel()
 				}
@@ -143,12 +133,12 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 				log.Int("total", len(peers)),
 				log.Int("outbound-total", outbound),
 			)
-			b.emitter.Emit(EventSpacemeshPeer{
+			emitter.Emit(EventSpacemeshPeer{
 				PID:           hs.PID,
 				Direction:     hs.Direction,
 				Connectedness: network.Connected,
 			})
-			if len(peers) >= b.target && !discoveryBootstrap {
+			if len(peers) >= b.cfg.TargetOutbound && !discoveryBootstrap {
 				// NOTE(dshulyak) this is a hack to support logic in tests that expects a message
 				// to be printed once
 				discoveryBootstrap = true
@@ -160,7 +150,7 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 				if peers[pid] == network.DirOutbound {
 					outbound--
 				}
-				b.emitter.Emit(EventSpacemeshPeer{
+				emitter.Emit(EventSpacemeshPeer{
 					PID:           pid,
 					Direction:     peers[pid],
 					Connectedness: network.NotConnected,
@@ -168,7 +158,7 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 				delete(peers, pid)
 			}
 		case <-ticker.C:
-			bootctx, cancel = context.WithTimeout(ctx, b.bootstrapTimeout)
+			bootctx, cancel = context.WithTimeout(ctx, b.cfg.Timeout)
 			b.triggerBootstrap(bootctx, limit, len(peers), outbound)
 		case <-ctx.Done():
 			cancel()
@@ -178,7 +168,7 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 }
 
 func (b *Bootstrap) triggerBootstrap(ctx context.Context, limit chan struct{}, total, outbound int) {
-	if outbound >= b.target {
+	if outbound >= b.cfg.TargetOutbound {
 		return
 	}
 	select {
@@ -187,14 +177,12 @@ func (b *Bootstrap) triggerBootstrap(ctx context.Context, limit chan struct{}, t
 		return
 	}
 	b.eg.Go(func() error {
-		defer func() {
-			<-limit
-		}()
-
-		if b.target > outbound {
-			b.discovery.Bootstrap(ctx)
+		err := b.discovery.Bootstrap(ctx)
+		<-limit
+		if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			return nil
 		}
-		return nil
+		return err
 	})
 	return
 }

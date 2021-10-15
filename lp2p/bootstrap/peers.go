@@ -13,10 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type Peer = peer.ID
-
 type waitPeersReq struct {
-	ch  chan []Peer
+	ch  chan []peer.ID
 	min int
 }
 
@@ -53,7 +51,7 @@ func NewPeers(h host.Host, opts ...Opt) *Peers {
 		exit:     make(chan struct{}),
 		requests: make(chan *waitPeersReq),
 	}
-	p.snapshot.Store(make([]Peer, 0, 20))
+	p.snapshot.Store(make([]peer.ID, 0, 20))
 	for _, opt := range opts {
 		opt(p)
 	}
@@ -85,21 +83,21 @@ func (p *Peers) Stop() {
 }
 
 // GetPeers returns a snapshot of the connected peers shuffled.
-func (p *Peers) GetPeers() []Peer {
-	peers, _ := p.snapshot.Load().([]Peer)
+func (p *Peers) GetPeers() []peer.ID {
+	peers, _ := p.snapshot.Load().([]peer.ID)
 	return peers
 }
 
 // PeerCount returns the number of connected peers.
 func (p *Peers) PeerCount() uint64 {
-	peers, _ := p.snapshot.Load().([]Peer)
+	peers, _ := p.snapshot.Load().([]peer.ID)
 	return uint64(len(peers))
 }
 
 // WaitPeers returns with atleast N peers or when context is terminated.
 // Nil slice is returned if Peers is closing.
-func (p *Peers) WaitPeers(ctx context.Context, n int) ([]Peer, error) {
-	req := waitPeersReq{min: n, ch: make(chan []Peer, 1)}
+func (p *Peers) WaitPeers(ctx context.Context, n int) ([]peer.ID, error) {
+	req := waitPeersReq{min: n, ch: make(chan []peer.ID, 1)}
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -132,7 +130,7 @@ func (p *Peers) Start() {
 
 func (p *Peers) listen(sub event.Subscription) {
 	var (
-		peerSet  = make(map[Peer]struct{})
+		peerSet  = make(map[peer.ID]struct{})
 		requests = map[*waitPeersReq]struct{}{}
 		isAdded  bool
 	)
@@ -164,12 +162,12 @@ func (p *Peers) listen(sub event.Subscription) {
 			}
 		case req := <-p.requests:
 			if len(peerSet) >= req.min {
-				req.ch <- p.snapshot.Load().([]Peer)
+				req.ch <- p.snapshot.Load().([]peer.ID)
 			} else {
 				requests[req] = struct{}{}
 			}
 		}
-		keys := make([]Peer, 0, len(peerSet))
+		keys := make([]peer.ID, 0, len(peerSet))
 		for k := range peerSet {
 			keys = append(keys, k)
 		}

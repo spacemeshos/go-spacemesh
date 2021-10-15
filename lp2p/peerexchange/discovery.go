@@ -19,8 +19,8 @@ import (
 
 // Config for Discovery.
 type Config struct {
-	BootstrapNodes []string
-	DataDir        string
+	Bootnodes []string
+	DataDir   string
 }
 
 // Discovery is struct that holds the protocol components, the protocol definition, the addr book data structure and more.
@@ -47,8 +47,8 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		return ctx.Err()
 	})
 
-	bootnodes := make([]*addrInfo, 0, len(config.BootstrapNodes))
-	for _, raw := range config.BootstrapNodes {
+	bootnodes := make([]*addrInfo, 0, len(config.Bootnodes))
+	for _, raw := range config.Bootnodes {
 		info, err := parseAddrInfo(raw)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse bootstrap node: %w", err)

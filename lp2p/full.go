@@ -2,12 +2,14 @@ package lp2p
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/libp2p/go-libp2p-core/host"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/lp2p/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/lp2p/handshake"
+	"github.com/spacemeshos/go-spacemesh/lp2p/peerexchange"
 	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 )
 
@@ -61,12 +63,17 @@ func Wrap(h host.Host, opts ...Opt) (*Host, error) {
 		return nil, err
 	}
 	fh.Peers = bootstrap.StartPeers(h, bootstrap.WithLog(fh.logger))
+	discovery, err := peerexchange.New(fh.logger, h, peerexchange.Config{
+		DataDir:   cfg.DataDir,
+		Bootnodes: cfg.Bootnodes,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize peerexchange discovery: %w", err)
+	}
 	fh.bootstrap, err = bootstrap.NewBootstrap(fh.logger, bootstrap.Config{
-		DataPath:       cfg.DataDir,
-		Bootstrap:      cfg.Bootnodes,
 		TargetOutbound: cfg.TargetOutbound,
 		Timeout:        cfg.BootstrapTimeout,
-	}, h)
+	}, h, discovery)
 	if err != nil {
 		return nil, err
 	}
