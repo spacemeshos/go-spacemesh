@@ -193,16 +193,16 @@ func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	b := &types.Block{}
 
 	err := s.blockSyntacticValidation(context.TODO(), b)
-	r.EqualError(err, errNoActiveSet.Error())
+	r.ErrorIs(err, errNoActiveSet)
 
 	b.ActiveSet = &[]types.ATXID{}
 	err = s.blockSyntacticValidation(context.TODO(), b)
-	r.EqualError(err, errZeroActiveSet.Error())
+	r.ErrorIs(err, errZeroActiveSet)
 
 	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
 	err = s.blockSyntacticValidation(context.TODO(), b)
-	r.EqualError(err, errDupTx.Error())
+	r.ErrorIs(err, errDupTx)
 }
 
 func mockForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {

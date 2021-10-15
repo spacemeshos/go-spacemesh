@@ -26,6 +26,7 @@ type validator interface {
 }
 
 type msgRPC struct {
+	Ctx   context.Context
 	Data  []byte
 	Error chan error
 }
@@ -141,7 +142,7 @@ func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pub
 	}
 	logger.With().Debug("assigned message priority, writing to priority queue",
 		log.Int("priority", int(priority)))
-	m := &msgRPC{Data: msg, Error: make(chan error, 1)}
+	m := &msgRPC{Data: msg, Error: make(chan error, 1), Ctx: ctx}
 	if err := b.queue.Write(priority, m); err != nil {
 		logger.With().Error("error writing inbound message to priority queue, dropping", log.Err(err))
 		return pubsub.ValidationIgnore
@@ -158,7 +159,7 @@ func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pub
 		return pubsub.ValidationIgnore
 	case err := <-m.Error:
 		if err != nil {
-			return pubsub.ValidationReject
+			return pubsub.ValidationIgnore
 		}
 	}
 	return pubsub.ValidationAccept
@@ -187,7 +188,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			}
 
 			// create an inner context object to handle this message
-			messageCtx := ctx
+			messageCtx := msg.Ctx
 
 			h := types.CalcMessageHash12(msg.Data, protoName)
 			msgLogger := logger.WithContext(messageCtx).WithFields(h)

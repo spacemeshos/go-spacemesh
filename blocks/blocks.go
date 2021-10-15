@@ -72,11 +72,9 @@ func NewBlockHandler(cfg Config, fetcher system.Fetcher, m mesh, v blockValidato
 
 // HandleBlock handles blocks from gossip
 func (bh *BlockHandler) HandleBlock(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
-	ctx = log.WithNewRequestID(ctx)
-
 	if err := bh.HandleBlockData(ctx, msg); err != nil {
 		bh.WithContext(ctx).With().Error("error handling block data", log.Err(err))
-		return pubsub.ValidationReject
+		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
 }

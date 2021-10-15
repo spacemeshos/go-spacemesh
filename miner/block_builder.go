@@ -355,19 +355,21 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					logger.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
-				bytes, err := types.InterfaceToBytes(blk)
-				if err != nil {
-					logger.With().Error("failed to serialize block", log.Err(err))
-					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot serialize block")
-					return
-				}
+				go func() {
+					bytes, err := types.InterfaceToBytes(blk)
+					if err != nil {
+						logger.With().Error("failed to serialize block", log.Err(err))
+						events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot serialize block")
+						return
+					}
 
-				// generate a new requestID for the new block message
-				blockCtx := log.WithNewRequestID(ctx, layerID, blk.ID())
-				if err = t.publisher.Publish(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
-					logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
-				}
-				events.ReportDoneCreatingBlock(true, layerID.Uint32(), "")
+					// generate a new requestID for the new block message
+					blockCtx := log.WithNewRequestID(ctx, layerID, blk.ID())
+					if err = t.publisher.Publish(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
+						logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
+					}
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "")
+				}()
 			}
 		}
 	}

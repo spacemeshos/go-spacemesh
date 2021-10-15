@@ -97,20 +97,20 @@ type LayerPromiseResult struct {
 
 // Logic is the struct containing components needed to follow layer fetching logic.
 type Logic struct {
-	log                         log.Log
-	fetcher                     fetch.Fetcher
-	atxsrv, blocksrv, beaconsrv *server.Server
-	host                        *lp2p.Host
-	mutex                       sync.Mutex
-	layerBlocksRes              map[types.LayerID]*layerResult
-	layerBlocksChs              map[types.LayerID][]chan LayerPromiseResult
-	poetProofs                  poetDB
-	atxs                        atxHandler
-	blockHandler                blockHandler
-	txs                         TxProcessor
-	layerDB                     layerDB
-	atxIds                      atxIDsDB
-	goldenATXID                 types.ATXID
+	log              log.Log
+	fetcher          fetch.Fetcher
+	atxsrv, blocksrv *server.Server
+	host             *lp2p.Host
+	mutex            sync.Mutex
+	layerBlocksRes   map[types.LayerID]*layerResult
+	layerBlocksChs   map[types.LayerID][]chan LayerPromiseResult
+	poetProofs       poetDB
+	atxs             atxHandler
+	blockHandler     blockHandler
+	txs              TxProcessor
+	layerDB          layerDB
+	atxIds           atxIDsDB
+	goldenATXID      types.ATXID
 }
 
 // Config defines configuration for layer fetching logic.
@@ -267,7 +267,9 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 		errFunc := func(err error) {
 			l.receiveLayerContent(ctx, layerID, peer, numPeers, nil, err)
 		}
-		l.blocksrv.Request(ctx, peer, layerID.Bytes(), receiveForPeerFunc, errFunc)
+		if err := l.blocksrv.Request(ctx, peer, layerID.Bytes(), receiveForPeerFunc, errFunc); err != nil {
+			errFunc(err)
+		}
 	}
 	return resChannel
 }
@@ -427,7 +429,9 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	if l.host.PeerCount() == 0 {
 		return errors.New("no peers")
 	}
-	l.atxsrv.Request(ctx, fetch.GetRandomPeer(l.host.GetPeers()), id.ToBytes(), receiveForPeerFunc, errFunc)
+	if err := l.atxsrv.Request(ctx, fetch.GetRandomPeer(l.host.GetPeers()), id.ToBytes(), receiveForPeerFunc, errFunc); err != nil {
+		return fmt.Errorf("failed to send request to the peer: %w", err)
+	}
 	l.log.WithContext(ctx).With().Debug("waiting for epoch atx response", id)
 	res := <-resCh
 	if res.Error != nil {

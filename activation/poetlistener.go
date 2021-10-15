@@ -28,7 +28,7 @@ func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ peer.ID, ms
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(msg, &proofMessage); err != nil {
 		l.Log.Error("failed to unmarshal poet membership proof: %v", err)
-		return pubsub.ValidationReject
+		return pubsub.ValidationIgnore
 	}
 
 	if err := l.poetDb.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
@@ -38,7 +38,7 @@ func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ peer.ID, ms
 		} else {
 			l.Log.Warning("poet proof not valid: %v", err)
 		}
-		return pubsub.ValidationReject
+		return pubsub.ValidationIgnore
 	}
 
 	if err := l.poetDb.storeProof(&proofMessage); err != nil {

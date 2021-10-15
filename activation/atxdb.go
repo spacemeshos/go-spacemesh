@@ -740,7 +740,7 @@ func (db *DB) HandleGossipAtx(ctx context.Context, _ peer.ID, msg []byte) pubsub
 	err := db.HandleAtxData(ctx, msg)
 	if err != nil {
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
-		return pubsub.ValidationReject
+		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
 }

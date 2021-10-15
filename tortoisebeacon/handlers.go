@@ -59,7 +59,7 @@ func (tb *TortoiseBeacon) HandleSerializedProposalMessage(ctx context.Context, p
 	var message ProposalMessage
 	if err := types.BytesToInterface(msg, &message); err != nil {
 		logger.With().Warning("received malformed proposal message", log.Err(err))
-		return pubsub.ValidationReject
+		return pubsub.ValidationIgnore
 	}
 
 	ch := tb.getProposalChannel(ctx, message.EpochID)
@@ -258,7 +258,7 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 	var m FirstVotingMessage
 	if err := types.BytesToInterface(msg, &m); err != nil {
 		logger.With().Warning("received invalid voting message", log.Err(err))
-		return pubsub.ValidationReject
+		return pubsub.ValidationIgnore
 	}
 
 	currentEpoch := tb.currentEpoch()
@@ -385,7 +385,7 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 	var m FollowingVotingMessage
 	if err := types.BytesToInterface(msg, &m); err != nil {
 		logger.With().Warning("received invalid voting message", log.Err(err))
-		return pubsub.ValidationReject
+		return pubsub.ValidationIgnore
 	}
 
 	currentEpoch := tb.currentEpoch()
@@ -398,7 +398,7 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 
 	if err := tb.handleFollowingVotingMessage(ctx, m); err != nil {
 		logger.With().Error("failed to handle following voting message", log.Err(err))
-		return pubsub.ValidationReject
+		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
 }

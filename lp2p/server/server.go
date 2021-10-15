@@ -112,11 +112,10 @@ func (s *Server) streamHandler(stream network.Stream) {
 
 // Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
 // is guaranteed to be called on success/error.
-func (s *Server) Request(ctx context.Context, p peer.ID, req []byte, resp func([]byte), failure func(error)) {
+func (s *Server) Request(ctx context.Context, p peer.ID, req []byte, resp func([]byte), failure func(error)) error {
 	stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), p, protocol.ID(s.protocol))
 	if err != nil {
-		failure(err)
-		return
+		return err
 	}
 	_ = stream.SetDeadline(time.Now().Add(s.timeout))
 	go func() {
@@ -152,4 +151,5 @@ func (s *Server) Request(ctx context.Context, p peer.ID, req []byte, resp func([
 			resp(r.Data)
 		}
 	}()
+	return nil
 }

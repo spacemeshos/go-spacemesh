@@ -49,7 +49,7 @@ func TestServer(t *testing.T) {
 		}
 	}
 	t.Run("ReceiveMessage", func(t *testing.T) {
-		client.Request(ctx, mesh.Hosts()[1].ID(), request, respHandler, respErrHandler)
+		require.NoError(t, client.Request(ctx, mesh.Hosts()[1].ID(), request, respHandler, respErrHandler))
 		select {
 		case <-time.After(time.Second):
 			require.FailNow(t, "timed out while waiting for message response")
@@ -58,7 +58,7 @@ func TestServer(t *testing.T) {
 		}
 	})
 	t.Run("ReceiveError", func(t *testing.T) {
-		client.Request(ctx, mesh.Hosts()[2].ID(), request, respHandler, respErrHandler)
+		require.NoError(t, client.Request(ctx, mesh.Hosts()[2].ID(), request, respHandler, respErrHandler))
 		select {
 		case <-time.After(time.Second):
 			require.FailNow(t, "timed out while waiting for error response")
@@ -67,12 +67,6 @@ func TestServer(t *testing.T) {
 		}
 	})
 	t.Run("DialError", func(t *testing.T) {
-		client.Request(ctx, mesh.Hosts()[3].ID(), request, respHandler, respErrHandler)
-		select {
-		case <-time.After(time.Second):
-			require.FailNow(t, "timed out while waiting for dial error")
-		case err := <-errch:
-			require.Error(t, err)
-		}
+		require.Error(t, client.Request(ctx, mesh.Hosts()[3].ID(), request, respHandler, respErrHandler))
 	})
 }
