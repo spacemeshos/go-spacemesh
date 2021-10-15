@@ -137,6 +137,23 @@ def test_add_client(add_client):
     assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(add_client)
 
 
+def test_add_many_clients(init_session, add_elk, add_node_pool, setup_bootstrap, setup_clients):
+    bs_info = setup_bootstrap.pods[0]
+    cspec = get_conf(bs_info, testconfig['client'], testconfig['genesis_delta'])
+
+    pods = add_multi_clients(testconfig, setup_bootstrap.deployment_id, cspec, size=4)
+    time.sleep(40 * timeout_factor)  # wait for the new clients to finish bootstrap and for logs to get to elasticsearch
+    fields = {'M': 'discovery_bootstrap'}
+    for p in pods:
+        hits = poll_query_message(indx=current_index,
+                                  namespace=testconfig['namespace'],
+                                  client_po_name=p,
+                                  fields=fields,
+                                  findFails=True,
+                                  expected=1)
+        assert len(hits) == 1, "Could not find new Client bootstrap message pod:{0}".format(p)
+
+
 def test_gossip(init_session, add_elk, add_node_pool, setup_clients, add_curl):
     initial = len(query_message(
         current_index, testconfig['namespace'], setup_clients.deployment_name, gossip_message_query_fields))
@@ -291,3 +308,32 @@ def test_many_gossip_sim(setup_clients, add_elk, add_node_pool, add_curl):
     total_expected_gossip = prev_num_of_msg + test_messages * pods_num
 
     send_msgs(setup_clients, api, gossip_message_query_fields, total_expected_gossip, num_of_msg=test_messages)
+
+
+# NOTE: this test is run in the end because it affects the network structure,
+# it creates more pods and bootstrap them which will affect final query results
+# an alternative to that would be to kill the pods when the test ends.
+def test_late_bootstraps(init_session, add_elk, add_node_pool, setup_bootstrap, setup_clients):
+    TEST_NUM = 10
+    testnames = []
+
+    for i in range(TEST_NUM):
+        client = add_multi_clients(testconfig, setup_bootstrap.deployment_id,
+                                   get_conf(setup_bootstrap.pods[0], testconfig['client'], testconfig['genesis_delta']),
+                                   1)
+        testnames.append((client[0], datetime.now()))
+
+    # Need to sleep for a while in order to enable the
+    # propagation of the gossip message
+    time.sleep(TEST_NUM * timeout_factor)
+
+    fields = {'M': 'discovery_bootstrap'}
+    for i in testnames:
+        hits = poll_query_message(indx=current_index,
+                                  namespace=testconfig['namespace'],
+                                  client_po_name=i[0],
+                                  fields=fields,
+                                  findFails=False,
+                                  expected=1)
+
+        assert len(hits) == 1, "Could not find new Client bootstrap message. client: {0}".format(i[0])
