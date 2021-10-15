@@ -114,7 +114,8 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 	)
 	defer ticker.Stop()
 
-	b.triggerBootstrap(ctx, limit, len(peers), outbound)
+	bootctx, cancel := context.WithTimeout(ctx, b.bootstrapTimeout)
+	b.triggerBootstrap(bootctx, limit, len(peers), outbound)
 	for {
 		select {
 		case evt := <-sub.Out():
@@ -131,6 +132,10 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 				// peer that is tagged as outbound will have higher weight then inbound peers.
 				// this is taken into account when conn manager high watermark is reached and subset of peers will be pruned.
 				b.host.ConnManager().TagPeer(hs.PID, "outbound", 100)
+				if outbound >= b.target {
+					// cancel bootctx to terminate bootstrap
+					cancel()
+				}
 			}
 			b.logger.With().Info("successful connection with a peer",
 				log.String("pid", hs.PID.Pretty()),
@@ -163,8 +168,10 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription) error {
 				delete(peers, pid)
 			}
 		case <-ticker.C:
-			b.triggerBootstrap(ctx, limit, len(peers), outbound)
+			bootctx, cancel = context.WithTimeout(ctx, b.bootstrapTimeout)
+			b.triggerBootstrap(bootctx, limit, len(peers), outbound)
 		case <-ctx.Done():
+			cancel()
 			return ctx.Err()
 		}
 	}
@@ -183,8 +190,6 @@ func (b *Bootstrap) triggerBootstrap(ctx context.Context, limit chan struct{}, t
 		defer func() {
 			<-limit
 		}()
-		ctx, cancel := context.WithTimeout(ctx, b.bootstrapTimeout)
-		defer cancel()
 
 		if b.target > outbound {
 			b.discovery.Bootstrap(ctx)
