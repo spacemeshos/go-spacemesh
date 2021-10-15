@@ -2,15 +2,23 @@ package lp2p
 
 import (
 	"crypto/rand"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 
 	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
 )
 
 const keyFilename = "p2p.key"
+
+type identityInfo struct {
+	Key []byte
+	ID  peer.ID // this is needed only to simplify integration with some testing tools
+}
 
 func genIdentity() (crypto.PrivKey, error) {
 	pk, _, err := crypto.GenerateEd25519Key(rand.Reader)
@@ -20,29 +28,53 @@ func genIdentity() (crypto.PrivKey, error) {
 	return pk, nil
 }
 
+func identityInfoFromDir(dir string) (*identityInfo, error) {
+	path := filepath.Join(dir, keyFilename)
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	var info identityInfo
+	err = json.Unmarshal(data, &info)
+	if err != nil {
+		return nil, err
+	}
+	return &info, nil
+}
+
 func ensureIdentity(dir string) (crypto.PrivKey, error) {
 	// TODO add crc check
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("can't ensure that directory %s exist: %w", dir, err)
 	}
-	path := filepath.Join(dir, keyFilename)
-	data, err := ioutil.ReadFile(path)
+	info, err := identityInfoFromDir(dir)
 	if err == nil {
-		return crypto.UnmarshalPrivateKey(data)
+		return crypto.UnmarshalPrivateKey(info.Key)
 	}
 	if errors.Is(err, os.ErrNotExist) {
 		key, err := genIdentity()
 		if err != nil {
 			return nil, err
 		}
-		data, err = crypto.MarshalPrivateKey(key)
+		id, err := peer.IDFromPrivateKey(key)
+		if err != nil {
+			panic("generated key is malformed")
+		}
+		raw, err := crypto.MarshalPrivateKey(key)
+		if err != nil {
+			panic("generated key can't be marshaled to bytes")
+		}
+		data, err := json.Marshal(identityInfo{
+			Key: raw,
+			ID:  id,
+		})
 		if err != nil {
 			return nil, err
 		}
-		if err := ioutil.WriteFile(path, data, 0o644); err != nil {
-			return nil, err
+		if err := ioutil.WriteFile(filepath.Join(dir, keyFilename), data, 0o644); err != nil {
+			return nil, fmt.Errorf("failed to write identity data: %w", err)
 		}
 		return key, nil
 	}
-	return nil, err
+	return nil, fmt.Errorf("failed to read key from disk: %w", err)
 }
