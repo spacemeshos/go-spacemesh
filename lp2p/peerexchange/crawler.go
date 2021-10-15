@@ -43,15 +43,15 @@ func (r *crawler) Bootstrap(ctx context.Context) error {
 		seen[srv.ID] = struct{}{}
 	}
 
-	r.logger.With().Info("starting crawl", log.Int("servers", len(servers)))
+	r.logger.With().Debug("starting crawl", log.Int("servers", len(servers)))
 	for {
 		if len(servers) == 0 {
-			r.logger.Info("crawl finished. no more servers to query")
+			r.logger.Debug("crawl finished. no more servers to query")
 			return nil
 		}
 		result, err := r.query(ctx, servers)
 		if err != nil {
-			r.logger.Info("crawl finished by timeout")
+			r.logger.Debug("crawl finished by timeout")
 			return err
 		}
 		var round []*addrInfo
@@ -106,7 +106,8 @@ func (r *crawler) query(ctx context.Context, servers []*addrInfo) ([]*addrInfo, 
 			if cr.Err != nil {
 				// TODO(dshulyak) also remove peer from persistent addrbook on validation error
 				r.host.Peerstore().ClearAddrs(cr.Src.ID)
-				r.logger.With().Warning("peer failed to respond to protocol queries",
+				// the address may actually be outdate, since we don't actively update address book
+				r.logger.With().Debug("peer failed to respond to protocol queries",
 					log.String("peer", cr.Src.ID.String()),
 					log.Err(cr.Err))
 				continue

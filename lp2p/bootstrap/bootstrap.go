@@ -127,7 +127,7 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 					cancel()
 				}
 			}
-			b.logger.With().Info("successful connection with a peer",
+			b.logger.With().Info("peer is connected",
 				log.String("pid", hs.PID.Pretty()),
 				log.Bool("outbound", hs.Direction == network.DirOutbound),
 				log.Int("total", len(peers)),
@@ -155,6 +155,12 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 					Direction:     peers[pid],
 					Connectedness: network.NotConnected,
 				})
+				b.logger.With().Info("peer is disconnected",
+					log.String("pid", pid.Pretty()),
+					log.Bool("outbound", peers[pid] == network.DirOutbound),
+					log.Int("total", len(peers)-1),
+					log.Int("outbound-total", outbound),
+				)
 				delete(peers, pid)
 			}
 		case <-ticker.C:
