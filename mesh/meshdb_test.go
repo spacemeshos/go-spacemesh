@@ -12,13 +12,14 @@ import (
 	"time"
 
 	"github.com/spacemeshos/ed25519"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -437,17 +438,21 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 	)
 	r.NoError(err)
 
-	txs := mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr1)
+	txs, err := mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr1)
+	r.NoError(err)
 	r.Equal(2, len(txs))
 
-	txs = mdb.GetTransactionsByDestination(types.NewLayerID(1), addr1)
+	txs, err = mdb.GetTransactionsByDestination(types.NewLayerID(1), addr1)
+	r.NoError(err)
 	r.Equal(2, len(txs))
 
 	// test negative case
-	txs = mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr3)
+	txs, err = mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr3)
+	r.NoError(err)
 	r.Equal(0, len(txs))
 
-	txs = mdb.GetTransactionsByDestination(types.NewLayerID(1), addr3)
+	txs, err = mdb.GetTransactionsByDestination(types.NewLayerID(1), addr3)
+	r.NoError(err)
 	r.Equal(0, len(txs))
 }
 
@@ -985,13 +990,17 @@ func TestMesh_FindOnce(t *testing.T) {
 	}
 	t.Run("ByDestination", func(t *testing.T) {
 		for _, layer := range layers {
-			assert.Len(t, mdb.GetTransactionsByDestination(types.NewLayerID(layer), addr1), 1)
+			txs, err := mdb.GetTransactionsByDestination(types.NewLayerID(layer), addr1)
+			require.NoError(t, err)
+			assert.Len(t, txs, 1)
 		}
 	})
 
 	t.Run("ByOrigin", func(t *testing.T) {
 		for _, layer := range layers {
-			assert.Len(t, mdb.GetTransactionsByOrigin(types.NewLayerID(layer), addr1), 1)
+			txs, err := mdb.GetTransactionsByOrigin(types.NewLayerID(layer), addr1)
+			require.NoError(t, err)
+			assert.Len(t, txs, 1)
 		}
 	})
 }

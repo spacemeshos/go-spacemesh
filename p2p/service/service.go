@@ -17,12 +17,12 @@ type MessageValidation struct {
 	reqID  string
 }
 
-// Message returns the message as bytes
+// Message returns the message as bytes.
 func (mv MessageValidation) Message() []byte {
 	return mv.msg
 }
 
-// Sender returns the public key of the sender of this message. (might not be the author)
+// Sender returns the public key of the sender of this message. (might not be the author).
 func (mv MessageValidation) Sender() p2pcrypto.PublicKey {
 	return mv.sender
 }
@@ -32,12 +32,12 @@ func (mv MessageValidation) Protocol() string {
 	return mv.prot
 }
 
-// RequestID is the originating request ID of the message
+// RequestID is the originating request ID of the message.
 func (mv MessageValidation) RequestID() string {
 	return mv.reqID
 }
 
-// P2PMetadata is a generic metadata interface
+// P2PMetadata is a generic metadata interface.
 type P2PMetadata struct {
 	FromAddress net.Addr
 	// add here more fields that are needed by protocols
@@ -50,14 +50,14 @@ func NewMessageValidation(sender p2pcrypto.PublicKey, msg []byte, prot string, r
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=service.go
 
-// DirectMessage is an interface that represents a simple direct message structure
+// DirectMessage is an interface that represents a simple direct message structure.
 type DirectMessage interface {
 	Metadata() P2PMetadata
 	Sender() p2pcrypto.PublicKey
 	Bytes() []byte
 }
 
-// GossipMessage is an interface that represents a simple gossip message structure
+// GossipMessage is an interface that represents a simple gossip message structure.
 type GossipMessage interface {
 	Sender() p2pcrypto.PublicKey
 	IsOwnMessage() bool
@@ -67,7 +67,7 @@ type GossipMessage interface {
 	ReportValidation(ctx context.Context, protocol string)
 }
 
-// Service is an interface that represents a networking service (ideally p2p) that we can use to send messages or listen to incoming messages
+// Service is an interface that represents a networking service (ideally p2p) that we can use to send messages or listen to incoming messages.
 type Service interface {
 	Start(ctx context.Context) error
 	RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan GossipMessage
@@ -88,7 +88,7 @@ type DataBytes struct {
 	Payload []byte
 }
 
-// DataMsgWrapper is a req-res payload wrapper
+// DataMsgWrapper is a req-res payload wrapper.
 type DataMsgWrapper struct {
 	Req     bool
 	MsgType uint32
@@ -96,12 +96,12 @@ type DataMsgWrapper struct {
 	Payload []byte
 }
 
-// Bytes returns the message as bytes
+// Bytes returns the message as bytes.
 func (m DataBytes) Bytes() []byte {
 	return m.Payload
 }
 
-// Bytes returns the message as bytes
+// Bytes returns the message as bytes.
 func (m DataMsgWrapper) Bytes() []byte {
 	return m.Payload
 }

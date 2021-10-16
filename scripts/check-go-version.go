@@ -8,8 +8,10 @@ import (
 	"strings"
 )
 
-var minMajor int
-var minMinor int
+var (
+	minMajor int
+	minMinor int
+)
 
 func init() {
 	flag.IntVar(&minMajor, "major", 1, "required major version")

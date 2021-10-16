@@ -1,6 +1,7 @@
 package state
 
 import (
+	"fmt"
 	"io"
 	"math/big"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rlp"
 )
 
-// AccountState is the interface defined to query a single account state
+// AccountState is the interface defined to query a single account state.
 type AccountState interface {
 	GetBalance() uint64
 	GetNonce() uint64
@@ -21,7 +22,7 @@ type AccountState interface {
 }
 
 // Object is the struct in which account information is stored. It contains account info such as nonce and balance
-// and also the accounts address, address hash and a reference to this structs containing database
+// and also the accounts address, address hash and a reference to this structs containing database.
 type Object struct {
 	address  types.Address
 	addrHash types.Hash32
@@ -41,7 +42,11 @@ func newObject(db *DB, address types.Address, data types.AccountState) *Object {
 
 // EncodeRLP implements rlp.Encoder.
 func (state *Object) EncodeRLP(w io.Writer) error {
-	return rlp.Encode(w, state.account)
+	if err := rlp.Encode(w, state.account); err != nil {
+		return fmt.Errorf("encode RLP: %w", err)
+	}
+
+	return nil
 }
 
 // AddBalance removes amount from c's balance.
@@ -76,7 +81,7 @@ func (state *Object) SubBalance(amount uint64) {
 	state.SetBalance(state.Balance() - amount)
 }
 
-// SetBalance sets the balance for current account
+// SetBalance sets the balance for current account.
 func (state *Object) SetBalance(amount uint64) {
 	state.setBalance(amount)
 	state.db.makeDirtyObj(state)
@@ -86,7 +91,7 @@ func (state *Object) setBalance(amount uint64) {
 	state.account.Balance = amount
 }
 
-// ReturnGas Return the gas back to the origin. Used by the Virtual machine or Closures
+// ReturnGas Return the gas back to the origin. Used by the Virtual machine or Closures.
 func (state *Object) ReturnGas(gas *big.Int) {}
 
 func (state *Object) deepCopy(db *DB) *Object {
@@ -99,12 +104,12 @@ func (state *Object) deepCopy(db *DB) *Object {
 // Attribute accessors
 //
 
-// Address returns the address of the contract/account
+// Address returns the address of the contract/account.
 func (state *Object) Address() types.Address {
 	return state.address
 }
 
-// SetNonce sets the nonce to be nonce for this Object
+// SetNonce sets the nonce to be nonce for this Object.
 func (state *Object) SetNonce(nonce uint64) {
 	state.setNonce(nonce)
 	state.db.makeDirtyObj(state)
@@ -114,12 +119,12 @@ func (state *Object) setNonce(nonce uint64) {
 	state.account.Nonce = nonce
 }
 
-// Balance returns the account current balance
+// Balance returns the account current balance.
 func (state *Object) Balance() uint64 {
 	return state.account.Balance
 }
 
-// Nonce returns the accounts current nonce
+// Nonce returns the accounts current nonce.
 func (state *Object) Nonce() uint64 {
 	return state.account.Nonce
 }

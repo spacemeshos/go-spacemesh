@@ -3,18 +3,22 @@ package hare
 import (
 	"context"
 	"errors"
+	"fmt"
 	"math/rand"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/require"
 )
 
 type HareWrapper struct {
@@ -129,11 +133,10 @@ func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload
 	}
 
 	e := m.nd.Broadcast(ctx, protocol, payload)
-	return e
+	return fmt.Errorf("broadcast: %w", e)
 }
 
-type trueOracle struct {
-}
+type trueOracle struct{}
 
 func (trueOracle) Register(bool, string) {
 }
@@ -158,7 +161,11 @@ func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types
 	return true, nil
 }
 
-// Test - runs a single CP for more than one iteration
+func (trueOracle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
+	return true
+}
+
+// Test - runs a single CP for more than one iteration.
 func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
 
@@ -212,8 +219,7 @@ func newRandBlockID(rng *rand.Rand) (id types.BlockID) {
 	return id
 }
 
-type mockBlockProvider struct {
-}
+type mockBlockProvider struct{}
 
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
@@ -236,13 +242,16 @@ func createMaatuf(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID
 		panic("failed to create vrf signer")
 	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
-	hare := New(tcfg, p2p, ed, nodeID, isSynced, &mockBlockProvider{}, rolacle, 10, &mockIdentityP{nid: nodeID},
+	ctrl := gomock.NewController(tb)
+	patrol := mocks.NewMocklayerPatrol(ctrl)
+	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
+	hare := New(tcfg, p2p, ed, nodeID, isSynced, &mockBlockProvider{}, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, layersCh, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare
 }
 
-// Test - run multiple CPs simultaneously
+// Test - run multiple CPs simultaneously.
 func Test_multipleCPs(t *testing.T) {
 	// NOTE(dshulyak) spams with overwriting sessionID in context
 	logtest.SetupGlobal(t)
@@ -278,7 +287,7 @@ func Test_multipleCPs(t *testing.T) {
 	test.WaitForTimedTermination(t, 60*time.Second)
 }
 
-// Test - run multiple CPs where one of them runs more than one iteration
+// Test - run multiple CPs where one of them runs more than one iteration.
 func Test_multipleCPsAndIterations(t *testing.T) {
 	logtest.SetupGlobal(t)
 

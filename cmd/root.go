@@ -3,10 +3,10 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 )
 
@@ -201,12 +201,12 @@ func AddCommands(cmd *cobra.Command) {
 		config.TortoiseBeacon.VotingRoundDuration, "Voting round duration in milliseconds")
 	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.WeakCoinRoundDuration, "tortoise-beacon-weak-coin-round-duration",
 		config.TortoiseBeacon.WeakCoinRoundDuration, "Weak coin round duration in milliseconds")
-	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.WaitAfterEpochStart, "tortoise-beacon-wait-after-epoch-start",
-		config.TortoiseBeacon.WaitAfterEpochStart, "How many milliseconds to wait after a new epoch is started.")
 	cmd.PersistentFlags().Var((*types.RatVar)(config.TortoiseBeacon.Theta), "tortoise-beacon-theta",
 		"Ratio of votes for reaching consensus")
 	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",
 		config.TortoiseBeacon.VotesLimit, "Maximum allowed number of votes to be sent")
+	cmd.PersistentFlags().Uint32Var(&config.TortoiseBeacon.BeaconSyncNumBlocks, "tortoise-beacon-sync-num-blocks",
+		config.TortoiseBeacon.BeaconSyncNumBlocks, "Numbers of blocks to wait before determining beacon values from them.")
 
 	/**======================== Post Flags ========================== **/
 

@@ -10,12 +10,13 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/require"
 )
 
 var testUDPAddr = func() *net.UDPAddr {
@@ -65,6 +66,7 @@ func (mc *mockCon) LocalAddr() net.Addr {
 func (mc *mockCon) SetDeadline(t time.Time) error {
 	return nil
 }
+
 func (mc *mockCon) SetReadDeadline(t time.Time) error {
 	return nil
 }
@@ -273,6 +275,7 @@ func (ucw *udpConnMock) Read(b []byte) (int, error) {
 	}
 	return 0, errors.New("not impl")
 }
+
 func (ucw *udpConnMock) Write(b []byte) (int, error) {
 	if ucw.WriteFunc != nil {
 		return ucw.WriteFunc(b)

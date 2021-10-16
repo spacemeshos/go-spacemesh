@@ -9,11 +9,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func Test_sumByteArray(t *testing.T) {
@@ -55,12 +56,11 @@ func TestNet_EnqueueMessage(t *testing.T) {
 			defer wg.Done()
 			select {
 			case <-n.IncomingMessages()[sum%n.queuesCount]:
-				//assert.Equal(t, s.Message, msg)
-				//assert.Equal(t, s.Conn.RemotePublicKey(), rnode.PublicKey())
+				// assert.Equal(t, s.Message, msg)
+				// assert.Equal(t, s.Conn.RemotePublicKey(), rnode.PublicKey())
 			case <-tx.C:
 				atomic.AddInt32(&timedout, 1)
 				return
-
 			}
 		}()
 	}
@@ -104,6 +104,7 @@ func (ml *mockListener) releaseConn() {
 func (ml *mockListener) Close() error {
 	return nil
 }
+
 func (ml *mockListener) Addr() net.Addr {
 	return &net.TCPAddr{IP: net.ParseIP("0.0.0.0"), Zone: ""}
 }
@@ -125,7 +126,7 @@ func Test_Net_LimitedConnections(t *testing.T) {
 	ln, err := node.NewNodeIdentity()
 	require.NoError(t, err)
 	n, err := NewNet(context.TODO(), cfg, ln, logtest.New(t).WithName(t.Name()))
-	//n.SubscribeOnNewRemoteConnections(counter)
+	// n.SubscribeOnNewRemoteConnections(counter)
 	require.NoError(t, err)
 	listener := newMockListener()
 	n.Start(context.TODO(), listener)

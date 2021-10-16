@@ -5,12 +5,13 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 /* methods below are kept to keep tests working without big changes */
@@ -65,7 +66,7 @@ func TestPing_Ping(t *testing.T) {
 }
 
 func TestPing_Ping_Concurrency(t *testing.T) {
-	//TODO : bigger concurrency test
+	// TODO : bigger concurrency test
 	sim := service.NewSimulator()
 	node1 := newTestNode(t, sim)
 	node2 := newTestNode(t, sim)

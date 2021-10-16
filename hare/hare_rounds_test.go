@@ -6,12 +6,15 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/require"
 )
 
 const skipMoreTests = true
@@ -51,16 +54,18 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 	}
 }
 
-type funcOracle func(types.LayerID, uint32, int, types.NodeID, []byte, *testHare) (uint16, error)
-type funcLayers func(types.LayerID, *testHare) ([]types.BlockID, error)
-type funcValidate func(types.LayerID, []types.BlockID, *testHare)
-type testHare struct {
-	*Hare
-	oracle   funcOracle
-	layers   funcLayers
-	validate funcValidate
-	N        int
-}
+type (
+	funcOracle   func(types.LayerID, uint32, int, types.NodeID, []byte, *testHare) (uint16, error)
+	funcLayers   func(types.LayerID, *testHare) ([]types.BlockID, error)
+	funcValidate func(types.LayerID, []types.BlockID, *testHare)
+	testHare     struct {
+		*Hare
+		oracle   funcOracle
+		layers   funcLayers
+		validate funcValidate
+		N        int
+	}
+)
 
 func (h *testHare) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committee int, id types.NodeID, sig []byte) (uint16, error) {
 	return h.oracle(layer, round, committee, id, sig, h)
@@ -68,21 +73,30 @@ func (h *testHare) CalcEligibility(ctx context.Context, layer types.LayerID, rou
 
 func (testHare) Register(bool, string)   {}
 func (testHare) Unregister(bool, string) {}
+func (testHare) IsEpochBeaconReady(context.Context, types.EpochID) bool {
+	return true
+}
+
 func (testHare) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
 }
+
 func (testHare) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	return []byte{}, nil
 }
+
 func (testHare) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
+
 func (h *testHare) HandleValidatedLayer(ctx context.Context, layer types.LayerID, ids []types.BlockID) {
 	h.validate(layer, ids, h)
 }
+
 func (h *testHare) LayerBlockIds(layer types.LayerID) ([]types.BlockID, error) {
 	return h.layers(layer, h)
 }
+
 func (h *testHare) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
 	panic("implement me")
 }
@@ -92,7 +106,10 @@ func createTestHare(tb testing.TB, tcfg config.Config, layersCh chan types.Layer
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: pub.Bytes()}
-	hare := New(tcfg, p2p, ed, nodeID, isSynced, bp, rolacle, 10, &mockIdentityP{nid: nodeID},
+	ctrl := gomock.NewController(tb)
+	patrol := mocks.NewMocklayerPatrol(ctrl)
+	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
+	hare := New(tcfg, p2p, ed, nodeID, isSynced, bp, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, layersCh, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 	return hare
 }

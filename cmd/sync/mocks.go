@@ -6,20 +6,21 @@ import (
 	"time"
 
 	"github.com/golang/protobuf/ptypes/duration"
+
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
 
 type blockEligibilityValidatorMock struct{}
@@ -97,6 +98,7 @@ type mockClock struct {
 func (m *mockClock) LayerToTime(types.LayerID) time.Time {
 	return time.Now().Add(1000 * time.Hour) // hack so this wont take affect in the mock
 }
+
 func (m *mockClock) Tick() {
 	l := m.GetCurrentLayer()
 	log.Info("tick %v", l)
@@ -118,11 +120,13 @@ func (m *mockClock) Subscribe() timesync.LayerTimer {
 
 	return newCh
 }
+
 func (m *mockClock) Unsubscribe(timer timesync.LayerTimer) {
 	m.countUnsub++
 	delete(m.ids, m.ch[timer])
 	delete(m.ch, timer)
 }
+
 func configTst() mesh.Config {
 	return mesh.Config{
 		BaseReward: big.NewInt(5000),
@@ -139,11 +143,9 @@ type allDbs struct {
 	poetDb      *activation.PoetDb
 	poetStorage database.Database
 	mshdb       *mesh.DB
-	tbDB        *tortoisebeacon.DB
-	tbDBStore   *database.LDBDatabase
 }
 
-func createMeshWithMock(dbs *allDbs, txpool *state.TxMempool, lg log.Log) *mesh.Mesh {
+func createMeshWithMock(dbs *allDbs, txpool *mempool.TxMempool, lg log.Log) *mesh.Mesh {
 	var msh *mesh.Mesh
 	if dbs.mshdb.PersistentData() {
 		lg.Info("persistent data found")
@@ -162,8 +164,8 @@ func createFetcherWithMock(dbs *allDbs, msh *mesh.Mesh, swarm service.Service, l
 	fetcher := fetch.NewFetch(context.TODO(), fCfg, swarm, lg)
 
 	lCfg := layerfetcher.Config{RequestTimeout: 20}
-	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, dbs.atxdb, dbs.poetDb, dbs.atxdb, mockTxProcessor{}, swarm, fetcher, msh, dbs.tbDB, lg)
-	layerFetch.AddDBs(dbs.mshdb.Blocks(), dbs.atxdbStore, dbs.mshdb.Transactions(), dbs.poetStorage, dbs.mshdb.InputVector(), dbs.tbDBStore)
+	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, dbs.atxdb, dbs.poetDb, dbs.atxdb, mockTxProcessor{}, swarm, fetcher, msh, lg)
+	layerFetch.AddDBs(dbs.mshdb.Blocks(), dbs.atxdbStore, dbs.mshdb.Transactions(), dbs.poetStorage)
 	return layerFetch
 }
 
@@ -172,5 +174,5 @@ func createSyncer(conf syncer.Configuration, msh *mesh.Mesh, layerFetch *layerfe
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 
 	layerFetch.Start()
-	return syncer.NewSyncer(context.TODO(), conf, &clock, msh, layerFetch, lg)
+	return syncer.NewSyncer(context.TODO(), conf, &clock, msh, layerFetch, layerpatrol.New(), lg)
 }

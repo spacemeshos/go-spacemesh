@@ -5,12 +5,13 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/log"
 	"nanomsg.org/go-mangos"
 	"nanomsg.org/go-mangos/protocol/pub"
 	"nanomsg.org/go-mangos/protocol/sub"
 	"nanomsg.org/go-mangos/transport/ipc"
 	"nanomsg.org/go-mangos/transport/tcp"
+
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // channelBuffer defines the listening channel buffer size.
@@ -33,8 +34,9 @@ type Subscriber struct {
 func NewSubscriber(url string) (*Subscriber, error) {
 	socket, err := sub.NewSocket()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create socket: %w", err)
 	}
+
 	socket.AddTransport(ipc.NewTransport())
 	socket.AddTransport(tcp.NewTransport())
 	socket.SetOption(mangos.OptionBestEffort, false)
@@ -42,7 +44,7 @@ func NewSubscriber(url string) (*Subscriber, error) {
 
 	err = socket.Dial(url)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("dial socket: %w", err)
 	}
 
 	return &Subscriber{
@@ -99,13 +101,17 @@ func (sub *Subscriber) route(payload []byte) {
 	}
 }
 
-// Close closes the socket which in turn will Close the listener func
+// Close closes the socket which in turn will Close the listener func.
 func (sub *Subscriber) Close() error {
 	select {
 	case <-sub.closer:
 	default:
 		close(sub.closer)
-		return sub.sock.Close()
+		if err := sub.sock.Close(); err != nil {
+			return fmt.Errorf("close socket: %w", err)
+		}
+
+		return nil
 	}
 	return nil
 }
@@ -118,10 +124,12 @@ func (sub *Subscriber) Subscribe(topic ChannelID) (chan []byte, error) {
 	if _, ok := sub.output[topic]; !ok {
 		sub.output[topic] = make(chan []byte, channelBuffer)
 	}
+
 	err := sub.sock.SetOption(mangos.OptionSubscribe, []byte{byte(topic)})
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("set subscribe socket option: %w", err)
 	}
+
 	return sub.output[topic], nil
 }
 
@@ -133,14 +141,14 @@ func (sub *Subscriber) SubscribeToAll() (chan []byte, error) {
 		allOutput := make(chan []byte, channelBuffer)
 		err := sub.sock.SetOption(mangos.OptionSubscribe, []byte(""))
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("set subscribe socket option: %w", err)
 		}
 		sub.allOutput = allOutput
 	}
 	return sub.allOutput, nil
 }
 
-// Publisher is a wrapper for mangos pubsub publisher socket
+// Publisher is a wrapper for mangos pubsub publisher socket.
 type Publisher struct {
 	sock mangos.Socket
 }
@@ -165,11 +173,14 @@ func newPublisher(url string) (*Publisher, error) {
 func (p *Publisher) publish(topic ChannelID, payload []byte) error {
 	msg := append([]byte{byte(topic)}, payload...)
 	log.With().Debug("sending msg", log.Binary("payload", payload))
-	err := p.sock.Send(msg)
-	return err
+	if err := p.sock.Send(msg); err != nil {
+		return fmt.Errorf("send to socket: %w", err)
+	}
+
+	return nil
 }
 
-// Close closes the publishers output socket
+// Close closes the publishers output socket.
 func (p *Publisher) Close() {
 	p.sock.Close()
 }

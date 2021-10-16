@@ -1,11 +1,13 @@
 package config
 
 import (
-	"github.com/spacemeshos/go-spacemesh/filesystem"
-	"github.com/spf13/viper"
-	"github.com/stretchr/testify/assert"
 	"path/filepath"
 	"testing"
+
+	"github.com/spf13/viper"
+	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/filesystem"
 )
 
 func TestLoadConfig(t *testing.T) {

@@ -18,11 +18,12 @@ package trie
 
 import (
 	"fmt"
+	"io"
+	"strings"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/rlp"
-	"io"
-	"strings"
 )
 
 var indices = []string{"0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "a", "b", "c", "d", "e", "f", "[17]"}
@@ -62,7 +63,12 @@ func (n *fullNode) EncodeRLP(w io.Writer) error {
 			nodes[i] = nilValueNode
 		}
 	}
-	return rlp.Encode(w, nodes)
+
+	if err := rlp.Encode(w, nodes); err != nil {
+		return fmt.Errorf("encode RLP: %w", err)
+	}
+
+	return nil
 }
 
 func (n *fullNode) copy() *fullNode   { copy := *n; return &copy }
@@ -107,12 +113,15 @@ func (n *fullNode) fstring(ind string) string {
 	}
 	return resp + fmt.Sprintf("\n%s] ", ind)
 }
+
 func (n *shortNode) fstring(ind string) string {
 	return fmt.Sprintf("{%x: %v} ", n.Key, n.Val.fstring(ind+"  "))
 }
+
 func (n hashNode) fstring(ind string) string {
 	return fmt.Sprintf("<%x> ", []byte(n))
 }
+
 func (n valueNode) fstring(ind string) string {
 	return fmt.Sprintf("%x ", []byte(n))
 }
@@ -149,7 +158,7 @@ func decodeNode(hash, buf []byte, cachegen uint16) (node, error) {
 func decodeShort(hash, elems []byte, cachegen uint16) (node, error) {
 	kbuf, rest, err := rlp.SplitString(elems)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("split RLP string: %w", err)
 	}
 	flag := nodeFlag{hash: hash, gen: cachegen}
 	key := compactToHex(kbuf)
@@ -179,7 +188,7 @@ func decodeFull(hash, elems []byte, cachegen uint16) (*fullNode, error) {
 	}
 	val, _, err := rlp.SplitString(elems)
 	if err != nil {
-		return n, err
+		return n, fmt.Errorf("split RLP string: %w", err)
 	}
 	if len(val) > 0 {
 		n.Children[16] = append(valueNode{}, val...)
@@ -192,7 +201,7 @@ const hashLen = len(types.Hash32{})
 func decodeRef(buf []byte, cachegen uint16) (node, []byte, error) {
 	kind, val, rest, err := rlp.Split(buf)
 	if err != nil {
-		return nil, buf, err
+		return nil, buf, fmt.Errorf("split RLP: %w", err)
 	}
 	switch {
 	case kind == rlp.List:

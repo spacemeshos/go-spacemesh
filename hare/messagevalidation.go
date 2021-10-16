@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -57,7 +58,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 		logger.With().Error("eligibility validator: GetIdentity failed (ignore if the safe layer is in genesis)",
 			log.Err(err),
 			log.String("sender_id", pub.ShortString()))
-		return false, err
+		return false, fmt.Errorf("get identity: %w", err)
 	}
 
 	// validate role
@@ -66,7 +67,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 		logger.With().Error("eligibility validator: could not retrieve eligibility result",
 			log.Err(err),
 			log.String("sender_id", pub.ShortString()))
-		return false, err
+		return false, fmt.Errorf("validate eligibility: %w", err)
 	}
 	if !res {
 		logger.With().Error("eligibility validator: sender is not eligible to participate",
@@ -125,7 +126,7 @@ func newSyntaxContextValidator(sgr Signer, threshold int, validator func(m *Msg)
 	return &syntaxContextValidator{sgr, threshold, validator, stateQuerier, layersPerEpoch, ev, validMsgsTracker, logger}
 }
 
-// contextual validation errors
+// contextual validation errors.
 var (
 	errNilMsg         = errors.New("nil message")
 	errNilInner       = errors.New("nil inner message")
@@ -327,9 +328,9 @@ func (v *syntaxContextValidator) validateAggregatedMessage(ctx context.Context, 
 		}
 
 		// extract public key
-		var iMsg, err = newMsg(ctx, v.Log, innerMsg, v.stateQuerier)
+		iMsg, err := newMsg(ctx, v.Log, innerMsg, v.stateQuerier)
 		if err != nil {
-			return err
+			return fmt.Errorf("new message: %w", err)
 		}
 
 		pub := iMsg.PubKey
@@ -468,7 +469,7 @@ func validateStatusType(m *Msg) bool {
 	return messageType(m.InnerMsg.Type) == status
 }
 
-// validate SVP for type A (where all Ki=-1)
+// validate SVP for type A (where all Ki=-1).
 func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) bool {
 	s := NewSet(m.InnerMsg.Values)
 	unionSet := NewEmptySet(len(m.InnerMsg.Values))
@@ -490,7 +491,7 @@ func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) b
 	return true
 }
 
-// validate SVP for type B (where exist Ki>=0)
+// validate SVP for type B (where exist Ki>=0).
 func (v *syntaxContextValidator) validateSVPTypeB(ctx context.Context, msg *Msg, maxSet *Set) bool {
 	// max set should be equal to the claimed set
 	s := NewSet(msg.InnerMsg.Values)

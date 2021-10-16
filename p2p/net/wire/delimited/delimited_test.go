@@ -41,7 +41,7 @@ func TestGoodReader(t *testing.T) {
 	}
 
 	// The stream should have been fully consumed.
-	if got, err := rd.Next(); err != io.EOF {
+	if got, err := rd.Next(); !errors.Is(err, io.EOF) {
 		t.Errorf("Next record: got %q [%v], want EOF", string(got), err)
 	}
 }
@@ -53,7 +53,7 @@ func TestCorruptReader(t *testing.T) {
 	rd := NewReader(r)
 
 	got, err := rd.Next()
-	if err != io.ErrUnexpectedEOF {
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
 		t.Fatalf("Next record: got %q [%v], want %v", string(got), err, io.ErrUnexpectedEOF)
 	}
 	t.Logf("Next record gave expected error: %v", err)
@@ -119,7 +119,7 @@ func TestRoundTrip(t *testing.T) {
 	for {
 		rec, err := rd.Next()
 		if err != nil {
-			if err != io.EOF {
+			if !errors.Is(err, io.EOF) {
 				t.Errorf("Next: unexpected error: %v", err)
 			}
 			break

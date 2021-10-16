@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
-// Service is a wrapper for service.Service to expose the Service interface to `p2p` package clients
+// Service is a wrapper for service.Service to expose the Service interface to `p2p` package clients.
 type Service service.Service
 
 // New creates a new P2P service a.k.a `Switch` it loads existing node information from the disk or creates a new one.

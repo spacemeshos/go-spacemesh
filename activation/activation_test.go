@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	//	"github.com/spacemeshos/post/config"
 )
 
 // ========== Vars / Consts ==========
@@ -327,9 +326,35 @@ func TestBuilder_StartSmeshingCoinbase(t *testing.T) {
 	builder := newBuilder(t, activationDb)
 
 	coinbase := types.Address{1, 1, 1}
-	require.NoError(t, builder.StartSmeshing(context.TODO(), coinbase, PostSetupOpts{}))
+	require.NoError(t, builder.StartSmeshing(coinbase, PostSetupOpts{}))
 	t.Cleanup(func() { builder.StopSmeshing(true) })
 	require.Equal(t, coinbase, builder.Coinbase())
+}
+
+func TestBuilder_RestartSmeshing(t *testing.T) {
+	activationDb := newActivationDb(t)
+	net.atxDb = activationDb
+	cfg := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+	sessionChan := make(chan struct{})
+	close(sessionChan)
+	builder := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, meshProviderMock, layersPerEpoch, nipostBuilderMock,
+		&postSetupProviderMock{sessionChan: sessionChan},
+		layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
+	builder.initialPost = initialPost
+
+	for i := 0; i < 100; i++ {
+		require.NoError(t, builder.StartSmeshing(types.Address{}, PostSetupOpts{}))
+		// NOTE(dshulyak) this is a poor way to test that smeshing started and didn't exit immediately,
+		// but proper test requires adding quite a lot of additional mocking and general refactoring.
+		time.Sleep(400 * time.Microsecond)
+		require.True(t, builder.Smeshing())
+		require.NoError(t, builder.StopSmeshing(true))
+		require.False(t, builder.Smeshing())
+	}
 }
 
 func TestBuilder_PublishActivationTx_HappyFlow(t *testing.T) {
@@ -379,7 +404,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	faultyNet := &FaultyNetMock{retErr: true}
 	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "failed to broadcast ATX: faulty")
+	r.EqualError(err, "sign and broadcast: failed to broadcast ATX: faulty")
 	r.False(published)
 
 	// create and attempt to publish ATX
@@ -420,7 +445,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	faultyNet := &FaultyNetMock{retErr: true}
 	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, faultyNet, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 	published, builtNIPost, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "failed to broadcast ATX: faulty")
+	r.EqualError(err, "sign and broadcast: failed to broadcast ATX: faulty")
 	r.False(published)
 	r.True(builtNIPost)
 
@@ -555,7 +580,7 @@ func TestBuilder_PublishActivationTx_FailsWhenNIPostBuilderFails(t *testing.T) {
 	storeAtx(r, activationDb, posAtx, logtest.New(t).WithName("storeAtx"))
 
 	published, _, err := publishAtx(b, postGenesisEpochLayer.Add(1), postGenesisEpoch, layersPerEpoch)
-	r.EqualError(err, "failed to build NIPost: NIPost builder error")
+	r.EqualError(err, "create ATX: failed to build NIPost: NIPost builder error")
 	r.False(published)
 }
 
@@ -703,9 +728,9 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	err = b.SignAtx(act)
 	assert.NoError(t, err)
 	// TODO(moshababo): encoded atx comparison fail, although decoded atxs are equal.
-	//bts, err := types.InterfaceToBytes(act)
-	//assert.NoError(t, err)
-	//assert.Equal(t, bts, net.lastTransmission)
+	// bts, err := types.InterfaceToBytes(act)
+	// assert.NoError(t, err)
+	// assert.Equal(t, bts, net.lastTransmission)
 
 	b = NewBuilder(cfg, id, &MockSigning{}, activationDb, &FaultyNetMock{}, layers, layersPerEpoch, nipostBuilder, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, db, logtest.New(t).WithName("atxBuilder"))
 	err = b.buildNIPostChallenge(context.TODO())

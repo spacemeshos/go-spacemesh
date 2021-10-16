@@ -17,11 +17,12 @@
 package state
 
 import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-
-	"testing"
-	//check "gopkg.in/check.v1"
 )
 
 // Tests that updating a state trie does not leak any database writes prior to
@@ -39,9 +40,10 @@ func TestUpdateLeaks(t *testing.T) {
 		state.IntermediateRoot(false)
 	}
 	// Ensure that no data was leaked into the database
-	for _, key := range db.Keys() {
-		value, _ := db.Get(key)
-		t.Errorf("State leaked into database: %x -> %x", key, value)
+	iter := db.Find(nil)
+	defer iter.Release()
+	for iter.Next() {
+		require.FailNowf(t, "leaked key", "%x", iter.Key())
 	}
 }
 
@@ -79,13 +81,19 @@ func TestIntermediateLeaks(t *testing.T) {
 	if _, err := finalState.Commit(); err != nil {
 		t.Fatalf("failed to commit final state: %v", err)
 	}
-	for _, key := range finalDb.Keys() {
+	it := finalDb.Find(nil)
+	defer it.Release()
+	for it.Next() {
+		key := it.Key()
 		if _, err := transDb.Get(key); err != nil {
 			val, _ := finalDb.Get(key)
 			t.Errorf("entry missing from the transition database: %x -> %x", key, val)
 		}
 	}
-	for _, key := range transDb.Keys() {
+	it = transDb.Find(nil)
+	defer it.Release()
+	for it.Next() {
+		key := it.Key()
 		if _, err := finalDb.Get(key); err != nil {
 			val, _ := transDb.Get(key)
 			t.Errorf("extra entry in the transition database: %x -> %x", key, val)
@@ -119,7 +127,7 @@ func TestCopy(t *testing.T) {
 		orig.updateStateObj(origObj)
 		copy.updateStateObj(copyObj)
 	}
-	// Finalise the changes on both concurrently
+	// Finalize the changes on both concurrently
 	done := make(chan struct{})
 	go func() {
 		close(done)

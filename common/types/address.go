@@ -3,14 +3,15 @@ package types
 import (
 	"encoding/hex"
 	"fmt"
+	"math/big"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"math/big"
 )
 
 const (
-	// AddressLength is the expected length of the address
+	// AddressLength is the expected length of the address.
 	AddressLength = 20
 )
 
@@ -47,7 +48,7 @@ func StringToAddress(s string) (Address, error) {
 	}
 	bt, err := hex.DecodeString(s)
 	if err != nil {
-		return Address{}, err
+		return Address{}, fmt.Errorf("decode hex string: %w", err)
 	}
 	return BytesToAddress(bt), nil
 }

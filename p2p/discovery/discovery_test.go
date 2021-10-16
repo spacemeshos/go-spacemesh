@@ -2,17 +2,19 @@ package discovery
 
 import (
 	"context"
+	"errors"
 	"strconv"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const tstBootstrapTimeout = 5 * time.Minute
@@ -59,7 +61,7 @@ func TestDHT_BootstrapAbort(t *testing.T) {
 	Cancel()
 	// Should return error after 2 seconds
 	err := dht.Bootstrap(Ctx)
-	require.EqualError(t, err, ErrBootAbort.Error(), "Should be able to abort bootstrap")
+	require.ErrorIs(t, err, ErrBootAbort, errors.New("Should be able to abort bootstrap"))
 }
 
 func TestKadDHT_VerySmallBootstrap(t *testing.T) {

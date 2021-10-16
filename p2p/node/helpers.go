@@ -12,7 +12,7 @@ import (
 
 var localhost = net.IP{127, 0, 0, 1}
 
-// ErrFailedToCreate is returned when we fail to create a node
+// ErrFailedToCreate is returned when we fail to create a node.
 var ErrFailedToCreate = errors.New("failed to create local test node")
 
 // GenerateTestNode generates a local test node without persisting data to local store and with default config value.
@@ -21,8 +21,7 @@ func GenerateTestNode(t *testing.T) (LocalNode, *Info) {
 }
 
 // GenerateTestNodeWithConfig creates a local test node without persisting data to local store.
-func GenerateTestNodeWithConfig(t *testing.T) (LocalNode, *Info) {
-
+func GenerateTestNodeWithConfig(t *testing.T) (ln LocalNode, info *Info) {
 	tcpPort, err := GetUnboundedPort("tcp", 0)
 	if err != nil {
 		t.Error("failed to get a port to bind", err)
@@ -34,14 +33,12 @@ func GenerateTestNodeWithConfig(t *testing.T) (LocalNode, *Info) {
 
 	addr := net.TCPAddr{IP: net.ParseIP("0.0.0.0"), Port: tcpPort}
 
-	var localNode LocalNode
-
-	localNode, err = NewNodeIdentity()
+	ln, err = NewNodeIdentity()
 	if err != nil {
 		t.Error(ErrFailedToCreate)
-		return emptyNode, nil
+		return ln, nil
 	}
-	return localNode, &Info{localNode.PublicKey().Array(), addr.IP, uint16(tcpPort), uint16(udpPort)}
+	return ln, &Info{ln.PublicKey().Array(), addr.IP, uint16(tcpPort), uint16(udpPort)}
 }
 
 // GenerateRandomNodeData generates a remote random node data for testing.
@@ -68,7 +65,7 @@ func GetUnboundedPort(protocol string, optionalPort int) (int, error) {
 		if e != nil {
 			l, e = net.Listen("tcp", ":0")
 			if e != nil {
-				return 0, e
+				return 0, fmt.Errorf("listen TCP: %w", e)
 			}
 		}
 		defer l.Close()
@@ -79,7 +76,7 @@ func GetUnboundedPort(protocol string, optionalPort int) (int, error) {
 		if e != nil {
 			l, e = net.ListenUDP("udp", &net.UDPAddr{Port: 0})
 			if e != nil {
-				return 0, e
+				return 0, fmt.Errorf("listen UDP: %w", e)
 			}
 		}
 		defer l.Close()

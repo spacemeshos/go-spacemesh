@@ -30,6 +30,7 @@ const (
 func newHashShake128() hash.Hash {
 	return &state{rate: 168, dsbyte: 0x1f, outputLen: 512}
 }
+
 func newHashShake256() hash.Hash {
 	return &state{rate: 136, dsbyte: 0x1f, outputLen: 512}
 }

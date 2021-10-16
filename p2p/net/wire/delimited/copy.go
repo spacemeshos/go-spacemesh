@@ -17,6 +17,7 @@
 package delimited
 
 import (
+	"errors"
 	"fmt"
 	"io"
 )
@@ -40,7 +41,7 @@ type Sink interface {
 func Copy(sink Sink, src Source) error {
 	for {
 		record, err := src.Next()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			return nil
 		} else if err != nil {
 			return fmt.Errorf("copy: read error: %w", err)

@@ -4,8 +4,9 @@ import (
 	"testing"
 
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
 func TestNewEdSignerFromBuffer(t *testing.T) {

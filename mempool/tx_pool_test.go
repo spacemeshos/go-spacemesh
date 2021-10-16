@@ -1,4 +1,4 @@
-package state
+package mempool
 
 import (
 	"encoding/binary"
@@ -6,10 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/require"
 )
 
 func getState(types.Address) (uint64, uint64, error) {
@@ -173,9 +175,21 @@ func createBatch(t testing.TB, signer *signing.EdSigner) ([]*types.Transaction, 
 	for i := uint64(0); i < 10000; i++ {
 		tx, err := types.NewSignedTx(5+1, types.Address{}, 50, 100, 1, signer)
 		require.NoError(t, err)
-		//tx := newTx(t, 5+i, 50, signer)
+		// tx := newTx(t, 5+i, 50, signer)
 		txBatch = append(txBatch, tx)
 		txIDBatch = append(txIDBatch, tx.ID())
 	}
 	return txBatch, txIDBatch
+}
+
+func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *types.Transaction {
+	feeAmount := uint64(1)
+	rec := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
+	return createTransaction(t, nonce, rec, totalAmount-feeAmount, feeAmount, signer)
+}
+
+func createTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+	tx, err := types.NewSignedTx(nonce, destination, amount, 100, fee, signer)
+	assert.NoError(t, err)
+	return tx
 }

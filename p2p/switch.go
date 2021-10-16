@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -26,13 +28,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"golang.org/x/sync/errgroup"
 )
 
-// ConnectingTimeout is the timeout we wait when trying to connect a neighborhood
+// ConnectingTimeout is the timeout we wait when trying to connect a neighborhood.
 const ConnectingTimeout = 20 * time.Second // todo: add to the config
 
-// UPNPRetries is the number of times to retry obtaining a port due to a UPnP failure
+// UPNPRetries is the number of times to retry obtaining a port due to a UPnP failure.
 const UPNPRetries = 20
 
 type cPool interface {
@@ -148,7 +149,7 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get node identidy: %w", err)
 	}
 
 	logger.With().Info("local node identity", l.PublicKey())
@@ -172,7 +173,7 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 	udpnet, err := net.NewUDPNet(shutdownCtx, config, l, logger.WithName("udpnet"))
 	if err != nil {
 		cancel()
-		return nil, err
+		return nil, fmt.Errorf("create UDP net: %w", err)
 	}
 
 	s := &Switch{
@@ -230,7 +231,12 @@ func newSwarm(ctx context.Context, config config.Config, logger log.Log, datadir
 }
 
 func (s *Switch) lookupFunc(target p2pcrypto.PublicKey) (*node.Info, error) {
-	return s.discover.Lookup(target)
+	node, err := s.discover.Lookup(target)
+	if err != nil {
+		return node, fmt.Errorf("lookup: %w", err)
+	}
+
+	return node, nil
 }
 
 func (s *Switch) onNewConnection(nce net.NewConnectionEvent) {
@@ -247,7 +253,7 @@ func (s *Switch) onNewConnection(nce net.NewConnectionEvent) {
 func (s *Switch) onClosedConnection(ctx context.Context, cwe net.ConnectionWithErr) {
 	// we don't want to block, we know this node's connection was closed.
 	// todo: pass on closing reason, if we closed the connection.
-	// 	mark address book or ban if malicious activity recognised
+	// 	mark address book or ban if malicious activity recognized
 	s.Disconnect(cwe.Conn.RemotePublicKey())
 }
 
@@ -410,7 +416,7 @@ func (s *Switch) sendMessageImpl(ctx context.Context, peerPubKey p2pcrypto.Publi
 	ctx = context.WithValue(ctx, log.PeerIDKey, conn.RemotePublicKey().String())
 	if err := conn.Send(ctx, final); err != nil {
 		logger.With().Error("error sending direct message", log.Err(err))
-		return err
+		return fmt.Errorf("send: %w", err)
 	}
 
 	logger.Debug("direct message sent successfully")
@@ -452,11 +458,11 @@ func (s *Switch) Shutdown() {
 
 		for i := range s.directProtocolHandlers {
 			delete(s.directProtocolHandlers, i)
-			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan.)
+			// close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan.)
 		}
 		for i := range s.gossipProtocolHandlers {
 			delete(s.gossipProtocolHandlers, i)
-			//close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan.)
+			// close(prt) //todo: signal protocols to shutdown with closing chan. (this makes us send on closed chan.)
 		}
 
 		s.peerLock.Lock()
@@ -478,7 +484,7 @@ func (s *Switch) Shutdown() {
 	})
 }
 
-// process an incoming message
+// process an incoming message.
 func (s *Switch) processMessage(ctx context.Context, ime net.IncomingMessageEvent) {
 	// Extract request context and add to log
 	if ime.RequestID != "" {
@@ -507,7 +513,7 @@ func (s *Switch) processMessage(ctx context.Context, ime net.IncomingMessageEven
 	}
 }
 
-// RegisterDirectProtocolWithChannel registers a direct protocol with a given channel. NOTE: eventually should replace RegisterDirectProtocol
+// RegisterDirectProtocolWithChannel registers a direct protocol with a given channel. NOTE: eventually should replace RegisterDirectProtocol.
 func (s *Switch) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
 	if s.started == 1 {
 		log.Panic("attempting to register direct protocol with channel after p2p has started")
@@ -555,17 +561,17 @@ func (s *Switch) listenToNetworkMessages(ctx context.Context) {
 // onRemoteClientMessage possible errors
 
 var (
-	// ErrBadFormat1 could'nt deserialize the payload
+	// ErrBadFormat1 could'nt deserialize the payload.
 	ErrBadFormat1 = errors.New("bad msg format, couldn't deserialize 1")
-	// ErrBadFormat2 could'nt deserialize the protocol message payload
+	// ErrBadFormat2 could'nt deserialize the protocol message payload.
 	ErrBadFormat2 = errors.New("bad msg format, couldn't deserialize 2")
-	// ErrOutOfSync is returned when message timestamp was out of sync
+	// ErrOutOfSync is returned when message timestamp was out of sync.
 	ErrOutOfSync = errors.New("received out of sync msg")
-	// ErrFailDecrypt session cant decrypt
+	// ErrFailDecrypt session cant decrypt.
 	ErrFailDecrypt = errors.New("can't decrypt message payload with session key")
-	// ErrNoProtocol we don't have the protocol message
+	// ErrNoProtocol we don't have the protocol message.
 	ErrNoProtocol = errors.New("received msg to an unsupported protocol")
-	// ErrNoSession we don't have this session
+	// ErrNoSession we don't have this session.
 	ErrNoSession = errors.New("connection is missing a session")
 )
 
@@ -620,7 +626,11 @@ func (s *Switch) onRemoteClientMessage(ctx context.Context, msg net.IncomingMess
 
 	if ok {
 		// if this message is tagged with a gossip protocol, relay it.
-		return s.gossip.Relay(ctx, msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data)
+		if err := s.gossip.Relay(ctx, msg.Conn.RemotePublicKey(), pm.Metadata.NextProtocol, data); err != nil {
+			return fmt.Errorf("relay gossip: %w", err)
+		}
+
+		return nil
 	}
 
 	// route authenticated message to the registered protocol
@@ -646,7 +656,7 @@ func (s *Switch) ProcessDirectProtocolMessage(ctx context.Context, sender p2pcry
 }
 
 // ProcessGossipProtocolMessage passes an already decrypted message to a protocol. It is expected that the protocol will
-// send the message syntactic validation result on the validationCompletedChan ASAP
+// send the message syntactic validation result on the validationCompletedChan ASAP.
 func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcrypto.PublicKey, ownMessage bool, protocol string, data service.Data, validationCompletedChan chan service.MessageValidation) error {
 	h := types.CalcMessageHash12(data.Bytes(), protocol)
 
@@ -683,7 +693,12 @@ func (s *Switch) Broadcast(ctx context.Context, protocol string, payload []byte)
 		ctx = log.WithNewRequestID(ctx)
 		s.logger.WithContext(ctx).Info("new broadcast message with no requestId, generated one")
 	}
-	return s.gossip.Broadcast(ctx, payload, protocol)
+
+	if err := s.gossip.Broadcast(ctx, payload, protocol); err != nil {
+		return fmt.Errorf("broadcast gossip: %w", err)
+	}
+
+	return nil
 }
 
 // Neighborhood : a small circle of peers we try to keep connections to. if a connection
@@ -726,7 +741,7 @@ func (s *Switch) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
 	return in, del
 }
 
-// NoResultsInterval is the timeout we wait between requesting more peers repeatedly
+// NoResultsInterval is the timeout we wait between requesting more peers repeatedly.
 const NoResultsInterval = 1 * time.Second
 
 // startNeighborhood starts the peersLoop and send a request to start connecting peers.
@@ -941,7 +956,7 @@ loop:
 	return total - bad
 }
 
-// Disconnect removes a peer from the neighborhood. It requests more peers if our outbound peer count is less than configured
+// Disconnect removes a peer from the neighborhood. It requests more peers if our outbound peer count is less than configured.
 func (s *Switch) Disconnect(peer p2pcrypto.PublicKey) {
 	s.inpeersMutex.Lock()
 	if _, ok := s.inpeers[peer]; ok {
@@ -1018,7 +1033,6 @@ func (s *Switch) getListeners(
 	getUDPListener func(udpAddr *inet.UDPAddr) (net.UDPListener, error),
 	discoverUpnpGateway func() (nattraversal.UPNPGateway, error),
 ) (inet.Listener, net.UDPListener, error) {
-
 	port := s.config.TCPPort
 	randomPort := port == 0
 	var gateway nattraversal.UPNPGateway
@@ -1090,13 +1104,28 @@ func (s *Switch) getListeners(
 }
 
 func getUDPListener(udpAddr *inet.UDPAddr) (net.UDPListener, error) {
-	return inet.ListenUDP("udp", udpAddr)
+	l, err := inet.ListenUDP("udp", udpAddr)
+	if err != nil {
+		return l, fmt.Errorf("listen UDP: %w", err)
+	}
+
+	return l, nil
 }
 
 func getTCPListener(tcpAddr *inet.TCPAddr) (inet.Listener, error) {
-	return inet.Listen("tcp", tcpAddr.String())
+	l, err := inet.Listen("tcp", tcpAddr.String())
+	if err != nil {
+		return l, fmt.Errorf("listen TCP: %w", err)
+	}
+
+	return l, nil
 }
 
 func discoverUPnPGateway() (igd nattraversal.UPNPGateway, err error) {
-	return nattraversal.DiscoverUPNPGateway()
+	gateway, err := nattraversal.DiscoverUPNPGateway()
+	if err != nil {
+		return gateway, fmt.Errorf("discover UPnP: %w", err)
+	}
+
+	return gateway, nil
 }

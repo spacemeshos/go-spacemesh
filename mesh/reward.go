@@ -1,9 +1,10 @@
 package mesh
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"math"
 	"math/big"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // Config defines the configuration options for Spacemesh rewards.

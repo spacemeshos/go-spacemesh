@@ -8,7 +8,7 @@ func Temporary(err error) bool {
 	return ok && tErr.Temporary()
 }
 
-// ConnectionWithErr is a pair of Connection and an error occurred within the connection
+// ConnectionWithErr is a pair of Connection and an error occurred within the connection.
 type ConnectionWithErr struct {
 	Conn Connection
 	Err  error

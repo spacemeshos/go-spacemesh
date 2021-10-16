@@ -13,11 +13,13 @@ import (
 	"sync"
 
 	"github.com/seehuhn/mt19937"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh/metrics"
 )
 
 const (
@@ -31,7 +33,7 @@ var (
 	constPROCESSED = []byte("processed")
 )
 
-// VERIFIED refers to layers we pushed into the state
+// VERIFIED refers to layers we pushed into the state.
 var VERIFIED = []byte("verified")
 
 type tortoise interface {
@@ -41,7 +43,7 @@ type tortoise interface {
 	HandleLateBlocks(context.Context, []*types.Block) (types.LayerID, types.LayerID)
 }
 
-// Validator interface to be used in tests to mock validation flow
+// Validator interface to be used in tests to mock validation flow.
 type Validator interface {
 	ValidateLayer(context.Context, *types.Layer)
 }
@@ -67,14 +69,14 @@ type txMemPool interface {
 	Put(id types.TransactionID, tx *types.Transaction)
 }
 
-// AtxDB holds logic for working with atxs
+// AtxDB holds logic for working with atxs.
 type AtxDB interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
 	GetFullAtx(id types.ATXID) (*types.ActivationTx, error)
 	SyntacticallyValidateAtx(ctx context.Context, atx *types.ActivationTx) error
 }
 
-// Mesh is the logic layer above our mesh.DB database
+// Mesh is the logic layer above our mesh.DB database.
 type Mesh struct {
 	log.Log
 	*DB
@@ -99,7 +101,7 @@ type Mesh struct {
 	txMutex             sync.Mutex
 }
 
-// NewMesh creates a new instant of a mesh
+// NewMesh creates a new instant of a mesh.
 func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
 	msh := &Mesh{
 		Log:                 logger,
@@ -129,7 +131,7 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 	return msh
 }
 
-// NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database
+// NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database.
 func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
 	msh := NewMesh(db, atxDb, rewardConfig, trtl, txPool, pr, logger)
 
@@ -177,7 +179,7 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 	return msh
 }
 
-// CacheWarmUp warms up cache with latest blocks
+// CacheWarmUp warms up cache with latest blocks.
 func (msh *Mesh) CacheWarmUp(layerSize int) {
 	start := types.NewLayerID(0)
 	if msh.ProcessedLayer().Uint32() > uint32(msh.blockCache.Cap()/layerSize) {
@@ -191,21 +193,21 @@ func (msh *Mesh) CacheWarmUp(layerSize int) {
 	msh.Info("cache warm up done")
 }
 
-// LatestLayerInState returns the latest layer we applied to state
+// LatestLayerInState returns the latest layer we applied to state.
 func (msh *Mesh) LatestLayerInState() types.LayerID {
 	defer msh.mutex.RUnlock()
 	msh.mutex.RLock()
 	return msh.latestLayerInState
 }
 
-// LatestLayer - returns the latest layer we saw from the network
+// LatestLayer - returns the latest layer we saw from the network.
 func (msh *Mesh) LatestLayer() types.LayerID {
 	defer msh.mutex.RUnlock()
 	msh.mutex.RLock()
 	return msh.latestLayer
 }
 
-// setLatestLayer sets the latest layer we saw from the network
+// setLatestLayer sets the latest layer we saw from the network.
 func (msh *Mesh) setLatestLayer(idx types.LayerID) {
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: idx,
@@ -223,11 +225,11 @@ func (msh *Mesh) setLatestLayer(idx types.LayerID) {
 	}
 }
 
-// GetLayer returns Layer i from the database
+// GetLayer returns Layer i from the database.
 func (msh *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
 	mBlocks, err := msh.LayerBlocks(i)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("layer blocks: %w", err)
 	}
 
 	l := types.NewLayer(i)
@@ -236,13 +238,13 @@ func (msh *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
 	return l, nil
 }
 
-// GetLayerHash returns layer hash for received blocks
+// GetLayerHash returns layer hash for received blocks.
 func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 	h, err := msh.recoverLayerHash(layerID)
 	if err == nil {
 		return h
 	}
-	if err == database.ErrNotFound {
+	if errors.Is(err, database.ErrNotFound) {
 		// layer hash not persisted. i.e. contextual validity not yet determined
 		lyr, err := msh.GetLayer(layerID)
 		if err == nil {
@@ -252,7 +254,7 @@ func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 	return types.EmptyLayerHash
 }
 
-// ProcessedLayer returns the last processed layer ID
+// ProcessedLayer returns the last processed layer ID.
 func (msh *Mesh) ProcessedLayer() types.LayerID {
 	msh.mutex.RLock()
 	defer msh.mutex.RUnlock()
@@ -438,7 +440,7 @@ func (msh *Mesh) HandleLateBlock(ctx context.Context, b *types.Block) {
 	msh.pushLayersToState(ctx, oldPbase, newPbase)
 }
 
-// apply the state of a range of layers, including re-adding transactions from invalid blocks to the mempool
+// apply the state of a range of layers, including re-adding transactions from invalid blocks to the mempool.
 func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types.LayerID) {
 	logger := msh.WithContext(ctx).WithFields(
 		log.FieldNamed("old_pbase", oldPbase),
@@ -480,7 +482,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 	}
 }
 
-// RevertState reverts to state as of a previous layer
+// RevertState reverts to state as of a previous layer.
 func (msh *Mesh) revertState(ctx context.Context, layerID types.LayerID) error {
 	logger := msh.WithContext(ctx).WithFields(layerID)
 	logger.Info("attempting to roll back state to previous layer")
@@ -512,7 +514,7 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	msh.setLatestLayerInState(l.Index())
 }
 
-// HandleValidatedLayer receives hare output once it finishes running for a given layer
+// HandleValidatedLayer receives hare output once it finishes running for a given layer.
 func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
 	logger := msh.WithContext(ctx).WithFields(validatedLayer)
 	var blocks []*types.Block
@@ -521,11 +523,15 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		block, err := msh.GetBlock(blockID)
 		if err != nil {
 			// stop processing this hare result, wait until tortoise pushes this layer into state
-			logger.Error("hare terminated with block that is not present in mesh")
+			logger.With().Error("hare terminated with block that is not present in mesh",
+				blockID,
+				log.Err(err))
 			return
 		}
 		blocks = append(blocks, block)
 	}
+
+	metrics.LayerNumBlocks.Observe(float64(len(layer)))
 
 	// report that hare "approved" this layer
 	events.ReportLayerUpdate(events.LayerUpdate{
@@ -602,13 +608,13 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
 	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
 		// can happen if database already closed
 		msh.Error("could not persist validated layer index %d: %v", lyr, err.Error())
-		return err
+		return fmt.Errorf("put into DB: %w", err)
 	}
 	msh.latestLayerInState = lyr
 	return nil
 }
 
-// GetAggregatedLayerHash returns the aggregated layer hash up to the specified layer
+// GetAggregatedLayerHash returns the aggregated layer hash up to the specified layer.
 func (msh *Mesh) GetAggregatedLayerHash(layerID types.LayerID) types.Hash32 {
 	h, err := msh.getAggregatedLayerHash(layerID)
 	if err != nil {
@@ -627,7 +633,7 @@ func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, er
 		hash.SetBytes(bts)
 		return hash, nil
 	}
-	return hash, err
+	return hash, fmt.Errorf("get from DB: %w", err)
 }
 
 func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs []*types.Transaction) {
@@ -702,13 +708,13 @@ func (msh *Mesh) pushTransactions(l *types.Layer) {
 
 var errLayerHasBlock = errors.New("layer has block")
 
-// SetZeroBlockLayer tags lyr as a layer without blocks
+// SetZeroBlockLayer tags lyr as a layer without blocks.
 func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	msh.With().Info("tagging zero block layer", lyr)
 	// check database for layer
 	if l, err := msh.GetLayer(lyr); err != nil {
 		// database error
-		if err != database.ErrNotFound {
+		if !errors.Is(err, database.ErrNotFound) {
 			msh.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
 			return err
 		}
@@ -729,7 +735,7 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 
 // AddBlockWithTxs adds a block to the database
 // blk - the block to add
-// txs - block txs that we dont have in our tx database yet
+// txs - block txs that we dont have in our tx database yet.
 func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
 	logger := msh.WithContext(ctx).WithFields(blk.ID())
 	logger.With().Debug("adding block to mesh", blk.Fields()...)
@@ -740,7 +746,7 @@ func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
 
 	// Store block (delete if storing ATXs fails)
 	if err := msh.DB.AddBlock(blk); err != nil {
-		if err == ErrAlreadyExist {
+		if errors.Is(err, ErrAlreadyExist) {
 			return nil
 		}
 		logger.With().Error("failed to add block", log.Err(err))
@@ -762,7 +768,7 @@ func (msh *Mesh) invalidateFromPools(blk *types.MiniBlock) {
 }
 
 // StoreTransactionsFromPool takes declared txs from provided block blk and writes them to DB. it then invalidates
-// the transactions from txpool
+// the transactions from txpool.
 func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 	// Store transactions (doesn't have to be rolled back if other writes fail)
 	if len(blk.TxIDs) == 0 {
@@ -775,12 +781,12 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 			// if the transaction is not in the pool it could have been
 			// invalidated by another block
 			if has, err := msh.transactions.Has(txID.Bytes()); !has {
-				return err
+				return fmt.Errorf("check if tx is in DB: %w", err)
 			}
 			continue
 		}
 		if err = tx.CalcAndSetOrigin(); err != nil {
-			return err
+			return fmt.Errorf("calc and set origin: %w", err)
 		}
 		txs = append(txs, tx)
 	}
@@ -798,7 +804,7 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 	return nil
 }
 
-// todo better thread safety
+// todo better thread safety.
 func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
@@ -821,7 +827,7 @@ func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
 	}
 }
 
-// GetOrphanBlocksBefore returns all known orphan blocks with layerID < l
+// GetOrphanBlocksBefore returns all known orphan blocks with layerID < l.
 func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
 	msh.mutex.RLock()
 	defer msh.mutex.RUnlock()
@@ -949,19 +955,19 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	// todo: should miner id be sorted in a deterministic order prior to applying rewards?
 }
 
-// GenesisBlock is a is the first static block that xists at the beginning of each network. it exist one layer before actual blocks could be created
+// GenesisBlock is a is the first static block that xists at the beginning of each network. it exist one layer before actual blocks could be created.
 func GenesisBlock() *types.Block {
 	return types.NewExistingBlock(types.GetEffectiveGenesis(), []byte("genesis"), nil)
 }
 
-// GenesisLayer generates layer 0 should be removed after the genesis flow is implemented
+// GenesisLayer generates layer 0 should be removed after the genesis flow is implemented.
 func GenesisLayer() *types.Layer {
 	l := types.NewLayer(types.GetEffectiveGenesis())
 	l.AddBlock(GenesisBlock())
 	return l
 }
 
-// GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested
+// GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested.
 func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
 	var mIds []types.ATXID
 	atxs := make(map[types.ATXID]*types.ActivationTx, len(atxIds))

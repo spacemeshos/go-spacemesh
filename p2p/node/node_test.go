@@ -2,12 +2,14 @@ package node
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 	"net"
 	"strconv"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 )
 
 func TestNew(t *testing.T) {

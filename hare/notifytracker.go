@@ -23,7 +23,7 @@ func newNotifyTracker(expectedSize int) *notifyTracker {
 }
 
 // OnNotify tracks the provided notification message.
-// Returns true if the InnerMsg didn't affect the state, false otherwise
+// Returns true if the InnerMsg didn't affect the state, false otherwise.
 func (nt *notifyTracker) OnNotify(msg *Msg) bool {
 	pub := msg.PubKey
 	eligibilityCount := uint32(msg.InnerMsg.EligibilityCount)
@@ -42,7 +42,7 @@ func (nt *notifyTracker) OnNotify(msg *Msg) bool {
 	return false
 }
 
-// NotificationsCount returns the number of notifications tracked for the provided set
+// NotificationsCount returns the number of notifications tracked for the provided set.
 func (nt *notifyTracker) NotificationsCount(s *Set) int {
 	return int(nt.tracker.CountStatus(s.ID()))
 }
@@ -65,7 +65,7 @@ func calcID(k uint32, set *Set) uint32 {
 	return hash.Sum32()
 }
 
-// tracks certificates
+// tracks certificates.
 func (nt *notifyTracker) onCertificate(k uint32, set *Set) {
 	nt.certificates[calcID(k, set)] = struct{}{}
 }

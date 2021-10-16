@@ -10,6 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/nattraversal"
@@ -21,8 +24,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 type cpoolMock struct {
@@ -467,7 +468,6 @@ func TestSwarm_MultipleMessagesFromMultipleSendersToMultipleProtocols(t *testing
 				mu.Unlock()
 			}
 		}()
-
 	}
 
 	require.NoError(t, p1.Start(context.TODO()))
@@ -609,7 +609,6 @@ func TestSwarm_onRemoteClientMessage(t *testing.T) {
 			break
 		case <-ti:
 			t.Error("Didn't get message in time")
-
 		}
 	}()
 	wg.Add(1)
@@ -904,7 +903,7 @@ func TestNeighborhood_Initial(t *testing.T) {
 	ti := time.After(time.Millisecond)
 	select {
 	case <-p.initial:
-		t.Error("Start succeded")
+		t.Error("Start succeeded")
 	case <-ti:
 		break
 	}
@@ -950,7 +949,7 @@ func TestNeighborhood_Disconnect(t *testing.T) {
 	}
 	assert.False(t, n.hasIncomingPeer(rnd.PublicKey()))
 
-	// manualy add an incoming peer
+	// manually add an incoming peer
 	rnd2 := node.GenerateRandomNodeData()
 	n.outpeers[rnd2.PublicKey()] = struct{}{} // no need to lock nothing's happening
 	go n.Disconnect(rnd2.PublicKey())
@@ -1178,10 +1177,12 @@ func TestSwarm_SendMessage(t *testing.T) {
 		return message
 	}
 
-	c.SetSendResult(errors.New("fail"))
+	expectedErr := errors.New("fail")
+	c.SetSendResult(expectedErr)
 
 	err = p.SendMessage(context.TODO(), someky, proto, []byte("LOL"))
-	require.Equal(t, err, errors.New("fail"))
+	fmt.Println(err)
+	require.ErrorIs(t, err, expectedErr)
 
 	c.SetSendResult(nil)
 
@@ -1336,7 +1337,6 @@ func testGetListenersScenario(
 	discoverUpnp func() (igd nattraversal.UPNPGateway, err error),
 	acquirePort bool,
 ) error {
-
 	r := require.New(t)
 
 	cfg := configWithPort(port)

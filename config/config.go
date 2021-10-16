@@ -3,24 +3,24 @@ package config
 
 import (
 	"fmt"
+	"math/big"
 	"path/filepath"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+	"github.com/spf13/viper"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
 	eligConfig "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
-
-	"github.com/spf13/viper"
 )
 
 const (
@@ -34,7 +34,7 @@ var (
 	defaultDataDir = filepath.Join(defaultHomeDir, defaultDataDirName, "/")
 )
 
-// Config defines the top level configuration for a spacemesh node
+// Config defines the top level configuration for a spacemesh node.
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
 	Genesis         *apiConfig.GenesisConfig `mapstructure:"genesis"`
@@ -58,7 +58,7 @@ func (cfg *Config) DataDir() string {
 	return filepath.Join(filesystem.GetCanonicalPath(cfg.DataDirParent), fmt.Sprint(cfg.P2P.NetworkID))
 }
 
-// BaseConfig defines the default configuration options for spacemesh app
+// BaseConfig defines the default configuration options for spacemesh app.
 type BaseConfig struct {
 	DataDirParent string `mapstructure:"data-folder"`
 
@@ -78,16 +78,16 @@ type BaseConfig struct {
 	OracleServer        string `mapstructure:"oracle_server"`
 	OracleServerWorldID int    `mapstructure:"oracle_server_worldid"`
 
-	GenesisTime      string `mapstructure:"genesis-time"`
-	LayerDurationSec int    `mapstructure:"layer-duration-sec"`
-	LayerAvgSize     int    `mapstructure:"layer-average-size"`
-	LayersPerEpoch   uint32 `mapstructure:"layers-per-epoch"`
-	Hdist            uint32 `mapstructure:"hdist"`                     // hare/input vector lookback distance
-	Zdist            uint32 `mapstructure:"zdist"`                     // hare result wait distance
-	ConfidenceParam  uint32 `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
-	WindowSize       uint32 `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
-	GlobalThreshold  uint8  `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
-	LocalThreshold   uint8  `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
+	GenesisTime      string   `mapstructure:"genesis-time"`
+	LayerDurationSec int      `mapstructure:"layer-duration-sec"`
+	LayerAvgSize     int      `mapstructure:"layer-average-size"`
+	LayersPerEpoch   uint32   `mapstructure:"layers-per-epoch"`
+	Hdist            uint32   `mapstructure:"hdist"`                     // hare/input vector lookback distance
+	Zdist            uint32   `mapstructure:"zdist"`                     // hare result wait distance
+	ConfidenceParam  uint32   `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
+	WindowSize       uint32   `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
+	GlobalThreshold  *big.Rat `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
+	LocalThreshold   *big.Rat `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
 
 	// how often we rerun tortoise from scratch, in minutes
 	TortoiseRerunInterval uint32 `mapstructure:"tortoise-rerun-interval"`
@@ -103,8 +103,6 @@ type BaseConfig struct {
 	SyncRequestTimeout int `mapstructure:"sync-request-timeout"` // ms the timeout for direct request in the sync
 
 	SyncInterval int `mapstructure:"sync-interval"` // sync interval in seconds
-
-	SyncValidationDelta int `mapstructure:"sync-validation-delta"` // sync interval in seconds
 
 	PublishEventsURL string `mapstructure:"events-url"`
 
@@ -125,8 +123,6 @@ type LoggerConfig struct {
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
 	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
-	TBeaconDbStoreLoggerLevel string `mapstructure:"tbDbStore"`
-	TBeaconDbLoggerLevel      string `mapstructure:"tbDb"`
 	TBeaconLoggerLevel        string `mapstructure:"tBeacon"`
 	WeakCoinLoggerLevel       string `mapstructure:"weakCoin"`
 	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
@@ -157,7 +153,7 @@ type SmeshingConfig struct {
 	Opts            activation.PostSetupOpts `mapstructure:"smeshing-opts"`
 }
 
-// DefaultConfig returns the default configuration for a spacemesh node
+// DefaultConfig returns the default configuration for a spacemesh node.
 func DefaultConfig() Config {
 	return Config{
 		BaseConfig:      defaultBaseConfig(),
@@ -184,7 +180,7 @@ func DefaultTestConfig() Config {
 	return conf
 }
 
-// DefaultBaseConfig returns a default configuration for spacemesh
+// DefaultBaseConfig returns a default configuration for spacemesh.
 func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:         defaultDataDir,
@@ -206,14 +202,13 @@ func defaultBaseConfig() BaseConfig {
 		Hdist:                 10,
 		Zdist:                 5,
 		ConfidenceParam:       5,
-		WindowSize:            100,     // should be "a few thousand layers" in production
-		GlobalThreshold:       60,      // in percentage terms, must be in interval [0, 100]
-		LocalThreshold:        20,      // in percentage terms, must be in interval [0, 100]
-		TortoiseRerunInterval: 60 * 24, // in minutes, once per day
+		WindowSize:            100,                 // should be "a few thousand layers" in production
+		GlobalThreshold:       big.NewRat(60, 100), // fraction
+		LocalThreshold:        big.NewRat(20, 100), // fraction
+		TortoiseRerunInterval: 60 * 24,             // in minutes, once per day
 		BlockCacheSize:        20,
 		SyncRequestTimeout:    2000,
 		SyncInterval:          10,
-		SyncValidationDelta:   300,
 		AtxsPerBlock:          100,
 		TxsPerBlock:           100,
 	}
@@ -234,7 +229,7 @@ func defaultTestConfig() BaseConfig {
 	return conf
 }
 
-// LoadConfig load the config file
+// LoadConfig load the config file.
 func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 	if fileLocation == "" {
 		fileLocation = defaultConfigFileName
@@ -258,7 +253,7 @@ func LoadConfig(fileLocation string, vip *viper.Viper) (err error) {
 	return nil
 }
 
-// SetConfigFile overrides the default config file path
+// SetConfigFile overrides the default config file path.
 func (cfg *BaseConfig) SetConfigFile(file string) {
 	cfg.ConfigFile = file
 }
