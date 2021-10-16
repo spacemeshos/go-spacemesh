@@ -144,6 +144,7 @@ func (s *Server) Request(ctx context.Context, p peer.ID, req []byte, resp func([
 		var r response
 		if _, err := codec.DecodeFrom(rd, &r); err != nil {
 			failure(err)
+			return
 		}
 		if len(r.Error) > 0 {
 			failure(errors.New(r.Error))
