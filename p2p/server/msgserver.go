@@ -179,7 +179,7 @@ func (p *MessageServer) readLoop(ctx context.Context) error {
 			// generate new reqID for message
 			ctx := log.WithNewRequestID(ctx)
 			// this causes issues with tests, leaving it here for debugging purposes
-			//logger.Debug("new msg received from channel")
+			// logger.Debug("new msg received from channel")
 			if !ok {
 				logger.Error("read loop channel was closed")
 				return context.Canceled

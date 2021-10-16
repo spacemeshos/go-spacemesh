@@ -177,7 +177,7 @@ func (c *MsgConnection) sendListener() {
 		select {
 		case m := <-c.messages:
 			// this causes issues with tests, leaving it here for debugging purposes
-			//c.logger.With().Debug("msgconnection: sending outgoing message",
+			// c.logger.With().Debug("msgconnection: sending outgoing message",
 			//	log.String("peer_id", m.peerID),
 			//	log.String("requestId", m.reqID),
 			//	log.Int("queue_length", len(c.messages)))
@@ -211,7 +211,7 @@ func (c *MsgConnection) Send(ctx context.Context, m []byte) error {
 	peerID, _ := ctx.Value(log.PeerIDKey).(string)
 
 	// this causes issues with tests, leaving it here for debugging purposes
-	//c.logger.WithContext(ctx).With().Debug("msgconnection: enqueuing outgoing message",
+	// c.logger.WithContext(ctx).With().Debug("msgconnection: enqueuing outgoing message",
 	//	log.Int("queue_length", len(c.messages)))
 	if len(c.messages) > 30 {
 		c.logger.WithContext(ctx).With().Warning("msgconnection: outbound send queue backlog",

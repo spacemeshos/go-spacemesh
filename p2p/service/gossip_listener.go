@@ -76,7 +76,7 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 
 	waitForGossipToken := func(ctx context.Context) {
 		// this causes issues with tests, leaving here for debug purposes
-		//l.WithContext(ctx).With().Debug("waiting for available slot for gossip handler",
+		// l.WithContext(ctx).With().Debug("waiting for available slot for gossip handler",
 		//	log.Int("available_slots", cap(tokenChan)-len(tokenChan)),
 		//	log.Int("total_slots", cap(tokenChan)))
 
@@ -88,7 +88,7 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 		tokenChan <- struct{}{}
 
 		// this causes issues with tests, leaving here for debug purposes
-		//l.WithContext(ctx).With().Debug("got gossip token",
+		// l.WithContext(ctx).With().Debug("got gossip token",
 		//	log.String("protocol", channel),
 		//	log.Int("queue_length", len(gossipChannel)))
 	}
@@ -102,7 +102,7 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 		}
 		go func() {
 			// this causes issues with tests, leaving here for debug purposes
-			//l.WithContext(ctx).Info("passing data to data handler")
+			// l.WithContext(ctx).Info("passing data to data handler")
 			// TODO: these handlers should have an API that includes a cancel method. they should time out eventually.
 			dataHandler(ctx, data, l.fetcher)
 			// replace token when done
@@ -117,7 +117,7 @@ func (l *Listener) listenToGossip(ctx context.Context, dataHandler GossipDataHan
 			return
 		case data := <-gossipChannel:
 			// this causes issues with tests, leaving here for debug purposes
-			//l.WithContext(ctx).With().Debug("got gossip message, forwarding to data handler",
+			// l.WithContext(ctx).With().Debug("got gossip message, forwarding to data handler",
 			//	log.String("protocol", channel),
 			//	log.Int("queue_length", len(gossipChannel)))
 			if !l.shouldListenToGossip() {

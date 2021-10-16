@@ -15,8 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
-type syncMock struct {
-}
+type syncMock struct{}
 
 func (sm *syncMock) FetchBlock(context.Context, types.BlockID) error {
 	return nil
