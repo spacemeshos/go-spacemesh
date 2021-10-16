@@ -5,33 +5,33 @@ import (
 	"container/list"
 	"context"
 	"errors"
+	"fmt"
 	"runtime"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"golang.org/x/sync/errgroup"
 )
 
 // MessageType is a uint32 used to distinguish between server messages inside a single protocol.
 type MessageType uint32
 
 const (
-	// PingPong is the ping protocol ID
+	// PingPong is the ping protocol ID.
 	PingPong MessageType = iota
-	// GetAddresses is the findnode protocol ID
+	// GetAddresses is the findnode protocol ID.
 	GetAddresses
-	// LayerBlocksMsg is used to fetch block IDs for a given layer hash
+	// LayerBlocksMsg is used to fetch block IDs for a given layer hash.
 	LayerBlocksMsg
-	// AtxIDsMsg is used to fetch ATXs for a given epoch
+	// AtxIDsMsg is used to fetch ATXs for a given epoch.
 	AtxIDsMsg
-	// TortoiseBeaconMsg is used to fetch tortoise beacon messages for a given epoch
-	TortoiseBeaconMsg
-	// Fetch is used to fetch data for a given hash
+	// Fetch is used to fetch data for a given hash.
 	Fetch
 	// RequestTimeSync is used for time synchronization with peers.
 	RequestTimeSync
@@ -59,13 +59,13 @@ type responseHandlers struct {
 	failCallBack func(err error)
 }
 
-// ErrShuttingDown is returned to the peer when the node is shutting down
+// ErrShuttingDown is returned to the peer when the node is shutting down.
 var ErrShuttingDown = errors.New("node is shutting down")
 
-// ErrBadRequest is returned to the peer upon failure to parse the request
+// ErrBadRequest is returned to the peer upon failure to parse the request.
 var ErrBadRequest = errors.New("unable to parse request")
 
-// ErrRequestTimeout is returned to the caller when the request times out
+// ErrRequestTimeout is returned to the caller when the request times out.
 var ErrRequestTimeout = errors.New("request timed out")
 
 type response struct {
@@ -82,7 +82,7 @@ func (r *response) getError() error {
 	return nil
 }
 
-// SerializeResponse serializes the response data returned by SendRequest
+// SerializeResponse serializes the response data returned by SendRequest.
 func SerializeResponse(data []byte, err error) []byte {
 	resp := response{Data: data}
 	if err != nil {
@@ -95,12 +95,12 @@ func SerializeResponse(data []byte, err error) []byte {
 	return bytes
 }
 
-// deserializeResponse deserializes the response data returned by SendRequest
+// deserializeResponse deserializes the response data returned by SendRequest.
 func deserializeResponse(data []byte) (*response, error) {
 	var resp response
 	err := types.BytesToInterface(data, &resp)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse: %w", err)
 	}
 	return &resp, nil
 }
@@ -108,14 +108,14 @@ func deserializeResponse(data []byte) (*response, error) {
 // MessageServer is a request-response multiplexer on top of the p2p layer. it provides a way to register
 // message types on top of a protocol and declare request and response handlers. it matches incoming responses to requests.
 type MessageServer struct {
-	ReqID              uint64 //request id (must be declared first to ensure 8 byte alignment on 32-bit systems, required by atomic operations)
-	name               string //server name
+	ReqID              uint64 // request id (must be declared first to ensure 8 byte alignment on 32-bit systems, required by atomic operations)
+	name               string // server name
 	network            Service
 	pendMutex          sync.RWMutex
-	pendingQueue       *list.List                                                     //queue of pending messages
-	resHandlers        map[uint64]responseHandlers                                    //response handlers by request ReqID
-	msgRequestHandlers map[MessageType]func(context.Context, Message) ([]byte, error) //request handlers by request type
-	ingressChannel     chan service.DirectMessage                                     //chan to relay messages into the server
+	pendingQueue       *list.List                                                     // queue of pending messages
+	resHandlers        map[uint64]responseHandlers                                    // response handlers by request ReqID
+	msgRequestHandlers map[MessageType]func(context.Context, Message) ([]byte, error) // request handlers by request type
+	ingressChannel     chan service.DirectMessage                                     // chan to relay messages into the server
 	requestLifetime    time.Duration
 	workerLimiter      chan struct{}
 	eg                 errgroup.Group
@@ -150,7 +150,7 @@ func NewMsgServer(ctx context.Context, network Service, name string, requestLife
 	return p
 }
 
-// Close stops the MessageServer
+// Close stops the MessageServer.
 func (p *MessageServer) Close() {
 	p.With().Info("closing message server")
 	p.cancel()
@@ -169,7 +169,7 @@ func (p *MessageServer) readLoop(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("context done: %w", ctx.Err())
 		case <-timer.C:
 			p.eg.Go(func() error {
 				p.cleanStaleMessages()
@@ -192,13 +192,13 @@ func (p *MessageServer) readLoop(ctx context.Context) error {
 					return nil
 				})
 			case <-ctx.Done():
-				return ctx.Err()
+				return fmt.Errorf("context done: %w", ctx.Err())
 			}
 		}
 	}
 }
 
-// clean stale messages after request life time expires
+// clean stale messages after request life time expires.
 func (p *MessageServer) cleanStaleMessages() {
 	for {
 		p.pendMutex.RLock()
@@ -340,13 +340,13 @@ func (p *MessageServer) SendRequest(ctx context.Context, msgType MessageType, pa
 			log.Int("msglen", len(payload)),
 			log.Err(err))
 		p.removeFromPending(reqID)
-		return err
+		return fmt.Errorf("send wrapped message: %w", err)
 	}
 	p.WithContext(ctx).Debug("sent request")
 	return nil
 }
 
-// TODO: make these longer, and random, to make it easier to find them in the logs
+// TODO: make these longer, and random, to make it easier to find them in the logs.
 func (p *MessageServer) newReqID() uint64 {
 	return atomic.AddUint64(&p.ReqID, 1)
 }

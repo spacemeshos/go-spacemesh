@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
@@ -66,7 +67,6 @@ func (l *PoetListener) handlePoetProofMessage(ctx context.Context, gossipMessage
 	}
 	if err := l.poetDb.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
 		proofMessage.RoundID, proofMessage.Signature); err != nil {
-
 		if types.IsProcessingError(err) {
 			l.Log.Error("failed to validate poet proof: %v", err)
 		} else {

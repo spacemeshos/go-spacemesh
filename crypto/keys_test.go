@@ -10,7 +10,6 @@ import (
 )
 
 func TestBasicApi(t *testing.T) {
-
 	badData, _ := hex.DecodeString("1234")
 	_, err := NewPublicKey(badData)
 	assert.Error(t, err, "expected error for bad key data")
@@ -55,7 +54,6 @@ func TestBasicApi(t *testing.T) {
 }
 
 func TestCryptoApi(t *testing.T) {
-
 	priv, pub, err := GenerateKeyPair()
 
 	assert.Nil(t, err, "Failed to generate keys")
@@ -95,7 +93,6 @@ func TestCryptoApi(t *testing.T) {
 	assert.Nil(t, err, fmt.Sprintf("dec error: %v", err))
 
 	assert.True(t, bytes.Equal(msgData, clearText), "expected same dec message")
-
 }
 
 func BenchmarkVerify(b *testing.B) {
@@ -115,10 +112,8 @@ func BenchmarkVerify(b *testing.B) {
 
 	b.StartTimer()
 	for i := 0; i < b.N; i++ {
-		//ok, err := pub.Verify(msgData, signature)
+		// ok, err := pub.Verify(msgData, signature)
 		pub.Verify(msgData, signature)
-
 	}
 	b.StopTimer()
-
 }

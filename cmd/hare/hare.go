@@ -9,21 +9,23 @@ import (
 	"os"
 	"time"
 
+	"github.com/spf13/cobra"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare"
+	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/monitoring"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spf13/cobra"
-	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 )
 
-// Cmd the command of the hare app
+// Cmd the command of the hare app.
 var Cmd = &cobra.Command{
 	Use:   "hare",
 	Short: "start hare",
@@ -63,7 +65,7 @@ func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, err
 	return buildSet(), nil
 }
 
-// HareApp represents an Hare application
+// HareApp represents an Hare application.
 type HareApp struct {
 	*cmdp.BaseApp
 	p2p     p2p.Service
@@ -75,17 +77,17 @@ type HareApp struct {
 	monitor *monitoring.Monitor
 }
 
-// IsSynced returns true always as we assume the node is synced
+// IsSynced returns true always as we assume the node is synced.
 func IsSynced(context.Context) bool {
 	return true
 }
 
-// NewHareApp returns a new instance
+// NewHareApp returns a new instance.
 func NewHareApp() *HareApp {
 	return &HareApp{BaseApp: cmdp.NewBaseApp(), sgn: signing.NewEdSigner()}
 }
 
-// Cleanup just unregisters the oracle
+// Cleanup just unregisters the oracle.
 func (app *HareApp) Cleanup() {
 	// TODO: move to array of cleanup functions and execute all here
 	app.oracle.Unregister(true, app.sgn.PublicKey().String())
@@ -113,7 +115,7 @@ func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(ctx context.Context,
 	return true, nil
 }
 
-// Start the app
+// Start the app.
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("starting hare main")
 
@@ -159,7 +161,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	//app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
 	lt := make(timesync.LayerTimer)
 
-	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
+	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
 	log.Info("starting hare service")
 	app.ha = hareI
 	if err = app.ha.Start(cmdp.Ctx); err != nil {

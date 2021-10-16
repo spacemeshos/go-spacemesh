@@ -45,7 +45,7 @@ func (e *testEncoder) EncodeRLP(w io.Writer) error {
 type byteEncoder byte
 
 func (e byteEncoder) EncodeRLP(w io.Writer) error {
-	var emptyList = []byte{0xC0}
+	emptyList := []byte{0xC0}
 	w.Write(emptyList)
 	return nil
 }
@@ -239,11 +239,11 @@ var encTests = []encTest{
 	// Encoder
 	{val: (*testEncoder)(nil), output: "00000000"},
 	{val: &testEncoder{}, output: "00010001000100010001"},
-	{val: &testEncoder{errors.New("test error")}, error: "test error"},
+	{val: &testEncoder{errors.New("test error")}, error: "encode RLP: test error"},
 	// verify that pointer method testEncoder.EncodeRLP is called for
 	// addressable non-pointer values.
 	{val: &struct{ TE testEncoder }{testEncoder{}}, output: "CA00010001000100010001"},
-	{val: &struct{ TE testEncoder }{testEncoder{errors.New("test error")}}, error: "test error"},
+	{val: &struct{ TE testEncoder }{testEncoder{errors.New("test error")}}, error: "encode RLP: test error"},
 	// verify the error for non-addressable non-pointer Encoder
 	{val: testEncoder{}, error: "rlp: game over: unadressable value of type rlp.testEncoder, EncodeRLP is pointer method"},
 	// verify the special case for []byte
@@ -288,7 +288,13 @@ func TestEncodeToReader(t *testing.T) {
 		if err != nil {
 			return nil, err
 		}
-		return ioutil.ReadAll(r)
+
+		data, err := ioutil.ReadAll(r)
+		if err != nil {
+			return data, fmt.Errorf("ioutil.ReadAll: %w", err)
+		}
+
+		return data, nil
 	})
 }
 
@@ -309,10 +315,10 @@ func TestEncodeToReaderPiecewise(t *testing.T) {
 			}
 			n, err := r.Read(output[start:end])
 			end = start + n
-			if err == io.EOF {
+			if errors.Is(err, io.EOF) {
 				break
 			} else if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("read: %w", err)
 			}
 		}
 		return output, nil

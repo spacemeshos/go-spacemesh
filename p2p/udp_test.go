@@ -7,6 +7,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -14,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/stretchr/testify/require"
 )
 
 const testStr = "regTest"
@@ -51,11 +52,9 @@ func (mun *mockUDPNetwork) Dial(ctx context.Context, address net2.Addr, remotepk
 }
 
 func (mun *mockUDPNetwork) SubscribeClosingConnections(func(context.Context, net.ConnectionWithErr)) {
-
 }
 
 func (mun *mockUDPNetwork) SubscribeOnNewRemoteConnections(func(event net.NewConnectionEvent)) {
-
 }
 
 func TestNewUDPMux(t *testing.T) {
@@ -95,7 +94,7 @@ func TestUDPMux_ProcessDirectProtocolMessage(t *testing.T) {
 
 	data := service.DataBytes{Payload: []byte(testStr)}
 	nod := node.GenerateRandomNodeData()
-	addr := &net2.UDPAddr{IP: nod.IP, Port: int(nod.DiscoveryPort)} //net2.ResolveUDPAddr("udp", nod.Address())
+	addr := &net2.UDPAddr{IP: nod.IP, Port: int(nod.DiscoveryPort)} // net2.ResolveUDPAddr("udp", nod.Address())
 	err := m.ProcessDirectProtocolMessage(nod.PublicKey(), testStr, data, service.P2PMetadata{FromAddress: addr})
 	require.Error(t, err) // no protocol
 	c := make(chan service.DirectMessage, 1)
@@ -145,7 +144,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 
 	err = m.sendMessageImpl(context.TODO(), sendto.PublicKey(), testStr, data)
 
-	require.Equal(t, ErrNoSession, err)
+	require.ErrorIs(t, ErrNoSession, err)
 	require.True(t, lookupcalled)
 
 	lookupcalled = false
@@ -162,7 +161,7 @@ func TestUDPMux_sendMessageImpl(t *testing.T) {
 
 	err = m.sendMessageImpl(context.TODO(), sendto.PublicKey(), testStr, data)
 
-	require.Equal(t, senderr, err)
+	require.ErrorIs(t, err, senderr)
 	require.True(t, lookupcalled)
 
 	m.cpool.CloseConnection(sendto.PublicKey())
@@ -191,9 +190,11 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 
 	gotfrom := node.GenerateRandomNodeData()
 
-	msg.Metadata = &ProtocolMessageMetadata{NextProtocol: testStr, ClientVersion: config.ClientVersion, Timestamp: time.Now().Unix(),
-		NetworkID: int32(1)}
-	//pb.NewUDPProtocolMessageMetadata(gotfrom.PublicKey(), int8(nd.NetworkID()), testStr)
+	msg.Metadata = &ProtocolMessageMetadata{
+		NextProtocol: testStr, ClientVersion: config.ClientVersion, Timestamp: time.Now().Unix(),
+		NetworkID: int32(1),
+	}
+	// pb.NewUDPProtocolMessageMetadata(gotfrom.PublicKey(), int8(nd.NetworkID()), testStr)
 	msg.Payload = &Payload{Payload: data.Bytes()}
 
 	themsgbuf, err := types.InterfaceToBytes(msg)
@@ -237,7 +238,6 @@ func TestUDPMux_ProcessUDP(t *testing.T) {
 	default:
 		t.Fatal("didn't get msg")
 	}
-
 }
 
 func Test_RoundTrip(t *testing.T) {
@@ -298,6 +298,5 @@ func Test_RoundTrip(t *testing.T) {
 		require.Equal(t, msg.Bytes(), []byte(testStr))
 	case <-tm.C:
 		t.Fatal("message timeout")
-
 	}
 }

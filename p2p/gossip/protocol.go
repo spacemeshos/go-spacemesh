@@ -3,6 +3,7 @@ package gossip
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -16,8 +17,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
-const oldMessageCacheSize = 10000
-const propagateHandleBufferSize = 5000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
+const (
+	oldMessageCacheSize       = 10000
+	propagateHandleBufferSize = 5000 // number of MessageValidation that we allow buffering, above this number protocols will get stuck
+)
 
 type peersManager interface {
 	GetPeers() []peers.Peer
@@ -25,7 +28,7 @@ type peersManager interface {
 	Close()
 }
 
-// Interface for the underlying p2p layer
+// Interface for the underlying p2p layer.
 type baseNetwork interface {
 	SendMessage(ctx context.Context, peerPubkey p2pcrypto.PublicKey, protocol string, payload []byte) error
 	SubscribePeerEvents() (conn chan p2pcrypto.PublicKey, disc chan p2pcrypto.PublicKey)
@@ -72,7 +75,7 @@ func NewProtocol(ctx context.Context, config config.SwarmConfig, base baseNetwor
 	}
 }
 
-// Start a loop that process peers events
+// Start a loop that process peers events.
 func (p *Protocol) Start(ctx context.Context) {
 	p.wg.Add(2)
 	go func() {
@@ -93,11 +96,11 @@ func (p *Protocol) Close() {
 	p.wg.Wait()
 }
 
-// Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues
+// Broadcast is the actual broadcast procedure - process the message internally and loop on peers and add the message to their queues.
 func (p *Protocol) Broadcast(ctx context.Context, payload []byte, nextProt string) error {
 	p.WithContext(ctx).With().Debug("broadcasting message", log.String("from_type", nextProt))
 	return p.processMessage(ctx, p.localNodePubkey, true, nextProt, service.DataBytes{Payload: payload})
-	//todo: should this ever return error ? then when processMessage should return error ?. should it block?
+	// todo: should this ever return error ? then when processMessage should return error ?. should it block?
 }
 
 // Relay processes a message, if the message is new, it is passed for the protocol to validate and then propagated.
@@ -112,7 +115,7 @@ func (p *Protocol) SetPriority(protoName string, priority priorityq.Priority) {
 }
 
 // markMessageAsOld adds the message's hash to the old messages queue so that the message won't be processed in case received again.
-// Returns true if message was already processed before
+// Returns true if message was already processed before.
 func (p *Protocol) markMessageAsOld(h types.Hash12) bool {
 	return p.oldMessageQ.GetOrInsert(h)
 }
@@ -139,12 +142,17 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 
 	logger.Event().Debug("gossip message is new, processing")
 	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
-	return p.net.ProcessGossipProtocolMessage(ctx, sender, ownMessage, protocol, msg, p.propagateQ)
+
+	if err := p.net.ProcessGossipProtocolMessage(ctx, sender, ownMessage, protocol, msg, p.propagateQ); err != nil {
+		return fmt.Errorf("process gossip protocol message: %w", err)
+	}
+
+	return nil
 }
 
 // send a message to all the peers.
 func (p *Protocol) propagateMessage(ctx context.Context, payload []byte, nextProt string, exclude p2pcrypto.PublicKey) {
-	//TODO soon: don't wait for message to send and if we finished sending last message one of the peers send the next
+	// TODO soon: don't wait for message to send and if we finished sending last message one of the peers send the next
 	// message. limit the number of simultaneous sends. consider other messages (mainly sync).
 	var wg sync.WaitGroup
 	for _, peer := range p.peers.GetPeers() {
@@ -230,7 +238,7 @@ func (p *Protocol) isShuttingDown() bool {
 	return false
 }
 
-// pushes messages that passed validation into the priority queue
+// pushes messages that passed validation into the priority queue.
 func (p *Protocol) propagationEventLoop(ctx context.Context) {
 	for {
 		select {

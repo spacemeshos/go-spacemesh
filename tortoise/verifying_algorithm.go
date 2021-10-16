@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
@@ -23,17 +24,17 @@ type ThreadSafeVerifyingTortoise struct {
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
 type Config struct {
-	LayerSize       int
+	LayerSize       uint32
 	Database        database.Database
 	MeshDatabase    blockDataProvider
 	ATXDB           atxDataProvider
 	Clock           layerClock
-	Hdist           uint32 // hare lookback distance: the distance over which we use the input vector/hare results
-	Zdist           uint32 // hare result wait distance: the distance over which we're willing to wait for hare results
-	ConfidenceParam uint32 // confidence wait distance: how long we wait for global consensus to be established
-	GlobalThreshold uint8  // threshold required to finalize blocks and layers (0-100)
-	LocalThreshold  uint8  // threshold that determines whether a node votes based on local or global opinion (0-100)
-	WindowSize      uint32 // tortoise sliding window: how many layers we store data for
+	Hdist           uint32   // hare lookback distance: the distance over which we use the input vector/hare results
+	Zdist           uint32   // hare result wait distance: the distance over which we're willing to wait for hare results
+	ConfidenceParam uint32   // confidence wait distance: how long we wait for global consensus to be established
+	GlobalThreshold *big.Rat // threshold required to finalize blocks and layers
+	LocalThreshold  *big.Rat // threshold that determines whether a node votes based on local or global opinion
+	WindowSize      uint32   // tortoise sliding window: how many layers we store data for
 	Log             log.Log
 	RerunInterval   time.Duration // how often to rerun from genesis
 }
@@ -42,9 +43,6 @@ type Config struct {
 func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingTortoise {
 	if cfg.Hdist < cfg.Zdist {
 		cfg.Log.With().Panic("hdist must be >= zdist", log.Uint32("hdist", cfg.Hdist), log.Uint32("zdist", cfg.Zdist))
-	}
-	if cfg.GlobalThreshold > 100 || cfg.LocalThreshold > 100 {
-		cfg.Log.With().Panic("global and local threshold values must be in the interval [0, 100]")
 	}
 	alg := &ThreadSafeVerifyingTortoise{
 		trtl: newTurtle(
@@ -75,7 +73,7 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 	return alg
 }
 
-// LatestComplete returns the latest verified layer
+// LatestComplete returns the latest verified layer.
 func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 	trtl.mutex.RLock()
 	verified := trtl.trtl.Verified
@@ -109,7 +107,7 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlocks(ctx context.Context, b
 }
 
 // HandleIncomingLayer processes all layer block votes
-// returns the old verified layer and new verified layer after taking into account the blocks votes
+// returns the old verified layer and new verified layer after taking into account the blocks votes.
 func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (oldVerified, newVerified types.LayerID, reverted bool) {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()
@@ -156,13 +154,13 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 	return
 }
 
-// this wrapper monitors the tortoise rerun for database changes that would cause us to need to revert state
+// this wrapper monitors the tortoise rerun for database changes that would cause us to need to revert state.
 type bdpWrapper struct {
 	blockDataProvider
 	firstUpdatedLayer *types.LayerID
 }
 
-// SaveContextualValidity overrides the method in the embedded type to check if we've made changes
+// SaveContextualValidity overrides the method in the embedded type to check if we've made changes.
 func (bdp *bdpWrapper) SaveContextualValidity(bid types.BlockID, lid types.LayerID, validityNew bool) error {
 	// we only need to know about the first updated layer
 	if bdp.firstUpdatedLayer == nil {
@@ -175,10 +173,15 @@ func (bdp *bdpWrapper) SaveContextualValidity(bid types.BlockID, lid types.Layer
 			bdp.firstUpdatedLayer = &lid
 		}
 	}
-	return bdp.blockDataProvider.SaveContextualValidity(bid, lid, validityNew)
+
+	if err := bdp.blockDataProvider.SaveContextualValidity(bid, lid, validityNew); err != nil {
+		return fmt.Errorf("save contextual validity: %w", err)
+	}
+
+	return nil
 }
 
-// trigger a rerun from genesis once in a while
+// trigger a rerun from genesis once in a while.
 func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (reverted bool, revertLayer types.LayerID) {
 	// TODO: should this happen "in the background" in a separate goroutine? Should it hold the mutex?
 	logger := trtl.logger.WithContext(ctx)
@@ -217,7 +220,7 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (
 	return
 }
 
-// Persist saves a copy of the current tortoise state to the database
+// Persist saves a copy of the current tortoise state to the database.
 func (trtl *ThreadSafeVerifyingTortoise) Persist(ctx context.Context) error {
 	trtl.mutex.Lock()
 	defer trtl.mutex.Unlock()

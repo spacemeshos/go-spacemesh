@@ -29,20 +29,19 @@ import (
 	"testing"
 	"testing/quick"
 
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/rlp"
 )
 
 func init() {
-	//spew.Config.Indent = "    "
-	//spew.Config.DisableMethods = false
+	// spew.Config.Indent = "    "
+	// spew.Config.DisableMethods = false
 }
 
-// Used for testing
+// Used for testing.
 func newEmpty() *Trie {
 	trie, _ := New(types.Hash32{}, NewDatabase(database.NewMemDatabase()))
 	return trie
@@ -324,7 +323,12 @@ type countingDB struct {
 
 func (db *countingDB) Get(key []byte) ([]byte, error) {
 	db.gets[string(key)]++
-	return db.Database.Get(key)
+	data, err := db.Database.Get(key)
+	if err != nil {
+		return data, fmt.Errorf("get from DB: %w", err)
+	}
+
+	return data, nil
 }
 
 // TestCacheUnload checks that decoded nodes are unloaded after a
@@ -483,8 +487,8 @@ func checkCacheInvariant(n, parent node, parentCachegen uint16, parentDirty bool
 
 	errorf := func(format string, args ...interface{}) error {
 		msg := fmt.Sprintf(format, args...)
-		//msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
-		//msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
+		// msg += fmt.Sprintf("\nat depth %d node %s", depth, spew.Sdump(n))
+		// msg += fmt.Sprintf("parent: %s", spew.Sdump(parent))
 		return errors.New(msg)
 	}
 	if flag.gen > parentCachegen {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	_ "net/http/pprof"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/cmd/node"

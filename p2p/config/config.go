@@ -8,17 +8,17 @@ import (
 )
 
 const (
-	// P2PDirectoryPath is the name of the directory where we store p2p stuff
+	// P2PDirectoryPath is the name of the directory where we store p2p stuff.
 	P2PDirectoryPath = "p2p"
-	// NodeDataFileName is the name of the file we store the the p2p identity keys
+	// NodeDataFileName is the name of the file we store the the p2p identity keys.
 	NodeDataFileName = "id.json"
-	// NodesDirectoryName is the name of the directory we store nodes identities under
+	// NodesDirectoryName is the name of the directory we store nodes identities under.
 	NodesDirectoryName = "nodes"
-	// UnlimitedMsgSize is a constant used to check whether message size is set to unlimited size
+	// UnlimitedMsgSize is a constant used to check whether message size is set to unlimited size.
 	UnlimitedMsgSize = 0
-	// defaultTCPPort is the inet port that P2P listens on by default
+	// defaultTCPPort is the inet port that P2P listens on by default.
 	defaultTCPPort = 7513
-	// defaultTCPInterface is the inet interface that P2P listens on by default
+	// defaultTCPInterface is the inet interface that P2P listens on by default.
 	defaultTCPInterface = "0.0.0.0"
 	// max number of parallel gossip goroutines per channel (protocol)
 	// TODO: correctly parameterize this. see https://github.com/spacemeshos/go-spacemesh/issues/2708.
@@ -42,7 +42,7 @@ func duration(duration string) (dur time.Duration) {
 	return dur
 }
 
-// Config defines the configuration options for the Spacemesh peer-to-peer networking layer
+// Config defines the configuration options for the Spacemesh peer-to-peer networking layer.
 type Config struct {
 	TCPPort               int           `mapstructure:"tcp-port"`
 	TCPInterface          string        `mapstructure:"tcp-interface"`
@@ -73,10 +73,10 @@ type SwarmConfig struct {
 	PeersFile              string   `mapstructure:"peers-file"`
 }
 
-// DefaultConfig defines the default p2p configuration
+// DefaultConfig defines the default p2p configuration.
 func DefaultConfig() Config {
 	// SwarmConfigValues defines default values for swarm config params.
-	var SwarmConfigValues = SwarmConfig{
+	SwarmConfigValues := SwarmConfig{
 		Gossip:                 true,
 		Bootstrap:              false,
 		RoutingTableBucketSize: 20,

@@ -7,15 +7,15 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"sync/atomic"
 	"time"
 	"unsafe"
 
 	"github.com/spacemeshos/ed25519"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/post/shared"
+	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -29,7 +29,7 @@ var (
 	ErrPoetServiceUnstable = errors.New("builder: poet service is unstable")
 )
 
-// AtxProtocol is the protocol id for broadcasting atxs over gossip
+// AtxProtocol is the protocol id for broadcasting atxs over gossip.
 const AtxProtocol = "AtxGossip"
 
 const defaultPoetRetryInterval = 5 * time.Second
@@ -43,8 +43,7 @@ type broadcaster interface {
 	Broadcast(ctx context.Context, channel string, data []byte) error
 }
 
-type poetNumberOfTickProvider struct {
-}
+type poetNumberOfTickProvider struct{}
 
 func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 	return 1
@@ -95,8 +94,8 @@ type syncer interface {
 // SmeshingProvider defines the functionality required for the node's Smesher API.
 type SmeshingProvider interface {
 	Smeshing() bool
-	StartSmeshing(context.Context, types.Address, PostSetupOpts) error
-	StopSmeshing(deleteFiles bool) error
+	StartSmeshing(types.Address, PostSetupOpts) error
+	StopSmeshing(bool) error
 	SmesherID() types.NodeID
 	Coinbase() types.Address
 	SetCoinbase(coinbase types.Address)
@@ -107,25 +106,20 @@ type SmeshingProvider interface {
 // A compile time check to ensure that Builder fully implements the SmeshingProvider interface.
 var _ SmeshingProvider = (*Builder)(nil)
 
-// Config defines configuration for Builder
+// Config defines configuration for Builder.
 type Config struct {
 	CoinbaseAccount types.Address
 	GoldenATXID     types.ATXID
 	LayersPerEpoch  uint32
 }
 
-type smeshingStatus int32
-
-const (
-	smeshingStatusIdle smeshingStatus = iota
-	smeshingStatusPendingPostSetup
-	smeshingStatusStarted
-)
-
 // Builder struct is the struct that orchestrates the creation of activation transactions
 // it is responsible for initializing post, receiving poet proof and orchestrating nipst. after which it will
-// calculate total weight and providing relevant view as proof
+// calculate total weight and providing relevant view as proof.
 type Builder struct {
+	pendingPoetClient atomic.UnsafePointer
+	started           atomic.Bool
+
 	signer
 	accountLock       sync.RWMutex
 	nodeID            types.NodeID
@@ -143,17 +137,15 @@ type Builder struct {
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
-	status                smeshingStatus
 	mtx                   sync.Mutex
 	store                 bytesStore
 	syncer                syncer
 	log                   log.Log
-	runCtx                context.Context
+	parentCtx             context.Context
 	stop                  func()
+	exited                chan struct{}
 	poetRetryInterval     time.Duration
 	poetClientInitializer PoETClientInitializer
-	// pendingPoetClient is modified using atomic operations on unsafe.Pointer
-	pendingPoetClient unsafe.Pointer
 }
 
 // BuilderOption ...
@@ -180,7 +172,7 @@ func WithPoETClientInitializer(initializer PoETClientInitializer) BuilderOption 
 // WithContext modifies parent context for background job.
 func WithContext(ctx context.Context) BuilderOption {
 	return func(b *Builder) {
-		b.runCtx = ctx
+		b.parentCtx = ctx
 	}
 }
 
@@ -189,7 +181,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 	layersPerEpoch uint32, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
-		runCtx:            context.Background(),
+		parentCtx:         context.Background(),
 		signer:            signer,
 		nodeID:            nodeID,
 		coinbaseAccount:   conf.CoinbaseAccount,
@@ -205,21 +197,16 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 		syncer:            syncer,
 		log:               log,
 		poetRetryInterval: defaultPoetRetryInterval,
-		status:            smeshingStatusIdle,
 	}
 	for _, opt := range opts {
 		opt(b)
 	}
-	b.runCtx, b.stop = context.WithCancel(b.runCtx)
 	return b
 }
 
 // Smeshing returns true iff atx builder started.
 func (b *Builder) Smeshing() bool {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
-
-	return b.status == smeshingStatusStarted
+	return b.started.Load()
 }
 
 // StartSmeshing is the main entry point of the atx builder.
@@ -227,32 +214,48 @@ func (b *Builder) Smeshing() bool {
 // If the post data is incomplete or missing, data creation
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
-func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opts PostSetupOpts) error {
+func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
 	b.mtx.Lock()
-	if b.status != smeshingStatusIdle {
-		b.mtx.Unlock()
-		return errors.New("already started")
+	if b.exited != nil {
+		select {
+		case <-b.exited:
+			// we are here if StartSession failed and method returned with error
+			// in this case it is expected that the user may call StartSmeshing without StopSmeshing first
+		default:
+			b.mtx.Unlock()
+			return errors.New("already started")
+		}
 	}
+
+	b.started.Store(true)
 	b.coinbaseAccount = coinbase
-	b.status = smeshingStatusPendingPostSetup
+	var ctx context.Context
+	exited := make(chan struct{})
+	ctx, b.stop = context.WithCancel(b.parentCtx)
+	b.exited = exited
 	b.mtx.Unlock()
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
-		b.status = smeshingStatusIdle
+		close(exited)
+		b.started.Store(false)
 		return fmt.Errorf("failed to start post setup session: %w", err)
 	}
-
 	go func() {
-		<-doneChan
+		// false after closing exited. otherwise IsSmeshing may return False but StartSmeshing return "already started"
+		defer b.started.Store(false)
+		defer close(exited)
+		select {
+		case <-ctx.Done():
+			return
+		case <-doneChan:
+		}
+
 		if s := b.postSetupProvider.Status(); s.State != postSetupStateComplete {
-			b.status = smeshingStatusIdle
 			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
 			return
 		}
-
-		b.status = smeshingStatusStarted
-		go b.loop(b.runCtx)
+		b.loop(ctx)
 	}()
 
 	return nil
@@ -262,8 +265,7 @@ func (b *Builder) StartSmeshing(ctx context.Context, coinbase types.Address, opt
 func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	b.mtx.Lock()
 	defer b.mtx.Unlock()
-
-	if b.status == smeshingStatusIdle {
+	if b.exited == nil {
 		return errors.New("not started")
 	}
 
@@ -272,18 +274,18 @@ func (b *Builder) StopSmeshing(deleteFiles bool) error {
 	}
 
 	b.stop()
-	b.status = smeshingStatusIdle
-
+	<-b.exited
+	b.exited = nil
 	return nil
 }
 
-// SmesherID returns the ID of the smesher that created this activation
+// SmesherID returns the ID of the smesher that created this activation.
 func (b *Builder) SmesherID() types.NodeID {
 	return b.nodeID
 }
 
 // SignAtx signs the atx and assigns the signature into atx.Sig
-// this function returns an error if atx could not be converted to bytes
+// this function returns an error if atx could not be converted to bytes.
 func (b *Builder) SignAtx(atx *types.ActivationTx) error {
 	return SignAtx(b, atx)
 }
@@ -297,7 +299,7 @@ func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
 	}
 }
 
-// loop is the main loop that tries to create an atx per tick received from the global clock
+// loop is the main loop that tries to create an atx per tick received from the global clock.
 func (b *Builder) loop(ctx context.Context) {
 	err := b.loadChallenge()
 	if err != nil {
@@ -310,7 +312,6 @@ func (b *Builder) loop(ctx context.Context) {
 	b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 	if err != nil {
 		b.log.Error("post execution failed: %v", err)
-		b.status = smeshingStatusIdle
 		return
 	}
 
@@ -330,11 +331,11 @@ func (b *Builder) run(ctx context.Context) {
 	}()
 	defer b.log.Info("atx builder is stopped")
 	for {
-		client := atomic.LoadPointer(&b.pendingPoetClient)
+		client := b.pendingPoetClient.Load()
 		if client != nil {
 			b.nipostBuilder.updatePoETProver(*(*PoetProvingServiceClient)(client))
 			// CaS here will not lose concurrent update
-			atomic.CompareAndSwapPointer(&b.pendingPoetClient, client, nil)
+			b.pendingPoetClient.CAS(client, nil)
 		}
 
 		if err := b.PublishActivationTx(ctx); err != nil {
@@ -349,7 +350,7 @@ func (b *Builder) run(ctx context.Context) {
 
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
-				// can be retried immediatly with a new challenge
+				// can be retried immediately with a new challenge
 			case errors.Is(err, ErrPoetServiceUnstable):
 				if poetRetryTimer == nil {
 					poetRetryTimer = time.NewTimer(b.poetRetryInterval)
@@ -377,7 +378,11 @@ func (b *Builder) run(ctx context.Context) {
 func (b *Builder) buildNIPostChallenge(ctx context.Context) error {
 	syncedCh := make(chan struct{})
 	b.syncer.RegisterChForSynced(ctx, syncedCh)
-	<-syncedCh
+	select {
+	case <-ctx.Done():
+		return ErrStopRequested
+	case <-syncedCh:
+	}
 	challenge := &types.NIPostChallenge{NodeID: b.nodeID}
 	atxID, pubLayerID, endTick, err := b.GetPositioningAtxInfo()
 	if err != nil {
@@ -409,12 +414,12 @@ func (b *Builder) UpdatePoETServer(ctx context.Context, target string) error {
 	if err != nil {
 		return fmt.Errorf("%w: %v", ErrPoetServiceUnstable, err)
 	}
-	atomic.StorePointer(&b.pendingPoetClient, unsafe.Pointer(&client))
+	b.pendingPoetClient.Store(unsafe.Pointer(&client))
 	return nil
 }
 
 // SetCoinbase sets the address rewardAddress to be the coinbase account written into the activation transaction
-// the rewards for blocks made by this miner will go to this address
+// the rewards for blocks made by this miner will go to this address.
 func (b *Builder) SetCoinbase(rewardAddress types.Address) {
 	b.accountLock.Lock()
 	defer b.accountLock.Unlock()
@@ -428,12 +433,12 @@ func (b *Builder) Coinbase() types.Address {
 	return b.coinbaseAccount
 }
 
-// MinGas [...]
+// MinGas [...].
 func (b *Builder) MinGas() uint64 {
 	panic("not implemented")
 }
 
-// SetMinGas [...]
+// SetMinGas [...].
 func (b *Builder) SetMinGas(value uint64) {
 	panic("not implemented")
 }
@@ -445,22 +450,28 @@ func (b *Builder) getNIPostKey() []byte {
 func (b *Builder) storeChallenge(ch *types.NIPostChallenge) error {
 	bts, err := types.InterfaceToBytes(ch)
 	if err != nil {
-		return err
+		return fmt.Errorf("serialize NIPost challenge: %w", err)
 	}
-	return b.store.Put(b.getNIPostKey(), bts)
+
+	if err := b.store.Put(b.getNIPostKey(), bts); err != nil {
+		return fmt.Errorf("put NIPost challenge to store: %w", err)
+	}
+
+	return nil
 }
 
 func (b *Builder) loadChallenge() error {
 	bts, err := b.store.Get(b.getNIPostKey())
 	if err != nil {
-		return err
+		return fmt.Errorf("get NIPost challenge from store: %w", err)
 	}
+
 	if len(bts) > 0 {
 		tp := &types.NIPostChallenge{}
-		err = types.BytesToInterface(bts, tp)
-		if err != nil {
-			return err
+		if err = types.BytesToInterface(bts, tp); err != nil {
+			return fmt.Errorf("parse NIPost challenge: %w", err)
 		}
+
 		b.challenge = tp
 	}
 	return nil
@@ -487,7 +498,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 		b.pendingATX, err = b.createAtx(ctx)
 		if err != nil {
 			b.log.Error(err.Error())
-			return err
+			return fmt.Errorf("create ATX: %w", err)
 		}
 	}
 
@@ -497,7 +508,7 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	size, err := b.signAndBroadcast(ctx, atx)
 	if err != nil {
 		b.log.Error(err.Error())
-		return err
+		return fmt.Errorf("sign and broadcast: %w", err)
 	}
 
 	b.log.Event().Info(fmt.Sprintf("atx published %v", atx.ID().ShortString()), atx.Fields(size)...)
@@ -619,7 +630,7 @@ func (b *Builder) GetPositioningAtxInfo() (types.ATXID, types.LayerID, uint64, e
 }
 
 // GetPrevAtx gets the last atx header of specified node Id, it returns error if no previous atx found or if no
-// AtxHeader struct in db
+// AtxHeader struct in db.
 func (b *Builder) GetPrevAtx(node types.NodeID) (*types.ActivationTxHeader, error) {
 	if id, err := b.db.GetNodeLastAtxID(node); err != nil {
 		return nil, fmt.Errorf("no prev atx found: %v", err)
@@ -643,16 +654,16 @@ func (b *Builder) discardChallengeIfStale() bool {
 }
 
 // ExtractPublicKey extracts public key from message and verifies public key exists in idStore, this is how we validate
-// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
+// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity.
 func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error) {
 	bts, err := signedAtx.InnerBytes()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("inner bytes of ATX: %w", err)
 	}
 
 	pubKey, err := ed25519.ExtractPublicKey(bts, signedAtx.Sig)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("extract ed25519 pubkey: %w", err)
 	}
 
 	pub := signing.NewPublicKey(pubKey)
@@ -660,11 +671,11 @@ func ExtractPublicKey(signedAtx *types.ActivationTx) (*signing.PublicKey, error)
 }
 
 // SignAtx signs the atx atx with specified signer and assigns the signature into atx.Sig
-// this function returns an error if atx could not be converted to bytes
+// this function returns an error if atx could not be converted to bytes.
 func SignAtx(signer signer, atx *types.ActivationTx) error {
 	bts, err := atx.InnerBytes()
 	if err != nil {
-		return err
+		return fmt.Errorf("inner bytes of ATX: %w", err)
 	}
 	atx.Sig = signer.Sign(bts)
 	return nil

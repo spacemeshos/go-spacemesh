@@ -64,6 +64,7 @@ type Hare struct {
 
 	mesh    meshProvider
 	rolacle Rolacle
+	patrol  layerPatrol
 
 	networkDelta time.Duration
 
@@ -92,6 +93,7 @@ func New(
 	syncState syncStateFunc,
 	mesh meshProvider,
 	rolacle Rolacle,
+	patrol layerPatrol,
 	layersPerEpoch uint16,
 	idProvider identityProvider,
 	stateQ StateQuerier,
@@ -113,6 +115,7 @@ func New(
 
 	h.mesh = mesh
 	h.rolacle = rolacle
+	h.patrol = patrol
 
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
 	// todo: this should be loaded from global config
@@ -159,10 +162,10 @@ func (h *Hare) oldestResultInBuffer() types.LayerID {
 	return lyr
 }
 
-// ErrTooLate means that the consensus was terminated too late
+// ErrTooLate means that the consensus was terminated too late.
 var ErrTooLate = errors.New("consensus process finished too late")
 
-// records the provided output
+// records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	set := output.Set()
 	blocks := make([]types.BlockID, len(set.values))
@@ -204,6 +207,11 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 
 	if id.GetEpoch().IsGenesis() {
 		logger.Info("not starting hare since we are in genesis epoch")
+		return
+	}
+
+	if !h.rolacle.IsEpochBeaconReady(ctx, id.GetEpoch()) {
+		logger.Info("not starting hare since beacon is not retrieved")
 		return
 	}
 
@@ -252,7 +260,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		// TODO:   and achieve consensus on empty set
 	}
 
-	logger.With().Debug("hare received layer blocks", log.Int("count", len(blocks)))
+	logger.With().Info("starting hare consensus with blocks", log.Int("num_blocks", len(blocks)))
 	set := NewSet(blocks)
 
 	instID := id
@@ -268,6 +276,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		h.broker.Unregister(ctx, cp.ID())
 		return
 	}
+	h.patrol.SetHareInCharge(instID)
 	logger.With().Info("number of consensus processes (after register)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	metrics.TotalConsensusProcesses.With("layer", id.String()).Add(1)
@@ -356,7 +365,7 @@ func (h *Hare) Start(ctx context.Context) error {
 	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_outputloop"))
 
 	if err := h.broker.Start(ctxBroker); err != nil {
-		return err
+		return fmt.Errorf("start broker: %w", err)
 	}
 
 	go h.tickLoop(ctxTickLoop)

@@ -2,8 +2,9 @@ package p2pcrypto
 
 import (
 	"bytes"
-	"github.com/stretchr/testify/require"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestBox(t *testing.T) {

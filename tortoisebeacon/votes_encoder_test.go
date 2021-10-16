@@ -3,9 +3,10 @@ package tortoisebeacon
 import (
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTortoiseBeacon_encodeVotes(t *testing.T) {
@@ -63,7 +64,7 @@ func TestTortoiseBeacon_encodeVotes(t *testing.T) {
 				config: Config{
 					VotesLimit: 100,
 				},
-				Log: logtest.New(t).WithName("TortoiseBeacon"),
+				logger: logtest.New(t).WithName("TortoiseBeacon"),
 			}
 
 			result := tb.encodeVotes(tc.currentRound, tc.proposals)

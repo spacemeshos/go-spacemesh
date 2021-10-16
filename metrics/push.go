@@ -5,11 +5,12 @@ import (
 
 	stdprometheus "github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/push"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // StartPushingMetrics begins pushing metrics to the url specified by the --metrics-push flag
-// with period specified by the --metrics-push-period flag
+// with period specified by the --metrics-push-period flag.
 func StartPushingMetrics(url string, periodSec int, nodeID, networkID string) {
 	period := time.Duration(periodSec) * time.Second
 	ticker := time.NewTicker(period)

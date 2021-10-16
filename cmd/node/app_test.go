@@ -1,3 +1,4 @@
+//go:build !exclude_app_test
 // +build !exclude_app_test
 
 package node
@@ -26,7 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -77,7 +77,6 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 		if i == 0 {
 			firstDir = dbStorepath
 		}
-		database.SwitchCreationContext(dbStorepath, string(name))
 		edSgn := signing.NewEdSigner()
 		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network, edSgn)
 		suite.NoError(err)
@@ -368,7 +367,7 @@ func reachedEpochTester(dependencies []int) TestScenario {
 	return TestScenario{setup, test, dependencies}
 }
 
-// test that all nodes see the same weak coin value in each layer
+// test that all nodes see the same weak coin value in each layer.
 func (suite *AppTestSuite) healingWeakcoinTester() {
 	globalLayer := suite.apps[0].mesh.LatestLayer()
 	globalCoin := make(map[types.LayerID]bool)
@@ -495,14 +494,14 @@ func sameRootTester(dependencies []int) TestScenario {
 	return TestScenario{setup, test, dependencies}
 }
 
-// run setup on all tests
+// run setup on all tests.
 func setupTests(suite *AppTestSuite) {
 	for _, test := range tests {
 		test.Setup(suite, suite.T())
 	}
 }
 
-// run test criterias after setup
+// run test criteria after setup.
 func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	for i, test := range tests {
 		depsOk := true
@@ -674,7 +673,8 @@ func calcTotalWeight(
 }
 
 func (suite *AppTestSuite) validateLastATXTotalWeight(app *App, numberOfEpochs int, expectedTotalWeight uint64) {
-	atxs := app.atxDb.GetEpochAtxs(types.EpochID(numberOfEpochs - 1))
+	atxs, err := app.atxDb.GetEpochAtxs(types.EpochID(numberOfEpochs - 1))
+	suite.Require().NoError(err)
 	suite.Len(atxs, len(suite.apps), "node: %v", app.nodeID.ShortString())
 
 	totalWeight := uint64(0)

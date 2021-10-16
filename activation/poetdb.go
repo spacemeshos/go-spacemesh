@@ -40,7 +40,6 @@ func (db *PoetDb) HasProof(proofRef []byte) bool {
 func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
 		proofMessage.RoundID, proofMessage.Signature); err != nil {
-
 		return err
 	}
 
@@ -53,7 +52,7 @@ func (db *PoetDb) ValidateAndStoreMsg(data []byte) error {
 	var proofMessage types.PoetProofMessage
 	err := types.BytesToInterface(data, &proofMessage)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse message: %w", err)
 	}
 	return db.ValidateAndStore(&proofMessage)
 }
@@ -160,7 +159,12 @@ func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef []byte) {
 
 // GetProofMessage returns the originally received PoET proof message.
 func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
-	return db.store.Get(proofRef)
+	proof, err := db.store.Get(proofRef)
+	if err != nil {
+		return proof, fmt.Errorf("get proof from store: %w", err)
+	}
+
+	return proof, nil
 }
 
 // GetMembershipMap returns the map of memberships in the requested PoET proof.
@@ -206,5 +210,9 @@ func calcRoot(leaves [][]byte) ([]byte, error) {
 func validatePoet(membershipRoot []byte, merkleProof shared.MerkleProof, leafCount uint64) error {
 	labelHashFunc := hash.GenLabelHashFunc(membershipRoot)
 	merkleHashFunc := hash.GenMerkleHashFunc(membershipRoot)
-	return verifier.Validate(merkleProof, labelHashFunc, merkleHashFunc, leafCount, shared.T)
+	if err := verifier.Validate(merkleProof, labelHashFunc, merkleHashFunc, leafCount, shared.T); err != nil {
+		return fmt.Errorf("validate PoET: %w", err)
+	}
+
+	return nil
 }
