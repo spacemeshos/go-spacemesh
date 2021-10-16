@@ -1176,7 +1176,7 @@ func (t *turtle) sumVotesForBlock(
 			if vote, exists := votingBlockOpinion[blockLayerID][blockID]; exists {
 				sum = sum.Add(vote)
 				// causes issues with logs, leaving here for debugging
-				//logger.With().Debug("added block opinion to vote sum",
+				// logger.With().Debug("added block opinion to vote sum",
 				//	log.FieldNamed("vote", vote),
 				//	sum)
 			} else {
