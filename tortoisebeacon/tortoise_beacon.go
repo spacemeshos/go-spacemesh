@@ -495,11 +495,11 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 	epoch := layer.GetEpoch()
 	logger := tb.logger.WithContext(ctx).WithFields(layer, epoch)
 
+	tb.setTickedEpoch(epoch)
 	if !layer.FirstInEpoch() {
 		logger.Debug("not first layer in epoch, skipping")
 		return
 	}
-	tb.setTickedEpoch(epoch)
 	if tb.isInProtocol() {
 		logger.Error("last beacon protocol is still running, skipping")
 		return
@@ -985,14 +985,17 @@ func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data
 }
 
 func (tb *TortoiseBeacon) getOwnWeight(epoch types.EpochID) uint64 {
+	if epoch == 0 {
+		return 0
+	}
 	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(tb.nodeID, epoch)
 	if err != nil {
-		tb.logger.With().Error("failed to look up own ATX for epoch", epoch-1, log.Err(err))
+		tb.logger.With().Error("failed to look up own ATX for epoch", epoch, log.Err(err))
 		return 0
 	}
 	hdr, err := tb.atxDB.GetAtxHeader(atxID)
 	if err != nil {
-		tb.logger.With().Error("failed to look up own weight for epoch", epoch-1, log.Err(err))
+		tb.logger.With().Error("failed to look up own weight for epoch", epoch, log.Err(err))
 		return 0
 	}
 	return hdr.GetWeight()
@@ -1003,7 +1006,6 @@ func (tb *TortoiseBeacon) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 	defer tb.mu.RUnlock()
 
 	epoch := tb.lastTickedEpoch
-	tb.logger.Info("gatherMetricsData for epoch %v", epoch)
 	var observed []*metrics.BeaconStats
 	if beacons, ok := tb.beaconsFromBlocks[epoch]; ok {
 		for beacon, stats := range beacons {

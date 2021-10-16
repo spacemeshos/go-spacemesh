@@ -195,6 +195,10 @@ func TestTortoiseBeaconWithMetrics(t *testing.T) {
 	for layer := types.NewLayerID(1); !layer.After(gLayer); layer = layer.Add(1) {
 		tb.handleLayer(context.TODO(), layer)
 		thisEpoch := layer.GetEpoch()
+		ownWeight := atxHeader.GetWeight()
+		if thisEpoch == 1 {
+			ownWeight = 0
+		}
 		allMetrics, err := prometheus.DefaultGatherer.Gather()
 		assert.NoError(t, err)
 		for _, m := range allMetrics {
@@ -203,7 +207,7 @@ func TestTortoiseBeaconWithMetrics(t *testing.T) {
 				require.Equal(t, 1, len(m.Metric))
 				numCalculatedBeacon++
 				beaconStr := types.HexToHash32(genesisBeacon).ShortString()
-				expected := fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beaconStr, thisEpoch+1, atxHeader.GetWeight())
+				expected := fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beaconStr, thisEpoch+1, ownWeight)
 				assert.Equal(t, expected, m.Metric[0].String())
 			case "spacemesh_beacons_beacon_observed_total":
 				t.Errorf("genesis blocks do not have blocks")
