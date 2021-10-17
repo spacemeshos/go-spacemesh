@@ -26,7 +26,7 @@ enabled = true
 
 [[testcases]]
 name = "start"
-instances = { min = 7, max = 10, default = 7 }
+instances = { min = 6, max = 10, default = 6 }
 
   [testcases.params]
   # test params

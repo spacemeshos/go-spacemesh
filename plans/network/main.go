@@ -39,19 +39,17 @@ var testcases = map[string]interface{}{
 	"start": run.InitializedTestCaseFn(Start),
 }
 
-
-
 // MustSetupNetworking activates the required networking configuration for the network
 //  this is still very simple and eventually will control latency and such.
 //  panics if there's an error
-func MustSetupNetworking(ctx context.Context, netclient *network.Client)  {
+func MustSetupNetworking(ctx context.Context, netclient *network.Client) {
 	netcfg := network.Config{
 		// Control the "default" network. At the moment, this is the only network.
 		Network: "default",
 
 		// Enable this network. Setting this to false will disconnect this test
 		// instance from this network. You probably don't want to do that.
-		Enable:  true,
+		Enable: true,
 
 		RoutingPolicy: network.AllowAll,
 		// Set what state the sidecar should signal back to you when it's done.
@@ -76,13 +74,12 @@ func MustSetupNetworking(ctx context.Context, netclient *network.Client)  {
 func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	// TODO: extract a lot of constants/params
 
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Hour)
 	defer cancel()
 	client := initCtx.SyncClient
 	netclient := initCtx.NetClient
 
 	MustSetupNetworking(ctx, netclient)
-
 
 	poets_topic := sync.NewTopic("poets", string(""))
 	gateways_topic := sync.NewTopic("gateways", node2.Info{})
@@ -92,7 +89,6 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	poets := env.IntParam("poets")
 	gateways := env.IntParam("gateways")
 	genesisOffset := env.IntParam("genesis_timestamp_offset")
-
 
 	seq := int(client.MustSignalAndWait(ctx, "role-allocation", env.TestInstanceCount))
 
@@ -106,8 +102,6 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		client.MustSubscribe(ctx, genesisTimeTopic, gench)
 		genesisTime = <-gench
 	}
-
-
 
 	ra := &roleAllocator{}
 
@@ -140,12 +134,22 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 
 		env.RecordMessage("starting poet")
 
-		go func(cfg2 *poetconfig.Config) {
-		if err := server.StartServer(cfg2); err != nil {
-			env.RecordFailure(err)
-		}
-		env.RecordSuccess()
+		errch := make(chan error)
+
+		go func(conf *poetconfig.Config) {
+			err := server.StartServer(conf)
+			if err != nil {
+				errch <- err
+			}
 		}(cfg)
+
+		select {
+			case err := <-errch:
+			env.RecordFailure(err)
+			case <-time.After(5* time.Second):
+				env.RecordSuccess()
+		}
+
 
 	}, func(obj interface{}) {
 		env.RecordMessage("done starting poet")
@@ -161,7 +165,6 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		}
 
 		ip := netclient.MustGetDataNetworkIP()
-
 
 		env.RecordMessage("gateway waiting for poet message")
 		poetch := make(chan string)
@@ -198,7 +201,7 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		case <-ctx.Done():
 			env.RecordFailure(errors.New("no peers within time"))
 		}
-		}, func(obj interface{}) {
+	}, func(obj interface{}) {
 		env.RecordMessage("done gateways")
 	})
 
@@ -246,7 +249,7 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 				return
 			}
 
-			}(nd)
+		}(nd)
 
 		for nd.P2P == nil {
 			time.Sleep(1 * time.Second)
@@ -254,10 +257,10 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 
 		inch, _ := nd.P2P.SubscribePeerEvents()
 		select {
-			case <-inch:
-				env.RecordSuccess()
-				case <-ctx.Done():
-				env.RecordFailure(errors.New("no peers within time"))
+		case <-inch:
+			env.RecordSuccess()
+		case <-ctx.Done():
+			env.RecordFailure(errors.New("no peers within time"))
 		}
 	}, func(obj interface{}) {
 		env.RecordMessage("done miner %v")
@@ -310,7 +313,6 @@ func createMinerConfig() *config.Config {
 	cfg.LAYERS.RequestTimeout = 10
 	cfg.SMESHING.CoinbaseAccount = "0x123"
 	cfg.GoldenATXID = "0x5678"
-
 
 	ppcfg := p2pcfg.DefaultConfig()
 	mppcfg := &ppcfg
@@ -374,7 +376,6 @@ func InitNode(ctx context.Context, cfg *config.Config) (*node.App, error) {
 	}
 	return nd, nil
 }
-
 
 func main() {
 	run.InvokeMap(testcases)
