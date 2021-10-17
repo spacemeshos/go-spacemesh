@@ -3,12 +3,10 @@ package hare
 import (
 	"bytes"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/common/types"
 	"hash/fnv"
 	"math"
 	"sort"
-	"sync"
-
-	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type messageType byte
@@ -56,7 +54,6 @@ type Set struct {
 	values    map[types.BlockID]struct{}
 	id        uint32
 	isIDValid bool
-	m         sync.RWMutex
 }
 
 // NewDefaultEmptySet creates an empty set with the default size.
@@ -104,9 +101,6 @@ func NewSet(data []types.BlockID) *Set {
 
 // Clone creates a copy of the set.
 func (s *Set) Clone() *Set {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
 	clone := NewEmptySet(len(s.values))
 	for bid := range s.values {
 		clone.Add(bid)
@@ -117,9 +111,6 @@ func (s *Set) Clone() *Set {
 
 // Contains returns true if the provided value is contained in the set, false otherwise.
 func (s *Set) Contains(id types.BlockID) bool {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
 	_, exist := s.values[id]
 	return exist
 }
@@ -127,15 +118,9 @@ func (s *Set) Contains(id types.BlockID) bool {
 // Add a value to the set.
 // It has no effect if the value already exists in the set.
 func (s *Set) Add(id types.BlockID) {
-	s.m.RLock()
 	if _, exist := s.values[id]; exist {
-		s.m.RUnlock()
 		return
 	}
-	s.m.RUnlock()
-
-	s.m.Lock()
-	defer s.m.Unlock()
 
 	s.isIDValid = false
 	s.values[id] = struct{}{}
@@ -144,15 +129,9 @@ func (s *Set) Add(id types.BlockID) {
 // Remove a value from the set.
 // It has no effect if the value doesn't exist in the set.
 func (s *Set) Remove(id types.BlockID) {
-	s.m.RLock()
 	if _, exist := s.values[id]; !exist {
-		s.m.RUnlock()
 		return
 	}
-	s.m.RUnlock()
-
-	s.m.Lock()
-	defer s.m.Unlock()
 
 	s.isIDValid = false
 	delete(s.values, id)
@@ -160,9 +139,6 @@ func (s *Set) Remove(id types.BlockID) {
 
 // Equals returns true if the provided set represents this set, false otherwise.
 func (s *Set) Equals(g *Set) bool {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
 	if len(s.values) != len(g.values) {
 		return false
 	}
@@ -178,9 +154,6 @@ func (s *Set) Equals(g *Set) bool {
 
 // ToSlice returns the array representation of the set.
 func (s *Set) ToSlice() []types.BlockID {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
 	// order keys
 	keys := make([]types.BlockID, len(s.values))
 	i := 0
@@ -198,9 +171,6 @@ func (s *Set) ToSlice() []types.BlockID {
 }
 
 func (s *Set) updateID() {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
 	// order keys
 	keys := make([]types.BlockID, len(s.values))
 	i := 0
@@ -231,9 +201,6 @@ func (s *Set) ID() uint32 {
 }
 
 func (s *Set) String() string {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
 	// TODO: should improve
 	b := new(bytes.Buffer)
 	for v := range s.values {
@@ -247,9 +214,6 @@ func (s *Set) String() string {
 
 // IsSubSetOf returns true if s is a subset of g, false otherwise.
 func (s *Set) IsSubSetOf(g *Set) bool {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
 	for v := range s.values {
 		if !g.Contains(v) {
 			return false
@@ -261,9 +225,6 @@ func (s *Set) IsSubSetOf(g *Set) bool {
 
 // Intersection returns the intersection a new set which represents the intersection of s and g.
 func (s *Set) Intersection(g *Set) *Set {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
 	both := NewEmptySet(len(s.values))
 	for v := range s.values {
 		if g.Contains(v) {
@@ -276,9 +237,6 @@ func (s *Set) Intersection(g *Set) *Set {
 
 // Union returns a new set which represents the union set of s and g.
 func (s *Set) Union(g *Set) *Set {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
 	union := NewEmptySet(len(s.values) + len(g.values))
 
 	for v := range s.values {
@@ -294,9 +252,6 @@ func (s *Set) Union(g *Set) *Set {
 
 // Complement returns a new set that represents the complement of s relatively to the world u.
 func (s *Set) Complement(u *Set) *Set {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
 	comp := NewEmptySet(len(u.values))
 	for v := range u.values {
 		if !s.Contains(v) {
@@ -309,9 +264,6 @@ func (s *Set) Complement(u *Set) *Set {
 
 // Subtract g from s.
 func (s *Set) Subtract(g *Set) {
-	s.m.Lock()
-	defer s.m.Unlock()
-
 	for v := range g.values {
 		s.isIDValid = false
 		delete(s.values, v)
@@ -320,8 +272,5 @@ func (s *Set) Subtract(g *Set) {
 
 // Size returns the number of elements in the set.
 func (s *Set) Size() int {
-	s.m.RLock()
-	defer s.m.RUnlock()
-
 	return len(s.values)
 }
