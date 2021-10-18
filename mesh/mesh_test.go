@@ -558,7 +558,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 	msh := getMesh(t, "mesh")
 
 	state := &MockMapState{}
-	msh.txProcessor = state
+	msh.svm = state
 
 	layerID := types.GetEffectiveGenesis().Add(1)
 	signer, origin := newSignerAndAddress(r, "origin")
@@ -594,7 +594,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 	msh := getMesh(t, "mesh")
 
 	state := &MockMapState{}
-	msh.txProcessor = state
+	msh.svm = state
 
 	layerID := types.NewLayerID(1)
 	signer, _ := newSignerAndAddress(r, "origin")

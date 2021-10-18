@@ -63,12 +63,12 @@ func ConfigTst() Config {
 	}
 }
 
-func getMeshWithMapState(tb testing.TB, id string, s txProcessor) (*Mesh, *AtxDbMock) {
+func getMeshWithMapState(tb testing.TB, id string, svm svm) (*Mesh, *AtxDbMock) {
 	atxDb := NewAtxDbMock()
 	lg := logtest.New(tb)
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
-	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), s, lg), atxDb
+	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), svm, lg), atxDb
 }
 
 func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs int, fee int64) int64 {
