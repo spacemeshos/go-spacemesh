@@ -48,7 +48,17 @@ func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub,
 // Publisher interface for publishing messages.
 type Publisher interface {
 	Publish(context.Context, string, []byte) error
+}
+
+// Subscriber is an interface for subcribing to messages.
+type Subscriber interface {
 	Register(string, GossipHandler)
+}
+
+// PublisherSubscriber common interface for publisher and subscribing.
+type PublisherSubscriber interface {
+	Publisher
+	Subscriber
 }
 
 // GossipHandler is a function that is

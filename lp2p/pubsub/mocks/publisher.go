@@ -49,14 +49,86 @@ func (mr *MockPublisherMockRecorder) Publish(arg0, arg1, arg2 interface{}) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockPublisher)(nil).Publish), arg0, arg1, arg2)
 }
 
+// MockSubscriber is a mock of Subscriber interface.
+type MockSubscriber struct {
+	ctrl     *gomock.Controller
+	recorder *MockSubscriberMockRecorder
+}
+
+// MockSubscriberMockRecorder is the mock recorder for MockSubscriber.
+type MockSubscriberMockRecorder struct {
+	mock *MockSubscriber
+}
+
+// NewMockSubscriber creates a new mock instance.
+func NewMockSubscriber(ctrl *gomock.Controller) *MockSubscriber {
+	mock := &MockSubscriber{ctrl: ctrl}
+	mock.recorder = &MockSubscriberMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockSubscriber) EXPECT() *MockSubscriberMockRecorder {
+	return m.recorder
+}
+
 // Register mocks base method.
-func (m *MockPublisher) Register(arg0 string, arg1 pubsub.GossipHandler) {
+func (m *MockSubscriber) Register(arg0 string, arg1 pubsub.GossipHandler) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "Register", arg0, arg1)
 }
 
 // Register indicates an expected call of Register.
-func (mr *MockPublisherMockRecorder) Register(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockSubscriberMockRecorder) Register(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockPublisher)(nil).Register), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockSubscriber)(nil).Register), arg0, arg1)
+}
+
+// MockPublisherSubscriber is a mock of PublisherSubscriber interface.
+type MockPublisherSubscriber struct {
+	ctrl     *gomock.Controller
+	recorder *MockPublisherSubscriberMockRecorder
+}
+
+// MockPublisherSubscriberMockRecorder is the mock recorder for MockPublisherSubscriber.
+type MockPublisherSubscriberMockRecorder struct {
+	mock *MockPublisherSubscriber
+}
+
+// NewMockPublisherSubscriber creates a new mock instance.
+func NewMockPublisherSubscriber(ctrl *gomock.Controller) *MockPublisherSubscriber {
+	mock := &MockPublisherSubscriber{ctrl: ctrl}
+	mock.recorder = &MockPublisherSubscriberMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockPublisherSubscriber) EXPECT() *MockPublisherSubscriberMockRecorder {
+	return m.recorder
+}
+
+// Publish mocks base method.
+func (m *MockPublisherSubscriber) Publish(arg0 context.Context, arg1 string, arg2 []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Publish", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// Publish indicates an expected call of Publish.
+func (mr *MockPublisherSubscriberMockRecorder) Publish(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Publish", reflect.TypeOf((*MockPublisherSubscriber)(nil).Publish), arg0, arg1, arg2)
+}
+
+// Register mocks base method.
+func (m *MockPublisherSubscriber) Register(arg0 string, arg1 pubsub.GossipHandler) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "Register", arg0, arg1)
+}
+
+// Register indicates an expected call of Register.
+func (mr *MockPublisherSubscriberMockRecorder) Register(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Register", reflect.TypeOf((*MockPublisherSubscriber)(nil).Register), arg0, arg1)
 }

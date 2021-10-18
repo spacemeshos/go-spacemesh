@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"sync"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/lp2p"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -101,29 +102,16 @@ func (p *PoetDbIMock) SetErr(err error) {
 func (p *PoetDbIMock) storeProof(proofMessage *types.PoetProofMessage) error { return nil }
 
 func TestNewPoetListener(t *testing.T) {
-	r := require.New(t)
-
 	lg := logtest.New(t)
-	svc := &ServiceMock{}
-	svc.ch = make(chan service.GossipMessage)
 	poetDb := PoetDbIMock{}
-	listener := NewPoetListener(svc, &poetDb, lg)
-	listener.Start(context.TODO())
+	listener := NewPoetListener(&poetDb, lg)
 
-	// ⚠️ IMPORTANT: We must not ensure that the node is synced! PoET messages must be propagated regardless.
+	msg, err := types.InterfaceToBytes(&types.PoetProofMessage{})
+	require.NoError(t, err)
+	require.Equal(t, pubsub.ValidationAccept,
+		listener.HandlePoetProofMessage(context.TODO(), lp2p.Peer("test"), msg))
 
-	// send valid message
-	validMsg := mockMsg{}
-	svc.ch <- &validMsg
-	time.Sleep(2 * time.Millisecond)
-	r.True(validMsg.GetReportValidation()) // message gets propagated
-
-	// send invalid message
-	invalidMsg := mockMsg{}
 	poetDb.SetErr(fmt.Errorf("bad poet message"))
-	svc.ch <- &invalidMsg
-	time.Sleep(2 * time.Millisecond)
-	r.False(invalidMsg.GetReportValidation()) // message does not get propagated
-
-	listener.Close()
+	require.Equal(t, pubsub.ValidationIgnore,
+		listener.HandlePoetProofMessage(context.TODO(), lp2p.Peer("test"), msg))
 }
