@@ -3,10 +3,11 @@ package hare
 import (
 	"bytes"
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"hash/fnv"
 	"math"
 	"sort"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 type messageType byte
