@@ -67,12 +67,15 @@ func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID      { pani
 func (mockState) ApplyTransactions(types.LayerID, []*types.Transaction) ([]*types.Transaction, error) {
 	return make([]*types.Transaction, 0), nil
 }
-func (mockState) ApplyRewards(types.LayerID, []types.Address, uint64)                     {}
-func (mockState) ApplyLayer(types.LayerID, []*types.Transaction, []types.Address, uint64) {}
-func (mockState) GetBalance(types.Address) uint64                                         { panic("implement me") }
-func (mockState) GetNonce(types.Address) uint64                                           { panic("implement me") }
-func (mockState) AddressExists(types.Address) bool                                        { return true }
-func (mockState) GetAllAccounts() (*types.MultipleAccountsState, error)                   { panic("implement me") }
+func (mockState) ApplyRewards(types.LayerID, []types.Address, uint64) {}
+func (s *mockState) ApplyLayer(l types.LayerID, txs []*types.Transaction, addresses []types.Address, reward uint64) ([]*types.Transaction, error) {
+	s.ApplyRewards(l, addresses, reward)
+	return s.ApplyTransactions(l, txs)
+}
+func (mockState) GetBalance(types.Address) uint64                       { panic("implement me") }
+func (mockState) GetNonce(types.Address) uint64                         { panic("implement me") }
+func (mockState) AddressExists(types.Address) bool                      { return true }
+func (mockState) GetAllAccounts() (*types.MultipleAccountsState, error) { panic("implement me") }
 
 type mockIStore struct{}
 
