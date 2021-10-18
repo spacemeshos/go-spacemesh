@@ -52,6 +52,11 @@ func (s *MockMapState) ApplyRewards(_ types.LayerID, miners []types.Address, rew
 	}
 }
 
+func (s *MockMapState) ApplyLayer(l types.LayerID, txs []*types.Transaction, miners []types.Address, reward uint64) {
+	s.ApplyRewards(l, miners, reward)
+	s.ApplyTransactions(l, txs)
+}
+
 func (s *MockMapState) AddressExists(types.Address) bool {
 	return true
 }

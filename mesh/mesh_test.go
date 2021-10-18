@@ -103,6 +103,9 @@ func (MockSVM) ApplyTransactions(types.LayerID, []*types.Transaction) (int, erro
 func (MockSVM) ApplyRewards(types.LayerID, []types.Address, uint64) {
 }
 
+func (MockSVM) ApplyLayer(types.LayerID, []*types.Transaction, []types.Address, uint64) {
+}
+
 func (MockSVM) AddressExists(types.Address) bool {
 	return true
 }

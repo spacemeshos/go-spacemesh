@@ -99,6 +99,11 @@ func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, er
 func (MockState) ApplyRewards(types.LayerID, []types.Address, uint64) {
 }
 
+func (state *MockState) ApplyLayer(layer types.LayerID, txs []*types.Transaction, miners []types.Address, reward uint64) {
+	state.ApplyRewards(layer, miners, reward)
+	state.ApplyTransactions(layer, txs)
+}
+
 func (MockState) AddressExists(types.Address) bool {
 	return true
 }

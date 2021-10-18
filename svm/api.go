@@ -49,3 +49,8 @@ func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 	}
 	return nil
 }
+
+func (s *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, miners []types.Address, reward uint64) {
+	s.ApplyRewards(layerID, miners, reward)
+	s.ApplyTransactions(layerID, transactions)
+}

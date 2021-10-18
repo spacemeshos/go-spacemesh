@@ -50,6 +50,7 @@ type Validator interface {
 type svm interface {
 	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error)
 	ApplyRewards(layer types.LayerID, miners []types.Address, reward uint64)
+	ApplyLayer(layer types.LayerID, txs []*types.Transaction, miners []types.Address, reward uint64)
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txID types.TransactionID) *types.LayerID
