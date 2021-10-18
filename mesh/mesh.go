@@ -932,13 +932,13 @@ func (msh *Mesh) reportRewards(rewards *layerRewardsInfo, coinbasesAndSmeshers m
 	}
 }
 
-func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
-	coinbases := make([]types.Address, 0, len(l.Blocks()))
+func (msh *Mesh) getCoinbasesAndSmeshers(l *types.Layer) (coinbasesAndSmeshers map[types.Address]map[string]uint64, coinbases []types.Address) {
+	coinbases = make([]types.Address, 0, len(l.Blocks()))
 	// the reason we are serializing the types.NodeID to a string instead of using it directly as a
 	// key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
 	// the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key
 	// TODO: fix this when changing the types.NodeID struct, see https://github.com/spacemeshos/go-spacemesh/issues/2269
-	coinbasesAndSmeshers := make(map[types.Address]map[string]uint64)
+	coinbasesAndSmeshers = make(map[types.Address]map[string]uint64)
 	for _, bl := range l.Blocks() {
 		if bl.ATXID == *types.EmptyATXID {
 			msh.With().Info("skipping reward distribution for block with no atx", bl.LayerIndex, bl.ID())
@@ -957,6 +957,16 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		}
 		coinbasesAndSmeshers[atx.Coinbase][atx.NodeID.String()]++
 	}
+
+	return coinbasesAndSmeshers, coinbases
+}
+
+func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
+	// the reason we are serializing the types.NodeID to a string instead of using it directly as a
+	// key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
+	// the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key
+	// TODO: fix this when changing the types.NodeID struct, see https://github.com/spacemeshos/go-spacemesh/issues/2269
+	coinbasesAndSmeshers, coinbases := msh.getCoinbasesAndSmeshers(l)
 
 	if len(coinbases) == 0 {
 		msh.With().Info("no valid blocks for layer", l.Index())
