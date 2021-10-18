@@ -20,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -106,13 +105,13 @@ func (m mockFetcher) GetHashes(_ []types.Hash32, _ fetch.Hint, _ bool) map[types
 
 type mockBlocks struct{}
 
-func (m mockBlocks) HandleBlockData(_ context.Context, _ []byte, _ service.Fetcher) error {
+func (m mockBlocks) HandleBlockData(_ context.Context, _ []byte) error {
 	panic("implement me")
 }
 
 type mockAtx struct{}
 
-func (m mockAtx) HandleAtxData(_ context.Context, _ []byte, _ service.Fetcher) error {
+func (m mockAtx) HandleAtxData(_ context.Context, _ []byte) error {
 	panic("implement me")
 }
 

@@ -142,11 +142,17 @@ func DefaultConfig() Config {
 	}
 }
 
-// MessageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'
-type MessageNetwork struct {
+type networkInterface interface {
+	PeerCount() uint64
+	GetPeers() []lp2p.Peer
+	Request(context.Context, lp2p.Peer, []byte, func([]byte), func(error)) error
+	Close() error
+}
+
+// messageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'
+type messageNetwork struct {
 	*server.Server
 	*lp2p.Host
-	log.Log
 }
 
 // GetRandomPeer returns a random peer from current peer list
@@ -168,7 +174,7 @@ type Fetch struct {
 	pendingRequests map[types.Hash32][]*request
 	// activeBatches contains batches of requests in pendingRequests.
 	activeBatches        map[types.Hash32]batchInfo
-	net                  *MessageNetwork
+	net                  networkInterface
 	requestReceiver      chan request
 	batchRequestReceiver chan []request
 	batchTimeout         *time.Ticker
@@ -194,10 +200,14 @@ func NewFetch(ctx context.Context, cfg Config, h *lp2p.Host, logger log.Log) *Fe
 		activeBatches:   make(map[types.Hash32]batchInfo),
 		doneChan:        make(chan struct{}),
 	}
-	f.net = &MessageNetwork{
-		Server: server.New(h, fetchProtocol, f.FetchRequestHandler, server.WithTimeout(time.Duration(cfg.RequestTimeout)*time.Second)),
-		Host:   h,
-		Log:    logger,
+	// TODO(dshulyak) this is done for tests. needs to be mocked properly
+	if h != nil {
+		f.net = &messageNetwork{
+			Server: server.New(h, fetchProtocol, f.FetchRequestHandler,
+				server.WithTimeout(time.Duration(cfg.RequestTimeout)*time.Second),
+			),
+			Host: h,
+		}
 	}
 	return f
 }

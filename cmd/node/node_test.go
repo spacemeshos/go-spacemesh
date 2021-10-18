@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	inet "net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -40,9 +39,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -424,7 +420,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
-		app.startAPIServices(context.TODO(), NetMock{})
+		app.startAPIServices(context.TODO())
 	}
 	defer app.stopServices()
 
@@ -496,7 +492,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 		app.Config.DataDirParent = path
-		app.startAPIServices(context.TODO(), NetMock{})
+		app.startAPIServices(context.TODO())
 	}
 	defer app.stopServices()
 	str, err := testArgs()
@@ -705,11 +701,10 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.API.StartTransactionService = true
 
 		// Prevent obnoxious warning in macOS
-		app.Config.P2P.AcquirePort = false
-		app.Config.P2P.TCPInterface = "127.0.0.1"
+		app.Config.P2P.Listen = "/ip4/127.0.0.1/tcp/7073"
 
 		// Avoid waiting for new connections.
-		app.Config.P2P.SwarmConfig.RandomConnections = 0
+		app.Config.P2P.TargetOutbound = 0
 
 		// Speed things up a little
 		app.Config.SyncInterval = 1
@@ -829,47 +824,4 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	// Wait for it to stop
 	wg.Wait()
-}
-
-func TestSpacemeshApp_P2PInterface(t *testing.T) {
-	setup()
-
-	// Use a unique port
-	port := 1238
-	addr := "127.0.0.1"
-
-	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
-
-	// Initialize the network: we don't want to listen but this lets us dial out
-	l, err := node.NewNodeIdentity()
-	r.NoError(err)
-	p2pnet, err := net.NewNet(context.TODO(), app.Config.P2P, l, logtest.New(t))
-	r.NoError(err)
-	// We need to listen on a different port
-	listener, err := inet.Listen("tcp", fmt.Sprintf("%s:%d", addr, 9270))
-	r.NoError(err)
-	p2pnet.Start(context.TODO(), listener)
-	defer p2pnet.Shutdown()
-
-	// Try to connect before we start the P2P service: this should fail
-	tcpAddr := inet.TCPAddr{IP: inet.ParseIP(addr), Port: port}
-	_, err = p2pnet.Dial(cmdp.Ctx, &tcpAddr, l.PublicKey())
-	r.Error(err)
-
-	// Start P2P services
-	app.Config.P2P.TCPPort = port
-	app.Config.P2P.TCPInterface = addr
-	app.Config.P2P.AcquirePort = false
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, logtest.New(t), app.Config.DataDir())
-	r.NoError(err)
-	r.NoError(swarm.Start(context.TODO()))
-	defer swarm.Shutdown()
-
-	// Try to connect again: this should succeed
-	conn, err := p2pnet.Dial(cmdp.Ctx, &tcpAddr, l.PublicKey())
-	r.NoError(err)
-	defer conn.Close()
-	r.Equal(fmt.Sprintf("%s:%d", addr, app.Config.P2P.TCPPort), conn.RemoteAddr().String())
-	r.Equal(l.PublicKey(), conn.RemotePublicKey())
 }

@@ -7,15 +7,12 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/spacemeshos/go-spacemesh/lp2p"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -33,59 +30,19 @@ type mockNet struct {
 	AsyncChannel    chan struct{}
 }
 
-func (m mockNet) Close() {
-}
-
-func (m mockNet) RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(context.Context, []byte) ([]byte, error)) {
-}
-
-func (m mockNet) Start(context.Context) error {
-	return nil
-}
-
-func (m mockNet) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
-	return nil
-}
-
-func (m mockNet) RegisterDirectProtocol(protocol string) chan service.DirectMessage {
-	return nil
-}
-
-func (m mockNet) GossipReady() <-chan struct{} {
-	c := make(chan struct{})
-	close(c)
-	return c
-}
-
-func (m mockNet) SubscribePeerEvents() (new chan p2pcrypto.PublicKey, del chan p2pcrypto.PublicKey) {
-	return nil, nil
-}
-
-func (m mockNet) Broadcast(_ context.Context, protocol string, payload []byte) error {
-	return nil
-}
-
-func (m mockNet) Shutdown() {
-}
-
-func (m mockNet) RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage {
-	return nil
-}
-
-func (m mockNet) SendWrappedMessage(_ context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error {
-	return nil
+func (m mockNet) GetPeers() []lp2p.Peer {
+	return []lp2p.Peer{lp2p.Peer("test")}
 }
 
 func (m mockNet) PeerCount() uint64 {
 	return 1
 }
 
-func (m mockNet) GetPeers() []peers.Peer {
-	_, pub1, _ := p2pcrypto.GenerateKeyPair()
-	return []peers.Peer{pub1}
+func (m mockNet) Close() error {
+	return nil
 }
 
-func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error {
+func (m *mockNet) Request(_ context.Context, pid lp2p.Peer, payload []byte, resHandler func(msg []byte), failHandler func(err error)) error {
 	m.TotalBatchCalls++
 	if m.ReturnError {
 		if m.AckChannel != nil {
@@ -123,8 +80,6 @@ func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, pay
 	return nil
 }
 
-var _ service.Service = (*mockNet)(nil)
-
 func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
 	cfg := Config{
 		2000, // make sure we never hit the batch timeout
@@ -139,7 +94,8 @@ func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
 		Responses:  make(map[types.Hash32]responseMessage),
 	}
 	lg := logtest.New(tb)
-	f := NewFetch(context.TODO(), cfg, mckNet, lg)
+	f := NewFetch(context.TODO(), cfg, nil, lg)
+	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
 	f.AddDB("db2", database.NewMemDatabase())
 
@@ -152,7 +108,8 @@ func customFetch(tb testing.TB, cfg Config) (*Fetch, *mockNet) {
 		Responses:  make(map[types.Hash32]responseMessage),
 	}
 	lg := logtest.New(tb)
-	f := NewFetch(context.TODO(), cfg, mckNet, lg)
+	f := NewFetch(context.TODO(), cfg, nil, lg)
+	f.net = mckNet
 	f.AddDB("db", database.NewMemDatabase())
 	return f, mckNet
 }
@@ -446,10 +403,12 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 }
 
 func TestFetch_GetRandomPeer(t *testing.T) {
-	myPeers := make([]peers.Peer, 1000)
+	myPeers := make([]lp2p.Peer, 1000)
 	for i := 0; i < len(myPeers); i++ {
-		_, pub, _ := p2pcrypto.GenerateKeyPair()
-		myPeers[i] = pub
+		buf := make([]byte, 20)
+		_, err := rand.Read(buf)
+		require.NoError(t, err)
+		myPeers[i] = lp2p.Peer(buf)
 	}
 	allTheSame := true
 	for i := 0; i < 20; i++ {
