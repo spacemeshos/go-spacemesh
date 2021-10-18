@@ -43,6 +43,15 @@ func StartPeers(h host.Host, opts ...Opt) *Peers {
 	return p
 }
 
+//go:generate mockgen -package=mocks -destination=./mocks/peers.go -source=./peers.go
+
+// Provider is an interface that provides peers.
+type Provider interface {
+	PeerCount() uint64
+	GetPeers() []peer.ID
+	WaitPeers(context.Context, int) ([]peer.ID, error)
+}
+
 // NewPeers creates a Peers using specified parameters and returns it.
 func NewPeers(h host.Host, opts ...Opt) *Peers {
 	p := &Peers{

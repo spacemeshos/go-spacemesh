@@ -18,6 +18,7 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -39,8 +40,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/lp2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -557,13 +558,18 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	path := t.TempDir()
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
-	localNet := service.NewSimulator()
+	mesh, err := mocknet.WithNPeers(context.TODO(), 1)
+	require.NoError(t, err)
 	cfg := getTestDefaultConfig()
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	app, err := InitSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(logtest.New(t)), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
+	h, err := lp2p.Wrap(mesh.Hosts()[0])
+	require.NoError(t, err)
+	app, err := InitSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339),
+		path, eligibility.New(logtest.New(t)),
+		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {

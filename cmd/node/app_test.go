@@ -16,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
@@ -30,6 +31,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/lp2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -70,7 +72,8 @@ func Test_PoETHarnessSanity(t *testing.T) {
 	require.NotNil(t, h)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, genesisTime string, poetClient *activation.HTTPPoetClient, clock TickProvider, network network) (firstDir string) {
+func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, genesisTime string,
+	poetClient *activation.HTTPPoetClient, clock TickProvider, mesh mocknet.Mocknet) (firstDir string) {
 	name := 'a'
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := suite.T().TempDir()
@@ -78,7 +81,9 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 			firstDir = dbStorepath
 		}
 		edSgn := signing.NewEdSigner()
-		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network, edSgn)
+		h, err := lp2p.Wrap(mesh.Hosts()[i])
+		suite.Require().NoError(err)
+		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, h, edSgn)
 		suite.NoError(err)
 		suite.apps = append(suite.apps, smApp)
 		name++
@@ -749,16 +754,13 @@ func TestShutdown(t *testing.T) {
 	r.NoError(err, "failed to create vrf signer")
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
-	swarm := net.NewNode()
-	dbStorepath := t.TempDir()
-
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
 	gTime := genesisTime
 	ld := time.Duration(20) * time.Second
 	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(t))
-	r.NoError(smApp.initServices(context.TODO(), nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock))
+	r.NoError(smApp.initServices(context.TODO(), nodeID, t.TempDir(), edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock))
 	r.NoError(smApp.startServices(context.TODO()))
 	ActivateGrpcServer(smApp)
 

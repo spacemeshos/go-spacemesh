@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/lp2p"
+	"github.com/spacemeshos/go-spacemesh/lp2p/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/lp2p/server"
 )
 
@@ -55,12 +56,9 @@ type poetDB interface {
 	ValidateAndStoreMsg(data []byte) error
 }
 
-// network defines network capabilities used.
 type network interface {
-	GetPeers() []lp2p.Peer
-	PeerCount() uint64
-	Request(ctx context.Context, payload []byte, address lp2p.Peer, resHandler func(msg []byte), errorHandler func(err error))
-	Close()
+	bootstrap.Provider
+	server.Host
 }
 
 var (
@@ -100,7 +98,7 @@ type Logic struct {
 	log              log.Log
 	fetcher          fetch.Fetcher
 	atxsrv, blocksrv *server.Server
-	host             *lp2p.Host
+	host             network
 	mutex            sync.Mutex
 	layerBlocksRes   map[types.LayerID]*layerResult
 	layerBlocksChs   map[types.LayerID][]chan LayerPromiseResult
@@ -126,7 +124,7 @@ func DefaultConfig() Config {
 
 // NewLogic creates a new instance of layer fetching logic
 func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDB, atxIDs atxIDsDB, txs TxProcessor,
-	host *lp2p.Host, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
+	host network, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
 	l := &Logic{
 		log:            log,
 		fetcher:        fetcher,

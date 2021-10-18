@@ -17,9 +17,8 @@ import (
 	lyrMocks "github.com/spacemeshos/go-spacemesh/layerfetcher/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/lp2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -45,35 +44,32 @@ func randomBlockID() types.BlockID {
 }
 
 type mockNet struct {
-	peers       []peers.Peer
-	layerBlocks map[peers.Peer][]byte
-	errors      map[peers.Peer]error
-	timeouts    map[peers.Peer]struct{}
+	peers       []lp2p.Peer
+	layerBlocks map[lp2p.Peer][]byte
+	errors      map[lp2p.Peer]error
+	timeouts    map[lp2p.Peer]struct{}
 }
 
 func newMockNet() *mockNet {
 	return &mockNet{
-		layerBlocks: make(map[peers.Peer][]byte),
-		errors:      make(map[peers.Peer]error),
-		timeouts:    make(map[peers.Peer]struct{}),
+		layerBlocks: make(map[lp2p.Peer][]byte),
+		errors:      make(map[lp2p.Peer]error),
+		timeouts:    make(map[lp2p.Peer]struct{}),
 	}
 }
-func (m *mockNet) GetPeers() []peers.Peer    { return m.peers }
-func (m *mockNet) PeerCount() uint64         { return uint64(len(m.peers)) }
-func (m *mockNet) GetRandomPeer() peers.Peer { return m.peers[0] }
-func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, _ []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errorHandler func(err error)) error {
-	if _, ok := m.timeouts[address]; ok {
+func (m *mockNet) GetPeers() []lp2p.Peer { return m.peers }
+func (m *mockNet) PeerCount() uint64     { return uint64(len(m.peers)) }
+
+func (m *mockNet) Request(_ context.Context, _ []byte, pid lp2p.Peer, resHandler func(msg []byte), errorHandler func(err error)) error {
+	if _, ok := m.timeouts[pid]; ok {
 		errorHandler(errors.New("peer timeout"))
 		return nil
 	}
-	switch msgType {
-	case server.LayerBlocksMsg:
-		if data, ok := m.layerBlocks[address]; ok {
-			resHandler(data)
-			return nil
-		}
+	if data, ok := m.layerBlocks[pid]; ok {
+		resHandler(data)
+		return nil
 	}
-	return m.errors[address]
+	return m.errors[pid]
 }
 func (mockNet) Close() {}
 
