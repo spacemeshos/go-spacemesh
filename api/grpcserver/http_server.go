@@ -85,7 +85,7 @@ func (s *JSONHTTPServer) startInternal(
 			err = gw.RegisterDebugServiceHandlerServer(ctx, mux, typed)
 		}
 		if err != nil {
-			log.Error("error registering %T with grpc gateway, error %v", svc, err)
+			log.Error("registering %T with grpc gateway failed with %v", svc, err)
 		}
 		serviceCount++
 	}
@@ -98,7 +98,7 @@ func (s *JSONHTTPServer) startInternal(
 		return
 	}
 
-	log.Info("starting grpc gateway server on port %d connected to grpc service", s.Port)
+	log.Info("starting grpc gateway server on port %d", s.Port)
 	s.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.Port),
 		Handler: mux,
