@@ -89,7 +89,7 @@ type Hare struct {
 func New(
 	conf config.Config,
 	pid peer.ID,
-	publisher pubsub.Publisher,
+	publisher pubsub.PublisherSubscriber,
 	sign Signer,
 	nid types.NodeID,
 	syncState syncStateFunc,
