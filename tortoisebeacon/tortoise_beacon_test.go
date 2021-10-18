@@ -9,6 +9,8 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
+	pubsubmocks "github.com/spacemeshos/go-spacemesh/lp2p/pubsub/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -17,9 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	dbMocks "github.com/spacemeshos/go-spacemesh/database/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	p2pMocks "github.com/spacemeshos/go-spacemesh/p2p/service/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -79,12 +78,23 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64, hasATX bool) (*To
 	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
 	require.NoError(t, err)
 
-	node := service.NewSimulator().NewNode()
+	publisher := newPublisher(t)
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
-	tb := New(conf, minerID, node, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
+	tb := New(conf, minerID, publisher, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
 	require.NotNil(t, tb)
 	tb.SetSyncState(testSyncState(true))
 	return tb, clock
+}
+
+func newPublisher(tb testing.TB) pubsub.Publisher {
+	tb.Helper()
+	ctrl := gomock.NewController(tb)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	publisher.EXPECT().
+		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
+	return publisher
 }
 
 func TestTortoiseBeacon(t *testing.T) {
@@ -516,16 +526,10 @@ func TestTortoiseBeacon_getProposalChannel(t *testing.T) {
 			}
 
 			if tc.makeNextChFull {
-				ctrl := gomock.NewController(t)
 				tb.mu.Lock()
 				nextCh := tb.getOrCreateProposalChannel(currentEpoch + 1)
 				for i := 0; i < proposalChanCapacity; i++ {
-					mockGossip := p2pMocks.NewMockGossipMessage(ctrl)
-					if i == 0 {
-						mockGossip.EXPECT().Sender().Return(p2pcrypto.NewRandomPubkey()).Times(1)
-					}
 					nextCh <- &proposalMessageWithReceiptData{
-						gossip:  mockGossip,
 						message: ProposalMessage{},
 					}
 				}
