@@ -101,43 +101,29 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	layers, atxDB := getMeshWithMapState(t, "t1", s)
 	defer layers.Close()
 
-	var totalFee int64
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
+	totalFee := int64(0)
+	blocksData := []struct {
+		numOfTxs int
+		fee      int64
+		addr     string
+	}{
+		{15, 7, "0xaaa"},
+		{13, rand.Int63n(100), "0xbbb"},
+		{17, rand.Int63n(100), "0xccc"},
+		{16, rand.Int63n(100), "0xddd"},
+	}
 
-	coinbase1 := types.HexToAddress("0xaaa")
-	atx := newActivationTx(types.NodeID{Key: "1", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, types.NewLayerID(1), 0, goldenATXID, coinbase1, 10, []types.BlockID{}, &types.NIPost{})
-	atxDB.AddAtx(atx.ID(), atx)
-	block1.ATXID = atx.ID()
-	totalFee += addTransactionsWithFee(t, layers.DB, block1, 15, 7)
+	for i, data := range blocksData {
+		block := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
 
-	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
+		coinbase1 := types.HexToAddress(data.addr)
+		atx := newActivationTx(types.NodeID{Key: strconv.Itoa(i + 1), VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, types.NewLayerID(1), 0, goldenATXID, coinbase1, 10, []types.BlockID{}, &types.NIPost{})
+		atxDB.AddAtx(atx.ID(), atx)
+		block.ATXID = atx.ID()
+		totalFee += addTransactionsWithFee(t, layers.DB, block, data.numOfTxs, data.fee)
 
-	coinbase2 := types.HexToAddress("0xbbb")
-	atx = newActivationTx(types.NodeID{Key: "2", VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, types.NewLayerID(1), 0, goldenATXID, coinbase2, 10, []types.BlockID{}, &types.NIPost{})
-	atxDB.AddAtx(atx.ID(), atx)
-	block2.ATXID = atx.ID()
-	totalFee += addTransactionsWithFee(t, layers.DB, block2, 13, rand.Int63n(100))
-
-	block3 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
-
-	coinbase3 := types.HexToAddress("0xccc")
-	atx = newActivationTx(types.NodeID{Key: "3", VRFPublicKey: []byte("bbbbb")}, 0, goldenATXID, types.NewLayerID(1), 0, goldenATXID, coinbase3, 10, []types.BlockID{}, &types.NIPost{})
-	atxDB.AddAtx(atx.ID(), atx)
-	block3.ATXID = atx.ID()
-	totalFee += addTransactionsWithFee(t, layers.DB, block3, 17, rand.Int63n(100))
-
-	block4 := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
-
-	coinbase4 := types.HexToAddress("0xddd")
-	atx = newActivationTx(types.NodeID{Key: "4", VRFPublicKey: []byte("bbbbb")}, 0, goldenATXID, types.NewLayerID(1), 0, goldenATXID, coinbase4, 10, []types.BlockID{}, &types.NIPost{})
-	atxDB.AddAtx(atx.ID(), atx)
-	block4.ATXID = atx.ID()
-	totalFee += addTransactionsWithFee(t, layers.DB, block4, 16, rand.Int63n(100))
-
-	_ = layers.AddBlock(block1)
-	_ = layers.AddBlock(block2)
-	_ = layers.AddBlock(block3)
-	_ = layers.AddBlock(block4)
+		layers.AddBlock(block)
+	}
 
 	params := NewTestRewardParams()
 
