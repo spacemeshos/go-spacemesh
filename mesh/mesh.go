@@ -518,8 +518,24 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	// TODO: fix this when changing the types.NodeID struct, see
 	// https://github.com/spacemeshos/go-spacemesh/issues/2269.
 	coinbasesAndSmeshers, coinbases := msh.getCoinbasesAndSmeshers(l)
+	var failedTxs []*types.Transaction
+	var err error
 
-	failedTxs, err := msh.svm.ApplyTransactions(l.Index(), validBlockTxs)
+	if len(coinbases) > 0 {
+		rewards := msh.calculateRewards(l, validBlockTxs, msh.config, coinbases)
+		// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
+		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, coinbases, rewards.blockTotalReward)
+		msh.logRewards(&rewards)
+		msh.reportRewards(&rewards, coinbasesAndSmeshers)
+
+		if err := msh.DB.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, rewards.blockTotalReward, rewards.blockLayerReward); err != nil {
+			msh.Log.Error("cannot write reward to db")
+		}
+	} else {
+		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, coinbases, 0)
+		msh.With().Info("no valid blocks for layer", l.Index())
+	}
+
 	if err != nil {
 		msh.With().Error("failed to apply transactions",
 			l.Index(), log.Int("num_failed_txs", len(failedTxs)), log.Err(err))
@@ -532,20 +548,6 @@ func (msh *Mesh) applyState(l *types.Layer) {
 		l.Index(),
 		log.Int("num_failed_txs", len(failedTxs)),
 	)
-
-	if len(coinbases) > 0 {
-		rewards := msh.calculateRewards(l, validBlockTxs, msh.config, coinbases)
-		// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
-		msh.svm.ApplyRewards(l.Index(), coinbases, rewards.blockTotalReward)
-		msh.logRewards(&rewards)
-		msh.reportRewards(&rewards, coinbasesAndSmeshers)
-
-		if err := msh.DB.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, rewards.blockTotalReward, rewards.blockLayerReward); err != nil {
-			msh.Log.Error("cannot write reward to db")
-		}
-	} else {
-		msh.With().Info("no valid blocks for layer", l.Index())
-	}
 
 	msh.setLatestLayerInState(l.Index())
 }
