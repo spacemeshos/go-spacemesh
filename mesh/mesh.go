@@ -521,9 +521,9 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	var failedTxs []*types.Transaction
 	var err error
 
+	// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
 	if len(coinbases) > 0 {
 		rewards := msh.calculateRewards(l, validBlockTxs, msh.config, coinbases)
-		// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
 		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, coinbases, rewards.blockTotalReward)
 		msh.logRewards(&rewards)
 		msh.reportRewards(&rewards, coinbasesAndSmeshers)
