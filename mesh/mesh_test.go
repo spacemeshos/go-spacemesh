@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"context"
-	"math/big"
 	"testing"
 	"time"
 
@@ -101,7 +100,7 @@ func (MockSVM) ApplyTransactions(types.LayerID, []*types.Transaction) (int, erro
 	return 0, nil
 }
 
-func (MockSVM) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
+func (MockSVM) ApplyRewards(types.LayerID, []types.Address, uint64) {
 }
 
 func (MockSVM) AddressExists(types.Address) bool {

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"math/big"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/duration"
@@ -66,7 +65,7 @@ func (mockState) ValidateNonceAndBalance(*types.Transaction) error              
 func (mockState) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error)            { panic("implement me") }
 func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID                 { panic("implement me") }
 func (mockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) { return 0, nil }
-func (mockState) ApplyRewards(types.LayerID, []types.Address, *big.Int)              {}
+func (mockState) ApplyRewards(types.LayerID, []types.Address, uint64)                {}
 func (mockState) GetBalance(types.Address) uint64                                    { panic("implement me") }
 func (mockState) GetNonce(types.Address) uint64                                      { panic("implement me") }
 func (mockState) AddressExists(types.Address) bool                                   { return true }
@@ -129,7 +128,7 @@ func (m *mockClock) Unsubscribe(timer timesync.LayerTimer) {
 
 func configTst() mesh.Config {
 	return mesh.Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: 5000,
 	}
 }
 

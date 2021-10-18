@@ -3,7 +3,6 @@ package activation
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -97,7 +96,7 @@ func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, er
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
+func (MockState) ApplyRewards(types.LayerID, []types.Address, uint64) {
 }
 
 func (MockState) AddressExists(types.Address) bool {
@@ -127,7 +126,7 @@ func (MockTxMemPool) Invalidate(types.TransactionID)              {}
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: 5000,
 	}
 }
 

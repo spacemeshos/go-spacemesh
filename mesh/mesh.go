@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"sync"
 
@@ -50,7 +49,7 @@ type Validator interface {
 
 type svm interface {
 	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error)
-	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
+	ApplyRewards(layer types.LayerID, miners []types.Address, reward uint64)
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txID types.TransactionID) *types.LayerID
@@ -866,31 +865,29 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 
 type layerRewardsInfo struct {
 	types.LayerID
-	feesReward          *big.Int
-	layerReward         *big.Int
-	numBlocks           *big.Int
-	blockTotalReward    *big.Int
-	blockTotalRewardMod *big.Int
-	blockLayerReward    *big.Int
-	blockLayerRewardMod *big.Int
+	feesReward          uint64
+	layerReward         uint64
+	numBlocks           uint64
+	blockTotalReward    uint64
+	blockTotalRewardMod uint64
+	blockLayerReward    uint64
+	blockLayerRewardMod uint64
 }
 
-func (info *layerRewardsInfo) totalReward() *big.Int {
-	total := big.NewInt(0)
-	total.Add(info.feesReward, info.layerReward)
-	return total
+func (info *layerRewardsInfo) totalReward() uint64 {
+	return info.feesReward + info.layerReward
 }
 
 func (msh *Mesh) logRewards(rewards *layerRewardsInfo) {
 	msh.With().Info("reward calculated",
 		rewards.LayerID,
-		log.Uint64("num_blocks", rewards.numBlocks.Uint64()),
-		log.Uint64("total_reward", rewards.totalReward().Uint64()),
-		log.Uint64("layer_reward", rewards.layerReward.Uint64()),
-		log.Uint64("block_total_reward", rewards.blockTotalReward.Uint64()),
-		log.Uint64("block_layer_reward", rewards.blockLayerReward.Uint64()),
-		log.Uint64("total_reward_remainder", rewards.blockTotalRewardMod.Uint64()),
-		log.Uint64("layer_reward_remainder", rewards.blockLayerRewardMod.Uint64()),
+		log.Uint64("num_blocks", rewards.numBlocks),
+		log.Uint64("total_reward", rewards.totalReward()),
+		log.Uint64("layer_reward", rewards.layerReward),
+		log.Uint64("block_total_reward", rewards.blockTotalReward),
+		log.Uint64("block_layer_reward", rewards.blockLayerReward),
+		log.Uint64("total_reward_remainder", rewards.blockTotalRewardMod),
+		log.Uint64("layer_reward_remainder", rewards.blockLayerRewardMod),
 	)
 }
 
@@ -898,13 +895,12 @@ func (msh *Mesh) calculateRewards(l *types.Layer, txs []*types.Transaction, para
 	rewards := layerRewardsInfo{}
 
 	rewards.LayerID = l.Index()
-	rewards.feesReward = &big.Int{}
 	for _, tx := range txs {
-		rewards.feesReward.Add(rewards.feesReward, new(big.Int).SetUint64(tx.Fee))
+		rewards.feesReward += tx.Fee
 	}
 
 	rewards.layerReward = calculateLayerReward(l.Index(), params)
-	rewards.numBlocks = big.NewInt(int64(len(coinbases)))
+	rewards.numBlocks = uint64(len(coinbases))
 
 	rewards.blockTotalReward, rewards.blockTotalRewardMod = calculateActualRewards(l.Index(), rewards.totalReward(), rewards.numBlocks)
 	rewards.blockLayerReward, rewards.blockLayerRewardMod = calculateActualRewards(l.Index(), rewards.layerReward, rewards.numBlocks)
@@ -926,8 +922,8 @@ func (msh *Mesh) reportRewards(rewards *layerRewardsInfo, coinbasesAndSmeshers m
 			}
 			events.ReportRewardReceived(events.Reward{
 				Layer:       rewards.LayerID,
-				Total:       cnt * rewards.blockTotalReward.Uint64(),
-				LayerReward: cnt * rewards.blockLayerReward.Uint64(),
+				Total:       cnt * rewards.blockTotalReward,
+				LayerReward: cnt * rewards.blockLayerReward,
 				Coinbase:    account,
 				Smesher:     *smesherEntry,
 			})
