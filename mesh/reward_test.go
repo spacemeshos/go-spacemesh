@@ -139,7 +139,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 
 	l, err := layers.GetLayer(types.NewLayerID(1))
 	assert.NoError(t, err)
-	layers.accumulateRewards(l, params)
+	layers.accumulateRewards(l, layers.extractUniqueOrderedTransactions(l), params)
 	totalRewardsCost := totalFee + params.BaseReward.Int64()
 	remainder := totalRewardsCost % 4
 

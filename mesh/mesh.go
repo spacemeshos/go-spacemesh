@@ -509,8 +509,11 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 }
 
 func (msh *Mesh) applyState(l *types.Layer) {
-	msh.accumulateRewards(l, msh.config)
-	msh.pushTransactions(l)
+	// Aggregate all blocks' rewards.
+	validBlockTxs := msh.extractUniqueOrderedTransactions(l)
+
+	msh.accumulateRewards(l, validBlockTxs, msh.config)
+	msh.pushTransactions(l, validBlockTxs)
 	msh.setLatestLayerInState(l.Index())
 }
 
@@ -689,8 +692,7 @@ func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.T
 	return txs
 }
 
-func (msh *Mesh) pushTransactions(l *types.Layer) {
-	validBlockTxs := msh.extractUniqueOrderedTransactions(l)
+func (msh *Mesh) pushTransactions(l *types.Layer, validBlockTxs []*types.Transaction) {
 	numFailedTxs, err := msh.ApplyTransactions(l.Index(), validBlockTxs)
 	if err != nil {
 		msh.With().Error("failed to apply transactions",
@@ -961,11 +963,13 @@ func (msh *Mesh) getCoinbasesAndSmeshers(l *types.Layer) (coinbasesAndSmeshers m
 	return coinbasesAndSmeshers, coinbases
 }
 
-func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
-	// the reason we are serializing the types.NodeID to a string instead of using it directly as a
+func (msh *Mesh) accumulateRewards(l *types.Layer, txs []*types.Transaction, params Config) {
+	// The reason we are serializing the types.NodeID to a string instead of using it directly as a
 	// key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
-	// the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key
-	// TODO: fix this when changing the types.NodeID struct, see https://github.com/spacemeshos/go-spacemesh/issues/2269
+	// the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key.
+	//
+	// TODO: fix this when changing the types.NodeID struct, see
+	// https://github.com/spacemeshos/go-spacemesh/issues/2269.
 	coinbasesAndSmeshers, coinbases := msh.getCoinbasesAndSmeshers(l)
 
 	if len(coinbases) == 0 {
@@ -973,8 +977,6 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		return
 	}
 
-	// aggregate all blocks' rewards
-	txs := msh.extractUniqueOrderedTransactions(l)
 	rewards := msh.calculateRewards(l, txs, params, coinbases)
 
 	// NOTE: We don't _report_ rewards when we apply them. This is because applying rewards just requires
@@ -990,9 +992,10 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 	msh.reportRewards(&rewards, coinbasesAndSmeshers)
 
 	if err := msh.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, rewards.blockTotalReward, rewards.blockLayerReward); err != nil {
-		msh.Error("cannot write reward to db")
+		msh.Log.Error("cannot write reward to db")
 	}
-	// todo: should miner id be sorted in a deterministic order prior to applying rewards?
+
+	// TODO: should miner id be sorted in a deterministic order prior to applying rewards?
 }
 
 // GenesisBlock is a is the first static block that xists at the beginning of each network. it exist one layer before actual blocks could be created.
