@@ -136,8 +136,8 @@ func New(
 	}
 }
 
-// IsEpochBeaconReady returns true if the beacon value is known for the specified epoch.
-func (o *Oracle) IsEpochBeaconReady(ctx context.Context, epoch types.EpochID) bool {
+// GetEpochBeacon returns the beacon for the specified epoch.
+func (o *Oracle) GetEpochBeacon(ctx context.Context, epoch types.EpochID) bool {
 	_, err := o.beacon.Value(ctx, epoch)
 	return err == nil
 }

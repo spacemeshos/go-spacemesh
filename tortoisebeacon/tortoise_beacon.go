@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/ALTree/bigfloat"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -19,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
@@ -91,7 +93,7 @@ func New(
 	clock layerClock,
 	logger log.Log,
 ) *TortoiseBeacon {
-	return &TortoiseBeacon{
+	tb := &TortoiseBeacon{
 		logger:                  logger,
 		config:                  conf,
 		nodeID:                  nodeID,
@@ -112,6 +114,8 @@ func New(
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 		votesMargin:             map[string]*big.Int{},
 	}
+	tb.metricsCollector = metrics.NewBeaconMetricsCollector(tb.gatherMetricsData, logger.WithName("metrics"))
+	return tb
 }
 
 // TortoiseBeacon represents Tortoise Beacon.
@@ -139,6 +143,7 @@ type TortoiseBeacon struct {
 	db          database.Database
 
 	mu              sync.RWMutex
+	lastTickedEpoch types.EpochID
 	epochInProgress types.EpochID
 	epochWeight     uint64
 
@@ -161,6 +166,10 @@ type TortoiseBeacon struct {
 	proposalPhaseFinishedTime time.Time
 	proposalChans             map[types.EpochID]chan *proposalMessageWithReceiptData
 	proposalChecker           eligibilityChecker
+
+	// metrics
+	metricsCollector *metrics.BeaconMetricsCollector
+	metricsRegistry  *prometheus.Registry
 }
 
 // SetSyncState updates sync state provider. Must be executed only once.
@@ -169,6 +178,13 @@ func (tb *TortoiseBeacon) SetSyncState(sync SyncState) {
 		tb.logger.Panic("sync state provider can be updated only once")
 	}
 	tb.sync = sync
+}
+
+// for testing.
+func (tb *TortoiseBeacon) setMetricsRegistry(registry *prometheus.Registry) {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+	tb.metricsRegistry = registry
 }
 
 // Start starts listening for layers and outputs.
@@ -187,6 +203,7 @@ func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 
 	tb.initGenesisBeacons()
 	tb.layerTicker = tb.clock.Subscribe()
+	tb.metricsCollector.Start(nil)
 
 	tb.eg.Go(func() error {
 		tb.listenLayers(ctx)
@@ -203,6 +220,7 @@ func (tb *TortoiseBeacon) Close() {
 	}
 	tb.logger.Info("closing %v", protoName)
 	tb.cancel()
+	tb.metricsCollector.Stop()
 	tb.clock.Unsubscribe(tb.layerTicker)
 	tb.logger.Info("waiting for tortoise beacon goroutines to finish")
 	if err := tb.eg.Wait(); err != nil {
@@ -231,6 +249,8 @@ func (tb *TortoiseBeacon) ReportBeaconFromBlock(epoch types.EpochID, blockID typ
 }
 
 func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types.BlockID, beacon []byte, weight uint64) {
+	beaconStr := types.BytesToHash(beacon).ShortString()
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -247,7 +267,7 @@ func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types
 		tb.logger.With().Debug("added beacon from block",
 			epochID,
 			blockID,
-			log.String("beacon", types.BytesToHash(beacon).ShortString()),
+			log.String("beacon", beaconStr),
 			log.Uint64("weight", weight))
 		return
 	}
@@ -263,7 +283,7 @@ func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types
 	tb.logger.With().Debug("added beacon from block",
 		epochID,
 		blockID,
-		log.String("beacon", types.BytesToHash(beacon).ShortString()),
+		log.String("beacon", beaconStr),
 		log.Uint64("weight", weight))
 }
 
@@ -457,12 +477,25 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 	}
 }
 
+func (tb *TortoiseBeacon) setTickedEpoch(epoch types.EpochID) {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+	tb.lastTickedEpoch = epoch
+}
+
+func (tb *TortoiseBeacon) setEpochInProgress(epoch types.EpochID) {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+	tb.epochInProgress = epoch
+}
+
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new CPs.
 func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) {
 	epoch := layer.GetEpoch()
 	logger := tb.logger.WithContext(ctx).WithFields(layer, epoch)
 
+	tb.setTickedEpoch(epoch)
 	if !layer.FirstInEpoch() {
 		logger.Debug("not first layer in epoch, skipping")
 		return
@@ -472,15 +505,6 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 		return
 	}
 	logger.Info("first layer in epoch, proceeding")
-
-	tb.mu.Lock()
-	if tb.epochInProgress >= epoch {
-		tb.mu.Unlock()
-		logger.Panic("epoch ticked twice")
-	}
-	tb.epochInProgress = epoch
-	tb.mu.Unlock()
-
 	tb.handleEpoch(ctx, epoch)
 }
 
@@ -516,6 +540,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		return
 	}
 
+	tb.setEpochInProgress(epoch)
 	tb.setBeginProtocol(ctx)
 	defer tb.setEndProtocol(ctx)
 
@@ -957,4 +982,52 @@ func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data
 	}
 
 	return nil
+}
+
+func (tb *TortoiseBeacon) getOwnWeight(epoch types.EpochID) uint64 {
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(tb.nodeID, epoch)
+	if err != nil {
+		tb.logger.With().Error("failed to look up own ATX for epoch", epoch, log.Err(err))
+		return 0
+	}
+	hdr, err := tb.atxDB.GetAtxHeader(atxID)
+	if err != nil {
+		tb.logger.With().Error("failed to look up own weight for epoch", epoch, log.Err(err))
+		return 0
+	}
+	return hdr.GetWeight()
+}
+
+func (tb *TortoiseBeacon) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.BeaconStats) {
+	tb.mu.RLock()
+	defer tb.mu.RUnlock()
+
+	epoch := tb.lastTickedEpoch
+	var observed []*metrics.BeaconStats
+	if beacons, ok := tb.beaconsFromBlocks[epoch]; ok {
+		for beacon, stats := range beacons {
+			stat := &metrics.BeaconStats{
+				Epoch:  epoch,
+				Beacon: types.BytesToHash([]byte(beacon)).ShortString(),
+				Count:  uint64(len(stats.blocks)),
+				Weight: stats.weight,
+			}
+			observed = append(observed, stat)
+		}
+	}
+	var calculated *metrics.BeaconStats
+	ownWeight := uint64(0)
+	if !epoch.IsGenesis() {
+		ownWeight = tb.getOwnWeight(epoch - 1)
+	}
+	if beacon, ok := tb.beacons[epoch]; ok {
+		calculated = &metrics.BeaconStats{
+			Epoch:  epoch,
+			Beacon: beacon.ShortString(),
+			Count:  1,
+			Weight: ownWeight,
+		}
+	}
+
+	return observed, calculated
 }

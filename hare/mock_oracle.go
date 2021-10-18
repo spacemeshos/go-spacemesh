@@ -72,10 +72,6 @@ func (mho *mockHashOracle) Unregister(client string) {
 	mho.mutex.Unlock()
 }
 
-func (mho *mockHashOracle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
-	return true
-}
-
 // Calculates the threshold for the given committee size.
 func (mho *mockHashOracle) calcThreshold(committeeSize int) uint32 {
 	mho.mutex.RLock()
