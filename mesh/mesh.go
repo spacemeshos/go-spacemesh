@@ -511,9 +511,42 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 func (msh *Mesh) applyState(l *types.Layer) {
 	// Aggregate all blocks' rewards.
 	validBlockTxs := msh.extractUniqueOrderedTransactions(l)
+	// The reason we are serializing the types.NodeID to a string instead of using it directly as a
+	// key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
+	// the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key.
+	//
+	// TODO: fix this when changing the types.NodeID struct, see
+	// https://github.com/spacemeshos/go-spacemesh/issues/2269.
+	coinbasesAndSmeshers, coinbases := msh.getCoinbasesAndSmeshers(l)
 
-	msh.accumulateRewards(l, validBlockTxs, msh.config)
-	msh.pushTransactions(l, validBlockTxs)
+	failedTxs, err := msh.svm.ApplyTransactions(l.Index(), validBlockTxs)
+	if err != nil {
+		msh.With().Error("failed to apply transactions",
+			l.Index(), log.Int("num_failed_txs", len(failedTxs)), log.Err(err))
+		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
+		//  e.g. persist the last layer transactions were applied from and use that instead of `oldPbase`
+	}
+	msh.removeFromUnappliedTxs(validBlockTxs)
+	msh.With().Info("applied transactions",
+		log.Int("valid_block_txs", len(validBlockTxs)),
+		l.Index(),
+		log.Int("num_failed_txs", len(failedTxs)),
+	)
+
+	if len(coinbases) > 0 {
+		rewards := msh.calculateRewards(l, validBlockTxs, msh.config, coinbases)
+		// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
+		msh.svm.ApplyRewards(l.Index(), coinbases, rewards.blockTotalReward)
+		msh.logRewards(&rewards)
+		msh.reportRewards(&rewards, coinbasesAndSmeshers)
+
+		if err := msh.DB.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, rewards.blockTotalReward, rewards.blockLayerReward); err != nil {
+			msh.Log.Error("cannot write reward to db")
+		}
+	} else {
+		msh.With().Info("no valid blocks for layer", l.Index())
+	}
+
 	msh.setLatestLayerInState(l.Index())
 }
 
@@ -691,22 +724,6 @@ func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.T
 		msh.Panic("could not find transactions %v from layer %v", missing, l)
 	}
 	return txs
-}
-
-func (msh *Mesh) pushTransactions(l *types.Layer, validBlockTxs []*types.Transaction) {
-	failedTxs, err := msh.svm.ApplyTransactions(l.Index(), validBlockTxs)
-	if err != nil {
-		msh.With().Error("failed to apply transactions",
-			l.Index(), log.Int("num_failed_txs", len(failedTxs)), log.Err(err))
-		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
-		//  e.g. persist the last layer transactions were applied from and use that instead of `oldPbase`
-	}
-	msh.removeFromUnappliedTxs(validBlockTxs)
-	msh.With().Info("applied transactions",
-		log.Int("valid_block_txs", len(validBlockTxs)),
-		l.Index(),
-		log.Int("num_failed_txs", len(failedTxs)),
-	)
 }
 
 var errLayerHasBlock = errors.New("layer has block")
@@ -959,41 +976,6 @@ func (msh *Mesh) getCoinbasesAndSmeshers(l *types.Layer) (coinbasesAndSmeshers m
 	}
 
 	return coinbasesAndSmeshers, coinbases
-}
-
-func (msh *Mesh) accumulateRewards(l *types.Layer, txs []*types.Transaction, params Config) {
-	// The reason we are serializing the types.NodeID to a string instead of using it directly as a
-	// key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
-	// the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key.
-	//
-	// TODO: fix this when changing the types.NodeID struct, see
-	// https://github.com/spacemeshos/go-spacemesh/issues/2269.
-	coinbasesAndSmeshers, coinbases := msh.getCoinbasesAndSmeshers(l)
-
-	if len(coinbases) == 0 {
-		msh.With().Info("no valid blocks for layer", l.Index())
-		return
-	}
-
-	rewards := msh.calculateRewards(l, txs, params, coinbases)
-
-	// NOTE: We don't _report_ rewards when we apply them. This is because applying rewards just requires
-	// the recipient (i.e., coinbase) account, whereas reporting requires knowing the associated smesher ID
-	// as well. We report rewards below once we unpack the data structure containing the association between
-	// rewards and smesherids.
-	//
-	// Applying rewards (here), reporting them, and adding them to the database (below) should be atomic. Right now,
-	// they're not. Also, ApplyRewards does not return an error if it fails.
-	// TODO: fix this.
-	msh.svm.ApplyRewards(l.Index(), coinbases, rewards.blockTotalReward)
-	msh.logRewards(&rewards)
-	msh.reportRewards(&rewards, coinbasesAndSmeshers)
-
-	if err := msh.DB.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, rewards.blockTotalReward, rewards.blockLayerReward); err != nil {
-		msh.Log.Error("cannot write reward to db")
-	}
-
-	// TODO: should miner id be sorted in a deterministic order prior to applying rewards?
 }
 
 // GenesisBlock is a is the first static block that xists at the beginning of each network. it exist one layer before actual blocks could be created.
