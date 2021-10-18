@@ -196,7 +196,7 @@ func TestTortoiseBeaconWithMetrics(t *testing.T) {
 		tb.handleLayer(context.TODO(), layer)
 		thisEpoch := layer.GetEpoch()
 		ownWeight := atxHeader.GetWeight()
-		if thisEpoch == 1 {
+		if thisEpoch.IsGenesis() {
 			ownWeight = 0
 		}
 		allMetrics, err := prometheus.DefaultGatherer.Gather()

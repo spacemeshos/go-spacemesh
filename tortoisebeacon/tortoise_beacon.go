@@ -985,9 +985,6 @@ func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data
 }
 
 func (tb *TortoiseBeacon) getOwnWeight(epoch types.EpochID) uint64 {
-	if epoch == 0 {
-		return 0
-	}
 	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(tb.nodeID, epoch)
 	if err != nil {
 		tb.logger.With().Error("failed to look up own ATX for epoch", epoch, log.Err(err))
@@ -1019,12 +1016,16 @@ func (tb *TortoiseBeacon) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 		}
 	}
 	var calculated *metrics.BeaconStats
+	ownWeight := uint64(0)
+	if !epoch.IsGenesis() {
+		ownWeight = tb.getOwnWeight(epoch - 1)
+	}
 	if beacon, ok := tb.beacons[epoch]; ok {
 		calculated = &metrics.BeaconStats{
 			Epoch:  epoch,
 			Beacon: beacon.ShortString(),
 			Count:  1,
-			Weight: tb.getOwnWeight(epoch - 1),
+			Weight: ownWeight,
 		}
 	}
 

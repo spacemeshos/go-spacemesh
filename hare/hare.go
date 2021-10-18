@@ -257,7 +257,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	c, err := h.broker.Register(ctx, instID)
 	if err != nil {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
-		return false, fmt.Errorf("broker registerr: %w", err)
+		return false, fmt.Errorf("broker register: %w", err)
 	}
 	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.network, h.outputChan)
 	cp.SetInbox(c)
