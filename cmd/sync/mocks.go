@@ -58,13 +58,15 @@ func (m *meshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.
 
 type mockState struct{}
 
-func (s mockState) ValidateAndAddTxToPool(_ *types.Transaction) error                     { panic("implement me") }
-func (s mockState) LoadState(types.LayerID) error                                         { return nil }
-func (s mockState) GetStateRoot() types.Hash32                                            { return [32]byte{} }
-func (mockState) ValidateNonceAndBalance(*types.Transaction) error                        { panic("implement me") }
-func (mockState) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error)                 { panic("implement me") }
-func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID                      { panic("implement me") }
-func (mockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error)      { return 0, nil }
+func (s mockState) ValidateAndAddTxToPool(_ *types.Transaction) error     { panic("implement me") }
+func (s mockState) LoadState(types.LayerID) error                         { return nil }
+func (s mockState) GetStateRoot() types.Hash32                            { return [32]byte{} }
+func (mockState) ValidateNonceAndBalance(*types.Transaction) error        { panic("implement me") }
+func (mockState) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error) { panic("implement me") }
+func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID      { panic("implement me") }
+func (mockState) ApplyTransactions(types.LayerID, []*types.Transaction) ([]*types.Transaction, error) {
+	return make([]*types.Transaction, 0), nil
+}
 func (mockState) ApplyRewards(types.LayerID, []types.Address, uint64)                     {}
 func (mockState) ApplyLayer(types.LayerID, []*types.Transaction, []types.Address, uint64) {}
 func (mockState) GetBalance(types.Address) uint64                                         { panic("implement me") }

@@ -40,9 +40,9 @@ func (MockMapState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) { pan
 func (MockMapState) GetBalance(types.Address) uint64                       { panic("implement me") }
 func (MockMapState) GetNonce(types.Address) uint64                         { panic("implement me") }
 
-func (s *MockMapState) ApplyTransactions(_ types.LayerID, txs []*types.Transaction) (int, error) {
+func (s *MockMapState) ApplyTransactions(_ types.LayerID, txs []*types.Transaction) ([]*types.Transaction, error) {
 	s.Txs = append(s.Txs, txs...)
-	return 0, nil
+	return make([]*types.Transaction, 0), nil
 }
 
 func (s *MockMapState) ApplyRewards(_ types.LayerID, miners []types.Address, reward uint64) {

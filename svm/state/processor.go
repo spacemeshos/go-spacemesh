@@ -114,10 +114,10 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) e
 
 // ApplyTransactions receives a batch of transactions to apply to state. Returns the number of transactions that we
 // failed to apply.
-func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
+func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) ([]*types.Transaction, error) {
 	if len(txs) == 0 {
 		err := tp.addStateToHistory(layer, tp.GetStateRoot())
-		return 0, err
+		return make([]*types.Transaction, 0), err
 	}
 
 	tp.mu.Lock()
@@ -137,14 +137,14 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 
 	newHash, err := tp.Commit()
 	if err != nil {
-		return remainingCount, fmt.Errorf("failed to commit global state: %w", err)
+		return remaining, fmt.Errorf("failed to commit global state: %w", err)
 	}
 
 	if err = tp.addStateToHistory(layer, newHash); err != nil {
-		return remainingCount, fmt.Errorf("add state to history: %w", err)
+		return remaining, fmt.Errorf("add state to history: %w", err)
 	}
 
-	return remainingCount, nil
+	return remaining, nil
 }
 
 func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash types.Hash32) error {

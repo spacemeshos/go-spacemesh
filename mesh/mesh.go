@@ -48,7 +48,7 @@ type Validator interface {
 }
 
 type svm interface {
-	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error)
+	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) ([]*types.Transaction, error)
 	ApplyRewards(layer types.LayerID, miners []types.Address, reward uint64)
 	ApplyLayer(layer types.LayerID, txs []*types.Transaction, miners []types.Address, reward uint64)
 	AddressExists(addr types.Address) bool
@@ -694,10 +694,10 @@ func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.T
 }
 
 func (msh *Mesh) pushTransactions(l *types.Layer, validBlockTxs []*types.Transaction) {
-	numFailedTxs, err := msh.ApplyTransactions(l.Index(), validBlockTxs)
+	failedTxs, err := msh.ApplyTransactions(l.Index(), validBlockTxs)
 	if err != nil {
 		msh.With().Error("failed to apply transactions",
-			l.Index(), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
+			l.Index(), log.Int("num_failed_txs", len(failedTxs)), log.Err(err))
 		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
 		//  e.g. persist the last layer transactions were applied from and use that instead of `oldPbase`
 	}
@@ -705,7 +705,7 @@ func (msh *Mesh) pushTransactions(l *types.Layer, validBlockTxs []*types.Transac
 	msh.With().Info("applied transactions",
 		log.Int("valid_block_txs", len(validBlockTxs)),
 		l.Index(),
-		log.Int("num_failed_txs", numFailedTxs),
+		log.Int("num_failed_txs", len(failedTxs)),
 	)
 }
 

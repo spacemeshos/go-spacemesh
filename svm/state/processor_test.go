@@ -88,7 +88,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 
 	failed, err := s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
-	assert.True(s.T(), failed == 0)
+	assert.Empty(s.T(), failed)
 
 	got := string(s.processor.Dump())
 
@@ -182,7 +182,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 
 	failed, err := s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
-	assert.True(s.T(), failed == 0)
+	assert.Empty(s.T(), failed)
 
 	err = s.processor.ApplyTransaction(createTransaction(s.T(), 0, obj2.address, 1, 5, signer1), types.LayerID{})
 	assert.Error(s.T(), err)
@@ -300,7 +300,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 
 	failed, err := processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
-	assert.True(s.T(), failed == 0)
+	assert.Empty(s.T(), failed)
 
 	transactions = []*types.Transaction{
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
@@ -308,7 +308,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	}
 
 	failed, err = processor.ApplyTransactions(types.NewLayerID(2), transactions)
-	assert.True(s.T(), failed == 0)
+	assert.Empty(s.T(), failed)
 	assert.NoError(s.T(), err)
 
 	got := string(processor.Dump())

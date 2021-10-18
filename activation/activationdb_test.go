@@ -92,8 +92,8 @@ func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) {
-	return 0, nil
+func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) ([]*types.Transaction, error) {
+	return make([]*types.Transaction, 0), nil
 }
 
 func (MockState) ApplyRewards(types.LayerID, []types.Address, uint64) {
