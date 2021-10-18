@@ -605,7 +605,8 @@ func (msh *Mesh) updateStateWithLayer(ctx context.Context, layer *types.Layer) {
 }
 
 func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
-	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
+	// Update validated layer only after applying transactions since loading of
+	// state depends on processedLayer param.
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
 	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
@@ -980,14 +981,14 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, txs []*types.Transaction, par
 	rewards := msh.calculateRewards(l, txs, params, coinbases)
 
 	// NOTE: We don't _report_ rewards when we apply them. This is because applying rewards just requires
-	// the recipient (i.e., coinbase) account, whereas reporting requires knowing the associated smesherid
+	// the recipient (i.e., coinbase) account, whereas reporting requires knowing the associated smesher ID
 	// as well. We report rewards below once we unpack the data structure containing the association between
 	// rewards and smesherids.
 	//
 	// Applying rewards (here), reporting them, and adding them to the database (below) should be atomic. Right now,
 	// they're not. Also, ApplyRewards does not return an error if it fails.
 	// TODO: fix this.
-	msh.ApplyRewards(l.Index(), coinbases, rewards.blockTotalReward)
+	msh.svm.ApplyRewards(l.Index(), coinbases, rewards.blockTotalReward)
 	msh.logRewards(&rewards)
 	msh.reportRewards(&rewards, coinbasesAndSmeshers)
 
