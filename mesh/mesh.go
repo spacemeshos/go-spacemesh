@@ -989,7 +989,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, txs []*types.Transaction, par
 	msh.logRewards(&rewards)
 	msh.reportRewards(&rewards, coinbasesAndSmeshers)
 
-	if err := msh.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, rewards.blockTotalReward, rewards.blockLayerReward); err != nil {
+	if err := msh.DB.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, rewards.blockTotalReward, rewards.blockLayerReward); err != nil {
 		msh.Log.Error("cannot write reward to db")
 	}
 
