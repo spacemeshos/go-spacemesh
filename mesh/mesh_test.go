@@ -75,52 +75,52 @@ func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, bl []*types.Bloc
 	return bl[0].Layer().Sub(1), bl[0].Layer()
 }
 
-type MockState struct{}
+type MockSVM struct{}
 
-func (MockState) ValidateAndAddTxToPool(*types.Transaction) error {
+func (MockSVM) ValidateAndAddTxToPool(*types.Transaction) error {
 	return nil
 }
 
-func (MockState) LoadState(types.LayerID) error {
+func (MockSVM) LoadState(types.LayerID) error {
 	panic("implement me")
 }
 
-func (MockState) GetStateRoot() types.Hash32 {
+func (MockSVM) GetStateRoot() types.Hash32 {
 	return [32]byte{}
 }
 
-func (MockState) ValidateNonceAndBalance(*types.Transaction) error {
+func (MockSVM) ValidateNonceAndBalance(*types.Transaction) error {
 	panic("implement me")
 }
 
-func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
+func (MockSVM) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) {
+func (MockSVM) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) {
 	return 0, nil
 }
 
-func (MockState) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
+func (MockSVM) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
 }
 
-func (MockState) AddressExists(types.Address) bool {
+func (MockSVM) AddressExists(types.Address) bool {
 	return true
 }
 
-func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
+func (MockSVM) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
-func (MockState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
+func (MockSVM) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 	panic("implement me")
 }
 
-func (MockState) GetBalance(types.Address) uint64 {
+func (MockSVM) GetBalance(types.Address) uint64 {
 	panic("implement me")
 }
 
-func (MockState) GetNonce(types.Address) uint64 {
+func (MockSVM) GetNonce(types.Address) uint64 {
 	panic("implement me")
 }
 
@@ -148,7 +148,7 @@ func (MockTxMemPool) Invalidate(types.TransactionID) {
 func getMesh(tb testing.TB, id string) *Mesh {
 	lg := logtest.New(tb).WithName(id)
 	mmdb := NewMemMeshDB(lg)
-	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
+	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockSVM{}, lg)
 }
 
 func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
@@ -473,7 +473,7 @@ func TestMesh_WakeUp(t *testing.T) {
 	assert.Equal(t, len(txIDs1), len(rBlock1.TxIDs), "block TX size was wrong")
 	assert.Equal(t, block1.Data, rBlock1.MiniBlock.Data, "block content was wrong")
 
-	recoveredMesh := NewMesh(msh.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: msh.DB}, newMockTxMemPool(), &MockState{}, logtest.New(t))
+	recoveredMesh := NewMesh(msh.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: msh.DB}, newMockTxMemPool(), &MockSVM{}, logtest.New(t))
 
 	rBlock2, err = recoveredMesh.GetBlock(block2.ID())
 	assert.NoError(t, err)
