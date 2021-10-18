@@ -694,7 +694,7 @@ func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.T
 }
 
 func (msh *Mesh) pushTransactions(l *types.Layer, validBlockTxs []*types.Transaction) {
-	failedTxs, err := msh.ApplyTransactions(l.Index(), validBlockTxs)
+	failedTxs, err := msh.svm.ApplyTransactions(l.Index(), validBlockTxs)
 	if err != nil {
 		msh.With().Error("failed to apply transactions",
 			l.Index(), log.Int("num_failed_txs", len(failedTxs)), log.Err(err))
