@@ -103,9 +103,6 @@ func (MockState) ApplyLayer(types.LayerID, []*types.Transaction, []types.AmountA
 	return []*types.Transaction{}, nil
 }
 
-func (MockState) ApplyRewards(types.LayerID, []types.Address, uint64) {
-}
-
 func (MockState) AddressExists(types.Address) bool {
 	return true
 }
@@ -563,6 +560,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 
 	layerID := types.GetEffectiveGenesis().Add(1)
 	signer, origin := newSignerAndAddress(r, "origin")
+
 	tx1 := addTxToMesh(r, msh, signer, 2468)
 	tx2 := addTxToMesh(r, msh, signer, 2469)
 	tx3 := addTxToMesh(r, msh, signer, 2470)

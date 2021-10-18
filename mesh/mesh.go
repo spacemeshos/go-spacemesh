@@ -593,9 +593,9 @@ func (msh *Mesh) applyState(l *types.Layer) {
 		// it's not. Also, ApplyRewards does not return an error if it fails.
 		// TODO: fix this.
 		msh.logRewards(&rewards)
+		msh.applyLayer(l, validBlockTxs, rewards.CoinbasesWithRewards())
 		msh.reportRewards(&rewards)
 		msh.writeRewards(&rewards)
-		msh.pushTransactions(l, validBlockTxs, rewards.CoinbasesWithRewards())
 		msh.removeFromUnappliedTxs(validBlockTxs)
 	}
 
@@ -775,8 +775,8 @@ func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.T
 	return txs
 }
 
-func (msh *Mesh) pushTransactions(l *types.Layer, transactions []*types.Transaction, rewards []types.AmountAndAddress) {
-	failedTxs, err := msh.svm.ApplyTransactions(l.Index(), transactions)
+func (msh *Mesh) applyLayer(l *types.Layer, transactions []*types.Transaction, rewards []types.AmountAndAddress) {
+	failedTxs, err := msh.svm.ApplyLayer(l.Index(), transactions, rewards)
 	if err != nil {
 		msh.With().Error("failed to apply transactions",
 			l.Index(), log.Int("num_failed_txs", len(failedTxs)), log.Err(err))

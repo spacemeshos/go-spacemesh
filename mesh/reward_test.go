@@ -47,9 +47,9 @@ func (s *MockMapSVM) ApplyTransactions(_ types.LayerID, txs []*types.Transaction
 
 func (s *MockMapSVM) ApplyLayer(l types.LayerID, transactions []*types.Transaction, rewards []types.AmountAndAddress) ([]*types.Transaction, error) {
 	s.ApplyTransactions(l, transactions)
-	for _, reward := range rewards {
-		s.Rewards[reward.Address] = reward.Amount
-		s.TotalReward += reward.Amount
+	for _, item := range rewards {
+		s.Rewards[item.Address] = item.Amount
+		s.TotalReward += item.Amount
 	}
 	return []*types.Transaction{}, nil
 }
@@ -141,6 +141,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	validBlockTxs := layers.extractUniqueOrderedTransactions(l)
 	rewards := layers.calculateRewards(l, validBlockTxs, params)
 	layers.writeRewards(&rewards)
+	layers.applyLayer(l, validBlockTxs, rewards.CoinbasesWithRewards())
 	totalRewardsCost := totalFee + params.BaseReward
 	remainder := totalRewardsCost % uint64(len(blockData))
 
