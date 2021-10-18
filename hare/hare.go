@@ -80,6 +80,7 @@ type Hare struct {
 
 	mesh    meshProvider
 	rolacle Rolacle
+	patrol  layerPatrol
 
 	networkDelta time.Duration
 
@@ -108,6 +109,7 @@ func New(
 	syncState syncStateFunc,
 	mesh meshProvider,
 	rolacle Rolacle,
+	patrol layerPatrol,
 	layersPerEpoch uint16,
 	idProvider identityProvider,
 	stateQ StateQuerier,
@@ -139,6 +141,7 @@ func New(
 
 	h.mesh = mesh
 	h.rolacle = rolacle
+	h.patrol = patrol
 
 	h.networkDelta = time.Duration(conf.WakeupDelta) * time.Second
 	// todo: this should be loaded from global config
@@ -299,6 +302,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 		h.broker.Unregister(ctx, cp.ID())
 		return
 	}
+	h.patrol.SetHareInCharge(instID)
 	logger.With().Info("number of consensus processes (after register)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	metrics.TotalConsensusProcesses.With("layer", id.String()).Add(1)

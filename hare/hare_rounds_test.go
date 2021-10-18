@@ -6,10 +6,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -98,7 +100,10 @@ func createTestHare(tb testing.TB, tcfg config.Config, clock *mockClock, p2p Net
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: pub.Bytes()}
-	hare := New(tcfg, p2p, ed, nodeID, isSynced, bp, rolacle, 10, &mockIdentityP{nid: nodeID},
+	ctrl := gomock.NewController(tb)
+	patrol := mocks.NewMocklayerPatrol(ctrl)
+	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
+	hare := New(tcfg, p2p, ed, nodeID, isSynced, bp, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, clock, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 	return hare
 }
