@@ -8,7 +8,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/libp2p/go-libp2p-core/protocol"
@@ -49,6 +48,12 @@ type response struct {
 	Error string
 }
 
+// Host is a subset of libp2p Host interface that needs to be implemented to be usable with server.
+type Host interface {
+	SetStreamHandler(protocol.ID, network.StreamHandler)
+	NewStream(context.Context, peer.ID, ...protocol.ID) (network.Stream, error)
+}
+
 // Server for the Handler.
 type Server struct {
 	logger   log.Log
@@ -56,13 +61,13 @@ type Server struct {
 	handler  Handler
 	timeout  time.Duration
 
-	h host.Host
+	h Host
 
 	ctx context.Context
 }
 
 // New server for the handler.
-func New(h host.Host, proto string, handler Handler, opts ...Opt) *Server {
+func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 	srv := &Server{
 		ctx:      context.Background(),
 		logger:   log.NewNop(),
