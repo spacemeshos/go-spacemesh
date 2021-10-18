@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -173,5 +174,5 @@ func createSyncer(conf syncer.Configuration, msh *mesh.Mesh, layerFetch *layerfe
 	lg.Info("current layer %v", clock.GetCurrentLayer())
 
 	layerFetch.Start()
-	return syncer.NewSyncer(context.TODO(), conf, &clock, msh, layerFetch, lg)
+	return syncer.NewSyncer(context.TODO(), conf, &clock, msh, layerFetch, layerpatrol.New(), lg)
 }
