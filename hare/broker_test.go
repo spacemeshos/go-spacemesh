@@ -111,6 +111,7 @@ func TestBroker_Priority(t *testing.T) {
 		wg.Wait()
 		return true
 	}}
+	require.NoError(t, broker.Start(context.TODO()))
 
 	// take control of the broker inbox so we can feed it messages in a deterministic order
 	// make the channel blocking (no buffer) so we can be sure the messages have been processed
@@ -131,14 +132,14 @@ func TestBroker_Priority(t *testing.T) {
 	// first, broadcast a bunch of simulated inbound messages
 	for i := 0; i < 10; i++ {
 		// channel send is blocking, so we're sure the messages have been processed
-		broker.HandleMessage(context.TODO(), "", serMsgInbound)
+		broker.queueMessage(context.TODO(), "not-self", serMsgInbound)
 	}
 
 	// make sure the listener has gotten at least one message
 	wg2.Wait()
 
 	// now broadcast one outbound message
-	broker.HandleMessage(context.TODO(), "", serMsgOutbound)
+	broker.queueMessage(context.TODO(), "", serMsgOutbound)
 
 	// all messages are queued, release the waiting listener (hare event loop)
 	wg.Done()
@@ -340,11 +341,11 @@ func TestBroker_Register2(t *testing.T) {
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
 
-	msg := newMockGossipMsg(m)
+	msg := newMockGossipMsg(m).Message
 	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.TODO(), "", mustEncode(t, msg)))
 
 	m.InnerMsg.InstanceID = instanceID2
-	msg = newMockGossipMsg(m)
+	msg = newMockGossipMsg(m).Message
 	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.TODO(), "", mustEncode(t, msg)))
 }
 
@@ -461,7 +462,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	b.isNodeSynced = falseFunc
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
-	msg := newMockGossipMsg(m)
+	msg := newMockGossipMsg(m).Message
 	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
 
 	_, ok := b.outbox[instanceID1.Uint32()]
@@ -476,14 +477,14 @@ func TestBroker_eventLoop(t *testing.T) {
 	c, e := b.Register(context.TODO(), instanceID2)
 	r.Nil(e)
 	m.InnerMsg.InstanceID = instanceID2
-	msg = newMockGossipMsg(m)
+	msg = newMockGossipMsg(m).Message
 	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
 	recM := <-c
-	r.Equal(msg.Bytes(), recM.Bytes())
+	r.Equal(msg, recM.Message)
 
 	// unknown->valid early
 	m.InnerMsg.InstanceID = instanceID3
-	msg = newMockGossipMsg(m)
+	msg = newMockGossipMsg(m).Message
 	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
 	c, e = b.Register(context.TODO(), instanceID3)
 	r.Nil(e)

@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/lp2p"
 	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
@@ -133,26 +134,8 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
-	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
-	logger.Debug("hare broker received inbound gossip message")
-
-	// prioritize based on signature: outbound messages (self-generated) get priority
-	priority := priorityq.Mid
-	if pid == b.pid {
-		priority = priorityq.High
-	}
-	logger.With().Debug("assigned message priority, writing to priority queue",
-		log.Int("priority", int(priority)))
-	m := &msgRPC{Data: msg, Error: make(chan error, 1), Ctx: ctx}
-	if err := b.queue.Write(priority, m); err != nil {
-		logger.With().Error("error writing inbound message to priority queue, dropping", log.Err(err))
-		return pubsub.ValidationIgnore
-	}
-
-	// indicate to the listener that there's a new message in the queue
-	select {
-	case b.queueChannel <- struct{}{}:
-	case <-ctx.Done():
+	m, err := b.queueMessage(ctx, pid, msg)
+	if err != nil {
 		return pubsub.ValidationIgnore
 	}
 	select {
@@ -166,6 +149,32 @@ func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pub
 	return pubsub.ValidationAccept
 }
 
+func (b *Broker) queueMessage(ctx context.Context, pid lp2p.Peer, msg []byte) (*msgRPC, error) {
+	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+	logger.Debug("hare broker received inbound gossip message")
+
+	// prioritize based on signature: outbound messages (self-generated) get priority
+	priority := priorityq.Mid
+	if pid == b.pid {
+		priority = priorityq.High
+	}
+	logger.With().Debug("assigned message priority, writing to priority queue",
+		log.Int("priority", int(priority)))
+	m := &msgRPC{Data: msg, Error: make(chan error, 1), Ctx: ctx}
+	if err := b.queue.Write(priority, m); err != nil {
+		logger.With().Error("error writing inbound message to priority queue, dropping", log.Err(err))
+		return nil, err
+	}
+
+	// indicate to the listener that there's a new message in the queue
+	select {
+	case b.queueChannel <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return m, nil
+}
+
 // listens to incoming messages and incoming tasks.
 func (b *Broker) eventLoop(ctx context.Context) {
 	for {
@@ -175,6 +184,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 		select {
 		case <-ctx.Done():
 			b.queue.Close()
+			close(b.queueChannel)
 			return
 		case <-b.queueChannel:
 			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
@@ -418,4 +428,10 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 	}
 
 	return <-res
+}
+
+// Close the broker.
+func (b *Broker) Close() {
+	b.stop()
+	b.Closer.Close()
 }
