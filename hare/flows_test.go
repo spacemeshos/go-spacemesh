@@ -263,10 +263,12 @@ func Test_multipleCPs(t *testing.T) {
 			lyrBlocks[j] = append(lyrBlocks[j], blk)
 		}
 	}
+	pubsubs := []*pubsub.PubSub{}
 	for i := 0; i < totalNodes; i++ {
 		host := mesh.Hosts()[i]
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)
+		pubsubs = append(pubsubs, ps)
 		// p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
 		h := createMaatuf(t, cfg, test.lCh[i], host.ID(), ps, oracle, t.Name(), lyrBlocks)
@@ -275,6 +277,14 @@ func Test_multipleCPs(t *testing.T) {
 		r.NoError(e)
 	}
 	require.NoError(t, mesh.ConnectAllButSelf())
+	require.Eventually(t, func() bool {
+		for _, ps := range pubsubs {
+			if len(ps.ProtocolPeers(protoName)) != len(mesh.Hosts())-1 {
+				return false
+			}
+		}
+		return true
+	}, 5*time.Second, 10*time.Millisecond)
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 			for i := 0; i < len(test.lCh); i++ {
@@ -313,11 +323,12 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 			lyrBlocks[j] = append(lyrBlocks[j], blk)
 		}
 	}
+	pubsubs := []*pubsub.PubSub{}
 	for i := 0; i < totalNodes; i++ {
 		host := mesh.Hosts()[i]
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)
-
+		pubsubs = append(pubsubs, ps)
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
 		h := createMaatuf(t, cfg, test.lCh[i], host.ID(), mp2p, oracle, t.Name(), lyrBlocks)
@@ -326,7 +337,14 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		r.NoError(e)
 	}
 	require.NoError(t, mesh.ConnectAllButSelf())
-
+	require.Eventually(t, func() bool {
+		for _, ps := range pubsubs {
+			if len(ps.ProtocolPeers(protoName)) != len(mesh.Hosts())-1 {
+				return false
+			}
+		}
+		return true
+	}, 5*time.Second, 10*time.Millisecond)
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 			for i := 0; i < len(test.lCh); i++ {

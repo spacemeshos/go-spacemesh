@@ -38,7 +38,7 @@ func TestGossip(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 	require.Eventually(t, func() bool {
 		for _, ps := range pubsubs {
-			if len(ps.pubsub.ListPeers(topic)) != len(mesh.Hosts())-1 {
+			if len(ps.ProtocolPeers(topic)) != len(mesh.Hosts())-1 {
 				return false
 			}
 		}

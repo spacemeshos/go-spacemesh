@@ -55,3 +55,8 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, msg []byte) error {
 	}
 	return nil
 }
+
+// ProtocolPeers returns list of peers that are communicating in a given protocol.
+func (ps *PubSub) ProtocolPeers(protocol string) []peer.ID {
+	return ps.pubsub.ListPeers(protocol)
+}
