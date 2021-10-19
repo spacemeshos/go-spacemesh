@@ -92,16 +92,8 @@ func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) ([]*types.Transaction, error) {
-	return make([]*types.Transaction, 0), nil
-}
-
-func (MockState) ApplyRewards(types.LayerID, []types.Address, uint64) {
-}
-
 func (state *MockState) ApplyLayer(layer types.LayerID, txs []*types.Transaction, miners []types.Address, reward uint64) ([]*types.Transaction, error) {
-	state.ApplyRewards(layer, miners, reward)
-	return state.ApplyTransactions(layer, txs)
+	return make([]*types.Transaction, 0), nil
 }
 
 func (MockState) AddressExists(types.Address) bool {
