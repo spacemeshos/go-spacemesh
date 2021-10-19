@@ -41,7 +41,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -378,10 +377,6 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 }
 
 type NetMock struct{}
-
-func (NetMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
-	return nil, nil
-}
 
 func (NetMock) Broadcast(context.Context, string, []byte) error {
 	return nil
