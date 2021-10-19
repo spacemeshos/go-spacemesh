@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"math"
 	"math/big"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -39,7 +40,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub/mocks"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -556,12 +556,24 @@ func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 	return string(buf), resp.StatusCode
 }
 
+func getUnboundedPort(optionalPort int) (int, error) {
+	l, e := net.Listen("tcp", fmt.Sprintf(":%v", optionalPort))
+	if e != nil {
+		l, e = net.Listen("tcp", ":0")
+		if e != nil {
+			return 0, fmt.Errorf("listen TCP: %w", e)
+		}
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
 func TestNewServersConfig(t *testing.T) {
 	logtest.SetupGlobal(t)
-	port1, err := node.GetUnboundedPort("tcp", 0)
+	port1, err := getUnboundedPort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	port2, err := node.GetUnboundedPort("tcp", 0)
+	port2, err := getUnboundedPort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	grpcService := NewServerWithInterface(port1, "localhost")
