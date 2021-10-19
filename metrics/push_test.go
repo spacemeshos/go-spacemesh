@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/go-kit/kit/metrics/prometheus"
-	stdprometheus "github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/push"
 	"github.com/prometheus/common/expfmt"
 )
@@ -16,13 +16,13 @@ import (
 func TestStartPushMetrics(t *testing.T) {
 	testMetricName := "testMetric"
 
-	testMetric := prometheus.NewGaugeFrom(stdprometheus.GaugeOpts{
+	testMetric := promauto.NewGaugeVec(prometheus.GaugeOpts{
 		Namespace: Namespace,
 		Subsystem: "Tests",
 		Name:      testMetricName,
 		Help:      "Should be equal 1",
 	}, nil)
-	testMetric.Add(1)
+	testMetric.WithLabelValues().Add(1)
 
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		resBytes, err := ioutil.ReadAll(r.Body)
@@ -40,7 +40,7 @@ func TestStartPushMetrics(t *testing.T) {
 	defer ts.Close()
 
 	pusher := push.New(ts.URL, "my_job").
-		Gatherer(stdprometheus.DefaultGatherer).
+		Gatherer(prometheus.DefaultGatherer).
 		Format(expfmt.FmtText)
 	err := pusher.Push()
 	if err != nil {
