@@ -133,7 +133,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	txs := layers.extractUniqueOrderedTransactions(l)
 	_, coinbases := layers.getCoinbasesAndSmeshers(l)
 	rewards := layers.calculateRewards(l, txs, layers.config, coinbases)
-	layers.svm.ApplyRewards(l.Index(), coinbases, rewards.blockTotalReward)
+	layers.svm.ApplyLayer(l.Index(), txs, coinbases, rewards.blockTotalReward)
 	totalRewardsCost := totalFee + int64(params.BaseReward)
 	remainder := totalRewardsCost % 4
 
