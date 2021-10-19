@@ -212,7 +212,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	r := require.New(t)
 	net := &mockP2p{}
 	broker := buildBroker(t, net, t.Name())
-	broker.Start(context.TODO())
+	r.NoError(broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	proc.network = net
 	mo := mocks.NewMockRolacle(ctrl)
@@ -222,7 +222,9 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
 	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), []byte{1})
 	mValidator.syntaxValid = false
+	r.False(proc.preRoundTracker.coinflip, "default coinflip should be false")
 	proc.handleMessage(context.TODO(), msg)
+	r.False(proc.preRoundTracker.coinflip, "invalid message should not change coinflip")
 	r.Equal(1, mValidator.countSyntax)
 	r.Equal(1, mValidator.countContext)
 	mValidator.syntaxValid = true
@@ -230,16 +232,19 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	r.NotEqual(0, mValidator.countContext)
 	mValidator.contextValid = nil
 	proc.handleMessage(context.TODO(), msg)
+	r.True(proc.preRoundTracker.coinflip)
 	r.Equal(0, len(proc.pending))
 	r.Equal(3, mValidator.countContext)
 	r.Equal(3, mValidator.countSyntax)
 	mValidator.contextValid = errors.New("not valid")
 	proc.handleMessage(context.TODO(), msg)
+	r.True(proc.preRoundTracker.coinflip)
 	r.Equal(4, mValidator.countContext)
 	r.Equal(3, mValidator.countSyntax)
 	r.Equal(0, len(proc.pending))
 	mValidator.contextValid = errEarlyMsg
 	proc.handleMessage(context.TODO(), msg)
+	r.True(proc.preRoundTracker.coinflip)
 	r.Equal(1, len(proc.pending))
 }
 
@@ -252,9 +257,9 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
 	proc.advanceToNextRound(context.TODO())
 	proc.advanceToNextRound(context.TODO())
-	assert.Equal(t, uint32(1), proc.k)
+	assert.EqualValues(t, 1, proc.k)
 	proc.advanceToNextRound(context.TODO())
-	assert.Equal(t, uint32(2), proc.k)
+	assert.EqualValues(t, 2, proc.k)
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
@@ -394,8 +399,10 @@ func TestConsensusProcess_procPre(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	s := NewDefaultEmptySet()
 	m := BuildPreRoundMsg(signing.NewEdSigner(), s, []byte{1})
+	require.False(t, proc.preRoundTracker.coinflip)
 	proc.processPreRoundMsg(context.TODO(), m)
-	assert.Equal(t, 1, len(proc.preRoundTracker.preRound))
+	require.Len(t, proc.preRoundTracker.preRound, 1)
+	require.True(t, proc.preRoundTracker.coinflip)
 }
 
 func TestConsensusProcess_procStatus(t *testing.T) {
@@ -404,7 +411,7 @@ func TestConsensusProcess_procStatus(t *testing.T) {
 	s := NewDefaultEmptySet()
 	m := BuildStatusMsg(signing.NewEdSigner(), s)
 	proc.processStatusMsg(context.TODO(), m)
-	assert.Equal(t, 1, len(proc.statusesTracker.statuses))
+	require.Len(t, proc.statusesTracker.statuses, 1)
 }
 
 func TestConsensusProcess_procProposal(t *testing.T) {
