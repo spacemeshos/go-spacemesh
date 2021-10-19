@@ -9,11 +9,10 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
+	network "github.com/libp2p/go-libp2p-core/network"
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	protocol "github.com/libp2p/go-libp2p-core/protocol"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	p2pcrypto "github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	peers "github.com/spacemeshos/go-spacemesh/p2p/peers"
-	server "github.com/spacemeshos/go-spacemesh/p2p/server"
-	service "github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
 // MockatxHandler is a mock of atxHandler interface.
@@ -40,17 +39,17 @@ func (m *MockatxHandler) EXPECT() *MockatxHandlerMockRecorder {
 }
 
 // HandleAtxData mocks base method.
-func (m *MockatxHandler) HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error {
+func (m *MockatxHandler) HandleAtxData(arg0 context.Context, arg1 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleAtxData", ctx, data, syncer)
+	ret := m.ctrl.Call(m, "HandleAtxData", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleAtxData indicates an expected call of HandleAtxData.
-func (mr *MockatxHandlerMockRecorder) HandleAtxData(ctx, data, syncer interface{}) *gomock.Call {
+func (mr *MockatxHandlerMockRecorder) HandleAtxData(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleAtxData", reflect.TypeOf((*MockatxHandler)(nil).HandleAtxData), ctx, data, syncer)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleAtxData", reflect.TypeOf((*MockatxHandler)(nil).HandleAtxData), arg0, arg1)
 }
 
 // MockblockHandler is a mock of blockHandler interface.
@@ -77,17 +76,17 @@ func (m *MockblockHandler) EXPECT() *MockblockHandlerMockRecorder {
 }
 
 // HandleBlockData mocks base method.
-func (m *MockblockHandler) HandleBlockData(ctx context.Context, date []byte, fetcher service.Fetcher) error {
+func (m *MockblockHandler) HandleBlockData(arg0 context.Context, arg1 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleBlockData", ctx, date, fetcher)
+	ret := m.ctrl.Call(m, "HandleBlockData", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleBlockData indicates an expected call of HandleBlockData.
-func (mr *MockblockHandlerMockRecorder) HandleBlockData(ctx, date, fetcher interface{}) *gomock.Call {
+func (mr *MockblockHandlerMockRecorder) HandleBlockData(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleBlockData", reflect.TypeOf((*MockblockHandler)(nil).HandleBlockData), ctx, date, fetcher)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleBlockData", reflect.TypeOf((*MockblockHandler)(nil).HandleBlockData), arg0, arg1)
 }
 
 // MockTxProcessor is a mock of TxProcessor interface.
@@ -376,23 +375,11 @@ func (m *Mocknetwork) EXPECT() *MocknetworkMockRecorder {
 	return m.recorder
 }
 
-// Close mocks base method.
-func (m *Mocknetwork) Close() {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Close")
-}
-
-// Close indicates an expected call of Close.
-func (mr *MocknetworkMockRecorder) Close() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Close", reflect.TypeOf((*Mocknetwork)(nil).Close))
-}
-
 // GetPeers mocks base method.
-func (m *Mocknetwork) GetPeers() []peers.Peer {
+func (m *Mocknetwork) GetPeers() []peer.ID {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPeers")
-	ret0, _ := ret[0].([]peers.Peer)
+	ret0, _ := ret[0].([]peer.ID)
 	return ret0
 }
 
@@ -400,6 +387,26 @@ func (m *Mocknetwork) GetPeers() []peers.Peer {
 func (mr *MocknetworkMockRecorder) GetPeers() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mocknetwork)(nil).GetPeers))
+}
+
+// NewStream mocks base method.
+func (m *Mocknetwork) NewStream(arg0 context.Context, arg1 peer.ID, arg2 ...protocol.ID) (network.Stream, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{arg0, arg1}
+	for _, a := range arg2 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "NewStream", varargs...)
+	ret0, _ := ret[0].(network.Stream)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// NewStream indicates an expected call of NewStream.
+func (mr *MocknetworkMockRecorder) NewStream(arg0, arg1 interface{}, arg2 ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{arg0, arg1}, arg2...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewStream", reflect.TypeOf((*Mocknetwork)(nil).NewStream), varargs...)
 }
 
 // PeerCount mocks base method.
@@ -416,16 +423,14 @@ func (mr *MocknetworkMockRecorder) PeerCount() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerCount", reflect.TypeOf((*Mocknetwork)(nil).PeerCount))
 }
 
-// SendRequest mocks base method.
-func (m *Mocknetwork) SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func([]byte), errorHandler func(error)) error {
+// SetStreamHandler mocks base method.
+func (m *Mocknetwork) SetStreamHandler(arg0 protocol.ID, arg1 network.StreamHandler) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SendRequest", ctx, msgType, payload, address, resHandler, errorHandler)
-	ret0, _ := ret[0].(error)
-	return ret0
+	m.ctrl.Call(m, "SetStreamHandler", arg0, arg1)
 }
 
-// SendRequest indicates an expected call of SendRequest.
-func (mr *MocknetworkMockRecorder) SendRequest(ctx, msgType, payload, address, resHandler, errorHandler interface{}) *gomock.Call {
+// SetStreamHandler indicates an expected call of SetStreamHandler.
+func (mr *MocknetworkMockRecorder) SetStreamHandler(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SendRequest", reflect.TypeOf((*Mocknetwork)(nil).SendRequest), ctx, msgType, payload, address, resHandler, errorHandler)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetStreamHandler", reflect.TypeOf((*Mocknetwork)(nil).SetStreamHandler), arg0, arg1)
 }
