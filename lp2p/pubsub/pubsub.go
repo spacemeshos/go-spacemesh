@@ -85,7 +85,7 @@ const (
 	ValidationReject = pubsub.ValidationReject
 )
 
-// ChainGossipHandle helper to chain multiple GossipHandler together. Called synchronously and in the order.
+// ChainGossipHandler helper to chain multiple GossipHandler together. Called synchronously and in the order.
 func ChainGossipHandler(handlers ...GossipHandler) GossipHandler {
 	return func(ctx context.Context, pid peer.ID, msg []byte) ValidationResult {
 		for _, h := range handlers {
