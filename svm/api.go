@@ -55,5 +55,10 @@ func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 // error on failure, as well as a vector of failed transactions.
 func (svm *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, miners []types.Address, reward uint64) ([]*types.Transaction, error) {
 	svm.TransactionProcessor.ApplyRewards(layerID, miners, reward)
-	return svm.TransactionProcessor.ApplyTransactions(layerID, transactions)
+	failedTxs, err := svm.TransactionProcessor.ApplyTransactions(layerID, transactions)
+	if err != nil {
+		return failedTxs, fmt.Errorf("failed applying transactions: %w", err)
+	}
+
+	return failedTxs, nil
 }
