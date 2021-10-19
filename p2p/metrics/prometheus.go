@@ -6,12 +6,21 @@ import (
 )
 
 const (
-	// MetricsSubsystem is a subsystem shared by all metrics exposed by this
-	// package.
-	MetricsSubsystem = "p2p"
+	subsystem = "p2p"
 
-	typeLabel        = "type"
-	messageTypeLabel = "message_type"
+	// TypeLabel is the metrics label name for type of connection.
+	TypeLabel = "type"
+	// TypeLabelInbound is the label value for inbound connection.
+	TypeLabelInbound = "inbound"
+	// TypeLabelOutbound is the label value for outbound connection.
+	TypeLabelOutbound = "outbound"
+
+	// MessageTypeLabel is the metrics label name for type of gossip messages.
+	MessageTypeLabel = "message_type"
+	// MessageTypeLabelOld is the label value for gossip messages already seen before.
+	MessageTypeLabelOld = "old"
+	// MessageTypeLabelNew is the label value for gossip messages not seen before.
+	MessageTypeLabelNew = "new"
 
 	// ProtocolLabel holds the name we use to add a protocol label value.
 	ProtocolLabel = "protocol"
@@ -24,35 +33,30 @@ var (
 	// PropagationQueueLen is the current size of the gossip queue.
 	PropagationQueueLen = metrics.NewGauge(
 		"propagate_queue_len",
-		MetricsSubsystem,
+		subsystem,
 		"Number of messages in the gossip queue",
 		nil,
 	)
 	// QueueLength is the current size of protocol queues.
 	QueueLength = metrics.NewGauge(
 		"protocol_queue_len",
-		MetricsSubsystem,
+		subsystem,
 		"Length of protocol queues",
 		[]string{ProtocolLabel},
 	)
 
-	totalPeers = metrics.NewGauge(
+	// TotalPeers is the number of peers the node has connected.
+	TotalPeers = metrics.NewGauge(
 		"peers",
-		MetricsSubsystem,
+		subsystem,
 		"Number of peers",
-		[]string{typeLabel},
+		[]string{TypeLabel},
 	)
-
-	// OutboundPeers is the number of outbound peers we have connected.
-	OutboundPeers = totalPeers.With(typeLabel, "outbound")
-
-	// InboundPeers is the number of inbound peers we have connected.
-	InboundPeers = totalPeers.With(typeLabel, "inbound")
 
 	// PeerRecv is the num of bytes received from peer.
 	PeerRecv = metrics.NewCounter(
 		"peer_receive_bytes_total",
-		MetricsSubsystem,
+		subsystem,
 		"Number of bytes received from a given peer",
 		[]string{PeerIDLabel},
 	)
@@ -60,32 +64,16 @@ var (
 	// PeerSend is the num of bytes sent to peer.
 	PeerSend = metrics.NewCounter(
 		"peer_send_bytes_total",
-		MetricsSubsystem,
+		subsystem,
 		"Number of bytes sent to a given peer",
 		[]string{PeerIDLabel},
 	)
 
-	totalGossipMessages = metrics.NewCounter(
+	// TotalGossipMessages is the number of received gossip messages.
+	TotalGossipMessages = metrics.NewCounter(
 		"total_gossip_messages",
-		MetricsSubsystem,
+		subsystem,
 		"Number of gossip messages received",
-		[]string{ProtocolLabel, messageTypeLabel},
-	)
-
-	// NewGossipMessages is a metric for newly received gossip messages.
-	NewGossipMessages = totalGossipMessages.With(messageTypeLabel, "new")
-
-	// OldGossipMessages is a metric for old messages received (duplicates).
-	OldGossipMessages = totalGossipMessages.With(messageTypeLabel, "old")
-
-	// InvalidGossipMessages is a metric for invalid messages received.
-	InvalidGossipMessages = totalGossipMessages.With(messageTypeLabel, "invalid")
-
-	// AddrbookSize is the current size of the discovery.
-	AddrbookSize = metrics.NewGauge(
-		"addrbook_size",
-		MetricsSubsystem,
-		"Number of peers in the discovery",
-		[]string{},
+		[]string{ProtocolLabel, MessageTypeLabel},
 	)
 )

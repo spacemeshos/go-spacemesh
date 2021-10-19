@@ -382,5 +382,5 @@ func (t *BlockBuilder) saveBlockBuildDurationMetric(ctx context.Context, started
 			Error("block building took too long ", log.Duration("elapsed", elapsed))
 	}
 
-	metrics.BlockBuildDuration.Observe(float64(elapsed / time.Millisecond))
+	metrics.BlockBuildDuration.WithLabelValues().Observe(float64(elapsed / time.Millisecond))
 }

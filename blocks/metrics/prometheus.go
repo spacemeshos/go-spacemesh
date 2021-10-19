@@ -7,8 +7,17 @@ import (
 )
 
 const (
-	subsystem     = "blocks"
-	diffTypeLabel = "diff_type"
+	subsystem = "blocks"
+
+	// DiffTypeLabel is the label name for the type of different opinions with base block.
+	DiffTypeLabel = "diff_type"
+
+	// DiffTypeFor is the label value for the different opinions with base block when voting for blocks.
+	DiffTypeFor = "diff_for"
+	// DiffTypeAgainst is the label value for the different opinions with base block when voting against blocks.
+	DiffTypeAgainst = "diff_against"
+	// DiffTypeNeutral is the label value for the different opinions with base block when voting neutral on blocks.
+	DiffTypeNeutral = "diff_neutral"
 )
 
 // LayerBlockSize checks average block size.
@@ -29,19 +38,13 @@ var NumTxsInBlock = metrics.NewHistogramWithBuckets(
 	prometheus.ExponentialBuckets(1, 2, 8),
 )
 
-var baseBlockExceptionLength = metrics.NewHistogramWithBuckets(
+// BaseBlockExceptionLength is the size of different opinions between a block and its base block.
+var BaseBlockExceptionLength = metrics.NewHistogramWithBuckets(
 	"base_block_exception_length",
 	subsystem,
 	"Base block exception length",
 	[]string{
-		diffTypeLabel,
+		DiffTypeLabel,
 	},
 	prometheus.ExponentialBuckets(1, 2, 8),
-)
-
-// Blocks diff lengths.
-var (
-	ForDiffLength     = baseBlockExceptionLength.With(diffTypeLabel, "diff_for")
-	AgainstDiffLength = baseBlockExceptionLength.With(diffTypeLabel, "diff_against")
-	NeutralDiffLength = baseBlockExceptionLength.With(diffTypeLabel, "diff_neutral")
 )

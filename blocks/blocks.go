@@ -7,12 +7,12 @@ import (
 	"time"
 
 	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spacemeshos/go-spacemesh/blocks/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
-	commonMetrics "github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -128,29 +128,29 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte) error 
 
 func saveMetrics(blk types.Block) {
 	type metric struct {
-		hist  commonMetrics.Histogram
+		hist  prometheus.Observer
 		value float64
 	}
 
 	metricList := []metric{
 		{
-			hist:  metrics.LayerBlockSize,
+			hist:  metrics.LayerBlockSize.WithLabelValues(),
 			value: float64(len(blk.Bytes())),
 		},
 		{
-			hist:  metrics.NumTxsInBlock,
+			hist:  metrics.NumTxsInBlock.WithLabelValues(),
 			value: float64(len(blk.TxIDs)),
 		},
 		{
-			hist:  metrics.ForDiffLength,
+			hist:  metrics.BaseBlockExceptionLength.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeFor}),
 			value: float64(len(blk.ForDiff)),
 		},
 		{
-			hist:  metrics.NeutralDiffLength,
+			hist:  metrics.BaseBlockExceptionLength.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeNeutral}),
 			value: float64(len(blk.NeutralDiff)),
 		},
 		{
-			hist:  metrics.AgainstDiffLength,
+			hist:  metrics.BaseBlockExceptionLength.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeAgainst}),
 			value: float64(len(blk.AgainstDiff)),
 		},
 	}

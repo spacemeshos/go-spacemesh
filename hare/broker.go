@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -208,10 +209,11 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			msgLogger.With().Debug("broker received hare message")
 
 			msgInstID := hareMsg.InnerMsg.InstanceID
-			metrics.MessageTypeCounter.With(
-				"type_id", hareMsg.InnerMsg.Type.String(),
-				"layer", msgInstID.String(),
-				"reporter", "brokerHandler").Add(1)
+			metrics.MessageTypeCounter.With(prometheus.Labels{
+				"type_id":  hareMsg.InnerMsg.Type.String(),
+				"layer":    msgInstID.String(),
+				"reporter": "brokerHandler",
+			}).Inc()
 			msgLogger = msgLogger.WithFields(log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)))
 			isEarly := false
 			if err := b.validate(messageCtx, hareMsg); err != nil {

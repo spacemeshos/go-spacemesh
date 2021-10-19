@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -274,7 +275,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	h.patrol.SetHareInCharge(instID)
 	logger.With().Info("number of consensus processes (after register)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
-	metrics.TotalConsensusProcesses.With("layer", id.String()).Add(1)
+	metrics.TotalConsensusProcesses.With(prometheus.Labels{"layer": id.String()}).Inc()
 	return true, nil
 }
 
@@ -365,7 +366,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 			h.broker.Unregister(ctx, out.ID())
 			logger.With().Info("number of consensus processes (after unregister)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
-			metrics.TotalConsensusProcesses.With("layer", out.ID().String()).Add(-1)
+			metrics.TotalConsensusProcesses.With(prometheus.Labels{"layer": out.ID().String()}).Dec()
 		case <-h.CloseChannel():
 			return
 		}
