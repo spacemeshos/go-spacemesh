@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math/rand"
 	"sync"
 	"testing"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -163,10 +163,6 @@ func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types
 	return true, nil
 }
 
-func (trueOracle) IsEpochBeaconReady(context.Context, types.EpochID) bool {
-	return true
-}
-
 // Test - runs a single CP for more than one iteration.
 func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
@@ -204,24 +200,9 @@ func (m *mockIdentityP) GetIdentity(string) (types.NodeID, error) {
 	return m.nid, nil
 }
 
-func buildSet() []types.BlockID {
-	rng := rand.New(rand.NewSource(0))
-	s := make([]types.BlockID, 200, 200)
-	for i := uint64(0); i < 200; i++ {
-		s = append(s, newRandBlockID(rng))
-	}
-	return s
+type mockBlockProvider struct {
+	lyrBlocks map[types.LayerID][]*types.Block
 }
-
-func newRandBlockID(rng *rand.Rand) (id types.BlockID) {
-	_, err := rng.Read(id[:])
-	if err != nil {
-		panic(err)
-	}
-	return id
-}
-
-type mockBlockProvider struct{}
 
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
 }
@@ -232,11 +213,15 @@ func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
 func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
 }
 
-func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
-	return buildSet(), nil
+func (mbp *mockBlockProvider) LayerBlocks(lyrID types.LayerID) ([]*types.Block, error) {
+	return mbp.lyrBlocks[lyrID], nil
 }
 
-func createMaatuf(tb testing.TB, tcfg config.Config, clock *mockClock, p2p NetworkService, rolacle Rolacle, name string) *Hare {
+func (mbp *mockBlockProvider) GetBlock(bID types.BlockID) (*types.Block, error) {
+	return nil, nil
+}
+
+func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, p2p NetworkService, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))
@@ -244,11 +229,16 @@ func createMaatuf(tb testing.TB, tcfg config.Config, clock *mockClock, p2p Netwo
 		panic("failed to create vrf signer")
 	}
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
-	ctrl := gomock.NewController(tb)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
-	hare := New(tcfg, p2p, ed, nodeID, isSynced, &mockBlockProvider{}, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, clock, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
+
+	hare := New(tcfg, p2p, ed, nodeID, isSynced, &mockBlockProvider{lyrBlocks: lyrBlocks}, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
+		&MockStateQuerier{true, nil}, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare
 }
@@ -437,11 +427,19 @@ func Test_multipleCPs(t *testing.T) {
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
 	oracle := &trueOracle{}
+
+	lyrBlocks := make(map[types.LayerID][]*types.Block)
+	for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
+		for i := uint64(0); i < 200; i++ {
+			blk := randomBlock(t, j, nil)
+			lyrBlocks[j] = append(lyrBlocks[j], blk)
+		}
+	}
 	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	for i := 0; i < totalNodes; i++ {
 		s := sim.NewNode()
 		src := NewSimRoundClock(s, scMap)
-		h := createMaatuf(t, cfg, test.clock, src, oracle, t.Name())
+		h := createMaatuf(t, cfg, test.clock, src, oracle, t.Name(), lyrBlocks)
 		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
@@ -471,12 +469,20 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	sim := service.NewSimulator()
 	test.initialSets = make([]*Set, totalNodes)
 	oracle := &trueOracle{}
+
+	lyrBlocks := make(map[types.LayerID][]*types.Block)
+	for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
+		for i := uint64(0); i < 200; i++ {
+			blk := randomBlock(t, j, nil)
+			lyrBlocks[j] = append(lyrBlocks[j], blk)
+		}
+	}
 	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	for i := 0; i < totalNodes; i++ {
 		s := sim.NewNode()
 		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		src := NewSimRoundClock(mp2p, scMap)
-		h := createMaatuf(t, cfg, test.clock, src, oracle, t.Name())
+		h := createMaatuf(t, cfg, test.clock, src, oracle, t.Name(), lyrBlocks)
 		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())

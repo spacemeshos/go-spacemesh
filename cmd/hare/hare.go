@@ -61,8 +61,24 @@ func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
 func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
 }
 
-func (mbp *mockBlockProvider) LayerBlockIds(types.LayerID) ([]types.BlockID, error) {
-	return buildSet(), nil
+func (mbp *mockBlockProvider) LayerBlocks(lyr types.LayerID) ([]*types.Block, error) {
+	s := make([]*types.Block, 200)
+	for i := uint64(0); i < 200; i++ {
+		blk := types.NewExistingBlock(lyr, util.Uint64ToBytes(i), nil)
+		blk.TortoiseBeacon = lyr.GetEpoch().ToBytes()
+		s[i] = blk
+	}
+	return s, nil
+}
+
+func (mbp *mockBlockProvider) GetBlock(types.BlockID) (*types.Block, error) {
+	return nil, nil
+}
+
+type mockBeaconGetter struct{}
+
+func (mbg *mockBeaconGetter) GetBeacon(id types.EpochID) ([]byte, error) {
+	return id.ToBytes(), nil
 }
 
 // HareApp represents an Hare application.
@@ -91,16 +107,6 @@ func NewHareApp() *HareApp {
 func (app *HareApp) Cleanup() {
 	// TODO: move to array of cleanup functions and execute all here
 	app.oracle.Unregister(true, app.sgn.PublicKey().String())
-}
-
-func buildSet() []types.BlockID {
-	s := make([]types.BlockID, 200, 200)
-
-	for i := uint64(0); i < 200; i++ {
-		s = append(s, types.NewExistingBlock(types.GetEffectiveGenesis().Add(1), util.Uint64ToBytes(i), nil).ID())
-	}
-
-	return s
 }
 
 type mockIDProvider struct{}
@@ -181,7 +187,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		ch:        make(chan struct{}),
 		layerTime: gTime,
 	}
-	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, hareOracle, layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, mockClock, lg)
+	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, &mockBeaconGetter{}, hareOracle, layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, mockClock, lg)
 	log.Info("starting hare service")
 	app.ha = hareI
 	if err = app.ha.Start(cmdp.Ctx); err != nil {

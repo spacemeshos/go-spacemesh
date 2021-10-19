@@ -649,7 +649,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	gossipListener := service.NewListener(swarm, layerFetch, newSyncer.ListenToGossip, app.addLogger(GossipListener, lg))
-	rabbit := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, patrol, newSyncer, msh, hOracle, idStore, clock, lg)
+	rabbit := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, patrol, newSyncer, msh, tBeacon, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
@@ -774,6 +774,7 @@ func (app *App) HareFactory(
 	patrol *layerpatrol.LayerPatrol,
 	syncer *syncer.Syncer,
 	msh *mesh.Mesh,
+	beacons blocks.BeaconGetter,
 	hOracle hare.Rolacle,
 	idStore *activation.IdentityStore,
 	clock TickProvider,
@@ -792,6 +793,7 @@ func (app *App) HareFactory(
 		nodeID,
 		syncer.IsSynced,
 		msh,
+		beacons,
 		hOracle,
 		patrol,
 		uint16(app.Config.LayersPerEpoch),

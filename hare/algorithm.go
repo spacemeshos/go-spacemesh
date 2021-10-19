@@ -29,15 +29,6 @@ const ( // constants of the different roles
 	leader  = role(2)
 )
 
-// Rolacle is the roles oracle provider.
-type Rolacle interface {
-	Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
-	CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
-	Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error)
-	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
-	IsEpochBeaconReady(ctx context.Context, epoch types.EpochID) bool
-}
-
 // NetworkService provides the registration and broadcast abilities in the network.
 type NetworkService interface {
 	RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage
@@ -236,7 +227,7 @@ func iterationFromCounter(roundCounter uint32) uint32 {
 // Start the consensus process.
 // It starts the PreRound round and then iterates through the rounds until consensus is reached or the instance is canceled.
 // It is assumed that the inbox is set before the call to Start.
-// It returns an error if Start has been called more than once, the set size is zero (no values) or the inbox is nil.
+// It returns an error if Start has been called more than once or the inbox is nil.
 func (proc *consensusProcess) Start(ctx context.Context) error {
 	logger := proc.WithContext(ctx)
 	if proc.isStarted { // called twice on same instance
@@ -327,7 +318,8 @@ PreRound:
 		proc.instanceID,
 		log.Int("set_size", proc.s.Size()))
 	if proc.s.Size() == 0 {
-		logger.Event().Warning("preround ended with empty set", types.LayerID(proc.instanceID))
+		logger.Event().Warning("preround ended with empty set",
+			proc.instanceID)
 	} else {
 		logger.With().Info("preround ended",
 			log.Int("set_size", proc.s.Size()),
@@ -493,7 +485,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 
 	// generate a new requestID for this message
 	ctx = log.WithNewRequestID(ctx,
-		types.LayerID(proc.instanceID),
+		proc.instanceID,
 		log.Uint32("msg_k", msg.InnerMsg.K),
 		log.String("msg_type", msg.InnerMsg.Type.String()),
 		log.Int("eligibility_count", int(msg.InnerMsg.EligibilityCount)),
@@ -515,8 +507,7 @@ func (proc *consensusProcess) sendMessage(ctx context.Context, msg *Msg) bool {
 func (proc *consensusProcess) onRoundEnd(ctx context.Context) {
 	logger := proc.WithContext(ctx).WithFields(
 		log.Uint32("current_k", proc.k),
-		proc.instanceID,
-	)
+		proc.instanceID)
 	logger.Debug("end of round")
 
 	// reset trackers
@@ -544,7 +535,7 @@ func (proc *consensusProcess) advanceToNextRound(ctx context.Context) {
 	if proc.k >= 4 && proc.k%4 == 0 {
 		proc.WithContext(ctx).Event().Warning("starting new iteration",
 			log.Uint32("current_k", proc.k),
-			types.LayerID(proc.instanceID))
+			proc.instanceID)
 	}
 }
 
@@ -594,21 +585,23 @@ func (proc *consensusProcess) beginCommitRound(ctx context.Context) {
 	// proposedSet may be nil, in such case the tracker will ignore Messages
 	proc.commitTracker = newCommitTracker(proc.cfg.F+1, proc.cfg.N, proposedSet) // track commits for proposed set
 
-	if proposedSet != nil { // has proposal to commit on
-		// check participation
-		if !proc.shouldParticipate(ctx) {
-			return
-		}
-
-		builder, err := proc.initDefaultBuilder(proposedSet)
-		if err != nil {
-			proc.WithContext(ctx).With().Error("init default builder failed", log.Err(err))
-			return
-		}
-		builder = builder.SetType(commit).Sign(proc.signing)
-		commitMsg := builder.Build()
-		proc.sendMessage(ctx, commitMsg)
+	if proposedSet == nil {
+		return
 	}
+
+	// check participation
+	if !proc.shouldParticipate(ctx) {
+		return
+	}
+
+	builder, err := proc.initDefaultBuilder(proposedSet)
+	if err != nil {
+		proc.WithContext(ctx).With().Error("init default builder failed", log.Err(err))
+		return
+	}
+	builder = builder.SetType(commit).Sign(proc.signing)
+	commitMsg := builder.Build()
+	proc.sendMessage(ctx, commitMsg)
 }
 
 func (proc *consensusProcess) beginNotifyRound(ctx context.Context) {
@@ -839,34 +832,30 @@ func (proc *consensusProcess) endOfStatusRound() {
 // checks if we should participate in the current round
 // returns true if we should participate, false otherwise.
 func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
-	logger := proc.WithContext(ctx)
+	logger := proc.WithContext(ctx).WithFields(
+		log.Uint32("current_k", proc.k),
+		proc.instanceID)
 
 	// query if identity is active
 	res, err := proc.oracle.IsIdentityActiveOnConsensusView(ctx, proc.signing.PublicKey().String(), proc.instanceID)
 	if err != nil {
-		logger.With().Error("should not participate: error checking our identity for activeness",
-			log.Err(err), proc.instanceID)
+		logger.With().Error("should not participate: error checking our identity for activeness", log.Err(err))
 		return false
 	}
 
 	if !res {
-		logger.With().Info("should not participate: identity is not active",
-			types.LayerID(proc.instanceID))
+		logger.Info("should not participate: identity is not active")
 		return false
 	}
 
 	currentRole := proc.currentRole(ctx)
 	if currentRole == passive {
-		logger.With().Info("should not participate: passive",
-			log.Uint32("current_k", proc.k),
-			proc.instanceID)
+		logger.Info("should not participate: passive")
 		return false
 	}
 
 	// should participate
 	logger.With().Info("should participate",
-		log.Uint32("current_k", proc.k),
-		proc.instanceID,
 		log.Bool("leader", currentRole == leader),
 		log.Uint32("eligibility_count", uint32(proc.eligibilityCount)),
 	)
@@ -875,7 +864,7 @@ func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 
 // Returns the role matching the current round if eligible for this round, false otherwise.
 func (proc *consensusProcess) currentRole(ctx context.Context) role {
-	logger := proc.WithContext(ctx)
+	logger := proc.WithContext(ctx).WithFields(proc.instanceID)
 	proof, err := proc.oracle.Proof(ctx, proc.instanceID, proc.k)
 	if err != nil {
 		logger.With().Error("could not retrieve eligibility proof from oracle", log.Err(err))
@@ -885,7 +874,7 @@ func (proc *consensusProcess) currentRole(ctx context.Context) role {
 	eligibilityCount, err := proc.oracle.CalcEligibility(ctx, proc.instanceID,
 		proc.k, expectedCommitteeSize(proc.k, proc.cfg.N, proc.cfg.ExpectedLeaders), proc.nid, proof)
 	if err != nil {
-		logger.With().Error("failed to check eligibility", log.Err(err), proc.instanceID)
+		logger.With().Error("failed to check eligibility", log.Err(err))
 		return passive
 	}
 

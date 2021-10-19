@@ -1,6 +1,7 @@
 package hare
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -8,8 +9,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -36,17 +39,6 @@ type TerminationOutput interface {
 	Set() *Set
 	Coinflip() bool
 	Completed() bool
-}
-
-type meshProvider interface {
-	// LayerBlockIds returns the block IDs stored for a layer
-	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
-	// HandleValidatedLayer receives Hare output when it succeeds
-	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
-	// InvalidateLayer receives the signal that Hare failed for a layer
-	InvalidateLayer(ctx context.Context, layerID types.LayerID)
-	// RecordCoinflip records the weak coinflip result for a layer
-	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
 }
 
 // RoundClock is a timer interface.
@@ -79,6 +71,7 @@ type Hare struct {
 	sign Signer
 
 	mesh    meshProvider
+	beacons blocks.BeaconGetter
 	rolacle Rolacle
 	patrol  layerPatrol
 
@@ -108,6 +101,7 @@ func New(
 	nid types.NodeID,
 	syncState syncStateFunc,
 	mesh meshProvider,
+	beacons blocks.BeaconGetter,
 	rolacle Rolacle,
 	patrol layerPatrol,
 	layersPerEpoch uint16,
@@ -140,6 +134,7 @@ func New(
 	h.sign = sign
 
 	h.mesh = mesh
+	h.beacons = beacons
 	h.rolacle = rolacle
 	h.patrol = patrol
 
@@ -159,9 +154,8 @@ func New(
 
 func (h *Hare) getLastLayer() types.LayerID {
 	h.layerLock.RLock()
-	lyr := h.lastLayer
-	h.layerLock.RUnlock()
-	return lyr
+	defer h.layerLock.RUnlock()
+	return h.lastLayer
 }
 
 // checks if the provided id is too late/old to be requested.
@@ -220,27 +214,27 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new consensus processes.
-func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
+func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	logger := h.WithContext(ctx).WithFields(id)
+	if h.IsClosed() {
+		logger.Info("hare exiting")
+		return false, nil
+	}
+
 	h.layerLock.Lock()
 	if id.After(h.lastLayer) {
 		h.lastLayer = id
 	} else {
 		logger.With().Error("received out of order layer tick", log.FieldNamed("last_layer", h.lastLayer))
 	}
-
 	h.layerLock.Unlock()
 
 	if id.GetEpoch().IsGenesis() {
 		logger.Info("not starting hare since we are in genesis epoch")
-		return
+		return false, nil
 	}
 
-	if !h.rolacle.IsEpochBeaconReady(ctx, id.GetEpoch()) {
-		logger.Info("not starting hare since beacon is not retrieved")
-		return
-	}
-
+	var err error
 	defer func() {
 		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
@@ -248,6 +242,12 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 			h.outputChan <- procReport{id, &Set{}, false, notCompleted}
 		}
 	}()
+
+	beacon, err := h.beacons.GetBeacon(id.GetEpoch())
+	if err != nil {
+		logger.Info("not starting hare since beacon is not retrieved")
+		return false, nil
+	}
 
 	// call to start the calculation of active set size beforehand
 	go func() {
@@ -265,27 +265,16 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	case <-clock.AwaitWakeup():
 		break // keep going
 	case <-h.CloseChannel():
-		// closed while waiting the delta
-		err = errors.New("closed while waiting the delta")
-		return
+		return false, errors.New("closed while waiting for hare delta")
 	}
 
 	if !h.broker.Synced(ctx, id) {
 		// if not currently synced don't start consensus process
 		logger.Info("not processing hare tick since node is not synced")
-		return
+		return false, nil
 	}
 
-	// retrieve set from orphan blocks
-	blocks, err := h.mesh.LayerBlockIds(h.lastLayer)
-	if err != nil {
-		logger.With().Error("no blocks found for hare, using empty set", log.Err(err))
-		// just fail here, it will end hare with empty set result
-		// return // ?
-		// TODO: there can be a difference between just fail with empty set
-		// TODO:   and achieve consensus on empty set
-	}
-
+	blocks := h.getGoodBlocks(h.lastLayer, beacon, logger)
 	logger.With().Info("starting hare consensus with blocks", log.Int("num_blocks", len(blocks)))
 	set := NewSet(blocks)
 
@@ -293,20 +282,58 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (err error) {
 	c, err := h.broker.Register(ctx, instID)
 	if err != nil {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
-		return
+		return false, fmt.Errorf("broker register: %w", err)
 	}
 	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.network, clock, h.outputChan)
 	cp.SetInbox(c)
 	if err = cp.Start(ctx); err != nil {
 		logger.With().Error("could not start consensus process", log.Err(err))
 		h.broker.Unregister(ctx, cp.ID())
-		return
+		return false, fmt.Errorf("start consensus: %w", err)
 	}
 	h.patrol.SetHareInCharge(instID)
 	logger.With().Info("number of consensus processes (after register)",
 		log.Int32("count", atomic.AddInt32(&h.totalCPs, 1)))
 	metrics.TotalConsensusProcesses.With("layer", id.String()).Add(1)
-	return
+	return true, nil
+}
+
+// getGoodBlocks finds the "good blocks" for the specified layer. a block is considered a good block if
+// it has the same beacon value as the node's beacon value.
+// any error encountered will be ignored and an empty set is returned.
+func (h *Hare) getGoodBlocks(lyrID types.LayerID, epochBeacon []byte, logger log.Log) []types.BlockID {
+	blocks, err := h.mesh.LayerBlocks(lyrID)
+	if err != nil {
+		if err != database.ErrNotFound {
+			logger.With().Error("no blocks found for hare, using empty set", log.Err(err))
+		}
+		return []types.BlockID{}
+	}
+
+	var goodBlocks []types.BlockID
+	for _, b := range blocks {
+		beacon := b.TortoiseBeacon
+		if b.RefBlock != nil {
+			refBlock, err := h.mesh.GetBlock(*b.RefBlock)
+			if err != nil {
+				logger.With().Error("failed to find ref block",
+					b.ID(),
+					log.String("ref_block_id", b.RefBlock.AsHash32().ShortString()))
+				return []types.BlockID{}
+			}
+			beacon = refBlock.TortoiseBeacon
+		}
+
+		if bytes.Equal(beacon, epochBeacon) {
+			goodBlocks = append(goodBlocks, b.ID())
+		} else {
+			logger.With().Warning("block has different beacon value",
+				b.ID(),
+				log.String("block_beacon", types.BytesToHash(beacon).ShortString()),
+				log.String("epoch_beacon", types.BytesToHash(epochBeacon).ShortString()))
+		}
+	}
+	return goodBlocks
 }
 
 var (
@@ -376,8 +403,11 @@ func (h *Hare) tickLoop(ctx context.Context) {
 				continue
 			}
 			go func(l types.LayerID) {
-				if err := h.onTick(ctx, l); err != nil {
+				started, err := h.onTick(ctx, l)
+				if err != nil {
 					h.With().Error("failed to handle tick", log.Err(err))
+				} else if !started {
+					h.WithContext(ctx).With().Warning("consensus not started for layer", layer)
 				}
 			}(layer)
 		case <-h.CloseChannel():

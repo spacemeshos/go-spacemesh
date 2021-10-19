@@ -13,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 const (
@@ -52,7 +53,7 @@ func TestPreRoundTracker_OnPreRound(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	s.Add(value2)
-	verifier := generateSigning(t)
+	verifier := signing.NewEdSigner()
 
 	m1 := BuildPreRoundMsg(verifier, s, nil)
 	tracker := newPreRoundTracker(lowThresh10, lowThresh10, logtest.New(t))
@@ -87,7 +88,7 @@ func TestPreRoundTracker_CanProveValueAndSet(t *testing.T) {
 
 	for i := 0; i < lowThresh10; i++ {
 		assert.False(t, tracker.CanProveSet(s))
-		m1 := BuildPreRoundMsg(generateSigning(t), s, nil)
+		m1 := BuildPreRoundMsg(signing.NewEdSigner(), s, nil)
 		tracker.OnPreRound(context.TODO(), m1)
 	}
 
@@ -100,9 +101,9 @@ func TestPreRoundTracker_UpdateSet(t *testing.T) {
 	tracker := newPreRoundTracker(2, 2, logtest.New(t))
 	s1 := NewSetFromValues(value1, value2, value3)
 	s2 := NewSetFromValues(value1, value2, value4)
-	prMsg1 := BuildPreRoundMsg(generateSigning(t), s1, nil)
+	prMsg1 := BuildPreRoundMsg(signing.NewEdSigner(), s1, nil)
 	tracker.OnPreRound(context.TODO(), prMsg1)
-	prMsg2 := BuildPreRoundMsg(generateSigning(t), s2, nil)
+	prMsg2 := BuildPreRoundMsg(signing.NewEdSigner(), s2, nil)
 	tracker.OnPreRound(context.TODO(), prMsg2)
 	assert.True(t, tracker.CanProveValue(value1))
 	assert.True(t, tracker.CanProveValue(value2))
@@ -113,7 +114,7 @@ func TestPreRoundTracker_UpdateSet(t *testing.T) {
 func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 	tracker := newPreRoundTracker(2, 2, logtest.New(t))
 	s1 := NewSetFromValues(value1)
-	verifier := generateSigning(t)
+	verifier := signing.NewEdSigner()
 	prMsg1 := BuildPreRoundMsg(verifier, s1, nil)
 	tracker.OnPreRound(context.TODO(), prMsg1)
 	assert.Equal(t, 1, len(tracker.preRound))
@@ -125,9 +126,9 @@ func TestPreRoundTracker_OnPreRound2(t *testing.T) {
 func TestPreRoundTracker_FilterSet(t *testing.T) {
 	tracker := newPreRoundTracker(2, 2, logtest.New(t))
 	s1 := NewSetFromValues(value1, value2)
-	prMsg1 := BuildPreRoundMsg(generateSigning(t), s1, nil)
+	prMsg1 := BuildPreRoundMsg(signing.NewEdSigner(), s1, nil)
 	tracker.OnPreRound(context.TODO(), prMsg1)
-	prMsg2 := BuildPreRoundMsg(generateSigning(t), s1, nil)
+	prMsg2 := BuildPreRoundMsg(signing.NewEdSigner(), s1, nil)
 	tracker.OnPreRound(context.TODO(), prMsg2)
 	set := NewSetFromValues(value1, value2, value3)
 	tracker.FilterSet(set)
@@ -165,7 +166,7 @@ func TestPreRoundTracker_BestVRF(t *testing.T) {
 		sha := sha256.Sum256(v.proof)
 		shaUint32 := binary.LittleEndian.Uint32(sha[:4])
 		r.Equal(v.val, shaUint32, "mismatch in hash output")
-		prMsg := BuildPreRoundMsg(generateSigning(t), s1, v.proof)
+		prMsg := BuildPreRoundMsg(signing.NewEdSigner(), s1, v.proof)
 		tracker.OnPreRound(context.TODO(), prMsg)
 		r.Equal(v.bestVal, tracker.bestVRF, "mismatch in best VRF value")
 		r.Equal(v.coin, tracker.coinflip, "mismatch in weak coin flip")
