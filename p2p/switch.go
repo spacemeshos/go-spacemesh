@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -648,7 +649,7 @@ func (s *Switch) ProcessDirectProtocolMessage(ctx context.Context, sender p2pcry
 		log.Int("queue_length", len(msgchan)),
 		log.String("protocol", protocol))
 
-	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
+	metrics.QueueLength.With(prometheus.Labels{metrics.ProtocolLabel: protocol}).Set(float64(len(msgchan)))
 
 	// TODO: check queue length
 	msgchan <- directProtocolMessage{metadata, sender, data}
@@ -670,7 +671,7 @@ func (s *Switch) ProcessGossipProtocolMessage(ctx context.Context, sender p2pcry
 		log.Int("queue_length", len(msgchan)),
 		h)
 
-	metrics.QueueLength.With(metrics.ProtocolLabel, protocol).Set(float64(len(msgchan)))
+	metrics.QueueLength.With(prometheus.Labels{metrics.ProtocolLabel: protocol}).Set(float64(len(msgchan)))
 
 	// TODO: check queue length
 	gpm := gossipProtocolMessage{sender: sender, ownMessage: ownMessage, data: data, validationChan: validationCompletedChan}
@@ -939,7 +940,7 @@ loop:
 
 			s.discover.Good(cne.n.PublicKey())
 			s.publishNewPeer(cne.n.PublicKey())
-			metrics.OutboundPeers.Add(1)
+			metrics.TotalPeers.With(prometheus.Labels{metrics.TypeLabel: metrics.TypeLabelOutbound}).Inc()
 			logger.With().Debug("added peer to peer list",
 				log.FieldNamed("peer_id", cne.n.PublicKey()))
 		case <-tm.C:
@@ -963,7 +964,7 @@ func (s *Switch) Disconnect(peer p2pcrypto.PublicKey) {
 		delete(s.inpeers, peer)
 		s.inpeersMutex.Unlock()
 		s.publishDelPeer(peer)
-		metrics.InboundPeers.Add(-1)
+		metrics.TotalPeers.With(prometheus.Labels{metrics.TypeLabel: metrics.TypeLabelInbound}).Dec()
 		return
 	}
 	s.inpeersMutex.Unlock()
@@ -977,7 +978,7 @@ func (s *Switch) Disconnect(peer p2pcrypto.PublicKey) {
 	}
 	s.outpeersMutex.Unlock()
 	s.publishDelPeer(peer)
-	metrics.OutboundPeers.Add(-1)
+	metrics.TotalPeers.With(prometheus.Labels{metrics.TypeLabel: metrics.TypeLabelOutbound}).Dec()
 
 	// todo: don't remove if we know this is a valid peer for later
 	// s.discovery.Remove(peer) // address doesn't matter because we only check dhtid
@@ -1007,7 +1008,7 @@ func (s *Switch) addIncomingPeer(n p2pcrypto.PublicKey) error {
 	if !exist {
 		s.publishNewPeer(n)
 		s.discover.Attempt(n) // or good?
-		metrics.InboundPeers.Add(1)
+		metrics.TotalPeers.With(prometheus.Labels{metrics.TypeLabel: metrics.TypeLabelInbound}).Inc()
 	}
 	return nil
 }
