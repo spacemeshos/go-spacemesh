@@ -24,6 +24,7 @@ type PoetListener struct {
 	poetDb poetValidatorPersistor
 }
 
+// HandlePoetProofMessage is a receiver for broadcast messages.
 func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(msg, &proofMessage); err != nil {

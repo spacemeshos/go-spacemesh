@@ -30,7 +30,7 @@ func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub,
 	// TODO(dshulyak) refactor code to accept options
 	opts := []pubsub.Option{
 		pubsub.WithFloodPublish(cfg.Flood),
-		pubsub.WithMessageIdFn(msgId),
+		pubsub.WithMessageIdFn(msgID),
 		pubsub.WithNoAuthor(),
 		pubsub.WithMessageSignaturePolicy(pubsub.StrictNoSign),
 		pubsub.WithPeerOutboundQueueSize(8192),
@@ -75,8 +75,13 @@ type GossipHandler = func(context.Context, peer.ID, []byte) ValidationResult
 type ValidationResult = pubsub.ValidationResult
 
 const (
+	// ValidationAccept should be returned if message is good and can be broadcasted.
 	ValidationAccept = pubsub.ValidationAccept
+	// ValidationIgnore should be returned if message might be good, but outdated
+	// and shouldn't be broadcasted.
 	ValidationIgnore = pubsub.ValidationIgnore
+	// ValidationReject should be returned if message is malformed or malicious
+	// and shouldn't be broadcasted. Peer might be potentially get banned when on this result.
 	ValidationReject = pubsub.ValidationReject
 )
 
@@ -92,7 +97,7 @@ func ChainGossipHandler(handlers ...GossipHandler) GossipHandler {
 	}
 }
 
-func msgId(msg *pb.Message) string {
+func msgID(msg *pb.Message) string {
 	hasher := sha256.New()
 	if msg.Topic != nil {
 		hasher.Write([]byte(*msg.Topic))

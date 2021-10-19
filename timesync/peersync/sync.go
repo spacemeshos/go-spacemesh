@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/lp2p"
+	"github.com/spacemeshos/go-spacemesh/lp2p/bootstrap"
 )
 
 const (
@@ -40,11 +41,6 @@ type systemTime struct{}
 
 func (s systemTime) Now() time.Time {
 	return time.Now()
-}
-
-// PeersWaiter provides interface for waiting for peers.
-type SyncHost interface {
-	WaitPeers(context.Context, int) ([]lp2p.Peer, error)
 }
 
 type request struct {
@@ -111,7 +107,7 @@ func WithConfig(config Config) Option {
 }
 
 // New creates Sync instance and returns pointer.
-func New(h host.Host, peers SyncHost, opts ...Option) *Sync {
+func New(h host.Host, peers bootstrap.Waiter, opts ...Option) *Sync {
 	sync := &Sync{
 		log:          log.NewNop(),
 		ctx:          context.Background(),
@@ -136,7 +132,7 @@ type Sync struct {
 	log          log.Log
 	time         Time
 	h            host.Host
-	peersWatcher SyncHost
+	peersWatcher bootstrap.Waiter
 
 	once   sync.Once
 	eg     errgroup.Group
