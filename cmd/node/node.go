@@ -850,10 +850,12 @@ func (app *App) startAPIServices(ctx context.Context, net api.NetworkAPI) {
 	// GRPC service.
 
 	// Make sure we only create the server once.
+	services := []grpcserver.ServiceAPI{}
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface)
 		}
+		services = append(services, svc)
 		svc.RegisterService(app.grpcAPIService)
 	}
 
@@ -893,17 +895,8 @@ func (app *App) startAPIServices(ctx context.Context, net api.NetworkAPI) {
 			// It should be caught inside apiConf.
 			log.Panic("one or more new grpc services must be enabled with new json gateway server")
 		}
-		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
-		app.jsonAPIService.StartService(
-			ctx,
-			apiConf.StartDebugService,
-			apiConf.StartGatewayService,
-			apiConf.StartGlobalStateService,
-			apiConf.StartMeshService,
-			apiConf.StartNodeService,
-			apiConf.StartSmesherService,
-			apiConf.StartTransactionService,
-		)
+		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort)
+		app.jsonAPIService.StartService(ctx, services...)
 	}
 }
 
