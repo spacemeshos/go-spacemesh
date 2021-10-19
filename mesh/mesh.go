@@ -532,8 +532,8 @@ func (msh *Mesh) applyState(l *types.Layer) {
 			msh.Log.Error("cannot write reward to db")
 		}
 	} else {
-		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, coinbases, 0)
 		msh.With().Info("no valid blocks for layer", l.Index())
+		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, coinbases, 0)
 	}
 
 	if err != nil {
