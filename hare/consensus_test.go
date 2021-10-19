@@ -7,6 +7,8 @@ import (
 	"time"
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
@@ -15,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/lp2p"
 	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/require"
 )
 
 // Test the consensus process as a whole

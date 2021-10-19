@@ -143,7 +143,7 @@ func bigRatDecodeFunc() mapstructure.DecodeHookFunc {
 	}
 }
 
-// EnsureCLIFlags checks flag types and converts them
+// EnsureCLIFlags checks flag types and converts them.
 func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
 		for i := 0; i < p.NumField(); i++ {

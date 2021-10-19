@@ -94,7 +94,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 	return d, nil
 }
 
-// Stop stops the discovery service
+// Stop stops the discovery service.
 func (d *Discovery) Stop() {
 	d.cancel()
 	d.eg.Wait()
@@ -160,7 +160,8 @@ func portFromAddress(h host.Host) (uint16, error) {
 		if int(uint16(port)) < port {
 			return 0, fmt.Errorf("port %d cant fit into uint16 %d", port, math.MaxUint16)
 		}
-		return uint16(port), nil
+		// linter is disabled, as we need first available valid port
+		return uint16(port), nil //nolint
 	}
 	return 0, nil
 }

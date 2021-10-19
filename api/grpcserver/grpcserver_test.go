@@ -513,7 +513,6 @@ func (m MempoolMock) GetTxsByAddress(addr types.Address) (txs []*types.Transacti
 }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
-
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort)
 

@@ -68,7 +68,7 @@ type PublisherSubscriber interface {
 	Subscriber
 }
 
-// GossipHandler is a function that is
+// GossipHandler is a function that is for receiving messages.
 type GossipHandler = func(context.Context, peer.ID, []byte) ValidationResult
 
 // ValidationResult is a one of the validation result constants.

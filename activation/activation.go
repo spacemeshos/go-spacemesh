@@ -40,8 +40,7 @@ type meshProvider interface {
 	LatestLayer() types.LayerID
 }
 
-type poetNumberOfTickProvider struct {
-}
+type poetNumberOfTickProvider struct{}
 
 func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
 	return 1

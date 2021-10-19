@@ -311,7 +311,7 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 	db.AddBalance(recipient, amount)
 }
 
-// HandleTxGossipData handles data sent from gossip
+// HandleTxGossipData handles data sent from gossip.
 func (tp *TransactionProcessor) HandleTxGossipData(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
 	if err := tp.HandleTxData(msg); err != nil {
 		tp.With().Error("invalid tx", log.Err(err))

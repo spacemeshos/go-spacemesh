@@ -72,7 +72,7 @@ func (a *addrBook) persistPeers(path string) {
 }
 
 // loadPeers loads the known address from the saved file.  If empty, missing, or
-// malformed file, just don't load anything and start fresh
+// malformed file, just don't load anything and start fresh.
 func (a *addrBook) loadPeers(path string) {
 	if len(path) == 0 {
 		return

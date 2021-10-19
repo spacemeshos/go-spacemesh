@@ -57,7 +57,7 @@ type Config struct {
 	GoldenATXID types.ATXID
 }
 
-// NewBlockHandler creates new BlockHandler
+// NewBlockHandler creates new BlockHandler.
 func NewBlockHandler(cfg Config, fetcher system.Fetcher, m mesh, v blockValidator, lg log.Log) *BlockHandler {
 	return &BlockHandler{
 		Log:         lg,
@@ -70,7 +70,7 @@ func NewBlockHandler(cfg Config, fetcher system.Fetcher, m mesh, v blockValidato
 	}
 }
 
-// HandleBlock handles blocks from gossip
+// HandleBlock handles blocks from gossip.
 func (bh *BlockHandler) HandleBlock(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
 	if err := bh.HandleBlockData(ctx, msg); err != nil {
 		bh.WithContext(ctx).With().Error("error handling block data", log.Err(err))
@@ -79,7 +79,7 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, _ peer.ID, msg []byte) 
 	return pubsub.ValidationAccept
 }
 
-// HandleBlockData handles blocks from gossip and sync
+// HandleBlockData handles blocks from gossip and sync.
 func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte) error {
 	logger := bh.WithContext(ctx)
 	logger.Info("handling data for new block")

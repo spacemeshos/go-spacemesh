@@ -318,7 +318,6 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}
 	}
 	for i := 0; i < totalNodes; i++ {
-
 		host := mesh.Hosts()[i]
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)

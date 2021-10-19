@@ -4,8 +4,9 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func Test_Lookup(t *testing.T) {

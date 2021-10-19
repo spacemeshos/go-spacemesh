@@ -149,13 +149,13 @@ type networkInterface interface {
 	Close() error
 }
 
-// messageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'
+// messageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'.
 type messageNetwork struct {
 	*server.Server
 	*lp2p.Host
 }
 
-// GetRandomPeer returns a random peer from current peer list
+// GetRandomPeer returns a random peer from current peer list.
 func GetRandomPeer(peers []lp2p.Peer) lp2p.Peer {
 	if len(peers) == 0 {
 		log.Panic("cannot send fetch: no peers found")
@@ -163,7 +163,7 @@ func GetRandomPeer(peers []lp2p.Peer) lp2p.Peer {
 	return peers[rand.Intn(len(peers))]
 }
 
-// Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch requests
+// Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch requests.
 type Fetch struct {
 	cfg Config
 	log log.Log
@@ -186,7 +186,7 @@ type Fetch struct {
 	dbLock               sync.RWMutex
 }
 
-// NewFetch creates a new Fetch struct
+// NewFetch creates a new Fetch struct.
 func NewFetch(ctx context.Context, cfg Config, h *lp2p.Host, logger log.Log) *Fetch {
 	f := &Fetch{
 		cfg:             cfg,

@@ -209,7 +209,7 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 	}
 }
 
-// Close closes underlying services
+// Close closes underlying services.
 func (s NodeService) Close() {}
 
 // Convert internal error level into level understood by the API.

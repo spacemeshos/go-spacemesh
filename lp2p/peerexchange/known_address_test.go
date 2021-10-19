@@ -28,35 +28,35 @@ func tstNewKnownAddress(lastSeen time.Time, attempts int,
 
 func TestChance(t *testing.T) {
 	now := time.Unix(time.Now().Unix(), 0)
-	var tests = []struct {
+	tests := []struct {
 		addr     *knownAddress
 		expected float64
 	}{
 		{
-			//Test normal case
+			// Test normal case
 			tstNewKnownAddress(now.Add(-35*time.Second),
 				0, time.Now().Add(-30*time.Minute), time.Now(), false, 0),
 			1.0,
 		}, {
-			//Test case in which lastseen < 0
+			// Test case in which lastseen < 0
 			tstNewKnownAddress(now.Add(20*time.Second),
 				0, time.Now().Add(-30*time.Minute), time.Now(), false, 0),
 			1.0,
 		}, {
-			//Test case in which lastattempt < 0
+			// Test case in which lastattempt < 0
 			tstNewKnownAddress(now.Add(-35*time.Second),
 				0, time.Now().Add(30*time.Minute), time.Now(), false, 0),
 			1.0 * .01,
 		}, {
-			//Test case in which lastattempt < ten minutes
+			// Test case in which lastattempt < ten minutes
 			tstNewKnownAddress(now.Add(-35*time.Second),
 				0, time.Now().Add(-5*time.Minute), time.Now(), false, 0),
 			1.0 * .01,
 		}, {
-			//Test case with several failed attempts.
+			// Test case with several failed attempts.
 			tstNewKnownAddress(now.Add(-35*time.Second),
 				2, time.Now().Add(-30*time.Minute), time.Now(), false, 0),
-			1 * math.Pow(0.66, 2), // 2 attemps
+			1 * math.Pow(0.66, 2), // 2 attempts
 		},
 	}
 
@@ -83,7 +83,7 @@ func TestIsBad(t *testing.T) {
 	monthOldNa := monthOld
 	currentNa := secondsOld
 
-	//Test addresses that have been tried in the last minute.
+	// Test addresses that have been tried in the last minute.
 	if TstKnownAddressIsBad(tstNewKnownAddress(futureNa, 3, secondsOld, zeroTime, false, 0)) {
 		t.Errorf("test case 1: addresses that have been tried in the last minute are not bad.")
 	}
@@ -100,27 +100,27 @@ func TestIsBad(t *testing.T) {
 		t.Errorf("test case 5: addresses that have been tried in the last minute are not bad.")
 	}
 
-	//Test address that claims to be from the future.
+	// Test address that claims to be from the future.
 	if !TstKnownAddressIsBad(tstNewKnownAddress(futureNa, 0, minutesOld, hoursOld, true, 0)) {
 		t.Errorf("test case 6: addresses that claim to be from the future are bad.")
 	}
 
-	//Test address that has not been seen in over a month.
+	// Test address that has not been seen in over a month.
 	if !TstKnownAddressIsBad(tstNewKnownAddress(monthOldNa, 0, minutesOld, hoursOld, true, 0)) {
 		t.Errorf("test case 7: addresses more than a month old are bad.")
 	}
 
-	//It has failed at least three times and never succeeded.
+	// It has failed at least three times and never succeeded.
 	if !TstKnownAddressIsBad(tstNewKnownAddress(minutesOldNa, 3, minutesOld, zeroTime, true, 0)) {
 		t.Errorf("test case 8: addresses that have never succeeded are bad.")
 	}
 
-	//It has failed ten times in the last week
+	// It has failed ten times in the last week
 	if !TstKnownAddressIsBad(tstNewKnownAddress(minutesOldNa, 10, minutesOld, monthOld, true, 0)) {
 		t.Errorf("test case 9: addresses that have not succeeded in too long are bad.")
 	}
 
-	//Test an address that should work.
+	// Test an address that should work.
 	if TstKnownAddressIsBad(tstNewKnownAddress(minutesOldNa, 2, minutesOld, hoursOld, true, 0)) {
 		t.Errorf("test case 10: This should be a valid address.")
 	}

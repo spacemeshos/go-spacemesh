@@ -127,7 +127,7 @@ const (
 	atxProtocol   = "/atx/1.0.0"
 )
 
-// NewLogic creates a new instance of layer fetching logic
+// NewLogic creates a new instance of layer fetching logic.
 func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDB, atxIDs atxIDsDB, txs TxProcessor,
 	host network, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
 	l := &Logic{

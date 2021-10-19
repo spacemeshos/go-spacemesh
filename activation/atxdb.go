@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -20,7 +21,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/post/shared"
 )
 
 const (
@@ -108,7 +108,7 @@ type DB struct {
 }
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
-// their validity
+// their validity.
 func NewDB(dbStore database.Database, fetcher system.Fetcher, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:         idStore,
@@ -735,7 +735,7 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 	return nil
 }
 
-// HandleGossipAtx handles the atx gossip data channel
+// HandleGossipAtx handles the atx gossip data channel.
 func (db *DB) HandleGossipAtx(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
 	err := db.HandleAtxData(ctx, msg)
 	if err != nil {
@@ -745,7 +745,7 @@ func (db *DB) HandleGossipAtx(ctx context.Context, _ peer.ID, msg []byte) pubsub
 	return pubsub.ValidationAccept
 }
 
-// HandleAtxData handles atxs received either by gossip or sync
+// HandleAtxData handles atxs received either by gossip or sync.
 func (db *DB) HandleAtxData(ctx context.Context, data []byte) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {

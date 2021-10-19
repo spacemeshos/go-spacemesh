@@ -207,7 +207,7 @@ linters:
     - misspell
     - staticcheck
     - whitespace
-    - wrapcheck
+#   - wrapcheck
 #    - varcheck
 #    - unparam
 #    - deadcode

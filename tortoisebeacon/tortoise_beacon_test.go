@@ -10,8 +10,6 @@ import (
 
 	"github.com/golang/mock/gomock"
 	"github.com/prometheus/client_golang/prometheus"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
-	pubsubmocks "github.com/spacemeshos/go-spacemesh/lp2p/pubsub/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -20,6 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	dbMocks "github.com/spacemeshos/go-spacemesh/database/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
+	pubsubmocks "github.com/spacemeshos/go-spacemesh/lp2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"

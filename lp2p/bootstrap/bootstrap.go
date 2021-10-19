@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/event"
@@ -188,7 +189,7 @@ func (b *Bootstrap) triggerBootstrap(ctx context.Context, limit chan struct{}, t
 		if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil
 		}
-		return err
+		return fmt.Errorf("unexpected error dureing bootstrap: %w", err)
 	})
 	return
 }

@@ -2,6 +2,7 @@ package pubsub
 
 import (
 	"context"
+	"fmt"
 	"sync"
 
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -49,5 +50,8 @@ func (ps *PubSub) Publish(ctx context.Context, topic string, msg []byte) error {
 	if topich == nil {
 		ps.logger.Panic("Publish is called before Register for topic %s", topic)
 	}
-	return topich.Publish(ctx, msg)
+	if err := topich.Publish(ctx, msg); err != nil {
+		return fmt.Errorf("failed to publish to topic %v: %w", topic, err)
+	}
+	return nil
 }

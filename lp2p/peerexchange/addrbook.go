@@ -174,7 +174,7 @@ func (a *addrBook) updateAddress(addr, src *addrInfo) {
 	a.logger.Debug("added new address %s for a total of %d addresses", addr.RawAddr, a.nTried+a.nNew)
 }
 
-// Lookup searches for an address using a public key. returns *Info
+// Lookup searches for an address using a public key. returns *Info.
 func (a *addrBook) Lookup(addr peer.ID) *addrInfo {
 	a.mu.Lock()
 	d := a.lookup(addr)
@@ -189,7 +189,7 @@ func (a *addrBook) lookup(addr peer.ID) *knownAddress {
 	return a.addrIndex[addr]
 }
 
-// moves a knownaddress to a tried bucket
+// moves a knownaddress to a tried bucket.
 func (a *addrBook) toTried(ka *knownAddress) {
 	// move to tried set, optionally evicting other addresses if neeed.
 	if ka.tried {
@@ -471,7 +471,7 @@ func (a *addrBook) Good(pid peer.ID) {
 	a.toTried(ka)
 }
 
-// RemoveAddress
+// RemoveAddress.
 func (a *addrBook) RemoveAddress(pid peer.ID) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
