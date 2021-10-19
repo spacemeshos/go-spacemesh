@@ -49,6 +49,10 @@ func StartPeers(h host.Host, opts ...Opt) *Peers {
 type Provider interface {
 	PeerCount() uint64
 	GetPeers() []peer.ID
+}
+
+// Waiter is an interface to wait for peers.
+type Waiter interface {
 	WaitPeers(context.Context, int) ([]peer.ID, error)
 }
 

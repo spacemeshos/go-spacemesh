@@ -63,8 +63,31 @@ func (mr *MockProviderMockRecorder) PeerCount() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PeerCount", reflect.TypeOf((*MockProvider)(nil).PeerCount))
 }
 
+// MockWaiter is a mock of Waiter interface.
+type MockWaiter struct {
+	ctrl     *gomock.Controller
+	recorder *MockWaiterMockRecorder
+}
+
+// MockWaiterMockRecorder is the mock recorder for MockWaiter.
+type MockWaiterMockRecorder struct {
+	mock *MockWaiter
+}
+
+// NewMockWaiter creates a new mock instance.
+func NewMockWaiter(ctrl *gomock.Controller) *MockWaiter {
+	mock := &MockWaiter{ctrl: ctrl}
+	mock.recorder = &MockWaiterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockWaiter) EXPECT() *MockWaiterMockRecorder {
+	return m.recorder
+}
+
 // WaitPeers mocks base method.
-func (m *MockProvider) WaitPeers(arg0 context.Context, arg1 int) ([]peer.ID, error) {
+func (m *MockWaiter) WaitPeers(arg0 context.Context, arg1 int) ([]peer.ID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "WaitPeers", arg0, arg1)
 	ret0, _ := ret[0].([]peer.ID)
@@ -73,7 +96,7 @@ func (m *MockProvider) WaitPeers(arg0 context.Context, arg1 int) ([]peer.ID, err
 }
 
 // WaitPeers indicates an expected call of WaitPeers.
-func (mr *MockProviderMockRecorder) WaitPeers(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockWaiterMockRecorder) WaitPeers(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitPeers", reflect.TypeOf((*MockProvider)(nil).WaitPeers), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitPeers", reflect.TypeOf((*MockWaiter)(nil).WaitPeers), arg0, arg1)
 }

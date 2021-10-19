@@ -97,7 +97,7 @@ type LayerPromiseResult struct {
 type Logic struct {
 	log              log.Log
 	fetcher          fetch.Fetcher
-	atxsrv, blocksrv *server.Server
+	atxsrv, blocksrv server.Requestor
 	host             network
 	mutex            sync.Mutex
 	layerBlocksRes   map[types.LayerID]*layerResult
@@ -122,6 +122,11 @@ func DefaultConfig() Config {
 	return Config{RequestTimeout: 10}
 }
 
+const (
+	blockProtocol = "/block/1.0.0"
+	atxProtocol   = "/atx/1.0.0"
+)
+
 // NewLogic creates a new instance of layer fetching logic
 func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDB, atxIDs atxIDsDB, txs TxProcessor,
 	host network, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
@@ -139,14 +144,10 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		txs:            txs,
 		goldenATXID:    cfg.GoldenATXID,
 	}
-	l.atxsrv = server.New(host, layersProtocol+"atx", l.epochATXsReqReceiver)
-	l.blocksrv = server.New(host, layersProtocol+"block", l.layerBlocksReqReceiver)
+	l.atxsrv = server.New(host, atxProtocol, l.epochATXsReqReceiver)
+	l.blocksrv = server.New(host, blockProtocol, l.layerBlocksReqReceiver)
 	return l
 }
-
-const (
-	layersProtocol = "/layers/2.0/"
-)
 
 // Start starts layerFetcher logic and fetch component.
 func (l *Logic) Start() {

@@ -48,10 +48,17 @@ type response struct {
 	Error string
 }
 
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./server.go
+
 // Host is a subset of libp2p Host interface that needs to be implemented to be usable with server.
 type Host interface {
 	SetStreamHandler(protocol.ID, network.StreamHandler)
 	NewStream(context.Context, peer.ID, ...protocol.ID) (network.Stream, error)
+}
+
+// Requestor is an interface for requesting replies from peer server.
+type Requestor interface {
+	Request(context.Context, peer.ID, []byte, func([]byte), func(error)) error
 }
 
 // Server for the Handler.
