@@ -517,7 +517,7 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	// https://github.com/spacemeshos/go-spacemesh/issues/2269.
 	coinbasesAndSmeshers, coinbases := msh.getCoinbasesAndSmeshers(l)
 	var failedTxs []*types.Transaction
-	var err error
+	var svmErr error
 
 	// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
 	if len(coinbases) > 0 {
@@ -526,7 +526,7 @@ func (msh *Mesh) applyState(l *types.Layer) {
 		for _, miner := range coinbases {
 			rewardByMiner[miner] += rewards.blockTotalReward
 		}
-		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, rewardByMiner)
+		failedTxs, svmErr = msh.svm.ApplyLayer(l.Index(), validBlockTxs, rewardByMiner)
 		msh.logRewards(&rewards)
 		msh.reportRewards(&rewards, coinbasesAndSmeshers)
 
@@ -535,12 +535,12 @@ func (msh *Mesh) applyState(l *types.Layer) {
 		}
 	} else {
 		msh.With().Info("no valid blocks for layer", l.Index())
-		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, map[types.Address]uint64{})
+		failedTxs, svmErr = msh.svm.ApplyLayer(l.Index(), validBlockTxs, map[types.Address]uint64{})
 	}
 
-	if err != nil {
+	if svmErr != nil {
 		msh.With().Error("failed to apply transactions",
-			l.Index(), log.Int("num_failed_txs", len(failedTxs)), log.Err(err))
+			l.Index(), log.Int("num_failed_txs", len(failedTxs)), log.Err(svmErr))
 		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
 		//  e.g. persist the last layer transactions were applied from and use that instead of `oldPbase`
 	}
