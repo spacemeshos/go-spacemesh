@@ -523,8 +523,8 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	if len(coinbases) > 0 {
 		rewards := msh.calculateRewards(l, validBlockTxs, msh.config, coinbases)
 		rewardByMiner := map[types.Address]uint64{}
-		for _, addr := range coinbases {
-			rewardByMiner[addr] = rewards.blockTotalReward
+		for _, miner := range coinbases {
+			rewardByMiner[miner] += rewards.blockTotalReward
 		}
 		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, rewardByMiner)
 		msh.logRewards(&rewards)
