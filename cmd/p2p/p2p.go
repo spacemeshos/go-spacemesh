@@ -104,10 +104,12 @@ func (app *P2PApp) startAPI() {
 
 	// Make sure we only create the server once.
 	var grpcSvc *grpcserver.Server
+	services := []grpcserver.ServiceAPI{}
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if grpcSvc == nil {
 			grpcSvc = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface)
 		}
+		services = append(services, svc)
 		svc.RegisterService(grpcSvc)
 	}
 
@@ -139,17 +141,8 @@ func (app *P2PApp) startAPI() {
 			// It should be caught inside apiConf.
 			log.Panic("one or more new grpc services must be enabled with new json gateway server")
 		}
-		jsonSvc = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
-		jsonSvc.StartService(
-			cmdp.Ctx,
-			apiConf.StartDebugService,
-			apiConf.StartGatewayService,
-			apiConf.StartGlobalStateService,
-			apiConf.StartMeshService,
-			apiConf.StartNodeService,
-			apiConf.StartSmesherService,
-			apiConf.StartTransactionService,
-		)
+		jsonSvc = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort)
+		jsonSvc.StartService(cmdp.Ctx, services...)
 		app.closers = append(app.closers, jsonSvc)
 	}
 }
