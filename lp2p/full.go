@@ -8,7 +8,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/lp2p/bootstrap"
-	"github.com/spacemeshos/go-spacemesh/lp2p/compat"
 	"github.com/spacemeshos/go-spacemesh/lp2p/handshake"
 	"github.com/spacemeshos/go-spacemesh/lp2p/peerexchange"
 	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
@@ -98,7 +97,6 @@ func (fh *Host) Stop() error {
 	fh.bootstrap.Stop()
 	fh.Peers.Stop()
 	fh.hs.Stop()
-	compat.CloseWriter()
 	if err := fh.Host.Close(); err != nil {
 		return fmt.Errorf("failed to close libp2p host: %w", err)
 	}

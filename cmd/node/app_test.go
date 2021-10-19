@@ -71,7 +71,7 @@ func Test_PoETHarnessSanity(t *testing.T) {
 	require.NotNil(t, h)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, genesisTime string,
+func (suite *AppTestSuite) initMultipleInstances(ctx context.Context, cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, genesisTime string,
 	poetClient *activation.HTTPPoetClient, clock TickProvider, mesh mocknet.Mocknet) (firstDir string) {
 	name := 'a'
 	for i, h := range mesh.Hosts() {
@@ -80,9 +80,10 @@ func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *el
 			firstDir = dbStorepath
 		}
 		edSgn := signing.NewEdSigner()
-		h, err := lp2p.Wrap(h)
+		wrapped, err := lp2p.Wrap(h, lp2p.WithContext(ctx))
 		suite.Require().NoError(err)
-		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, h, edSgn)
+		suite.T().Cleanup(func() { _ = wrapped.Stop() })
+		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, wrapped, edSgn)
 		suite.NoError(err)
 		suite.apps = append(suite.apps, smApp)
 		name++
@@ -124,7 +125,11 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 		numberOfEpochs = 5 // first 2 epochs are genesis
 		numOfInstances = 5
 	)
-	mesh, err := mocknet.FullMeshLinked(context.TODO(), numOfInstances)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mesh, err := mocknet.FullMeshLinked(ctx, numOfInstances)
 	suite.Require().NoError(err)
 	cfg := getTestDefaultConfig()
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
@@ -164,7 +169,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	ld := 20 * time.Second
 	clock := sharedClock{suite.log, timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(suite.T()))}
-	firstDir := suite.initMultipleInstances(cfg, rolacle, numOfInstances, genesisTime, poetHarness.HTTPPoetClient, clock, mesh)
+	firstDir := suite.initMultipleInstances(ctx, cfg, rolacle, numOfInstances, genesisTime, poetHarness.HTTPPoetClient, clock, mesh)
 	suite.Require().NoError(mesh.ConnectAllButSelf())
 	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
 	// when we try to allocate more database files. Wrap this context neatly in an inline func.
@@ -233,7 +238,8 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	// initialize a new app using the same database as the first node and make sure the state roots match
 	host, err := mesh.GenPeer()
 	suite.Require().NoError(err)
-	wrapped, err := lp2p.Wrap(host)
+	wrapped, err := lp2p.Wrap(host, lp2p.WithContext(ctx))
+	defer wrapped.Stop()
 	suite.Require().NoError(err)
 	smApp, err := InitSingleInstance(lg, *cfg, 0, genesisTime, firstDir, rolacle, poetHarness.HTTPPoetClient, clock, wrapped, edSgn)
 	suite.NoError(err)
@@ -708,6 +714,9 @@ func TestShutdown(t *testing.T) {
 
 	// make sure previous goroutines have stopped
 	time.Sleep(3 * time.Second)
+	before := make([]byte, 1<<16)
+	n := runtime.Stack(before, true)
+	before = before[:n]
 	gCount := runtime.NumGoroutine()
 	r := require.New(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -783,6 +792,7 @@ func TestShutdown(t *testing.T) {
 	if !assert.Equal(t, gCount, gCount2) {
 		buf := make([]byte, 1<<16)
 		numbytes := runtime.Stack(buf, true)
+		t.Log(string(before))
 		t.Log(string(buf[:numbytes]))
 	}
 }

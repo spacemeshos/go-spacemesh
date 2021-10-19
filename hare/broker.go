@@ -182,7 +182,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			log.Int("msg_queue_size", len(b.queueChannel)),
 			log.Int("task_queue_size", len(b.tasks)))
 		select {
-		case <-ctx.Done():
+		case <-b.Closer.CloseChannel():
 			b.queue.Close()
 			close(b.queueChannel)
 			return
@@ -428,10 +428,4 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 	}
 
 	return <-res
-}
-
-// Close the broker.
-func (b *Broker) Close() {
-	b.stop()
-	b.Closer.Close()
 }

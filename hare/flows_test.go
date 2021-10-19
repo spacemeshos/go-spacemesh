@@ -275,7 +275,6 @@ func Test_multipleCPs(t *testing.T) {
 		r.NoError(e)
 	}
 	require.NoError(t, mesh.ConnectAllButSelf())
-
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 			for i := 0; i < len(test.lCh); i++ {
