@@ -23,7 +23,7 @@ type identityInfo struct {
 func genIdentity() (crypto.PrivKey, error) {
 	pk, _, err := crypto.GenerateEd25519Key(rand.Reader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate ed25519 identity: %w", err)
 	}
 	return pk, nil
 }
@@ -32,12 +32,12 @@ func identityInfoFromDir(dir string) (*identityInfo, error) {
 	path := filepath.Join(dir, keyFilename)
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to read file %s: %w", path, err)
 	}
 	var info identityInfo
 	err = json.Unmarshal(data, &info)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("faile to unmarshal file content from %s into %+v: %w", path, info, err)
 	}
 	return &info, nil
 }

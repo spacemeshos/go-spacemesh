@@ -41,6 +41,7 @@ type Config struct {
 	BootstrapTimeout   time.Duration
 	MaxMessageSize     int
 
+	NatPort        bool     `mapstructure:"natport"`
 	Flood          bool     `mapstructure:"flood"`
 	Listen         string   `mapstructure:"listen"`
 	NetworkID      uint32   `mapstructure:"network-id"`
@@ -68,12 +69,11 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 		cm.Protect(addr.ID, "bootstrap")
 	}
 
-	h, err := libp2p.New(ctx,
+	lopts := []libp2p.Option{
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
 		libp2p.Ping(true),
 		libp2p.UserAgent("go-spacemesh"),
-		libp2p.NATPortMap(),
 		libp2p.DisableRelay(),
 
 		libp2p.Transport(tcp.NewTCPTransport),
@@ -82,9 +82,13 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 
 		libp2p.ConnectionManager(cm),
 		libp2p.Peerstore(pstoremem.NewPeerstore()),
-	)
+	}
+	if cfg.NatPort {
+		lopts = append(lopts, libp2p.NATPortMap())
+	}
+	h, err := libp2p.New(ctx, lopts...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to initialize libp2p host: %w", err)
 	}
 
 	logger.With().Info("local node identity",

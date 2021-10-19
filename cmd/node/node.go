@@ -963,6 +963,12 @@ func (app *App) stopServices() {
 		app.log.Debug("peer timesync stopped")
 	}
 
+	if app.host != nil {
+		if err := app.host.Stop(); err != nil {
+			app.log.With().Warning("p2p host exited with error", log.Err(err))
+		}
+	}
+
 	events.CloseEventReporter()
 	events.CloseEventPubSub()
 
@@ -1132,7 +1138,6 @@ func (app *App) Start() error {
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
-	defer app.host.Close()
 
 	if err = app.initServices(ctx,
 		nodeID,

@@ -32,7 +32,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
@@ -75,13 +74,13 @@ func Test_PoETHarnessSanity(t *testing.T) {
 func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, genesisTime string,
 	poetClient *activation.HTTPPoetClient, clock TickProvider, mesh mocknet.Mocknet) (firstDir string) {
 	name := 'a'
-	for i := 0; i < numOfInstances; i++ {
+	for i, h := range mesh.Hosts() {
 		dbStorepath := suite.T().TempDir()
 		if i == 0 {
 			firstDir = dbStorepath
 		}
 		edSgn := signing.NewEdSigner()
-		h, err := lp2p.Wrap(mesh.Hosts()[i])
+		h, err := lp2p.Wrap(h)
 		suite.Require().NoError(err)
 		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, h, edSgn)
 		suite.NoError(err)
@@ -121,11 +120,12 @@ func (clock sharedClock) RealClose() {
 }
 
 func (suite *AppTestSuite) TestMultipleNodes() {
-	net := service.NewSimulator()
 	const (
 		numberOfEpochs = 5 // first 2 epochs are genesis
 		numOfInstances = 5
 	)
+	mesh, err := mocknet.FullMeshLinked(context.TODO(), numOfInstances)
+	suite.Require().NoError(err)
 	cfg := getTestDefaultConfig()
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 	lg := logtest.New(suite.T())
@@ -164,8 +164,8 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	ld := 20 * time.Second
 	clock := sharedClock{suite.log, timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(suite.T()))}
-	firstDir := suite.initMultipleInstances(cfg, rolacle, numOfInstances, genesisTime, poetHarness.HTTPPoetClient, clock, net)
-
+	firstDir := suite.initMultipleInstances(cfg, rolacle, numOfInstances, genesisTime, poetHarness.HTTPPoetClient, clock, mesh)
+	mesh.ConnectAllButSelf()
 	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
 	// when we try to allocate more database files. Wrap this context neatly in an inline func.
 	var oldRoot types.Hash32
@@ -231,7 +231,11 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}()
 
 	// initialize a new app using the same database as the first node and make sure the state roots match
-	smApp, err := InitSingleInstance(lg, *cfg, 0, genesisTime, firstDir, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
+	host, err := mesh.GenPeer()
+	suite.Require().NoError(err)
+	wrapped, err := lp2p.Wrap(host)
+	suite.Require().NoError(err)
+	smApp, err := InitSingleInstance(lg, *cfg, 0, genesisTime, firstDir, rolacle, poetHarness.HTTPPoetClient, clock, wrapped, edSgn)
 	suite.NoError(err)
 	// test that loaded root is equal
 	suite.validateReloadStateRoot(smApp, oldRoot)
@@ -705,10 +709,15 @@ func TestShutdown(t *testing.T) {
 	// make sure previous goroutines have stopped
 	time.Sleep(3 * time.Second)
 	gCount := runtime.NumGoroutine()
-	net := service.NewSimulator()
 	r := require.New(t)
+	ctx, cancel := context.WithCancel(context.Background())
 
+	mesh, err := mocknet.WithNPeers(context.TODO(), 1)
+	r.NoError(err)
+	wrapped, err := lp2p.Wrap(mesh.Hosts()[0], lp2p.WithContext(ctx))
+	r.NoError(err)
 	smApp := New(WithLog(logtest.New(t)))
+	smApp.host = wrapped
 	genesisTime := time.Now().Add(time.Second * 10)
 
 	smApp.Config.POST.BitsPerLabel = 8
@@ -757,14 +766,15 @@ func TestShutdown(t *testing.T) {
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	gTime := genesisTime
-	ld := time.Duration(20) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(t))
-	r.NoError(smApp.initServices(context.TODO(), nodeID, t.TempDir(), edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock))
+	clock := timesync.NewClock(timesync.RealClock{}, 20*time.Second, genesisTime, logtest.New(t))
+	r.NoError(smApp.initServices(context.TODO(), nodeID, t.TempDir(), edSgn, false,
+		hareOracle, uint32(smApp.Config.LayerAvgSize),
+		poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock))
 	r.NoError(smApp.startServices(context.TODO()))
 	ActivateGrpcServer(smApp)
 
 	r.NoError(poetHarness.Teardown(true))
+	cancel()
 	smApp.stopServices()
 
 	time.Sleep(5 * time.Second)

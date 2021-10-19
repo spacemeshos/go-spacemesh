@@ -189,9 +189,9 @@ func ActivateGrpcServer(smApp *App) {
 	smApp.Config.API.StartTransactionService = true
 	smApp.Config.API.GrpcServerPort = 9094
 	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
-	smApp.gatewaySvc = grpcserver.NewGatewayService(nil)
+	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.host)
 	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.txPool)
-	smApp.txService = grpcserver.NewTransactionService(nil, smApp.mesh, smApp.txPool, smApp.syncer)
+	smApp.txService = grpcserver.NewTransactionService(smApp.host, smApp.mesh, smApp.txPool, smApp.syncer)
 	smApp.gatewaySvc.RegisterService(smApp.grpcAPIService)
 	smApp.globalstateSvc.RegisterService(smApp.grpcAPIService)
 	smApp.txService.RegisterService(smApp.grpcAPIService)

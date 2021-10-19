@@ -3,6 +3,7 @@ package handshake
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/event"
@@ -32,7 +33,7 @@ func WithLog(logger log.Log) Opt {
 }
 
 const (
-	hsprotocol    = "handshake/1.0.0"
+	hsprotocol    = "/handshake/1.0.0"
 	streamTimeout = 10 * time.Second
 )
 
@@ -46,28 +47,27 @@ type handshakeAck struct {
 
 // New instantiates handshake protocol for the host.
 func New(h host.Host, netid uint32, opts ...Opt) *Handshake {
-	emitter, err := h.EventBus().Emitter(new(EventHandshakeComplete))
-	if err != nil {
-		panic(err)
-	}
 	ctx, cancel := context.WithCancel(context.Background())
 	hs := &Handshake{
-		logger:  log.NewNop(),
-		netid:   netid,
-		emitter: emitter,
-		h:       h,
-		ctx:     ctx,
-		cancel:  cancel,
+		logger: log.NewNop(),
+		netid:  netid,
+		h:      h,
+		cancel: cancel,
 	}
 	for _, opt := range opts {
 		opt(hs)
 	}
 	h.SetStreamHandler(protocol.ID(hsprotocol), hs.handler)
+	emitter, err := h.EventBus().Emitter(new(EventHandshakeComplete))
+	if err != nil {
+		hs.logger.With().Panic("failed to initialize emitter for handshake", log.Err(err))
+	}
 	sub, err := h.EventBus().Subscribe(new(event.EvtPeerIdentificationCompleted))
 	if err != nil {
 		hs.logger.With().Panic("failed to subsribe for events", log.Err(err))
 	}
-	hs.start(sub)
+	hs.emitter = emitter
+	hs.start(ctx, sub)
 	return hs
 }
 
@@ -75,21 +75,24 @@ func New(h host.Host, netid uint32, opts ...Opt) *Handshake {
 type Handshake struct {
 	logger log.Log
 
-	netid uint32
-	h     host.Host
-
 	emitter event.Emitter
-	ctx     context.Context
-	cancel  context.CancelFunc
-	eg      errgroup.Group
+	netid   uint32
+	h       host.Host
+
+	cancel context.CancelFunc
+	eg     errgroup.Group
 }
 
-func (h *Handshake) start(sub event.Subscription) {
+func (h *Handshake) start(ctx context.Context, sub event.Subscription) {
 	h.eg.Go(func() error {
+		defer sub.Close()
 		for {
 			select {
-			case <-h.ctx.Done():
-				return h.ctx.Err()
+			case <-ctx.Done():
+				if ctx.Err() != nil {
+					return fmt.Errorf("handshake ctx: %w", ctx.Err())
+				}
+				return nil
 			case evt := <-sub.Out():
 				id, ok := evt.(event.EvtPeerIdentificationCompleted)
 				if !ok {
@@ -98,11 +101,12 @@ func (h *Handshake) start(sub event.Subscription) {
 				logger := h.logger.WithFields(log.String("pid", id.Peer.Pretty()))
 				h.eg.Go(func() error {
 					logger.Debug("handshake with peer")
-					if err := h.Request(h.ctx, id.Peer); err != nil {
+					if err := h.Request(ctx, id.Peer); err != nil {
 						logger.Warning("failed to complete handshake with peer",
 							log.Err(err),
 						)
 						_ = h.h.Network().ClosePeer(id.Peer)
+						return nil
 					}
 					logger.Debug("handshake completed")
 					return nil
@@ -123,17 +127,17 @@ func (h *Handshake) Stop() {
 func (h *Handshake) Request(ctx context.Context, pid peer.ID) error {
 	stream, err := h.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocol.ID(hsprotocol))
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to init stream: %w", err)
 	}
 	defer stream.Close()
 	stream.SetDeadline(time.Now().Add(streamTimeout))
 	defer stream.SetDeadline(time.Time{})
 	if _, err = codec.EncodeTo(stream, &handshakeMessage{Network: h.netid}); err != nil {
-		return err
+		return fmt.Errorf("failed to send handshake msg: %w", err)
 	}
 	var ack handshakeAck
 	if _, err := codec.DecodeFrom(stream, &ack); err != nil {
-		return err
+		return fmt.Errorf("failed to receive handshake ack: %w", err)
 	}
 	if len(ack.Error) > 0 {
 		return errors.New(ack.Error)

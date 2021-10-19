@@ -69,7 +69,7 @@ func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syn
 		latestLayer:    types.GetEffectiveGenesis(),
 		limit:          limit,
 		queue:          priorityq.New(inboxCapacity), // TODO: set capacity correctly
-		queueChannel:   make(chan struct{}, 1),
+		queueChannel:   make(chan struct{}, inboxCapacity),
 	}
 }
 
