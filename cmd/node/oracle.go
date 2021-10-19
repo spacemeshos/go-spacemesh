@@ -51,10 +51,6 @@ func (bo *localOracle) Proof(ctx context.Context, layer types.LayerID, round uin
 	return proof, nil
 }
 
-func (bo *localOracle) IsEpochBeaconReady(ctx context.Context, epoch types.EpochID) bool {
-	return true
-}
-
 func newLocalOracle(rolacle *eligibility.FixedRolacle, committeeSize int, nodeID types.NodeID) *localOracle {
 	return &localOracle{
 		committeeSize: committeeSize,

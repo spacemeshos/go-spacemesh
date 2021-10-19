@@ -372,7 +372,7 @@ func newMockGossipMsg(msg *Message) *mockGossipMessage {
 func TestBroker_Send(t *testing.T) {
 	sim := service.NewSimulator()
 	n1 := sim.NewNode()
-	broker := buildBroker(t, n1, t.Name())
+	broker := buildBroker(t, t.Name())
 	mev := &mockEligibilityValidator{valid: false}
 	broker.eValidator = mev
 	broker.Start(context.TODO())

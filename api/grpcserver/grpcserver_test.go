@@ -515,7 +515,7 @@ func (m MempoolMock) GetTxsByAddress(addr types.Address) (txs []*types.Transacti
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
 
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
-	jsonService := NewJSONHTTPServer(cfg.JSONServerPort, cfg.GrpcServerPort)
+	jsonService := NewJSONHTTPServer(cfg.JSONServerPort)
 
 	// attach services
 	for _, svc := range services {
@@ -525,14 +525,7 @@ func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	// start gRPC and json servers
 	grpcStarted := grpcService.Start()
 	jsonStarted := jsonService.StartService(
-		context.TODO(),
-		cfg.StartDebugService,
-		cfg.StartGatewayService,
-		cfg.StartGlobalStateService,
-		cfg.StartMeshService,
-		cfg.StartNodeService,
-		cfg.StartSmesherService,
-		cfg.StartTransactionService)
+		context.TODO(), services...)
 
 	timer := time.NewTimer(3 * time.Second)
 	defer timer.Stop()
@@ -572,10 +565,9 @@ func TestNewServersConfig(t *testing.T) {
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	grpcService := NewServerWithInterface(port1, "localhost")
-	jsonService := NewJSONHTTPServer(port2, port1)
+	jsonService := NewJSONHTTPServer(port2)
 
 	require.Equal(t, port2, jsonService.Port, "Expected same port")
-	require.Equal(t, port1, jsonService.GrpcPort, "Expected same port")
 	require.Equal(t, port1, grpcService.Port, "Expected same port")
 }
 

@@ -7,7 +7,6 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/runtime"
 	gw "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"google.golang.org/grpc"
 
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -22,8 +21,8 @@ type JSONHTTPServer struct {
 }
 
 // NewJSONHTTPServer creates a new json http server.
-func NewJSONHTTPServer(port int, grpcPort int) *JSONHTTPServer {
-	return &JSONHTTPServer{Port: port, GrpcPort: grpcPort}
+func NewJSONHTTPServer(port int) *JSONHTTPServer {
+	return &JSONHTTPServer{Port: port}
 }
 
 // Close stops the server.
@@ -41,13 +40,7 @@ func (s *JSONHTTPServer) Close() error {
 // StartService starts the json api server and listens for status (started, stopped).
 func (s *JSONHTTPServer) StartService(
 	ctx context.Context,
-	startDebugService bool,
-	gwservice gw.GatewayServiceServer,
-	startGlobalStateService bool,
-	startMeshService bool,
-	startNodeService bool,
-	startSmesherService bool,
-	startTransactionService bool,
+	services ...ServiceAPI,
 ) <-chan struct{} {
 	started := make(chan struct{})
 
@@ -55,13 +48,7 @@ func (s *JSONHTTPServer) StartService(
 	go s.startInternal(
 		ctx,
 		started,
-		startDebugService,
-		gwservice,
-		startGlobalStateService,
-		startMeshService,
-		startNodeService,
-		startSmesherService,
-		startTransactionService)
+		services...)
 
 	return started
 }
@@ -69,81 +56,38 @@ func (s *JSONHTTPServer) StartService(
 func (s *JSONHTTPServer) startInternal(
 	ctx context.Context,
 	started chan<- struct{},
-	startDebugService bool,
-	gwservice gw.GatewayServiceServer,
-	startGlobalStateService bool,
-	startMeshService bool,
-	startNodeService bool,
-	startSmesherService bool,
-	startTransactionService bool) {
+	services ...ServiceAPI) {
 	ctx, cancel := context.WithCancel(ctx)
 
 	// This will close all downstream connections when the server closes
 	defer cancel()
 
 	mux := runtime.NewServeMux()
-	opts := []grpc.DialOption{grpc.WithInsecure()}
-
-	// register the http server on the local grpc server
-	jsonEndpoint := fmt.Sprintf("localhost:%d", s.GrpcPort)
 
 	// register each individual, enabled service
 	serviceCount := 0
-	if gwservice != nil {
-		if err := gw.RegisterGatewayServiceHandlerServer(ctx, mux, gwservice); err != nil {
-			log.Error("error registering GatewayService with grpc gateway", err)
-		} else {
-			serviceCount++
-			log.Info("registered GatewayService with grpc gateway server")
+	for _, svc := range services {
+		var err error
+		switch typed := svc.(type) {
+		case *GatewayService:
+			err = gw.RegisterGatewayServiceHandlerServer(ctx, mux, typed)
+		case *GlobalStateService:
+			err = gw.RegisterGlobalStateServiceHandlerServer(ctx, mux, typed)
+		case *MeshService:
+			err = gw.RegisterMeshServiceHandlerServer(ctx, mux, typed)
+		case *NodeService:
+			err = gw.RegisterNodeServiceHandlerServer(ctx, mux, typed)
+		case *SmesherService:
+			err = gw.RegisterSmesherServiceHandlerServer(ctx, mux, typed)
+		case *TransactionService:
+			err = gw.RegisterTransactionServiceHandlerServer(ctx, mux, typed)
+		case *DebugService:
+			err = gw.RegisterDebugServiceHandlerServer(ctx, mux, typed)
 		}
-	}
-	if startGlobalStateService {
-		if err := gw.RegisterGlobalStateServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
-			log.Error("error registering GlobalStateService with grpc gateway", err)
-		} else {
-			serviceCount++
-			log.Info("registered GlobalStateService with grpc gateway server")
+		if err != nil {
+			log.Error("registering %T with grpc gateway failed with %v", svc, err)
 		}
-	}
-	if startMeshService {
-		if err := gw.RegisterMeshServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
-			log.Error("error registering MeshService with grpc gateway", err)
-		} else {
-			serviceCount++
-			log.Info("registered MeshService with grpc gateway server")
-		}
-	}
-	if startNodeService {
-		if err := gw.RegisterNodeServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
-			log.Error("error registering NodeService with grpc gateway", err)
-		} else {
-			serviceCount++
-			log.Info("registered NodeService with grpc gateway server")
-		}
-	}
-	if startSmesherService {
-		if err := gw.RegisterSmesherServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
-			log.Error("error registering SmesherService with grpc gateway", err)
-		} else {
-			serviceCount++
-			log.Info("registered SmesherService with grpc gateway server")
-		}
-	}
-	if startTransactionService {
-		if err := gw.RegisterTransactionServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
-			log.Error("error registering TransactionService with grpc gateway", err)
-		} else {
-			serviceCount++
-			log.Info("registered TransactionService with grpc gateway server")
-		}
-	}
-	if startDebugService {
-		if err := gw.RegisterDebugServiceHandlerFromEndpoint(ctx, mux, jsonEndpoint, opts); err != nil {
-			log.Error("error registering DebugService with grpc gateway", err)
-		} else {
-			serviceCount++
-			log.Info("registered DebugService with grpc gateway server")
-		}
+		serviceCount++
 	}
 
 	close(started)
@@ -154,7 +98,7 @@ func (s *JSONHTTPServer) startInternal(
 		return
 	}
 
-	log.Info("starting grpc gateway server on port %d connected to grpc service at %s", s.Port, jsonEndpoint)
+	log.Info("starting grpc gateway server on port %d", s.Port)
 	s.server = &http.Server{
 		Addr:    fmt.Sprintf(":%d", s.Port),
 		Handler: mux,

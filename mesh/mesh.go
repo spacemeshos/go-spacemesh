@@ -523,7 +523,9 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		block, err := msh.GetBlock(blockID)
 		if err != nil {
 			// stop processing this hare result, wait until tortoise pushes this layer into state
-			logger.Error("hare terminated with block that is not present in mesh")
+			logger.With().Error("hare terminated with block that is not present in mesh",
+				blockID,
+				log.Err(err))
 			return
 		}
 		blocks = append(blocks, block)

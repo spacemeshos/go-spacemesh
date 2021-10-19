@@ -37,6 +37,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/lp2p"
 	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
@@ -633,11 +634,12 @@ func (app *App) initServices(ctx context.Context,
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
 	fetcherWrapped.Fetcher = layerFetch
 
+	patrol := layerpatrol.New()
 	syncerConf := syncer.Configuration{
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
 		AlwaysListen: app.Config.AlwaysListen,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	syncValidator.sync = newSyncer
 	tBeacon.SetSyncState(newSyncer)
@@ -655,7 +657,7 @@ func (app *App) initServices(ctx context.Context,
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
-	rabbit := app.HareFactory(ctx, mdb, sgn, nodeID, newSyncer, msh, hOracle, idStore, clock, lg)
+	rabbit := app.HareFactory(ctx, mdb, sgn, nodeID, patrol, newSyncer, msh, tBeacon, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
@@ -767,8 +769,10 @@ func (app *App) HareFactory(
 	mdb *mesh.DB,
 	sgn hare.Signer,
 	nodeID types.NodeID,
+	patrol *layerpatrol.LayerPatrol,
 	syncer *syncer.Syncer,
 	msh *mesh.Mesh,
+	beacons blocks.BeaconGetter,
 	hOracle hare.Rolacle,
 	idStore *activation.IdentityStore,
 	clock TickProvider,
@@ -788,7 +792,9 @@ func (app *App) HareFactory(
 		nodeID,
 		syncer.IsSynced,
 		msh,
+		beacons,
 		hOracle,
+		patrol,
 		uint16(app.Config.LayersPerEpoch),
 		idStore,
 		hOracle,
@@ -841,10 +847,12 @@ func (app *App) startAPIServices(ctx context.Context) {
 	// GRPC service.
 
 	// Make sure we only create the server once.
+	services := []grpcserver.ServiceAPI{}
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface)
 		}
+		services = append(services, svc)
 		svc.RegisterService(app.grpcAPIService)
 	}
 
@@ -884,17 +892,8 @@ func (app *App) startAPIServices(ctx context.Context) {
 			// It should be caught inside apiConf.
 			log.Panic("one or more new grpc services must be enabled with new json gateway server")
 		}
-		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
-		app.jsonAPIService.StartService(
-			ctx,
-			apiConf.StartDebugService,
-			grpcserver.NewGatewayService(app.host),
-			apiConf.StartGlobalStateService,
-			apiConf.StartMeshService,
-			apiConf.StartNodeService,
-			apiConf.StartSmesherService,
-			apiConf.StartTransactionService,
-		)
+		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort)
+		app.jsonAPIService.StartService(ctx, services...)
 	}
 }
 

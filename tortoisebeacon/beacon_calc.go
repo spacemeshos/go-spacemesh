@@ -22,11 +22,12 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, l
 		log.String("hashes", strings.Join(allHashHexes, ", ")))
 
 	beacon := allHashes.hash()
+	beaconStr := beacon.ShortString()
 
-	logger = logger.WithFields(log.String("beacon", beacon.ShortString()))
+	logger = logger.WithFields(log.String("beacon", beaconStr))
 	logger.With().Info("calculated beacon", log.Int("num_hashes", len(allHashes)))
 
-	events.ReportCalculatedTortoiseBeacon(epoch, beacon.ShortString())
+	events.ReportCalculatedTortoiseBeacon(epoch, beaconStr)
 
 	if err := tb.setBeacon(epoch, beacon); err != nil {
 		return err
