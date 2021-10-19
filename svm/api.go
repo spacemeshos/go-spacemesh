@@ -50,11 +50,11 @@ func (svm *SVM) SetupGenesis(conf *config.GenesisConfig) error {
 	return nil
 }
 
-// ApplyLayer applies a reward to a vector of miners as well as a vector of
+// ApplyLayer applies the given rewards to some miners as well as a vector of
 // transactions for the given layer. to miners vector for layer. It returns an
 // error on failure, as well as a vector of failed transactions.
-func (svm *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, miners []types.Address, reward uint64) ([]*types.Transaction, error) {
-	svm.TransactionProcessor.ApplyRewards(layerID, miners, reward)
+func (svm *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+	svm.TransactionProcessor.ApplyRewards(layerID, rewards)
 	failedTxs, err := svm.TransactionProcessor.ApplyTransactions(layerID, transactions)
 	if err != nil {
 		return failedTxs, fmt.Errorf("failed applying transactions: %w", err)

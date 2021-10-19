@@ -96,7 +96,7 @@ func (MockSVM) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (s *MockSVM) ApplyLayer(l types.LayerID, txs []*types.Transaction, addresses []types.Address, reward uint64) ([]*types.Transaction, error) {
+func (s *MockSVM) ApplyLayer(l types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
 	return make([]*types.Transaction, 0), nil
 }
 

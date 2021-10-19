@@ -40,9 +40,9 @@ func (MockMapState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) { pan
 func (MockMapState) GetBalance(types.Address) uint64                       { panic("implement me") }
 func (MockMapState) GetNonce(types.Address) uint64                         { panic("implement me") }
 
-func (s *MockMapState) ApplyLayer(l types.LayerID, txs []*types.Transaction, miners []types.Address, reward uint64) ([]*types.Transaction, error) {
-	for _, minerID := range miners {
-		s.Rewards[minerID] = reward
+func (s *MockMapState) ApplyLayer(l types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+	for miner, reward := range rewards {
+		s.Rewards[miner] = reward
 		s.TotalReward += reward
 	}
 
@@ -126,7 +126,11 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	txs := layers.extractUniqueOrderedTransactions(l)
 	_, coinbases := layers.getCoinbasesAndSmeshers(l)
 	rewards := layers.calculateRewards(l, txs, layers.config, coinbases)
-	layers.svm.ApplyLayer(l.Index(), txs, coinbases, rewards.blockTotalReward)
+	rewardByMiner := map[types.Address]uint64{}
+	for _, coinbase := range coinbases {
+		rewardByMiner[coinbase] = rewards.blockTotalReward
+	}
+	layers.svm.ApplyLayer(l.Index(), txs, rewardByMiner)
 	totalRewardsCost := totalFee + int64(params.BaseReward)
 	remainder := totalRewardsCost % 4
 

@@ -199,15 +199,14 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
-	s.processor.ApplyRewards(types.NewLayerID(1), []types.Address{
-		types.HexToAddress("aaa"),
-		types.HexToAddress("bbb"),
-		types.HexToAddress("ccc"),
-		types.HexToAddress("ddd"),
-		types.HexToAddress("bbb"),
-		types.HexToAddress("aaa"),
+	s.processor.ApplyRewards(types.NewLayerID(1), map[types.Address]uint64{
+		types.HexToAddress("aaa"): 1000,
+		types.HexToAddress("bbb"): 1000,
+		types.HexToAddress("ccc"): 1000,
+		types.HexToAddress("ddd"): 1000,
+		types.HexToAddress("bbb"): 1000,
+		types.HexToAddress("aaa"): 1000,
 	},
-		1000,
 	)
 
 	assert.Equal(s.T(), s.processor.GetBalance(types.HexToAddress("aaa")), uint64(2000))

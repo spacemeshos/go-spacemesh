@@ -48,7 +48,7 @@ type Validator interface {
 }
 
 type svm interface {
-	ApplyLayer(layer types.LayerID, txs []*types.Transaction, miners []types.Address, reward uint64) ([]*types.Transaction, error)
+	ApplyLayer(layer types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error)
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txID types.TransactionID) *types.LayerID
@@ -522,7 +522,11 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
 	if len(coinbases) > 0 {
 		rewards := msh.calculateRewards(l, validBlockTxs, msh.config, coinbases)
-		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, coinbases, rewards.blockTotalReward)
+		rewardByMiner := map[types.Address]uint64{}
+		for _, addr := range coinbases {
+			rewardByMiner[addr] = rewards.blockTotalReward
+		}
+		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, rewardByMiner)
 		msh.logRewards(&rewards)
 		msh.reportRewards(&rewards, coinbasesAndSmeshers)
 
@@ -531,7 +535,7 @@ func (msh *Mesh) applyState(l *types.Layer) {
 		}
 	} else {
 		msh.With().Info("no valid blocks for layer", l.Index())
-		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, coinbases, 0)
+		failedTxs, err = msh.svm.ApplyLayer(l.Index(), validBlockTxs, map[types.Address]uint64{})
 	}
 
 	if err != nil {

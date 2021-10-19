@@ -64,7 +64,7 @@ func (s mockState) GetStateRoot() types.Hash32                            { retu
 func (mockState) ValidateNonceAndBalance(*types.Transaction) error        { panic("implement me") }
 func (mockState) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error) { panic("implement me") }
 func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID      { panic("implement me") }
-func (s *mockState) ApplyLayer(l types.LayerID, txs []*types.Transaction, addresses []types.Address, reward uint64) ([]*types.Transaction, error) {
+func (s *mockState) ApplyLayer(l types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
 	return make([]*types.Transaction, 0), nil
 }
 func (mockState) GetBalance(types.Address) uint64                       { panic("implement me") }
