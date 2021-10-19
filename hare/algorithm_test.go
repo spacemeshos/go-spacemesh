@@ -18,8 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/lp2p/pubsub/mocks"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -45,10 +43,6 @@ func (mmv *mockMessageValidator) ContextuallyValidateMessage(context.Context, *M
 type mockP2p struct {
 	count int
 	err   error
-}
-
-func (m *mockP2p) RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage {
-	return make(chan service.GossipMessage)
 }
 
 func (m *mockP2p) Publish(context.Context, string, []byte) error {
@@ -621,11 +615,6 @@ type mockNet struct {
 func (m *mockNet) Publish(ctx context.Context, protocol string, payload []byte) error {
 	m.callBroadcast++
 	return m.err
-}
-
-func (m *mockNet) RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage {
-	m.callRegister++
-	return nil
 }
 
 func TestConsensusProcess_handlePending(t *testing.T) {

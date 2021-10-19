@@ -35,7 +35,7 @@ func TestGossip(t *testing.T) {
 	}
 	// connect after initializng gossip sub protocol for every peer. otherwise stream initialize
 	// maybe fail if other side wasn't able to initialize gossipsub on time.
-	mesh.ConnectAllButSelf()
+	require.NoError(t, mesh.ConnectAllButSelf())
 	require.Eventually(t, func() bool {
 		for _, ps := range pubsubs {
 			if len(ps.pubsub.ListPeers(topic)) != len(mesh.Hosts())-1 {

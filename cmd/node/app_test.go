@@ -165,7 +165,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	ld := 20 * time.Second
 	clock := sharedClock{suite.log, timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(suite.T()))}
 	firstDir := suite.initMultipleInstances(cfg, rolacle, numOfInstances, genesisTime, poetHarness.HTTPPoetClient, clock, mesh)
-	mesh.ConnectAllButSelf()
+	suite.Require().NoError(mesh.ConnectAllButSelf())
 	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
 	// when we try to allocate more database files. Wrap this context neatly in an inline func.
 	var oldRoot types.Hash32

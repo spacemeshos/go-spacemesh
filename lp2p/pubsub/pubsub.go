@@ -13,14 +13,21 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+// DefaultConfig for PubSub.
+func DefaultConfig() Config {
+	return Config{Flood: true}
+}
+
 // Config for PubSub.
 type Config struct {
+	// TODO(dshulyak) change it to NoFlood
 	Flood          bool
 	MaxMessageSize int
 }
 
 // New creates PubSub instance.
 func New(ctx context.Context, logger log.Log, h host.Host, cfg Config) (*PubSub, error) {
+	// TODO(dshulyak) refactor code to accept options
 	opts := []pubsub.Option{
 		pubsub.WithFloodPublish(cfg.Flood),
 		pubsub.WithMessageIdFn(msgId),

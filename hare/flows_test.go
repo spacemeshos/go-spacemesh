@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
 	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
@@ -16,8 +17,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/spacemeshos/go-spacemesh/lp2p"
+	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -107,32 +108,22 @@ func (his *HareWrapper) checkResult(t *testing.T, id types.LayerID) {
 }
 
 type p2pManipulator struct {
-	nd           *service.Node
+	nd           pubsub.PublisherSubscriber
 	stalledLayer types.LayerID
 	err          error
 }
 
-func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
-	ch := m.nd.RegisterGossipProtocol(protocol, prio)
-	wch := make(chan service.GossipMessage)
-
-	go func() {
-		for {
-			x := <-ch
-			wch <- x
-		}
-	}()
-
-	return wch
+func (m *p2pManipulator) Register(protocol string, handler pubsub.GossipHandler) {
+	m.nd.Register(protocol, handler)
 }
 
-func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload []byte) error {
+func (m *p2pManipulator) Publish(ctx context.Context, protocol string, payload []byte) error {
 	msg, _ := MessageFromBuffer(payload)
 	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != preRound {
 		return m.err
 	}
 
-	e := m.nd.Broadcast(ctx, protocol, payload)
+	e := m.nd.Publish(ctx, protocol, payload)
 	return fmt.Errorf("broadcast: %w", e)
 }
 
@@ -167,7 +158,11 @@ func Test_consensusIterations(t *testing.T) {
 
 	totalNodes := 20
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
-	sim := service.NewSimulator()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	require.NoError(t, err)
+
 	test.initialSets = make([]*Set, totalNodes)
 	set1 := NewSetFromValues(value1)
 	test.fill(set1, 0, totalNodes-1)
@@ -175,13 +170,16 @@ func Test_consensusIterations(t *testing.T) {
 	oracle := &trueOracle{}
 	i := 0
 	creationFunc := func() {
-		s := sim.NewNode()
-		p2pm := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
+		host := mesh.Hosts()[i]
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		require.NoError(t, err)
+		p2pm := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		proc := createConsensusProcess(t, true, cfg, oracle, p2pm, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
 		i++
 	}
 	test.Create(totalNodes, creationFunc)
+	require.NoError(t, mesh.ConnectAllButSelf())
 	test.Start()
 	test.WaitForTimedTermination(t, 30*time.Second)
 }
@@ -219,7 +217,7 @@ func (mbp *mockBlockProvider) GetBlock(bID types.BlockID) (*types.Block, error) 
 	return nil, nil
 }
 
-func createMaatuf(t testing.TB, tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
+func createMaatuf(t testing.TB, tcfg config.Config, layersCh chan types.LayerID, pid lp2p.Peer, p2p pubsub.PublisherSubscriber, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))
@@ -235,7 +233,7 @@ func createMaatuf(t testing.TB, tcfg config.Config, layersCh chan types.LayerID,
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
 	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
 
-	hare := New(tcfg, p2p, ed, nodeID, isSynced, &mockBlockProvider{lyrBlocks: lyrBlocks}, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
+	hare := New(tcfg, pid, p2p, ed, nodeID, isSynced, &mockBlockProvider{lyrBlocks: lyrBlocks}, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, layersCh, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare
@@ -252,7 +250,12 @@ func Test_multipleCPs(t *testing.T) {
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
-	sim := service.NewSimulator()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	require.NoError(t, err)
+
 	test.initialSets = make([]*Set, totalNodes)
 	oracle := &trueOracle{}
 
@@ -264,14 +267,17 @@ func Test_multipleCPs(t *testing.T) {
 		}
 	}
 	for i := 0; i < totalNodes; i++ {
-		s := sim.NewNode()
+		host := mesh.Hosts()[i]
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		require.NoError(t, err)
 		// p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(t, cfg, test.lCh[i], s, oracle, t.Name(), lyrBlocks)
+		h := createMaatuf(t, cfg, test.lCh[i], host.ID(), ps, oracle, t.Name(), lyrBlocks)
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
+	require.NoError(t, mesh.ConnectAllButSelf())
 
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
@@ -295,7 +301,12 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	test := newHareWrapper(totalCp)
 	totalNodes := 20
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
-	sim := service.NewSimulator()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	require.NoError(t, err)
+
 	test.initialSets = make([]*Set, totalNodes)
 	oracle := &trueOracle{}
 
@@ -307,10 +318,14 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}
 	}
 	for i := 0; i < totalNodes; i++ {
-		s := sim.NewNode()
-		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
+
+		host := mesh.Hosts()[i]
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		require.NoError(t, err)
+
+		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(t, cfg, test.lCh[i], mp2p, oracle, t.Name(), lyrBlocks)
+		h := createMaatuf(t, cfg, test.lCh[i], host.ID(), mp2p, oracle, t.Name(), lyrBlocks)
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)

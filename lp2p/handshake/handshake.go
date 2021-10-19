@@ -26,6 +26,7 @@ type EventHandshakeComplete struct {
 // Opt is for configuring Handshake.
 type Opt func(*Handshake)
 
+// WithLog configures logger for handshake protocol.
 func WithLog(logger log.Log) Opt {
 	return func(hs *Handshake) {
 		hs.logger = logger
@@ -155,6 +156,9 @@ func (h *Handshake) handler(stream network.Stream) {
 		return
 	}
 	if msg.Network != h.netid {
+		h.logger.Warning("network id mismatch",
+			log.Uint32("network-id", h.netid),
+			log.Uint32("peer-network-id", msg.Network))
 		return
 	}
 	if _, err := codec.EncodeTo(stream, &handshakeAck{}); err != nil {

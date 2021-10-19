@@ -130,7 +130,7 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 	return nil
 }
 
-// separate listener routine that receives gossip messages and adds them to the priority queue
+// HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
 	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
 	logger.Debug("hare broker received inbound gossip message")
