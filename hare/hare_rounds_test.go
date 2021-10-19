@@ -174,7 +174,7 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	}
 }
 
-func Test_HareNoEnoughStatuses(t *testing.T) {
+func Test_HareNotEnoughStatuses(t *testing.T) {
 	if skipMoreTests {
 		t.SkipNow()
 	}

@@ -266,8 +266,7 @@ func (s *Set) Complement(u *Set) *Set {
 // Subtract g from s.
 func (s *Set) Subtract(g *Set) {
 	for v := range g.values {
-		s.isIDValid = false
-		delete(s.values, v)
+		s.Remove(v)
 	}
 }
 

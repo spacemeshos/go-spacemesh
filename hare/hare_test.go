@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"sync"
 	"testing"
 	"time"
@@ -105,7 +106,7 @@ func createHare(t *testing.T, n1 p2p.Service, msh meshProvider, beacons blocks.B
 	ctrl := gomock.NewController(t)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
-	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, (&mockSyncer{true}).IsSynced, msh, beacons, nil, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), clock, logger)
+	return New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, (&mockSyncer{true}).IsSynced, msh, beacons, eligibility.New(logger), patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), clock, logger)
 }
 
 var _ Consensus = (*mockConsensusProcess)(nil)
@@ -119,7 +120,7 @@ func TestHare_New(t *testing.T) {
 
 	logger := logtest.New(t).WithName(t.Name())
 	h := New(cfg, n1, signing2.NewEdSigner(), types.NodeID{}, (&mockSyncer{true}).IsSynced,
-		mocks.NewMockmeshProvider(ctrl), bMocks.NewMockBeaconGetter(ctrl), nil, mocks.NewMocklayerPatrol(ctrl), 10,
+		mocks.NewMockmeshProvider(ctrl), bMocks.NewMockBeaconGetter(ctrl), eligibility.New(logger), mocks.NewMocklayerPatrol(ctrl), 10,
 		&mockIDProvider{}, NewMockStateQuerier(), newMockClock(), logger)
 	assert.NotNil(t, h)
 }

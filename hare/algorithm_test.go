@@ -494,16 +494,16 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	proc.advanceToNextRound(context.TODO())
 	proc.onEarlyMessage(context.TODO(), buildMessage(nil))
-	r.Equal(0, len(proc.pending))
+	r.Len(proc.pending, 0)
 	proc.onEarlyMessage(context.TODO(), m)
-	r.Equal(1, len(proc.pending))
+	r.Len(proc.pending, 1)
 	proc.onEarlyMessage(context.TODO(), m)
-	r.Equal(1, len(proc.pending))
+	r.Len(proc.pending, 1)
 	m2 := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	proc.onEarlyMessage(context.TODO(), m2)
 	m3 := BuildPreRoundMsg(signing.NewEdSigner(), NewDefaultEmptySet(), nil)
 	proc.onEarlyMessage(context.TODO(), m3)
-	r.Equal(3, len(proc.pending))
+	r.Len(proc.pending, 3)
 	proc.onRoundBegin(context.TODO())
 
 	// make sure we wait enough for the go routine to be executed
@@ -511,7 +511,7 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	tk := time.NewTicker(100 * time.Microsecond)
 	select {
 	case <-timeout.C:
-		r.Equal(0, len(proc.pending))
+		r.Len(proc.pending, 0)
 	case <-tk.C:
 		if 0 == len(proc.pending) {
 			return
