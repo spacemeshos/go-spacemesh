@@ -92,7 +92,6 @@ func noopPubSub(tb testing.TB) pubsub.PublisherSubscriber {
 		AnyTimes()
 	publisher.EXPECT().
 		Register(gomock.Any(), gomock.Any()).
-		Return(nil).
 		AnyTimes()
 	return publisher
 }

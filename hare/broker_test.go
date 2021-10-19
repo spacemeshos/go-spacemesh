@@ -355,8 +355,8 @@ func TestBroker_Register3(t *testing.T) {
 
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
-	msg := newMockGossipMsg(m)
-	broker.HandleMessage(context.TODO(), "", mustEncode(t, msg))
+
+	broker.HandleMessage(context.TODO(), "", mustEncode(t, m))
 	time.Sleep(1 * time.Millisecond)
 	client := mockClient{instanceID1}
 	ch, _ := broker.Register(context.TODO(), client.id)
@@ -378,8 +378,8 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 	sgn := signing.NewEdSigner()
 	m := BuildPreRoundMsg(sgn, NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
-	msg := newMockGossipMsg(m)
-	broker.HandleMessage(context.TODO(), "", mustEncode(t, msg))
+
+	broker.HandleMessage(context.TODO(), "", mustEncode(t, m))
 
 	tm := time.NewTimer(2 * time.Second)
 	for {
@@ -502,16 +502,15 @@ func TestBroker_eventLoop2(t *testing.T) {
 	r.NotNil(e)
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID4
-	msg := newMockGossipMsg(m)
-	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
+	b.HandleMessage(context.TODO(), "", mustEncode(t, m))
 	v, ok := b.syncState[instanceID4.Uint32()]
 	r.True(ok)
 	r.NotEqual(true, v)
 
 	// valid but not early
 	m.InnerMsg.InstanceID = instanceID6
-	msg = newMockGossipMsg(m)
-	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
+
+	b.HandleMessage(context.TODO(), "", mustEncode(t, m))
 	_, ok = b.outbox[instanceID6.Uint32()]
 	r.False(ok)
 }

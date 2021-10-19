@@ -3,7 +3,6 @@ package hare
 import (
 	"context"
 	"errors"
-	"fmt"
 	"testing"
 	"time"
 
@@ -122,9 +121,7 @@ func (m *p2pManipulator) Publish(ctx context.Context, protocol string, payload [
 	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != preRound {
 		return m.err
 	}
-
-	e := m.nd.Publish(ctx, protocol, payload)
-	return fmt.Errorf("broadcast: %w", e)
+	return m.nd.Publish(ctx, protocol, payload)
 }
 
 type trueOracle struct{}
@@ -329,6 +326,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
+	require.NoError(t, mesh.ConnectAllButSelf())
 
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {

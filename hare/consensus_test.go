@@ -141,9 +141,10 @@ func (test *ConsensusTest) Start() {
 	go startProcs(test.dishonest)
 }
 
-func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, oracle fullRolacle, network pubsub.Publisher, initialSet *Set, layer types.LayerID, name string) *consensusProcess {
+func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, oracle fullRolacle, network pubsub.PublisherSubscriber, initialSet *Set, layer types.LayerID, name string) *consensusProcess {
 	broker := buildBroker(tb, name)
 	broker.Start(context.TODO())
+	network.Register(protoName, broker.HandleMessage)
 	output := make(chan TerminationOutput, 1)
 	signing := signing2.NewEdSigner()
 	oracle.Register(isHonest, signing.PublicKey().String())
@@ -356,13 +357,13 @@ func TestRecvDelayedDishonest(t *testing.T) {
 		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
 		require.NoError(t, err)
 		proc := createConsensusProcess(t, false, cfg, oracle,
-			&delayeadPubSub{ps: ps, recvDelay: 10 * time.Second},
+			&delayeadPubSub{ps: ps, recvDelay: 5 * time.Second},
 			test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.dishonest = append(test.dishonest, proc)
 		i++
 	}
 	test.Create(totalNodes/2-1, dishonestFunc)
-
+	require.NoError(t, mesh.ConnectAllButSelf())
 	test.Start()
 	test.WaitForTimedTermination(t, 30*time.Second)
 }
@@ -396,4 +397,5 @@ func (ps *delayeadPubSub) Register(protocol string, handler pubsub.GossipHandler
 			return handler(ctx, pid, msg)
 		}
 	}
+	ps.ps.Register(protocol, handler)
 }
