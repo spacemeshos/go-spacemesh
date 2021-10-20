@@ -57,7 +57,7 @@ func (svm *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transact
 	svm.txProcessor.ApplyRewards(layerID, rewards)
 	failedTxs, err := svm.txProcessor.ApplyTransactions(layerID, transactions)
 	if err != nil {
-		return failedTxs, err
+		return failedTxs, fmt.Errorf("%w", err)
 	}
 
 	return failedTxs, nil
@@ -75,7 +75,11 @@ func (svm *SVM) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 
 // GetLayerStateRoot returns the state root at a given layer.
 func (svm *SVM) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
-	return svm.txProcessor.GetLayerStateRoot(layer)
+	hash, err := svm.txProcessor.GetLayerStateRoot(layer)
+	if err != nil {
+		err = fmt.Errorf("%w", err)
+	}
+	return hash, err
 }
 
 // GetStateRoot gets the current state root hash.
@@ -85,7 +89,10 @@ func (svm *SVM) GetStateRoot() types.Hash32 {
 
 // LoadState loads the last state from persistent storage.
 func (svm *SVM) LoadState(layer types.LayerID) error {
-	return svm.txProcessor.LoadState(layer)
+	if err := svm.txProcessor.LoadState(layer); err != nil {
+		return fmt.Errorf("%w", err)
+	}
+	return nil
 }
 
 // GetBalance Retrieve the balance from the given address or 0 if object not found.
@@ -101,13 +108,20 @@ func (svm *SVM) GetNonce(addr types.Address) uint64 {
 
 // GetAllAccounts returns a dump of all accounts in global state.
 func (svm *SVM) GetAllAccounts() (*types.MultipleAccountsState, error) {
-	return svm.txProcessor.GetAllAccounts()
+	accounts, err := svm.txProcessor.GetAllAccounts()
+	if err != nil {
+		err = fmt.Errorf("%w", err)
+	}
+	return accounts, err
 }
 
 // ValidateNonceAndBalance validates that the tx origin account has enough balance to apply the tx,
 // also, it checks that nonce in tx is correct, returns error otherwise.
 func (svm *SVM) ValidateNonceAndBalance(transaction *types.Transaction) error {
-	return svm.txProcessor.ValidateNonceAndBalance(transaction)
+	if err := svm.txProcessor.ValidateNonceAndBalance(transaction); err != nil {
+		return fmt.Errorf("%w", err)
+	}
+	return nil
 }
 
 // ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool
@@ -115,5 +129,8 @@ func (svm *SVM) ValidateNonceAndBalance(transaction *types.Transaction) error {
 //
 // TODO: Remove this and use a whole separate API for mempool management.
 func (svm *SVM) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	return svm.txProcessor.ValidateAndAddTxToPool(tx)
+	if err := svm.txProcessor.ValidateAndAddTxToPool(tx); err != nil {
+		return fmt.Errorf("%w", err)
+	}
+	return nil
 }
