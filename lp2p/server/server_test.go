@@ -67,6 +67,12 @@ func TestServer(t *testing.T) {
 		}
 	})
 	t.Run("DialError", func(t *testing.T) {
-		require.Error(t, client.Request(ctx, mesh.Hosts()[3].ID(), request, respHandler, respErrHandler))
+		require.NoError(t, client.Request(ctx, mesh.Hosts()[3].ID(), request, respHandler, respErrHandler))
+		select {
+		case <-time.After(time.Second):
+			require.FailNow(t, "timed out while waiting for dial error")
+		case err := <-errch:
+			require.Error(t, err)
+		}
 	})
 }

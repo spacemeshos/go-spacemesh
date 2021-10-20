@@ -125,19 +125,21 @@ func (s *Server) streamHandler(stream network.Stream) {
 // Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
 // is guaranteed to be called on success/error.
 func (s *Server) Request(ctx context.Context, p peer.ID, req []byte, resp func([]byte), failure func(error)) error {
-	stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), p, protocol.ID(s.protocol))
-	if err != nil {
-		return err
-	}
-	_ = stream.SetDeadline(time.Now().Add(s.timeout))
+	// TODO(dshulyak) check peer connectedness. requires Host interface change and change of mocks
 	go func() {
+		stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), p, protocol.ID(s.protocol))
+		if err != nil {
+			failure(err)
+			return
+		}
 		defer stream.Close()
 		defer stream.SetDeadline(time.Time{})
+		_ = stream.SetDeadline(time.Now().Add(s.timeout))
 
 		wr := bufio.NewWriter(stream)
 		sz := make([]byte, binary.MaxVarintLen64)
 		n := binary.PutUvarint(sz, uint64(len(req)))
-		_, err := wr.Write(sz[:n])
+		_, err = wr.Write(sz[:n])
 		if err != nil {
 			failure(err)
 			return
