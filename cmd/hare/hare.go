@@ -121,6 +121,26 @@ func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(ctx context.Context,
 	return true, nil
 }
 
+type mockClock struct {
+	ch        chan struct{}
+	layerTime time.Time
+}
+
+func (m *mockClock) LayerToTime(types.LayerID) time.Time {
+	return m.layerTime
+}
+
+func (m *mockClock) AwaitLayer(layerID types.LayerID) chan struct{} {
+	if layerID == m.GetCurrentLayer() {
+		return m.ch
+	}
+	return make(chan struct{})
+}
+
+func (m *mockClock) GetCurrentLayer() types.LayerID {
+	return types.GetEffectiveGenesis().Add(1)
+}
+
 // Start the app.
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("starting hare main")
@@ -163,11 +183,11 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	/*if err != nil {
 		log.Panic("error parsing config err=%v", err)
 	}*/
-	//ld := time.Duration(app.Config.LayerDurationSec) * time.Second
-	//app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
-	lt := make(timesync.LayerTimer)
-
-	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, &mockBeaconGetter{}, hareOracle, layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
+	mockClock := &mockClock{
+		ch:        make(chan struct{}),
+		layerTime: gTime,
+	}
+	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, &mockBeaconGetter{}, hareOracle, layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, mockClock, lg)
 	log.Info("starting hare service")
 	app.ha = hareI
 	if err = app.ha.Start(cmdp.Ctx); err != nil {
@@ -180,7 +200,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		log.Info("sleeping until %v", gTime)
 		time.Sleep(gTime.Sub(time.Now()))
 	}
-	lt <- types.GetEffectiveGenesis().Add(1)
+	close(mockClock.ch)
 }
 
 func main() {

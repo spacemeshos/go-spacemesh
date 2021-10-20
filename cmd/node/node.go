@@ -799,7 +799,7 @@ func (app *App) HareFactory(
 		uint16(app.Config.LayersPerEpoch),
 		idStore,
 		hOracle,
-		clock.Subscribe(),
+		clock,
 		app.addLogger(HareLogger, lg))
 	return ha
 }

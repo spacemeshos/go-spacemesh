@@ -10,6 +10,8 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/config"
@@ -327,7 +329,7 @@ func (c *FormattedConnection) sendSock(m []byte) error {
 		return fmt.Errorf("write record: %w", err)
 	}
 
-	metrics.PeerRecv.With(metrics.PeerIDLabel, c.remotePub.String()).Add(float64(len(m)))
+	metrics.PeerRecv.With(prometheus.Labels{metrics.PeerIDLabel: c.remotePub.String()}).Add(float64(len(m)))
 	return nil
 }
 

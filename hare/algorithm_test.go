@@ -160,7 +160,10 @@ func TestConsensusProcess_Start(t *testing.T) {
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
-	p := generateConsensusProcess(t)
+	c := cfg
+	c.LimitConcurrent = 1
+	c.RoundDuration = 1
+	p := generateConsensusProcessWithConfig(t, c)
 	p.SetInbox(make(chan *Msg, 10))
 	p.cfg.LimitIterations = 1
 	p.cfg.RoundDuration = 1
@@ -176,7 +179,9 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	net := &mockP2p{}
 	broker := buildBroker(t, net, t.Name())
 	require.NoError(t, broker.Start(context.TODO()))
-	proc := generateConsensusProcess(t)
+	c := cfg
+	c.F = 2
+	proc := generateConsensusProcessWithConfig(t, c)
 	proc.network = net
 
 	mo := mocks.NewMockRolacle(ctrl)
@@ -258,6 +263,10 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
+	return generateConsensusProcessWithConfig(t, cfg)
+}
+
+func generateConsensusProcessWithConfig(t *testing.T, cfg config.Config) *consensusProcess {
 	_, bninfo := node.GenerateTestNode(t)
 	sim := service.NewSimulator()
 	n1 := sim.NewNodeFrom(bninfo)
@@ -271,8 +280,10 @@ func generateConsensusProcess(t *testing.T) *consensusProcess {
 	oracle.Register(true, edPubkey.String())
 	output := make(chan TerminationOutput, 1)
 
-	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, edSigner,
-		types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}, n1, output, truer{}, logtest.New(t).WithName(edPubkey.String()))
+	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(),
+		10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub},
+		n1, output, truer{}, newRoundClockFromCfg(cfg),
+		logtest.New(t).WithName(edPubkey.String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -390,7 +401,7 @@ func TestConsensusProcess_procPre(t *testing.T) {
 	m := BuildPreRoundMsg(signing.NewEdSigner(), s, []byte{1})
 	require.False(t, proc.preRoundTracker.coinflip)
 	proc.processPreRoundMsg(context.TODO(), m)
-	require.Equal(t, 1, len(proc.preRoundTracker.preRound))
+	require.Len(t, proc.preRoundTracker.preRound, 1)
 	require.True(t, proc.preRoundTracker.coinflip)
 }
 
@@ -400,7 +411,7 @@ func TestConsensusProcess_procStatus(t *testing.T) {
 	s := NewDefaultEmptySet()
 	m := BuildStatusMsg(signing.NewEdSigner(), s)
 	proc.processStatusMsg(context.TODO(), m)
-	require.Equal(t, 1, len(proc.statusesTracker.statuses))
+	require.Len(t, proc.statusesTracker.statuses, 1)
 }
 
 func TestConsensusProcess_procProposal(t *testing.T) {
@@ -519,8 +530,8 @@ func TestProcOutput_Set(t *testing.T) {
 }
 
 func TestIterationFromCounter(t *testing.T) {
-	for i := 0; i < 10; i++ {
-		assert.Equal(t, uint32(i/4), iterationFromCounter(uint32(i)))
+	for i := uint32(0); i < 10; i++ {
+		assert.Equal(t, i/4, iterationFromCounter(i))
 	}
 }
 
