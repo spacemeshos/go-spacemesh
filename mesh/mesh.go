@@ -47,7 +47,7 @@ type Validator interface {
 	ValidateLayer(context.Context, *types.Layer)
 }
 
-type svm interface {
+type state interface {
 	ApplyLayer(layer types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error)
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
@@ -79,7 +79,7 @@ type Mesh struct {
 	log.Log
 	*DB
 	AtxDB
-	svm
+	state
 	Validator
 	trtl   tortoise
 	txPool txMemPool
@@ -100,12 +100,12 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, svm svm, logger log.Log) *Mesh {
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
 	msh := &Mesh{
 		Log:                 logger,
 		trtl:                trtl,
 		txPool:              txPool,
-		svm:                 svm,
+		state:               state,
 		done:                make(chan struct{}),
 		DB:                  db,
 		config:              rewardConfig,
@@ -130,8 +130,8 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 }
 
 // NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database.
-func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, svm svm, logger log.Log) *Mesh {
-	msh := NewMesh(db, atxDb, rewardConfig, trtl, txPool, svm, logger)
+func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
+	msh := NewMesh(db, atxDb, rewardConfig, trtl, txPool, state, logger)
 
 	latest, err := db.general.Get(constLATEST)
 	if err != nil {
@@ -153,7 +153,7 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 		logger.With().Panic("failed to recover latest layer in state", log.Err(err))
 	}
 
-	err = svm.LoadState(msh.LatestLayerInState())
+	err = state.LoadState(msh.LatestLayerInState())
 	if err != nil {
 		logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 	}
@@ -172,7 +172,7 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 		log.FieldNamed("latest", msh.LatestLayer()),
 		log.FieldNamed("processed", msh.ProcessedLayer()),
 		log.FieldNamed("verified", msh.trtl.LatestComplete()),
-		log.String("root_hash", svm.GetStateRoot().String()))
+		log.String("root_hash", state.GetStateRoot().String()))
 
 	return msh
 }
@@ -474,7 +474,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 		msh.updateStateWithLayer(ctx, types.NewExistingLayer(layerID, validBlocks))
 		msh.Event().Info("end of layer state root",
 			layerID,
-			log.String("state_root", util.Bytes2Hex(msh.svm.GetStateRoot().Bytes())),
+			log.String("state_root", util.Bytes2Hex(msh.state.GetStateRoot().Bytes())),
 		)
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
@@ -526,7 +526,7 @@ func (msh *Mesh) applyState(l *types.Layer) {
 		for _, miner := range coinbases {
 			rewardByMiner[miner] += rewards.blockTotalReward
 		}
-		failedTxs, svmErr = msh.svm.ApplyLayer(l.Index(), validBlockTxs, rewardByMiner)
+		failedTxs, svmErr = msh.state.ApplyLayer(l.Index(), validBlockTxs, rewardByMiner)
 		msh.logRewards(&rewards)
 		msh.reportRewards(&rewards, coinbasesAndSmeshers)
 
@@ -535,7 +535,7 @@ func (msh *Mesh) applyState(l *types.Layer) {
 		}
 	} else {
 		msh.With().Info("no valid blocks for layer", l.Index())
-		failedTxs, svmErr = msh.svm.ApplyLayer(l.Index(), validBlockTxs, map[types.Address]uint64{})
+		failedTxs, svmErr = msh.state.ApplyLayer(l.Index(), validBlockTxs, map[types.Address]uint64{})
 	}
 
 	if svmErr != nil {

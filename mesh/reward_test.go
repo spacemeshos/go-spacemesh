@@ -60,12 +60,12 @@ func ConfigTst() Config {
 	}
 }
 
-func getMeshWithMapState(tb testing.TB, id string, svm svm) (*Mesh, *AtxDbMock) {
+func getMeshWithMapState(tb testing.TB, id string, state state) (*Mesh, *AtxDbMock) {
 	atxDb := NewAtxDbMock()
 	lg := logtest.New(tb)
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
-	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), svm, lg), atxDb
+	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), state, lg), atxDb
 }
 
 func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs int, fee int64) int64 {
@@ -130,7 +130,7 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 	for _, coinbase := range coinbases {
 		rewardByMiner[coinbase] = rewards.blockTotalReward
 	}
-	layers.svm.ApplyLayer(l.Index(), txs, rewardByMiner)
+	layers.state.ApplyLayer(l.Index(), txs, rewardByMiner)
 	totalRewardsCost := totalFee + int64(params.BaseReward)
 	remainder := totalRewardsCost % 4
 
