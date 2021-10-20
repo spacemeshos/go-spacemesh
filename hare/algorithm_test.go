@@ -514,16 +514,8 @@ func TestConsensusProcess_onEarlyMessage(t *testing.T) {
 	proc.onRoundBegin(context.TODO())
 
 	// make sure we wait enough for the go routine to be executed
-	timeout := time.NewTimer(1 * time.Second)
-	tk := time.NewTicker(100 * time.Microsecond)
-	select {
-	case <-timeout.C:
-		r.Len(proc.pending, 0)
-	case <-tk.C:
-		if 0 == len(proc.pending) {
-			return
-		}
-	}
+	r.Eventually(func() bool { return len(proc.pending) == 0 },
+		time.Second, 100*time.Millisecond, "expected proc.pending to have zero length")
 }
 
 func TestProcOutput_Id(t *testing.T) {
