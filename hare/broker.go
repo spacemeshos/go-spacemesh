@@ -143,6 +143,7 @@ func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pub
 		return pubsub.ValidationIgnore
 	case err := <-m.Error:
 		if err != nil {
+			b.Log.With().Warning("hare validation failed", log.Err(err))
 			return pubsub.ValidationIgnore
 		}
 	}

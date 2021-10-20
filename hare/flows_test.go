@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
@@ -121,7 +122,8 @@ func (m *p2pManipulator) Publish(ctx context.Context, protocol string, payload [
 	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != preRound {
 		return m.err
 	}
-	return m.nd.Publish(ctx, protocol, payload)
+	e := m.nd.Publish(ctx, protocol, payload)
+	return fmt.Errorf("broadcast: %w", e)
 }
 
 type trueOracle struct{}
@@ -245,7 +247,7 @@ func Test_multipleCPs(t *testing.T) {
 	r := require.New(t)
 	totalCp := uint32(3)
 	test := newHareWrapper(totalCp)
-	totalNodes := 20
+	totalNodes := 10
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -305,7 +307,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	r := require.New(t)
 	totalCp := uint32(4)
 	test := newHareWrapper(totalCp)
-	totalNodes := 20
+	totalNodes := 10
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
 
 	ctx, cancel := context.WithCancel(context.Background())
