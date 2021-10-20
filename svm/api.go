@@ -91,9 +91,8 @@ func (svm *SVM) GetStateRoot() types.Hash32 {
 func (svm *SVM) LoadState(layer types.LayerID) error {
 	if err := svm.txProcessor.LoadState(layer); err != nil {
 		return fmt.Errorf("SVM cannot rewind back to layer %d: %w", layer.Uint32(), err)
-	} else {
-		return nil
 	}
+	return nil
 }
 
 // GetBalance Retrieve the balance from the given address or 0 if object not found.
@@ -121,9 +120,8 @@ func (svm *SVM) GetAllAccounts() (*types.MultipleAccountsState, error) {
 func (svm *SVM) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	if err := svm.txProcessor.ValidateNonceAndBalance(transaction); err != nil {
 		return fmt.Errorf("SVM failed validating nonce and balance: %w", err)
-	} else {
-		return nil
 	}
+	return nil
 }
 
 // ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool
@@ -133,7 +131,6 @@ func (svm *SVM) ValidateNonceAndBalance(transaction *types.Transaction) error {
 func (svm *SVM) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	if err := svm.txProcessor.ValidateAndAddTxToPool(tx); err != nil {
 		return fmt.Errorf("SVM cannot validate transaction and/or add it to the mempool: %w", err)
-	} else {
-		return nil
 	}
+	return nil
 }
