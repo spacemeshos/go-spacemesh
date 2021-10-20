@@ -12,7 +12,6 @@ import (
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -126,6 +125,10 @@ func (msq mockStateQuerier) IsIdentityActiveOnConsensusView(ctx context.Context,
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("starting hare main")
 
+	log.JSONLog(true)
+	logger := log.NewWithLevel("HARE_TEST", zap.NewAtomicLevelAt(zap.DebugLevel))
+	log.SetupGlobal(logger)
+
 	if app.Config.PprofHTTPServer {
 		log.Info("starting pprof server")
 		go func() {
@@ -137,21 +140,17 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	log.Info("initializing P2P services")
+
+	pub := app.sgn.PublicKey()
+
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
-	host, err := lp2p.New(cmdp.Ctx, log.NewDefault("p2p_haretest"), cfg)
+	host, err := lp2p.New(cmdp.Ctx, logger, cfg)
 	if err != nil {
 		log.With().Panic("error starting p2p services", log.Err(err))
 	}
 	defer host.Stop()
 	app.host = host
-
-	pub := app.sgn.PublicKey()
-
-	lg1 := log.NewDefault(pub.String())
-	lvl := zap.NewAtomicLevel()
-	lvl.SetLevel(zapcore.DebugLevel)
-	lg := lg1.SetLevel(&lvl)
 
 	setServerAddress(app.Config.OracleServer)
 	app.oracle = newClientWithWorldID(uint64(app.Config.OracleServerWorldID))
@@ -171,7 +170,9 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	//app.clock = timesync.NewClock(timesync.RealClock{}, ld, gTime, lg)
 	lt := make(timesync.LayerTimer)
 
-	hareI := hare.New(app.Config.HARE, host.ID(), host, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, &mockBeaconGetter{}, hareOracle, layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, lg)
+	hareI := hare.New(app.Config.HARE, host.ID(), host, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}},
+		IsSynced, &mockBlockProvider{}, &mockBeaconGetter{}, hareOracle,
+		layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, lt, logger)
 	log.Info("starting hare service")
 	app.ha = hareI
 	if err = app.ha.Start(cmdp.Ctx); err != nil {
