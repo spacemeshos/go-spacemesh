@@ -1209,7 +1209,7 @@ type syncHandler struct {
 }
 
 func (s *syncHandler) Handle(ctx context.Context, _ lp2p.Peer, _ []byte) pubsub.ValidationResult {
-	if s.sync.IsSynced(ctx) {
+	if s.sync.ListenToGossip() {
 		return pubsub.ValidationAccept
 	}
 	return pubsub.ValidationIgnore
