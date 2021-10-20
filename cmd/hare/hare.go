@@ -149,7 +149,6 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	if err != nil {
 		log.With().Panic("error starting p2p services", log.Err(err))
 	}
-	defer host.Stop()
 	app.host = host
 
 	setServerAddress(app.Config.OracleServer)
