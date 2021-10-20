@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
@@ -24,7 +26,7 @@ import (
 type HareWrapper struct {
 	totalCP     uint32
 	termination util.Closer
-	lCh         []chan types.LayerID
+	clock       *mockClock
 	hare        []*Hare
 	initialSets []*Set // all initial sets
 	outputs     map[types.LayerID][]*Set
@@ -33,7 +35,7 @@ type HareWrapper struct {
 
 func newHareWrapper(totalCp uint32) *HareWrapper {
 	hs := new(HareWrapper)
-	hs.lCh = make([]chan types.LayerID, 0)
+	hs.clock = newMockClock()
 	hs.totalCP = totalCp
 	hs.termination = util.NewCloser()
 	hs.outputs = make(map[types.LayerID][]*Set, 0)
@@ -41,7 +43,7 @@ func newHareWrapper(totalCp uint32) *HareWrapper {
 	return hs
 }
 
-func (his *HareWrapper) fill(set *Set, begin int, end int) {
+func (his *HareWrapper) fill(set *Set, begin, end int) {
 	for i := begin; i <= end; i++ {
 		his.initialSets[i] = set
 	}
@@ -219,7 +221,7 @@ func (mbp *mockBlockProvider) GetBlock(bID types.BlockID) (*types.Block, error) 
 	return nil, nil
 }
 
-func createMaatuf(t testing.TB, tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
+func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, p2p NetworkService, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))
@@ -236,9 +238,179 @@ func createMaatuf(t testing.TB, tcfg config.Config, layersCh chan types.LayerID,
 	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
 
 	hare := New(tcfg, p2p, ed, nodeID, isSynced, &mockBlockProvider{lyrBlocks: lyrBlocks}, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, layersCh, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
+		&MockStateQuerier{true, nil}, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare
+}
+
+type mockClock struct {
+	channels     map[types.LayerID]chan struct{}
+	layerTime    map[types.LayerID]time.Time
+	currentLayer types.LayerID
+	m            sync.RWMutex
+}
+
+func newMockClock() *mockClock {
+	return &mockClock{
+		channels:     make(map[types.LayerID]chan struct{}),
+		layerTime:    map[types.LayerID]time.Time{types.GetEffectiveGenesis(): time.Now()},
+		currentLayer: types.GetEffectiveGenesis().Add(1),
+	}
+}
+
+func (m *mockClock) LayerToTime(layer types.LayerID) time.Time {
+	m.m.RLock()
+	defer m.m.RUnlock()
+
+	return m.layerTime[layer]
+}
+
+func (m *mockClock) AwaitLayer(layer types.LayerID) chan struct{} {
+	m.m.Lock()
+	defer m.m.Unlock()
+
+	if _, ok := m.layerTime[layer]; ok {
+		ch := make(chan struct{})
+		close(ch)
+		return ch
+	}
+	if ch, ok := m.channels[layer]; ok {
+		return ch
+	}
+	ch := make(chan struct{})
+	m.channels[layer] = ch
+	return ch
+}
+
+func (m *mockClock) GetCurrentLayer() types.LayerID {
+	m.m.RLock()
+	defer m.m.RUnlock()
+
+	return m.currentLayer
+}
+
+func (m *mockClock) advanceLayer() {
+	time.Sleep(time.Millisecond)
+	m.m.Lock()
+	defer m.m.Unlock()
+
+	log.Info("sending for layer %v", m.currentLayer)
+	m.layerTime[m.currentLayer] = time.Now()
+	if ch, ok := m.channels[m.currentLayer]; ok {
+		close(ch)
+		delete(m.channels, m.currentLayer)
+	}
+	m.currentLayer = m.currentLayer.Add(1)
+}
+
+type SharedRoundClock struct {
+	currentRound     uint32
+	rounds           map[uint32]chan struct{}
+	minCount         int
+	processingDelay  time.Duration
+	sentMessages     uint16
+	advanceScheduled bool
+	m                sync.Mutex
+}
+
+func NewSharedClock(minCount int, totalCP uint32, processingDelay time.Duration) map[types.LayerID]*SharedRoundClock {
+	m := make(map[types.LayerID]*SharedRoundClock)
+	for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(totalCP)); i = i.Add(1) {
+		m[i] = &SharedRoundClock{
+			currentRound:    preRound,
+			rounds:          make(map[uint32]chan struct{}),
+			minCount:        minCount,
+			processingDelay: processingDelay,
+			sentMessages:    0,
+		}
+	}
+	return m
+}
+
+func (c *SharedRoundClock) AwaitWakeup() <-chan struct{} {
+	ch := make(chan struct{})
+	close(ch)
+	return ch
+}
+
+func (c *SharedRoundClock) AwaitEndOfRound(round uint32) <-chan struct{} {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	ch, ok := c.rounds[round]
+	if !ok {
+		ch = make(chan struct{})
+		c.rounds[round] = ch
+	}
+	return ch
+}
+
+func (c *SharedRoundClock) IncMessages(cnt uint16) {
+	c.m.Lock()
+	defer c.m.Unlock()
+
+	c.sentMessages += cnt
+	if int(c.sentMessages) >= c.minCount && !c.advanceScheduled {
+		time.AfterFunc(c.processingDelay, func() {
+			c.m.Lock()
+			defer c.m.Unlock()
+
+			c.sentMessages = 0
+			c.advanceScheduled = false
+			c.advanceRound()
+		})
+		c.advanceScheduled = true
+	}
+}
+
+func (c *SharedRoundClock) advanceRound() {
+	c.currentRound++
+	if prevRound, ok := c.rounds[c.currentRound-1]; ok {
+		close(prevRound)
+	}
+}
+
+type SimRoundClock struct {
+	clocks map[types.LayerID]*SharedRoundClock
+	m      sync.Mutex
+	s      NetworkService
+}
+
+func (c *SimRoundClock) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
+	return c.s.RegisterGossipProtocol(protocol, prio)
+}
+
+func (c *SimRoundClock) Broadcast(ctx context.Context, protocol string, payload []byte) error {
+	instanceID, cnt := extractInstanceID(payload)
+
+	c.m.Lock()
+	clock := c.clocks[instanceID]
+	clock.IncMessages(cnt)
+	c.m.Unlock()
+
+	if err := c.s.Broadcast(ctx, protocol, payload); err != nil {
+		return fmt.Errorf("failed to broadcast: %w", err)
+	}
+	return nil
+}
+
+func extractInstanceID(payload []byte) (types.LayerID, uint16) {
+	m, err := MessageFromBuffer(payload)
+	if err != nil {
+		panic(err)
+	}
+	return m.InnerMsg.InstanceID, m.InnerMsg.EligibilityCount
+}
+
+func (c *SimRoundClock) NewRoundClock(layerID types.LayerID) RoundClock {
+	return c.clocks[layerID]
+}
+
+func NewSimRoundClock(s NetworkService, clocks map[types.LayerID]*SharedRoundClock) *SimRoundClock {
+	return &SimRoundClock{
+		clocks: clocks,
+		s:      s,
+	}
 }
 
 // Test - run multiple CPs simultaneously.
@@ -263,11 +435,12 @@ func Test_multipleCPs(t *testing.T) {
 			lyrBlocks[j] = append(lyrBlocks[j], blk)
 		}
 	}
+	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	for i := 0; i < totalNodes; i++ {
 		s := sim.NewNode()
-		// p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
-		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(t, cfg, test.lCh[i], s, oracle, t.Name(), lyrBlocks)
+		src := NewSimRoundClock(s, scMap)
+		h := createMaatuf(t, cfg, test.clock, src, oracle, t.Name(), lyrBlocks)
+		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)
@@ -275,9 +448,7 @@ func Test_multipleCPs(t *testing.T) {
 
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
-			for i := 0; i < len(test.lCh); i++ {
-				test.lCh[i] <- j
-			}
+			test.clock.advanceLayer()
 			time.Sleep(250 * time.Millisecond)
 		}
 	}()
@@ -306,11 +477,13 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 			lyrBlocks[j] = append(lyrBlocks[j], blk)
 		}
 	}
+	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	for i := 0; i < totalNodes; i++ {
 		s := sim.NewNode()
 		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
-		test.lCh = append(test.lCh, make(chan types.LayerID, 1))
-		h := createMaatuf(t, cfg, test.lCh[i], mp2p, oracle, t.Name(), lyrBlocks)
+		src := NewSimRoundClock(mp2p, scMap)
+		h := createMaatuf(t, cfg, test.clock, src, oracle, t.Name(), lyrBlocks)
+		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)
@@ -318,9 +491,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
-			for i := 0; i < len(test.lCh); i++ {
-				test.lCh[i] <- j
-			}
+			test.clock.advanceLayer()
 			time.Sleep(500 * time.Millisecond)
 		}
 	}()

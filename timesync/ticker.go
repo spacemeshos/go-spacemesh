@@ -111,7 +111,7 @@ func (t *Ticker) Notify() (int, error) {
 
 	layer := t.TimeToLayer(t.clock.Now())
 	// close prev layers
-	for l := t.lastTickedLayer.Add(1); !l.After(layer); l = l.Add(1) {
+	for l := t.lastTickedLayer; !l.After(layer); l = l.Add(1) {
 		if layerChan, found := t.layerChannels[l]; found {
 			close(layerChan)
 			delete(t.layerChannels, l)

@@ -190,12 +190,13 @@ type consensusProcess struct {
 	mTracker          *msgsTracker    // tracks valid messages
 	terminating       bool
 	eligibilityCount  uint16
+	clock             RoundClock
 }
 
 // newConsensusProcess creates a new consensus process instance.
 func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
 	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p NetworkService,
-	terminationReport chan TerminationOutput, ev roleValidator, logger log.Log) *consensusProcess {
+	terminationReport chan TerminationOutput, ev roleValidator, clock RoundClock, logger log.Log) *consensusProcess {
 	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
 		State:             State{preRound, preRound, s.Clone(), nil},
@@ -212,6 +213,7 @@ func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, or
 		pending:           make(map[string]*Msg, cfg.N),
 		Log:               logger,
 		mTracker:          msgsTracker,
+		clock:             clock,
 	}
 	proc.validator = newSyntaxContextValidator(signing, cfg.F+1, proc.statusValidator(), stateQuerier, layersPerEpoch, ev, msgsTracker, logger)
 
@@ -267,15 +269,11 @@ func (proc *consensusProcess) eventLoop(ctx context.Context) {
 	logger.With().Info("consensus process started",
 		log.Int("hare_n", proc.cfg.N),
 		log.Int("f", proc.cfg.F),
-		log.String("duration", (time.Duration(proc.cfg.RoundDuration)*time.Second).String()),
+		log.Duration("duration", time.Duration(proc.cfg.RoundDuration)*time.Second),
 		proc.instanceID,
 		log.Int("exp_leaders", proc.cfg.ExpectedLeaders),
 		log.String("current_set", proc.s.String()),
 		log.Int("set_size", proc.s.Size()))
-
-	// start the timer
-	timer := time.NewTimer(time.Duration(proc.cfg.RoundDuration) * time.Second)
-	defer timer.Stop()
 
 	// check participation and send message
 	go func() {
@@ -296,13 +294,15 @@ func (proc *consensusProcess) eventLoop(ctx context.Context) {
 		}
 	}()
 
+	endOfRound := proc.clock.AwaitEndOfRound(preRound)
+
 PreRound:
 	for {
 		select {
-		// listen to pre-round messages
+		// listen to pre-round Messages
 		case msg := <-proc.inbox:
 			proc.handleMessage(ctx, msg)
-		case <-timer.C:
+		case <-endOfRound:
 			break PreRound
 		case <-proc.CloseChannel():
 			logger.With().Info("terminating during preround: received termination signal",
@@ -330,8 +330,7 @@ PreRound:
 
 	// start first iteration
 	proc.onRoundBegin(ctx)
-	ticker := time.NewTicker(time.Duration(proc.cfg.RoundDuration) * time.Second)
-	defer ticker.Stop()
+	endOfRound = proc.clock.AwaitEndOfRound(proc.k)
 
 	for {
 		select {
@@ -340,7 +339,7 @@ PreRound:
 			if proc.terminating {
 				return
 			}
-		case <-ticker.C: // next round event
+		case <-endOfRound: // next round event
 			proc.onRoundEnd(ctx)
 			proc.advanceToNextRound(ctx)
 
@@ -355,6 +354,7 @@ PreRound:
 			}
 
 			proc.onRoundBegin(ctx)
+			endOfRound = proc.clock.AwaitEndOfRound(proc.k)
 		case <-proc.CloseChannel(): // close event
 			logger.With().Info("terminating: received termination signal",
 				log.Uint32("current_k", proc.k),
