@@ -429,7 +429,10 @@ func (msh *Mesh) getValidBlockIDs(ctx context.Context, layerID types.LayerID) ([
 
 // HandleLateBlock process a late (contextually invalid) block.
 func (msh *Mesh) HandleLateBlock(ctx context.Context, b *types.Block) {
-	msh.WithContext(ctx).With().Info("validate late block", b.ID())
+	msh.WithContext(ctx).With().Info("validate late block",
+		b.ID(),
+		b.ATXID,
+		log.FieldNamed("miner_id", b.MinerID()))
 	// TODO: handle late blocks in batches, see https://github.com/spacemeshos/go-spacemesh/issues/2412
 	oldPbase, newPbase := msh.trtl.HandleLateBlocks(ctx, []*types.Block{b})
 	if err := msh.trtl.Persist(ctx); err != nil {
