@@ -124,8 +124,12 @@ func (m *p2pManipulator) Publish(ctx context.Context, protocol string, payload [
 	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != preRound {
 		return m.err
 	}
-	e := m.nd.Publish(ctx, protocol, payload)
-	return fmt.Errorf("broadcast: %w", e)
+
+	if err := m.nd.Publish(ctx, protocol, payload); err != nil {
+		return fmt.Errorf("broadcast: %w", err)
+	}
+
+	return nil
 }
 
 type trueOracle struct{}

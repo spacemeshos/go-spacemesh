@@ -141,7 +141,7 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, resp func
 	go func() {
 		start := time.Now()
 		defer func() {
-			s.logger.With().Info("request execution time",
+			s.logger.WithContext(ctx).With().Info("request execution time",
 				log.String("protocol", s.protocol),
 				log.Duration("duration", time.Since(start)),
 			)
