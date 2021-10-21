@@ -47,7 +47,7 @@ func newHareSuite() *HareSuite {
 	return hs
 }
 
-func (his *HareSuite) fill(set *Set, begin int, end int) {
+func (his *HareSuite) fill(set *Set, begin, end int) {
 	for i := begin; i <= end; i++ {
 		his.initialSets[i] = set
 	}
@@ -150,7 +150,8 @@ func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, ora
 	signing := signing2.NewEdSigner()
 	oracle.Register(isHonest, signing.PublicKey().String())
 	proc := newConsensusProcess(cfg, layer, initialSet, oracle, NewMockStateQuerier(), 10, signing,
-		types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, truer{}, logtest.New(tb).WithName(signing.PublicKey().ShortString()))
+		types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, truer{},
+		newRoundClockFromCfg(logtest.New(tb), cfg), logtest.New(tb).WithName(signing.PublicKey().ShortString()))
 	c, _ := broker.Register(context.TODO(), proc.ID())
 	proc.SetInbox(c)
 

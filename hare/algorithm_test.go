@@ -16,12 +16,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	pubsubmocks "github.com/spacemeshos/go-spacemesh/lp2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
+
+func newRoundClockFromCfg(logger log.Log, cfg config.Config) *RoundClockWithCache {
+	logger.Info("creating clock at %v wakeup: %v round duration: %v", time.Now(), cfg.WakeupDelta, cfg.RoundDuration)
+	return NewRoundClockWithCache(time.Now(),
+		time.Duration(cfg.WakeupDelta)*time.Second,
+		time.Duration(cfg.RoundDuration)*time.Second,
+	)
+}
 
 type mockMessageValidator struct {
 	syntaxValid  bool
@@ -152,7 +160,10 @@ func TestConsensusProcess_Start(t *testing.T) {
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
-	p := generateConsensusProcess(t)
+	c := cfg
+	c.LimitConcurrent = 1
+	c.RoundDuration = 1
+	p := generateConsensusProcessWithConfig(t, c)
 	p.SetInbox(make(chan *Msg, 10))
 	p.cfg.LimitIterations = 1
 	p.cfg.RoundDuration = 1
@@ -168,7 +179,9 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	net := &mockP2p{}
 	broker := buildBroker(t, t.Name())
 	require.NoError(t, broker.Start(context.TODO()))
-	proc := generateConsensusProcess(t)
+	c := cfg
+	c.F = 2
+	proc := generateConsensusProcessWithConfig(t, c)
 	proc.publisher = net
 
 	mo := mocks.NewMockRolacle(ctrl)
@@ -247,11 +260,15 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	assert.EqualValues(t, 2, proc.k)
 }
 
-func generateConsensusProcess(tb testing.TB) *consensusProcess {
-	tb.Helper()
+func generateConsensusProcess(t *testing.T) *consensusProcess {
+	return generateConsensusProcessWithConfig(t, cfg)
+}
 
+func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *consensusProcess {
+	tb.Helper()
+	logger := logtest.New(tb)
 	s := NewSetFromValues(value1)
-	oracle := eligibility.New(logtest.New(tb))
+	oracle := eligibility.New(logger)
 	edSigner := signing.NewEdSigner()
 	edPubkey := edSigner.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(edSigner.Sign(edPubkey.Bytes()))
@@ -259,15 +276,10 @@ func generateConsensusProcess(tb testing.TB) *consensusProcess {
 	oracle.Register(true, edPubkey.String())
 	output := make(chan TerminationOutput, 1)
 
-	ctrl := gomock.NewController(tb)
-	pubsub := pubsubmocks.NewMockPublisher(ctrl)
-	pubsub.EXPECT().
-		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
-		Return(nil).
-		AnyTimes()
-
-	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(), 10, edSigner,
-		types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}, pubsub, output, truer{}, logtest.New(tb).WithName(edPubkey.String()))
+	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(),
+		10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub},
+		noopPubSub(tb), output, truer{}, newRoundClockFromCfg(logger, cfg),
+		logtest.New(tb).WithName(edPubkey.String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -385,7 +397,7 @@ func TestConsensusProcess_procPre(t *testing.T) {
 	m := BuildPreRoundMsg(signing.NewEdSigner(), s, []byte{1})
 	require.False(t, proc.preRoundTracker.coinflip)
 	proc.processPreRoundMsg(context.TODO(), m)
-	require.Equal(t, 1, len(proc.preRoundTracker.preRound))
+	require.Len(t, proc.preRoundTracker.preRound, 1)
 	require.True(t, proc.preRoundTracker.coinflip)
 }
 
@@ -395,7 +407,7 @@ func TestConsensusProcess_procStatus(t *testing.T) {
 	s := NewDefaultEmptySet()
 	m := BuildStatusMsg(signing.NewEdSigner(), s)
 	proc.processStatusMsg(context.TODO(), m)
-	require.Equal(t, 1, len(proc.statusesTracker.statuses))
+	require.Len(t, proc.statusesTracker.statuses, 1)
 }
 
 func TestConsensusProcess_procProposal(t *testing.T) {
@@ -514,8 +526,8 @@ func TestProcOutput_Set(t *testing.T) {
 }
 
 func TestIterationFromCounter(t *testing.T) {
-	for i := 0; i < 10; i++ {
-		assert.Equal(t, uint32(i/4), iterationFromCounter(uint32(i)))
+	for i := uint32(0); i < 10; i++ {
+		assert.Equal(t, i/4, iterationFromCounter(i))
 	}
 }
 

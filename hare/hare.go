@@ -25,7 +25,7 @@ import (
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
 
-type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, terminationReport chan TerminationOutput) Consensus
+type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus
 
 // Consensus represents an item that acts like a consensus process.
 type Consensus interface {
@@ -45,6 +45,20 @@ type TerminationOutput interface {
 	Completed() bool
 }
 
+// RoundClock is a timer interface.
+type RoundClock interface {
+	AwaitWakeup() <-chan struct{}
+	AwaitEndOfRound(round uint32) <-chan struct{}
+}
+
+// LayerClock provides a timer for the start of a given layer, as well as the current layer and allows converting a
+// layer number to a clock time.
+type LayerClock interface {
+	LayerToTime(id types.LayerID) time.Time
+	AwaitLayer(layerID types.LayerID) chan struct{}
+	GetCurrentLayer() types.LayerID
+}
+
 // Hare is the orchestrator that starts new consensus processes and collects their output.
 type Hare struct {
 	util.Closer
@@ -52,7 +66,9 @@ type Hare struct {
 	config config.Config
 
 	publisher  pubsub.Publisher
-	beginLayer chan types.LayerID
+	layerClock LayerClock
+
+	newRoundClock func(LayerID types.LayerID) RoundClock
 
 	broker *Broker
 
@@ -96,7 +112,7 @@ func New(
 	layersPerEpoch uint16,
 	idProvider identityProvider,
 	stateQ StateQuerier,
-	beginLayer chan types.LayerID,
+	layerClock LayerClock,
 	logger log.Log,
 ) *Hare {
 	h := new(Hare)
@@ -106,7 +122,17 @@ func New(
 	h.Log = logger
 	h.config = conf
 	h.publisher = publisher
-	h.beginLayer = beginLayer
+	h.layerClock = layerClock
+	h.newRoundClock = func(layerID types.LayerID) RoundClock {
+		layerTime := layerClock.LayerToTime(layerID)
+		wakeupDelta := time.Duration(conf.WakeupDelta) * time.Second
+		roundDuration := time.Duration(h.config.RoundDuration) * time.Second
+		h.With().Info("creating hare round clock", layerID,
+			log.String("layer_time", layerTime.String()),
+			log.Duration("wakeup_delta", wakeupDelta),
+			log.Duration("round_duration", roundDuration))
+		return NewSimpleRoundClock(layerTime, wakeupDelta, roundDuration)
+	}
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
 	h.broker = newBroker(pid, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
@@ -123,8 +149,8 @@ func New(
 	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
 	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) // we keep results about LayerBuffer past layers
-	h.factory = func(conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, terminationReport chan TerminationOutput) Consensus {
-		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, logger)
+	h.factory = func(conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus {
+		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, clock, logger)
 	}
 
 	h.nid = nid
@@ -234,17 +260,16 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		// this is called only for its side effects, but at least print the error if it returns one
 		if isActive, err := h.rolacle.IsIdentityActiveOnConsensusView(ctx, h.nid.Key, id); err != nil {
 			logger.With().Error("error checking if identity is active",
-				log.Bool("is_active", isActive),
-				log.Err(err))
+				log.Bool("isActive", isActive), log.Err(err))
 		}
 	}()
 
 	logger.With().Debug("hare got tick, sleeping", log.String("delta", fmt.Sprint(h.networkDelta)))
 
-	ti := time.NewTimer(h.networkDelta)
+	clock := h.newRoundClock(id)
 	select {
-	case <-ti.C:
-		break
+	case <-clock.AwaitWakeup():
+		break // keep going
 	case <-h.CloseChannel():
 		return false, errors.New("closed while waiting for hare delta")
 	}
@@ -265,7 +290,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
 		return false, fmt.Errorf("broker register: %w", err)
 	}
-	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.publisher, h.outputChan)
+	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.publisher, clock, h.outputChan)
 	cp.SetInbox(c)
 	if err = cp.Start(ctx); err != nil {
 		logger.With().Error("could not start consensus process", log.Err(err))
@@ -340,6 +365,7 @@ func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
 
 // listens to outputs arriving from consensus processes.
 func (h *Hare) outputCollectionLoop(ctx context.Context) {
+	h.WithContext(ctx).With().Info("starting collection loop")
 	for {
 		select {
 		case out := <-h.outputChan:
@@ -375,17 +401,21 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 
 // listens to new layers.
 func (h *Hare) tickLoop(ctx context.Context) {
-	for {
+	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
-		case layer := <-h.beginLayer:
-			go func() {
-				started, err := h.onTick(ctx, layer)
+		case <-h.layerClock.AwaitLayer(layer):
+			if h.layerClock.LayerToTime(layer).Sub(time.Now()) > (time.Duration(h.config.WakeupDelta) * time.Second) {
+				h.With().Warning("missed hare window, skipping layer", layer)
+				continue
+			}
+			go func(l types.LayerID) {
+				started, err := h.onTick(ctx, l)
 				if err != nil {
-					h.WithContext(ctx).With().Error("error processing hare tick", log.Err(err))
+					h.With().Error("failed to handle tick", log.Err(err))
 				} else if !started {
 					h.WithContext(ctx).With().Warning("consensus not started for layer", layer)
 				}
-			}()
+			}(layer)
 		case <-h.CloseChannel():
 			return
 		}

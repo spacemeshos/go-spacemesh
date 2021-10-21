@@ -117,11 +117,11 @@ func randomBlock(t *testing.T, lyrID types.LayerID, beacon []byte) *types.Block 
 	return block
 }
 
-func createHare(t *testing.T, id lp2p.Peer, ps pubsub.PublisherSubscriber, msh meshProvider, beacons blocks.BeaconGetter, logger log.Log) *Hare {
+func createHare(t *testing.T, id lp2p.Peer, ps pubsub.PublisherSubscriber, msh meshProvider, beacons blocks.BeaconGetter, clock *mockClock, logger log.Log) *Hare {
 	ctrl := gomock.NewController(t)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
-	return New(cfg, id, ps, signing2.NewEdSigner(), types.NodeID{}, (&mockSyncer{true}).IsSynced, msh, beacons, eligibility.New(logger), patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
+	return New(cfg, id, ps, signing2.NewEdSigner(), types.NodeID{}, (&mockSyncer{true}).IsSynced, msh, beacons, eligibility.New(logger), patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), clock, logger)
 }
 
 var _ Consensus = (*mockConsensusProcess)(nil)
@@ -133,7 +133,7 @@ func TestHare_New(t *testing.T) {
 	logger := logtest.New(t).WithName(t.Name())
 	h := New(cfg, "", noopPubSub(t), signing2.NewEdSigner(), types.NodeID{}, (&mockSyncer{true}).IsSynced,
 		mocks.NewMockmeshProvider(ctrl), bMocks.NewMockBeaconGetter(ctrl), eligibility.New(logger), mocks.NewMocklayerPatrol(ctrl), 10,
-		&mockIDProvider{}, NewMockStateQuerier(), make(chan types.LayerID), logger)
+		&mockIDProvider{}, NewMockStateQuerier(), newMockClock(), logger)
 	assert.NotNil(t, h)
 }
 
@@ -143,7 +143,7 @@ func TestHare_Start(t *testing.T) {
 
 	mockMesh := mocks.NewMockmeshProvider(ctrl)
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
-	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, logtest.New(t).WithName(t.Name()))
+	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, newMockClock(), logtest.New(t).WithName(t.Name()))
 
 	assert.NoError(t, h.Start(context.TODO()))
 	t.Cleanup(func() {
@@ -157,7 +157,7 @@ func TestHare_collectOutputAndGetResult(t *testing.T) {
 
 	mockMesh := mocks.NewMockmeshProvider(ctrl)
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
-	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, logtest.New(t).WithName(t.Name()))
+	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, newMockClock(), logtest.New(t).WithName(t.Name()))
 
 	res, err := h.GetResult(types.NewLayerID(0))
 	assert.Equal(t, errNoResult, err)
@@ -184,7 +184,7 @@ func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 
 	mockMesh := mocks.NewMockmeshProvider(ctrl)
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
-	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, logtest.New(t).WithName(t.Name()))
+	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, newMockClock(), logtest.New(t).WithName(t.Name()))
 
 	lyrID := types.NewLayerID(10)
 	res, err := h.GetResult(lyrID)
@@ -212,7 +212,7 @@ func TestHare_OutputCollectionLoop(t *testing.T) {
 
 	mockMesh := mocks.NewMockmeshProvider(ctrl)
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
-	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, logtest.New(t).WithName(t.Name()))
+	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, newMockClock(), logtest.New(t).WithName(t.Name()))
 	require.NoError(t, h.Start(context.TODO()))
 
 	lyrID := types.NewLayerID(8)
@@ -238,7 +238,7 @@ func TestHare_onTick(t *testing.T) {
 	cfg.F = 1
 	cfg.RoundDuration = 1
 
-	layerTicker := make(chan types.LayerID)
+	clock := newMockClock()
 
 	oracle := newMockHashOracle(numOfClients)
 	signing := signing2.NewEdSigner()
@@ -247,13 +247,13 @@ func TestHare_onTick(t *testing.T) {
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(types.GetEffectiveGenesis().Add(1)).Times(1)
-	h := New(cfg, "", noopPubSub(t), signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, mockMesh, mockBeacons, oracle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
+	h := New(cfg, "", noopPubSub(t), signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, mockMesh, mockBeacons, oracle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), clock, logtest.New(t).WithName("Hare"))
 	h.networkDelta = 0
 	h.bufferSize = 1
 
 	createdChan := make(chan struct{})
 	var nmcp *mockConsensusProcess
-	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, outputChan chan TerminationOutput) Consensus {
+	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 		createdChan <- struct{}{}
 		return nmcp
@@ -276,7 +276,7 @@ func TestHare_onTick(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		layerTicker <- lyrID
+		clock.advanceLayer()
 		<-createdChan
 		<-nmcp.CloseChannel()
 		wg.Done()
@@ -292,7 +292,7 @@ func TestHare_onTick(t *testing.T) {
 	// consensus process is closed, should not process any tick
 	wg.Add(1)
 	go func() {
-		layerTicker <- lyrID
+		clock.advanceLayer()
 		h.Close()
 		wg.Done()
 	}()
@@ -316,7 +316,8 @@ func TestHare_onTick_BeaconFromRefBlocks(t *testing.T) {
 	cfg.F = 1
 	cfg.RoundDuration = 1
 
-	layerTicker := make(chan types.LayerID)
+	clock := newMockClock()
+	clock.advanceLayer() // we want to start at genesis + 2 instead of 1
 	lyrID := types.GetEffectiveGenesis().Add(2)
 
 	oracle := newMockHashOracle(numOfClients)
@@ -327,13 +328,13 @@ func TestHare_onTick_BeaconFromRefBlocks(t *testing.T) {
 
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(lyrID).Times(1)
-	h := New(cfg, "", noopPubSub(t), signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, mockMesh, mockBeacons, oracle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
+	h := New(cfg, "", noopPubSub(t), signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, mockMesh, mockBeacons, oracle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), clock, logtest.New(t).WithName("Hare"))
 	h.networkDelta = 0
 	h.bufferSize = 1
 
 	createdChan := make(chan struct{})
 	var nmcp *mockConsensusProcess
-	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, outputChan chan TerminationOutput) Consensus {
+	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 		createdChan <- struct{}{}
 		return nmcp
@@ -362,7 +363,7 @@ func TestHare_onTick_BeaconFromRefBlocks(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		layerTicker <- lyrID
+		clock.advanceLayer()
 		<-createdChan
 		<-nmcp.CloseChannel()
 		wg.Done()
@@ -386,7 +387,7 @@ func TestHare_onTick_SomeBadBlocks(t *testing.T) {
 	cfg.F = 1
 	cfg.RoundDuration = 1
 
-	layerTicker := make(chan types.LayerID)
+	clock := newMockClock()
 
 	oracle := newMockHashOracle(numOfClients)
 	signing := signing2.NewEdSigner()
@@ -395,13 +396,13 @@ func TestHare_onTick_SomeBadBlocks(t *testing.T) {
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(types.GetEffectiveGenesis().Add(1)).Times(1)
-	h := New(cfg, "", noopPubSub(t), signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, mockMesh, mockBeacons, oracle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
+	h := New(cfg, "", noopPubSub(t), signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, mockMesh, mockBeacons, oracle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), clock, logtest.New(t).WithName("Hare"))
 	h.networkDelta = 0
 	h.bufferSize = 1
 
 	createdChan := make(chan struct{})
 	var nmcp *mockConsensusProcess
-	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, outputChan chan TerminationOutput) Consensus {
+	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 		createdChan <- struct{}{}
 		return nmcp
@@ -428,7 +429,7 @@ func TestHare_onTick_SomeBadBlocks(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		layerTicker <- lyrID
+		clock.advanceLayer()
 		<-createdChan
 		<-nmcp.CloseChannel()
 		wg.Done()
@@ -453,7 +454,7 @@ func TestHare_onTick_NoGoodBlocks(t *testing.T) {
 	cfg.F = 1
 	cfg.RoundDuration = 1
 
-	layerTicker := make(chan types.LayerID)
+	clock := newMockClock()
 
 	oracle := newMockHashOracle(numOfClients)
 	signing := signing2.NewEdSigner()
@@ -462,13 +463,14 @@ func TestHare_onTick_NoGoodBlocks(t *testing.T) {
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(types.GetEffectiveGenesis().Add(1)).Times(1)
-	h := New(cfg, "", noopPubSub(t), signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, mockMesh, mockBeacons, oracle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
+	h := New(cfg, "", noopPubSub(t), signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, mockMesh, mockBeacons, oracle,
+		patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), clock, logtest.New(t).WithName("Hare"))
 	h.networkDelta = 0
 	h.bufferSize = 1
 
 	createdChan := make(chan struct{})
 	var nmcp *mockConsensusProcess
-	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, outputChan chan TerminationOutput) Consensus {
+	h.factory = func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, outputChan chan TerminationOutput) Consensus {
 		nmcp = newMockConsensusProcess(cfg, instanceId, s, oracle, signing, p2p, outputChan)
 		createdChan <- struct{}{}
 		return nmcp
@@ -495,7 +497,7 @@ func TestHare_onTick_NoGoodBlocks(t *testing.T) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
-		layerTicker <- lyrID
+		clock.advanceLayer()
 		<-createdChan
 		<-nmcp.CloseChannel()
 		wg.Done()
@@ -522,9 +524,9 @@ func TestHare_onTick_NoBeacon(t *testing.T) {
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
 	mockBeacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(nil, errors.New("whatever")).Times(1)
 
-	layerTicker := make(chan types.LayerID)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
-	h := New(cfg, "", noopPubSub(t), nil, types.NodeID{}, (&mockSyncer{false}).IsSynced, mockMesh, mockBeacons, moRolacle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
+	h := New(cfg, "", noopPubSub(t), nil, types.NodeID{}, (&mockSyncer{false}).IsSynced, mockMesh, mockBeacons, moRolacle,
+		patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), newMockClock(), logtest.New(t).WithName("Hare"))
 	h.networkDelta = 0
 	require.NoError(t, h.broker.Start(context.TODO()))
 
@@ -547,10 +549,9 @@ func TestHare_onTick_NotSynced(t *testing.T) {
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
 	mockBeacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(randomBytes(t, 32), nil).Times(1)
 
-	layerTicker := make(chan types.LayerID)
-
 	patrol := mocks.NewMocklayerPatrol(ctrl)
-	h := New(cfg, "", noopPubSub(t), nil, types.NodeID{}, (&mockSyncer{false}).IsSynced, mp, mockBeacons, moRolacle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
+	h := New(cfg, "", noopPubSub(t), nil, types.NodeID{}, (&mockSyncer{false}).IsSynced, mp, mockBeacons, moRolacle,
+		patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), newMockClock(), logtest.New(t).WithName("Hare"))
 	h.networkDelta = 0
 	require.NoError(t, h.broker.Start(context.TODO()))
 
@@ -566,7 +567,7 @@ func TestHare_outputBuffer(t *testing.T) {
 	mockMesh := mocks.NewMockmeshProvider(ctrl)
 	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
-	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, logtest.New(t).WithName(t.Name()))
+	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, newMockClock(), logtest.New(t).WithName(t.Name()))
 	lasti := types.LayerID{}
 
 	for i := lasti; i.Before(types.NewLayerID(h.bufferSize)); i = i.Add(1) {
@@ -598,7 +599,7 @@ func TestHare_IsTooLate(t *testing.T) {
 	mockMesh := mocks.NewMockmeshProvider(ctrl)
 	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
-	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, logtest.New(t).WithName(t.Name()))
+	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, newMockClock(), logtest.New(t).WithName(t.Name()))
 
 	for i := (types.LayerID{}); i.Before(types.NewLayerID(h.bufferSize * 2)); i = i.Add(1) {
 		mockid := i
@@ -625,7 +626,7 @@ func TestHare_oldestInBuffer(t *testing.T) {
 	mockMesh := mocks.NewMockmeshProvider(ctrl)
 	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
-	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, logtest.New(t).WithName(t.Name()))
+	h := createHare(t, "", noopPubSub(t), mockMesh, mockBeacons, newMockClock(), logtest.New(t).WithName(t.Name()))
 	lasti := types.LayerID{}
 
 	for i := lasti; i.Before(types.NewLayerID(h.bufferSize)); i = i.Add(1) {
@@ -678,7 +679,6 @@ func TestHare_WeakCoin(t *testing.T) {
 	layerID := types.NewLayerID(10)
 
 	done := make(chan struct{})
-	layerTicker := make(chan types.LayerID)
 	oracle := newMockHashOracle(numOfClients)
 	signing := signing2.NewEdSigner()
 
@@ -688,7 +688,8 @@ func TestHare_WeakCoin(t *testing.T) {
 	mockMesh := mocks.NewMockmeshProvider(ctrl)
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
-	h := New(cfg, "", noopPubSub(t), signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, mockMesh, mockBeacons, oracle, patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), layerTicker, logtest.New(t).WithName("Hare"))
+	h := New(cfg, "", noopPubSub(t), signing, types.NodeID{}, (&mockSyncer{true}).IsSynced, mockMesh, mockBeacons, oracle,
+		patrol, 10, &mockIDProvider{}, NewMockStateQuerier(), newMockClock(), logtest.New(t).WithName("Hare"))
 	defer h.Close()
 	h.lastLayer = layerID
 	set := NewSetFromValues(value1)
