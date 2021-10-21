@@ -63,16 +63,16 @@ func (svm *SVM) ApplyLayer(layerID types.LayerID, transactions []*types.Transact
 	return failedTxs, nil
 }
 
-//// AddressExists checks if an account address exists in this node's global state.
-//func (svm *SVM) AddressExists(addr types.Address) bool {
-//	return svm.txProcessor.AddressExists(addr)
-//}
-//
-//// GetLayerApplied gets the layer id at which this tx was applied.
-//func (svm *SVM) GetLayerApplied(txID types.TransactionID) *types.LayerID {
-//	return svm.txProcessor.GetLayerApplied(txID)
-//}
-//
+// AddressExists checks if an account address exists in this node's global state.
+func (svm *SVM) AddressExists(addr types.Address) bool {
+	return svm.TransactionProcessor.AddressExists(addr)
+}
+
+// GetLayerApplied gets the layer id at which this tx was applied.
+func (svm *SVM) GetLayerApplied(txID types.TransactionID) *types.LayerID {
+	return svm.TransactionProcessor.GetLayerApplied(txID)
+}
+
 //// GetLayerStateRoot returns the state root at a given layer.
 //func (svm *SVM) GetLayerStateRoot(layer types.LayerID) (types.Hash32, error) {
 //	hash, err := svm.txProcessor.GetLayerStateRoot(layer)
