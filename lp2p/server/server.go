@@ -86,7 +86,7 @@ func New(h Host, proto string, handler Handler, opts ...Opt) *Server {
 		protocol: proto,
 		handler:  handler,
 		h:        h,
-		timeout:  5 * time.Second,
+		timeout:  10 * time.Second,
 	}
 	for _, opt := range opts {
 		opt(srv)
@@ -109,7 +109,12 @@ func (s *Server) streamHandler(stream network.Stream) {
 	if err != nil {
 		return
 	}
+	start := time.Now()
 	buf, err = s.handler(log.WithNewRequestID(s.ctx), buf)
+	s.logger.With().Info("protocol handler execution time",
+		log.String("protocol", s.protocol),
+		log.Duration("duration", time.Since(start)),
+	)
 	var resp response
 	if err != nil {
 		resp.Error = err.Error()
@@ -134,6 +139,15 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, resp func
 		return fmt.Errorf("%w: %s", ErrNotConnected, pid)
 	}
 	go func() {
+		start := time.Now()
+		defer func() {
+			s.logger.With().Info("request execution time",
+				log.String("protocol", s.protocol),
+				log.Duration("duration", time.Since(start)),
+			)
+		}()
+		ctx, cancel := context.WithTimeout(ctx, s.timeout)
+		defer cancel()
 		stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocol.ID(s.protocol))
 		if err != nil {
 			failure(err)

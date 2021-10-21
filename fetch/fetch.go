@@ -205,6 +205,7 @@ func NewFetch(ctx context.Context, cfg Config, h *lp2p.Host, logger log.Log) *Fe
 		f.net = &messageNetwork{
 			Server: server.New(h, fetchProtocol, f.FetchRequestHandler,
 				server.WithTimeout(time.Duration(cfg.RequestTimeout)*time.Second),
+				server.WithLog(logger),
 			),
 			Host: h,
 		}

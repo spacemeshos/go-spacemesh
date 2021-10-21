@@ -144,8 +144,8 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		txs:            txs,
 		goldenATXID:    cfg.GoldenATXID,
 	}
-	l.atxsrv = server.New(host, atxProtocol, l.epochATXsReqReceiver)
-	l.blocksrv = server.New(host, blockProtocol, l.layerBlocksReqReceiver)
+	l.atxsrv = server.New(host, atxProtocol, l.epochATXsReqReceiver, server.WithLog(log))
+	l.blocksrv = server.New(host, blockProtocol, l.layerBlocksReqReceiver, server.WithLog(log))
 	return l
 }
 
