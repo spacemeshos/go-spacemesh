@@ -37,6 +37,20 @@ func (m *MockHost) EXPECT() *MockHostMockRecorder {
 	return m.recorder
 }
 
+// Network mocks base method.
+func (m *MockHost) Network() network.Network {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Network")
+	ret0, _ := ret[0].(network.Network)
+	return ret0
+}
+
+// Network indicates an expected call of Network.
+func (mr *MockHostMockRecorder) Network() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Network", reflect.TypeOf((*MockHost)(nil).Network))
+}
+
 // NewStream mocks base method.
 func (m *MockHost) NewStream(arg0 context.Context, arg1 peer.ID, arg2 ...protocol.ID) (network.Stream, error) {
 	m.ctrl.T.Helper()

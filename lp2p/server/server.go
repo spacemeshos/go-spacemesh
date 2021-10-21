@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
 	"time"
 
@@ -15,6 +16,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
+
+// ErrNotConnected is returned when peer is not connected.
+var ErrNotConnected = errors.New("peer is not connected")
 
 // Opt is a type to configure a server.
 type Opt func(s *Server)
@@ -54,6 +58,7 @@ type response struct {
 type Host interface {
 	SetStreamHandler(protocol.ID, network.StreamHandler)
 	NewStream(context.Context, peer.ID, ...protocol.ID) (network.Stream, error)
+	Network() network.Network
 }
 
 // Requestor is an interface for requesting replies from peer server.
@@ -124,10 +129,12 @@ func (s *Server) streamHandler(stream network.Stream) {
 
 // Request sends a binary request to the peer. Request is executed in the background, one of the callbacks
 // is guaranteed to be called on success/error.
-func (s *Server) Request(ctx context.Context, p peer.ID, req []byte, resp func([]byte), failure func(error)) error {
-	// TODO(dshulyak) check peer connectedness. requires Host interface change and change of mocks
+func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, resp func([]byte), failure func(error)) error {
+	if s.h.Network().Connectedness(pid) != network.Connected {
+		return fmt.Errorf("%w: %s", ErrNotConnected, pid)
+	}
 	go func() {
-		stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), p, protocol.ID(s.protocol))
+		stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocol.ID(s.protocol))
 		if err != nil {
 			failure(err)
 			return

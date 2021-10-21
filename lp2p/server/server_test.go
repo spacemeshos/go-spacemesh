@@ -75,4 +75,7 @@ func TestServer(t *testing.T) {
 			require.Error(t, err)
 		}
 	})
+	t.Run("NotConnected", func(t *testing.T) {
+		require.ErrorIs(t, client.Request(ctx, "unknown", request, respHandler, respErrHandler), ErrNotConnected)
+	})
 }
