@@ -110,7 +110,9 @@ func (mux *UDPMux) listenToNetworkMessage() {
 			go func(event inet.IncomingMessageEvent) {
 				err := mux.processUDPMessage(event)
 				if err != nil {
-					mux.logger.Error("Error handing network message err=%v", err)
+					mux.logger.With().Error("Error handing network message",
+						log.String("from_addr", event.Conn.RemoteAddr().String()),
+						log.Err(err))
 					// todo: blacklist ?
 				}
 			}(msg)
