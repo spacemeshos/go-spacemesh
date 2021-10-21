@@ -4,6 +4,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func BuildNotifyMsg(signing Signer, s *Set) *Msg {
@@ -24,7 +26,7 @@ func TestNotifyTracker_OnNotify(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	s.Add(value2)
-	verifier := generateSigning(t)
+	verifier := signing.NewEdSigner()
 
 	tracker := newNotifyTracker(lowDefaultSize)
 	exist := tracker.OnNotify(BuildNotifyMsg(verifier, s))
@@ -42,8 +44,8 @@ func TestNotifyTracker_NotificationsCount(t *testing.T) {
 	s := NewEmptySet(lowDefaultSize)
 	s.Add(value1)
 	tracker := newNotifyTracker(lowDefaultSize)
-	tracker.OnNotify(BuildNotifyMsg(generateSigning(t), s))
+	tracker.OnNotify(BuildNotifyMsg(signing.NewEdSigner(), s))
 	assert.Equal(t, 1, tracker.NotificationsCount(s))
-	tracker.OnNotify(BuildNotifyMsg(generateSigning(t), s))
+	tracker.OnNotify(BuildNotifyMsg(signing.NewEdSigner(), s))
 	assert.Equal(t, 2, tracker.NotificationsCount(s))
 }

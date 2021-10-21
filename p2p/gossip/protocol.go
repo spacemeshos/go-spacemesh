@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -130,7 +132,10 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 	)
 	logger.Debug("checking gossip message newness")
 	if p.markMessageAsOld(h) {
-		metrics.OldGossipMessages.With(metrics.ProtocolLabel, protocol).Add(1)
+		metrics.TotalGossipMessages.With(prometheus.Labels{
+			metrics.ProtocolLabel:    protocol,
+			metrics.MessageTypeLabel: metrics.MessageTypeLabelOld,
+		}).Inc()
 		// todo : - have some more metrics for termination
 		if !ownMessage {
 			logger.Debug("gossip message is old, dropping")
@@ -141,7 +146,10 @@ func (p *Protocol) processMessage(ctx context.Context, sender p2pcrypto.PublicKe
 	}
 
 	logger.Event().Debug("gossip message is new, processing")
-	metrics.NewGossipMessages.With("protocol", protocol).Add(1)
+	metrics.TotalGossipMessages.With(prometheus.Labels{
+		metrics.ProtocolLabel:    protocol,
+		metrics.MessageTypeLabel: metrics.MessageTypeLabelNew,
+	}).Inc()
 
 	if err := p.net.ProcessGossipProtocolMessage(ctx, sender, ownMessage, protocol, msg, p.propagateQ); err != nil {
 		return fmt.Errorf("process gossip protocol message: %w", err)
@@ -256,7 +264,7 @@ func (p *Protocol) propagationEventLoop(ctx context.Context) {
 				log.String("protocol", msgV.Protocol()),
 				log.Int("priority_queue_length", p.pq.Length()),
 				log.Int("propagation_queue_length", len(p.propagateQ)))
-			metrics.PropagationQueueLen.Set(float64(len(p.propagateQ)))
+			metrics.PropagationQueueLen.WithLabelValues().Set(float64(len(p.propagateQ)))
 
 		case <-p.shutdownCtx.Done():
 			p.WithContext(ctx).Error("propagate event loop stopped: protocol shutdown")

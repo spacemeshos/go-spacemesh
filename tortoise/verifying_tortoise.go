@@ -271,8 +271,8 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 	className string,
 	voteVector vec,
 	baseBlockLayer types.LayerID,
+	logger log.Logger,
 ) bool {
-	logger := t.logger.WithContext(ctx)
 	for _, exceptionBlockID := range diffList {
 		exceptionBlock, err := t.bdp.GetBlock(exceptionBlockID)
 		if err != nil {
@@ -373,7 +373,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 				log.Int("support_count", len(exceptionVectorMap[1])),
 				log.Int("neutral_count", len(exceptionVectorMap[2])))
 
-			metrics.LayerDistanceToBaseBlock.Observe(float64(t.Last.Value - layerID.Value))
+			metrics.LayerDistanceToBaseBlock.WithLabelValues().Observe(float64(t.Last.Value - layerID.Value))
 
 			return blockID, [][]types.BlockID{
 				blockMapToArray(exceptionVectorMap[0]),
@@ -743,9 +743,9 @@ func (t *turtle) determineBlockGoodness(ctx context.Context, block *types.Block)
 		logger.With().Error("inconsistent state: base block not found", log.Err(err))
 	} else if true &&
 		// (2) all diffs appear after the base block and are consistent with the current local opinion
-		t.checkBlockAndGetLocalOpinion(ctx, block.ForDiff, "support", support, baseBlock.LayerIndex) &&
-		t.checkBlockAndGetLocalOpinion(ctx, block.AgainstDiff, "against", against, baseBlock.LayerIndex) &&
-		t.checkBlockAndGetLocalOpinion(ctx, block.NeutralDiff, "abstain", abstain, baseBlock.LayerIndex) {
+		t.checkBlockAndGetLocalOpinion(ctx, block.ForDiff, "support", support, baseBlock.LayerIndex, logger) &&
+		t.checkBlockAndGetLocalOpinion(ctx, block.AgainstDiff, "against", against, baseBlock.LayerIndex, logger) &&
+		t.checkBlockAndGetLocalOpinion(ctx, block.NeutralDiff, "abstain", abstain, baseBlock.LayerIndex, logger) {
 		logger.Debug("block is good")
 		return true
 	}

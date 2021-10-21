@@ -649,7 +649,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	gossipListener := service.NewListener(swarm, layerFetch, newSyncer.ListenToGossip, app.addLogger(GossipListener, lg))
-	rabbit := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, patrol, newSyncer, msh, hOracle, idStore, clock, lg)
+	rabbit := app.HareFactory(ctx, mdb, swarm, sgn, nodeID, patrol, newSyncer, msh, tBeacon, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	minerCfg := miner.Config{
@@ -774,6 +774,7 @@ func (app *App) HareFactory(
 	patrol *layerpatrol.LayerPatrol,
 	syncer *syncer.Syncer,
 	msh *mesh.Mesh,
+	beacons blocks.BeaconGetter,
 	hOracle hare.Rolacle,
 	idStore *activation.IdentityStore,
 	clock TickProvider,
@@ -792,12 +793,13 @@ func (app *App) HareFactory(
 		nodeID,
 		syncer.IsSynced,
 		msh,
+		beacons,
 		hOracle,
 		patrol,
 		uint16(app.Config.LayersPerEpoch),
 		idStore,
 		hOracle,
-		clock.Subscribe(),
+		clock,
 		app.addLogger(HareLogger, lg))
 	return ha
 }
@@ -848,10 +850,12 @@ func (app *App) startAPIServices(ctx context.Context, net api.NetworkAPI) {
 	// GRPC service.
 
 	// Make sure we only create the server once.
+	services := []grpcserver.ServiceAPI{}
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface)
 		}
+		services = append(services, svc)
 		svc.RegisterService(app.grpcAPIService)
 	}
 
@@ -891,17 +895,8 @@ func (app *App) startAPIServices(ctx context.Context, net api.NetworkAPI) {
 			// It should be caught inside apiConf.
 			log.Panic("one or more new grpc services must be enabled with new json gateway server")
 		}
-		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort, apiConf.GrpcServerPort)
-		app.jsonAPIService.StartService(
-			ctx,
-			apiConf.StartDebugService,
-			apiConf.StartGatewayService,
-			apiConf.StartGlobalStateService,
-			apiConf.StartMeshService,
-			apiConf.StartNodeService,
-			apiConf.StartSmesherService,
-			apiConf.StartTransactionService,
-		)
+		app.jsonAPIService = grpcserver.NewJSONHTTPServer(apiConf.JSONServerPort)
+		app.jsonAPIService.StartService(ctx, services...)
 	}
 }
 

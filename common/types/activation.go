@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"strconv"
 
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
@@ -38,6 +39,11 @@ func (l EpochID) FirstLayer() LayerID {
 
 // Field returns a log field. Implements the LoggableField interface.
 func (l EpochID) Field() log.Field { return log.Uint32("epoch_id", uint32(l)) }
+
+// String returns string representation of the epoch id numeric value.
+func (l EpochID) String() string {
+	return strconv.FormatUint(uint64(l), 10)
+}
 
 // ATXID is a 32-bit hash used to identify an activation transaction.
 type ATXID Hash32

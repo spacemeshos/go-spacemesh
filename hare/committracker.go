@@ -16,7 +16,7 @@ type commitTracker struct {
 	eligibilityCount int
 }
 
-func newCommitTracker(threshold int, expectedSize int, proposedSet *Set) *commitTracker {
+func newCommitTracker(threshold, expectedSize int, proposedSet *Set) *commitTracker {
 	ct := &commitTracker{}
 	ct.seenSenders = make(map[string]bool, expectedSize)
 	ct.commits = make([]*Message, 0, threshold)
