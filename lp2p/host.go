@@ -9,9 +9,9 @@ import (
 	"github.com/libp2p/go-libp2p"
 	connmgr "github.com/libp2p/go-libp2p-connmgr"
 	"github.com/libp2p/go-libp2p-core/peer"
-	mplex "github.com/libp2p/go-libp2p-mplex"
 	noise "github.com/libp2p/go-libp2p-noise"
 	"github.com/libp2p/go-libp2p-peerstore/pstoremem"
+	yamux "github.com/libp2p/go-libp2p-yamux"
 	"github.com/libp2p/go-tcp-transport"
 
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -69,15 +69,15 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 		cm.Protect(addr.ID, "bootstrap")
 	}
 
+	streamer := *yamux.DefaultTransport
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),
 		libp2p.ListenAddrStrings(cfg.Listen),
-		libp2p.Ping(true),
 		libp2p.UserAgent("go-spacemesh"),
 		libp2p.DisableRelay(),
 
 		libp2p.Transport(tcp.NewTCPTransport),
-		libp2p.Muxer("/mplex/6.7.0", mplex.DefaultTransport),
+		libp2p.Muxer("/yamux/1.0.0", &streamer),
 		libp2p.Security(noise.ID, noise.New),
 
 		libp2p.ConnectionManager(cm),
