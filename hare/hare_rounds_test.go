@@ -100,7 +100,7 @@ func (h *testHare) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
 }
 func (h *testHare) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {}
 
-func createTestHare(tb testing.TB, tcfg config.Config, clock *mockClock, pid lp2p.Peer, p2p pubsub.PublisherSubscriber, rolacle Rolacle, name string, bp meshProvider) *Hare {
+func createTestHare(tb testing.TB, tcfg config.Config, clock *mockClock, pid lp2p.Peer, p2p pubsub.PublishSubsciber, rolacle Rolacle, name string, bp meshProvider) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: pub.Bytes()}

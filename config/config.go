@@ -157,7 +157,7 @@ type SmeshingConfig struct {
 func DefaultConfig() Config {
 	return Config{
 		BaseConfig:      defaultBaseConfig(),
-		P2P:             lp2p.Default(),
+		P2P:             lp2p.DefaultConfig(),
 		API:             apiConfig.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
@@ -175,7 +175,7 @@ func DefaultConfig() Config {
 func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.BaseConfig = defaultTestConfig()
-	conf.P2P = lp2p.Default()
+	conf.P2P = lp2p.DefaultConfig()
 	conf.API = apiConfig.DefaultTestConfig()
 	return conf
 }

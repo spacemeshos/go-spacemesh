@@ -20,8 +20,8 @@ import (
 // Peer is an alias to libp2p's peer.ID.
 type Peer = peer.ID
 
-// Default config.
-func Default() Config {
+// DefaultConfig config.
+func DefaultConfig() Config {
 	return Config{
 		Listen:             "/ip4/0.0.0.0/tcp/7513",
 		Flood:              true,

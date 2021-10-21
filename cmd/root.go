@@ -69,14 +69,16 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&config.P2P.Listen, "listen",
 		config.P2P.Listen, "address for listening")
 	cmd.PersistentFlags().BoolVar(&config.P2P.Flood, "flood",
-		config.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic reqiurements)")
+		config.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic requirements)")
+	cmd.PersistentFlags().BoolVar(&config.P2P.NatPort, "natport",
+		config.P2P.NatPort, "enable port-mapping on the router (upnp must be enabled for this to work)")
 	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
-		config.P2P.NetworkID, "network-id to participate int")
+		config.P2P.NetworkID, "network-id to participate in")
 	cmd.PersistentFlags().IntVar(&config.P2P.LowPeers, "low-peers",
 		config.P2P.LowPeers, "low watermark for the number of connections")
 	cmd.PersistentFlags().IntVar(&config.P2P.HighPeers, "high-peers",
 		config.P2P.HighPeers,
-		"high watermark for the number of connections. once reached connections are pruned until low watermark remains")
+		"high watermark for the number of connections; once reached, connections are pruned until low watermark remains")
 	cmd.PersistentFlags().IntVar(&config.P2P.TargetOutbound, "target-outbound",
 		config.P2P.TargetOutbound, "target outbound connections")
 	cmd.PersistentFlags().StringSliceVar(&config.P2P.Bootnodes, "bootnodes",

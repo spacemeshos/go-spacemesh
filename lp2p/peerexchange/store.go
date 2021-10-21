@@ -31,8 +31,6 @@ func (a *addrBook) persistPeers(path string) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 
-	// First we make a serialisable datastructure so we can encode it to
-	// json.
 	sam := new(serializedAddrManager)
 	copy(sam.Key[:], a.key[:])
 
@@ -71,7 +69,7 @@ func (a *addrBook) persistPeers(path string) {
 	}
 }
 
-// loadPeers loads the known address from the saved file.  If empty, missing, or
+// loadPeers loads the known address from the saved file. If empty, missing, or
 // malformed file, just don't load anything and start fresh.
 func (a *addrBook) loadPeers(path string) {
 	if len(path) == 0 {
@@ -106,7 +104,7 @@ func (a *addrBook) decodeFrom(path string) error {
 	}
 	r, err := os.Open(path)
 	if err != nil {
-		return fmt.Errorf("error opening file: %v", err)
+		return fmt.Errorf("error opening file: %w", err)
 	}
 	defer r.Close()
 
@@ -114,7 +112,7 @@ func (a *addrBook) decodeFrom(path string) error {
 	dec := json.NewDecoder(r)
 	err = dec.Decode(&sam)
 	if err != nil {
-		return fmt.Errorf("error reading %s: %v", path, err)
+		return fmt.Errorf("error reading %s: %w", path, err)
 	}
 
 	copy(a.key[:], sam.Key[:])

@@ -6,12 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"math/big"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
-	"reflect"
 	"runtime"
 	"strconv"
 	"time"
@@ -27,6 +25,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
+	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
@@ -214,7 +213,7 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
 		mapstructure.StringToSliceHookFunc(","),
-		bigRatDecodeFunc(),
+		mapstructureutil.BigRatDecodeFunc(),
 	)
 
 	// load config if it was loaded to our viper
@@ -224,32 +223,6 @@ func LoadConfigFromFile() (*cfg.Config, error) {
 	}
 
 	return &conf, nil
-}
-
-func bigRatDecodeFunc() mapstructure.DecodeHookFunc {
-	return func(f reflect.Type, t reflect.Type, data interface{}) (interface{}, error) {
-		if t != reflect.TypeOf(big.Rat{}) {
-			return data, nil
-		}
-
-		switch f.Kind() {
-		case reflect.String:
-			v, ok := new(big.Rat).SetString(data.(string))
-			if !ok {
-				return nil, errors.New("malformed string representing big.Rat was provided")
-			}
-
-			return v, nil
-		case reflect.Float64:
-			return new(big.Rat).SetFloat64(data.(float64)), nil
-		case reflect.Int64:
-			return new(big.Rat).SetInt64(data.(int64)), nil
-		case reflect.Uint64:
-			return new(big.Rat).SetUint64(data.(uint64)), nil
-		default:
-			return data, nil
-		}
-	}
 }
 
 // Option to modify an App instance.

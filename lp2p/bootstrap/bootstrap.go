@@ -111,7 +111,7 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 	defer ticker.Stop()
 
 	bootctx, cancel := context.WithTimeout(ctx, b.cfg.Timeout)
-	b.triggerBootstrap(bootctx, limit, len(peers), outbound)
+	b.triggerBootstrap(bootctx, limit, outbound)
 	for {
 		select {
 		case evt := <-sub.Out():
@@ -171,7 +171,7 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 			}
 		case <-ticker.C:
 			bootctx, cancel = context.WithTimeout(ctx, b.cfg.Timeout)
-			b.triggerBootstrap(bootctx, limit, len(peers), outbound)
+			b.triggerBootstrap(bootctx, limit, outbound)
 		case <-ctx.Done():
 			cancel()
 			return ctx.Err()
@@ -179,7 +179,7 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 	}
 }
 
-func (b *Bootstrap) triggerBootstrap(ctx context.Context, limit chan struct{}, total, outbound int) {
+func (b *Bootstrap) triggerBootstrap(ctx context.Context, limit chan struct{}, outbound int) {
 	if outbound >= b.cfg.TargetOutbound {
 		return
 	}
@@ -194,7 +194,6 @@ func (b *Bootstrap) triggerBootstrap(ctx context.Context, limit chan struct{}, t
 		if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 			return nil
 		}
-		return fmt.Errorf("unexpected error dureing bootstrap: %w", err)
+		return fmt.Errorf("unexpected error during bootstrap: %w", err)
 	})
-	return
 }

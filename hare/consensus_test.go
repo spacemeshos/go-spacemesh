@@ -142,7 +142,7 @@ func (test *ConsensusTest) Start() {
 	go startProcs(test.dishonest)
 }
 
-func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, oracle fullRolacle, network pubsub.PublisherSubscriber, initialSet *Set, layer types.LayerID, name string) *consensusProcess {
+func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, oracle fullRolacle, network pubsub.PublishSubsciber, initialSet *Set, layer types.LayerID, name string) *consensusProcess {
 	broker := buildBroker(tb, name)
 	broker.Start(context.TODO())
 	network.Register(protoName, broker.HandleMessage)
@@ -371,7 +371,7 @@ func TestRecvDelayedDishonest(t *testing.T) {
 }
 
 type delayeadPubSub struct {
-	ps                   pubsub.PublisherSubscriber
+	ps                   pubsub.PublishSubsciber
 	recvDelay, sendDelay time.Duration
 }
 

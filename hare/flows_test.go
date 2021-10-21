@@ -110,7 +110,7 @@ func (his *HareWrapper) checkResult(t *testing.T, id types.LayerID) {
 }
 
 type p2pManipulator struct {
-	nd           pubsub.PublisherSubscriber
+	nd           pubsub.PublishSubsciber
 	stalledLayer types.LayerID
 	err          error
 }
@@ -218,7 +218,7 @@ func (mbp *mockBlockProvider) GetBlock(bID types.BlockID) (*types.Block, error) 
 	return nil, nil
 }
 
-func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, pid lp2p.Peer, p2p pubsub.PublisherSubscriber, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
+func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, pid lp2p.Peer, p2p pubsub.PublishSubsciber, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))
@@ -370,7 +370,7 @@ func (c *SharedRoundClock) advanceRound() {
 type SimRoundClock struct {
 	clocks map[types.LayerID]*SharedRoundClock
 	m      sync.Mutex
-	s      pubsub.PublisherSubscriber
+	s      pubsub.PublishSubsciber
 }
 
 func (c *SimRoundClock) Register(protocol string, handler pubsub.GossipHandler) {
@@ -403,7 +403,7 @@ func (c *SimRoundClock) NewRoundClock(layerID types.LayerID) RoundClock {
 	return c.clocks[layerID]
 }
 
-func NewSimRoundClock(s pubsub.PublisherSubscriber, clocks map[types.LayerID]*SharedRoundClock) *SimRoundClock {
+func NewSimRoundClock(s pubsub.PublishSubsciber, clocks map[types.LayerID]*SharedRoundClock) *SimRoundClock {
 	return &SimRoundClock{
 		clocks: clocks,
 		s:      s,

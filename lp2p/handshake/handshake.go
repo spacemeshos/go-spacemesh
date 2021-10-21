@@ -143,7 +143,12 @@ func (h *Handshake) Request(ctx context.Context, pid peer.ID) error {
 	if len(ack.Error) > 0 {
 		return errors.New(ack.Error)
 	}
-	h.emitter.Emit(EventHandshakeComplete{PID: pid, Direction: stream.Conn().Stat().Direction})
+	if err := h.emitter.Emit(EventHandshakeComplete{
+		PID:       pid,
+		Direction: stream.Conn().Stat().Direction,
+	}); err != nil {
+		h.logger.With().Error("failed to emit handshake event", log.Err(err))
+	}
 	return nil
 }
 

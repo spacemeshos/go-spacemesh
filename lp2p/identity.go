@@ -23,7 +23,7 @@ type identityInfo struct {
 func genIdentity() (crypto.PrivKey, error) {
 	pk, _, err := crypto.GenerateEd25519Key(rand.Reader)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate ed25519 identity: %w", err)
+		return nil, fmt.Errorf("generate ed25519 identity: %w", err)
 	}
 	return pk, nil
 }
@@ -32,12 +32,12 @@ func identityInfoFromDir(dir string) (*identityInfo, error) {
 	path := filepath.Join(dir, keyFilename)
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file %s: %w", path, err)
+		return nil, fmt.Errorf("read file %s: %w", path, err)
 	}
 	var info identityInfo
 	err = json.Unmarshal(data, &info)
 	if err != nil {
-		return nil, fmt.Errorf("faile to unmarshal file content from %s into %+v: %w", path, info, err)
+		return nil, fmt.Errorf("unmarshal file content from %s into %+v: %w", path, info, err)
 	}
 	return &info, nil
 }
@@ -45,7 +45,7 @@ func identityInfoFromDir(dir string) (*identityInfo, error) {
 func ensureIdentity(dir string) (crypto.PrivKey, error) {
 	// TODO add crc check
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("can't ensure that directory %s exist: %w", dir, err)
+		return nil, fmt.Errorf("ensure that directory %s exist: %w", dir, err)
 	}
 	info, err := identityInfoFromDir(dir)
 	if err == nil {
@@ -76,9 +76,9 @@ func ensureIdentity(dir string) (crypto.PrivKey, error) {
 			return nil, err
 		}
 		if err := ioutil.WriteFile(filepath.Join(dir, keyFilename), data, 0o644); err != nil {
-			return nil, fmt.Errorf("failed to write identity data: %w", err)
+			return nil, fmt.Errorf("write identity data: %w", err)
 		}
 		return key, nil
 	}
-	return nil, fmt.Errorf("failed to read key from disk: %w", err)
+	return nil, fmt.Errorf("read key from disk: %w", err)
 }

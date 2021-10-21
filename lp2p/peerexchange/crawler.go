@@ -46,7 +46,7 @@ func (r *crawler) Bootstrap(ctx context.Context) error {
 	r.logger.With().Debug("starting crawl", log.Int("servers", len(servers)))
 	for {
 		if len(servers) == 0 {
-			r.logger.Debug("crawl finished. no more servers to query")
+			r.logger.Debug("crawl finished; no more servers to query")
 			return nil
 		}
 		result, err := r.query(ctx, servers)

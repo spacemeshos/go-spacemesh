@@ -82,10 +82,10 @@ func (mip *mockIDProvider) GetIdentity(edID string) (types.NodeID, error) {
 	return types.NodeID{Key: edID, VRFPublicKey: []byte{}}, mip.err
 }
 
-func noopPubSub(tb testing.TB) pubsub.PublisherSubscriber {
+func noopPubSub(tb testing.TB) pubsub.PublishSubsciber {
 	tb.Helper()
 	ctrl := gomock.NewController(tb)
-	publisher := pubsubmocks.NewMockPublisherSubscriber(ctrl)
+	publisher := pubsubmocks.NewMockPublishSubsciber(ctrl)
 	publisher.EXPECT().
 		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
 		Return(nil).
@@ -117,7 +117,7 @@ func randomBlock(t *testing.T, lyrID types.LayerID, beacon []byte) *types.Block 
 	return block
 }
 
-func createHare(t *testing.T, id lp2p.Peer, ps pubsub.PublisherSubscriber, msh meshProvider, beacons blocks.BeaconGetter, clock *mockClock, logger log.Log) *Hare {
+func createHare(t *testing.T, id lp2p.Peer, ps pubsub.PublishSubsciber, msh meshProvider, beacons blocks.BeaconGetter, clock *mockClock, logger log.Log) *Hare {
 	ctrl := gomock.NewController(t)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()

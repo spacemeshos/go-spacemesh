@@ -62,8 +62,8 @@ type Subscriber interface {
 	Register(string, GossipHandler)
 }
 
-// PublisherSubscriber common interface for publisher and subscribing.
-type PublisherSubscriber interface {
+// PublishSubsciber common interface for publisher and subscribing.
+type PublishSubsciber interface {
 	Publisher
 	Subscriber
 }

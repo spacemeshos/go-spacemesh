@@ -120,9 +120,9 @@ func TestBootstrapCancelDiscoveryContext(t *testing.T) {
 		case <-bootctx.Done():
 			require.Equal(t, bootctx.Err(), context.Canceled)
 		case <-time.After(timeout):
-			require.FailNow(t, "timedout on waiting for bootctx cancellation")
+			require.FailNow(t, "timed out on waiting for bootctx cancellation")
 		}
 	case <-time.After(timeout):
-		require.FailNow(t, "timedout on waiting for a call to Bootstrap")
+		require.FailNow(t, "timed out on waiting for a call to Bootstrap")
 	}
 }

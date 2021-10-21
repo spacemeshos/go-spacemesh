@@ -56,7 +56,7 @@ type Host struct {
 func Wrap(h host.Host, opts ...Opt) (*Host, error) {
 	fh := &Host{
 		ctx:    context.Background(),
-		cfg:    Default(),
+		cfg:    DefaultConfig(),
 		logger: log.NewNop(),
 		Host:   h,
 	}
