@@ -134,8 +134,11 @@ func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload
 		return m.err
 	}
 
-	e := m.nd.Broadcast(ctx, protocol, payload)
-	return fmt.Errorf("broadcast: %w", e)
+	if err := m.nd.Broadcast(ctx, protocol, payload); err != nil {
+		return fmt.Errorf("broadcast: %w", err)
+	}
+
+	return nil
 }
 
 type trueOracle struct{}
