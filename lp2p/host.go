@@ -61,6 +61,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	lp2plog.SetPrimaryCore(logger.Core())
 
 	cm := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, cfg.GracePeersShutdown)
+	// TODO(dshulyak) remove this part
 	for _, p := range cfg.Bootnodes {
 		addr, err := peer.AddrInfoFromString(p)
 		if err != nil {
@@ -77,8 +78,8 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 		libp2p.DisableRelay(),
 
 		libp2p.Transport(tcp.NewTCPTransport),
-		libp2p.Muxer("/yamux/1.0.0", &streamer),
 		libp2p.Security(noise.ID, noise.New),
+		libp2p.Muxer("/yamux/1.0.0", &streamer),
 
 		libp2p.ConnectionManager(cm),
 		libp2p.Peerstore(pstoremem.NewPeerstore()),

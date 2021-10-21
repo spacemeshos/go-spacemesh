@@ -683,7 +683,7 @@ func (app *App) initServices(ctx context.Context,
 		postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
 	)
-	app.host.Register(activation.AtxProtocol, atxDB.HandleGossipAtx)
+	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncValidator.Handle, atxDB.HandleGossipAtx))
 	app.host.Register(state.IncomingTxProtocol, pubsub.ChainGossipHandler(syncValidator.Handle, processor.HandleTxGossipData))
 	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 

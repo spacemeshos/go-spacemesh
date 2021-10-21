@@ -83,6 +83,7 @@ func (r *crawler) query(ctx context.Context, servers []*addrInfo) ([]*addrInfo, 
 			go func() {
 				ainfo, err := peer.AddrInfoFromP2pAddr(addr.Addr())
 				if err == nil {
+					// TODO(dshulyak) skip request if connection is inbound
 					err = r.host.Connect(ctx, *ainfo)
 				}
 				var res []*addrInfo
