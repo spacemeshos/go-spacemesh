@@ -714,9 +714,7 @@ func TestShutdown(t *testing.T) {
 
 	// make sure previous goroutines have stopped
 	time.Sleep(3 * time.Second)
-	before := make([]byte, 1<<16)
-	n := runtime.Stack(before, true)
-	before = before[:n]
+
 	gCount := runtime.NumGoroutine()
 	r := require.New(t)
 	ctx, cancel := context.WithCancel(context.Background())
@@ -792,7 +790,6 @@ func TestShutdown(t *testing.T) {
 	if !assert.Equal(t, gCount, gCount2) {
 		buf := make([]byte, 1<<16)
 		numbytes := runtime.Stack(buf, true)
-		t.Log(string(before))
 		t.Log(string(buf[:numbytes]))
 	}
 }
