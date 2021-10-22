@@ -87,10 +87,10 @@ func (svm *SVM) GetStateRoot() types.Hash32 {
 	return svm.state.GetStateRoot()
 }
 
-// LoadState loads the last state from persistent storage.
-func (svm *SVM) LoadState(layer types.LayerID) error {
+// Rewind loads the given layer state from persistent storage.
+func (svm *SVM) Rewind(layer types.LayerID) error {
 	if err := svm.state.LoadState(layer); err != nil {
-		return fmt.Errorf("SVM couldn't recover the state at layer %d: %w", layer.Uint32(), err)
+		return fmt.Errorf("SVM couldn't rewind back to layer %d: %w", layer.Uint32(), err)
 	}
 	return nil
 }

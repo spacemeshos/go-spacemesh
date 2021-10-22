@@ -32,7 +32,7 @@ func (s *MockMapState) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	return nil
 }
 
-func (s MockMapState) LoadState(types.LayerID) error                       { panic("implement me") }
+func (s MockMapState) Rewind(types.LayerID) error                          { panic("implement me") }
 func (MockMapState) GetStateRoot() types.Hash32                            { return [32]byte{} }
 func (MockMapState) ValidateNonceAndBalance(*types.Transaction) error      { panic("implement me") }
 func (MockMapState) GetLayerApplied(types.TransactionID) *types.LayerID    { panic("implement me") }
