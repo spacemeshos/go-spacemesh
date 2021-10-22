@@ -10,7 +10,6 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -120,7 +119,7 @@ func New(h host.Host, peers bootstrap.Waiter, opts ...Option) *Sync {
 		opt(sync)
 	}
 	sync.ctx, sync.cancel = context.WithCancel(sync.ctx)
-	h.SetStreamHandler(protocol.ID(protocolName), sync.streamHandler)
+	h.SetStreamHandler(protocolName, sync.streamHandler)
 	return sync
 }
 
@@ -260,11 +259,12 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []lp2p.Peer) (time.
 		go func(pid lp2p.Peer) {
 			defer wg.Done()
 			logger := s.log.WithFields(log.String("pid", pid.Pretty())).With()
-			stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocol.ID(protocolName))
+			stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocolName)
 			if err != nil {
 				logger.Warning("failed to create new stream", log.Err(err))
 				return
 			}
+			defer stream.Close()
 			_ = stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
 			defer stream.SetDeadline(time.Time{})
 			if _, err := stream.Write(buf); err != nil {

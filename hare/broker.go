@@ -61,6 +61,7 @@ func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syn
 	return &Broker{
 		Closer:         closer,
 		Log:            log,
+		pid:            pid,
 		eValidator:     eValidator,
 		stateQuerier:   stateQuerier,
 		isNodeSynced:   syncState,
@@ -152,7 +153,7 @@ func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pub
 }
 
 func (b *Broker) queueMessage(ctx context.Context, pid lp2p.Peer, msg []byte) (*msgRPC, error) {
-	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.latestLayer))
 	logger.Debug("hare broker received inbound gossip message")
 
 	// prioritize based on signature: outbound messages (self-generated) get priority

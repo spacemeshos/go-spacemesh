@@ -139,7 +139,7 @@ func TestBroker_Priority(t *testing.T) {
 	wg2.Wait()
 
 	// now broadcast one outbound message
-	broker.queueMessage(context.TODO(), "", serMsgOutbound)
+	broker.queueMessage(context.TODO(), broker.pid, serMsgOutbound)
 
 	// all messages are queued, release the waiting listener (hare event loop)
 	wg.Done()
