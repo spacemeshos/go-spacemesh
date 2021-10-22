@@ -121,7 +121,7 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, e
 		log.String("to", pid.String())).With()
 	logger.Debug("sending request")
 
-	stream, err := p.h.NewStream(ctx, pid, protocol.ID(protocolName))
+	stream, err := p.h.NewStream(network.WithNoDial(ctx, "existing"), pid, protocol.ID(protocolName))
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a discovery stream: %w", err)
 	}
