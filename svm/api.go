@@ -87,12 +87,14 @@ func (svm *SVM) GetStateRoot() types.Hash32 {
 	return svm.state.GetStateRoot()
 }
 
-// Rewind loads the given layer state from persistent storage.
-func (svm *SVM) Rewind(layer types.LayerID) error {
-	if err := svm.state.LoadState(layer); err != nil {
-		return fmt.Errorf("SVM couldn't rewind back to layer %d: %w", layer.Uint32(), err)
+// Rewind loads the given layer state from persistent storage. On success, it
+// also returns the current state root hash *after* rewinding.
+func (svm *SVM) Rewind(layer types.LayerID) (types.Hash32, error) {
+	err := svm.state.LoadState(layer)
+	if err != nil {
+		return types.Hash32{}, fmt.Errorf("SVM couldn't rewind back to layer %d: %w", layer.Uint32(), err)
 	}
-	return nil
+	return svm.state.GetStateRoot(), err
 }
 
 // GetBalance Retrieve the balance from the given address or 0 if object not found.

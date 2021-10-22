@@ -59,7 +59,7 @@ func (m *meshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.
 type mockState struct{}
 
 func (s mockState) ValidateAndAddTxToPool(_ *types.Transaction) error     { panic("implement me") }
-func (s mockState) Rewind(types.LayerID) error                            { return nil }
+func (s mockState) Rewind(types.LayerID) (types.Hash32, error)            { return s.GetStateRoot(), nil }
 func (s mockState) GetStateRoot() types.Hash32                            { return [32]byte{} }
 func (mockState) ValidateNonceAndBalance(*types.Transaction) error        { panic("implement me") }
 func (mockState) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error) { panic("implement me") }

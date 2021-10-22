@@ -54,7 +54,7 @@ type state interface {
 	GetLayerApplied(txID types.TransactionID) *types.LayerID
 	GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
 	GetStateRoot() types.Hash32
-	Rewind(layer types.LayerID) error
+	Rewind(layer types.LayerID) (types.Hash32, error)
 	ValidateAndAddTxToPool(tx *types.Transaction) error
 	GetBalance(addr types.Address) uint64
 	GetNonce(addr types.Address) uint64
@@ -153,7 +153,7 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 		logger.With().Panic("failed to recover latest layer in state", log.Err(err))
 	}
 
-	err = state.Rewind(msh.LatestLayerInState())
+	_, err = state.Rewind(msh.LatestLayerInState())
 	if err != nil {
 		logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 	}
@@ -487,7 +487,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 func (msh *Mesh) revertState(ctx context.Context, layerID types.LayerID) error {
 	logger := msh.WithContext(ctx).WithFields(layerID)
 	logger.Info("attempting to roll back state to previous layer")
-	if err := msh.Rewind(layerID); err != nil {
+	if _, err := msh.state.Rewind(layerID); err != nil {
 		return fmt.Errorf("failed to revert state to layer %v: %w", layerID, err)
 	}
 	return nil
