@@ -331,7 +331,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
 	}
 
-	err = processor.Rewind(types.NewLayerID(1))
+	err = processor.LoadState(types.NewLayerID(1))
 	assert.NoError(s.T(), err)
 
 	got = string(processor.Dump())
