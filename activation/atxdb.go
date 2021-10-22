@@ -753,6 +753,13 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte) error {
 	}
 	atx.CalcAndSetID()
 	logger := db.log.WithContext(ctx).WithFields(atx.ID())
+	existing, _ := db.GetAtxHeader(atx.ID())
+	if existing != nil {
+		logger.With().Debug("received known atx")
+		// NOTE(dshulyak) it must be noop cause we will fail in fetcher otherwise
+		// but ideally it should make us not forward the message.
+		return nil
+	}
 
 	logger.With().Info(fmt.Sprintf("got new atx %v", atx.ID().ShortString()), atx.Fields(len(data))...)
 
