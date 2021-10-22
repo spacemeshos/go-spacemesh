@@ -514,14 +514,11 @@ func (app *App) initServices(ctx context.Context,
 	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
 
-	syncValidator := syncHandler{}
-
 	wc := weakcoin.New(app.host,
 		vrfSigner, vrfVerifier,
 		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
 		weakcoin.WithMaxRound(app.Config.TortoiseBeacon.RoundsNumber),
 	)
-	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncValidator.Handle, wc.HandleProposal))
 
 	tBeacon := tortoisebeacon.New(
 		app.Config.TortoiseBeacon,
@@ -536,12 +533,6 @@ func (app *App) initServices(ctx context.Context,
 		tBeaconDBStore,
 		clock,
 		app.addLogger(TBeaconLogger, lg))
-	app.host.Register(tortoisebeacon.TBProposalProtocol,
-		pubsub.ChainGossipHandler(syncValidator.Handle, tBeacon.HandleSerializedProposalMessage))
-	app.host.Register(tortoisebeacon.TBFirstVotingProtocol,
-		pubsub.ChainGossipHandler(syncValidator.Handle, tBeacon.HandleSerializedFirstVotingMessage))
-	app.host.Register(tortoisebeacon.TBFollowingVotingProtocol,
-		pubsub.ChainGossipHandler(syncValidator.Handle, tBeacon.HandleSerializedFollowingVotingMessage))
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.ThreadSafeVerifyingTortoise
@@ -614,7 +605,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
-	syncValidator.sync = newSyncer
 	tBeacon.SetSyncState(newSyncer)
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxDB, tBeacon, vrfSigner, nodeID, newSyncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
@@ -655,7 +645,6 @@ func (app *App) initServices(ctx context.Context,
 		stateAndMeshProjector,
 		app.txPool,
 		app.addLogger(BlockBuilderLogger, lg))
-	app.host.Register(blocks.NewBlockProtocol, pubsub.ChainGossipHandler(syncValidator.Handle, blockListener.HandleBlock))
 
 	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
 
@@ -683,8 +672,24 @@ func (app *App) initServices(ctx context.Context,
 		postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
 	)
-	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncValidator.Handle, atxDB.HandleGossipAtx))
-	app.host.Register(state.IncomingTxProtocol, pubsub.ChainGossipHandler(syncValidator.Handle, processor.HandleTxGossipData))
+
+	syncHandler := func(_ context.Context, _ lp2p.Peer, _ []byte) pubsub.ValidationResult {
+		if newSyncer.ListenToGossip() {
+			return pubsub.ValidationAccept
+		}
+		return pubsub.ValidationIgnore
+	}
+
+	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, wc.HandleProposal))
+	app.host.Register(tortoisebeacon.TBProposalProtocol,
+		pubsub.ChainGossipHandler(syncHandler, tBeacon.HandleSerializedProposalMessage))
+	app.host.Register(tortoisebeacon.TBFirstVotingProtocol,
+		pubsub.ChainGossipHandler(syncHandler, tBeacon.HandleSerializedFirstVotingMessage))
+	app.host.Register(tortoisebeacon.TBFollowingVotingProtocol,
+		pubsub.ChainGossipHandler(syncHandler, tBeacon.HandleSerializedFollowingVotingMessage))
+	app.host.Register(blocks.NewBlockProtocol, pubsub.ChainGossipHandler(syncHandler, blockListener.HandleBlock))
+	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxDB.HandleGossipAtx))
+	app.host.Register(state.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, processor.HandleTxGossipData))
 	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 
 	app.blockProducer = blockProducer
@@ -1175,15 +1180,4 @@ func (app *App) Start() error {
 
 type layerFetcher struct {
 	system.Fetcher
-}
-
-type syncHandler struct {
-	sync *syncer.Syncer
-}
-
-func (s *syncHandler) Handle(ctx context.Context, _ lp2p.Peer, _ []byte) pubsub.ValidationResult {
-	if s.sync.ListenToGossip() {
-		return pubsub.ValidationAccept
-	}
-	return pubsub.ValidationIgnore
 }
