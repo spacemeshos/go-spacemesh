@@ -38,7 +38,7 @@ func WithNodeStatesReporter(f func()) Opt {
 
 // StartPeers creates a Peers instance that is registered to `s`'s events and starts it.
 func StartPeers(h host.Host, opts ...Opt) *Peers {
-	p := NewPeers(h, opts...)
+	p := newPeers(h, opts...)
 	p.Start()
 	return p
 }
@@ -56,8 +56,8 @@ type Waiter interface {
 	WaitPeers(context.Context, int) ([]peer.ID, error)
 }
 
-// NewPeers creates a Peers using specified parameters and returns it.
-func NewPeers(h host.Host, opts ...Opt) *Peers {
+// newPeers creates a Peers using specified parameters and returns it.
+func newPeers(h host.Host, opts ...Opt) *Peers {
 	p := &Peers{
 		h:        h,
 		logger:   log.NewNop(),
