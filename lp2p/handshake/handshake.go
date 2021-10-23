@@ -163,7 +163,10 @@ func (h *Handshake) handler(stream network.Stream) {
 	if msg.Network != h.netid {
 		h.logger.Warning("network id mismatch",
 			log.Uint32("network-id", h.netid),
-			log.Uint32("peer-network-id", msg.Network))
+			log.Uint32("peer-network-id", msg.Network),
+			log.String("peer-id", stream.Conn().RemotePeer().String()),
+			log.String("peer-address", stream.Conn().LocalMultiaddr().String()),
+		)
 		return
 	}
 	if _, err := codec.EncodeTo(stream, &handshakeAck{}); err != nil {
