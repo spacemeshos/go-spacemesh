@@ -527,7 +527,6 @@ func mockTortoiseBeacon(t *testing.T) blocks.BeaconGetter {
 func createBlockBuilder(t *testing.T, ID string, publisher pubsub.Publisher, meshBlocks []*types.Block) *BlockBuilder {
 	beginRound := make(chan types.LayerID)
 	cfg := Config{
-		Hdist:          5,
 		MinerID:        types.NodeID{Key: ID},
 		AtxsPerBlock:   selectCount,
 		LayersPerEpoch: 3,

@@ -256,7 +256,7 @@ func TestBlockOracleATXLookupError(t *testing.T) {
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nID, func() bool { return true }, lg.WithName("blockOracle"))
 	activationDB.atxErr = errors.New("not found")
 	_, proofs, _, err := blockOracle.BlockEligible(types.NewLayerID(layersPerEpoch * 2))
-	r.EqualError(err, "failed to get latest atx for node in epoch 2: get atx id for target epoch 2: get ATX ID from DB: not found")
+	r.EqualError(err, "failed to get valid atx for node for target epoch 2: get atx id for target epoch 2: get ATX ID from DB: not found")
 	r.Nil(proofs)
 }
 
@@ -565,30 +565,6 @@ func TestBlockEligibility_calc(t *testing.T) {
 	atxDb := &mockAtxDB{atxH: atxH.ActivationTxHeader}
 	o := NewMinerBlockOracle(10, 1, atxDb, mockBeaconProvider(t), vrfsgn, nodeID, func() bool { return true }, logtest.New(t).WithName(t.Name()))
 	o.atx = atxH.ActivationTxHeader
-	_, err := o.calcEligibilityProofs(1)
+	_, _, err := o.calcEligibilityProofs(0, 1)
 	r.EqualError(err, "zero total weight not allowed") // a hack to make sure we got genesis active set size on genesis
-}
-
-func TestMinerBlockOracle_GetEligibleLayers(t *testing.T) {
-	r := require.New(t)
-	committeeSize := uint32(10)
-	layersPerEpoch := uint32(20)
-	types.SetLayersPerEpoch(layersPerEpoch)
-
-	activationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(0)}
-	beaconProvider := mockBeaconProvider(t)
-	lg := logtest.New(t).WithName(nodeID.Key[:5])
-	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
-	numberOfEpochsToTest := 1 // this test supports only 1 epoch
-	eligibleLayers := 0
-	for layer := layersPerEpoch * 2; layer < layersPerEpoch*uint32(numberOfEpochsToTest+2); layer++ {
-		activationDB.atxPublicationLayer = types.NewLayerID((layer/layersPerEpoch)*layersPerEpoch - 1)
-		layerID := types.NewLayerID(layer)
-		_, proofs, _, err := blockOracle.BlockEligible(layerID)
-		r.NoError(err)
-		if len(proofs) > 0 {
-			eligibleLayers++
-		}
-	}
-	r.Equal(eligibleLayers, len(blockOracle.GetEligibleLayers()))
 }
