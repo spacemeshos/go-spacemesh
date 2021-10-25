@@ -37,6 +37,14 @@ func WithContext(ctx context.Context) Opt {
 	}
 }
 
+// WithNodeReporter updates reporter that is notified every time when
+// node added or removed a peer.
+func WithNodeReporter(reporter func()) Opt {
+	return func(fh *Host) {
+		fh.nodeReporter = reporter
+	}
+}
+
 // Host is a conveniency wrapper for all p2p related functionality required to run
 // a full spacemesh node.
 type Host struct {
@@ -46,7 +54,10 @@ type Host struct {
 
 	host.Host
 	*pubsub.PubSub
+
+	nodeReporter func()
 	*bootstrap.Peers
+
 	discovery *peerexchange.Discovery
 	hs        *handshake.Handshake
 	bootstrap *bootstrap.Bootstrap
@@ -72,7 +83,11 @@ func Wrap(h host.Host, opts ...Opt) (*Host, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize pubsub: %w", err)
 	}
-	fh.Peers = bootstrap.StartPeers(h, bootstrap.WithLog(fh.logger))
+	fh.Peers = bootstrap.StartPeers(h,
+		bootstrap.WithLog(fh.logger),
+		bootstrap.WithContext(fh.ctx),
+		bootstrap.WithNodeReporter(fh.nodeReporter),
+	)
 	fh.discovery, err = peerexchange.New(fh.logger, h, peerexchange.Config{
 		DataDir:   cfg.DataDir,
 		Bootnodes: cfg.Bootnodes,
