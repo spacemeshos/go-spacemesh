@@ -1,6 +1,7 @@
 module github.com/spacemeshos/go-spacemesh
 
 require (
+	cloud.google.com/go/storage v1.10.0
 	github.com/ALTree/bigfloat v0.0.0-20201218142103-4a33235224ec
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/bits-and-blooms/bitset v1.2.0
@@ -56,6 +57,7 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e // indirect
 	golang.org/x/tools v0.1.5 // indirect
+	google.golang.org/api v0.30.0
 	google.golang.org/genproto v0.0.0-20200825200019-8632dd797987
 	google.golang.org/grpc v1.40.0
 	nanomsg.org/go-mangos v1.4.0
