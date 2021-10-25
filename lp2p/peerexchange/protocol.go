@@ -10,7 +10,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/protocol"
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"go.uber.org/atomic"
@@ -41,14 +40,14 @@ func newPeerExchange(h host.Host, rt *addrBook, listen uint16, log log.Log) *pee
 		logger: log,
 		listen: atomic.NewUint32(uint32(listen)),
 	}
-	h.SetStreamHandler(protocol.ID(protocolName), ga.handler)
+	h.SetStreamHandler(protocolName, ga.handler)
 	return ga
 }
 
 func (p *peerExchange) handler(stream network.Stream) {
 	defer stream.Close()
 	t := time.Now()
-	logger := p.logger.WithFields(log.String("type", "getaddresses"),
+	logger := p.logger.WithFields(log.String("protocol", protocolName),
 		log.String("from", stream.Conn().RemotePeer().Pretty())).With()
 
 	var port uint16
@@ -121,7 +120,7 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, e
 		log.String("to", pid.String())).With()
 	logger.Debug("sending request")
 
-	stream, err := p.h.NewStream(network.WithNoDial(ctx, "existing"), pid, protocol.ID(protocolName))
+	stream, err := p.h.NewStream(network.WithNoDial(ctx, "existing"), pid, protocolName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create a discovery stream: %w", err)
 	}
