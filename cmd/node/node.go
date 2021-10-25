@@ -38,12 +38,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/svm"
@@ -180,9 +180,9 @@ type HareService interface {
 type TortoiseBeaconService interface {
 	Service
 	GetBeacon(id types.EpochID) ([]byte, error)
-	HandleSerializedProposalMessage(context.Context, lp2p.Peer, []byte) pubsub.ValidationResult
-	HandleSerializedFirstVotingMessage(context.Context, lp2p.Peer, []byte) pubsub.ValidationResult
-	HandleSerializedFollowingVotingMessage(context.Context, lp2p.Peer, []byte) pubsub.ValidationResult
+	HandleSerializedProposalMessage(context.Context, p2p.Peer, []byte) pubsub.ValidationResult
+	HandleSerializedFirstVotingMessage(context.Context, p2p.Peer, []byte) pubsub.ValidationResult
+	HandleSerializedFollowingVotingMessage(context.Context, p2p.Peer, []byte) pubsub.ValidationResult
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
@@ -292,7 +292,7 @@ type App struct {
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
 
-	host *lp2p.Host
+	host *p2p.Host
 
 	loggers map[string]*zap.AtomicLevel
 	term    chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
@@ -673,7 +673,7 @@ func (app *App) initServices(ctx context.Context,
 		activation.WithContext(ctx),
 	)
 
-	syncHandler := func(_ context.Context, _ lp2p.Peer, _ []byte) pubsub.ValidationResult {
+	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {
 		if newSyncer.ListenToGossip() {
 			return pubsub.ValidationAccept
 		}
@@ -1111,8 +1111,8 @@ func (app *App) Start() error {
 
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
-	app.host, err = lp2p.New(ctx, app.addLogger(P2PLogger, lg), cfg,
-		lp2p.WithNodeReporter(events.ReportNodeStatusUpdate))
+	app.host, err = p2p.New(ctx, app.addLogger(P2PLogger, lg), cfg,
+		p2p.WithNodeReporter(events.ReportNodeStatusUpdate))
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}

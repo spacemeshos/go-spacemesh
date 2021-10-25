@@ -1,4 +1,4 @@
-package lp2p
+package p2p
 
 import (
 	"context"
@@ -7,10 +7,10 @@ import (
 	"github.com/libp2p/go-libp2p-core/host"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p/bootstrap"
-	"github.com/spacemeshos/go-spacemesh/lp2p/handshake"
-	"github.com/spacemeshos/go-spacemesh/lp2p/peerexchange"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
+	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 // Opt is for configuring Host.

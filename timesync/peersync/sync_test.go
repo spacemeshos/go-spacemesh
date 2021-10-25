@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync/mocks"
 )
 
@@ -41,7 +41,7 @@ func TestSyncGetOffset(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		tm := mocks.NewMockTime(ctrl)
-		peers := []lp2p.Peer{}
+		peers := []p2p.Peer{}
 		tm.EXPECT().Now().Return(roundStartTime)
 		tm.EXPECT().Now().Return(responseReceive).AnyTimes()
 		for _, h := range mesh.Hosts()[1:] {
@@ -61,7 +61,7 @@ func TestSyncGetOffset(t *testing.T) {
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
 		tm := mocks.NewMockTime(ctrl)
-		peers := []lp2p.Peer{}
+		peers := []p2p.Peer{}
 		tm.EXPECT().Now().Return(roundStartTime)
 		tm.EXPECT().Now().Return(responseReceive).AnyTimes()
 		for _, h := range mesh.Hosts()[1:] {
@@ -104,7 +104,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 	tm.EXPECT().Now().Return(roundStartTime)
 	tm.EXPECT().Now().Return(responseReceive).AnyTimes()
 
-	peers := []lp2p.Peer{}
+	peers := []p2p.Peer{}
 	for _, h := range mesh.Hosts()[1:] {
 		peers = append(peers, h.ID())
 		_ = New(h, nil, WithTime(adjustedTime(peerResponse)))
@@ -136,9 +136,9 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	errors := []error{ErrPeersNotSynced, nil, nil, ErrPeersNotSynced}
 	mesh, err := mocknet.FullMeshLinked(context.TODO(), len(delays))
 	require.NoError(t, err)
-	hosts := []*lp2p.Host{}
+	hosts := []*p2p.Host{}
 	for _, h := range mesh.Hosts() {
-		fh, err := lp2p.Wrap(h)
+		fh, err := p2p.Upgrade(h)
 		require.NoError(t, err)
 		t.Cleanup(func() { _ = fh.Stop() })
 		hosts = append(hosts, fh)

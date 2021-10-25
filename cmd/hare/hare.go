@@ -19,8 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
 	"github.com/spacemeshos/go-spacemesh/monitoring"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -84,7 +84,7 @@ func (mbg *mockBeaconGetter) GetBeacon(id types.EpochID) ([]byte, error) {
 // HareApp represents an Hare application.
 type HareApp struct {
 	*cmdp.BaseApp
-	host    *lp2p.Host
+	host    *p2p.Host
 	oracle  *oracleClient
 	sgn     hare.Signer
 	ha      *hare.Hare
@@ -165,7 +165,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
-	host, err := lp2p.New(cmdp.Ctx, logger, cfg)
+	host, err := p2p.New(cmdp.Ctx, logger, cfg)
 	if err != nil {
 		log.With().Panic("error starting p2p services", log.Err(err))
 	}

@@ -40,7 +40,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -560,7 +560,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	h, err := lp2p.Upgrade(mesh.Hosts()[0])
+	h, err := p2p.Upgrade(mesh.Hosts()[0])
 	require.NoError(t, err)
 	app, err := InitSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339),
 		path, eligibility.New(logtest.New(t)),

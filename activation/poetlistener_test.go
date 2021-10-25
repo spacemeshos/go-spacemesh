@@ -10,8 +10,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 type PoetDbIMock struct {
@@ -41,9 +41,9 @@ func TestNewPoetListener(t *testing.T) {
 	msg, err := types.InterfaceToBytes(&types.PoetProofMessage{})
 	require.NoError(t, err)
 	require.Equal(t, pubsub.ValidationAccept,
-		listener.HandlePoetProofMessage(context.TODO(), lp2p.Peer("test"), msg))
+		listener.HandlePoetProofMessage(context.TODO(), p2p.Peer("test"), msg))
 
 	poetDb.SetErr(fmt.Errorf("bad poet message"))
 	require.Equal(t, pubsub.ValidationIgnore,
-		listener.HandlePoetProofMessage(context.TODO(), lp2p.Peer("test"), msg))
+		listener.HandlePoetProofMessage(context.TODO(), p2p.Peer("test"), msg))
 }

@@ -16,8 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/miner/metrics"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 const (

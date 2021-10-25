@@ -13,8 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
@@ -152,7 +152,7 @@ func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pub
 	return pubsub.ValidationAccept
 }
 
-func (b *Broker) queueMessage(ctx context.Context, pid lp2p.Peer, msg []byte) (*msgRPC, error) {
+func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*msgRPC, error) {
 	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.latestLayer))
 	logger.Debug("hare broker received inbound gossip message")
 

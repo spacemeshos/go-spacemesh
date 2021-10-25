@@ -11,8 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p/bootstrap/mocks"
-	"github.com/spacemeshos/go-spacemesh/lp2p/handshake"
+	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap/mocks"
+	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 )
 
 func TestBootstrapEmitEvents(t *testing.T) {

@@ -23,7 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
@@ -218,7 +218,7 @@ func GracefulShutdown(apps []*App) {
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
 func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
-	poetClient *activation.HTTPPoetClient, clock TickProvider, host *lp2p.Host, edSgn *signing.EdSigner) (*App, error) {
+	poetClient *activation.HTTPPoetClient, clock TickProvider, host *p2p.Host, edSgn *signing.EdSigner) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg
 	smApp.Config.GenesisTime = genesisTime
@@ -294,7 +294,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
 		edSgn := signing.NewEdSigner()
-		host, err := lp2p.Upgrade(mesh.Hosts()[i], lp2p.WithLog(logger), lp2p.WithConfig(cfg.P2P))
+		host, err := p2p.Upgrade(mesh.Hosts()[i], p2p.WithLog(logger), p2p.WithConfig(cfg.P2P))
 		if err != nil {
 			logger.With().Error("failed to initialize host", log.Err(err))
 			return

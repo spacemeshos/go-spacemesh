@@ -19,8 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -222,7 +222,7 @@ func (mbp *mockBlockProvider) GetBlock(bID types.BlockID) (*types.Block, error) 
 	return nil, nil
 }
 
-func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, pid lp2p.Peer, p2p pubsub.PublishSubsciber, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
+func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))

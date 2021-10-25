@@ -13,7 +13,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p/handshake"
+	"github.com/spacemeshos/go-spacemesh/p2p/handshake"
 )
 
 // EventSpacemeshPeer is emitted when peer is connected after handshake or disconnected.

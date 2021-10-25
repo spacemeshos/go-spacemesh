@@ -12,7 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -30,8 +30,8 @@ type mockNet struct {
 	AsyncChannel    chan struct{}
 }
 
-func (m mockNet) GetPeers() []lp2p.Peer {
-	return []lp2p.Peer{lp2p.Peer("test")}
+func (m mockNet) GetPeers() []p2p.Peer {
+	return []p2p.Peer{p2p.Peer("test")}
 }
 
 func (m mockNet) PeerCount() uint64 {
@@ -42,7 +42,7 @@ func (m mockNet) Close() error {
 	return nil
 }
 
-func (m *mockNet) Request(_ context.Context, pid lp2p.Peer, payload []byte, resHandler func(msg []byte), failHandler func(err error)) error {
+func (m *mockNet) Request(_ context.Context, pid p2p.Peer, payload []byte, resHandler func(msg []byte), failHandler func(err error)) error {
 	m.TotalBatchCalls++
 	if m.ReturnError {
 		if m.AckChannel != nil {
@@ -403,12 +403,12 @@ func TestFetch_handleNewRequest_MultipleReqsForSameHashHighPriority(t *testing.T
 }
 
 func TestFetch_GetRandomPeer(t *testing.T) {
-	myPeers := make([]lp2p.Peer, 1000)
+	myPeers := make([]p2p.Peer, 1000)
 	for i := 0; i < len(myPeers); i++ {
 		buf := make([]byte, 20)
 		_, err := rand.Read(buf)
 		require.NoError(t, err)
-		myPeers[i] = lp2p.Peer(buf)
+		myPeers[i] = p2p.Peer(buf)
 	}
 	allTheSame := true
 	for i := 0; i < 20; i++ {

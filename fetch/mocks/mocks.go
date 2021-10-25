@@ -12,7 +12,7 @@ import (
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 	database "github.com/spacemeshos/go-spacemesh/database"
 	fetch "github.com/spacemeshos/go-spacemesh/fetch"
-	lp2p "github.com/spacemeshos/go-spacemesh/lp2p"
+	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 // MockFetcher is a mock of Fetcher interface.
@@ -140,10 +140,10 @@ func (mr *MocknetworkInterfaceMockRecorder) Close() *gomock.Call {
 }
 
 // GetPeers mocks base method.
-func (m *MocknetworkInterface) GetPeers() []lp2p.Peer {
+func (m *MocknetworkInterface) GetPeers() []p2p.Peer {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetPeers")
-	ret0, _ := ret[0].([]lp2p.Peer)
+	ret0, _ := ret[0].([]p2p.Peer)
 	return ret0
 }
 
@@ -168,7 +168,7 @@ func (mr *MocknetworkInterfaceMockRecorder) PeerCount() *gomock.Call {
 }
 
 // Request mocks base method.
-func (m *MocknetworkInterface) Request(arg0 context.Context, arg1 lp2p.Peer, arg2 []byte, arg3 func([]byte), arg4 func(error)) error {
+func (m *MocknetworkInterface) Request(arg0 context.Context, arg1 p2p.Peer, arg2 []byte, arg3 func([]byte), arg4 func(error)) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Request", arg0, arg1, arg2, arg3, arg4)
 	ret0, _ := ret[0].(error)

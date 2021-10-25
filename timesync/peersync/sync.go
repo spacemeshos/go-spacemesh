@@ -14,8 +14,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/lp2p/bootstrap"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
 )
 
 const (
@@ -240,7 +240,7 @@ func (s *Sync) run() error {
 }
 
 // GetOffset computes offset from received response. The method is stateless and safe to use concurrently.
-func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []lp2p.Peer) (time.Duration, error) {
+func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.Duration, error) {
 	var (
 		responses = make(chan response, len(prs))
 		round     = round{
@@ -256,7 +256,7 @@ func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []lp2p.Peer) (time.
 	}
 	for _, pid := range prs {
 		wg.Add(1)
-		go func(pid lp2p.Peer) {
+		go func(pid p2p.Peer) {
 			defer wg.Done()
 			logger := s.log.WithFields(log.String("pid", pid.Pretty())).With()
 			stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocolName)

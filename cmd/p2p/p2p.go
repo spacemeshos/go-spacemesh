@@ -16,9 +16,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 // Cmd is the p2p cmd.
@@ -57,13 +57,13 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("initializing p2p services")
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
-	host, err := lp2p.New(cmdp.Ctx, logger, cfg)
+	host, err := p2p.New(cmdp.Ctx, logger, cfg)
 	if err != nil {
 		log.With().Panic("failed to create host", log.Err(err))
 	}
 	defer host.Stop()
 
-	host.Register(activation.PoetProofProtocol, func(ctx context.Context, pid lp2p.Peer, msg []byte) pubsub.ValidationResult {
+	host.Register(activation.PoetProofProtocol, func(ctx context.Context, pid p2p.Peer, msg []byte) pubsub.ValidationResult {
 		log.With().Info("api_test_gossip: got test gossip message", log.Int("len", len(msg)))
 		return pubsub.ValidationAccept
 	})

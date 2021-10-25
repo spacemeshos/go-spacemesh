@@ -5,12 +5,10 @@
 package mocks
 
 import (
-	context "context"
 	reflect "reflect"
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	lp2p "github.com/spacemeshos/go-spacemesh/lp2p"
 )
 
 // MockTime is a mock of Time interface.
@@ -48,42 +46,4 @@ func (m *MockTime) Now() time.Time {
 func (mr *MockTimeMockRecorder) Now() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Now", reflect.TypeOf((*MockTime)(nil).Now))
-}
-
-// MockPeersWatcher is a mock of PeersWatcher interface.
-type MockPeersWatcher struct {
-	ctrl     *gomock.Controller
-	recorder *MockPeersWatcherMockRecorder
-}
-
-// MockPeersWatcherMockRecorder is the mock recorder for MockPeersWatcher.
-type MockPeersWatcherMockRecorder struct {
-	mock *MockPeersWatcher
-}
-
-// NewMockPeersWatcher creates a new mock instance.
-func NewMockPeersWatcher(ctrl *gomock.Controller) *MockPeersWatcher {
-	mock := &MockPeersWatcher{ctrl: ctrl}
-	mock.recorder = &MockPeersWatcherMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockPeersWatcher) EXPECT() *MockPeersWatcherMockRecorder {
-	return m.recorder
-}
-
-// WaitPeers mocks base method.
-func (m *MockPeersWatcher) WaitPeers(arg0 context.Context, arg1 int) ([]lp2p.Peer, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "WaitPeers", arg0, arg1)
-	ret0, _ := ret[0].([]lp2p.Peer)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// WaitPeers indicates an expected call of WaitPeers.
-func (mr *MockPeersWatcherMockRecorder) WaitPeers(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "WaitPeers", reflect.TypeOf((*MockPeersWatcher)(nil).WaitPeers), arg0, arg1)
 }

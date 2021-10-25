@@ -17,9 +17,9 @@ import (
 	lyrMocks "github.com/spacemeshos/go-spacemesh/layerfetcher/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/lp2p/server"
-	srvmocks "github.com/spacemeshos/go-spacemesh/lp2p/server/mocks"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
+	srvmocks "github.com/spacemeshos/go-spacemesh/p2p/server/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -44,20 +44,20 @@ func randomBlockID() types.BlockID {
 	return types.BlockID(types.CalcHash32(b).ToHash20())
 }
 
-func randPeer(tb testing.TB) lp2p.Peer {
+func randPeer(tb testing.TB) p2p.Peer {
 	tb.Helper()
 	buf := make([]byte, 20)
 	_, err := rand.Read(buf)
 	require.NoError(tb, err)
-	return lp2p.Peer(buf)
+	return p2p.Peer(buf)
 }
 
 type mockNet struct {
 	server.Host
-	peers       []lp2p.Peer
-	layerBlocks map[lp2p.Peer][]byte
-	errors      map[lp2p.Peer]error
-	timeouts    map[lp2p.Peer]struct{}
+	peers       []p2p.Peer
+	layerBlocks map[p2p.Peer][]byte
+	errors      map[p2p.Peer]error
+	timeouts    map[p2p.Peer]struct{}
 }
 
 func newMockNet(tb testing.TB) *mockNet {
@@ -66,15 +66,15 @@ func newMockNet(tb testing.TB) *mockNet {
 	h.EXPECT().SetStreamHandler(gomock.Any(), gomock.Any()).AnyTimes()
 	return &mockNet{
 		Host:        h,
-		layerBlocks: make(map[lp2p.Peer][]byte),
-		errors:      make(map[lp2p.Peer]error),
-		timeouts:    make(map[lp2p.Peer]struct{}),
+		layerBlocks: make(map[p2p.Peer][]byte),
+		errors:      make(map[p2p.Peer]error),
+		timeouts:    make(map[p2p.Peer]struct{}),
 	}
 }
-func (m *mockNet) GetPeers() []lp2p.Peer { return m.peers }
-func (m *mockNet) PeerCount() uint64     { return uint64(len(m.peers)) }
+func (m *mockNet) GetPeers() []p2p.Peer { return m.peers }
+func (m *mockNet) PeerCount() uint64    { return uint64(len(m.peers)) }
 
-func (m *mockNet) Request(_ context.Context, pid lp2p.Peer, _ []byte, resHandler func(msg []byte), errorHandler func(err error)) error {
+func (m *mockNet) Request(_ context.Context, pid p2p.Peer, _ []byte, resHandler func(msg []byte), errorHandler func(err error)) error {
 	if _, ok := m.timeouts[pid]; ok {
 		errorHandler(errors.New("peer timeout"))
 		return nil

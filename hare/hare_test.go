@@ -21,9 +21,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
-	pubsubmocks "github.com/spacemeshos/go-spacemesh/lp2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -117,7 +117,7 @@ func randomBlock(t *testing.T, lyrID types.LayerID, beacon []byte) *types.Block 
 	return block
 }
 
-func createHare(t *testing.T, id lp2p.Peer, ps pubsub.PublishSubsciber, msh meshProvider, beacons blocks.BeaconGetter, clock *mockClock, logger log.Log) *Hare {
+func createHare(t *testing.T, id p2p.Peer, ps pubsub.PublishSubsciber, msh meshProvider, beacons blocks.BeaconGetter, clock *mockClock, logger log.Log) *Hare {
 	ctrl := gomock.NewController(t)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()

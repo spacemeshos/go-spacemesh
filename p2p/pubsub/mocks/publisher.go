@@ -9,7 +9,7 @@ import (
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
-	pubsub "github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
+	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 // MockPublisher is a mock of Publisher interface.

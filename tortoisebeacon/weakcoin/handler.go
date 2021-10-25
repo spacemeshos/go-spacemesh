@@ -8,7 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 // HandleProposal defines method to handle Tortoise Beacon Weak Coin Messages from gossip.

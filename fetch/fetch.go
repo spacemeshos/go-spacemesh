@@ -11,8 +11,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/lp2p/server"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -94,7 +94,7 @@ type requestBatch struct {
 
 type batchInfo struct {
 	requestBatch
-	peer lp2p.Peer
+	peer p2p.Peer
 }
 
 // SetID calculates the hash of all requests and sets it as this batches ID.
@@ -144,19 +144,19 @@ func DefaultConfig() Config {
 
 type networkInterface interface {
 	PeerCount() uint64
-	GetPeers() []lp2p.Peer
-	Request(context.Context, lp2p.Peer, []byte, func([]byte), func(error)) error
+	GetPeers() []p2p.Peer
+	Request(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error
 	Close() error
 }
 
 // messageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'.
 type messageNetwork struct {
 	*server.Server
-	*lp2p.Host
+	*p2p.Host
 }
 
 // GetRandomPeer returns a random peer from current peer list.
-func GetRandomPeer(peers []lp2p.Peer) lp2p.Peer {
+func GetRandomPeer(peers []p2p.Peer) p2p.Peer {
 	if len(peers) == 0 {
 		log.Panic("cannot send fetch: no peers found")
 	}
@@ -187,7 +187,7 @@ type Fetch struct {
 }
 
 // NewFetch creates a new Fetch struct.
-func NewFetch(ctx context.Context, cfg Config, h *lp2p.Host, logger log.Log) *Fetch {
+func NewFetch(ctx context.Context, cfg Config, h *p2p.Host, logger log.Log) *Fetch {
 	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,

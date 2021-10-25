@@ -17,9 +17,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	dbMocks "github.com/spacemeshos/go-spacemesh/database/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
-	pubsubmocks "github.com/spacemeshos/go-spacemesh/lp2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/mempool"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )

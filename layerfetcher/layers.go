@@ -12,9 +12,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/lp2p/bootstrap"
-	"github.com/spacemeshos/go-spacemesh/lp2p/server"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
+	"github.com/spacemeshos/go-spacemesh/p2p/server"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./layers.go
@@ -84,7 +84,7 @@ type layerResult struct {
 	layerID     types.LayerID
 	blocks      map[types.BlockID]struct{}
 	inputVector []types.BlockID
-	responses   map[lp2p.Peer]*peerResult
+	responses   map[p2p.Peer]*peerResult
 }
 
 // LayerPromiseResult is the result of trying to fetch data for an entire layer.
@@ -235,7 +235,7 @@ func (l *Logic) initLayerPolling(layerID types.LayerID, ch chan LayerPromiseResu
 	l.layerBlocksRes[layerID] = &layerResult{
 		layerID:   layerID,
 		blocks:    make(map[types.BlockID]struct{}),
-		responses: make(map[lp2p.Peer]*peerResult),
+		responses: make(map[p2p.Peer]*peerResult),
 	}
 	return true
 }
@@ -322,7 +322,7 @@ func extractPeerResult(logger log.Log, layerID types.LayerID, data []byte, peerE
 
 // receiveLayerContent is called when response of block IDs for a layer hash is received from remote peer.
 // if enough responses are received, it notifies the channels waiting for the layer blocks result.
-func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, peer lp2p.Peer, expectedResults int, data []byte, peerErr error) {
+func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, peer p2p.Peer, expectedResults int, data []byte, peerErr error) {
 	l.log.WithContext(ctx).With().Debug("received layer content from peer", log.String("peer", peer.String()))
 	peerRes := extractPeerResult(l.log.WithContext(ctx), layerID, data, peerErr)
 	if peerRes.err == nil {

@@ -15,8 +15,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/lp2p"
-	"github.com/spacemeshos/go-spacemesh/lp2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	signing2 "github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -394,7 +394,7 @@ func (ps *delayeadPubSub) Publish(ctx context.Context, protocol string, msg []by
 
 func (ps *delayeadPubSub) Register(protocol string, handler pubsub.GossipHandler) {
 	if ps.recvDelay != 0 {
-		handler = func(ctx context.Context, pid lp2p.Peer, msg []byte) pubsub.ValidationResult {
+		handler = func(ctx context.Context, pid p2p.Peer, msg []byte) pubsub.ValidationResult {
 			rng := time.Duration(rand.Uint32()) * time.Second % ps.recvDelay
 			select {
 			case <-ctx.Done():
