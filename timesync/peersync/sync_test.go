@@ -11,6 +11,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
+	bootmocks "github.com/spacemeshos/go-spacemesh/p2p/bootstrap/mocks"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync/mocks"
 )
 
@@ -94,10 +95,10 @@ func TestSyncTerminateOnError(t *testing.T) {
 	require.NoError(t, err)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	watcher := mocks.NewMockPeersWatcher(ctrl)
+	waiter := bootmocks.NewMockWaiter(ctrl)
 	tm := mocks.NewMockTime(ctrl)
 
-	sync := New(mesh.Hosts()[0], watcher,
+	sync := New(mesh.Hosts()[0], waiter,
 		WithTime(tm),
 		WithConfig(config),
 	)
@@ -109,7 +110,7 @@ func TestSyncTerminateOnError(t *testing.T) {
 		peers = append(peers, h.ID())
 		_ = New(h, nil, WithTime(adjustedTime(peerResponse)))
 	}
-	watcher.EXPECT().WaitPeers(gomock.Any(), gomock.Any()).Return(peers, nil)
+	waiter.EXPECT().WaitPeers(gomock.Any(), gomock.Any()).Return(peers, nil)
 
 	sync.Start()
 	t.Cleanup(sync.Stop)
