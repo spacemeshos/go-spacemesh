@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"math"
-	"math/big"
 	"os"
 	"path"
 	"sort"
@@ -529,13 +528,13 @@ func TestMeshDB_testGetRewards(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, 10000, 9000)
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, 20000, 19000)
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, big.NewInt(15000), big.NewInt(14500))
+	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, 15000, 14500)
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewards(addr2)
@@ -614,13 +613,13 @@ func TestMeshDB_testGetRewardsBySmesher(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, 10000, 9000)
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, 20000, 19000)
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, big.NewInt(15000), big.NewInt(14500))
+	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, 15000, 14500)
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
@@ -699,13 +698,13 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, 10000, 9000)
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, 20000, 19000)
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, big.NewInt(15000), big.NewInt(14500))
+	err = mdb.writeTransactionRewards(types.NewLayerID(3), test3Map, 15000, 14500)
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
@@ -777,7 +776,7 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshers(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, 10000, 9000)
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
@@ -868,10 +867,10 @@ func TestMeshDB_testGetRewardsBySmesherMultipleSmeshersAndLayers(t *testing.T) {
 		},
 	}
 
-	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, big.NewInt(10000), big.NewInt(9000))
+	err := mdb.writeTransactionRewards(types.NewLayerID(1), test1Map, 10000, 9000)
 	r.NoError(err)
 
-	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, big.NewInt(20000), big.NewInt(19000))
+	err = mdb.writeTransactionRewards(types.NewLayerID(2), test2Map, 20000, 19000)
 	r.NoError(err)
 
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)

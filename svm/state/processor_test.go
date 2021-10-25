@@ -2,7 +2,6 @@ package state
 
 import (
 	crand "crypto/rand"
-	"math/big"
 	"math/rand"
 	"testing"
 
@@ -89,7 +88,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 
 	failed, err := s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
-	assert.True(s.T(), failed == 0)
+	assert.Empty(s.T(), failed)
 
 	got := string(s.processor.Dump())
 
@@ -183,7 +182,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 
 	failed, err := s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
-	assert.True(s.T(), failed == 0)
+	assert.Empty(s.T(), failed)
 
 	err = s.processor.ApplyTransaction(createTransaction(s.T(), 0, obj2.address, 1, 5, signer1), types.LayerID{})
 	assert.Error(s.T(), err)
@@ -200,15 +199,12 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyRewards() {
-	s.processor.ApplyRewards(types.NewLayerID(1), []types.Address{
-		types.HexToAddress("aaa"),
-		types.HexToAddress("bbb"),
-		types.HexToAddress("ccc"),
-		types.HexToAddress("ddd"),
-		types.HexToAddress("bbb"),
-		types.HexToAddress("aaa"),
+	s.processor.ApplyRewards(types.NewLayerID(1), map[types.Address]uint64{
+		types.HexToAddress("aaa"): 2000,
+		types.HexToAddress("bbb"): 2000,
+		types.HexToAddress("ccc"): 1000,
+		types.HexToAddress("ddd"): 1000,
 	},
-		big.NewInt(int64(1000)),
 	)
 
 	assert.Equal(s.T(), s.processor.GetBalance(types.HexToAddress("aaa")), uint64(2000))
@@ -301,7 +297,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 
 	failed, err := processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
-	assert.True(s.T(), failed == 0)
+	assert.Empty(s.T(), failed)
 
 	transactions = []*types.Transaction{
 		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
@@ -309,7 +305,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	}
 
 	failed, err = processor.ApplyTransactions(types.NewLayerID(2), transactions)
-	assert.True(s.T(), failed == 0)
+	assert.Empty(s.T(), failed)
 	assert.NoError(s.T(), err)
 
 	got := string(processor.Dump())

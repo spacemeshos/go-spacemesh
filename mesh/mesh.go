@@ -8,7 +8,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"math/big"
 	"math/rand"
 	"sync"
 
@@ -48,9 +47,8 @@ type Validator interface {
 	ValidateLayer(context.Context, *types.Layer)
 }
 
-type txProcessor interface {
-	ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error)
-	ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int)
+type state interface {
+	ApplyLayer(layer types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error)
 	AddressExists(addr types.Address) bool
 	ValidateNonceAndBalance(transaction *types.Transaction) error
 	GetLayerApplied(txID types.TransactionID) *types.LayerID
@@ -81,7 +79,7 @@ type Mesh struct {
 	log.Log
 	*DB
 	AtxDB
-	txProcessor
+	state
 	Validator
 	trtl   tortoise
 	txPool txMemPool
@@ -102,12 +100,12 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
 	msh := &Mesh{
 		Log:                 logger,
 		trtl:                trtl,
 		txPool:              txPool,
-		txProcessor:         pr,
+		state:               state,
 		done:                make(chan struct{}),
 		DB:                  db,
 		config:              rewardConfig,
@@ -132,8 +130,8 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 }
 
 // NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database.
-func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, pr txProcessor, logger log.Log) *Mesh {
-	msh := NewMesh(db, atxDb, rewardConfig, trtl, txPool, pr, logger)
+func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
+	msh := NewMesh(db, atxDb, rewardConfig, trtl, txPool, state, logger)
 
 	latest, err := db.general.Get(constLATEST)
 	if err != nil {
@@ -155,7 +153,7 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 		logger.With().Panic("failed to recover latest layer in state", log.Err(err))
 	}
 
-	err = pr.LoadState(msh.LatestLayerInState())
+	err = state.LoadState(msh.LatestLayerInState())
 	if err != nil {
 		logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 	}
@@ -174,7 +172,7 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 		log.FieldNamed("latest", msh.LatestLayer()),
 		log.FieldNamed("processed", msh.ProcessedLayer()),
 		log.FieldNamed("verified", msh.trtl.LatestComplete()),
-		log.String("root_hash", pr.GetStateRoot().String()))
+		log.String("root_hash", state.GetStateRoot().String()))
 
 	return msh
 }
@@ -479,7 +477,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types
 		msh.updateStateWithLayer(ctx, types.NewExistingLayer(layerID, validBlocks))
 		msh.Event().Info("end of layer state root",
 			layerID,
-			log.String("state_root", util.Bytes2Hex(msh.txProcessor.GetStateRoot().Bytes())),
+			log.String("state_root", util.Bytes2Hex(msh.state.GetStateRoot().Bytes())),
 		)
 		msh.reInsertTxsToPool(validBlocks, invalidBlocks, l.Index())
 	}
@@ -512,8 +510,50 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 }
 
 func (msh *Mesh) applyState(l *types.Layer) {
-	msh.accumulateRewards(l, msh.config)
-	msh.pushTransactions(l)
+	// Aggregate all blocks' rewards.
+	validBlockTxs := msh.extractUniqueOrderedTransactions(l)
+	// The reason we are serializing the types.NodeID to a string instead of using it directly as a
+	// key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
+	// the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key.
+	//
+	// TODO: fix this when changing the types.NodeID struct, see
+	// https://github.com/spacemeshos/go-spacemesh/issues/2269.
+	coinbasesAndSmeshers, coinbases := msh.getCoinbasesAndSmeshers(l)
+	var failedTxs []*types.Transaction
+	var svmErr error
+
+	// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
+	if len(coinbases) > 0 {
+		rewards := msh.calculateRewards(l, validBlockTxs, msh.config, coinbases)
+		rewardByMiner := map[types.Address]uint64{}
+		for _, miner := range coinbases {
+			rewardByMiner[miner] += rewards.blockTotalReward
+		}
+		failedTxs, svmErr = msh.state.ApplyLayer(l.Index(), validBlockTxs, rewardByMiner)
+		msh.logRewards(&rewards)
+		msh.reportRewards(&rewards, coinbasesAndSmeshers)
+
+		if err := msh.DB.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, rewards.blockTotalReward, rewards.blockLayerReward); err != nil {
+			msh.Log.Error("cannot write reward to db")
+		}
+	} else {
+		msh.With().Info("no valid blocks for layer", l.Index())
+		failedTxs, svmErr = msh.state.ApplyLayer(l.Index(), validBlockTxs, map[types.Address]uint64{})
+	}
+
+	if svmErr != nil {
+		msh.With().Error("failed to apply transactions",
+			l.Index(), log.Int("num_failed_txs", len(failedTxs)), log.Err(svmErr))
+		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
+		//  e.g. persist the last layer transactions were applied from and use that instead of `oldPbase`
+	}
+	msh.removeFromUnappliedTxs(validBlockTxs)
+	msh.With().Info("applied transactions",
+		log.Int("valid_block_txs", len(validBlockTxs)),
+		l.Index(),
+		log.Int("num_failed_txs", len(failedTxs)),
+	)
+
 	msh.setLatestLayerInState(l.Index())
 }
 
@@ -605,7 +645,8 @@ func (msh *Mesh) updateStateWithLayer(ctx context.Context, layer *types.Layer) {
 }
 
 func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
-	// update validated layer only after applying transactions since loading of state depends on processedLayer param.
+	// Update validated layer only after applying transactions since loading of
+	// state depends on processedLayer param.
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
 	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
@@ -690,23 +731,6 @@ func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.T
 		msh.Panic("could not find transactions %v from layer %v", missing, l)
 	}
 	return txs
-}
-
-func (msh *Mesh) pushTransactions(l *types.Layer) {
-	validBlockTxs := msh.extractUniqueOrderedTransactions(l)
-	numFailedTxs, err := msh.ApplyTransactions(l.Index(), validBlockTxs)
-	if err != nil {
-		msh.With().Error("failed to apply transactions",
-			l.Index(), log.Int("num_failed_txs", numFailedTxs), log.Err(err))
-		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
-		//  e.g. persist the last layer transactions were applied from and use that instead of `oldPbase`
-	}
-	msh.removeFromUnappliedTxs(validBlockTxs)
-	msh.With().Info("applied transactions",
-		log.Int("valid_block_txs", len(validBlockTxs)),
-		l.Index(),
-		log.Int("num_failed_txs", numFailedTxs),
-	)
 }
 
 var errLayerHasBlock = errors.New("layer has block")
@@ -864,13 +888,81 @@ func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	return idArr, nil
 }
 
-func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
-	coinbases := make([]types.Address, 0, len(l.Blocks()))
+type layerRewardsInfo struct {
+	types.LayerID
+	feesReward          uint64
+	layerReward         uint64
+	numBlocks           uint64
+	blockTotalReward    uint64
+	blockTotalRewardMod uint64
+	blockLayerReward    uint64
+	blockLayerRewardMod uint64
+}
+
+func (info *layerRewardsInfo) totalReward() uint64 {
+	return info.feesReward + info.layerReward
+}
+
+func (msh *Mesh) logRewards(rewards *layerRewardsInfo) {
+	msh.With().Info("reward calculated",
+		rewards.LayerID,
+		log.Uint64("num_blocks", rewards.numBlocks),
+		log.Uint64("total_reward", rewards.totalReward()),
+		log.Uint64("layer_reward", rewards.layerReward),
+		log.Uint64("block_total_reward", rewards.blockTotalReward),
+		log.Uint64("block_layer_reward", rewards.blockLayerReward),
+		log.Uint64("total_reward_remainder", rewards.blockTotalRewardMod),
+		log.Uint64("layer_reward_remainder", rewards.blockLayerRewardMod),
+	)
+}
+
+func (msh *Mesh) calculateRewards(l *types.Layer, txs []*types.Transaction, params Config, coinbases []types.Address) layerRewardsInfo {
+	rewards := layerRewardsInfo{}
+
+	rewards.LayerID = l.Index()
+	for _, tx := range txs {
+		rewards.feesReward += tx.Fee
+	}
+
+	rewards.layerReward = calculateLayerReward(l.Index(), params)
+	rewards.numBlocks = uint64(len(coinbases))
+
+	rewards.blockTotalReward, rewards.blockTotalRewardMod = calculateActualRewards(l.Index(), rewards.totalReward(), rewards.numBlocks)
+	rewards.blockLayerReward, rewards.blockLayerRewardMod = calculateActualRewards(l.Index(), rewards.layerReward, rewards.numBlocks)
+
+	return rewards
+}
+
+func (msh *Mesh) reportRewards(rewards *layerRewardsInfo, coinbasesAndSmeshers map[types.Address]map[string]uint64) {
+	// Report the rewards for each coinbase and each smesherID within each coinbase.
+	// This can be thought of as a partition of the reward amongst all the smesherIDs
+	// that added the coinbase into the block.
+	for account, smesherAccountEntry := range coinbasesAndSmeshers {
+		for smesherString, cnt := range smesherAccountEntry {
+			smesherEntry, err := types.StringToNodeID(smesherString)
+			if err != nil {
+				msh.With().Error("unable to convert bytes to nodeid", log.Err(err),
+					log.String("smesher_string", smesherString))
+				return
+			}
+			events.ReportRewardReceived(events.Reward{
+				Layer:       rewards.LayerID,
+				Total:       cnt * rewards.blockTotalReward,
+				LayerReward: cnt * rewards.blockLayerReward,
+				Coinbase:    account,
+				Smesher:     *smesherEntry,
+			})
+		}
+	}
+}
+
+func (msh *Mesh) getCoinbasesAndSmeshers(l *types.Layer) (coinbasesAndSmeshers map[types.Address]map[string]uint64, coinbases []types.Address) {
+	coinbases = make([]types.Address, 0, len(l.Blocks()))
 	// the reason we are serializing the types.NodeID to a string instead of using it directly as a
 	// key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
 	// the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key
 	// TODO: fix this when changing the types.NodeID struct, see https://github.com/spacemeshos/go-spacemesh/issues/2269
-	coinbasesAndSmeshers := make(map[types.Address]map[string]uint64)
+	coinbasesAndSmeshers = make(map[types.Address]map[string]uint64)
 	for _, bl := range l.Blocks() {
 		if bl.ATXID == *types.EmptyATXID {
 			msh.With().Info("skipping reward distribution for block with no atx", bl.LayerIndex, bl.ID())
@@ -890,72 +982,7 @@ func (msh *Mesh) accumulateRewards(l *types.Layer, params Config) {
 		coinbasesAndSmeshers[atx.Coinbase][atx.NodeID.String()]++
 	}
 
-	if len(coinbases) == 0 {
-		msh.With().Info("no valid blocks for layer", l.Index())
-		return
-	}
-
-	// aggregate all blocks' rewards
-	txs := msh.extractUniqueOrderedTransactions(l)
-
-	totalReward := &big.Int{}
-	for _, tx := range txs {
-		totalReward.Add(totalReward, new(big.Int).SetUint64(tx.Fee))
-	}
-
-	layerReward := calculateLayerReward(l.Index(), params)
-	totalReward.Add(totalReward, layerReward)
-
-	numBlocks := big.NewInt(int64(len(coinbases)))
-
-	blockTotalReward, blockTotalRewardMod := calculateActualRewards(l.Index(), totalReward, numBlocks)
-
-	// NOTE: We don't _report_ rewards when we apply them. This is because applying rewards just requires
-	// the recipient (i.e., coinbase) account, whereas reporting requires knowing the associated smesherid
-	// as well. We report rewards below once we unpack the data structure containing the association between
-	// rewards and smesherids.
-
-	// Applying rewards (here), reporting them, and adding them to the database (below) should be atomic. Right now,
-	// they're not. Also, ApplyRewards does not return an error if it fails.
-	// TODO: fix this.
-	msh.ApplyRewards(l.Index(), coinbases, blockTotalReward)
-
-	blockLayerReward, blockLayerRewardMod := calculateActualRewards(l.Index(), layerReward, numBlocks)
-	msh.With().Info("reward calculated",
-		l.Index(),
-		log.Uint64("num_blocks", numBlocks.Uint64()),
-		log.Uint64("total_reward", totalReward.Uint64()),
-		log.Uint64("layer_reward", layerReward.Uint64()),
-		log.Uint64("block_total_reward", blockTotalReward.Uint64()),
-		log.Uint64("block_layer_reward", blockLayerReward.Uint64()),
-		log.Uint64("total_reward_remainder", blockTotalRewardMod.Uint64()),
-		log.Uint64("layer_reward_remainder", blockLayerRewardMod.Uint64()),
-	)
-
-	// Report the rewards for each coinbase and each smesherID within each coinbase.
-	// This can be thought of as a partition of the reward amongst all the smesherIDs
-	// that added the coinbase into the block.
-	for account, smesherAccountEntry := range coinbasesAndSmeshers {
-		for smesherString, cnt := range smesherAccountEntry {
-			smesherEntry, err := types.StringToNodeID(smesherString)
-			if err != nil {
-				msh.With().Error("unable to convert bytes to nodeid", log.Err(err),
-					log.String("smesher_string", smesherString))
-				return
-			}
-			events.ReportRewardReceived(events.Reward{
-				Layer:       l.Index(),
-				Total:       cnt * blockTotalReward.Uint64(),
-				LayerReward: cnt * blockLayerReward.Uint64(),
-				Coinbase:    account,
-				Smesher:     *smesherEntry,
-			})
-		}
-	}
-	if err := msh.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, blockTotalReward, blockLayerReward); err != nil {
-		msh.Error("cannot write reward to db")
-	}
-	// todo: should miner id be sorted in a deterministic order prior to applying rewards?
+	return coinbasesAndSmeshers, coinbases
 }
 
 // GenesisBlock is a is the first static block that xists at the beginning of each network. it exist one layer before actual blocks could be created.

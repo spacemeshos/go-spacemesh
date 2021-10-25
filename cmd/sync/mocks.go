@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"math/big"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/duration"
@@ -56,18 +55,19 @@ func (m *meshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.
 
 type mockState struct{}
 
-func (s mockState) ValidateAndAddTxToPool(_ *types.Transaction) error                { panic("implement me") }
-func (s mockState) LoadState(types.LayerID) error                                    { return nil }
-func (s mockState) GetStateRoot() types.Hash32                                       { return [32]byte{} }
-func (mockState) ValidateNonceAndBalance(*types.Transaction) error                   { panic("implement me") }
-func (mockState) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error)            { panic("implement me") }
-func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID                 { panic("implement me") }
-func (mockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) { return 0, nil }
-func (mockState) ApplyRewards(types.LayerID, []types.Address, *big.Int)              {}
-func (mockState) GetBalance(types.Address) uint64                                    { panic("implement me") }
-func (mockState) GetNonce(types.Address) uint64                                      { panic("implement me") }
-func (mockState) AddressExists(types.Address) bool                                   { return true }
-func (mockState) GetAllAccounts() (*types.MultipleAccountsState, error)              { panic("implement me") }
+func (s mockState) ValidateAndAddTxToPool(_ *types.Transaction) error     { panic("implement me") }
+func (s mockState) LoadState(types.LayerID) error                         { return nil }
+func (s mockState) GetStateRoot() types.Hash32                            { return [32]byte{} }
+func (mockState) ValidateNonceAndBalance(*types.Transaction) error        { panic("implement me") }
+func (mockState) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error) { panic("implement me") }
+func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID      { panic("implement me") }
+func (s *mockState) ApplyLayer(l types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+	return make([]*types.Transaction, 0), nil
+}
+func (mockState) GetBalance(types.Address) uint64                       { panic("implement me") }
+func (mockState) GetNonce(types.Address) uint64                         { panic("implement me") }
+func (mockState) AddressExists(types.Address) bool                      { return true }
+func (mockState) GetAllAccounts() (*types.MultipleAccountsState, error) { panic("implement me") }
 
 type mockIStore struct{}
 
@@ -126,7 +126,7 @@ func (m *mockClock) Unsubscribe(timer timesync.LayerTimer) {
 
 func configTst() mesh.Config {
 	return mesh.Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: 5000,
 	}
 }
 

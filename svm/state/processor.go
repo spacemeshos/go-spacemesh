@@ -4,7 +4,6 @@ import (
 	"container/list"
 	"context"
 	"fmt"
-	"math/big"
 	"sync"
 
 	"github.com/libp2p/go-libp2p-core/peer"
@@ -116,10 +115,10 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) e
 
 // ApplyTransactions receives a batch of transactions to apply to state. Returns the number of transactions that we
 // failed to apply.
-func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) (int, error) {
+func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*types.Transaction) ([]*types.Transaction, error) {
 	if len(txs) == 0 {
 		err := tp.addStateToHistory(layer, tp.GetStateRoot())
-		return 0, err
+		return make([]*types.Transaction, 0), err
 	}
 
 	tp.mu.Lock()
@@ -139,14 +138,14 @@ func (tp *TransactionProcessor) ApplyTransactions(layer types.LayerID, txs []*ty
 
 	newHash, err := tp.Commit()
 	if err != nil {
-		return remainingCount, fmt.Errorf("failed to commit global state: %w", err)
+		return remaining, fmt.Errorf("failed to commit global state: %w", err)
 	}
 
 	if err = tp.addStateToHistory(layer, newHash); err != nil {
-		return remainingCount, fmt.Errorf("add state to history: %w", err)
+		return remaining, fmt.Errorf("add state to history: %w", err)
 	}
 
-	return remainingCount, nil
+	return remaining, nil
 }
 
 func (tp *TransactionProcessor) addStateToHistory(layer types.LayerID, newHash types.Hash32) error {
@@ -188,17 +187,15 @@ func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Ha
 	return x, nil
 }
 
-// ApplyRewards applies reward reward to miners vector for layer
-// TODO: convert rewards to uint64 (see https://github.com/spacemeshos/go-spacemesh/issues/2069)
-func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, miners []types.Address, reward *big.Int) {
-	rewardConverted := reward.Uint64()
-	for _, account := range miners {
+// ApplyRewards applies reward reward to miners vector for layer.
+func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, rewards map[types.Address]uint64) {
+	for account, reward := range rewards {
 		tp.Log.With().Info("reward applied",
 			log.String("account", account.Short()),
-			log.Uint64("reward", rewardConverted),
+			log.Uint64("reward", reward),
 			layer,
 		)
-		tp.AddBalance(account, rewardConverted)
+		tp.AddBalance(account, reward)
 	}
 
 	newHash, err := tp.Commit()
