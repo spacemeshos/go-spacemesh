@@ -5,6 +5,7 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -71,7 +72,9 @@ func (r *crawler) query(ctx context.Context, servers []*addrInfo) ([]*addrInfo, 
 		seen       = map[peer.ID]struct{}{}
 		reschan    = make(chan queryResult)
 		pending, i int
+		eg, gctx   = errgroup.WithContext(ctx)
 	)
+	defer eg.Wait()
 	for {
 		for ; i < len(servers) && pending < maxConcurrentRequests; i++ {
 			addr := servers[i]
@@ -80,7 +83,7 @@ func (r *crawler) query(ctx context.Context, servers []*addrInfo) ([]*addrInfo, 
 			}
 			pending++
 
-			go func() {
+			eg.Go(func() error {
 				ainfo, err := peer.AddrInfoFromP2pAddr(addr.Addr())
 				if err == nil {
 					// TODO(dshulyak) skip request if connection is inbound
@@ -88,13 +91,15 @@ func (r *crawler) query(ctx context.Context, servers []*addrInfo) ([]*addrInfo, 
 				}
 				var res []*addrInfo
 				if err == nil {
-					res, err = r.disc.Request(ctx, addr.ID)
+					res, err = r.disc.Request(gctx, addr.ID)
 				}
 				select {
 				case reschan <- queryResult{Src: addr, Result: res, Err: err}:
-				case <-ctx.Done():
+				case <-gctx.Done():
+					return gctx.Err()
 				}
-			}()
+				return nil
+			})
 		}
 		if pending == 0 {
 			return out, nil
