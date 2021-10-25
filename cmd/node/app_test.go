@@ -80,7 +80,7 @@ func (suite *AppTestSuite) initMultipleInstances(ctx context.Context, cfg *confi
 			firstDir = dbStorepath
 		}
 		edSgn := signing.NewEdSigner()
-		wrapped, err := lp2p.Wrap(h, lp2p.WithContext(ctx))
+		wrapped, err := lp2p.Upgrade(h, lp2p.WithContext(ctx))
 		suite.Require().NoError(err)
 		suite.T().Cleanup(func() { _ = wrapped.Stop() })
 		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, wrapped, edSgn)
@@ -238,7 +238,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	// initialize a new app using the same database as the first node and make sure the state roots match
 	host, err := mesh.GenPeer()
 	suite.Require().NoError(err)
-	wrapped, err := lp2p.Wrap(host, lp2p.WithContext(ctx))
+	wrapped, err := lp2p.Upgrade(host, lp2p.WithContext(ctx))
 	defer wrapped.Stop()
 	suite.Require().NoError(err)
 	smApp, err := InitSingleInstance(lg, *cfg, 0, genesisTime, firstDir, rolacle, poetHarness.HTTPPoetClient, clock, wrapped, edSgn)
@@ -721,7 +721,7 @@ func TestShutdown(t *testing.T) {
 
 	mesh, err := mocknet.WithNPeers(context.TODO(), 1)
 	r.NoError(err)
-	wrapped, err := lp2p.Wrap(mesh.Hosts()[0], lp2p.WithContext(ctx))
+	wrapped, err := lp2p.Upgrade(mesh.Hosts()[0], lp2p.WithContext(ctx))
 	r.NoError(err)
 	smApp := New(WithLog(logtest.New(t)))
 	smApp.host = wrapped

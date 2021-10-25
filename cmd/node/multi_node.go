@@ -294,7 +294,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
 		edSgn := signing.NewEdSigner()
-		host, err := lp2p.Wrap(mesh.Hosts()[i], lp2p.WithLog(logger), lp2p.WithConfig(cfg.P2P))
+		host, err := lp2p.Upgrade(mesh.Hosts()[i], lp2p.WithLog(logger), lp2p.WithConfig(cfg.P2P))
 		if err != nil {
 			logger.With().Error("failed to initialize host", log.Err(err))
 			return

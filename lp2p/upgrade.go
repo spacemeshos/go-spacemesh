@@ -63,8 +63,8 @@ type Host struct {
 	bootstrap *bootstrap.Bootstrap
 }
 
-// Wrap creates Host instance from host.Host.
-func Wrap(h host.Host, opts ...Opt) (*Host, error) {
+// Upgrade creates Host instance from host.Host.
+func Upgrade(h host.Host, opts ...Opt) (*Host, error) {
 	fh := &Host{
 		ctx:    context.Background(),
 		cfg:    DefaultConfig(),
