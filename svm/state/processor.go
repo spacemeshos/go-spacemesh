@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -14,7 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/trie"
 )
 
@@ -308,13 +309,12 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 }
 
 // HandleTxGossipData handles data sent from gossip.
-func (tp *TransactionProcessor) HandleTxGossipData(ctx context.Context, data service.GossipMessage, syncer service.Fetcher) {
-	err := tp.HandleTxData(data.Bytes())
-	if err != nil {
+func (tp *TransactionProcessor) HandleTxGossipData(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
+	if err := tp.HandleTxData(msg); err != nil {
 		tp.With().Error("invalid tx", log.Err(err))
-		return
+		return pubsub.ValidationIgnore
 	}
-	data.ReportValidation(ctx, IncomingTxProtocol)
+	return pubsub.ValidationAccept
 }
 
 // HandleTxData handles data received on TX gossip channel.

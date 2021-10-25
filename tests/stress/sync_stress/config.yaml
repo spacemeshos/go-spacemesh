@@ -15,7 +15,7 @@ bootstrap:
   command: '/bin/go-sync'
   replicas: 1
   args:
-    randcon: '8'
+    target-outbound: '8'
     hare-committee-size: '800'
     hare-max-adversaries: '399'
     hare-round-duration-sec: '10'
@@ -33,7 +33,7 @@ client:
   command: '/bin/go-sync'
   replicas: 9
   args:
-    randcon: '8'
+    target-outbound: '8'
     hare-committee-size: '800'
     hare-max-adversaries: '399'
     hare-round-duration-sec: '10'

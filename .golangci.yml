@@ -190,7 +190,8 @@ linters-settings:
       - .WithMessagef(
       - .WithStack(
 # Custom sigs
-      - status.Error(
+      - .Error(
+      - .Err(
     ignorePackageGlobs:
       - encoding/*
       - github.com/pkg/*

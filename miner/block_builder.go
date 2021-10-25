@@ -11,13 +11,15 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/metrics"
-	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 const (
@@ -62,18 +64,17 @@ type BlockBuilder struct {
 	signer
 	minerID         types.NodeID
 	rnd             *rand.Rand
-	hdist           uint32
 	beginRoundEvent chan types.LayerID
 	stopChan        chan struct{}
 	TransactionPool txPool
 	mu              sync.Mutex
-	network         p2p.Service
+	publisher       pubsub.Publisher
 	meshProvider    meshProvider
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
 	beaconProvider  blocks.BeaconGetter
 	syncer          syncer
-	wg              sync.WaitGroup
+	eg              errgroup.Group
 	started         bool
 	atxsPerBlock    int // number of atxs to select per block
 	txsPerBlock     int // max number of tx to select per block
@@ -86,7 +87,6 @@ type BlockBuilder struct {
 type Config struct {
 	DBPath         string
 	MinerID        types.NodeID
-	Hdist          uint32
 	AtxsPerBlock   int
 	LayersPerEpoch uint32
 	TxsPerBlock    int
@@ -96,9 +96,9 @@ type Config struct {
 func NewBlockBuilder(
 	config Config,
 	sgn signer,
-	net p2p.Service,
+	publisher pubsub.Publisher,
 	beginRoundEvent chan types.LayerID,
-	orph meshProvider,
+	msh meshProvider,
 	bbp baseBlockProvider,
 	blockOracle blockOracle,
 	beaconProvider blocks.BeaconGetter,
@@ -123,14 +123,13 @@ func NewBlockBuilder(
 	return &BlockBuilder{
 		minerID:         config.MinerID,
 		signer:          sgn,
-		hdist:           config.Hdist,
 		Log:             logger,
 		rnd:             rand.New(rand.NewSource(int64(seed))),
 		beginRoundEvent: beginRoundEvent,
 		stopChan:        make(chan struct{}),
 		mu:              sync.Mutex{},
-		network:         net,
-		meshProvider:    orph,
+		publisher:       publisher,
+		meshProvider:    msh,
 		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
 		beaconProvider:  beaconProvider,
@@ -155,11 +154,10 @@ func (t *BlockBuilder) Start(ctx context.Context) error {
 	}
 
 	t.started = true
-	t.wg.Add(1)
-	go func() {
+	t.eg.Go(func() error {
 		t.createBlockLoop(log.WithNewSessionID(ctx))
-		t.wg.Done()
-	}()
+		return nil
+	})
 	return nil
 }
 
@@ -172,7 +170,7 @@ func (t *BlockBuilder) Close() error {
 	}
 	t.started = false
 	close(t.stopChan)
-	t.wg.Wait()
+	t.eg.Wait()
 	t.db.Close()
 	return nil
 }
@@ -312,40 +310,40 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 
 			started := time.Now()
 
-			atxID, proofs, atxs, err := t.blockOracle.BlockEligible(layerID)
+			atxID, proofs, activeSet, err := t.blockOracle.BlockEligible(layerID)
 			if err != nil {
 				if errors.Is(err, blocks.ErrMinerHasNoATXInPreviousEpoch) {
-					logger.With().Info("node has no ATX in previous epoch and is not eligible for blocks")
-					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "not eligible to produce block")
+					logger.Info("node has no ATX in previous epoch and is not eligible for blocks")
+					events.ReportDoneCreatingBlock(false, layerID.Uint32(), "not eligible to produce block")
 					continue
 				}
-				events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to check for block eligibility")
-				logger.With().Error("failed to check for block eligibility", layerID, log.Err(err))
+				events.ReportDoneCreatingBlock(false, layerID.Uint32(), "failed to check for block eligibility")
+				logger.With().Error("failed to check for block eligibility", log.Err(err))
 				continue
 			}
 			if len(proofs) == 0 {
 				events.ReportDoneCreatingBlock(false, layerID.Uint32(), "")
-				logger.With().Info("not eligible for blocks in layer", layerID, layerID.GetEpoch())
+				logger.Info("not eligible for blocks in layer")
 				continue
 			}
 			// TODO: include multiple proofs in each block and weigh blocks where applicable
 
-			logger.With().Info("eligible for one or more blocks in layer", atxID, log.Int("count", len(proofs)))
+			logger.With().Info("eligible for one or more blocks in layer", atxID, log.Int("num_blocks", len(proofs)))
 			for _, eligibilityProof := range proofs {
 				txList, _, err := t.TransactionPool.GetTxsForBlock(t.txsPerBlock, t.projector.GetProjection)
 				if err != nil {
-					events.ReportDoneCreatingBlock(false, layerID.Uint32(), "failed to get txs for block")
-					logger.With().Error("failed to get txs for block", layerID, log.Err(err))
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to get txs for block")
+					logger.With().Error("failed to get txs for block", log.Err(err))
 					continue
 				}
-				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, atxs, beacon)
+				blk, err := t.createBlock(ctx, layerID, atxID, eligibilityProof, txList, activeSet, beacon)
 				if err != nil {
-					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot create new block")
+					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to create new block")
 					logger.With().Error("failed to create new block", log.Err(err))
 					continue
 				}
 
-				t.saveBlockBuildDurationMetric(ctx, started, layerID, blk.ID())
+				t.saveBlockBuildDurationMetric(ctx, started, layerID)
 
 				if t.stopped() {
 					return
@@ -355,27 +353,28 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 					logger.With().Error("failed to store block", blk.ID(), log.Err(err))
 					continue
 				}
-				go func() {
+				t.eg.Go(func() error {
 					bytes, err := types.InterfaceToBytes(blk)
 					if err != nil {
 						logger.With().Error("failed to serialize block", log.Err(err))
 						events.ReportDoneCreatingBlock(true, layerID.Uint32(), "cannot serialize block")
-						return
+						return nil
 					}
 
 					// generate a new requestID for the new block message
 					blockCtx := log.WithNewRequestID(ctx, layerID, blk.ID())
-					if err = t.network.Broadcast(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
+					if err = t.publisher.Publish(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
 						logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
 					}
 					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "")
-				}()
+					return nil
+				})
 			}
 		}
 	}
 }
 
-func (t *BlockBuilder) saveBlockBuildDurationMetric(ctx context.Context, started time.Time, layerID types.LayerID, blockID types.BlockID) {
+func (t *BlockBuilder) saveBlockBuildDurationMetric(ctx context.Context, started time.Time, layerID types.LayerID) {
 	elapsed := time.Since(started)
 	if elapsed > blockBuildDurationErrorThreshold {
 		t.WithContext(ctx).WithFields(layerID, layerID.GetEpoch()).With().

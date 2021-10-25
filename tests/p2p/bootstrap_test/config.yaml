@@ -21,7 +21,7 @@ bootstrap:
       memory: '512M'
       cpu: '1'
   args:
-    randcon: '8'
+    target-outbound: '8'
     data-folder: '/usr/share/spacemesh/'
     hare-committee-size: '800'
     hare-max-adversaries: '399'

@@ -6,14 +6,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
-// NetworkAPI is an API to nodes gossip network.
-type NetworkAPI interface {
-	Broadcast(ctx context.Context, channel string, data []byte) error
-	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
-}
+// Publisher interface for publishing messages.
+type Publisher = pubsub.Publisher
 
 // PostSetupAPI is an alias to PostSetupProvider.
 type PostSetupAPI = activation.PostSetupProvider
@@ -66,7 +63,6 @@ type TxAPI interface {
 
 // PeerCounter is an api to get amount of connected peers.
 type PeerCounter interface {
-	Close()
 	PeerCount() uint64
 }
 

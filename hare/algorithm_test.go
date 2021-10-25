@@ -16,14 +16,20 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
+
+func newRoundClockFromCfg(logger log.Log, cfg config.Config) *RoundClockWithCache {
+	logger.Info("creating clock at %v wakeup: %v round duration: %v", time.Now(), cfg.WakeupDelta, cfg.RoundDuration)
+	return NewRoundClockWithCache(time.Now(),
+		time.Duration(cfg.WakeupDelta)*time.Second,
+		time.Duration(cfg.RoundDuration)*time.Second,
+	)
+}
 
 type mockMessageValidator struct {
 	syntaxValid  bool
@@ -47,11 +53,7 @@ type mockP2p struct {
 	err   error
 }
 
-func (m *mockP2p) RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage {
-	return make(chan service.GossipMessage)
-}
-
-func (m *mockP2p) Broadcast(context.Context, string, []byte) error {
+func (m *mockP2p) Publish(context.Context, string, []byte) error {
 	m.count++
 	return m.err
 }
@@ -121,13 +123,13 @@ func buildMessage(msg *Message) *Msg {
 	return &Msg{Message: msg, PubKey: nil}
 }
 
-func buildBroker(tb testing.TB, net NetworkService, testName string) *Broker {
-	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
+func buildBroker(tb testing.TB, testName string) *Broker {
+	return newBroker("self", &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
 		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.NewCloser(), logtest.New(tb).WithName(testName))
 }
 
-func buildBrokerLimit4(tb testing.TB, net NetworkService, testName string) *Broker {
-	return newBroker(net, &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
+func buildBrokerLimit4(tb testing.TB, testName string) *Broker {
+	return newBroker("self", &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
 		(&mockSyncer{true}).IsSynced, 10, 4, util.NewCloser(), logtest.New(tb).WithName(testName))
 }
 
@@ -145,9 +147,7 @@ func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) boo
 
 // test that a InnerMsg to a specific set ObjectID is delivered by the broker.
 func TestConsensusProcess_Start(t *testing.T) {
-	sim := service.NewSimulator()
-	n1 := sim.NewNode()
-	broker := buildBroker(t, n1, t.Name())
+	broker := buildBroker(t, t.Name())
 	require.NoError(t, broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	inbox, _ := broker.Register(context.TODO(), proc.ID())
@@ -177,12 +177,12 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 	defer ctrl.Finish()
 
 	net := &mockP2p{}
-	broker := buildBroker(t, net, t.Name())
+	broker := buildBroker(t, t.Name())
 	require.NoError(t, broker.Start(context.TODO()))
 	c := cfg
 	c.F = 2
 	proc := generateConsensusProcessWithConfig(t, c)
-	proc.network = net
+	proc.publisher = net
 
 	mo := mocks.NewMockRolacle(ctrl)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(true, nil).Times(1)
@@ -211,10 +211,10 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 
 	r := require.New(t)
 	net := &mockP2p{}
-	broker := buildBroker(t, net, t.Name())
+	broker := buildBroker(t, t.Name())
 	r.NoError(broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
-	proc.network = net
+	proc.publisher = net
 	mo := mocks.NewMockRolacle(ctrl)
 	proc.oracle = mo
 	mValidator := &mockMessageValidator{}
@@ -249,9 +249,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 }
 
 func TestConsensusProcess_nextRound(t *testing.T) {
-	sim := service.NewSimulator()
-	n1 := sim.NewNode()
-	broker := buildBroker(t, n1, t.Name())
+	broker := buildBroker(t, t.Name())
 	require.NoError(t, broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
@@ -266,24 +264,22 @@ func generateConsensusProcess(t *testing.T) *consensusProcess {
 	return generateConsensusProcessWithConfig(t, cfg)
 }
 
-func generateConsensusProcessWithConfig(t *testing.T, cfg config.Config) *consensusProcess {
-	_, bninfo := node.GenerateTestNode(t)
-	sim := service.NewSimulator()
-	n1 := sim.NewNodeFrom(bninfo)
-
+func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *consensusProcess {
+	tb.Helper()
+	logger := logtest.New(tb)
 	s := NewSetFromValues(value1)
-	oracle := eligibility.New(logtest.New(t))
+	oracle := eligibility.New(logger)
 	edSigner := signing.NewEdSigner()
 	edPubkey := edSigner.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(edSigner.Sign(edPubkey.Bytes()))
-	assert.NoError(t, err)
+	assert.NoError(tb, err)
 	oracle.Register(true, edPubkey.String())
 	output := make(chan TerminationOutput, 1)
 
 	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(),
 		10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub},
-		n1, output, truer{}, newRoundClockFromCfg(cfg),
-		logtest.New(t).WithName(edPubkey.String()))
+		noopPubSub(tb), output, truer{}, newRoundClockFromCfg(logger, cfg),
+		logtest.New(tb).WithName(edPubkey.String()))
 }
 
 func TestConsensusProcess_Id(t *testing.T) {
@@ -378,7 +374,7 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	net := &mockP2p{}
 
 	proc := generateConsensusProcess(t)
-	proc.network = net
+	proc.publisher = net
 
 	b := proc.sendMessage(context.TODO(), nil)
 	r.Equal(0, net.count)
@@ -543,7 +539,7 @@ func TestConsensusProcess_beginStatusRound(t *testing.T) {
 	proc.advanceToNextRound(context.TODO())
 	proc.onRoundBegin(context.TODO())
 	network := &mockP2p{}
-	proc.network = network
+	proc.publisher = network
 
 	mo := mocks.NewMockRolacle(ctrl)
 	mo.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), proc.instanceID).Return(true, nil).Times(1)
@@ -568,7 +564,7 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 	proc := generateConsensusProcess(t)
 	proc.advanceToNextRound(context.TODO())
 	network := &mockP2p{}
-	proc.network = network
+	proc.publisher = network
 	proc.k = 1
 
 	mo := mocks.NewMockRolacle(ctrl)
@@ -596,7 +592,7 @@ func TestConsensusProcess_beginCommitRound(t *testing.T) {
 
 	proc := generateConsensusProcess(t)
 	network := &mockP2p{}
-	proc.network = network
+	proc.publisher = network
 
 	mo := mocks.NewMockRolacle(ctrl)
 	proc.oracle = mo
@@ -628,14 +624,9 @@ type mockNet struct {
 	err           error
 }
 
-func (m *mockNet) Broadcast(context.Context, string, []byte) error {
+func (m *mockNet) Publish(ctx context.Context, protocol string, payload []byte) error {
 	m.callBroadcast++
 	return m.err
-}
-
-func (m *mockNet) RegisterGossipProtocol(string, priorityq.Priority) chan service.GossipMessage {
-	m.callRegister++
-	return nil
 }
 
 func TestConsensusProcess_handlePending(t *testing.T) {
@@ -657,7 +648,7 @@ func TestConsensusProcess_beginRound4(t *testing.T) {
 
 	proc := generateConsensusProcess(t)
 	net := &mockNet{}
-	proc.network = net
+	proc.publisher = net
 	mpt := &mockProposalTracker{}
 	mct := &mockCommitTracker{}
 	proc.proposalTracker = mpt

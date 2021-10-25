@@ -7,11 +7,11 @@ import (
 	"net/http"
 	_ "net/http/pprof"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
 	"go.uber.org/zap"
-	"go.uber.org/zap/zapcore"
 
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -84,7 +84,7 @@ func (mbg *mockBeaconGetter) GetBeacon(id types.EpochID) ([]byte, error) {
 // HareApp represents an Hare application.
 type HareApp struct {
 	*cmdp.BaseApp
-	p2p     p2p.Service
+	host    *p2p.Host
 	oracle  *oracleClient
 	sgn     hare.Signer
 	ha      *hare.Hare
@@ -145,6 +145,10 @@ func (m *mockClock) GetCurrentLayer() types.LayerID {
 func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	log.Info("starting hare main")
 
+	log.JSONLog(true)
+	logger := log.NewWithLevel("HARE_TEST", zap.NewAtomicLevelAt(zap.DebugLevel))
+	log.SetupGlobal(logger)
+
 	if app.Config.PprofHTTPServer {
 		log.Info("starting pprof server")
 		go func() {
@@ -156,18 +160,16 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 	}
 	types.SetLayersPerEpoch(app.Config.LayersPerEpoch)
 	log.Info("initializing P2P services")
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, log.NewDefault("p2p_haretest"), app.Config.DataDir())
-	app.p2p = swarm
-	if err != nil {
-		log.With().Panic("error starting p2p services", log.Err(err))
-	}
 
 	pub := app.sgn.PublicKey()
 
-	lg1 := log.NewDefault(pub.String())
-	lvl := zap.NewAtomicLevel()
-	lvl.SetLevel(zapcore.DebugLevel)
-	lg := lg1.SetLevel(&lvl)
+	cfg := app.Config.P2P
+	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
+	host, err := p2p.New(cmdp.Ctx, logger, cfg)
+	if err != nil {
+		log.With().Panic("error starting p2p services", log.Err(err))
+	}
+	app.host = host
 
 	setServerAddress(app.Config.OracleServer)
 	app.oracle = newClientWithWorldID(uint64(app.Config.OracleServerWorldID))
@@ -187,14 +189,13 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		ch:        make(chan struct{}),
 		layerTime: gTime,
 	}
-	hareI := hare.New(app.Config.HARE, app.p2p, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}}, IsSynced, &mockBlockProvider{}, &mockBeaconGetter{}, hareOracle, layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, mockClock, lg)
+	hareI := hare.New(app.Config.HARE, host.ID(), host, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}},
+		IsSynced, &mockBlockProvider{}, &mockBeaconGetter{}, hareOracle,
+		layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, mockClock, logger)
 	log.Info("starting hare service")
 	app.ha = hareI
 	if err = app.ha.Start(cmdp.Ctx); err != nil {
 		log.With().Panic("error starting hare", log.Err(err))
-	}
-	if err = app.p2p.Start(cmdp.Ctx); err != nil {
-		log.With().Panic("error starting p2p", log.Err(err))
 	}
 	if gTime.After(time.Now()) {
 		log.Info("sleeping until %v", gTime)

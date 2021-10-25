@@ -18,15 +18,19 @@ import (
 	"google.golang.org/api/option"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Sync cmd.
@@ -101,9 +105,11 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	)
 
 	path := app.Config.DataDir()
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
+	cfg := app.Config.P2P
+	cfg.DataDir = path
+	host, err := p2p.New(cmdp.Ctx, lg.WithName("p2p"), cfg)
 	if err != nil {
-		panic("something got fudged while creating p2p service ")
+		lg.With().Panic("failed to create p2p host", log.Err(err))
 	}
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
@@ -142,7 +148,10 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	app.logger.Info("new sync tester")
 
 	layersPerEpoch := app.Config.LayersPerEpoch
-	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
+
+	fw := &fetcherWrapper{}
+
+	atxdb := activation.NewDB(atxdbStore, fw, &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
 
 	dbs := &allDbs{
 		atxdb:       atxdb,
@@ -154,15 +163,22 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 
 	msh := createMeshWithMock(dbs, txpool, app.logger)
 	app.msh = msh
-	layerFetch := createFetcherWithMock(dbs, msh, swarm, app.logger)
+
+	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, fw, msh, blockEligibilityValidatorMock{}, lg)
+
+	fCfg := fetch.DefaultConfig()
+	fetcher := fetch.NewFetch(context.TODO(), fCfg, host, lg)
+
+	lCfg := layerfetcher.Config{RequestTimeout: 20}
+	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, dbs.atxdb, dbs.poetDb, dbs.atxdb, mockTxProcessor{}, host, fetcher, msh, lg)
+	layerFetch.AddDBs(dbs.mshdb.Blocks(), dbs.atxdbStore, dbs.mshdb.Transactions(), dbs.poetStorage)
 	layerFetch.Start()
+	fw.Fetcher = layerFetch
+
 	syncerConf := syncer.Configuration{
 		SyncInterval: 2 * 60 * time.Millisecond,
 	}
 	app.sync = createSyncer(syncerConf, msh, layerFetch, types.NewLayerID(expectedLayers), app.logger)
-	if err = swarm.Start(cmdp.Ctx); err != nil {
-		log.With().Panic("error starting p2p", log.Err(err))
-	}
 
 	i := layersPerEpoch * 2
 	for ; ; i++ {
@@ -193,7 +209,6 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	}
 
 	lg.Event().Info("sync done",
-		log.String("node_id", app.BaseApp.Config.P2P.NodeID),
 		log.FieldNamed("processed", msh.ProcessedLayer()),
 	)
 	app.sync.Close()
@@ -265,6 +280,10 @@ func getData(path, prefix string, lg log.Log) error {
 
 	lg.Info("done downloading: %v files", count)
 	return nil
+}
+
+type fetcherWrapper struct {
+	system.Fetcher
 }
 
 func ensureDirExists(path string) error {

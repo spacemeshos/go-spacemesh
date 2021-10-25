@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
 // ProposalMessage is a message type which is used when sending proposals.
@@ -27,7 +26,6 @@ func (p ProposalMessage) String() string {
 
 type proposalMessageWithReceiptData struct {
 	message      ProposalMessage
-	gossip       service.GossipMessage
 	receivedTime time.Time
 }
 

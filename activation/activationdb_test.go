@@ -133,7 +133,7 @@ func getAtxDb(tb testing.TB, id string) (*DB, *mesh.Mesh, database.Database) {
 	lg := logtest.New(tb).WithName(id)
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxStore := database.NewMemDatabase()
-	atxdb := NewDB(atxStore, NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(atxStore, nil, NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers, atxStore
 }
@@ -797,7 +797,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	msh := mesh.NewMemMeshDB(lg)
 	store, err := database.NewLDBDatabase(tmpPath, 0, 0, lg.WithName("atxLDB"))
 	r.NoError(err)
-	atxdb := NewDB(store, NewIdentityStore(store), msh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(store, nil, NewIdentityStore(store), msh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	const (
 		numOfMiners = 300
@@ -893,7 +893,7 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	ed := signing.NewEdSigner()
 	nodeID := types.NodeID{Key: ed.PublicKey().String(), VRFPublicKey: []byte("bbbbb")}
@@ -938,7 +938,7 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 	id := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
 	atx := newActivationTx(id, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{})
 
@@ -979,7 +979,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	validAtx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, goldenATXID, types.LayerID{}), [20]byte{}, nil, 0, nil)
 	err := atxdb.ContextuallyValidateAtx(validAtx.ActivationTxHeader)
@@ -997,7 +997,7 @@ func TestActivateDB_HandleAtxNilNipst(t *testing.T) {
 	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
 	buf, err := types.InterfaceToBytes(atx)
 	require.NoError(t, err)
-	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf, nil))
+	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf))
 }
 
 func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
@@ -1011,7 +1011,7 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	idStore := NewIdentityStore(iddbstore)
 	atxdbstore, err := database.NewLDBDatabase(filepath.Join(path, "atx"), 0, 0, lg)
 	require.NoError(b, err)
-	atxdb := NewDB(atxdbstore, idStore, mdb, 288, types.ATXID{}, &Validator{}, lg)
+	atxdb := NewDB(atxdbstore, nil, idStore, mdb, 288, types.ATXID{}, &Validator{}, lg)
 
 	var (
 		stop uint64

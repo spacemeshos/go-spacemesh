@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -18,12 +19,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
 
-type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, clock RoundClock, terminationReport chan TerminationOutput) Consensus
+type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus
 
 // Consensus represents an item that acts like a consensus process.
 type Consensus interface {
@@ -63,7 +65,7 @@ type Hare struct {
 	log.Log
 	config config.Config
 
-	network    NetworkService
+	publisher  pubsub.Publisher
 	layerClock LayerClock
 
 	newRoundClock func(LayerID types.LayerID) RoundClock
@@ -98,7 +100,8 @@ type Hare struct {
 // New returns a new Hare struct.
 func New(
 	conf config.Config,
-	p2p NetworkService,
+	pid peer.ID,
+	publisher pubsub.PublishSubsciber,
 	sign Signer,
 	nid types.NodeID,
 	syncState syncStateFunc,
@@ -118,7 +121,7 @@ func New(
 
 	h.Log = logger
 	h.config = conf
-	h.network = p2p
+	h.publisher = publisher
 	h.layerClock = layerClock
 	h.newRoundClock = func(layerID types.LayerID) RoundClock {
 		layerTime := layerClock.LayerToTime(layerID)
@@ -132,7 +135,8 @@ func New(
 	}
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
-	h.broker = newBroker(p2p, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
+	h.broker = newBroker(pid, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
+	publisher.Register(protoName, h.broker.HandleMessage)
 	h.sign = sign
 
 	h.mesh = mesh
@@ -145,7 +149,7 @@ func New(
 	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
 	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) // we keep results about LayerBuffer past layers
-	h.factory = func(conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, clock RoundClock, terminationReport chan TerminationOutput) Consensus {
+	h.factory = func(conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput) Consensus {
 		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, clock, logger)
 	}
 
@@ -286,7 +290,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
 		return false, fmt.Errorf("broker register: %w", err)
 	}
-	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.network, clock, h.outputChan)
+	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.publisher, clock, h.outputChan)
 	cp.SetInbox(c)
 	if err = cp.Start(ctx); err != nil {
 		logger.With().Error("could not start consensus process", log.Err(err))

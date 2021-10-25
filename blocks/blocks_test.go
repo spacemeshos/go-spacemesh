@@ -187,21 +187,21 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
 	cfg := Config{3, goldenATXID}
-	// yncs, _, _ := SyncMockFactory(2, conf, "TestSyncProtocol_NilResponse", memoryDB, newMemPoetDb)
-	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, logtest.New(t))
-	b := &types.Block{}
 
 	fetch := newFetchMock()
-	err := s.blockSyntacticValidation(context.TODO(), b, fetch)
+	s := NewBlockHandler(cfg, fetch, &meshMock{}, &verifierMock{}, logtest.New(t))
+	b := &types.Block{}
+
+	err := s.blockSyntacticValidation(context.TODO(), b)
 	r.ErrorIs(err, errNoActiveSet)
 
 	b.ActiveSet = &[]types.ATXID{}
-	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
+	err = s.blockSyntacticValidation(context.TODO(), b)
 	r.ErrorIs(err, errZeroActiveSet)
 
 	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
-	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
+	err = s.blockSyntacticValidation(context.TODO(), b)
 	r.ErrorIs(err, errDupTx)
 }
 
@@ -216,7 +216,7 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	cfg := Config{
 		3, goldenATXID,
 	}
-	s := NewBlockHandler(cfg, &meshMock{}, &verifierMock{}, logtest.New(t))
+	s := NewBlockHandler(cfg, fetch, &meshMock{}, &verifierMock{}, logtest.New(t))
 	s.traverse = mockForBlockInView
 	a := atx("")
 	atxpool.Put(a)
@@ -230,11 +230,11 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	b.RefBlock = &block1ID
 	b.ATXID = a.ID()
 	fetch.retError = true
-	err := s.blockSyntacticValidation(context.TODO(), b, fetch)
+	err := s.blockSyntacticValidation(context.TODO(), b)
 	r.Equal(err, fmt.Errorf("failed to fetch ref block %v e: error", *b.RefBlock))
 
 	fetch.retError = false
-	err = s.blockSyntacticValidation(context.TODO(), b, fetch)
+	err = s.blockSyntacticValidation(context.TODO(), b)
 	r.NoError(err)
 	assert.Equal(t, 2, fetch.getBlockCalled[block1ID])
 }

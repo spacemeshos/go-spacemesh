@@ -85,7 +85,7 @@ type NetMock struct {
 	atxDb            atxDBProvider
 }
 
-func (n *NetMock) Broadcast(_ context.Context, _ string, d []byte) error {
+func (n *NetMock) Publish(_ context.Context, _ string, d []byte) error {
 	n.lastTransmission = d
 	go n.hookToAtxPool(d)
 	return nil
@@ -189,7 +189,7 @@ type FaultyNetMock struct {
 	retErr bool
 }
 
-func (n *FaultyNetMock) Broadcast(_ context.Context, _ string, d []byte) error {
+func (n *FaultyNetMock) Publish(_ context.Context, _ string, d []byte) error {
 	n.bt = d
 	if n.retErr {
 		return fmt.Errorf("faulty")
@@ -201,7 +201,7 @@ func (n *FaultyNetMock) Broadcast(_ context.Context, _ string, d []byte) error {
 // ========== Helper functions ==========
 
 func newActivationDb(tb testing.TB) *DB {
-	return NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(logtest.New(tb).WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(tb).WithName("atxDB"))
+	return NewDB(database.NewMemDatabase(), nil, &MockIDStore{}, mesh.NewMemMeshDB(logtest.New(tb).WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(tb).WithName("atxDB"))
 }
 
 func newChallenge(nodeID types.NodeID, sequence uint64, prevAtxID, posAtxID types.ATXID, pubLayerID types.LayerID) types.NIPostChallenge {
@@ -416,7 +416,7 @@ func TestBuilder_PublishActivationTx_FaultyNet(t *testing.T) {
 	r.True(builtNipost)
 
 	// if the network works and we try to publish a new ATX, the timeout should result in a clean state (so a NIPost should be built)
-	b.net = net
+	b.publisher = net
 	net.atxDb = activationDb
 	posAtx := newAtx(newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(layersPerEpoch+1)), nipost)
 	storeAtx(r, activationDb, posAtx, logtest.New(t).WithName("storeAtx"))
@@ -454,7 +454,7 @@ func TestBuilder_PublishActivationTx_RebuildNIPostWhenTargetEpochPassed(t *testi
 	// new NIPost.
 
 	// if the network works - the ATX should be published
-	b.net = net
+	b.publisher = net
 	net.atxDb = activationDb
 	posAtx := newAtx(newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer.Add(3*layersPerEpoch)), nipost)
 	storeAtx(r, activationDb, posAtx, logtest.New(t).WithName("storeAtx"))
@@ -651,7 +651,7 @@ func TestBuilder_SignAtx(t *testing.T) {
 
 	ed := signing.NewEdSigner()
 	nodeID := types.NodeID{Key: ed.PublicKey().String(), VRFPublicKey: []byte("bbbbb")}
-	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(logtest.New(t).WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	activationDb := NewDB(database.NewMemDatabase(), nil, &MockIDStore{}, mesh.NewMemMeshDB(logtest.New(t).WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
 	b := NewBuilder(cfg, nodeID, ed, activationDb, net, meshProviderMock, layersPerEpoch, nipostBuilderMock, &postSetupProviderMock{}, layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
 
 	prevAtx := types.ATXID(types.HexToHash32("0x111"))
@@ -678,7 +678,7 @@ func TestBuilder_NIPostPublishRecovery(t *testing.T) {
 	layersPerEpoch := uint32(10)
 	db := NewMockDB()
 	sig := &MockSigning{}
-	activationDb := NewDB(database.NewMemDatabase(), &MockIDStore{}, mesh.NewMemMeshDB(logtest.New(t).WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
+	activationDb := NewDB(database.NewMemDatabase(), nil, &MockIDStore{}, mesh.NewMemMeshDB(logtest.New(t).WithName("meshDB")), layersPerEpoch, goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB1"))
 	net.atxDb = activationDb
 
 	cfg := Config{
@@ -891,9 +891,11 @@ func TestActivationDB_FetchAtxReferences(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)
 
-	activationDb := newActivationDb(t)
-	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	fetcher := newFetchMock()
+	activationDb := NewDB(database.NewMemDatabase(), fetcher, &MockIDStore{},
+		mesh.NewMemMeshDB(logtest.New(t).WithName("meshDB")), layersPerEpoch,
+		goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB"))
+	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 
 	atx1 := newAtx(challenge, nipost)
 	atx1.PositioningATX = prevAtxID // should be fetched
@@ -918,7 +920,7 @@ func TestActivationDB_FetchAtxReferences(t *testing.T) {
 	atxList := []*types.ActivationTx{atx1, atx2, atx3, atx4, atx5}
 
 	for _, atx := range atxList {
-		r.NoError(activationDb.FetchAtxReferences(context.TODO(), atx, fetcher))
+		r.NoError(activationDb.FetchAtxReferences(context.TODO(), atx))
 	}
 
 	expected := map[types.ATXID]int{
