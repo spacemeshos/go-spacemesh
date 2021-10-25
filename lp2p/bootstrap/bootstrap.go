@@ -122,6 +122,9 @@ func (b *Bootstrap) run(ctx context.Context, sub event.Subscription, emitter eve
 			if _, exist := peers[hs.PID]; exist {
 				continue
 			}
+			if b.host.Network().Connectedness(hs.PID) == network.NotConnected {
+				continue
+			}
 			peers[hs.PID] = hs.Direction
 			if hs.Direction == network.DirOutbound {
 				outbound++
