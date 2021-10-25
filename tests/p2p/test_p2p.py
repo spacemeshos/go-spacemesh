@@ -27,8 +27,8 @@ gossip_message_query_fields = {'M': 'api_test_gossip: got test gossip message'}
 def query_bootstrap_es(namespace, bootstrap_po_name):
     hits = poll_query_message(current_index, namespace, bootstrap_po_name, {"M": "local node identity"}, expected=1)
     for h in hits:
-        if getattr(h, 'key', None):
-            return h.key
+        if getattr(h, 'identity', None):
+            return h.identity
     return None
 
 # ==============================================================================
@@ -103,8 +103,8 @@ def test_bootstrap(init_session, add_elk, add_node_pool, add_curl, setup_bootstr
     print("running test_bootstrap")
     sleep_print_backwards(10 * timeout_factor, "wait for the bootstrap logs to be available in ElasticSearch")
     bs_id = query_bootstrap_es(testconfig['namespace'], setup_bootstrap.pods[0]['name'])
-    ass_err = f"setup_bootstrap.pods[0]['key'] = {setup_bootstrap.pods[0]['key']}, bootstrap returned ID: {bs_id}"
-    assert setup_bootstrap.pods[0]['key'] == bs_id, ass_err
+    ass_err = f"setup_bootstrap.pods[0]['identity'] = {setup_bootstrap.pods[0]['identity']}, bootstrap returned ID: {bs_id}"
+    assert setup_bootstrap.pods[0]['identity'] == bs_id, ass_err
 
 
 def test_client(init_session, add_elk, add_node_pool, add_curl, setup_clients, save_log_on_exit):
@@ -175,8 +175,7 @@ def test_gossip(init_session, add_elk, add_node_pool, setup_clients, add_curl):
 
     # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
     # TODO: check frequently before timeout so we might be able to finish earlier.
-    gossip_propagation_sleep = len(
-        setup_clients.pods) * timeout_factor / 2  # currently we expect short propagation times.
+    gossip_propagation_sleep = 3 * timeout_factor # currently we expect short propagation times.
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
@@ -188,7 +187,7 @@ def test_gossip(init_session, add_elk, add_node_pool, setup_clients, add_curl):
                                findFails=False,
                                expected=total_expected_gossip)
 
-    assert total_expected_gossip == len(after), "test_gossip: Total gossip messages in ES is not as expected"
+    assert total_expected_gossip <= len(after), "test_gossip: Total gossip messages in ES is not as expected"
 
 
 def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
@@ -216,7 +215,7 @@ def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
 
         # Need to sleep for a while in order to enable the propagation of the gossip message - 0.5 sec for each node
         # TODO: check frequently before timeout so we might be able to finish earlier.
-        gossip_propagation_sleep = 15 * timeout_factor  # currently we expect short propagation times.
+        gossip_propagation_sleep = 3 * timeout_factor  # currently we expect short propagation times.
         print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
         time.sleep(gossip_propagation_sleep)
 
@@ -229,7 +228,7 @@ def test_many_gossip_messages(setup_clients, add_elk, add_node_pool, add_curl):
                                    expected=total_expected_gossip)
 
         assertion_msg = "test_many_gossip_messages: Total gossip messages in ES is not as expected"
-        assert total_expected_gossip == len(after), assertion_msg
+        assert total_expected_gossip <= len(after), assertion_msg
 
 
 def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000, prop_sleep_time=20, num_of_msg=100,
@@ -267,7 +266,7 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
         assert expected_ret in out, ass_err
 
     # we expect short propagation times
-    gossip_propagation_sleep = (num_of_msg + prop_sleep_time) * timeout_factor
+    gossip_propagation_sleep = prop_sleep_time * timeout_factor
     print('sleep for {0} sec to enable gossip propagation'.format(gossip_propagation_sleep))
     time.sleep(gossip_propagation_sleep)
 
@@ -280,7 +279,7 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
                                expected=total_expected_gossip)
 
     # run some additional queries to make debugging easier
-    if total_expected_gossip != len(results):
+    if total_expected_gossip > len(results):
         for pod in setup_clients.pods:
             # query_fields = headers.copy()
             # query_fields['kubernetes.pod_name'] = pod['name']
@@ -289,7 +288,7 @@ def send_msgs(setup_clients, api, headers, total_expected_gossip, msg_size=10000
 
     err_msg = "msg_testing: Total gossip messages in ES is not as expected"
     err_msg += f"\nexpected {total_expected_gossip}, got {len(results)}"
-    assert total_expected_gossip == len(results), err_msg
+    assert total_expected_gossip <= len(results), err_msg
 
 
 # Deploy X peers
@@ -309,49 +308,6 @@ def test_many_gossip_sim(setup_clients, add_elk, add_node_pool, add_curl):
     total_expected_gossip = prev_num_of_msg + test_messages * pods_num
 
     send_msgs(setup_clients, api, gossip_message_query_fields, total_expected_gossip, num_of_msg=test_messages)
-
-
-def test_broadcast_unknown_protocol(setup_bootstrap, add_elk, add_node_pool, setup_clients, add_curl):
-    api = 'v1/gateway/broadcastpoet'
-    # protocol is modified
-    headers = gossip_message_query_fields.copy()
-    headers['protocol'] = 'unknown_protocol'
-    msg_size = 10000  # 1kb TODO: increase up to 2mb
-    test_messages = 10
-
-    prev_num_of_msg = len(query_message(current_index, testconfig['namespace'], setup_clients.deployment_name, headers))
-    # add only the number of previous messages
-    # when there's a problem in our protocol we're not even sending
-    total_expected_gossip = prev_num_of_msg
-
-    send_msgs(setup_clients, api, headers, total_expected_gossip, num_of_msg=test_messages)
-
-
-# Different client version on bootstrap:
-# Deploy X peers with client version A
-# Wait for bootstrap
-# Deploy new "v2" peers with client version B<A
-# Validate that the new nodes failed to bootstrap
-# NOTE: this test is run in the end because it affects the network structure,
-# it creates an additional pod with a "v2" client
-# ALSO NOTE: The "v2" client is actually running an _earlier_ client version, this is confusing
-def test_diff_client_ver(setup_bootstrap, add_elk, add_node_pool, setup_clients, add_curl, add_clients):
-    num_of_v2_clients = 2
-    v2_version = "v2"
-
-    clients = add_clients(num_of_v2_clients, v2_version)
-
-    # Sleep a while before checking the node is bootstrapped
-    time.sleep(20 * timeout_factor)
-    headers = {'M': 'discovery_bootstrap'}
-    for cl in clients:
-        hits = poll_query_message(indx=current_index,
-                                  namespace=setup_bootstrap.deployment_id,
-                                  client_po_name=cl,
-                                  fields=headers,
-                                  findFails=False)
-        ass_err = f"client is not supposed to discover bootstrap, on: {cl}"
-        assert len(hits) == 0, ass_err
 
 
 # NOTE: this test is run in the end because it affects the network structure,

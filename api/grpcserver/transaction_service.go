@@ -20,10 +20,10 @@ import (
 
 // TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
-	Network api.NetworkAPI // P2P Swarm
-	Mesh    api.TxAPI      // Mesh
-	Mempool api.MempoolAPI
-	syncer  api.Syncer
+	publisher api.Publisher // P2P Swarm
+	Mesh      api.TxAPI     // Mesh
+	Mempool   api.MempoolAPI
+	syncer    api.Syncer
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -33,16 +33,16 @@ func (s TransactionService) RegisterService(server *Server) {
 
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
-	net api.NetworkAPI,
+	publisher api.Publisher,
 	tx api.TxAPI,
 	mempool api.MempoolAPI,
 	syncer api.Syncer,
 ) *TransactionService {
 	return &TransactionService{
-		Network: net,
-		Mesh:    tx,
-		Mempool: mempool,
-		syncer:  syncer,
+		publisher: publisher,
+		Mesh:      tx,
+		Mempool:   mempool,
+		syncer:    syncer,
 	}
 }
 
@@ -90,7 +90,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 		tx.Recipient, len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
 
 	go func() {
-		if err := s.Network.Broadcast(ctx, state.IncomingTxProtocol, in.Transaction); err != nil {
+		if err := s.publisher.Publish(ctx, state.IncomingTxProtocol, in.Transaction); err != nil {
 			log.Error("error broadcasting incoming tx: %v", err)
 		}
 	}()

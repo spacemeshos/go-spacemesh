@@ -11,7 +11,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	service "github.com/spacemeshos/go-spacemesh/p2p/service"
 	timesync "github.com/spacemeshos/go-spacemesh/timesync"
 	weakcoin "github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
@@ -112,18 +111,6 @@ func (m *Mockcoin) Get(arg0 context.Context, arg1 types.EpochID, arg2 types.Roun
 func (mr *MockcoinMockRecorder) Get(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*Mockcoin)(nil).Get), arg0, arg1, arg2)
-}
-
-// HandleSerializedMessage mocks base method.
-func (m *Mockcoin) HandleSerializedMessage(arg0 context.Context, arg1 service.GossipMessage, arg2 service.Fetcher) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "HandleSerializedMessage", arg0, arg1, arg2)
-}
-
-// HandleSerializedMessage indicates an expected call of HandleSerializedMessage.
-func (mr *MockcoinMockRecorder) HandleSerializedMessage(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSerializedMessage", reflect.TypeOf((*Mockcoin)(nil).HandleSerializedMessage), arg0, arg1, arg2)
 }
 
 // StartEpoch mocks base method.

@@ -8,16 +8,13 @@ import (
 	"github.com/golang/protobuf/ptypes/duration"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -157,22 +154,8 @@ func createMeshWithMock(dbs *allDbs, txpool *mempool.TxMempool, lg log.Log) *mes
 	return msh
 }
 
-func createFetcherWithMock(dbs *allDbs, msh *mesh.Mesh, swarm service.Service, lg log.Log) *layerfetcher.Logic {
-	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, msh, blockEligibilityValidatorMock{}, lg)
-
-	fCfg := fetch.DefaultConfig()
-	fetcher := fetch.NewFetch(context.TODO(), fCfg, swarm, lg)
-
-	lCfg := layerfetcher.Config{RequestTimeout: 20}
-	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, dbs.atxdb, dbs.poetDb, dbs.atxdb, mockTxProcessor{}, swarm, fetcher, msh, lg)
-	layerFetch.AddDBs(dbs.mshdb.Blocks(), dbs.atxdbStore, dbs.mshdb.Transactions(), dbs.poetStorage)
-	return layerFetch
-}
-
 func createSyncer(conf syncer.Configuration, msh *mesh.Mesh, layerFetch *layerfetcher.Logic, expectedLayers types.LayerID, lg log.Log) *syncer.Syncer {
 	clock := mockClock{Layer: expectedLayers.Add(1)}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
-
-	layerFetch.Start()
 	return syncer.NewSyncer(context.TODO(), conf, &clock, msh, layerFetch, layerpatrol.New(), lg)
 }

@@ -12,22 +12,21 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./layers.go
 
 // atxHandler defines handling function for incoming ATXs.
 type atxHandler interface {
-	HandleAtxData(ctx context.Context, data []byte, syncer service.Fetcher) error
+	HandleAtxData(context.Context, []byte) error
 }
 
 // blockHandler defines handling function for blocks.
 type blockHandler interface {
-	HandleBlockData(ctx context.Context, date []byte, fetcher service.Fetcher) error
+	HandleBlockData(context.Context, []byte) error
 }
 
 // TxProcessor is an interface for handling TX data received in sync.
@@ -57,12 +56,9 @@ type poetDB interface {
 	ValidateAndStoreMsg(data []byte) error
 }
 
-// network defines network capabilities used.
 type network interface {
-	GetPeers() []peers.Peer
-	PeerCount() uint64
-	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errorHandler func(err error)) error
-	Close()
+	bootstrap.Provider
+	server.Host
 }
 
 var (
@@ -88,7 +84,7 @@ type layerResult struct {
 	layerID     types.LayerID
 	blocks      map[types.BlockID]struct{}
 	inputVector []types.BlockID
-	responses   map[peers.Peer]*peerResult
+	responses   map[p2p.Peer]*peerResult
 }
 
 // LayerPromiseResult is the result of trying to fetch data for an entire layer.
@@ -99,19 +95,20 @@ type LayerPromiseResult struct {
 
 // Logic is the struct containing components needed to follow layer fetching logic.
 type Logic struct {
-	log            log.Log
-	fetcher        fetch.Fetcher
-	net            network
-	mutex          sync.Mutex
-	layerBlocksRes map[types.LayerID]*layerResult
-	layerBlocksChs map[types.LayerID][]chan LayerPromiseResult
-	poetProofs     poetDB
-	atxs           atxHandler
-	blockHandler   blockHandler
-	txs            TxProcessor
-	layerDB        layerDB
-	atxIds         atxIDsDB
-	goldenATXID    types.ATXID
+	log              log.Log
+	fetcher          fetch.Fetcher
+	atxsrv, blocksrv server.Requestor
+	host             network
+	mutex            sync.Mutex
+	layerBlocksRes   map[types.LayerID]*layerResult
+	layerBlocksChs   map[types.LayerID][]chan LayerPromiseResult
+	poetProofs       poetDB
+	atxs             atxHandler
+	blockHandler     blockHandler
+	txs              TxProcessor
+	layerDB          layerDB
+	atxIds           atxIDsDB
+	goldenATXID      types.ATXID
 }
 
 // Config defines configuration for layer fetching logic.
@@ -125,13 +122,18 @@ func DefaultConfig() Config {
 	return Config{RequestTimeout: 10}
 }
 
+const (
+	blockProtocol = "/block/1.0.0"
+	atxProtocol   = "/atx/1.0.0"
+)
+
 // NewLogic creates a new instance of layer fetching logic.
-func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDB, atxIDs atxIDsDB, txs TxProcessor, network service.Service, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
-	srv := fetch.NewMessageNetwork(ctx, cfg.RequestTimeout, network, layersProtocol, log)
+func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDB, atxIDs atxIDsDB, txs TxProcessor,
+	host network, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
 	l := &Logic{
 		log:            log,
 		fetcher:        fetcher,
-		net:            srv,
+		host:           host,
 		layerBlocksRes: make(map[types.LayerID]*layerResult),
 		layerBlocksChs: make(map[types.LayerID][]chan LayerPromiseResult),
 		poetProofs:     poet,
@@ -142,16 +144,10 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		txs:            txs,
 		goldenATXID:    cfg.GoldenATXID,
 	}
-
-	srv.RegisterBytesMsgHandler(server.LayerBlocksMsg, l.layerBlocksReqReceiver)
-	srv.RegisterBytesMsgHandler(server.AtxIDsMsg, l.epochATXsReqReceiver)
-
+	l.atxsrv = server.New(host, atxProtocol, l.epochATXsReqReceiver, server.WithLog(log))
+	l.blocksrv = server.New(host, blockProtocol, l.layerBlocksReqReceiver, server.WithLog(log))
 	return l
 }
-
-const (
-	layersProtocol = "/layers/2.0/"
-)
 
 // Start starts layerFetcher logic and fetch component.
 func (l *Logic) Start() {
@@ -160,7 +156,6 @@ func (l *Logic) Start() {
 
 // Close closes all running workers.
 func (l *Logic) Close() {
-	l.net.Close()
 	l.fetcher.Stop()
 }
 
@@ -240,7 +235,7 @@ func (l *Logic) initLayerPolling(layerID types.LayerID, ch chan LayerPromiseResu
 	l.layerBlocksRes[layerID] = &layerResult{
 		layerID:   layerID,
 		blocks:    make(map[types.BlockID]struct{}),
-		responses: make(map[peers.Peer]*peerResult),
+		responses: make(map[p2p.Peer]*peerResult),
 	}
 	return true
 }
@@ -250,7 +245,7 @@ func (l *Logic) initLayerPolling(layerID types.LayerID, ch chan LayerPromiseResu
 func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) chan LayerPromiseResult {
 	resChannel := make(chan LayerPromiseResult, 1)
 
-	remotePeers := l.net.GetPeers()
+	remotePeers := l.host.GetPeers()
 	numPeers := len(remotePeers)
 	if numPeers == 0 {
 		resChannel <- LayerPromiseResult{Layer: layerID, Err: ErrNoPeers}
@@ -271,9 +266,8 @@ func (l *Logic) PollLayerContent(ctx context.Context, layerID types.LayerID) cha
 		errFunc := func(err error) {
 			l.receiveLayerContent(ctx, layerID, peer, numPeers, nil, err)
 		}
-		err := l.net.SendRequest(ctx, server.LayerBlocksMsg, layerID.Bytes(), peer, receiveForPeerFunc, errFunc)
-		if err != nil {
-			l.receiveLayerContent(ctx, layerID, peer, numPeers, nil, err)
+		if err := l.blocksrv.Request(ctx, peer, layerID.Bytes(), receiveForPeerFunc, errFunc); err != nil {
+			errFunc(err)
 		}
 	}
 	return resChannel
@@ -328,7 +322,7 @@ func extractPeerResult(logger log.Log, layerID types.LayerID, data []byte, peerE
 
 // receiveLayerContent is called when response of block IDs for a layer hash is received from remote peer.
 // if enough responses are received, it notifies the channels waiting for the layer blocks result.
-func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, peer peers.Peer, expectedResults int, data []byte, peerErr error) {
+func (l *Logic) receiveLayerContent(ctx context.Context, layerID types.LayerID, peer p2p.Peer, expectedResults int, data []byte, peerErr error) {
 	l.log.WithContext(ctx).With().Debug("received layer content from peer", log.String("peer", peer.String()))
 	peerRes := extractPeerResult(l.log.WithContext(ctx), layerID, data, peerErr)
 	if peerRes.err == nil {
@@ -431,15 +425,12 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 			Atxs:  nil,
 		}
 	}
-	if l.net.PeerCount() == 0 {
+	if l.host.PeerCount() == 0 {
 		return errors.New("no peers")
 	}
-
-	err := l.net.SendRequest(ctx, server.AtxIDsMsg, id.ToBytes(), fetch.GetRandomPeer(l.net.GetPeers()), receiveForPeerFunc, errFunc)
-	if err != nil {
-		return fmt.Errorf("send net request: %w", err)
+	if err := l.atxsrv.Request(ctx, fetch.GetRandomPeer(l.host.GetPeers()), id.ToBytes(), receiveForPeerFunc, errFunc); err != nil {
+		return fmt.Errorf("failed to send request to the peer: %w", err)
 	}
-
 	l.log.WithContext(ctx).With().Debug("waiting for epoch atx response", id)
 	res := <-resCh
 	if res.Error != nil {
@@ -459,7 +450,7 @@ func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byt
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
 
-	if err := l.atxs.HandleAtxData(ctx, data, l); err != nil {
+	if err := l.atxs.HandleAtxData(ctx, data); err != nil {
 		return fmt.Errorf("handle ATX data: %w", err)
 	}
 
@@ -493,7 +484,7 @@ func (l *Logic) getPoetResult(ctx context.Context, hash types.Hash32, data []byt
 
 // blockReceiveFunc handles blocks received via fetch.
 func (l *Logic) blockReceiveFunc(ctx context.Context, data []byte) error {
-	if err := l.blockHandler.HandleBlockData(ctx, data, l); err != nil {
+	if err := l.blockHandler.HandleBlockData(ctx, data); err != nil {
 		return fmt.Errorf("handle block data: %w", err)
 	}
 
@@ -550,7 +541,7 @@ func (l *Logic) FetchBlock(ctx context.Context, id types.BlockID) error {
 		return res.Err
 	}
 	if !res.IsLocal {
-		if err := l.blockHandler.HandleBlockData(ctx, res.Data, l); err != nil {
+		if err := l.blockHandler.HandleBlockData(ctx, res.Data); err != nil {
 			return fmt.Errorf("handle block data: %w", err)
 		}
 

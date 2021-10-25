@@ -17,7 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/metrics"
-	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 const (
@@ -67,7 +67,7 @@ type BlockBuilder struct {
 	stopChan        chan struct{}
 	TransactionPool txPool
 	mu              sync.Mutex
-	network         p2p.Service
+	publisher       pubsub.Publisher
 	meshProvider    meshProvider
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
@@ -96,7 +96,7 @@ type Config struct {
 func NewBlockBuilder(
 	config Config,
 	sgn signer,
-	net p2p.Service,
+	publisher pubsub.Publisher,
 	beginRoundEvent chan types.LayerID,
 	orph meshProvider,
 	bbp baseBlockProvider,
@@ -129,7 +129,7 @@ func NewBlockBuilder(
 		beginRoundEvent: beginRoundEvent,
 		stopChan:        make(chan struct{}),
 		mu:              sync.Mutex{},
-		network:         net,
+		publisher:       publisher,
 		meshProvider:    orph,
 		baseBlockP:      bbp,
 		blockOracle:     blockOracle,
@@ -365,7 +365,7 @@ func (t *BlockBuilder) createBlockLoop(ctx context.Context) {
 
 					// generate a new requestID for the new block message
 					blockCtx := log.WithNewRequestID(ctx, layerID, blk.ID())
-					if err = t.network.Broadcast(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
+					if err = t.publisher.Publish(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
 						logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
 					}
 					events.ReportDoneCreatingBlock(true, layerID.Uint32(), "")

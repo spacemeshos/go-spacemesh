@@ -4,32 +4,34 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/libp2p/go-libp2p-core/peer"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
-// HandleSerializedMessage defines method to handle Tortoise Beacon Weak Coin Messages from gossip.
-func (wc *WeakCoin) HandleSerializedMessage(ctx context.Context, data service.GossipMessage, _ service.Fetcher) {
+// HandleProposal defines method to handle Tortoise Beacon Weak Coin Messages from gossip.
+func (wc *WeakCoin) HandleProposal(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
 	logger := wc.logger.WithContext(ctx)
 	logger.With().Debug("received weak coin message",
-		log.String("from", data.Sender().String()),
-		log.Binary("data", data.Bytes()),
+		log.String("from", pid.String()),
+		log.Binary("data", msg),
 	)
 
 	var message Message
-	if err := types.BytesToInterface(data.Bytes(), &message); err != nil {
+	if err := types.BytesToInterface(msg, &message); err != nil {
 		logger.With().Warning("received invalid weak coin message",
-			log.Binary("message", data.Bytes()),
+			log.Binary("message", msg),
 			log.Err(err))
-		return
+		return pubsub.ValidationIgnore
 	}
 
 	if err := wc.receiveMessage(ctx, message); err != nil {
 		logger.With().Debug("received invalid proposal", message.Epoch, message.Round, log.Err(err))
-		return
+		return pubsub.ValidationIgnore
 	}
-	data.ReportValidation(ctx, GossipProtocol)
+	return pubsub.ValidationAccept
 }
 
 func (wc *WeakCoin) receiveMessage(ctx context.Context, message Message) error {
