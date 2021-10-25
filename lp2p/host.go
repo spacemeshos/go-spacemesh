@@ -96,6 +96,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 		log.String("identity", h.ID().String()),
 	)
 	// TODO(dshulyak) this is small mess. refactor to avoid this patching
+	// both New and Upgrade should use options.
 	opts = append(opts, WithConfig(cfg), WithLog(logger))
 	return Upgrade(h, opts...)
 }

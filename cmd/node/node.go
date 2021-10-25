@@ -1111,7 +1111,8 @@ func (app *App) Start() error {
 
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
-	app.host, err = lp2p.New(ctx, app.addLogger(P2PLogger, lg), cfg)
+	app.host, err = lp2p.New(ctx, app.addLogger(P2PLogger, lg), cfg,
+		lp2p.WithNodeReporter(events.ReportNodeStatusUpdate))
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
