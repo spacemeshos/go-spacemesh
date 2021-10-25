@@ -978,7 +978,10 @@ func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, protocol string, dat
 	// NOTE(dshulyak) moved to goroutine because self-broadcast is applied synchronously
 	tb.eg.Go(func() error {
 		if err := tb.publisher.Publish(ctx, protocol, serialized); err != nil {
-			return fmt.Errorf("broadcast: %w", err)
+			tb.logger.With().Error("failed to broadcast",
+				log.String("protocol", protocol),
+				log.Err(err),
+			)
 		}
 		return nil
 	})
