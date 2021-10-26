@@ -37,6 +37,7 @@ func DefaultConfig() Config {
 // Config for all things related to p2p layer.
 type Config struct {
 	DataDir            string
+	LogLevel           log.Level
 	GracePeersShutdown time.Duration
 	BootstrapTimeout   time.Duration
 	MaxMessageSize     int
@@ -58,7 +59,10 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	if err != nil {
 		return nil, err
 	}
+	// what we set in cfg.LogLevel doesn't will not be applied
+	// unless level of the Core is atleast as high
 	lp2plog.SetPrimaryCore(logger.Core())
+	lp2plog.SetAllLoggers(lp2plog.LogLevel(cfg.LogLevel))
 
 	cm := connmgr.NewConnManager(cfg.LowPeers, cfg.HighPeers, cfg.GracePeersShutdown)
 	// TODO(dshulyak) remove this part
@@ -69,7 +73,6 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 		}
 		cm.Protect(addr.ID, "bootstrap")
 	}
-
 	streamer := *yamux.DefaultTransport
 	lopts := []libp2p.Option{
 		libp2p.Identity(key),

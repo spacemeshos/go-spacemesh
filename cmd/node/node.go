@@ -28,6 +28,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/config"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -371,44 +372,18 @@ func (app *App) Cleanup() {
 // specific module.
 func (app *App) addLogger(name string, logger log.Log) log.Log {
 	lvl := zap.NewAtomicLevel()
-	config := app.Config.LOGGING
-	level, ok := map[string]string{
-		AppLogger:            config.AppLoggerLevel,
-		P2PLogger:            config.P2PLoggerLevel,
-		PostLogger:           config.PostLoggerLevel,
-		StateDbLogger:        config.StateDbLoggerLevel,
-		StateLogger:          config.StateLoggerLevel,
-		AtxDbStoreLogger:     config.AtxDbStoreLoggerLevel,
-		TBeaconLogger:        config.TBeaconLoggerLevel,
-		WeakCoinLogger:       config.WeakCoinLoggerLevel,
-		PoetDbStoreLogger:    config.PoetDbStoreLoggerLevel,
-		StoreLogger:          config.StoreLoggerLevel,
-		PoetDbLogger:         config.PoetDbLoggerLevel,
-		MeshDBLogger:         config.MeshDBLoggerLevel,
-		TrtlLogger:           config.TrtlLoggerLevel,
-		AtxDbLogger:          config.AtxDbLoggerLevel,
-		BlkEligibilityLogger: config.BlkEligibilityLoggerLevel,
-		MeshLogger:           config.MeshLoggerLevel,
-		SyncLogger:           config.SyncLoggerLevel,
-		BlockOracle:          config.BlockOracleLevel,
-		HareOracleLogger:     config.HareOracleLoggerLevel,
-		HareBeaconLogger:     config.HareBeaconLoggerLevel,
-		HareLogger:           config.HareLoggerLevel,
-		BlockBuilderLogger:   config.BlockBuilderLoggerLevel,
-		BlockListenerLogger:  config.BlockListenerLoggerLevel,
-		PoetListenerLogger:   config.PoetListenerLoggerLevel,
-		NipostBuilderLogger:  config.NipostBuilderLoggerLevel,
-		AtxBuilderLogger:     config.AtxBuilderLoggerLevel,
-		TimeSyncLogger:       config.TimeSyncLoggerLevel,
-	}[name]
-
+	loggers, err := decodeLoggers(app.Config.LOGGING)
+	if err != nil {
+		panic("unable to decode loggers into map[string]string")
+	}
+	level, ok := loggers[name]
 	if ok {
 		if err := lvl.UnmarshalText([]byte(level)); err != nil {
 			app.log.Error("cannot parse logging for %v error %v", name, err)
-			lvl.SetLevel(log.Level())
+			lvl.SetLevel(log.DefaultLevel())
 		}
 	} else {
-		lvl.SetLevel(log.Level())
+		lvl.SetLevel(log.DefaultLevel())
 	}
 
 	if logger.Check(lvl.Level()) {
@@ -416,6 +391,14 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 		logger = logger.SetLevel(&lvl)
 	}
 	return logger.WithName(name).WithFields(log.String("module", name))
+}
+
+func (app *App) getLevel(name string) (log.Level, bool) {
+	alvl, exist := app.loggers[name]
+	if !exist {
+		return 0, false
+	}
+	return alvl.Level(), true
 }
 
 // SetLogLevel updates the log level of an existing logger.
@@ -1110,8 +1093,15 @@ func (app *App) Start() error {
 
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
-	app.host, err = p2p.New(ctx, app.addLogger(P2PLogger, lg), cfg,
-		p2p.WithNodeReporter(events.ReportNodeStatusUpdate))
+	p2plog := app.addLogger(P2PLogger, lg)
+	var exist bool
+	cfg.LogLevel, exist = app.getLevel(P2PLogger)
+	if !exist {
+		lg.Panic("p2p logger level is not set after calling app.addLogger")
+	}
+	app.host, err = p2p.New(ctx, p2plog, cfg,
+		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
+	)
 	if err != nil {
 		return fmt.Errorf("failed to initialize p2p host: %w", err)
 	}
@@ -1180,4 +1170,12 @@ func (app *App) Start() error {
 
 type layerFetcher struct {
 	system.Fetcher
+}
+
+func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
+	rst := map[string]string{}
+	if err := mapstructure.Decode(cfg, &rst); err != nil {
+		return nil, fmt.Errorf("mapstructure decode: %w", err)
+	}
+	return rst, nil
 }
