@@ -113,6 +113,11 @@ func (p *peerExchange) UpdateExternalPort(port uint16) {
 	p.listen.Store(uint32(port))
 }
 
+// ExternalPort returns currently configured external port.
+func (p *peerExchange) ExternalPort() uint16 {
+	return uint16(p.listen.Load())
+}
+
 // Request addresses from a remote node, it will block and return the results returned from the node.
 func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, error) {
 	logger := p.logger.WithContext(ctx).WithFields(
@@ -128,7 +133,7 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, e
 
 	_ = stream.SetDeadline(time.Now().Add(messageTimeout))
 	defer stream.SetDeadline(time.Time{})
-	if _, err := codec.EncodeTo(stream, uint16(p.listen.Load())); err != nil {
+	if _, err := codec.EncodeTo(stream, p.ExternalPort()); err != nil {
 		return nil, fmt.Errorf("failed to send GetAddress request: %w", err)
 	}
 

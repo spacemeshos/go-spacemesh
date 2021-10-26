@@ -3,14 +3,20 @@ package peerexchange
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/libp2p/go-libp2p-core/event"
+	"github.com/libp2p/go-libp2p-core/host"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	ma "github.com/multiformats/go-multiaddr"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p/peerexchange/mocks"
 )
 
 func TestDiscovery_CrawlMesh(t *testing.T) {
@@ -69,4 +75,64 @@ func TestDiscovery_CrawlMesh(t *testing.T) {
 		require.True(t, len(h.Network().Conns()) > 1,
 			"expected connections with more then just bootnode")
 	}
+}
+
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./discovery_test.go
+
+// AddrProvider provider for multiaddrs.
+type AddrProvider interface {
+	Addrs() []ma.Multiaddr
+}
+
+type patchedHost struct {
+	host.Host
+	provider AddrProvider
+}
+
+func (ph patchedHost) Addrs() []ma.Multiaddr {
+	return ph.provider.Addrs()
+}
+
+func multiaddrFromString(tb testing.TB, raw string) ma.Multiaddr {
+	tb.Helper()
+
+	addr, err := ma.NewMultiaddr(raw)
+	require.NoError(tb, err)
+	return addr
+}
+
+func TestDiscovery_PrefereRoutablePort(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mesh, err := mocknet.WithNPeers(ctx, 1)
+	require.NoError(t, err)
+	h := mesh.Hosts()[0]
+
+	ctrl := gomock.NewController(t)
+	addrmock := mocks.NewMockAddrProvider(ctrl)
+	ph := patchedHost{Host: h, provider: addrmock}
+
+	emitter, err := h.EventBus().Emitter(&event.EvtLocalAddressesUpdated{})
+	require.NoError(t, err)
+
+	returned := []ma.Multiaddr{
+		multiaddrFromString(t, "/ip4/0.0.0.0/tcp/7777"),
+	}
+	addrmock.EXPECT().Addrs().DoAndReturn(func() []ma.Multiaddr {
+		return returned
+	}).AnyTimes()
+	discovery, err := New(logtest.New(t), ph, Config{})
+	require.NoError(t, err)
+	t.Cleanup(discovery.Stop)
+
+	external := uint16(1010)
+	returned = append(returned, multiaddrFromString(
+		t, fmt.Sprintf("/ip4/110.0.0.0/tcp/%d", external),
+	))
+
+	emitter.Emit(event.EvtLocalAddressesUpdated{})
+	require.Eventually(t, func() bool {
+		return discovery.ExternalPort() == external
+	}, 100*time.Millisecond, 10*time.Millisecond)
 }
