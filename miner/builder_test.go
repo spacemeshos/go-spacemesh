@@ -333,7 +333,8 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 
 	beacon := types.HexToHash32("0x94812631").Bytes()
 	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
-	b, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(1), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, beacon)
+	activeSet := []types.ATXID{atx1, atx2, atx3, atx4, atx5}
+	b, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(1), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, activeSet, beacon)
 	assert.NoError(t, err)
 
 	assert.Equal(t, hareRes, b.ForDiff)
@@ -343,11 +344,11 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	assert.True(t, ContainsTx(b.TxIDs, transids[1]))
 	assert.True(t, ContainsTx(b.TxIDs, transids[2]))
 
-	assert.Equal(t, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, *b.ActiveSet)
+	assert.Equal(t, activeSet, *b.ActiveSet)
 	assert.Equal(t, beacon, b.TortoiseBeacon)
 
 	// test create second block
-	bl, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, nil, beacon)
+	bl, err := builder.createBlock(context.TODO(), types.GetEffectiveGenesis().Add(2), types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 1, Sig: []byte{1}}, transids, activeSet, beacon)
 	assert.NoError(t, err)
 
 	assert.Equal(t, hareRes, bl.ForDiff)
@@ -360,6 +361,75 @@ func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
 	assert.Equal(t, *bl.RefBlock, b.ID())
 	assert.Nil(t, bl.ActiveSet)
 	assert.Nil(t, bl.TortoiseBeacon)
+}
+
+func TestBlockBuilder_CreateBlockWithRef_FailedLookup(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
+
+	st := []*types.Block{block1, block2, block3}
+	builder := createBlockBuilder(t, "a", newPublisher(t), st)
+	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
+		return types.BlockID{0}, [][]types.BlockID{{block4.ID()}, hareRes, {}}, nil
+	}}
+	mockDB := dbMocks.NewMockDatabase(ctrl)
+	builder.db = mockDB
+
+	recipient := types.BytesToAddress([]byte{0x01})
+	signer := signing.NewEdSigner()
+
+	trans := []*types.Transaction{
+		NewTx(t, 1, recipient, signer),
+		NewTx(t, 2, recipient, signer),
+		NewTx(t, 3, recipient, signer),
+	}
+
+	beacon := types.HexToHash32("0x94812631").Bytes()
+	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
+	activeSet := []types.ATXID{atx1, atx2, atx3, atx4, atx5}
+	lyr := types.GetEffectiveGenesis().Add(1)
+	dbErr := errors.New("unknown")
+	mockDB.EXPECT().Get(getEpochKey(lyr.GetEpoch())).Return(nil, dbErr).Times(1)
+	b, err := builder.createBlock(context.TODO(), lyr, types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, activeSet, beacon)
+	assert.ErrorIs(t, err, dbErr)
+	assert.Nil(t, b)
+}
+
+func TestBlockBuilder_CreateBlockWithRef_FailedSave(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	hareRes := []types.BlockID{block1.ID(), block2.ID(), block3.ID(), block4.ID()}
+
+	st := []*types.Block{block1, block2, block3}
+	builder := createBlockBuilder(t, "a", newPublisher(t), st)
+	builder.baseBlockP = &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
+		return types.BlockID{0}, [][]types.BlockID{{block4.ID()}, hareRes, {}}, nil
+	}}
+	mockDB := dbMocks.NewMockDatabase(ctrl)
+	builder.db = mockDB
+
+	recipient := types.BytesToAddress([]byte{0x01})
+	signer := signing.NewEdSigner()
+
+	trans := []*types.Transaction{
+		NewTx(t, 1, recipient, signer),
+		NewTx(t, 2, recipient, signer),
+		NewTx(t, 3, recipient, signer),
+	}
+
+	beacon := types.HexToHash32("0x94812631").Bytes()
+	transids := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
+	activeSet := []types.ATXID{atx1, atx2, atx3, atx4, atx5}
+	lyr := types.GetEffectiveGenesis().Add(1)
+	dbErr := errors.New("unknown")
+	mockDB.EXPECT().Get(getEpochKey(lyr.GetEpoch())).Return(nil, database.ErrNotFound).Times(1)
+	mockDB.EXPECT().Put(getEpochKey(lyr.GetEpoch()), gomock.Any()).Return(dbErr).Times(1)
+	b, err := builder.createBlock(context.TODO(), lyr, types.ATXID(types.Hash32{1, 2, 3}), types.BlockEligibilityProof{J: 0, Sig: []byte{1}}, transids, activeSet, beacon)
+	assert.ErrorIs(t, err, dbErr)
+	assert.Nil(t, b)
 }
 
 func NewTx(t *testing.T, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {

@@ -247,6 +247,10 @@ func (t *BlockBuilder) createBlock(
 	epoch := id.GetEpoch()
 	refBlock, err := t.getRefBlock(epoch)
 	if err != nil {
+		if !errors.Is(err, database.ErrNotFound) {
+			logger.With().Error("failed to get ref block", log.Err(err))
+			return nil, fmt.Errorf("get ref block: %w", err)
+		}
 		logger.With().Debug("creating block with active set (no reference block for epoch)",
 			log.Int("active_set_size", len(activeSet)),
 			log.FieldNamed("ref_block", refBlock),
@@ -263,18 +267,17 @@ func (t *BlockBuilder) createBlock(
 
 	blockBytes, err := types.InterfaceToBytes(b)
 	if err != nil {
-		return nil, fmt.Errorf("serialize: %w", err)
+		logger.With().Panic("failed to serialize block", log.Err(err))
 	}
 
 	bl := &types.Block{MiniBlock: b, Signature: t.signer.Sign(blockBytes)}
-
 	bl.Initialize()
 
 	if b.ActiveSet != nil {
 		logger.With().Debug("storing ref block", epoch, bl.ID())
 		if err := t.storeRefBlock(epoch, bl.ID()); err != nil {
 			logger.With().Error("cannot store ref block", epoch, log.Err(err))
-			// todo: panic?
+			return nil, fmt.Errorf("store ref block: %w", err)
 		}
 	}
 
