@@ -374,7 +374,7 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 	lvl := zap.NewAtomicLevel()
 	loggers, err := decodeLoggers(app.Config.LOGGING)
 	if err != nil {
-		panic("unable to decode loggers into map[string]string")
+		app.log.With().Panic("unable to decode loggers into map[string]string", log.Err(err))
 	}
 	level, ok := loggers[name]
 	if ok {
