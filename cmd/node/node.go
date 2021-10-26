@@ -29,7 +29,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
-	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -199,17 +198,17 @@ type TickProvider interface {
 }
 
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified.
-func LoadConfigFromFile() (*cfg.Config, error) {
+func LoadConfigFromFile() (*config.Config, error) {
 	fileLocation := viper.GetString("config")
 	vip := viper.New()
 	// read in default config if passed as param using viper
-	if err := cfg.LoadConfig(fileLocation, vip); err != nil {
+	if err := config.LoadConfig(fileLocation, vip); err != nil {
 		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
 			fileLocation, err))
 		// return err
 	}
 
-	conf := cfg.DefaultConfig()
+	conf := config.DefaultConfig()
 
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
@@ -237,7 +236,7 @@ func WithLog(logger log.Log) Option {
 }
 
 // WithConfig overvwrites default App config.
-func WithConfig(conf *cfg.Config) Option {
+func WithConfig(conf *config.Config) Option {
 	return func(app *App) {
 		app.Config = conf
 	}
@@ -245,7 +244,7 @@ func WithConfig(conf *cfg.Config) Option {
 
 // New creates an instance of the spacemesh app.
 func New(opts ...Option) *App {
-	defaultConfig := cfg.DefaultConfig()
+	defaultConfig := config.DefaultConfig()
 	app := &App{
 		Config:  &defaultConfig,
 		log:     log.NewNop(),
@@ -265,7 +264,7 @@ func New(opts ...Option) *App {
 type App struct {
 	*cobra.Command
 	nodeID         types.NodeID
-	Config         *cfg.Config
+	Config         *config.Config
 	grpcAPIService *grpcserver.Server
 	jsonAPIService *grpcserver.JSONHTTPServer
 	gatewaySvc     *grpcserver.GatewayService
