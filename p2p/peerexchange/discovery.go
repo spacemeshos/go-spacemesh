@@ -62,10 +62,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 	}
 	d.book.AddAddresses(bootnodes, best)
 
-	protocol := newPeerExchange(h, d.book,
-		portFromHost(logger, h),
-		logger,
-	)
+	protocol := newPeerExchange(h, d.book, portFromHost(logger, h), logger)
 	d.crawl = newCrawler(h, d.book, protocol, logger)
 	sub, err := h.EventBus().Subscribe(new(event.EvtLocalAddressesUpdated), eventbus.BufSize(4))
 	if err != nil {
@@ -134,7 +131,7 @@ func portFromHost(logger log.Log, h host.Host) uint16 {
 		logger.With().Warning("failed to find best host address. host won't be dialable", log.Err(err))
 		return 0
 	}
-	logger.With().Info("host addresses are updated", log.String("address", addr.String()))
+	logger.With().Info("selected new best address", log.String("address", addr.String()))
 	port, err := portFromAddress(addr)
 	if err != nil {
 		logger.With().Warning("failed to find port from host. host won't be dialable", log.Err(err))
@@ -171,7 +168,7 @@ func routableNetAddress(h host.Host) (ma.Multiaddr, error) {
 func portFromAddress(addr ma.Multiaddr) (uint16, error) {
 	netaddr, err := manet.ToNetAddr(addr)
 	if err != nil {
-		return 0, fmt.Errorf("failed to cast addr %s to netaddr: %w", addr, err)
+		return 0, fmt.Errorf("cast addr %s to netaddr: %w", addr, err)
 	}
 	_, portStr, err := net.SplitHostPort(netaddr.String())
 	if err != nil {
@@ -179,7 +176,7 @@ func portFromAddress(addr ma.Multiaddr) (uint16, error) {
 	}
 	port, err := strconv.Atoi(portStr)
 	if err != nil {
-		return 0, fmt.Errorf("failed to convert port %s to int", portStr)
+		return 0, fmt.Errorf("convert port %s to int: %w", portStr, err)
 	}
 	if int(uint16(port)) < port {
 		return 0, fmt.Errorf("port %d cant fit into uint16 %d", port, math.MaxUint16)
