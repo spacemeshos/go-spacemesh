@@ -16,14 +16,14 @@ const (
 	namespaceEvict    = "e"
 	namespaceVerified = "v"
 	namespaceGood     = "g"
-	namespaceOpinons  = "o"
+	namespaceOpinions = "o"
 )
 
 type state struct {
 	log log.Log
 	db  database.Database
 
-	// if true only non-flushed items will be synced
+	// if true only non-flushed items will be persisted
 	diffMode bool
 
 	// last layer processed: note that tortoise does not have a concept of "current" layer (and it's not aware of the
@@ -35,7 +35,7 @@ type state struct {
 	Verified    types.LayerID
 	// if key exists in the map the block is good. if value is true it was written to the disk.
 	GoodBlocksIndex map[types.BlockID]bool
-	// use 2D array to be able to iterate from latest elements easily
+	// use 2D array to be able to iterate from the latest elements easily
 	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion
 }
 
@@ -43,7 +43,7 @@ func (s *state) Persist() error {
 	batch := s.db.NewBatch()
 
 	if err := batch.Put([]byte(namespaceLast), s.Last.Bytes()); err != nil {
-		return fmt.Errorf("put 'last' namespace into Dbatch: %w", err)
+		return fmt.Errorf("put 'last' namespace into batch: %w", err)
 	}
 	if err := batch.Put([]byte(namespaceEvict), s.LastEvicted.Bytes()); err != nil {
 		return fmt.Errorf("put 'evict' namespace into batch: %w", err)
@@ -60,7 +60,7 @@ func (s *state) Persist() error {
 		b.WriteString(namespaceGood)
 		b.Write(id.Bytes())
 		if err := batch.Put(b.Bytes(), nil); err != nil {
-			return fmt.Errorf("put into batch")
+			return fmt.Errorf("put 'good' namespace into batch: %w", err)
 		}
 		b.Reset()
 	}
@@ -73,7 +73,7 @@ func (s *state) Persist() error {
 				}
 				opinion.Flushed = true
 				opinions[block2] = opinion
-				b.WriteString(namespaceOpinons)
+				b.WriteString(namespaceOpinions)
 				b.Write(encodeLayerKey(layer))
 				b.Write(block1.Bytes())
 				b.Write(block2.Bytes())
@@ -83,7 +83,7 @@ func (s *state) Persist() error {
 					s.log.With().Panic("can't encode vec", log.Err(err))
 				}
 				if err := batch.Put(b.Bytes(), buf); err != nil {
-					return fmt.Errorf("put into batch")
+					return fmt.Errorf("put 'opinions' namespace into batch: %w", err)
 				}
 				b.Reset()
 			}
@@ -120,16 +120,20 @@ func (s *state) Recover() error {
 	s.LastEvicted = types.BytesToLayerID(buf)
 
 	it := s.db.Find([]byte(namespaceGood))
-	defer it.Release()
+	defer func(iter database.Iterator) {
+		it.Release()
+	}(it)
 	for it.Next() {
 		s.GoodBlocksIndex[decodeBlock(it.Key()[1:])] = true
 	}
 	if it.Error() != nil {
-		return fmt.Errorf("iterator: %w", it.Error())
+		return fmt.Errorf("good blocks iterator: %w", it.Error())
 	}
 
-	it = s.db.Find([]byte(namespaceOpinons))
-	defer it.Release()
+	it = s.db.Find([]byte(namespaceOpinions))
+	defer func(iter database.Iterator) {
+		it.Release()
+	}(it)
 	for it.Next() {
 		layer := decodeLayerKey(it.Key())
 		offset := 1 + types.LayerIDSize
@@ -145,12 +149,12 @@ func (s *state) Recover() error {
 
 		var opinion vec
 		if err := codec.Decode(it.Value(), &opinion); err != nil {
-			return fmt.Errorf("decode with codec: %w", err)
+			return fmt.Errorf("decode opinion with codec: %w", err)
 		}
 		s.BlockOpinionsByLayer[layer][block1][block2] = opinion
 	}
 	if err := it.Error(); err != nil {
-		return fmt.Errorf("iterator: %w", it.Error())
+		return fmt.Errorf("opinion iterator: %w", it.Error())
 	}
 
 	return nil
@@ -159,7 +163,7 @@ func (s *state) Recover() error {
 func (s *state) Evict() error {
 	var (
 		batch = s.db.NewBatch()
-		it    = s.db.Find([]byte(namespaceOpinons))
+		it    = s.db.Find([]byte(namespaceOpinions))
 		b     bytes.Buffer
 	)
 	defer it.Release()
@@ -201,5 +205,5 @@ func encodeLayerKey(layer types.LayerID) []byte {
 }
 
 func decodeLayerKey(key []byte) types.LayerID {
-	return types.NewLayerID(util.BytesToUint32BE((key[1 : 1+types.LayerIDSize])))
+	return types.NewLayerID(util.BytesToUint32BE(key[1 : 1+types.LayerIDSize]))
 }
