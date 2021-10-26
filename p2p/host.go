@@ -41,7 +41,7 @@ type Config struct {
 	BootstrapTimeout   time.Duration
 	MaxMessageSize     int
 
-	NatPort        bool     `mapstructure:"natport"`
+	DisableNatPort bool     `mapstructure:"disable-natport"`
 	Flood          bool     `mapstructure:"flood"`
 	Listen         string   `mapstructure:"listen"`
 	NetworkID      uint32   `mapstructure:"network-id"`
@@ -84,7 +84,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 		libp2p.ConnectionManager(cm),
 		libp2p.Peerstore(pstoremem.NewPeerstore()),
 	}
-	if cfg.NatPort {
+	if !cfg.DisableNatPort {
 		lopts = append(lopts, libp2p.NATPortMap())
 	}
 	h, err := libp2p.New(ctx, lopts...)

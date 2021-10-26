@@ -70,8 +70,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.P2P.Listen, "address for listening")
 	cmd.PersistentFlags().BoolVar(&config.P2P.Flood, "flood",
 		config.P2P.Flood, "flood created messages to all peers (true by default. disable to lower traffic requirements)")
-	cmd.PersistentFlags().BoolVar(&config.P2P.NatPort, "natport",
-		config.P2P.NatPort, "enable port-mapping on the router (upnp must be enabled for this to work)")
+	cmd.PersistentFlags().BoolVar(&config.P2P.DisableNatPort, "disable-natport",
+		config.P2P.DisableNatPort, "disable nat port-mapping (if enabled upnp protocol is used to negotiate external port with router)")
 	cmd.PersistentFlags().Uint32Var(&config.P2P.NetworkID, "network-id",
 		config.P2P.NetworkID, "network-id to participate in")
 	cmd.PersistentFlags().IntVar(&config.P2P.LowPeers, "low-peers",

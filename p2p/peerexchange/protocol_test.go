@@ -4,11 +4,20 @@ import (
 	"context"
 	"testing"
 
+	"github.com/libp2p/go-libp2p-core/host"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
+
+func routablePort(h host.Host) (uint16, error) {
+	addr, err := routableNetAddress(h)
+	if err != nil {
+		return 0, err
+	}
+	return portFromAddress(addr)
+}
 
 func TestDiscovery_LearnAddress(t *testing.T) {
 	n := 4
@@ -20,7 +29,7 @@ func TestDiscovery_LearnAddress(t *testing.T) {
 	for _, h := range mesh.Hosts() {
 		require.NoError(t, err)
 		book := newAddrBook(Config{}, logger)
-		port, err := portFromAddress(h)
+		port, err := routablePort(h)
 		require.NoError(t, err)
 		protocols = append(protocols, newPeerExchange(h, book, port, logger))
 	}
