@@ -120,9 +120,7 @@ func (s *state) Recover() error {
 	s.LastEvicted = types.BytesToLayerID(buf)
 
 	it := s.db.Find([]byte(namespaceGood))
-	defer func(iter database.Iterator) {
-		it.Release()
-	}(it)
+	defer it.Release()
 	for it.Next() {
 		s.GoodBlocksIndex[decodeBlock(it.Key()[1:])] = true
 	}
@@ -131,9 +129,7 @@ func (s *state) Recover() error {
 	}
 
 	it = s.db.Find([]byte(namespaceOpinions))
-	defer func(iter database.Iterator) {
-		it.Release()
-	}(it)
+	defer it.Release()
 	for it.Next() {
 		layer := decodeLayerKey(it.Key())
 		offset := 1 + types.LayerIDSize
