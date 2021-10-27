@@ -1,12 +1,15 @@
 package svm
 
 import (
+	"context"
 	"fmt"
 
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
 
@@ -132,5 +135,20 @@ func (svm *SVM) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	if err := svm.state.ValidateAndAddTxToPool(tx); err != nil {
 		return fmt.Errorf("SVM couldn't validate and/or add transaction to mempool: %w", err)
 	}
+	return nil
+}
+
+// HandleGossipTransaction wraps around HandleTransaction,
+// which handles data received on the transactions gossip channel.
+func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
+	if err := svm.HandleTransaction(msg); err != nil {
+		svm.state.With().Error("invalid transaction", log.Err(err))
+		return pubsub.ValidationIgnore
+	}
+	return pubsub.ValidationAccept
+}
+
+// TODO: HandleTransaction handles data received on transactions gossip channel.
+func (svm *SVM) HandleTransaction(data []byte) error {
 	return nil
 }
