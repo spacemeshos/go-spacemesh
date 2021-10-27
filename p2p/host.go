@@ -59,7 +59,7 @@ func New(ctx context.Context, logger log.Log, cfg Config, opts ...Opt) (*Host, e
 	if err != nil {
 		return nil, err
 	}
-	// what we set in cfg.LogLevel doesn't will not be applied
+	// what we set in cfg.LogLevel will not be used
 	// unless level of the Core is atleast as high
 	lp2plog.SetPrimaryCore(logger.Core())
 	lp2plog.SetAllLoggers(lp2plog.LogLevel(cfg.LogLevel))

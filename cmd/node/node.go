@@ -392,12 +392,12 @@ func (app *App) addLogger(name string, logger log.Log) log.Log {
 	return logger.WithName(name).WithFields(log.String("module", name))
 }
 
-func (app *App) getLevel(name string) (log.Level, bool) {
+func (app *App) getLevel(name string) log.Level {
 	alvl, exist := app.loggers[name]
 	if !exist {
-		return 0, false
+		return 0
 	}
-	return alvl.Level(), true
+	return alvl.Level()
 }
 
 // SetLogLevel updates the log level of an existing logger.
@@ -1093,11 +1093,8 @@ func (app *App) Start() error {
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
 	p2plog := app.addLogger(P2PLogger, lg)
-	var exist bool
-	cfg.LogLevel, exist = app.getLevel(P2PLogger)
-	if !exist {
-		lg.Panic("p2p logger level is not set after calling app.addLogger")
-	}
+	// if addLogger won't add a level we will use a default 0 (info).
+	cfg.LogLevel = app.getLevel(P2PLogger)
 	app.host, err = p2p.New(ctx, p2plog, cfg,
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
