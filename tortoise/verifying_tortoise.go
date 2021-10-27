@@ -118,7 +118,7 @@ func newTurtle(
 			log:                  lg,
 			GoodBlocksIndex:      map[types.BlockID]bool{},
 			BlockOpinionsByLayer: map[types.LayerID]map[types.BlockID]Opinion{},
-			HaveOpinions:         map[types.BlockID]struct{}{},
+			HaveOpinions:         map[types.BlockID]types.LayerID{},
 		},
 		logger:          lg.Named("turtle"),
 		Hdist:           hdist,
@@ -164,7 +164,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	for _, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
 		t.BlockOpinionsByLayer[genesisLayer.Index()][id] = Opinion{}
-		t.HaveOpinions[id] = struct{}{}
+		t.HaveOpinions[id] = genesisLayer.Index()
 		t.GoodBlocksIndex[id] = false // false means good block, not flushed
 	}
 	t.Last = genesisLayer.Index()
@@ -281,26 +281,26 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 	logger log.Logger,
 ) bool {
 	for _, exceptionBlockID := range diffList {
-		exceptionBlock, err := t.bdp.GetBlock(exceptionBlockID)
-		if err != nil {
+		lid, exist := t.HaveOpinions[exceptionBlockID]
+		if !exist {
 			logger.With().Error("inconsistent state: can't find block from diff list",
 				log.FieldNamed("exception_block_id", exceptionBlockID))
 			return false
 		}
 
-		if exceptionBlock.LayerIndex.Before(baseBlockLayer) {
+		if lid.Before(baseBlockLayer) {
 			logger.With().Error("good block candidate contains exception for block older than its base block",
 				log.FieldNamed("older_block", exceptionBlockID),
-				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
+				log.FieldNamed("older_layer", lid),
 				log.FieldNamed("base_block_layer", baseBlockLayer))
 			return false
 		}
 
-		v, err := t.getLocalBlockOpinion(ctx, exceptionBlock.LayerIndex, exceptionBlockID)
+		v, err := t.getLocalBlockOpinion(ctx, lid, exceptionBlockID)
 		if err != nil {
 			logger.With().Error("unable to get single block opinion for block in exception list",
 				log.FieldNamed("older_block", exceptionBlockID),
-				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
+				log.FieldNamed("older_layer", lid),
 				log.FieldNamed("base_block_layer", baseBlockLayer),
 				log.Err(err))
 			return false
@@ -308,8 +308,8 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 
 		if v != voteVector {
 			logger.With().Debug("not adding block to good blocks because its vote differs from local opinion",
-				log.FieldNamed("older_block", exceptionBlock.ID()),
-				log.FieldNamed("older_layer", exceptionBlock.LayerIndex),
+				log.FieldNamed("older_block", exceptionBlockID),
+				log.FieldNamed("older_layer", lid),
 				log.FieldNamed("local_opinion", v),
 				log.String("block_exception_vote", className))
 			return false
@@ -572,24 +572,23 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	logger.With().Debug("processing block", block.Fields()...)
 	logger.With().Debug("getting base block", log.FieldNamed("base_block_id", block.BaseBlock))
 
-	baseBlock, err := t.bdp.GetBlock(block.BaseBlock)
-	if err != nil {
-		return errBaseBlockNotInDatabase
+	lid, exist := t.HaveOpinions[block.BaseBlock]
+	if !exist {
+		return fmt.Errorf("base block %v is not known or was evicted", block.BaseBlock)
 	}
 
 	logger.With().Debug("block adds support for",
 		log.Int("count", len(block.BlockHeader.ForDiff)),
 		types.BlockIdsField(block.BlockHeader.ForDiff))
-	logger.With().Debug("checking base block", baseBlock.Fields()...)
 
-	layerOpinions, ok := t.BlockOpinionsByLayer[baseBlock.LayerIndex]
+	layerOpinions, ok := t.BlockOpinionsByLayer[lid]
 	if !ok {
-		return fmt.Errorf("%s: %v, %v", errstrBaseBlockLayerMissing, block.BaseBlock, baseBlock.LayerIndex)
+		return fmt.Errorf("%s: %v, %v", errstrBaseBlockLayerMissing, block.BaseBlock, lid)
 	}
 
-	baseBlockOpinion, ok := layerOpinions[baseBlock.ID()]
+	baseBlockOpinion, ok := layerOpinions[block.BaseBlock]
 	if !ok {
-		return fmt.Errorf("%s: %v, %v", errstrBaseBlockNotFoundInLayer, block.BaseBlock, baseBlock.LayerIndex)
+		return fmt.Errorf("%s: %v, %v", errstrBaseBlockNotFoundInLayer, block.BaseBlock, lid)
 	}
 
 	voteWeight, err := t.voteWeight(ctx, block)
@@ -601,7 +600,12 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	//   see https://github.com/spacemeshos/go-spacemesh/issues/2369
 	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
 	//   see https://github.com/spacemeshos/go-spacemesh/issues/2673
-	opinion := make(map[types.BlockID]vec)
+	opinion := make(map[types.BlockID]vec,
+		len(block.ForDiff)+
+			len(block.NeutralDiff)+
+			len(block.NeutralDiff)+
+			len(baseBlockOpinion),
+	)
 
 	for _, bid := range block.ForDiff {
 		opinion[bid] = support.Multiply(voteWeight)
@@ -635,7 +639,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 
 	logger.With().Debug("adding or updating block opinion")
 	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = opinion
-	t.HaveOpinions[block.ID()] = struct{}{}
+	t.HaveOpinions[block.ID()] = block.LayerIndex
 	return nil
 }
 
@@ -740,13 +744,13 @@ func (t *turtle) determineBlockGoodness(ctx context.Context, block *types.Block)
 	// (1) the base block is marked as good
 	if _, good := t.GoodBlocksIndex[block.BaseBlock]; !good {
 		logger.Debug("base block is not good")
-	} else if baseBlock, err := t.bdp.GetBlock(block.BaseBlock); err != nil {
-		logger.With().Error("inconsistent state: base block not found", log.Err(err))
+	} else if baselid, exist := t.HaveOpinions[block.BaseBlock]; !exist {
+		logger.With().Error("inconsistent state: base block not found")
 	} else if true &&
 		// (2) all diffs appear after the base block and are consistent with the current local opinion
-		t.checkBlockAndGetLocalOpinion(ctx, block.ForDiff, "support", support, baseBlock.LayerIndex, logger) &&
-		t.checkBlockAndGetLocalOpinion(ctx, block.AgainstDiff, "against", against, baseBlock.LayerIndex, logger) &&
-		t.checkBlockAndGetLocalOpinion(ctx, block.NeutralDiff, "abstain", abstain, baseBlock.LayerIndex, logger) {
+		t.checkBlockAndGetLocalOpinion(ctx, block.ForDiff, "support", support, baselid, logger) &&
+		t.checkBlockAndGetLocalOpinion(ctx, block.AgainstDiff, "against", against, baselid, logger) &&
+		t.checkBlockAndGetLocalOpinion(ctx, block.NeutralDiff, "abstain", abstain, baselid, logger) {
 		logger.Debug("block is good")
 		return true
 	}
