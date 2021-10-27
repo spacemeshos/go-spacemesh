@@ -20,7 +20,7 @@ import (
 
 func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng *rand.Rand) *state {
 	return func(rng *rand.Rand) *state {
-		st := &state{db: database.NewMemDatabase(), log: logtest.New(tb)}
+		st := &state{db: db, log: logger}
 		var layers [3]types.LayerID
 		for i := range layers {
 			layer, ok := quick.Value(reflect.TypeOf(types.LayerID{}), rng)
