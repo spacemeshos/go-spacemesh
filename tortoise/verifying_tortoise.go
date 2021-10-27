@@ -118,6 +118,7 @@ func newTurtle(
 			log:                  lg,
 			GoodBlocksIndex:      map[types.BlockID]bool{},
 			BlockOpinionsByLayer: map[types.LayerID]map[types.BlockID]Opinion{},
+			HaveOpinions:         map[types.BlockID]struct{}{},
 		},
 		logger:          lg.Named("turtle"),
 		Hdist:           hdist,
@@ -163,6 +164,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	for _, blk := range genesisLayer.Blocks() {
 		id := blk.ID()
 		t.BlockOpinionsByLayer[genesisLayer.Index()][id] = Opinion{}
+		t.HaveOpinions[id] = struct{}{}
 		t.GoodBlocksIndex[id] = false // false means good block, not flushed
 	}
 	t.Last = genesisLayer.Index()
@@ -211,6 +213,11 @@ func (t *turtle) evict(ctx context.Context) {
 		for blk := range t.BlockOpinionsByLayer[layerToEvict] {
 			delete(t.GoodBlocksIndex, blk)
 		}
+		for _, bids := range t.BlockOpinionsByLayer[layerToEvict] {
+			for bid := range bids {
+				delete(t.HaveOpinions, bid)
+			}
+		}
 		delete(t.BlockOpinionsByLayer, layerToEvict)
 	}
 	t.LastEvicted = windowStart.Sub(1)
@@ -249,10 +256,10 @@ func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID
 		return abstain, nil
 	}
 
-	t.logger.WithContext(ctx).With().Debug("got layer opinion vector",
-		layerID,
-		log.FieldNamed("query_block", blockid),
-		log.String("input", blockIDsToString(input)))
+	// t.logger.WithContext(ctx).With().Debug("got layer opinion vector",
+	// 	layerID,
+	// 	log.FieldNamed("query_block", blockid),
+	// 	log.String("input", blockIDsToString(input)))
 
 	for _, bl := range input {
 		if bl == blockid {
@@ -615,14 +622,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	}
 	for blk, vote := range baseBlockOpinion {
 		// ignore opinions of very old blocks
-		fblk, err := t.bdp.GetBlock(blk)
-		if err != nil {
-			return fmt.Errorf(
-				"block in base block opinion list not in db! "+
-					"voting_block_id: %v, voting_block_layer: %v, base_block_id: %v, base_block_layer: %v, block_id: %v",
-				block.ID().String(), block.LayerIndex, baseBlock.ID(), baseBlock.LayerIndex, blk.String())
-		}
-		if fblk.LayerIndex.Before(t.LastEvicted) {
+		if _, have := t.HaveOpinions[blk]; !have {
 			continue
 		}
 
@@ -635,6 +635,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 
 	logger.With().Debug("adding or updating block opinion")
 	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = opinion
+	t.HaveOpinions[block.ID()] = struct{}{}
 	return nil
 }
 

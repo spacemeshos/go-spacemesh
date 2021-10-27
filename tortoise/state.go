@@ -37,6 +37,7 @@ type state struct {
 	GoodBlocksIndex map[types.BlockID]bool
 	// use 2D array to be able to iterate from latest elements easily
 	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion
+	HaveOpinions         map[types.BlockID]struct{}
 }
 
 func (s *state) Persist() error {
