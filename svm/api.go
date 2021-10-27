@@ -148,7 +148,48 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ peer.ID, msg []by
 	return pubsub.ValidationAccept
 }
 
-// TODO: HandleTransaction handles data received on transactions gossip channel.
+// HandleTransaction handles data received on transactions gossip channel.
 func (svm *SVM) HandleTransaction(data []byte) error {
+	tx, err := types.BytesToTransaction(data)
+	if err != nil {
+		svm.state.With().Error("cannot parse incoming transaction", log.Err(err))
+		return fmt.Errorf("parse: %w", err)
+	}
+
+	if err := svm.handleTransaction(tx); err != nil {
+		return fmt.Errorf("handle transaction: %w", err)
+	}
+
+	return nil
+}
+
+func (svm *SVM) handleTransaction(tx *types.Transaction) error {
+	if err := tx.CalcAndSetOrigin(); err != nil {
+		svm.state.With().Error("failed to calculate transaction origin", tx.ID(), log.Err(err))
+		return fmt.Errorf("calculate and set origin: %w", err)
+	}
+
+	svm.state.Log.With().Info("got new tx",
+		tx.ID(),
+		log.Uint64("nonce", tx.AccountNonce),
+		log.Uint64("amount", tx.Amount),
+		log.Uint64("fee", tx.Fee),
+		log.Uint64("gas", tx.GasLimit),
+		log.String("recipient", tx.Recipient.String()),
+		log.String("origin", tx.Origin().String()))
+
+	if !svm.state.AddressExists(tx.Origin()) {
+		svm.state.With().Error("transaction origin does not exist",
+			log.String("transaction", tx.String()),
+			tx.ID(),
+			log.String("origin", tx.Origin().Short()))
+		return fmt.Errorf("transaction origin does not exist")
+	}
+	if err := svm.ValidateNonceAndBalance(tx); err != nil {
+		svm.state.With().Error("nonce and balance validation failed", tx.ID(), log.Err(err))
+		return fmt.Errorf("nonce and balance validation failed")
+	}
+
+	svm.ValidateAndAddTxToPool(tx)
 	return nil
 }
