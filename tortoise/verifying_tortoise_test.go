@@ -1161,18 +1161,18 @@ func TestGetLocalBlockOpinion(t *testing.T) {
 	blocks := generateBlocks(t, l1ID, 2, alg.BaseBlock, atxdb, 1)
 
 	// no input vector for recent layer: expect abstain vote
-	vec, err := alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID())
+	vec, err := alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID(), map[types.LayerID][]types.BlockID{})
 	r.NoError(err)
 	r.Equal(abstain, vec)
 
 	// block included in input vector
 	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, []types.BlockID{blocks[0].ID()}))
-	vec, err = alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID())
+	vec, err = alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID(), map[types.LayerID][]types.BlockID{})
 	r.NoError(err)
 	r.Equal(support, vec)
 
 	// block not included in input vector
-	vec, err = alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[1].ID())
+	vec, err = alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[1].ID(), map[types.LayerID][]types.BlockID{})
 	r.NoError(err)
 	r.Equal(against, vec)
 }

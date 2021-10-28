@@ -237,15 +237,19 @@ func blockIDsToString(input []types.BlockID) string {
 // returns the local opinion on the validity of a block in a layer (support, against, or abstain)
 // TODO: cache but somehow check for changes (e.g., late-finishing Hare), maybe check hash?
 //    see https://github.com/spacemeshos/go-spacemesh/issues/2672
-func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID, blockid types.BlockID) (vec, error) {
+func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID, blockid types.BlockID, inputs map[types.LayerID][]types.BlockID) (vec, error) {
 	if !layerID.After(types.GetEffectiveGenesis()) {
 		return support, nil
 	}
-
-	input, err := t.layerOpinionVector(ctx, layerID)
-	// an error here signifies a real database failure
-	if err != nil {
-		return abstain, err
+	input, exist := inputs[layerID]
+	if !exist {
+		var err error
+		input, err = t.layerOpinionVector(ctx, layerID)
+		// an error here signifies a real database failure
+		if err != nil {
+			return abstain, err
+		}
+		inputs[layerID] = input
 	}
 	// otherwise, nil means we should abstain
 	if input == nil {
@@ -276,6 +280,7 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 	baseBlockLayer types.LayerID,
 	logger log.Logger,
 ) bool {
+	inputs := map[types.LayerID][]types.BlockID{}
 	for _, exceptionBlockID := range diffList {
 		lid, exist := t.BlockLayer[exceptionBlockID]
 		if !exist {
@@ -301,7 +306,7 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 			return false
 		}
 
-		v, err := t.getLocalBlockOpinion(ctx, lid, exceptionBlockID)
+		v, err := t.getLocalBlockOpinion(ctx, lid, exceptionBlockID, inputs)
 		if err != nil {
 			logger.With().Error("unable to get single block opinion for block in exception list",
 				log.FieldNamed("older_block", exceptionBlockID),
@@ -604,12 +609,11 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	//   see https://github.com/spacemeshos/go-spacemesh/issues/2369
 	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
 	//   see https://github.com/spacemeshos/go-spacemesh/issues/2673
-	opinion := make(map[types.BlockID]vec,
-		len(block.ForDiff)+
-			len(block.NeutralDiff)+
-			len(block.NeutralDiff)+
-			len(baseBlockOpinion),
-	)
+	lth := len(block.ForDiff) +
+		len(block.NeutralDiff) +
+		len(block.NeutralDiff) +
+		len(baseBlockOpinion)
+	opinion := make(map[types.BlockID]vec, lth)
 
 	for _, bid := range block.ForDiff {
 		opinion[bid] = support.Multiply(voteWeight)
@@ -634,11 +638,9 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		if !exist {
 			continue
 		}
-
-		// add base block vote only if there weren't already exceptions (support/against/abstain) for this block.
-		// and re-weight vote since we want the voting block's weight, not the base block's weight.
-		if _, exists := opinion[blk]; !exists {
-			opinion[blk] = simplifyVote(vote).Multiply(voteWeight)
+		if _, exist := opinion[blk]; !exist {
+			nvote := simplifyVote(vote).Multiply(voteWeight)
+			opinion[blk] = nvote
 		}
 	}
 

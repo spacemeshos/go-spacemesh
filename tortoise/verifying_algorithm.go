@@ -185,7 +185,8 @@ func (bdp *bdpWrapper) SaveContextualValidity(bid types.BlockID, lid types.Layer
 func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (reverted bool, revertLayer types.LayerID) {
 	// TODO: should this happen "in the background" in a separate goroutine? Should it hold the mutex?
 	logger := trtl.logger.WithContext(ctx)
-	logger.With().Info("triggering tortoise full rerun from genesis")
+	last := trtl.trtl.Last
+	logger.With().Info("triggering tortoise full rerun from genesis", last)
 
 	// start from scratch with a new tortoise instance for each rerun
 	trtlForRerun := trtl.trtl.cloneTurtleParams()
@@ -203,7 +204,7 @@ func (trtl *ThreadSafeVerifyingTortoise) rerunFromGenesis(ctx context.Context) (
 			return
 		}
 	}
-	logger.With().Info("full rerun completed")
+	logger.With().Info("full rerun completed", last)
 
 	// revert state if necessary
 	// state will be reapplied in mesh after we return, no need to reapply here
