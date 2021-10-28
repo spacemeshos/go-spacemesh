@@ -1431,7 +1431,7 @@ func TestProcessBlock(t *testing.T) {
 
 	// missing base block
 	err := alg.trtl.processBlock(context.TODO(), blockWithMissingBaseBlock)
-	r.Equal(errBaseBlockNotInDatabase, err)
+	r.ErrorIs(err, errBaseBlockUnknown)
 
 	// blocks in this layer will use a block from the previous layer as their base block
 	baseBlockProviderFn := func(context.Context) (types.BlockID, [][]types.BlockID, error) {
@@ -1443,14 +1443,12 @@ func TestProcessBlock(t *testing.T) {
 	// base block layer missing
 	alg.trtl.BlockOpinionsByLayer[l2ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
 	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
-	r.Error(err)
-	r.Contains(err.Error(), errstrBaseBlockLayerMissing)
+	r.ErrorIs(err, errBaseBlockUnknown)
 
 	// base block opinion missing from layer
 	alg.trtl.BlockOpinionsByLayer[l1ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
 	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
-	r.Error(err)
-	r.Contains(err.Error(), errstrBaseBlockNotFoundInLayer)
+	r.ErrorIs(err, errBaseBlockUnknown)
 
 	// malicious (conflicting) voting pattern
 	l2Blocks[0].BaseBlock = mesh.GenesisBlock().ID()
@@ -1488,9 +1486,11 @@ func TestProcessBlock(t *testing.T) {
 	alg.trtl.BlockOpinionsByLayer[l3ID] = make(map[types.BlockID]Opinion, blocksPerLayer)
 	// these must be in the mesh or we'll get an error when processing a block (l3Blocks[0])
 	// with a base block (l2Blocks[0]) that contains an opinion on them
-	r.NoError(mdb.AddBlock(l1Blocks[1]))
-	r.NoError(mdb.AddBlock(l1Blocks[2]))
-	r.NoError(mdb.AddBlock(l1Blocks[3]))
+	for _, block := range l1Blocks[1:] {
+		r.NoError(mdb.AddBlock(block))
+		alg.trtl.BlockLayer[block.ID()] = block.LayerIndex
+	}
+	alg.trtl.BlockLayer[l2Blocks[0].ID()] = l2Blocks[0].LayerIndex
 	r.NoError(alg.trtl.processBlock(context.TODO(), l3Blocks[0]))
 	expectedOpinionVector := Opinion{
 		l1Blocks[0].ID(): abstain,                                   // from exception
@@ -2361,17 +2361,23 @@ func TestHealBalanceAttack(t *testing.T) {
 	// this means that later blocks/layers with a base block or vote that supports this block will not be marked good
 	l4lateblock := generateBlocks(t, l4ID, 1, alg.BaseBlock, atxdb, 1)[0]
 	r.NoError(mdb.AddBlock(l4lateblock))
+	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l4lateblock}))
 
 	// this primes the block opinions for these blocks, without attempting to verify the previous layer
 	r.NoError(alg.trtl.handleLayerBlocks(context.TODO(), l5ID))
 
+	addOpinion := func(lid types.LayerID, from, to types.BlockID, vector vec) {
+		alg.trtl.BlockOpinionsByLayer[lid][from][to] = vector
+		alg.trtl.BlockLayer[from] = lid
+	}
+
 	// make one of the base blocks support it, and make one vote against it. note: these base blocks have already been
 	// marked good. this means that blocks that use one of these as a base block will also be marked good (as long as
 	// they don't add explicit exception votes for or against the late block).
-	alg.trtl.BlockOpinionsByLayer[l5ID][l5BaseBlock1][l4lateblock.ID()] = support
-	alg.trtl.BlockOpinionsByLayer[l5ID][l5BaseBlock2][l4lateblock.ID()] = against
-	alg.trtl.BlockOpinionsByLayer[l5ID][l5blockIDs[2]][l4lateblock.ID()] = support
-	alg.trtl.BlockOpinionsByLayer[l5ID][l5blockIDs[3]][l4lateblock.ID()] = against
+	addOpinion(l5ID, l5BaseBlock1, l4lateblock.ID(), support)
+	addOpinion(l5ID, l5BaseBlock2, l4lateblock.ID(), against)
+	addOpinion(l5ID, l5blockIDs[2], l4lateblock.ID(), support)
+	addOpinion(l5ID, l5blockIDs[3], l4lateblock.ID(), against)
 
 	// now process l5
 	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l5ID, l5blockIDs))

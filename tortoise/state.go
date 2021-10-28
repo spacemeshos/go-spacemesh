@@ -37,7 +37,8 @@ type state struct {
 	GoodBlocksIndex map[types.BlockID]bool
 	// use 2D array to be able to iterate from latest elements easily
 	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion
-	HaveOpinions         map[types.BlockID]types.LayerID
+	// BlockLayer stores reverse mapping from BlockOpinionsByLayer
+	BlockLayer map[types.BlockID]types.LayerID
 }
 
 func (s *state) Persist() error {
@@ -101,6 +102,7 @@ func (s *state) Persist() error {
 func (s *state) Recover() error {
 	s.GoodBlocksIndex = map[types.BlockID]bool{}
 	s.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
+	s.BlockLayer = map[types.BlockID]types.LayerID{}
 
 	buf, err := s.db.Get([]byte(namespaceLast))
 	if err != nil {
@@ -135,6 +137,8 @@ func (s *state) Recover() error {
 		layer := decodeLayerKey(it.Key())
 		offset := 1 + types.LayerIDSize
 		block1 := decodeBlock(it.Key()[offset : offset+types.BlockIDSize])
+
+		s.BlockLayer[block1] = layer
 
 		if _, exist := s.BlockOpinionsByLayer[layer]; !exist {
 			s.BlockOpinionsByLayer[layer] = map[types.BlockID]Opinion{}
