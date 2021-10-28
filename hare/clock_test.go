@@ -9,7 +9,7 @@ import (
 )
 
 func TestClock_AwaitWakeup(t *testing.T) {
-	c := NewRoundClockWithCache(time.Now(), 10*time.Millisecond, 8*time.Millisecond)
+	c := NewSimpleRoundClock(time.Now(), 10*time.Millisecond, 8*time.Millisecond)
 
 	ch := c.AwaitWakeup()
 	select {
@@ -37,7 +37,7 @@ func TestClock_AwaitRound(t *testing.T) {
 		Add(-(wakeupDelta + (5 * roundDuration))).
 		Add(waitTime)
 
-	c := NewRoundClockWithCache(layerTime, wakeupDelta, roundDuration)
+	c := NewSimpleRoundClock(layerTime, wakeupDelta, roundDuration)
 
 	ch := c.AwaitEndOfRound(3)
 
