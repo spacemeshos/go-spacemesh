@@ -78,6 +78,8 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 	}
 	ctx, cancel := context.WithCancel(ctx)
 	alg.cancel = cancel
+	// TODO(dshulyak) with low rerun interval it is possible to start a rerun
+	// when initial sync is in progress, or right after sync
 	alg.eg.Go(func() error {
 		alg.waitRerun(ctx, cfg.RerunInterval)
 		return nil
