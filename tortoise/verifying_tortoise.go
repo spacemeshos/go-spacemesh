@@ -279,8 +279,8 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 	voteVector vec,
 	baseBlockLayer types.LayerID,
 	logger log.Logger,
+	inputs map[types.LayerID][]types.BlockID,
 ) bool {
-	inputs := map[types.LayerID][]types.BlockID{}
 	for _, exceptionBlockID := range diffList {
 		lid, exist := t.BlockLayer[exceptionBlockID]
 		if !exist {
@@ -633,7 +633,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		opinion[bid] = abstain
 	}
 	for blk, vote := range baseBlockOpinion {
-		// ignore opinions of very old blocks
+		// ignore opinions on very old blocks
 		_, exist := t.BlockLayer[blk]
 		if !exist {
 			continue
@@ -749,15 +749,16 @@ func (t *turtle) determineBlockGoodness(ctx context.Context, block *types.Block)
 		log.FieldNamed("base_block_id", block.BaseBlock))
 	// Go over all blocks, in order. Mark block i "good" if:
 	// (1) the base block is marked as good
+	inputs := map[types.LayerID][]types.BlockID{}
 	if _, good := t.GoodBlocksIndex[block.BaseBlock]; !good {
 		logger.Debug("base block is not good")
 	} else if baselid, exist := t.BlockLayer[block.BaseBlock]; !exist {
 		logger.With().Error("inconsistent state: base block not found")
 	} else if true &&
 		// (2) all diffs appear after the base block and are consistent with the current local opinion
-		t.checkBlockAndGetLocalOpinion(ctx, block.ForDiff, "support", support, baselid, logger) &&
-		t.checkBlockAndGetLocalOpinion(ctx, block.AgainstDiff, "against", against, baselid, logger) &&
-		t.checkBlockAndGetLocalOpinion(ctx, block.NeutralDiff, "abstain", abstain, baselid, logger) {
+		t.checkBlockAndGetLocalOpinion(ctx, block.ForDiff, "support", support, baselid, logger, inputs) &&
+		t.checkBlockAndGetLocalOpinion(ctx, block.AgainstDiff, "against", against, baselid, logger, inputs) &&
+		t.checkBlockAndGetLocalOpinion(ctx, block.NeutralDiff, "abstain", abstain, baselid, logger, inputs) {
 		logger.Debug("block is good")
 		return true
 	}
