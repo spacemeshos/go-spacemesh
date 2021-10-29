@@ -924,32 +924,6 @@ func TestPersistAndRecover(t *testing.T) {
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(2).Uint32()), int(alg2.LatestComplete().Uint32()), "wrong latest complete layer")
 }
 
-func TestRerunInterval(t *testing.T) {
-	r := require.New(t)
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-	lastRerun := alg.lastRerun
-
-	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-
-	// no rerun
-	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
-	alg.HandleIncomingLayer(context.TODO(), l1.Index())
-	r.Equal(lastRerun, alg.lastRerun)
-
-	// force a rerun
-	alg.lastRerun = time.Now().Add(-alg.trtl.RerunInterval)
-	alg.HandleIncomingLayer(context.TODO(), l1.Index())
-	r.NotEqual(lastRerun, alg.lastRerun)
-	lastRerun = alg.lastRerun
-
-	// no rerun
-	alg.HandleIncomingLayer(context.TODO(), l1.Index())
-	r.Equal(lastRerun, alg.lastRerun)
-}
-
 func TestLayerOpinionVector(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh(t)
@@ -2320,7 +2294,7 @@ func TestRerunAndRevert(t *testing.T) {
 	}
 
 	// force a rerun and make sure there was a reversion
-	alg.lastRerun = time.Now().Add(-alg.trtl.RerunInterval)
+	require.NoError(t, alg.rerun(context.TODO()))
 	oldVerified, newVerified, reverted = alg.HandleIncomingLayer(context.TODO(), l2ID)
 	r.Equal(int(l0ID.Uint32()), int(oldVerified.Uint32()))
 	r.Equal(int(l1ID.Uint32()), int(newVerified.Uint32()))
