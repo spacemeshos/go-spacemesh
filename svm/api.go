@@ -8,7 +8,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
@@ -156,27 +155,15 @@ func (svm *SVM) HandleTransaction(data []byte) error {
 		svm.state.With().Error("cannot parse incoming transaction", log.Err(err))
 		return fmt.Errorf("parse: %w", err)
 	}
+	if err := types.BytesToInterface(data, &tx); err != nil {
+		svm.state.With().Error("cannot parse incoming transaction data", log.Err(err))
+		return fmt.Errorf("parse: %w", err)
+	}
 
 	if err := svm.handleTransaction(tx); err != nil {
 		return fmt.Errorf("handle transaction: %w", err)
 	}
 
-	return nil
-}
-
-// HandleTxSyncData handles data received on TX sync.
-// TODO: Fold this function into SVM.HandleTransaction.
-func (svm *SVM) HandleTxSyncData(data []byte) error {
-	var tx mesh.DbTransaction
-	err := types.BytesToInterface(data, &tx)
-	if err != nil {
-		svm.state.With().Error("cannot parse incoming transaction", log.Err(err))
-		return fmt.Errorf("parse: %w", err)
-	}
-	if err = tx.CalcAndSetOrigin(); err != nil {
-		return fmt.Errorf("calculate and set origin: %w", err)
-	}
-	svm.ValidateAndAddTxToPool(tx.Transaction)
 	return nil
 }
 

@@ -31,7 +31,7 @@ type blockHandler interface {
 
 // TxProcessor is an interface for handling TX data received in sync.
 type TxProcessor interface {
-	HandleTxSyncData(data []byte) error
+	HandleTransaction(data []byte) error
 }
 
 // layerDB is an interface that returns layer data and blocks.
@@ -462,8 +462,8 @@ func (l *Logic) getTxResult(ctx context.Context, hash types.Hash32, data []byte)
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
 
-	if err := l.txs.HandleTxSyncData(data); err != nil {
-		return fmt.Errorf("handle tx sync data: %w", err)
+	if err := l.txs.HandleTransaction(data); err != nil {
+		return fmt.Errorf("handle transaction: %w", err)
 	}
 
 	return nil
