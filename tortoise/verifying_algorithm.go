@@ -133,10 +133,12 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 	)
 
 	if value := trtl.update.Load(); value != nil {
-		completed := (*rerunResult)(value)
-		current := trtl.trtl
-		updated := completed.Consensus
-		var err error
+		var (
+			completed = (*rerunResult)(value)
+			current   = trtl.trtl
+			updated   = completed.Consensus
+			err       error
+		)
 		if current.Last.After(updated.Last) {
 			start := time.Now()
 			logger.Info("tortoise received more layers while rerun was in progress. running a catchup",
@@ -161,9 +163,8 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 			updated.log = current.log
 			updated.bdp = current.bdp
 			trtl.trtl = updated
-
-			trtl.update.CAS(value, nil) // Store will miss a concurrent rerun
 		}
+		trtl.update.CAS(value, nil) // Store will miss a concurrent rerun
 	}
 
 	logger.Info("handling incoming layer",

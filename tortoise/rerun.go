@@ -37,24 +37,21 @@ func (t *ThreadSafeVerifyingTortoise) rerun(ctx context.Context) error {
 
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.Bool("rerun", true),
-		last,
+		log.FieldNamed("last-layer-id", last),
 	)
 
 	start := time.Now()
-	logger.With().Info("tortoise rerun started", last)
+	logger.With().Info("tortoise rerun started")
 
 	consensus := t.trtl.cloneTurtleParams()
-	consensus.log = logger
+	consensus.logger = logger
 	consensus.init(ctx, mesh.GenesisLayer())
 	tracer := &validityTracer{blockDataProvider: consensus.bdp}
 	consensus.bdp = tracer
 
 	for lid := types.GetEffectiveGenesis(); !lid.After(last); lid = lid.Add(1) {
-		logger.With().Debug("rerunning tortoise for layer", lid)
 		if err := consensus.HandleIncomingLayer(ctx, lid); err != nil {
 			logger.With().Error("tortoise rerun failed", log.Err(err))
-			// bail out completely if we encounter an error: don't revert state and don't swap out the trtl
-			// TODO: give this some more thought
 			return err
 		}
 	}
