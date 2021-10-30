@@ -8,6 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
@@ -141,33 +142,35 @@ func (svm *SVM) ValidateAndAddTxToPool(tx *types.Transaction) error {
 // HandleGossipTransaction wraps around HandleTransaction,
 // which handles data received on the transactions gossip channel.
 func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
-	if err := svm.HandleTransaction(msg); err != nil {
-		svm.state.With().Error("invalid transaction", log.Err(err))
+	tx, err := types.BytesToTransaction(msg)
+	if err != nil {
+		svm.state.With().Error("cannot parse incoming transaction", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
+
+	if err = svm.handleTransaction(tx, true); err != nil {
+		svm.state.With().Error("handle transaction", log.Err(err))
+		return pubsub.ValidationIgnore
+	}
+
 	return pubsub.ValidationAccept
 }
 
-// HandleTransaction handles data received on transactions gossip channel.
-func (svm *SVM) HandleTransaction(data []byte) error {
-	tx, err := types.BytesToTransaction(data)
+// HandleTxSyncData handles data received on transaction sync.
+func (svm *SVM) HandleTxSyncData(data []byte) error {
+	var tx mesh.DbTransaction
+	err := types.BytesToInterface(data, &tx)
 	if err != nil {
 		svm.state.With().Error("cannot parse incoming transaction", log.Err(err))
 		return fmt.Errorf("parse: %w", err)
 	}
-	if err := types.BytesToInterface(data, &tx); err != nil {
-		svm.state.With().Error("cannot parse incoming transaction data", log.Err(err))
-		return fmt.Errorf("parse: %w", err)
-	}
-
-	if err := svm.handleTransaction(tx); err != nil {
+	if err = svm.handleTransaction(tx.Transaction, false); err != nil {
 		return fmt.Errorf("handle transaction: %w", err)
 	}
-
 	return nil
 }
 
-func (svm *SVM) handleTransaction(tx *types.Transaction) error {
+func (svm *SVM) handleTransaction(tx *types.Transaction, validateOrigin bool) error {
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		svm.state.With().Error("failed to calculate transaction origin", tx.ID(), log.Err(err))
 		return fmt.Errorf("calculate and set origin: %w", err)
@@ -182,7 +185,7 @@ func (svm *SVM) handleTransaction(tx *types.Transaction) error {
 		log.String("recipient", tx.Recipient.String()),
 		log.String("origin", tx.Origin().String()))
 
-	if !svm.state.AddressExists(tx.Origin()) {
+	if validateOrigin && !svm.state.AddressExists(tx.Origin()) {
 		svm.state.With().Error("transaction origin does not exist",
 			log.String("transaction", tx.String()),
 			tx.ID(),
