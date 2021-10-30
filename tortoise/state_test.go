@@ -34,6 +34,7 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 
 		st.GoodBlocksIndex = map[types.BlockID]bool{}
 		st.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
+		st.BlockLayer = map[types.BlockID]types.LayerID{}
 
 		for i := 0; i < 200; i++ {
 			layerGen, ok := quick.Value(reflect.TypeOf(types.LayerID{}), rng)
@@ -50,6 +51,7 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 			block1 := block1Gen.Interface().(types.BlockID)
 			if _, exist := st.BlockOpinionsByLayer[layer][block1]; !exist {
 				st.BlockOpinionsByLayer[layer][block1] = Opinion{}
+				st.BlockLayer[block1] = layer
 			}
 			st.GoodBlocksIndex[block1] = false
 			block2 := block2Gen.Interface().(types.BlockID)
@@ -109,6 +111,7 @@ func TestStateEvict(t *testing.T) {
 				continue
 			}
 			for block := range st.BlockOpinionsByLayer[layer] {
+				delete(st.BlockLayer, block)
 				delete(st.GoodBlocksIndex, block)
 			}
 			delete(st.BlockOpinionsByLayer, layer)
