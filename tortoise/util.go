@@ -101,4 +101,4 @@ func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, layerS
 }
 
 // Opinion is opinions on other blocks.
-type Opinion map[types.BlockID]vec
+type Opinion map[types.LayerID]map[types.BlockID]vec

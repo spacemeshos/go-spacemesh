@@ -67,27 +67,30 @@ func (s *state) Persist() error {
 		b.Reset()
 	}
 
-	for layer, blocks := range s.BlockOpinionsByLayer {
-		for block1, opinions := range blocks {
-			for block2, opinion := range opinions {
-				if opinion.Flushed && s.diffMode {
-					continue
-				}
-				opinion.Flushed = true
-				opinions[block2] = opinion
-				b.WriteString(namespaceOpinions)
-				b.Write(encodeLayerKey(layer))
-				b.Write(block1.Bytes())
-				b.Write(block2.Bytes())
+	for layer1, blocks := range s.BlockOpinionsByLayer {
+		for block1, blockOpinions := range blocks {
+			for layer2, layerOpinions := range blockOpinions {
+				for block2, opinion := range layerOpinions {
+					if opinion.Flushed && s.diffMode {
+						continue
+					}
+					opinion.Flushed = true
+					layerOpinions[block2] = opinion
+					b.WriteString(namespaceOpinions)
+					b.Write(encodeLayerKey(layer1))
+					b.Write(block1.Bytes())
+					b.Write(encodeLayerKey(layer2))
+					b.Write(block2.Bytes())
 
-				buf, err := codec.Encode(opinion)
-				if err != nil {
-					s.log.With().Panic("can't encode vec", log.Err(err))
+					buf, err := codec.Encode(opinion)
+					if err != nil {
+						s.log.With().Panic("can't encode vec", log.Err(err))
+					}
+					if err := batch.Put(b.Bytes(), buf); err != nil {
+						return fmt.Errorf("put 'opinions' namespace into batch: %w", err)
+					}
+					b.Reset()
 				}
-				if err := batch.Put(b.Bytes(), buf); err != nil {
-					return fmt.Errorf("put 'opinions' namespace into batch: %w", err)
-				}
-				b.Reset()
 			}
 		}
 	}
@@ -134,25 +137,31 @@ func (s *state) Recover() error {
 	it = s.db.Find([]byte(namespaceOpinions))
 	defer it.Release()
 	for it.Next() {
-		layer := decodeLayerKey(it.Key())
-		offset := 1 + types.LayerIDSize
-		block1 := decodeBlock(it.Key()[offset : offset+types.BlockIDSize])
+		// first byte is namespace
+		layer1 := decodeLayerKey(it.Key()[1:])
+		offset1 := 1 + types.LayerIDSize
+		offset2 := offset1 + types.BlockIDSize + types.LayerIDSize
+		block1 := decodeBlock(it.Key()[offset1 : offset1+types.BlockIDSize])
 
-		s.BlockLayer[block1] = layer
+		s.BlockLayer[block1] = layer1
 
-		if _, exist := s.BlockOpinionsByLayer[layer]; !exist {
-			s.BlockOpinionsByLayer[layer] = map[types.BlockID]Opinion{}
+		if _, exist := s.BlockOpinionsByLayer[layer1]; !exist {
+			s.BlockOpinionsByLayer[layer1] = map[types.BlockID]Opinion{}
 		}
-		if _, exist := s.BlockOpinionsByLayer[layer][block1]; !exist {
-			s.BlockOpinionsByLayer[layer][block1] = Opinion{}
+		if _, exist := s.BlockOpinionsByLayer[layer1][block1]; !exist {
+			s.BlockOpinionsByLayer[layer1][block1] = Opinion{}
 		}
-		block2 := decodeBlock(it.Key()[offset+types.BlockIDSize:])
+		layer2 := decodeLayerKey(it.Key()[offset1+types.BlockIDSize : offset2])
+		block2 := decodeBlock(it.Key()[offset2:])
+		if _, exist := s.BlockOpinionsByLayer[layer1][block1][layer2]; !exist {
+			s.BlockOpinionsByLayer[layer1][block1][layer2] = map[types.BlockID]vec{}
+		}
 
 		var opinion vec
 		if err := codec.Decode(it.Value(), &opinion); err != nil {
 			return fmt.Errorf("decode opinion with codec: %w", err)
 		}
-		s.BlockOpinionsByLayer[layer][block1][block2] = opinion
+		s.BlockOpinionsByLayer[layer1][block1][layer2][block2] = opinion
 	}
 	if err := it.Error(); err != nil {
 		return fmt.Errorf("opinion iterator: %w", it.Error())
@@ -169,7 +178,8 @@ func (s *state) Evict() error {
 	)
 	defer it.Release()
 	for it.Next() {
-		layer := decodeLayerKey(it.Key())
+		// first byte is namespace
+		layer := decodeLayerKey(it.Key()[1:])
 		if layer.After(s.LastEvicted) {
 			break
 		}
@@ -206,5 +216,5 @@ func encodeLayerKey(layer types.LayerID) []byte {
 }
 
 func decodeLayerKey(key []byte) types.LayerID {
-	return types.NewLayerID(util.BytesToUint32BE(key[1 : 1+types.LayerIDSize]))
+	return types.NewLayerID(util.BytesToUint32BE(key[:types.LayerIDSize]))
 }

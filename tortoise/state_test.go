@@ -44,14 +44,18 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 			block2Gen, ok := quick.Value(reflect.TypeOf(types.BlockID{}), rng)
 			require.True(tb, ok)
 
-			layer := layerGen.Interface().(types.LayerID)
-			if _, exist := st.BlockOpinionsByLayer[layer]; !exist {
-				st.BlockOpinionsByLayer[layer] = map[types.BlockID]Opinion{}
+			layer1 := layerGen.Interface().(types.LayerID)
+			if _, exist := st.BlockOpinionsByLayer[layer1]; !exist {
+				st.BlockOpinionsByLayer[layer1] = map[types.BlockID]Opinion{}
 			}
 			block1 := block1Gen.Interface().(types.BlockID)
-			if _, exist := st.BlockOpinionsByLayer[layer][block1]; !exist {
-				st.BlockOpinionsByLayer[layer][block1] = Opinion{}
-				st.BlockLayer[block1] = layer
+			if _, exist := st.BlockOpinionsByLayer[layer1][block1]; !exist {
+				st.BlockOpinionsByLayer[layer1][block1] = Opinion{}
+				st.BlockLayer[block1] = layer1
+			}
+			layer2 := layerGen.Interface().(types.LayerID)
+			if _, exist := st.BlockOpinionsByLayer[layer1][block1][layer2]; !exist {
+				st.BlockOpinionsByLayer[layer1][block1][layer2] = map[types.BlockID]vec{}
 			}
 			st.GoodBlocksIndex[block1] = false
 			block2 := block2Gen.Interface().(types.BlockID)
@@ -59,7 +63,7 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 			require.True(tb, ok)
 			val := vecGen.Interface().(vec)
 			val.Flushed = false
-			st.BlockOpinionsByLayer[layer][block1][block2] = val
+			st.BlockOpinionsByLayer[layer1][block1][layer2][block2] = val
 		}
 		return st
 	}
