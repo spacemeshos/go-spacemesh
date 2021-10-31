@@ -148,7 +148,7 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		return pubsub.ValidationIgnore
 	}
 
-	if err = svm.handleTransaction(tx, true); err != nil {
+	if err = svm.HandleTransaction(tx, true); err != nil {
 		svm.state.With().Error("handle transaction", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
@@ -164,19 +164,21 @@ func (svm *SVM) HandleTxSyncData(data []byte) error {
 		svm.state.With().Error("cannot parse incoming transaction", log.Err(err))
 		return fmt.Errorf("parse: %w", err)
 	}
-	if err = svm.handleTransaction(tx.Transaction, false); err != nil {
+	if err = svm.HandleTransaction(tx.Transaction, false); err != nil {
 		return fmt.Errorf("handle transaction: %w", err)
 	}
 	return nil
 }
 
-func (svm *SVM) handleTransaction(tx *types.Transaction, validateOrigin bool) error {
+// HandleTransaction handles data received on transaction gossip channel.
+// It allows for transactions from both valid and invalid blocks to be added to the mempool.
+func (svm *SVM) HandleTransaction(tx *types.Transaction, validateOrigin bool) error {
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		svm.state.With().Error("failed to calculate transaction origin", tx.ID(), log.Err(err))
 		return fmt.Errorf("calculate and set origin: %w", err)
 	}
 
-	svm.state.Log.With().Info("got new tx",
+	svm.log.With().Info("got new tx",
 		tx.ID(),
 		log.Uint64("nonce", tx.AccountNonce),
 		log.Uint64("amount", tx.Amount),
@@ -185,7 +187,7 @@ func (svm *SVM) handleTransaction(tx *types.Transaction, validateOrigin bool) er
 		log.String("recipient", tx.Recipient.String()),
 		log.String("origin", tx.Origin().String()))
 
-	if validateOrigin && !svm.state.AddressExists(tx.Origin()) {
+	if validateOrigin && !svm.AddressExists(tx.Origin()) {
 		svm.state.With().Error("transaction origin does not exist",
 			log.String("transaction", tx.String()),
 			tx.ID(),
