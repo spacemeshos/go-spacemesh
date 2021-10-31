@@ -292,7 +292,6 @@ github.com/inconshreveable/mousetrap v1.0.0 h1:Z8tu5sraLXCXIcARxBp/8cbvlwVa7Z1NH
 github.com/inconshreveable/mousetrap v1.0.0/go.mod h1:PxqpIevigyE2G7u3NXJIT2ANytuPF1OarO4DADm73n8=
 github.com/influxdata/influxdb1-client v0.0.0-20191209144304-8bf82d3c094d/go.mod h1:qj24IKcXYK6Iy9ceXlo3Tc+vtHo9lIhSX5JddghvEPo=
 github.com/jessevdk/go-flags v0.0.0-20141203071132-1679536dcc89/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
-github.com/jessevdk/go-flags v1.4.0 h1:4IU2WS7AumrZ/40jfhf4QVDMsQwqA7VEHozFRrGARJA=
 github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
 github.com/joho/godotenv v1.3.0/go.mod h1:7hK45KPybAkOC6peb+G5yklZfMxEjkZhHbwpqxOKXbg=
@@ -499,8 +498,8 @@ github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82 h1:FmAao0S
 github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
 github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d h1:S4vq8zxKOp1ST2J/oAKDLAdvV5ZEE23D5F2z0YJP81w=
 github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d/go.mod h1:Zcdq864a2sxmWjyI1/3gN1Xk1jVWerzFbFw7bjPRYN4=
-github.com/spacemeshos/post v0.0.0-20210831040706-7255a25137a2 h1:5w1EPHgB2asEx0aGb6EcuDHZ09xOrK3CRgEWyKUd77Q=
-github.com/spacemeshos/post v0.0.0-20210831040706-7255a25137a2/go.mod h1:yL5XcvEgquVOAn/pkJTlzc5UsYs2M8z/rpwb3eD/Jkk=
+github.com/spacemeshos/post v0.0.0-20211014030409-e1a8091bb648 h1:oU1Q5FdCjmxim0qfAAAipLOcko2o6G22CowsDCMmHUI=
+github.com/spacemeshos/post v0.0.0-20211014030409-e1a8091bb648/go.mod h1:yL5XcvEgquVOAn/pkJTlzc5UsYs2M8z/rpwb3eD/Jkk=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9/go.mod h1:Pz5LyRghtiEuSixOVGO0da5AxKBZa6+Yq8ZJfjTAPI0=
 github.com/spacemeshos/smutil v0.0.0-20190604133034-b5189449f5c5 h1:a+uIX0wjwWdK2JpsQnNhSdp3KDkqGg6P7Jp3nMZP8BM=
