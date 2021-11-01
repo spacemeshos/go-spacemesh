@@ -138,11 +138,13 @@ func (s *state) Recover() error {
 	defer it.Release()
 	for it.Next() {
 		// first byte is namespace
-		layer1 := decodeLayerKey(it.Key()[1:])
-		offset1 := 1 + types.LayerIDSize
-		offset2 := offset1 + types.BlockIDSize + types.LayerIDSize
-		block1 := decodeBlock(it.Key()[offset1 : offset1+types.BlockIDSize])
+		layer1Offset := len(namespaceOpinions)
+		block1Offset := layer1Offset + types.LayerIDSize
+		layer2Offset := block1Offset + types.BlockIDSize
+		block2Offset := layer2Offset + types.LayerIDSize
 
+		layer1 := decodeLayerKey(it.Key()[layer1Offset:])
+		block1 := decodeBlock(it.Key()[block1Offset:layer2Offset])
 		s.BlockLayer[block1] = layer1
 
 		if _, exist := s.BlockOpinionsByLayer[layer1]; !exist {
@@ -151,8 +153,9 @@ func (s *state) Recover() error {
 		if _, exist := s.BlockOpinionsByLayer[layer1][block1]; !exist {
 			s.BlockOpinionsByLayer[layer1][block1] = Opinion{}
 		}
-		layer2 := decodeLayerKey(it.Key()[offset1+types.BlockIDSize : offset2])
-		block2 := decodeBlock(it.Key()[offset2:])
+
+		layer2 := decodeLayerKey(it.Key()[layer2Offset:block2Offset])
+		block2 := decodeBlock(it.Key()[block2Offset:])
 		if _, exist := s.BlockOpinionsByLayer[layer1][block1][layer2]; !exist {
 			s.BlockOpinionsByLayer[layer1][block1][layer2] = map[types.BlockID]vec{}
 		}
