@@ -624,7 +624,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		opinion[bid] = abstain
 	}
 	for blk, vote := range baseBlockOpinion {
-		// ignore opinions of very old blocks
+		// ignore opinions on very old blocks
 		_, exist := t.BlockLayer[blk]
 		if !exist {
 			continue
