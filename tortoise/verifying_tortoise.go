@@ -709,7 +709,7 @@ func (t *turtle) blockLayer(blockID types.BlockID) (types.LayerID, error) {
 	if !ok {
 		block, err := t.bdp.GetBlock(blockID)
 		if err != nil {
-			return types.LayerID{}, err
+			return types.LayerID{}, fmt.Errorf("db: %w", err)
 		}
 
 		blockLayer = block.LayerIndex
