@@ -624,16 +624,13 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	opinion := make(Opinion, lth)
 
 	for _, blockID := range block.ForDiff {
-		blockLayer, ok := t.BlockLayer[blockID]
-		if !ok {
-			block, err := t.bdp.GetBlock(blockID)
-			if err != nil {
-				// print error and keep going
-				logger.With().Error("block in for diff is missing", blockID, log.Err(err))
-				return nil
-			}
-
-			blockLayer = block.LayerIndex
+		blockLayer, err := t.blockLayer(blockID)
+		if errors.Is(err, database.ErrNotFound) {
+			logger.With().Error("block in for diff is missing", blockID, log.Err(err))
+			return nil
+		}
+		if err != nil {
+			return err
 		}
 
 		if _, ok := opinion[blockLayer]; !ok {
@@ -643,16 +640,13 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		opinion[blockLayer][blockID] = support.Multiply(voteWeight)
 	}
 	for _, blockID := range block.AgainstDiff {
-		blockLayer, ok := t.BlockLayer[blockID]
-		if !ok {
-			block, err := t.bdp.GetBlock(blockID)
-			if err != nil {
-				// print error and keep going
-				logger.With().Error("block in for against diff is missing", blockID, log.Err(err))
-				return nil
-			}
-
-			blockLayer = block.LayerIndex
+		blockLayer, err := t.blockLayer(blockID)
+		if errors.Is(err, database.ErrNotFound) {
+			logger.With().Error("block in against diff is missing", blockID, log.Err(err))
+			return nil
+		}
+		if err != nil {
+			return err
 		}
 
 		if _, ok := opinion[blockLayer]; !ok {
@@ -667,16 +661,13 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		opinion[blockLayer][blockID] = against.Multiply(voteWeight)
 	}
 	for _, blockID := range block.NeutralDiff {
-		blockLayer, ok := t.BlockLayer[blockID]
-		if !ok {
-			block, err := t.bdp.GetBlock(blockID)
-			if err != nil {
-				// print error and keep going
-				logger.With().Error("block in for diff is missing", blockID, log.Err(err))
-				return nil
-			}
-
-			blockLayer = block.LayerIndex
+		blockLayer, err := t.blockLayer(blockID)
+		if errors.Is(err, database.ErrNotFound) {
+			logger.With().Error("block in neutral diff is missing", blockID, log.Err(err))
+			return nil
+		}
+		if err != nil {
+			return err
 		}
 
 		if _, ok := opinion[blockLayer]; !ok {
@@ -711,6 +702,19 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = opinion
 	t.BlockLayer[block.ID()] = block.LayerIndex
 	return nil
+}
+
+func (t *turtle) blockLayer(blockID types.BlockID) (types.LayerID, error) {
+	blockLayer, ok := t.BlockLayer[blockID]
+	if !ok {
+		block, err := t.bdp.GetBlock(blockID)
+		if err != nil {
+			return types.LayerID{}, err
+		}
+
+		blockLayer = block.LayerIndex
+	}
+	return blockLayer, nil
 }
 
 // ProcessNewBlocks processes the votes of a set of blocks, records their opinions, and marks good blocks good.
