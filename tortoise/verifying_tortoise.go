@@ -623,78 +623,86 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		len(baseBlockOpinion)
 	opinion := make(Opinion, lth)
 
-	for _, bid := range block.ForDiff {
-		blk, err := t.bdp.GetBlock(bid)
-		if err != nil {
-			// print error and keep going
-			logger.With().Error("block in for diff is missing", bid, log.Err(err))
-			return nil
+	for _, blockID := range block.ForDiff {
+		blockLayer, ok := t.BlockLayer[blockID]
+		if !ok {
+			block, err := t.bdp.GetBlock(blockID)
+			if err != nil {
+				// print error and keep going
+				logger.With().Error("block in for diff is missing", blockID, log.Err(err))
+				return nil
+			}
+
+			blockLayer = block.LayerIndex
 		}
 
-		if _, ok := opinion[blk.LayerIndex]; !ok {
-			opinion[blk.LayerIndex] = make(map[types.BlockID]vec, t.AvgLayerSize)
+		if _, ok := opinion[blockLayer]; !ok {
+			opinion[blockLayer] = make(map[types.BlockID]vec, t.AvgLayerSize)
 		}
 
-		opinion[blk.LayerIndex][bid] = support.Multiply(voteWeight)
+		opinion[blockLayer][blockID] = support.Multiply(voteWeight)
 	}
-	for _, bid := range block.AgainstDiff {
-		blk, err := t.bdp.GetBlock(bid)
-		if err != nil {
-			// print error and keep going
-			logger.With().Error("block in for against diff is missing", bid, log.Err(err))
-			return nil
+	for _, blockID := range block.AgainstDiff {
+		blockLayer, ok := t.BlockLayer[blockID]
+		if !ok {
+			block, err := t.bdp.GetBlock(blockID)
+			if err != nil {
+				// print error and keep going
+				logger.With().Error("block in for against diff is missing", blockID, log.Err(err))
+				return nil
+			}
+
+			blockLayer = block.LayerIndex
 		}
 
-		if _, ok := opinion[blk.LayerIndex]; !ok {
-			opinion[blk.LayerIndex] = make(map[types.BlockID]vec, t.AvgLayerSize)
+		if _, ok := opinion[blockLayer]; !ok {
+			opinion[blockLayer] = make(map[types.BlockID]vec, t.AvgLayerSize)
 		}
 
 		// this could only happen in malicious blocks, and they should not pass a syntax check, but check here just
 		// to be extra safe
-		if _, alreadyVoted := opinion[blk.LayerIndex][bid]; alreadyVoted {
+		if _, alreadyVoted := opinion[blockLayer][blockID]; alreadyVoted {
 			return fmt.Errorf("%s %v", errstrConflictingVotes, block.ID())
 		}
-		opinion[blk.LayerIndex][bid] = against.Multiply(voteWeight)
+		opinion[blockLayer][blockID] = against.Multiply(voteWeight)
 	}
-	for _, bid := range block.NeutralDiff {
-		blk, err := t.bdp.GetBlock(bid)
-		if err != nil {
-			// print error and keep going
-			logger.With().Error("block in for diff is missing", bid, log.Err(err))
-			return nil
+	for _, blockID := range block.NeutralDiff {
+		blockLayer, ok := t.BlockLayer[blockID]
+		if !ok {
+			block, err := t.bdp.GetBlock(blockID)
+			if err != nil {
+				// print error and keep going
+				logger.With().Error("block in for diff is missing", blockID, log.Err(err))
+				return nil
+			}
+
+			blockLayer = block.LayerIndex
 		}
 
-		if _, ok := opinion[blk.LayerIndex]; !ok {
-			opinion[blk.LayerIndex] = make(map[types.BlockID]vec, t.AvgLayerSize)
+		if _, ok := opinion[blockLayer]; !ok {
+			opinion[blockLayer] = make(map[types.BlockID]vec, t.AvgLayerSize)
 		}
 
-		if _, alreadyVoted := opinion[blk.LayerIndex][bid]; alreadyVoted {
+		if _, alreadyVoted := opinion[blockLayer][blockID]; alreadyVoted {
 			return fmt.Errorf("%s %v", errstrConflictingVotes, block.ID())
 		}
-		opinion[blk.LayerIndex][bid] = abstain
+		opinion[blockLayer][blockID] = abstain
 	}
 	for _, opinions := range baseBlockOpinion {
 		for bid, vote := range opinions {
 			// ignore opinions on very old blocks
-			_, exist := t.BlockLayer[bid]
-			if !exist {
+			blockLayer, ok := t.BlockLayer[bid]
+			if !ok {
 				continue
 			}
 
-			blk, err := t.bdp.GetBlock(bid)
-			if err != nil {
-				// print error and keep going
-				logger.With().Error("block in for diff is missing", bid, log.Err(err))
-				return nil
+			if _, ok := opinion[blockLayer]; !ok {
+				opinion[blockLayer] = make(map[types.BlockID]vec, t.AvgLayerSize)
 			}
 
-			if _, ok := opinion[blk.LayerIndex]; !ok {
-				opinion[blk.LayerIndex] = make(map[types.BlockID]vec, t.AvgLayerSize)
-			}
-
-			if _, exist := opinion[blk.LayerIndex][bid]; !exist {
+			if _, exist := opinion[blockLayer][bid]; !exist {
 				nvote := simplifyVote(vote).Multiply(voteWeight)
-				opinion[blk.LayerIndex][bid] = nvote
+				opinion[blockLayer][bid] = nvote
 			}
 		}
 	}
