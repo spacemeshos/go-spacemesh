@@ -23,9 +23,9 @@ import (
 
 var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
 
-func newRoundClockFromCfg(logger log.Log, cfg config.Config) *RoundClockWithCache {
+func newRoundClockFromCfg(logger log.Log, cfg config.Config) *SimpleRoundClock {
 	logger.Info("creating clock at %v wakeup: %v round duration: %v", time.Now(), cfg.WakeupDelta, cfg.RoundDuration)
-	return NewRoundClockWithCache(time.Now(),
+	return NewSimpleRoundClock(time.Now(),
 		time.Duration(cfg.WakeupDelta)*time.Second,
 		time.Duration(cfg.RoundDuration)*time.Second,
 	)
