@@ -144,7 +144,7 @@ func (svm *SVM) ValidateAndAddTxToPool(tx *types.Transaction) error {
 func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	tx, err := types.BytesToTransaction(msg)
 	if err != nil {
-		svm.state.With().Error("cannot parse incoming transaction", log.Err(err))
+		svm.state.With().Error("SVM couldn't parse incoming transaction", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 
@@ -161,7 +161,7 @@ func (svm *SVM) HandleTxSyncData(data []byte) error {
 	var tx mesh.DbTransaction
 	err := types.BytesToInterface(data, &tx)
 	if err != nil {
-		svm.state.With().Error("cannot parse incoming transaction", log.Err(err))
+		svm.state.With().Error("SVM couldn't parse incoming transaction", log.Err(err))
 		return fmt.Errorf("parse: %w", err)
 	}
 	if err = svm.HandleTransaction(tx.Transaction, false); err != nil {
@@ -174,7 +174,7 @@ func (svm *SVM) HandleTxSyncData(data []byte) error {
 // It allows for transactions from both valid and invalid blocks to be added to the mempool.
 func (svm *SVM) HandleTransaction(tx *types.Transaction, validateOrigin bool) error {
 	if err := tx.CalcAndSetOrigin(); err != nil {
-		svm.state.With().Error("failed to calculate transaction origin", tx.ID(), log.Err(err))
+		svm.state.With().Error("SVM failed to calculate transaction origin", tx.ID(), log.Err(err))
 		return fmt.Errorf("calculate and set origin: %w", err)
 	}
 
@@ -194,11 +194,11 @@ func (svm *SVM) HandleTransaction(tx *types.Transaction, validateOrigin bool) er
 			log.String("origin", tx.Origin().Short()))
 		return fmt.Errorf("transaction origin does not exist")
 	}
-	if err := svm.ValidateNonceAndBalance(tx); err != nil {
-		svm.state.With().Error("nonce and balance validation failed", tx.ID(), log.Err(err))
+
+	if err := svm.ValidateAndAddTxToPool(tx); err != nil {
+		svm.state.With().Error("SVM couldn't validate and/or add transaction to mempool", tx.ID(), log.Err(err))
 		return fmt.Errorf("nonce and balance validation failed")
 	}
 
-	svm.ValidateAndAddTxToPool(tx)
 	return nil
 }
