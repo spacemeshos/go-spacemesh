@@ -1227,31 +1227,31 @@ func TestCalculateExceptions(t *testing.T) {
 		r.Len(votes[2], numNeutral) // neutral
 	}
 
-	localOpinionsCache := map[types.LayerID][]types.BlockID{}
+	inputVectorCache := map[types.LayerID][]types.BlockID{}
 
 	// genesis layer
 	l0ID := types.GetEffectiveGenesis()
-	votes, err := alg.trtl.calculateExceptions(context.TODO(), l0ID, Opinion{}, localOpinionsCache)
+	votes, err := alg.trtl.calculateExceptions(context.TODO(), l0ID, Opinion{}, inputVectorCache)
 	r.NoError(err)
 	// expect votes in support of all genesis blocks
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), 0)
-	r.Equal(1, len(localOpinionsCache))
+	r.Equal(1, len(inputVectorCache))
 
 	// layer greater than last processed: expect support only for genesis
 	l1ID := l0ID.Add(1)
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{}, localOpinionsCache)
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{}, inputVectorCache)
 	r.NoError(err)
 	expectVotes(votes, 0, 1, 0)
-	r.Equal(1, len(localOpinionsCache))
+	r.Equal(1, len(inputVectorCache))
 
 	// now advance the processed layer
 	alg.trtl.Last = l1ID
 
 	// missing layer data
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{}, localOpinionsCache)
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{}, inputVectorCache)
 	r.ErrorIs(err, database.ErrNotFound)
 	r.Nil(votes)
-	r.Equal(1, len(localOpinionsCache))
+	r.Equal(1, len(inputVectorCache))
 
 	// layer opinion vector is nil (abstains): recent layer, in mesh, no input vector
 	alg.trtl.Last = l0ID
@@ -1259,45 +1259,45 @@ func TestCalculateExceptions(t *testing.T) {
 	r.NoError(addLayerToMesh(mdb, l1))
 	alg.trtl.Last = l1ID
 	mdb.InputVectorBackupFunc = nil
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{}, localOpinionsCache)
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{}, inputVectorCache)
 	r.NoError(err)
 	// expect no against, FOR only for l0, and NEUTRAL for l1
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), defaultTestLayerSize)
-	r.Equal(2, len(localOpinionsCache))
+	r.Equal(2, len(inputVectorCache))
 
 	// adding diffs for: support all blocks in the layer
-	localOpinionsCache = map[types.LayerID][]types.BlockID{}
+	inputVectorCache = map[types.LayerID][]types.BlockID{}
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{}, localOpinionsCache)
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{}, inputVectorCache)
 	r.NoError(err)
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks())+defaultTestLayerSize, 0)
-	r.Equal(2, len(localOpinionsCache))
+	r.Equal(2, len(inputVectorCache))
 
 	// adding diffs against: vote against all blocks in the layer
 	mdb.InputVectorBackupFunc = nil
-	localOpinionsCache = map[types.LayerID][]types.BlockID{}
+	inputVectorCache = map[types.LayerID][]types.BlockID{}
 	// we cannot store an empty vector here (it comes back as nil), so just put another block ID in it
 	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, []types.BlockID{mesh.GenesisBlock().ID()}))
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{}, localOpinionsCache)
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{}, inputVectorCache)
 	r.NoError(err)
 
 	// we don't explicitly vote against blocks in the layer, we implicitly vote against them by not voting for them
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), 0)
-	r.Equal(2, len(localOpinionsCache))
+	r.Equal(2, len(inputVectorCache))
 
 	// compare opinions: all agree, no exceptions
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-	localOpinionsCache = map[types.LayerID][]types.BlockID{}
+	inputVectorCache = map[types.LayerID][]types.BlockID{}
 	opinion := Opinion{
 		mesh.GenesisBlock().ID(): support,
 		l1.Blocks()[0].ID():      support,
 		l1.Blocks()[1].ID():      support,
 		l1.Blocks()[2].ID():      support,
 	}
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, opinion, localOpinionsCache)
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, opinion, inputVectorCache)
 	r.NoError(err)
 	expectVotes(votes, 0, 0, 0)
-	r.Equal(2, len(localOpinionsCache))
+	r.Equal(2, len(inputVectorCache))
 
 	// compare opinions: all disagree, adds exceptions
 	opinion = Opinion{
@@ -1306,10 +1306,10 @@ func TestCalculateExceptions(t *testing.T) {
 		l1.Blocks()[1].ID():      against,
 		l1.Blocks()[2].ID():      against,
 	}
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, opinion, localOpinionsCache)
+	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, opinion, inputVectorCache)
 	r.NoError(err)
 	expectVotes(votes, 0, 4, 0)
-	r.Equal(2, len(localOpinionsCache))
+	r.Equal(2, len(inputVectorCache))
 
 	l2ID := l1ID.Add(1)
 	l3ID := l2ID.Add(1)
@@ -1317,7 +1317,7 @@ func TestCalculateExceptions(t *testing.T) {
 
 	// exceeding max exceptions
 	t.Run("exceeding max exceptions", func(t *testing.T) {
-		localOpinionsCache := map[types.LayerID][]types.BlockID{}
+		inputVectorCache := map[types.LayerID][]types.BlockID{}
 		alg.trtl.MaxExceptions = 10
 		l2 := createTurtleLayer(t, l2ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, alg.trtl.MaxExceptions+1)
 		for _, block := range l2.Blocks() {
@@ -1325,18 +1325,18 @@ func TestCalculateExceptions(t *testing.T) {
 		}
 		l3 = createTurtleLayer(t, l3ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 		alg.trtl.Last = l2ID
-		votes, err = alg.trtl.calculateExceptions(context.TODO(), l2ID, Opinion{}, localOpinionsCache)
+		votes, err = alg.trtl.calculateExceptions(context.TODO(), l2ID, Opinion{}, inputVectorCache)
 		r.Error(err)
 		r.Contains(err.Error(), errstrTooManyExceptions, "expected too many exceptions error")
 		r.Nil(votes)
-		r.Equal(3, len(localOpinionsCache))
+		r.Equal(3, len(inputVectorCache))
 	})
 
 	// TODO: test adding base block opinion in support of a block that disagrees with the local opinion, e.g., a block
 	//   that this node has not seen yet. See https://github.com/spacemeshos/go-spacemesh/issues/2424.
 
 	t.Run("advance sliding window", func(t *testing.T) {
-		localOpinionsCache := map[types.LayerID][]types.BlockID{}
+		inputVectorCache := map[types.LayerID][]types.BlockID{}
 		// advance the evicted layer until the exception layer slides outside the sliding window
 		for _, block := range l3.Blocks() {
 			r.NoError(mdb.AddBlock(block))
@@ -1351,11 +1351,11 @@ func TestCalculateExceptions(t *testing.T) {
 		l5ID := l4ID.Add(1)
 		createTurtleLayer(t, l5ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 		alg.trtl.Last = l4ID
-		votes, err = alg.trtl.calculateExceptions(context.TODO(), l3ID, Opinion{}, localOpinionsCache)
+		votes, err = alg.trtl.calculateExceptions(context.TODO(), l3ID, Opinion{}, inputVectorCache)
 		r.NoError(err)
 		// expect votes FOR the blocks in the two intervening layers between the base block layer and the last layer
 		expectVotes(votes, 0, 2*defaultTestLayerSize, 0)
-		r.Equal(2, len(localOpinionsCache))
+		r.Equal(2, len(inputVectorCache))
 	})
 }
 
@@ -1368,28 +1368,28 @@ func TestDetermineBlockGoodness(t *testing.T) {
 
 	l1ID := types.GetEffectiveGenesis().Add(1)
 	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
-	localOpinionsCache := map[types.LayerID][]types.BlockID{}
+	inputVectorCache := map[types.LayerID][]types.BlockID{}
 
 	// block marked good
-	r.True(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[0], localOpinionsCache))
+	r.True(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[0], inputVectorCache))
 
 	// base block not found
 	randBlockID := randomBlockID()
 	alg.trtl.GoodBlocksIndex[randBlockID] = false
 	l1Blocks[1].BaseBlock = randBlockID
-	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[1], localOpinionsCache))
+	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[1], inputVectorCache))
 
 	// base block not good
 	l1Blocks[1].BaseBlock = l1Blocks[2].ID()
-	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[1], localOpinionsCache))
+	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[1], inputVectorCache))
 
 	// diff inconsistent with local opinion
 	l1Blocks[2].AgainstDiff = []types.BlockID{mesh.GenesisBlock().ID()}
-	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[2], localOpinionsCache))
+	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[2], inputVectorCache))
 
 	// can run again on the same block with no change (idempotency)
-	r.True(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[0], localOpinionsCache))
-	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[2], localOpinionsCache))
+	r.True(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[0], inputVectorCache))
+	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[2], inputVectorCache))
 }
 
 func TestScoreBlocks(t *testing.T) {
@@ -1401,27 +1401,27 @@ func TestScoreBlocks(t *testing.T) {
 
 	l1ID := types.GetEffectiveGenesis().Add(1)
 	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
-	localOpinionsCache := map[types.LayerID][]types.BlockID{}
+	inputVectorCache := map[types.LayerID][]types.BlockID{}
 
 	// adds a block not already marked good
 	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
-	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]}, localOpinionsCache)
+	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]}, inputVectorCache)
 	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 
 	// no change if already marked good
-	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]}, localOpinionsCache)
+	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]}, inputVectorCache)
 	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 
 	// removes a block previously marked good
 	// diff inconsistent with local opinion
 	l1Blocks[0].AgainstDiff = []types.BlockID{mesh.GenesisBlock().ID()}
-	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]}, localOpinionsCache)
+	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]}, inputVectorCache)
 	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 
 	// try a few blocks
 	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[1].ID())
 	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[2].ID())
-	alg.trtl.scoreBlocks(context.TODO(), l1Blocks, localOpinionsCache)
+	alg.trtl.scoreBlocks(context.TODO(), l1Blocks, inputVectorCache)
 
 	// adds new blocks
 	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[1].ID())
@@ -1730,13 +1730,13 @@ func TestVerifyLayers(t *testing.T) {
 	l6ID := l5ID.Add(1)
 	l6Blocks := generateBlocks(t, l6ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 
-	localOpinionsCache := map[types.LayerID][]types.BlockID{}
+	inputVectorCache := map[types.LayerID][]types.BlockID{}
 	// layer missing in database
 	alg.trtl.Last = l2ID
-	err := alg.trtl.verifyLayers(context.TODO(), localOpinionsCache)
+	err := alg.trtl.verifyLayers(context.TODO(), inputVectorCache)
 	r.Error(err)
 	r.Contains(err.Error(), errstrCantFindLayer)
-	r.Equal(0, len(localOpinionsCache))
+	r.Equal(0, len(inputVectorCache))
 
 	// empty layer: local opinion vector is nil, abstains on all blocks in layer
 	// no contextual validity data recorded
@@ -1751,10 +1751,10 @@ func TestVerifyLayers(t *testing.T) {
 		},
 	}
 	alg.trtl.bdp = mdbWrapper
-	err = alg.trtl.verifyLayers(context.TODO(), localOpinionsCache)
+	err = alg.trtl.verifyLayers(context.TODO(), inputVectorCache)
 	r.NoError(err)
 	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))
-	r.Equal(1, len(localOpinionsCache))
+	r.Equal(1, len(inputVectorCache))
 
 	for _, block := range l2Blocks {
 		r.NoError(mdb.AddBlock(block))
@@ -1773,9 +1773,9 @@ func TestVerifyLayers(t *testing.T) {
 	alg.trtl.Last = l3ID
 
 	// voting blocks not marked good, both global and local opinion is abstain, verified layer does not advance
-	r.NoError(alg.trtl.verifyLayers(context.TODO(), localOpinionsCache))
+	r.NoError(alg.trtl.verifyLayers(context.TODO(), inputVectorCache))
 	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))
-	r.Equal(2, len(localOpinionsCache))
+	r.Equal(2, len(inputVectorCache))
 
 	// now mark voting blocks good
 	alg.trtl.GoodBlocksIndex[l3Blocks[0].ID()] = false
@@ -1791,9 +1791,9 @@ func TestVerifyLayers(t *testing.T) {
 
 	// consensus doesn't match: fail to verify candidate layer
 	// global opinion: good, local opinion: abstain
-	r.NoError(alg.trtl.verifyLayers(context.TODO(), localOpinionsCache))
+	r.NoError(alg.trtl.verifyLayers(context.TODO(), inputVectorCache))
 	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))
-	r.Equal(2, len(localOpinionsCache))
+	r.Equal(2, len(inputVectorCache))
 
 	// mark local opinion of L2 good so verified layer advances
 	// do the reverse for L3: local opinion is good, global opinion is undecided
@@ -1883,11 +1883,11 @@ func TestVerifyLayers(t *testing.T) {
 	// verified layer advances one step, but L3 is not verified because global opinion is undecided, so verification
 	// stops there
 	t.Run("global opinion undecided", func(t *testing.T) {
-		localOpinionsCache := map[types.LayerID][]types.BlockID{}
-		err = alg.trtl.verifyLayers(context.TODO(), localOpinionsCache)
+		inputVectorCache := map[types.LayerID][]types.BlockID{}
+		err = alg.trtl.verifyLayers(context.TODO(), inputVectorCache)
 		r.NoError(err)
 		r.Equal(int(l2ID.Uint32()), int(alg.trtl.Verified.Uint32()))
-		r.Equal(2, len(localOpinionsCache))
+		r.Equal(2, len(inputVectorCache))
 	})
 
 	l4Votes = Opinion{
@@ -1903,17 +1903,17 @@ func TestVerifyLayers(t *testing.T) {
 
 	// weight not exceeded
 	t.Run("weight not exceeded", func(t *testing.T) {
-		localOpinionsCache := map[types.LayerID][]types.BlockID{}
+		inputVectorCache := map[types.LayerID][]types.BlockID{}
 		// modify vote so one block votes in support of L3 blocks, two blocks continue to abstain, so threshold not met
 		alg.trtl.BlockOpinionsByLayer[l4ID][l4Blocks[0].ID()] = l4Votes
-		err = alg.trtl.verifyLayers(context.TODO(), localOpinionsCache)
+		err = alg.trtl.verifyLayers(context.TODO(), inputVectorCache)
 		r.NoError(err)
 		r.Equal(int(l2ID.Uint32()), int(alg.trtl.Verified.Uint32()))
-		r.Equal(1, len(localOpinionsCache))
+		r.Equal(1, len(inputVectorCache))
 	})
 
 	t.Run("healing handoff", func(t *testing.T) {
-		localOpinionsCache := map[types.LayerID][]types.BlockID{}
+		inputVectorCache := map[types.LayerID][]types.BlockID{}
 		// test self-healing: self-healing can verify layers that are stuck for specific reasons, i.e., where local and
 		// global opinion differ (or local opinion is missing).
 		alg.trtl.Hdist = 1
@@ -1975,9 +1975,9 @@ func TestVerifyLayers(t *testing.T) {
 		// previously stuck layer (l3) and the following layer (l4) since it's old enough, then hand control back to the
 		// ordinary verifying tortoise which should continue and verify l5.
 		alg.trtl.Last = l4ID.Add(alg.trtl.Hdist + 1)
-		r.NoError(alg.trtl.verifyLayers(context.TODO(), localOpinionsCache))
+		r.NoError(alg.trtl.verifyLayers(context.TODO(), inputVectorCache))
 		r.Equal(int(l5ID.Uint32()), int(alg.trtl.Verified.Uint32()))
-		r.Equal(2, len(localOpinionsCache))
+		r.Equal(2, len(inputVectorCache))
 	})
 }
 
@@ -2411,10 +2411,10 @@ func TestHealBalanceAttack(t *testing.T) {
 
 	// now process l5
 	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l5ID, l5blockIDs))
-	localOpinionsCache := map[types.LayerID][]types.BlockID{}
-	r.NoError(alg.trtl.verifyLayers(context.TODO(), localOpinionsCache))
+	inputVectorCache := map[types.LayerID][]types.BlockID{}
+	r.NoError(alg.trtl.verifyLayers(context.TODO(), inputVectorCache))
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(3))
-	r.Equal(1, len(localOpinionsCache))
+	r.Equal(1, len(inputVectorCache))
 
 	// we can trick calculateExceptions into not adding explicit exception votes for or against this block by
 	// making it think we've already evicted its layer

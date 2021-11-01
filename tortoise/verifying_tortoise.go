@@ -237,11 +237,11 @@ func blockIDsToString(input []types.BlockID) string {
 // returns the local opinion on the validity of a block in a layer (support, against, or abstain)
 // TODO: cache but somehow check for changes (e.g., late-finishing Hare), maybe check hash?
 //    see https://github.com/spacemeshos/go-spacemesh/issues/2672
-func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID, blockid types.BlockID, localOpinionsCache map[types.LayerID][]types.BlockID) (vec, error) {
+func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID, blockid types.BlockID, inputVectorCache map[types.LayerID][]types.BlockID) (vec, error) {
 	if !layerID.After(types.GetEffectiveGenesis()) {
 		return support, nil
 	}
-	input, err := t.getLayerInputVector(ctx, layerID, localOpinionsCache)
+	input, err := t.getLayerInputVector(ctx, layerID, inputVectorCache)
 	if err != nil {
 		return abstain, err
 	}
@@ -273,7 +273,7 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 	voteVector vec,
 	baseBlockLayer types.LayerID,
 	logger log.Logger,
-	localOpinionsCache map[types.LayerID][]types.BlockID,
+	inputVectorCache map[types.LayerID][]types.BlockID,
 ) bool {
 	for _, exceptionBlockID := range diffList {
 		lid, exist := t.BlockLayer[exceptionBlockID]
@@ -300,7 +300,7 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 			return false
 		}
 
-		v, err := t.getLocalBlockOpinion(ctx, lid, exceptionBlockID, localOpinionsCache)
+		v, err := t.getLocalBlockOpinion(ctx, lid, exceptionBlockID, inputVectorCache)
 		if err != nil {
 			logger.With().Error("unable to get single block opinion for block in exception list",
 				log.FieldNamed("older_block", exceptionBlockID),
@@ -359,7 +359,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	// look at good blocks backwards from most recent processed layer to find a suitable base block
 	// TODO: optimize by, e.g., trying to minimize the size of the exception list (rather than first match)
 	// see https://github.com/spacemeshos/go-spacemesh/issues/2402
-	localOpinionsCache := map[types.LayerID][]types.BlockID{}
+	inputVectorCache := map[types.LayerID][]types.BlockID{}
 	for layerID := t.Last; layerID.After(t.LastEvicted); layerID = layerID.Sub(1) {
 		logger := logger.WithFields(
 			log.FieldNamed("last_layer", t.Last),
@@ -373,7 +373,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 
 			// Calculate the set of exceptions between the base block opinion and latest local opinion
 			logger.With().Debug("found candidate base block", blockID)
-			exceptionVectorMap, err := t.calculateExceptions(ctx, layerID, opinion, localOpinionsCache)
+			exceptionVectorMap, err := t.calculateExceptions(ctx, layerID, opinion, inputVectorCache)
 			if err != nil {
 				logger.With().Warning("error calculating vote exceptions for block", blockID, log.Err(err))
 				continue
@@ -405,7 +405,7 @@ func (t *turtle) calculateExceptions(
 	ctx context.Context,
 	baseBlockLayerID types.LayerID,
 	baseBlockOpinion Opinion, // candidate base block's opinion vector
-	localOpinionsCache map[types.LayerID][]types.BlockID,
+	inputVectorCache map[types.LayerID][]types.BlockID,
 ) ([]map[types.BlockID]struct{}, error) {
 	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("base_block_layer_id", baseBlockLayerID))
 
@@ -460,7 +460,7 @@ func (t *turtle) calculateExceptions(
 		}
 
 		// get local opinion for layer
-		layerInputVector, err := t.getLayerInputVector(ctx, layerID, localOpinionsCache)
+		layerInputVector, err := t.getLayerInputVector(ctx, layerID, inputVectorCache)
 		if err != nil {
 			// an error here signifies a real database failure
 			logger.With().Error(errstrUnableToCalculateLocalOpinion, log.Err(err))
@@ -654,16 +654,16 @@ func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) er
 		t.logger.WithContext(ctx).Warning("cannot process empty block list")
 		return nil
 	}
-	localOpinionsCache := map[types.LayerID][]types.BlockID{}
-	if err := t.processBlocks(ctx, blocks, localOpinionsCache); err != nil {
+	inputVectorCache := map[types.LayerID][]types.BlockID{}
+	if err := t.processBlocks(ctx, blocks, inputVectorCache); err != nil {
 		return err
 	}
 
 	// attempt to verify layers up to the latest one for which we have new block data
-	return t.verifyLayers(ctx, localOpinionsCache)
+	return t.verifyLayers(ctx, inputVectorCache)
 }
 
-func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block, localOpinionsCache map[types.LayerID][]types.BlockID) error {
+func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block, inputVectorCache map[types.LayerID][]types.BlockID) error {
 	logger := t.logger.WithContext(ctx)
 	lastLayerID := types.NewLayerID(0)
 
@@ -694,7 +694,7 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block, local
 		}
 	}
 
-	t.scoreBlocks(ctx, filteredBlocks, localOpinionsCache)
+	t.scoreBlocks(ctx, filteredBlocks, inputVectorCache)
 
 	if t.Last.Before(lastLayerID) {
 		logger.With().Warning("got blocks for new layer before receiving layer, updating highest layer seen",
@@ -706,21 +706,21 @@ func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block, local
 	return nil
 }
 
-func (t *turtle) scoreBlocksByLayerID(ctx context.Context, layerID types.LayerID, localOpinionsCache map[types.LayerID][]types.BlockID) error {
+func (t *turtle) scoreBlocksByLayerID(ctx context.Context, layerID types.LayerID, inputVectorCache map[types.LayerID][]types.BlockID) error {
 	blocks, err := t.bdp.LayerBlocks(layerID)
 	if err != nil {
 		return fmt.Errorf("layer blocks: %w", err)
 	}
-	t.scoreBlocks(ctx, blocks, localOpinionsCache)
+	t.scoreBlocks(ctx, blocks, inputVectorCache)
 	return nil
 }
 
-func (t *turtle) scoreBlocks(ctx context.Context, blocks []*types.Block, localOpinionsCache map[types.LayerID][]types.BlockID) {
+func (t *turtle) scoreBlocks(ctx context.Context, blocks []*types.Block, inputVectorCache map[types.LayerID][]types.BlockID) {
 	logger := t.logger.WithContext(ctx)
 	logger.With().Debug("marking good blocks", log.Int("count", len(blocks)))
 	numGood := 0
 	for _, b := range blocks {
-		if t.determineBlockGoodness(ctx, b, localOpinionsCache) {
+		if t.determineBlockGoodness(ctx, b, inputVectorCache) {
 			// note: we have no way of warning if a block was previously marked as not good
 			logger.With().Debug("marking block good", b.ID(), b.LayerIndex)
 			t.GoodBlocksIndex[b.ID()] = false // false means good block, not flushed
@@ -739,7 +739,7 @@ func (t *turtle) scoreBlocks(ctx context.Context, blocks []*types.Block, localOp
 		log.Int("good_blocks", numGood))
 }
 
-func (t *turtle) determineBlockGoodness(ctx context.Context, block *types.Block, localOpinionsCache map[types.LayerID][]types.BlockID) bool {
+func (t *turtle) determineBlockGoodness(ctx context.Context, block *types.Block, inputVectorCache map[types.LayerID][]types.BlockID) bool {
 	logger := t.logger.WithContext(ctx).WithFields(
 		block.ID(),
 		block.LayerIndex,
@@ -752,9 +752,9 @@ func (t *turtle) determineBlockGoodness(ctx context.Context, block *types.Block,
 		logger.With().Error("inconsistent state: base block not found")
 	} else if true &&
 		// (2) all diffs appear after the base block and are consistent with the current local opinion
-		t.checkBlockAndGetLocalOpinion(ctx, block.ForDiff, "support", support, baselid, logger, localOpinionsCache) &&
-		t.checkBlockAndGetLocalOpinion(ctx, block.AgainstDiff, "against", against, baselid, logger, localOpinionsCache) &&
-		t.checkBlockAndGetLocalOpinion(ctx, block.NeutralDiff, "abstain", abstain, baselid, logger, localOpinionsCache) {
+		t.checkBlockAndGetLocalOpinion(ctx, block.ForDiff, "support", support, baselid, logger, inputVectorCache) &&
+		t.checkBlockAndGetLocalOpinion(ctx, block.AgainstDiff, "against", against, baselid, logger, inputVectorCache) &&
+		t.checkBlockAndGetLocalOpinion(ctx, block.NeutralDiff, "abstain", abstain, baselid, logger, inputVectorCache) {
 		logger.Debug("block is good")
 		return true
 	}
@@ -770,8 +770,8 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID)
 	}
 
 	// attempt to verify layers up to the latest one for which we have new block data
-	localOpinionsCache := map[types.LayerID][]types.BlockID{}
-	return t.verifyLayers(ctx, localOpinionsCache)
+	inputVectorCache := map[types.LayerID][]types.BlockID{}
+	return t.verifyLayers(ctx, inputVectorCache)
 }
 
 func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) error {
@@ -801,12 +801,12 @@ func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) e
 	}
 
 	logger.With().Info("tortoise handling incoming layer", log.Int("num_blocks", len(layerBlocks)))
-	localOpinionsCache := map[types.LayerID][]types.BlockID{}
-	return t.processBlocks(ctx, layerBlocks, localOpinionsCache)
+	inputVectorCache := map[types.LayerID][]types.BlockID{}
+	return t.processBlocks(ctx, layerBlocks, inputVectorCache)
 }
 
 // loops over all layers from the last verified up to a new target layer and attempts to verify each in turn.
-func (t *turtle) verifyLayers(ctx context.Context, localOpinionsCache map[types.LayerID][]types.BlockID) error {
+func (t *turtle) verifyLayers(ctx context.Context, inputVectorCache map[types.LayerID][]types.BlockID) error {
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.FieldNamed("verification_target", t.Last),
 		log.FieldNamed("old_verified", t.Verified))
@@ -834,7 +834,7 @@ candidateLayerLoop:
 
 		// get the local opinion for this layer. below, we calculate the global opinion on each block in the layer and
 		// check if it agrees with this local opinion.
-		rawLayerInputVector, err := t.getLayerInputVector(ctx, candidateLayerID, localOpinionsCache)
+		rawLayerInputVector, err := t.getLayerInputVector(ctx, candidateLayerID, inputVectorCache)
 		if err != nil {
 			// an error here signifies a real database failure
 			return fmt.Errorf("%s %v: %w", errstrUnableToCalculateLocalOpinion, candidateLayerID, err)
@@ -950,7 +950,7 @@ candidateLayerLoop:
 				if t.Verified.After(lastVerified) {
 					// clear the cache for layers we are about to heal
 					for layerID := lastVerified.Add(1); !layerID.After(t.Verified); layerID = layerID.Add(1) {
-						delete(localOpinionsCache, layerID)
+						delete(inputVectorCache, layerID)
 					}
 					// rescore goodness of blocks in all intervening layers on the basis of new information
 					// TODO: this is inefficient and we can probably do better
@@ -959,7 +959,7 @@ candidateLayerLoop:
 						// TODO LANE: this operation can be very expensive and very slow after a few layers,
 						//   since no caching is currently performed. it needs to be optimized and cached.
 						//   see https://github.com/spacemeshos/go-spacemesh/issues/2672
-						if err := t.scoreBlocksByLayerID(ctx, layerID, localOpinionsCache); err != nil {
+						if err := t.scoreBlocksByLayerID(ctx, layerID, inputVectorCache); err != nil {
 							// if we fail to process a layer, there's probably no point in trying to rescore blocks
 							// in later layers, so just print an error and bail
 							logger.With().Error("error trying to rescore good blocks in healed layers",
@@ -1006,15 +1006,15 @@ func (t *turtle) layerCutoff() types.LayerID {
 	return t.Last.Sub(t.Hdist)
 }
 
-func (t *turtle) getLayerInputVector(ctx context.Context, lyrID types.LayerID, localOpinionsCache map[types.LayerID][]types.BlockID) ([]types.BlockID, error) {
-	if iv, ok := localOpinionsCache[lyrID]; ok {
+func (t *turtle) getLayerInputVector(ctx context.Context, lyrID types.LayerID, inputVectorCache map[types.LayerID][]types.BlockID) ([]types.BlockID, error) {
+	if iv, ok := inputVectorCache[lyrID]; ok {
 		return iv, nil
 	}
 	iv, err := t.layerOpinionVector(ctx, lyrID)
 	if err != nil {
 		return []types.BlockID{}, fmt.Errorf("layer opinions: %w", err)
 	}
-	localOpinionsCache[lyrID] = iv
+	inputVectorCache[lyrID] = iv
 	return iv, nil
 }
 
