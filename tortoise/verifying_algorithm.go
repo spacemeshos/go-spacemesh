@@ -7,12 +7,13 @@ import (
 	"sync"
 	"time"
 
+	"go.uber.org/atomic"
+	"golang.org/x/sync/errgroup"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"go.uber.org/atomic"
-	"golang.org/x/sync/errgroup"
 )
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
@@ -129,42 +130,13 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 	var (
 		oldVerified = trtl.trtl.Verified
 		logger      = trtl.logger.WithContext(ctx).With()
-		reverted    bool
 	)
-
-	if value := trtl.update.Load(); value != nil {
-		var (
-			completed = (*rerunResult)(value)
-			current   = trtl.trtl
-			updated   = completed.Consensus
-			err       error
-		)
-		if current.Last.After(updated.Last) {
-			start := time.Now()
-			logger.Info("tortoise received more layers while rerun was in progress. running a catchup",
-				log.FieldNamed("last", current.Last),
-				log.FieldNamed("rerun-last", updated.Last))
-
-			err = catchupToCurrent(ctx, current, updated)
-			if err != nil {
-				logger.Error("cathup failed", log.Err(err))
-			} else {
-				logger.Info("catchup finished", log.Duration("duration", time.Since(start)))
-			}
-		}
-		if err == nil {
-			reverted = completed.Tracer.Reverted()
-			if reverted {
-				// make sure state is reapplied from far enough back if there was a state reversion.
-				// this is the first changed layer. subtract one to indicate that the layer _prior_ was the old
-				// pBase, since we never reapply the state of oldPbase.
-				oldVerified = completed.Tracer.FirstLayer().Sub(1)
-			}
-			updated.log = current.log
-			updated.bdp = current.bdp
-			trtl.trtl = updated
-		}
-		trtl.update.CAS(value, nil) // Store will miss a concurrent rerun
+	reverted, observed := trtl.updateFromRerun(ctx)
+	if reverted {
+		// make sure state is reapplied from far enough back if there was a state reversion.
+		// this is the first changed layer. subtract one to indicate that the layer _prior_ was the old
+		// pBase, since we never reapply the state of oldPbase.
+		oldVerified = observed.Sub(1)
 	}
 
 	logger.Info("handling incoming layer",
@@ -199,13 +171,4 @@ func (trtl *ThreadSafeVerifyingTortoise) Persist(ctx context.Context) error {
 func (trtl *ThreadSafeVerifyingTortoise) Stop() {
 	trtl.cancel()
 	trtl.eg.Wait()
-}
-
-func catchupToCurrent(ctx context.Context, current, updated *turtle) error {
-	for lid := updated.Last.Add(1); !lid.After(current.Last); lid = lid.Add(1) {
-		if err := updated.HandleIncomingLayer(ctx, lid); err != nil {
-			return err
-		}
-	}
-	return nil
 }

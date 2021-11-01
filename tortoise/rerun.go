@@ -16,6 +16,46 @@ type rerunResult struct {
 	Tracer    *validityTracer
 }
 
+func (t *ThreadSafeVerifyingTortoise) updateFromRerun(ctx context.Context) (bool, types.LayerID) {
+	var (
+		logger   = t.logger.WithContext(ctx).With()
+		reverted bool
+		observed types.LayerID
+	)
+	if value := t.update.Load(); value != nil {
+		var (
+			completed = (*rerunResult)(value)
+			current   = t.trtl
+			updated   = completed.Consensus
+			err       error
+		)
+		if current.Last.After(updated.Last) {
+			start := time.Now()
+			logger.Info("tortoise received more layers while rerun was in progress. running a catchup",
+				log.FieldNamed("last", current.Last),
+				log.FieldNamed("rerun-last", updated.Last))
+
+			err = catchupToCurrent(ctx, current, updated)
+			if err != nil {
+				logger.Error("cathup failed", log.Err(err))
+			} else {
+				logger.Info("catchup finished", log.Duration("duration", time.Since(start)))
+			}
+		}
+		if err == nil {
+			reverted = completed.Tracer.Reverted()
+			if reverted {
+				observed = completed.Tracer.FirstLayer()
+			}
+			updated.log = current.log
+			updated.bdp = current.bdp
+			t.trtl = updated
+		}
+		t.update.CAS(value, nil) // Store will miss a concurrent rerun
+	}
+	return reverted, observed
+}
+
 func (t *ThreadSafeVerifyingTortoise) waitRerun(ctx context.Context, period time.Duration) {
 	timer := time.NewTimer(period)
 	defer timer.Stop()
@@ -95,4 +135,13 @@ func (vt *validityTracer) Reverted() bool {
 // FirstLayer should be called only if Reverted returns true.
 func (vt *validityTracer) FirstLayer() types.LayerID {
 	return *vt.firstUpdatedLayer
+}
+
+func catchupToCurrent(ctx context.Context, current, updated *turtle) error {
+	for lid := updated.Last.Add(1); !lid.After(current.Last); lid = lid.Add(1) {
+		if err := updated.HandleIncomingLayer(ctx, lid); err != nil {
+			return err
+		}
+	}
+	return nil
 }
