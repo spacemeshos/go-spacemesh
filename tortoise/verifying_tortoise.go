@@ -1216,15 +1216,19 @@ func (t *turtle) sumVotesForBlock(
 				continue
 			}
 
-			blk, err := t.bdp.GetBlock(blockID)
-			if err != nil {
-				panic(err)
+			blockLayer, ok := t.BlockLayer[blockID]
+			if !ok {
+				block, err := t.bdp.GetBlock(blockID)
+				if err != nil {
+					panic(err)
+				}
+				blockLayer = block.LayerIndex
 			}
 
 			// check if this block has an opinion on the block to vote on.
 			// no opinion (on a block in an older layer) counts as an explicit vote against the block.
 			// note: in this case, the weight is already factored into the vote, so no need to fetch weight.
-			if opinionVote, exists := votingBlockOpinion[blk.LayerIndex][blockID]; exists {
+			if opinionVote, exists := votingBlockOpinion[blockLayer][blockID]; exists {
 				// logger.With().Debug("added block opinion to vote sum",
 				// 	log.FieldNamed("voting_block", votingBlockID),
 				// 	log.FieldNamed("vote", opinionVote),
