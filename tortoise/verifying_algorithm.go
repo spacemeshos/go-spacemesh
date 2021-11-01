@@ -43,8 +43,12 @@ type ThreadSafeVerifyingTortoise struct {
 	eg     errgroup.Group
 	cancel context.CancelFunc
 
-	mu   sync.RWMutex
-	trtl *turtle
+	mu sync.RWMutex
+	// persistMu is needed to allow concurrent BaseBlock and Persist call
+	// but to prevent multiple concurrent Persist calls
+	// relevant after rerun on nodes with slow disk
+	persistMu sync.Mutex
+	trtl      *turtle
 }
 
 // NewVerifyingTortoise creates ThreadSafeVerifyingTortoise instance.
@@ -159,6 +163,8 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 func (trtl *ThreadSafeVerifyingTortoise) Persist(ctx context.Context) error {
 	trtl.mu.RLock()
 	defer trtl.mu.RUnlock()
+	trtl.persistMu.Lock()
+	defer trtl.persistMu.Unlock()
 	start := time.Now()
 
 	err := trtl.trtl.persist()

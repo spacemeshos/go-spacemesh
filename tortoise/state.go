@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -23,7 +22,6 @@ const (
 
 type state struct {
 	log log.Log
-	mu  sync.Mutex
 	db  database.Database
 
 	// if true only non-flushed items will be persisted
@@ -45,8 +43,6 @@ type state struct {
 }
 
 func (s *state) Persist() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	batch := s.db.NewBatch()
 
 	var b bytes.Buffer
@@ -108,8 +104,6 @@ func (s *state) Persist() error {
 }
 
 func (s *state) Recover() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	s.GoodBlocksIndex = map[types.BlockID]bool{}
 	s.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
 	s.BlockLayer = map[types.BlockID]types.LayerID{}
@@ -172,8 +166,6 @@ func (s *state) Recover() error {
 }
 
 func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
 	var (
 		logger = s.log.WithContext(ctx)
 		batch  = s.db.NewBatch()
