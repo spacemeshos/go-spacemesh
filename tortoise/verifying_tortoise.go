@@ -824,13 +824,6 @@ func (t *turtle) verifyLayers(ctx context.Context) error {
 candidateLayerLoop:
 	for candidateLayerID := t.Verified.Add(1); candidateLayerID.Before(t.Last); candidateLayerID = candidateLayerID.Add(1) {
 		logger := logger.WithFields(log.FieldNamed("candidate_layer", candidateLayerID))
-
-		// it's possible that self healing already verified a layer
-		if !t.Verified.Before(candidateLayerID) {
-			logger.Info("self healing already verified this layer")
-			continue
-		}
-
 		logger.Info("attempting to verify candidate layer")
 
 		// note: if the following checks fail, we just return rather than trying to verify later layers.
@@ -941,10 +934,6 @@ candidateLayerLoop:
 			// between this unverified candidate layer and the latest layer is greater than this distance, then we trigger
 			// self healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
 			// we only consider the local opinion for recent layers.
-			if candidateLayerID.After(t.Last) {
-				logger.With().Panic("candidate layer is higher than last layer received",
-					log.FieldNamed("last_layer", t.Last))
-			}
 			logger.With().Debug("considering attempting to heal layer",
 				log.FieldNamed("layer_cutoff", t.layerCutoff()),
 				log.Uint32("zdist", t.Zdist),
