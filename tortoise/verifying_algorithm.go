@@ -34,13 +34,13 @@ type Config struct {
 
 // ThreadSafeVerifyingTortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
 type ThreadSafeVerifyingTortoise struct {
+	// update for rerun
+	update atomic.UnsafePointer
+
 	logger log.Log
 
 	eg     errgroup.Group
 	cancel context.CancelFunc
-
-	// update for rerun
-	update atomic.UnsafePointer
 
 	mu   sync.RWMutex
 	trtl *turtle
@@ -97,9 +97,9 @@ func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 
 // BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
 func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
-	trtl.mu.Lock()
+	trtl.mu.RLock()
+	defer trtl.mu.RUnlock()
 	block, diffs, err := trtl.trtl.BaseBlock(ctx)
-	trtl.mu.Unlock()
 	if err != nil {
 		return types.BlockID{}, nil, err
 	}
@@ -185,10 +185,14 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 
 // Persist saves a copy of the current tortoise state to the database.
 func (trtl *ThreadSafeVerifyingTortoise) Persist(ctx context.Context) error {
-	trtl.mu.Lock()
-	defer trtl.mu.Unlock()
-	trtl.logger.WithContext(ctx).Info("persist tortoise")
-	return trtl.trtl.persist()
+	trtl.mu.RLock()
+	defer trtl.mu.RUnlock()
+	start := time.Now()
+
+	err := trtl.trtl.persist()
+	trtl.logger.WithContext(ctx).With().Info("persist tortoise",
+		log.Duration("duration", time.Since(start)))
+	return err
 }
 
 // Stop background workers.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -22,6 +23,7 @@ const (
 
 type state struct {
 	log log.Log
+	mu  sync.Mutex
 	db  database.Database
 
 	// if true only non-flushed items will be synced
@@ -43,17 +45,10 @@ type state struct {
 }
 
 func (s *state) Persist() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	batch := s.db.NewBatch()
 
-	if err := batch.Put([]byte(namespaceLast), s.Last.Bytes()); err != nil {
-		return fmt.Errorf("put 'last' namespace into Dbatch: %w", err)
-	}
-	if err := batch.Put([]byte(namespaceEvict), s.LastEvicted.Bytes()); err != nil {
-		return fmt.Errorf("put 'evict' namespace into batch: %w", err)
-	}
-	if err := batch.Put([]byte(namespaceVerified), s.Verified.Bytes()); err != nil {
-		return fmt.Errorf("put 'verified' namespace into batch: %w", err)
-	}
 	var b bytes.Buffer
 	for id, flushed := range s.GoodBlocksIndex {
 		if flushed && s.diffMode {
@@ -66,6 +61,10 @@ func (s *state) Persist() error {
 		}
 		b.Reset()
 	}
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("write batch: %w", err)
+	}
+	batch.Reset()
 
 	for layer, blocks := range s.BlockOpinionsByLayer {
 		for block1, opinions := range blocks {
@@ -87,16 +86,30 @@ func (s *state) Persist() error {
 				b.Reset()
 			}
 		}
+		if err := batch.Write(); err != nil {
+			return fmt.Errorf("write batch: %w", err)
+		}
+		batch.Reset()
 	}
 
+	if err := batch.Put([]byte(namespaceLast), s.Last.Bytes()); err != nil {
+		return fmt.Errorf("put 'last' namespace into Dbatch: %w", err)
+	}
+	if err := batch.Put([]byte(namespaceEvict), s.LastEvicted.Bytes()); err != nil {
+		return fmt.Errorf("put 'evict' namespace into batch: %w", err)
+	}
+	if err := batch.Put([]byte(namespaceVerified), s.Verified.Bytes()); err != nil {
+		return fmt.Errorf("put 'verified' namespace into batch: %w", err)
+	}
 	if err := batch.Write(); err != nil {
 		return fmt.Errorf("write batch: %w", err)
 	}
-
 	return nil
 }
 
 func (s *state) Recover() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.GoodBlocksIndex = map[types.BlockID]bool{}
 	s.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
 	s.BlockLayer = map[types.BlockID]types.LayerID{}
@@ -159,6 +172,8 @@ func (s *state) Recover() error {
 }
 
 func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	var (
 		logger = s.log.WithContext(ctx)
 		batch  = s.db.NewBatch()
