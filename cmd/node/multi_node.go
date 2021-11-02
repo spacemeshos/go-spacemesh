@@ -159,6 +159,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.LayersPerEpoch = 3
 	cfg.TxsPerBlock = 100
 	cfg.Hdist = 5
+	cfg.Zdist = 5
 
 	cfg.LayerDurationSec = 20
 	cfg.HareEligibility.ConfidenceParam = 4

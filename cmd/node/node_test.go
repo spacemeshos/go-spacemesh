@@ -376,12 +376,6 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	r.Equal(1234, app.Config.API.JSONServerPort)
 }
 
-type NetMock struct{}
-
-func (NetMock) Broadcast(context.Context, string, []byte) error {
-	return nil
-}
-
 func marshalProto(t *testing.T, msg proto.Message) string {
 	var buf bytes.Buffer
 	var m jsonpb.Marshaler
@@ -825,4 +819,22 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 	// Wait for it to stop
 	wg.Wait()
+}
+
+func TestInitialize_BadTortoiseParams(t *testing.T) {
+	conf := config.DefaultConfig()
+	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
+	require.NoError(t, app.Initialize())
+
+	conf = config.DefaultTestConfig()
+	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
+	require.NoError(t, app.Initialize())
+
+	app = New(WithLog(logtest.New(t)), WithConfig(getTestDefaultConfig()))
+	require.NoError(t, app.Initialize())
+
+	conf.Zdist = 5
+	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
+	err := app.Initialize()
+	assert.EqualError(t, err, "incompatible tortoise hare params")
 }

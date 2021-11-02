@@ -20,7 +20,7 @@ func DefaultConfig() Config {
 		RoundDuration:   10,
 		WakeupDelta:     10,
 		ExpectedLeaders: 5,
-		LimitIterations: 50,
+		LimitIterations: 5,
 		LimitConcurrent: 5,
 	}
 }

@@ -200,7 +200,7 @@ func defaultBaseConfig() BaseConfig {
 		PoETServer:            "127.0.0.1",
 		GoldenATXID:           "0x5678", // TODO: Change the value
 		Hdist:                 10,
-		Zdist:                 5,
+		Zdist:                 8,
 		ConfidenceParam:       5,
 		WindowSize:            100,                 // should be "a few thousand layers" in production
 		GlobalThreshold:       big.NewRat(60, 100), // fraction
