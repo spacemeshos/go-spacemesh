@@ -63,7 +63,8 @@ func SetLayersPerEpoch(layers uint32) {
 	atomic.StoreUint32(&effectiveGenesis, layers*2-1)
 }
 
-func getLayersPerEpoch() uint32 {
+// GetLayersPerEpoch returns number of layers per epoch.
+func GetLayersPerEpoch() uint32 {
 	return atomic.LoadUint32(&layersPerEpoch)
 }
 
@@ -88,7 +89,7 @@ type LayerID struct {
 
 // GetEpoch returns the epoch number of this LayerID.
 func (l LayerID) GetEpoch() EpochID {
-	return EpochID(l.Value / getLayersPerEpoch())
+	return EpochID(l.Value / GetLayersPerEpoch())
 }
 
 // Add layers to the layer. Panics on wraparound.
@@ -112,7 +113,7 @@ func (l LayerID) Sub(layers uint32) LayerID {
 
 // OrdinalInEpoch returns layer ordinal in epoch.
 func (l LayerID) OrdinalInEpoch() uint32 {
-	return l.Value % getLayersPerEpoch()
+	return l.Value % GetLayersPerEpoch()
 }
 
 // FirstInEpoch returns whether this LayerID is first in epoch.

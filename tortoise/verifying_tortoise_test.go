@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
 func init() {
@@ -1072,7 +1073,6 @@ func defaultTurtle(tb testing.TB) *turtle {
 		database.NewMemDatabase(),
 		mdb,
 		getAtxDB(),
-		defaultClock(tb),
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -1080,7 +1080,6 @@ func defaultTurtle(tb testing.TB) *turtle {
 		defaultTestLayerSize,
 		defaultTestGlobalThreshold,
 		defaultTestLocalThreshold,
-		defaultTestRerunInterval,
 	)
 }
 
@@ -1108,7 +1107,6 @@ func defaultConfig(t *testing.T, mdb *mesh.DB) Config {
 		Database:        database.NewMemDatabase(),
 		MeshDatabase:    mdb,
 		ATXDB:           getAtxDB(),
-		Clock:           defaultClock(t),
 		Hdist:           defaultTestHdist,
 		Zdist:           defaultTestZdist,
 		ConfidenceParam: defaultTestConfidenceParam,
@@ -3038,4 +3036,39 @@ func TestMultiTortoise(t *testing.T) {
 		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 		checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
 	})
+}
+
+func BenchmarkTortoiseLayerHandling(b *testing.B) {
+	ctx := context.Background()
+	const size = 30
+
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := Config{
+		Log:             logtest.New(b),
+		Database:        database.NewMemDatabase(),
+		MeshDatabase:    s.State.MeshDB,
+		ATXDB:           s.State.AtxDB,
+		LayerSize:       size,
+		Hdist:           10,
+		Zdist:           5,
+		ConfidenceParam: 5,
+		WindowSize:      20,
+		GlobalThreshold: big.NewRat(6, 10),
+		LocalThreshold:  big.NewRat(2, 10),
+	}
+	tortoise := NewVerifyingTortoise(ctx, cfg)
+
+	var layers []types.LayerID
+	for i := 0; i < 400; i++ {
+		layers = append(layers, s.Next())
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, lid := range layers {
+			tortoise.HandleIncomingLayer(ctx, lid)
+		}
+	}
 }
