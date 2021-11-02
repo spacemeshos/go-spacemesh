@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-	"unsafe"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -16,15 +15,16 @@ type rerunResult struct {
 	Tracer    *validityTracer
 }
 
+// updateFromRerun must be called while holding appropriate mutex (see struct definition).
 func (t *ThreadSafeVerifyingTortoise) updateFromRerun(ctx context.Context) (bool, types.LayerID) {
 	var (
 		logger   = t.logger.WithContext(ctx).With()
 		reverted bool
 		observed types.LayerID
 	)
-	if value := t.update.Load(); value != nil {
+	if t.update != nil {
 		var (
-			completed = (*rerunResult)(value)
+			completed = t.update
 			current   = t.trtl
 			updated   = completed.Consensus
 			err       error
@@ -51,12 +51,12 @@ func (t *ThreadSafeVerifyingTortoise) updateFromRerun(ctx context.Context) (bool
 			updated.bdp = current.bdp
 			t.trtl = updated
 		}
-		t.update.CAS(value, nil) // Store will miss a concurrent rerun
+		t.update = nil
 	}
 	return reverted, observed
 }
 
-func (t *ThreadSafeVerifyingTortoise) waitRerun(ctx context.Context, period time.Duration) {
+func (t *ThreadSafeVerifyingTortoise) rerunLoop(ctx context.Context, period time.Duration) {
 	timer := time.NewTimer(period)
 	defer timer.Stop()
 	for {
@@ -100,8 +100,9 @@ func (t *ThreadSafeVerifyingTortoise) rerun(ctx context.Context) error {
 	}
 	logger.With().Info("tortoise rerun completed", last, log.Duration("duration", time.Since(start)))
 
-	rst := &rerunResult{Consensus: consensus, Tracer: tracer}
-	t.update.Store((unsafe.Pointer)(rst))
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.update = &rerunResult{Consensus: consensus, Tracer: tracer}
 	return nil
 }
 

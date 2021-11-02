@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"go.uber.org/atomic"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -35,18 +34,17 @@ type Config struct {
 
 // ThreadSafeVerifyingTortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
 type ThreadSafeVerifyingTortoise struct {
-	// update for rerun
-	update atomic.UnsafePointer
-
 	logger log.Log
 
 	eg     errgroup.Group
 	cancel context.CancelFunc
 
 	mu sync.RWMutex
+	// update will be set to non-nil after rerun completes, and must be set to nil once
+	// used to replace trtl.
+	update *rerunResult
 	// persistMu is needed to allow concurrent BaseBlock and Persist call
 	// but to prevent multiple concurrent Persist calls
-	// relevant after rerun on nodes with slow disk
 	persistMu sync.Mutex
 	trtl      *turtle
 }
@@ -86,7 +84,7 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 	// TODO(dshulyak) with low rerun interval it is possible to start a rerun
 	// when initial sync is in progress, or right after sync
 	alg.eg.Go(func() error {
-		alg.waitRerun(ctx, cfg.RerunInterval)
+		alg.rerunLoop(ctx, cfg.RerunInterval)
 		return nil
 	})
 	return alg
