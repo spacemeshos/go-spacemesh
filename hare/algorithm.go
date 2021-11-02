@@ -337,7 +337,7 @@ PreRound:
 			proc.advanceToNextRound(ctx)
 
 			// exit if we reached the limit on number of iterations
-			if proc.k/4 >= uint32(proc.cfg.LimitIterations) {
+			if proc.k >= uint32(proc.cfg.LimitIterations)*4 {
 				logger.With().Warning("terminating: reached iterations limit",
 					log.Int("limit", proc.cfg.LimitIterations),
 					log.Uint32("current_k", proc.k),

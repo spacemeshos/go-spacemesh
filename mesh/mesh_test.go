@@ -753,3 +753,23 @@ func TestMesh_HandleValidatedLayer(t *testing.T) {
 	msh.HandleValidatedLayer(context.TODO(), lyr, types.BlockIDs(blocks))
 	require.Equal(t, lyr, msh.ProcessedLayer())
 }
+
+func TestMesh_HandleValidatedLayer_emptyOutputFromHare(t *testing.T) {
+	msh := getMesh(t, "HandleValidatedLayer_Empty")
+	layerID := types.GetEffectiveGenesis().Add(1)
+
+	createMeshFromHareOutput(t, layerID, msh, NewAtxDbMock())
+	require.Equal(t, layerID, msh.ProcessedLayer())
+
+	var empty []types.BlockID
+	layerID = layerID.Add(1)
+	msh.HandleValidatedLayer(context.TODO(), layerID, empty)
+
+	// input vector saved
+	iv, err := msh.GetLayerInputVectorByID(layerID)
+	require.NoError(t, err)
+	assert.Nil(t, iv)
+
+	// but processed layer has advanced
+	assert.Equal(t, layerID, msh.ProcessedLayer())
+}

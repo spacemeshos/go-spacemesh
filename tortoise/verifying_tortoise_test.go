@@ -947,11 +947,11 @@ func TestLayerOpinionVector(t *testing.T) {
 
 	// hare failed for layer: should vote against all blocks
 	mdb.InputVectorBackupFunc = func(types.LayerID) ([]types.BlockID, error) {
-		return nil, mesh.ErrInvalidLayer
+		return nil, database.ErrNotFound
 	}
 	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l1ID)
 	r.NoError(err)
-	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
+	r.Nil(opinionVec)
 
 	// old layer missing from mesh: should vote against all blocks
 	// older than zdist, not as old as hdist

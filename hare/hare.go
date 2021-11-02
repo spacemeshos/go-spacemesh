@@ -193,18 +193,23 @@ var ErrTooLate = errors.New("consensus process finished too late")
 
 // records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
-	set := output.Set()
-	blocks := make([]types.BlockID, len(set.values))
-	i := 0
-	for v := range set.values {
-		blocks[i] = v
-		i++
+	layerID := output.ID()
+	var blocks []types.BlockID
+	if output.Completed() {
+		h.WithContext(ctx).With().Info("hare terminated with success", layerID)
+		set := output.Set()
+		blocks = make([]types.BlockID, len(set.values))
+		i := 0
+		for v := range set.values {
+			blocks[i] = v
+			i++
+		}
+	} else {
+		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
 	}
+	h.mesh.HandleValidatedLayer(ctx, layerID, blocks)
 
-	id := output.ID()
-	h.mesh.HandleValidatedLayer(ctx, id, blocks)
-
-	if h.outOfBufferRange(id) {
+	if h.outOfBufferRange(layerID) {
 		return ErrTooLate
 	}
 
@@ -213,7 +218,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	if uint32(len(h.outputs)) >= h.bufferSize {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
-	h.outputs[id] = blocks
+	h.outputs[layerID] = blocks
 
 	return nil
 }
@@ -379,15 +384,8 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 				log.Bool("coinflip", coin))
 			h.mesh.RecordCoinflip(ctx, layerID, coin)
 
-			if out.Completed() { // CP completed, collect the output
-				logger.With().Info("collecting results for completed hare instance", layerID)
-				if err := h.collectOutput(ctx, out); err != nil {
-					logger.With().Warning("error collecting output from hare", log.Err(err))
-				}
-			} else {
-				// Notify the mesh that Hare failed
-				h.WithContext(ctx).With().Info("recording hare instance failure", layerID)
-				h.mesh.InvalidateLayer(ctx, layerID)
+			if err := h.collectOutput(ctx, out); err != nil {
+				logger.With().Warning("error collecting output from hare", log.Err(err))
 			}
 			h.broker.Unregister(ctx, out.ID())
 			logger.With().Info("number of consensus processes (after unregister)",
