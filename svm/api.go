@@ -148,7 +148,7 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		return pubsub.ValidationIgnore
 	}
 
-	if err = svm.HandleTransaction(tx, true); err != nil {
+	if err = svm.handleTransaction(tx, true); err != nil {
 		svm.state.With().Error("handle transaction", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
@@ -164,15 +164,15 @@ func (svm *SVM) HandleTxSyncData(data []byte) error {
 		svm.state.With().Error("SVM couldn't parse incoming transaction", log.Err(err))
 		return fmt.Errorf("parse: %w", err)
 	}
-	if err = svm.HandleTransaction(tx.Transaction, false); err != nil {
+	if err = svm.handleTransaction(tx.Transaction, false); err != nil {
 		return fmt.Errorf("handle transaction: %w", err)
 	}
 	return nil
 }
 
-// HandleTransaction handles data received on transaction gossip channel.
+// handleTransaction handles data received on transaction gossip channel.
 // It allows for transactions from both valid and invalid blocks to be added to the mempool.
-func (svm *SVM) HandleTransaction(tx *types.Transaction, validateOrigin bool) error {
+func (svm *SVM) handleTransaction(tx *types.Transaction, validateOrigin bool) error {
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		svm.state.With().Error("SVM failed to calculate transaction origin", tx.ID(), log.Err(err))
 		return fmt.Errorf("calculate and set origin: %w", err)

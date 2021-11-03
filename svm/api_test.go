@@ -60,7 +60,7 @@ func TestHandleTransaction_ValidateOrigin(t *testing.T) {
 	svm.state.SetNonce(origin, 3)
 
 	tx := newTx(t, 3, 10, signer)
-	err := svm.HandleTransaction(tx, true)
+	err := svm.handleTransaction(tx, true)
 	r.NoError(err)
 }
 
@@ -78,7 +78,7 @@ func TestHandleTransaction_DontValidateOrigin(t *testing.T) {
 	svm.state.SetNonce(origin, 5)
 
 	tx := newTx(t, 5, 10, signer)
-	err := svm.HandleTransaction(tx, false)
+	err := svm.handleTransaction(tx, false)
 	r.NoError(err)
 }
 
@@ -96,7 +96,7 @@ func TestHandleTransaction_WrongNonce(t *testing.T) {
 	svm.state.SetNonce(origin, 5)
 
 	tx := newTx(t, 2, 10, signer)
-	err := svm.HandleTransaction(tx, true)
+	err := svm.handleTransaction(tx, true)
 	r.Error(err, "nonce and balance validation failed; Expected: 5, Actual: 7")
 }
 
@@ -114,6 +114,6 @@ func TestHandleTransaction_InsufficientBalance(t *testing.T) {
 	svm.state.SetNonce(origin, 2)
 
 	tx := newTx(t, 2, 10, signer)
-	err := svm.HandleTransaction(tx, true)
+	err := svm.handleTransaction(tx, true)
 	r.Error(err, "nonce and balance validation failed: insufficient balance")
 }
