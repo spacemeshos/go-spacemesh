@@ -68,7 +68,7 @@ func getMeshWithMapState(tb testing.TB, id string, state state) (*Mesh, *AtxDbMo
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
 	ctrl := gomock.NewController(tb)
-	mockFetch := mocks.NewMockFetcher(ctrl)
+	mockFetch := mocks.NewMockBlockFetcher(ctrl)
 	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
 	return NewMesh(mshDb, atxDb, ConfigTst(), mockFetch, &MeshValidatorMock{}, newMockTxMemPool(), state, lg), atxDb
 }

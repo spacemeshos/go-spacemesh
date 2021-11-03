@@ -137,7 +137,7 @@ func getAtxDb(tb testing.TB, id string) (*DB, *mesh.Mesh, database.Database) {
 	atxStore := database.NewMemDatabase()
 	atxdb := NewDB(atxStore, nil, NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 	ctrl := gomock.NewController(tb)
-	mockFetch := mocks.NewMockFetcher(ctrl)
+	mockFetch := mocks.NewMockBlockFetcher(ctrl)
 	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
 	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), mockFetch, &MeshValidatorMock{}, &MockTxMemPool{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers, atxStore

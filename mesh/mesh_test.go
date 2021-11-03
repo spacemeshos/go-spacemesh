@@ -147,7 +147,7 @@ func getMesh(tb testing.TB, id string) *Mesh {
 	lg := logtest.New(tb).WithName(id)
 	mmdb := NewMemMeshDB(lg)
 	ctrl := gomock.NewController(tb)
-	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), mocks.NewMockFetcher(ctrl), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
+	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), mocks.NewMockBlockFetcher(ctrl), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
 }
 
 func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
@@ -473,7 +473,7 @@ func TestMesh_WakeUp(t *testing.T) {
 	assert.Equal(t, block1.Data, rBlock1.MiniBlock.Data, "block content was wrong")
 
 	ctrl := gomock.NewController(t)
-	recoveredMesh := NewMesh(msh.DB, NewAtxDbMock(), ConfigTst(), mocks.NewMockFetcher(ctrl), &MeshValidatorMock{mdb: msh.DB}, newMockTxMemPool(), &MockState{}, logtest.New(t))
+	recoveredMesh := NewMesh(msh.DB, NewAtxDbMock(), ConfigTst(), mocks.NewMockBlockFetcher(ctrl), &MeshValidatorMock{mdb: msh.DB}, newMockTxMemPool(), &MockState{}, logtest.New(t))
 
 	rBlock2, err = recoveredMesh.GetBlock(block2.ID())
 	assert.NoError(t, err)
@@ -728,7 +728,7 @@ func TestMesh_HandleValidatedLayer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockFetch := mocks.NewMockFetcher(ctrl)
+	mockFetch := mocks.NewMockBlockFetcher(ctrl)
 	numOfBlocks := 10
 	maxTxs := 20
 	s := &MockMapState{Rewards: make(map[types.Address]uint64)}

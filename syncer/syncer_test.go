@@ -133,7 +133,7 @@ func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
 	atxdb := activation.NewDB(atxStore, nil, activation.NewIdentityStore(database.NewMemDatabase()), memdb, layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
 	ctrl := gomock.NewController(t)
-	mockFetch := sysMocks.NewMockFetcher(ctrl)
+	mockFetch := sysMocks.NewMockBlockFetcher(ctrl)
 	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
 	return mesh.NewMesh(memdb, atxdb, mesh.Config{}, mockFetch, &mockValidator{}, nil, nil, lg.WithName("mesh"))
 }

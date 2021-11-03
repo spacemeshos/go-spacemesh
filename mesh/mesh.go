@@ -82,7 +82,7 @@ type Mesh struct {
 	AtxDB
 	state
 	Validator
-	fetch  system.Fetcher
+	fetch  system.BlockFetcher
 	trtl   tortoise
 	txPool txMemPool
 	config Config
@@ -102,7 +102,7 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, fetcher system.Fetcher, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, fetcher system.BlockFetcher, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
 	msh := &Mesh{
 		Log:                 logger,
 		fetch:               fetcher,
@@ -133,7 +133,7 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, fetcher system.Fetcher, t
 }
 
 // NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database.
-func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, fetcher system.Fetcher, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
+func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, fetcher system.BlockFetcher, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
 	msh := NewMesh(db, atxDb, rewardConfig, fetcher, trtl, txPool, state, logger)
 
 	latest, err := db.general.Get(constLATEST)
