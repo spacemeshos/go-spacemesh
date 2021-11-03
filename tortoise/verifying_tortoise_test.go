@@ -3041,9 +3041,7 @@ func TestMultiTortoise(t *testing.T) {
 
 func TestRerunMissingLayer(t *testing.T) {
 	ctx := context.Background()
-	const size = 30
-
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
 	s.Setup()
 
 	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
@@ -3078,9 +3076,7 @@ func TestRerunMissingLayer(t *testing.T) {
 
 func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	ctx := context.Background()
-	const size = 30
-
-	s := sim.New(sim.WithLayerSize(size))
+	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
 	s.Setup()
 
 	cfg := defaultConfig(b, s.State.MeshDB, s.State.AtxDB)
