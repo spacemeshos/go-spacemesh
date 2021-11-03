@@ -201,7 +201,7 @@ func defaultBaseConfig() BaseConfig {
 		GoldenATXID:           "0x5678", // TODO: Change the value
 		Hdist:                 10,
 		Zdist:                 8,
-		ConfidenceParam:       5,
+		ConfidenceParam:       2,
 		WindowSize:            100,                 // should be "a few thousand layers" in production
 		GlobalThreshold:       big.NewRat(60, 100), // fraction
 		LocalThreshold:        big.NewRat(20, 100), // fraction

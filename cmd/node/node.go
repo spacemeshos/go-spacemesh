@@ -300,7 +300,8 @@ func (app *App) Initialize() (err error) {
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
 	// hare's max time duration to run consensus for a layer
-	maxHareLayerDurationSec := app.Config.HARE.WakeupDelta + app.Config.HARE.LimitIterations*4*app.Config.HARE.RoundDuration
+	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration // pre-round + 4 rounds per iteration
+	maxHareLayerDurationSec := app.Config.HARE.WakeupDelta + maxHareRoundsPerLayer*app.Config.HARE.RoundDuration
 	if app.Config.LayerDurationSec*int(app.Config.Zdist) <= maxHareLayerDurationSec {
 		log.With().Error("incompatible params",
 			log.Uint32("tortoise_zdist", app.Config.Zdist),

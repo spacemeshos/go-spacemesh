@@ -198,11 +198,9 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	if output.Completed() {
 		h.WithContext(ctx).With().Info("hare terminated with success", layerID)
 		set := output.Set()
-		blocks = make([]types.BlockID, len(set.values))
-		i := 0
-		for v := range set.values {
-			blocks[i] = v
-			i++
+		blocks = make([]types.BlockID, 0, len(set.values))
+		for key := range set.values {
+			blocks = append(blocks, key)
 		}
 	} else {
 		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
