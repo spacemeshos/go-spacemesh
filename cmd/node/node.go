@@ -291,6 +291,7 @@ type App struct {
 	svm            *svm.SVM
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
+	tortoise       *tortoise.ThreadSafeVerifyingTortoise
 
 	host *p2p.Host
 
@@ -528,7 +529,6 @@ func (app *App) initServices(ctx context.Context,
 		Database:        trtlStateDB,
 		MeshDatabase:    mdb,
 		ATXDB:           atxDB,
-		Clock:           clock,
 		Hdist:           app.Config.Hdist,
 		Zdist:           app.Config.Zdist,
 		ConfidenceParam: app.Config.ConfidenceParam,
@@ -689,6 +689,7 @@ func (app *App) initServices(ctx context.Context,
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
 	app.svm = svm
+	app.tortoise = trtl
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
 			app.host,
@@ -919,6 +920,10 @@ func (app *App) stopServices() {
 	if app.ptimesync != nil {
 		app.ptimesync.Stop()
 		app.log.Debug("peer timesync stopped")
+	}
+	if app.tortoise != nil {
+		app.log.Info("stopping tortoise. if tortoise is in rerun it may take a while")
+		app.tortoise.Stop()
 	}
 
 	if app.host != nil {

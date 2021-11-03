@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 
 	"github.com/spacemeshos/ed25519"
 
@@ -65,6 +66,9 @@ type EdSigner struct {
 	pubKey  ed25519.PublicKey  // only the pub key part
 }
 
+// PrivateKeySize size of the private key in bytes.
+const PrivateKeySize = ed25519.PrivateKeySize
+
 // NewEdSignerFromBuffer builds a signer from a private key as byte buffer.
 func NewEdSignerFromBuffer(buff []byte) (*EdSigner, error) {
 	if len(buff) != ed25519.PrivateKeySize {
@@ -80,6 +84,15 @@ func NewEdSignerFromBuffer(buff []byte) (*EdSigner, error) {
 	}
 
 	return sgn, nil
+}
+
+// NewEdSignerFromRand generate signer using predictable randomness source.
+func NewEdSignerFromRand(rand io.Reader) *EdSigner {
+	pub, priv, err := ed25519.GenerateKey(rand)
+	if err != nil {
+		log.Panic("Could not generate key pair err=%v", err)
+	}
+	return &EdSigner{privKey: priv, pubKey: pub}
 }
 
 // NewEdSigner returns an auto-generated ed signer.
