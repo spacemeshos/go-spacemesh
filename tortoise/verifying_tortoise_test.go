@@ -886,7 +886,7 @@ func TestPersistAndRecover(t *testing.T) {
 
 	mdb.InputVectorBackupFunc = getHareResults
 	atxdb := getAtxDB()
-	cfg := defaultConfig(t, mdb)
+	cfg := defaultConfig(t, mdb, getAtxDB())
 	cfg.ATXDB = atxdb
 	alg := NewVerifyingTortoise(context.TODO(), cfg)
 
@@ -1101,12 +1101,13 @@ func TestCloneTurtle(t *testing.T) {
 	r.NotEqual(trtl.Last, trtl2.Last)
 }
 
-func defaultConfig(t *testing.T, mdb *mesh.DB) Config {
+func defaultConfig(tb testing.TB, mdb *mesh.DB, atxdb atxDataProvider) Config {
+	tb.Helper()
 	return Config{
 		LayerSize:       defaultTestLayerSize,
 		Database:        database.NewMemDatabase(),
 		MeshDatabase:    mdb,
-		ATXDB:           getAtxDB(),
+		ATXDB:           atxdb,
 		Hdist:           defaultTestHdist,
 		Zdist:           defaultTestZdist,
 		ConfidenceParam: defaultTestConfidenceParam,
@@ -1114,12 +1115,12 @@ func defaultConfig(t *testing.T, mdb *mesh.DB) Config {
 		GlobalThreshold: defaultTestGlobalThreshold,
 		LocalThreshold:  defaultTestLocalThreshold,
 		RerunInterval:   defaultTestRerunInterval,
-		Log:             logtest.New(t),
+		Log:             logtest.New(tb),
 	}
 }
 
 func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
-	return NewVerifyingTortoise(context.TODO(), defaultConfig(t, mdb))
+	return NewVerifyingTortoise(context.TODO(), defaultConfig(t, mdb, getAtxDB()))
 }
 
 func TestGetLocalBlockOpinion(t *testing.T) {
@@ -3045,20 +3046,7 @@ func TestRerunMissingLayer(t *testing.T) {
 	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
-	cfg := Config{
-		Log:             logtest.New(t),
-		Database:        database.NewMemDatabase(),
-		MeshDatabase:    s.State.MeshDB,
-		ATXDB:           s.State.AtxDB,
-		LayerSize:       size,
-		Hdist:           10,
-		Zdist:           5,
-		ConfidenceParam: 5,
-		WindowSize:      20,
-		GlobalThreshold: big.NewRat(6, 10),
-		LocalThreshold:  big.NewRat(2, 10),
-	}
-
+	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 	layers := make([]types.LayerID, 20)
 	for i := range layers {
@@ -3071,6 +3059,7 @@ func TestRerunMissingLayer(t *testing.T) {
 		}
 		tortoise.HandleIncomingLayer(context.TODO(), lid)
 	}
+	// TODO(dshulyak) implement public interface to enforce rerun
 	require.NoError(t, tortoise.rerun(context.TODO()))
 	oldpbase, newpbase, reverted := tortoise.HandleIncomingLayer(context.TODO(), s.Next())
 	require.True(t, reverted)
@@ -3094,19 +3083,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
-	cfg := Config{
-		Log:             logtest.New(b),
-		Database:        database.NewMemDatabase(),
-		MeshDatabase:    s.State.MeshDB,
-		ATXDB:           s.State.AtxDB,
-		LayerSize:       size,
-		Hdist:           10,
-		Zdist:           5,
-		ConfidenceParam: 5,
-		WindowSize:      20,
-		GlobalThreshold: big.NewRat(6, 10),
-		LocalThreshold:  big.NewRat(2, 10),
-	}
+	cfg := defaultConfig(b, s.State.MeshDB, s.State.AtxDB)
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	var layers []types.LayerID

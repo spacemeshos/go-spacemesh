@@ -36,18 +36,10 @@ func WithLogger(logger log.Log) GenOpt {
 	}
 }
 
-// WithPath configures path for persist storage.
-func WithPath(path string) GenOpt {
-	return func(g *Generator) {
-		g.conf.Path = path
-	}
-}
-
 type config struct {
 	FirstLayer     types.LayerID
 	LayerSize      uint32
 	LayersPerEpoch uint32
-	Path           string
 }
 
 func defaults() config {
