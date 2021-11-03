@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
 func init() {
@@ -885,7 +886,7 @@ func TestPersistAndRecover(t *testing.T) {
 
 	mdb.InputVectorBackupFunc = getHareResults
 	atxdb := getAtxDB()
-	cfg := defaultConfig(t, mdb)
+	cfg := defaultConfig(t, mdb, getAtxDB())
 	cfg.ATXDB = atxdb
 	alg := NewVerifyingTortoise(context.TODO(), cfg)
 
@@ -1072,7 +1073,6 @@ func defaultTurtle(tb testing.TB) *turtle {
 		database.NewMemDatabase(),
 		mdb,
 		getAtxDB(),
-		defaultClock(tb),
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -1080,7 +1080,6 @@ func defaultTurtle(tb testing.TB) *turtle {
 		defaultTestLayerSize,
 		defaultTestGlobalThreshold,
 		defaultTestLocalThreshold,
-		defaultTestRerunInterval,
 	)
 }
 
@@ -1102,13 +1101,13 @@ func TestCloneTurtle(t *testing.T) {
 	r.NotEqual(trtl.Last, trtl2.Last)
 }
 
-func defaultConfig(t *testing.T, mdb *mesh.DB) Config {
+func defaultConfig(tb testing.TB, mdb *mesh.DB, atxdb atxDataProvider) Config {
+	tb.Helper()
 	return Config{
 		LayerSize:       defaultTestLayerSize,
 		Database:        database.NewMemDatabase(),
 		MeshDatabase:    mdb,
-		ATXDB:           getAtxDB(),
-		Clock:           defaultClock(t),
+		ATXDB:           atxdb,
 		Hdist:           defaultTestHdist,
 		Zdist:           defaultTestZdist,
 		ConfidenceParam: defaultTestConfidenceParam,
@@ -1116,12 +1115,12 @@ func defaultConfig(t *testing.T, mdb *mesh.DB) Config {
 		GlobalThreshold: defaultTestGlobalThreshold,
 		LocalThreshold:  defaultTestLocalThreshold,
 		RerunInterval:   defaultTestRerunInterval,
-		Log:             logtest.New(t),
+		Log:             logtest.New(tb),
 	}
 }
 
 func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
-	return NewVerifyingTortoise(context.TODO(), defaultConfig(t, mdb))
+	return NewVerifyingTortoise(context.TODO(), defaultConfig(t, mdb, getAtxDB()))
 }
 
 func TestGetLocalBlockOpinion(t *testing.T) {
@@ -3038,4 +3037,60 @@ func TestMultiTortoise(t *testing.T) {
 		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 		checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
 	})
+}
+
+func TestRerunMissingLayer(t *testing.T) {
+	ctx := context.Background()
+	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
+	s.Setup()
+
+	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	tortoise := NewVerifyingTortoise(ctx, cfg)
+	layers := make([]types.LayerID, 20)
+	for i := range layers {
+		layers[i] = s.Next()
+	}
+	missing := layers[10]
+	for _, lid := range layers {
+		if lid == missing {
+			continue
+		}
+		tortoise.HandleIncomingLayer(context.TODO(), lid)
+	}
+	// TODO(dshulyak) implement public interface to enforce rerun
+	require.NoError(t, tortoise.rerun(context.TODO()))
+	oldpbase, newpbase, reverted := tortoise.HandleIncomingLayer(context.TODO(), s.Next())
+	require.True(t, reverted)
+	require.Equal(t, missing.Sub(2), oldpbase)
+	require.Equal(t, layers[len(layers)-1], newpbase)
+	for _, lid := range layers {
+		bids, err := s.State.MeshDB.LayerBlockIds(lid)
+		require.NoError(t, err)
+		for _, bid := range bids {
+			validity, err := s.State.MeshDB.ContextualValidity(bid)
+			require.NoError(t, err)
+			require.True(t, validity)
+		}
+	}
+}
+
+func BenchmarkTortoiseLayerHandling(b *testing.B) {
+	ctx := context.Background()
+	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
+	s.Setup()
+
+	cfg := defaultConfig(b, s.State.MeshDB, s.State.AtxDB)
+	tortoise := NewVerifyingTortoise(ctx, cfg)
+
+	var layers []types.LayerID
+	for i := 0; i < 200; i++ {
+		layers = append(layers, s.Next())
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		for _, lid := range layers {
+			tortoise.HandleIncomingLayer(ctx, lid)
+		}
+	}
 }

@@ -2,10 +2,12 @@ package tortoise
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
@@ -116,7 +118,7 @@ type validityTracer struct {
 func (vt *validityTracer) SaveContextualValidity(bid types.BlockID, lid types.LayerID, validityNew bool) error {
 	if vt.firstUpdatedLayer == nil {
 		validityCur, err := vt.ContextualValidity(bid)
-		if err != nil {
+		if err != nil && !errors.Is(err, database.ErrNotFound) {
 			return fmt.Errorf("error reading contextual validity of block %v: %w", bid, err)
 		}
 		if validityCur != validityNew {

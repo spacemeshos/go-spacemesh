@@ -21,7 +21,6 @@ type Config struct {
 	Database        database.Database
 	MeshDatabase    blockDataProvider
 	ATXDB           atxDataProvider
-	Clock           layerClock
 	Hdist           uint32   // hare lookback distance: the distance over which we use the input vector/hare results
 	Zdist           uint32   // hare result wait distance: the distance over which we're willing to wait for hare results
 	ConfidenceParam uint32   // confidence wait distance: how long we wait for global consensus to be established
@@ -60,7 +59,6 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 			cfg.Database,
 			cfg.MeshDatabase,
 			cfg.ATXDB,
-			cfg.Clock,
 			cfg.Hdist,
 			cfg.Zdist,
 			cfg.ConfidenceParam,
@@ -68,7 +66,6 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 			cfg.LayerSize,
 			cfg.GlobalThreshold,
 			cfg.LocalThreshold,
-			cfg.RerunInterval,
 		),
 		logger: cfg.Log,
 	}
@@ -83,10 +80,12 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 	alg.cancel = cancel
 	// TODO(dshulyak) with low rerun interval it is possible to start a rerun
 	// when initial sync is in progress, or right after sync
-	alg.eg.Go(func() error {
-		alg.rerunLoop(ctx, cfg.RerunInterval)
-		return nil
-	})
+	if cfg.RerunInterval != 0 {
+		alg.eg.Go(func() error {
+			alg.rerunLoop(ctx, cfg.RerunInterval)
+			return nil
+		})
+	}
 	return alg
 }
 
