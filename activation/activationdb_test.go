@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
@@ -23,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
@@ -134,7 +136,10 @@ func getAtxDb(tb testing.TB, id string) (*DB, *mesh.Mesh, database.Database) {
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxStore := database.NewMemDatabase()
 	atxdb := NewDB(atxStore, nil, NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
-	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockState{}, lg.WithName("mesh"))
+	ctrl := gomock.NewController(tb)
+	mockFetch := mocks.NewMockFetcher(ctrl)
+	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
+	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), mockFetch, &MeshValidatorMock{}, &MockTxMemPool{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers, atxStore
 }
 

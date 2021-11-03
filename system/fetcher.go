@@ -6,6 +6,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./fetcher.go
+
 // Fetcher is a general interface that defines a component capable of fetching data from remote peers.
 type Fetcher interface {
 	FetchBlock(context.Context, types.BlockID) error

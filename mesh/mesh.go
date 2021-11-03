@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
@@ -81,6 +82,7 @@ type Mesh struct {
 	AtxDB
 	state
 	Validator
+	fetch  system.Fetcher
 	trtl   tortoise
 	txPool txMemPool
 	config Config
@@ -100,9 +102,10 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, fetcher system.Fetcher, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
 	msh := &Mesh{
 		Log:                 logger,
+		fetch:               fetcher,
 		trtl:                trtl,
 		txPool:              txPool,
 		state:               state,
@@ -130,8 +133,8 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 }
 
 // NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database.
-func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
-	msh := NewMesh(db, atxDb, rewardConfig, trtl, txPool, state, logger)
+func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, fetcher system.Fetcher, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
+	msh := NewMesh(db, atxDb, rewardConfig, fetcher, trtl, txPool, state, logger)
 
 	latest, err := db.general.Get(constLATEST)
 	if err != nil {
@@ -558,11 +561,19 @@ func (msh *Mesh) applyState(l *types.Layer) {
 }
 
 // HandleValidatedLayer receives hare output once it finishes running for a given layer.
-func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
+func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, blockIDs []types.BlockID) {
 	logger := msh.WithContext(ctx).WithFields(validatedLayer)
-	var blocks []*types.Block
 
-	for _, blockID := range layer {
+	// when HandleValidatedLayer is called by hare, we may not have all the blocks in the hare output.
+	// so try harder to fetch the blocks from peers.
+	if len(blockIDs) > 0 && !validatedLayer.GetEpoch().IsGenesis() {
+		if err := msh.fetch.GetBlocks(ctx, blockIDs); err != nil {
+			logger.With().Warning("not all blocks are available locally", validatedLayer, log.Err(err))
+		}
+	}
+
+	var blocks []*types.Block
+	for _, blockID := range blockIDs {
 		block, err := msh.GetBlock(blockID)
 		if err != nil {
 			// stop processing this hare result, wait until tortoise pushes this layer into state
@@ -574,7 +585,7 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		blocks = append(blocks, block)
 	}
 
-	metrics.LayerNumBlocks.WithLabelValues().Observe(float64(len(layer)))
+	metrics.LayerNumBlocks.WithLabelValues().Observe(float64(len(blockIDs)))
 
 	// report that hare "approved" this layer
 	events.ReportLayerUpdate(events.LayerUpdate{

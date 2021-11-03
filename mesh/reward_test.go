@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 var goldenATXID = types.ATXID(types.HexToHash32("77777"))
@@ -65,7 +67,10 @@ func getMeshWithMapState(tb testing.TB, id string, state state) (*Mesh, *AtxDbMo
 	lg := logtest.New(tb)
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
-	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), state, lg), atxDb
+	ctrl := gomock.NewController(tb)
+	mockFetch := mocks.NewMockFetcher(ctrl)
+	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
+	return NewMesh(mshDb, atxDb, ConfigTst(), mockFetch, &MeshValidatorMock{}, newMockTxMemPool(), state, lg), atxDb
 }
 
 func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs int, fee int64) int64 {

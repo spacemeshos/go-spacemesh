@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
+	sysMocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const (
@@ -126,12 +127,15 @@ func feedLayerResult(from, to types.LayerID, mf *mockFetcher, msh *mesh.Mesh) {
 	}
 }
 
-func newMemMesh(lg log.Log) *mesh.Mesh {
+func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 	memdb := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxStore := database.NewMemDatabase()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
 	atxdb := activation.NewDB(atxStore, nil, activation.NewIdentityStore(database.NewMemDatabase()), memdb, layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
-	return mesh.NewMesh(memdb, atxdb, mesh.Config{}, &mockValidator{}, nil, nil, lg.WithName("mesh"))
+	ctrl := gomock.NewController(t)
+	mockFetch := sysMocks.NewMockFetcher(ctrl)
+	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
+	return mesh.NewMesh(memdb, atxdb, mesh.Config{}, mockFetch, &mockValidator{}, nil, nil, lg.WithName("mesh"))
 }
 
 var conf = Configuration{
@@ -157,7 +161,7 @@ func TestStartAndShutdown(t *testing.T) {
 	ticker := newMockLayerTicker()
 	ctx, cancel := context.WithCancel(context.TODO())
 	conf.SyncInterval = time.Millisecond * 5
-	syncer := newSyncer(ctx, t, conf, ticker, newMemMesh(lg), newMockFetcher(), lg)
+	syncer := newSyncer(ctx, t, conf, ticker, newMemMesh(t, lg), newMockFetcher(), lg)
 	syncedCh := make(chan struct{})
 	syncer.RegisterChForSynced(context.TODO(), syncedCh)
 
@@ -180,7 +184,7 @@ func TestSynchronize_OnlyOneSynchronize(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 	ticker.advanceToLayer(types.NewLayerID(10))
 	syncer.Start(context.TODO())
@@ -216,7 +220,7 @@ func TestSynchronize_AllGood(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 	glayer := types.GetEffectiveGenesis()
 	current := glayer.Add(10)
@@ -243,7 +247,7 @@ func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 
 	ctrl := gomock.NewController(t)
@@ -290,7 +294,7 @@ func TestSynchronize_ValidateLayersTooDelayed(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 
 	ctrl := gomock.NewController(t)
@@ -353,7 +357,7 @@ func TestSynchronize_getLayerFromPeersFailed(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 	lyr := types.GetEffectiveGenesis().Add(1)
 	ticker.advanceToLayer(lyr.Add(1))
@@ -382,7 +386,7 @@ func TestSynchronize_getATXsFailedEpochZero(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 2))
 	syncer.Start(context.TODO())
@@ -407,7 +411,7 @@ func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
 	lg := logtest.New(t)
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 2))
 	syncer.Start(context.TODO())
@@ -432,7 +436,7 @@ func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
 	lg := logtest.New(t)
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 	syncer.Start(context.TODO())
 
@@ -482,7 +486,7 @@ func TestSynchronize_StaySyncedUponFailure(t *testing.T) {
 	lg := logtest.New(t)
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 	syncer.Start(context.TODO())
 
@@ -522,7 +526,7 @@ func TestSynchronize_BecomeNotSyncedUponFailureIfNoGossip(t *testing.T) {
 	lg := logtest.New(t)
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 	syncer.Start(context.TODO())
 
@@ -565,7 +569,7 @@ func TestFromNotSyncedToSynced(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 
 	assert.False(t, syncer.ListenToGossip())
@@ -604,7 +608,7 @@ func TestFromGossipSyncToNotSynced(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 
 	assert.False(t, syncer.ListenToGossip())
@@ -665,7 +669,7 @@ func TestFromSyncedToNotSynced(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	mm := newMemMesh(lg)
+	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
 	syncedCh := make(chan struct{})
 	syncer.RegisterChForSynced(context.TODO(), syncedCh)
@@ -750,7 +754,7 @@ func waitOutGossipSync(t *testing.T, current types.LayerID, syncer *Syncer, mlt 
 
 func TestForceSync(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
-	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, newMockLayerTicker(), newMemMesh(lg), newMockFetcher(), lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, newMockLayerTicker(), newMemMesh(t, lg), newMockFetcher(), lg)
 	syncedCh := make(chan struct{})
 	syncer.RegisterChForSynced(context.TODO(), syncedCh)
 	assert.False(t, syncer.ListenToGossip())
@@ -768,7 +772,7 @@ func TestMultipleForceSync(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
-	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, newMemMesh(t, lg), mf, lg)
 	assert.False(t, syncer.ListenToGossip())
 	assert.False(t, syncer.IsSynced(context.TODO()))
 	lyr := types.NewLayerID(1)
@@ -789,7 +793,7 @@ func TestGetATXsCurrentEpoch(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
-	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, newMemMesh(t, lg), mf, lg)
 	syncer.Start(context.TODO())
 
 	require.Equal(t, 3, layersPerEpoch)
@@ -830,7 +834,7 @@ func TestGetATXsOldAndCurrentEpoch(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	mf := newMockFetcher()
 	ticker := newMockLayerTicker()
-	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, newMemMesh(lg), mf, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, newMemMesh(t, lg), mf, lg)
 	syncer.Start(context.TODO())
 
 	require.Equal(t, 3, layersPerEpoch)
