@@ -134,6 +134,11 @@ type mockTxProcessor struct{}
 
 func (m mockTxProcessor) HandleTxSyncData(_ []byte) error { return nil }
 
+type mockBlockFetcher struct{}
+
+func (m *mockBlockFetcher) FetchBlock(context.Context, types.BlockID) error  { return nil }
+func (m *mockBlockFetcher) GetBlocks(context.Context, []types.BlockID) error { return nil }
+
 type allDbs struct {
 	atxdb       *activation.DB
 	atxdbStore  *database.LDBDatabase
@@ -146,10 +151,10 @@ func createMeshWithMock(dbs *allDbs, txpool *mempool.TxMempool, lg log.Log) *mes
 	var msh *mesh.Mesh
 	if dbs.mshdb.PersistentData() {
 		lg.Info("persistent data found")
-		msh = mesh.NewRecoveredMesh(context.TODO(), dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
+		msh = mesh.NewRecoveredMesh(context.TODO(), dbs.mshdb, dbs.atxdb, configTst(), &mockBlockFetcher{}, &meshValidatorMock{}, txpool, &mockState{}, lg)
 	} else {
 		lg.Info("no persistent data found")
-		msh = mesh.NewMesh(dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
+		msh = mesh.NewMesh(dbs.mshdb, dbs.atxdb, configTst(), &mockBlockFetcher{}, &meshValidatorMock{}, txpool, &mockState{}, lg)
 	}
 	return msh
 }
