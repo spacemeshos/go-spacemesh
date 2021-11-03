@@ -3038,6 +3038,55 @@ func TestMultiTortoise(t *testing.T) {
 	})
 }
 
+func TestRerunMissingLayer(t *testing.T) {
+	ctx := context.Background()
+	const size = 30
+
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := Config{
+		Log:             logtest.New(t),
+		Database:        database.NewMemDatabase(),
+		MeshDatabase:    s.State.MeshDB,
+		ATXDB:           s.State.AtxDB,
+		LayerSize:       size,
+		Hdist:           10,
+		Zdist:           5,
+		ConfidenceParam: 5,
+		WindowSize:      20,
+		GlobalThreshold: big.NewRat(6, 10),
+		LocalThreshold:  big.NewRat(2, 10),
+	}
+
+	tortoise := NewVerifyingTortoise(ctx, cfg)
+	layers := make([]types.LayerID, 20)
+	for i := range layers {
+		layers[i] = s.Next()
+	}
+	missing := layers[10]
+	for _, lid := range layers {
+		if lid == missing {
+			continue
+		}
+		tortoise.HandleIncomingLayer(context.TODO(), lid)
+	}
+	require.NoError(t, tortoise.rerun(context.TODO()))
+	oldpbase, newpbase, reverted := tortoise.HandleIncomingLayer(context.TODO(), s.Next())
+	require.True(t, reverted)
+	require.Equal(t, missing.Sub(2), oldpbase)
+	require.Equal(t, layers[len(layers)-1], newpbase)
+	for _, lid := range layers {
+		bids, err := s.State.MeshDB.LayerBlockIds(lid)
+		require.NoError(t, err)
+		for _, bid := range bids {
+			validity, err := s.State.MeshDB.ContextualValidity(bid)
+			require.NoError(t, err)
+			require.True(t, validity)
+		}
+	}
+}
+
 func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	ctx := context.Background()
 	const size = 30
@@ -3061,7 +3110,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	var layers []types.LayerID
-	for i := 0; i < 400; i++ {
+	for i := 0; i < 200; i++ {
 		layers = append(layers, s.Next())
 	}
 
