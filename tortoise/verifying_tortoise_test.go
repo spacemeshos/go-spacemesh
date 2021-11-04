@@ -3039,41 +3039,6 @@ func TestMultiTortoise(t *testing.T) {
 	})
 }
 
-func TestRerunMissingLayer(t *testing.T) {
-	ctx := context.Background()
-	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
-	s.Setup()
-
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
-	tortoise := NewVerifyingTortoise(ctx, cfg)
-	layers := make([]types.LayerID, 20)
-	for i := range layers {
-		layers[i] = s.Next()
-	}
-	missing := layers[10]
-	for _, lid := range layers {
-		if lid == missing {
-			continue
-		}
-		tortoise.HandleIncomingLayer(context.TODO(), lid)
-	}
-	// TODO(dshulyak) implement public interface to enforce rerun
-	require.NoError(t, tortoise.rerun(context.TODO()))
-	oldpbase, newpbase, reverted := tortoise.HandleIncomingLayer(context.TODO(), s.Next())
-	require.True(t, reverted)
-	require.Equal(t, missing.Sub(2), oldpbase)
-	require.Equal(t, layers[len(layers)-1], newpbase)
-	for _, lid := range layers {
-		bids, err := s.State.MeshDB.LayerBlockIds(lid)
-		require.NoError(t, err)
-		for _, bid := range bids {
-			validity, err := s.State.MeshDB.ContextualValidity(bid)
-			require.NoError(t, err)
-			require.True(t, validity)
-		}
-	}
-}
-
 func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	ctx := context.Background()
 	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
