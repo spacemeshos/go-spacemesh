@@ -33,7 +33,7 @@ func (t *ThreadSafeVerifyingTortoise) updateFromRerun(ctx context.Context) (bool
 		)
 		// we need to persist after rerun is completed so that eviction will not miss any layers
 		// that were received concurrently.
-		err = completed.Consensus.Persist()
+		err = updated.Persist()
 		if err != nil {
 			logger.Error("failed to persist state after rerun", log.Err(err))
 		}
