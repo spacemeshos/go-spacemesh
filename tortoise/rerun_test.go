@@ -75,11 +75,13 @@ func TestRerunAndRevert(t *testing.T) {
 }
 
 func TestRerunMissingLayer(t *testing.T) {
+	const size = 10
 	ctx := context.Background()
-	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
+	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
 	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg.LayerSize = size
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 	layers := make([]types.LayerID, 20)
 	for i := range layers {
