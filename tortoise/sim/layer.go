@@ -38,7 +38,8 @@ func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 	}
 	lid := g.genLayer()
 	if cfg.Reorder != 0 {
-		g.reordered[lid.Add(cfg.Reorder)] = lid
+		// Add(1) to account for generated layer at the end
+		g.reordered[lid.Add(cfg.Reorder).Add(1)] = lid
 		return g.genLayer()
 	}
 	return lid

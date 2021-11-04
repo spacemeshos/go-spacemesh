@@ -3074,36 +3074,29 @@ func TestRerunMissingLayer(t *testing.T) {
 	}
 }
 
-func TestReorderLayer(t *testing.T) {
-	const size = 30
-	s := sim.New(sim.WithLayerSize(size))
+func TestOnlyInorderLayersAreVerified(t *testing.T) {
+	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
 	s.Setup()
 
 	ctx := context.Background()
 	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
-	cfg.LayerSize = size
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	var (
-		last     types.LayerID
+		inorder  types.LayerID
 		verified types.LayerID
 	)
 	for _, lid := range sim.GenLayers(s,
-		sim.WithSequence(10),
-		sim.WithSequence(1, sim.WithNextReorder(5)),
-		sim.WithSequence(10),
+		sim.WithSequence(1),
+		sim.WithSequence(1, sim.WithNextReorder(1)),
+		sim.WithSequence(3),
 	) {
-		// if we missed a layer we have to reapply all layers after that.
-		if lid.After(last) {
-			last = lid
-			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
-		} else {
-			for lid := lid; !lid.After(last); lid = lid.Add(1) {
-				_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
-			}
+		if lid == inorder.Add(1) || (inorder == types.LayerID{}) {
+			inorder = lid
 		}
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
 	}
-	require.Equal(t, last.Sub(1), verified)
+	require.Equal(t, inorder.Sub(1), verified)
 }
 
 func BenchmarkTortoiseLayerHandling(b *testing.B) {
