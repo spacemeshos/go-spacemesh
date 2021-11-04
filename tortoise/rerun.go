@@ -24,37 +24,48 @@ func (t *ThreadSafeVerifyingTortoise) updateFromRerun(ctx context.Context) (bool
 		reverted bool
 		observed types.LayerID
 	)
-	if t.update != nil {
-		var (
-			completed = t.update
-			current   = t.trtl
-			updated   = completed.Consensus
-			err       error
-		)
-		if current.Last.After(updated.Last) {
-			start := time.Now()
-			logger.Info("tortoise received more layers while rerun was in progress. running a catchup",
-				log.FieldNamed("last", current.Last),
-				log.FieldNamed("rerun-last", updated.Last))
-
-			err = catchupToCurrent(ctx, current, updated)
-			if err != nil {
-				logger.Error("cathup failed", log.Err(err))
-			} else {
-				logger.Info("catchup finished", log.Duration("duration", time.Since(start)))
-			}
-		}
-		if err == nil {
-			reverted = completed.Tracer.Reverted()
-			if reverted {
-				observed = completed.Tracer.FirstLayer()
-			}
-			updated.log = current.log
-			updated.bdp = current.bdp
-			t.trtl = updated
-		}
-		t.update = nil
+	if t.update == nil {
+		return reverted, observed
 	}
+	defer func() {
+		t.update = nil
+	}()
+	var (
+		completed = t.update
+		current   = t.trtl
+		updated   = completed.Consensus
+		err       error
+	)
+	// we need to persist after rerun is completed so that eviction will not miss any layers
+	// that were received concurrently.
+	err = updated.Persist()
+	if err != nil {
+		logger.Error("failed to persist state after rerun", log.Err(err))
+		return reverted, observed
+	}
+	if current.Last.After(updated.Last) && err == nil {
+		start := time.Now()
+		logger.Info("tortoise received more layers while rerun was in progress. running a catchup",
+			log.FieldNamed("last", current.Last),
+			log.FieldNamed("rerun-last", updated.Last))
+
+		err = catchupToCurrent(ctx, current, updated)
+		if err != nil {
+			logger.Error("cathup failed", log.Err(err))
+		} else {
+			logger.Info("catchup finished", log.Duration("duration", time.Since(start)))
+		}
+	}
+	if err != nil {
+		return reverted, observed
+	}
+	reverted = completed.Tracer.Reverted()
+	if reverted {
+		observed = completed.Tracer.FirstLayer()
+	}
+	updated.log = current.log
+	updated.bdp = current.bdp
+	t.trtl = updated
 	return reverted, observed
 }
 
