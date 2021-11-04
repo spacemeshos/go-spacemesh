@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/syndtr/goleveldb/leveldb"
 
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -16,27 +18,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
-type blockDataProvider interface {
-	LayerContextuallyValidBlocks(context.Context, types.LayerID) (map[types.BlockID]struct{}, error)
-	GetBlock(types.BlockID) (*types.Block, error)
-	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
-	LayerBlocks(types.LayerID) ([]*types.Block, error)
-
-	GetCoinflip(context.Context, types.LayerID) (bool, bool)
-	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)
-	SaveContextualValidity(types.BlockID, types.LayerID, bool) error
-	ContextualValidity(types.BlockID) (bool, error)
-}
-
 type atxDataProvider interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 }
 
-type layerClock interface {
-	LayerToTime(types.LayerID) time.Time
-}
-
 var (
+	// we will delay counting votes in blocks with different beacon values by this many layers.
+	badBeaconVoteDelays = uint32(10)
+
 	errNoBaseBlockFound                 = errors.New("no good base block within exception vector limit")
 	errBaseBlockUnknown                 = errors.New("inconsistent state: base block unknown")
 	errNotSorted                        = errors.New("input blocks are not sorted by layerID")
@@ -63,8 +52,9 @@ type turtle struct {
 	state
 	logger log.Log
 
-	atxdb atxDataProvider
-	bdp   blockDataProvider
+	atxdb   atxDataProvider
+	bdp     blockDataProvider
+	beacons blocks.BeaconGetter
 
 	// note: the rest of these are exported for purposes of serialization only
 
@@ -99,6 +89,7 @@ func newTurtle(
 	db database.Database,
 	bdp blockDataProvider,
 	atxdb atxDataProvider,
+	beacons blocks.BeaconGetter,
 	hdist,
 	zdist,
 	confidenceParam,
@@ -112,6 +103,8 @@ func newTurtle(
 			diffMode:             true,
 			db:                   db,
 			log:                  lg,
+			refBlockBeacons:      map[types.EpochID]map[types.BlockID][]byte{},
+			badBeaconBlocks:      map[types.BlockID]struct{}{},
 			GoodBlocksIndex:      map[types.BlockID]bool{},
 			BlockOpinionsByLayer: map[types.LayerID]map[types.BlockID]Opinion{},
 			BlockLayer:           map[types.BlockID]types.LayerID{},
@@ -125,6 +118,7 @@ func newTurtle(
 		LocalThreshold:  localThreshold,
 		bdp:             bdp,
 		atxdb:           atxdb,
+		beacons:         beacons,
 		AvgLayerSize:    avgLayerSize,
 		MaxExceptions:   int(hdist) * int(avgLayerSize) * 100,
 	}
@@ -137,6 +131,7 @@ func (t *turtle) cloneTurtleParams() *turtle {
 		t.db,
 		t.bdp,
 		t.atxdb,
+		t.beacons,
 		t.Hdist,
 		t.Zdist,
 		t.ConfidenceParam,
@@ -708,14 +703,18 @@ func (t *turtle) determineBlockGoodness(ctx context.Context, block *types.Block)
 		block.LayerIndex,
 		log.FieldNamed("base_block_id", block.BaseBlock))
 	// Go over all blocks, in order. Mark block i "good" if:
-	// (1) the base block is marked as good
+	// (1) it has the right beacon value
+	if !t.blockHasGoodBeacon(block, logger) {
+		return false
+	}
+	// (2) the base block is marked as good
 	inputs := map[types.LayerID][]types.BlockID{}
 	if _, good := t.GoodBlocksIndex[block.BaseBlock]; !good {
 		logger.Debug("base block is not good")
 	} else if baselid, exist := t.BlockLayer[block.BaseBlock]; !exist {
 		logger.With().Error("inconsistent state: base block not found")
 	} else if true &&
-		// (2) all diffs appear after the base block and are consistent with the current local opinion
+		// (3) all diffs appear after the base block and are consistent with the current local opinion
 		t.checkBlockAndGetLocalOpinion(ctx, block.ForDiff, "support", support, baselid, logger, inputs) &&
 		t.checkBlockAndGetLocalOpinion(ctx, block.AgainstDiff, "against", against, baselid, logger, inputs) &&
 		t.checkBlockAndGetLocalOpinion(ctx, block.NeutralDiff, "abstain", abstain, baselid, logger, inputs) {
@@ -724,6 +723,64 @@ func (t *turtle) determineBlockGoodness(ctx context.Context, block *types.Block)
 	}
 	logger.Debug("block is not good")
 	return false
+}
+
+func (t *turtle) blockHasGoodBeacon(block *types.Block, logger log.Log) bool {
+	layerID := block.LayerIndex
+
+	// first check if we have it in the cache
+	if _, bad := t.badBeaconBlocks[block.ID()]; bad {
+		return false
+	}
+
+	epochBeacon, err := t.beacons.GetBeacon(layerID.GetEpoch())
+	if err != nil {
+		logger.Error("failed to get beacon for epoch", layerID.GetEpoch())
+		return false
+	}
+
+	beacon, err := t.getBlockBeacon(block, logger)
+	if err != nil {
+		return false
+	}
+	good := bytes.Equal(beacon, epochBeacon)
+	if !good {
+		logger.With().Warning("block has different beacon",
+			log.String("block_beacon", types.BytesToHash(beacon).ShortString()),
+			log.String("epoch_beacon", types.BytesToHash(epochBeacon).ShortString()))
+		t.badBeaconBlocks[block.ID()] = struct{}{}
+	}
+	return good
+}
+
+func (t *turtle) getBlockBeacon(block *types.Block, logger log.Log) ([]byte, error) {
+	refBlockID := block.ID()
+	if block.RefBlock != nil {
+		refBlockID = *block.RefBlock
+	}
+
+	epoch := block.LayerIndex.GetEpoch()
+	beacons, ok := t.refBlockBeacons[epoch]
+	if ok {
+		if beacon, ok := beacons[refBlockID]; ok {
+			return beacon, nil
+		}
+	} else {
+		t.refBlockBeacons[epoch] = make(map[types.BlockID][]byte)
+	}
+
+	beacon := block.TortoiseBeacon
+	if block.RefBlock != nil {
+		refBlock, err := t.bdp.GetBlock(refBlockID)
+		if err != nil {
+			logger.With().Error("failed to find ref block",
+				log.String("ref_block_id", refBlockID.AsHash32().ShortString()))
+			return nil, fmt.Errorf("get ref block: %w", err)
+		}
+		beacon = refBlock.TortoiseBeacon
+	}
+	t.refBlockBeacons[epoch][refBlockID] = beacon
+	return beacon, nil
 }
 
 // HandleIncomingLayer processes all layer block votes
@@ -1186,8 +1243,9 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 		for _, blockID := range layerBlockIds {
 			logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
 
-			// count all votes for or against this block by all blocks in later layers: don't filter out any
-			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID.Add(1), func(id types.BlockID) bool { return true })
+			// count all votes for or against this block by all blocks in later layers. for blocks with a different
+			// beacon values, we delay their votes by badBeaconVoteDelays layers
+			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID.Add(1), t.voteBlockFilterForHealing(candidateLayerID, logger))
 			if err != nil {
 				logger.Error("error summing votes for candidate block in candidate layer", log.Err(err))
 				return
@@ -1216,4 +1274,21 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 	}
 
 	return
+}
+
+// only blocks with the correct beacon value are considered good blocks and their votes counted by
+// verifying tortoise. for blocks with a different beacon values, we count their votes only in self-healing mode
+// and delay their votes by badBeaconVoteDelays layers.
+func (t *turtle) voteBlockFilterForHealing(candidateLayerID types.LayerID, logger log.Log) func(types.BlockID) bool {
+	return func(bid types.BlockID) bool {
+		if _, bad := t.badBeaconBlocks[bid]; !bad {
+			return true
+		}
+		voteLayer, exist := t.BlockLayer[bid]
+		if !exist {
+			logger.With().Error("inconsistent state: voting block not found", bid)
+			return false
+		}
+		return voteLayer.Uint32() > badBeaconVoteDelays && voteLayer.Sub(badBeaconVoteDelays).After(candidateLayerID)
+	}
 }

@@ -10,17 +10,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoise/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
@@ -1060,19 +1064,17 @@ func TestBaseBlock(t *testing.T) {
 	r.Nil(exceptions)
 }
 
-func defaultClock(tb testing.TB) layerClock {
-	genesisTime := time.Now().Add(time.Second * 10)
-	ld := time.Duration(10) * time.Second
-	return timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(tb))
-}
-
 func defaultTurtle(tb testing.TB) *turtle {
 	mdb := getInMemMesh(tb)
+	ctrl := gomock.NewController(tb)
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
 	return newTurtle(
 		logtest.New(tb),
 		database.NewMemDatabase(),
 		mdb,
 		getAtxDB(),
+		mockBeacons,
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -1103,10 +1105,14 @@ func TestCloneTurtle(t *testing.T) {
 
 func defaultConfig(tb testing.TB, mdb *mesh.DB, atxdb atxDataProvider) Config {
 	tb.Helper()
+	ctrl := gomock.NewController(tb)
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
 	return Config{
 		LayerSize:       defaultTestLayerSize,
 		Database:        database.NewMemDatabase(),
 		MeshDatabase:    mdb,
+		Beacons:         mockBeacons,
 		ATXDB:           atxdb,
 		Hdist:           defaultTestHdist,
 		Zdist:           defaultTestZdist,
@@ -3058,4 +3064,107 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 			tortoise.HandleIncomingLayer(ctx, lid)
 		}
 	}
+}
+
+func randomBytes(t *testing.T, size int) []byte {
+	data, err := crypto.GetRandomBytes(size)
+	require.NoError(t, err)
+	return data
+}
+
+func randomBlock(t *testing.T, lyrID types.LayerID, beacon []byte, refBlockID *types.BlockID) *types.Block {
+	block := types.NewExistingBlock(lyrID, randomBytes(t, 4), nil)
+	block.TortoiseBeacon = beacon
+	block.RefBlock = refBlockID
+	return block
+}
+
+func TestBlockHasGoodBeacon(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	layerID := types.GetEffectiveGenesis().Add(1)
+	epochBeacon := randomBytes(t, 32)
+	block := randomBlock(t, layerID, epochBeacon, nil)
+
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	trtl := defaultTurtle(t)
+	trtl.beacons = mockBeacons
+
+	logger := logtest.New(t)
+	// good beacon
+	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
+	assert.True(t, trtl.blockHasGoodBeacon(block, logger))
+
+	// bad beacon
+	beacon := randomBytes(t, 32)
+	require.NotEqual(t, epochBeacon, beacon)
+	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(beacon, nil).Times(1)
+	assert.False(t, trtl.blockHasGoodBeacon(block, logger))
+
+	// ask a bad beacon again won't cause a lookup since it's cached
+	assert.False(t, trtl.blockHasGoodBeacon(block, logger))
+}
+
+func TestGetBlockBeacon(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	layerID := types.GetEffectiveGenesis().Add(1)
+	beacon := randomBytes(t, 32)
+	refBlock := randomBlock(t, layerID, beacon, nil)
+	refBlockID := refBlock.ID()
+	block := randomBlock(t, layerID, nil, &refBlockID)
+
+	mockBdp := mocks.NewMockblockDataProvider(ctrl)
+	trtl := defaultTurtle(t)
+	trtl.bdp = mockBdp
+
+	logger := logtest.New(t)
+	mockBdp.EXPECT().GetBlock(refBlockID).Return(refBlock, nil).Times(1)
+	got, err := trtl.getBlockBeacon(block, logger)
+	assert.NoError(t, err)
+	assert.Equal(t, beacon, got)
+
+	// get the block beacon again and the data is cached
+	got, err = trtl.getBlockBeacon(block, logger)
+	assert.NoError(t, err)
+	assert.Equal(t, beacon, got)
+}
+
+func TestVoteBlockFilterForHealing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	layerID := types.GetEffectiveGenesis().Add(100)
+	epochBeacon := randomBytes(t, 32)
+	goodBlock := randomBlock(t, layerID, epochBeacon, nil)
+	badBeacon := randomBytes(t, 32)
+	require.NotEqual(t, epochBeacon, badBeacon)
+	badBlock := randomBlock(t, layerID, badBeacon, nil)
+
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	trtl := defaultTurtle(t)
+	trtl.beacons = mockBeacons
+
+	trtl.BlockLayer[goodBlock.ID()] = layerID
+	trtl.BlockLayer[badBlock.ID()] = layerID
+
+	logger := logtest.New(t)
+	// cause the bad beacon block to be cached
+	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(2)
+	assert.True(t, trtl.blockHasGoodBeacon(goodBlock, logger))
+	assert.False(t, trtl.blockHasGoodBeacon(badBlock, logger))
+
+	// we don't count votes in bad beacon block for badBeaconVoteDelays layers
+	i := uint32(1)
+	for ; i <= badBeaconVoteDelays; i++ {
+		filter := trtl.voteBlockFilterForHealing(layerID.Sub(i), logger)
+		assert.True(t, filter(goodBlock.ID()))
+		assert.False(t, filter(badBlock.ID()))
+	}
+	// now we count the bad beacon block's votes
+	filter := trtl.voteBlockFilterForHealing(layerID.Sub(i), logger)
+	assert.True(t, filter(goodBlock.ID()))
+	assert.True(t, filter(badBlock.ID()))
 }

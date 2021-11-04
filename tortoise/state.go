@@ -27,6 +27,12 @@ type state struct {
 	// if true only non-flushed items will be persisted
 	diffMode bool
 
+	// cache ref blocks by epoch
+	refBlockBeacons map[types.EpochID]map[types.BlockID][]byte
+	// cache blocks with bad beacons. this cache is mainly for self-healing where we only have BlockID
+	// in the opinions map to work with.
+	badBeaconBlocks map[types.BlockID]struct{}
+
 	// last layer processed: note that tortoise does not have a concept of "current" layer (and it's not aware of the
 	// current time or latest tick). As far as Tortoise is concerned, Last is the current layer. This is a subjective
 	// view of time, but Tortoise receives layers as soon as Hare finishes processing them or when they are received via
@@ -185,6 +191,7 @@ func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
 			}
 			delete(s.GoodBlocksIndex, blk)
 			delete(s.BlockLayer, blk)
+			delete(s.badBeaconBlocks, blk)
 			for blk2, opinion := range s.BlockOpinionsByLayer[layerToEvict][blk] {
 				if !opinion.Flushed {
 					continue
@@ -202,7 +209,11 @@ func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
 		}
 		batch.Reset()
 	}
+	oldEpoch := s.LastEvicted.GetEpoch()
 	s.LastEvicted = windowStart.Sub(1)
+	if s.LastEvicted.GetEpoch() > oldEpoch {
+		delete(s.refBlockBeacons, oldEpoch)
+	}
 	return nil
 }
 

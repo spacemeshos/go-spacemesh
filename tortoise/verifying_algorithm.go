@@ -9,6 +9,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -20,6 +21,7 @@ type Config struct {
 	LayerSize       uint32
 	Database        database.Database
 	MeshDatabase    blockDataProvider
+	Beacons         blocks.BeaconGetter
 	ATXDB           atxDataProvider
 	Hdist           uint32   // hare lookback distance: the distance over which we use the input vector/hare results
 	Zdist           uint32   // hare result wait distance: the distance over which we're willing to wait for hare results
@@ -59,6 +61,7 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 			cfg.Database,
 			cfg.MeshDatabase,
 			cfg.ATXDB,
+			cfg.Beacons,
 			cfg.Hdist,
 			cfg.Zdist,
 			cfg.ConfidenceParam,
