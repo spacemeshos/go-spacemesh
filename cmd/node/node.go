@@ -292,7 +292,7 @@ type App struct {
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
 
-	host *p2p.Host
+	Host *p2p.Host
 
 	loggers map[string]*zap.AtomicLevel
 	term    chan struct{} // this channel is closed when closing services, goroutines should wait on this channel in order to terminate
@@ -496,7 +496,7 @@ func (app *App) initServices(ctx context.Context,
 	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
 
-	wc := weakcoin.New(app.host,
+	wc := weakcoin.New(app.Host,
 		vrfSigner, vrfVerifier,
 		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
 		weakcoin.WithMaxRound(app.Config.TortoiseBeacon.RoundsNumber),
@@ -505,7 +505,7 @@ func (app *App) initServices(ctx context.Context,
 	tBeacon := tortoisebeacon.New(
 		app.Config.TortoiseBeacon,
 		nodeID,
-		app.host,
+		app.Host,
 		atxDB,
 		sgn,
 		edVerifier,
@@ -574,9 +574,9 @@ func (app *App) initServices(ctx context.Context,
 	}
 	blockListener := blocks.NewBlockHandler(bCfg, fetcherWrapped, msh, eValidator, app.addLogger(BlockListenerLogger, lg))
 
-	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, app.host, app.addLogger(Fetcher, lg))
+	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, app.Host, app.addLogger(Fetcher, lg))
 
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, app.host, remoteFetchService, msh, app.addLogger(LayerFetcher, lg))
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, processor, app.Host, remoteFetchService, msh, app.addLogger(LayerFetcher, lg))
 	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
 	fetcherWrapped.Fetcher = layerFetch
 
@@ -616,7 +616,7 @@ func (app *App) initServices(ctx context.Context,
 	blockProducer := miner.NewBlockBuilder(
 		minerCfg,
 		sgn,
-		app.host,
+		app.Host,
 		clock.Subscribe(),
 		msh,
 		trtl,
@@ -649,7 +649,7 @@ func (app *App) initServices(ctx context.Context,
 		LayersPerEpoch:  layersPerEpoch,
 	}
 	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn,
-		atxDB, app.host, msh, layersPerEpoch, nipostBuilder,
+		atxDB, app.Host, msh, layersPerEpoch, nipostBuilder,
 		postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg),
 		activation.WithContext(ctx),
 	)
@@ -661,17 +661,17 @@ func (app *App) initServices(ctx context.Context,
 		return pubsub.ValidationIgnore
 	}
 
-	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, wc.HandleProposal))
-	app.host.Register(tortoisebeacon.TBProposalProtocol,
+	app.Host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, wc.HandleProposal))
+	app.Host.Register(tortoisebeacon.TBProposalProtocol,
 		pubsub.ChainGossipHandler(syncHandler, tBeacon.HandleSerializedProposalMessage))
-	app.host.Register(tortoisebeacon.TBFirstVotingProtocol,
+	app.Host.Register(tortoisebeacon.TBFirstVotingProtocol,
 		pubsub.ChainGossipHandler(syncHandler, tBeacon.HandleSerializedFirstVotingMessage))
-	app.host.Register(tortoisebeacon.TBFollowingVotingProtocol,
+	app.Host.Register(tortoisebeacon.TBFollowingVotingProtocol,
 		pubsub.ChainGossipHandler(syncHandler, tBeacon.HandleSerializedFollowingVotingMessage))
-	app.host.Register(blocks.NewBlockProtocol, pubsub.ChainGossipHandler(syncHandler, blockListener.HandleBlock))
-	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxDB.HandleGossipAtx))
-	app.host.Register(state.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, processor.HandleTxGossipData))
-	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
+	app.Host.Register(blocks.NewBlockProtocol, pubsub.ChainGossipHandler(syncHandler, blockListener.HandleBlock))
+	app.Host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxDB.HandleGossipAtx))
+	app.Host.Register(state.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, processor.HandleTxGossipData))
+	app.Host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 
 	app.blockProducer = blockProducer
 	app.blockListener = blockListener
@@ -691,8 +691,8 @@ func (app *App) initServices(ctx context.Context,
 	app.svm = svm
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
-			app.host,
-			app.host,
+			app.Host,
+			app.Host,
 			peersync.WithLog(app.addLogger(TimeSyncLogger, lg)),
 			peersync.WithConfig(app.Config.TIME.Peersync),
 		)
@@ -745,8 +745,8 @@ func (app *App) HareFactory(
 
 	ha := hare.New(
 		app.Config.HARE,
-		app.host.ID(),
-		app.host,
+		app.Host.ID(),
+		app.Host,
 		sgn,
 		nodeID,
 		syncer.IsSynced,
@@ -820,7 +820,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewDebugService(app.mesh))
 	}
 	if apiConf.StartGatewayService {
-		registerService(grpcserver.NewGatewayService(app.host))
+		registerService(grpcserver.NewGatewayService(app.Host))
 	}
 	if apiConf.StartGlobalStateService {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.txPool))
@@ -829,7 +829,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewMeshService(app.mesh, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
 	}
 	if apiConf.StartNodeService {
-		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)
+		nodeService := grpcserver.NewNodeService(app.Host, app.mesh, app.clock, app.syncer, app.atxBuilder)
 		registerService(nodeService)
 		app.closers = append(app.closers, nodeService)
 	}
@@ -837,7 +837,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
-		registerService(grpcserver.NewTransactionService(app.host, app.mesh, app.txPool, app.syncer))
+		registerService(grpcserver.NewTransactionService(app.Host, app.mesh, app.txPool, app.syncer))
 	}
 
 	// Now that the services are registered, start the server.
@@ -921,9 +921,9 @@ func (app *App) stopServices() {
 		app.log.Debug("peer timesync stopped")
 	}
 
-	if app.host != nil {
-		if err := app.host.Stop(); err != nil {
-			app.log.With().Warning("p2p host exited with error", log.Err(err))
+	if app.Host != nil {
+		if err := app.Host.Stop(); err != nil {
+			app.log.With().Warning("p2p Host exited with error", log.Err(err))
 		}
 	}
 
@@ -1003,7 +1003,7 @@ func (app *App) getIdentityFile() (string, error) {
 }
 
 func (app *App) startSyncer(ctx context.Context) {
-	_, err := app.host.WaitPeers(ctx, app.Config.P2P.TargetOutbound)
+	_, err := app.Host.WaitPeers(ctx, app.Config.P2P.TargetOutbound)
 	if err != nil {
 		return
 	}
@@ -1095,11 +1095,11 @@ func (app *App) Start() error {
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
-	app.host, err = p2p.New(ctx, p2plog, cfg,
+	app.Host, err = p2p.New(ctx, p2plog, cfg,
 		p2p.WithNodeReporter(events.ReportNodeStatusUpdate),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to initialize p2p host: %w", err)
+		return fmt.Errorf("failed to initialize p2p Host: %w", err)
 	}
 
 	if err = app.initServices(ctx,
@@ -1122,7 +1122,7 @@ func (app *App) Start() error {
 
 	if app.Config.MetricsPush != "" {
 		metrics.StartPushingMetrics(app.Config.MetricsPush, app.Config.MetricsPushPeriod,
-			app.host.ID().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
+			app.Host.ID().String(), strconv.Itoa(int(app.Config.P2P.NetworkID)))
 	}
 
 	if err := app.startServices(ctx); err != nil {

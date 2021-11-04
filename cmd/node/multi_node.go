@@ -189,9 +189,9 @@ func ActivateGrpcServer(smApp *App) {
 	smApp.Config.API.StartTransactionService = true
 	smApp.Config.API.GrpcServerPort = 9094
 	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
-	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.host)
+	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.Host)
 	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.txPool)
-	smApp.txService = grpcserver.NewTransactionService(smApp.host, smApp.mesh, smApp.txPool, smApp.syncer)
+	smApp.txService = grpcserver.NewTransactionService(smApp.Host, smApp.mesh, smApp.txPool, smApp.syncer)
 	smApp.gatewaySvc.RegisterService(smApp.grpcAPIService)
 	smApp.globalstateSvc.RegisterService(smApp.grpcAPIService)
 	smApp.txService.RegisterService(smApp.grpcAPIService)
@@ -228,7 +228,7 @@ func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.Config.POST.MaxNumUnits = smApp.Config.SMESHING.Opts.NumUnits << 5
 	smApp.Config.SMESHING.Opts.NumUnits = smApp.Config.SMESHING.Opts.NumUnits << (i % 5)
 
-	smApp.host = host
+	smApp.Host = host
 	smApp.edSgn = edSgn
 
 	pub := edSgn.PublicKey()
@@ -296,7 +296,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 		edSgn := signing.NewEdSigner()
 		host, err := p2p.Upgrade(mesh.Hosts()[i], p2p.WithLog(logger), p2p.WithConfig(cfg.P2P))
 		if err != nil {
-			logger.With().Error("failed to initialize host", log.Err(err))
+			logger.With().Error("failed to initialize Host", log.Err(err))
 			return
 		}
 		smApp, err := InitSingleInstance(logger, *cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, host, edSgn)

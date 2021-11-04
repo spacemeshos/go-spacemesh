@@ -27,6 +27,7 @@ RUN cd /go-spacemesh/plans/`awk '/^module/ {split($0,a,"/"); print a[5]}' /tmp/g
 
 ## The 'AS runtime' token is used to parse Docker stdout to extract the build image ID to cache.
 FROM ${run_image} AS runtime
+ENV LD_LIBRARY_PATH=/:$LD_LIBRARY_PATH
 
 
 ## TODO: should we just start from another base image that is not busybox? does testground require busybox?
@@ -34,6 +35,8 @@ FROM ${run_image} AS runtime
 #COPY --from=builder /lib/x86_64-linux-gnu/librt.so.1 /lib/librt.so.1
 #COPY --from=builder /lib/x86_64-linux-gnu/libdl-2.28.so /lib/libdl-2.28.so
 #COPY --from=builder /lib/x86_64-linux-gnu/libdl.so.2 /lib/libdl.so.2
+
+
 COPY --from=builder /build/testplan /testplan
 COPY --from=builder /build/libgpu-setup.so /libgpu-setup.so
 

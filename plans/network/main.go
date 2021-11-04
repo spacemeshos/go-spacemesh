@@ -2,25 +2,23 @@ package main
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/poet/server"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-
+	"strings"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	node2 "github.com/spacemeshos/go-spacemesh/p2p/node"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/testground/sdk-go/sync"
 
 	"github.com/spacemeshos/go-spacemesh/config"
-	p2pcfg "github.com/spacemeshos/go-spacemesh/p2p/config"
 	poetconfig "github.com/spacemeshos/poet/config"
 
 	"github.com/spacemeshos/go-spacemesh/cmd/node"
@@ -63,6 +61,14 @@ func MustSetupNetworking(ctx context.Context, netclient *network.Client) {
 	}
 }
 
+func NodeString(key, ip string, port uint16) string {
+	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", ip, port, key)
+}
+
+func  IPFromNodeString(str string) string {
+	return strings.Split(str, "/")[2]
+}
+
 // Start creates a basic spacemesh layout of instances.
 // 	it first creates poet instances shares their addresses with gateways and miners
 // 	gateway nodes function as bootstrap nodes and gateways for poets, their addresses
@@ -82,7 +88,7 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	MustSetupNetworking(ctx, netclient)
 
 	poets_topic := sync.NewTopic("poets", string(""))
-	gateways_topic := sync.NewTopic("gateways", node2.Info{})
+	gateways_topic := sync.NewTopic("gateways", string(""))
 	genesisTimeTopic := sync.NewTopic("genesis_time", "")
 
 	// role-allocation assigns a sequence number to each instance and distributes roles
@@ -111,14 +117,14 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		client.MustPublish(ctx, poets_topic, string(poet_ip.String()+":8080"))
 		env.RecordMessage("Published poet data ", string(poet_ip.String()+":8080"))
 
-		gatewaych := make(chan node2.Info)
+		gatewaych := make(chan string)
 		client.MustSubscribe(ctx, gateways_topic, gatewaych)
 		gatewaylist := make([]string, 0)
 
 		for g := 0; g < gateways; g++ {
 			gw := <-gatewaych
-			env.RecordMessage("Added poet gatweway %v", gw.IP.String()+":9092")
-			gatewaylist = append(gatewaylist, gw.IP.String()+":9092")
+			env.RecordMessage("Added poet gatweway %v", IPFromNodeString(gw)+":9092")
+			gatewaylist = append(gatewaylist, IPFromNodeString(gw)+":9092")
 		}
 
 		var err error
@@ -183,24 +189,17 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 			}
 		}(nd)
 
-		for nd.P2P == nil {
-			time.Sleep(1 * time.Second)
-		}
-		inch, _ := nd.P2P.SubscribePeerEvents()
-		info := nd.P2P.(*p2p.Switch).LocalNode()
-		env.RecordMessage("gateway P2P is ready, p2pid :", info.PublicKey().String())
+		time.Sleep(5 * time.Second)
 
 		port := uint16(7513)
-		bs_info := node2.NewNode(info.PublicKey(), ip, port, port)
+		id := nd.Host.ID().String()
+		ipstr := ip.String()
+		bsInfo := NodeString(id, ipstr, port)
 
-		client.MustPublish(ctx, gateways_topic, bs_info)
+		env.RecordMessage("gateway P2P is ready, %v", bsInfo)
+		client.MustPublish(ctx, gateways_topic, bsInfo)
+		<-ctx.Done()
 
-		select {
-		case <-inch:
-			env.RecordSuccess()
-		case <-ctx.Done():
-			env.RecordFailure(errors.New("no peers within time"))
-		}
 	}, func(obj interface{}) {
 		env.RecordMessage("done gateways")
 	})
@@ -209,8 +208,6 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		env.RecordMessage("hello im miner")
 		minercfg := createMinerConfig()
 		minercfg.GenesisTime = genesisTime
-		pcfg := &minercfg.P2P
-		pcfg.SwarmConfig.Bootstrap = true
 
 		env.RecordMessage("miner waiting for poet message")
 		poetch := make(chan string)
@@ -220,17 +217,23 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 		minercfg.PoETServer = poetaddr
 
 		env.RecordMessage("miner waiting for bootstrap message")
-		gatewaych := make(chan node2.Info)
-		client.MustSubscribe(ctx, gateways_topic, gatewaych)
+		gatewaych := make(chan string)
+		s := client.MustSubscribe(ctx, gateways_topic, gatewaych)
+
 		gatewaylist := make([]string, 0)
 
 		for g := 0; g < gateways; g++ {
-			gw := <-gatewaych
-			env.RecordMessage("miner adding gateway %v", gw.String())
-			gatewaylist = append(gatewaylist, gw.String())
+			select {
+			case gw := <-gatewaych:
+				env.RecordMessage("miner adding gateway %v", gw)
+				gatewaylist = append(gatewaylist, gw)
+				case <-s.Done():
+					break
+			}
 		}
 
-		pcfg.SwarmConfig.BootstrapNodes = gatewaylist
+		pcfg := &minercfg.P2P
+		pcfg.Bootnodes = gatewaylist
 
 		minercfg.P2P = *pcfg
 		env.RecordMessage("starting miner node")
@@ -250,18 +253,9 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 			}
 
 		}(nd)
+		<-ctx.Done()
 
-		for nd.P2P == nil {
-			time.Sleep(1 * time.Second)
-		}
 
-		inch, _ := nd.P2P.SubscribePeerEvents()
-		select {
-		case <-inch:
-			env.RecordSuccess()
-		case <-ctx.Done():
-			env.RecordFailure(errors.New("no peers within time"))
-		}
 	}, func(obj interface{}) {
 		env.RecordMessage("done miner %v")
 	})
@@ -314,10 +308,10 @@ func createMinerConfig() *config.Config {
 	cfg.SMESHING.CoinbaseAccount = "0x123"
 	cfg.GoldenATXID = "0x5678"
 
-	ppcfg := p2pcfg.DefaultConfig()
-	mppcfg := &ppcfg
-	mppcfg.SwarmConfig.RandomConnections = 1
-	cfg.P2P = *mppcfg
+	ppcfg := p2p.DefaultConfig()
+	p_ppcfg := &ppcfg
+	p_ppcfg.TargetOutbound = 1
+	cfg.P2P = *p_ppcfg
 
 	cfg.LOGGING.AppLoggerLevel = "info"
 	cfg.LOGGING.P2PLoggerLevel = "info"
@@ -325,8 +319,6 @@ func createMinerConfig() *config.Config {
 	cfg.LOGGING.StateDbLoggerLevel = "info"
 	cfg.LOGGING.StateLoggerLevel = "info"
 	cfg.LOGGING.AtxDbStoreLoggerLevel = "info"
-	cfg.LOGGING.TBeaconDbStoreLoggerLevel = "info"
-	cfg.LOGGING.TBeaconDbLoggerLevel = "info"
 	cfg.LOGGING.TBeaconLoggerLevel = "info"
 	cfg.LOGGING.WeakCoinLoggerLevel = "info"
 	cfg.LOGGING.PoetDbStoreLoggerLevel = "info"

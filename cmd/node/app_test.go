@@ -724,7 +724,7 @@ func TestShutdown(t *testing.T) {
 	wrapped, err := p2p.Upgrade(mesh.Hosts()[0], p2p.WithContext(ctx))
 	r.NoError(err)
 	smApp := New(WithLog(logtest.New(t)))
-	smApp.host = wrapped
+	smApp.Host = wrapped
 	genesisTime := time.Now().Add(time.Second * 10)
 
 	smApp.Config.POST.BitsPerLabel = 8
