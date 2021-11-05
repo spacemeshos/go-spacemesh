@@ -311,6 +311,11 @@ func (tp *TransactionProcessor) ValidateAndAddTxToPool(tx *types.Transaction) er
 	if err != nil {
 		return err
 	}
-	tp.pool.Put(tx.ID(), tx)
+	tp.AddTxToPool(tx)
 	return nil
+}
+
+// AddTxToPool exports mempool functionality for adding tx to the pool.
+func (tp *TransactionProcessor) AddTxToPool(tx *types.Transaction) {
+	tp.pool.Put(tx.ID(), tx)
 }

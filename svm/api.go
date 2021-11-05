@@ -164,14 +164,14 @@ func (svm *SVM) HandleTxSyncData(data []byte) error {
 		svm.state.With().Error("SVM couldn't parse incoming transaction", log.Err(err))
 		return fmt.Errorf("parse: %w", err)
 	}
-	if err = svm.handleTransaction(tx.Transaction, false); err != nil {
-		return fmt.Errorf("handle transaction: %w", err)
+	if err = tx.CalcAndSetOrigin(); err != nil {
+		return fmt.Errorf("calculate and set origin: %w", err)
 	}
+	svm.state.AddTxToPool(tx.Transaction)
 	return nil
 }
 
 // handleTransaction handles data received on transaction gossip channel.
-// It allows for transactions from both valid and invalid blocks to be added to the mempool.
 func (svm *SVM) handleTransaction(tx *types.Transaction, validateOrigin bool) error {
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		svm.state.With().Error("SVM failed to calculate transaction origin", tx.ID(), log.Err(err))
