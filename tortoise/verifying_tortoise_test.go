@@ -17,7 +17,6 @@ import (
 	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -163,6 +162,7 @@ const (
 var (
 	defaultTestHdist           = config.DefaultConfig().Hdist
 	defaultTestZdist           = config.DefaultConfig().Zdist
+	defaultVoteDelays          = config.DefaultConfig().LayersPerEpoch
 	defaultTestGlobalThreshold = big.NewRat(6, 10)
 	defaultTestLocalThreshold  = big.NewRat(2, 10)
 	defaultTestRerunInterval   = time.Hour
@@ -1082,6 +1082,7 @@ func defaultTurtle(tb testing.TB) *turtle {
 		defaultTestLayerSize,
 		defaultTestGlobalThreshold,
 		defaultTestLocalThreshold,
+		defaultVoteDelays,
 	)
 }
 
@@ -1097,6 +1098,7 @@ func TestCloneTurtle(t *testing.T) {
 	r.Equal(trtl.ConfidenceParam, trtl2.ConfidenceParam)
 	r.Equal(trtl.WindowSize, trtl2.WindowSize)
 	r.Equal(trtl.AvgLayerSize, trtl2.AvgLayerSize)
+	r.Equal(trtl.badBeaconVoteDelayLayers, trtl2.badBeaconVoteDelayLayers)
 	r.Equal(trtl.GlobalThreshold, trtl2.GlobalThreshold)
 	r.Equal(trtl.LocalThreshold, trtl2.LocalThreshold)
 	r.Equal(trtl.RerunInterval, trtl2.RerunInterval)
@@ -1109,19 +1111,20 @@ func defaultConfig(tb testing.TB, mdb *mesh.DB, atxdb atxDataProvider) Config {
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
 	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
 	return Config{
-		LayerSize:       defaultTestLayerSize,
-		Database:        database.NewMemDatabase(),
-		MeshDatabase:    mdb,
-		Beacons:         mockBeacons,
-		ATXDB:           atxdb,
-		Hdist:           defaultTestHdist,
-		Zdist:           defaultTestZdist,
-		ConfidenceParam: defaultTestConfidenceParam,
-		WindowSize:      defaultTestWindowSize,
-		GlobalThreshold: defaultTestGlobalThreshold,
-		LocalThreshold:  defaultTestLocalThreshold,
-		RerunInterval:   defaultTestRerunInterval,
-		Log:             logtest.New(tb),
+		LayerSize:                defaultTestLayerSize,
+		Database:                 database.NewMemDatabase(),
+		MeshDatabase:             mdb,
+		Beacons:                  mockBeacons,
+		ATXDB:                    atxdb,
+		Hdist:                    defaultTestHdist,
+		Zdist:                    defaultTestZdist,
+		ConfidenceParam:          defaultTestConfidenceParam,
+		WindowSize:               defaultTestWindowSize,
+		BadBeaconVoteDelayLayers: defaultVoteDelays,
+		GlobalThreshold:          defaultTestGlobalThreshold,
+		LocalThreshold:           defaultTestLocalThreshold,
+		RerunInterval:            defaultTestRerunInterval,
+		Log:                      logtest.New(tb),
 	}
 }
 
@@ -3066,14 +3069,17 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	}
 }
 
-func randomBytes(t *testing.T, size int) []byte {
-	data, err := crypto.GetRandomBytes(size)
-	require.NoError(t, err)
+func randomBytes(tb testing.TB, size int) []byte {
+	tb.Helper()
+	data := make([]byte, size)
+	_, err := rand.Read(data)
+	require.NoError(tb, err)
 	return data
 }
 
-func randomBlock(t *testing.T, lyrID types.LayerID, beacon []byte, refBlockID *types.BlockID) *types.Block {
-	block := types.NewExistingBlock(lyrID, randomBytes(t, 4), nil)
+func randomBlock(tb testing.TB, lyrID types.LayerID, beacon []byte, refBlockID *types.BlockID) *types.Block {
+	tb.Helper()
+	block := types.NewExistingBlock(lyrID, randomBytes(tb, 4), nil)
 	block.TortoiseBeacon = beacon
 	block.RefBlock = refBlockID
 	return block
@@ -3158,7 +3164,7 @@ func TestVoteBlockFilterForHealing(t *testing.T) {
 
 	// we don't count votes in bad beacon block for badBeaconVoteDelays layers
 	i := uint32(1)
-	for ; i <= badBeaconVoteDelays; i++ {
+	for ; i <= defaultVoteDelays; i++ {
 		filter := trtl.voteBlockFilterForHealing(layerID.Sub(i), logger)
 		assert.True(t, filter(goodBlock.ID()))
 		assert.False(t, filter(badBlock.ID()))

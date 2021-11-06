@@ -173,9 +173,11 @@ func (s *state) Recover() error {
 
 func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
 	var (
-		logger = s.log.WithContext(ctx)
-		batch  = s.db.NewBatch()
-		b      bytes.Buffer
+		logger       = s.log.WithContext(ctx)
+		batch        = s.db.NewBatch()
+		b            bytes.Buffer
+		epochToEvict = make(map[types.EpochID]struct{})
+		oldestEpoch  = windowStart.GetEpoch()
 	)
 	for layerToEvict := s.LastEvicted.Add(1); layerToEvict.Before(windowStart); layerToEvict = layerToEvict.Add(1) {
 		logger.With().Debug("evicting layer",
@@ -204,16 +206,18 @@ func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
 			}
 		}
 		delete(s.BlockOpinionsByLayer, layerToEvict)
+		if layerToEvict.GetEpoch() < oldestEpoch {
+			epochToEvict[layerToEvict.GetEpoch()] = struct{}{}
+		}
 		if err := batch.Write(); err != nil {
 			return fmt.Errorf("write batch for layer %s to db: %w", layerToEvict, err)
 		}
 		batch.Reset()
 	}
-	oldEpoch := s.LastEvicted.GetEpoch()
-	s.LastEvicted = windowStart.Sub(1)
-	if s.LastEvicted.GetEpoch() > oldEpoch {
-		delete(s.refBlockBeacons, oldEpoch)
+	for epoch := range epochToEvict {
+		delete(s.refBlockBeacons, epoch)
 	}
+	s.LastEvicted = windowStart.Sub(1)
 	return nil
 }
 

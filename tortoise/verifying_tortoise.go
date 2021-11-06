@@ -23,9 +23,6 @@ type atxDataProvider interface {
 }
 
 var (
-	// we will delay counting votes in blocks with different beacon values by this many layers.
-	badBeaconVoteDelays = uint32(10)
-
 	errNoBaseBlockFound                 = errors.New("no good base block within exception vector limit")
 	errBaseBlockUnknown                 = errors.New("inconsistent state: base block unknown")
 	errNotSorted                        = errors.New("input blocks are not sorted by layerID")
@@ -79,6 +76,10 @@ type turtle struct {
 	AvgLayerSize  uint32
 	MaxExceptions int
 
+	// we will delay counting votes in blocks with different beacon values by this many layers in self-healing.
+	// for regular verifying tortoise runs, we don't count these votes at all.
+	badBeaconVoteDelayLayers uint32
+
 	// how often we want to rerun from genesis
 	RerunInterval time.Duration
 }
@@ -97,6 +98,7 @@ func newTurtle(
 	avgLayerSize uint32,
 	globalThreshold,
 	localThreshold *big.Rat,
+	badBeaconVoteDelayLayers uint32,
 ) *turtle {
 	return &turtle{
 		state: state{
@@ -109,18 +111,19 @@ func newTurtle(
 			BlockOpinionsByLayer: map[types.LayerID]map[types.BlockID]Opinion{},
 			BlockLayer:           map[types.BlockID]types.LayerID{},
 		},
-		logger:          lg.Named("turtle"),
-		Hdist:           hdist,
-		Zdist:           zdist,
-		ConfidenceParam: confidenceParam,
-		WindowSize:      windowSize,
-		GlobalThreshold: globalThreshold,
-		LocalThreshold:  localThreshold,
-		bdp:             bdp,
-		atxdb:           atxdb,
-		beacons:         beacons,
-		AvgLayerSize:    avgLayerSize,
-		MaxExceptions:   int(hdist) * int(avgLayerSize) * 100,
+		logger:                   lg.Named("turtle"),
+		Hdist:                    hdist,
+		Zdist:                    zdist,
+		ConfidenceParam:          confidenceParam,
+		WindowSize:               windowSize,
+		GlobalThreshold:          globalThreshold,
+		LocalThreshold:           localThreshold,
+		badBeaconVoteDelayLayers: badBeaconVoteDelayLayers,
+		bdp:                      bdp,
+		atxdb:                    atxdb,
+		beacons:                  beacons,
+		AvgLayerSize:             avgLayerSize,
+		MaxExceptions:            int(hdist) * int(avgLayerSize) * 100,
 	}
 }
 
@@ -139,6 +142,7 @@ func (t *turtle) cloneTurtleParams() *turtle {
 		t.AvgLayerSize,
 		t.GlobalThreshold,
 		t.LocalThreshold,
+		t.badBeaconVoteDelayLayers,
 	)
 }
 
@@ -1289,6 +1293,6 @@ func (t *turtle) voteBlockFilterForHealing(candidateLayerID types.LayerID, logge
 			logger.With().Error("inconsistent state: voting block not found", bid)
 			return false
 		}
-		return voteLayer.Uint32() > badBeaconVoteDelays && voteLayer.Sub(badBeaconVoteDelays).After(candidateLayerID)
+		return voteLayer.Uint32() > t.badBeaconVoteDelayLayers && voteLayer.Sub(t.badBeaconVoteDelayLayers).After(candidateLayerID)
 	}
 }

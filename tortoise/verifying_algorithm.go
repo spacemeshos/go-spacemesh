@@ -18,19 +18,20 @@ import (
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
 type Config struct {
-	LayerSize       uint32
-	Database        database.Database
-	MeshDatabase    blockDataProvider
-	Beacons         blocks.BeaconGetter
-	ATXDB           atxDataProvider
-	Hdist           uint32   // hare lookback distance: the distance over which we use the input vector/hare results
-	Zdist           uint32   // hare result wait distance: the distance over which we're willing to wait for hare results
-	ConfidenceParam uint32   // confidence wait distance: how long we wait for global consensus to be established
-	GlobalThreshold *big.Rat // threshold required to finalize blocks and layers
-	LocalThreshold  *big.Rat // threshold that determines whether a node votes based on local or global opinion
-	WindowSize      uint32   // tortoise sliding window: how many layers we store data for
-	Log             log.Log
-	RerunInterval   time.Duration // how often to rerun from genesis
+	LayerSize                uint32
+	Database                 database.Database
+	MeshDatabase             blockDataProvider
+	Beacons                  blocks.BeaconGetter
+	ATXDB                    atxDataProvider
+	Hdist                    uint32   // hare lookback distance: the distance over which we use the input vector/hare results
+	Zdist                    uint32   // hare result wait distance: the distance over which we're willing to wait for hare results
+	ConfidenceParam          uint32   // confidence wait distance: how long we wait for global consensus to be established
+	GlobalThreshold          *big.Rat // threshold required to finalize blocks and layers
+	LocalThreshold           *big.Rat // threshold that determines whether a node votes based on local or global opinion
+	WindowSize               uint32   // tortoise sliding window: how many layers we store data for
+	Log                      log.Log
+	RerunInterval            time.Duration // how often to rerun from genesis
+	BadBeaconVoteDelayLayers uint32        // number of layers to delay votes for blocks with bad beacon values during self-healing
 }
 
 // ThreadSafeVerifyingTortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
@@ -69,6 +70,7 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 			cfg.LayerSize,
 			cfg.GlobalThreshold,
 			cfg.LocalThreshold,
+			cfg.BadBeaconVoteDelayLayers,
 		),
 		logger: cfg.Log,
 	}
