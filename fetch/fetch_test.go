@@ -32,8 +32,8 @@ type mockNet struct {
 	AsyncChannel    chan struct{}
 }
 
-func (m mockNet) GetPeers() []p2p.Peer {
-	return []p2p.Peer{p2p.Peer("test")}
+func (m *mockNet) GetPeers() []p2p.Peer {
+	return []p2p.Peer{"test"}
 }
 
 func (m *mockNet) PeerCount() uint64 {
