@@ -514,9 +514,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	c, e := b.Register(context.TODO(), instanceID2)
 	r.Nil(e)
 
-	msg.mu.Lock()
 	m.InnerMsg.InstanceID = instanceID2
-	msg.mu.Unlock()
 
 	msg = newMockGossipMsg(m).Message
 	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
@@ -524,9 +522,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	r.Equal(msg, recM.Message)
 
 	// unknown->valid early
-	msg.mu.Lock()
 	m.InnerMsg.InstanceID = instanceID3
-	msg.mu.Unlock()
 	msg = newMockGossipMsg(m).Message
 	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
 	c, e = b.Register(context.TODO(), instanceID3)
@@ -554,9 +550,7 @@ func TestBroker_eventLoop2(t *testing.T) {
 	r.NotEqual(true, v)
 
 	// valid but not early
-	msg.mu.Lock()
 	m.InnerMsg.InstanceID = instanceID6
-	msg.mu.Unlock()
 
 	b.HandleMessage(context.TODO(), "", mustEncode(t, m))
 	b.mu.RLock()
