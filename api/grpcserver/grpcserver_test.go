@@ -1796,8 +1796,12 @@ func TestTransactionService(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	publisher := mocks.NewMockPublisher(ctrl)
+	var receivedMu sync.Mutex
 	received := []byte{}
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+
 		received = msg
 		return nil
 	})
@@ -2026,7 +2030,9 @@ func TestTransactionService(t *testing.T) {
 				// Wait until the data is available
 				wgBroadcast.Wait()
 
+				receivedMu.Lock()
 				data := received
+				receivedMu.Unlock()
 				// Deserialize
 				tx, err := types.BytesToTransaction(data)
 				require.NotNil(t, tx, "expected transaction")
