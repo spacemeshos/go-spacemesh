@@ -188,7 +188,7 @@ func TestConsensusFixedOracle(t *testing.T) {
 	test.Create(totalNodes, creationFunc)
 	require.NoError(t, mesh.ConnectAllButSelf())
 	test.Start()
-	test.WaitForTimedTermination(t, 40*time.Second)
+	test.WaitForTimedTermination(t, 30*time.Second)
 }
 
 func TestSingleValueForHonestSet(t *testing.T) {
@@ -198,8 +198,9 @@ func TestSingleValueForHonestSet(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000}
-	totalNodes := 50
+	// Larger values may trigger race detector failures because of 8128 goroutines limit.
+	cfg := config.Config{N: 16, F: 8, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000}
+	totalNodes := 20
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -222,7 +223,7 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	test.Create(totalNodes, creationFunc)
 	require.NoError(t, mesh.ConnectAllButSelf())
 	test.Start()
-	test.WaitForTimedTermination(t, 40*time.Second)
+	test.WaitForTimedTermination(t, 30*time.Second)
 }
 
 func TestAllDifferentSet(t *testing.T) {
@@ -265,7 +266,7 @@ func TestAllDifferentSet(t *testing.T) {
 	test.Create(cfg.N, creationFunc)
 	require.NoError(t, mesh.ConnectAllButSelf())
 	test.Start()
-	test.WaitForTimedTermination(t, 40*time.Second)
+	test.WaitForTimedTermination(t, 30*time.Second)
 }
 
 func TestSndDelayedDishonest(t *testing.T) {
