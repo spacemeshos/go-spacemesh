@@ -3,8 +3,6 @@ package types
 import (
 	"fmt"
 	"strings"
-	"sync/atomic"
-	"unsafe"
 
 	"github.com/spacemeshos/ed25519"
 
@@ -55,23 +53,27 @@ var EmptyTransactionID = TransactionID{}
 type Transaction struct {
 	InnerTransaction
 	Signature [64]byte
-	// TODO(nkryuchkov): Consider getting rid of unsafe.
-	origin unsafe.Pointer // *Address
-	id     unsafe.Pointer // *TransactionID
+	origin    *Address
+	id        *TransactionID
 }
 
 // Origin returns the transaction's origin address: the public key extracted from the transaction signature.
 func (t *Transaction) Origin() Address {
-	if atomic.LoadPointer(&t.origin) == nil {
+	if t.origin == nil {
 		panic("origin not set")
 	}
 
-	return *(*Address)(atomic.LoadPointer(&t.origin))
+	return *t.origin
 }
 
 // SetOrigin sets the cache of the transaction's origin address.
 func (t *Transaction) SetOrigin(origin Address) {
-	atomic.StorePointer(&t.origin, unsafe.Pointer(&origin))
+	if t.origin != nil && *t.origin == origin {
+		// Avoid data races caused by writing if origin is the same.
+		return
+	}
+
+	t.origin = &origin
 }
 
 // CalcAndSetOrigin extracts the public key from the transaction's signature and caches it as the transaction's origin
@@ -97,7 +99,7 @@ func (t *Transaction) CalcAndSetOrigin() error {
 // ID returns the transaction's ID. If it's not cached, it's calculated, cached and returned.
 func (t *Transaction) ID() TransactionID {
 	if t.id != nil {
-		return *(*TransactionID)(atomic.LoadPointer(&t.id))
+		return *t.id
 	}
 
 	txBytes, err := InterfaceToBytes(t)
@@ -106,7 +108,7 @@ func (t *Transaction) ID() TransactionID {
 	}
 
 	id := TransactionID(CalcHash32(txBytes))
-	atomic.StorePointer(&t.id, unsafe.Pointer(&id))
+	t.id = &id
 
 	return id
 }

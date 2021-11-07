@@ -619,7 +619,9 @@ func TestBroker_eventLoop(t *testing.T) {
 	r.Equal(msg.Bytes(), recM.Bytes())
 
 	// unknown->valid early
+	msg.mu.Lock()
 	m.InnerMsg.InstanceID = instanceID3
+	msg.mu.Unlock()
 	msg = newMockGossipMsg(m)
 	b.inbox <- msg
 	c, e = b.Register(context.TODO(), instanceID3)
