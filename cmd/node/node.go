@@ -291,6 +291,7 @@ type App struct {
 	svm            *svm.SVM
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
+	tortoise       *tortoise.ThreadSafeVerifyingTortoise
 
 	host *p2p.Host
 
@@ -528,7 +529,6 @@ func (app *App) initServices(ctx context.Context,
 		Database:        trtlStateDB,
 		MeshDatabase:    mdb,
 		ATXDB:           atxDB,
-		Clock:           clock,
 		Hdist:           app.Config.Hdist,
 		Zdist:           app.Config.Zdist,
 		ConfidenceParam: app.Config.ConfidenceParam,
@@ -543,10 +543,10 @@ func (app *App) initServices(ctx context.Context,
 	svm := svm.New(processor, app.addLogger(SVMLogger, lg))
 
 	if mdb.PersistentData() {
-		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, trtl, app.txPool, svm, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, fetcherWrapped, trtl, app.txPool, svm, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
-		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, svm, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, fetcherWrapped, trtl, app.txPool, svm, app.addLogger(MeshLogger, lg))
 		if err := svm.SetupGenesis(app.Config.Genesis); err != nil {
 			return fmt.Errorf("setup genesis: %w", err)
 		}
@@ -689,6 +689,7 @@ func (app *App) initServices(ctx context.Context,
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
 	app.svm = svm
+	app.tortoise = trtl
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
 			app.host,
@@ -919,6 +920,10 @@ func (app *App) stopServices() {
 	if app.ptimesync != nil {
 		app.ptimesync.Stop()
 		app.log.Debug("peer timesync stopped")
+	}
+	if app.tortoise != nil {
+		app.log.Info("stopping tortoise. if tortoise is in rerun it may take a while")
+		app.tortoise.Stop()
 	}
 
 	if app.host != nil {

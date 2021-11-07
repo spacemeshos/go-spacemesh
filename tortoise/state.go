@@ -2,6 +2,7 @@ package tortoise
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -44,28 +45,22 @@ type state struct {
 func (s *state) Persist() error {
 	batch := s.db.NewBatch()
 
-	if err := batch.Put([]byte(namespaceLast), s.Last.Bytes()); err != nil {
-		return fmt.Errorf("put 'last' namespace into batch: %w", err)
-	}
-	if err := batch.Put([]byte(namespaceEvict), s.LastEvicted.Bytes()); err != nil {
-		return fmt.Errorf("put 'evict' namespace into batch: %w", err)
-	}
-	if err := batch.Put([]byte(namespaceVerified), s.Verified.Bytes()); err != nil {
-		return fmt.Errorf("put 'verified' namespace into batch: %w", err)
-	}
 	var b bytes.Buffer
 	for id, flushed := range s.GoodBlocksIndex {
 		if flushed && s.diffMode {
 			continue
 		}
 		s.GoodBlocksIndex[id] = true
-		b.WriteString(namespaceGood)
-		b.Write(id.Bytes())
+		encodeGoodBlockKey(&b, id)
 		if err := batch.Put(b.Bytes(), nil); err != nil {
 			return fmt.Errorf("put 'good' namespace into batch: %w", err)
 		}
 		b.Reset()
 	}
+	if err := batch.Write(); err != nil {
+		return fmt.Errorf("write batch: %w", err)
+	}
+	batch.Reset()
 
 	for layer1, blocks := range s.BlockOpinionsByLayer {
 		for block1, blockOpinions := range blocks {
@@ -76,11 +71,7 @@ func (s *state) Persist() error {
 					}
 					opinion.Flushed = true
 					layerOpinions[block2] = opinion
-					b.WriteString(namespaceOpinions)
-					b.Write(encodeLayerKey(layer1))
-					b.Write(block1.Bytes())
-					b.Write(encodeLayerKey(layer2))
-					b.Write(block2.Bytes())
+					encodeOpinionKey(&b, layer1, layer2, block1, block2)
 
 					buf, err := codec.Encode(opinion)
 					if err != nil {
@@ -93,12 +84,24 @@ func (s *state) Persist() error {
 				}
 			}
 		}
+		if err := batch.Write(); err != nil {
+			return fmt.Errorf("write batch: %w", err)
+		}
+		batch.Reset()
 	}
 
+	if err := batch.Put([]byte(namespaceLast), s.Last.Bytes()); err != nil {
+		return fmt.Errorf("put 'last' namespace into batch: %w", err)
+	}
+	if err := batch.Put([]byte(namespaceEvict), s.LastEvicted.Bytes()); err != nil {
+		return fmt.Errorf("put 'evict' namespace into batch: %w", err)
+	}
+	if err := batch.Put([]byte(namespaceVerified), s.Verified.Bytes()); err != nil {
+		return fmt.Errorf("put 'verified' namespace into batch: %w", err)
+	}
 	if err := batch.Write(); err != nil {
 		return fmt.Errorf("write batch: %w", err)
 	}
-
 	return nil
 }
 
@@ -166,6 +169,7 @@ func (s *state) Recover() error {
 		}
 		s.BlockOpinionsByLayer[layer1][block1][layer2][block2] = opinion
 	}
+
 	if err := it.Error(); err != nil {
 		return fmt.Errorf("opinion iterator: %w", it.Error())
 	}
@@ -173,38 +177,51 @@ func (s *state) Recover() error {
 	return nil
 }
 
-func (s *state) Evict() error {
+func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
 	var (
-		batch = s.db.NewBatch()
-		it    = s.db.Find([]byte(namespaceOpinions))
-		b     bytes.Buffer
+		logger = s.log.WithContext(ctx)
+		batch  = s.db.NewBatch()
+		b      bytes.Buffer
 	)
-	defer it.Release()
-	for it.Next() {
-		// first byte is namespace
-		layer := decodeLayerKey(it.Key()[1:])
-		if layer.After(s.LastEvicted) {
-			break
+	for layerToEvict := s.LastEvicted.Add(1); layerToEvict.Before(windowStart); layerToEvict = layerToEvict.Add(1) {
+		logger.With().Debug("evicting layer",
+			layerToEvict,
+			log.Int("blocks", len(s.BlockOpinionsByLayer[layerToEvict])))
+		for blk := range s.BlockOpinionsByLayer[layerToEvict] {
+			if s.GoodBlocksIndex[blk] {
+				encodeGoodBlockKey(&b, blk)
+				if err := batch.Delete(b.Bytes()); err != nil {
+					return fmt.Errorf("delete good block in batch %x: %w", b.Bytes(), err)
+				}
+				b.Reset()
+			}
+			delete(s.GoodBlocksIndex, blk)
+			delete(s.BlockLayer, blk)
+			for lid := range s.BlockOpinionsByLayer[layerToEvict][blk] {
+				for blk2, opinion := range s.BlockOpinionsByLayer[layerToEvict][blk][lid] {
+					if !opinion.Flushed {
+						continue
+					}
+					encodeOpinionKey(&b, layerToEvict, lid, blk, blk2)
+					if err := batch.Delete(b.Bytes()); err != nil {
+						return fmt.Errorf("delete opinion in batch %x: %w", b.Bytes(), err)
+					}
+					b.Reset()
+				}
+			}
 		}
-		b.WriteString(namespaceGood)
-		offset := 1 + types.LayerIDSize
-		b.Write(it.Key()[offset : offset+types.BlockIDSize])
-		if err := batch.Delete(b.Bytes()); err != nil {
-			return fmt.Errorf("delete from batch: %w", err)
+		delete(s.BlockOpinionsByLayer, layerToEvict)
+		for lyr := range s.BlockOpinionsByLayer {
+			for blk := range s.BlockOpinionsByLayer[lyr] {
+				delete(s.BlockOpinionsByLayer[lyr][blk], layerToEvict)
+			}
 		}
-		b.Reset()
-		if err := batch.Delete(it.Key()); err != nil {
-			return fmt.Errorf("delete from batch: %w", err)
+		if err := batch.Write(); err != nil {
+			return fmt.Errorf("write batch for layer %s to db: %w", layerToEvict, err)
 		}
+		batch.Reset()
 	}
-	if it.Error() != nil {
-		return fmt.Errorf("iterator: %w", it.Error())
-	}
-
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("write batch: %w", err)
-	}
-
+	s.LastEvicted = windowStart.Sub(1)
 	return nil
 }
 
@@ -220,4 +237,17 @@ func encodeLayerKey(layer types.LayerID) []byte {
 
 func decodeLayerKey(key []byte) types.LayerID {
 	return types.NewLayerID(util.BytesToUint32BE(key[:types.LayerIDSize]))
+}
+
+func encodeGoodBlockKey(b *bytes.Buffer, bid types.BlockID) {
+	b.WriteString(namespaceGood)
+	b.Write(bid.Bytes())
+}
+
+func encodeOpinionKey(b *bytes.Buffer, layer1, layer2 types.LayerID, bid1, bid2 types.BlockID) {
+	b.WriteString(namespaceOpinions)
+	b.Write(encodeLayerKey(layer1))
+	b.Write(bid1.Bytes())
+	b.Write(encodeLayerKey(layer2))
+	b.Write(bid2.Bytes())
 }

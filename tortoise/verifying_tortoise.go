@@ -30,7 +30,6 @@ type blockDataProvider interface {
 
 type atxDataProvider interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
-	GetAtxTimestamp(types.ATXID) (time.Time, error)
 }
 
 type layerClock interface {
@@ -66,7 +65,6 @@ type turtle struct {
 
 	atxdb atxDataProvider
 	bdp   blockDataProvider
-	clock layerClock
 
 	// note: the rest of these are exported for purposes of serialization only
 
@@ -101,7 +99,6 @@ func newTurtle(
 	db database.Database,
 	bdp blockDataProvider,
 	atxdb atxDataProvider,
-	clock layerClock,
 	hdist,
 	zdist,
 	confidenceParam,
@@ -109,7 +106,6 @@ func newTurtle(
 	avgLayerSize uint32,
 	globalThreshold,
 	localThreshold *big.Rat,
-	rerun time.Duration,
 ) *turtle {
 	return &turtle{
 		state: state{
@@ -129,10 +125,8 @@ func newTurtle(
 		LocalThreshold:  localThreshold,
 		bdp:             bdp,
 		atxdb:           atxdb,
-		clock:           clock,
 		AvgLayerSize:    avgLayerSize,
 		MaxExceptions:   int(hdist) * int(avgLayerSize) * 100,
-		RerunInterval:   rerun,
 	}
 }
 
@@ -143,7 +137,6 @@ func (t *turtle) cloneTurtleParams() *turtle {
 		t.db,
 		t.bdp,
 		t.atxdb,
-		t.clock,
 		t.Hdist,
 		t.Zdist,
 		t.ConfidenceParam,
@@ -151,7 +144,6 @@ func (t *turtle) cloneTurtleParams() *turtle {
 		t.AvgLayerSize,
 		t.GlobalThreshold,
 		t.LocalThreshold,
-		t.RerunInterval,
 	)
 }
 
@@ -208,24 +200,7 @@ func (t *turtle) evict(ctx context.Context) {
 		log.FieldNamed("window_start", windowStart))
 
 	// evict from last evicted to the beginning of our window
-	for layerToEvict := t.LastEvicted.Add(1); layerToEvict.Before(windowStart); layerToEvict = layerToEvict.Add(1) {
-		logger.With().Debug("evicting layer", layerToEvict)
-		for blk := range t.BlockOpinionsByLayer[layerToEvict] {
-			delete(t.GoodBlocksIndex, blk)
-			delete(t.BlockLayer, blk)
-		}
-		// delete opinions _of_ blocks in the layer to evict
-		delete(t.BlockOpinionsByLayer, layerToEvict)
-
-		// delete opinions _about_ blocks in the layer to evict
-		for lyr := range t.BlockOpinionsByLayer {
-			for blk := range t.BlockOpinionsByLayer[lyr] {
-				delete(t.BlockOpinionsByLayer[lyr][blk], layerToEvict)
-			}
-		}
-	}
-	t.LastEvicted = windowStart.Sub(1)
-	if err := t.state.Evict(); err != nil {
+	if err := t.state.Evict(ctx, windowStart); err != nil {
 		logger.With().Panic("can't evict persisted state", log.Err(err))
 	}
 }
@@ -535,35 +510,12 @@ func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block) (uint
 		return 0, fmt.Errorf("get ATX header: %w", err)
 	}
 
-	atxTimestamp, err := t.atxdb.GetAtxTimestamp(votingBlock.ATXID)
-	if err != nil {
-		return 0, fmt.Errorf("get ATX timestamp: %w", err)
-	}
-
-	atxEpoch := atxHeader.PubLayerID.GetEpoch()
-	nextEpochStart := t.clock.LayerToTime((atxEpoch + 1).FirstLayer())
-
-	// check if the ATX was received on time
-	// TODO: add an exception for sync, when we expect everything to be received late
-	//   see https://github.com/spacemeshos/go-spacemesh/issues/2540
-	// if atxTimestamp.Before(nextEpochStart) {
 	blockWeight := atxHeader.GetWeight()
 	logger.With().Debug("voting block atx was timely",
-		log.FieldNamed("next_epoch", atxEpoch+1),
-		log.Time("next_epoch_start", nextEpochStart),
-		log.Time("atx_timestamp", atxTimestamp),
 		votingBlock.ID(),
 		votingBlock.ATXID,
 		log.Uint64("block_weight", blockWeight))
 	return blockWeight, nil
-	//}
-	//logger.With().Warning("voting block atx was untimely, zeroing block vote weight",
-	//	log.FieldNamed("next_epoch", atxEpoch+1),
-	//	log.Time("next_epoch_start", nextEpochStart),
-	//	log.Time("atx_timestamp", atxTimestamp),
-	//	votingBlock.ID(),
-	//	votingBlock.ATXID)
-	//return 0, nil
 }
 
 func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID, blockVotedOn types.BlockID) (uint64, error) {
