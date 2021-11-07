@@ -51,17 +51,15 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 		st.BlockLayer = map[types.BlockID]types.LayerID{}
 
 		for i := 0; i < 200; i++ {
-			layer1Gen, ok := quick.Value(reflect.TypeOf(uint32(0)), rng)
-			require.True(tb, ok)
-			layer2Gen, ok := quick.Value(reflect.TypeOf(uint32(0)), rng)
+			layerGen, ok := quick.Value(reflect.TypeOf(uint32(0)), rng)
 			require.True(tb, ok)
 			block1Gen, ok := quick.Value(reflect.TypeOf(types.BlockID{}), rng)
 			require.True(tb, ok)
 			block2Gen, ok := quick.Value(reflect.TypeOf(types.BlockID{}), rng)
 			require.True(tb, ok)
 
-			layer1Val := layer1Gen.Interface().(uint32)
-			layer1 := types.NewLayerID(layer1Val % verified)
+			layerVal := layerGen.Interface().(uint32)
+			layer1 := types.NewLayerID(layerVal % verified)
 			if _, exist := st.BlockOpinionsByLayer[layer1]; !exist {
 				st.BlockOpinionsByLayer[layer1] = map[types.BlockID]Opinion{}
 			}
@@ -70,7 +68,8 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 				st.BlockOpinionsByLayer[layer1][block1] = Opinion{}
 				st.BlockLayer[block1] = layer1
 			}
-			layer2 := layer2Gen.Interface().(types.LayerID)
+			layerVal = layerGen.Interface().(uint32)
+			layer2 := types.NewLayerID(layerVal % verified)
 			if _, exist := st.BlockOpinionsByLayer[layer1][block1][layer2]; !exist {
 				st.BlockOpinionsByLayer[layer1][block1][layer2] = map[types.BlockID]vec{}
 			}
