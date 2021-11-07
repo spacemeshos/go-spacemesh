@@ -6,11 +6,14 @@ import (
 	"fmt"
 	"time"
 
+	peer "github.com/libp2p/go-libp2p-core/peer"
+	"github.com/prometheus/client_golang/prometheus"
+
 	"github.com/spacemeshos/go-spacemesh/blocks/metrics"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	commonMetrics "github.com/spacemeshos/go-spacemesh/metrics"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // NewBlockProtocol is the protocol indicator for gossip blocks.
@@ -40,6 +43,7 @@ type blockValidator interface {
 // BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip.
 type BlockHandler struct {
 	log.Log
+	fetcher     system.Fetcher
 	traverse    forBlockInView
 	depth       uint32
 	mesh        mesh
@@ -54,9 +58,10 @@ type Config struct {
 }
 
 // NewBlockHandler creates new BlockHandler.
-func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHandler {
+func NewBlockHandler(cfg Config, fetcher system.Fetcher, m mesh, v blockValidator, lg log.Log) *BlockHandler {
 	return &BlockHandler{
 		Log:         lg,
+		fetcher:     fetcher,
 		traverse:    m.ForBlockInView,
 		depth:       cfg.Depth,
 		mesh:        m,
@@ -66,24 +71,16 @@ func NewBlockHandler(cfg Config, m mesh, v blockValidator, lg log.Log) *BlockHan
 }
 
 // HandleBlock handles blocks from gossip.
-func (bh *BlockHandler) HandleBlock(ctx context.Context, data service.GossipMessage, fetcher service.Fetcher) {
-	// restore the request ID and add context
-	if data.RequestID() != "" {
-		ctx = log.WithRequestID(ctx, data.RequestID())
-	} else {
-		ctx = log.WithNewRequestID(ctx)
-		bh.WithContext(ctx).Warning("got block from gossip with no requestId, generated new id")
-	}
-
-	if err := bh.HandleBlockData(ctx, data.Bytes(), fetcher); err != nil {
+func (bh *BlockHandler) HandleBlock(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
+	if err := bh.HandleBlockData(ctx, msg); err != nil {
 		bh.WithContext(ctx).With().Error("error handling block data", log.Err(err))
-		return
+		return pubsub.ValidationIgnore
 	}
-	data.ReportValidation(ctx, NewBlockProtocol)
+	return pubsub.ValidationAccept
 }
 
 // HandleBlockData handles blocks from gossip and sync.
-func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetcher service.Fetcher) error {
+func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte) error {
 	logger := bh.WithContext(ctx)
 	logger.Info("handling data for new block")
 	start := time.Now()
@@ -105,7 +102,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 	}
 	logger.With().Info("got new block", blk.Fields()...)
 
-	if err := bh.blockSyntacticValidation(ctx, &blk, fetcher); err != nil {
+	if err := bh.blockSyntacticValidation(ctx, &blk); err != nil {
 		logger.With().Error("failed to validate block", log.Err(err))
 		return fmt.Errorf("failed to validate block %v", err)
 	}
@@ -131,29 +128,29 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte, fetche
 
 func saveMetrics(blk types.Block) {
 	type metric struct {
-		hist  commonMetrics.Histogram
+		hist  prometheus.Observer
 		value float64
 	}
 
 	metricList := []metric{
 		{
-			hist:  metrics.LayerBlockSize,
+			hist:  metrics.LayerBlockSize.WithLabelValues(),
 			value: float64(len(blk.Bytes())),
 		},
 		{
-			hist:  metrics.NumTxsInBlock,
+			hist:  metrics.NumTxsInBlock.WithLabelValues(),
 			value: float64(len(blk.TxIDs)),
 		},
 		{
-			hist:  metrics.ForDiffLength,
+			hist:  metrics.BaseBlockExceptionLength.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeFor}),
 			value: float64(len(blk.ForDiff)),
 		},
 		{
-			hist:  metrics.NeutralDiffLength,
+			hist:  metrics.BaseBlockExceptionLength.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeNeutral}),
 			value: float64(len(blk.NeutralDiff)),
 		},
 		{
-			hist:  metrics.AgainstDiffLength,
+			hist:  metrics.BaseBlockExceptionLength.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeAgainst}),
 			value: float64(len(blk.AgainstDiff)),
 		},
 	}
@@ -171,7 +168,7 @@ func blockDependencies(blk *types.Block) []types.BlockID {
 	return combined
 }
 
-func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block, fetcher service.Fetcher) error {
+func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block) error {
 	// Add layer to context, for logging purposes, since otherwise the context will be lost here below
 	if reqID, ok := log.ExtractRequestID(ctx); ok {
 		ctx = log.WithRequestID(ctx, reqID, block.Layer())
@@ -181,14 +178,14 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 
 	// if there is a reference block - first validate it
 	if block.RefBlock != nil {
-		err := fetcher.FetchBlock(ctx, *block.RefBlock)
+		err := bh.fetcher.FetchBlock(ctx, *block.RefBlock)
 		if err != nil {
 			return fmt.Errorf("failed to fetch ref block %v e: %v", *block.RefBlock, err)
 		}
 	}
 
 	// try fetch referenced ATXs
-	err := bh.fetchAllReferencedAtxs(ctx, block, fetcher)
+	err := bh.fetchAllReferencedAtxs(ctx, block)
 	if err != nil {
 		return fmt.Errorf("fetch all referenced ATXs: %w", err)
 	}
@@ -204,14 +201,14 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 
 	// get the TXs
 	if len(block.TxIDs) > 0 {
-		err := fetcher.GetTxs(ctx, block.TxIDs)
+		err := bh.fetcher.GetTxs(ctx, block.TxIDs)
 		if err != nil {
 			return fmt.Errorf("failed to fetch txs %v e: %v", block.ID(), err)
 		}
 	}
 
 	// get and validate blocks views using the fetch
-	err = fetcher.GetBlocks(ctx, blockDependencies(block))
+	err = bh.fetcher.GetBlocks(ctx, blockDependencies(block))
 	if err != nil {
 		return fmt.Errorf("failed to fetch view %v e: %v", block.ID(), err)
 	}
@@ -220,7 +217,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	return nil
 }
 
-func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block, fetcher service.Fetcher) error {
+func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block) error {
 	bh.WithContext(ctx).With().Debug("block handler fetching all atxs referenced by block", blk.ID())
 
 	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
@@ -238,7 +235,7 @@ func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.B
 		}
 	}
 	if len(atxs) > 0 {
-		if err := fetcher.GetAtxs(ctx, atxs); err != nil {
+		if err := bh.fetcher.GetAtxs(ctx, atxs); err != nil {
 			return fmt.Errorf("get ATXs: %w", err)
 		}
 

@@ -1,10 +1,10 @@
 package activation
 
 import (
-	"github.com/hashicorp/golang-lru"
-	"github.com/prometheus/common/log"
+	lru "github.com/hashicorp/golang-lru"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 // AtxCache holds an lru cache of ActivationTxHeader structs of recent atx used to calculate active set size
@@ -18,7 +18,7 @@ type AtxCache struct {
 func NewAtxCache(size int) AtxCache {
 	cache, err := lru.New(size)
 	if err != nil {
-		log.Fatal("could not initialize cache ", err)
+		log.Panic("could not initialize cache ", err)
 	}
 	return AtxCache{Cache: cache}
 }

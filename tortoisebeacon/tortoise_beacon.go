@@ -10,15 +10,17 @@ import (
 	"time"
 
 	"github.com/ALTree/bigfloat"
+	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
@@ -49,7 +51,6 @@ type coin interface {
 	FinishRound(context.Context)
 	Get(context.Context, types.EpochID, types.RoundID) bool
 	FinishEpoch(context.Context, types.EpochID)
-	HandleSerializedMessage(context.Context, service.GossipMessage, service.Fetcher)
 }
 
 type eligibilityChecker interface {
@@ -80,7 +81,7 @@ type SyncState interface {
 func New(
 	conf Config,
 	nodeID types.NodeID,
-	net broadcaster,
+	publisher pubsub.Publisher,
 	atxDB activationDB,
 	edSigner signing.Signer,
 	edVerifier signing.VerifyExtractor,
@@ -91,12 +92,12 @@ func New(
 	clock layerClock,
 	logger log.Log,
 ) *TortoiseBeacon {
-	return &TortoiseBeacon{
+	tb := &TortoiseBeacon{
 		logger:                  logger,
 		config:                  conf,
 		nodeID:                  nodeID,
 		theta:                   new(big.Float).SetRat(conf.Theta),
-		net:                     net,
+		publisher:               publisher,
 		atxDB:                   atxDB,
 		edSigner:                edSigner,
 		edVerifier:              edVerifier,
@@ -113,6 +114,8 @@ func New(
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 		votesMargin:             map[string]*big.Int{},
 	}
+	tb.metricsCollector = metrics.NewBeaconMetricsCollector(tb.gatherMetricsData, logger.WithName("metrics"))
+	return tb
 }
 
 // TortoiseBeacon represents Tortoise Beacon.
@@ -127,7 +130,7 @@ type TortoiseBeacon struct {
 	config      Config
 	nodeID      types.NodeID
 	sync        SyncState
-	net         broadcaster
+	publisher   pubsub.Publisher
 	atxDB       activationDB
 	edSigner    signing.Signer
 	edVerifier  signing.VerifyExtractor
@@ -141,6 +144,7 @@ type TortoiseBeacon struct {
 	db          database.Database
 
 	mu              sync.RWMutex
+	lastTickedEpoch types.EpochID
 	epochInProgress types.EpochID
 	epochWeight     uint64
 
@@ -163,6 +167,10 @@ type TortoiseBeacon struct {
 	proposalPhaseFinishedTime time.Time
 	proposalChans             map[types.EpochID]chan *proposalMessageWithReceiptData
 	proposalChecker           eligibilityChecker
+
+	// metrics
+	metricsCollector *metrics.BeaconMetricsCollector
+	metricsRegistry  *prometheus.Registry
 }
 
 // SetSyncState updates sync state provider. Must be executed only once.
@@ -171,6 +179,13 @@ func (tb *TortoiseBeacon) SetSyncState(sync SyncState) {
 		tb.logger.Panic("sync state provider can be updated only once")
 	}
 	tb.sync = sync
+}
+
+// for testing.
+func (tb *TortoiseBeacon) setMetricsRegistry(registry *prometheus.Registry) {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+	tb.metricsRegistry = registry
 }
 
 // Start starts listening for layers and outputs.
@@ -189,6 +204,7 @@ func (tb *TortoiseBeacon) Start(ctx context.Context) error {
 
 	tb.initGenesisBeacons()
 	tb.layerTicker = tb.clock.Subscribe()
+	tb.metricsCollector.Start(nil)
 
 	tb.eg.Go(func() error {
 		tb.listenLayers(ctx)
@@ -205,6 +221,7 @@ func (tb *TortoiseBeacon) Close() {
 	}
 	tb.logger.Info("closing %v", protoName)
 	tb.cancel()
+	tb.metricsCollector.Stop()
 	tb.clock.Unsubscribe(tb.layerTicker)
 	tb.logger.Info("waiting for tortoise beacon goroutines to finish")
 	if err := tb.eg.Wait(); err != nil {
@@ -233,6 +250,8 @@ func (tb *TortoiseBeacon) ReportBeaconFromBlock(epoch types.EpochID, blockID typ
 }
 
 func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types.BlockID, beacon []byte, weight uint64) {
+	beaconStr := types.BytesToHash(beacon).ShortString()
+
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
@@ -249,7 +268,7 @@ func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types
 		tb.logger.With().Debug("added beacon from block",
 			epochID,
 			blockID,
-			log.String("beacon", types.BytesToHash(beacon).ShortString()),
+			log.String("beacon", beaconStr),
 			log.Uint64("weight", weight))
 		return
 	}
@@ -265,7 +284,7 @@ func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types
 	tb.logger.With().Debug("added beacon from block",
 		epochID,
 		blockID,
-		log.String("beacon", types.BytesToHash(beacon).ShortString()),
+		log.String("beacon", beaconStr),
 		log.Uint64("weight", weight))
 }
 
@@ -459,12 +478,25 @@ func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
 	}
 }
 
+func (tb *TortoiseBeacon) setTickedEpoch(epoch types.EpochID) {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+	tb.lastTickedEpoch = epoch
+}
+
+func (tb *TortoiseBeacon) setEpochInProgress(epoch types.EpochID) {
+	tb.mu.Lock()
+	defer tb.mu.Unlock()
+	tb.epochInProgress = epoch
+}
+
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new CPs.
 func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) {
 	epoch := layer.GetEpoch()
 	logger := tb.logger.WithContext(ctx).WithFields(layer, epoch)
 
+	tb.setTickedEpoch(epoch)
 	if !layer.FirstInEpoch() {
 		logger.Debug("not first layer in epoch, skipping")
 		return
@@ -474,15 +506,6 @@ func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) 
 		return
 	}
 	logger.Info("first layer in epoch, proceeding")
-
-	tb.mu.Lock()
-	if tb.epochInProgress >= epoch {
-		tb.mu.Unlock()
-		logger.Panic("epoch ticked twice")
-	}
-	tb.epochInProgress = epoch
-	tb.mu.Unlock()
-
 	tb.handleEpoch(ctx, epoch)
 }
 
@@ -518,6 +541,7 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 		return
 	}
 
+	tb.setEpochInProgress(epoch)
 	tb.setBeginProtocol(ctx)
 	defer tb.setEndProtocol(ctx)
 
@@ -655,7 +679,6 @@ func (tb *TortoiseBeacon) getProposalChannel(ctx context.Context, epoch types.Ep
 			select {
 			case msg := <-ch:
 				logger.With().Warning("proposal channel for next epoch is full, dropping oldest msg",
-					log.String("sender", msg.gossip.Sender().String()),
 					log.String("message", msg.message.String()))
 			default:
 			}
@@ -955,15 +978,69 @@ func buildProposal(epoch types.EpochID, logger log.Log) []byte {
 	return b
 }
 
-func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data interface{}) error {
+func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, protocol string, data interface{}) error {
 	serialized, err := types.InterfaceToBytes(data)
 	if err != nil {
 		tb.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
 	}
 
-	if err := tb.net.Broadcast(ctx, channel, serialized); err != nil {
-		return fmt.Errorf("broadcast: %w", err)
+	// NOTE(dshulyak) moved to goroutine because self-broadcast is applied synchronously
+	tb.eg.Go(func() error {
+		if err := tb.publisher.Publish(ctx, protocol, serialized); err != nil {
+			tb.logger.With().Error("failed to broadcast",
+				log.String("protocol", protocol),
+				log.Err(err),
+			)
+		}
+		return nil
+	})
+	return nil
+}
+
+func (tb *TortoiseBeacon) getOwnWeight(epoch types.EpochID) uint64 {
+	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(tb.nodeID, epoch)
+	if err != nil {
+		tb.logger.With().Error("failed to look up own ATX for epoch", epoch, log.Err(err))
+		return 0
+	}
+	hdr, err := tb.atxDB.GetAtxHeader(atxID)
+	if err != nil {
+		tb.logger.With().Error("failed to look up own weight for epoch", epoch, log.Err(err))
+		return 0
+	}
+	return hdr.GetWeight()
+}
+
+func (tb *TortoiseBeacon) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.BeaconStats) {
+	tb.mu.RLock()
+	defer tb.mu.RUnlock()
+
+	epoch := tb.lastTickedEpoch
+	var observed []*metrics.BeaconStats
+	if beacons, ok := tb.beaconsFromBlocks[epoch]; ok {
+		for beacon, stats := range beacons {
+			stat := &metrics.BeaconStats{
+				Epoch:  epoch,
+				Beacon: types.BytesToHash([]byte(beacon)).ShortString(),
+				Count:  uint64(len(stats.blocks)),
+				Weight: stats.weight,
+			}
+			observed = append(observed, stat)
+		}
+	}
+	var calculated *metrics.BeaconStats
+	ownWeight := uint64(0)
+	if !epoch.IsGenesis() {
+		ownWeight = tb.getOwnWeight(epoch - 1)
+	}
+	if beacon, ok := tb.beacons[epoch]; ok {
+		calculated = &metrics.BeaconStats{
+			Epoch:  epoch,
+			Beacon: beacon.ShortString(),
+			Count:  1,
+			Weight: ownWeight,
+		}
 	}
 
-	return nil
+	return observed, calculated
 }

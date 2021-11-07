@@ -21,9 +21,9 @@ def test_reboot_bootstrap(init_session):
     # test params
     sleep_time = 5
     session_id = init_session
-    bootstrap_group_id = 'bootstrap_key'
+    bootstrap_group_id = 'identity'
     ss_file_path = get_spec_file_path("bootstrap-w-conf-ss.yml")
-    key_regex = r"local node identity.*\"key\"\s*:\s*\"(?P<{bootstrap_group_id}>\w+)".format(bootstrap_group_id=bootstrap_group_id)
+    key_regex = r"local node identity.*\"identity\"\s*:\s*\"(?P<{bootstrap_group_id}>\w+)".format(bootstrap_group_id=bootstrap_group_id)
     # using the same logic as setup_bootstrap fixture but with an additional
     # file_path argument to load a none default yaml spec file
     bootstrap_deployment_info = DeploymentInfo(dep_id=session_id)
@@ -48,7 +48,7 @@ def test_reboot_bootstrap(init_session):
     pod_name = pods[0].spec.hostname
     new_key = pod.search_phrase_in_pod_log(pod_name, session_id, BOOTSTRAP_LABEL, key_regex, group=bootstrap_group_id)
     print(f"new key is: {new_key}")
-    original_bs_key = bootstrap_deployment_info.pods[0]["key"]
+    original_bs_key = bootstrap_deployment_info.pods[0]["identity"]
     print(f"old key is: {original_bs_key}")
 
     ass_msg = f"keys did not match\noriginal key: {original_bs_key}\nnew key: {new_key}\n"

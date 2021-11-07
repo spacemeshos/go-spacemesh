@@ -136,8 +136,8 @@ func New(
 	}
 }
 
-// IsEpochBeaconReady returns true if the beacon value is known for the specified epoch.
-func (o *Oracle) IsEpochBeaconReady(ctx context.Context, epoch types.EpochID) bool {
+// GetEpochBeacon returns the beacon for the specified epoch.
+func (o *Oracle) GetEpochBeacon(ctx context.Context, epoch types.EpochID) bool {
 	_, err := o.beacon.Value(ctx, epoch)
 	return err == nil
 }
@@ -223,7 +223,7 @@ func calcVrfFrac(vrfSig []byte) fixed.Fixed {
 }
 
 func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
-	id types.NodeID, vrfSig []byte) (n int, p fixed.Fixed, vrfFrac fixed.Fixed, done bool, err error) {
+	id types.NodeID, vrfSig []byte) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
 		id,

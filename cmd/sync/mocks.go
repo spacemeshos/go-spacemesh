@@ -2,21 +2,18 @@ package main
 
 import (
 	"context"
-	"math/big"
 	"time"
 
 	"github.com/golang/protobuf/ptypes/duration"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
+	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -58,18 +55,19 @@ func (m *meshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.
 
 type mockState struct{}
 
-func (s mockState) ValidateAndAddTxToPool(_ *types.Transaction) error                { panic("implement me") }
-func (s mockState) LoadState(types.LayerID) error                                    { return nil }
-func (s mockState) GetStateRoot() types.Hash32                                       { return [32]byte{} }
-func (mockState) ValidateNonceAndBalance(*types.Transaction) error                   { panic("implement me") }
-func (mockState) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error)            { panic("implement me") }
-func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID                 { panic("implement me") }
-func (mockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) { return 0, nil }
-func (mockState) ApplyRewards(types.LayerID, []types.Address, *big.Int)              {}
-func (mockState) GetBalance(types.Address) uint64                                    { panic("implement me") }
-func (mockState) GetNonce(types.Address) uint64                                      { panic("implement me") }
-func (mockState) AddressExists(types.Address) bool                                   { return true }
-func (mockState) GetAllAccounts() (*types.MultipleAccountsState, error)              { panic("implement me") }
+func (s mockState) ValidateAndAddTxToPool(_ *types.Transaction) error     { panic("implement me") }
+func (s mockState) LoadState(types.LayerID) error                         { return nil }
+func (s mockState) GetStateRoot() types.Hash32                            { return [32]byte{} }
+func (mockState) ValidateNonceAndBalance(*types.Transaction) error        { panic("implement me") }
+func (mockState) GetLayerStateRoot(_ types.LayerID) (types.Hash32, error) { panic("implement me") }
+func (mockState) GetLayerApplied(types.TransactionID) *types.LayerID      { panic("implement me") }
+func (s *mockState) ApplyLayer(l types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+	return make([]*types.Transaction, 0), nil
+}
+func (mockState) GetBalance(types.Address) uint64                       { panic("implement me") }
+func (mockState) GetNonce(types.Address) uint64                         { panic("implement me") }
+func (mockState) AddressExists(types.Address) bool                      { return true }
+func (mockState) GetAllAccounts() (*types.MultipleAccountsState, error) { panic("implement me") }
 
 type mockIStore struct{}
 
@@ -128,13 +126,18 @@ func (m *mockClock) Unsubscribe(timer timesync.LayerTimer) {
 
 func configTst() mesh.Config {
 	return mesh.Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: 5000,
 	}
 }
 
 type mockTxProcessor struct{}
 
 func (m mockTxProcessor) HandleTxSyncData(_ []byte) error { return nil }
+
+type mockBlockFetcher struct{}
+
+func (m *mockBlockFetcher) FetchBlock(context.Context, types.BlockID) error  { return nil }
+func (m *mockBlockFetcher) GetBlocks(context.Context, []types.BlockID) error { return nil }
 
 type allDbs struct {
 	atxdb       *activation.DB
@@ -148,30 +151,16 @@ func createMeshWithMock(dbs *allDbs, txpool *mempool.TxMempool, lg log.Log) *mes
 	var msh *mesh.Mesh
 	if dbs.mshdb.PersistentData() {
 		lg.Info("persistent data found")
-		msh = mesh.NewRecoveredMesh(context.TODO(), dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
+		msh = mesh.NewRecoveredMesh(context.TODO(), dbs.mshdb, dbs.atxdb, configTst(), &mockBlockFetcher{}, &meshValidatorMock{}, txpool, &mockState{}, lg)
 	} else {
 		lg.Info("no persistent data found")
-		msh = mesh.NewMesh(dbs.mshdb, dbs.atxdb, configTst(), &meshValidatorMock{}, txpool, &mockState{}, lg)
+		msh = mesh.NewMesh(dbs.mshdb, dbs.atxdb, configTst(), &mockBlockFetcher{}, &meshValidatorMock{}, txpool, &mockState{}, lg)
 	}
 	return msh
-}
-
-func createFetcherWithMock(dbs *allDbs, msh *mesh.Mesh, swarm service.Service, lg log.Log) *layerfetcher.Logic {
-	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, msh, blockEligibilityValidatorMock{}, lg)
-
-	fCfg := fetch.DefaultConfig()
-	fetcher := fetch.NewFetch(context.TODO(), fCfg, swarm, lg)
-
-	lCfg := layerfetcher.Config{RequestTimeout: 20}
-	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, dbs.atxdb, dbs.poetDb, dbs.atxdb, mockTxProcessor{}, swarm, fetcher, msh, lg)
-	layerFetch.AddDBs(dbs.mshdb.Blocks(), dbs.atxdbStore, dbs.mshdb.Transactions(), dbs.poetStorage)
-	return layerFetch
 }
 
 func createSyncer(conf syncer.Configuration, msh *mesh.Mesh, layerFetch *layerfetcher.Logic, expectedLayers types.LayerID, lg log.Log) *syncer.Syncer {
 	clock := mockClock{Layer: expectedLayers.Add(1)}
 	lg.Info("current layer %v", clock.GetCurrentLayer())
-
-	layerFetch.Start()
-	return syncer.NewSyncer(context.TODO(), conf, &clock, msh, layerFetch, lg)
+	return syncer.NewSyncer(context.TODO(), conf, &clock, msh, layerFetch, layerpatrol.New(), lg)
 }

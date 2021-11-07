@@ -77,6 +77,7 @@ func (t *TimeClock) startClock() {
 			}
 		case <-t.stop:
 			tmr.Stop()
+			t.log.Info("stopping global clock %p", t)
 			return
 		}
 	}

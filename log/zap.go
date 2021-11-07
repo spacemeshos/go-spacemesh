@@ -164,6 +164,11 @@ func (l Log) Check(level zapcore.Level) bool {
 	return l.logger.Check(level, "") != nil
 }
 
+// Core returns logger engine.
+func (l Log) Core() zapcore.Core {
+	return l.logger.Core()
+}
+
 // WithName appends a name to a current name.
 func (l Log) WithName(prefix string) Log {
 	lgr := l.logger.Named(fmt.Sprintf("%-13s", prefix))

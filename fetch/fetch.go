@@ -11,11 +11,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	p2pconf "github.com/spacemeshos/go-spacemesh/p2p/config"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -97,7 +94,7 @@ type requestBatch struct {
 
 type batchInfo struct {
 	requestBatch
-	peer peers.Peer
+	peer p2p.Peer
 }
 
 // SetID calculates the hash of all requests and sets it as this batches ID.
@@ -141,57 +138,29 @@ func DefaultConfig() Config {
 		MaxRetriesForPeer:    2,
 		BatchSize:            20,
 		RequestTimeout:       10,
-		MaxRetriesForRequest: 20,
+		MaxRetriesForRequest: 100,
 	}
 }
 
-type peersProvider interface {
-	GetPeers() []peers.Peer
+type networkInterface interface {
 	PeerCount() uint64
-	Close()
+	GetPeers() []p2p.Peer
+	Request(context.Context, p2p.Peer, []byte, func([]byte), func(error)) error
+	Close() error
 }
 
-// MessageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'.
-type MessageNetwork struct {
-	*server.MessageServer
-	peersProvider
-	log.Log
-}
-
-// Close closes the message network.
-func (mn MessageNetwork) Close() {
-	mn.MessageServer.Close()
-	mn.peersProvider.Close()
-}
-
-// NewMessageNetwork creates a new instance of the fetch network server.
-func NewMessageNetwork(ctx context.Context, requestTimeOut int, net service.Service, protocol string, log log.Log) *MessageNetwork {
-	return &MessageNetwork{
-		server.NewMsgServer(ctx, net.(server.Service), protocol, time.Duration(requestTimeOut)*time.Second, make(chan service.DirectMessage, p2pconf.Values.BufferSize), log),
-		peers.Start(net, peers.WithLog(log.WithName("peers"))),
-		log,
-	}
+// messageNetwork is a network interface that allows fetch to communicate with other nodes with 'fetch servers'.
+type messageNetwork struct {
+	*server.Server
+	*p2p.Host
 }
 
 // GetRandomPeer returns a random peer from current peer list.
-func GetRandomPeer(peers []peers.Peer) peers.Peer {
+func GetRandomPeer(peers []p2p.Peer) p2p.Peer {
 	if len(peers) == 0 {
 		log.Panic("cannot send fetch: no peers found")
 	}
 	return peers[rand.Intn(len(peers))]
-}
-
-// GetPeers return active peers.
-func (mn MessageNetwork) GetPeers() []peers.Peer {
-	return mn.peersProvider.GetPeers()
-}
-
-type network interface {
-	GetPeers() []peers.Peer
-	PeerCount() uint64
-	SendRequest(ctx context.Context, msgType server.MessageType, payload []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), failHandler func(err error)) error
-	RegisterBytesMsgHandler(msgType server.MessageType, reqHandler func(ctx context.Context, b []byte) ([]byte, error))
-	Close()
 }
 
 // Fetch is the main struct that contains network peers and logic to batch and dispatch hash fetch requests.
@@ -205,7 +174,7 @@ type Fetch struct {
 	pendingRequests map[types.Hash32][]*request
 	// activeBatches contains batches of requests in pendingRequests.
 	activeBatches        map[types.Hash32]batchInfo
-	net                  network
+	net                  networkInterface
 	requestReceiver      chan request
 	batchRequestReceiver chan []request
 	batchTimeout         *time.Ticker
@@ -218,30 +187,35 @@ type Fetch struct {
 }
 
 // NewFetch creates a new Fetch struct.
-func NewFetch(ctx context.Context, cfg Config, network service.Service, logger log.Log) *Fetch {
-	srv := NewMessageNetwork(ctx, cfg.RequestTimeout, network, fetchProtocol, logger)
-
+func NewFetch(ctx context.Context, cfg Config, h *p2p.Host, logger log.Log) *Fetch {
 	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,
 		dbs:             make(map[Hint]database.Getter),
 		activeRequests:  make(map[types.Hash32][]*request),
 		pendingRequests: make(map[types.Hash32][]*request),
-		net:             srv,
 		requestReceiver: make(chan request),
 		batchTimeout:    time.NewTicker(time.Millisecond * time.Duration(cfg.BatchTimeout)),
 		stop:            make(chan struct{}),
 		activeBatches:   make(map[types.Hash32]batchInfo),
 		doneChan:        make(chan struct{}),
 	}
-
+	// TODO(dshulyak) this is done for tests. needs to be mocked properly
+	if h != nil {
+		f.net = &messageNetwork{
+			Server: server.New(h, fetchProtocol, f.FetchRequestHandler,
+				server.WithTimeout(time.Duration(cfg.RequestTimeout)*time.Second),
+				server.WithLog(logger),
+			),
+			Host: h,
+		}
+	}
 	return f
 }
 
 // Start starts handling fetch requests.
 func (f *Fetch) Start() {
 	f.onlyOnce.Do(func() {
-		f.net.RegisterBytesMsgHandler(server.Fetch, f.FetchRequestHandler)
 		go f.loop()
 	})
 }
@@ -343,14 +317,14 @@ func (f *Fetch) loop() {
 // in a response batch.
 func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) ([]byte, error) {
 	if f.stopped() {
-		return nil, server.ErrShuttingDown
+		return nil, context.Canceled
 	}
 
 	var requestBatch requestBatch
 	err := types.BytesToInterface(data, &requestBatch)
 	if err != nil {
 		f.log.WithContext(ctx).With().Error("failed to parse request", log.Err(err))
-		return nil, server.ErrBadRequest
+		return nil, errors.New("bad request")
 	}
 	resBatch := responseBatch{
 		ID:        requestBatch.ID,
@@ -544,7 +518,6 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	}
 	// try sending batch to some random peer
 	retries := 0
-	var p peers.Peer
 	for {
 		if f.stopped() {
 			return
@@ -558,7 +531,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 		}
 
 		// get random peer
-		p = GetRandomPeer(f.net.GetPeers())
+		p := GetRandomPeer(f.net.GetPeers())
 		f.log.With().Debug("sending request batch to peer",
 			log.String("batch_hash", batch.ID.ShortString()),
 			log.Int("num_requests", len(batch.Requests)),
@@ -567,7 +540,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 		f.activeBatchM.Lock()
 		f.activeBatches[batch.ID] = batch
 		f.activeBatchM.Unlock()
-		err := f.net.SendRequest(context.TODO(), server.Fetch, bytes, p, f.receiveResponse, errorFunc)
+		err := f.net.Request(context.TODO(), p, bytes, f.receiveResponse, errorFunc)
 
 		// if call succeeded, continue to other requests
 		if err != nil {

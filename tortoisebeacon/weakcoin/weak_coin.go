@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -37,12 +38,6 @@ type config struct {
 	VRFPrefix           string
 	NextRoundBufferSize int
 	MaxRound            types.RoundID
-}
-
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./weak_coin.go
-
-type broadcaster interface {
-	Broadcast(ctx context.Context, channel string, data []byte) error
 }
 
 // UnitAllowances is a map from miner identifier to the number of units of spacetime.
@@ -90,18 +85,18 @@ func WithNextRoundBufferSize(size int) Option {
 
 // New creates an instance of weak coin protocol.
 func New(
-	net broadcaster,
+	publisher pubsub.Publisher,
 	signer signing.Signer,
 	verifier signing.Verifier,
 	opts ...Option,
 ) *WeakCoin {
 	wc := &WeakCoin{
-		logger:   log.NewNop(),
-		config:   defaultConfig(),
-		signer:   signer,
-		verifier: verifier,
-		net:      net,
-		coins:    make(map[types.RoundID]bool),
+		logger:    log.NewNop(),
+		config:    defaultConfig(),
+		signer:    signer,
+		verifier:  verifier,
+		publisher: publisher,
+		coins:     make(map[types.RoundID]bool),
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -112,11 +107,11 @@ func New(
 
 // WeakCoin implementation of the protocol.
 type WeakCoin struct {
-	logger   log.Log
-	config   config
-	verifier signing.Verifier
-	signer   signing.Signer
-	net      broadcaster
+	logger    log.Log
+	config    config
+	verifier  signing.Verifier
+	signer    signing.Signer
+	publisher pubsub.Publisher
 
 	mu                         sync.RWMutex
 	epochStarted, roundStarted bool
@@ -245,15 +240,15 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (b
 
 func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
 	wc.mu.Lock()
-	broadcast, smallest := wc.prepareProposal(epoch, round)
+	msg, smallest := wc.prepareProposal(epoch, round)
 	wc.mu.Unlock()
 
 	// nothing to send is valid if all proposals are exceeding threshold
-	if broadcast == nil {
+	if msg == nil {
 		return nil
 	}
 
-	if err := wc.net.Broadcast(ctx, GossipProtocol, broadcast); err != nil {
+	if err := wc.publisher.Publish(ctx, GossipProtocol, msg); err != nil {
 		return fmt.Errorf("failed to broadcast weak coin message: %w", err)
 	}
 

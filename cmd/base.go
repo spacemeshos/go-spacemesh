@@ -10,10 +10,12 @@ import (
 	"reflect"
 	"sync"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	bc "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
@@ -132,7 +134,14 @@ func parseConfig() (*bc.Config, error) {
 
 	conf := bc.DefaultConfig()
 	// load config if it was loaded to our viper
-	err := vip.Unmarshal(&conf)
+	hook := mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToTimeDurationHookFunc(),
+		mapstructure.StringToSliceHookFunc(","),
+		mapstructureutil.BigRatDecodeFunc(),
+	)
+
+	// load config if it was loaded to our viper
+	err := vip.Unmarshal(&conf, viper.DecodeHook(hook))
 	if err != nil {
 		log.Error("Failed to parse config\n")
 		return nil, fmt.Errorf("parse config: %w", err)
@@ -215,10 +224,6 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 
 			ff = reflect.TypeOf(appCFG.P2P)
 			elem = reflect.ValueOf(&appCFG.P2P).Elem()
-			assignFields(ff, elem, name)
-
-			ff = reflect.TypeOf(appCFG.P2P.SwarmConfig)
-			elem = reflect.ValueOf(&appCFG.P2P.SwarmConfig).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appCFG.TIME)

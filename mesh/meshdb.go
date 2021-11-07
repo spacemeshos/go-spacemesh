@@ -8,7 +8,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"path/filepath"
 	"sync"
 
@@ -710,7 +709,7 @@ type dbReward struct {
 	// TotalReward - LayerRewardEstimate = FeesEstimate
 }
 
-func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[types.Address]map[string]uint64, totalReward, layerReward *big.Int) error {
+func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[types.Address]map[string]uint64, totalReward, layerReward uint64) error {
 	batch := m.transactions.NewBatch()
 	for account, smesherAccountEntry := range accountBlockCount {
 		for smesherString, cnt := range smesherAccountEntry {
@@ -718,7 +717,7 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 			if err != nil {
 				return fmt.Errorf("could not convert String to NodeID for %v: %v", smesherString, err)
 			}
-			reward := dbReward{TotalReward: cnt * totalReward.Uint64(), LayerRewardEstimate: cnt * layerReward.Uint64(), SmesherID: *smesherEntry, Coinbase: account}
+			reward := dbReward{TotalReward: cnt * totalReward, LayerRewardEstimate: cnt * layerReward, SmesherID: *smesherEntry, Coinbase: account}
 			if b, err := types.InterfaceToBytes(&reward); err != nil {
 				return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
 			} else if err := batch.Put(getRewardKey(l, account, *smesherEntry), b); err != nil {

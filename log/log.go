@@ -24,8 +24,11 @@ var logwriter io.Writer
 // default encoders.
 var defaultEncoder = zap.NewDevelopmentEncoderConfig()
 
-// Level returns the zapcore level of logging.
-func Level() zapcore.Level {
+// Level is an alias to zapcore.Level.
+type Level = zapcore.Level
+
+// DefaultLevel returns the zapcore level of logging.
+func DefaultLevel() Level {
 	return zapcore.InfoLevel
 }
 
@@ -115,7 +118,7 @@ func RegisterHooks(lg Log, hooks ...func(zapcore.Entry) error) Log {
 
 // NewDefault creates a Log with the default log level.
 func NewDefault(module string) Log {
-	return NewWithLevel(module, zap.NewAtomicLevelAt(Level()))
+	return NewWithLevel(module, zap.NewAtomicLevelAt(DefaultLevel()))
 }
 
 // NewFromLog creates a Log from an existing zap-compatible log.

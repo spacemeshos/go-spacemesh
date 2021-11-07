@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -17,9 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	dbMocks "github.com/spacemeshos/go-spacemesh/database/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	p2pMocks "github.com/spacemeshos/go-spacemesh/p2p/service/mocks"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -79,21 +79,30 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64, hasATX bool) (*To
 	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
 	require.NoError(t, err)
 
-	node := service.NewSimulator().NewNode()
+	publisher := newPublisher(t)
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
-	tb := New(conf, minerID, node, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
+	tb := New(conf, minerID, publisher, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
 	require.NotNil(t, tb)
 	tb.SetSyncState(testSyncState(true))
+	tb.setMetricsRegistry(prometheus.NewPedanticRegistry())
 	return tb, clock
 }
 
-func TestTortoiseBeacon(t *testing.T) {
-	t.Parallel()
+func newPublisher(tb testing.TB) pubsub.Publisher {
+	tb.Helper()
+	ctrl := gomock.NewController(tb)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
+	publisher.EXPECT().
+		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
+		Return(nil).
+		AnyTimes()
+	return publisher
+}
 
+func TestTortoiseBeacon(t *testing.T) {
 	tb, clock := setUpTortoiseBeacon(t, uint64(10), true)
 	epoch := types.EpochID(3)
-	err := tb.Start(context.TODO())
-	require.NoError(t, err)
+	require.NoError(t, tb.Start(context.TODO()))
 
 	t.Logf("Awaiting epoch %v", epoch)
 	awaitEpoch(clock, epoch)
@@ -109,12 +118,9 @@ func TestTortoiseBeacon(t *testing.T) {
 }
 
 func TestTortoiseBeaconZeroWeightEpoch(t *testing.T) {
-	t.Parallel()
-
 	tb, clock := setUpTortoiseBeacon(t, uint64(0), true)
 	epoch := types.EpochID(3)
-	err := tb.Start(context.TODO())
-	require.NoError(t, err)
+	require.NoError(t, tb.Start(context.TODO()))
 
 	t.Logf("Awaiting epoch %v", epoch)
 	awaitEpoch(clock, epoch)
@@ -128,12 +134,9 @@ func TestTortoiseBeaconZeroWeightEpoch(t *testing.T) {
 }
 
 func TestTortoiseBeaconNoATXInPreviousEpoch(t *testing.T) {
-	t.Parallel()
-
 	tb, clock := setUpTortoiseBeacon(t, uint64(0), false)
 	epoch := types.EpochID(3)
-	err := tb.Start(context.TODO())
-	require.NoError(t, err)
+	require.NoError(t, tb.Start(context.TODO()))
 
 	t.Logf("Awaiting epoch %v", epoch)
 	awaitEpoch(clock, epoch)
@@ -154,6 +157,134 @@ func awaitEpoch(clock *timesync.TimeClock, epoch types.EpochID) {
 		if layer.GetEpoch() > epoch {
 			return
 		}
+	}
+}
+
+func TestTortoiseBeaconWithMetrics(t *testing.T) {
+	layersPerEpoch := uint32(3)
+	types.SetLayersPerEpoch(layersPerEpoch)
+
+	conf := UnitTestConfig()
+	ctrl := gomock.NewController(t)
+	mockDB := mocks.NewMockactivationDB(ctrl)
+	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).AnyTimes()
+	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(10000), nil, nil).AnyTimes()
+	atxHeader := &types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{
+			StartTick: 0,
+			EndTick:   1,
+		},
+		NumUnits: 199,
+	}
+	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(atxHeader, nil).AnyTimes()
+	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).AnyTimes()
+
+	mwc := coinValueMock(t, true)
+
+	logger := logtest.New(t).WithName("TortoiseBeacon")
+	clock := clockNeverNotify(t)
+
+	edSgn := signing.NewEdSigner()
+	edPubkey := edSgn.PublicKey()
+	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
+	require.NoError(t, err)
+
+	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
+	tb := New(conf, minerID, newPublisher(t), mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
+	require.NotNil(t, tb)
+	tb.SetSyncState(testSyncState(true))
+
+	require.NoError(t, tb.Start(context.TODO()))
+	t.Cleanup(func() {
+		tb.Close()
+	})
+
+	gLayer := types.GetEffectiveGenesis()
+	numCalculatedBeacon := 0
+	for layer := types.NewLayerID(1); !layer.After(gLayer); layer = layer.Add(1) {
+		tb.handleLayer(context.TODO(), layer)
+		thisEpoch := layer.GetEpoch()
+		ownWeight := atxHeader.GetWeight()
+		if thisEpoch.IsGenesis() {
+			ownWeight = 0
+		}
+		allMetrics, err := prometheus.DefaultGatherer.Gather()
+		assert.NoError(t, err)
+		for _, m := range allMetrics {
+			switch *m.Name {
+			case "spacemesh_beacons_beacon_calculated_weight":
+				require.Equal(t, 1, len(m.Metric))
+				numCalculatedBeacon++
+				beaconStr := types.HexToHash32(genesisBeacon).ShortString()
+				expected := fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beaconStr, thisEpoch+1, ownWeight)
+				assert.Equal(t, expected, m.Metric[0].String())
+			case "spacemesh_beacons_beacon_observed_total":
+				t.Errorf("genesis blocks do not have blocks")
+			case "spacemesh_beacons_beacon_observed_weight":
+				t.Errorf("genesis blocks do not have blocks")
+			}
+		}
+	}
+	assert.Equal(t, int(gLayer.Uint32()), numCalculatedBeacon)
+
+	epoch3Beacon := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+	epoch := types.EpochID(3)
+	finalLayer := types.NewLayerID(layersPerEpoch * uint32(epoch))
+	beacon1 := randomHash()
+	beacon2 := randomHash()
+	for layer := gLayer.Add(1); layer.Before(finalLayer); layer = layer.Add(1) {
+		tb.handleLayer(context.TODO(), layer)
+		thisEpoch := layer.GetEpoch()
+		tb.recordBlockBeacon(thisEpoch, randomBlockID(), beacon1.Bytes(), 100)
+		tb.recordBlockBeacon(thisEpoch, randomBlockID(), beacon2.Bytes(), 200)
+
+		numCalculated := 0
+		numObserved := 0
+		numObservedWeight := 0
+		tb.logger.Info("gathering data from test in epoch %v", thisEpoch)
+		allMetrics, err := prometheus.DefaultGatherer.Gather()
+		assert.NoError(t, err)
+		for _, m := range allMetrics {
+			switch *m.Name {
+			case "spacemesh_beacons_beacon_calculated_weight":
+				require.Equal(t, 1, len(m.Metric))
+				numCalculated++
+				beaconStr := types.HexToHash32(epoch3Beacon).ShortString()
+				expected := fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beaconStr, thisEpoch+1, atxHeader.GetWeight())
+				assert.Equal(t, expected, m.Metric[0].String())
+			case "spacemesh_beacons_beacon_observed_total":
+				tb.logger.Info(m.String())
+				require.Equal(t, 2, len(m.Metric))
+				numObserved = numObserved + 2
+				count := layer.OrdinalInEpoch() + 1
+				expected := []string{
+					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon1.ShortString(), thisEpoch, count),
+					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon2.ShortString(), thisEpoch, count),
+				}
+				for _, subM := range m.Metric {
+					assert.Contains(t, expected, subM.String())
+				}
+			case "spacemesh_beacons_beacon_observed_weight":
+				require.Equal(t, 2, len(m.Metric))
+				numObservedWeight = numObservedWeight + 2
+				weight := (layer.OrdinalInEpoch() + 1) * 100
+				expected := []string{
+					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon1.ShortString(), thisEpoch, weight),
+					fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beacon2.ShortString(), thisEpoch, weight*2),
+				}
+				for _, subM := range m.Metric {
+					assert.Contains(t, expected, subM.String())
+				}
+			}
+		}
+		if layer.OrdinalInEpoch() == 2 {
+			// there should be calculated beacon already by the last layer of the epoch
+			assert.Equal(t, 1, numCalculated, layer)
+		} else {
+			assert.LessOrEqual(t, numCalculated, 1, layer)
+		}
+		assert.Equal(t, 2, numObserved, layer)
+		assert.Equal(t, 2, numObservedWeight, layer)
 	}
 }
 
@@ -516,16 +647,10 @@ func TestTortoiseBeacon_getProposalChannel(t *testing.T) {
 			}
 
 			if tc.makeNextChFull {
-				ctrl := gomock.NewController(t)
 				tb.mu.Lock()
 				nextCh := tb.getOrCreateProposalChannel(currentEpoch + 1)
 				for i := 0; i < proposalChanCapacity; i++ {
-					mockGossip := p2pMocks.NewMockGossipMessage(ctrl)
-					if i == 0 {
-						mockGossip.EXPECT().Sender().Return(p2pcrypto.NewRandomPubkey()).Times(1)
-					}
 					nextCh <- &proposalMessageWithReceiptData{
-						gossip:  mockGossip,
 						message: ProposalMessage{},
 					}
 				}

@@ -3,13 +3,18 @@ package hare
 import (
 	"context"
 	"errors"
+	"fmt"
 	"sync"
+
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
 )
 
@@ -23,18 +28,23 @@ type validator interface {
 	Validate(context.Context, *Msg) bool
 }
 
+type msgRPC struct {
+	Ctx   context.Context
+	Data  []byte
+	Error chan error
+}
+
 // Broker is the dispatcher of incoming Hare messages.
 // The broker validates that the sender is eligible and active and forwards the message to the corresponding outbox.
 type Broker struct {
 	util.Closer
 	log.Log
 	mu             sync.RWMutex
-	network        NetworkService
+	pid            peer.ID
 	eValidator     validator     // provides eligibility validation
 	stateQuerier   StateQuerier  // provides activeness check
 	isNodeSynced   syncStateFunc // provider function to check if the node is currently synced
 	layersPerEpoch uint16
-	inbox          chan service.GossipMessage
 	queue          priorityq.PriorityQueue
 	queueChannel   chan struct{} // used to synchronize the message queues
 	syncState      map[uint32]bool
@@ -46,13 +56,14 @@ type Broker struct {
 	isStarted      bool
 	minDeleted     types.LayerID
 	limit          int // max number of simultaneous consensus processes
+	stop           context.CancelFunc
 }
 
-func newBroker(networkService NetworkService, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
+func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
 	return &Broker{
 		Closer:         closer,
 		Log:            log,
-		network:        networkService,
+		pid:            pid,
 		eValidator:     eValidator,
 		stateQuerier:   stateQuerier,
 		isNodeSynced:   syncState,
@@ -63,8 +74,8 @@ func newBroker(networkService NetworkService, eValidator validator, stateQuerier
 		tasks:          make(chan func()),
 		latestLayer:    types.GetEffectiveGenesis(),
 		limit:          limit,
-		queue:          priorityq.New(inboxCapacity),       // TODO: set capacity correctly
-		queueChannel:   make(chan struct{}, inboxCapacity), // TODO: set capacity correctly
+		queue:          priorityq.New(inboxCapacity), // TODO: set capacity correctly
+		queueChannel:   make(chan struct{}, inboxCapacity),
 	}
 }
 
@@ -74,16 +85,10 @@ func (b *Broker) Start(ctx context.Context) error {
 		b.WithContext(ctx).Error("could not start instance")
 		return startInstanceError(errors.New("instance already started"))
 	}
-
-	inbox := b.network.RegisterGossipProtocol(protoName, priorityq.Mid)
-	return b.startWithInbox(ctx, inbox)
-}
-
-func (b *Broker) startWithInbox(ctx context.Context, inbox chan service.GossipMessage) error {
 	b.isStarted = true
-	b.inbox = inbox
+	ctx, cancel := context.WithCancel(ctx)
 
-	go b.queueLoop(log.WithNewSessionID(ctx))
+	b.stop = cancel
 	go b.eventLoop(log.WithNewSessionID(ctx))
 
 	return nil
@@ -137,43 +142,48 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 	return nil
 }
 
-// separate listener routine that receives gossip messages and adds them to the priority queue.
-func (b *Broker) queueLoop(ctx context.Context) {
-	for {
-		select {
-		case msg := <-b.inbox:
-			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
-			logger.Debug("hare broker received inbound gossip message",
-				log.Int("inbox_queue_len", len(b.inbox)))
-			if msg == nil {
-				logger.Error("broker message validation failed: called with nil")
-				continue
-			}
-
-			// prioritize based on signature: outbound messages (self-generated) get priority
-			priority := priorityq.Mid
-			if msg.IsOwnMessage() {
-				priority = priorityq.High
-			}
-			logger.With().Debug("assigned message priority, writing to priority queue",
-				log.Int("priority", int(priority)))
-
-			if err := b.queue.Write(priority, msg); err != nil {
-				logger.With().Error("error writing inbound message to priority queue, dropping", log.Err(err))
-			}
-
-			// indicate to the listener that there's a new message in the queue
-			b.queueChannel <- struct{}{}
-
-		case <-b.CloseChannel():
-			b.Info("broker exiting")
-			b.queue.Close()
-
-			// release the listener to notice that the queue is closing
-			close(b.queueChannel)
-			return
+// HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
+func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+	m, err := b.queueMessage(ctx, pid, msg)
+	if err != nil {
+		return pubsub.ValidationIgnore
+	}
+	select {
+	case <-ctx.Done():
+		return pubsub.ValidationIgnore
+	case err := <-m.Error:
+		if err != nil {
+			b.Log.With().Warning("hare validation failed", log.Err(err))
+			return pubsub.ValidationIgnore
 		}
 	}
+	return pubsub.ValidationAccept
+}
+
+func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*msgRPC, error) {
+	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
+	logger.Debug("hare broker received inbound gossip message")
+
+	// prioritize based on signature: outbound messages (self-generated) get priority
+	priority := priorityq.Mid
+	if pid == b.pid {
+		priority = priorityq.High
+	}
+	logger.With().Debug("assigned message priority, writing to priority queue",
+		log.Int("priority", int(priority)))
+	m := &msgRPC{Data: msg, Error: make(chan error, 1), Ctx: ctx}
+	if err := b.queue.Write(priority, m); err != nil {
+		logger.With().Error("error writing inbound message to priority queue, dropping", log.Err(err))
+		return nil, fmt.Errorf("write inbound message to priority queue: %w", err)
+	}
+
+	// indicate to the listener that there's a new message in the queue
+	select {
+	case b.queueChannel <- struct{}{}:
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	}
+	return m, nil
 }
 
 // listens to incoming messages and incoming tasks.
@@ -183,6 +193,10 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			log.Int("msg_queue_size", len(b.queueChannel)),
 			log.Int("task_queue_size", len(b.tasks)))
 		select {
+		case <-b.Closer.CloseChannel():
+			b.queue.Close()
+			close(b.queueChannel)
+			return
 		case <-b.queueChannel:
 			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
 			rawMsg, err := b.queue.Read()
@@ -190,42 +204,37 @@ func (b *Broker) eventLoop(ctx context.Context) {
 				logger.With().Info("priority queue was closed, exiting", log.Err(err))
 				return
 			}
-			msg, ok := rawMsg.(service.GossipMessage)
+			msg, ok := rawMsg.(*msgRPC)
 			if !ok {
-				logger.Error("could not convert priority queue message, ignoring")
-				continue
+				logger.Panic("could not convert priority queue message, ignoring")
 			}
 
 			// create an inner context object to handle this message
-			messageCtx := ctx
+			messageCtx := msg.Ctx
 
-			// try to read stored context
-			if msg.RequestID() == "" {
-				logger.With().Warning("broker received hare message with no registered requestID")
-			} else {
-				messageCtx = log.WithRequestID(ctx, msg.RequestID())
-			}
-
-			h := types.CalcMessageHash12(msg.Bytes(), protoName)
+			h := types.CalcMessageHash12(msg.Data, protoName)
 			msgLogger := logger.WithContext(messageCtx).WithFields(h)
-			hareMsg, err := MessageFromBuffer(msg.Bytes())
+			hareMsg, err := MessageFromBuffer(msg.Data)
 			if err != nil {
 				msgLogger.With().Error("could not build message", h, log.Err(err))
+				msg.Error <- err
 				continue
 			}
 			msgLogger = msgLogger.WithFields(hareMsg)
 
 			if hareMsg.InnerMsg == nil {
 				msgLogger.With().Error("broker message validation failed", log.Err(errNilInner))
+				msg.Error <- errNilInner
 				continue
 			}
 			msgLogger.With().Debug("broker received hare message")
 
 			msgInstID := hareMsg.InnerMsg.InstanceID
-			metrics.MessageTypeCounter.With(
-				"type_id", hareMsg.InnerMsg.Type.String(),
-				"layer", msgInstID.String(),
-				"reporter", "brokerHandler").Add(1)
+			metrics.MessageTypeCounter.With(prometheus.Labels{
+				"type_id":  hareMsg.InnerMsg.Type.String(),
+				"layer":    msgInstID.String(),
+				"reporter": "brokerHandler",
+			}).Inc()
 			msgLogger = msgLogger.WithFields(log.FieldNamed("msg_layer_id", types.LayerID(msgInstID)))
 			isEarly := false
 			if err := b.validate(messageCtx, hareMsg); err != nil {
@@ -233,6 +242,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 					// not early, validation failed
 					msgLogger.With().Debug("broker received a message to a consensus process that is not registered",
 						log.Err(err))
+					msg.Error <- err
 					continue
 				}
 
@@ -244,6 +254,7 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			iMsg, err := newMsg(messageCtx, b.Log, hareMsg, b.stateQuerier)
 			if err != nil {
 				msgLogger.With().Warning("message validation failed: could not construct msg", log.Err(err))
+				msg.Error <- err
 				continue
 			}
 
@@ -251,11 +262,12 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			if !b.eValidator.Validate(messageCtx, iMsg) {
 				msgLogger.With().Warning("message validation failed: eligibility validator returned false",
 					log.String("hare_msg", hareMsg.String()))
+				msg.Error <- errors.New("not eligible")
 				continue
 			}
 
 			// validation passed, report
-			msg.ReportValidation(ctx, protoName)
+			msg.Error <- nil
 			msgLogger.With().Debug("broker reported hare message as valid", hareMsg)
 
 			if isEarly {

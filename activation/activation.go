@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -37,10 +38,6 @@ const defaultPoetRetryInterval = 5 * time.Second
 type meshProvider interface {
 	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
 	LatestLayer() types.LayerID
-}
-
-type broadcaster interface {
-	Broadcast(ctx context.Context, channel string, data []byte) error
 }
 
 type poetNumberOfTickProvider struct{}
@@ -127,7 +124,7 @@ type Builder struct {
 	goldenATXID       types.ATXID
 	layersPerEpoch    uint32
 	db                atxDBProvider
-	net               broadcaster
+	publisher         pubsub.Publisher
 	mesh              meshProvider
 	tickProvider      poetNumberOfTickProvider
 	nipostBuilder     nipostBuilder
@@ -177,7 +174,7 @@ func WithContext(ctx context.Context) BuilderOption {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider,
+func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, publisher pubsub.Publisher, mesh meshProvider,
 	layersPerEpoch uint32, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
@@ -188,7 +185,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 		goldenATXID:       conf.GoldenATXID,
 		layersPerEpoch:    conf.LayersPerEpoch,
 		db:                db,
-		net:               net,
+		publisher:         publisher,
 		mesh:              mesh,
 		nipostBuilder:     nipostBuilder,
 		postSetupProvider: postSetupProvider,
@@ -609,7 +606,7 @@ func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
 	}
-	if err := b.net.Broadcast(ctx, AtxProtocol, buf); err != nil {
+	if err := b.publisher.Publish(ctx, AtxProtocol, buf); err != nil {
 		return 0, fmt.Errorf("failed to broadcast ATX: %v", err)
 	}
 	return len(buf), nil

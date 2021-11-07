@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"math/rand"
 	"path/filepath"
 	"reflect"
@@ -18,38 +19,54 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
+func min(x, y uint32) uint32 {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+func max(x, y uint32) uint32 {
+	if x > y {
+		return x
+	}
+	return y
+}
+
 func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng *rand.Rand) *state {
 	return func(rng *rand.Rand) *state {
 		st := &state{db: database.NewMemDatabase(), log: logtest.New(tb)}
-		var layers [3]types.LayerID
-		for i := range layers {
-			layer, ok := quick.Value(reflect.TypeOf(types.LayerID{}), rng)
-			require.True(tb, ok)
-			layers[i] = layer.Interface().(types.LayerID)
-		}
 
-		st.Last = layers[0]
-		st.Verified = layers[1]
-		st.LastEvicted = layers[2]
+		verifiedGen, ok := quick.Value(reflect.TypeOf(uint32(0)), rng)
+		require.True(tb, ok)
+		verified := verifiedGen.Interface().(uint32)
+		// verified between 200 and 1000
+		verified = max(200, min(verified, 1000))
+
+		st.Last = types.NewLayerID(verified + 100)
+		st.Verified = types.NewLayerID(verified)
 
 		st.GoodBlocksIndex = map[types.BlockID]bool{}
 		st.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
+		st.BlockLayer = map[types.BlockID]types.LayerID{}
 
 		for i := 0; i < 200; i++ {
-			layerGen, ok := quick.Value(reflect.TypeOf(types.LayerID{}), rng)
+			layerGen, ok := quick.Value(reflect.TypeOf(uint32(0)), rng)
 			require.True(tb, ok)
 			block1Gen, ok := quick.Value(reflect.TypeOf(types.BlockID{}), rng)
 			require.True(tb, ok)
 			block2Gen, ok := quick.Value(reflect.TypeOf(types.BlockID{}), rng)
 			require.True(tb, ok)
 
-			layer := layerGen.Interface().(types.LayerID)
+			layerVal := layerGen.Interface().(uint32)
+			layer := types.NewLayerID(layerVal % verified)
 			if _, exist := st.BlockOpinionsByLayer[layer]; !exist {
 				st.BlockOpinionsByLayer[layer] = map[types.BlockID]Opinion{}
 			}
 			block1 := block1Gen.Interface().(types.BlockID)
 			if _, exist := st.BlockOpinionsByLayer[layer][block1]; !exist {
 				st.BlockOpinionsByLayer[layer][block1] = Opinion{}
+				st.BlockLayer[block1] = layer
 			}
 			st.GoodBlocksIndex[block1] = false
 			block2 := block2Gen.Interface().(types.BlockID)
@@ -99,27 +116,21 @@ func TestStateEvict(t *testing.T) {
 		sort.Slice(layers, func(i, j int) bool {
 			return layers[i].Before(layers[j])
 		})
-		st.LastEvicted = layers[len(layers)/2]
+		// persist everything, otherwise evict will only delete data from memory
 		if !assert.NoError(t, st.Persist()) {
 			return false
 		}
 
-		for layer := range st.BlockOpinionsByLayer {
-			if layer.After(st.LastEvicted) {
-				continue
-			}
-			for block := range st.BlockOpinionsByLayer[layer] {
-				delete(st.GoodBlocksIndex, block)
-			}
-			delete(st.BlockOpinionsByLayer, layer)
+		if !assert.NoError(t, st.Evict(context.TODO(), layers[len(layers)/2])) {
+			return false
 		}
-		if !assert.NoError(t, st.Evict()) {
+
+		// persists layers including LastEvicted, as it is recovered and compared in the test
+		if !assert.NoError(t, st.Persist()) {
 			return false
 		}
 
 		original := *st
-		st.BlockOpinionsByLayer = nil
-		st.GoodBlocksIndex = nil
 		if !assert.NoError(t, st.Recover()) {
 			return false
 		}

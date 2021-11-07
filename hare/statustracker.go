@@ -18,7 +18,7 @@ type statusTracker struct {
 	log.Log
 }
 
-func newStatusTracker(threshold int, expectedSize int) *statusTracker {
+func newStatusTracker(threshold, expectedSize int) *statusTracker {
 	st := &statusTracker{}
 	st.statuses = make(map[string]*Msg, expectedSize)
 	st.threshold = uint16(threshold)
