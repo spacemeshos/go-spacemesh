@@ -59,9 +59,10 @@ type State struct {
 // New creates Generator instance.
 func New(opts ...GenOpt) *Generator {
 	g := &Generator{
-		rng:    rand.New(rand.NewSource(time.Now().UnixNano())),
-		conf:   defaults(),
-		logger: log.NewNop(),
+		rng:       rand.New(rand.NewSource(time.Now().UnixNano())),
+		conf:      defaults(),
+		logger:    log.NewNop(),
+		reordered: map[types.LayerID]types.LayerID{},
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -84,6 +85,7 @@ type Generator struct {
 	State State
 
 	nextLayer   types.LayerID
+	reordered   map[types.LayerID]types.LayerID
 	layers      []*types.Layer
 	activations []types.ATXID
 	keys        []*signing.EdSigner
@@ -144,50 +146,4 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 
 		g.keys = append(g.keys, signing.NewEdSignerFromRand(g.rng))
 	}
-}
-
-// Next generates next layer.
-func (g *Generator) Next() types.LayerID {
-	half := int(g.conf.LayerSize) / 2
-	numblocks := intInRange(g.rng, [2]int{half, half * 3})
-	layer := types.NewLayer(g.nextLayer)
-	for i := 0; i < numblocks; i++ {
-		miner := g.rng.Intn(len(g.activations))
-		atxid := g.activations[miner]
-		signer := g.keys[miner]
-
-		// TODO base block selection algorithm must be selected as an option
-		// so that erroneous base block selection can be defined as a failure condition
-
-		baseLayer := g.layers[len(g.layers)-1]
-		support := g.layers[len(g.layers)-1].BlocksIDs()
-		base := baseLayer.Blocks()[g.rng.Intn(len(baseLayer.Blocks()))]
-
-		data := make([]byte, 20)
-		g.rng.Read(data)
-		block := &types.Block{
-			MiniBlock: types.MiniBlock{
-				BlockHeader: types.BlockHeader{
-					LayerIndex: g.nextLayer,
-					ATXID:      atxid,
-					BaseBlock:  base.ID(),
-					ForDiff:    support,
-					Data:       data,
-				},
-			},
-		}
-		block.Signature = signer.Sign(block.Bytes())
-		block.Initialize()
-		if err := g.State.MeshDB.AddBlock(block); err != nil {
-			g.logger.With().Panic("failed to add block", log.Err(err))
-		}
-		layer.AddBlock(block)
-	}
-	// TODO saving layer input should be skipped as one of the error conditions
-	if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), layer.BlocksIDs()); err != nil {
-		g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
-	}
-	g.layers = append(g.layers, layer)
-	g.nextLayer = g.nextLayer.Add(1)
-	return layer.Index()
 }
