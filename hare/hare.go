@@ -415,7 +415,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 				if err != nil {
 					h.With().Error("failed to handle tick", log.Err(err))
 				} else if !started {
-					h.WithContext(ctx).With().Warning("consensus not started for layer", layer)
+					h.WithContext(ctx).With().Warning("consensus not started for layer", l)
 				}
 			}(layer)
 		case <-h.CloseChannel():
