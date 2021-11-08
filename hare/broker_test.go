@@ -670,7 +670,7 @@ func TestBroker_Flow(t *testing.T) {
 func TestBroker_Synced(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
-	b.Start(context.TODO())
+	require.NoError(t, b.Start(context.TODO()))
 	wg := sync.WaitGroup{}
 	for i := uint32(0); i < 1000; i++ {
 		wg.Add(1)
@@ -681,4 +681,14 @@ func TestBroker_Synced(t *testing.T) {
 	}
 
 	wg.Wait()
+	b.Close()
+
+	timer := time.NewTimer(1 * time.Second)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		t.Errorf("timeout")
+	case <-b.CloseChannel():
+	}
 }
