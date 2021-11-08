@@ -51,6 +51,7 @@ type HeapQueue struct {
 	queue []*HeapQueueItem
 }
 
+// New creates a new priority queue based on HeapQueue.
 func New() PriorityQueue {
 	pq := &HeapQueue{
 		Closer: util.NewCloser(),
