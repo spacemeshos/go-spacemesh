@@ -139,7 +139,7 @@ func (svm *SVM) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	return nil
 }
 
-// HandleGossipTransaction wraps handles data received on the transactions gossip channel.
+// HandleGossipTransaction handles data received on the transactions gossip channel.
 func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	tx, err := types.BytesToTransaction(msg)
 	if err != nil {
