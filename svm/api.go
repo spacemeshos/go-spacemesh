@@ -156,8 +156,12 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 	return pubsub.ValidationAccept
 }
 
-// HandleTxSyncData handles data received on transaction sync.
-func (svm *SVM) HandleTxSyncData(data []byte) error {
+// HandleSyncTransaction handles transactions received via sync.
+// Unlike HandleGossipTransaction, which only stores valid transactions,
+// HandleSyncTransaction only deserializes transactions and stores them regardless of validity. This is because
+// transactions received via sync are necessarily referenced somewhere meaning that we must have them stored, even if
+// they're invalid, for the data availability of the referencing block.
+func (svm *SVM) HandleSyncTransaction(data []byte) error {
 	var tx mesh.DbTransaction
 	err := types.BytesToInterface(data, &tx)
 	if err != nil {
