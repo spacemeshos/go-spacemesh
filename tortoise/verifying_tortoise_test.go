@@ -3048,12 +3048,39 @@ func TestMultiTortoise(t *testing.T) {
 	})
 }
 
-func BenchmarkTortoiseLayerHandling(b *testing.B) {
-	ctx := context.Background()
+func TestOnlyInorderLayersAreVerified(t *testing.T) {
 	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
 	s.Setup()
 
+	ctx := context.Background()
+	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	tortoise := NewVerifyingTortoise(ctx, cfg)
+
+	var (
+		inorder  types.LayerID
+		verified types.LayerID
+	)
+	for _, lid := range sim.GenLayers(s,
+		sim.WithSequence(1),
+		sim.WithSequence(1, sim.WithNextReorder(1)),
+		sim.WithSequence(3),
+	) {
+		if lid == inorder.Add(1) || (inorder == types.LayerID{}) {
+			inorder = lid
+		}
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
+	}
+	require.Equal(t, inorder.Sub(1), verified)
+}
+
+func BenchmarkTortoiseLayerHandling(b *testing.B) {
+	const size = 30
+	s := sim.New(sim.WithLayerSize(30))
+	s.Setup()
+
+	ctx := context.Background()
 	cfg := defaultConfig(b, s.State.MeshDB, s.State.AtxDB)
+	cfg.LayerSize = 30
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	var layers []types.LayerID
