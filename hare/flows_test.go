@@ -161,8 +161,9 @@ func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types
 func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
 
-	totalNodes := 20
+	totalNodes := 15
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
