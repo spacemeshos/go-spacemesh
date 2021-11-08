@@ -683,5 +683,12 @@ func TestBroker_Synced(t *testing.T) {
 	wg.Wait()
 	b.Close()
 
-	<-b.CloseChannel()
+	timer := time.NewTimer(1 * time.Second)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		t.Errorf("timeout")
+	case <-b.CloseChannel():
+	}
 }
