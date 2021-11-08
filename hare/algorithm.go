@@ -838,7 +838,7 @@ func (proc *consensusProcess) endOfStatusRound() {
 // returns true if we should participate, false otherwise.
 func (proc *consensusProcess) shouldParticipate(ctx context.Context) bool {
 	logger := proc.WithContext(ctx).WithFields(
-		log.Uint32("current_k", proc.k),
+		log.Uint32("current_k", proc.getK()),
 		proc.instanceID)
 
 	// query if identity is active
