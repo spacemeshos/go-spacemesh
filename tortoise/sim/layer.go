@@ -19,6 +19,13 @@ type nextConf struct {
 }
 
 // WithNextReorder configures when reordered layer should be returned.
+// Examples:
+// Next() Next(WithNextReorder(1)) Next()
+// 1      3                        2
+// Next() Next(WithNextReorder(2)) Next() Next()
+// 1      3                        4      2
+//
+// So the Next layer with WithNextReorder will be delayed exactly by `delay` value.
 func WithNextReorder(delay uint32) NextOpt {
 	return func(c *nextConf) {
 		c.Reorder = delay

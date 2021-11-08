@@ -84,7 +84,8 @@ type Generator struct {
 
 	State State
 
-	nextLayer   types.LayerID
+	nextLayer types.LayerID
+	// key is when to return => value is the layer to return
 	reordered   map[types.LayerID]types.LayerID
 	layers      []*types.Layer
 	activations []types.ATXID
