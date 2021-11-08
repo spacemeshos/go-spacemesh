@@ -875,7 +875,7 @@ func TestAddToMesh(t *testing.T) {
 
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
-	alg.HandleIncomingLayer(context.TODO(), l3.Index())
+	require.NoError(t, alg.rerun(context.TODO()))
 
 	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l4))
@@ -1227,8 +1227,8 @@ func TestCalculateExceptions(t *testing.T) {
 
 	// missing layer data
 	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
-	r.ErrorIs(err, database.ErrNotFound)
-	r.Nil(votes)
+	r.NoError(err)
+	expectVotes(votes, 0, 1, 0)
 
 	// layer opinion vector is nil (abstains): recent layer, in mesh, no input vector
 	alg.trtl.Last = l0ID
@@ -3048,7 +3048,7 @@ func TestMultiTortoise(t *testing.T) {
 	})
 }
 
-func TestOnlyInorderLayersAreVerified(t *testing.T) {
+func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
 	s.Setup()
 
@@ -3057,7 +3057,7 @@ func TestOnlyInorderLayersAreVerified(t *testing.T) {
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	var (
-		inorder  types.LayerID
+		last     types.LayerID
 		verified types.LayerID
 	)
 	for _, lid := range sim.GenLayers(s,
@@ -3065,12 +3065,10 @@ func TestOnlyInorderLayersAreVerified(t *testing.T) {
 		sim.WithSequence(1, sim.WithNextReorder(1)),
 		sim.WithSequence(3),
 	) {
-		if lid == inorder.Add(1) || (inorder == types.LayerID{}) {
-			inorder = lid
-		}
+		last = lid
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
 	}
-	require.Equal(t, inorder.Sub(1), verified)
+	require.Equal(t, last.Sub(1), verified)
 }
 
 func BenchmarkTortoiseLayerHandling(b *testing.B) {

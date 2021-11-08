@@ -51,6 +51,19 @@ func TestOrder(t *testing.T) {
 			window: 5,
 		},
 		{
+			desc: "OutOfOrderLast",
+			send: []types.LayerID{
+				types.NewLayerID(8), types.NewLayerID(10), types.NewLayerID(9),
+				types.NewLayerID(11), types.NewLayerID(12),
+			},
+			expect: []types.LayerID{
+				types.NewLayerID(8), types.NewLayerID(9), types.NewLayerID(10),
+				types.NewLayerID(11), types.NewLayerID(12),
+			},
+			last:   types.NewLayerID(7),
+			window: 10,
+		},
+		{
 			desc:   "OldLayer",
 			send:   []types.LayerID{types.NewLayerID(1), types.NewLayerID(2), types.NewLayerID(1)},
 			expect: []types.LayerID{types.NewLayerID(1), types.NewLayerID(2)},

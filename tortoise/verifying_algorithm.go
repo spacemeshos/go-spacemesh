@@ -152,21 +152,20 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 		// pBase, since we never reapply the state of oldPbase.
 		oldVerified = observed.Sub(1)
 	}
-
 	trtl.org.Iterate(ctx, layerID, func(lid types.LayerID) {
 		logger.Info("handling incoming layer",
 			log.FieldNamed("old_pbase", oldVerified),
-			log.FieldNamed("incoming_layer", layerID))
-		if err := trtl.trtl.HandleIncomingLayer(ctx, layerID); err != nil {
+			log.FieldNamed("incoming_layer", lid))
+		if err := trtl.trtl.HandleIncomingLayer(ctx, lid); err != nil {
 			logger.Error("tortoise errored handling incoming layer", log.Err(err))
 		}
+		logger.Info("finished handling incoming layer",
+			log.FieldNamed("old_pbase", oldVerified),
+			log.FieldNamed("new_pbase", trtl.trtl.Verified),
+			log.FieldNamed("incoming_layer", lid))
 	})
 
 	newVerified := trtl.trtl.Verified
-	logger.Info("finished handling incoming layer",
-		log.FieldNamed("old_pbase", oldVerified),
-		log.FieldNamed("new_pbase", newVerified),
-		log.FieldNamed("incoming_layer", layerID))
 	return oldVerified, newVerified, reverted
 }
 
