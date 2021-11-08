@@ -115,6 +115,7 @@ func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.B
 
 // HandleLateBlocks processes votes and goodness for late blocks (for late block definition see white paper).
 // Returns the old verified layer and new verified layer after taking into account the blocks' votes.
+// DEPRECATED: don't use this method it will be completely removed.
 func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlocks(ctx context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
 	trtl.mu.Lock()
 	defer trtl.mu.Unlock()
