@@ -112,20 +112,6 @@ func (o *Organizer) submitPending(ctx context.Context, all bool, f LayersIterato
 	}
 }
 
-func earliestLayer(lid1, lid2 types.LayerID) types.LayerID {
-	if lid1.Before(lid2) {
-		return lid1
-	}
-	return lid2
-}
-
-func latestLayer(lid1, lid2 types.LayerID) types.LayerID {
-	if lid1.After(lid2) {
-		return lid1
-	}
-	return lid2
-}
-
 func checkEmpty(logger log.Log, lid types.LayerID) {
 	if (lid == types.LayerID{}) {
 		return
