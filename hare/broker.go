@@ -8,7 +8,6 @@ import (
 
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/prometheus/client_golang/prometheus"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
@@ -74,7 +73,7 @@ func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syn
 		tasks:          make(chan func()),
 		latestLayer:    types.GetEffectiveGenesis(),
 		limit:          limit,
-		queue:          priorityq.New(inboxCapacity), // TODO: set capacity correctly
+		queue:          priorityq.New(),
 		queueChannel:   make(chan struct{}, inboxCapacity),
 	}
 }
