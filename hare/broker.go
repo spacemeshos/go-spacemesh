@@ -179,6 +179,9 @@ func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*m
 	}
 
 	// indicate to the listener that there's a new message in the queue
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	select {
 	case <-ctx.Done():
 		return nil, ctx.Err()
@@ -198,7 +201,9 @@ func (b *Broker) eventLoop(ctx context.Context) {
 		select {
 		case <-b.Closer.CloseChannel():
 			b.queue.Close()
+			b.mu.Lock()
 			close(b.queueChannel)
+			b.mu.Unlock()
 			return
 		case <-b.queueChannel:
 			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
