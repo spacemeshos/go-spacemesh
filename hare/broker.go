@@ -100,6 +100,7 @@ var (
 	errFutureMsg         = errors.New("future message")
 	errRegistration      = errors.New("failed during registration")
 	errInstanceNotSynced = errors.New("instance not synchronized")
+	errClosed            = errors.New("closed")
 )
 
 // validate the message is contextually valid and that the target layer is synced.
@@ -179,9 +180,11 @@ func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*m
 
 	// indicate to the listener that there's a new message in the queue
 	select {
-	case b.queueChannel <- struct{}{}:
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	case <-b.Closer.CloseChannel():
+		return nil, errClosed
+	case b.queueChannel <- struct{}{}:
 	}
 	return m, nil
 }
