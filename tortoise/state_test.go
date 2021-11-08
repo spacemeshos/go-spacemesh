@@ -35,7 +35,7 @@ func max(x, y uint32) uint32 {
 
 func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng *rand.Rand) *state {
 	return func(rng *rand.Rand) *state {
-		st := &state{db: database.NewMemDatabase(), log: logtest.New(tb)}
+		st := &state{db: db, log: logger}
 
 		verifiedGen, ok := quick.Value(reflect.TypeOf(uint32(0)), rng)
 		require.True(tb, ok)
@@ -49,6 +49,7 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 		st.GoodBlocksIndex = map[types.BlockID]bool{}
 		st.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
 		st.BlockLayer = map[types.BlockID]types.LayerID{}
+		st.refBlockBeacons = make(map[types.EpochID]map[types.BlockID][]byte)
 
 		for i := 0; i < 200; i++ {
 			layerGen, ok := quick.Value(reflect.TypeOf(uint32(0)), rng)
@@ -68,6 +69,13 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 				st.BlockOpinionsByLayer[layer][block1] = Opinion{}
 				st.BlockLayer[block1] = layer
 			}
+
+			epoch := layer.GetEpoch()
+			if _, ok := st.refBlockBeacons[epoch]; !ok {
+				st.refBlockBeacons[epoch] = make(map[types.BlockID][]byte)
+			}
+			st.refBlockBeacons[epoch][block1] = randomBytes(tb, 32)
+
 			st.GoodBlocksIndex[block1] = false
 			block2 := block2Gen.Interface().(types.BlockID)
 			vecGen, ok := quick.Value(reflect.TypeOf(vec{}), rng)
@@ -147,6 +155,41 @@ func TestStateEvict(t *testing.T) {
 func TestStateRecoverNotFound(t *testing.T) {
 	st := makeStateGen(t, database.NewMemDatabase(), logtest.New(t))(rand.New(rand.NewSource(1001)))
 	require.ErrorIs(t, st.Recover(), database.ErrNotFound)
+}
+
+func TestEvictBeaconByEpoch(t *testing.T) {
+	st := makeStateGen(t, database.NewMemDatabase(), logtest.New(t))(rand.New(rand.NewSource(1001)))
+	st.refBlockBeacons = make(map[types.EpochID]map[types.BlockID][]byte)
+
+	for b, l := range st.BlockLayer {
+		epoch := l.GetEpoch()
+		if _, ok := st.refBlockBeacons[epoch]; !ok {
+			st.refBlockBeacons[epoch] = make(map[types.BlockID][]byte)
+		}
+		st.refBlockBeacons[epoch][b] = randomBytes(t, 32)
+	}
+	layers := make([]types.LayerID, 0, len(st.BlockOpinionsByLayer))
+	for layer := range st.BlockOpinionsByLayer {
+		layers = append(layers, layer)
+	}
+	sort.Slice(layers, func(i, j int) bool {
+		return layers[i].Before(layers[j])
+	})
+
+	epochSize := len(st.refBlockBeacons)
+	windowStart := layers[len(layers)/2]
+	earliestEpoch := windowStart.GetEpoch()
+	assert.NotEmpty(t, st.refBlockBeacons[earliestEpoch])
+	require.NoError(t, st.Evict(context.TODO(), windowStart))
+
+	// beacon cache should be evicted
+	assert.LessOrEqual(t, len(st.refBlockBeacons), epochSize)
+	// windowStart's epoch should still be there
+	assert.NotEmpty(t, st.refBlockBeacons[earliestEpoch])
+	// every epoch should be >= earliestEpoch
+	for epoch := range st.refBlockBeacons {
+		assert.GreaterOrEqual(t, epoch, earliestEpoch)
+	}
 }
 
 func BenchmarkStatePersist(b *testing.B) {
