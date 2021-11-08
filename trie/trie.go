@@ -20,6 +20,7 @@ package trie
 import (
 	"bytes"
 	"fmt"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto"
@@ -64,6 +65,7 @@ type LeafCallback func(leaf []byte, parent types.Hash32) error
 //
 // Trie is not safe for concurrent use.
 type Trie struct {
+	mu   sync.Mutex
 	db   *Database
 	root node
 
@@ -128,6 +130,9 @@ func (t *Trie) Get(key []byte) []byte {
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryGet(key []byte) ([]byte, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	key = keybytesToHex(key)
 	value, newroot, didResolve, err := t.tryGet(t.root, key, 0)
 	if err == nil && didResolve {
@@ -196,6 +201,9 @@ func (t *Trie) Update(key, value []byte) {
 //
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryUpdate(key, value []byte) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	k := keybytesToHex(key)
 	if len(value) != 0 {
 		_, n, err := t.insert(t.root, nil, k, valueNode(value))
@@ -293,6 +301,9 @@ func (t *Trie) Delete(key []byte) {
 // TryDelete removes any existing value for key from the trie.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *Trie) TryDelete(key []byte) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	k := keybytesToHex(key)
 	_, n, err := t.delete(t.root, nil, k)
 	if err != nil {
@@ -444,6 +455,9 @@ func (t *Trie) Root() []byte { return t.Hash().Bytes() }
 // Hash returns the root hash of the trie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *Trie) Hash() types.Hash32 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	hash, cached, _ := t.hashRoot(nil, nil)
 	t.root = cached
 	return types.BytesToHash(hash.(hashNode))
@@ -452,6 +466,9 @@ func (t *Trie) Hash() types.Hash32 {
 // Commit writes all nodes to the trie's memory database, tracking the internal
 // and external (for account tries) references.
 func (t *Trie) Commit(onleaf LeafCallback) (root types.Hash32, err error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if t.db == nil {
 		log.Panic("commit called on trie with nil database")
 	}
