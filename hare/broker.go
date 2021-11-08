@@ -195,9 +195,11 @@ func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*m
 // listens to incoming messages and incoming tasks.
 func (b *Broker) eventLoop(ctx context.Context) {
 	for {
-		b.WithContext(ctx).With().Debug("broker queue sizes",
-			log.Int("msg_queue_size", len(b.queueChannel)),
-			log.Int("task_queue_size", len(b.tasks)))
+		if !b.IsClosed() {
+			b.WithContext(ctx).With().Debug("broker queue sizes",
+				log.Int("msg_queue_size", len(b.queueChannel)),
+				log.Int("task_queue_size", len(b.tasks)))
+		}
 		select {
 		case <-b.Closer.CloseChannel():
 			b.queue.Close()
