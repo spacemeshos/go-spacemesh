@@ -4,12 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise/organizer"
 )
 
@@ -96,22 +94,18 @@ func TestOrder(t *testing.T) {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			ctx := context.Background()
-			ctrl := gomock.NewController(t)
-			tortoise := mocks.NewMockTortoise(ctrl)
-			var rst []types.LayerID
-			tortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-				func(ctx context.Context, lid types.LayerID) (types.LayerID, types.LayerID, bool) {
-					rst = append(rst, lid)
-					return lid.Sub(1), lid, false
-				}).AnyTimes()
 
-			org := organizer.New(tortoise,
+			org := organizer.New(
 				organizer.WithWindowSize(tc.window),
-				organizer.WithVerifiedLayer(tc.last),
+				organizer.WithLastLayer(tc.last),
 				organizer.WithLogger(logtest.New(t)),
 			)
+			var rst []types.LayerID
+			iterator := func(lid types.LayerID) {
+				rst = append(rst, lid)
+			}
 			for _, lid := range tc.send {
-				org.HandleIncomingLayer(ctx, lid)
+				org.Iterate(ctx, lid, iterator)
 			}
 			require.Equal(t, tc.expect, rst)
 		})

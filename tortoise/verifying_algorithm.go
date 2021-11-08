@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/tortoise/organizer"
 )
 
 // Config holds the arguments and dependencies to create a verifying tortoise instance.
@@ -41,7 +42,9 @@ type ThreadSafeVerifyingTortoise struct {
 	eg     errgroup.Group
 	cancel context.CancelFunc
 
-	mu sync.RWMutex
+	mu  sync.RWMutex
+	org *organizer.Organizer
+
 	// update will be set to non-nil after rerun completes, and must be set to nil once
 	// used to replace trtl.
 	update *rerunResult
@@ -81,6 +84,10 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 			cfg.Log.With().Panic("can't recover turtle state", log.Err(err))
 		}
 	}
+	alg.org = organizer.New(
+		organizer.WithLogger(cfg.Log),
+		organizer.WithLastLayer(alg.trtl.Last),
+	)
 	ctx, cancel := context.WithCancel(ctx)
 	alg.cancel = cancel
 	// TODO(dshulyak) with low rerun interval it is possible to start a rerun
@@ -146,13 +153,14 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 		oldVerified = observed.Sub(1)
 	}
 
-	logger.Info("handling incoming layer",
-		log.FieldNamed("old_pbase", oldVerified),
-		log.FieldNamed("incoming_layer", layerID))
-	if err := trtl.trtl.HandleIncomingLayer(ctx, layerID); err != nil {
-		// consider panicking here instead, since it means tortoise is stuck
-		logger.Error("tortoise errored handling incoming layer", log.Err(err))
-	}
+	trtl.org.Iterate(ctx, layerID, func(lid types.LayerID) {
+		logger.Info("handling incoming layer",
+			log.FieldNamed("old_pbase", oldVerified),
+			log.FieldNamed("incoming_layer", layerID))
+		if err := trtl.trtl.HandleIncomingLayer(ctx, layerID); err != nil {
+			logger.Error("tortoise errored handling incoming layer", log.Err(err))
+		}
+	})
 
 	newVerified := trtl.trtl.Verified
 	logger.Info("finished handling incoming layer",
