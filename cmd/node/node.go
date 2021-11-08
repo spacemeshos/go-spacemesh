@@ -525,28 +525,30 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, trtlStateDB)
 	trtlCfg := tortoise.Config{
-		LayerSize:       layerSize,
-		Database:        trtlStateDB,
-		MeshDatabase:    mdb,
-		ATXDB:           atxDB,
-		Hdist:           app.Config.Hdist,
-		Zdist:           app.Config.Zdist,
-		ConfidenceParam: app.Config.ConfidenceParam,
-		WindowSize:      app.Config.WindowSize,
-		GlobalThreshold: app.Config.GlobalThreshold,
-		LocalThreshold:  app.Config.LocalThreshold,
-		Log:             app.addLogger(TrtlLogger, lg),
-		RerunInterval:   time.Minute * time.Duration(app.Config.TortoiseRerunInterval),
+		LayerSize:                layerSize,
+		Database:                 trtlStateDB,
+		MeshDatabase:             mdb,
+		ATXDB:                    atxDB,
+		Beacons:                  tBeacon,
+		Hdist:                    app.Config.Hdist,
+		Zdist:                    app.Config.Zdist,
+		ConfidenceParam:          app.Config.ConfidenceParam,
+		WindowSize:               app.Config.WindowSize,
+		GlobalThreshold:          app.Config.GlobalThreshold,
+		LocalThreshold:           app.Config.LocalThreshold,
+		Log:                      app.addLogger(TrtlLogger, lg),
+		RerunInterval:            time.Minute * time.Duration(app.Config.TortoiseRerunInterval),
+		BadBeaconVoteDelayLayers: app.Config.LayersPerEpoch,
 	}
 
 	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
 	svm := svm.New(processor, app.addLogger(SVMLogger, lg))
 
 	if mdb.PersistentData() {
-		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, trtl, app.txPool, svm, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, fetcherWrapped, trtl, app.txPool, svm, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
-		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, trtl, app.txPool, svm, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, fetcherWrapped, trtl, app.txPool, svm, app.addLogger(MeshLogger, lg))
 		if err := svm.SetupGenesis(app.Config.Genesis); err != nil {
 			return fmt.Errorf("setup genesis: %w", err)
 		}

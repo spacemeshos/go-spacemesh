@@ -10,8 +10,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -20,7 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoise/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
@@ -159,6 +162,7 @@ const (
 var (
 	defaultTestHdist           = config.DefaultConfig().Hdist
 	defaultTestZdist           = config.DefaultConfig().Zdist
+	defaultVoteDelays          = config.DefaultConfig().LayersPerEpoch
 	defaultTestGlobalThreshold = big.NewRat(6, 10)
 	defaultTestLocalThreshold  = big.NewRat(2, 10)
 	defaultTestRerunInterval   = time.Hour
@@ -1060,19 +1064,17 @@ func TestBaseBlock(t *testing.T) {
 	r.Nil(exceptions)
 }
 
-func defaultClock(tb testing.TB) layerClock {
-	genesisTime := time.Now().Add(time.Second * 10)
-	ld := time.Duration(10) * time.Second
-	return timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(tb))
-}
-
 func defaultTurtle(tb testing.TB) *turtle {
 	mdb := getInMemMesh(tb)
+	ctrl := gomock.NewController(tb)
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
 	return newTurtle(
 		logtest.New(tb),
 		database.NewMemDatabase(),
 		mdb,
 		getAtxDB(),
+		mockBeacons,
 		defaultTestHdist,
 		defaultTestZdist,
 		defaultTestConfidenceParam,
@@ -1080,6 +1082,7 @@ func defaultTurtle(tb testing.TB) *turtle {
 		defaultTestLayerSize,
 		defaultTestGlobalThreshold,
 		defaultTestLocalThreshold,
+		defaultVoteDelays,
 	)
 }
 
@@ -1095,6 +1098,7 @@ func TestCloneTurtle(t *testing.T) {
 	r.Equal(trtl.ConfidenceParam, trtl2.ConfidenceParam)
 	r.Equal(trtl.WindowSize, trtl2.WindowSize)
 	r.Equal(trtl.AvgLayerSize, trtl2.AvgLayerSize)
+	r.Equal(trtl.badBeaconVoteDelayLayers, trtl2.badBeaconVoteDelayLayers)
 	r.Equal(trtl.GlobalThreshold, trtl2.GlobalThreshold)
 	r.Equal(trtl.LocalThreshold, trtl2.LocalThreshold)
 	r.Equal(trtl.RerunInterval, trtl2.RerunInterval)
@@ -1103,19 +1107,24 @@ func TestCloneTurtle(t *testing.T) {
 
 func defaultConfig(tb testing.TB, mdb *mesh.DB, atxdb atxDataProvider) Config {
 	tb.Helper()
+	ctrl := gomock.NewController(tb)
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
 	return Config{
-		LayerSize:       defaultTestLayerSize,
-		Database:        database.NewMemDatabase(),
-		MeshDatabase:    mdb,
-		ATXDB:           atxdb,
-		Hdist:           defaultTestHdist,
-		Zdist:           defaultTestZdist,
-		ConfidenceParam: defaultTestConfidenceParam,
-		WindowSize:      defaultTestWindowSize,
-		GlobalThreshold: defaultTestGlobalThreshold,
-		LocalThreshold:  defaultTestLocalThreshold,
-		RerunInterval:   defaultTestRerunInterval,
-		Log:             logtest.New(tb),
+		LayerSize:                defaultTestLayerSize,
+		Database:                 database.NewMemDatabase(),
+		MeshDatabase:             mdb,
+		Beacons:                  mockBeacons,
+		ATXDB:                    atxdb,
+		Hdist:                    defaultTestHdist,
+		Zdist:                    defaultTestZdist,
+		ConfidenceParam:          defaultTestConfidenceParam,
+		WindowSize:               defaultTestWindowSize,
+		BadBeaconVoteDelayLayers: defaultVoteDelays,
+		GlobalThreshold:          defaultTestGlobalThreshold,
+		LocalThreshold:           defaultTestLocalThreshold,
+		RerunInterval:            defaultTestRerunInterval,
+		Log:                      logtest.New(tb),
 	}
 }
 
@@ -3039,41 +3048,6 @@ func TestMultiTortoise(t *testing.T) {
 	})
 }
 
-func TestRerunMissingLayer(t *testing.T) {
-	ctx := context.Background()
-	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
-	s.Setup()
-
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
-	tortoise := NewVerifyingTortoise(ctx, cfg)
-	layers := make([]types.LayerID, 20)
-	for i := range layers {
-		layers[i] = s.Next()
-	}
-	missing := layers[10]
-	for _, lid := range layers {
-		if lid == missing {
-			continue
-		}
-		tortoise.HandleIncomingLayer(context.TODO(), lid)
-	}
-	// TODO(dshulyak) implement public interface to enforce rerun
-	require.NoError(t, tortoise.rerun(context.TODO()))
-	oldpbase, newpbase, reverted := tortoise.HandleIncomingLayer(context.TODO(), s.Next())
-	require.True(t, reverted)
-	require.Equal(t, missing.Sub(2), oldpbase)
-	require.Equal(t, layers[len(layers)-1], newpbase)
-	for _, lid := range layers {
-		bids, err := s.State.MeshDB.LayerBlockIds(lid)
-		require.NoError(t, err)
-		for _, bid := range bids {
-			validity, err := s.State.MeshDB.ContextualValidity(bid)
-			require.NoError(t, err)
-			require.True(t, validity)
-		}
-	}
-}
-
 func TestOnlyInorderLayersAreVerified(t *testing.T) {
 	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
 	s.Setup()
@@ -3120,4 +3094,110 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 			tortoise.HandleIncomingLayer(ctx, lid)
 		}
 	}
+}
+
+func randomBytes(tb testing.TB, size int) []byte {
+	tb.Helper()
+	data := make([]byte, size)
+	_, err := rand.Read(data)
+	require.NoError(tb, err)
+	return data
+}
+
+func randomBlock(tb testing.TB, lyrID types.LayerID, beacon []byte, refBlockID *types.BlockID) *types.Block {
+	tb.Helper()
+	block := types.NewExistingBlock(lyrID, randomBytes(tb, 4), nil)
+	block.TortoiseBeacon = beacon
+	block.RefBlock = refBlockID
+	return block
+}
+
+func TestBlockHasGoodBeacon(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	layerID := types.GetEffectiveGenesis().Add(1)
+	epochBeacon := randomBytes(t, 32)
+	block := randomBlock(t, layerID, epochBeacon, nil)
+
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	trtl := defaultTurtle(t)
+	trtl.beacons = mockBeacons
+
+	logger := logtest.New(t)
+	// good beacon
+	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
+	assert.True(t, trtl.blockHasGoodBeacon(block, logger))
+
+	// bad beacon
+	beacon := randomBytes(t, 32)
+	require.NotEqual(t, epochBeacon, beacon)
+	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(beacon, nil).Times(1)
+	assert.False(t, trtl.blockHasGoodBeacon(block, logger))
+
+	// ask a bad beacon again won't cause a lookup since it's cached
+	assert.False(t, trtl.blockHasGoodBeacon(block, logger))
+}
+
+func TestGetBlockBeacon(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	layerID := types.GetEffectiveGenesis().Add(1)
+	beacon := randomBytes(t, 32)
+	refBlock := randomBlock(t, layerID, beacon, nil)
+	refBlockID := refBlock.ID()
+	block := randomBlock(t, layerID, nil, &refBlockID)
+
+	mockBdp := mocks.NewMockblockDataProvider(ctrl)
+	trtl := defaultTurtle(t)
+	trtl.bdp = mockBdp
+
+	logger := logtest.New(t)
+	mockBdp.EXPECT().GetBlock(refBlockID).Return(refBlock, nil).Times(1)
+	got, err := trtl.getBlockBeacon(block, logger)
+	assert.NoError(t, err)
+	assert.Equal(t, beacon, got)
+
+	// get the block beacon again and the data is cached
+	got, err = trtl.getBlockBeacon(block, logger)
+	assert.NoError(t, err)
+	assert.Equal(t, beacon, got)
+}
+
+func TestVoteBlockFilterForHealing(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	layerID := types.GetEffectiveGenesis().Add(100)
+	epochBeacon := randomBytes(t, 32)
+	goodBlock := randomBlock(t, layerID, epochBeacon, nil)
+	badBeacon := randomBytes(t, 32)
+	require.NotEqual(t, epochBeacon, badBeacon)
+	badBlock := randomBlock(t, layerID, badBeacon, nil)
+
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	trtl := defaultTurtle(t)
+	trtl.beacons = mockBeacons
+
+	trtl.BlockLayer[goodBlock.ID()] = layerID
+	trtl.BlockLayer[badBlock.ID()] = layerID
+
+	logger := logtest.New(t)
+	// cause the bad beacon block to be cached
+	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(2)
+	assert.True(t, trtl.blockHasGoodBeacon(goodBlock, logger))
+	assert.False(t, trtl.blockHasGoodBeacon(badBlock, logger))
+
+	// we don't count votes in bad beacon block for badBeaconVoteDelays layers
+	i := uint32(1)
+	for ; i <= defaultVoteDelays; i++ {
+		filter := trtl.voteBlockFilterForHealing(layerID.Sub(i), logger)
+		assert.True(t, filter(goodBlock.ID()))
+		assert.False(t, filter(badBlock.ID()))
+	}
+	// now we count the bad beacon block's votes
+	filter := trtl.voteBlockFilterForHealing(layerID.Sub(i), logger)
+	assert.True(t, filter(goodBlock.ID()))
+	assert.True(t, filter(badBlock.ID()))
 }
