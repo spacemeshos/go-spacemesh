@@ -1,6 +1,7 @@
 package svm
 
 import (
+	"context"
 	"math/rand"
 	"testing"
 
@@ -11,6 +12,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mempool"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
@@ -46,7 +49,7 @@ func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *t
 	return createTransaction(t, nonce, rec, totalAmount-feeAmount, feeAmount, signer)
 }
 
-func TestHandleTransaction_ValidateOrigin(t *testing.T) {
+func TestHandleGossipTransaction_ValidationAccepted(t *testing.T) {
 	r := require.New(t)
 
 	db := database.NewMemDatabase()
@@ -60,11 +63,14 @@ func TestHandleTransaction_ValidateOrigin(t *testing.T) {
 	svm.state.SetNonce(origin, 3)
 
 	tx := newTx(t, 3, 10, signer)
-	err := svm.handleTransaction(tx, true)
-	r.NoError(err)
+	msg, _ := types.InterfaceToBytes(tx)
+
+	got := svm.HandleGossipTransaction(context.TODO(), p2p.Peer(signer.PublicKey().String()), msg)
+	want := pubsub.ValidationAccept
+	r.Equal(got, want)
 }
 
-func TestHandleTransaction_DontValidateOrigin(t *testing.T) {
+func TestHandleGossipTransaction_ValidationIgnored_WrongNonce(t *testing.T) {
 	r := require.New(t)
 
 	db := database.NewMemDatabase()
@@ -74,33 +80,18 @@ func TestHandleTransaction_DontValidateOrigin(t *testing.T) {
 
 	signer := signing.NewEdSigner()
 	origin := types.BytesToAddress(signer.PublicKey().Bytes())
-	svm.state.SetBalance(origin, 300)
-	svm.state.SetNonce(origin, 5)
+	svm.state.SetBalance(origin, 500)
+	svm.state.SetNonce(origin, 3)
 
-	tx := newTx(t, 5, 10, signer)
-	err := svm.handleTransaction(tx, false)
-	r.NoError(err)
+	tx := newTx(t, 4, 10, signer)
+	msg, _ := types.InterfaceToBytes(tx)
+
+	got := svm.HandleGossipTransaction(context.TODO(), p2p.Peer(signer.PublicKey().String()), msg)
+	want := pubsub.ValidationIgnore
+	r.Equal(got, want)
 }
 
-func TestHandleTransaction_WrongNonce(t *testing.T) {
-	r := require.New(t)
-
-	db := database.NewMemDatabase()
-	lg := logtest.New(t).WithName("svm_logger")
-	proc := state.NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
-	svm := New(proc, lg)
-
-	signer := signing.NewEdSigner()
-	origin := types.BytesToAddress(signer.PublicKey().Bytes())
-	svm.state.SetBalance(origin, 1000)
-	svm.state.SetNonce(origin, 5)
-
-	tx := newTx(t, 2, 10, signer)
-	err := svm.handleTransaction(tx, true)
-	r.Error(err, "nonce and balance validation failed; Expected: 5, Actual: 7")
-}
-
-func TestHandleTransaction_InsufficientBalance(t *testing.T) {
+func TestHandleGossipTransaction_ValidationIgnored_InsufficientBalance(t *testing.T) {
 	r := require.New(t)
 
 	db := database.NewMemDatabase()
@@ -111,9 +102,29 @@ func TestHandleTransaction_InsufficientBalance(t *testing.T) {
 	signer := signing.NewEdSigner()
 	origin := types.BytesToAddress(signer.PublicKey().Bytes())
 	svm.state.SetBalance(origin, 5)
-	svm.state.SetNonce(origin, 2)
+	svm.state.SetNonce(origin, 3)
 
-	tx := newTx(t, 2, 10, signer)
-	err := svm.handleTransaction(tx, true)
-	r.Error(err, "nonce and balance validation failed: insufficient balance")
+	tx := newTx(t, 3, 10, signer)
+	msg, _ := types.InterfaceToBytes(tx)
+
+	got := svm.HandleGossipTransaction(context.TODO(), p2p.Peer(signer.PublicKey().String()), msg)
+	want := pubsub.ValidationIgnore
+	r.Equal(got, want)
+}
+
+func TestHandleGossipTransaction_ValidationIgnored_NoTxOrigin(t *testing.T) {
+	r := require.New(t)
+
+	db := database.NewMemDatabase()
+	lg := logtest.New(t).WithName("svm_logger")
+	proc := state.NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	svm := New(proc, lg)
+
+	signer := signing.NewEdSigner()
+	tx := newTx(t, 3, 10, signer)
+	msg, _ := types.InterfaceToBytes(tx)
+
+	got := svm.HandleGossipTransaction(context.TODO(), p2p.Peer(signer.PublicKey().String()), msg)
+	want := pubsub.ValidationIgnore
+	r.Equal(got, want)
 }

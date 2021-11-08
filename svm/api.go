@@ -139,8 +139,7 @@ func (svm *SVM) ValidateAndAddTxToPool(tx *types.Transaction) error {
 	return nil
 }
 
-// HandleGossipTransaction wraps around HandleTransaction,
-// which handles data received on the transactions gossip channel.
+// HandleGossipTransaction wraps handles data received on the transactions gossip channel.
 func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	tx, err := types.BytesToTransaction(msg)
 	if err != nil {
@@ -148,8 +147,30 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		return pubsub.ValidationIgnore
 	}
 
-	if err = svm.handleTransaction(tx, true); err != nil {
-		svm.state.With().Error("handle transaction", log.Err(err))
+	if err := tx.CalcAndSetOrigin(); err != nil {
+		svm.state.With().Error("SVM failed to calculate transaction origin", tx.ID(), log.Err(err))
+		return pubsub.ValidationIgnore
+	}
+
+	svm.log.With().Info("got new tx",
+		tx.ID(),
+		log.Uint64("nonce", tx.AccountNonce),
+		log.Uint64("amount", tx.Amount),
+		log.Uint64("fee", tx.Fee),
+		log.Uint64("gas", tx.GasLimit),
+		log.String("recipient", tx.Recipient.String()),
+		log.String("origin", tx.Origin().String()))
+
+	if !svm.AddressExists(tx.Origin()) {
+		svm.state.With().Error("transaction origin does not exist",
+			log.String("transaction", tx.String()),
+			tx.ID(),
+			log.String("origin", tx.Origin().Short()))
+		return pubsub.ValidationIgnore
+	}
+
+	if err := svm.ValidateAndAddTxToPool(tx); err != nil {
+		svm.state.With().Error("SVM couldn't validate and/or add transaction to mempool", tx.ID(), log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 
@@ -172,37 +193,5 @@ func (svm *SVM) HandleSyncTransaction(data []byte) error {
 		return fmt.Errorf("calculate and set origin: %w", err)
 	}
 	svm.state.AddTxToPool(tx.Transaction)
-	return nil
-}
-
-// handleTransaction handles data received on transaction gossip channel.
-func (svm *SVM) handleTransaction(tx *types.Transaction, validateOrigin bool) error {
-	if err := tx.CalcAndSetOrigin(); err != nil {
-		svm.state.With().Error("SVM failed to calculate transaction origin", tx.ID(), log.Err(err))
-		return fmt.Errorf("calculate and set origin: %w", err)
-	}
-
-	svm.log.With().Info("got new tx",
-		tx.ID(),
-		log.Uint64("nonce", tx.AccountNonce),
-		log.Uint64("amount", tx.Amount),
-		log.Uint64("fee", tx.Fee),
-		log.Uint64("gas", tx.GasLimit),
-		log.String("recipient", tx.Recipient.String()),
-		log.String("origin", tx.Origin().String()))
-
-	if validateOrigin && !svm.AddressExists(tx.Origin()) {
-		svm.state.With().Error("transaction origin does not exist",
-			log.String("transaction", tx.String()),
-			tx.ID(),
-			log.String("origin", tx.Origin().Short()))
-		return fmt.Errorf("transaction origin does not exist")
-	}
-
-	if err := svm.ValidateAndAddTxToPool(tx); err != nil {
-		svm.state.With().Error("SVM couldn't validate and/or add transaction to mempool", tx.ID(), log.Err(err))
-		return fmt.Errorf("nonce and balance validation failed")
-	}
-
 	return nil
 }
