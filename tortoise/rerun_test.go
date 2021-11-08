@@ -113,10 +113,12 @@ func TestRerunMissingLayer(t *testing.T) {
 
 func TestRerunEvictConcurrent(t *testing.T) {
 	ctx := context.Background()
-	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
+	const size = 30
+	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
 	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg.LayerSize = size
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	for i := 0; i < int(cfg.WindowSize); i++ {
