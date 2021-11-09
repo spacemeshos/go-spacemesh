@@ -147,7 +147,9 @@ func getMesh(tb testing.TB, id string) *Mesh {
 	lg := logtest.New(tb).WithName(id)
 	mmdb := NewMemMeshDB(lg)
 	ctrl := gomock.NewController(tb)
-	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), mocks.NewMockBlockFetcher(ctrl), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
+	mockFetch := mocks.NewMockBlockFetcher(ctrl)
+	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
+	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), mockFetch, &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
 }
 
 func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
@@ -752,4 +754,24 @@ func TestMesh_HandleValidatedLayer(t *testing.T) {
 		}).Times(1)
 	msh.HandleValidatedLayer(context.TODO(), lyr, types.BlockIDs(blocks))
 	require.Equal(t, lyr, msh.ProcessedLayer())
+}
+
+func TestMesh_HandleValidatedLayer_emptyOutputFromHare(t *testing.T) {
+	msh := getMesh(t, "HandleValidatedLayer_Empty")
+	layerID := types.GetEffectiveGenesis().Add(1)
+
+	createMeshFromHareOutput(t, layerID, msh, NewAtxDbMock())
+	require.Equal(t, layerID, msh.ProcessedLayer())
+
+	var empty []types.BlockID
+	layerID = layerID.Add(1)
+	msh.HandleValidatedLayer(context.TODO(), layerID, empty)
+
+	// input vector saved
+	iv, err := msh.GetLayerInputVectorByID(layerID)
+	require.NoError(t, err)
+	assert.Nil(t, iv)
+
+	// but processed layer has advanced
+	assert.Equal(t, layerID, msh.ProcessedLayer())
 }
