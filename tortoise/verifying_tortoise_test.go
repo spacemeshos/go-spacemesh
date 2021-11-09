@@ -875,7 +875,7 @@ func TestAddToMesh(t *testing.T) {
 
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
-	alg.HandleIncomingLayer(context.TODO(), l3.Index())
+	require.NoError(t, alg.rerun(context.TODO()))
 
 	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l4))
@@ -1227,8 +1227,8 @@ func TestCalculateExceptions(t *testing.T) {
 
 	// missing layer data
 	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
-	r.ErrorIs(err, database.ErrNotFound)
-	r.Nil(votes)
+	r.NoError(err)
+	expectVotes(votes, 0, 1, 0)
 
 	// layer opinion vector is nil (abstains): recent layer, in mesh, no input vector
 	alg.trtl.Last = l0ID
@@ -1484,39 +1484,6 @@ func TestProcessBlock(t *testing.T) {
 	r.Equal(expectedOpinionVector, alg.trtl.BlockOpinionsByLayer[l3ID][l3Blocks[0].ID()])
 }
 
-func TestLateBlocks(t *testing.T) {
-	r := require.New(t)
-	mdb := getInMemMesh(t)
-	alg := defaultAlgorithm(t, mdb)
-	atxdb := getAtxDB()
-	alg.trtl.atxdb = atxdb
-
-	// process a bunch of layers normally
-	l0ID := types.GetEffectiveGenesis()
-	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(4), alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(5), alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
-
-	// send some late blocks that are in the input vector
-	layerLate := l0ID.Add(2)
-	lyr := makeLayer(t, layerLate, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), layerLate, lyr.BlocksIDs()))
-	oldVerified, newVerified := alg.HandleLateBlocks(context.TODO(), lyr.Blocks())
-	r.Equal(oldVerified, newVerified)
-	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
-
-	// send some late blocks that are not in the input vector
-	lyr = makeLayer(t, layerLate, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	oldVerified, newVerified = alg.HandleLateBlocks(context.TODO(), lyr.Blocks())
-	r.Equal(oldVerified, newVerified)
-	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
-
-	// TODO: send enough valid late blocks to overwhelm verifying tortoise's opinion
-}
-
 func makeAtxHeaderWithWeight(weight uint) (mockAtxHeader *types.ActivationTxHeader) {
 	mockAtxHeader = &types.ActivationTxHeader{NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: "fakekey"}}}
 	mockAtxHeader.StartTick = 0
@@ -1566,112 +1533,6 @@ func TestVoteWeightInOpinion(t *testing.T) {
 	l2Block := l2.Blocks()[0]
 	r.Len(l2Block.ForDiff, 1)
 	r.Equal(blockID, l2Block.ForDiff[0])
-}
-
-func TestProcessNewBlocks(t *testing.T) {
-	r := require.New(t)
-
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-	l1ID := types.GetEffectiveGenesis().Add(1)
-	l2ID := l1ID.Add(1)
-	l1Blocks := generateBlocks(t, l1ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
-	l2Blocks := generateBlocks(t, l2ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
-
-	for _, block := range l1Blocks {
-		r.NoError(mdb.AddBlock(block))
-	}
-	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-
-	// empty input
-	r.Nil(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{}))
-
-	// input not sorted by layer
-	blocksOutOfOrder := []*types.Block{l2Blocks[0], l1Blocks[0]}
-	err := alg.trtl.ProcessNewBlocks(context.TODO(), blocksOutOfOrder)
-	r.Equal(errNotSorted, err)
-
-	// process some blocks: make sure opinions updated and block marked good
-	l1Blocks[0].ForDiff = []types.BlockID{l1Blocks[1].ID(), l1Blocks[2].ID()}
-	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l1Blocks[0]}))
-	r.Contains(alg.trtl.BlockOpinionsByLayer, l1ID)
-	r.Contains(alg.trtl.BlockOpinionsByLayer[l1ID], l1Blocks[0].ID())
-	r.Equal(alg.trtl.BlockOpinionsByLayer[l1ID][l1Blocks[0].ID()], Opinion{
-		l1Blocks[1].ID(): support,
-		l1Blocks[2].ID(): support,
-	})
-	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
-	r.Equal(alg.trtl.GoodBlocksIndex[l1Blocks[0].ID()], false)
-
-	// base block opinion missing: input block should also not be marked good
-	l1Blocks[1].BaseBlock = l1Blocks[2].ID()
-	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l1Blocks[1]}))
-	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[1].ID())
-
-	// base block not marked good: input block should also not be marked good
-	alg.trtl.BlockOpinionsByLayer[l1ID][l1Blocks[2].ID()] = Opinion{}
-	l1Blocks[1].BaseBlock = l1Blocks[2].ID()
-	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l1Blocks[1]}))
-	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[1].ID())
-
-	// base block not found
-	l1Blocks[2].BaseBlock = l2Blocks[0].ID()
-	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l1Blocks[2]}))
-	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[2].ID())
-
-	// diffs appear before base block layer and/or are not consistent
-	// base block in L1 but this block contains a FOR vote for the genesis block in L0
-	l2Blocks[0].BaseBlock = l1Blocks[0].ID()
-	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l2Blocks[0]}))
-	r.NotContains(alg.trtl.GoodBlocksIndex, l2Blocks[0].ID())
-
-	// test eviction
-	r.Equal(int(mesh.GenesisLayer().Index().Sub(1).Uint32()), int(alg.trtl.LastEvicted.Uint32()))
-	// move verified up a bunch to make sure eviction occurs
-	alg.trtl.Verified = types.GetEffectiveGenesis().Add(alg.trtl.Hdist).Add(alg.trtl.WindowSize)
-	r.Contains(alg.trtl.BlockOpinionsByLayer, l1ID)
-	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
-	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l2Blocks[0]}))
-	r.Equal(int(alg.trtl.Verified.Uint32())-int(alg.trtl.WindowSize)-1, int(alg.trtl.LastEvicted.Uint32()))
-	r.NotContains(alg.trtl.BlockOpinionsByLayer, l1ID)
-	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
-
-	// make sure we don't add data on blocks older than the eviction window
-	lenBefore := len(alg.trtl.GoodBlocksIndex)
-	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l1Blocks[0]}))
-	r.Equal(lenBefore, len(alg.trtl.GoodBlocksIndex))
-	r.NotContains(alg.trtl.BlockOpinionsByLayer, l1ID)
-	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
-}
-
-func TestHandleLateBlocks(t *testing.T) {
-	// r := require.New(t)
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-	l1ID := types.GetEffectiveGenesis().Add(1)
-	l2ID := l1ID.Add(1)
-
-	// increase the layer size so a few blocks won't finalize a layer
-	const testLayerSize = 10
-	alg.trtl.AvgLayerSize = testLayerSize
-	checkVerifiedLayer(t, alg.trtl, types.GetEffectiveGenesis())
-
-	// one good layer
-	makeAndProcessLayer(t, l1ID, alg.trtl, testLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	checkVerifiedLayer(t, alg.trtl, types.GetEffectiveGenesis())
-
-	// generate and handle a small number of blocks: should not be able to verify layer
-	makeAndProcessLayer(t, l2ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	checkVerifiedLayer(t, alg.trtl, types.GetEffectiveGenesis())
-
-	// after late blocks arrive, verification should succeed
-	lyr := makeLayer(t, l2ID, alg.trtl, testLayerSize-defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	alg.HandleLateBlocks(context.TODO(), lyr.Blocks())
-	checkVerifiedLayer(t, alg.trtl, l1ID)
 }
 
 func TestVerifyLayers(t *testing.T) {
@@ -2281,7 +2142,7 @@ func TestHealBalanceAttack(t *testing.T) {
 	// this means that later blocks/layers with a base block or vote that supports this block will not be marked good
 	l4lateblock := generateBlocks(t, l4ID, 1, alg.BaseBlock, atxdb, 1)[0]
 	r.NoError(mdb.AddBlock(l4lateblock))
-	r.NoError(alg.trtl.ProcessNewBlocks(context.TODO(), []*types.Block{l4lateblock}))
+	r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
 
 	// this primes the block opinions for these blocks, without attempting to verify the previous layer
 	r.NoError(alg.trtl.handleLayerBlocks(context.TODO(), l5ID))
@@ -2572,7 +2433,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		// keep track of all blocks on each side of the partition
 		var forkBlocksA, forkBlocksB []*types.Block
-
+		beforePartition := layerID
 		// simulate a partition
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
@@ -2670,13 +2531,16 @@ func TestMultiTortoise(t *testing.T) {
 			// forkBlockIDsA = append(forkBlockIDsA, block.ID())
 			r.NoError(mdb2.AddBlock(block))
 		}
-		alg2.HandleLateBlocks(context.TODO(), forkBlocksA)
 
 		for _, block := range forkBlocksB {
 			// forkBlockIDsB = append(forkBlockIDsB, block.ID())
 			r.NoError(mdb1.AddBlock(block))
 		}
-		alg1.HandleLateBlocks(context.TODO(), forkBlocksB)
+
+		for lid := beforePartition.Add(1); !lid.After(layerID); lid = lid.Add(1) {
+			r.NoError(alg1.trtl.HandleIncomingLayer(context.TODO(), lid))
+			r.NoError(alg2.trtl.HandleIncomingLayer(context.TODO(), lid))
+		}
 
 		// now continue for a few layers after rejoining, during which the minority tortoise will be stuck
 		// because its opinions about which blocks are valid/invalid are wrong and disagree with the majority
@@ -3048,7 +2912,7 @@ func TestMultiTortoise(t *testing.T) {
 	})
 }
 
-func TestOnlyInorderLayersAreVerified(t *testing.T) {
+func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
 	s.Setup()
 
@@ -3057,7 +2921,7 @@ func TestOnlyInorderLayersAreVerified(t *testing.T) {
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	var (
-		inorder  types.LayerID
+		last     types.LayerID
 		verified types.LayerID
 	)
 	for _, lid := range sim.GenLayers(s,
@@ -3065,12 +2929,10 @@ func TestOnlyInorderLayersAreVerified(t *testing.T) {
 		sim.WithSequence(1, sim.WithNextReorder(1)),
 		sim.WithSequence(3),
 	) {
-		if lid == inorder.Add(1) || (inorder == types.LayerID{}) {
-			inorder = lid
-		}
+		last = lid
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
 	}
-	require.Equal(t, inorder.Sub(1), verified)
+	require.Equal(t, last.Sub(1), verified)
 }
 
 func BenchmarkTortoiseLayerHandling(b *testing.B) {

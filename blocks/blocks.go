@@ -32,7 +32,6 @@ type mesh interface {
 	GetBlock(types.BlockID) (*types.Block, error)
 	AddBlockWithTxs(context.Context, *types.Block) error
 	ProcessedLayer() types.LayerID
-	HandleLateBlock(context.Context, *types.Block)
 	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 }
 
@@ -116,10 +115,9 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte) error 
 	}
 
 	if !blk.Layer().After(bh.mesh.ProcessedLayer()) { //|| blk.Layer() == bh.mesh.getValidatingLayer() {
-		logger.With().Error("block is late",
+		logger.With().Warning("block is late",
 			log.FieldNamed("processed_layer", bh.mesh.ProcessedLayer()),
 			log.FieldNamed("miner_id", blk.MinerID()))
-		bh.mesh.HandleLateBlock(ctx, &blk)
 	}
 
 	logger.With().Debug("time to process block", log.Duration("duration", time.Since(start)))
