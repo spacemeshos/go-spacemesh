@@ -322,7 +322,8 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	var (
 		logger        = t.logger.WithContext(ctx)
 		disagreements = map[types.BlockID]types.LayerID{}
-		contenders    []types.BlockID
+		// choices from the best to the least bad
+		choices []types.BlockID
 	)
 
 	for lid := t.Last; lid.After(t.LastEvicted); lid = lid.Sub(1) {
@@ -333,13 +334,13 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 				continue
 			}
 			disagreements[bid] = dis
-			contenders = append(contenders, bid)
+			choices = append(choices, bid)
 		}
 	}
 
-	sort.Slice(contenders, func(i, j int) bool {
-		ibid := contenders[i]
-		jbid := contenders[j]
+	sort.Slice(choices, func(i, j int) bool {
+		ibid := choices[i]
+		jbid := choices[j]
 		_, iexist := t.GoodBlocksIndex[ibid]
 		_, jexist := t.GoodBlocksIndex[jbid]
 		if iexist && !jexist {
@@ -354,7 +355,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 		return false
 	})
 
-	for _, bid := range contenders {
+	for _, bid := range choices {
 		lid := t.BlockLayer[bid]
 		exceptions, err := t.calculateExceptions(ctx, lid, t.BlockOpinionsByLayer[lid][bid])
 		if err != nil {

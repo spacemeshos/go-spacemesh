@@ -1055,13 +1055,6 @@ func TestBaseBlock(t *testing.T) {
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 	expectBaseBlockLayer(l2.Index(), 0, defaultTestLayerSize, 0)
-
-	// mark all blocks bad
-	alg.trtl.GoodBlocksIndex = make(map[types.BlockID]bool, 0)
-	baseBlockID, exceptions, err := alg.BaseBlock(context.TODO())
-	r.Equal(errNoBaseBlockFound, err)
-	r.Equal(types.BlockID{0}, baseBlockID)
-	r.Nil(exceptions)
 }
 
 func defaultTurtle(tb testing.TB) *turtle {
@@ -2955,6 +2948,29 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 		for _, lid := range layers {
 			tortoise.HandleIncomingLayer(ctx, lid)
 		}
+	}
+}
+
+func BenchmarkBaseBlockSelection(b *testing.B) {
+	const size = 50
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	ctx := context.Background()
+	cfg := defaultConfig(b, s.State.MeshDB, s.State.AtxDB)
+	cfg.LayerSize = size
+	tortoise := NewVerifyingTortoise(ctx, cfg)
+
+	var last, verified types.LayerID
+	for i := 0; i < 200; i++ {
+		last = s.Next()
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(b, last.Sub(1), verified)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tortoise.BaseBlock(ctx)
 	}
 }
 
