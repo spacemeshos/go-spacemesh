@@ -217,7 +217,6 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
 	h.outputs[layerID] = blocks
-
 	return nil
 }
 
@@ -244,6 +243,12 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	}
 
 	var err error
+	beacon, err := h.beacons.GetBeacon(id.GetEpoch())
+	if err != nil {
+		logger.Info("not starting hare since beacon is not retrieved")
+		return false, nil
+	}
+
 	defer func() {
 		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
@@ -251,12 +256,6 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 			h.outputChan <- procReport{id, &Set{}, false, notCompleted}
 		}
 	}()
-
-	beacon, err := h.beacons.GetBeacon(id.GetEpoch())
-	if err != nil {
-		logger.Info("not starting hare since beacon is not retrieved")
-		return false, nil
-	}
 
 	// call to start the calculation of active set size beforehand
 	go func() {

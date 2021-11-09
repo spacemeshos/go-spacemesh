@@ -147,7 +147,9 @@ func getMesh(tb testing.TB, id string) *Mesh {
 	lg := logtest.New(tb).WithName(id)
 	mmdb := NewMemMeshDB(lg)
 	ctrl := gomock.NewController(tb)
-	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), mocks.NewMockBlockFetcher(ctrl), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
+	mockFetch := mocks.NewMockBlockFetcher(ctrl)
+	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
+	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), mockFetch, &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
 }
 
 func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
