@@ -109,7 +109,7 @@ func TestOrder(t *testing.T) {
 			ctx := context.Background()
 
 			org := organizer.New(
-				organizer.WithWindowSize(tc.window),
+				organizer.WithBufferSize(tc.window),
 				organizer.WithLastLayer(tc.last),
 				organizer.WithLogger(logtest.New(t)),
 			)
