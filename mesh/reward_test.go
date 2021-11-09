@@ -306,37 +306,6 @@ func TestMesh_updateStateWithLayer_SameInputFromSyncing(t *testing.T) {
 	require.Equal(t, oldTxs, s.Txs)
 }
 
-func TestMesh_updateStateWithLayer_LateBlock(t *testing.T) {
-	gLyr := types.GetEffectiveGenesis()
-	finalLyr := gLyr.Add(10)
-
-	// s is the state where a node advance its state via syncing with peers
-	s := &MockMapState{Rewards: make(map[types.Address]uint64)}
-	msh, atxDB := getMeshWithMapState(t, "t1", s)
-	t.Cleanup(func() {
-		msh.Close()
-	})
-	createMeshFromSyncing(t, finalLyr, msh, atxDB)
-	oldTxs := make([]*types.Transaction, len(s.Txs))
-	copy(oldTxs, s.Txs)
-	require.Greater(t, len(oldTxs), 0)
-
-	oldLyr, err := msh.GetLayer(finalLyr.Sub(4))
-	require.NoError(t, err)
-
-	blk := oldLyr.Blocks()[0]
-	msh.HandleLateBlock(context.TODO(), blk)
-	// a seen late block should not change the state
-	require.Equal(t, oldTxs, s.Txs)
-
-	// a not-before-seen late block should not change the state either
-	nodeID := types.NodeID{Key: strconv.Itoa(999), VRFPublicKey: []byte("ccccc")}
-	blk, _ = createBlock(t, msh, oldLyr.Index(), nodeID, 200, atxDB)
-	msh.HandleLateBlock(context.TODO(), blk)
-	// a late block we haven't seen should not the state
-	require.Equal(t, oldTxs, s.Txs)
-}
-
 func TestMesh_updateStateWithLayer_AdvanceInOrder(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)

@@ -8,8 +8,6 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/syndtr/goleveldb/leveldb"
-
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -422,10 +420,8 @@ func (t *turtle) calculateExceptions(
 
 		layerBlockIds, err := t.bdp.LayerBlockIds(layerID)
 		if err != nil {
-			if !errors.Is(err, leveldb.ErrClosed) {
-				// this should not happen! we only look at layers up to the last processed layer, and we only process
-				// layers with valid block data.
-				logger.With().Error("no block ids for layer in database", log.Err(err))
+			if errors.Is(err, database.ErrNotFound) {
+				continue
 			}
 			return nil, fmt.Errorf("layer block IDs: %w", err)
 		}
@@ -609,27 +605,9 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	return nil
 }
 
-// ProcessNewBlocks processes the votes of a set of blocks, records their opinions, and marks good blocks good.
-// The blocks do not all have to be in the same layer, but if they span multiple layers, they must be sorted by LayerID.
-func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) error {
-	if len(blocks) == 0 {
-		// nothing to do
-		t.logger.WithContext(ctx).Warning("cannot process empty block list")
-		return nil
-	}
-	if err := t.processBlocks(ctx, blocks); err != nil {
-		return err
-	}
-
-	// attempt to verify layers up to the latest one for which we have new block data
-	return t.verifyLayers(ctx)
-}
-
 func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error {
 	logger := t.logger.WithContext(ctx)
 	lastLayerID := types.NewLayerID(0)
-
-	logger.With().Info("tortoise handling incoming block data", log.Int("num_blocks", len(blocks)))
 
 	// process the votes in all layer blocks and update tables
 	filteredBlocks := make([]*types.Block, 0, len(blocks))
@@ -790,6 +768,12 @@ func (t *turtle) getBlockBeacon(block *types.Block, logger log.Log) ([]byte, err
 // HandleIncomingLayer processes all layer block votes
 // returns the old pbase and new pbase after taking into account block votes.
 func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) error {
+	// unconditionally set the layer to the last one that we have seen once tortoise or sync
+	// submits this layer. it doesn't matter if we fail to process it.
+	if t.Last.Before(layerID) {
+		t.Last = layerID
+	}
+
 	if err := t.handleLayerBlocks(ctx, layerID); err != nil {
 		return err
 	}
@@ -819,12 +803,6 @@ func (t *turtle) handleLayerBlocks(ctx context.Context, layerID types.LayerID) e
 		t.logger.WithContext(ctx).Warning("cannot process empty layer block list")
 		return nil
 	}
-
-	if t.Last.Before(layerID) {
-		t.Last = layerID
-	}
-
-	logger.With().Info("tortoise handling incoming layer", log.Int("num_blocks", len(layerBlocks)))
 	return t.processBlocks(ctx, layerBlocks)
 }
 
@@ -833,7 +811,6 @@ func (t *turtle) verifyLayers(ctx context.Context) error {
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.FieldNamed("verification_target", t.Last),
 		log.FieldNamed("old_verified", t.Verified))
-	logger.Info("starting layer verification")
 
 	// we perform eviction here because it should happen after the verified layer advances
 	defer t.evict(ctx)

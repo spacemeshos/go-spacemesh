@@ -40,7 +40,6 @@ type tortoise interface {
 	HandleIncomingLayer(context.Context, types.LayerID) (oldPbase, newPbase types.LayerID, reverted bool)
 	LatestComplete() types.LayerID
 	Persist(context.Context) error
-	HandleLateBlocks(context.Context, []*types.Block) (types.LayerID, types.LayerID)
 }
 
 // Validator interface to be used in tests to mock validation flow.
@@ -428,20 +427,6 @@ func (msh *Mesh) getValidBlockIDs(ctx context.Context, layerID types.LayerID) ([
 		}
 	}
 	return validBlockIDs, nil
-}
-
-// HandleLateBlock process a late (contextually invalid) block.
-func (msh *Mesh) HandleLateBlock(ctx context.Context, b *types.Block) {
-	msh.WithContext(ctx).With().Info("validate late block",
-		b.ID(),
-		b.ATXID,
-		log.FieldNamed("miner_id", b.MinerID()))
-	// TODO: handle late blocks in batches, see https://github.com/spacemeshos/go-spacemesh/issues/2412
-	oldPbase, newPbase := msh.trtl.HandleLateBlocks(ctx, []*types.Block{b})
-	if err := msh.trtl.Persist(ctx); err != nil {
-		msh.WithContext(ctx).With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
-	}
-	msh.pushLayersToState(ctx, oldPbase, newPbase)
 }
 
 // apply the state of a range of layers, including re-adding transactions from invalid blocks to the mempool.
