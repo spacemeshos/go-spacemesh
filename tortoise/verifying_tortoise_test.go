@@ -761,8 +761,8 @@ func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDat
 
 func TestEviction(t *testing.T) {
 	logger := logtest.New(t)
-	layers := types.NewLayerID(defaultTestWindowSize * 5)
-	avgPerLayer := 20 // more blocks = longer test
+	layers := types.NewLayerID(defaultTestWindowSize * 2)
+	avgPerLayer := 3 // more blocks = longer test
 	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, 0, 0)
 	require.Equal(t, int(trtl.WindowSize+2), len(trtl.BlockOpinionsByLayer))
 
@@ -2957,6 +2957,7 @@ func BenchmarkBaseBlockSelection(b *testing.B) {
 	const size = 30
 	s := sim.New(
 		sim.WithLayerSize(size),
+		sim.WithPath(b.TempDir()),
 	)
 	s.Setup()
 

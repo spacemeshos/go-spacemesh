@@ -339,14 +339,17 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	sort.Slice(choices, func(i, j int) bool {
 		ibid := choices[i]
 		jbid := choices[j]
+		// prioritize good blocks
 		_, iexist := t.GoodBlocksIndex[ibid]
 		_, jexist := t.GoodBlocksIndex[jbid]
 		if iexist && !jexist {
 			return true
 		}
-		if disagreements[ibid].After(disagreements[jbid]) {
+		// // prioritize block with less disagreements
+		if disagreements[ibid].Before(disagreements[jbid]) {
 			return true
 		}
+		// prioritize blocks from later layers
 		if t.BlockLayer[ibid].After(t.BlockLayer[jbid]) {
 			return true
 		}
@@ -360,7 +363,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 			logger.With().Warning("error calculating vote exceptions for block", bid, log.Err(err))
 			continue
 		}
-
+		// fmt.Println(lid, bid, len(exceptions), disagreements[bid])
 		logger.With().Info("chose base block",
 			bid,
 			log.Int("against_count", len(exceptions[0])),
@@ -384,7 +387,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 func (t *turtle) firstDisagreement(ctx context.Context, blid types.LayerID, bid types.BlockID) (types.LayerID, error) {
 	opinions := t.BlockOpinionsByLayer[blid][bid]
 	inputs := map[types.LayerID][]types.BlockID{}
-	for lid := blid; lid.After(t.LastEvicted); lid = lid.Sub(1) {
+	for lid := blid.Sub(1); lid.After(t.LastEvicted); lid = lid.Sub(1) {
 		blocks, err := t.bdp.LayerBlockIds(lid)
 		if err != nil {
 			return types.LayerID{}, nil
