@@ -21,7 +21,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-const protoName = "HARE_PROTOCOL"
+const (
+	// RoundsPerIteration is the number of rounds per iteration in the hare protocol.
+	RoundsPerIteration = 4
+	protoName          = "HARE_PROTOCOL"
+)
 
 type role byte
 
@@ -341,7 +345,7 @@ PreRound:
 
 			// exit if we reached the limit on number of iterations
 			k := proc.getK()
-			if k/4 >= uint32(proc.cfg.LimitIterations) {
+			if k >= uint32(proc.cfg.LimitIterations)*RoundsPerIteration {
 				logger.With().Warning("terminating: reached iterations limit",
 					log.Int("limit", proc.cfg.LimitIterations),
 					log.Uint32("current_k", k),
