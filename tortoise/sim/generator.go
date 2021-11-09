@@ -36,7 +36,15 @@ func WithLogger(logger log.Log) GenOpt {
 	}
 }
 
+// WithPath configures path for persistent databases.
+func WithPath(path string) GenOpt {
+	return func(g *Generator) {
+		g.conf.Path = path
+	}
+}
+
 type config struct {
+	Path           string
 	FirstLayer     types.LayerID
 	LayerSize      uint32
 	LayersPerEpoch uint32
@@ -67,7 +75,7 @@ func New(opts ...GenOpt) *Generator {
 	for _, opt := range opts {
 		opt(g)
 	}
-	mdb := mesh.NewMemMeshDB(g.logger)
+	mdb := newMeshDB(g.logger, g.conf)
 	atxdb := newAtxDB(g.logger, mdb, g.conf)
 
 	g.State = State{MeshDB: mdb, AtxDB: atxdb}

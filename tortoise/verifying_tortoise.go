@@ -35,13 +35,11 @@ var (
 )
 
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
-	arr := make([]types.BlockID, len(m))
-	i := 0
+	arr := make([]types.BlockID, 0, len(m))
 	for b := range m {
-		arr[i] = b
-		i++
+		arr = append(arr, b)
 	}
-	return types.SortBlockIDs(arr)
+	return arr
 }
 
 type turtle struct {
@@ -349,7 +347,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 		if disagreements[ibid].After(disagreements[jbid]) {
 			return true
 		}
-		if t.BlockLayer[ibid].After(disagreements[jbid]) {
+		if t.BlockLayer[ibid].After(t.BlockLayer[jbid]) {
 			return true
 		}
 		return false
@@ -1114,15 +1112,16 @@ func (t *turtle) layerOpinionVector(ctx context.Context, layerID types.LayerID) 
 		}
 		// this layer has been verified, so we should be able to read the set of contextual blocks
 		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
+
 		layerBlocks, err := t.bdp.LayerContextuallyValidBlocks(ctx, layerID)
 		if err != nil {
 			return nil, fmt.Errorf("layer contextually valid blocks: %w", err)
 		}
+
 		logger.With().Debug("got contextually valid blocks for layer",
 			log.Int("count", len(layerBlocks)))
 		return blockMapToArray(layerBlocks), nil
 	}
-
 	// for newer layers, we vote according to the local opinion (input vector, from hare or sync)
 	opinionVec, err := t.bdp.GetLayerInputVectorByID(layerID)
 	if err != nil {

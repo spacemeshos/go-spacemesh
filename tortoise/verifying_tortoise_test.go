@@ -2930,7 +2930,9 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 
 func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	const size = 30
-	s := sim.New(sim.WithLayerSize(30))
+	s := sim.New(
+		sim.WithLayerSize(30),
+	)
 	s.Setup()
 
 	ctx := context.Background()
@@ -2952,8 +2954,10 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 }
 
 func BenchmarkBaseBlockSelection(b *testing.B) {
-	const size = 50
-	s := sim.New(sim.WithLayerSize(size))
+	const size = 30
+	s := sim.New(
+		sim.WithLayerSize(size),
+	)
 	s.Setup()
 
 	ctx := context.Background()
@@ -2970,7 +2974,9 @@ func BenchmarkBaseBlockSelection(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		start := time.Now()
 		tortoise.BaseBlock(ctx)
+		fmt.Println(time.Since(start))
 	}
 }
 
