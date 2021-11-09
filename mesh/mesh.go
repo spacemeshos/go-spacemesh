@@ -40,7 +40,6 @@ type tortoise interface {
 	HandleIncomingLayer(context.Context, types.LayerID) (oldPbase, newPbase types.LayerID, reverted bool)
 	LatestComplete() types.LayerID
 	Persist(context.Context) error
-	HandleLateBlocks(context.Context, []*types.Block) (types.LayerID, types.LayerID)
 }
 
 // Validator interface to be used in tests to mock validation flow.
