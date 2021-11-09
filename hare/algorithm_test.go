@@ -186,6 +186,8 @@ func TestConsensusProcess_Start(t *testing.T) {
 	assert.Equal(t, nil, err)
 	err = proc.Start(context.TODO())
 	assert.Equal(t, "instance already started", err.Error())
+
+	closeBrokerAndWait(t, broker)
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {

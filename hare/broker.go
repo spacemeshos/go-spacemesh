@@ -57,6 +57,7 @@ type Broker struct {
 	minDeleted     types.LayerID
 	limit          int // max number of simultaneous consensus processes
 	stop           context.CancelFunc
+	eventLoopQuit  chan struct{}
 }
 
 func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
@@ -89,6 +90,8 @@ func (b *Broker) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 
 	b.stop = cancel
+	b.eventLoopQuit = make(chan struct{})
+
 	go b.eventLoop(log.WithNewSessionID(ctx))
 
 	return nil
@@ -194,12 +197,15 @@ func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*m
 
 // listens to incoming messages and incoming tasks.
 func (b *Broker) eventLoop(ctx context.Context) {
+	defer func() {
+		close(b.eventLoopQuit)
+	}()
+
 	for {
-		if !b.IsClosed() {
-			b.WithContext(ctx).With().Debug("broker queue sizes",
-				log.Int("msg_queue_size", len(b.queueChannel)),
-				log.Int("task_queue_size", len(b.tasks)))
-		}
+		b.WithContext(ctx).With().Debug("broker queue sizes",
+			log.Int("msg_queue_size", len(b.queueChannel)),
+			log.Int("task_queue_size", len(b.tasks)))
+
 		select {
 		case <-b.Closer.CloseChannel():
 			b.queue.Close()
@@ -486,6 +492,24 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 	}
 
 	return <-res
+}
+
+func (b *Broker) Close() {
+	b.Closer.Close()
+}
+
+func (b *Broker) CloseChannel() chan struct{} {
+	ch := make(chan struct{})
+
+	go func() {
+		<-b.Closer.CloseChannel()
+		if b.eventLoopQuit != nil {
+			<-b.eventLoopQuit
+		}
+		close(ch)
+	}()
+
+	return ch
 }
 
 func (b *Broker) getLatestLayer() types.LayerID {
