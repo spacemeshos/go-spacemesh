@@ -99,7 +99,7 @@ func (o *Organizer) Iterate(ctx context.Context, lid types.LayerID, f Callback) 
 // submitAll is a special case that submits all layers in a buffer even if there are gaps between them.
 func (o *Organizer) submitAll(f Callback) {
 	for lid := o.submitted.Add(1); !lid.After(o.received); lid = lid.Add(1) {
-		_, exists := o.buf.pop(lid)
+		exists := o.buf.pop(lid)
 		if !exists {
 			continue
 		}
@@ -111,7 +111,7 @@ func (o *Organizer) submitAll(f Callback) {
 // submitPending submits all non-nil layers in (o.submitted, o.received].
 func (o *Organizer) submitPending(f Callback) {
 	for lid := o.submitted.Add(1); !lid.After(o.received); lid = lid.Add(1) {
-		_, exists := o.buf.pop(lid)
+		exists := o.buf.pop(lid)
 		if !exists {
 			return
 		}
@@ -120,27 +120,19 @@ func (o *Organizer) submitPending(f Callback) {
 	}
 }
 
-type layerBuffer []types.LayerID
+type layerBuffer []bool
 
 func (buf layerBuffer) store(lid types.LayerID) {
 	pos := int(lid.Uint32()) % len(buf)
-	checkEmpty(buf[pos])
-	buf[pos] = lid
+	if buf[pos] {
+		panic(fmt.Sprintf("invalid state. overwriting non-empty layer %s in the buffer with", lid))
+	}
+	buf[pos] = true
 }
 
-func (buf layerBuffer) pop(lid types.LayerID) (types.LayerID, bool) {
+func (buf layerBuffer) pop(lid types.LayerID) bool {
 	pos := int(lid.Uint32()) % len(buf)
 	rst := buf[pos]
-	if rst != lid {
-		panic(fmt.Sprintf("invalid state. storing invalid layer %s instead of %s", rst, lid))
-	}
-	buf[pos] = types.LayerID{}
-	return rst, rst != types.LayerID{}
-}
-
-func checkEmpty(lid types.LayerID) {
-	if (lid == types.LayerID{}) {
-		return
-	}
-	panic(fmt.Sprintf("invalid state. overwriting non-empty layer %s in the window", lid))
+	buf[pos] = false
+	return rst
 }
