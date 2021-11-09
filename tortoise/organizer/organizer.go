@@ -9,7 +9,7 @@ import (
 )
 
 // Callback is used to send iterated layers to the caller.
-// For siplicity Callback iterates over all layers unconditionally.
+// For simplicity Callback iterates over all layers unconditionally.
 type Callback func(types.LayerID)
 
 // Opt is for configuring Organizer.
@@ -30,9 +30,9 @@ func WithLastLayer(lid types.LayerID) Opt {
 	}
 }
 
-// WithWindowSize configures size of the window.
+// WithBufferSize configures size of the window.
 // By default window of the size 1000 is used.
-func WithWindowSize(size int) Opt {
+func WithBufferSize(size int) Opt {
 	return func(o *Organizer) {
 		o.buf = make(layerBuffer, size)
 	}
@@ -131,6 +131,9 @@ func (buf layerBuffer) store(lid types.LayerID) {
 func (buf layerBuffer) pop(lid types.LayerID) (types.LayerID, bool) {
 	pos := int(lid.Uint32()) % len(buf)
 	rst := buf[pos]
+	if rst != lid {
+		panic(fmt.Sprintf("invalid state. storing invalid layer %s instead of %s", rst, lid))
+	}
 	buf[pos] = types.LayerID{}
 	return rst, rst != types.LayerID{}
 }
