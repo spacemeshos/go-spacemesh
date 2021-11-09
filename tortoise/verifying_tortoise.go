@@ -605,22 +605,6 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	return nil
 }
 
-// ProcessNewBlocks processes the votes of a set of blocks, records their opinions, and marks good blocks good.
-// The blocks do not all have to be in the same layer, but if they span multiple layers, they must be sorted by LayerID.
-func (t *turtle) ProcessNewBlocks(ctx context.Context, blocks []*types.Block) error {
-	if len(blocks) == 0 {
-		// nothing to do
-		t.logger.WithContext(ctx).Warning("cannot process empty block list")
-		return nil
-	}
-	if err := t.processBlocks(ctx, blocks); err != nil {
-		return err
-	}
-
-	// attempt to verify layers up to the latest one for which we have new block data
-	return t.verifyLayers(ctx)
-}
-
 func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) error {
 	logger := t.logger.WithContext(ctx)
 	lastLayerID := types.NewLayerID(0)

@@ -120,21 +120,6 @@ func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.B
 	return block, diffs, err
 }
 
-// HandleLateBlocks processes votes and goodness for late blocks (for late block definition see white paper).
-// Returns the old verified layer and new verified layer after taking into account the blocks' votes.
-// DEPRECATED: don't use this method it will be completely removed.
-func (trtl *ThreadSafeVerifyingTortoise) HandleLateBlocks(ctx context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
-	trtl.mu.Lock()
-	defer trtl.mu.Unlock()
-	oldVerified := trtl.trtl.Verified
-	if err := trtl.trtl.ProcessNewBlocks(ctx, blocks); err != nil {
-		// consider panicking here instead, since it means tortoise is stuck
-		trtl.logger.WithContext(ctx).With().Error("tortoise errored handling late blocks", log.Err(err))
-	}
-	newVerified := trtl.trtl.Verified
-	return oldVerified, newVerified
-}
-
 // HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes.
 func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
