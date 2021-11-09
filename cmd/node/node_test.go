@@ -213,8 +213,9 @@ func setup() {
 	// Reset the shutdown context
 	// oof, globals make testing really difficult
 	ctx, cancel := context.WithCancel(context.Background())
-	cmdp.Ctx = ctx
-	cmdp.Cancel = cancel
+
+	cmdp.SetCtx(ctx)
+	cmdp.SetCancel(cancel)
 
 	events.CloseEventReporter()
 	resetFlags()
@@ -664,7 +665,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
-	cmdp.Cancel() // stop the app
+	cmdp.Cancel()() // stop the app
+
 	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
 }
@@ -815,7 +817,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2.Wait()
 
 	// This stops the app
-	cmdp.Cancel()
+	cmdp.Cancel()()
 
 	// Wait for it to stop
 	wg.Wait()

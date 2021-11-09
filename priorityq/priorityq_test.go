@@ -10,20 +10,9 @@ import (
 
 var defLen = 1000
 
-func TestNewPriorityQ(t *testing.T) {
-	r := require.New(t)
-	pq := New(defLen)
-	r.Equal(defLen, cap(pq.queues[High]))
-	r.Equal(defLen, cap(pq.queues[Mid]))
-	r.Equal(defLen, cap(pq.queues[Low]))
-	r.Equal(prioritiesCount, len(pq.queues))
-	r.Equal(prioritiesCount, cap(pq.queues))
-	r.Equal(defLen*prioritiesCount, cap(pq.waitCh))
-}
-
 func TestPriorityQ_Write(t *testing.T) {
 	r := require.New(t)
-	pq := New(defLen)
+	pq := New()
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -43,19 +32,12 @@ func TestPriorityQ_Write(t *testing.T) {
 	}()
 
 	wg.Wait()
-	r.Equal(defLen, len(pq.queues[High]))
-	r.Equal(defLen, len(pq.queues[Low]))
-}
-
-func TestPriorityQ_WriteError(t *testing.T) {
-	r := require.New(t)
-	pq := New(defLen)
-	r.Equal(ErrUnknownPriority, pq.Write(3, 0))
+	r.Equal(defLen*2, pq.Length())
 }
 
 func TestPriorityQ_Read(t *testing.T) {
 	r := require.New(t)
-	pq := New(defLen)
+	pq := New()
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
@@ -115,13 +97,13 @@ func TestPriorityQ_Read(t *testing.T) {
 
 func TestPriorityQ_Close(t *testing.T) {
 	r := require.New(t)
-	pq := New(defLen)
+	pq := New()
 	prios := []Priority{Low, Mid, High}
 	for i := 0; i < 1000; i++ {
 		r.NoError(pq.Write(Priority(i%len(prios)), []byte("LOLOLOLLZ")))
 	}
 
-	r.Equal(_getQueueSize(pq), defLen)
+	r.Equal(pq.Length(), defLen)
 
 	c := make(chan struct{})
 
@@ -144,12 +126,4 @@ func TestPriorityQ_Close(t *testing.T) {
 	// close it right away
 	pq.Close()
 	<-c
-}
-
-func _getQueueSize(pq *Queue) int {
-	i := 0
-	for _, q := range pq.queues {
-		i += len(q)
-	}
-	return i
 }

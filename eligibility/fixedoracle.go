@@ -215,9 +215,9 @@ func (fo *FixedRolacle) eligible(ctx context.Context, layer types.LayerID, round
 	if _, exist := fo.emaps[instID]; !exist {
 		fo.emaps[instID] = fo.generateEligibility(ctx, size)
 	}
-	fo.mapRW.Unlock()
 	// get eligibility result
 	_, exist := fo.emaps[instID][id.Key]
+	fo.mapRW.Unlock()
 
 	return exist, nil
 }

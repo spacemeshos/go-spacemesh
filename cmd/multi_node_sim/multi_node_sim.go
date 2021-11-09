@@ -39,7 +39,7 @@ var Cmd = &cobra.Command{
 	Use:   "run_sim",
 	Short: "start simulation",
 	Run: func(cmd *cobra.Command, args []string) {
-		node.StartMultiNode(log.AppLog, multiConfig.NumberOfNodes, multiConfig.BlocksPerLayer, multiConfig.RunUntilLayer, multiConfig.DbLocation)
+		node.StartMultiNode(log.GetLogger(), multiConfig.NumberOfNodes, multiConfig.BlocksPerLayer, multiConfig.RunUntilLayer, multiConfig.DbLocation)
 	},
 }
 

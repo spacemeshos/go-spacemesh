@@ -31,6 +31,7 @@ type DB struct {
 	inputVector           database.Database
 	blockMutex            sync.RWMutex
 	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
+	coinflipMu            sync.RWMutex
 	coinflips             map[types.LayerID]bool // weak coinflip results from Hare
 	lhMutex               sync.Mutex
 	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
@@ -350,12 +351,19 @@ func (m *DB) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip
 	m.WithContext(ctx).With().Info("recording coinflip result for layer in mesh",
 		layerID,
 		log.Bool("coinflip", coinflip))
+
+	m.coinflipMu.Lock()
+	defer m.coinflipMu.Unlock()
+
 	m.coinflips[layerID] = coinflip
 }
 
 // GetCoinflip returns the weak coinflip result for the given layer.
 func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) {
+	m.coinflipMu.Lock()
 	coin, exists := m.coinflips[layerID]
+	m.coinflipMu.Unlock()
+
 	return coin, exists
 }
 

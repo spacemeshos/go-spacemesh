@@ -198,9 +198,9 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	if output.Completed() {
 		h.WithContext(ctx).With().Info("hare terminated with success", layerID)
 		set := output.Set()
-		blocks = make([]types.BlockID, 0, len(set.values))
-		for key := range set.values {
-			blocks = append(blocks, key)
+		blocks = make([]types.BlockID, 0, set.len())
+		for _, v := range set.elements() {
+			blocks = append(blocks, v)
 		}
 	} else {
 		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
@@ -282,7 +282,9 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		return false, nil
 	}
 
+	h.layerLock.RLock()
 	blocks := h.getGoodBlocks(h.lastLayer, beacon, logger)
+	h.layerLock.RUnlock()
 	logger.With().Info("starting hare consensus with blocks", log.Int("num_blocks", len(blocks)))
 	set := NewSet(blocks)
 
@@ -408,7 +410,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 				if err != nil {
 					h.With().Error("failed to handle tick", log.Err(err))
 				} else if !started {
-					h.WithContext(ctx).With().Warning("consensus not started for layer", layer)
+					h.WithContext(ctx).With().Warning("consensus not started for layer", l)
 				}
 			}(layer)
 		case <-h.CloseChannel():

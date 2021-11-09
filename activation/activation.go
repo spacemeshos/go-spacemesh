@@ -134,7 +134,7 @@ type Builder struct {
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
-	mtx                   sync.Mutex
+	mu                    sync.Mutex
 	store                 bytesStore
 	syncer                syncer
 	log                   log.Log
@@ -212,14 +212,14 @@ func (b *Builder) Smeshing() bool {
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
 func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
-	b.mtx.Lock()
+	b.mu.Lock()
 	if b.exited != nil {
 		select {
 		case <-b.exited:
 			// we are here if StartSession failed and method returned with error
 			// in this case it is expected that the user may call StartSmeshing without StopSmeshing first
 		default:
-			b.mtx.Unlock()
+			b.mu.Unlock()
 			return errors.New("already started")
 		}
 	}
@@ -230,7 +230,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	exited := make(chan struct{})
 	ctx, b.stop = context.WithCancel(b.parentCtx)
 	b.exited = exited
-	b.mtx.Unlock()
+	b.mu.Unlock()
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
@@ -260,8 +260,9 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 
 // StopSmeshing stops the atx builder.
 func (b *Builder) StopSmeshing(deleteFiles bool) error {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	if b.exited == nil {
 		return errors.New("not started")
 	}

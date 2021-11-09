@@ -187,6 +187,7 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	}
 	wc.nextRoundBuffer = wc.nextRoundBuffer[:0]
 	wc.mu.Unlock()
+
 	return wc.publishProposal(ctx, epoch, round)
 }
 
@@ -238,7 +239,9 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (b
 }
 
 func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
+	wc.mu.Lock()
 	msg, smallest := wc.prepareProposal(epoch, round)
+	wc.mu.Unlock()
 
 	// nothing to send is valid if all proposals are exceeding threshold
 	if msg == nil {

@@ -476,7 +476,7 @@ func (v *syntaxContextValidator) validateSVPTypeA(ctx context.Context, m *Msg) b
 	for _, status := range m.InnerMsg.Svp.Messages {
 		statusSet := NewSet(status.InnerMsg.Values)
 		// build union
-		for bid := range statusSet.values {
+		for _, bid := range statusSet.elements() {
 			unionSet.Add(bid) // assuming add is unique
 		}
 	}

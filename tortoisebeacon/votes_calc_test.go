@@ -70,9 +70,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				config: Config{
-					Theta: big.NewRat(1, 1),
-				},
+				theta:       new(big.Float).SetRat(big.NewRat(1, 1)),
 				logger:      logtest.New(t).WithName("TortoiseBeacon"),
 				atxDB:       mockDB,
 				votesMargin: tc.votesMargin,
@@ -167,9 +165,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				config: Config{
-					Theta: big.NewRat(1, 1),
-				},
+				theta:       new(big.Float).SetRat(big.NewRat(1, 1)),
 				logger:      logtest.New(t).WithName("TortoiseBeacon"),
 				atxDB:       mockDB,
 				votesMargin: tc.votesCount,

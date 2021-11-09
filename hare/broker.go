@@ -39,6 +39,7 @@ type msgRPC struct {
 type Broker struct {
 	util.Closer
 	log.Log
+	mu             sync.RWMutex
 	pid            peer.ID
 	eValidator     validator     // provides eligibility validation
 	stateQuerier   StateQuerier  // provides activeness check
@@ -50,11 +51,14 @@ type Broker struct {
 	outbox         map[uint32]chan *Msg
 	pending        map[uint32][]*Msg // the buffer of pending early messages for the next layer
 	tasks          chan func()       // a channel to synchronize tasks (register/unregister) with incoming messages handling
-	latestLayer    types.LayerID     // the latest layer to attempt register (successfully or unsuccessfully)
+	latestLayerMu  sync.RWMutex
+	latestLayer    types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
 	isStarted      bool
 	minDeleted     types.LayerID
 	limit          int // max number of simultaneous consensus processes
 	stop           context.CancelFunc
+	eventLoopQuit  chan struct{}
+	queueMessageWg *sync.WaitGroup
 }
 
 func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
@@ -72,8 +76,9 @@ func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syn
 		tasks:          make(chan func()),
 		latestLayer:    types.GetEffectiveGenesis(),
 		limit:          limit,
-		queue:          priorityq.New(inboxCapacity), // TODO: set capacity correctly
+		queue:          priorityq.New(),
 		queueChannel:   make(chan struct{}, inboxCapacity),
+		queueMessageWg: &sync.WaitGroup{},
 	}
 }
 
@@ -85,8 +90,12 @@ func (b *Broker) Start(ctx context.Context) error {
 	}
 	b.isStarted = true
 	ctx, cancel := context.WithCancel(ctx)
+
 	b.stop = cancel
+	b.eventLoopQuit = make(chan struct{})
+
 	go b.eventLoop(log.WithNewSessionID(ctx))
+
 	return nil
 }
 
@@ -96,6 +105,7 @@ var (
 	errFutureMsg         = errors.New("future message")
 	errRegistration      = errors.New("failed during registration")
 	errInstanceNotSynced = errors.New("instance not synchronized")
+	errClosed            = errors.New("closed")
 )
 
 // validate the message is contextually valid and that the target layer is synced.
@@ -103,21 +113,25 @@ var (
 func (b *Broker) validate(ctx context.Context, m *Message) error {
 	msgInstID := m.InnerMsg.InstanceID
 
+	b.mu.RLock()
 	_, exist := b.outbox[msgInstID.Uint32()]
+	b.mu.RUnlock()
 
 	if !exist {
 		// prev layer, must be unregistered
-		if msgInstID.Before(b.latestLayer) {
+		latestLayer := b.getLatestLayer()
+
+		if msgInstID.Before(latestLayer) {
 			return errUnregistered
 		}
 
 		// current layer
-		if msgInstID == b.latestLayer {
+		if msgInstID == latestLayer {
 			return errRegistration
 		}
 
 		// early msg
-		if msgInstID == b.latestLayer.Add(1) {
+		if msgInstID == latestLayer.Add(1) {
 			return errEarlyMsg
 		}
 
@@ -136,6 +150,10 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+	if b.IsClosed() {
+		return pubsub.ValidationIgnore
+	}
+
 	m, err := b.queueMessage(ctx, pid, msg)
 	if err != nil {
 		return pubsub.ValidationIgnore
@@ -153,7 +171,10 @@ func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pub
 }
 
 func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*msgRPC, error) {
-	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.latestLayer))
+	b.queueMessageWg.Add(1)
+	defer b.queueMessageWg.Done()
+
+	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
 	logger.Debug("hare broker received inbound gossip message")
 
 	// prioritize based on signature: outbound messages (self-generated) get priority
@@ -171,26 +192,32 @@ func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*m
 
 	// indicate to the listener that there's a new message in the queue
 	select {
-	case b.queueChannel <- struct{}{}:
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	case <-b.Closer.CloseChannel():
+		return nil, errClosed
+	case b.queueChannel <- struct{}{}:
 	}
 	return m, nil
 }
 
 // listens to incoming messages and incoming tasks.
 func (b *Broker) eventLoop(ctx context.Context) {
+	defer func() {
+		close(b.eventLoopQuit)
+	}()
+
 	for {
 		b.WithContext(ctx).With().Debug("broker queue sizes",
 			log.Int("msg_queue_size", len(b.queueChannel)),
 			log.Int("task_queue_size", len(b.tasks)))
+
 		select {
 		case <-b.Closer.CloseChannel():
 			b.queue.Close()
-			close(b.queueChannel)
 			return
 		case <-b.queueChannel:
-			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+			logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
 			rawMsg, err := b.queue.Read()
 			if err != nil {
 				logger.With().Info("priority queue was closed, exiting", log.Err(err))
@@ -263,23 +290,33 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			msgLogger.With().Debug("broker reported hare message as valid", hareMsg)
 
 			if isEarly {
+				b.mu.Lock()
 				if _, exist := b.pending[msgInstID.Uint32()]; !exist { // create buffer if first msg
 					b.pending[msgInstID.Uint32()] = make([]*Msg, 0)
 				}
+				b.mu.Unlock()
+
 				// we want to write all buffered messages to a chan with InboxCapacity len
 				// hence, we limit the buffer for pending messages
-				if len(b.pending[msgInstID.Uint32()]) == inboxCapacity {
+				b.mu.RLock()
+				chCount := len(b.pending[msgInstID.Uint32()])
+				b.mu.RUnlock()
+				if chCount == inboxCapacity {
 					msgLogger.With().Error("too many pending messages, ignoring message",
 						log.Int("inbox_capacity", inboxCapacity),
 						log.String("sender_id", iMsg.PubKey.ShortString()))
 					continue
 				}
+				b.mu.Lock()
 				b.pending[msgInstID.Uint32()] = append(b.pending[msgInstID.Uint32()], iMsg)
+				b.mu.Unlock()
 				continue
 			}
 
 			// has instance, just send
+			b.mu.RLock()
 			out, exist := b.outbox[msgInstID.Uint32()]
+			b.mu.RUnlock()
 			if !exist {
 				msgLogger.With().Panic("missing broker instance for layer")
 			}
@@ -288,29 +325,36 @@ func (b *Broker) eventLoop(ctx context.Context) {
 			out <- iMsg
 
 		case task := <-b.tasks:
+			latestLayer := b.getLatestLayer()
+
 			b.WithContext(ctx).With().Debug("broker received task, executing",
-				log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+				log.FieldNamed("latest_layer", latestLayer))
 			task()
 			b.WithContext(ctx).With().Debug("broker finished executing task",
-				log.FieldNamed("latest_layer", types.LayerID(b.latestLayer)))
+				log.FieldNamed("latest_layer", latestLayer))
 		}
 	}
 }
 
 func (b *Broker) updateLatestLayer(ctx context.Context, id types.LayerID) {
-	if !id.After(b.latestLayer) { // should expect to update only newer layers
+	if !id.After(b.getLatestLayer()) { // should expect to update only newer layers
 		b.WithContext(ctx).With().Panic("tried to update a previous layer",
 			log.FieldNamed("this_layer", id),
-			log.FieldNamed("prev_layer", b.latestLayer))
+			log.FieldNamed("prev_layer", b.getLatestLayer()))
 		return
 	}
 
-	b.latestLayer = id
+	b.setLatestLayer(id)
 }
 
 func (b *Broker) cleanOldLayers() {
-	for i := b.minDeleted.Add(1); i.Before(b.latestLayer); i = i.Add(1) {
-		if _, exist := b.outbox[i.Uint32()]; !exist { // unregistered
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	for i := b.minDeleted.Add(1); i.Before(b.getLatestLayer()); i = i.Add(1) {
+		_, exist := b.outbox[i.Uint32()]
+
+		if !exist { // unregistered
 			delete(b.syncState, i.Uint32()) // clean sync state
 			b.minDeleted = b.minDeleted.Add(1)
 		} else { // encountered first still running layer
@@ -320,6 +364,9 @@ func (b *Broker) cleanOldLayers() {
 }
 
 func (b *Broker) updateSynchronicity(ctx context.Context, id types.LayerID) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	if _, ok := b.syncState[id.Uint32()]; ok { // already has result
 		return
 	}
@@ -338,7 +385,9 @@ func (b *Broker) updateSynchronicity(ctx context.Context, id types.LayerID) {
 func (b *Broker) isSynced(ctx context.Context, id types.LayerID) bool {
 	b.updateSynchronicity(ctx, id)
 
+	b.mu.RLock()
 	synced, ok := b.syncState[id.Uint32()]
+	b.mu.RUnlock()
 	if !ok { // not exist means unknown
 		b.WithContext(ctx).Panic("syncState doesn't contain a value after call to updateSynchronicity")
 	}
@@ -362,26 +411,38 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 			// executed sequentially and synchronously. There is still the concern that two or more
 			// calls to Register will be executed out of order, but Register is only called
 			// on a new layer tick, and anyway updateLatestLayer would panic in this case.
-			if len(b.outbox) >= b.limit {
+			b.mu.RLock()
+			outboxLen := len(b.outbox)
+			b.mu.RUnlock()
+			if outboxLen >= b.limit {
 				// unregister the earliest layer to make space for the new layer
 				// cannot call unregister here because unregister blocks and this would cause a deadlock
+				b.mu.RLock()
 				instance := b.minDeleted.Add(1)
+				b.mu.RUnlock()
 				b.cleanState(instance)
 				b.With().Info("unregistered layer due to maximum concurrent processes", types.LayerID(instance))
 			}
 
-			b.outbox[id.Uint32()] = make(chan *Msg, inboxCapacity)
+			outboxCh := make(chan *Msg, inboxCapacity)
 
+			b.mu.Lock()
+			b.outbox[id.Uint32()] = outboxCh
 			pendingForInstance := b.pending[id.Uint32()]
+			b.mu.Unlock()
+
 			if pendingForInstance != nil {
 				for _, mOut := range pendingForInstance {
-					b.outbox[id.Uint32()] <- mOut
+					outboxCh <- mOut
 				}
+				b.mu.Lock()
 				delete(b.pending, id.Uint32())
+				b.mu.Unlock()
 			}
 
 			resErr <- nil
-			resCh <- b.outbox[id.Uint32()]
+			resCh <- outboxCh
+
 			return
 		}
 
@@ -405,7 +466,10 @@ func (b *Broker) Register(ctx context.Context, id types.LayerID) (chan *Msg, err
 }
 
 func (b *Broker) cleanState(id types.LayerID) {
+	b.mu.Lock()
 	delete(b.outbox, id.Uint32())
+	b.mu.Unlock()
+
 	b.cleanOldLayers()
 }
 
@@ -431,4 +495,41 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 	}
 
 	return <-res
+}
+
+// Close closes broker.
+func (b *Broker) Close() {
+	b.Closer.Close()
+	<-b.CloseChannel()
+	b.queueMessageWg.Wait()
+	close(b.queueChannel)
+}
+
+// CloseChannel returns the channel to wait on for close signal.
+func (b *Broker) CloseChannel() chan struct{} {
+	ch := make(chan struct{})
+
+	go func() {
+		<-b.Closer.CloseChannel()
+		if b.eventLoopQuit != nil {
+			<-b.eventLoopQuit
+		}
+		close(ch)
+	}()
+
+	return ch
+}
+
+func (b *Broker) getLatestLayer() types.LayerID {
+	b.latestLayerMu.RLock()
+	defer b.latestLayerMu.RUnlock()
+
+	return b.latestLayer
+}
+
+func (b *Broker) setLatestLayer(layer types.LayerID) {
+	b.latestLayerMu.Lock()
+	defer b.latestLayerMu.Unlock()
+
+	b.latestLayer = layer
 }

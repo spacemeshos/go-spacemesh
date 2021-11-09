@@ -33,6 +33,7 @@ type HareSuite struct {
 	termination util.Closer
 	procs       []*consensusProcess
 	dishonest   []*consensusProcess
+	brokers     []*Broker
 	initialSets []*Set // all initial sets
 	honestSets  []*Set // initial sets of honest
 	outputs     []*Set
@@ -57,6 +58,10 @@ func (his *HareSuite) waitForTermination() {
 	for _, p := range his.procs {
 		<-p.CloseChannel()
 		his.outputs = append(his.outputs, p.s)
+	}
+	for _, b := range his.brokers {
+		b.Close()
+		<-b.CloseChannel()
 	}
 
 	his.termination.Close()
@@ -107,7 +112,7 @@ func (his *HareSuite) checkResult(t *testing.T) {
 	}
 
 	// check that the output has no intersection with the complement of the union of honest
-	for v := range his.outputs[0].values {
+	for _, v := range his.outputs[0].elements() {
 		if union.Complement(u).Contains(v) {
 			t.Error("Validity 2 failed: unexpected value encountered: ", v)
 		}
@@ -142,7 +147,7 @@ func (test *ConsensusTest) Start() {
 	go startProcs(test.dishonest)
 }
 
-func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, oracle fullRolacle, network pubsub.PublishSubsciber, initialSet *Set, layer types.LayerID, name string) *consensusProcess {
+func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, oracle fullRolacle, network pubsub.PublishSubsciber, initialSet *Set, layer types.LayerID, name string) (*consensusProcess, *Broker) {
 	broker := buildBroker(tb, name)
 	broker.Start(context.TODO())
 	network.Register(protoName, broker.HandleMessage)
@@ -155,7 +160,7 @@ func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, ora
 	c, _ := broker.Register(context.TODO(), proc.ID())
 	proc.SetInbox(c)
 
-	return proc
+	return proc, broker
 }
 
 func TestConsensusFixedOracle(t *testing.T) {
@@ -180,8 +185,9 @@ func TestConsensusFixedOracle(t *testing.T) {
 	creationFunc := func() {
 		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
 		require.NoError(t, err)
-		proc := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], types.NewLayerID(1), t.Name())
+		proc, broker := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
+		test.brokers = append(test.brokers, broker)
 		i++
 	}
 	test.Create(totalNodes, creationFunc)
@@ -197,8 +203,9 @@ func TestSingleValueForHonestSet(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000}
-	totalNodes := 50
+	// Larger values may trigger race detector failures because of 8128 goroutines limit.
+	cfg := config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000}
+	totalNodes := 10
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -214,8 +221,9 @@ func TestSingleValueForHonestSet(t *testing.T) {
 	creationFunc := func() {
 		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
 		require.NoError(t, err)
-		proc := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], types.NewLayerID(1), t.Name())
+		proc, broker := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
+		test.brokers = append(test.brokers, broker)
 		i++
 	}
 	test.Create(totalNodes, creationFunc)
@@ -257,8 +265,9 @@ func TestAllDifferentSet(t *testing.T) {
 	creationFunc := func() {
 		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
 		require.NoError(t, err)
-		proc := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], types.NewLayerID(1), t.Name())
+		proc, broker := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
+		test.brokers = append(test.brokers, broker)
 		i++
 	}
 	test.Create(cfg.N, creationFunc)
@@ -274,8 +283,9 @@ func TestSndDelayedDishonest(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000}
-	totalNodes := 50
+	cfg := config.Config{N: 16, F: 8, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000}
+	totalNodes := 20
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
@@ -294,7 +304,8 @@ func TestSndDelayedDishonest(t *testing.T) {
 	honestFunc := func() {
 		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
 		require.NoError(t, err)
-		proc := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], types.NewLayerID(1), t.Name())
+		proc, broker := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], types.NewLayerID(1), t.Name())
+		test.brokers = append(test.brokers, broker)
 		test.procs = append(test.procs, proc)
 		i++
 	}
@@ -306,16 +317,17 @@ func TestSndDelayedDishonest(t *testing.T) {
 	dishonestFunc := func() {
 		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
 		require.NoError(t, err)
-		proc := createConsensusProcess(t, false, cfg, oracle,
+		proc, broker := createConsensusProcess(t, false, cfg, oracle,
 			&delayeadPubSub{ps: ps, sendDelay: 5 * time.Second},
 			test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.dishonest = append(test.dishonest, proc)
+		test.brokers = append(test.brokers, broker)
 		i++
 	}
 	test.Create(totalNodes/2-1, dishonestFunc)
 	require.NoError(t, mesh.ConnectAllButSelf())
 	test.Start()
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 40*time.Second)
 }
 
 func TestRecvDelayedDishonest(t *testing.T) {
@@ -325,8 +337,8 @@ func TestRecvDelayedDishonest(t *testing.T) {
 
 	test := newConsensusTest()
 
-	cfg := config.Config{N: 50, F: 25, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000}
-	totalNodes := 50
+	cfg := config.Config{N: 16, F: 8, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000}
+	totalNodes := 20
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -346,8 +358,9 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	honestFunc := func() {
 		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
 		require.NoError(t, err)
-		proc := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], types.NewLayerID(1), t.Name())
+		proc, broker := createConsensusProcess(t, true, cfg, oracle, ps, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
+		test.brokers = append(test.brokers, broker)
 		i++
 	}
 
@@ -358,16 +371,17 @@ func TestRecvDelayedDishonest(t *testing.T) {
 	dishonestFunc := func() {
 		ps, err := pubsub.New(ctx, logtest.New(t), mesh.Hosts()[i], pubsub.DefaultConfig())
 		require.NoError(t, err)
-		proc := createConsensusProcess(t, false, cfg, oracle,
+		proc, broker := createConsensusProcess(t, false, cfg, oracle,
 			&delayeadPubSub{ps: ps, recvDelay: 5 * time.Second},
 			test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.dishonest = append(test.dishonest, proc)
+		test.brokers = append(test.brokers, broker)
 		i++
 	}
 	test.Create(totalNodes/2-1, dishonestFunc)
 	require.NoError(t, mesh.ConnectAllButSelf())
 	test.Start()
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 40*time.Second)
 }
 
 type delayeadPubSub struct {

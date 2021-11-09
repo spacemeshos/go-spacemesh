@@ -808,9 +808,6 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 			}
 			continue
 		}
-		if err = tx.CalcAndSetOrigin(); err != nil {
-			return fmt.Errorf("calc and set origin: %w", err)
-		}
 		txs = append(txs, tx)
 	}
 	if err := msh.writeTransactions(blk, txs...); err != nil {

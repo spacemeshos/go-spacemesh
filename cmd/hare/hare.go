@@ -165,7 +165,8 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
-	host, err := p2p.New(cmdp.Ctx, logger, cfg)
+	ctx := cmdp.Ctx()
+	host, err := p2p.New(ctx, logger, cfg)
 	if err != nil {
 		log.With().Panic("error starting p2p services", log.Err(err))
 	}
@@ -194,7 +195,8 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, mockClock, logger)
 	log.Info("starting hare service")
 	app.ha = hareI
-	if err = app.ha.Start(cmdp.Ctx); err != nil {
+
+	if err = app.ha.Start(ctx); err != nil {
 		log.With().Panic("error starting hare", log.Err(err))
 	}
 	if gTime.After(time.Now()) {

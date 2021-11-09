@@ -705,9 +705,8 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 
 			tb := TortoiseBeacon{
 				logger: logtest.New(t).WithName("TortoiseBeacon"),
-				config: Config{
-					Theta: tc.theta,
-				},
+				config: Config{},
+				theta:  new(big.Float).SetRat(tc.theta),
 			}
 
 			threshold := tb.votingThreshold(tc.weight)
