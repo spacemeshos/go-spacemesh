@@ -494,10 +494,7 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 	return <-res
 }
 
-func (b *Broker) Close() {
-	b.Closer.Close()
-}
-
+// CloseChannel returns the channel to wait on for close signal.
 func (b *Broker) CloseChannel() chan struct{} {
 	ch := make(chan struct{})
 
