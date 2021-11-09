@@ -497,6 +497,7 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 	return <-res
 }
 
+// Close closes broker.
 func (b *Broker) Close() {
 	b.Closer.Close()
 	<-b.CloseChannel()
