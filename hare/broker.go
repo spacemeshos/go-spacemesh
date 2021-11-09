@@ -58,6 +58,7 @@ type Broker struct {
 	limit          int // max number of simultaneous consensus processes
 	stop           context.CancelFunc
 	eventLoopQuit  chan struct{}
+	queueMessageWg *sync.WaitGroup
 }
 
 func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
@@ -77,6 +78,7 @@ func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syn
 		limit:          limit,
 		queue:          priorityq.New(),
 		queueChannel:   make(chan struct{}, inboxCapacity),
+		queueMessageWg: &sync.WaitGroup{},
 	}
 }
 
@@ -148,6 +150,10 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
 func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+	if b.IsClosed() {
+		return pubsub.ValidationIgnore
+	}
+
 	m, err := b.queueMessage(ctx, pid, msg)
 	if err != nil {
 		return pubsub.ValidationIgnore
@@ -165,6 +171,9 @@ func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pub
 }
 
 func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*msgRPC, error) {
+	b.queueMessageWg.Add(1)
+	defer b.queueMessageWg.Done()
+
 	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
 	logger.Debug("hare broker received inbound gossip message")
 
@@ -491,6 +500,7 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 func (b *Broker) Close() {
 	b.Closer.Close()
 	<-b.CloseChannel()
+	b.queueMessageWg.Wait()
 	close(b.queueChannel)
 }
 
