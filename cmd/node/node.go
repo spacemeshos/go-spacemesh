@@ -176,15 +176,6 @@ type HareService interface {
 	GetResult(types.LayerID) ([]types.BlockID, error)
 }
 
-// TortoiseBeaconService is an interface that defines tortoise beacon functionality.
-type TortoiseBeaconService interface {
-	Service
-	GetBeacon(id types.EpochID) ([]byte, error)
-	HandleSerializedProposalMessage(context.Context, p2p.Peer, []byte) pubsub.ValidationResult
-	HandleSerializedFirstVotingMessage(context.Context, p2p.Peer, []byte) pubsub.ValidationResult
-	HandleSerializedFollowingVotingMessage(context.Context, p2p.Peer, []byte) pubsub.ValidationResult
-}
-
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
 type TickProvider interface {
 	Subscribe() timesync.LayerTimer
@@ -284,7 +275,7 @@ type App struct {
 	atxDb          *activation.DB
 	poetListener   *activation.PoetListener
 	edSgn          *signing.EdSigner
-	tortoiseBeacon TortoiseBeaconService
+	tortoiseBeacon *tortoisebeacon.TortoiseBeacon
 	closers        []interface{ Close() }
 	log            log.Log
 	txPool         *mempool.TxMempool
@@ -306,6 +297,21 @@ func (app *App) introduction() {
 
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
+	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
+	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
+	// hare's max time duration to run consensus for a layer
+	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration // pre-round + 4 rounds per iteration
+	maxHareLayerDurationSec := app.Config.HARE.WakeupDelta + maxHareRoundsPerLayer*app.Config.HARE.RoundDuration
+	if app.Config.LayerDurationSec*int(app.Config.Zdist) <= maxHareLayerDurationSec {
+		log.With().Error("incompatible params",
+			log.Uint32("tortoise_zdist", app.Config.Zdist),
+			log.Int("layer_duration", app.Config.LayerDurationSec),
+			log.Int("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
+			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
+			log.Int("hare_round_duration", app.Config.HARE.RoundDuration))
+		return errors.New("incompatible tortoise hare params")
+	}
+
 	// override default config in timesync since timesync is using TimeCongigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 

@@ -704,6 +704,7 @@ func TestHare_WeakCoin(t *testing.T) {
 		}
 	}
 
+	var empty []types.BlockID
 	// complete + coin flip true
 	mockMesh.EXPECT().RecordCoinflip(gomock.Any(), layerID, true).Times(1)
 	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), layerID, gomock.Any()).Do(
@@ -715,8 +716,8 @@ func TestHare_WeakCoin(t *testing.T) {
 
 	// incomplete + coin flip true
 	mockMesh.EXPECT().RecordCoinflip(gomock.Any(), layerID, true).Times(1)
-	mockMesh.EXPECT().InvalidateLayer(gomock.Any(), layerID).Do(
-		func(context.Context, types.LayerID) {
+	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), layerID, empty).Do(
+		func(context.Context, types.LayerID, []types.BlockID) {
 			done <- struct{}{}
 		}).Times(1)
 	h.outputChan <- mockReport{layerID, set, false, true}
@@ -733,8 +734,8 @@ func TestHare_WeakCoin(t *testing.T) {
 
 	// incomplete + coin flip false
 	mockMesh.EXPECT().RecordCoinflip(gomock.Any(), layerID, false).Times(1)
-	mockMesh.EXPECT().InvalidateLayer(gomock.Any(), layerID).Do(
-		func(context.Context, types.LayerID) {
+	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), layerID, empty).Do(
+		func(context.Context, types.LayerID, []types.BlockID) {
 			done <- struct{}{}
 		}).Times(1)
 	h.outputChan <- mockReport{layerID, set, false, false}

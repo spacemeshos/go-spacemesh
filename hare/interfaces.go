@@ -27,8 +27,6 @@ type meshProvider interface {
 	GetBlock(types.BlockID) (*types.Block, error)
 	// HandleValidatedLayer receives Hare output when it succeeds
 	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
-	// InvalidateLayer receives the signal that Hare failed for a layer
-	InvalidateLayer(ctx context.Context, layerID types.LayerID)
 	// RecordCoinflip records the weak coinflip result for a layer
 	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
 }
