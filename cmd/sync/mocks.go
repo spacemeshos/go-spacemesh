@@ -132,7 +132,7 @@ func configTst() mesh.Config {
 
 type mockTxProcessor struct{}
 
-func (m mockTxProcessor) HandleTxSyncData(_ []byte) error { return nil }
+func (m mockTxProcessor) HandleSyncTransaction(_ []byte) error { return nil }
 
 type mockBlockFetcher struct{}
 
