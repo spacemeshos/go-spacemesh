@@ -2,14 +2,15 @@ package organizer
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// LayersIterator is used to traverse organized layers.
-// For siplicity LayersIterator iterates over all layers unconditionally.
-type LayersIterator func(types.LayerID)
+// Callback is used to send iterated layers to the caller.
+// For siplicity Callback iterates over all layers unconditionally.
+type Callback func(types.LayerID)
 
 // Opt is for configuring Organizer.
 type Opt func(*Organizer)
@@ -33,7 +34,7 @@ func WithLastLayer(lid types.LayerID) Opt {
 // By default window of the size 1000 is used.
 func WithWindowSize(size int) Opt {
 	return func(o *Organizer) {
-		o.window = make([]types.LayerID, size)
+		o.buf = make(layerBuffer, size)
 	}
 }
 
@@ -41,7 +42,7 @@ func WithWindowSize(size int) Opt {
 func New(opts ...Opt) *Organizer {
 	o := &Organizer{
 		logger: log.NewNop(),
-		window: make([]types.LayerID, 1000), // ~4kb
+		buf:    make(layerBuffer, 1000), // ~4kb
 	}
 	for _, opt := range opts {
 		opt(o)
@@ -58,36 +59,35 @@ type Organizer struct {
 	submitted types.LayerID
 	// last received layer that is not submitted
 	received types.LayerID
-	// all layers between submitted and received
-	// window is non-empty only if there are gaps after submitted
-	window []types.LayerID
+	// buf stores all layers between submitted and received
+	// buf is non-empty only if there are gaps after submitted
+	buf layerBuffer
 }
 
 // Iterate allows to iterate over all ordered layers that are currently within the window including new layer.
-func (o *Organizer) Iterate(ctx context.Context, lid types.LayerID, f LayersIterator) {
+func (o *Organizer) Iterate(ctx context.Context, lid types.LayerID, f Callback) {
 	if !lid.After(o.submitted) {
 		return
 	}
-	if lid.After(o.submitted.Add(uint32(len(o.window)))) {
+	if lid.After(o.submitted.Add(uint32(len(o.buf)))) {
 		o.logger.WithContext(ctx).With().Error("tortoise organizer received a layer that does not fit in the current window."+
 			" subbmiting pending with gaps",
-			log.Int("window", len(o.window)),
+			log.Int("window", len(o.buf)),
 			log.Named("submitted", o.submitted),
 			log.Named("received", lid),
 		)
-		o.submitPending(ctx, true, f)
+		o.submitAll(f)
+		// after all layers are submitted update submitted to the layer before this one
 		o.submitted = lid.Sub(1)
 	}
 
 	// at this stage we know that the layer is within the window
-	pos := int(lid.Uint32()) % len(o.window)
-	checkEmpty(o.logger, o.window[pos])
-	o.window[pos] = lid
+	o.buf.store(lid)
 	if lid.After(o.received) {
 		o.received = lid
 	}
 	if lid.Sub(1) == o.submitted {
-		o.submitPending(ctx, false, f)
+		o.submitPending(f)
 	} else {
 		o.logger.WithContext(ctx).With().Warning("tortoise organizer has a gap in the window, not subbmiting a layer",
 			log.Named("submitted", o.submitted),
@@ -96,27 +96,48 @@ func (o *Organizer) Iterate(ctx context.Context, lid types.LayerID, f LayersIter
 	}
 }
 
-// submitPending submits all non-nil layers in (o.submitted, o.received].
-func (o *Organizer) submitPending(ctx context.Context, all bool, f LayersIterator) {
+// submitAll is a special case that submits all layers in a buffer even if there are gaps between them.
+func (o *Organizer) submitAll(f Callback) {
 	for lid := o.submitted.Add(1); !lid.After(o.received); lid = lid.Add(1) {
-		pos := int(lid.Uint32()) % len(o.window)
-		if (o.window[pos] == types.LayerID{}) {
-			if !all {
-				break
-			}
+		_, exists := o.buf.pop(lid)
+		if !exists {
 			continue
 		}
-		o.window[pos] = types.LayerID{}
 		o.submitted = lid
 		f(lid)
 	}
 }
 
-func checkEmpty(logger log.Log, lid types.LayerID) {
+// submitPending submits all non-nil layers in (o.submitted, o.received].
+func (o *Organizer) submitPending(f Callback) {
+	for lid := o.submitted.Add(1); !lid.After(o.received); lid = lid.Add(1) {
+		_, exists := o.buf.pop(lid)
+		if !exists {
+			return
+		}
+		o.submitted = lid
+		f(lid)
+	}
+}
+
+type layerBuffer []types.LayerID
+
+func (buf layerBuffer) store(lid types.LayerID) {
+	pos := int(lid.Uint32()) % len(buf)
+	checkEmpty(buf[pos])
+	buf[pos] = lid
+}
+
+func (buf layerBuffer) pop(lid types.LayerID) (types.LayerID, bool) {
+	pos := int(lid.Uint32()) % len(buf)
+	rst := buf[pos]
+	buf[pos] = types.LayerID{}
+	return rst, rst != types.LayerID{}
+}
+
+func checkEmpty(lid types.LayerID) {
 	if (lid == types.LayerID{}) {
 		return
 	}
-	logger.With().Panic("invalid state. overwriting non-empty layer in the window",
-		lid,
-	)
+	panic(fmt.Sprintf("invalid state. overwriting non-empty layer %s in the window", lid))
 }
