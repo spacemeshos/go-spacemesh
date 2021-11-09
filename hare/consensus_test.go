@@ -61,6 +61,7 @@ func (his *HareSuite) waitForTermination() {
 	}
 	for _, b := range his.brokers {
 		b.Close()
+		<-b.CloseChannel()
 	}
 
 	his.termination.Close()
