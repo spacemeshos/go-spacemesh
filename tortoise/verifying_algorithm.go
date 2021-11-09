@@ -127,31 +127,32 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 	defer trtl.mu.Unlock()
 
 	var (
-		oldVerified = trtl.trtl.Verified
-		logger      = trtl.logger.WithContext(ctx).With()
+		old    = trtl.trtl.Verified
+		logger = trtl.logger.WithContext(ctx).With()
 	)
+
 	reverted, observed := trtl.updateFromRerun(ctx)
 	if reverted {
 		// make sure state is reapplied from far enough back if there was a state reversion.
 		// this is the first changed layer. subtract one to indicate that the layer _prior_ was the old
 		// pBase, since we never reapply the state of oldPbase.
-		oldVerified = observed.Sub(1)
+		old = observed.Sub(1)
 	}
+
 	trtl.org.Iterate(ctx, layerID, func(lid types.LayerID) {
 		logger.Info("handling incoming layer",
-			log.FieldNamed("old_pbase", oldVerified),
+			log.FieldNamed("old_pbase", old),
 			log.FieldNamed("incoming_layer", lid))
 		if err := trtl.trtl.HandleIncomingLayer(ctx, lid); err != nil {
 			logger.Error("tortoise errored handling incoming layer", log.Err(err))
 		}
 		logger.Info("finished handling incoming layer",
-			log.FieldNamed("old_pbase", oldVerified),
+			log.FieldNamed("old_pbase", old),
 			log.FieldNamed("new_pbase", trtl.trtl.Verified),
 			log.FieldNamed("incoming_layer", lid))
 	})
 
-	newVerified := trtl.trtl.Verified
-	return oldVerified, newVerified, reverted
+	return old, trtl.trtl.Verified, reverted
 }
 
 // Persist saves a copy of the current tortoise state to the database.

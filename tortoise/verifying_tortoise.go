@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -202,21 +203,7 @@ func (t *turtle) evict(ctx context.Context) {
 	}
 }
 
-func blockIDsToString(input []types.BlockID) string {
-	str := "["
-	for i, b := range input {
-		str += b.String()
-		if i != len(input)-1 {
-			str += ","
-		}
-	}
-	str += "]"
-	return str
-}
-
-// returns the local opinion on the validity of a block in a layer (support, against, or abstain)
-// TODO: cache but somehow check for changes (e.g., late-finishing Hare), maybe check hash?
-//    see https://github.com/spacemeshos/go-spacemesh/issues/2672
+// returns the local opinion on the validity of a block in a layer (support, against, or abstain).
 func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID, blockid types.BlockID, inputs map[types.LayerID][]types.BlockID) (vec, error) {
 	if !layerID.After(types.GetEffectiveGenesis()) {
 		return support, nil
@@ -235,12 +222,6 @@ func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID
 	if input == nil {
 		return abstain, nil
 	}
-
-	// t.logger.WithContext(ctx).With().Debug("got layer opinion vector",
-	// 	layerID,
-	// 	log.FieldNamed("query_block", blockid),
-	// 	log.String("input", blockIDsToString(input)))
-
 	for _, bl := range input {
 		if bl == blockid {
 			// note: we never abstain on individual blocks, only on a whole layer, which would have been captured
@@ -248,7 +229,6 @@ func (t *turtle) getLocalBlockOpinion(ctx context.Context, layerID types.LayerID
 			return support, nil
 		}
 	}
-
 	return against, nil
 }
 
@@ -336,52 +316,95 @@ func (t *turtle) voteVectorForLayer(
 	return
 }
 
-// BaseBlock finds and returns a good block from a recent layer that's suitable to serve as a base block for opinions
-// for newly-constructed blocks. Also includes vectors of exceptions, where the current local opinion differs from
-// (or is newer than) that of the base block.
+// BaseBlock ...
+// TODO(dshulyak) rewrite
 func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
-	logger := t.logger.WithContext(ctx)
+	var (
+		logger        = t.logger.WithContext(ctx)
+		disagreements = map[types.BlockID]types.LayerID{}
+		contenders    []types.BlockID
+	)
 
-	// look at good blocks backwards from most recent processed layer to find a suitable base block
-	// TODO: optimize by, e.g., trying to minimize the size of the exception list (rather than first match)
-	// see https://github.com/spacemeshos/go-spacemesh/issues/2402
-	for layerID := t.Last; layerID.After(t.LastEvicted); layerID = layerID.Sub(1) {
-		logger := logger.WithFields(
-			log.FieldNamed("last_layer", t.Last),
-			log.FieldNamed("last_evicted", t.LastEvicted),
-			log.FieldNamed("base_block_candidate_layer", layerID))
-		for blockID, opinion := range t.BlockOpinionsByLayer[layerID] {
-			if _, ok := t.GoodBlocksIndex[blockID]; !ok {
-				logger.With().Info("not considering block not marked good as base block candidate", blockID)
-				continue
-			}
-
-			// Calculate the set of exceptions between the base block opinion and latest local opinion
-			logger.With().Debug("found candidate base block", blockID)
-			exceptionVectorMap, err := t.calculateExceptions(ctx, layerID, opinion)
+	for lid := t.Last; lid.After(t.LastEvicted); lid = lid.Sub(1) {
+		for bid := range t.BlockOpinionsByLayer[lid] {
+			dis, err := t.firstDisagreement(ctx, lid, bid)
 			if err != nil {
-				logger.With().Warning("error calculating vote exceptions for block", blockID, log.Err(err))
+				logger.With().Error("failed to find first disagremement", bid, log.Err(err))
 				continue
 			}
-
-			logger.With().Info("chose base block",
-				blockID,
-				log.Int("against_count", len(exceptionVectorMap[0])),
-				log.Int("support_count", len(exceptionVectorMap[1])),
-				log.Int("neutral_count", len(exceptionVectorMap[2])))
-
-			metrics.LayerDistanceToBaseBlock.WithLabelValues().Observe(float64(t.Last.Value - layerID.Value))
-
-			return blockID, [][]types.BlockID{
-				blockMapToArray(exceptionVectorMap[0]),
-				blockMapToArray(exceptionVectorMap[1]),
-				blockMapToArray(exceptionVectorMap[2]),
-			}, nil
+			disagreements[bid] = dis
+			contenders = append(contenders, bid)
 		}
 	}
 
+	sort.Slice(contenders, func(i, j int) bool {
+		ibid := contenders[i]
+		jbid := contenders[j]
+		_, iexist := t.GoodBlocksIndex[ibid]
+		_, jexist := t.GoodBlocksIndex[jbid]
+		if iexist && !jexist {
+			return true
+		}
+		if disagreements[ibid].After(disagreements[jbid]) {
+			return true
+		}
+		if t.BlockLayer[ibid].After(disagreements[jbid]) {
+			return true
+		}
+		return false
+	})
+
+	for _, bid := range contenders {
+		lid := t.BlockLayer[bid]
+		exceptions, err := t.calculateExceptions(ctx, lid, t.BlockOpinionsByLayer[lid][bid])
+		if err != nil {
+			logger.With().Warning("error calculating vote exceptions for block", bid, log.Err(err))
+			continue
+		}
+
+		logger.With().Info("chose base block",
+			bid,
+			log.Int("against_count", len(exceptions[0])),
+			log.Int("support_count", len(exceptions[1])),
+			log.Int("neutral_count", len(exceptions[2])))
+
+		metrics.LayerDistanceToBaseBlock.WithLabelValues().Observe(float64(t.Last.Value - lid.Value))
+
+		return bid, [][]types.BlockID{
+			blockMapToArray(exceptions[0]),
+			blockMapToArray(exceptions[1]),
+			blockMapToArray(exceptions[2]),
+		}, nil
+	}
+
 	// TODO: special error encoding when exceeding exception list size
-	return types.BlockID{0}, nil, errNoBaseBlockFound
+	return types.BlockID{}, nil, errNoBaseBlockFound
+}
+
+// firstDisagreement returns first layer where local opinion is different from blocks opinion within sliding window.
+func (t *turtle) firstDisagreement(ctx context.Context, blid types.LayerID, bid types.BlockID) (types.LayerID, error) {
+	opinions := t.BlockOpinionsByLayer[blid][bid]
+	inputs := map[types.LayerID][]types.BlockID{}
+	for lid := blid; lid.After(t.LastEvicted); lid = lid.Sub(1) {
+		blocks, err := t.bdp.LayerBlockIds(lid)
+		if err != nil {
+			return types.LayerID{}, nil
+		}
+		for _, on := range blocks {
+			local, err := t.getLocalBlockOpinion(ctx, lid, on, inputs)
+			if err != nil {
+				return types.LayerID{}, err
+			}
+			opinion, exist := opinions[on]
+			if !exist {
+				opinion = against
+			}
+			if local != opinion {
+				return lid, nil
+			}
+		}
+	}
+	return t.LastEvicted, nil
 }
 
 // calculate and return a list of exceptions, i.e., differences between the opinions of a base block and the local
@@ -961,12 +984,7 @@ candidateLayerLoop:
 				// later layers to continue
 				if t.Verified.After(lastVerified) {
 					// rescore goodness of blocks in all intervening layers on the basis of new information
-					// TODO: this is inefficient and we can probably do better
-					//   see https://github.com/spacemeshos/go-spacemesh/issues/2522
 					for layerID := lastVerified.Add(1); !layerID.After(t.Last); layerID = layerID.Add(1) {
-						// TODO LANE: this operation can be very expensive and very slow after a few layers,
-						//   since no caching is currently performed. it needs to be optimized and cached.
-						//   see https://github.com/spacemeshos/go-spacemesh/issues/2672
 						if err := t.scoreBlocksByLayerID(ctx, layerID); err != nil {
 							// if we fail to process a layer, there's probably no point in trying to rescore blocks
 							// in later layers, so just print an error and bail
@@ -1215,8 +1233,6 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 		layerBlockIds, err := t.bdp.LayerBlockIds(candidateLayerID)
 		if err != nil {
 			logger.Error("inconsistent state: can't find layer in database, cannot heal")
-
-			// there's no point in trying to verify later layers so just give up now
 			return
 		}
 
@@ -1253,7 +1269,6 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 		pbaseNew = candidateLayerID
 		logger.Info("self healing verified candidate layer")
 	}
-
 	return
 }
 
