@@ -1134,6 +1134,9 @@ func TestGetLocalBlockOpinion(t *testing.T) {
 	blocks := generateBlocks(t, l1ID, 2, alg.BaseBlock, atxdb, 1)
 
 	// no input vector for recent layer: expect abstain vote
+	for _, block := range blocks {
+		require.NoError(t, mdb.AddBlock(block))
+	}
 	vec, err := alg.trtl.getLocalBlockOpinion(newContext(context.TODO()), l1ID, blocks[0].ID())
 	r.NoError(err)
 	r.Equal(abstain, vec)
@@ -2939,7 +2942,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	cfg.LayerSize = size
 
 	var layers []types.LayerID
-	for i := 0; i < 200; i++ {
+	for i := 0; i < 400; i++ {
 		layers = append(layers, s.Next())
 	}
 
@@ -2963,7 +2966,7 @@ func BenchmarkBaseBlockSelection(b *testing.B) {
 	ctx := context.Background()
 	cfg := defaultConfig(b, s.State.MeshDB, s.State.AtxDB)
 	cfg.LayerSize = size
-	cfg.WindowSize = 100
+	cfg.WindowSize = 50
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	var last, verified types.LayerID

@@ -9,16 +9,17 @@ import (
 func newContext(ctx context.Context) *tcontext {
 	return &tcontext{
 		Context:      ctx,
+		LocalOpinion: map[types.LayerID]map[types.BlockID]vec{},
 		LayerBlocks:  map[types.LayerID][]types.BlockID{},
 		InputVectors: map[types.LayerID][]types.BlockID{},
-		ValidBlocks:  map[types.LayerID]map[types.BlockID]struct{}{},
+		ValidBlocks:  map[types.LayerID][]types.BlockID{},
 	}
 }
 
 type tcontext struct {
 	context.Context
+	LocalOpinion map[types.LayerID]map[types.BlockID]vec
 	LayerBlocks  map[types.LayerID][]types.BlockID
 	InputVectors map[types.LayerID][]types.BlockID
-	// contextually valid blocks per layer
-	ValidBlocks map[types.LayerID]map[types.BlockID]struct{}
+	ValidBlocks  map[types.LayerID][]types.BlockID
 }
