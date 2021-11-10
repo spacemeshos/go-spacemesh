@@ -405,11 +405,15 @@ func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 		// This will block, so run in a goroutine
 		go func() {
 			for {
+				mu.RLock()
+				stopChan := reporter.stopChan
+				mu.RUnlock()
+
 				select {
 				case layer := <-newLayerCh:
 					log.With().Debug("reporter got new layer", layer)
 					ReportNodeStatusUpdate()
-				case <-reporter.stopChan:
+				case <-stopChan:
 					return
 				}
 			}

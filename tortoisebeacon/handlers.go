@@ -215,7 +215,9 @@ func (tb *TortoiseBeacon) verifyProposalMessage(ctx context.Context, m ProposalM
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to register proposal (miner ID %v): %w", minerID, err)
 	}
 
+	tb.mu.RLock()
 	passes := tb.proposalChecker.IsProposalEligible(m.VRFSignature)
+	tb.mu.RUnlock()
 	if !passes {
 		// the peer may have different total weight from us so that it passes threshold for the peer
 		// but does not pass here

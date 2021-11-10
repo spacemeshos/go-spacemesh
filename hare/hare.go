@@ -193,18 +193,21 @@ var ErrTooLate = errors.New("consensus process finished too late")
 
 // records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
-	set := output.Set()
-	blocks := make([]types.BlockID, len(set.values))
-	i := 0
-	for v := range set.values {
-		blocks[i] = v
-		i++
+	layerID := output.ID()
+	var blocks []types.BlockID
+	if output.Completed() {
+		h.WithContext(ctx).With().Info("hare terminated with success", layerID)
+		set := output.Set()
+		blocks = make([]types.BlockID, 0, set.len())
+		for _, v := range set.elements() {
+			blocks = append(blocks, v)
+		}
+	} else {
+		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
 	}
+	h.mesh.HandleValidatedLayer(ctx, layerID, blocks)
 
-	id := output.ID()
-	h.mesh.HandleValidatedLayer(ctx, id, blocks)
-
-	if h.outOfBufferRange(id) {
+	if h.outOfBufferRange(layerID) {
 		return ErrTooLate
 	}
 
@@ -213,8 +216,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	if uint32(len(h.outputs)) >= h.bufferSize {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
-	h.outputs[id] = blocks
-
+	h.outputs[layerID] = blocks
 	return nil
 }
 
@@ -241,6 +243,12 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	}
 
 	var err error
+	beacon, err := h.beacons.GetBeacon(id.GetEpoch())
+	if err != nil {
+		logger.Info("not starting hare since beacon is not retrieved")
+		return false, nil
+	}
+
 	defer func() {
 		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
@@ -248,12 +256,6 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 			h.outputChan <- procReport{id, &Set{}, false, notCompleted}
 		}
 	}()
-
-	beacon, err := h.beacons.GetBeacon(id.GetEpoch())
-	if err != nil {
-		logger.Info("not starting hare since beacon is not retrieved")
-		return false, nil
-	}
 
 	// call to start the calculation of active set size beforehand
 	go func() {
@@ -280,7 +282,9 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		return false, nil
 	}
 
+	h.layerLock.RLock()
 	blocks := h.getGoodBlocks(h.lastLayer, beacon, logger)
+	h.layerLock.RUnlock()
 	logger.With().Info("starting hare consensus with blocks", log.Int("num_blocks", len(blocks)))
 	set := NewSet(blocks)
 
@@ -379,15 +383,8 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 				log.Bool("coinflip", coin))
 			h.mesh.RecordCoinflip(ctx, layerID, coin)
 
-			if out.Completed() { // CP completed, collect the output
-				logger.With().Info("collecting results for completed hare instance", layerID)
-				if err := h.collectOutput(ctx, out); err != nil {
-					logger.With().Warning("error collecting output from hare", log.Err(err))
-				}
-			} else {
-				// Notify the mesh that Hare failed
-				h.WithContext(ctx).With().Info("recording hare instance failure", layerID)
-				h.mesh.InvalidateLayer(ctx, layerID)
+			if err := h.collectOutput(ctx, out); err != nil {
+				logger.With().Warning("error collecting output from hare", log.Err(err))
 			}
 			h.broker.Unregister(ctx, out.ID())
 			logger.With().Info("number of consensus processes (after unregister)",
@@ -413,7 +410,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 				if err != nil {
 					h.With().Error("failed to handle tick", log.Err(err))
 				} else if !started {
-					h.WithContext(ctx).With().Warning("consensus not started for layer", layer)
+					h.WithContext(ctx).With().Warning("consensus not started for layer", l)
 				}
 			}(layer)
 		case <-h.CloseChannel():

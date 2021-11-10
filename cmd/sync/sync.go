@@ -107,7 +107,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	path := app.Config.DataDir()
 	cfg := app.Config.P2P
 	cfg.DataDir = path
-	host, err := p2p.New(cmdp.Ctx, lg.WithName("p2p"), cfg)
+	host, err := p2p.New(cmdp.Ctx(), lg.WithName("p2p"), cfg)
 	if err != nil {
 		lg.With().Panic("failed to create p2p host", log.Err(err))
 	}
@@ -194,14 +194,17 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 			}
 		} else {
 			lg.With().Info("loaded layer from disk", types.NewLayerID(i))
-			msh.ValidateLayer(cmdp.Ctx, lyr)
+
+			msh.ValidateLayer(cmdp.Ctx(), lyr)
 		}
 	}
 
 	sleep := time.Duration(10) * time.Second
 	lg.Info("wait %v sec", sleep)
 	time.Sleep(sleep)
-	go app.sync.Start(cmdp.Ctx)
+
+	go app.sync.Start(cmdp.Ctx())
+
 	for msh.ProcessedLayer().Before(types.NewLayerID(expectedLayers)) {
 		lg.Info("sleep for %v sec", 30)
 		app.sync.ForceSync(context.TODO())

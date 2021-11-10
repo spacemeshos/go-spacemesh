@@ -434,6 +434,7 @@ github.com/jbenet/goprocess v0.1.4 h1:DRGOFReOMqqDNXwW70QkacFW0YN9QnwLV0Vqk+3oU0
 github.com/jbenet/goprocess v0.1.4/go.mod h1:5yspPrukOVuOLORacaBi858NqyClJPQxYZlqdZVfqY4=
 github.com/jellevandenhooff/dkim v0.0.0-20150330215556-f50fe3d243e1/go.mod h1:E0B/fFc00Y+Rasa88328GlI/XbtyysCtTHZS8h7IrBU=
 github.com/jessevdk/go-flags v0.0.0-20141203071132-1679536dcc89/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
+github.com/jessevdk/go-flags v1.4.0 h1:4IU2WS7AumrZ/40jfhf4QVDMsQwqA7VEHozFRrGARJA=
 github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
 github.com/joho/godotenv v1.3.0/go.mod h1:7hK45KPybAkOC6peb+G5yklZfMxEjkZhHbwpqxOKXbg=
@@ -991,7 +992,7 @@ github.com/soheilhy/cmux v0.1.4/go.mod h1:IM3LyeVVIOuxMH7sFAkER9+bJ4dT7Ms6E4xg4k
 github.com/sony/gobreaker v0.4.1/go.mod h1:ZKptC7FHNvhBz7dN2LGjPVBz2sZJmc0/PkyDJOjmxWY=
 github.com/sourcegraph/annotate v0.0.0-20160123013949-f4cad6c6324d/go.mod h1:UdhH50NIW0fCiwBSr0co2m7BnFLdv4fQTgdqdJTHFeE=
 github.com/sourcegraph/syntaxhighlight v0.0.0-20170531221838-bd320f5d308e/go.mod h1:HuIsMU8RRBOtsCgI77wP899iHVBQpCmg4ErYMZB+2IA=
-github.com/spacemeshos/api/release/go v0.0.0-20201013155109-3facffccde82/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
+github.com/spacemeshos/api/release/go v0.0.0-20201103002846-7d0dfed55cc1/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
 github.com/spacemeshos/api/release/go v1.3.1-0.20210726064428-9474f58a4ace h1:+tyuJvN3jdWzYcdrzHR18IQTlLT9j9WVZie1lu2/qss=
 github.com/spacemeshos/api/release/go v1.3.1-0.20210726064428-9474f58a4ace/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
 github.com/spacemeshos/bitstream v0.0.0-20210407173523-8168e84f83b0 h1:f5AVMlh6x7rVJ+SoYvqkOl284OpdPw7tH5aBliIt0gc=
@@ -1002,10 +1003,10 @@ github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f h1:lfO6HimQclaLO
 github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f/go.mod h1:3SkkvXHU4Vm7yjpfgPu97PcZVvWweBmx0FOLRW7ek+g=
 github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82 h1:FmAao0SylhJiAkJfC1+Ots9SS71b8Upvxx6yoBFqEsY=
 github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
-github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d h1:S4vq8zxKOp1ST2J/oAKDLAdvV5ZEE23D5F2z0YJP81w=
-github.com/spacemeshos/poet v0.1.1-0.20201013202053-99eed195dc2d/go.mod h1:Zcdq864a2sxmWjyI1/3gN1Xk1jVWerzFbFw7bjPRYN4=
-github.com/spacemeshos/post v0.0.0-20210831040706-7255a25137a2 h1:5w1EPHgB2asEx0aGb6EcuDHZ09xOrK3CRgEWyKUd77Q=
-github.com/spacemeshos/post v0.0.0-20210831040706-7255a25137a2/go.mod h1:yL5XcvEgquVOAn/pkJTlzc5UsYs2M8z/rpwb3eD/Jkk=
+github.com/spacemeshos/poet v0.1.1-0.20201103004828-ef8f28a744fc h1:Gg/X0ybT0E9tTK3AfuTYM6kdTrW9+KrL+lWVGf9FpvQ=
+github.com/spacemeshos/poet v0.1.1-0.20201103004828-ef8f28a744fc/go.mod h1:vPh8wIzojvkOIDtQD/fXkQ+AMQUZIiFZeG7DeCpMH5o=
+github.com/spacemeshos/post v0.0.0-20211014030409-e1a8091bb648 h1:oU1Q5FdCjmxim0qfAAAipLOcko2o6G22CowsDCMmHUI=
+github.com/spacemeshos/post v0.0.0-20211014030409-e1a8091bb648/go.mod h1:yL5XcvEgquVOAn/pkJTlzc5UsYs2M8z/rpwb3eD/Jkk=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9/go.mod h1:Pz5LyRghtiEuSixOVGO0da5AxKBZa6+Yq8ZJfjTAPI0=
 github.com/spacemeshos/smutil v0.0.0-20190604133034-b5189449f5c5 h1:a+uIX0wjwWdK2JpsQnNhSdp3KDkqGg6P7Jp3nMZP8BM=

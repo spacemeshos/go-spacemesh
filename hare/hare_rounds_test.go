@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
@@ -151,6 +152,8 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
+
+	var mu sync.RWMutex
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 2, 5,
@@ -165,11 +168,17 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
+
+			mu.Lock()
 			m[l][hare.N] = len(blocks) + 1
+			mu.Unlock()
 		})
 
 	w.LayerTicker(100 * time.Millisecond)
 	time.Sleep(time.Second * 6)
+
+	mu.RLock()
+	defer mu.RUnlock()
 
 	for x := range m {
 		for y := range m[x] {

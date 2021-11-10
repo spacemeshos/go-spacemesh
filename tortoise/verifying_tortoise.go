@@ -1133,19 +1133,15 @@ func (t *turtle) layerOpinionVector(ctx *tcontext, lid types.LayerID) ([]types.B
 	// for newer layers, we vote according to the local opinion (input vector, from hare or sync)
 	opinionVec, err := t.getInputVector(ctx, lid)
 	if err != nil {
-		if errors.Is(err, mesh.ErrInvalidLayer) {
-			// Hare already failed for this layer, so we want to vote against all blocks in the layer. Just return an
-			// empty list.
-			return voteAgainstAll, nil
-		} else if t.Last.After(types.NewLayerID(t.Zdist)) && lid.Before(t.Last.Sub(t.Zdist)) {
+		if t.Last.After(types.NewLayerID(t.Zdist)) && lid.Before(t.Last.Sub(t.Zdist)) {
 			// Layer has passed the Hare abort distance threshold, so we give up waiting for Hare results. At this point
 			// our opinion on this layer is that we vote against blocks (i.e., we support an empty layer).
 			return voteAgainstAll, nil
-		} else {
-			// Hare hasn't failed and layer has not passed the Hare abort threshold, so we abstain while we keep waiting
-			// for Hare results.
-			return voteAbstain, nil
 		}
+		// Hare hasn't failed and layer has not passed the Hare abort threshold, so we abstain while we keep waiting
+		// for Hare results.
+		logger.With().Warning("local opinion abstains on all blocks in layer", log.Err(err))
+		return voteAbstain, nil
 	}
 	logger.With().Debug("got contextually valid blocks for layer",
 		log.Int("count", len(opinionVec)))

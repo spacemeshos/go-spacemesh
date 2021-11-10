@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -49,13 +50,41 @@ func (mmv *mockMessageValidator) ContextuallyValidateMessage(context.Context, *M
 }
 
 type mockP2p struct {
+	mu    sync.RWMutex
 	count int
 	err   error
 }
 
 func (m *mockP2p) Publish(context.Context, string, []byte) error {
+	m.incCount()
+	return m.getErr()
+}
+
+func (m *mockP2p) getCount() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.count
+}
+
+func (m *mockP2p) incCount() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.count++
+}
+
+func (m *mockP2p) getErr() error {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	return m.err
+}
+
+func (m *mockP2p) setErr(err error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.err = err
 }
 
 type mockProposalTracker struct {
@@ -124,17 +153,17 @@ func buildMessage(msg *Message) *Msg {
 }
 
 func buildBroker(tb testing.TB, testName string) *Broker {
-	return newBroker("self", &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
+	return newBroker("self", &mockEligibilityValidator{valid: 1}, MockStateQuerier{true, nil},
 		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.NewCloser(), logtest.New(tb).WithName(testName))
 }
 
 func buildBrokerLimit4(tb testing.TB, testName string) *Broker {
-	return newBroker("self", &mockEligibilityValidator{valid: true}, MockStateQuerier{true, nil},
+	return newBroker("self", &mockEligibilityValidator{valid: 1}, MockStateQuerier{true, nil},
 		(&mockSyncer{true}).IsSynced, 10, 4, util.NewCloser(), logtest.New(tb).WithName(testName))
 }
 
 type mockEligibilityValidator struct {
-	valid        bool
+	valid        int32
 	validationFn func(context.Context, *Msg) bool
 }
 
@@ -142,7 +171,7 @@ func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) boo
 	if mev.validationFn != nil {
 		return mev.validationFn(ctx, msg)
 	}
-	return mev.valid
+	return atomic.LoadInt32(&mev.valid) != 0
 }
 
 // test that a InnerMsg to a specific set ObjectID is delivered by the broker.
@@ -157,6 +186,8 @@ func TestConsensusProcess_Start(t *testing.T) {
 	assert.Equal(t, nil, err)
 	err = proc.Start(context.TODO())
 	assert.Equal(t, "instance already started", err.Error())
+
+	closeBrokerAndWait(t, broker)
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
@@ -169,7 +200,8 @@ func TestConsensusProcess_TerminationLimit(t *testing.T) {
 	p.cfg.RoundDuration = 1
 	require.NoError(t, p.Start(context.TODO()))
 	time.Sleep(time.Duration(6*p.cfg.RoundDuration) * time.Second)
-	assert.EqualValues(t, 1, p.k/4)
+
+	assert.EqualValues(t, 1, p.getK()/4)
 }
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
@@ -200,7 +232,7 @@ func TestConsensusProcess_eventLoop(t *testing.T) {
 		wg.Done()
 	}()
 	time.Sleep(500 * time.Millisecond)
-	assert.Equal(t, 1, net.count)
+	assert.Equal(t, 1, net.getCount())
 	proc.Close()
 	wg.Wait()
 }
@@ -255,9 +287,9 @@ func TestConsensusProcess_nextRound(t *testing.T) {
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
 	proc.advanceToNextRound(context.TODO())
 	proc.advanceToNextRound(context.TODO())
-	assert.EqualValues(t, 1, proc.k)
+	assert.EqualValues(t, 1, proc.getK())
 	proc.advanceToNextRound(context.TODO())
-	assert.EqualValues(t, 2, proc.k)
+	assert.EqualValues(t, 2, proc.getK())
 }
 
 func generateConsensusProcess(t *testing.T) *consensusProcess {
@@ -290,9 +322,9 @@ func TestConsensusProcess_Id(t *testing.T) {
 
 func TestNewConsensusProcess_AdvanceToNextRound(t *testing.T) {
 	proc := generateConsensusProcess(t)
-	k := proc.k
+	k := proc.getK()
 	proc.advanceToNextRound(context.TODO())
-	assert.Equal(t, k+1, proc.k)
+	assert.Equal(t, k+1, proc.getK())
 }
 
 func TestConsensusProcess_CreateInbox(t *testing.T) {
@@ -312,7 +344,7 @@ func TestConsensusProcess_InitDefaultBuilder(t *testing.T) {
 	assert.True(t, NewSet(builder.inner.Values).Equals(s))
 	verifier := builder.msg.PubKey
 	assert.Nil(t, verifier)
-	assert.Equal(t, builder.inner.K, proc.k)
+	assert.Equal(t, builder.inner.K, proc.getK())
 	assert.Equal(t, builder.inner.Ki, proc.ki)
 	assert.Equal(t, builder.inner.InstanceID, proc.instanceID)
 }
@@ -377,16 +409,16 @@ func TestConsensusProcess_sendMessage(t *testing.T) {
 	proc.publisher = net
 
 	b := proc.sendMessage(context.TODO(), nil)
-	r.Equal(0, net.count)
+	r.Equal(0, net.getCount())
 	r.False(b)
 	msg := buildStatusMsg(signing.NewEdSigner(), proc.s, 0)
 
-	net.err = errors.New("mock network failed error")
+	net.setErr(errors.New("mock network failed error"))
 	b = proc.sendMessage(context.TODO(), msg)
 	r.False(b)
-	r.Equal(1, net.count)
+	r.Equal(1, net.getCount())
 
-	net.err = nil
+	net.setErr(nil)
 	b = proc.sendMessage(context.TODO(), msg)
 	r.True(b)
 }
@@ -454,7 +486,7 @@ func TestConsensusProcess_procNotify(t *testing.T) {
 	proc.ki = 0
 	m.InnerMsg.K = proc.ki
 	proc.s.Add(value5)
-	proc.k = notifyRound
+	proc.setK(notifyRound)
 	proc.processNotifyMsg(context.TODO(), m)
 	assert.True(t, s.Equals(proc.s))
 }
@@ -553,7 +585,7 @@ func TestConsensusProcess_beginStatusRound(t *testing.T) {
 
 	preStatusTracker := proc.statusesTracker
 	proc.beginStatusRound(context.TODO())
-	assert.Equal(t, 1, network.count)
+	assert.Equal(t, 1, network.getCount())
 	assert.NotEqual(t, preStatusTracker, proc.statusesTracker)
 }
 
@@ -582,7 +614,7 @@ func TestConsensusProcess_beginProposalRound(t *testing.T) {
 	proc.SetInbox(make(chan *Msg, 1))
 	proc.beginProposalRound(context.TODO())
 
-	assert.Equal(t, 1, network.count)
+	assert.Equal(t, 1, network.getCount())
 	assert.Nil(t, proc.statusesTracker)
 }
 
@@ -615,7 +647,7 @@ func TestConsensusProcess_beginCommitRound(t *testing.T) {
 	mo.EXPECT().Proof(gomock.Any(), proc.instanceID, proc.k).Return(nil, nil).Times(2)
 	mo.EXPECT().CalcEligibility(gomock.Any(), proc.instanceID, proc.k, gomock.Any(), proc.nid, gomock.Any()).Return(uint16(1), nil).Times(1)
 	proc.beginCommitRound(context.TODO())
-	assert.Equal(t, 1, network.count)
+	assert.Equal(t, 1, network.getCount())
 }
 
 type mockNet struct {

@@ -55,9 +55,11 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	log.SetupGlobal(logger)
 
 	log.Info("initializing p2p services")
+
 	cfg := app.Config.P2P
 	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
-	host, err := p2p.New(cmdp.Ctx, logger, cfg)
+	ctx := cmdp.Ctx()
+	host, err := p2p.New(ctx, logger, cfg)
 	if err != nil {
 		log.With().Panic("failed to create host", log.Err(err))
 	}
@@ -82,10 +84,10 @@ func (app *P2PApp) Start(cmd *cobra.Command, args []string) {
 	defer svc.Close()
 
 	jsonSvc := grpcserver.NewJSONHTTPServer(app.Config.API.JSONServerPort)
-	jsonSvc.StartService(cmdp.Ctx, gwsvc)
+	jsonSvc.StartService(ctx, gwsvc)
 	defer jsonSvc.Close()
 
-	<-cmdp.Ctx.Done()
+	<-ctx.Done()
 }
 
 func main() {

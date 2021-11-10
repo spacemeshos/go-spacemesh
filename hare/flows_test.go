@@ -161,8 +161,9 @@ func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types
 func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
 
-	totalNodes := 20
+	totalNodes := 15
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
@@ -179,14 +180,15 @@ func Test_consensusIterations(t *testing.T) {
 		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
 		require.NoError(t, err)
 		p2pm := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
-		proc := createConsensusProcess(t, true, cfg, oracle, p2pm, test.initialSets[i], types.NewLayerID(1), t.Name())
+		proc, broker := createConsensusProcess(t, true, cfg, oracle, p2pm, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
+		test.brokers = append(test.brokers, broker)
 		i++
 	}
 	test.Create(totalNodes, creationFunc)
 	require.NoError(t, mesh.ConnectAllButSelf())
 	test.Start()
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 40*time.Second)
 }
 
 func isSynced(context.Context) bool {
@@ -471,7 +473,7 @@ func Test_multipleCPs(t *testing.T) {
 		}
 	}()
 
-	test.WaitForTimedTermination(t, 60*time.Second)
+	test.WaitForTimedTermination(t, 80*time.Second)
 }
 
 // Test - run multiple CPs where one of them runs more than one iteration.
@@ -531,5 +533,5 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}
 	}()
 
-	test.WaitForTimedTermination(t, 50*time.Second)
+	test.WaitForTimedTermination(t, 100*time.Second)
 }

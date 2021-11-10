@@ -3,6 +3,7 @@ package hare
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -26,8 +27,6 @@ var (
 	instanceID6 = types.NewLayerID(6)
 	instanceID7 = types.NewLayerID(7)
 )
-
-const reqID = "abracadabra"
 
 func trueFunc(context.Context) bool {
 	return true
@@ -79,12 +78,14 @@ func TestBroker_Start(t *testing.T) {
 	err = broker.Start(context.TODO())
 	assert.NotNil(t, err)
 	assert.Equal(t, "instance already started", err.Error())
+
+	closeBrokerAndWait(t, broker)
 }
 
 // test that a InnerMsg to a specific set ID is delivered by the broker.
 func TestBroker_Received(t *testing.T) {
 	broker := buildBroker(t, t.Name())
-	broker.Start(context.TODO())
+	require.NoError(t, broker.Start(context.TODO()))
 
 	inbox, err := broker.Register(context.TODO(), instanceID1)
 	assert.Nil(t, err)
@@ -92,6 +93,8 @@ func TestBroker_Received(t *testing.T) {
 	serMsg := createMessage(t, instanceID1)
 	broker.HandleMessage(context.TODO(), "", serMsg)
 	waitForMessages(t, inbox, instanceID1, 1)
+
+	closeBrokerAndWait(t, broker)
 }
 
 // test that self-generated (outbound) messages are handled before incoming messages.
@@ -198,36 +201,49 @@ func TestBroker_Priority(t *testing.T) {
 // the earliest one gets unregistered in favor of the newest one.
 func TestBroker_MaxConcurrentProcesses(t *testing.T) {
 	broker := buildBrokerLimit4(t, t.Name())
-	broker.Start(context.TODO())
+	require.NoError(t, broker.Start(context.TODO()))
 
 	broker.Register(context.TODO(), instanceID1)
 	broker.Register(context.TODO(), instanceID2)
 	broker.Register(context.TODO(), instanceID3)
 	broker.Register(context.TODO(), instanceID4)
+
+	broker.mu.RLock()
 	assert.Equal(t, 4, len(broker.outbox))
+	broker.mu.RUnlock()
 
 	// this statement should cause inbox1 to be unregistered
 	inbox5, _ := broker.Register(context.TODO(), instanceID5)
+	broker.mu.RLock()
 	assert.Equal(t, 4, len(broker.outbox))
+	broker.mu.RUnlock()
 
 	serMsg := createMessage(t, instanceID5)
 	broker.HandleMessage(context.TODO(), "", serMsg)
 	waitForMessages(t, inbox5, instanceID5, 1)
+	broker.mu.RLock()
 	assert.Nil(t, broker.outbox[instanceID1.Uint32()])
+	broker.mu.RUnlock()
 
 	inbox6, _ := broker.Register(context.TODO(), instanceID6)
+	broker.mu.RLock()
 	assert.Equal(t, 4, len(broker.outbox))
+	broker.mu.RUnlock()
+	broker.mu.RLock()
 	assert.Nil(t, broker.outbox[instanceID2.Uint32()])
+	broker.mu.RUnlock()
 
 	serMsg = createMessage(t, instanceID6)
 	broker.HandleMessage(context.TODO(), "", serMsg)
 	waitForMessages(t, inbox6, instanceID6, 1)
+
+	closeBrokerAndWait(t, broker)
 }
 
 // test that aborting the broker aborts.
 func TestBroker_Abort(t *testing.T) {
 	broker := buildBroker(t, t.Name())
-	broker.Start(context.TODO())
+	require.NoError(t, broker.Start(context.TODO()))
 
 	timer := time.NewTimer(3 * time.Second)
 
@@ -273,30 +289,57 @@ func TestBroker_MultipleInstanceIds(t *testing.T) {
 	const msgCount = 1
 
 	broker := buildBroker(t, t.Name())
-	broker.Start(context.TODO())
+	require.NoError(t, broker.Start(context.TODO()))
 
 	inbox1, _ := broker.Register(context.TODO(), instanceID1)
 	inbox2, _ := broker.Register(context.TODO(), instanceID2)
 	inbox3, _ := broker.Register(context.TODO(), instanceID3)
 
-	go sendMessages(t, instanceID1, broker, msgCount)
-	go sendMessages(t, instanceID2, broker, msgCount)
-	go sendMessages(t, instanceID3, broker, msgCount)
+	var wg sync.WaitGroup
+	wg.Add(5)
+	go func() {
+		defer wg.Done()
+		sendMessages(t, instanceID1, broker, msgCount)
+	}()
+	go func() {
+		defer wg.Done()
+		sendMessages(t, instanceID2, broker, msgCount)
+	}()
+	go func() {
+		defer wg.Done()
+		sendMessages(t, instanceID3, broker, msgCount)
+	}()
 
-	go waitForMessages(t, inbox1, instanceID1, msgCount)
-	go waitForMessages(t, inbox2, instanceID2, msgCount)
+	go func() {
+		defer wg.Done()
+		waitForMessages(t, inbox1, instanceID1, msgCount)
+	}()
+	go func() {
+		defer wg.Done()
+		waitForMessages(t, inbox2, instanceID2, msgCount)
+	}()
 	waitForMessages(t, inbox3, instanceID3, msgCount)
 
 	assert.True(t, true)
+	wg.Wait()
+	closeBrokerAndWait(t, broker)
 }
 
 func TestBroker_RegisterUnregister(t *testing.T) {
 	broker := buildBroker(t, t.Name())
-	broker.Start(context.TODO())
+	require.NoError(t, broker.Start(context.TODO()))
 	broker.Register(context.TODO(), instanceID1)
+
+	broker.mu.RLock()
 	assert.Equal(t, 1, len(broker.outbox))
+	broker.mu.RUnlock()
+
 	broker.Unregister(context.TODO(), instanceID1)
+	broker.mu.RLock()
 	assert.Nil(t, broker.outbox[instanceID1.Uint32()])
+	broker.mu.RUnlock()
+
+	closeBrokerAndWait(t, broker)
 }
 
 func newMockGossipMsg(msg *Message) *Msg {
@@ -306,9 +349,9 @@ func newMockGossipMsg(msg *Message) *Msg {
 func TestBroker_Send(t *testing.T) {
 	ctx := context.TODO()
 	broker := buildBroker(t, t.Name())
-	mev := &mockEligibilityValidator{valid: false}
+	mev := &mockEligibilityValidator{valid: 0}
 	broker.eValidator = mev
-	broker.Start(ctx)
+	require.NoError(t, broker.Start(ctx))
 
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", nil))
 
@@ -320,23 +363,34 @@ func TestBroker_Send(t *testing.T) {
 	require.Equal(t, pubsub.ValidationIgnore, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
 	// nothing happens since this is an invalid InnerMsg
 
-	mev.valid = true
+	atomic.StoreInt32(&mev.valid, 1)
 	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(ctx, "", mustEncode(t, msg)))
+
+	closeBrokerAndWait(t, broker)
 }
 
 func TestBroker_Register(t *testing.T) {
 	broker := buildBroker(t, t.Name())
-	broker.Start(context.TODO())
+	require.NoError(t, broker.Start(context.TODO()))
 	msg := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil)
+
+	broker.mu.Lock()
 	broker.pending[instanceID1.Uint32()] = []*Msg{msg, msg}
+	broker.mu.Unlock()
+
 	broker.Register(context.TODO(), instanceID1)
+
+	broker.mu.RLock()
 	assert.Equal(t, 2, len(broker.outbox[instanceID1.Uint32()]))
 	assert.Equal(t, 0, len(broker.pending[instanceID1.Uint32()]))
+	broker.mu.RUnlock()
+
+	closeBrokerAndWait(t, broker)
 }
 
 func TestBroker_Register2(t *testing.T) {
 	broker := buildBroker(t, t.Name())
-	broker.Start(context.TODO())
+	require.NoError(t, broker.Start(context.TODO()))
 	broker.Register(context.TODO(), instanceID1)
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
@@ -347,6 +401,8 @@ func TestBroker_Register2(t *testing.T) {
 	m.InnerMsg.InstanceID = instanceID2
 	msg = newMockGossipMsg(m).Message
 	require.Equal(t, pubsub.ValidationAccept, broker.HandleMessage(context.TODO(), "", mustEncode(t, msg)))
+
+	closeBrokerAndWait(t, broker)
 }
 
 func TestBroker_Register3(t *testing.T) {
@@ -364,6 +420,7 @@ func TestBroker_Register3(t *testing.T) {
 	for {
 		select {
 		case <-ch:
+			closeBrokerAndWait(t, broker)
 			return
 		case <-timer.C:
 			t.FailNow()
@@ -373,7 +430,7 @@ func TestBroker_Register3(t *testing.T) {
 
 func TestBroker_PubkeyExtraction(t *testing.T) {
 	broker := buildBroker(t, t.Name())
-	broker.Start(context.TODO())
+	require.NoError(t, broker.Start(context.TODO()))
 	inbox, _ := broker.Register(context.TODO(), instanceID1)
 	sgn := signing.NewEdSigner()
 	m := BuildPreRoundMsg(sgn, NewSetFromValues(value1), nil).Message
@@ -386,6 +443,7 @@ func TestBroker_PubkeyExtraction(t *testing.T) {
 		select {
 		case inMsg := <-inbox:
 			assert.True(t, sgn.PublicKey().Equals(inMsg.PubKey))
+			closeBrokerAndWait(t, broker)
 			return
 		case <-tm.C:
 			t.Error("Timeout")
@@ -406,25 +464,34 @@ func Test_newMsg(t *testing.T) {
 
 func TestBroker_updateInstance(t *testing.T) {
 	r := require.New(t)
+
 	b := buildBroker(t, t.Name())
-	r.Equal(types.NewLayerID(0), b.latestLayer)
+	r.Equal(types.NewLayerID(0), b.getLatestLayer())
 	b.updateLatestLayer(context.TODO(), types.NewLayerID(1))
-	r.Equal(types.NewLayerID(1), b.latestLayer)
+	r.Equal(types.NewLayerID(1), b.getLatestLayer())
+
 	b.updateLatestLayer(context.TODO(), types.NewLayerID(2))
-	r.Equal(types.NewLayerID(2), b.latestLayer)
+	r.Equal(types.NewLayerID(2), b.getLatestLayer())
+
+	closeBrokerAndWait(t, b)
 }
 
 func TestBroker_updateSynchronicity(t *testing.T) {
 	r := require.New(t)
+
 	b := buildBroker(t, t.Name())
 	b.isNodeSynced = trueFunc
 	b.updateSynchronicity(context.TODO(), types.NewLayerID(1))
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
+
 	b.isNodeSynced = falseFunc
 	b.updateSynchronicity(context.TODO(), types.NewLayerID(1))
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
+
 	b.updateSynchronicity(context.TODO(), types.NewLayerID(2))
 	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
+
+	closeBrokerAndWait(t, b)
 }
 
 func TestBroker_isSynced(t *testing.T) {
@@ -432,11 +499,15 @@ func TestBroker_isSynced(t *testing.T) {
 	b := buildBroker(t, t.Name())
 	b.isNodeSynced = trueFunc
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
+
 	b.isNodeSynced = falseFunc
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
 	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
+
 	b.isNodeSynced = trueFunc
 	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
+
+	closeBrokerAndWait(t, b)
 }
 
 func TestBroker_Register4(t *testing.T) {
@@ -446,17 +517,22 @@ func TestBroker_Register4(t *testing.T) {
 	b.isNodeSynced = trueFunc
 	c, e := b.Register(context.TODO(), types.NewLayerID(1))
 	r.Nil(e)
+
+	b.mu.RLock()
 	r.Equal(b.outbox[1], c)
+	b.mu.RUnlock()
 
 	b.isNodeSynced = falseFunc
 	_, e = b.Register(context.TODO(), types.NewLayerID(2))
 	r.NotNil(e)
+
+	closeBrokerAndWait(t, b)
 }
 
 func TestBroker_eventLoop(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
-	b.Start(context.TODO())
+	require.NoError(t, b.Start(context.TODO()))
 
 	// unknown-->invalid, ignore
 	b.isNodeSynced = falseFunc
@@ -465,7 +541,9 @@ func TestBroker_eventLoop(t *testing.T) {
 	msg := newMockGossipMsg(m).Message
 	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
 
+	b.mu.RLock()
 	_, ok := b.outbox[instanceID1.Uint32()]
+	b.mu.RUnlock()
 	r.False(ok)
 
 	// register to invalid should error
@@ -476,7 +554,9 @@ func TestBroker_eventLoop(t *testing.T) {
 	b.isNodeSynced = trueFunc
 	c, e := b.Register(context.TODO(), instanceID2)
 	r.Nil(e)
+
 	m.InnerMsg.InstanceID = instanceID2
+
 	msg = newMockGossipMsg(m).Message
 	b.HandleMessage(context.TODO(), "", mustEncode(t, msg))
 	recM := <-c
@@ -489,12 +569,14 @@ func TestBroker_eventLoop(t *testing.T) {
 	c, e = b.Register(context.TODO(), instanceID3)
 	r.Nil(e)
 	<-c
+
+	closeBrokerAndWait(t, b)
 }
 
 func TestBroker_eventLoop2(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
-	b.Start(context.TODO())
+	require.NoError(t, b.Start(context.TODO()))
 
 	// invalid instance
 	b.isNodeSynced = falseFunc
@@ -503,7 +585,10 @@ func TestBroker_eventLoop2(t *testing.T) {
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID4
 	b.HandleMessage(context.TODO(), "", mustEncode(t, m))
+	b.mu.RLock()
 	v, ok := b.syncState[instanceID4.Uint32()]
+	b.mu.RUnlock()
+
 	r.True(ok)
 	r.NotEqual(true, v)
 
@@ -511,8 +596,12 @@ func TestBroker_eventLoop2(t *testing.T) {
 	m.InnerMsg.InstanceID = instanceID6
 
 	b.HandleMessage(context.TODO(), "", mustEncode(t, m))
+	b.mu.RLock()
 	_, ok = b.outbox[instanceID6.Uint32()]
+	b.mu.RUnlock()
 	r.False(ok)
+
+	closeBrokerAndWait(t, b)
 }
 
 func Test_validate(t *testing.T) {
@@ -521,7 +610,7 @@ func Test_validate(t *testing.T) {
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
 	m.InnerMsg.InstanceID = types.NewLayerID(1)
-	b.latestLayer = types.NewLayerID(2)
+	b.setLatestLayer(types.NewLayerID(2))
 	e := b.validate(context.TODO(), m.Message)
 	r.EqualError(e, errUnregistered.Error())
 
@@ -534,14 +623,23 @@ func Test_validate(t *testing.T) {
 	r.EqualError(e, errEarlyMsg.Error())
 
 	m.InnerMsg.InstanceID = types.NewLayerID(2)
+
+	b.mu.Lock()
 	b.outbox[2] = make(chan *Msg)
 	b.syncState[2] = false
+	b.mu.Unlock()
+
 	e = b.validate(context.TODO(), m.Message)
 	r.EqualError(e, errNotSynced.Error())
 
+	b.mu.Lock()
 	b.syncState[2] = true
+	b.mu.Unlock()
+
 	e = b.validate(context.TODO(), m.Message)
 	r.Nil(e)
+
+	closeBrokerAndWait(t, b)
 }
 
 func TestBroker_clean(t *testing.T) {
@@ -550,25 +648,40 @@ func TestBroker_clean(t *testing.T) {
 
 	ten := types.NewLayerID(10)
 	for i := types.NewLayerID(1); i.Before(ten); i = i.Add(1) {
+		b.mu.Lock()
 		b.syncState[i.Uint32()] = true
+		b.mu.Unlock()
 	}
 
-	b.latestLayer = ten.Sub(1)
+	b.setLatestLayer(ten.Sub(1))
+
+	b.mu.Lock()
 	b.outbox[5] = make(chan *Msg)
+	b.mu.Unlock()
+
 	b.cleanOldLayers()
 	r.Equal(types.NewLayerID(4), b.minDeleted)
+	b.mu.RLock()
 	r.Equal(5, len(b.syncState))
+	b.mu.RUnlock()
 
+	b.mu.Lock()
 	delete(b.outbox, 5)
+	b.mu.Unlock()
+
 	b.cleanOldLayers()
+	b.mu.RLock()
 	r.Equal(1, len(b.syncState))
+	b.mu.RUnlock()
+
+	closeBrokerAndWait(t, b)
 }
 
 func TestBroker_Flow(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
 
-	b.Start(context.TODO())
+	require.NoError(t, b.Start(context.TODO()))
 
 	m := BuildStatusMsg(signing.NewEdSigner(), NewDefaultEmptySet())
 	m.InnerMsg.InstanceID = types.NewLayerID(1)
@@ -601,12 +714,14 @@ func TestBroker_Flow(t *testing.T) {
 
 	b.Unregister(context.TODO(), types.NewLayerID(1))
 	r.Equal(instanceID2, b.minDeleted)
+
+	closeBrokerAndWait(t, b)
 }
 
 func TestBroker_Synced(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
-	b.Start(context.TODO())
+	require.NoError(t, b.Start(context.TODO()))
 	wg := sync.WaitGroup{}
 	for i := uint32(0); i < 1000; i++ {
 		wg.Add(1)
@@ -617,4 +732,18 @@ func TestBroker_Synced(t *testing.T) {
 	}
 
 	wg.Wait()
+	closeBrokerAndWait(t, b)
+}
+
+func closeBrokerAndWait(t *testing.T, b *Broker) {
+	b.Close()
+
+	timer := time.NewTimer(1 * time.Second)
+	defer timer.Stop()
+
+	select {
+	case <-timer.C:
+		t.Errorf("timeout")
+	case <-b.CloseChannel():
+	}
 }

@@ -138,7 +138,6 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 		// pBase, since we never reapply the state of oldPbase.
 		old = observed.Sub(1)
 	}
-
 	trtl.org.Iterate(ctx, layerID, func(lid types.LayerID) {
 		logger.Info("handling incoming layer",
 			log.FieldNamed("old_pbase", old),

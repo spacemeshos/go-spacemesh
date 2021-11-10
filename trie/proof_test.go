@@ -65,7 +65,7 @@ func dbKeys(tb testing.TB, db *database.LDBDatabase) (rst [][]byte) {
 }
 
 func TestProof(t *testing.T) {
-	trie, vals := randomTrie(500)
+	trie, vals := randomTrie(100)
 	root := trie.Hash()
 	for i, prover := range makeProvers(trie) {
 		for _, kv := range vals {
@@ -106,7 +106,9 @@ func TestOneElementProof(t *testing.T) {
 }
 
 func TestBadProof(t *testing.T) {
-	trie, vals := randomTrie(800)
+	// Higher values cause the `limit on 8128 simultaneously alive goroutines is exceeded, dying` error
+	// when tests are run with the `-race` flag.
+	trie, vals := randomTrie(100)
 	root := trie.Hash()
 	for i, prover := range makeProvers(trie) {
 		for _, kv := range vals {

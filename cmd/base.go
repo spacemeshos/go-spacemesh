@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
+	"sync"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
@@ -30,13 +31,44 @@ var (
 
 	// Commit is the git commit used to build the app. Designed to be overwritten by make.
 	Commit string
-
-	// Ctx is the node's main context.
-	Ctx, cancel = context.WithCancel(context.Background())
-
-	// Cancel is a function used to initiate graceful shutdown.
-	Cancel = cancel
 )
+
+var (
+	mu                      sync.RWMutex
+	globalCtx, globalCancel = context.WithCancel(context.Background())
+)
+
+// Ctx returns global context.
+func Ctx() context.Context {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	return globalCtx
+}
+
+// SetCtx sets global context.
+func SetCtx(ctx context.Context) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	globalCtx = ctx
+}
+
+// Cancel returns global cancellation function.
+func Cancel() func() {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	return globalCancel
+}
+
+// SetCancel sets global cancellation function.
+func SetCancel(cancelFunc func()) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	globalCancel = cancelFunc
+}
 
 // BaseApp is the base application command, provides basic init and flags for all executables and applications.
 type BaseApp struct {
@@ -60,7 +92,8 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	go func() {
 		for range signalChan {
 			log.Info("Received an interrupt, stopping services...\n")
-			Cancel()
+
+			Cancel()()
 		}
 	}()
 

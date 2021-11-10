@@ -180,18 +180,6 @@ func (mr *MockmeshProviderMockRecorder) HandleValidatedLayer(ctx, validatedLayer
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleValidatedLayer", reflect.TypeOf((*MockmeshProvider)(nil).HandleValidatedLayer), ctx, validatedLayer, layer)
 }
 
-// InvalidateLayer mocks base method.
-func (m *MockmeshProvider) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "InvalidateLayer", ctx, layerID)
-}
-
-// InvalidateLayer indicates an expected call of InvalidateLayer.
-func (mr *MockmeshProviderMockRecorder) InvalidateLayer(ctx, layerID interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "InvalidateLayer", reflect.TypeOf((*MockmeshProvider)(nil).InvalidateLayer), ctx, layerID)
-}
-
 // LayerBlocks mocks base method.
 func (m *MockmeshProvider) LayerBlocks(arg0 types.LayerID) ([]*types.Block, error) {
 	m.ctrl.T.Helper()

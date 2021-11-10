@@ -213,8 +213,9 @@ func setup() {
 	// Reset the shutdown context
 	// oof, globals make testing really difficult
 	ctx, cancel := context.WithCancel(context.Background())
-	cmdp.Ctx = ctx
-	cmdp.Cancel = cancel
+
+	cmdp.SetCtx(ctx)
+	cmdp.SetCancel(cancel)
 
 	events.CloseEventReporter()
 	resetFlags()
@@ -374,12 +375,6 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartJSONServer)
 	r.Equal(1234, app.Config.API.JSONServerPort)
-}
-
-type NetMock struct{}
-
-func (NetMock) Broadcast(context.Context, string, []byte) error {
-	return nil
 }
 
 func marshalProto(t *testing.T, msg proto.Message) string {
@@ -670,7 +665,8 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
-	cmdp.Cancel() // stop the app
+	cmdp.Cancel()() // stop the app
+
 	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
 }
@@ -821,8 +817,26 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2.Wait()
 
 	// This stops the app
-	cmdp.Cancel()
+	cmdp.Cancel()()
 
 	// Wait for it to stop
 	wg.Wait()
+}
+
+func TestInitialize_BadTortoiseParams(t *testing.T) {
+	conf := config.DefaultConfig()
+	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
+	require.NoError(t, app.Initialize())
+
+	conf = config.DefaultTestConfig()
+	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
+	require.NoError(t, app.Initialize())
+
+	app = New(WithLog(logtest.New(t)), WithConfig(getTestDefaultConfig()))
+	require.NoError(t, app.Initialize())
+
+	conf.Zdist = 5
+	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
+	err := app.Initialize()
+	assert.EqualError(t, err, "incompatible tortoise hare params")
 }

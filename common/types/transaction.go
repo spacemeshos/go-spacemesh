@@ -62,11 +62,17 @@ func (t *Transaction) Origin() Address {
 	if t.origin == nil {
 		panic("origin not set")
 	}
+
 	return *t.origin
 }
 
 // SetOrigin sets the cache of the transaction's origin address.
 func (t *Transaction) SetOrigin(origin Address) {
+	if t.origin != nil && *t.origin == origin {
+		// Avoid data races caused by writing if origin is the same.
+		return
+	}
+
 	t.origin = &origin
 }
 
@@ -82,8 +88,11 @@ func (t *Transaction) CalcAndSetOrigin() error {
 		return fmt.Errorf("failed to extract transaction pubkey: %v", err)
 	}
 
-	t.origin = &Address{}
-	t.origin.SetBytes(pubKey)
+	addr := Address{}
+	addr.SetBytes(pubKey)
+
+	t.SetOrigin(addr)
+
 	return nil
 }
 
@@ -97,8 +106,10 @@ func (t *Transaction) ID() TransactionID {
 	if err != nil {
 		panic("failed to marshal transaction: " + err.Error())
 	}
+
 	id := TransactionID(CalcHash32(txBytes))
 	t.id = &id
+
 	return id
 }
 
