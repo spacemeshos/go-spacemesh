@@ -1553,8 +1553,7 @@ func TestVerifyLayers(t *testing.T) {
 	// layer missing in database
 	alg.trtl.Last = l2ID
 	err := alg.trtl.verifyLayers(newContext(context.TODO()))
-	r.Error(err)
-	r.Contains(err.Error(), errstrCantFindLayer)
+	r.ErrorIs(err, database.ErrNotFound)
 
 	// empty layer: local opinion vector is nil, abstains on all blocks in layer
 	// no contextual validity data recorded
@@ -1790,53 +1789,6 @@ func TestVerifyLayers(t *testing.T) {
 	})
 }
 
-func TestVoteVectorForLayer(t *testing.T) {
-	r := require.New(t)
-
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
-	var blockIDs []types.BlockID
-	for _, block := range l1Blocks {
-		blockIDs = append(blockIDs, block.ID())
-	}
-
-	// empty input: expect empty output
-	emptyVec := make([]types.BlockID, 0, 0)
-	voteMap := alg.trtl.voteVectorForLayer(emptyVec, emptyVec)
-	r.Equal(map[types.BlockID]vec{}, voteMap)
-
-	// nil input vector: abstain on all blocks in layer
-	voteMap = alg.trtl.voteVectorForLayer(blockIDs, nil)
-	r.Len(blockIDs, 3)
-	r.Equal(map[types.BlockID]vec{
-		blockIDs[0]: abstain,
-		blockIDs[1]: abstain,
-		blockIDs[2]: abstain,
-	}, voteMap)
-
-	// empty input vector: vote against everything
-	voteMap = alg.trtl.voteVectorForLayer(blockIDs, make([]types.BlockID, 0, 0))
-	r.Len(blockIDs, 3)
-	r.Equal(map[types.BlockID]vec{
-		blockIDs[0]: against,
-		blockIDs[1]: against,
-		blockIDs[2]: against,
-	}, voteMap)
-
-	// adds support for blocks in input vector
-	voteMap = alg.trtl.voteVectorForLayer(blockIDs, blockIDs[1:])
-	r.Len(blockIDs, 3)
-	r.Equal(map[types.BlockID]vec{
-		blockIDs[0]: against,
-		blockIDs[1]: support,
-		blockIDs[2]: support,
-	}, voteMap)
-}
-
 func TestSumVotesForBlock(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh(t)
@@ -2019,9 +1971,8 @@ func TestHealing(t *testing.T) {
 		require.NoError(t, alg.trtl.HandleIncomingLayer(newContext(context.TODO()), l3ID))
 
 		// make sure local opinion supports L2
-		layerInputVector, err := alg.trtl.layerOpinionVector(newContext(context.TODO()), l2ID)
-		r.NoError(err)
-		localOpinionVec := alg.trtl.voteVectorForLayer(l2BlockIDs, layerInputVector)
+		localOpinionVec, err := alg.trtl.getLocalOpinion(newContext(context.TODO()), l2ID)
+		require.NoError(t, err)
 		for _, bid := range l2BlockIDs {
 			r.Contains(localOpinionVec, bid)
 			r.Equal(support, localOpinionVec[bid])

@@ -269,33 +269,6 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 	return true
 }
 
-// convert two vectors, of (1) raw candidate block IDs for a layer and (2) an opinion vector of blocks we believe belong
-// in the layer, into a map of votes for each of these blocks.
-func (t *turtle) voteVectorForLayer(
-	candidateBlocks []types.BlockID, opinionVec []types.BlockID) (voteMap map[types.BlockID]vec) {
-	voteMap = make(map[types.BlockID]vec, len(candidateBlocks))
-	if opinionVec == nil {
-		// nil means abstain, i.e., we have no opinion on blocks in this layer
-		for _, b := range candidateBlocks {
-			voteMap[b] = abstain
-		}
-		return
-	}
-
-	// add support for all blocks in input vector
-	for _, b := range opinionVec {
-		voteMap[b] = support
-	}
-
-	// vote against all layer blocks not in input vector
-	for _, b := range candidateBlocks {
-		if _, ok := voteMap[b]; !ok {
-			voteMap[b] = against
-		}
-	}
-	return
-}
-
 // BaseBlock selects a base block from sliding window based on a following priorities in order:
 // - choose good block
 // - choose block with the least difference to the local opinion
@@ -875,30 +848,16 @@ candidateLayerLoop:
 		// note: if the following checks fail, we just return rather than trying to verify later layers.
 		// we don't presently support verifying layer N+1 when layer N hasn't been verified.
 
-		layerBlockIds, err := t.getLayerBlocksIDs(ctx, candidateLayerID)
+		localLayerOpinionVec, err := t.getLocalOpinion(ctx, candidateLayerID)
 		if err != nil {
-			return fmt.Errorf("%s %v: %w", errstrCantFindLayer, candidateLayerID, err)
+			return err
 		}
-
-		// get the local opinion for this layer. below, we calculate the global opinion on each block in the layer and
-		// check if it agrees with this local opinion.
-		rawLayerInputVector, err := t.layerOpinionVector(ctx, candidateLayerID)
-		if err != nil {
-			// an error here signifies a real database failure
-			return fmt.Errorf("%s %v: %w", errstrUnableToCalculateLocalOpinion, candidateLayerID, err)
-		}
-
-		// otherwise, nil means we should abstain
-		if rawLayerInputVector == nil {
-			logger.With().Warning("input vector abstains on all blocks in layer", candidateLayerID)
-		}
-		localLayerOpinionVec := t.voteVectorForLayer(layerBlockIds, rawLayerInputVector)
 		if len(localLayerOpinionVec) == 0 {
 			// warn about this to be safe, but we do allow empty layers and must be able to verify them
 			logger.With().Warning("empty vote vector for layer", candidateLayerID)
 		}
 
-		contextualValidity := make(map[types.BlockID]bool, len(layerBlockIds))
+		contextualValidity := make(map[types.BlockID]bool, len(localLayerOpinionVec))
 
 		// Count the votes of good blocks. localOpinionOnBlock is our local opinion on this block.
 		// Declare the vote vector "verified" up to position k if the total weight exceeds the confidence threshold in
