@@ -365,6 +365,10 @@ var (
 )
 
 func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
+	return makeLayerWithBeacon(t, layerID, trtl, nil, blocksPerLayer, atxdb, msh, inputVectorFn)
+}
+
+func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beacon []byte, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
 	logger := logtest.New(t)
 	logger.Debug("======================== choosing base block for layer", layerID)
 	if inputVectorFn != nil {
@@ -392,7 +396,8 @@ func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer
 					LayerIndex: layerID,
 					Data:       []byte(strconv.Itoa(i)),
 				},
-				TxIDs: nil,
+				TxIDs:          nil,
+				TortoiseBeacon: beacon,
 			},
 		}
 		blk.BaseBlock = baseBlockID
@@ -1961,6 +1966,14 @@ func TestHealing(t *testing.T) {
 	mdb := getInMemMesh(t)
 	alg := defaultAlgorithm(t, mdb)
 
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	alg.trtl.beacons = mockBeacons
+
+	goodBeacon := randomBytes(t, 32)
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(goodBeacon, nil).AnyTimes()
+
 	l0ID := types.GetEffectiveGenesis()
 	l1ID := l0ID.Add(1)
 	l2ID := l1ID.Add(1)
@@ -1982,8 +1995,8 @@ func TestHealing(t *testing.T) {
 	alg.trtl.Last = l0ID
 	atxdb := getAtxDB()
 	alg.trtl.atxdb = atxdb
-	l1 := makeLayer(t, l1ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	l2 := makeLayer(t, l2ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	l1 := makeLayerWithBeacon(t, l1ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	l2 := makeLayerWithBeacon(t, l2ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 
 	// healing should work even when there is no local opinion on a layer (i.e., no output vector, while waiting
 	// for hare results)
@@ -2019,7 +2032,7 @@ func TestHealing(t *testing.T) {
 		// then create and process one more new layer
 		// prevent base block from referencing earlier (approved) layers
 		alg.trtl.Last = l0ID
-		makeLayer(t, l3ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		makeLayerWithBeacon(t, l3ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l3ID))
 
 		// make sure local opinion supports L2
@@ -2052,14 +2065,44 @@ func TestHealing(t *testing.T) {
 
 		// create and process several more layers
 		// but don't save layer input vectors, so local opinion is abstain
-		makeLayer(t, l4ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		makeLayerWithBeacon(t, l4ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
 
 		// delete good blocks data
+		oldGoodBlocksIndex := alg.trtl.GoodBlocksIndex
 		alg.trtl.GoodBlocksIndex = make(map[types.BlockID]bool, 0)
 
 		alg.trtl.heal(context.TODO(), l4ID)
 		checkVerifiedLayer(t, alg.trtl, l3ID)
+		alg.trtl.GoodBlocksIndex = oldGoodBlocksIndex
+	})
+
+	l5ID := l4ID.Add(1)
+	l6ID := l5ID.Add(1)
+	l7ID := l6ID.Add(1)
+
+	// healing should count votes of non-good blocks
+	t.Run("counts votes of bad-beacon blocks", func(t *testing.T) {
+		checkVerifiedLayer(t, alg.trtl, l3ID)
+		badBeacon := randomBytes(t, 32)
+
+		// create and process several more layers with the wrong beacon.
+		// but don't save layer input vectors, so local opinion is abstain
+		makeLayerWithBeacon(t, l5ID, alg.trtl, badBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		makeLayerWithBeacon(t, l6ID, alg.trtl, badBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		makeLayerWithBeacon(t, l7ID, alg.trtl, badBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l5ID))
+		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l6ID))
+		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l7ID))
+		checkVerifiedLayer(t, alg.trtl, l3ID)
+
+		// delete good blocks data
+		alg.trtl.GoodBlocksIndex = make(map[types.BlockID]bool, 0)
+
+		alg.trtl.badBeaconVoteDelayLayers = 1
+		alg.trtl.Hdist = 0
+		alg.trtl.heal(context.TODO(), l7ID)
+		checkVerifiedLayer(t, alg.trtl, l4ID)
 	})
 }
 
@@ -2913,7 +2956,8 @@ func TestMultiTortoise(t *testing.T) {
 }
 
 func TestOutOfOrderLayersAreVerified(t *testing.T) {
-	s := sim.New(sim.WithLayerSize(defaultTestLayerSize))
+	// increase layer size reduce test flakiness
+	s := sim.New(sim.WithLayerSize(defaultTestLayerSize * 10))
 	s.Setup()
 
 	ctx := context.Background()

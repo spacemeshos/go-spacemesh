@@ -949,6 +949,7 @@ candidateLayerLoop:
 				log.FieldNamed("last_layer_received", t.Last),
 				log.Uint32("confidence_param", t.ConfidenceParam))
 			if candidateLayerID.Before(t.layerCutoff()) && t.Last.Difference(candidateLayerID) > t.Zdist+t.ConfidenceParam {
+				logger.With().Info("start self-healing with verified layer", t.Verified)
 				lastLayer := t.Last
 				// don't attempt to heal layers newer than Hdist
 				if lastLayer.After(t.layerCutoff()) {
@@ -956,6 +957,7 @@ candidateLayerLoop:
 				}
 				lastVerified := t.Verified
 				t.heal(ctx, lastLayer)
+				logger.With().Info("finished self-healing with verified layer", t.Verified)
 
 				// if self healing made progress, short-circuit processing of this layer, but allow verification of
 				// later layers to continue
@@ -1247,7 +1249,6 @@ func (t *turtle) heal(ctx context.Context, targetLayerID types.LayerID) {
 		pbaseNew = candidateLayerID
 		logger.Info("self healing verified candidate layer")
 	}
-
 	return
 }
 
