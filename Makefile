@@ -113,7 +113,7 @@ tidy:
 	go mod tidy
 	# NOTE(dshulyak) go mod tidy for some reason removes github.com/jessevdk/go-flags from indirect dependencies
 	# starting from 1.16. similar issue was fixed in 1.17 https://github.com/golang/go/issues/44129
-	# but apparently this is not exactly our case 
+	# but apparently this is not exactly our case
 	go get -d github.com/spacemeshos/poet@v0.1.1-0.20201103004828-ef8f28a744fc
 .PHONY: tidy
 
@@ -142,15 +142,15 @@ docker-local-build: go-spacemesh hare p2p harness
 endif
 
 test test-all: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 ./...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -race -timeout 0 -p 1 ./...
 .PHONY: test
 
 test-no-app-test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -timeout 0 -p 1 -tags exclude_app_test ./...
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -race -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test-no-app-test
 
 test-only-app-test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
+	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -race -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
 .PHONY: test-only-app-test
 
 test-tidy:
