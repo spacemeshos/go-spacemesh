@@ -760,13 +760,15 @@ func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDat
 }
 
 func TestEviction(t *testing.T) {
+	const size = 10
 	s := sim.New(
-		sim.WithLayerSize(defaultTestLayerSize),
+		sim.WithLayerSize(size),
 	)
 	s.Setup()
 
 	ctx := context.Background()
 	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg.LayerSize = size
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 	trtl := tortoise.trtl
 
