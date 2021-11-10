@@ -195,7 +195,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 					continue
 				}
 
-				weight, err := trtl.voteWeightByID(context.TODO(), bid, i)
+				weight, err := trtl.voteWeightByID(newContext(context.TODO()), bid, i)
 				require.NoError(t, err)
 				sum = sum.Add(opinionVote.Multiply(weight))
 			}
@@ -315,7 +315,7 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer int, vot
 	trtl = defaultTurtle(t)
 	trtl.AvgLayerSize = uint32(blocksPerLayer)
 	trtl.bdp = msh
-	trtl.init(context.TODO(), mesh.GenesisLayer())
+	trtl.init(newContext(context.TODO()), mesh.GenesisLayer())
 
 	var l types.LayerID
 	atxdb := getAtxDB()
@@ -348,15 +348,15 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 	// write blocks to database first; the verifying tortoise will subsequently read them
 	if inputVectorFn == nil {
 		// just save the layer contents as the input layer vector (the default behavior)
-		require.NoError(t, msh.SaveLayerInputVectorByID(context.TODO(), lyr.Index(), lyr.BlocksIDs()))
+		require.NoError(t, msh.SaveLayerInputVectorByID(newContext(context.TODO()), lyr.Index(), lyr.BlocksIDs()))
 	} else if blocks, err := inputVectorFn(l); err != nil {
 		logger.With().Warning("error from input vector fn", log.Err(err))
 	} else {
 		// save blocks to db for this layer
-		require.NoError(t, msh.SaveLayerInputVectorByID(context.TODO(), l, blocks))
+		require.NoError(t, msh.SaveLayerInputVectorByID(newContext(context.TODO()), l, blocks))
 	}
 
-	require.NoError(t, trtl.HandleIncomingLayer(context.TODO(), l))
+	require.NoError(t, trtl.HandleIncomingLayer(newContext(context.TODO()), l))
 }
 
 var (
@@ -374,7 +374,7 @@ func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer
 		}()
 		msh.SetInputVectorBackupFunc(inputVectorFn)
 	}
-	baseBlockID, lists, err := trtl.BaseBlock(context.TODO())
+	baseBlockID, lists, err := trtl.BaseBlock(newContext(context.TODO()))
 	require.NoError(t, err)
 	logger.Debug("base block for layer", layerID, "is", baseBlockID)
 	logger.Debug("exception lists for layer", layerID, "(against, support, neutral):", lists)
@@ -435,7 +435,7 @@ func TestLayerPatterns(t *testing.T) {
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
 		trtl.atxdb = atxdb
-		trtl.init(context.TODO(), mesh.GenesisLayer())
+		trtl.init(newContext(context.TODO()), mesh.GenesisLayer())
 		numGood := 5
 		pattern := make([]bool, numGood)
 		for i := 0; i < numGood; i++ {
@@ -453,7 +453,7 @@ func TestLayerPatterns(t *testing.T) {
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
 		trtl.atxdb = atxdb
-		trtl.init(context.TODO(), mesh.GenesisLayer())
+		trtl.init(newContext(context.TODO()), mesh.GenesisLayer())
 
 		// calculate the number of layers needed to accumulate enough votes to cross the global threshold and
 		// invalidate earlier bad blocks
@@ -592,7 +592,7 @@ func TestLayerPatterns(t *testing.T) {
 		trtl.AvgLayerSize = blocksPerLayer
 		trtl.bdp = msh
 		trtl.atxdb = atxdb
-		trtl.init(context.TODO(), mesh.GenesisLayer())
+		trtl.init(newContext(context.TODO()), mesh.GenesisLayer())
 		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
 		finalVerified := types.GetEffectiveGenesis().Add(uint32(len(pattern)) - 1)
 		require.Equal(t, int(finalVerified.Uint32()), int(trtl.Verified.Uint32()))
@@ -647,7 +647,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 	trtl.AvgLayerSize = uint32(blocksPerLayer)
 	trtl.bdp = msh
 	gen := mesh.GenesisLayer()
-	trtl.init(context.TODO(), gen)
+	trtl.init(newContext(context.TODO()), gen)
 
 	var l types.LayerID
 	atxdb := getAtxDB()
@@ -675,7 +675,7 @@ type (
 func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider, atxdb atxDataWriter, weight uint) (blocks []*types.Block) {
 	logger := logtest.New(t)
 	logger.Debug("======================== choosing base block for layer", l)
-	b, lists, err := bbp(context.TODO())
+	b, lists, err := bbp(newContext(context.TODO()))
 	require.NoError(t, err)
 	logger.Debug("the base block for layer", l, "is", b, ". exception lists:")
 	logger.Debug("\tagainst\t", lists[0])
@@ -712,7 +712,7 @@ func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider,
 }
 
 func generateBlock(t *testing.T, l types.LayerID, bbp baseBlockProvider, atxdb atxDataWriter, weight uint) *types.Block {
-	b, lists, err := bbp(context.TODO())
+	b, lists, err := bbp(newContext(context.TODO()))
 	require.NoError(t, err)
 	atxHeader := makeAtxHeaderWithWeight(weight)
 	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
@@ -748,7 +748,7 @@ func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDat
 	if err != nil {
 		blocks = nil
 	}
-	if err := msh.SaveLayerInputVectorByID(context.TODO(), l.Sub(1), blocks); err != nil {
+	if err := msh.SaveLayerInputVectorByID(newContext(context.TODO()), l.Sub(1), blocks); err != nil {
 		panic("database error")
 	}
 	lyr := types.NewLayer(l)
@@ -760,17 +760,22 @@ func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDat
 }
 
 func TestEviction(t *testing.T) {
-	logger := logtest.New(t)
-	layers := types.NewLayerID(defaultTestWindowSize * 2)
-	avgPerLayer := 3 // more blocks = longer test
-	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, 0, 0)
-	require.Equal(t, int(trtl.WindowSize+2), len(trtl.BlockOpinionsByLayer))
+	s := sim.New(
+		sim.WithLayerSize(defaultTestLayerSize),
+	)
+	s.Setup()
 
-	// verified layer was advanced
-	require.Equal(t, int(layers.Sub(1).Uint32()), int(trtl.Verified.Uint32()))
+	ctx := context.Background()
+	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	tortoise := NewVerifyingTortoise(ctx, cfg)
+	trtl := tortoise.trtl
+
+	for i := 0; i < 100; i++ {
+		tortoise.HandleIncomingLayer(ctx, s.Next())
+	}
 
 	// old data were evicted
-	require.Equal(t, int(trtl.Verified.Sub(trtl.WindowSize+1).Uint32()), int(trtl.LastEvicted.Uint32()))
+	require.EqualValues(t, trtl.Verified.Sub(tortoise.trtl.WindowSize+1).Uint32(), trtl.LastEvicted.Uint32())
 
 	checkBlockLayer := func(bid types.BlockID, layerAfter types.LayerID) types.LayerID {
 		blk, err := trtl.bdp.GetBlock(bid)
@@ -798,13 +803,6 @@ func TestEviction(t *testing.T) {
 			}
 		}
 	}
-
-	require.Equal(t, (int(trtl.WindowSize)+2)*avgPerLayer, count)
-	logger.Debug("=======================================================================")
-	logger.Debug("count blocks on blocks layers ", len(trtl.BlockOpinionsByLayer))
-	logger.Debug("count blocks on blocks blocks ", count)
-	require.Equal(t, int(trtl.WindowSize+2)*avgPerLayer, len(trtl.GoodBlocksIndex)) // all blocks should be good
-	logger.Debug("count good blocks ", len(trtl.GoodBlocksIndex))
 }
 
 func TestEviction2(t *testing.T) {
@@ -859,27 +857,27 @@ func TestAddToMesh(t *testing.T) {
 	logger.With().Info("first is", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
 	logger.With().Info("first bb is", l1.Index(), l1.Blocks()[0].BaseBlock, types.BlockIdsField(l1.Blocks()[0].ForDiff))
 
-	alg.HandleIncomingLayer(context.TODO(), l1.Index())
+	alg.HandleIncomingLayer(newContext(context.TODO()), l1.Index())
 
 	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l2))
-	alg.HandleIncomingLayer(context.TODO(), l2.Index())
+	alg.HandleIncomingLayer(newContext(context.TODO()), l2.Index())
 
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 
 	l3a := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize+1)
 
 	// this should fail as the blocks for this layer have not been added to the mesh yet
-	alg.HandleIncomingLayer(context.TODO(), l3a.Index())
+	alg.HandleIncomingLayer(newContext(context.TODO()), l3a.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
-	require.NoError(t, alg.rerun(context.TODO()))
+	require.NoError(t, alg.rerun(newContext(context.TODO())))
 
 	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l4))
-	alg.HandleIncomingLayer(context.TODO(), l4.Index())
+	alg.HandleIncomingLayer(newContext(context.TODO()), l4.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(3).Uint32()), int(alg.LatestComplete().Uint32()), "wrong latest complete layer")
 }
 
@@ -892,21 +890,21 @@ func TestPersistAndRecover(t *testing.T) {
 	atxdb := getAtxDB()
 	cfg := defaultConfig(t, mdb, getAtxDB())
 	cfg.ATXDB = atxdb
-	alg := NewVerifyingTortoise(context.TODO(), cfg)
+	alg := NewVerifyingTortoise(newContext(context.TODO()), cfg)
 
 	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
-	alg.HandleIncomingLayer(context.TODO(), l1.Index())
-	require.NoError(t, alg.Persist(context.TODO()))
+	alg.HandleIncomingLayer(newContext(context.TODO()), l1.Index())
+	require.NoError(t, alg.Persist(newContext(context.TODO())))
 
 	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l2))
-	alg.HandleIncomingLayer(context.TODO(), l2.Index())
-	require.NoError(t, alg.Persist(context.TODO()))
+	alg.HandleIncomingLayer(newContext(context.TODO()), l2.Index())
+	require.NoError(t, alg.Persist(newContext(context.TODO())))
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 
 	// now recover
-	alg2 := NewVerifyingTortoise(context.TODO(), cfg)
+	alg2 := NewVerifyingTortoise(newContext(context.TODO()), cfg)
 	require.Equal(t, alg.LatestComplete(), alg2.LatestComplete())
 	require.Equal(t, alg.trtl.bdp, alg2.trtl.bdp)
 	require.Equal(t, alg.trtl.LastEvicted, alg2.trtl.LastEvicted)
@@ -921,8 +919,8 @@ func TestPersistAndRecover(t *testing.T) {
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
 
-	alg.HandleIncomingLayer(context.TODO(), l3.Index())
-	alg2.HandleIncomingLayer(context.TODO(), l3.Index())
+	alg.HandleIncomingLayer(newContext(context.TODO()), l3.Index())
+	alg2.HandleIncomingLayer(newContext(context.TODO()), l3.Index())
 
 	// expect identical results
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(2).Uint32()), int(alg.LatestComplete().Uint32()), "wrong latest complete layer")
@@ -941,7 +939,7 @@ func TestLayerOpinionVector(t *testing.T) {
 
 	// recent layer missing from mesh: should abstain and keep waiting
 	l1ID := l0.Index().Add(1)
-	opinionVec, err := alg.trtl.layerOpinionVector(context.TODO(), l1ID)
+	opinionVec, err := alg.trtl.layerOpinionVector(newContext(context.TODO()), l1ID)
 	r.NoError(err)
 	r.Nil(opinionVec)
 
@@ -949,7 +947,7 @@ func TestLayerOpinionVector(t *testing.T) {
 	mdb.InputVectorBackupFunc = func(types.LayerID) ([]types.BlockID, error) {
 		return nil, mesh.ErrInvalidLayer
 	}
-	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l1ID)
+	opinionVec, err = alg.trtl.layerOpinionVector(newContext(context.TODO()), l1ID)
 	r.NoError(err)
 	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
 
@@ -959,14 +957,14 @@ func TestLayerOpinionVector(t *testing.T) {
 	l2ID := l1ID.Add(1)
 	alg.trtl.Last = types.NewLayerID(defaultTestZdist).Add(l2ID.Uint32()).Add(1)
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	opinionVec, err = alg.trtl.layerOpinionVector(newContext(context.TODO()), l2ID)
 	r.NoError(err)
 	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
 
 	// very old layer (more than hdist layers back)
 	// if the layer isn't in the mesh, it's an error
 	alg.trtl.Last = types.NewLayerID(defaultTestHdist).Add(l2ID.Uint32()).Add(1)
-	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	opinionVec, err = alg.trtl.layerOpinionVector(newContext(context.TODO()), l2ID)
 	r.ErrorIs(err, database.ErrNotFound)
 	r.Nil(opinionVec)
 
@@ -983,20 +981,20 @@ func TestLayerOpinionVector(t *testing.T) {
 		r.NoError(mdb.AddBlock(b))
 	}
 	alg.trtl.Last = types.NewLayerID(defaultTestHdist).Add(l2ID.Uint32()).Add(1)
-	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	opinionVec, err = alg.trtl.layerOpinionVector(newContext(context.TODO()), l2ID)
 	r.Error(err)
 	r.Contains(err.Error(), errstrNoCoinflip)
 	r.Nil(opinionVec)
 
 	// coinflip true: expect support for all layer blocks
-	mdb.RecordCoinflip(context.TODO(), alg.trtl.Last.Sub(1), true)
-	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	mdb.RecordCoinflip(newContext(context.TODO()), alg.trtl.Last.Sub(1), true)
+	opinionVec, err = alg.trtl.layerOpinionVector(newContext(context.TODO()), l2ID)
 	r.NoError(err)
 	r.Equal(l2.Hash(), types.CalcBlocksHash32(types.SortBlockIDs(opinionVec), nil))
 
 	// coinflip false: expect vote against all blocks in layer
-	mdb.RecordCoinflip(context.TODO(), alg.trtl.Last.Sub(1), false)
-	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	mdb.RecordCoinflip(newContext(context.TODO()), alg.trtl.Last.Sub(1), false)
+	opinionVec, err = alg.trtl.layerOpinionVector(newContext(context.TODO()), l2ID)
 	r.NoError(err)
 	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
 
@@ -1005,7 +1003,7 @@ func TestLayerOpinionVector(t *testing.T) {
 		r.NoError(mdb.SaveContextualValidity(b.ID(), l2ID, true))
 	}
 	alg.trtl.Verified = l2ID
-	opinionVec, err = alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+	opinionVec, err = alg.trtl.layerOpinionVector(newContext(context.TODO()), l2ID)
 	r.NoError(err)
 	// this is the easiest way to compare a set of blockIDs
 	r.Equal(l2.Hash(), types.CalcBlocksHash32(types.SortBlockIDs(opinionVec), nil))
@@ -1023,7 +1021,7 @@ func TestBaseBlock(t *testing.T) {
 
 	l0 := mesh.GenesisLayer()
 	expectBaseBlockLayer := func(layerID types.LayerID, numAgainst, numSupport, numNeutral int) {
-		baseBlockID, exceptions, err := alg.BaseBlock(context.TODO())
+		baseBlockID, exceptions, err := alg.BaseBlock(newContext(context.TODO()))
 		r.NoError(err)
 		// expect no exceptions
 		r.Len(exceptions, 3, "expected three vote exception arrays")
@@ -1041,18 +1039,18 @@ func TestBaseBlock(t *testing.T) {
 	// add a couple of incoming layers and make sure the base block layer advances as well
 	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
-	alg.HandleIncomingLayer(context.TODO(), l1.Index())
+	alg.HandleIncomingLayer(newContext(context.TODO()), l1.Index())
 	expectBaseBlockLayer(l1.Index(), 0, defaultTestLayerSize, 0)
 
 	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l2))
-	alg.HandleIncomingLayer(context.TODO(), l2.Index())
+	alg.HandleIncomingLayer(newContext(context.TODO()), l2.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 	expectBaseBlockLayer(l2.Index(), 0, defaultTestLayerSize, 0)
 
 	// add a layer that's not in the mesh and make sure it does not advance
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
-	alg.HandleIncomingLayer(context.TODO(), l3.Index())
+	alg.HandleIncomingLayer(newContext(context.TODO()), l3.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 	expectBaseBlockLayer(l2.Index(), 0, defaultTestLayerSize, 0)
 }
@@ -1122,7 +1120,7 @@ func defaultConfig(tb testing.TB, mdb *mesh.DB, atxdb atxDataProvider) Config {
 }
 
 func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
-	return NewVerifyingTortoise(context.TODO(), defaultConfig(t, mdb, getAtxDB()))
+	return NewVerifyingTortoise(newContext(context.TODO()), defaultConfig(t, mdb, getAtxDB()))
 }
 
 func TestGetLocalBlockOpinion(t *testing.T) {
@@ -1136,18 +1134,18 @@ func TestGetLocalBlockOpinion(t *testing.T) {
 	blocks := generateBlocks(t, l1ID, 2, alg.BaseBlock, atxdb, 1)
 
 	// no input vector for recent layer: expect abstain vote
-	vec, err := alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID(), map[types.LayerID][]types.BlockID{})
+	vec, err := alg.trtl.getLocalBlockOpinion(newContext(context.TODO()), l1ID, blocks[0].ID())
 	r.NoError(err)
 	r.Equal(abstain, vec)
 
 	// block included in input vector
-	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, []types.BlockID{blocks[0].ID()}))
-	vec, err = alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[0].ID(), map[types.LayerID][]types.BlockID{})
+	r.NoError(mdb.SaveLayerInputVectorByID(newContext(context.TODO()), l1ID, []types.BlockID{blocks[0].ID()}))
+	vec, err = alg.trtl.getLocalBlockOpinion(newContext(context.TODO()), l1ID, blocks[0].ID())
 	r.NoError(err)
 	r.Equal(support, vec)
 
 	// block not included in input vector
-	vec, err = alg.trtl.getLocalBlockOpinion(context.TODO(), l1ID, blocks[1].ID(), map[types.LayerID][]types.BlockID{})
+	vec, err = alg.trtl.getLocalBlockOpinion(newContext(context.TODO()), l1ID, blocks[1].ID())
 	r.NoError(err)
 	r.Equal(against, vec)
 }
@@ -1165,26 +1163,26 @@ func TestCheckBlockAndGetInputVector(t *testing.T) {
 	lg := logtest.New(t)
 
 	// missing block
-	r.False(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID, lg, map[types.LayerID][]types.BlockID{}))
+	r.False(alg.trtl.checkBlockAndGetLocalOpinion(newContext(context.TODO()), diffList, "foo", support, l1ID, lg))
 
 	// exception block older than base block
 	blocks[0].LayerIndex = mesh.GenesisLayer().Index()
 	r.NoError(mdb.AddBlock(blocks[0]))
-	r.False(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID, lg, map[types.LayerID][]types.BlockID{}))
+	r.False(alg.trtl.checkBlockAndGetLocalOpinion(newContext(context.TODO()), diffList, "foo", support, l1ID, lg))
 
 	// missing input vector for layer
 	r.NoError(mdb.AddBlock(blocks[1]))
 	diffList[0] = blocks[1].ID()
-	r.False(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID, lg, map[types.LayerID][]types.BlockID{}))
+	r.False(alg.trtl.checkBlockAndGetLocalOpinion(newContext(context.TODO()), diffList, "foo", support, l1ID, lg))
 
 	// good
-	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, diffList))
-	r.True(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID, lg, map[types.LayerID][]types.BlockID{}))
+	r.NoError(mdb.SaveLayerInputVectorByID(newContext(context.TODO()), l1ID, diffList))
+	r.True(alg.trtl.checkBlockAndGetLocalOpinion(newContext(context.TODO()), diffList, "foo", support, l1ID, lg))
 
 	// vote differs from input vector
 	diffList[0] = blocks[2].ID()
 	r.NoError(mdb.AddBlock(blocks[2]))
-	r.False(alg.trtl.checkBlockAndGetLocalOpinion(context.TODO(), diffList, "foo", support, l1ID, lg, map[types.LayerID][]types.BlockID{}))
+	r.False(alg.trtl.checkBlockAndGetLocalOpinion(newContext(context.TODO()), diffList, "foo", support, l1ID, lg))
 }
 
 func TestCalculateExceptions(t *testing.T) {
@@ -1204,14 +1202,14 @@ func TestCalculateExceptions(t *testing.T) {
 
 	// genesis layer
 	l0ID := types.GetEffectiveGenesis()
-	votes, err := alg.trtl.calculateExceptions(context.TODO(), l0ID, Opinion{})
+	votes, err := alg.trtl.calculateExceptions(newContext(context.TODO()), l0ID, Opinion{})
 	r.NoError(err)
 	// expect votes in support of all genesis blocks
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), 0)
 
 	// layer greater than last processed: expect support only for genesis
 	l1ID := l0ID.Add(1)
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(newContext(context.TODO()), l1ID, Opinion{})
 	r.NoError(err)
 	expectVotes(votes, 0, 1, 0)
 
@@ -1219,7 +1217,7 @@ func TestCalculateExceptions(t *testing.T) {
 	alg.trtl.Last = l1ID
 
 	// missing layer data
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(newContext(context.TODO()), l1ID, Opinion{})
 	r.NoError(err)
 	expectVotes(votes, 0, 1, 0)
 
@@ -1229,22 +1227,22 @@ func TestCalculateExceptions(t *testing.T) {
 	r.NoError(addLayerToMesh(mdb, l1))
 	alg.trtl.Last = l1ID
 	mdb.InputVectorBackupFunc = nil
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(newContext(context.TODO()), l1ID, Opinion{})
 	r.NoError(err)
 	// expect no against, FOR only for l0, and NEUTRAL for l1
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), defaultTestLayerSize)
 
 	// adding diffs for: support all blocks in the layer
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(newContext(context.TODO()), l1ID, Opinion{})
 	r.NoError(err)
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks())+defaultTestLayerSize, 0)
 
 	// adding diffs against: vote against all blocks in the layer
 	mdb.InputVectorBackupFunc = nil
 	// we cannot store an empty vector here (it comes back as nil), so just put another block ID in it
-	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, []types.BlockID{mesh.GenesisBlock().ID()}))
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, Opinion{})
+	r.NoError(mdb.SaveLayerInputVectorByID(newContext(context.TODO()), l1ID, []types.BlockID{mesh.GenesisBlock().ID()}))
+	votes, err = alg.trtl.calculateExceptions(newContext(context.TODO()), l1ID, Opinion{})
 	r.NoError(err)
 
 	// we don't explicitly vote against blocks in the layer, we implicitly vote against them by not voting for them
@@ -1258,7 +1256,7 @@ func TestCalculateExceptions(t *testing.T) {
 		l1.Blocks()[1].ID():      support,
 		l1.Blocks()[2].ID():      support,
 	}
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, opinion)
+	votes, err = alg.trtl.calculateExceptions(newContext(context.TODO()), l1ID, opinion)
 	r.NoError(err)
 	expectVotes(votes, 0, 0, 0)
 
@@ -1269,7 +1267,7 @@ func TestCalculateExceptions(t *testing.T) {
 		l1.Blocks()[1].ID():      against,
 		l1.Blocks()[2].ID():      against,
 	}
-	votes, err = alg.trtl.calculateExceptions(context.TODO(), l1ID, opinion)
+	votes, err = alg.trtl.calculateExceptions(newContext(context.TODO()), l1ID, opinion)
 	r.NoError(err)
 	expectVotes(votes, 0, 4, 0)
 
@@ -1286,7 +1284,7 @@ func TestCalculateExceptions(t *testing.T) {
 		}
 		l3 = createTurtleLayer(t, l3ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 		alg.trtl.Last = l2ID
-		votes, err = alg.trtl.calculateExceptions(context.TODO(), l2ID, Opinion{})
+		votes, err = alg.trtl.calculateExceptions(newContext(context.TODO()), l2ID, Opinion{})
 		r.Error(err)
 		r.Contains(err.Error(), errstrTooManyExceptions, "expected too many exceptions error")
 		r.Nil(votes)
@@ -1302,7 +1300,7 @@ func TestCalculateExceptions(t *testing.T) {
 		}
 		l4ID := l3ID.Add(1)
 		alg.trtl.LastEvicted = l2ID
-		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l3ID))
+		r.NoError(alg.trtl.HandleIncomingLayer(newContext(context.TODO()), l3ID))
 		l4 := createTurtleLayer(t, l4ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 		for _, block := range l4.Blocks() {
 			r.NoError(mdb.AddBlock(block))
@@ -1310,7 +1308,7 @@ func TestCalculateExceptions(t *testing.T) {
 		l5ID := l4ID.Add(1)
 		createTurtleLayer(t, l5ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 		alg.trtl.Last = l4ID
-		votes, err = alg.trtl.calculateExceptions(context.TODO(), l3ID, Opinion{})
+		votes, err = alg.trtl.calculateExceptions(newContext(context.TODO()), l3ID, Opinion{})
 		r.NoError(err)
 		// expect votes FOR the blocks in the two intervening layers between the base block layer and the last layer
 		expectVotes(votes, 0, 2*defaultTestLayerSize, 0)
@@ -1328,25 +1326,25 @@ func TestDetermineBlockGoodness(t *testing.T) {
 	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
 
 	// block marked good
-	r.True(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[0]))
+	r.True(alg.trtl.determineBlockGoodness(newContext(context.TODO()), l1Blocks[0]))
 
 	// base block not found
 	randBlockID := randomBlockID()
 	alg.trtl.GoodBlocksIndex[randBlockID] = false
 	l1Blocks[1].BaseBlock = randBlockID
-	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[1]))
+	r.False(alg.trtl.determineBlockGoodness(newContext(context.TODO()), l1Blocks[1]))
 
 	// base block not good
 	l1Blocks[1].BaseBlock = l1Blocks[2].ID()
-	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[1]))
+	r.False(alg.trtl.determineBlockGoodness(newContext(context.TODO()), l1Blocks[1]))
 
 	// diff inconsistent with local opinion
 	l1Blocks[2].AgainstDiff = []types.BlockID{mesh.GenesisBlock().ID()}
-	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[2]))
+	r.False(alg.trtl.determineBlockGoodness(newContext(context.TODO()), l1Blocks[2]))
 
 	// can run again on the same block with no change (idempotency)
-	r.True(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[0]))
-	r.False(alg.trtl.determineBlockGoodness(context.TODO(), l1Blocks[2]))
+	r.True(alg.trtl.determineBlockGoodness(newContext(context.TODO()), l1Blocks[0]))
+	r.False(alg.trtl.determineBlockGoodness(newContext(context.TODO()), l1Blocks[2]))
 }
 
 func TestScoreBlocks(t *testing.T) {
@@ -1361,23 +1359,23 @@ func TestScoreBlocks(t *testing.T) {
 
 	// adds a block not already marked good
 	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
-	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]})
+	alg.trtl.scoreBlocks(newContext(context.TODO()), []*types.Block{l1Blocks[0]})
 	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 
 	// no change if already marked good
-	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]})
+	alg.trtl.scoreBlocks(newContext(context.TODO()), []*types.Block{l1Blocks[0]})
 	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 
 	// removes a block previously marked good
 	// diff inconsistent with local opinion
 	l1Blocks[0].AgainstDiff = []types.BlockID{mesh.GenesisBlock().ID()}
-	alg.trtl.scoreBlocks(context.TODO(), []*types.Block{l1Blocks[0]})
+	alg.trtl.scoreBlocks(newContext(context.TODO()), []*types.Block{l1Blocks[0]})
 	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[0].ID())
 
 	// try a few blocks
 	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[1].ID())
 	r.NotContains(alg.trtl.GoodBlocksIndex, l1Blocks[2].ID())
-	alg.trtl.scoreBlocks(context.TODO(), l1Blocks)
+	alg.trtl.scoreBlocks(newContext(context.TODO()), l1Blocks)
 
 	// adds new blocks
 	r.Contains(alg.trtl.GoodBlocksIndex, l1Blocks[1].ID())
@@ -1405,7 +1403,7 @@ func TestProcessBlock(t *testing.T) {
 	blockWithMissingBaseBlock.BaseBlock = l1Blocks[1].ID()
 
 	// missing base block
-	err := alg.trtl.processBlock(context.TODO(), blockWithMissingBaseBlock)
+	err := alg.trtl.processBlock(newContext(context.TODO()), blockWithMissingBaseBlock)
 	r.ErrorIs(err, errBaseBlockUnknown)
 
 	// blocks in this layer will use a block from the previous layer as their base block
@@ -1417,19 +1415,19 @@ func TestProcessBlock(t *testing.T) {
 
 	// base block layer missing
 	alg.trtl.BlockOpinionsByLayer[l2ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
-	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
+	err = alg.trtl.processBlock(newContext(context.TODO()), l2Blocks[0])
 	r.ErrorIs(err, errBaseBlockUnknown)
 
 	// base block opinion missing from layer
 	alg.trtl.BlockOpinionsByLayer[l1ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
-	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
+	err = alg.trtl.processBlock(newContext(context.TODO()), l2Blocks[0])
 	r.ErrorIs(err, errBaseBlockUnknown)
 
 	// malicious (conflicting) voting pattern
 	l2Blocks[0].BaseBlock = mesh.GenesisBlock().ID()
 	l2Blocks[0].ForDiff = []types.BlockID{l1Blocks[1].ID()}
 	l2Blocks[0].AgainstDiff = l2Blocks[0].ForDiff
-	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
+	err = alg.trtl.processBlock(newContext(context.TODO()), l2Blocks[0])
 	r.Error(err)
 	r.Contains(err.Error(), errstrConflictingVotes)
 
@@ -1466,7 +1464,7 @@ func TestProcessBlock(t *testing.T) {
 		alg.trtl.BlockLayer[block.ID()] = block.LayerIndex
 	}
 	alg.trtl.BlockLayer[l2Blocks[0].ID()] = l2Blocks[0].LayerIndex
-	r.NoError(alg.trtl.processBlock(context.TODO(), l3Blocks[0]))
+	r.NoError(alg.trtl.processBlock(newContext(context.TODO()), l3Blocks[0]))
 	expectedOpinionVector := Opinion{
 		l1Blocks[0].ID(): abstain,                                   // from exception
 		l1Blocks[1].ID(): against.Multiply(uint64(blockVoteWeight)), // from exception
@@ -1494,7 +1492,7 @@ func TestVoteWeight(t *testing.T) {
 	totalSpace := 100
 	atxdb.mockAtxHeader = makeAtxHeaderWithWeight(uint(totalSpace))
 	someBlocks := generateBlocks(t, types.GetEffectiveGenesis().Add(1), 1, alg.BaseBlock, atxdb, 1)
-	weight, err := alg.trtl.voteWeight(context.TODO(), someBlocks[0])
+	weight, err := alg.trtl.voteWeight(newContext(context.TODO()), someBlocks[0])
 	r.NoError(err)
 	r.Equal(totalSpace, int(weight))
 }
@@ -1549,7 +1547,7 @@ func TestVerifyLayers(t *testing.T) {
 
 	// layer missing in database
 	alg.trtl.Last = l2ID
-	err := alg.trtl.verifyLayers(context.TODO())
+	err := alg.trtl.verifyLayers(newContext(context.TODO()))
 	r.Error(err)
 	r.Contains(err.Error(), errstrCantFindLayer)
 
@@ -1566,7 +1564,7 @@ func TestVerifyLayers(t *testing.T) {
 		},
 	}
 	alg.trtl.bdp = mdbWrapper
-	err = alg.trtl.verifyLayers(context.TODO())
+	err = alg.trtl.verifyLayers(newContext(context.TODO()))
 	r.NoError(err)
 	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))
 
@@ -1587,7 +1585,7 @@ func TestVerifyLayers(t *testing.T) {
 	alg.trtl.Last = l3ID
 
 	// voting blocks not marked good, both global and local opinion is abstain, verified layer does not advance
-	r.NoError(alg.trtl.verifyLayers(context.TODO()))
+	r.NoError(alg.trtl.verifyLayers(newContext(context.TODO())))
 	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))
 
 	// now mark voting blocks good
@@ -1604,7 +1602,7 @@ func TestVerifyLayers(t *testing.T) {
 
 	// consensus doesn't match: fail to verify candidate layer
 	// global opinion: good, local opinion: abstain
-	r.NoError(alg.trtl.verifyLayers(context.TODO()))
+	r.NoError(alg.trtl.verifyLayers(newContext(context.TODO())))
 	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))
 
 	// mark local opinion of L2 good so verified layer advances
@@ -1627,9 +1625,9 @@ func TestVerifyLayers(t *testing.T) {
 	for _, block := range l6Blocks {
 		r.NoError(mdb.AddBlock(block))
 	}
-	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l3ID, l3BlockIDs))
-	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l4ID, l4BlockIDs))
-	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l5ID, l5BlockIDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(newContext(context.TODO()), l3ID, l3BlockIDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(newContext(context.TODO()), l4ID, l4BlockIDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(newContext(context.TODO()), l5ID, l5BlockIDs))
 	l4Votes := Opinion{
 		// support these so global opinion is support
 		l2Blocks[0].ID(): support,
@@ -1695,7 +1693,7 @@ func TestVerifyLayers(t *testing.T) {
 	// verified layer advances one step, but L3 is not verified because global opinion is undecided, so verification
 	// stops there
 	t.Run("global opinion undecided", func(t *testing.T) {
-		err = alg.trtl.verifyLayers(context.TODO())
+		err = alg.trtl.verifyLayers(newContext(context.TODO()))
 		r.NoError(err)
 		r.Equal(int(l2ID.Uint32()), int(alg.trtl.Verified.Uint32()))
 	})
@@ -1715,7 +1713,7 @@ func TestVerifyLayers(t *testing.T) {
 	t.Run("weight not exceeded", func(t *testing.T) {
 		// modify vote so one block votes in support of L3 blocks, two blocks continue to abstain, so threshold not met
 		alg.trtl.BlockOpinionsByLayer[l4ID][l4Blocks[0].ID()] = l4Votes
-		err = alg.trtl.verifyLayers(context.TODO())
+		err = alg.trtl.verifyLayers(newContext(context.TODO()))
 		r.NoError(err)
 		r.Equal(int(l2ID.Uint32()), int(alg.trtl.Verified.Uint32()))
 	})
@@ -1782,7 +1780,7 @@ func TestVerifyLayers(t *testing.T) {
 		// previously stuck layer (l3) and the following layer (l4) since it's old enough, then hand control back to the
 		// ordinary verifying tortoise which should continue and verify l5.
 		alg.trtl.Last = l4ID.Add(alg.trtl.Hdist + 1)
-		r.NoError(alg.trtl.verifyLayers(context.TODO()))
+		r.NoError(alg.trtl.verifyLayers(newContext(context.TODO())))
 		r.Equal(int(l5ID.Uint32()), int(alg.trtl.Verified.Uint32()))
 	})
 }
@@ -1868,12 +1866,12 @@ func TestSumVotesForBlock(t *testing.T) {
 
 	// if we reject all blocks, we expect an abstain outcome
 	alg.trtl.Last = l2ID
-	sum, err := alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterRejectAll)
+	sum, err := alg.trtl.sumVotesForBlock(newContext(context.TODO()), blockWeReallyDislike.ID(), l2ID, filterRejectAll)
 	r.NoError(err)
 	r.Equal(abstain, sum)
 
 	// if we allow all blocks to vote, we expect an against outcome
-	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterPassAll)
+	sum, err = alg.trtl.sumVotesForBlock(newContext(context.TODO()), blockWeReallyDislike.ID(), l2ID, filterPassAll)
 	r.NoError(err)
 	r.Equal(against.Multiply(3), sum)
 
@@ -1890,20 +1888,20 @@ func TestSumVotesForBlock(t *testing.T) {
 		l2Blocks[8].ID(): {},
 	}
 	// some blocks explicitly vote against, others have no opinion
-	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterPassAll)
+	sum, err = alg.trtl.sumVotesForBlock(newContext(context.TODO()), blockWeReallyDislike.ID(), l2ID, filterPassAll)
 	r.NoError(err)
 	r.Equal(against.Multiply(9), sum)
 	// some blocks vote for, others have no opinion
-	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyLike.ID(), l2ID, filterPassAll)
+	sum, err = alg.trtl.sumVotesForBlock(newContext(context.TODO()), blockWeReallyLike.ID(), l2ID, filterPassAll)
 	r.NoError(err)
 	r.Equal(support.Multiply(2).Add(against.Multiply(7)), sum)
 	// one block votes neutral, others have no opinion
-	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDontCare.ID(), l2ID, filterPassAll)
+	sum, err = alg.trtl.sumVotesForBlock(newContext(context.TODO()), blockWeReallyDontCare.ID(), l2ID, filterPassAll)
 	r.NoError(err)
 	r.Equal(abstain.Multiply(1).Add(against.Multiply(8)), sum)
 
 	// vote missing: counts against
-	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeNeverSaw.ID(), l2ID, filterPassAll)
+	sum, err = alg.trtl.sumVotesForBlock(newContext(context.TODO()), blockWeNeverSaw.ID(), l2ID, filterPassAll)
 	r.NoError(err)
 	r.Equal(against.Multiply(9), sum)
 }
@@ -1920,7 +1918,7 @@ func TestSumWeightedVotesForBlock(t *testing.T) {
 	filterPassAll := func(types.BlockID) bool { return true }
 
 	// use the same base block for all newly-created blocks
-	b, lists, err := alg.BaseBlock(context.TODO())
+	b, lists, err := alg.BaseBlock(newContext(context.TODO()))
 	r.NoError(err)
 	bbp := func(context.Context) (types.BlockID, [][]types.BlockID, error) {
 		return b, lists, nil
@@ -1935,10 +1933,10 @@ func TestSumWeightedVotesForBlock(t *testing.T) {
 		r.NoError(mdb.AddBlock(block))
 
 		// update t.Last and process block votes
-		r.NoError(alg.trtl.handleLayerBlocks(context.TODO(), l1ID))
+		r.NoError(alg.trtl.handleLayerBlocks(newContext(context.TODO()), l1ID))
 
 		// check
-		sum, err := alg.trtl.sumVotesForBlock(context.TODO(), genesisBlockID, l1ID, filterPassAll)
+		sum, err := alg.trtl.sumVotesForBlock(newContext(context.TODO()), genesisBlockID, l1ID, filterPassAll)
 		r.NoError(err)
 		r.EqualValues(netWeight, sum.Support-sum.Against)
 	}
@@ -1963,12 +1961,12 @@ func TestHealing(t *testing.T) {
 		checkVerifiedLayer(t, alg.trtl, l0ID)
 
 		// while bootstrapping there should be no healing
-		alg.trtl.heal(context.TODO(), l2ID)
+		alg.trtl.heal(newContext(context.TODO()), l2ID)
 		checkVerifiedLayer(t, alg.trtl, l0ID)
 
 		// later, healing should not occur on layers not at least Hdist back
 		alg.trtl.Last = types.NewLayerID(alg.trtl.Hdist + 1)
-		alg.trtl.heal(context.TODO(), l2ID)
+		alg.trtl.heal(newContext(context.TODO()), l2ID)
 		checkVerifiedLayer(t, alg.trtl, l0ID)
 	})
 
@@ -1982,13 +1980,13 @@ func TestHealing(t *testing.T) {
 	// for hare results)
 	t.Run("does not depend on local opinion", func(t *testing.T) {
 		checkVerifiedLayer(t, alg.trtl, l0ID)
-		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l1ID))
-		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l2ID))
+		r.NoError(alg.trtl.HandleIncomingLayer(newContext(context.TODO()), l1ID))
+		r.NoError(alg.trtl.HandleIncomingLayer(newContext(context.TODO()), l2ID))
 
 		// reducing hdist will allow verification to start happening
 		alg.trtl.Hdist = 1
 		// alg.trtl.Last = l2ID
-		alg.trtl.heal(context.TODO(), l2ID)
+		alg.trtl.heal(newContext(context.TODO()), l2ID)
 		checkVerifiedLayer(t, alg.trtl, l1ID)
 	})
 
@@ -2006,17 +2004,17 @@ func TestHealing(t *testing.T) {
 		for _, block := range l2.Blocks() {
 			l2BlockIDs = append(l2BlockIDs, block.ID())
 		}
-		require.NoError(t, mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, l1BlockIDs))
-		require.NoError(t, mdb.SaveLayerInputVectorByID(context.TODO(), l2ID, l2BlockIDs))
+		require.NoError(t, mdb.SaveLayerInputVectorByID(newContext(context.TODO()), l1ID, l1BlockIDs))
+		require.NoError(t, mdb.SaveLayerInputVectorByID(newContext(context.TODO()), l2ID, l2BlockIDs))
 
 		// then create and process one more new layer
 		// prevent base block from referencing earlier (approved) layers
 		alg.trtl.Last = l0ID
 		makeLayer(t, l3ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l3ID))
+		require.NoError(t, alg.trtl.HandleIncomingLayer(newContext(context.TODO()), l3ID))
 
 		// make sure local opinion supports L2
-		layerInputVector, err := alg.trtl.layerOpinionVector(context.TODO(), l2ID)
+		layerInputVector, err := alg.trtl.layerOpinionVector(newContext(context.TODO()), l2ID)
 		r.NoError(err)
 		localOpinionVec := alg.trtl.voteVectorForLayer(l2BlockIDs, layerInputVector)
 		for _, bid := range l2BlockIDs {
@@ -2024,7 +2022,7 @@ func TestHealing(t *testing.T) {
 			r.Equal(support, localOpinionVec[bid])
 		}
 
-		alg.trtl.heal(context.TODO(), l3ID)
+		alg.trtl.heal(newContext(context.TODO()), l3ID)
 		checkVerifiedLayer(t, alg.trtl, l2ID)
 
 		// make sure contextual validity is updated
@@ -2046,12 +2044,12 @@ func TestHealing(t *testing.T) {
 		// create and process several more layers
 		// but don't save layer input vectors, so local opinion is abstain
 		makeLayer(t, l4ID, alg.trtl, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
+		require.NoError(t, alg.trtl.HandleIncomingLayer(newContext(context.TODO()), l4ID))
 
 		// delete good blocks data
 		alg.trtl.GoodBlocksIndex = make(map[types.BlockID]bool, 0)
 
-		alg.trtl.heal(context.TODO(), l4ID)
+		alg.trtl.heal(newContext(context.TODO()), l4ID)
 		checkVerifiedLayer(t, alg.trtl, l3ID)
 	})
 }
@@ -2135,10 +2133,10 @@ func TestHealBalanceAttack(t *testing.T) {
 	// this means that later blocks/layers with a base block or vote that supports this block will not be marked good
 	l4lateblock := generateBlocks(t, l4ID, 1, alg.BaseBlock, atxdb, 1)[0]
 	r.NoError(mdb.AddBlock(l4lateblock))
-	r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
+	r.NoError(alg.trtl.HandleIncomingLayer(newContext(context.TODO()), l4ID))
 
 	// this primes the block opinions for these blocks, without attempting to verify the previous layer
-	r.NoError(alg.trtl.handleLayerBlocks(context.TODO(), l5ID))
+	r.NoError(alg.trtl.handleLayerBlocks(newContext(context.TODO()), l5ID))
 
 	addOpinion := func(lid types.LayerID, from, to types.BlockID, vector vec) {
 		alg.trtl.BlockOpinionsByLayer[lid][from][to] = vector
@@ -2154,8 +2152,8 @@ func TestHealBalanceAttack(t *testing.T) {
 	addOpinion(l5ID, l5blockIDs[3], l4lateblock.ID(), against)
 
 	// now process l5
-	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l5ID, l5blockIDs))
-	r.NoError(alg.trtl.verifyLayers(context.TODO()))
+	r.NoError(mdb.SaveLayerInputVectorByID(newContext(context.TODO()), l5ID, l5blockIDs))
+	r.NoError(alg.trtl.verifyLayers(newContext(context.TODO())))
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(3))
 
 	// we can trick calculateExceptions into not adding explicit exception votes for or against this block by
@@ -2180,7 +2178,7 @@ func TestHealBalanceAttack(t *testing.T) {
 			baseBlockID = l5BaseBlock2
 		}
 
-		evm, err := alg.trtl.calculateExceptions(context.TODO(), l5ID, alg.trtl.BlockOpinionsByLayer[l5ID][baseBlockID])
+		evm, err := alg.trtl.calculateExceptions(newContext(context.TODO()), l5ID, alg.trtl.BlockOpinionsByLayer[l5ID][baseBlockID])
 		r.NoError(err)
 		return baseBlockID, [][]types.BlockID{
 			blockMapToArray(evm[0]),
@@ -2201,7 +2199,7 @@ func TestHealBalanceAttack(t *testing.T) {
 	// first counts votes in order to determine the local opinion on the layer with the late block. once the local
 	// opinion has been established, blocks will immediately begin explicitly voting for or against the block, and
 	// the local opinion will no longer be abstain.
-	mdb.RecordCoinflip(context.TODO(), lastUnhealedLayer.Sub(2), true)
+	mdb.RecordCoinflip(newContext(context.TODO()), lastUnhealedLayer.Sub(2), true)
 
 	// after healing begins, we need a few more layers until the global opinion of the block passes the threshold
 	finalLayer := lastUnhealedLayer.Add(9)
@@ -2223,8 +2221,8 @@ func TestHealBalanceAttack(t *testing.T) {
 
 		blockIDs, err := mdb.LayerBlockIds(layerID)
 		r.NoError(err)
-		r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), layerID))
+		r.NoError(mdb.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+		r.NoError(alg.trtl.HandleIncomingLayer(newContext(context.TODO()), layerID))
 	}
 	checkVerifiedLayer(t, alg.trtl, finalLayer.Sub(1))
 
@@ -2350,10 +2348,10 @@ func TestMultiTortoise(t *testing.T) {
 				r.NoError(mdb1.AddBlock(block))
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 		}
 
 		// make and process a bunch of layers and make sure both tortoises can verify them
@@ -2413,10 +2411,10 @@ func TestMultiTortoise(t *testing.T) {
 				r.NoError(mdb1.AddBlock(block))
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			// both should make progress
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
@@ -2440,14 +2438,14 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			// majority tortoise is unaffected, minority tortoise gets stuck
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
@@ -2472,8 +2470,8 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
 			forkBlocksB = append(forkBlocksB, blocksB...)
@@ -2481,8 +2479,8 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			// majority tortoise is unaffected, minority tortoise is still stuck
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
@@ -2498,8 +2496,8 @@ func TestMultiTortoise(t *testing.T) {
 			blockIDsA = append(blockIDsA, block.ID())
 			r.NoError(mdb1.AddBlock(block))
 		}
-		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
-		alg1.HandleIncomingLayer(context.TODO(), layerID)
+		r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsA))
+		alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
 		forkBlocksB = append(forkBlocksB, blocksB...)
@@ -2507,8 +2505,8 @@ func TestMultiTortoise(t *testing.T) {
 			blockIDsB = append(blockIDsB, block.ID())
 			r.NoError(mdb2.AddBlock(block))
 		}
-		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
-		alg2.HandleIncomingLayer(context.TODO(), layerID)
+		r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsB))
+		alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 		// minority node is healed
 		lastVerified = layerID.Sub(1)
@@ -2531,8 +2529,8 @@ func TestMultiTortoise(t *testing.T) {
 		}
 
 		for lid := beforePartition.Add(1); !lid.After(layerID); lid = lid.Add(1) {
-			r.NoError(alg1.trtl.HandleIncomingLayer(context.TODO(), lid))
-			r.NoError(alg2.trtl.HandleIncomingLayer(context.TODO(), lid))
+			r.NoError(alg1.trtl.HandleIncomingLayer(newContext(context.TODO()), lid))
+			r.NoError(alg2.trtl.HandleIncomingLayer(newContext(context.TODO()), lid))
 		}
 
 		// now continue for a few layers after rejoining, during which the minority tortoise will be stuck
@@ -2552,10 +2550,10 @@ func TestMultiTortoise(t *testing.T) {
 				r.NoError(mdb1.AddBlock(block))
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			// majority tortoise is unaffected, minority tortoise remains stuck
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
@@ -2576,10 +2574,10 @@ func TestMultiTortoise(t *testing.T) {
 				r.NoError(mdb1.AddBlock(block))
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			// majority tortoise is unaffected, minority tortoise begins to heal but its verifying tortoise
 			// is still stuck
@@ -2637,10 +2635,10 @@ func TestMultiTortoise(t *testing.T) {
 				r.NoError(mdb1.AddBlock(block))
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			// both should make progress
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
@@ -2659,14 +2657,14 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			// both nodes get stuck
 			checkVerifiedLayer(t, alg1.trtl, lastVerified)
@@ -2687,16 +2685,16 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			// both nodes still stuck
 			checkVerifiedLayer(t, alg1.trtl, lastVerified)
@@ -2711,16 +2709,16 @@ func TestMultiTortoise(t *testing.T) {
 			blockIDsA = append(blockIDsA, block.ID())
 			r.NoError(mdb1.AddBlock(block))
 		}
-		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
-		alg1.HandleIncomingLayer(context.TODO(), layerID)
+		r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsA))
+		alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
 		for _, block := range blocksB {
 			blockIDsB = append(blockIDsB, block.ID())
 			r.NoError(mdb2.AddBlock(block))
 		}
-		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
-		alg2.HandleIncomingLayer(context.TODO(), layerID)
+		r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsB))
+		alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 		// both nodes are healed
 		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
@@ -2785,12 +2783,12 @@ func TestMultiTortoise(t *testing.T) {
 				r.NoError(mdb2.AddBlock(block))
 				r.NoError(mdb3.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
-			alg3.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			r.NoError(mdb3.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDs))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
+			alg3.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			// all should make progress
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
@@ -2810,22 +2808,22 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			for _, block := range blocksC {
 				blockIDsC = append(blockIDsC, block.ID())
 				r.NoError(mdb3.AddBlock(block))
 			}
-			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
-			alg3.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb3.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsC))
+			alg3.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			// all nodes get stuck
 			checkVerifiedLayer(t, alg1.trtl, lastVerified)
@@ -2846,24 +2844,24 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			blocksC := generateBlocks(t, layerID, layerSize, alg3.BaseBlock, atxdb3, 1)
 			for _, block := range blocksC {
 				blockIDsC = append(blockIDsC, block.ID())
 				r.NoError(mdb3.AddBlock(block))
 			}
-			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
-			alg3.HandleIncomingLayer(context.TODO(), layerID)
+			r.NoError(mdb3.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsC))
+			alg3.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 			// nodes still stuck
 			checkVerifiedLayer(t, alg1.trtl, lastVerified)
@@ -2879,24 +2877,24 @@ func TestMultiTortoise(t *testing.T) {
 			blockIDsA = append(blockIDsA, block.ID())
 			r.NoError(mdb1.AddBlock(block))
 		}
-		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
-		alg1.HandleIncomingLayer(context.TODO(), layerID)
+		r.NoError(mdb1.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsA))
+		alg1.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
 		for _, block := range blocksB {
 			blockIDsB = append(blockIDsB, block.ID())
 			r.NoError(mdb2.AddBlock(block))
 		}
-		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
-		alg2.HandleIncomingLayer(context.TODO(), layerID)
+		r.NoError(mdb2.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsB))
+		alg2.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 		blocksC := generateBlocks(t, layerID, layerSize, alg3.BaseBlock, atxdb3, 1)
 		for _, block := range blocksC {
 			blockIDsC = append(blockIDsC, block.ID())
 			r.NoError(mdb3.AddBlock(block))
 		}
-		r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
-		alg3.HandleIncomingLayer(context.TODO(), layerID)
+		r.NoError(mdb3.SaveLayerInputVectorByID(newContext(context.TODO()), layerID, blockIDsC))
+		alg3.HandleIncomingLayer(newContext(context.TODO()), layerID)
 
 		// all nodes are healed
 		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
@@ -2931,14 +2929,14 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	const size = 30
 	s := sim.New(
-		sim.WithLayerSize(30),
+		sim.WithLayerSize(size),
+		sim.WithPath(b.TempDir()),
 	)
 	s.Setup()
 
 	ctx := context.Background()
 	cfg := defaultConfig(b, s.State.MeshDB, s.State.AtxDB)
-	cfg.LayerSize = 30
-	tortoise := NewVerifyingTortoise(ctx, cfg)
+	cfg.LayerSize = size
 
 	var layers []types.LayerID
 	for i := 0; i < 200; i++ {
@@ -2947,6 +2945,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
+		tortoise := NewVerifyingTortoise(ctx, cfg)
 		for _, lid := range layers {
 			tortoise.HandleIncomingLayer(ctx, lid)
 		}
@@ -2964,10 +2963,11 @@ func BenchmarkBaseBlockSelection(b *testing.B) {
 	ctx := context.Background()
 	cfg := defaultConfig(b, s.State.MeshDB, s.State.AtxDB)
 	cfg.LayerSize = size
+	cfg.WindowSize = 100
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	var last, verified types.LayerID
-	for i := 0; i < 200; i++ {
+	for i := 0; i < 400; i++ {
 		last = s.Next()
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
@@ -2975,9 +2975,7 @@ func BenchmarkBaseBlockSelection(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		start := time.Now()
 		tortoise.BaseBlock(ctx)
-		fmt.Println(time.Since(start))
 	}
 }
 
