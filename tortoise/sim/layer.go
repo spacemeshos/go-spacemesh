@@ -11,11 +11,14 @@ import (
 type NextOpt func(*nextConf)
 
 func nextConfDefaults() nextConf {
-	return nextConf{}
+	return nextConf{
+		VoteGen: perfectVoting,
+	}
 }
 
 type nextConf struct {
 	Reorder uint32
+	VoteGen VotesGenerator
 }
 
 // WithNextReorder configures when reordered layer should be returned.
@@ -32,6 +35,13 @@ func WithNextReorder(delay uint32) NextOpt {
 	}
 }
 
+// WithVoteGenerator declares vote generator for a layer.
+func WithVoteGenerator(gen VotesGenerator) NextOpt {
+	return func(c *nextConf) {
+		c.VoteGen = gen
+	}
+}
+
 // Next generates next layer.
 func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 	cfg := nextConfDefaults()
@@ -43,16 +53,16 @@ func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 		delete(g.reordered, g.nextLayer)
 		return lid
 	}
-	lid := g.genLayer()
+	lid := g.genLayer(cfg)
 	if cfg.Reorder != 0 {
 		// Add(1) to account for generated layer at the end
 		g.reordered[lid.Add(cfg.Reorder).Add(1)] = lid
-		return g.genLayer()
+		return g.genLayer(cfg)
 	}
 	return lid
 }
 
-func (g *Generator) genLayer() types.LayerID {
+func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 	half := int(g.conf.LayerSize) / 2
 	numblocks := intInRange(g.rng, [2]int{half, half * 3})
 	layer := types.NewLayer(g.nextLayer)
@@ -64,20 +74,19 @@ func (g *Generator) genLayer() types.LayerID {
 		// TODO base block selection algorithm must be selected as an option
 		// so that erroneous base block selection can be defined as a failure condition
 
-		baseLayer := g.layers[len(g.layers)-1]
-		support := g.layers[len(g.layers)-1].BlocksIDs()
-		base := baseLayer.Blocks()[g.rng.Intn(len(baseLayer.Blocks()))]
-
+		voting := cfg.VoteGen(g.rng, g.layers)
 		data := make([]byte, 20)
 		g.rng.Read(data)
 		block := &types.Block{
 			MiniBlock: types.MiniBlock{
 				BlockHeader: types.BlockHeader{
-					LayerIndex: g.nextLayer,
-					ATXID:      atxid,
-					BaseBlock:  base.ID(),
-					ForDiff:    support,
-					Data:       data,
+					LayerIndex:  g.nextLayer,
+					ATXID:       atxid,
+					BaseBlock:   voting.Base,
+					ForDiff:     voting.Support,
+					AgainstDiff: voting.Against,
+					NeutralDiff: voting.Abstain,
+					Data:        data,
 				},
 			},
 		}

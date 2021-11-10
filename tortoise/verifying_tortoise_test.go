@@ -2966,7 +2966,7 @@ func BenchmarkBaseBlockSelection(b *testing.B) {
 	ctx := context.Background()
 	cfg := defaultConfig(b, s.State.MeshDB, s.State.AtxDB)
 	cfg.LayerSize = size
-	cfg.WindowSize = 50
+	cfg.WindowSize = 100
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	var last, verified types.LayerID
@@ -3086,4 +3086,85 @@ func TestVoteBlockFilterForHealing(t *testing.T) {
 	filter := trtl.voteBlockFilterForHealing(layerID.Sub(i), logger)
 	assert.True(t, filter(goodBlock.ID()))
 	assert.True(t, filter(badBlock.ID()))
+}
+
+func TestBaseBlockPrioritization(t *testing.T) {
+	genesis := types.GetEffectiveGenesis()
+	for _, tc := range []struct {
+		desc     string
+		seqs     []sim.Sequence
+		expected types.LayerID
+		window   uint32
+	}{
+		{
+			desc: "GoodBlocksOrderByLayer",
+			seqs: []sim.Sequence{
+				sim.WithSequence(5),
+			},
+			expected: genesis.Add(5),
+			window:   5,
+		},
+		{
+			desc: "BadBlocksIgnored",
+			seqs: []sim.Sequence{
+				sim.WithSequence(5),
+				sim.WithSequence(5, sim.WithVoteGenerator(sim.OlderExceptions)),
+			},
+			expected: genesis.Add(5),
+			window:   5,
+		},
+		{
+			desc: "BadBlocksOverflowAfterEviction",
+			seqs: []sim.Sequence{
+				sim.WithSequence(5),
+				sim.WithSequence(20, sim.WithVoteGenerator(sim.OlderExceptions)),
+			},
+			expected: genesis.Add(25),
+			window:   5,
+		},
+		{
+			desc: "ConflictingVotesIgnored",
+			seqs: []sim.Sequence{
+				sim.WithSequence(5),
+				sim.WithSequence(1, sim.WithVoteGenerator(sim.GapVote)),
+			},
+			expected: genesis.Add(5),
+			window:   10,
+		},
+		{
+			desc: "GapVotesPrefferedOverBadBlock",
+			seqs: []sim.Sequence{
+				sim.WithSequence(5),
+				sim.WithSequence(1, sim.WithVoteGenerator(sim.GapVote)),
+				sim.WithSequence(1, sim.WithVoteGenerator(sim.OlderExceptions)),
+			},
+			expected: genesis.Add(5),
+			window:   10,
+		},
+	} {
+		t.Run(tc.desc, func(t *testing.T) {
+			const size = 10
+			s := sim.New(
+				sim.WithLayerSize(size),
+			)
+			s.Setup()
+
+			ctx := context.Background()
+			cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+			cfg.LayerSize = size
+			cfg.WindowSize = tc.window
+			cfg.Log = logtest.New(t)
+			tortoise := NewVerifyingTortoise(ctx, cfg)
+
+			for _, lid := range sim.GenLayers(s, tc.seqs...) {
+				tortoise.HandleIncomingLayer(ctx, lid)
+			}
+
+			base, _, err := tortoise.BaseBlock(ctx)
+			require.NoError(t, err)
+			block, err := s.State.MeshDB.GetBlock(base)
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, block.LayerIndex)
+		})
+	}
 }
