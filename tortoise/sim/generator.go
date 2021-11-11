@@ -3,7 +3,6 @@ package sim
 import (
 	"context"
 	"math/rand"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -15,7 +14,7 @@ import (
 // GenOpt for configuring Generator.
 type GenOpt func(*Generator)
 
-// WithSeed configures seed for Generator. By default current time used as a seed.
+// WithSeed configures seed for Generator. By default 0 is used.
 func WithSeed(seed int64) GenOpt {
 	return func(g *Generator) {
 		g.rng = rand.New(rand.NewSource(seed))
@@ -67,7 +66,7 @@ type State struct {
 // New creates Generator instance.
 func New(opts ...GenOpt) *Generator {
 	g := &Generator{
-		rng:       rand.New(rand.NewSource(time.Now().UnixNano())),
+		rng:       rand.New(rand.NewSource(0)),
 		conf:      defaults(),
 		logger:    log.NewNop(),
 		reordered: map[types.LayerID]types.LayerID{},

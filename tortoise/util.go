@@ -52,6 +52,10 @@ func (a vec) Multiply(x uint64) vec {
 	return a
 }
 
+func equalVotes(i, j vec) bool {
+	return i.Support == j.Support && i.Against == j.Against
+}
+
 func simplifyVote(v vec) vec {
 	if v.Support > v.Against {
 		return support

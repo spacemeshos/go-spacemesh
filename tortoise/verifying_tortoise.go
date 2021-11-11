@@ -282,12 +282,9 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 		choices       []types.BlockID // choices from the best to the least bad
 	)
 
-	// TODO(dshulyak) try to compute first disagreement iteratively when new layer
-	// is received. however HandlingLayer needs to be better optimized if compared
-	// with BaseBlock, so leaving it in BaseBlock makes more sense unless it will be very slow
-	for lid := t.Last; lid.After(t.LastEvicted); lid = lid.Sub(1) {
+	for lid := t.LastEvicted.Add(1); !lid.After(t.Last); lid = lid.Add(1) {
 		for bid := range t.BlockOpinionsByLayer[lid] {
-			dis, err := t.firstDisagreement(tctx, lid, bid)
+			dis, err := t.firstDisagreement(tctx, lid, bid, disagreements)
 			if err != nil {
 				logger.With().Error("failed to compute first disagremement", bid, log.Err(err))
 				continue
@@ -310,7 +307,6 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 		if disagreements[ibid] != disagreements[jbid] {
 			return disagreements[ibid].After(disagreements[jbid])
 		}
-		// prioritize blocks from later layers
 		if t.BlockLayer[ibid] != t.BlockLayer[jbid] {
 			return t.BlockLayer[ibid].After(t.BlockLayer[jbid])
 		}
@@ -377,9 +373,29 @@ func (t *turtle) getLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.Bl
 }
 
 // firstDisagreement returns first layer where local opinion is different from blocks opinion within sliding window.
-func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, bid types.BlockID) (types.LayerID, error) {
+func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, bid types.BlockID, disagreements map[types.BlockID]types.LayerID) (types.LayerID, error) {
 	opinions := t.BlockOpinionsByLayer[blid][bid]
-	for lid := t.LastEvicted.Add(1); lid.Before(blid); lid = lid.Add(1) {
+	from := t.LastEvicted.Add(1)
+
+	// if the block is good we know that there are no exceptions that precede base block.
+	// in such case current block will not fix any previous disagreements
+	// of the base block. or if base block completely agrees with local opinion
+	// we need only to compare opinions starting from base block layer
+	if _, exist := t.GoodBlocksIndex[bid]; exist {
+		block, err := t.bdp.GetBlock(bid)
+		if err != nil {
+			return types.LayerID{}, fmt.Errorf("reading block %s: %w", bid, err)
+		}
+		basedis, exist := disagreements[block.BaseBlock]
+		if exist {
+			baselid := t.BlockLayer[block.BaseBlock]
+			if basedis.Before(baselid) {
+				return basedis, nil
+			}
+			from = baselid
+		}
+	}
+	for lid := from; lid.Before(blid); lid = lid.Add(1) {
 		locals, err := t.getLocalOpinion(ctx, lid)
 		if err != nil {
 			return types.LayerID{}, err
@@ -389,13 +405,12 @@ func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, bid types.
 			if !exist {
 				opinion = against
 			}
-			// need to simplify because opinion stores metainfo about persistence
-			if local != simplifyVote(opinion) {
+			if !equalVotes(local, opinion) {
 				return lid, nil
 			}
 		}
 	}
-	return t.LastEvicted, nil
+	return blid, nil
 }
 
 // calculate and return a list of exceptions, i.e., differences between the opinions of a base block and the local
