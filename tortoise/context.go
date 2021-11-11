@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-func newContext(ctx context.Context) *tcontext {
+func wrapContext(ctx context.Context) *tcontext {
 	return &tcontext{
 		Context:      ctx,
 		LocalOpinion: map[types.LayerID]map[types.BlockID]vec{},

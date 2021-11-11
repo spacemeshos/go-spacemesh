@@ -302,7 +302,7 @@ func (t *turtle) layerVoteVector(bids, supported []types.BlockID) map[types.Bloc
 // - otherwise deterministically select block with lowest id.
 func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	var (
-		tctx          = newContext(ctx)
+		tctx          = wrapContext(ctx)
 		logger        = t.logger.WithContext(ctx)
 		disagreements = map[types.BlockID]types.LayerID{}
 		choices       []types.BlockID // choices from the best to the least bad
@@ -790,7 +790,7 @@ func (t *turtle) getBlockBeacon(block *types.Block, logger log.Log) ([]byte, err
 // HandleIncomingLayer processes all layer block votes
 // returns the old pbase and new pbase after taking into account block votes.
 func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) error {
-	tctx := newContext(ctx)
+	tctx := wrapContext(ctx)
 	// unconditionally set the layer to the last one that we have seen once tortoise or sync
 	// submits this layer. it doesn't matter if we fail to process it.
 	if t.Last.Before(layerID) {
