@@ -17,8 +17,9 @@ func nextConfDefaults() nextConf {
 }
 
 type nextConf struct {
-	Reorder uint32
-	VoteGen VotesGenerator
+	Reorder  uint32
+	FailHare bool
+	VoteGen  VotesGenerator
 }
 
 // WithNextReorder configures when reordered layer should be returned.
@@ -32,6 +33,13 @@ type nextConf struct {
 func WithNextReorder(delay uint32) NextOpt {
 	return func(c *nextConf) {
 		c.Reorder = delay
+	}
+}
+
+// WithHareFailure will prevent from saving input vector.
+func WithHareFailure() NextOpt {
+	return func(c *nextConf) {
+		c.FailHare = true
 	}
 }
 
@@ -63,10 +71,8 @@ func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 }
 
 func (g *Generator) genLayer(cfg nextConf) types.LayerID {
-	half := int(g.conf.LayerSize) / 2
-	numblocks := intInRange(g.rng, [2]int{half, half * 3})
 	layer := types.NewLayer(g.nextLayer)
-	for i := 0; i < numblocks; i++ {
+	for i := 0; i < int(g.conf.LayerSize); i++ {
 		miner := g.rng.Intn(len(g.activations))
 		atxid := g.activations[miner]
 		signer := g.keys[miner]
@@ -97,10 +103,13 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		}
 		layer.AddBlock(block)
 	}
-	// TODO saving layer input should be skipped as one of the error conditions
-	if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), layer.BlocksIDs()); err != nil {
-		g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
+	if !cfg.FailHare {
+		if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), layer.BlocksIDs()); err != nil {
+			g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
+		}
 	}
+	// TODO parametrize coinflip
+	g.State.MeshDB.RecordCoinflip(context.Background(), layer.Index(), true)
 	g.layers = append(g.layers, layer)
 	g.nextLayer = g.nextLayer.Add(1)
 	return layer.Index()

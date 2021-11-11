@@ -433,175 +433,99 @@ func testLayerPattern(t *testing.T, atxdb atxDataWriter, db blockDataWriter, trt
 }
 
 func TestLayerPatterns(t *testing.T) {
-	const blocksPerLayer = 10 // more blocks means a longer test
+	const size = 10 // more blocks means a longer test
 	t.Run("many good layers", func(t *testing.T) {
-		msh := getInMemMesh(t)
-		atxdb := getAtxDB()
-		trtl := defaultTurtle(t)
-		trtl.AvgLayerSize = blocksPerLayer
-		trtl.bdp = msh
-		trtl.atxdb = atxdb
-		trtl.init(context.TODO(), mesh.GenesisLayer())
-		numGood := 5
-		pattern := make([]bool, numGood)
-		for i := 0; i < numGood; i++ {
-			pattern[i] = true
+		s := sim.New(sim.WithLayerSize(size))
+		s.Setup()
+
+		ctx := context.Background()
+		cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+		cfg.LayerSize = size
+		tortoise := NewVerifyingTortoise(ctx, cfg)
+
+		var (
+			last     types.LayerID
+			verified types.LayerID
+		)
+		for _, lid := range sim.GenLayers(s,
+			sim.WithSequence(5),
+		) {
+			last = lid
+			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
 		}
-		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
-		require.Equal(t, int(types.GetEffectiveGenesis().Add(uint32(numGood-1)).Uint32()), int(trtl.Verified.Uint32()))
+		require.Equal(t, last.Sub(1), verified)
 	})
 
 	t.Run("heal after bad layers", func(t *testing.T) {
-		// use a mesh wrapper to simulate weakcoin, needed for healing
-		msh := &meshWrapper{blockDataWriter: getInMemMesh(t)}
-		atxdb := getAtxDB()
-		trtl := defaultTurtle(t)
-		trtl.AvgLayerSize = blocksPerLayer
-		trtl.bdp = msh
-		trtl.atxdb = atxdb
-		trtl.init(context.TODO(), mesh.GenesisLayer())
+		s := sim.New(sim.WithLayerSize(size))
+		s.Setup()
 
-		// calculate the number of layers needed to accumulate enough votes to cross the global threshold and
-		// invalidate earlier bad blocks
-		// run a quick simulation to check how many layers it will take to accumulate enough votes against the
-		// bad blocks
+		ctx := context.Background()
+		cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+		cfg.LayerSize = size
+		tortoise := NewVerifyingTortoise(ctx, cfg)
+
+		var (
+			last     types.LayerID
+			genesis  = types.GetEffectiveGenesis()
+			verified types.LayerID
+		)
+		for _, lid := range sim.GenLayers(s,
+			sim.WithSequence(5),
+			sim.WithSequence(2, sim.WithHareFailure()),
+		) {
+			last = lid
+			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
+		}
+		require.Equal(t, genesis.Add(5), verified)
 		vote := abstain
 		numLayersToFullyHeal := 0
 		for i := 0; vote == abstain; i++ {
 			// fast-forward to the point where Zdist is past, we've stopped waiting for hare results for the bad
 			// layers and started voting against them, and we've accumulated votes for ConfidenceParam layers
-			netVote := vec{Against: uint64(i * blocksPerLayer)}
+			netVote := vec{Against: uint64(i * size)}
 			// Zdist + ConfidenceParam (+ a margin of one due to the math) layers have already passed, so that's our
 			// delta
-			vote = calculateOpinionWithThreshold(trtl.logger, netVote, trtl.GlobalThreshold, blocksPerLayer, uint32(i+1)+trtl.Zdist+trtl.ConfidenceParam)
+			vote = calculateOpinionWithThreshold(logtest.New(t), netVote, cfg.GlobalThreshold, size, uint32(i+1)+cfg.Zdist+cfg.ConfidenceParam)
 			// safety cutoff
 			if i > 100 {
 				panic("failed to accumulate enough votes")
 			}
 			numLayersToFullyHeal++
 		}
-		t.Log("layers to fully heal:", numLayersToFullyHeal)
-
-		// five good layers, then two bad, then enough good to heal
-		// after healing, verifying tortoise should be able to start verifying again
-		pattern := []bool{
-			true,  // 8  verified
-			true,  // 9  verified
-			true,  // 10 verified
-			true,  // 11 verified
-			true,  // 12 verification stalled: zdist
-			false, // 13 verification stalled: zdist, simulated hare failure
-			false, // 14 verification stalled: zdist, simulated hare failure
-			true,  // 15 verification stalled: zdist
-			true,  // 16 verification stalled: zdist
-			true,  // 17 verification stalled: confidence interval
-			true,  // 18 verification stalled: confidence interval
-			true,  // 19 verification stalled: confidence interval
-			true,  // 20 verification stalled: confidence interval
-			true,  // 21 verification stalled: confidence interval
-			true,  // 22 verification resumes zdist+confidence interval layers before
-			true,  // 23 verification resumes zdist+confidence interval layers before
+		for _, lid := range sim.GenLayers(s,
+			sim.WithSequence(numLayersToFullyHeal),
+		) {
+			last = lid
+			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
 		}
-		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
-		lastProcessed := types.GetEffectiveGenesis().Add(uint32(len(pattern)))
-
-		// at this point, verified layer should still be stuck before the bad layers
-		lastVerified := types.GetEffectiveGenesis().Add(5)
-		require.Equal(t, int(lastVerified.Uint32()), int(trtl.Verified.Uint32()))
-
-		// now, we need a few layers to accumulate enough votes to heal
-		for i := 1; i < numLayersToFullyHeal; i++ {
-			lastProcessed = lastProcessed.Add(uint32(1))
-			makeAndProcessLayer(t, lastProcessed, trtl, blocksPerLayer, atxdb, msh, nil)
-		}
-
-		// still no progress
-		require.Equal(t, int(lastVerified.Uint32()), int(trtl.Verified.Uint32()))
-
-		// after one more layer, self healing should have verified a single layer
-		lastProcessed = lastProcessed.Add(1)
-		makeAndProcessLayer(t, lastProcessed, trtl, blocksPerLayer, atxdb, msh, nil)
-		lastVerified = lastVerified.Add(1)
-		require.Equal(t, int(lastVerified.Uint32()), int(trtl.Verified.Uint32()))
-
-		// verified layer should now lag by zdist+confidence interval+layers to heal
-		require.Equal(t, lastVerified, types.GetEffectiveGenesis().Add(uint32(len(pattern))-trtl.Zdist-trtl.ConfidenceParam))
-
-		// after a few more good layers, verifying tortoise should catch up and start verifying again
-		// TODO: calculate this hardcoded number using the same simulation we used to do so above
-		lastVerified = lastVerified.Add(trtl.Zdist + trtl.ConfidenceParam + uint32(numLayersToFullyHeal-1))
-		for i := 1; i < 8; i++ {
-			lastProcessed = lastProcessed.Add(1)
-			makeAndProcessLayer(t, lastProcessed, trtl, blocksPerLayer, atxdb, msh, nil)
-			lastVerified = lastVerified.Add(1)
-		}
-		require.Equal(t, int(lastVerified.Uint32()), int(trtl.Verified.Uint32()))
-		require.Equal(t, int(lastVerified.Uint32()), int(lastProcessed.Uint32()-1))
-
-		// make sure verifying tortoise is working again, without healing
-		// (healing wouldn't kick in again until zdist+confidence interval have passed)
-		lastProcessed = lastProcessed.Add(1)
-		lastVerified = lastVerified.Add(1)
-		makeAndProcessLayer(t, lastProcessed, trtl, blocksPerLayer, atxdb, msh, nil)
-		require.Equal(t, int(lastVerified.Uint32()), int(trtl.Verified.Uint32()))
+		require.Equal(t, last.Sub(1), verified)
 	})
 
 	t.Run("heal after good bad good bad good pattern", func(t *testing.T) {
-		pattern := []bool{
-			true,
-			true,
-			true,
-			true,
-			true,
-			false,
-			true,
-			true,
-			false,
-			false,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-			true,
-		}
+		s := sim.New(sim.WithLayerSize(size))
+		s.Setup()
 
-		// use a mesh wrapper to simulate weakcoin, needed for healing
-		msh := &meshWrapper{blockDataWriter: getInMemMesh(t)}
-		atxdb := getAtxDB()
-		trtl := defaultTurtle(t)
-		trtl.AvgLayerSize = blocksPerLayer
-		trtl.bdp = msh
-		trtl.atxdb = atxdb
-		trtl.init(context.TODO(), mesh.GenesisLayer())
-		testLayerPattern(t, atxdb, msh, trtl, blocksPerLayer, pattern)
-		finalVerified := types.GetEffectiveGenesis().Add(uint32(len(pattern)) - 1)
-		require.Equal(t, int(finalVerified.Uint32()), int(trtl.Verified.Uint32()))
+		ctx := context.Background()
+		cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+		cfg.LayerSize = size
+		tortoise := NewVerifyingTortoise(ctx, cfg)
+
+		var (
+			last     types.LayerID
+			verified types.LayerID
+		)
+		for _, lid := range sim.GenLayers(s,
+			sim.WithSequence(5),
+			sim.WithSequence(1, sim.WithHareFailure()),
+			sim.WithSequence(2),
+			sim.WithSequence(2, sim.WithHareFailure()),
+			sim.WithSequence(30),
+		) {
+			last = lid
+			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
+		}
+		require.Equal(t, last.Sub(1), verified)
 	})
 }
 
