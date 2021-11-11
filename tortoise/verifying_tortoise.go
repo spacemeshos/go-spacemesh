@@ -269,17 +269,20 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 }
 
 func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]vec, error) {
-	opinion := map[types.BlockID]vec{}
 	bids, err := t.getLayerBlocksIDs(ctx, lid)
 	if err != nil {
 		return nil, err
 	}
-
-	defaultOpinion := against
 	supported, err := t.layerOpinionVector(ctx, lid)
 	if err != nil {
 		return nil, err
 	}
+	return t.layerVoteVector(bids, supported), nil
+}
+
+func (t *turtle) layerVoteVector(bids, supported []types.BlockID) map[types.BlockID]vec {
+	opinion := map[types.BlockID]vec{}
+	defaultOpinion := against
 	if supported == nil { //nolint
 		defaultOpinion = abstain
 	}
@@ -289,7 +292,7 @@ func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[type
 	for _, on := range supported { //nolint
 		opinion[on] = support
 	}
-	return opinion, nil
+	return opinion
 }
 
 // BaseBlock selects a base block from sliding window based on a following priorities in order:
@@ -955,6 +958,7 @@ candidateLayerLoop:
 				log.FieldNamed("last_layer_received", t.Last),
 				log.Uint32("confidence_param", t.ConfidenceParam))
 			if candidateLayerID.Before(t.layerCutoff()) && t.Last.Difference(candidateLayerID) > t.Zdist+t.ConfidenceParam {
+				logger.With().Info("start self-healing with verified layer", t.Verified)
 				lastLayer := t.Last
 				// don't attempt to heal layers newer than Hdist
 				if lastLayer.After(t.layerCutoff()) {
@@ -962,6 +966,7 @@ candidateLayerLoop:
 				}
 				lastVerified := t.Verified
 				t.heal(ctx, lastLayer)
+				logger.With().Info("finished self-healing with verified layer", t.Verified)
 
 				// if self healing made progress, short-circuit processing of this layer, but allow verification of
 				// later layers to continue
@@ -1089,11 +1094,7 @@ func (t *turtle) layerOpinionVector(ctx *tcontext, lid types.LayerID) ([]types.B
 		}
 		// this layer has been verified, so we should be able to read the set of contextual blocks
 		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
-		bids, err := t.getValidBlocks(ctx, lid)
-		if err != nil {
-			return nil, fmt.Errorf("layer contextually valid blocks: %w", err)
-		}
-		return bids, nil
+		return t.getValidBlocks(ctx, lid)
 	}
 	// for newer layers, we vote according to the local opinion (input vector, from hare or sync)
 	opinionVec, err := t.getInputVector(ctx, lid)
