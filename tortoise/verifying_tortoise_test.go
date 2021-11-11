@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	mrand "math/rand"
 	"strconv"
 	"testing"
 	"time"
@@ -2895,7 +2896,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	cfg.LayerSize = size
 
 	var layers []types.LayerID
-	for i := 0; i < 400; i++ {
+	for i := 0; i < 200; i++ {
 		layers = append(layers, s.Next())
 	}
 
@@ -2908,7 +2909,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	}
 }
 
-func BenchmarkBaseBlockSelection(b *testing.B) {
+func BenchmarkTortoiseBaseBlockSelection(b *testing.B) {
 	const size = 30
 	s := sim.New(
 		sim.WithLayerSize(size),
@@ -3041,6 +3042,33 @@ func TestVoteBlockFilterForHealing(t *testing.T) {
 	assert.True(t, filter(badBlock.ID()))
 }
 
+// gapVote will skip one layer in voting.
+func gapVote(rng *mrand.Rand, layers []*types.Layer) sim.Voting {
+	if len(layers) == 1 {
+		panic("need atleast 2 layers")
+	}
+	baseLayer := layers[len(layers)-1]
+	support := layers[len(layers)-2].BlocksIDs()
+	base := baseLayer.Blocks()[rng.Intn(len(baseLayer.Blocks()))]
+	return sim.Voting{Base: base.ID(), Support: support}
+}
+
+// olderExceptions will vote for block older then base block.
+func olderExceptions(rng *mrand.Rand, layers []*types.Layer) sim.Voting {
+	if len(layers) == 1 {
+		panic("need atleast 2 layers")
+	}
+	baseLayer := layers[len(layers)-1]
+	base := baseLayer.Blocks()[rng.Intn(len(baseLayer.Blocks()))]
+	voting := sim.Voting{Base: base.ID()}
+	for _, layer := range layers[len(layers)-2:] {
+		for _, bid := range layer.BlocksIDs() {
+			voting.Support = append(voting.Support, bid)
+		}
+	}
+	return voting
+}
+
 func TestBaseBlockPrioritization(t *testing.T) {
 	genesis := types.GetEffectiveGenesis()
 	for _, tc := range []struct {
@@ -3055,13 +3083,12 @@ func TestBaseBlockPrioritization(t *testing.T) {
 				sim.WithSequence(5),
 			},
 			expected: genesis.Add(5),
-			window:   5,
 		},
 		{
 			desc: "BadBlocksIgnored",
 			seqs: []sim.Sequence{
 				sim.WithSequence(5),
-				sim.WithSequence(5, sim.WithVoteGenerator(sim.OlderExceptions)),
+				sim.WithSequence(5, sim.WithVoteGenerator(olderExceptions)),
 			},
 			expected: genesis.Add(5),
 			window:   5,
@@ -3070,7 +3097,7 @@ func TestBaseBlockPrioritization(t *testing.T) {
 			desc: "BadBlocksOverflowAfterEviction",
 			seqs: []sim.Sequence{
 				sim.WithSequence(5),
-				sim.WithSequence(20, sim.WithVoteGenerator(sim.OlderExceptions)),
+				sim.WithSequence(20, sim.WithVoteGenerator(olderExceptions)),
 			},
 			expected: genesis.Add(25),
 			window:   5,
@@ -3079,17 +3106,7 @@ func TestBaseBlockPrioritization(t *testing.T) {
 			desc: "ConflictingVotesIgnored",
 			seqs: []sim.Sequence{
 				sim.WithSequence(5),
-				sim.WithSequence(1, sim.WithVoteGenerator(sim.GapVote)),
-			},
-			expected: genesis.Add(5),
-			window:   10,
-		},
-		{
-			desc: "GapVotesPrefferedOverBadBlock",
-			seqs: []sim.Sequence{
-				sim.WithSequence(5),
-				sim.WithSequence(1, sim.WithVoteGenerator(sim.GapVote)),
-				sim.WithSequence(1, sim.WithVoteGenerator(sim.OlderExceptions)),
+				sim.WithSequence(1, sim.WithVoteGenerator(gapVote)),
 			},
 			expected: genesis.Add(5),
 			window:   10,

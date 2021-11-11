@@ -53,7 +53,7 @@ func (a vec) Multiply(x uint64) vec {
 }
 
 func equalVotes(i, j vec) bool {
-	return i.Support == j.Support && i.Against == j.Against
+	return simplifyVote(i) == simplifyVote(j)
 }
 
 func simplifyVote(v vec) vec {

@@ -265,8 +265,31 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 			return false
 		}
 	}
-
 	return true
+}
+
+func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]vec, error) {
+	opinion := map[types.BlockID]vec{}
+	bids, err := t.getLayerBlocksIDs(ctx, lid)
+	if err != nil {
+		return nil, err
+	}
+
+	defaultOpinion := against
+	supported, err := t.layerOpinionVector(ctx, lid)
+	if err != nil {
+		return nil, err
+	}
+	if supported == nil { //nolint
+		defaultOpinion = abstain
+	}
+	for _, on := range bids {
+		opinion[on] = defaultOpinion
+	}
+	for _, on := range supported { //nolint
+		opinion[on] = support
+	}
+	return opinion, nil
 }
 
 // BaseBlock selects a base block from sliding window based on a following priorities in order:
@@ -307,10 +330,11 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 		if disagreements[ibid] != disagreements[jbid] {
 			return disagreements[ibid].After(disagreements[jbid])
 		}
+		// priortize blocks from higher layers
 		if t.BlockLayer[ibid] != t.BlockLayer[jbid] {
 			return t.BlockLayer[ibid].After(t.BlockLayer[jbid])
 		}
-		// otherwise just sort determistically using lexic order
+		// otherwise just sort determistically
 		return ibid.Compare(jbid)
 	})
 
@@ -340,47 +364,14 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	return types.BlockID{}, nil, errNoBaseBlockFound
 }
 
-func (t *turtle) getLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]vec, error) {
-	opinion, exists := ctx.LocalOpinion[lid]
-	if exists {
-		return opinion, nil
-	}
-
-	opinion = map[types.BlockID]vec{}
-	bids, err := t.getLayerBlocksIDs(ctx, lid)
-	if err != nil {
-		return nil, err
-	}
-
-	defaultOpinion := against
-	supported, err := t.layerOpinionVector(ctx, lid)
-	if err != nil {
-		return nil, err
-	}
-	if supported == nil { //nolint
-		defaultOpinion = abstain
-	}
-	for _, on := range bids {
-		opinion[on] = defaultOpinion
-	}
-
-	for _, on := range supported { //nolint
-		opinion[on] = support
-	}
-
-	ctx.LocalOpinion[lid] = opinion
-	return opinion, nil
-}
-
 // firstDisagreement returns first layer where local opinion is different from blocks opinion within sliding window.
 func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, bid types.BlockID, disagreements map[types.BlockID]types.LayerID) (types.LayerID, error) {
 	opinions := t.BlockOpinionsByLayer[blid][bid]
 	from := t.LastEvicted.Add(1)
 
 	// if the block is good we know that there are no exceptions that precede base block.
-	// in such case current block will not fix any previous disagreements
-	// of the base block. or if base block completely agrees with local opinion
-	// we need only to compare opinions starting from base block layer
+	// in such case current block will not fix any previous disagreements of the base block.
+	// or if the base block completely agrees with local opinion compute disagreements after base block.
 	if _, exist := t.GoodBlocksIndex[bid]; exist {
 		block, err := t.bdp.GetBlock(bid)
 		if err != nil {
@@ -1120,46 +1111,6 @@ func (t *turtle) layerOpinionVector(ctx *tcontext, lid types.LayerID) ([]types.B
 	logger.With().Debug("got contextually valid blocks for layer",
 		log.Int("count", len(opinionVec)))
 	return opinionVec, nil
-}
-
-func (t *turtle) getInputVector(ctx *tcontext, lid types.LayerID) ([]types.BlockID, error) {
-	bids, exist := ctx.InputVectors[lid]
-	if exist {
-		return bids, nil
-	}
-	bids, err := t.bdp.GetLayerInputVectorByID(lid)
-	if err != nil {
-		return nil, fmt.Errorf("read input vector blocks for layer %s: %w", lid, err)
-	}
-	ctx.InputVectors[lid] = bids
-	return bids, nil
-}
-
-func (t *turtle) getValidBlocks(ctx *tcontext, lid types.LayerID) ([]types.BlockID, error) {
-	bids, exist := ctx.ValidBlocks[lid]
-	if exist {
-		return bids, nil
-	}
-	bidsmap, err := t.bdp.LayerContextuallyValidBlocks(ctx, lid)
-	if err != nil {
-		return nil, fmt.Errorf("read valid blocks for layer %s: %w", lid, err)
-	}
-	bids = blockMapToArray(bidsmap)
-	ctx.ValidBlocks[lid] = bids
-	return bids, nil
-}
-
-func (t *turtle) getLayerBlocksIDs(ctx *tcontext, lid types.LayerID) ([]types.BlockID, error) {
-	bids, exist := ctx.LayerBlocks[lid]
-	if exist {
-		return bids, nil
-	}
-	bids, err := t.bdp.LayerBlockIds(lid)
-	if err != nil {
-		return nil, fmt.Errorf("read blocks for layer %s: %w", lid, err)
-	}
-	ctx.LayerBlocks[lid] = bids
-	return bids, nil
 }
 
 func (t *turtle) sumVotesForBlock(
