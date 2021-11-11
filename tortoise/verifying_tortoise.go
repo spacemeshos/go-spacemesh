@@ -369,8 +369,14 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 
 // firstDisagreement returns first layer where local opinion is different from blocks opinion within sliding window.
 func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, bid types.BlockID, disagreements map[types.BlockID]types.LayerID) (types.LayerID, error) {
-	opinions := t.BlockOpinionsByLayer[blid][bid]
-	from := t.LastEvicted.Add(1)
+	var (
+		opinions = t.BlockOpinionsByLayer[blid][bid]
+		from     = t.LastEvicted.Add(1)
+		// using it as a mark that the votes for block are completely consistent
+		// with a local opinion. so if it two blocks have consistent histories select block
+		// from a higher layer as it is more consistent.
+		consistent = t.Last
+	)
 
 	// if the block is good we know that there are no exceptions that precede base block.
 	// in such case current block will not fix any previous disagreements of the base block.
@@ -383,7 +389,7 @@ func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, bid types.
 		basedis, exist := disagreements[block.BaseBlock]
 		if exist {
 			baselid := t.BlockLayer[block.BaseBlock]
-			if basedis.Before(baselid) {
+			if basedis.Before(consistent) {
 				return basedis, nil
 			}
 			from = baselid
@@ -404,7 +410,7 @@ func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, bid types.
 			}
 		}
 	}
-	return blid, nil
+	return consistent, nil
 }
 
 // calculate and return a list of exceptions, i.e., differences between the opinions of a base block and the local

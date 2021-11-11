@@ -3138,7 +3138,7 @@ func gapVote(rng *mrand.Rand, layers []*types.Layer) sim.Voting {
 	if len(layers) == 1 {
 		panic("need atleast 2 layers")
 	}
-	baseLayer := layers[len(layers)-1]
+	baseLayer := layers[len(layers)-2]
 	support := layers[len(layers)-2].BlocksIDs()
 	base := baseLayer.Blocks()[rng.Intn(len(baseLayer.Blocks()))]
 	return sim.Voting{Base: base.ID(), Support: support}
