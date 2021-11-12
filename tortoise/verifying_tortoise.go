@@ -24,11 +24,11 @@ type atxDataProvider interface {
 var (
 	errNoBaseBlockFound                 = errors.New("no good base block within exception vector limit")
 	errBaseBlockUnknown                 = errors.New("inconsistent state: base block unknown")
+	errBaseBlockLayerMissing            = errors.New("base block layer not found")
 	errNotSorted                        = errors.New("input blocks are not sorted by layerID")
+	errBaseBlockNotFoundInLayer         = errors.New("base block opinions not found in layer")
 	errstrNoCoinflip                    = "no weak coin value for layer"
 	errstrTooManyExceptions             = "too many exceptions to base block vote"
-	errstrBaseBlockLayerMissing         = "base block layer not found"
-	errstrBaseBlockNotFoundInLayer      = "base block opinions not found in layer"
 	errstrConflictingVotes              = "conflicting votes found in block"
 	errstrUnableToCalculateLocalOpinion = "unable to calculate local opinion for layer"
 )
@@ -458,11 +458,13 @@ func (t *turtle) calculateExceptions(
 		addDiffs := func(bid types.BlockID, voteClass string, voteVec vec, diffMap map[types.BlockID]struct{}) {
 			if v, ok := baseBlockOpinion[bid]; !ok || simplifyVote(v) != voteVec {
 				logger.With().Debug("added vote diff",
-					log.FieldNamed("diff_block", bid),
-					log.String("diff_class", voteClass))
+					log.Named("diff_block", bid),
+					log.String("diff_class", voteClass),
+					log.Named("opinion", v),
+				)
 				if layerID.Before(baseBlockLayerID) {
 					logger.With().Warning("added exception before base block layer, this block will not be marked good",
-						log.FieldNamed("diff_block", bid),
+						log.Named("diff_block", bid),
 						log.String("diff_class", voteClass))
 				}
 				diffMap[bid] = struct{}{}
@@ -564,6 +566,10 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	// We then add the vote difference vector and the explicit vote vector to our vote-totals vector.
 	logger.With().Debug("processing block", block.Fields()...)
 
+	if !block.LayerIndex.After(t.LastEvicted) {
+		return fmt.Errorf("block %s is from evicted layer %s", block.ID(), block.LayerIndex)
+	}
+
 	baseBlockLid, ok := t.BlockLayer[block.BaseBlock]
 	if !ok {
 		return fmt.Errorf("%w: %s", errBaseBlockUnknown, block.BaseBlock)
@@ -575,12 +581,12 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 
 	layerOpinions, ok := t.BlockOpinionsByLayer[baseBlockLid]
 	if !ok {
-		return fmt.Errorf("%s: %v, %v", errstrBaseBlockLayerMissing, block.BaseBlock, baseBlockLid)
+		return fmt.Errorf("%w: %v, %v", errBaseBlockLayerMissing, block.BaseBlock, baseBlockLid)
 	}
 
 	baseBlockOpinion, ok := layerOpinions[block.BaseBlock]
 	if !ok {
-		return fmt.Errorf("%s: %v, %v", errstrBaseBlockNotFoundInLayer, block.BaseBlock, baseBlockLid)
+		return fmt.Errorf("%w: %v, %v", errBaseBlockNotFoundInLayer, block.BaseBlock, baseBlockLid)
 	}
 
 	voteWeight, err := t.voteWeight(ctx, block)
@@ -619,17 +625,23 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 		// ignore opinions on very old blocks
 		_, exist := t.BlockLayer[blk]
 		if !exist {
-			continue
+			block, err := t.bdp.GetBlock(blk)
+			if err != nil {
+				continue
+			}
+			if !block.LayerIndex.After(t.LastEvicted) {
+				continue
+			}
+			t.BlockLayer[blk] = block.LayerIndex
 		}
 		if _, exist := opinion[blk]; !exist {
 			nvote := simplifyVote(vote).Multiply(voteWeight)
 			opinion[blk] = nvote
 		}
 	}
-
+	t.BlockLayer[block.ID()] = block.LayerIndex
 	logger.With().Debug("adding or updating block opinion")
 	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = opinion
-	t.BlockLayer[block.ID()] = block.LayerIndex
 	return nil
 }
 
