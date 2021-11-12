@@ -120,19 +120,22 @@ func (o *Organizer) submitPending(f Callback) {
 	}
 }
 
-type layerBuffer []bool
+type layerBuffer []types.LayerID
 
 func (buf layerBuffer) store(lid types.LayerID) {
 	pos := int(lid.Uint32()) % len(buf)
-	if buf[pos] {
+	if buf[pos] == lid {
+		return
+	}
+	if (buf[pos] != types.LayerID{}) {
 		panic(fmt.Sprintf("invalid state. overwriting non-empty layer %s in the buffer with", lid))
 	}
-	buf[pos] = true
+	buf[pos] = lid
 }
 
 func (buf layerBuffer) pop(lid types.LayerID) bool {
 	pos := int(lid.Uint32()) % len(buf)
 	rst := buf[pos]
-	buf[pos] = false
-	return rst
+	buf[pos] = types.LayerID{}
+	return rst != types.LayerID{}
 }
