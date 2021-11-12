@@ -20,9 +20,13 @@ const (
 	commit   messageType = 2
 	notify   messageType = 3
 	pre      messageType = 10
+	certify  messageType = 11
 )
 
-const preRound uint32 = math.MaxUint32
+const (
+	preRound     uint32 = math.MaxUint32
+	certifyRound uint32 = math.MaxUint32 >> 1
+)
 
 // declare round identifiers.
 const (
@@ -46,6 +50,8 @@ func (mType messageType) String() string {
 		return "Notify"
 	case pre:
 		return "PreRound"
+	case certify:
+		return "Certification"
 	default:
 		return "Unknown message type"
 	}
