@@ -10,23 +10,28 @@ import (
 func wrapContext(ctx context.Context) *tcontext {
 	return &tcontext{
 		Context:      ctx,
-		LocalOpinion: map[types.LayerID]map[types.BlockID]vec{},
-		LayerBlocks:  map[types.LayerID][]types.BlockID{},
-		InputVectors: map[types.LayerID][]types.BlockID{},
-		ValidBlocks:  map[types.LayerID][]types.BlockID{},
+		localOpinion: map[types.LayerID]map[types.BlockID]vec{},
+		layerBlocks:  map[types.LayerID][]types.BlockID{},
+		inputVectors: map[types.LayerID][]types.BlockID{},
+		validBlocks:  map[types.LayerID][]types.BlockID{},
 	}
 }
 
+// tcontext is meant for caching db queries within a single logical operation, therefore it is context.
 type tcontext struct {
 	context.Context
-	LocalOpinion map[types.LayerID]map[types.BlockID]vec
-	LayerBlocks  map[types.LayerID][]types.BlockID
-	InputVectors map[types.LayerID][]types.BlockID
-	ValidBlocks  map[types.LayerID][]types.BlockID
+	// generated local opinion from computeLocalOpinon
+	localOpinion map[types.LayerID]map[types.BlockID]vec
+	// all blocks that we know about
+	layerBlocks map[types.LayerID][]types.BlockID
+	// hare's input vectors
+	inputVectors map[types.LayerID][]types.BlockID
+	// contextually valid blocks
+	validBlocks map[types.LayerID][]types.BlockID
 }
 
 func (t *turtle) getLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]vec, error) {
-	opinion, exists := ctx.LocalOpinion[lid]
+	opinion, exists := ctx.localOpinion[lid]
 	if exists {
 		return opinion, nil
 	}
@@ -34,12 +39,12 @@ func (t *turtle) getLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.Bl
 	if err != nil {
 		return nil, err
 	}
-	ctx.LocalOpinion[lid] = opinion
+	ctx.localOpinion[lid] = opinion
 	return opinion, nil
 }
 
 func (t *turtle) getInputVector(ctx *tcontext, lid types.LayerID) ([]types.BlockID, error) {
-	bids, exist := ctx.InputVectors[lid]
+	bids, exist := ctx.inputVectors[lid]
 	if exist {
 		return bids, nil
 	}
@@ -47,12 +52,12 @@ func (t *turtle) getInputVector(ctx *tcontext, lid types.LayerID) ([]types.Block
 	if err != nil {
 		return nil, fmt.Errorf("read input vector blocks for layer %s: %w", lid, err)
 	}
-	ctx.InputVectors[lid] = bids
+	ctx.inputVectors[lid] = bids
 	return bids, nil
 }
 
 func (t *turtle) getValidBlocks(ctx *tcontext, lid types.LayerID) ([]types.BlockID, error) {
-	bids, exist := ctx.ValidBlocks[lid]
+	bids, exist := ctx.validBlocks[lid]
 	if exist {
 		return bids, nil
 	}
@@ -61,12 +66,12 @@ func (t *turtle) getValidBlocks(ctx *tcontext, lid types.LayerID) ([]types.Block
 		return nil, fmt.Errorf("read valid blocks for layer %s: %w", lid, err)
 	}
 	bids = blockMapToArray(bidsmap)
-	ctx.ValidBlocks[lid] = bids
+	ctx.validBlocks[lid] = bids
 	return bids, nil
 }
 
 func (t *turtle) getLayerBlocksIDs(ctx *tcontext, lid types.LayerID) ([]types.BlockID, error) {
-	bids, exist := ctx.LayerBlocks[lid]
+	bids, exist := ctx.layerBlocks[lid]
 	if exist {
 		return bids, nil
 	}
@@ -74,6 +79,6 @@ func (t *turtle) getLayerBlocksIDs(ctx *tcontext, lid types.LayerID) ([]types.Bl
 	if err != nil {
 		return nil, fmt.Errorf("read blocks for layer %s: %w", lid, err)
 	}
-	ctx.LayerBlocks[lid] = bids
+	ctx.layerBlocks[lid] = bids
 	return bids, nil
 }

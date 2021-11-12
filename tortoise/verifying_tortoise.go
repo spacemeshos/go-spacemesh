@@ -30,7 +30,6 @@ var (
 	errstrBaseBlockLayerMissing         = "base block layer not found"
 	errstrBaseBlockNotFoundInLayer      = "base block opinions not found in layer"
 	errstrConflictingVotes              = "conflicting votes found in block"
-	errstrCantFindLayer                 = "inconsistent state: can't find layer in database"
 	errstrUnableToCalculateLocalOpinion = "unable to calculate local opinion for layer"
 )
 
@@ -977,6 +976,8 @@ candidateLayerLoop:
 				// if self healing made progress, short-circuit processing of this layer, but allow verification of
 				// later layers to continue
 				if t.Verified.After(lastVerified) {
+					// reinitialize context because contextually valid blocks were changed
+					ctx = wrapContext(ctx)
 					// rescore goodness of blocks in all intervening layers on the basis of new information
 					for layerID := lastVerified.Add(1); !layerID.After(t.Last); layerID = layerID.Add(1) {
 						if err := t.scoreBlocksByLayerID(ctx, layerID); err != nil {

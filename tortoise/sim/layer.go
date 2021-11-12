@@ -36,8 +36,8 @@ func WithNextReorder(delay uint32) NextOpt {
 	}
 }
 
-// WithHareFailure will prevent from saving input vector.
-func WithHareFailure() NextOpt {
+// WithoutInputVector will prevent from saving input vector.
+func WithoutInputVector() NextOpt {
 	return func(c *nextConf) {
 		c.FailHare = true
 	}

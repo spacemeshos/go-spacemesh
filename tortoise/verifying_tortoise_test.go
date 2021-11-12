@@ -415,23 +415,6 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 	return lyr
 }
 
-func testLayerPattern(t *testing.T, atxdb atxDataWriter, db blockDataWriter, trtl *turtle, blocksPerLayer int, successPattern []bool) {
-	logger := logtest.New(t)
-	badLayerFn := func(layerID types.LayerID) ([]types.BlockID, error) {
-		logger.Debug("giving bad results for layer", layerID)
-		return nil, errors.New("simulated hare failure")
-	}
-	for i, success := range successPattern {
-		thisLayerID := types.GetEffectiveGenesis().Add(uint32(i) + 1)
-		logger.Debug("======================== processing layer", thisLayerID)
-		if success {
-			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, atxdb, db, nil)
-		} else {
-			makeAndProcessLayer(t, thisLayerID, trtl, blocksPerLayer, atxdb, db, badLayerFn)
-		}
-	}
-}
-
 func TestLayerPatterns(t *testing.T) {
 	const size = 10 // more blocks means a longer test
 	t.Run("many good layers", func(t *testing.T) {
@@ -472,7 +455,7 @@ func TestLayerPatterns(t *testing.T) {
 		)
 		for _, lid := range sim.GenLayers(s,
 			sim.WithSequence(5),
-			sim.WithSequence(2, sim.WithHareFailure()),
+			sim.WithSequence(2, sim.WithoutInputVector()),
 		) {
 			last = lid
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
@@ -517,9 +500,9 @@ func TestLayerPatterns(t *testing.T) {
 		)
 		for _, lid := range sim.GenLayers(s,
 			sim.WithSequence(5),
-			sim.WithSequence(1, sim.WithHareFailure()),
+			sim.WithSequence(1, sim.WithoutInputVector()),
 			sim.WithSequence(2),
-			sim.WithSequence(2, sim.WithHareFailure()),
+			sim.WithSequence(2, sim.WithoutInputVector()),
 			sim.WithSequence(30),
 		) {
 			last = lid
@@ -3059,7 +3042,7 @@ func TestVoteBlockFilterForHealing(t *testing.T) {
 
 // gapVote will skip one layer in voting.
 func gapVote(rng *mrand.Rand, layers []*types.Layer) sim.Voting {
-	if len(layers) == 1 {
+	if len(layers) < 2 {
 		panic("need atleast 2 layers")
 	}
 	baseLayer := layers[len(layers)-2]
@@ -3070,7 +3053,7 @@ func gapVote(rng *mrand.Rand, layers []*types.Layer) sim.Voting {
 
 // olderExceptions will vote for block older then base block.
 func olderExceptions(rng *mrand.Rand, layers []*types.Layer) sim.Voting {
-	if len(layers) == 1 {
+	if len(layers) < 2 {
 		panic("need atleast 2 layers")
 	}
 	baseLayer := layers[len(layers)-1]
@@ -3082,6 +3065,19 @@ func olderExceptions(rng *mrand.Rand, layers []*types.Layer) sim.Voting {
 		}
 	}
 	return voting
+}
+
+func TestBaseBlockGenesis(t *testing.T) {
+	ctx := context.Background()
+
+	s := sim.New()
+	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	tortoise := NewVerifyingTortoise(ctx, cfg)
+
+	base, exceptions, err := tortoise.BaseBlock(ctx)
+	require.NoError(t, err)
+	require.Equal(t, exceptions, [][]types.BlockID{{}, {base}, {}})
+	require.Equal(t, mesh.GenesisBlock().ID(), base)
 }
 
 func TestBaseBlockPrioritization(t *testing.T) {
