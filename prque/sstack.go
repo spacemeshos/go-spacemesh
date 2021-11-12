@@ -2,7 +2,7 @@
 
 package prque
 
-// The size of a block of data
+// The size of a block of data.
 const blockSize = 4096
 
 // A prioritized item in the sorted stack.

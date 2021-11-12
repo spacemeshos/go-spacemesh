@@ -3,23 +3,25 @@ package grpcserver
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-// GlobalStateService exposes global state data, output from the STF
+// GlobalStateService exposes global state data, output from the STF.
 type GlobalStateService struct {
 	Mesh    api.TxAPI
 	Mempool api.MempoolAPI
 }
 
-// RegisterService registers this service with a grpc server instance
+// RegisterService registers this service with a grpc server instance.
 func (s GlobalStateService) RegisterService(server *Server) {
 	pb.RegisterGlobalStateServiceServer(server.GrpcServer, s)
 }
@@ -32,7 +34,7 @@ func NewGlobalStateService(tx api.TxAPI, mempool api.MempoolAPI) *GlobalStateSer
 	}
 }
 
-// GlobalStateHash returns the latest layer and its computed global state hash
+// GlobalStateHash returns the latest layer and its computed global state hash.
 func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
@@ -44,7 +46,7 @@ func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHash
 func (s GlobalStateService) getProjection(curCounter, curBalance uint64, addr types.Address) (counter, balance uint64, err error) {
 	counter, balance, err = s.Mesh.GetProjection(addr, curCounter, curBalance)
 	if err != nil {
-		return 0, 0, err
+		return 0, 0, fmt.Errorf("get mesh projection: %w", err)
 	}
 	counter, balance = s.Mempool.GetProjection(addr, counter, balance)
 	return counter, balance, nil
@@ -70,7 +72,7 @@ func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, er
 	}, nil
 }
 
-// Account returns current and projected counter and balance for one account
+// Account returns current and projected counter and balance for one account.
 func (s GlobalStateService) Account(_ context.Context, in *pb.AccountRequest) (*pb.AccountResponse, error) {
 	log.Info("GRPC GlobalStateService.Account")
 
@@ -96,7 +98,7 @@ func (s GlobalStateService) Account(_ context.Context, in *pb.AccountRequest) (*
 	return &pb.AccountResponse{AccountWrapper: acct}, nil
 }
 
-// AccountDataQuery returns historical account data such as rewards and receipts
+// AccountDataQuery returns historical account data such as rewards and receipts.
 func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDataQueryRequest) (*pb.AccountDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.AccountDataQuery")
 
@@ -184,7 +186,7 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 	return res, nil
 }
 
-// SmesherDataQuery returns historical info on smesher rewards
+// SmesherDataQuery returns historical info on smesher rewards.
 func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDataQueryRequest) (*pb.SmesherDataQueryResponse, error) {
 	log.Info("GRPC GlobalStateService.SmesherDataQuery")
 
@@ -248,7 +250,7 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 
 // STREAMS
 
-// AccountDataStream exposes a stream of account-related data
+// AccountDataStream exposes a stream of account-related data.
 func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, stream pb.GlobalStateService_AccountDataStreamServer) error {
 	log.Info("GRPC GlobalStateService.AccountDataStream")
 
@@ -304,10 +306,11 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					log.With().Error("unable to fetch projected account state", log.Err(err))
 					return status.Errorf(codes.Internal, "error fetching projected account data")
 				}
-				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
+				resp := &pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_AccountWrapper{
 					AccountWrapper: acct,
-				}}}); err != nil {
-					return err
+				}}}
+				if err := stream.Send(resp); err != nil {
+					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
 		case reward, ok := <-channelReward:
@@ -321,7 +324,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			}
 			// Apply address filter
 			if reward.Coinbase == addr {
-				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
+				resp := &pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
 					Reward: &pb.Reward{
 						Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
 						Total:       &pb.Amount{Value: reward.Total},
@@ -332,8 +335,9 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 						Coinbase: &pb.AccountId{Address: addr.Bytes()},
 						Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 					},
-				}}}); err != nil {
-					return err
+				}}}
+				if err := stream.Send(resp); err != nil {
+					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
 		case receipt, ok := <-channelReceipt:
@@ -347,7 +351,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 			}
 			// Apply address filter
 			if receipt.Address == addr {
-				if err := stream.Send(&pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Receipt{
+				resp := &pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Receipt{
 					Receipt: &pb.TransactionReceipt{
 						Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
 						// Result:      receipt.Result,
@@ -357,8 +361,9 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 						Index:   receipt.Index,
 						// SvmData: nil,
 					},
-				}}}); err != nil {
-					return err
+				}}}
+				if err := stream.Send(resp); err != nil {
+					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
 		case <-stream.Context().Done():
@@ -371,7 +376,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 	}
 }
 
-// SmesherRewardStream exposes a stream of smesher rewards
+// SmesherRewardStream exposes a stream of smesher rewards.
 func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamRequest, stream pb.GlobalStateService_SmesherRewardStreamServer) error {
 	log.Info("GRPC GlobalStateService.SmesherRewardStream")
 
@@ -396,7 +401,7 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 			}
 			// filter on the smesherID
 			if comp := bytes.Compare(reward.Smesher.ToBytes(), smesherIDBytes); comp == 0 {
-				if err := stream.Send(&pb.SmesherRewardStreamResponse{
+				resp := &pb.SmesherRewardStreamResponse{
 					Reward: &pb.Reward{
 						Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
 						Total:       &pb.Amount{Value: reward.Total},
@@ -406,8 +411,9 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 						Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
 						Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 					},
-				}); err != nil {
-					return err
+				}
+				if err := stream.Send(resp); err != nil {
+					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
 		case <-stream.Context().Done():
@@ -417,7 +423,7 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 	}
 }
 
-// AppEventStream exposes a stream of emitted app events
+// AppEventStream exposes a stream of emitted app events.
 func (s GlobalStateService) AppEventStream(*pb.AppEventStreamRequest, pb.GlobalStateService_AppEventStreamServer) error {
 	log.Info("GRPC GlobalStateService.AppEventStream")
 
@@ -427,7 +433,7 @@ func (s GlobalStateService) AppEventStream(*pb.AppEventStreamRequest, pb.GlobalS
 	return status.Errorf(codes.Unimplemented, "this endpoint has not yet been implemented")
 }
 
-// GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash
+// GlobalStateStream exposes a stream of global data data items: rewards, receipts, account info, global state hash.
 func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, stream pb.GlobalStateService_GlobalStateStreamServer) error {
 	log.Info("GRPC GlobalStateService.GlobalStateStream")
 
@@ -481,10 +487,11 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.With().Error("unable to fetch projected account state", log.Err(err))
 				return status.Errorf(codes.Internal, "error fetching projected account data")
 			}
-			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_AccountWrapper{
+			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_AccountWrapper{
 				AccountWrapper: acct,
-			}}}); err != nil {
-				return err
+			}}}
+			if err := stream.Send(resp); err != nil {
+				return fmt.Errorf("send to stream: %w", err)
 			}
 		case reward, ok := <-channelReward:
 			if !ok {
@@ -495,7 +502,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Info("reward channel closed, shutting down")
 				return nil
 			}
-			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
+			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
 					Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
 					Total:       &pb.Amount{Value: reward.Total},
@@ -506,8 +513,9 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					Coinbase: &pb.AccountId{Address: reward.Coinbase.Bytes()},
 					Smesher:  &pb.SmesherId{Id: reward.Smesher.ToBytes()},
 				},
-			}}}); err != nil {
-				return err
+			}}}
+			if err := stream.Send(resp); err != nil {
+				return fmt.Errorf("send to stream: %w", err)
 			}
 		case receipt, ok := <-channelReceipt:
 			if !ok {
@@ -518,7 +526,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Info("receipt channel closed, shutting down")
 				return nil
 			}
-			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Receipt{
+			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Receipt{
 				Receipt: &pb.TransactionReceipt{
 					Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
 					// Result:      receipt.Result,
@@ -528,8 +536,9 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					Index:   receipt.Index,
 					// SvmData: nil,
 				},
-			}}}); err != nil {
-				return err
+			}}}
+			if err := stream.Send(resp); err != nil {
+				return fmt.Errorf("send to stream: %w", err)
 			}
 		case layer, ok := <-channelLayer:
 			if !ok {
@@ -545,13 +554,14 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Error("error retrieving layer data: %s", err)
 				return status.Errorf(codes.Internal, "error retrieving layer data")
 			}
-			if err := stream.Send(&pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
+			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_GlobalState{
 				GlobalState: &pb.GlobalStateHash{
 					RootHash: root.Bytes(),
 					Layer:    &pb.LayerNumber{Number: layer.LayerID.Uint32()},
 				},
-			}}}); err != nil {
-				return err
+			}}}
+			if err := stream.Send(resp); err != nil {
+				return fmt.Errorf("send to stream: %w", err)
 			}
 		case <-stream.Context().Done():
 			log.Info("AccountDataStream closing stream, client disconnected")

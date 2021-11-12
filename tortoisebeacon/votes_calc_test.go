@@ -7,10 +7,11 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
-	"github.com/stretchr/testify/require"
 )
 
 func TestTortoiseBeacon_calcVotes(t *testing.T) {
@@ -69,9 +70,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				config: Config{
-					Theta: big.NewRat(1, 1),
-				},
+				theta:       new(big.Float).SetRat(big.NewRat(1, 1)),
 				logger:      logtest.New(t).WithName("TortoiseBeacon"),
 				atxDB:       mockDB,
 				votesMargin: tc.votesMargin,
@@ -166,9 +165,7 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 			t.Parallel()
 
 			tb := TortoiseBeacon{
-				config: Config{
-					Theta: big.NewRat(1, 1),
-				},
+				theta:       new(big.Float).SetRat(big.NewRat(1, 1)),
 				logger:      logtest.New(t).WithName("TortoiseBeacon"),
 				atxDB:       mockDB,
 				votesMargin: tc.votesCount,

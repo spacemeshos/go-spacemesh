@@ -5,7 +5,7 @@ LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.
 include Makefile.Inc
 
 DOCKER_HUB ?= spacemeshos
-TEST_LOG_LEVEL ?= 
+TEST_LOG_LEVEL ?=
 
 COMMIT = $(shell git rev-parse HEAD)
 SHA = $(shell git rev-parse --short HEAD)
@@ -131,11 +131,6 @@ docker-local-build: go-spacemesh hare p2p sync harness
 .PHONY: docker-local-build
 endif
 
-# TODO(nkryuchkov): Add -race flag to the `test` target and remove `test-race` after all data races are fixed.
-test-race: get-gpu-setup
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -race ./...
-.PHONY: test
-
 test test-all: get-gpu-setup
 	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 ./...
 .PHONY: test
@@ -172,17 +167,14 @@ golangci-lint:
 	golangci-lint run --config .golangci.yml
 .PHONY: golangci-lint
 
-golangci-lint-fast:
-	golangci-lint run --config .golangci-fast.yml
-.PHONY: golangci-lint
+# Auto-fixes golangci-lint issues where possible.
+golangci-lint-fix:
+	golangci-lint run --config .golangci.yml --fix
+.PHONY: golangci-lint-fix
 
 golangci-lint-github-action:
 	./bin/golangci-lint run --config .golangci.yml --out-format=github-actions
 .PHONY: golangci-lint-github-action
-
-golangci-lint-fast-github-action:
-	./bin/golangci-lint run --config .golangci-fast.yml --out-format=github-actions
-.PHONY: golangci-lint-fast-github-action
 
 cover:
 	@echo "mode: count" > cover-all.out

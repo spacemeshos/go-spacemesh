@@ -1,3 +1,4 @@
+//go:build !exclude_app_test
 // +build !exclude_app_test
 
 package node
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spacemeshos/post/initialization"
 	"github.com/stretchr/testify/assert"
@@ -29,7 +31,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
@@ -69,15 +71,19 @@ func Test_PoETHarnessSanity(t *testing.T) {
 	require.NotNil(t, h)
 }
 
-func (suite *AppTestSuite) initMultipleInstances(cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, genesisTime string, poetClient *activation.HTTPPoetClient, clock TickProvider, network network) (firstDir string) {
+func (suite *AppTestSuite) initMultipleInstances(ctx context.Context, cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, genesisTime string,
+	poetClient *activation.HTTPPoetClient, clock TickProvider, mesh mocknet.Mocknet) (firstDir string) {
 	name := 'a'
-	for i := 0; i < numOfInstances; i++ {
+	for i, h := range mesh.Hosts() {
 		dbStorepath := suite.T().TempDir()
 		if i == 0 {
 			firstDir = dbStorepath
 		}
 		edSgn := signing.NewEdSigner()
-		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, network, edSgn)
+		wrapped, err := p2p.Upgrade(h, p2p.WithContext(ctx))
+		suite.Require().NoError(err)
+		suite.T().Cleanup(func() { _ = wrapped.Stop() })
+		smApp, err := InitSingleInstance(logtest.New(suite.T()), *cfg, i, genesisTime, dbStorepath, rolacle, poetClient, clock, wrapped, edSgn)
 		suite.NoError(err)
 		suite.apps = append(suite.apps, smApp)
 		name++
@@ -115,11 +121,16 @@ func (clock sharedClock) RealClose() {
 }
 
 func (suite *AppTestSuite) TestMultipleNodes() {
-	net := service.NewSimulator()
 	const (
 		numberOfEpochs = 5 // first 2 epochs are genesis
 		numOfInstances = 5
 	)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	mesh, err := mocknet.FullMeshLinked(ctx, numOfInstances)
+	suite.Require().NoError(err)
 	cfg := getTestDefaultConfig()
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 	lg := logtest.New(suite.T())
@@ -158,8 +169,8 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}
 	ld := 20 * time.Second
 	clock := sharedClock{suite.log, timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(suite.T()))}
-	firstDir := suite.initMultipleInstances(cfg, rolacle, numOfInstances, genesisTime, poetHarness.HTTPPoetClient, clock, net)
-
+	firstDir := suite.initMultipleInstances(ctx, cfg, rolacle, numOfInstances, genesisTime, poetHarness.HTTPPoetClient, clock, mesh)
+	suite.Require().NoError(mesh.ConnectAllButSelf())
 	// We must shut down before running the rest of the tests or we'll get an error about resource unavailable
 	// when we try to allocate more database files. Wrap this context neatly in an inline func.
 	var oldRoot types.Hash32
@@ -225,7 +236,12 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 	}()
 
 	// initialize a new app using the same database as the first node and make sure the state roots match
-	smApp, err := InitSingleInstance(lg, *cfg, 0, genesisTime, firstDir, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
+	host, err := mesh.GenPeer()
+	suite.Require().NoError(err)
+	wrapped, err := p2p.Upgrade(host, p2p.WithContext(ctx))
+	defer wrapped.Stop()
+	suite.Require().NoError(err)
+	smApp, err := InitSingleInstance(lg, *cfg, 0, genesisTime, firstDir, rolacle, poetHarness.HTTPPoetClient, clock, wrapped, edSgn)
 	suite.NoError(err)
 	// test that loaded root is equal
 	suite.validateReloadStateRoot(smApp, oldRoot)
@@ -366,7 +382,7 @@ func reachedEpochTester(dependencies []int) TestScenario {
 	return TestScenario{setup, test, dependencies}
 }
 
-// test that all nodes see the same weak coin value in each layer
+// test that all nodes see the same weak coin value in each layer.
 func (suite *AppTestSuite) healingWeakcoinTester() {
 	globalLayer := suite.apps[0].mesh.LatestLayer()
 	globalCoin := make(map[types.LayerID]bool)
@@ -493,14 +509,14 @@ func sameRootTester(dependencies []int) TestScenario {
 	return TestScenario{setup, test, dependencies}
 }
 
-// run setup on all tests
+// run setup on all tests.
 func setupTests(suite *AppTestSuite) {
 	for _, test := range tests {
 		test.Setup(suite, suite.T())
 	}
 }
 
-// run test criterias after setup
+// run test criteria after setup.
 func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 	for i, test := range tests {
 		depsOk := true
@@ -698,11 +714,17 @@ func TestShutdown(t *testing.T) {
 
 	// make sure previous goroutines have stopped
 	time.Sleep(3 * time.Second)
-	gCount := runtime.NumGoroutine()
-	net := service.NewSimulator()
-	r := require.New(t)
 
+	gCount := runtime.NumGoroutine()
+	r := require.New(t)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	mesh, err := mocknet.WithNPeers(context.TODO(), 1)
+	r.NoError(err)
+	wrapped, err := p2p.Upgrade(mesh.Hosts()[0], p2p.WithContext(ctx))
+	r.NoError(err)
 	smApp := New(WithLog(logtest.New(t)))
+	smApp.host = wrapped
 	genesisTime := time.Now().Add(time.Second * 10)
 
 	smApp.Config.POST.BitsPerLabel = 8
@@ -724,6 +746,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.LayersPerEpoch = 3
 	smApp.Config.TxsPerBlock = 100
 	smApp.Config.Hdist = 5
+	smApp.Config.Zdist = 5
 	smApp.Config.GenesisTime = genesisTime.Format(time.RFC3339)
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3
@@ -748,20 +771,18 @@ func TestShutdown(t *testing.T) {
 	r.NoError(err, "failed to create vrf signer")
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
-	swarm := net.NewNode()
-	dbStorepath := t.TempDir()
-
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	gTime := genesisTime
-	ld := time.Duration(20) * time.Second
-	clock := timesync.NewClock(timesync.RealClock{}, ld, gTime, logtest.New(t))
-	r.NoError(smApp.initServices(context.TODO(), nodeID, swarm, dbStorepath, edSgn, false, hareOracle, uint32(smApp.Config.LayerAvgSize), poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock))
+	clock := timesync.NewClock(timesync.RealClock{}, 20*time.Second, genesisTime, logtest.New(t))
+	r.NoError(smApp.initServices(context.TODO(), nodeID, t.TempDir(), edSgn, false,
+		hareOracle, uint32(smApp.Config.LayerAvgSize),
+		poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock))
 	r.NoError(smApp.startServices(context.TODO()))
 	ActivateGrpcServer(smApp)
 
 	r.NoError(poetHarness.Teardown(true))
+	cancel()
 	smApp.stopServices()
 
 	time.Sleep(5 * time.Second)

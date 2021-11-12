@@ -16,7 +16,7 @@ type commitTracker struct {
 	eligibilityCount int
 }
 
-func newCommitTracker(threshold int, expectedSize int, proposedSet *Set) *commitTracker {
+func newCommitTracker(threshold, expectedSize int, proposedSet *Set) *commitTracker {
 	ct := &commitTracker{}
 	ct.seenSenders = make(map[string]bool, expectedSize)
 	ct.commits = make([]*Message, 0, threshold)
@@ -26,7 +26,7 @@ func newCommitTracker(threshold int, expectedSize int, proposedSet *Set) *commit
 	return ct
 }
 
-// OnCommit tracks the given commit message
+// OnCommit tracks the given commit message.
 func (ct *commitTracker) OnCommit(msg *Msg) {
 	if ct.proposedSet == nil { // no valid proposed set
 		return
@@ -66,7 +66,7 @@ func (ct *commitTracker) CommitCount() int {
 }
 
 // BuildCertificate returns a certificate if there are enough commits, nil otherwise
-// Returns the certificate if has enough commit Messages, nil otherwise
+// Returns the certificate if has enough commit Messages, nil otherwise.
 func (ct *commitTracker) BuildCertificate() *certificate {
 	if !ct.HasEnoughCommits() {
 		return nil

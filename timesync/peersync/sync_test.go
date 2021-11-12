@@ -2,45 +2,29 @@ package peersync
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/timesync/peersync/mocks"
-	"github.com/stretchr/testify/assert"
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
+
+	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	bootmocks "github.com/spacemeshos/go-spacemesh/p2p/bootstrap/mocks"
+	"github.com/spacemeshos/go-spacemesh/timesync/peersync/mocks"
 )
 
-var _ service.DirectMessage = (*directMessage)(nil)
+type adjustedTime time.Time
 
-type directMessage service.DataMsgWrapper
-
-func (d *directMessage) Data() service.Data {
-	return (*service.DataMsgWrapper)(d)
+func (t adjustedTime) Now() time.Time {
+	return time.Time(t)
 }
 
-func (d *directMessage) Bytes() []byte {
-	return (*service.DataMsgWrapper)(d).Bytes()
-}
+type delayedTime time.Duration
 
-func (d *directMessage) Sender() p2pcrypto.PublicKey {
-	return nil
-}
-
-func (d *directMessage) Metadata() service.P2PMetadata {
-	return service.P2PMetadata{}
-}
-
-type adjustedTime time.Duration
-
-func (a adjustedTime) Now() time.Time {
-	return time.Now().Add((time.Duration)(a))
+func (t delayedTime) Now() time.Time {
+	return time.Now().Add(time.Duration(t))
 }
 
 func TestSyncGetOffset(t *testing.T) {
@@ -51,71 +35,44 @@ func TestSyncGetOffset(t *testing.T) {
 		responseReceive = start.Add(40 * time.Second)
 	)
 
-	peers := []peers.Peer{
-		p2pcrypto.NewRandomPubkey(),
-		p2pcrypto.NewRandomPubkey(),
-		p2pcrypto.NewRandomPubkey(),
-	}
-	resp := Response{
-		Timestamp: peerResponse.UnixNano(),
-	}
-	respBuf, err := types.InterfaceToBytes(resp)
-	require.NoError(t, err)
-	payload := server.SerializeResponse(respBuf, nil)
-	receive := make(chan service.DirectMessage, len(peers))
-
 	t.Run("Success", func(t *testing.T) {
+		mesh, err := mocknet.FullMeshConnected(context.TODO(), 4)
+		require.NoError(t, err)
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		network := mocks.NewMockNetwork(ctrl)
 		tm := mocks.NewMockTime(ctrl)
-		network.EXPECT().RegisterDirectProtocolWithChannel(protocolName, gomock.Any()).Return(receive)
-
+		peers := []p2p.Peer{}
 		tm.EXPECT().Now().Return(roundStartTime)
-		for _, peer := range peers {
-			network.EXPECT().SendWrappedMessage(gomock.Any(), peer, protocolName, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ p2pcrypto.PublicKey, _ string, msg *service.DataMsgWrapper) error {
-					receive <- (*directMessage)(&service.DataMsgWrapper{
-						ReqID:   msg.ReqID,
-						Payload: payload,
-					})
-					return nil
-				},
-			)
-			tm.EXPECT().Now().Return(responseReceive)
+		tm.EXPECT().Now().Return(responseReceive).AnyTimes()
+		for _, h := range mesh.Hosts()[1:] {
+			peers = append(peers, h.ID())
+			_ = New(h, nil, WithTime(adjustedTime(peerResponse)))
 		}
-		sync := New(network,
-			WithTime(tm),
-		)
+		sync := New(mesh.Hosts()[0], nil, WithTime(tm))
 		offset, err := sync.GetOffset(context.TODO(), 0, peers)
 		require.NoError(t, err)
 		require.Equal(t, 5*time.Second, offset)
 	})
 
 	t.Run("Failure", func(t *testing.T) {
+		mesh, err := mocknet.FullMeshConnected(context.TODO(), 4)
+		require.NoError(t, err)
+
 		ctrl := gomock.NewController(t)
 		defer ctrl.Finish()
-		network := mocks.NewMockNetwork(ctrl)
 		tm := mocks.NewMockTime(ctrl)
-		network.EXPECT().RegisterDirectProtocolWithChannel(protocolName, gomock.Any()).Return(receive)
-
+		peers := []p2p.Peer{}
 		tm.EXPECT().Now().Return(roundStartTime)
-		for _, peer := range peers {
-			network.EXPECT().SendWrappedMessage(gomock.Any(), peer, protocolName, gomock.Any()).DoAndReturn(
-				func(_ context.Context, _ p2pcrypto.PublicKey, _ string, msg *service.DataMsgWrapper) error {
-					return errors.New("test")
-				},
-			)
+		tm.EXPECT().Now().Return(responseReceive).AnyTimes()
+		for _, h := range mesh.Hosts()[1:] {
+			peers = append(peers, h.ID())
 		}
-		conf := DefaultConfig()
-		conf.RequiredResponses = 0
-		sync := New(network,
-			WithTime(tm),
-			WithConfig(conf),
-		)
+
+		sync := New(mesh.Hosts()[0], nil, WithTime(tm))
 		offset, err := sync.GetOffset(context.TODO(), 0, peers)
 		require.ErrorIs(t, err, ErrTimesyncFailed)
-		require.Equal(t, time.Duration(0), offset)
+		require.Empty(t, offset)
 	})
 }
 
@@ -132,49 +89,31 @@ func TestSyncTerminateOnError(t *testing.T) {
 		roundStartTime  = start.Add(10 * time.Second)
 		peerResponse    = start.Add(30 * time.Second)
 		responseReceive = start.Add(30 * time.Second)
-		peersCount      = 3
 	)
 
+	mesh, err := mocknet.FullMeshConnected(context.TODO(), 4)
+	require.NoError(t, err)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	network := mocks.NewMockNetwork(ctrl)
+	waiter := bootmocks.NewMockWaiter(ctrl)
 	tm := mocks.NewMockTime(ctrl)
-	receive := make(chan service.DirectMessage, peersCount)
-	network.EXPECT().RegisterDirectProtocolWithChannel(protocolName, gomock.Any()).Return(receive)
-	added := make(chan p2pcrypto.PublicKey, peersCount)
-	network.EXPECT().SubscribePeerEvents().Return(added, nil)
 
-	sync := New(network,
+	sync := New(mesh.Hosts()[0], waiter,
 		WithTime(tm),
 		WithConfig(config),
 	)
 	tm.EXPECT().Now().Return(roundStartTime)
+	tm.EXPECT().Now().Return(responseReceive).AnyTimes()
+
+	peers := []p2p.Peer{}
+	for _, h := range mesh.Hosts()[1:] {
+		peers = append(peers, h.ID())
+		_ = New(h, nil, WithTime(adjustedTime(peerResponse)))
+	}
+	waiter.EXPECT().WaitPeers(gomock.Any(), gomock.Any()).Return(peers, nil)
+
 	sync.Start()
 	t.Cleanup(sync.Stop)
-	for i := 0; i < peersCount; i++ {
-		peer := p2pcrypto.NewRandomPubkey()
-		network.EXPECT().SendWrappedMessage(gomock.Any(), peer, protocolName, gomock.Any()).DoAndReturn(
-			func(_ context.Context, _ p2pcrypto.PublicKey, _ string, msg *service.DataMsgWrapper) error {
-				var req Request
-				assert.NoError(t, types.BytesToInterface(msg.Payload, &req))
-				resp := Response{
-					ID:        req.ID,
-					Timestamp: peerResponse.UnixNano(),
-				}
-				respBuf, err := types.InterfaceToBytes(resp)
-				assert.NoError(t, err)
-				payload := server.SerializeResponse(respBuf, nil)
-
-				receive <- (*directMessage)(&service.DataMsgWrapper{
-					ReqID:   msg.ReqID,
-					Payload: payload,
-				})
-				return nil
-			},
-		)
-		tm.EXPECT().Now().Return(responseReceive)
-		added <- peer
-	}
 	errors := make(chan error, 1)
 	go func() {
 		errors <- sync.Wait()
@@ -188,8 +127,6 @@ func TestSyncTerminateOnError(t *testing.T) {
 }
 
 func TestSyncSimulateMultiple(t *testing.T) {
-	sim := service.NewSimulator()
-
 	config := DefaultConfig()
 	config.MaxClockOffset = 1 * time.Second
 	config.MaxOffsetErrors = 2
@@ -198,31 +135,40 @@ func TestSyncSimulateMultiple(t *testing.T) {
 	delays := []time.Duration{0, 1200 * time.Millisecond, 1900 * time.Millisecond, 10 * time.Second}
 	instances := []*Sync{}
 	errors := []error{ErrPeersNotSynced, nil, nil, ErrPeersNotSynced}
-
-	for _, delay := range delays {
-		sync := New(
-			sim.NewNode(),
-			WithConfig(config),
-			WithTime(adjustedTime(delay)),
-		)
-		instances = append(instances, sync)
+	mesh, err := mocknet.FullMeshLinked(context.TODO(), len(delays))
+	require.NoError(t, err)
+	hosts := []*p2p.Host{}
+	for _, h := range mesh.Hosts() {
+		fh, err := p2p.Upgrade(h)
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = fh.Stop() })
+		hosts = append(hosts, fh)
 	}
-	for _, inst := range instances {
-		inst.Start()
-		t.Cleanup(inst.Stop)
+	require.NoError(t, mesh.ConnectAllButSelf())
+
+	for i, delay := range delays {
+		sync := New(hosts[i], hosts[i],
+			WithConfig(config),
+			WithTime(delayedTime(delay)),
+			WithLog(logtest.New(t).Named(hosts[i].ID().Pretty())),
+		)
+		sync.Start()
+		t.Cleanup(sync.Stop)
+		instances = append(instances, sync)
 	}
 	for i, inst := range instances {
 		if errors[i] == nil {
 			continue
 		}
 		wait := make(chan error, 1)
+		inst := inst
 		go func() {
 			wait <- inst.Wait()
 		}()
 		select {
 		case err := <-wait:
 			require.ErrorIs(t, err, errors[i])
-		case <-time.After(100 * time.Millisecond):
+		case <-time.After(1000 * time.Millisecond):
 			require.FailNowf(t, "timed out waiting for an error", "node %d", i)
 		}
 	}

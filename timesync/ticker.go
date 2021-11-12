@@ -23,7 +23,7 @@ func newSubs() *subs {
 	}
 }
 
-// Subscribe returns a channel on which the subscriber will be notified when a new layer starts
+// Subscribe returns a channel on which the subscriber will be notified when a new layer starts.
 func (s *subs) Subscribe() LayerTimer {
 	ch := make(LayerTimer)
 	s.m.Lock()
@@ -33,7 +33,7 @@ func (s *subs) Subscribe() LayerTimer {
 	return ch
 }
 
-// Unsubscribe removed subscriber channel ch from notification list
+// Unsubscribe removed subscriber channel ch from notification list.
 func (s *subs) Unsubscribe(ch LayerTimer) {
 	s.m.Lock()
 	delete(s.subscribers, ch)
@@ -41,16 +41,16 @@ func (s *subs) Unsubscribe(ch LayerTimer) {
 }
 
 // LayerTimer is a channel of LayerIDs
-// Subscribers will receive the ticked layer through such channel
+// Subscribers will receive the ticked layer through such channel.
 type LayerTimer chan types.LayerID
 
-// LayerConverter provides conversions from time to layer and vice versa
+// LayerConverter provides conversions from time to layer and vice versa.
 type LayerConverter interface {
 	TimeToLayer(time.Time) types.LayerID
 	LayerToTime(types.LayerID) time.Time
 }
 
-// Ticker is the struct responsible for notifying that a layer has been ticked to subscribers
+// Ticker is the struct responsible for notifying that a layer has been ticked to subscribers.
 type Ticker struct {
 	*subs                 // the sub-unsub provider
 	LayerConverter        // layer conversions provider
@@ -71,7 +71,7 @@ func WithLog(lg log.Log) TickerOption {
 	}
 }
 
-// NewTicker returns a new instance of ticker
+// NewTicker returns a new instance of ticker.
 func NewTicker(c Clock, lc LayerConverter, opts ...TickerOption) *Ticker {
 	t := &Ticker{
 		subs:            newSubs(),
@@ -95,13 +95,13 @@ var (
 )
 
 // the limit on how late a notify can be
-// an attempt to notify later than sendTickThreshold from the expected tick time will resulted in a missed tick error
+// an attempt to notify later than sendTickThreshold from the expected tick time will resulted in a missed tick error.
 const sendTickThreshold = 500 * time.Millisecond
 
 // Notify notifies all the subscribers with the current layer
 // if the tick time has passed notify is skipped and errMissedTickTime is returned
 // notify may be skipped also for non-monotonic tick
-// if some of the subscribers where not listening, they are skipped. In that case, errMissedTicks is returned along the number of subscribers not listening
+// if some of the subscribers where not listening, they are skipped. In that case, errMissedTicks is returned along the number of subscribers not listening.
 func (t *Ticker) Notify() (int, error) {
 	t.m.Lock()
 	defer t.m.Unlock()
@@ -111,7 +111,7 @@ func (t *Ticker) Notify() (int, error) {
 
 	layer := t.TimeToLayer(t.clock.Now())
 	// close prev layers
-	for l := t.lastTickedLayer.Add(1); !l.After(layer); l = l.Add(1) {
+	for l := t.lastTickedLayer; !l.After(layer); l = l.Add(1) {
 		if layerChan, found := t.layerChannels[l]; found {
 			close(layerChan)
 			delete(t.layerChannels, l)
@@ -163,7 +163,7 @@ func (t *Ticker) timeSinceLastTick() time.Duration {
 	return t.clock.Now().Sub(timeOfLastTick)
 }
 
-// StartNotifying starts the clock notifying
+// StartNotifying starts the clock notifying.
 func (t *Ticker) StartNotifying() {
 	t.log.Info("started notifying")
 	t.m.Lock()
@@ -171,7 +171,7 @@ func (t *Ticker) StartNotifying() {
 	t.m.Unlock()
 }
 
-// GetCurrentLayer gets the current layer
+// GetCurrentLayer gets the current layer.
 func (t *Ticker) GetCurrentLayer() types.LayerID {
 	return t.TimeToLayer(t.clock.Now())
 }
@@ -183,7 +183,7 @@ func init() {
 }
 
 // AwaitLayer returns a channel that will be signald when layer id layerID was ticked by the clock, or if this layer has passed
-// while sleeping. it does so by closing the returned channel
+// while sleeping. it does so by closing the returned channel.
 func (t *Ticker) AwaitLayer(layerID types.LayerID) chan struct{} {
 	t.m.Lock()
 	defer t.m.Unlock()

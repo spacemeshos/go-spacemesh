@@ -18,14 +18,14 @@ package trie
 
 import (
 	"bytes"
-	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/crypto"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"runtime"
 	"sync"
 	"testing"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/crypto"
+	"github.com/spacemeshos/go-spacemesh/database"
 )
 
 func newEmptySecure() *SecureTrie {
@@ -114,10 +114,10 @@ func TestSecureTrieConcurrency(t *testing.T) {
 	threads := runtime.NumCPU()
 	tries := make([]*SecureTrie, threads)
 	for i := 0; i < threads; i++ {
-		cpy := *trie
-		tries[i] = &cpy
+		cpy := trie.Copy()
+		tries[i] = cpy
 	}
-	// Start a batch of goroutines interactng with the trie
+	// Start a batch of goroutines interacting with the trie
 	pend := new(sync.WaitGroup)
 	pend.Add(threads)
 	for i := 0; i < threads; i++ {

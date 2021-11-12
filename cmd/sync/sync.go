@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -12,24 +13,27 @@ import (
 	"time"
 
 	"cloud.google.com/go/storage"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 	"github.com/spf13/cobra"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-// Sync cmd
+// Sync cmd.
 var cmd = &cobra.Command{
 	Use:   "sync",
 	Short: "start sync",
@@ -45,10 +49,12 @@ var cmd = &cobra.Command{
 
 // ////////////////////////////
 
-var expectedLayers uint32
-var bucket string
-var version string
-var remote bool
+var (
+	expectedLayers uint32
+	bucket         string
+	version        string
+	remote         bool
+)
 
 func init() {
 	// path to remote storage
@@ -99,10 +105,11 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	)
 
 	path := app.Config.DataDir()
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, lg.WithName("p2p"), app.Config.DataDir())
-
+	cfg := app.Config.P2P
+	cfg.DataDir = path
+	host, err := p2p.New(cmdp.Ctx(), lg.WithName("p2p"), cfg)
 	if err != nil {
-		panic("something got fudged while creating p2p service ")
+		lg.With().Panic("failed to create p2p host", log.Err(err))
 	}
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
@@ -121,12 +128,6 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		return
 	}
 
-	tbDBStore, err := database.NewLDBDatabase(filepath.Join(path, "tb"), 0, 0, lg.WithName("tbDbStore"))
-	if err != nil {
-		lg.With().Error("error creating tortoise beacon database", log.Err(err))
-		return
-	}
-
 	poetDb := activation.NewPoetDb(poetDbStore, lg.WithName("poetDb").WithOptions(log.Nop))
 
 	mshdb, err := mesh.NewPersistentMeshDB(filepath.Join(path, "mesh"), 5, lg.WithOptions(log.Nop))
@@ -141,14 +142,16 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		return
 	}
 
-	txpool := state.NewTxMemPool()
+	txpool := mempool.NewTxMemPool()
 
 	app.logger = log.NewDefault("sync_test")
 	app.logger.Info("new sync tester")
 
 	layersPerEpoch := app.Config.LayersPerEpoch
-	atxdb := activation.NewDB(atxdbStore, &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
-	tbDB := tortoisebeacon.NewDB(tbDBStore, lg.WithOptions(log.Nop))
+
+	fw := &fetcherWrapper{}
+
+	atxdb := activation.NewDB(atxdbStore, fw, &mockIStore{}, mshdb, layersPerEpoch, goldenATXID, &validatorMock{}, lg.WithOptions(log.Nop))
 
 	dbs := &allDbs{
 		atxdb:       atxdb,
@@ -156,21 +159,26 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 		poetDb:      poetDb,
 		poetStorage: poetDbStore,
 		mshdb:       mshdb,
-		tbDBStore:   tbDBStore,
-		tbDB:        tbDB,
 	}
 
 	msh := createMeshWithMock(dbs, txpool, app.logger)
 	app.msh = msh
-	layerFetch := createFetcherWithMock(dbs, msh, swarm, app.logger)
+
+	blockHandler := blocks.NewBlockHandler(blocks.Config{Depth: 10}, fw, msh, blockEligibilityValidatorMock{}, lg)
+
+	fCfg := fetch.DefaultConfig()
+	fetcher := fetch.NewFetch(context.TODO(), fCfg, host, lg)
+
+	lCfg := layerfetcher.Config{RequestTimeout: 20}
+	layerFetch := layerfetcher.NewLogic(context.TODO(), lCfg, blockHandler, dbs.atxdb, dbs.poetDb, dbs.atxdb, mockTxProcessor{}, host, fetcher, msh, lg)
+	layerFetch.AddDBs(dbs.mshdb.Blocks(), dbs.atxdbStore, dbs.mshdb.Transactions(), dbs.poetStorage)
 	layerFetch.Start()
+	fw.Fetcher = layerFetch
+
 	syncerConf := syncer.Configuration{
 		SyncInterval: 2 * 60 * time.Millisecond,
 	}
 	app.sync = createSyncer(syncerConf, msh, layerFetch, types.NewLayerID(expectedLayers), app.logger)
-	if err = swarm.Start(cmdp.Ctx); err != nil {
-		log.With().Panic("error starting p2p", log.Err(err))
-	}
 
 	i := layersPerEpoch * 2
 	for ; ; i++ {
@@ -186,14 +194,17 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 			}
 		} else {
 			lg.With().Info("loaded layer from disk", types.NewLayerID(i))
-			msh.ValidateLayer(cmdp.Ctx, lyr)
+
+			msh.ValidateLayer(cmdp.Ctx(), lyr)
 		}
 	}
 
 	sleep := time.Duration(10) * time.Second
 	lg.Info("wait %v sec", sleep)
 	time.Sleep(sleep)
-	go app.sync.Start(cmdp.Ctx)
+
+	go app.sync.Start(cmdp.Ctx())
+
 	for msh.ProcessedLayer().Before(types.NewLayerID(expectedLayers)) {
 		lg.Info("sleep for %v sec", 30)
 		app.sync.ForceSync(context.TODO())
@@ -201,7 +212,6 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	}
 
 	lg.Event().Info("sync done",
-		log.String("node_id", app.BaseApp.Config.P2P.NodeID),
 		log.FieldNamed("processed", msh.ProcessedLayer()),
 	)
 	app.sync.Close()
@@ -211,7 +221,7 @@ func (app *syncApp) start(_ *cobra.Command, _ []string) {
 	}
 }
 
-// GetData downloads data from remote storage
+// GetData downloads data from remote storage.
 func getData(path, prefix string, lg log.Log) error {
 	c := http.Client{
 		Transport: &http.Transport{
@@ -236,22 +246,22 @@ func getData(path, prefix string, lg log.Log) error {
 	count := 0
 	for {
 		attrs, err := it.Next()
-		if err == iterator.Done {
+		if errors.Is(err, iterator.Done) {
 			break
 		}
 		if err != nil {
-			return err
+			return fmt.Errorf("iterator: %w", err)
 		}
 
 		rc, err := client.Bucket(bucket).Object(attrs.Name).NewReader(ctx)
 		if err != nil {
-			return err
+			return fmt.Errorf("create reader: %w", err)
 		}
 
 		data, err := ioutil.ReadAll(rc)
 		_ = rc.Close()
 		if err != nil {
-			return err
+			return fmt.Errorf("read all: %w", err)
 		}
 
 		// skip main folder
@@ -260,14 +270,13 @@ func getData(path, prefix string, lg log.Log) error {
 		}
 		dest := path + strings.TrimPrefix(attrs.Name, version)
 		if err := ensureDirExists(dest); err != nil {
-			return err
+			return fmt.Errorf("ensure dir exists: %w", err)
 		}
 		lg.Info("downloading: %v to %v", attrs.Name, dest)
 
-		err = ioutil.WriteFile(dest, data, 0644)
-		if err != nil {
+		if err = ioutil.WriteFile(dest, data, 0o644); err != nil {
 			lg.Error("%v", err)
-			return err
+			return fmt.Errorf("write file: %w", err)
 		}
 		count++
 	}
@@ -276,9 +285,17 @@ func getData(path, prefix string, lg log.Log) error {
 	return nil
 }
 
+type fetcherWrapper struct {
+	system.Fetcher
+}
+
 func ensureDirExists(path string) error {
 	dir, _ := filepath.Split(path)
-	return filesystem.ExistOrCreate(dir)
+	if err := filesystem.ExistOrCreate(dir); err != nil {
+		return fmt.Errorf("create dir: %w", err)
+	}
+
+	return nil
 }
 
 func main() {

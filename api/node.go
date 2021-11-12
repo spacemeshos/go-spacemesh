@@ -5,16 +5,12 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
-// NetworkAPI is an API to nodes gossip network
-type NetworkAPI interface {
-	Broadcast(ctx context.Context, channel string, data []byte) error
-	SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey)
-}
+// Publisher interface for publishing messages.
+type Publisher = pubsub.Publisher
 
 // PostSetupAPI is an alias to PostSetupProvider.
 type PostSetupAPI = activation.PostSetupProvider
@@ -22,24 +18,24 @@ type PostSetupAPI = activation.PostSetupProvider
 // SmeshingAPI is an alias to SmeshingProvider.
 type SmeshingAPI = activation.SmeshingProvider
 
-// GenesisTimeAPI is an API to get genesis time and current layer of the system
+// GenesisTimeAPI is an API to get genesis time and current layer of the system.
 type GenesisTimeAPI interface {
 	GetGenesisTime() time.Time
 	GetCurrentLayer() types.LayerID
 }
 
-// LoggingAPI is an API to system loggers
+// LoggingAPI is an API to system loggers.
 type LoggingAPI interface {
 	SetLogLevel(loggerName, severity string) error
 }
 
-// Syncer is the API to get sync status and to start sync
+// Syncer is the API to get sync status and to start sync.
 type Syncer interface {
 	IsSynced(context.Context) bool
 	Start(context.Context)
 }
 
-// TxAPI is an api for getting transaction status
+// TxAPI is an api for getting transaction status.
 type TxAPI interface {
 	AddressExists(types.Address) bool
 	ValidateNonceAndBalance(*types.Transaction) error
@@ -65,13 +61,12 @@ type TxAPI interface {
 	// TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
 }
 
-// PeerCounter is an api to get amount of connected peers
+// PeerCounter is an api to get amount of connected peers.
 type PeerCounter interface {
-	Close()
 	PeerCount() uint64
 }
 
-// MempoolAPI is an API for reading mempool data that's useful for API services
+// MempoolAPI is an API for reading mempool data that's useful for API services.
 type MempoolAPI interface {
 	Get(types.TransactionID) (*types.Transaction, error)
 	GetTxsByAddress(types.Address) []*types.Transaction

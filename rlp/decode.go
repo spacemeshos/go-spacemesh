@@ -33,7 +33,7 @@ var (
 	// has been reached during streaming.
 	errEol = errors.New("rlp: end of list")
 
-	// Actual Errors
+	// Actual Errors.
 	errExpectedString   = errors.New("rlp: expected String or Byte")
 	errExpectedList     = errors.New("rlp: expected List")
 	errCanonInt         = errors.New("rlp: non-canonical integer format")
@@ -42,7 +42,7 @@ var (
 	errValueTooLarge    = errors.New("rlp: value size exceeds available input length")
 	errMoreThanOneValue = errors.New("rlp: input contains more than one value")
 
-	// internal errors
+	// internal errors.
 	errNotInList     = errors.New("rlp: call of ListEnd outside of any list")
 	errNotAtEOL      = errors.New("rlp: call of ListEnd not positioned at EOL")
 	errUintOverflow  = errors.New("rlp: uint overflow")
@@ -80,7 +80,7 @@ type Decoder interface {
 // must contain an element for each decoded field. Decode returns an
 // error if there are too few or too many elements.
 //
-// The decoding of struct fields honours certain struct tags, "tail",
+// The decoding of struct fields honors certain struct tags, "tail",
 // "nil" and "-".
 //
 // The "-" tag ignores fields.
@@ -135,7 +135,7 @@ func Decode(r io.Reader, val interface{}) error {
 func DecodeBytes(b []byte, val interface{}) error {
 	r := bytes.NewReader(b)
 	if err := NewStream(r, uint64(len(b))).Decode(val); err != nil {
-		return err
+		return fmt.Errorf("new stream: %w", err)
 	}
 	if r.Len() > 0 {
 		return errMoreThanOneValue
@@ -350,7 +350,7 @@ func decodeSliceElems(s *Stream, val reflect.Value, elemdec decoder) error {
 			val.SetLen(i + 1)
 		}
 		// decode into element
-		if err := elemdec(s, val.Index(i)); err == errEol {
+		if err := elemdec(s, val.Index(i)); errors.Is(err, errEol) {
 			break
 		} else if err != nil {
 			return addErrorContext(err, fmt.Sprint("[", i, "]"))
@@ -369,7 +369,7 @@ func decodeListArray(s *Stream, val reflect.Value, elemdec decoder) error {
 	vlen := val.Len()
 	i := 0
 	for ; i < vlen; i++ {
-		if err := elemdec(s, val.Index(i)); err == errEol {
+		if err := elemdec(s, val.Index(i)); errors.Is(err, errEol) {
 			break
 		} else if err != nil {
 			return addErrorContext(err, fmt.Sprint("[", i, "]"))
@@ -438,7 +438,7 @@ func makeStructDecoder(typ reflect.Type) (decoder, error) {
 		}
 		for _, f := range fields {
 			err := f.info.decoder(s, val.Field(f.index))
-			if err == errEol {
+			if errors.Is(err, errEol) {
 				return &decodeError{msg: "too few elements", typ: typ}
 			} else if err != nil {
 				return addErrorContext(err, "."+typ.Field(f.index).Name)
@@ -533,7 +533,11 @@ func decodeInterface(s *Stream, val reflect.Value) error {
 // This decoder is used for non-pointer values of types
 // that implement the Decoder interface using a pointer receiver.
 func decodeDecoderNoPtr(s *Stream, val reflect.Value) error {
-	return val.Addr().Interface().(Decoder).DecodeRLP(s)
+	if err := val.Addr().Interface().(Decoder).DecodeRLP(s); err != nil {
+		return fmt.Errorf("decode RLP: %w", err)
+	}
+
+	return nil
 }
 
 func decodeDecoder(s *Stream, val reflect.Value) error {
@@ -544,18 +548,23 @@ func decodeDecoder(s *Stream, val reflect.Value) error {
 	if val.Kind() == reflect.Ptr && val.IsNil() {
 		val.Set(reflect.New(val.Type().Elem()))
 	}
-	return val.Interface().(Decoder).DecodeRLP(s)
+
+	if err := val.Interface().(Decoder).DecodeRLP(s); err != nil {
+		return fmt.Errorf("decode RLP: %w", err)
+	}
+
+	return nil
 }
 
 // Kind represents the kind of value contained in an RLP stream.
 type Kind int
 
 const (
-	// Byte : a byte
+	// Byte : a byte.
 	Byte Kind = iota
-	// String : a string
+	// String : a string.
 	String
-	// List : a list
+	// List : a list.
 	List
 )
 
@@ -719,7 +728,7 @@ func (s *Stream) uint(maxbits int) (uint64, error) {
 		}
 		v, err := s.readUint(byte(size))
 		switch {
-		case err == errCanonSize:
+		case errors.Is(err, errCanonSize):
 			// Adjust error because we're not reading a size right now.
 			return 0, errCanonInt
 		case err != nil:
@@ -997,7 +1006,7 @@ func (s *Stream) readFull(buf []byte) (err error) {
 		nn, err = s.r.Read(buf[n:])
 		n += nn
 	}
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		err = io.ErrUnexpectedEOF
 	}
 	return err
@@ -1008,7 +1017,7 @@ func (s *Stream) readByte() (byte, error) {
 		return 0, err
 	}
 	b, err := s.r.ReadByte()
-	if err == io.EOF {
+	if errors.Is(err, io.EOF) {
 		err = io.ErrUnexpectedEOF
 	}
 	return b, err

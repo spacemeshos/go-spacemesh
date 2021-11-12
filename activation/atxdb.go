@@ -9,15 +9,18 @@ import (
 	"sync"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/spacemeshos/post/shared"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/post/shared"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
@@ -85,7 +88,7 @@ type atxChan struct {
 }
 
 // DB hold the atxs received from all nodes and their validity status
-// it also stores identifications for all nodes e.g the coupling between ed id and bls id
+// it also stores identifications for all nodes e.g the coupling between ed id and bls id.
 type DB struct {
 	sync.RWMutex
 	// todo: think about whether we need one db or several(#1922)
@@ -99,11 +102,14 @@ type DB struct {
 	log             log.Log
 	processAtxMutex sync.Mutex
 	atxChannels     map[types.ATXID]*atxChan
+
+	// FIXME(dshulyak) this should not be defined in database
+	fetcher system.Fetcher
 }
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
-// their validity
-func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
+// their validity.
+func NewDB(dbStore database.Database, fetcher system.Fetcher, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:         idStore,
 		atxs:            dbStore,
@@ -114,6 +120,7 @@ func NewDB(dbStore database.Database, idStore idStore, meshDb *mesh.DB, layersPe
 		nipostValidator: nipostValidator,
 		log:             log,
 		atxChannels:     make(map[types.ATXID]*atxChan),
+		fetcher:         fetcher,
 	}
 	return db
 }
@@ -124,7 +131,7 @@ func init() {
 	close(closedChan)
 }
 
-// AwaitAtx returns a channel that will receive notification when the specified atx with id id is received via gossip
+// AwaitAtx returns a channel that will receive notification when the specified atx with id id is received via gossip.
 func (db *DB) AwaitAtx(id types.ATXID) chan struct{} {
 	db.Lock()
 	defer db.Unlock()
@@ -246,7 +253,7 @@ func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map
 	startTime := time.Now()
 	err := db.meshDb.ForBlockInView(view, firstLayerOfPrevEpoch, traversalFunc)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("traverse blocks in view: %w", err)
 	}
 	db.log.With().Info("done calculating miner weights",
 		log.Int("numMiners", len(minerWeight)),
@@ -451,21 +458,23 @@ func (db *DB) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.Activa
 func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 	atxHeaderBytes, err := types.InterfaceToBytes(atx.ActivationTxHeader)
 	if err != nil {
-		return err
+		return fmt.Errorf("serialize ATX: %w", err)
 	}
+
 	err = db.atxs.Put(getAtxHeaderKey(atx.ID()), atxHeaderBytes)
 	if err != nil {
-		return err
+		return fmt.Errorf("put ATX in DB: %w", err)
 	}
 
 	// todo: this changed so that a full atx will be written - inherently there will be double data with atx header
 	atxBytes, err := types.InterfaceToBytes(atx)
 	if err != nil {
-		return err
+		return fmt.Errorf("parse ATX: %w", err)
 	}
+
 	err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBytes)
 	if err != nil {
-		return err
+		return fmt.Errorf("put ATX in DB: %w", err)
 	}
 
 	// notify subscribers
@@ -486,7 +495,7 @@ type atxIDAndLayer struct {
 // This function is not thread safe and needs to be called under a global lock.
 func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 	currentTopAtx, err := db.getTopAtx()
-	if err != nil && err != database.ErrNotFound {
+	if err != nil && !errors.Is(err, database.ErrNotFound) {
 		return fmt.Errorf("failed to get current atx: %v", err)
 	}
 	if err == nil && !currentTopAtx.LayerID.Before(atx.PubLayerID) {
@@ -512,7 +521,7 @@ func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
 func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 	topAtxBytes, err := db.atxs.Get([]byte(namespaceTop))
 	if err != nil {
-		if err == database.ErrNotFound {
+		if errors.Is(err, database.ErrNotFound) {
 			return atxIDAndLayer{
 				AtxID: db.goldenATXID,
 			}, nil
@@ -530,14 +539,14 @@ func (db *DB) getTopAtx() (atxIDAndLayer, error) {
 func (db *DB) getAtxTimestamp(id types.ATXID) (time.Time, error) {
 	b, err := db.atxs.Get(getAtxTimestampKey(id))
 	if err != nil {
-		return time.Time{}, err
+		return time.Time{}, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
 	ts := time.Unix(0, int64(binary.LittleEndian.Uint64(b)))
 	return ts, nil
 }
 
-// addAtxToNodeID inserts activation atx id by node
+// addAtxToNodeID inserts activation atx id by node.
 func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
 	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.PubLayerID.GetEpoch()), atx.ID().Bytes())
 	if err != nil {
@@ -568,10 +577,10 @@ func (db *DB) addAtxTimestamp(ctx context.Context, timestamp time.Time, atx *typ
 	return nil
 }
 
-// ErrAtxNotFound is a specific error returned when no atx was found in DB
+// ErrAtxNotFound is a specific error returned when no atx was found in DB.
 type ErrAtxNotFound error
 
-// GetNodeLastAtxID returns the last atx id that was received for node nodeID
+// GetNodeLastAtxID returns the last atx id that was received for node nodeID.
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	it := db.atxs.Find(getNodeAtxPrefix(nodeID).Bytes())
 	defer it.Release()
@@ -583,15 +592,16 @@ func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
 	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
 	// composing the key.
 	if exists := it.Last(); !exists {
-		return *types.EmptyATXID, ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
+		err := ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
+		return *types.EmptyATXID, fmt.Errorf("find ATX in DB: %w", err)
 	}
 	if it.Error() != nil {
-		return *types.EmptyATXID, it.Error()
+		return *types.EmptyATXID, fmt.Errorf("iterator error: %w", it.Error())
 	}
 	return types.ATXID(types.BytesToHash(it.Value())), nil
 }
 
-// GetEpochAtxs returns all valid ATXs received in the epoch epochID
+// GetEpochAtxs returns all valid ATXs received in the epoch epochID.
 func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID, err error) {
 	it := db.atxs.Find(getEpochPrefix(epochID).Bytes())
 	defer it.Release()
@@ -611,7 +621,7 @@ func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID, err error
 }
 
 // GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified publication epoch. meaning the atx
-// that the requested nodeID has published. it returns an error if no atx was found for provided nodeID
+// that the requested nodeID has published. it returns an error if no atx was found for provided nodeID.
 func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, publicationEpoch types.EpochID) (types.ATXID, error) {
 	id, err := db.atxs.Get(getNodeAtxKey(nodeID, publicationEpoch))
 	if err != nil {
@@ -621,7 +631,7 @@ func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, publicationEpoch types.E
 	return types.ATXID(types.BytesToHash(id)), nil
 }
 
-// GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id
+// GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id.
 func (db *DB) GetPosAtxID() (types.ATXID, error) {
 	idAndLayer, err := db.getTopAtx()
 	if err != nil {
@@ -669,20 +679,22 @@ func (db *DB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
 	}
 	atxHeaderBytes, err := db.atxs.Get(getAtxHeaderKey(id))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
+
 	var atxHeader types.ActivationTxHeader
 	err = types.BytesToInterface(atxHeaderBytes, &atxHeader)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse ATX header: %w", err)
 	}
+
 	atxHeader.SetID(&id)
 	db.atxHeaderCache.Add(id, &atxHeader)
 	return &atxHeader, nil
 }
 
 // GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
-// in all databases
+// in all databases.
 func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	if id == *types.EmptyATXID {
 		return nil, errors.New("trying to fetch empty atx id")
@@ -692,12 +704,14 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 	atxBytes, err := db.atxs.Get(getAtxBodyKey(id))
 	db.RUnlock()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
+
 	atx, err := types.BytesToAtx(atxBytes)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse ATX: %w", err)
 	}
+
 	atx.ActivationTxHeader.SetID(&id)
 	db.atxHeaderCache.Add(id, atx.ActivationTxHeader)
 
@@ -705,7 +719,7 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 }
 
 // ValidateSignedAtx extracts public key from message and verifies public key exists in idStore, this is how we validate
-// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity
+// ATX signature. If this is the first ATX it is considered valid anyways and ATX syntactic validation will determine ATX validity.
 func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.ActivationTx) error {
 	// this is the first occurrence of this identity, we cannot validate simply by extracting public key
 	// pass it down to Atx handling so that atx can be syntactically verified and identity could be registered.
@@ -721,27 +735,31 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 	return nil
 }
 
-// HandleGossipAtx handles the atx gossip data channel
-func (db *DB) HandleGossipAtx(ctx context.Context, data service.GossipMessage, fetcher service.Fetcher) {
-	if data == nil {
-		return
-	}
-	err := db.HandleAtxData(ctx, data.Bytes(), fetcher)
+// HandleGossipAtx handles the atx gossip data channel.
+func (db *DB) HandleGossipAtx(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
+	err := db.HandleAtxData(ctx, msg)
 	if err != nil {
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
-		return
+		return pubsub.ValidationIgnore
 	}
-	data.ReportValidation(ctx, AtxProtocol)
+	return pubsub.ValidationAccept
 }
 
-// HandleAtxData handles atxs received either by gossip or sync
-func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fetcher) error {
+// HandleAtxData handles atxs received either by gossip or sync.
+func (db *DB) HandleAtxData(ctx context.Context, data []byte) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
 		return fmt.Errorf("cannot parse incoming atx")
 	}
 	atx.CalcAndSetID()
 	logger := db.log.WithContext(ctx).WithFields(atx.ID())
+	existing, _ := db.GetAtxHeader(atx.ID())
+	if existing != nil {
+		logger.With().Debug("received known atx")
+		// NOTE(dshulyak) it must be noop cause we will fail in fetcher otherwise
+		// but ideally it should make us not forward the message.
+		return nil
+	}
 
 	logger.With().Info(fmt.Sprintf("got new atx %v", atx.ID().ShortString()), atx.Fields(len(data))...)
 
@@ -749,12 +767,12 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 		return fmt.Errorf("nil nipst in gossip for atx %s", atx.ShortString())
 	}
 
-	if err := fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
+	if err := db.fetcher.GetPoetProof(ctx, atx.GetPoetProofRef()); err != nil {
 		return fmt.Errorf("received atx (%v) with syntactically invalid or missing PoET proof (%x): %v",
 			atx.ShortString(), atx.GetPoetProofRef().ShortString(), err)
 	}
 
-	if err := db.FetchAtxReferences(ctx, atx, fetcher); err != nil {
+	if err := db.FetchAtxReferences(ctx, atx); err != nil {
 		return fmt.Errorf("received atx with missing references of prev or pos id %v, %v, %v, %v",
 			atx.ID().ShortString(), atx.PrevATXID.ShortString(), atx.PositioningATX.ShortString(), log.Err(err))
 	}
@@ -775,20 +793,20 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte, fetcher service.Fe
 	return nil
 }
 
-// FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db
-func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx, f service.Fetcher) error {
+// FetchAtxReferences fetches positioning and prev atxs from peers if they are not found in db.
+func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) error {
 	logger := db.log.WithContext(ctx)
 	if atx.PositioningATX != *types.EmptyATXID && atx.PositioningATX != db.goldenATXID {
 		logger.With().Debug("going to fetch pos atx", atx.PositioningATX, atx.ID())
-		if err := f.FetchAtx(ctx, atx.PositioningATX); err != nil {
-			return err
+		if err := db.fetcher.FetchAtx(ctx, atx.PositioningATX); err != nil {
+			return fmt.Errorf("fetch positioning ATX: %w", err)
 		}
 	}
 
 	if atx.PrevATXID != *types.EmptyATXID {
 		logger.With().Debug("going to fetch prev atx", atx.PrevATXID, atx.ID())
-		if err := f.FetchAtx(ctx, atx.PrevATXID); err != nil {
-			return err
+		if err := db.fetcher.FetchAtx(ctx, atx.PrevATXID); err != nil {
+			return fmt.Errorf("fetch previous ATX ID: %w", err)
 		}
 	}
 	logger.With().Debug("done fetching references for atx", atx.ID())

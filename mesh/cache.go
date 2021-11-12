@@ -1,9 +1,10 @@
 package mesh
 
 import (
-	"github.com/hashicorp/golang-lru"
-	"github.com/prometheus/common/log"
+	lru "github.com/hashicorp/golang-lru"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type blockCache struct {
@@ -14,7 +15,7 @@ type blockCache struct {
 func newBlockCache(cap int) blockCache {
 	cache, err := lru.New(cap)
 	if err != nil {
-		log.Fatal("could not initialize cache ", err)
+		log.Panic("could not initialize cache ", err)
 	}
 	return blockCache{Cache: cache, cap: cap}
 }

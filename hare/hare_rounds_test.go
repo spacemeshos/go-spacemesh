@@ -3,15 +3,22 @@ package hare
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/stretchr/testify/require"
+
+	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
+	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/require"
 )
 
 const skipMoreTests = true
@@ -27,12 +34,6 @@ func newTestHareWrapper(count int) *TestHareWrapper {
 	return w
 }
 
-func (w *TestHareWrapper) Tick(layer types.LayerID) {
-	for i := 0; i < len(w.lCh); i++ {
-		w.lCh[i] <- layer
-	}
-}
-
 func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
@@ -41,7 +42,7 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 	last := j.Add(w.totalCP)
 
 	for ; j.Before(last); j = j.Add(1) {
-		w.Tick(j)
+		w.clock.advanceLayer()
 		select {
 		case <-w.termination.CloseChannel():
 			return
@@ -51,16 +52,18 @@ func (w *TestHareWrapper) LayerTicker(interval time.Duration) {
 	}
 }
 
-type funcOracle func(types.LayerID, uint32, int, types.NodeID, []byte, *testHare) (uint16, error)
-type funcLayers func(types.LayerID, *testHare) ([]types.BlockID, error)
-type funcValidate func(types.LayerID, []types.BlockID, *testHare)
-type testHare struct {
-	*Hare
-	oracle   funcOracle
-	layers   funcLayers
-	validate funcValidate
-	N        int
-}
+type (
+	funcOracle   func(types.LayerID, uint32, int, types.NodeID, []byte, *testHare) (uint16, error)
+	funcLayers   func(types.LayerID, *testHare) ([]*types.Block, error)
+	funcValidate func(types.LayerID, []types.BlockID, *testHare)
+	testHare     struct {
+		*Hare
+		oracle   funcOracle
+		layers   funcLayers
+		validate funcValidate
+		N        int
+	}
+)
 
 func (h *testHare) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committee int, id types.NodeID, sig []byte) (uint16, error) {
 	return h.oracle(layer, round, committee, id, sig, h)
@@ -68,32 +71,50 @@ func (h *testHare) CalcEligibility(ctx context.Context, layer types.LayerID, rou
 
 func (testHare) Register(bool, string)   {}
 func (testHare) Unregister(bool, string) {}
+
 func (testHare) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
 	return true, nil
 }
+
 func (testHare) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
 	return []byte{}, nil
 }
+
 func (testHare) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
 	return true, nil
 }
+
 func (h *testHare) HandleValidatedLayer(ctx context.Context, layer types.LayerID, ids []types.BlockID) {
 	h.validate(layer, ids, h)
 }
-func (h *testHare) LayerBlockIds(layer types.LayerID) ([]types.BlockID, error) {
+
+func (h *testHare) LayerBlocks(layer types.LayerID) ([]*types.Block, error) {
 	return h.layers(layer, h)
 }
+
+func (h *testHare) GetBlock(id types.BlockID) (*types.Block, error) {
+	return nil, nil
+}
+
 func (h *testHare) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
 	panic("implement me")
 }
 func (h *testHare) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {}
 
-func createTestHare(tb testing.TB, tcfg config.Config, layersCh chan types.LayerID, p2p NetworkService, rolacle Rolacle, name string, bp meshProvider) *Hare {
+func createTestHare(tb testing.TB, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, rolacle Rolacle, name string, bp meshProvider) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: pub.Bytes()}
-	hare := New(tcfg, p2p, ed, nodeID, isSynced, bp, rolacle, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, layersCh, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
+
+	ctrl := gomock.NewController(tb)
+	defer ctrl.Finish()
+
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
+	patrol := mocks.NewMocklayerPatrol(ctrl)
+	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
+	hare := New(tcfg, pid, p2p, ed, nodeID, isSynced, bp, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
+		&MockStateQuerier{true, nil}, clock, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 	return hare
 }
 
@@ -109,17 +130,20 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations, concu
 		LimitConcurrent: maxLayers,
 	}
 
-	sim := service.NewSimulator()
+	mesh, err := mocknet.FullMeshLinked(context.TODO(), nodes)
+	require.NoError(t, err)
 	for i := 0; i < nodes; i++ {
-		s := sim.NewNode()
-		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
-		w.lCh = append(w.lCh, make(chan types.LayerID, 1))
+		host := mesh.Hosts()[i]
+		ps, err := pubsub.New(context.TODO(), logtest.New(t), host, pubsub.DefaultConfig())
+		require.NoError(t, err)
+		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		h := &testHare{nil, oracle, bp, validate, i}
-		h.Hare = createTestHare(t, cfg, w.lCh[i], mp2p, h, t.Name(), h)
+		h.Hare = createTestHare(t, cfg, w.clock, host.ID(), mp2p, h, t.Name(), h)
 		w.hare = append(w.hare, h.Hare)
 		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
+	require.NoError(t, mesh.ConnectAllButSelf())
 
 	return w
 }
@@ -128,6 +152,8 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
+
+	var mu sync.RWMutex
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 2, 5,
@@ -137,16 +163,22 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]types.BlockID, error) {
-			return []types.BlockID{}, nil
+		func(layer types.LayerID, hare *testHare) ([]*types.Block, error) {
+			return []*types.Block{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
+
+			mu.Lock()
 			m[l][hare.N] = len(blocks) + 1
+			mu.Unlock()
 		})
 
 	w.LayerTicker(100 * time.Millisecond)
 	time.Sleep(time.Second * 6)
+
+	mu.RLock()
+	defer mu.RUnlock()
 
 	for x := range m {
 		for y := range m[x] {
@@ -174,8 +206,8 @@ func Test_HareNotEnoughStatuses(t *testing.T) {
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]types.BlockID, error) {
-			return []types.BlockID{}, nil
+		func(layer types.LayerID, hare *testHare) ([]*types.Block, error) {
+			return []*types.Block{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
@@ -210,8 +242,8 @@ func Test_HareNotEnoughLeaders(t *testing.T) {
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]types.BlockID, error) {
-			return []types.BlockID{}, nil
+		func(layer types.LayerID, hare *testHare) ([]*types.Block, error) {
+			return []*types.Block{}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
@@ -246,8 +278,8 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]types.BlockID, error) {
-			return []types.BlockID{genBlockID(1)}, nil
+		func(layer types.LayerID, hare *testHare) ([]*types.Block, error) {
+			return []*types.Block{randomBlock(t, layer, nil)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
@@ -282,8 +314,8 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 			}
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]types.BlockID, error) {
-			return []types.BlockID{genBlockID(1)}, nil
+		func(layer types.LayerID, hare *testHare) ([]*types.Block, error) {
+			return []*types.Block{randomBlock(t, layer, nil)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
@@ -315,8 +347,8 @@ func Test_HareComplete(t *testing.T) {
 		func(layer types.LayerID, round uint32, committee int, id types.NodeID, blocks []byte, hare *testHare) (uint16, error) {
 			return 1, nil
 		},
-		func(layer types.LayerID, hare *testHare) ([]types.BlockID, error) {
-			return []types.BlockID{genBlockID(int(layer.Uint32()))}, nil
+		func(layer types.LayerID, hare *testHare) ([]*types.Block, error) {
+			return []*types.Block{randomBlock(t, layer, nil)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1

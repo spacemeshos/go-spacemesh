@@ -2,17 +2,19 @@ package mesh
 
 import (
 	"context"
-	"math/big"
 	"testing"
 	"time"
+
+	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 type ContextualValidityMock struct{}
@@ -96,11 +98,8 @@ func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) {
-	return 0, nil
-}
-
-func (MockState) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
+func (s *MockState) ApplyLayer(l types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+	return make([]*types.Transaction, 0), nil
 }
 
 func (MockState) AddressExists(types.Address) bool {
@@ -147,7 +146,10 @@ func (MockTxMemPool) Invalidate(types.TransactionID) {
 func getMesh(tb testing.TB, id string) *Mesh {
 	lg := logtest.New(tb).WithName(id)
 	mmdb := NewMemMeshDB(lg)
-	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
+	ctrl := gomock.NewController(tb)
+	mockFetch := mocks.NewMockBlockFetcher(ctrl)
+	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
+	return NewMesh(mmdb, NewAtxDbMock(), ConfigTst(), mockFetch, &MeshValidatorMock{mdb: mmdb}, newMockTxMemPool(), &MockState{}, lg)
 }
 
 func addLayer(r *require.Assertions, id types.LayerID, layerSize int, msh *Mesh) *types.Layer {
@@ -299,7 +301,7 @@ func TestMesh_SetZeroBlockLayer(t *testing.T) {
 
 	lyrID := types.GetEffectiveGenesis().Add(1)
 	lyr, err := msh.GetLayer(lyrID)
-	r.Equal(database.ErrNotFound, err)
+	r.ErrorIs(err, database.ErrNotFound)
 	r.Nil(lyr)
 	err = msh.SetZeroBlockLayer(lyrID)
 	assert.NoError(t, err)
@@ -327,7 +329,7 @@ func TestMesh_AddLayerGetLayer(t *testing.T) {
 
 	id := types.GetEffectiveGenesis().Add(1)
 	_, err := msh.GetLayer(id)
-	r.EqualError(err, database.ErrNotFound.Error())
+	r.ErrorIs(err, database.ErrNotFound)
 
 	txIDs1, _ := addManyTXsToPool(r, msh, 4)
 	txIDs2, _ := addManyTXsToPool(r, msh, 3)
@@ -472,7 +474,8 @@ func TestMesh_WakeUp(t *testing.T) {
 	assert.Equal(t, len(txIDs1), len(rBlock1.TxIDs), "block TX size was wrong")
 	assert.Equal(t, block1.Data, rBlock1.MiniBlock.Data, "block content was wrong")
 
-	recoveredMesh := NewMesh(msh.DB, NewAtxDbMock(), ConfigTst(), &MeshValidatorMock{mdb: msh.DB}, newMockTxMemPool(), &MockState{}, logtest.New(t))
+	ctrl := gomock.NewController(t)
+	recoveredMesh := NewMesh(msh.DB, NewAtxDbMock(), ConfigTst(), mocks.NewMockBlockFetcher(ctrl), &MeshValidatorMock{mdb: msh.DB}, newMockTxMemPool(), &MockState{}, logtest.New(t))
 
 	rBlock2, err = recoveredMesh.GetBlock(block2.ID())
 	assert.NoError(t, err)
@@ -557,7 +560,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 	msh := getMesh(t, "mesh")
 
 	state := &MockMapState{}
-	msh.txProcessor = state
+	msh.state = state
 
 	layerID := types.GetEffectiveGenesis().Add(1)
 	signer, origin := newSignerAndAddress(r, "origin")
@@ -593,7 +596,7 @@ func TestMesh_AddBlockWithTxs_PushTransactions_getInvalidBlocksByHare(t *testing
 	msh := getMesh(t, "mesh")
 
 	state := &MockMapState{}
-	msh.txProcessor = state
+	msh.state = state
 
 	layerID := types.NewLayerID(1)
 	signer, _ := newSignerAndAddress(r, "origin")
@@ -721,4 +724,54 @@ func TestMesh_AddBlockWithTxs(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, numTXs, len(res.TxIDs), "block TX size was wrong")
 	assert.Equal(t, block.Data, res.MiniBlock.Data, "block content was wrong")
+}
+
+func TestMesh_HandleValidatedLayer(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockFetch := mocks.NewMockBlockFetcher(ctrl)
+	numOfBlocks := 10
+	maxTxs := 20
+	s := &MockMapState{Rewards: make(map[types.Address]uint64)}
+	msh, atxDB := getMeshWithMapState(t, "t1", s)
+	defer msh.Close()
+	msh.fetch = mockFetch
+
+	gLyr := types.GetEffectiveGenesis()
+	for i := types.NewLayerID(1); i.Before(gLyr); i = i.Add(1) {
+		msh.HandleValidatedLayer(context.TODO(), i, []types.BlockID{})
+		require.Equal(t, i, msh.ProcessedLayer())
+	}
+	msh.HandleValidatedLayer(context.TODO(), gLyr, []types.BlockID{GenesisBlock().ID()})
+	require.Equal(t, gLyr, msh.ProcessedLayer())
+
+	lyr := gLyr.Add(1)
+	_, blocks := createLayer(t, msh, lyr, numOfBlocks, maxTxs, atxDB)
+	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Do(
+		func(ctx context.Context, blockIDs []types.BlockID) {
+			assert.Equal(t, types.SortBlockIDs(blockIDs), types.SortBlockIDs(types.BlockIDs(blocks)))
+		}).Times(1)
+	msh.HandleValidatedLayer(context.TODO(), lyr, types.BlockIDs(blocks))
+	require.Equal(t, lyr, msh.ProcessedLayer())
+}
+
+func TestMesh_HandleValidatedLayer_emptyOutputFromHare(t *testing.T) {
+	msh := getMesh(t, "HandleValidatedLayer_Empty")
+	layerID := types.GetEffectiveGenesis().Add(1)
+
+	createMeshFromHareOutput(t, layerID, msh, NewAtxDbMock())
+	require.Equal(t, layerID, msh.ProcessedLayer())
+
+	var empty []types.BlockID
+	layerID = layerID.Add(1)
+	msh.HandleValidatedLayer(context.TODO(), layerID, empty)
+
+	// input vector saved
+	iv, err := msh.GetLayerInputVectorByID(layerID)
+	require.NoError(t, err)
+	assert.Nil(t, iv)
+
+	// but processed layer has advanced
+	assert.Equal(t, layerID, msh.ProcessedLayer())
 }

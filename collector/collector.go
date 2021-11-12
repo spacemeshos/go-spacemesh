@@ -9,19 +9,19 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-// EventsCollector collects events from node and writes them to DB
+// EventsCollector collects events from node and writes them to DB.
 type EventsCollector struct {
 	url  string
 	stop chan struct{}
 	db   DB
 }
 
-// NewCollector created a new instance of the collector listening on url for events and writing them to the provided DB
+// NewCollector created a new instance of the collector listening on url for events and writing them to the provided DB.
 func NewCollector(db DB, url string) *EventsCollector {
 	return &EventsCollector{url, make(chan struct{}), db}
 }
 
-// DB defines which events should be stores by any db that the collector uses
+// DB defines which events should be stores by any db that the collector uses.
 type DB interface {
 	StoreBlock(event *events.NewBlock) error
 	StoreBlockValid(event *events.ValidBlock) error
@@ -35,14 +35,13 @@ type DB interface {
 	StoreTortoiseBeaconCalculated(event *events.TortoiseBeaconCalculated) error
 }
 
-// Start starts collecting events
+// Start starts collecting events.
 func (c *EventsCollector) Start(blocking bool) {
 	if blocking {
 		c.collectEvents(c.url)
 	} else {
 		go c.collectEvents(c.url)
 	}
-
 }
 
 // Stop stops collecting events.

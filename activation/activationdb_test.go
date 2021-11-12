@@ -3,7 +3,6 @@ package activation
 import (
 	"context"
 	"fmt"
-	"math/big"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -12,11 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
+	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/ed25519"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -24,6 +24,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
@@ -93,11 +94,8 @@ func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
 	panic("implement me")
 }
 
-func (MockState) ApplyTransactions(types.LayerID, []*types.Transaction) (int, error) {
-	return 0, nil
-}
-
-func (MockState) ApplyRewards(types.LayerID, []types.Address, *big.Int) {
+func (state *MockState) ApplyLayer(layer types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+	return make([]*types.Transaction, 0), nil
 }
 
 func (MockState) AddressExists(types.Address) bool {
@@ -127,7 +125,7 @@ func (MockTxMemPool) Invalidate(types.TransactionID)              {}
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
-		BaseReward: big.NewInt(5000),
+		BaseReward: 5000,
 	}
 }
 
@@ -137,8 +135,11 @@ func getAtxDb(tb testing.TB, id string) (*DB, *mesh.Mesh, database.Database) {
 	lg := logtest.New(tb).WithName(id)
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxStore := database.NewMemDatabase()
-	atxdb := NewDB(atxStore, NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
-	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), &MeshValidatorMock{}, &MockTxMemPool{}, &MockState{}, lg.WithName("mesh"))
+	atxdb := NewDB(atxStore, nil, NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	ctrl := gomock.NewController(tb)
+	mockFetch := mocks.NewMockBlockFetcher(ctrl)
+	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
+	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), mockFetch, &MeshValidatorMock{}, &MockTxMemPool{}, &MockState{}, lg.WithName("mesh"))
 	return atxdb, layers, atxStore
 }
 
@@ -152,7 +153,7 @@ func processAtxs(db *DB, atxs []*types.ActivationTx) error {
 	for _, atx := range atxs {
 		err := db.ProcessAtx(context.TODO(), atx)
 		if err != nil {
-			return err
+			return fmt.Errorf("process ATX: %w", err)
 		}
 	}
 	return nil
@@ -334,7 +335,7 @@ func Test_DBSanity(t *testing.T) {
 	assert.Equal(t, atx3.ID(), id)
 
 	id, err = atxdb.GetNodeLastAtxID(id3)
-	assert.EqualError(t, err, fmt.Sprintf("atx for node %v does not exist", id3.ShortString()))
+	assert.EqualError(t, err, fmt.Sprintf("find ATX in DB: atx for node %v does not exist", id3.ShortString()))
 	assert.Equal(t, *types.EmptyATXID, id)
 }
 
@@ -564,7 +565,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	assert.NoError(t, err)
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err,
-		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", atx.NodeID.ShortString()))
+		fmt.Sprintf("could not fetch node last atx: find ATX in DB: atx for node %v does not exist", atx.NodeID.ShortString()))
 
 	// Prev atx not declared but initial Post not included.
 	atx = newActivationTx(idx1, 0, *types.EmptyATXID, posAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
@@ -801,7 +802,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	msh := mesh.NewMemMeshDB(lg)
 	store, err := database.NewLDBDatabase(tmpPath, 0, 0, lg.WithName("atxLDB"))
 	r.NoError(err)
-	atxdb := NewDB(store, NewIdentityStore(store), msh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(store, nil, NewIdentityStore(store), msh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	const (
 		numOfMiners = 300
@@ -897,7 +898,7 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	ed := signing.NewEdSigner()
 	nodeID := types.NodeID{Key: ed.PublicKey().String(), VRFPublicKey: []byte("bbbbb")}
@@ -942,7 +943,7 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 	id := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
 	atx := newActivationTx(id, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{})
 
@@ -983,7 +984,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	validAtx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, goldenATXID, types.LayerID{}), [20]byte{}, nil, 0, nil)
 	err := atxdb.ContextuallyValidateAtx(validAtx.ActivationTxHeader)
@@ -993,7 +994,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, goldenATXID, types.LayerID{}), [20]byte{}, nil, 0, nil)
 	err = atxdb.ContextuallyValidateAtx(malformedAtx.ActivationTxHeader)
 	r.EqualError(err,
-		fmt.Sprintf("could not fetch node last atx: atx for node %v does not exist", nodeID.ShortString()))
+		fmt.Sprintf("could not fetch node last atx: find ATX in DB: atx for node %v does not exist", nodeID.ShortString()))
 }
 
 func TestActivateDB_HandleAtxNilNipst(t *testing.T) {
@@ -1001,7 +1002,7 @@ func TestActivateDB_HandleAtxNilNipst(t *testing.T) {
 	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
 	buf, err := types.InterfaceToBytes(atx)
 	require.NoError(t, err)
-	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf, nil))
+	require.Error(t, atxdb.HandleAtxData(context.TODO(), buf))
 }
 
 func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
@@ -1015,7 +1016,7 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	idStore := NewIdentityStore(iddbstore)
 	atxdbstore, err := database.NewLDBDatabase(filepath.Join(path, "atx"), 0, 0, lg)
 	require.NoError(b, err)
-	atxdb := NewDB(atxdbstore, idStore, mdb, 288, types.ATXID{}, &Validator{}, lg)
+	atxdb := NewDB(atxdbstore, nil, idStore, mdb, 288, types.ATXID{}, &Validator{}, lg)
 
 	var (
 		stop uint64

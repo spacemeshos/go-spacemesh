@@ -4,8 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/events"
 )
 
 type MockDb struct {

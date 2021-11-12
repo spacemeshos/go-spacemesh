@@ -11,13 +11,14 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/fixed"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -25,9 +26,11 @@ const (
 	defLayersPerEpoch uint32 = 10
 )
 
-var errFoo = errors.New("some error")
-var errMy = errors.New("my error")
-var cfg = eCfg.Config{ConfidenceParam: 25, EpochOffset: 3}
+var (
+	errFoo = errors.New("some error")
+	errMy  = errors.New("my error")
+	cfg    = eCfg.Config{ConfidenceParam: 25, EpochOffset: 3}
+)
 
 var (
 	genWeight          = 5
@@ -173,7 +176,7 @@ func TestOracle_BuildVRFMessage(t *testing.T) {
 	o := Oracle{vrfMsgCache: newMockCacher(), Log: logtest.New(t)}
 	o.beacon = &mockValueProvider{1, errFoo}
 	_, err := o.buildVRFMessage(context.TODO(), types.NewLayerID(1), 1)
-	r.Equal(errFoo, err)
+	r.ErrorIs(err, errFoo)
 
 	o.beacon = &mockValueProvider{1, nil}
 	firstLayer := types.NewLayerID(1)
@@ -333,7 +336,7 @@ func TestOracle_CalcEligibility_ErrorFromBeacon(t *testing.T) {
 
 	res, err := o.CalcEligibility(context.TODO(), types.NewLayerID(1), 0, 1, types.NodeID{}, []byte{})
 
-	r.EqualError(err, errFoo.Error())
+	r.ErrorIs(err, errFoo)
 	r.Equal(uint16(0), res)
 }
 
@@ -527,7 +530,7 @@ func TestOracle_Proof(t *testing.T) {
 	o.beacon = &mockValueProvider{0, errMy}
 	sig, err := o.Proof(context.TODO(), types.NewLayerID(2), 3)
 	assert.Nil(t, sig)
-	assert.EqualError(t, err, errMy.Error())
+	assert.ErrorIs(t, err, errMy)
 
 	o.beacon = &mockValueProvider{0, nil}
 	o.vrfSigner = &mockSigner{nil}
@@ -600,8 +603,8 @@ func TestOracle_actives(t *testing.T) {
 		r.NoError(err)
 		for i := 0; i < numAtxs; i++ {
 			// this works too:
-			//atxid := types.ATXID(types.BytesToHash([]byte{byte(i)}))
-			//r.Contains(v1, atxid.Hash32().String())
+			// atxid := types.ATXID(types.BytesToHash([]byte{byte(i)}))
+			// r.Contains(v1, atxid.Hash32().String())
 			r.Contains(v1, fmt.Sprintf("0x%064x", i))
 		}
 	})
@@ -670,7 +673,7 @@ func TestOracle_concurrentActives(t *testing.T) {
 	r.Equal(1, mc.numAdd)
 }
 
-// make sure the oracle collects blocks from all layers in the safe layer range
+// make sure the oracle collects blocks from all layers in the safe layer range.
 func TestOracle_MultipleLayerBlocks(t *testing.T) {
 	r := require.New(t)
 	confidenceParam := uint32(25)

@@ -21,11 +21,12 @@ import (
 	crand "crypto/rand"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
 	mrand "github.com/spacemeshos/go-spacemesh/rand"
-	"github.com/stretchr/testify/require"
 )
 
 // makeProvers creates Merkle trie provers based on different implementations to
@@ -64,7 +65,7 @@ func dbKeys(tb testing.TB, db *database.LDBDatabase) (rst [][]byte) {
 }
 
 func TestProof(t *testing.T) {
-	trie, vals := randomTrie(500)
+	trie, vals := randomTrie(100)
 	root := trie.Hash()
 	for i, prover := range makeProvers(trie) {
 		for _, kv := range vals {
@@ -105,7 +106,9 @@ func TestOneElementProof(t *testing.T) {
 }
 
 func TestBadProof(t *testing.T) {
-	trie, vals := randomTrie(800)
+	// Higher values cause the `limit on 8128 simultaneously alive goroutines is exceeded, dying` error
+	// when tests are run with the `-race` flag.
+	trie, vals := randomTrie(100)
 	root := trie.Hash()
 	for i, prover := range makeProvers(trie) {
 		for _, kv := range vals {
