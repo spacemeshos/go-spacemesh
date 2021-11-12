@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -19,7 +20,7 @@ const (
 	// GossipProtocol is weak coin Gossip protocol name.
 	GossipProtocol = "WeakCoinGossip"
 
-	// equal to 2^256 / 2
+	// equal to 2^256 / 2.
 	defaultThreshold = "0x8000000000000000000000000000000000000000000000000000000000000000"
 )
 
@@ -37,12 +38,6 @@ type config struct {
 	VRFPrefix           string
 	NextRoundBufferSize int
 	MaxRound            types.RoundID
-}
-
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./weak_coin.go
-
-type broadcaster interface {
-	Broadcast(ctx context.Context, channel string, data []byte) error
 }
 
 // UnitAllowances is a map from miner identifier to the number of units of spacetime.
@@ -90,18 +85,18 @@ func WithNextRoundBufferSize(size int) Option {
 
 // New creates an instance of weak coin protocol.
 func New(
-	net broadcaster,
+	publisher pubsub.Publisher,
 	signer signing.Signer,
 	verifier signing.Verifier,
 	opts ...Option,
 ) *WeakCoin {
 	wc := &WeakCoin{
-		logger:   log.NewNop(),
-		config:   defaultConfig(),
-		signer:   signer,
-		verifier: verifier,
-		net:      net,
-		coins:    make(map[types.RoundID]bool),
+		logger:    log.NewNop(),
+		config:    defaultConfig(),
+		signer:    signer,
+		verifier:  verifier,
+		publisher: publisher,
+		coins:     make(map[types.RoundID]bool),
 	}
 	for _, opt := range opts {
 		opt(wc)
@@ -112,11 +107,11 @@ func New(
 
 // WeakCoin implementation of the protocol.
 type WeakCoin struct {
-	logger   log.Log
-	config   config
-	verifier signing.Verifier
-	signer   signing.Signer
-	net      broadcaster
+	logger    log.Log
+	config    config
+	verifier  signing.Verifier
+	signer    signing.Signer
+	publisher pubsub.Publisher
 
 	mu                         sync.RWMutex
 	epochStarted, roundStarted bool
@@ -131,15 +126,15 @@ type WeakCoin struct {
 
 // Get the result of the coin flip in this round. It is only valid in between StartEpoch/EndEpoch
 // and only after CompleteRound was called.
-func (wc *WeakCoin) Get(epoch types.EpochID, round types.RoundID) bool {
+func (wc *WeakCoin) Get(ctx context.Context, epoch types.EpochID, round types.RoundID) bool {
 	if epoch.IsGenesis() {
-		return false
+		wc.logger.WithContext(ctx).With().Panic("tb weak coin not used during genesis")
 	}
 
 	wc.mu.RLock()
 	defer wc.mu.RUnlock()
 	if wc.epoch != epoch {
-		wc.logger.Panic("requested epoch wasn't started or already completed",
+		wc.logger.WithContext(ctx).With().Panic("requested epoch wasn't started or already completed",
 			log.Uint32("started_epoch", uint32(wc.epoch)),
 			log.Uint32("requested_epoch", uint32(epoch)))
 	}
@@ -148,30 +143,35 @@ func (wc *WeakCoin) Get(epoch types.EpochID, round types.RoundID) bool {
 }
 
 // StartEpoch notifies that epoch is started and we can accept messages for this epoch.
-func (wc *WeakCoin) StartEpoch(epoch types.EpochID, allowances UnitAllowances) {
+func (wc *WeakCoin) StartEpoch(ctx context.Context, epoch types.EpochID, allowances UnitAllowances) {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
 	wc.epochStarted = true
 	wc.epoch = epoch
 	wc.allowances = allowances
+	wc.logger.WithContext(ctx).With().Info("tb weak coin started epoch", epoch)
 }
 
 // FinishEpoch completes epoch. After it is called Get for this epoch will panic.
-func (wc *WeakCoin) FinishEpoch() {
+func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
+	logger := wc.logger.WithContext(ctx).WithFields(epoch)
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
+	if epoch != wc.epoch {
+		logger.Panic("attempted to finish tb weak coin for the wrong epoch")
+	}
 	wc.epochStarted = false
 	wc.allowances = nil
 	wc.coins = map[types.RoundID]bool{}
 	wc.round = 0
+	logger.Info("tb weak coin finished epoch")
 }
 
 // StartRound process any buffered messages for this round and broadcast our proposal.
 func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	wc.mu.Lock()
-	wc.logger.With().Info("started round",
-		log.Uint32("epoch_id", uint32(wc.epoch)),
-		log.Uint32("round_id", uint32(round)))
+	logger := wc.logger.WithContext(ctx).WithFields(wc.epoch, round)
+	logger.Info("started round")
 	wc.roundStarted = true
 	wc.round = round
 	wc.smallestProposal = nil
@@ -180,20 +180,18 @@ func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 		if msg.Epoch != wc.epoch || msg.Round != wc.round {
 			continue
 		}
-		if err := wc.updateProposal(msg); err != nil {
-			wc.logger.With().Debug("received invalid proposal",
-				log.Err(err),
-				log.Uint32("epoch_id", uint32(msg.Epoch)),
-				log.Uint32("round_id", uint32(msg.Round)))
+		if err := wc.updateProposal(ctx, msg); err != nil {
+			logger.With().Debug("received invalid proposal", log.Err(err))
 		}
 		wc.nextRoundBuffer[i] = Message{}
 	}
 	wc.nextRoundBuffer = wc.nextRoundBuffer[:0]
 	wc.mu.Unlock()
+
 	return wc.publishProposal(ctx, epoch, round)
 }
 
-func (wc *WeakCoin) updateProposal(message Message) error {
+func (wc *WeakCoin) updateProposal(ctx context.Context, message Message) error {
 	buf := wc.encodeProposal(message.Epoch, message.Round, message.Unit)
 	if !wc.verifier.Verify(signing.NewPublicKey(message.MinerPK), buf, message.Signature) {
 		return fmt.Errorf("signature is invalid signature %x", message.Signature)
@@ -204,7 +202,7 @@ func (wc *WeakCoin) updateProposal(message Message) error {
 		return fmt.Errorf("miner %x is not allowed to submit proposal for unit %d", message.MinerPK, message.Unit)
 	}
 
-	wc.updateSmallest(message.Signature)
+	wc.updateSmallest(ctx, message.Signature)
 	return nil
 }
 
@@ -230,7 +228,7 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (b
 			}
 			msg, err := types.InterfaceToBytes(message)
 			if err != nil {
-				wc.logger.Panic("can't serialize weak coin message", log.Err(err))
+				wc.logger.With().Panic("failed to serialize weak coin message", log.Err(err))
 			}
 
 			broadcast = msg
@@ -241,20 +239,22 @@ func (wc *WeakCoin) prepareProposal(epoch types.EpochID, round types.RoundID) (b
 }
 
 func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, round types.RoundID) error {
-	broadcast, smallest := wc.prepareProposal(epoch, round)
+	wc.mu.Lock()
+	msg, smallest := wc.prepareProposal(epoch, round)
+	wc.mu.Unlock()
 
 	// nothing to send is valid if all proposals are exceeding threshold
-	if broadcast == nil {
+	if msg == nil {
 		return nil
 	}
 
-	if err := wc.net.Broadcast(ctx, GossipProtocol, broadcast); err != nil {
+	if err := wc.publisher.Publish(ctx, GossipProtocol, msg); err != nil {
 		return fmt.Errorf("failed to broadcast weak coin message: %w", err)
 	}
 
-	wc.logger.With().Info("published proposal",
-		log.Uint32("epoch_id", uint32(epoch)),
-		log.Uint32("round_id", uint32(round)),
+	wc.logger.WithContext(ctx).With().Info("published proposal",
+		epoch,
+		round,
 		log.String("proposal", types.BytesToHash(smallest).ShortString()))
 
 	wc.mu.Lock()
@@ -263,21 +263,19 @@ func (wc *WeakCoin) publishProposal(ctx context.Context, epoch types.EpochID, ro
 		// another epoch/round was started concurrently
 		return nil
 	}
-	wc.updateSmallest(smallest)
+	wc.updateSmallest(ctx, smallest)
 	return nil
 }
 
 // FinishRound computes coinflip based on proposals received in this round.
 // After it is called new proposals for this round won't be accepted.
-func (wc *WeakCoin) FinishRound() {
+func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
+	logger := wc.logger.WithContext(ctx).WithFields(wc.epoch, wc.round)
 	wc.roundStarted = false
 	if wc.smallestProposal == nil {
-		wc.logger.With().Warning("completed round without valid proposals",
-			log.Uint32("epoch_id", uint32(wc.epoch)),
-			log.Uint32("round_id", uint32(wc.round)),
-		)
+		logger.Warning("completed round without valid proposals")
 		return
 	}
 	// NOTE(dshulyak) we need to select good bit here. for ed25519 it means select LSB and never MSB.
@@ -290,19 +288,17 @@ func (wc *WeakCoin) FinishRound() {
 	coinflip := wc.smallestProposal[lsbIndex]&1 == 1
 
 	wc.coins[wc.round] = coinflip
-	wc.logger.With().Info("completed round",
-		log.Uint32("epoch_id", uint32(wc.epoch)),
-		log.Uint32("round_id", uint32(wc.round)),
+	logger.With().Info("completed round",
 		log.String("proposal", types.BytesToHash(wc.smallestProposal).ShortString()),
-		log.Bool("coinflip", coinflip))
+		log.Bool("tb_weakcoin", coinflip))
 	wc.smallestProposal = nil
 }
 
-func (wc *WeakCoin) updateSmallest(proposal []byte) {
+func (wc *WeakCoin) updateSmallest(ctx context.Context, proposal []byte) {
 	if len(proposal) > 0 && (bytes.Compare(proposal, wc.smallestProposal) == -1 || wc.smallestProposal == nil) {
-		wc.logger.With().Debug("saving new proposal",
-			log.Uint32("epoch_id", uint32(wc.epoch)),
-			log.Uint64("round_id", uint64(wc.round)),
+		wc.logger.WithContext(ctx).With().Debug("saving new proposal",
+			wc.epoch,
+			wc.round,
 			log.String("proposal", types.BytesToHash(proposal).ShortString()),
 			log.String("previous", types.BytesToHash(wc.smallestProposal).ShortString()),
 		)
@@ -318,17 +314,17 @@ func (wc *WeakCoin) encodeProposal(epoch types.EpochID, round types.RoundID, uni
 	proposal := bytes.Buffer{}
 	proposal.WriteString(wc.config.VRFPrefix)
 	if _, err := proposal.Write(epoch.ToBytes()); err != nil {
-		wc.logger.Panic("can't write epoch to a buffer", log.Err(err))
+		wc.logger.With().Panic("can't write epoch to a buffer", log.Err(err))
 	}
 	roundBuf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(roundBuf, uint64(round))
 	if _, err := proposal.Write(roundBuf); err != nil {
-		wc.logger.Panic("can't write uint64 to a buffer", log.Err(err))
+		wc.logger.With().Panic("can't write uint64 to a buffer", log.Err(err))
 	}
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint64(buf, unit)
 	if _, err := proposal.Write(buf); err != nil {
-		wc.logger.Panic("can't write uint64 to a buffer", log.Err(err))
+		wc.logger.With().Panic("can't write uint64 to a buffer", log.Err(err))
 	}
 	return proposal.Bytes()
 }

@@ -106,8 +106,6 @@ Before building we need to set up the golang environment. Do this by running:
 ```bash
 make install
 ```
-This will invoke `setup_env.sh` which supports Linux and MacOS. On other platforms it should be straightforward to follow the steps in this script manually.
-
 
 ### Building
 To build `go-spacemesh` for your current system architecture, from the project root directory, use:

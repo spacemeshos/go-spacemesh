@@ -17,9 +17,9 @@ type Config struct {
 	FirstVotingRoundDuration time.Duration `mapstructure:"tortoise-beacon-first-voting-round-duration"` // First voting round duration
 	VotingRoundDuration      time.Duration `mapstructure:"tortoise-beacon-voting-round-duration"`       // Voting round duration
 	WeakCoinRoundDuration    time.Duration `mapstructure:"tortoise-beacon-weak-coin-round-duration"`    // Weak coin round duration
-	WaitAfterEpochStart      time.Duration `mapstructure:"tortoise-beacon-wait-after-epoch-start"`      // How long to wait after a new epoch is started.
 	Theta                    *big.Rat      `mapstructure:"tortoise-beacon-theta"`                       // Ratio of votes for reaching consensus
 	VotesLimit               uint64        `mapstructure:"tortoise-beacon-votes-limit"`                 // Maximum allowed number of votes to be sent
+	BeaconSyncNumBlocks      uint32        `mapstructure:"tortoise-beacon-sync-num-blocks"`             // Numbers of layers to wait before determining beacon values from blocks when the node didn't participate in previous epoch.
 }
 
 // DefaultConfig returns the default configuration for the tortoise beacon.
@@ -33,9 +33,9 @@ func DefaultConfig() Config {
 		FirstVotingRoundDuration: 1 * time.Hour,
 		VotingRoundDuration:      30 * time.Minute,
 		WeakCoinRoundDuration:    1 * time.Minute,
-		WaitAfterEpochStart:      10 * time.Second,
 		Theta:                    big.NewRat(1, 4),
-		VotesLimit:               100, // TODO: around 100, find the calculation in the forum
+		VotesLimit:               100,  // TODO: around 100, find the calculation in the forum
+		BeaconSyncNumBlocks:      1600, // should be 2 clusters of 800 blocks
 	}
 }
 
@@ -50,9 +50,9 @@ func UnitTestConfig() Config {
 		FirstVotingRoundDuration: 40 * time.Millisecond,
 		VotingRoundDuration:      20 * time.Millisecond,
 		WeakCoinRoundDuration:    20 * time.Millisecond,
-		WaitAfterEpochStart:      1,
 		Theta:                    big.NewRat(1, 25000),
 		VotesLimit:               100,
+		BeaconSyncNumBlocks:      2,
 	}
 }
 
@@ -67,8 +67,8 @@ func NodeSimUnitTestConfig() Config {
 		FirstVotingRoundDuration: 100 * time.Millisecond,
 		VotingRoundDuration:      100 * time.Millisecond,
 		WeakCoinRoundDuration:    100 * time.Millisecond,
-		WaitAfterEpochStart:      1,
 		Theta:                    big.NewRat(1, 25000),
 		VotesLimit:               100,
+		BeaconSyncNumBlocks:      10,
 	}
 }

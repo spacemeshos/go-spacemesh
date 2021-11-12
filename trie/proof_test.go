@@ -21,6 +21,8 @@ import (
 	crand "crypto/rand"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -29,17 +31,17 @@ import (
 
 // makeProvers creates Merkle trie provers based on different implementations to
 // test all variations.
-func makeProvers(trie *Trie) []func(key []byte) *database.MemDatabase {
-	var provers []func(key []byte) *database.MemDatabase
+func makeProvers(trie *Trie) []func(key []byte) *database.LDBDatabase {
+	var provers []func(key []byte) *database.LDBDatabase
 
 	// Create a direct trie based Merkle prover
-	provers = append(provers, func(key []byte) *database.MemDatabase {
+	provers = append(provers, func(key []byte) *database.LDBDatabase {
 		proof := database.NewMemDatabase()
 		trie.Prove(key, 0, proof)
 		return proof
 	})
 	// Create a leaf iterator based Merkle prover
-	provers = append(provers, func(key []byte) *database.MemDatabase {
+	provers = append(provers, func(key []byte) *database.LDBDatabase {
 		proof := database.NewMemDatabase()
 		if it := NewIterator(trie.NodeIterator(key)); it.Next() && bytes.Equal(key, it.Key) {
 			for _, p := range it.Prove() {
@@ -51,8 +53,19 @@ func makeProvers(trie *Trie) []func(key []byte) *database.MemDatabase {
 	return provers
 }
 
+func dbKeys(tb testing.TB, db *database.LDBDatabase) (rst [][]byte) {
+	tb.Helper()
+	it := db.Find(nil)
+	defer it.Release()
+	for it.Next() {
+		rst = append(rst, it.Key())
+	}
+	require.NoError(tb, it.Error())
+	return
+}
+
 func TestProof(t *testing.T) {
-	trie, vals := randomTrie(500)
+	trie, vals := randomTrie(100)
 	root := trie.Hash()
 	for i, prover := range makeProvers(trie) {
 		for _, kv := range vals {
@@ -62,7 +75,7 @@ func TestProof(t *testing.T) {
 			}
 			val, _, err := VerifyProof(root, kv.k, proof)
 			if err != nil {
-				t.Fatalf("prover %d: failed to verify proof for key %x: %v\nraw proof: %x", i, kv.k, err, proof)
+				t.Fatalf("prover %d: failed to verify proof for key %x: %v", i, kv.k, err)
 			}
 			if !bytes.Equal(val, kv.v) {
 				t.Fatalf("prover %d: verified value mismatch for key %x: have %x, want %x", i, kv.k, val, kv.v)
@@ -79,12 +92,12 @@ func TestOneElementProof(t *testing.T) {
 		if proof == nil {
 			t.Fatalf("prover %d: nil proof", i)
 		}
-		if proof.Len() != 1 {
+		if len(dbKeys(t, proof)) != 1 {
 			t.Errorf("prover %d: proof should have one element", i)
 		}
 		val, _, err := VerifyProof(trie.Hash(), []byte("k"), proof)
 		if err != nil {
-			t.Fatalf("prover %d: failed to verify proof: %v\nraw proof: %x", i, err, proof)
+			t.Fatalf("prover %d: failed to verify proof: %v", i, err)
 		}
 		if !bytes.Equal(val, []byte("v")) {
 			t.Fatalf("prover %d: verified value mismatch: have %x, want 'k'", i, val)
@@ -93,7 +106,9 @@ func TestOneElementProof(t *testing.T) {
 }
 
 func TestBadProof(t *testing.T) {
-	trie, vals := randomTrie(800)
+	// Higher values cause the `limit on 8128 simultaneously alive goroutines is exceeded, dying` error
+	// when tests are run with the `-race` flag.
+	trie, vals := randomTrie(100)
 	root := trie.Hash()
 	for i, prover := range makeProvers(trie) {
 		for _, kv := range vals {
@@ -101,7 +116,8 @@ func TestBadProof(t *testing.T) {
 			if proof == nil {
 				t.Fatalf("prover %d: nil proof", i)
 			}
-			key := proof.Keys()[mrand.Intn(proof.Len())]
+			keys := dbKeys(t, proof)
+			key := keys[mrand.Intn(len(keys))]
 			val, _ := proof.Get(key)
 			proof.Delete(key)
 
@@ -125,12 +141,12 @@ func TestMissingKeyProof(t *testing.T) {
 		proof := database.NewMemDatabase()
 		trie.Prove([]byte(key), 0, proof)
 
-		if proof.Len() != 1 {
+		if len(dbKeys(t, proof)) != 1 {
 			t.Errorf("test %d: proof should have one element", i)
 		}
 		val, _, err := VerifyProof(trie.Hash(), []byte(key), proof)
 		if err != nil {
-			t.Fatalf("test %d: failed to verify proof: %v\nraw proof: %x", i, err, proof)
+			t.Fatalf("test %d: failed to verify proof: %v\n", i, err)
 		}
 		if val != nil {
 			t.Fatalf("test %d: verified value mismatch: have %x, want nil", i, val)
@@ -160,7 +176,7 @@ func BenchmarkProve(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		kv := vals[keys[i%len(keys)]]
 		proofs := database.NewMemDatabase()
-		if trie.Prove(kv.k, 0, proofs); len(proofs.Keys()) == 0 {
+		if trie.Prove(kv.k, 0, proofs); len(dbKeys(b, proofs)) == 0 {
 			b.Fatalf("zero length proof for %x", kv.k)
 		}
 	}
@@ -170,7 +186,7 @@ func BenchmarkVerifyProof(b *testing.B) {
 	trie, vals := randomTrie(100)
 	root := trie.Hash()
 	var keys []string
-	var proofs []*database.MemDatabase
+	var proofs []*database.LDBDatabase
 	for k := range vals {
 		keys = append(keys, k)
 		proof := database.NewMemDatabase()

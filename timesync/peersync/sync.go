@@ -8,13 +8,14 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
+	"golang.org/x/sync/errgroup"
+
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
-	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/taskgroup"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/bootstrap"
 )
 
 const (
@@ -28,18 +29,11 @@ var (
 	ErrTimesyncFailed = errors.New("timesync: failed request")
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./sync.go Time,Network
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./sync.go
 
-// Time ...
+// Time provides interface for current time.
 type Time interface {
 	Now() time.Time
-}
-
-// Network ...
-type Network interface {
-	RegisterDirectProtocolWithChannel(protocol string, ingressChannel chan service.DirectMessage) chan service.DirectMessage
-	SendWrappedMessage(ctx context.Context, nodeID p2pcrypto.PublicKey, protocol string, payload *service.DataMsgWrapper) error
-	SubscribePeerEvents() (added, expired chan p2pcrypto.PublicKey)
 }
 
 type systemTime struct{}
@@ -48,13 +42,11 @@ func (s systemTime) Now() time.Time {
 	return time.Now()
 }
 
-// Request for time from a peer.
-type Request struct {
+type request struct {
 	ID uint64
 }
 
-// Response for time from a peer.
-type Response struct {
+type response struct {
 	ID        uint64
 	Timestamp int64
 }
@@ -62,13 +54,12 @@ type Response struct {
 // DefaultConfig for Sync.
 func DefaultConfig() Config {
 	return Config{
-		RoundRetryInterval:  5 * time.Second,
-		RoundInterval:       30 * time.Minute,
-		RoundTimeout:        5 * time.Second,
-		MaxClockOffset:      10 * time.Second,
-		MaxOffsetErrors:     10,
-		RequiredResponses:   3,
-		ResponsesBufferSize: 20,
+		RoundRetryInterval: 5 * time.Second,
+		RoundInterval:      30 * time.Minute,
+		RoundTimeout:       5 * time.Second,
+		MaxClockOffset:     10 * time.Second,
+		MaxOffsetErrors:    10,
+		RequiredResponses:  3,
 	}
 }
 
@@ -81,8 +72,6 @@ type Config struct {
 	MaxClockOffset     time.Duration `mapstructure:"max-clock-offset"`
 	MaxOffsetErrors    int           `mapstructure:"max-offset-errors"`
 	RequiredResponses  int           `mapstructure:"required-responses"`
-	// ResponsesBufferSize should be updated from p2pconfig.BufferSize
-	ResponsesBufferSize int
 }
 
 // Option to modify Sync behavior.
@@ -117,27 +106,20 @@ func WithConfig(config Config) Option {
 }
 
 // New creates Sync instance and returns pointer.
-func New(network Network, opts ...Option) *Sync {
+func New(h host.Host, peers bootstrap.Waiter, opts ...Option) *Sync {
 	sync := &Sync{
-		log:     log.NewNop(),
-		ctx:     context.Background(),
-		time:    systemTime{},
-		config:  DefaultConfig(),
-		network: network,
+		log:          log.NewNop(),
+		ctx:          context.Background(),
+		time:         systemTime{},
+		h:            h,
+		config:       DefaultConfig(),
+		peersWatcher: peers,
 	}
 	for _, opt := range opts {
 		opt(sync)
 	}
 	sync.ctx, sync.cancel = context.WithCancel(sync.ctx)
-	sync.tg = taskgroup.New(taskgroup.WithContext(sync.ctx))
-	sync.srv = server.NewMsgServer(sync.ctx,
-		network,
-		protocolName,
-		sync.config.RoundTimeout,
-		make(chan service.DirectMessage, sync.config.ResponsesBufferSize),
-		sync.log,
-	)
-	sync.srv.RegisterBytesMsgHandler(server.RequestTimeSync, sync.requestHandler)
+	h.SetStreamHandler(protocolName, sync.streamHandler)
 	return sync
 }
 
@@ -147,66 +129,58 @@ type Sync struct {
 
 	config       Config
 	log          log.Log
-	srv          *server.MessageServer
 	time         Time
-	network      Network
-	peersWatcher *peers.Peers
+	h            host.Host
+	peersWatcher bootstrap.Waiter
 
 	once   sync.Once
-	tg     *taskgroup.Group
+	eg     errgroup.Group
 	ctx    context.Context
 	cancel func()
 }
 
-func (s *Sync) requestHandler(ctx context.Context, buf []byte) ([]byte, error) {
-	var request Request
-	if err := types.BytesToInterface(buf, &request); err != nil {
-		s.log.WithContext(ctx).With().Debug("can't decode request", log.Binary("request", buf), log.Err(err))
-		return nil, server.ErrBadRequest
+func (s *Sync) streamHandler(stream network.Stream) {
+	defer stream.Close()
+	_ = stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
+	defer stream.SetDeadline(time.Time{})
+	var request request
+	if _, err := codec.DecodeFrom(stream, &request); err != nil {
+		s.log.With().Warning("can't decode request", log.Err(err))
+		return
 	}
-	resp := Response{
+	resp := response{
 		ID:        request.ID,
 		Timestamp: s.time.Now().UnixNano(),
 	}
-	buf, err := types.InterfaceToBytes(&resp)
-	if err != nil {
-		s.log.With().Panic("can't encode response", log.Binary("response", buf), log.Err(err))
+	if _, err := codec.EncodeTo(stream, &resp); err != nil {
+		s.log.With().Warning("can't encode response", log.Err(err))
 	}
-	return buf, nil
 }
 
 // Start background workers.
 func (s *Sync) Start() {
-	s.once.Do(func() {
-		// NOTE(dshulyal) we can't start listening for peers in New because Simulator
-		// sometimes hangs in that case
-		s.peersWatcher = peers.Start(s.network, peers.WithLog(s.log))
-		s.tg.Go(func(ctx context.Context) error {
-			return s.run(ctx)
-		})
+	s.eg.Go(func() error {
+		return s.run()
 	})
 }
 
 // Stop background workers.
 func (s *Sync) Stop() {
 	s.cancel()
-	if s.peersWatcher != nil {
-		s.peersWatcher.Close()
-	}
 	s.Wait()
-	s.srv.Close()
 }
 
 // Wait will return first error that is returned by background workers.
 func (s *Sync) Wait() error {
-	err := s.tg.Wait()
+	err := s.eg.Wait()
 	if errors.Is(err, context.Canceled) {
 		return nil
 	}
-	return err
+
+	return fmt.Errorf("taskgroup: %w", err)
 }
 
-func (s *Sync) run(ctx context.Context) error {
+func (s *Sync) run() error {
 	var (
 		timer *time.Timer
 		round uint64
@@ -214,19 +188,18 @@ func (s *Sync) run(ctx context.Context) error {
 	s.log.With().Debug("started sync background worker")
 	defer s.log.With().Debug("exiting sync background worker")
 	for {
-		prs, err := s.peersWatcher.WaitPeers(ctx, s.config.RequiredResponses)
+		prs, err := s.peersWatcher.WaitPeers(s.ctx, s.config.RequiredResponses)
 		if err != nil {
-			return err
+			return fmt.Errorf("wait peers: %w", err)
 		}
 		s.log.With().Info("starting time sync round with peers",
 			log.Uint64("round", round),
 			log.Int("peers_count", len(prs)),
 			log.Uint32("errors_count", atomic.LoadUint32(&s.errCnt)),
 		)
-		rctx, cancel := context.WithTimeout(ctx, s.config.RoundTimeout)
-		offset, err := s.GetOffset(rctx, round, prs)
+		ctx, cancel := context.WithTimeout(s.ctx, s.config.RoundTimeout)
+		offset, err := s.GetOffset(ctx, round, prs)
 		cancel()
-
 		var timeout time.Duration
 		if err == nil {
 			if offset > s.config.MaxClockOffset || (offset < 0 && -offset > s.config.MaxClockOffset) {
@@ -259,68 +232,63 @@ func (s *Sync) run(ctx context.Context) error {
 			timer.Reset(timeout)
 		}
 		select {
-		case <-ctx.Done():
-			return ctx.Err()
+		case <-s.ctx.Done():
+			return fmt.Errorf("context done: %w", ctx.Err())
 		case <-timer.C:
 		}
 	}
 }
 
 // GetOffset computes offset from received response. The method is stateless and safe to use concurrently.
-func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []peers.Peer) (time.Duration, error) {
+func (s *Sync) GetOffset(ctx context.Context, id uint64, prs []p2p.Peer) (time.Duration, error) {
 	var (
-		responses = make(chan Response, len(prs))
+		responses = make(chan response, len(prs))
 		round     = round{
 			ID:                id,
 			Timestamp:         s.time.Now().UnixNano(),
 			RequiredResponses: s.config.RequiredResponses,
 		}
-		request = Request{ID: id}
+		wg sync.WaitGroup
 	)
-	buf, err := types.InterfaceToBytes(&request)
+	buf, err := codec.Encode(&request{ID: id})
 	if err != nil {
 		s.log.With().Panic("can't encode request to bytes", log.Err(err))
 	}
-	var (
-		errCnt    int
-		respCount int
-	)
-	for _, peer := range prs {
-		if err := s.srv.SendRequest(ctx, server.RequestTimeSync, buf, peer, func(msg []byte) {
-			var response Response
-			if err := types.BytesToInterface(msg, &response); err != nil {
-				s.log.Debug("can't decode response", log.Binary("response", buf), log.Err(err))
+	for _, pid := range prs {
+		wg.Add(1)
+		go func(pid p2p.Peer) {
+			defer wg.Done()
+			logger := s.log.WithFields(log.String("pid", pid.Pretty())).With()
+			stream, err := s.h.NewStream(network.WithNoDial(ctx, "existing connection"), pid, protocolName)
+			if err != nil {
+				logger.Warning("failed to create new stream", log.Err(err))
+				return
+			}
+			defer stream.Close()
+			_ = stream.SetDeadline(s.time.Now().Add(s.config.RoundTimeout))
+			defer stream.SetDeadline(time.Time{})
+			if _, err := stream.Write(buf); err != nil {
+				logger.Warning("failed to send a request", log.Err(err))
+				return
+			}
+			var resp response
+			if _, err := codec.DecodeFrom(stream, &resp); err != nil {
+				logger.Warning("failed to read response from peer", log.Err(err))
 				return
 			}
 			select {
 			case <-ctx.Done():
-			case responses <- response:
+			case responses <- resp:
 			}
-		}, func(error) {}); err != nil {
-			s.log.Debug("can't send request to peer", log.Err(err))
-			errCnt++
-		}
-		if d := len(prs) - errCnt; d < s.config.RequiredResponses || d == 0 {
-			return 0, fmt.Errorf("%w: failed to send requests to %d peers from %d", ErrTimesyncFailed, errCnt, len(prs))
-		}
+		}(pid)
 	}
-
-	wait := func() {
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case resp := <-responses:
-				round.AddResponse(resp, s.time.Now().UnixNano())
-				respCount++
-				if respCount == len(prs)-errCnt {
-					return
-				}
-			}
-		}
+	go func() {
+		wg.Wait()
+		close(responses)
+	}()
+	for resp := range responses {
+		round.AddResponse(resp, s.time.Now().UnixNano())
 	}
-	wait()
-
 	if round.Ready() {
 		return round.Offset(), nil
 	}

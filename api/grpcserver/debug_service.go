@@ -5,19 +5,20 @@ import (
 
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
-// DebugService exposes global state data, output from the STF
+// DebugService exposes global state data, output from the STF.
 type DebugService struct {
 	Mesh api.TxAPI
 }
 
-// RegisterService registers this service with a grpc server instance
+// RegisterService registers this service with a grpc server instance.
 func (d DebugService) RegisterService(server *Server) {
 	pb.RegisterDebugServiceServer(server.GrpcServer, d)
 }
@@ -29,7 +30,7 @@ func NewDebugService(tx api.TxAPI) *DebugService {
 	}
 }
 
-// Accounts returns current counter and balance for all accounts
+// Accounts returns current counter and balance for all accounts.
 func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.AccountsResponse, error) {
 	log.Info("GRPC DebugServices.Accounts")
 

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 )
 
 // ProposalMessage is a message type which is used when sending proposals.
@@ -27,12 +26,12 @@ func (p ProposalMessage) String() string {
 
 type proposalMessageWithReceiptData struct {
 	message      ProposalMessage
-	gossip       service.GossipMessage
 	receivedTime time.Time
 }
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.
 type FirstVotingMessageBody struct {
+	EpochID                   types.EpochID
 	ValidProposals            [][]byte
 	PotentiallyValidProposals [][]byte
 }
@@ -55,7 +54,7 @@ func (v FirstVotingMessage) String() string {
 
 // FollowingVotingMessageBody is FollowingVotingMessage without a signature.
 type FollowingVotingMessageBody struct {
-	MinerID        types.NodeID
+	EpochID        types.EpochID
 	RoundID        types.RoundID
 	VotesBitVector []uint64
 }

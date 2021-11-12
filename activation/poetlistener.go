@@ -2,10 +2,12 @@ package activation
 
 import (
 	"context"
+
+	"github.com/libp2p/go-libp2p-core/peer"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 // PoetProofProtocol is the name of the PoetProof gossip protocol.
@@ -18,77 +20,38 @@ type poetValidatorPersistor interface {
 
 // PoetListener handles PoET gossip messages.
 type PoetListener struct {
-	Log               log.Log
-	net               service.Service
-	poetDb            poetValidatorPersistor
-	poetProofMessages chan service.GossipMessage
-	started           bool
-	exit              chan struct{}
+	Log    log.Log
+	poetDb poetValidatorPersistor
 }
 
-// Start starts listening to PoET gossip messages.
-func (l *PoetListener) Start(ctx context.Context) {
-	if l.started {
-		return
-	}
-	go l.loop(ctx)
-	l.started = true
-}
-
-// Close performs graceful shutdown of the PoET listener.
-func (l *PoetListener) Close() {
-	close(l.exit)
-	l.started = false
-}
-
-func (l *PoetListener) loop(ctx context.Context) {
-	for {
-		select {
-		case poetProof := <-l.poetProofMessages:
-			if poetProof == nil {
-				l.Log.WithContext(ctx).Error("nil poet message received")
-				continue
-			}
-			go l.handlePoetProofMessage(ctx, poetProof)
-		case <-l.exit:
-			l.Log.WithContext(ctx).Info("listening stopped")
-			return
-		}
-	}
-}
-
-func (l *PoetListener) handlePoetProofMessage(ctx context.Context, gossipMessage service.GossipMessage) {
-	// ⚠️ IMPORTANT: We must not ensure that the node is synced! PoET messages must be propagated regardless.
+// HandlePoetProofMessage is a receiver for broadcast messages.
+func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
 	var proofMessage types.PoetProofMessage
-	if err := types.BytesToInterface(gossipMessage.Bytes(), &proofMessage); err != nil {
+	if err := types.BytesToInterface(msg, &proofMessage); err != nil {
 		l.Log.Error("failed to unmarshal poet membership proof: %v", err)
-		return
+		return pubsub.ValidationIgnore
 	}
+
 	if err := l.poetDb.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
 		proofMessage.RoundID, proofMessage.Signature); err != nil {
-
 		if types.IsProcessingError(err) {
 			l.Log.Error("failed to validate poet proof: %v", err)
 		} else {
 			l.Log.Warning("poet proof not valid: %v", err)
 		}
-		return
+		return pubsub.ValidationIgnore
 	}
-
-	gossipMessage.ReportValidation(ctx, PoetProofProtocol)
 
 	if err := l.poetDb.storeProof(&proofMessage); err != nil {
 		l.Log.Error("failed to store poet proof: %v", err)
 	}
+	return pubsub.ValidationAccept
 }
 
 // NewPoetListener returns a new PoetListener.
-func NewPoetListener(net service.Service, poetDb poetValidatorPersistor, logger log.Log) *PoetListener {
+func NewPoetListener(poetDb poetValidatorPersistor, logger log.Log) *PoetListener {
 	return &PoetListener{
-		Log:               logger,
-		net:               net,
-		poetDb:            poetDb,
-		poetProofMessages: net.RegisterGossipProtocol(PoetProofProtocol, priorityq.Low),
-		exit:              make(chan struct{}),
+		Log:    logger,
+		poetDb: poetDb,
 	}
 }

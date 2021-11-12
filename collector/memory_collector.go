@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 )
 
-// MemoryCollector is an in memory database to store collected events
+// MemoryCollector is an in memory database to store collected events.
 type MemoryCollector struct {
 	events                 map[events.ChannelID][]Event
 	doneCreatingBlockEvent map[uint32][]*events.DoneCreatingBlock
@@ -21,7 +21,7 @@ type MemoryCollector struct {
 	lck sync.RWMutex
 }
 
-// NewMemoryCollector initializes a new memory collector that stores collected events
+// NewMemoryCollector initializes a new memory collector that stores collected events.
 func NewMemoryCollector() *MemoryCollector {
 	return &MemoryCollector{
 		events:                 make(map[events.ChannelID][]Event),
@@ -35,12 +35,12 @@ func NewMemoryCollector() *MemoryCollector {
 	}
 }
 
-// Event defines global interface for all events to help identify their types, which is channel id
+// Event defines global interface for all events to help identify their types, which is channel id.
 type Event interface {
 	GetChannel() events.ChannelID
 }
 
-// StoreBlock stores block received event by layer id
+// StoreBlock stores block received event by layer id.
 func (c *MemoryCollector) StoreBlock(event *events.NewBlock) error {
 	c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
@@ -49,7 +49,7 @@ func (c *MemoryCollector) StoreBlock(event *events.NewBlock) error {
 	return nil
 }
 
-// StoreBlockValid stores block validity event
+// StoreBlockValid stores block validity event.
 func (c *MemoryCollector) StoreBlockValid(event *events.ValidBlock) error {
 	/*c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
@@ -57,7 +57,7 @@ func (c *MemoryCollector) StoreBlockValid(event *events.ValidBlock) error {
 	return nil
 }
 
-// StoreTx stores tx received event, currently commented out because not used
+// StoreTx stores tx received event, currently commented out because not used.
 func (c *MemoryCollector) StoreTx(event *events.NewTx) error {
 	/*c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
@@ -65,7 +65,7 @@ func (c *MemoryCollector) StoreTx(event *events.NewTx) error {
 	return nil
 }
 
-// StoreTxValid stored tx validity event. currently commented out because not used
+// StoreTxValid stored tx validity event. currently commented out because not used.
 func (c *MemoryCollector) StoreTxValid(event *events.ValidTx) error {
 	/*c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
@@ -73,7 +73,7 @@ func (c *MemoryCollector) StoreTxValid(event *events.ValidTx) error {
 	return nil
 }
 
-// StoreAtx stores created ATX by epoch
+// StoreAtx stores created ATX by epoch.
 func (c *MemoryCollector) StoreAtx(event *events.NewAtx) error {
 	c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
@@ -83,7 +83,7 @@ func (c *MemoryCollector) StoreAtx(event *events.NewAtx) error {
 	return nil
 }
 
-// StoreAtxValid stores an atx valididty event. not used thus commented out
+// StoreAtxValid stores an atx valididty event. not used thus commented out.
 func (c *MemoryCollector) StoreAtxValid(event *events.ValidAtx) error {
 	/*c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
@@ -91,7 +91,7 @@ func (c *MemoryCollector) StoreAtxValid(event *events.ValidAtx) error {
 	return nil
 }
 
-// StoreReward should store reward received but for now is is commented out since not used
+// StoreReward should store reward received but for now is is commented out since not used.
 func (c *MemoryCollector) StoreReward(event *events.RewardReceived) error {
 	/*c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
@@ -99,7 +99,7 @@ func (c *MemoryCollector) StoreReward(event *events.RewardReceived) error {
 	return nil
 }
 
-// StoreBlockCreated stores block created events by layer
+// StoreBlockCreated stores block created events by layer.
 func (c *MemoryCollector) StoreBlockCreated(event *events.DoneCreatingBlock) error {
 	c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
@@ -108,7 +108,7 @@ func (c *MemoryCollector) StoreBlockCreated(event *events.DoneCreatingBlock) err
 	return nil
 }
 
-// StoreAtxCreated stores atx created events received by epoch
+// StoreAtxCreated stores atx created events received by epoch.
 func (c *MemoryCollector) StoreAtxCreated(event *events.AtxCreated) error {
 	c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
@@ -132,42 +132,42 @@ func (c *MemoryCollector) StoreTortoiseBeaconCalculated(event *events.TortoiseBe
 	return nil
 }
 
-// GetAtxCreationDone get number of atxs that were crated by this miner events for the provided epoch
+// GetAtxCreationDone get number of atxs that were crated by this miner events for the provided epoch.
 func (c *MemoryCollector) GetAtxCreationDone(epoch types.EpochID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 	return len(c.doneCreatingAtxEvent[uint32(epoch)])
 }
 
-// GetCreatedAtx returns the number of created atx events received for the epoch
+// GetCreatedAtx returns the number of created atx events received for the epoch.
 func (c *MemoryCollector) GetCreatedAtx(epoch types.EpochID) []string {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 	return c.createdAtxs[uint32(epoch)]
 }
 
-// GetNumOfCreatedATXs returns numbe of created atxs per layer
+// GetNumOfCreatedATXs returns numbe of created atxs per layer.
 func (c *MemoryCollector) GetNumOfCreatedATXs(layer types.LayerID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 	return len(c.createdAtxs[layer.Uint32()])
 }
 
-// GetReceivedATXsNum returns the number of atx received events received for the provided layer
+// GetReceivedATXsNum returns the number of atx received events received for the provided layer.
 func (c *MemoryCollector) GetReceivedATXsNum(layer types.LayerID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 	return len(c.gotAtxEvent[layer.Uint32()])
 }
 
-// GetBlockCreationDone returns number of blocks created events for the given layer
+// GetBlockCreationDone returns number of blocks created events for the given layer.
 func (c *MemoryCollector) GetBlockCreationDone(layer types.LayerID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 	return len(c.doneCreatingBlockEvent[layer.Uint32()])
 }
 
-// GetNumOfCreatedBlocks returns number of blocks created events received by this miner
+// GetNumOfCreatedBlocks returns number of blocks created events received by this miner.
 func (c *MemoryCollector) GetNumOfCreatedBlocks(layer types.LayerID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
@@ -180,7 +180,7 @@ func (c *MemoryCollector) GetNumOfCreatedBlocks(layer types.LayerID) int {
 	return created
 }
 
-// GetReceivedBlocks returns number of blocks received events received by this miner
+// GetReceivedBlocks returns number of blocks received events received by this miner.
 func (c *MemoryCollector) GetReceivedBlocks(layer types.LayerID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()

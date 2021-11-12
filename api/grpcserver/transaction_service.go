@@ -3,48 +3,50 @@ package grpcserver
 import (
 	"bytes"
 	"context"
+	"fmt"
 
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/spacemeshos/go-spacemesh/api"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/state"
 	"google.golang.org/genproto/googleapis/rpc/code"
 	rpcstatus "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+
+	"github.com/spacemeshos/go-spacemesh/api"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
 
-// TransactionService exposes transaction data, and a submit tx endpoint
+// TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
-	Network api.NetworkAPI // P2P Swarm
-	Mesh    api.TxAPI      // Mesh
-	Mempool api.MempoolAPI
-	syncer  api.Syncer
+	publisher api.Publisher // P2P Swarm
+	Mesh      api.TxAPI     // Mesh
+	Mempool   api.MempoolAPI
+	syncer    api.Syncer
 }
 
-// RegisterService registers this service with a grpc server instance
+// RegisterService registers this service with a grpc server instance.
 func (s TransactionService) RegisterService(server *Server) {
 	pb.RegisterTransactionServiceServer(server.GrpcServer, s)
 }
 
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
-	net api.NetworkAPI,
+	publisher api.Publisher,
 	tx api.TxAPI,
 	mempool api.MempoolAPI,
 	syncer api.Syncer,
 ) *TransactionService {
 	return &TransactionService{
-		Network: net,
-		Mesh:    tx,
-		Mempool: mempool,
-		syncer:  syncer,
+		publisher: publisher,
+		Mesh:      tx,
+		Mempool:   mempool,
+		syncer:    syncer,
 	}
 }
 
-// SubmitTransaction allows a new tx to be submitted
+// SubmitTransaction allows a new tx to be submitted.
 func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.SubmitTransactionRequest) (*pb.SubmitTransactionResponse, error) {
 	log.Info("GRPC TransactionService.SubmitTransaction")
 
@@ -66,24 +68,29 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
+
 	if err := tx.CalcAndSetOrigin(); err != nil {
 		log.Error("failed to calculate tx origin: %v", err)
 		return nil, status.Error(codes.InvalidArgument,
 			"`Transaction` must contain a valid, serialized transaction")
 	}
+
 	if !s.Mesh.AddressExists(tx.Origin()) {
 		log.With().Error("tx origin address not found in global state",
 			tx.ID(), log.String("origin", tx.Origin().Short()))
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` origin account not found")
 	}
+
 	if err := s.Mesh.ValidateNonceAndBalance(tx); err != nil {
 		log.Error("tx failed nonce and balance check: %v", err)
 		return nil, status.Error(codes.InvalidArgument, "`Transaction` incorrect counter or insufficient balance")
 	}
+
 	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address: %x (len: %v), amount: %v, gas limit: %v, fee: %v, id: %v, nonce: %v",
 		tx.Recipient, len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
+
 	go func() {
-		if err := s.Network.Broadcast(ctx, state.IncomingTxProtocol, in.Transaction); err != nil {
+		if err := s.publisher.Publish(ctx, state.IncomingTxProtocol, in.Transaction); err != nil {
 			log.Error("error broadcasting incoming tx: %v", err)
 		}
 	}()
@@ -125,7 +132,7 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (r
 	return
 }
 
-// TransactionsState returns current tx data for one or more txs
+// TransactionsState returns current tx data for one or more txs.
 func (s TransactionService) TransactionsState(_ context.Context, in *pb.TransactionsStateRequest) (*pb.TransactionsStateResponse, error) {
 	log.Info("GRPC TransactionService.TransactionsState")
 
@@ -162,7 +169,7 @@ func (s TransactionService) TransactionsState(_ context.Context, in *pb.Transact
 
 // STREAMS
 
-// TransactionsStateStream exposes a stream of tx data
+// TransactionsStateStream exposes a stream of tx data.
 func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStreamRequest, stream pb.TransactionService_TransactionsStateStreamServer) error {
 	log.Info("GRPC TransactionService.TransactionsStateStream")
 
@@ -209,7 +216,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 						res.Transaction = convertTransaction(tx.Transaction)
 					}
 					if err := stream.Send(res); err != nil {
-						return err
+						return fmt.Errorf("send stream: %w", err)
 					}
 
 					// Don't match on any other transactions
@@ -284,8 +291,9 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 
 							res.Transaction = convertTransaction(&tx.Transaction)
 						}
+
 						if err := stream.Send(res); err != nil {
-							return err
+							return fmt.Errorf("send stream: %w", err)
 						}
 					}
 				}

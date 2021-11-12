@@ -2,10 +2,12 @@ package hare
 
 import (
 	"bytes"
-	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/stretchr/testify/assert"
 	"sort"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 func TestSet_Add(t *testing.T) {

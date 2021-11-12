@@ -2,7 +2,7 @@ package layerfetcher
 
 import "github.com/spacemeshos/go-spacemesh/common/types"
 
-// layerBlocks is the response for a given layer ID
+// layerBlocks is the response for a given layer ID.
 type layerBlocks struct {
 	// Blocks are the blocks in a layer
 	Blocks []types.BlockID

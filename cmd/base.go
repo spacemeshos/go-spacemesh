@@ -8,11 +8,14 @@ import (
 	"os"
 	"os/signal"
 	"reflect"
+	"sync"
 
+	"github.com/mitchellh/mapstructure"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	bc "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
@@ -28,26 +31,57 @@ var (
 
 	// Commit is the git commit used to build the app. Designed to be overwritten by make.
 	Commit string
-
-	// Ctx is the node's main context.
-	Ctx, cancel = context.WithCancel(context.Background())
-
-	// Cancel is a function used to initiate graceful shutdown.
-	Cancel = cancel
 )
 
-// BaseApp is the base application command, provides basic init and flags for all executables and applications
+var (
+	mu                      sync.RWMutex
+	globalCtx, globalCancel = context.WithCancel(context.Background())
+)
+
+// Ctx returns global context.
+func Ctx() context.Context {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	return globalCtx
+}
+
+// SetCtx sets global context.
+func SetCtx(ctx context.Context) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	globalCtx = ctx
+}
+
+// Cancel returns global cancellation function.
+func Cancel() func() {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	return globalCancel
+}
+
+// SetCancel sets global cancellation function.
+func SetCancel(cancelFunc func()) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	globalCancel = cancelFunc
+}
+
+// BaseApp is the base application command, provides basic init and flags for all executables and applications.
 type BaseApp struct {
 	Config *bc.Config
 }
 
-// NewBaseApp returns new basic application
+// NewBaseApp returns new basic application.
 func NewBaseApp() *BaseApp {
 	dc := bc.DefaultConfig()
 	return &BaseApp{Config: &dc}
 }
 
-// Initialize loads config, sets logger  and listens to Ctrl ^C
+// Initialize loads config, sets logger  and listens to Ctrl ^C.
 func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
 	signalChan := make(chan os.Signal, 1)
@@ -58,7 +92,8 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 	go func() {
 		for range signalChan {
 			log.Info("Received an interrupt, stopping services...\n")
-			Cancel()
+
+			Cancel()()
 		}
 	}()
 
@@ -99,16 +134,23 @@ func parseConfig() (*bc.Config, error) {
 
 	conf := bc.DefaultConfig()
 	// load config if it was loaded to our viper
-	err := vip.Unmarshal(&conf)
+	hook := mapstructure.ComposeDecodeHookFunc(
+		mapstructure.StringToTimeDurationHookFunc(),
+		mapstructure.StringToSliceHookFunc(","),
+		mapstructureutil.BigRatDecodeFunc(),
+	)
+
+	// load config if it was loaded to our viper
+	err := vip.Unmarshal(&conf, viper.DecodeHook(hook))
 	if err != nil {
 		log.Error("Failed to parse config\n")
-		return nil, err
+		return nil, fmt.Errorf("parse config: %w", err)
 	}
 
 	return &conf, nil
 }
 
-// EnsureCLIFlags checks flag types and converts them
+// EnsureCLIFlags checks flag types and converts them.
 func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 	assignFields := func(p reflect.Type, elem reflect.Value, name string) {
 		for i := 0; i < p.NumField(); i++ {
@@ -184,10 +226,6 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 			elem = reflect.ValueOf(&appCFG.P2P).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appCFG.P2P.SwarmConfig)
-			elem = reflect.ValueOf(&appCFG.P2P.SwarmConfig).Elem()
-			assignFields(ff, elem, name)
-
 			ff = reflect.TypeOf(appCFG.TIME)
 			elem = reflect.ValueOf(&appCFG.TIME).Elem()
 			assignFields(ff, elem, name)
@@ -222,5 +260,9 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 		}
 	})
 	// check list of requested GRPC services (if any)
-	return appCFG.API.ParseServicesList()
+	if err := appCFG.API.ParseServicesList(); err != nil {
+		return fmt.Errorf("parse services list: %w", err)
+	}
+
+	return nil
 }

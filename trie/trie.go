@@ -20,6 +20,7 @@ package trie
 import (
 	"bytes"
 	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -30,7 +31,7 @@ var (
 	emptyRoot = types.HexToHash32("56e81f171bcc55a6ff8345e692c0f86e5b48e01b996cadc001622fb5e363b421")
 
 	// emptyState is the known hash of an empty state trie entry.
-	emptyState = crypto.Keccak256Hash(nil) //TODO: is it really Kecca256n hash?
+	emptyState = crypto.Keccak256Hash(nil) // TODO: is it really Kecca256n hash?
 )
 
 /*var (

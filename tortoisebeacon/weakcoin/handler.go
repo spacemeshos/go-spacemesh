@@ -4,37 +4,37 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/libp2p/go-libp2p-core/peer"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
-// HandleSerializedMessage defines method to handle Tortoise Beacon Weak Coin Messages from gossip.
-func (wc *WeakCoin) HandleSerializedMessage(ctx context.Context, data service.GossipMessage, sync service.Fetcher) {
-	wc.logger.With().Debug("received weak coin message",
-		log.String("from", data.Sender().String()),
-		log.Binary("data", data.Bytes()),
+// HandleProposal defines method to handle Tortoise Beacon Weak Coin Messages from gossip.
+func (wc *WeakCoin) HandleProposal(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+	logger := wc.logger.WithContext(ctx)
+	logger.With().Debug("received weak coin message",
+		log.String("from", pid.String()),
+		log.Binary("data", msg),
 	)
 
 	var message Message
-	if err := types.BytesToInterface(data.Bytes(), &message); err != nil {
-		wc.logger.With().Debug("received invalid weak coin message",
-			log.Binary("message", data.Bytes()),
+	if err := types.BytesToInterface(msg, &message); err != nil {
+		logger.With().Warning("received invalid weak coin message",
+			log.Binary("message", msg),
 			log.Err(err))
-		return
+		return pubsub.ValidationIgnore
 	}
 
-	if err := wc.receiveMessage(message); err != nil {
-		wc.logger.With().Debug("received invalid proposal",
-			log.Err(err),
-			log.Uint32("epoch_id", uint32(message.Epoch)),
-			log.Uint32("round_id", uint32(message.Round)))
-		return
+	if err := wc.receiveMessage(ctx, message); err != nil {
+		logger.With().Debug("received invalid proposal", message.Epoch, message.Round, log.Err(err))
+		return pubsub.ValidationIgnore
 	}
-	data.ReportValidation(ctx, GossipProtocol)
+	return pubsub.ValidationAccept
 }
 
-func (wc *WeakCoin) receiveMessage(message Message) error {
+func (wc *WeakCoin) receiveMessage(ctx context.Context, message Message) error {
 	if wc.aboveThreshold(message.Signature) {
 		return fmt.Errorf("proposal %x is above threshold", message.Signature)
 	}
@@ -48,7 +48,7 @@ func (wc *WeakCoin) receiveMessage(message Message) error {
 		}
 		return fmt.Errorf("message for the wrong round %v/%v", message.Epoch, message.Round)
 	}
-	return wc.updateProposal(message)
+	return wc.updateProposal(ctx, message)
 }
 
 func (wc *WeakCoin) isNextRound(epoch types.EpochID, round types.RoundID) bool {

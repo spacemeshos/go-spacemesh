@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io/ioutil"
-	inet "net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +18,7 @@ import (
 
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
@@ -32,7 +32,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
-	"github.com/spacemeshos/go-spacemesh/cmd"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -42,10 +41,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
-	"github.com/spacemeshos/go-spacemesh/p2p/net"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -208,7 +203,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	r.Equal(true, app.Config.TestMode)
 }
 
-// This must be called in between each test that changes flags
+// This must be called in between each test that changes flags.
 func resetFlags() {
 	Cmd.ResetFlags()
 	cmdp.AddCommands(Cmd)
@@ -218,8 +213,9 @@ func setup() {
 	// Reset the shutdown context
 	// oof, globals make testing really difficult
 	ctx, cancel := context.WithCancel(context.Background())
-	cmdp.Ctx = ctx
-	cmdp.Cancel = cancel
+
+	cmdp.SetCtx(ctx)
+	cmdp.SetCancel(cancel)
 
 	events.CloseEventReporter()
 	resetFlags()
@@ -240,7 +236,7 @@ func TestSpacemeshApp_GrpcFlags(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		err := cmdp.EnsureCLIFlags(cmd, app.Config)
 		r.Error(err)
-		r.Equal("unrecognized GRPC service requested: illegal", err.Error())
+		r.Equal("parse services list: unrecognized GRPC service requested: illegal", err.Error())
 	}
 	str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "illegal")
 	r.NoError(err)
@@ -346,7 +342,7 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		err := cmdp.EnsureCLIFlags(cmd, app.Config)
 		r.Error(err)
-		r.Equal("must enable at least one GRPC service along with JSON gateway service", err.Error())
+		r.Equal("parse services list: must enable at least one GRPC service along with JSON gateway service", err.Error())
 	}
 	str, err := testArgs("--json-server")
 	r.NoError(err)
@@ -379,16 +375,6 @@ func TestSpacemeshApp_JsonFlags(t *testing.T) {
 	r.Equal(false, app.Config.API.StartNodeService)
 	r.Equal(false, app.Config.API.StartJSONServer)
 	r.Equal(1234, app.Config.API.JSONServerPort)
-}
-
-type NetMock struct{}
-
-func (NetMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
-	return nil, nil
-}
-
-func (NetMock) Broadcast(context.Context, string, []byte) error {
-	return nil
 }
 
 func marshalProto(t *testing.T, msg proto.Message) string {
@@ -425,7 +411,7 @@ func TestSpacemeshApp_GrpcService(t *testing.T) {
 		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 		app.Config.API.GrpcServerPort = port
 		app.Config.DataDirParent = path
-		app.startAPIServices(context.TODO(), NetMock{})
+		app.startAPIServices(context.TODO())
 	}
 	defer app.stopServices()
 
@@ -497,7 +483,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 		app.Config.DataDirParent = path
-		app.startAPIServices(context.TODO(), NetMock{})
+		app.startAPIServices(context.TODO())
 	}
 	defer app.stopServices()
 	str, err := testArgs()
@@ -549,7 +535,7 @@ func TestSpacemeshApp_JsonService(t *testing.T) {
 	require.Equal(t, message, msg.Msg.Value)
 }
 
-// E2E app test of the stream endpoints in the NodeService
+// E2E app test of the stream endpoints in the NodeService.
 func TestSpacemeshApp_NodeService(t *testing.T) {
 	// errlog should be used only for testing.
 	logger := logtest.New(t)
@@ -562,13 +548,18 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	path := t.TempDir()
 
 	clock := timesync.NewClock(timesync.RealClock{}, time.Duration(1)*time.Second, time.Now(), logtest.New(t))
-	localNet := service.NewSimulator()
+	mesh, err := mocknet.WithNPeers(context.TODO(), 1)
+	require.NoError(t, err)
 	cfg := getTestDefaultConfig()
 
 	poetHarness, err := activation.NewHTTPPoetHarness(false)
 	require.NoError(t, err)
 	edSgn := signing.NewEdSigner()
-	app, err := InitSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339), path, eligibility.New(logtest.New(t)), poetHarness.HTTPPoetClient, clock, localNet, edSgn)
+	h, err := p2p.Upgrade(mesh.Hosts()[0])
+	require.NoError(t, err)
+	app, err := InitSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339),
+		path, eligibility.New(logtest.New(t)),
+		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
 
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
@@ -598,7 +589,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	go func() {
 		// This makes sure the test doesn't end until this goroutine closes
 		defer wg.Done()
-		str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node", "--acquire-port=false", "--tcp-interface", "127.0.0.1", "--grpc-interface", "localhost")
+		str, err := testArgs("--grpc-port", strconv.Itoa(port), "--grpc", "node", "--grpc-interface", "localhost")
 		assert.Empty(t, str)
 		assert.NoError(t, err)
 	}()
@@ -674,12 +665,13 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	}
 
 	// This stops the app
-	cmd.Cancel() // stop the app
+	cmdp.Cancel()() // stop the app
+
 	// Wait for everything to stop cleanly before ending test
 	wg.Wait()
 }
 
-// E2E app test of the transaction service
+// E2E app test of the transaction service.
 func TestSpacemeshApp_TransactionService(t *testing.T) {
 	setup()
 	r := require.New(t)
@@ -706,11 +698,10 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		app.Config.API.StartTransactionService = true
 
 		// Prevent obnoxious warning in macOS
-		app.Config.P2P.AcquirePort = false
-		app.Config.P2P.TCPInterface = "127.0.0.1"
+		app.Config.P2P.Listen = "/ip4/127.0.0.1/tcp/7073"
 
 		// Avoid waiting for new connections.
-		app.Config.P2P.SwarmConfig.RandomConnections = 0
+		app.Config.P2P.TargetOutbound = 0
 
 		// Speed things up a little
 		app.Config.SyncInterval = 1
@@ -826,51 +817,26 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	wg2.Wait()
 
 	// This stops the app
-	cmdp.Cancel()
+	cmdp.Cancel()()
 
 	// Wait for it to stop
 	wg.Wait()
 }
 
-func TestSpacemeshApp_P2PInterface(t *testing.T) {
-	setup()
+func TestInitialize_BadTortoiseParams(t *testing.T) {
+	conf := config.DefaultConfig()
+	app := New(WithLog(logtest.New(t)), WithConfig(&conf))
+	require.NoError(t, app.Initialize())
 
-	// Use a unique port
-	port := 1238
-	addr := "127.0.0.1"
+	conf = config.DefaultTestConfig()
+	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
+	require.NoError(t, app.Initialize())
 
-	r := require.New(t)
-	app := New(WithLog(logtest.New(t)))
+	app = New(WithLog(logtest.New(t)), WithConfig(getTestDefaultConfig()))
+	require.NoError(t, app.Initialize())
 
-	// Initialize the network: we don't want to listen but this lets us dial out
-	l, err := node.NewNodeIdentity()
-	r.NoError(err)
-	p2pnet, err := net.NewNet(context.TODO(), app.Config.P2P, l, logtest.New(t))
-	r.NoError(err)
-	// We need to listen on a different port
-	listener, err := inet.Listen("tcp", fmt.Sprintf("%s:%d", addr, 9270))
-	r.NoError(err)
-	p2pnet.Start(context.TODO(), listener)
-	defer p2pnet.Shutdown()
-
-	// Try to connect before we start the P2P service: this should fail
-	tcpAddr := inet.TCPAddr{IP: inet.ParseIP(addr), Port: port}
-	_, err = p2pnet.Dial(cmdp.Ctx, &tcpAddr, l.PublicKey())
-	r.Error(err)
-
-	// Start P2P services
-	app.Config.P2P.TCPPort = port
-	app.Config.P2P.TCPInterface = addr
-	app.Config.P2P.AcquirePort = false
-	swarm, err := p2p.New(cmdp.Ctx, app.Config.P2P, logtest.New(t), app.Config.DataDir())
-	r.NoError(err)
-	r.NoError(swarm.Start(context.TODO()))
-	defer swarm.Shutdown()
-
-	// Try to connect again: this should succeed
-	conn, err := p2pnet.Dial(cmdp.Ctx, &tcpAddr, l.PublicKey())
-	r.NoError(err)
-	defer conn.Close()
-	r.Equal(fmt.Sprintf("%s:%d", addr, app.Config.P2P.TCPPort), conn.RemoteAddr().String())
-	r.Equal(l.PublicKey(), conn.RemotePublicKey())
+	conf.Zdist = 5
+	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
+	err := app.Initialize()
+	assert.EqualError(t, err, "incompatible tortoise hare params")
 }

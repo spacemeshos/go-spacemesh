@@ -75,9 +75,9 @@ tortoise-beacon-proposal-duration = "2m"
 tortoise-beacon-first-voting-round-duration = "1h"
 tortoise-beacon-voting-round-duration = "30m"
 tortoise-beacon-weak-coin-round-duration = "1m"
-tortoise-beacon-wait-after-epoch-start = "10s"
 tortoise-beacon-theta = "1/4"
 tortoise-beacon-votes-limit = 100
+tortoise-beacon-sync-num-blocks = 1600
 
 [logging]
 app = "info"
@@ -102,7 +102,5 @@ poet = "info"
 nipost = "info"
 atx-builder = "info"
 hare-beacon = "info"
-tbDbStore = "info"
-tbDb = "info"
 tBeacon = "info"
 weakCoin = "info"

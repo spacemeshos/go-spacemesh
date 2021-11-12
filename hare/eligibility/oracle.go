@@ -8,6 +8,7 @@ import (
 
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/fixed"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -27,11 +28,16 @@ type signer interface {
 	Sign(msg []byte) []byte
 }
 
+type addGet interface {
+	Add(key, value interface{}) (evicted bool)
+	Get(key interface{}) (value interface{}, ok bool)
+}
+
 type atxProvider interface {
 	// GetMinerWeightsInEpochFromView gets the active set (node IDs) for a set of blocks
 	GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error)
 	// GetEpochAtxs is used to get the tortoise active set for an epoch
-	GetEpochAtxs(types.EpochID) []types.ATXID
+	GetEpochAtxs(types.EpochID) ([]types.ATXID, error)
 	// GetAtxHeader returns the ATX header for an ATX ID
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 }
@@ -44,7 +50,7 @@ type meshProvider interface {
 // a function to verify the message with the signature and its public key.
 type verifierFunc = func(pub, msg, sig []byte) bool
 
-// Oracle is the hare eligibility oracle
+// Oracle is the hare eligibility oracle.
 type Oracle struct {
 	lock           sync.Mutex
 	beacon         valueProvider
@@ -130,6 +136,12 @@ func New(
 	}
 }
 
+// GetEpochBeacon returns the beacon for the specified epoch.
+func (o *Oracle) GetEpochBeacon(ctx context.Context, epoch types.EpochID) bool {
+	_, err := o.beacon.Value(ctx, epoch)
+	return err == nil
+}
+
 type vrfMessage struct {
 	Beacon uint32
 	Round  uint32
@@ -140,7 +152,7 @@ func buildKey(l types.LayerID, r uint32) [2]uint64 {
 	return [2]uint64{uint64(l.Uint32()), uint64(r)}
 }
 
-// buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round)
+// buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
 func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	key := buildKey(layer, round)
 
@@ -160,7 +172,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 			layer,
 			layer.GetEpoch(),
 			log.Uint32("round", round))
-		return nil, err
+		return nil, fmt.Errorf("get beacon: %w", err)
 	}
 
 	// marshal message
@@ -211,7 +223,7 @@ func calcVrfFrac(vrfSig []byte) fixed.Fixed {
 }
 
 func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
-	id types.NodeID, vrfSig []byte) (n int, p fixed.Fixed, vrfFrac fixed.Fixed, done bool, err error) {
+	id types.NodeID, vrfSig []byte) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
 		id,
@@ -362,7 +374,7 @@ func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round
 	return uint16(n), nil
 }
 
-// Proof returns the role proof for the current Layer & Round
+// Proof returns the role proof for the current Layer & Round.
 func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
 	msg, err := o.buildVRFMessage(ctx, layer, round)
 	if err != nil {
@@ -373,7 +385,7 @@ func (o *Oracle) Proof(ctx context.Context, layer types.LayerID, round uint32) (
 	return o.vrfSigner.Sign(msg), nil
 }
 
-// Returns a map of all active node IDs in the specified layer id
+// Returns a map of all active node IDs in the specified layer id.
 func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[string]uint64, error) {
 	logger := o.WithContext(ctx).WithFields(
 		log.FieldNamed("target_layer", targetLayer),
@@ -461,7 +473,10 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 		logger.With().Warning("no hare active set for layer range, reading tortoise set for epoch instead",
 			targetLayer.GetEpoch())
 	}
-	atxs := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)
+	atxs, err := o.atxdb.GetEpochAtxs(targetLayer.GetEpoch() - 1)
+	if err != nil {
+		return nil, fmt.Errorf("can't get atxs for an epoch %d: %w", targetLayer.GetEpoch()-1, err)
+	}
 	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxs)))
 	if len(atxs) == 0 {
 		return nil, fmt.Errorf("empty active set for layer %v in epoch %v",

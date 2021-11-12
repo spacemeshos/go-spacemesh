@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -36,7 +37,7 @@ func (id TransactionID) Bytes() []byte {
 // Field returns a log field. Implements the LoggableField interface.
 func (id TransactionID) Field() log.Field { return log.FieldNamed("tx_id", id.Hash32()) }
 
-// TxIdsField returns a list of loggable fields for a given list of IDs
+// TxIdsField returns a list of loggable fields for a given list of IDs.
 func TxIdsField(ids []TransactionID) log.Field {
 	strs := []string{}
 	for _, a := range ids {
@@ -61,11 +62,17 @@ func (t *Transaction) Origin() Address {
 	if t.origin == nil {
 		panic("origin not set")
 	}
+
 	return *t.origin
 }
 
 // SetOrigin sets the cache of the transaction's origin address.
 func (t *Transaction) SetOrigin(origin Address) {
+	if t.origin != nil && *t.origin == origin {
+		// Avoid data races caused by writing if origin is the same.
+		return
+	}
+
 	t.origin = &origin
 }
 
@@ -81,8 +88,11 @@ func (t *Transaction) CalcAndSetOrigin() error {
 		return fmt.Errorf("failed to extract transaction pubkey: %v", err)
 	}
 
-	t.origin = &Address{}
-	t.origin.SetBytes(pubKey)
+	addr := Address{}
+	addr.SetBytes(pubKey)
+
+	t.SetOrigin(addr)
+
 	return nil
 }
 
@@ -96,8 +106,10 @@ func (t *Transaction) ID() TransactionID {
 	if err != nil {
 		panic("failed to marshal transaction: " + err.Error())
 	}
+
 	id := TransactionID(CalcHash32(txBytes))
 	t.id = &id
+
 	return id
 }
 
@@ -143,7 +155,7 @@ type Reward struct {
 	Coinbase            Address
 }
 
-// NewSignedTx is used in TESTS ONLY to generate signed txs
+// NewSignedTx is used in TESTS ONLY to generate signed txs.
 func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *signing.EdSigner) (*Transaction, error) {
 	inner := InnerTransaction{
 		AccountNonce: nonce,

@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"sort"
+	"strconv"
 
 	poetShared "github.com/spacemeshos/poet/shared"
 	postShared "github.com/spacemeshos/post/shared"
@@ -33,11 +34,16 @@ func (l EpochID) NeedsGoldenPositioningATX() bool {
 
 // FirstLayer returns the layer ID of the first layer in the epoch.
 func (l EpochID) FirstLayer() LayerID {
-	return NewLayerID(uint32(l)).Mul(getLayersPerEpoch())
+	return NewLayerID(uint32(l)).Mul(GetLayersPerEpoch())
 }
 
 // Field returns a log field. Implements the LoggableField interface.
 func (l EpochID) Field() log.Field { return log.Uint32("epoch_id", uint32(l)) }
+
+// String returns string representation of the epoch id numeric value.
+func (l EpochID) String() string {
+	return strconv.FormatUint(uint64(l), 10)
+}
 
 // ATXID is a 32-bit hash used to identify an activation transaction.
 type ATXID Hash32
@@ -190,7 +196,7 @@ func (atx *ActivationTx) InnerBytes() ([]byte, error) {
 	return InterfaceToBytes(atx.InnerActivationTx)
 }
 
-// Fields returns an array of LoggableFields for logging
+// Fields returns an array of LoggableFields for logging.
 func (atx *ActivationTx) Fields(size int) []log.LoggableField {
 	initialPost := ""
 	if atx.InitialPost != nil {

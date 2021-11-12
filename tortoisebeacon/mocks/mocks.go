@@ -11,7 +11,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	service "github.com/spacemeshos/go-spacemesh/p2p/service"
 	timesync "github.com/spacemeshos/go-spacemesh/timesync"
 	weakcoin "github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
@@ -53,58 +52,6 @@ func (mr *MockbroadcasterMockRecorder) Broadcast(ctx, channel, data interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Broadcast", reflect.TypeOf((*Mockbroadcaster)(nil).Broadcast), ctx, channel, data)
 }
 
-// MocktortoiseBeaconDB is a mock of tortoiseBeaconDB interface.
-type MocktortoiseBeaconDB struct {
-	ctrl     *gomock.Controller
-	recorder *MocktortoiseBeaconDBMockRecorder
-}
-
-// MocktortoiseBeaconDBMockRecorder is the mock recorder for MocktortoiseBeaconDB.
-type MocktortoiseBeaconDBMockRecorder struct {
-	mock *MocktortoiseBeaconDB
-}
-
-// NewMocktortoiseBeaconDB creates a new mock instance.
-func NewMocktortoiseBeaconDB(ctrl *gomock.Controller) *MocktortoiseBeaconDB {
-	mock := &MocktortoiseBeaconDB{ctrl: ctrl}
-	mock.recorder = &MocktortoiseBeaconDBMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocktortoiseBeaconDB) EXPECT() *MocktortoiseBeaconDBMockRecorder {
-	return m.recorder
-}
-
-// GetTortoiseBeacon mocks base method.
-func (m *MocktortoiseBeaconDB) GetTortoiseBeacon(epochID types.EpochID) (types.Hash32, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTortoiseBeacon", epochID)
-	ret0, _ := ret[0].(types.Hash32)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetTortoiseBeacon indicates an expected call of GetTortoiseBeacon.
-func (mr *MocktortoiseBeaconDBMockRecorder) GetTortoiseBeacon(epochID interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTortoiseBeacon", reflect.TypeOf((*MocktortoiseBeaconDB)(nil).GetTortoiseBeacon), epochID)
-}
-
-// SetTortoiseBeacon mocks base method.
-func (m *MocktortoiseBeaconDB) SetTortoiseBeacon(epochID types.EpochID, beacon types.Hash32) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetTortoiseBeacon", epochID, beacon)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SetTortoiseBeacon indicates an expected call of SetTortoiseBeacon.
-func (mr *MocktortoiseBeaconDBMockRecorder) SetTortoiseBeacon(epochID, beacon interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetTortoiseBeacon", reflect.TypeOf((*MocktortoiseBeaconDB)(nil).SetTortoiseBeacon), epochID, beacon)
-}
-
 // Mockcoin is a mock of coin interface.
 type Mockcoin struct {
 	ctrl     *gomock.Controller
@@ -129,65 +76,53 @@ func (m *Mockcoin) EXPECT() *MockcoinMockRecorder {
 }
 
 // FinishEpoch mocks base method.
-func (m *Mockcoin) FinishEpoch() {
+func (m *Mockcoin) FinishEpoch(arg0 context.Context, arg1 types.EpochID) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "FinishEpoch")
+	m.ctrl.Call(m, "FinishEpoch", arg0, arg1)
 }
 
 // FinishEpoch indicates an expected call of FinishEpoch.
-func (mr *MockcoinMockRecorder) FinishEpoch() *gomock.Call {
+func (mr *MockcoinMockRecorder) FinishEpoch(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishEpoch", reflect.TypeOf((*Mockcoin)(nil).FinishEpoch))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishEpoch", reflect.TypeOf((*Mockcoin)(nil).FinishEpoch), arg0, arg1)
 }
 
 // FinishRound mocks base method.
-func (m *Mockcoin) FinishRound() {
+func (m *Mockcoin) FinishRound(arg0 context.Context) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "FinishRound")
+	m.ctrl.Call(m, "FinishRound", arg0)
 }
 
 // FinishRound indicates an expected call of FinishRound.
-func (mr *MockcoinMockRecorder) FinishRound() *gomock.Call {
+func (mr *MockcoinMockRecorder) FinishRound(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishRound", reflect.TypeOf((*Mockcoin)(nil).FinishRound))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FinishRound", reflect.TypeOf((*Mockcoin)(nil).FinishRound), arg0)
 }
 
 // Get mocks base method.
-func (m *Mockcoin) Get(arg0 types.EpochID, arg1 types.RoundID) bool {
+func (m *Mockcoin) Get(arg0 context.Context, arg1 types.EpochID, arg2 types.RoundID) bool {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", arg0, arg1)
+	ret := m.ctrl.Call(m, "Get", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
 	return ret0
 }
 
 // Get indicates an expected call of Get.
-func (mr *MockcoinMockRecorder) Get(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockcoinMockRecorder) Get(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*Mockcoin)(nil).Get), arg0, arg1)
-}
-
-// HandleSerializedMessage mocks base method.
-func (m *Mockcoin) HandleSerializedMessage(arg0 context.Context, arg1 service.GossipMessage, arg2 service.Fetcher) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "HandleSerializedMessage", arg0, arg1, arg2)
-}
-
-// HandleSerializedMessage indicates an expected call of HandleSerializedMessage.
-func (mr *MockcoinMockRecorder) HandleSerializedMessage(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSerializedMessage", reflect.TypeOf((*Mockcoin)(nil).HandleSerializedMessage), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*Mockcoin)(nil).Get), arg0, arg1, arg2)
 }
 
 // StartEpoch mocks base method.
-func (m *Mockcoin) StartEpoch(arg0 types.EpochID, arg1 weakcoin.UnitAllowances) {
+func (m *Mockcoin) StartEpoch(arg0 context.Context, arg1 types.EpochID, arg2 weakcoin.UnitAllowances) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "StartEpoch", arg0, arg1)
+	m.ctrl.Call(m, "StartEpoch", arg0, arg1, arg2)
 }
 
 // StartEpoch indicates an expected call of StartEpoch.
-func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1 interface{}) *gomock.Call {
+func (mr *MockcoinMockRecorder) StartEpoch(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*Mockcoin)(nil).StartEpoch), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartEpoch", reflect.TypeOf((*Mockcoin)(nil).StartEpoch), arg0, arg1, arg2)
 }
 
 // StartRound mocks base method.
@@ -202,6 +137,43 @@ func (m *Mockcoin) StartRound(arg0 context.Context, arg1 types.RoundID) error {
 func (mr *MockcoinMockRecorder) StartRound(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StartRound", reflect.TypeOf((*Mockcoin)(nil).StartRound), arg0, arg1)
+}
+
+// MockeligibilityChecker is a mock of eligibilityChecker interface.
+type MockeligibilityChecker struct {
+	ctrl     *gomock.Controller
+	recorder *MockeligibilityCheckerMockRecorder
+}
+
+// MockeligibilityCheckerMockRecorder is the mock recorder for MockeligibilityChecker.
+type MockeligibilityCheckerMockRecorder struct {
+	mock *MockeligibilityChecker
+}
+
+// NewMockeligibilityChecker creates a new mock instance.
+func NewMockeligibilityChecker(ctrl *gomock.Controller) *MockeligibilityChecker {
+	mock := &MockeligibilityChecker{ctrl: ctrl}
+	mock.recorder = &MockeligibilityCheckerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockeligibilityChecker) EXPECT() *MockeligibilityCheckerMockRecorder {
+	return m.recorder
+}
+
+// IsProposalEligible mocks base method.
+func (m *MockeligibilityChecker) IsProposalEligible(proposal []byte) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsProposalEligible", proposal)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// IsProposalEligible indicates an expected call of IsProposalEligible.
+func (mr *MockeligibilityCheckerMockRecorder) IsProposalEligible(proposal interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsProposalEligible", reflect.TypeOf((*MockeligibilityChecker)(nil).IsProposalEligible), proposal)
 }
 
 // MocklayerClock is a mock of layerClock interface.
@@ -225,34 +197,6 @@ func NewMocklayerClock(ctrl *gomock.Controller) *MocklayerClock {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MocklayerClock) EXPECT() *MocklayerClockMockRecorder {
 	return m.recorder
-}
-
-// AwaitLayer mocks base method.
-func (m *MocklayerClock) AwaitLayer(arg0 types.LayerID) chan struct{} {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AwaitLayer", arg0)
-	ret0, _ := ret[0].(chan struct{})
-	return ret0
-}
-
-// AwaitLayer indicates an expected call of AwaitLayer.
-func (mr *MocklayerClockMockRecorder) AwaitLayer(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AwaitLayer", reflect.TypeOf((*MocklayerClock)(nil).AwaitLayer), arg0)
-}
-
-// GetCurrentLayer mocks base method.
-func (m *MocklayerClock) GetCurrentLayer() types.LayerID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetCurrentLayer")
-	ret0, _ := ret[0].(types.LayerID)
-	return ret0
-}
-
-// GetCurrentLayer indicates an expected call of GetCurrentLayer.
-func (mr *MocklayerClockMockRecorder) GetCurrentLayer() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCurrentLayer", reflect.TypeOf((*MocklayerClock)(nil).GetCurrentLayer))
 }
 
 // LayerToTime mocks base method.

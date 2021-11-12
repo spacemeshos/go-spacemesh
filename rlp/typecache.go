@@ -33,7 +33,7 @@ type typeinfo struct {
 	writer
 }
 
-// represents struct tags
+// represents struct tags.
 type tags struct {
 	// rlp:"nil" controls whether empty input results in a nil pointer.
 	nilOK bool

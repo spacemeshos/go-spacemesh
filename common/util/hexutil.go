@@ -30,6 +30,7 @@ encoding may be of uneven length. The number zero encodes as "0x0".
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -37,7 +38,7 @@ import (
 
 const uintBits = 32 << (uint64(^uint(0)) >> 63)
 
-// Errors
+// Errors.
 var (
 	ErrEmptyString   = &decError{"empty hex string"}
 	ErrSyntax        = &decError{"invalid hex string"}
@@ -231,14 +232,14 @@ func mapError(err error) error {
 	if _, ok := err.(hex.InvalidByteError); ok {
 		return ErrSyntax
 	}
-	if err == hex.ErrLength {
+	if errors.Is(err, hex.ErrLength) {
 		return ErrOddLength
 	}
 	return err
 }
 
 // Hex2Bytes returns the bytes represented by the hexadecimal string str.
-// Note that str should not be "0x" prefixed. To decode a "0x" prefixed string use FromHex
+// Note that str should not be "0x" prefixed. To decode a "0x" prefixed string use FromHex.
 func Hex2Bytes(str string) []byte {
 	h, _ := hex.DecodeString(str)
 	return h

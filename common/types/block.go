@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 
 	"github.com/spacemeshos/ed25519"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -52,21 +53,22 @@ var (
 	// the first genesis epoch and the following epoch in which ATXs are published.
 	effectiveGenesis uint32
 
-	// EmptyLayerHash is the layer hash for an empty layer
+	// EmptyLayerHash is the layer hash for an empty layer.
 	EmptyLayerHash = Hash32{}
 )
 
-// SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param
+// SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param.
 func SetLayersPerEpoch(layers uint32) {
 	atomic.StoreUint32(&layersPerEpoch, layers)
 	atomic.StoreUint32(&effectiveGenesis, layers*2-1)
 }
 
-func getLayersPerEpoch() uint32 {
+// GetLayersPerEpoch returns number of layers per epoch.
+func GetLayersPerEpoch() uint32 {
 	return atomic.LoadUint32(&layersPerEpoch)
 }
 
-// GetEffectiveGenesis returns when actual blocks would be created
+// GetEffectiveGenesis returns when actual blocks would be created.
 func GetEffectiveGenesis() LayerID {
 	return NewLayerID(atomic.LoadUint32(&effectiveGenesis))
 }
@@ -87,7 +89,7 @@ type LayerID struct {
 
 // GetEpoch returns the epoch number of this LayerID.
 func (l LayerID) GetEpoch() EpochID {
-	return EpochID(l.Value / getLayersPerEpoch())
+	return EpochID(l.Value / GetLayersPerEpoch())
 }
 
 // Add layers to the layer. Panics on wraparound.
@@ -111,7 +113,7 @@ func (l LayerID) Sub(layers uint32) LayerID {
 
 // OrdinalInEpoch returns layer ordinal in epoch.
 func (l LayerID) OrdinalInEpoch() uint32 {
-	return l.Value % getLayersPerEpoch()
+	return l.Value % GetLayersPerEpoch()
 }
 
 // FirstInEpoch returns whether this LayerID is first in epoch.
@@ -239,9 +241,6 @@ type BlockEligibilityProof struct {
 
 	// Sig is the VRF signature from which the block's LayerID is derived.
 	Sig []byte
-
-	// TortoiseBeacon is the tortoise beacon value for this block.
-	TortoiseBeacon []byte
 }
 
 // BlockHeader includes all of a block's fields, except the list of transaction IDs, activation transaction IDs and the
@@ -275,9 +274,10 @@ func (b BlockHeader) Layer() LayerID {
 // produce the block signature.
 type MiniBlock struct {
 	BlockHeader
-	TxIDs     []TransactionID
-	ActiveSet *[]ATXID
-	RefBlock  *BlockID
+	TxIDs          []TransactionID
+	ActiveSet      *[]ATXID
+	RefBlock       *BlockID
+	TortoiseBeacon []byte
 }
 
 // Block includes all of a block's fields, including signature and a cache of the BlockID and MinerID.
@@ -298,7 +298,7 @@ func (b *Block) Bytes() []byte {
 	return blkBytes
 }
 
-// Fields returns an array of LoggableFields for logging
+// Fields returns an array of LoggableFields for logging.
 func (b *Block) Fields() []log.LoggableField {
 	activeSet := 0
 	if b.ActiveSet != nil {
@@ -388,7 +388,7 @@ func BlockIDs(blocks []*Block) []BlockID {
 	return ids
 }
 
-// BlockIdsField returns a list of loggable fields for a given list of BlockIDs
+// BlockIdsField returns a list of loggable fields for a given list of BlockIDs.
 func BlockIdsField(ids []BlockID) log.Field {
 	var strs []string
 	for _, a := range ids {
