@@ -1320,10 +1320,6 @@ func TestProcessBlock(t *testing.T) {
 	r.NoError(mdb.AddBlock(blockWithMissingBaseBlock))
 	blockWithMissingBaseBlock.BaseBlock = l1Blocks[1].ID()
 
-	// missing base block
-	err := alg.trtl.processBlock(context.TODO(), blockWithMissingBaseBlock)
-	r.ErrorIs(err, errBaseBlockUnknown)
-
 	// blocks in this layer will use a block from the previous layer as their base block
 	baseBlockProviderFn := func(context.Context) (types.BlockID, [][]types.BlockID, error) {
 		return blockWithMissingBaseBlock.ID(), make([][]types.BlockID, blocksPerLayer), nil
@@ -1331,21 +1327,14 @@ func TestProcessBlock(t *testing.T) {
 	l2ID := l1ID.Add(1)
 	l2Blocks := generateBlocks(t, l2ID, blocksPerLayer, baseBlockProviderFn, atxdb, baseBlockVoteWeight)
 
-	// base block layer missing
 	alg.trtl.BlockOpinionsByLayer[l2ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
-	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
-	r.ErrorIs(err, errBaseBlockUnknown)
-
-	// base block opinion missing from layer
 	alg.trtl.BlockOpinionsByLayer[l1ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
-	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
-	r.ErrorIs(err, errBaseBlockUnknown)
 
 	// malicious (conflicting) voting pattern
 	l2Blocks[0].BaseBlock = mesh.GenesisBlock().ID()
 	l2Blocks[0].ForDiff = []types.BlockID{l1Blocks[1].ID()}
 	l2Blocks[0].AgainstDiff = l2Blocks[0].ForDiff
-	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
+	err := alg.trtl.processBlock(context.TODO(), l2Blocks[0])
 	r.Error(err)
 	r.Contains(err.Error(), errstrConflictingVotes)
 
@@ -3069,6 +3058,7 @@ func olderExceptions(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 
 // outOfWindowBaseBlock creates VotesGenerator with a specific window.
 // vote generator will produce one block that uses base block outside of the sliding window.
+// NOTE that it will produce blocks as if it didn't knew about blocks from higher layers.
 func outOfWindowBaseBlock(n, window int) sim.VotesGenerator {
 	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 		if i >= n {
@@ -3081,6 +3071,8 @@ func outOfWindowBaseBlock(n, window int) sim.VotesGenerator {
 	}
 }
 
+// tortoiseVoting is for testing that protocol makes progress using heuristic that we are
+// using for the network.
 func tortoiseVoting(tortoise *ThreadSafeVerifyingTortoise) sim.VotesGenerator {
 	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 		base, exceptions, err := tortoise.BaseBlock(context.Background())
