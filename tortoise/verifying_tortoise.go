@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
-	"sort"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -319,26 +318,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 		}
 	}
 
-	sort.Slice(choices, func(i, j int) bool {
-		ibid := choices[i]
-		jbid := choices[j]
-		// prioritize good blocks
-		_, iexist := t.GoodBlocksIndex[ibid]
-		_, jexist := t.GoodBlocksIndex[jbid]
-		if iexist != jexist {
-			return iexist
-		}
-		// prioritize blocks with less disagreements to a local opinion
-		if disagreements[ibid] != disagreements[jbid] {
-			return disagreements[ibid].After(disagreements[jbid])
-		}
-		// priortize blocks from higher layers
-		if t.BlockLayer[ibid] != t.BlockLayer[jbid] {
-			return t.BlockLayer[ibid].After(t.BlockLayer[jbid])
-		}
-		// otherwise just sort determistically
-		return ibid.Compare(jbid)
-	})
+	prioritizeBlocks(choices, t.GoodBlocksIndex, disagreements, t.BlockLayer)
 
 	for _, bid := range choices {
 		lid := t.BlockLayer[bid]
@@ -372,7 +352,7 @@ func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, bid types.
 		opinions = t.BlockOpinionsByLayer[blid][bid]
 		from     = t.LastEvicted.Add(1)
 		// using it as a mark that the votes for block are completely consistent
-		// with a local opinion. so if it two blocks have consistent histories select block
+		// with a local opinion. so if two blocks have consistent histories select block
 		// from a higher layer as it is more consistent.
 		consistent = t.Last
 	)
