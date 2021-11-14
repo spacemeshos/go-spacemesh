@@ -103,6 +103,16 @@ func TestOrder(t *testing.T) {
 			},
 			window: 3,
 		},
+		{
+			desc: "RepeatLayerLargerSubmitted",
+			send: []types.LayerID{
+				types.NewLayerID(4), types.NewLayerID(6), types.NewLayerID(6), types.NewLayerID(5),
+			},
+			expect: []types.LayerID{
+				types.NewLayerID(4), types.NewLayerID(5), types.NewLayerID(6),
+			},
+			window: 3,
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
