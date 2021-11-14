@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"github.com/golang/protobuf/ptypes/empty"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/plans/network/api"
 	"github.com/spacemeshos/poet/server"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -80,12 +84,18 @@ func  IPFromNodeString(str string) string {
 func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	// TODO: extract a lot of constants/params
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Hour)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute*30)
 	defer cancel()
-	client := initCtx.SyncClient
+
+	client := sync.MustBoundClient(ctx, env)
+	defer client.Close()
 	netclient := initCtx.NetClient
 
+
 	MustSetupNetworking(ctx, netclient)
+	initCtx.MustWaitAllInstancesInitialized(ctx)
+
+	ip := netclient.MustGetDataNetworkIP()
 
 	poets_topic := sync.NewTopic("poets", string(""))
 	gateways_topic := sync.NewTopic("gateways", string(""))
@@ -113,9 +123,8 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 
 	ra.Add("poet", poets, func(r *role) {
 		env.RecordMessage("Getting poet ip")
-		poet_ip := netclient.MustGetDataNetworkIP()
-		client.MustPublish(ctx, poets_topic, string(poet_ip.String()+":8080"))
-		env.RecordMessage("Published poet data ", string(poet_ip.String()+":8080"))
+		client.MustPublish(ctx, poets_topic, string(ip.String()+":8080"))
+		env.RecordMessage("Published poet data ", string(ip.String()+":8080"))
 
 		gatewaych := make(chan string)
 		client.MustSubscribe(ctx, gateways_topic, gatewaych)
@@ -153,12 +162,11 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 			case err := <-errch:
 			env.RecordFailure(err)
 			case <-time.After(5* time.Second):
-				env.RecordSuccess()
+				break
 		}
 
-
+		env.RecordSuccess()
 	}, func(obj interface{}) {
-		env.RecordMessage("done starting poet")
 	})
 
 	ra.Add("gateway", gateways, func(r *role) {
@@ -169,8 +177,6 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 			env.RecordFailure(err)
 			return
 		}
-
-		ip := netclient.MustGetDataNetworkIP()
 
 		env.RecordMessage("gateway waiting for poet message")
 		poetch := make(chan string)
@@ -198,13 +204,16 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 
 		env.RecordMessage("gateway P2P is ready, %v", bsInfo)
 		client.MustPublish(ctx, gateways_topic, bsInfo)
-		<-ctx.Done()
+
+		env.RecordSuccess()
 
 	}, func(obj interface{}) {
-		env.RecordMessage("done gateways")
+
 	})
 
-	ra.Add("miner", env.TestInstanceCount-poets-gateways, func(r *role) {
+
+	ra.Add("miner", env.TestInstanceCount-1-poets-gateways, func(r *role) {
+
 		env.RecordMessage("hello im miner")
 		minercfg := createMinerConfig()
 		minercfg.GenesisTime = genesisTime
@@ -253,19 +262,56 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 			}
 
 		}(nd)
-		<-ctx.Done()
 
+		time.Sleep(30 * time.Second)
+
+		env.RecordMessage("running miner test")
+
+		acc, err := TestMiner(ctx)
+		if err != nil {
+			env.RecordFailure(fmt.Errorf("miner is not smeshing %v, err: %v", acc, err))
+			return
+		}
+		env.RecordMessage("Miner started smeshing! %v", acc)
+		env.RecordSuccess()
 
 	}, func(obj interface{}) {
-		env.RecordMessage("done miner %v")
 	})
 
 	if err := ra.Allocate(seq); err != nil {
 		env.RecordFailure(err)
 	}
 
-	<-ctx.Done()
 	return nil
+}
+
+func TestMiner(ctx context.Context) (string, error) {
+	client, err := api.New("localhost:9092")
+
+	if err != nil {
+		return "", err
+	}
+
+
+	accresp, err := client.SmesherID(ctx, &empty.Empty{})
+	if err != nil {
+		return "", err
+	}
+
+	accstr := util.Bytes2Hex(accresp.AccountId.GetAddress())
+	smhresp, err := client.IsSmeshing(ctx, &empty.Empty{})
+	if err != nil {
+		return accstr, err
+	}
+
+
+	if smhresp.IsSmeshing {
+		return accstr, nil
+	} else {
+		return accstr, errors.New("not smeshing")
+	}
+
+
 }
 
 func createMinerConfig() *config.Config {
@@ -345,6 +391,7 @@ func createMinerConfig() *config.Config {
 	papicfg := &apicfg
 	papicfg.StartGatewayService = true
 	papicfg.StartGlobalStateService = true
+	papicfg.StartDebugService = true
 	papicfg.StartMeshService = true
 	papicfg.StartNodeService = true
 	papicfg.StartSmesherService = true
