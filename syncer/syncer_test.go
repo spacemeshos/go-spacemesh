@@ -243,6 +243,58 @@ func TestSynchronize_AllGood(t *testing.T) {
 	syncer.Close()
 }
 
+func TestSynchronize_ValidationTakesTooLong(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	lg := logtest.New(t).WithName("syncer")
+	ticker := newMockLayerTicker()
+	mf := newMockFetcher()
+	mm := newMemMesh(t, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
+	validator := mocks.NewMocklayerValidator(ctrl)
+	syncer.validator = validator
+
+	glayer := types.GetEffectiveGenesis()
+	current := glayer.Add(8)
+	ticker.advanceToLayer(current)
+	syncer.Start(context.TODO())
+
+	arrivedOldCurrent := make(chan struct{}, 1)
+	finishOldCurrent := make(chan struct{}, 1)
+	newCurrent := current.Add(2)
+	for l := types.NewLayerID(1); l.Before(newCurrent); l = l.Add(1) {
+		l := l
+		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, layer *types.Layer) {
+				assert.Equal(t, l, layer.Index())
+				if l == current.Sub(1) {
+					arrivedOldCurrent <- struct{}{}
+					<-finishOldCurrent
+				}
+			}).Times(1)
+	}
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		assert.True(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+
+	// allow data sync to finish
+	feedLayerResult(glayer.Add(1), newCurrent.Sub(1), mf, mm)
+	// now advance current further
+	<-arrivedOldCurrent
+	ticker.advanceToLayer(newCurrent)
+	finishOldCurrent <- struct{}{}
+	wg.Wait()
+
+	assert.True(t, syncer.ListenToGossip())
+	assert.False(t, syncer.IsSynced(context.TODO()))
+	syncer.Close()
+}
+
 func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
@@ -290,7 +342,7 @@ func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 	assert.False(t, syncer.IsSynced(context.TODO()))
 }
 
-func TestSynchronize_ValidateLayersTooDelayed(t *testing.T) {
+func TestSynchronize_HareValidateLayersTooDelayed(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
 	mf := newMockFetcher()
