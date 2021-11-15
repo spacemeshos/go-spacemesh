@@ -1320,10 +1320,6 @@ func TestProcessBlock(t *testing.T) {
 	r.NoError(mdb.AddBlock(blockWithMissingBaseBlock))
 	blockWithMissingBaseBlock.BaseBlock = l1Blocks[1].ID()
 
-	// missing base block
-	err := alg.trtl.processBlock(context.TODO(), blockWithMissingBaseBlock)
-	r.ErrorIs(err, errBaseBlockUnknown)
-
 	// blocks in this layer will use a block from the previous layer as their base block
 	baseBlockProviderFn := func(context.Context) (types.BlockID, [][]types.BlockID, error) {
 		return blockWithMissingBaseBlock.ID(), make([][]types.BlockID, blocksPerLayer), nil
@@ -1331,21 +1327,14 @@ func TestProcessBlock(t *testing.T) {
 	l2ID := l1ID.Add(1)
 	l2Blocks := generateBlocks(t, l2ID, blocksPerLayer, baseBlockProviderFn, atxdb, baseBlockVoteWeight)
 
-	// base block layer missing
 	alg.trtl.BlockOpinionsByLayer[l2ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
-	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
-	r.ErrorIs(err, errBaseBlockUnknown)
-
-	// base block opinion missing from layer
 	alg.trtl.BlockOpinionsByLayer[l1ID] = make(map[types.BlockID]Opinion, defaultTestLayerSize)
-	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
-	r.ErrorIs(err, errBaseBlockUnknown)
 
 	// malicious (conflicting) voting pattern
 	l2Blocks[0].BaseBlock = mesh.GenesisBlock().ID()
 	l2Blocks[0].ForDiff = []types.BlockID{l1Blocks[1].ID()}
 	l2Blocks[0].AgainstDiff = l2Blocks[0].ForDiff
-	err = alg.trtl.processBlock(context.TODO(), l2Blocks[0])
+	err := alg.trtl.processBlock(context.TODO(), l2Blocks[0])
 	r.Error(err)
 	r.Contains(err.Error(), errstrConflictingVotes)
 
@@ -3041,7 +3030,7 @@ func TestVoteBlockFilterForHealing(t *testing.T) {
 }
 
 // gapVote will skip one layer in voting.
-func gapVote(rng *mrand.Rand, layers []*types.Layer) sim.Voting {
+func gapVote(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	if len(layers) < 2 {
 		panic("need atleast 2 layers")
 	}
@@ -3052,7 +3041,7 @@ func gapVote(rng *mrand.Rand, layers []*types.Layer) sim.Voting {
 }
 
 // olderExceptions will vote for block older then base block.
-func olderExceptions(rng *mrand.Rand, layers []*types.Layer) sim.Voting {
+func olderExceptions(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	if len(layers) < 2 {
 		panic("need atleast 2 layers")
 	}
@@ -3067,6 +3056,38 @@ func olderExceptions(rng *mrand.Rand, layers []*types.Layer) sim.Voting {
 	return voting
 }
 
+// outOfWindowBaseBlock creates VotesGenerator with a specific window.
+// vote generator will produce one block that uses base block outside of the sliding window.
+// NOTE that it will produce blocks as if it didn't knew about blocks from higher layers.
+func outOfWindowBaseBlock(n, window int) sim.VotesGenerator {
+	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+		if i >= n {
+			return sim.PerfectVoting(rng, layers, i)
+		}
+		li := len(layers) - window
+		baseLayer := layers[li]
+		base := baseLayer.Blocks()[rng.Intn(len(baseLayer.Blocks()))]
+		return sim.Voting{Base: base.ID(), Support: layers[li].BlocksIDs()}
+	}
+}
+
+// tortoiseVoting is for testing that protocol makes progress using heuristic that we are
+// using for the network.
+func tortoiseVoting(tortoise *ThreadSafeVerifyingTortoise) sim.VotesGenerator {
+	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+		base, exceptions, err := tortoise.BaseBlock(context.Background())
+		if err != nil {
+			panic(err)
+		}
+		return sim.Voting{
+			Base:    base,
+			Against: exceptions[0],
+			Support: exceptions[1],
+			Abstain: exceptions[2],
+		}
+	}
+}
+
 func TestBaseBlockGenesis(t *testing.T) {
 	ctx := context.Background()
 
@@ -3078,6 +3099,58 @@ func TestBaseBlockGenesis(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, exceptions, [][]types.BlockID{{}, {base}, {}})
 	require.Equal(t, mesh.GenesisBlock().ID(), base)
+}
+
+func ensureBaseAndExceptionsFromLayer(tb testing.TB, lid types.LayerID, base types.BlockID, exceptions [][]types.BlockID, mdb blockDataProvider) {
+	tb.Helper()
+
+	block, err := mdb.GetBlock(base)
+	require.NoError(tb, err)
+	require.Equal(tb, lid, block.LayerIndex)
+	require.Empty(tb, exceptions[0])
+	require.Empty(tb, exceptions[2])
+	for _, bid := range exceptions[1] {
+		block, err := mdb.GetBlock(bid)
+		require.NoError(tb, err)
+		require.Equal(tb, lid, block.LayerIndex, "block=%s block layer=%s last=%s", block.ID(), block.LayerIndex, lid)
+	}
+}
+
+func TestBaseBlockEvictedBlock(t *testing.T) {
+	const size = 10
+	s := sim.New(
+		sim.WithLayerSize(size),
+	)
+	s.Setup()
+
+	ctx := context.Background()
+	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg.LayerSize = size
+	cfg.WindowSize = 10
+	tortoise := NewVerifyingTortoise(ctx, cfg)
+
+	var last, verified types.LayerID
+	// turn GenLayers into on-demand generator, so that later case can be placed as a step
+	for _, lid := range sim.GenLayers(s,
+		sim.WithSequence(30),
+		sim.WithSequence(1, sim.WithVoteGenerator(
+			outOfWindowBaseBlock(1, int(cfg.WindowSize)*2),
+		)),
+		sim.WithSequence(1),
+	) {
+		last = lid
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
+		require.Equal(t, last.Sub(1), verified)
+	}
+	for i := 0; i < 10; i++ {
+		base, exceptions, err := tortoise.BaseBlock(ctx)
+		require.NoError(t, err)
+		ensureBaseAndExceptionsFromLayer(t, last, base, exceptions, s.State.MeshDB)
+
+		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+		require.Equal(t, last.Sub(1), verified)
+	}
 }
 
 func TestBaseBlockPrioritization(t *testing.T) {

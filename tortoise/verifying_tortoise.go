@@ -22,12 +22,9 @@ type atxDataProvider interface {
 
 var (
 	errNoBaseBlockFound                 = errors.New("no good base block within exception vector limit")
-	errBaseBlockUnknown                 = errors.New("inconsistent state: base block unknown")
 	errNotSorted                        = errors.New("input blocks are not sorted by layerID")
 	errstrNoCoinflip                    = "no weak coin value for layer"
 	errstrTooManyExceptions             = "too many exceptions to base block vote"
-	errstrBaseBlockLayerMissing         = "base block layer not found"
-	errstrBaseBlockNotFoundInLayer      = "base block opinions not found in layer"
 	errstrConflictingVotes              = "conflicting votes found in block"
 	errstrUnableToCalculateLocalOpinion = "unable to calculate local opinion for layer"
 )
@@ -438,11 +435,13 @@ func (t *turtle) calculateExceptions(
 		addDiffs := func(bid types.BlockID, voteClass string, voteVec vec, diffMap map[types.BlockID]struct{}) {
 			if v, ok := baseBlockOpinion[bid]; !ok || simplifyVote(v) != voteVec {
 				logger.With().Debug("added vote diff",
-					log.FieldNamed("diff_block", bid),
-					log.String("diff_class", voteClass))
+					log.Named("diff_block", bid),
+					log.String("diff_class", voteClass),
+					log.Named("opinion", v),
+				)
 				if layerID.Before(baseBlockLayerID) {
 					logger.With().Warning("added exception before base block layer, this block will not be marked good",
-						log.FieldNamed("diff_block", bid),
+						log.Named("diff_block", bid),
 						log.String("diff_class", voteClass))
 				}
 				diffMap[bid] = struct{}{}
@@ -534,6 +533,18 @@ func (t *turtle) persist() error {
 	return t.state.Persist()
 }
 
+func (t *turtle) getBaseBlockOpinions(bid types.BlockID) Opinion {
+	lid, ok := t.BlockLayer[bid]
+	if !ok {
+		return nil
+	}
+	byLayer, ok := t.BlockOpinionsByLayer[lid]
+	if !ok {
+		return nil
+	}
+	return byLayer[bid]
+}
+
 func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.FieldNamed("processing_block_id", block.ID()),
@@ -544,23 +555,15 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	// We then add the vote difference vector and the explicit vote vector to our vote-totals vector.
 	logger.With().Debug("processing block", block.Fields()...)
 
-	baseBlockLid, ok := t.BlockLayer[block.BaseBlock]
-	if !ok {
-		return fmt.Errorf("%w: %s", errBaseBlockUnknown, block.BaseBlock)
-	}
-
 	logger.With().Debug("block adds support for",
 		log.Int("count", len(block.BlockHeader.ForDiff)),
 		types.BlockIdsField(block.BlockHeader.ForDiff))
 
-	layerOpinions, ok := t.BlockOpinionsByLayer[baseBlockLid]
-	if !ok {
-		return fmt.Errorf("%s: %v, %v", errstrBaseBlockLayerMissing, block.BaseBlock, baseBlockLid)
-	}
-
-	baseBlockOpinion, ok := layerOpinions[block.BaseBlock]
-	if !ok {
-		return fmt.Errorf("%s: %v, %v", errstrBaseBlockNotFoundInLayer, block.BaseBlock, baseBlockLid)
+	baseBlockOpinion := t.getBaseBlockOpinions(block.BaseBlock)
+	if len(baseBlockOpinion) == 0 {
+		logger.With().Warning("base block opinions are empty. base block is unknown or was evicted",
+			block.BaseBlock,
+		)
 	}
 
 	voteWeight, err := t.voteWeight(ctx, block)
@@ -574,7 +577,7 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	//   see https://github.com/spacemeshos/go-spacemesh/issues/2673
 	lth := len(block.ForDiff) +
 		len(block.NeutralDiff) +
-		len(block.NeutralDiff) +
+		len(block.AgainstDiff) +
 		len(baseBlockOpinion)
 	opinion := make(map[types.BlockID]vec, lth)
 
@@ -606,10 +609,9 @@ func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 			opinion[blk] = nvote
 		}
 	}
-
+	t.BlockLayer[block.ID()] = block.LayerIndex
 	logger.With().Debug("adding or updating block opinion")
 	t.BlockOpinionsByLayer[block.LayerIndex][block.ID()] = opinion
-	t.BlockLayer[block.ID()] = block.LayerIndex
 	return nil
 }
 
