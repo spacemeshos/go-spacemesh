@@ -39,7 +39,8 @@ type mockLayerTicker struct {
 }
 
 func newMockLayerTicker() *mockLayerTicker {
-	return &mockLayerTicker{current: unsafe.Pointer(&types.LayerID{})}
+	firstLayer := types.NewLayerID(1)
+	return &mockLayerTicker{current: unsafe.Pointer(&firstLayer)}
 }
 
 func (mlt *mockLayerTicker) advanceToLayer(layerID types.LayerID) {
@@ -272,6 +273,8 @@ func TestSynchronize_ValidationTakesTooLong(t *testing.T) {
 					arrivedOldCurrent <- struct{}{}
 					<-finishOldCurrent
 				}
+				// cause mesh's processed layer to advance
+				mm.HandleValidatedLayer(ctx, l, []types.BlockID{})
 			}).Times(1)
 	}
 
@@ -493,7 +496,6 @@ func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
 	syncer.Start(context.TODO())
 
 	// brings the node to synced state
-	ticker.advanceToLayer(types.NewLayerID(1))
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -543,7 +545,6 @@ func TestSynchronize_StaySyncedUponFailure(t *testing.T) {
 	syncer.Start(context.TODO())
 
 	// brings the node to synced state
-	ticker.advanceToLayer(types.NewLayerID(1))
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -583,7 +584,6 @@ func TestSynchronize_BecomeNotSyncedUponFailureIfNoGossip(t *testing.T) {
 	syncer.Start(context.TODO())
 
 	// brings the node to synced state
-	ticker.advanceToLayer(types.NewLayerID(1))
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {

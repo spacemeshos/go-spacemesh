@@ -285,6 +285,10 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		return false
 	}
 
+	if s.ticker.GetCurrentLayer().Uint32() == 0 {
+		return false
+	}
+
 	// at most one synchronize process can run at any time
 	if !s.setSyncerBusy() {
 		logger.Info("sync is already running, giving up")
@@ -300,72 +304,57 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
 
 	s.setStateBeforeSync(ctx)
-
 	var (
 		vQueue chan *types.Layer
 		vDone  chan struct{}
+
+		target = s.mesh.ProcessedLayer()
 		// number of attempts to start a validation goroutine
-		attempt = uint64(0)
+		attempt = 1
 		// whether the data sync succeed. validation failure is not checked by design.
 		success = true
 	)
-
-	// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis
-	// and retry in the next sync run if validation fails.
-	// our clock starts ticking from 1 so it is safe to skip layer 0
-	// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
-syncLoop:
-	for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
-		var layer *types.Layer
-		var err error
-		if layer, err = s.syncLayer(ctx, layerID); err != nil {
-			logger.With().Error("failed to sync to layer", layerID, log.Err(err))
-			success = false
-			if attempt > 0 {
-				// clean up the validation thread before exiting loop
-				close(vQueue)
-				select {
-				case <-vDone:
-				case <-s.shutdownCtx.Done():
-				}
+	attemptFunc := func() (bool, types.LayerID) {
+		var (
+			layer       *types.Layer
+			syncedLayer types.LayerID
+			err         error
+		)
+		// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis
+		// and retry in the next sync run if validation fails.
+		// our clock starts ticking from 1 so it is safe to skip layer 0
+		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
+		for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
+			if layer, err = s.syncLayer(ctx, layerID); err != nil {
+				return false, layerID
 			}
-			break
+			syncedLayer = layerID
+			vQueue <- layer
+			logger.With().Debug("finished data sync", layerID)
 		}
-		if attempt == 0 {
-			attempt++
-			vQueue, vDone = s.startValidating(ctx, s.run, attempt)
-		}
-		vQueue <- layer
-		logger.With().Debug("finished data sync", layerID)
-
-		if layerID == s.ticker.GetCurrentLayer().Sub(1) {
-			// about to exit loop, check if validation is all done
-			success = true
-			close(vQueue)
-			logger.With().Debug("data is synced, waiting for validation",
-				log.Uint64("attempt", attempt),
-				log.FieldNamed("current", s.ticker.GetCurrentLayer()),
-				log.FieldNamed("latest", s.mesh.LatestLayer()),
-				log.FieldNamed("processed", s.mesh.ProcessedLayer()))
-			select {
-			case <-vDone:
-				// check if we are still on target. if not, go back to the sync loop
-				if layerID != s.ticker.GetCurrentLayer().Sub(1) {
-					success = false
-					attempt++
-					vQueue, vDone = s.startValidating(ctx, s.run, attempt)
-					continue syncLoop
-				}
-				break syncLoop
-			case <-s.shutdownCtx.Done():
-				break syncLoop
-			}
+		logger.With().Debug("data is synced, waiting for validation",
+			log.Int("attempt", attempt),
+			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
+			log.FieldNamed("latest", s.mesh.LatestLayer()),
+			log.FieldNamed("processed", s.mesh.ProcessedLayer()))
+		return true, syncedLayer
+	}
+	// check if we are on target. if not, do the sync loop again
+	for ; success && target != s.ticker.GetCurrentLayer().Sub(1); attempt++ {
+		vQueue, vDone = s.startValidating(ctx, s.run, attempt)
+		success, target = attemptFunc()
+		close(vQueue)
+		select {
+		case <-vDone:
+		case <-s.shutdownCtx.Done():
+			return false
 		}
 	}
+
 	s.setStateAfterSync(ctx, success)
 	logger.With().Info(fmt.Sprintf("finished sync run #%v", s.run),
 		log.Bool("success", success),
-		log.Uint64("attempt", attempt),
+		log.Int("attempt", attempt),
 		log.String("sync_state", s.getSyncState().String()),
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
@@ -510,7 +499,7 @@ func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
 // start a dedicated process to validate layers one by one.
 // it is caller's responsibility to close the returned "queue" channel to signal end of workload.
 // "done" channel will be closed once all workload in "queue" is completed.
-func (s *Syncer) startValidating(ctx context.Context, run, attempt uint64) (chan *types.Layer, chan struct{}) {
+func (s *Syncer) startValidating(ctx context.Context, run uint64, attempt int) (chan *types.Layer, chan struct{}) {
 	logger := s.logger.WithContext(ctx).WithName("validation")
 
 	// start a dedicated process for validation.
