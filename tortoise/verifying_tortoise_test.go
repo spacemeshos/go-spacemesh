@@ -3093,3 +3093,90 @@ func TestBaseBlockPrioritization(t *testing.T) {
 		})
 	}
 }
+
+// splitVoting partitions votes into two halves.
+func splitVoting(n int) sim.VotesGenerator {
+	return func(_ *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+		var (
+			support []types.BlockID
+			last    = layers[len(layers)-1]
+			bids    = last.BlocksIDs()
+			half    = len(bids) / 2
+		)
+		if i < n/2 {
+			support = bids[:half]
+		} else {
+			support = bids[half:]
+		}
+		return sim.Voting{Base: support[0], Support: support}
+	}
+}
+
+func ensureBlockLayerWithin(tb testing.TB, bdp blockDataProvider, bid types.BlockID, from, to types.LayerID) {
+	tb.Helper()
+
+	block, err := bdp.GetBlock(bid)
+	require.NoError(tb, err)
+	require.True(tb, !block.LayerIndex.Before(from) && !block.LayerIndex.After(to),
+		"%s not in [%s,%s]", block.LayerIndex, from, to,
+	)
+}
+
+func TestWeakCoinVoting(t *testing.T) {
+	const (
+		size  = 10
+		hdist = 3
+	)
+	s := sim.New(
+		sim.WithLayerSize(size),
+	)
+	s.Setup(sim.WithSetupUnitsRange(1, 1))
+
+	ctx := context.Background()
+	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg.LayerSize = size
+	cfg.Hdist = hdist
+	cfg.Zdist = hdist
+	var (
+		tortoise       = NewVerifyingTortoise(ctx, cfg)
+		verified, last types.LayerID
+		genesis        = types.GetEffectiveGenesis()
+	)
+	for _, lid := range sim.GenLayers(s,
+		sim.WithSequence(5),
+		sim.WithSequence(hdist+1,
+			sim.WithCoin(true), // declare support
+			sim.WithoutInputVector(),
+			sim.WithVoteGenerator(splitVoting(size)),
+		),
+	) {
+		last = lid
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
+	}
+	// 5th layer after genesis verifies 4th
+	// and later layers can't verify previous as they are split
+	require.Equal(t, genesis.Add(4), verified)
+	base, exceptions, err := tortoise.BaseBlock(ctx)
+	require.NoError(t, err)
+	// last block that is consistent with local opinion
+	ensureBlockLayerWithin(t, s.State.MeshDB, base, genesis.Add(5), genesis.Add(5))
+
+	against, support, neutral := exceptions[0], exceptions[1], exceptions[2]
+	require.Empty(t, against, "NOT IMPLEMENTED")
+	// support for all layers before last - hdist
+	for _, bid := range support {
+		ensureBlockLayerWithin(t, s.State.MeshDB, bid, genesis.Add(5), last.Sub(hdist).Sub(1))
+	}
+	// neutral for layers within hdist
+	for _, bid := range neutral {
+		ensureBlockLayerWithin(t, s.State.MeshDB, bid, last.Sub(hdist), last)
+	}
+	// test that honest nodes can switch to verifying tortoise from this condition
+	// TODO(dshulyak) compute how many layers we need to wait here and add a test to know
+	// when we switch to good blocks from recent layers
+	for i := 0; i < 11; i++ {
+		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified)
+}

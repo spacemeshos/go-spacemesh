@@ -12,13 +12,15 @@ type NextOpt func(*nextConf)
 
 func nextConfDefaults() nextConf {
 	return nextConf{
-		VoteGen: PerfectVoting,
+		VoteGen:  PerfectVoting,
+		Coinflip: true,
 	}
 }
 
 type nextConf struct {
 	Reorder  uint32
 	FailHare bool
+	Coinflip bool
 	VoteGen  VotesGenerator
 }
 
@@ -47,6 +49,13 @@ func WithoutInputVector() NextOpt {
 func WithVoteGenerator(gen VotesGenerator) NextOpt {
 	return func(c *nextConf) {
 		c.VoteGen = gen
+	}
+}
+
+// WithCoin is to setup weak coin for voting. By default coin will support blocks.
+func WithCoin(coin bool) NextOpt {
+	return func(c *nextConf) {
+		c.Coinflip = coin
 	}
 }
 
@@ -108,8 +117,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 			g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
 		}
 	}
-	// TODO parametrize coinflip
-	g.State.MeshDB.RecordCoinflip(context.Background(), layer.Index(), true)
+	g.State.MeshDB.RecordCoinflip(context.Background(), layer.Index(), cfg.Coinflip)
 	g.layers = append(g.layers, layer)
 	g.nextLayer = g.nextLayer.Add(1)
 	return layer.Index()
