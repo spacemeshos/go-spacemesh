@@ -238,7 +238,7 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 			remaining = append(remaining, tx)
 		}
 		events.ReportValidTx(tx, err == nil)
-		events.ReportNewTx(tx)
+		events.ReportNewTx(layerID, tx)
 	}
 	return
 }
