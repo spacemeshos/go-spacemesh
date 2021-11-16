@@ -485,13 +485,8 @@ func TestSynchronize_HareValidateLayersTooDelayed(t *testing.T) {
 				mm.HandleValidatedLayer(ctx, l, []types.BlockID{})
 			}).Times(1)
 	}
-	for l := gLayer.Add(1); l.Before(latestLyr); l = l.Add(1) {
-		if l == gLayer.Add(1) {
-			patrol.EXPECT().IsHareInCharge(l).Return(true).Times(1)
-		} else {
-			patrol.EXPECT().IsHareInCharge(l).Return(true).Times(maxAttemptWithinRun)
-		}
-	}
+	patrol.EXPECT().IsHareInCharge(gLayer.Add(1)).Return(true).Times(1)
+	patrol.EXPECT().IsHareInCharge(gLayer.Add(2)).Return(true).Times(maxAttemptWithinRun)
 	// the 1st layer after genesis, despite having hare started consensus protocol for it,
 	// is too much delayed.
 	validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(

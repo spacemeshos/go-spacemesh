@@ -531,9 +531,12 @@ func (s *Syncer) startValidating(ctx context.Context, run uint64, attempt int) (
 			if s.isClosed() {
 				return nil
 			}
-			if s.shouldValidate(layer.Index()) {
-				s.validateLayer(ctx, layer)
+			if !s.shouldValidate(layer.Index()) {
+				// layers should be validated in order. once we skip one layer, there is no point
+				// continuing with later layers
+				break
 			}
+			s.validateLayer(ctx, layer)
 		}
 		close(done)
 		logger.Debug("validation done for run #%v attempt #%v", run, attempt)
