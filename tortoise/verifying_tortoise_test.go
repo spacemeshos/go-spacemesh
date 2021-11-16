@@ -1120,14 +1120,14 @@ func TestCalculateExceptions(t *testing.T) {
 
 	// genesis layer
 	l0ID := types.GetEffectiveGenesis()
-	votes, err := alg.trtl.calculateExceptions(wrapContext(context.TODO()), l0ID, Opinion{})
+	votes, err := alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l0ID, Opinion{})
 	r.NoError(err)
 	// expect votes in support of all genesis blocks
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), 0)
 
 	// layer greater than last processed: expect support only for genesis
 	l1ID := l0ID.Add(1)
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
 	r.NoError(err)
 	expectVotes(votes, 0, 1, 0)
 
@@ -1135,7 +1135,7 @@ func TestCalculateExceptions(t *testing.T) {
 	alg.trtl.Last = l1ID
 
 	// missing layer data
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
 	r.NoError(err)
 	expectVotes(votes, 0, 1, 0)
 
@@ -1145,14 +1145,14 @@ func TestCalculateExceptions(t *testing.T) {
 	r.NoError(addLayerToMesh(mdb, l1))
 	alg.trtl.Last = l1ID
 	mdb.InputVectorBackupFunc = nil
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
 	r.NoError(err)
 	// expect no against, FOR only for l0, and NEUTRAL for l1
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), defaultTestLayerSize)
 
 	// adding diffs for: support all blocks in the layer
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
 	r.NoError(err)
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks())+defaultTestLayerSize, 0)
 
@@ -1160,7 +1160,7 @@ func TestCalculateExceptions(t *testing.T) {
 	mdb.InputVectorBackupFunc = nil
 	// we cannot store an empty vector here (it comes back as nil), so just put another block ID in it
 	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, []types.BlockID{mesh.GenesisBlock().ID()}))
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
 	r.NoError(err)
 
 	// we don't explicitly vote against blocks in the layer, we implicitly vote against them by not voting for them
@@ -1174,7 +1174,7 @@ func TestCalculateExceptions(t *testing.T) {
 		l1.Blocks()[1].ID():      support,
 		l1.Blocks()[2].ID():      support,
 	}
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, opinion)
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, opinion)
 	r.NoError(err)
 	expectVotes(votes, 0, 0, 0)
 
@@ -1185,7 +1185,7 @@ func TestCalculateExceptions(t *testing.T) {
 		l1.Blocks()[1].ID():      against,
 		l1.Blocks()[2].ID():      against,
 	}
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, opinion)
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, opinion)
 	r.NoError(err)
 	expectVotes(votes, 0, 4, 0)
 
@@ -1202,7 +1202,7 @@ func TestCalculateExceptions(t *testing.T) {
 		}
 		l3 = createTurtleLayer(t, l3ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 		alg.trtl.Last = l2ID
-		votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l2ID, Opinion{})
+		votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l2ID, Opinion{})
 		r.Error(err)
 		r.Contains(err.Error(), errstrTooManyExceptions, "expected too many exceptions error")
 		r.Nil(votes)
@@ -1226,7 +1226,7 @@ func TestCalculateExceptions(t *testing.T) {
 		l5ID := l4ID.Add(1)
 		createTurtleLayer(t, l5ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 		alg.trtl.Last = l4ID
-		votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l3ID, Opinion{})
+		votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l3ID, Opinion{})
 		r.NoError(err)
 		// expect votes FOR the blocks in the two intervening layers between the base block layer and the last layer
 		expectVotes(votes, 0, 2*defaultTestLayerSize, 0)
@@ -2074,7 +2074,7 @@ func TestHealBalanceAttack(t *testing.T) {
 			baseBlockID = l5BaseBlock2
 		}
 
-		evm, err := alg.trtl.calculateExceptions(wrapContext(context.TODO()), l5ID, alg.trtl.BlockOpinionsByLayer[l5ID][baseBlockID])
+		evm, err := alg.trtl.calculateExceptions(wrapContext(context.TODO()), alg.trtl.Last, l5ID, alg.trtl.BlockOpinionsByLayer[l5ID][baseBlockID])
 		r.NoError(err)
 		return baseBlockID, [][]types.BlockID{
 			blockMapToArray(evm[0]),

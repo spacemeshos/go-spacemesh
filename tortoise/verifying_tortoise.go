@@ -274,6 +274,9 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 		logger        = t.logger.WithContext(ctx)
 		disagreements = map[types.BlockID]types.LayerID{}
 		choices       []types.BlockID // choices from the best to the least bad
+
+		// TODO change it per https://github.com/spacemeshos/go-spacemesh/issues/2920
+		votinglid = t.Last
 	)
 
 	for lid := t.LastEvicted.Add(1); !lid.After(t.Last); lid = lid.Add(1) {
@@ -292,7 +295,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 
 	for _, bid := range choices {
 		lid := t.BlockLayer[bid]
-		exceptions, err := t.calculateExceptions(tctx, lid, t.BlockOpinionsByLayer[lid][bid])
+		exceptions, err := t.calculateExceptions(tctx, votinglid, lid, t.BlockOpinionsByLayer[lid][bid])
 		if err != nil {
 			logger.With().Warning("error calculating vote exceptions for block", bid, log.Err(err))
 			continue
@@ -366,10 +369,11 @@ func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, bid types.
 // opinion.
 func (t *turtle) calculateExceptions(
 	ctx *tcontext,
-	baseBlockLayerID types.LayerID,
-	baseBlockOpinion Opinion, // candidate base block's opinion vector
+	votinglid,
+	baselid types.LayerID,
+	baseopinion Opinion, // candidate base block's opinion vector
 ) ([]map[types.BlockID]struct{}, error) {
-	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("base_block_layer_id", baseBlockLayerID))
+	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("base_block_layer_id", baselid))
 
 	// using maps prevents duplicates
 	againstDiff := make(map[types.BlockID]struct{})
@@ -377,7 +381,7 @@ func (t *turtle) calculateExceptions(
 	neutralDiff := make(map[types.BlockID]struct{})
 
 	// we support all genesis blocks by default
-	if baseBlockLayerID == types.GetEffectiveGenesis() {
+	if baselid == types.GetEffectiveGenesis() {
 		for _, i := range types.BlockIDs(mesh.GenesisLayer().Blocks()) {
 			forDiff[i] = struct{}{}
 		}
@@ -388,79 +392,67 @@ func (t *turtle) calculateExceptions(
 	// "good" if its own base block is marked "good" and all exceptions it contains agree with our local opinion.
 	// We only look for and store exceptions within the sliding window set of layers as an optimization, but a block
 	// can contain exceptions from any layer, back to genesis.
-	startLayer := t.LastEvicted.Add(1)
-	if startLayer.Before(types.GetEffectiveGenesis()) {
-		startLayer = types.GetEffectiveGenesis()
-	}
-	for layerID := startLayer; !layerID.After(t.Last); layerID = layerID.Add(1) {
-		logger := logger.WithFields(log.FieldNamed("diff_layer_id", layerID))
+	for lid := t.LastEvicted.Add(1); !lid.After(t.Last); lid = lid.Add(1) {
+		logger := logger.WithFields(log.FieldNamed("diff_layer_id", lid))
 		logger.Debug("checking input vector diffs")
 
-		layerBlockIds, err := getLayerBlocksIDs(ctx, t.bdp, layerID)
+		local, err := t.getLocalOpinion(ctx, lid)
 		if err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				continue
 			}
-			return nil, fmt.Errorf("layer block IDs: %w", err)
+			return nil, err
 		}
 
 		// helper function for adding diffs
-		addDiffs := func(bid types.BlockID, voteClass string, voteVec vec, diffMap map[types.BlockID]struct{}) {
-			if v, ok := baseBlockOpinion[bid]; !ok || simplifyVote(v) != voteVec {
-				logger.With().Debug("added vote diff",
-					log.Named("diff_block", bid),
-					log.String("diff_class", voteClass),
-					log.Named("opinion", v),
-				)
-				if layerID.Before(baseBlockLayerID) {
-					logger.With().Warning("added exception before base block layer, this block will not be marked good",
-						log.Named("diff_block", bid),
-						log.String("diff_class", voteClass))
+		addDiffs := func(logger log.Log, bid types.BlockID, voteVec vec, diffMap map[types.BlockID]struct{}) {
+			if v, ok := baseopinion[bid]; !ok || simplifyVote(v) != voteVec {
+				logger.With().Debug("added vote diff", log.Named("opinion", v))
+				if lid.Before(baselid) {
+					logger.With().Warning("added exception before base block layer, this block will not be marked good")
 				}
 				diffMap[bid] = struct{}{}
 			}
 		}
 
-		// get local opinion for layer
-		layerInputVector, err := t.layerOpinionVector(ctx, layerID)
-		if err != nil {
-			// an error here signifies a real database failure
-			logger.With().Error(errstrUnableToCalculateLocalOpinion, log.Err(err))
-			return nil, err
-		}
-
-		// otherwise, nil means we should abstain
-		if layerInputVector == nil {
-			// still waiting for Hare results, vote neutral and move on
-			logger.With().Debug("input vector is empty, adding neutral diffs", log.Err(err))
-			for _, b := range layerBlockIds {
-				addDiffs(b, "neutral", abstain, neutralDiff)
+		for bid, opinion := range local {
+			usecoinflip := opinion == abstain && lid.Before(t.layerCutoff())
+			if usecoinflip {
+				if votinglid.After(types.GetEffectiveGenesis().Add(1)) {
+					coin, exist := t.bdp.GetCoinflip(ctx, votinglid.Sub(1))
+					if !exist {
+						return nil, fmt.Errorf("coinflip is not recorded in %s", votinglid.Sub(1))
+					}
+					if coin {
+						opinion = support
+					} else {
+						opinion = against
+					}
+				}
 			}
-			continue
+			logger := logger.WithFields(
+				log.Bool("use_coinflip", usecoinflip),
+				log.Named("diff_block", bid),
+				log.String("diff_class", opinion.String()),
+			)
+			switch opinion {
+			case support:
+				addDiffs(logger, bid, support, forDiff)
+			case abstain:
+				addDiffs(logger, bid, abstain, neutralDiff)
+			case against:
+				// Finally, we need to consider the case where the base block supports a block in this layer that is not in our
+				// input vector (e.g., one we haven't seen), by adding a diff against the block.
+				// We do not explicitly add votes against blocks that the base block does _not_ support, since by not voting to
+				// support a block in an old layer, we are implicitly voting against it. But if the base block does explicitly
+				// support a block and we disagree, we need to add a vote against here.
+				//
+				// TODO(dshulyak) consider what is written above and in https://github.com/spacemeshos/go-spacemesh/issues/2424
+				// but generally we will not process a block if dependencies are not fetched
+				// so the block that has some unknown to us dependency will not be even added to tortoise state
+				// addDiffs(bid, logger, against, againstDiff)
+			}
 		}
-		logger.With().Debug("got local opinion vector for layer", log.Int("count", len(layerInputVector)))
-
-		inInputVector := make(map[types.BlockID]struct{})
-
-		// Add diffs FOR blocks that are in the input vector, but where the base block has no opinion or does not
-		// explicitly support the block
-		for _, b := range layerInputVector {
-			inInputVector[b] = struct{}{}
-			addDiffs(b, "support", support, forDiff)
-		}
-
-		// Finally, we need to consider the case where the base block supports a block in this layer that is not in our
-		// input vector (e.g., one we haven't seen), by adding a diff against the block.
-		// We do not explicitly add votes against blocks that the base block does _not_ support, since by not voting to
-		// support a block in an old layer, we are implicitly voting against it. But if the base block does explicitly
-		// support a block and we disagree, we need to add a vote against here.
-		// TODO: this is not currently possible since base block opinions aren't indexed by layer. See
-		//   https://github.com/spacemeshos/go-spacemesh/issues/2424
-		//for b, v := range baseBlockOpinion.BlockOpinions {
-		//	if _, ok := inInputVector[b]; !ok && v != against {
-		//		addDiffs(b, "against", against, againstDiff)
-		//	}
-		//}
 	}
 
 	// check if exceeded max no. exceptions
