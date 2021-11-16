@@ -55,7 +55,7 @@ func (m *meshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.
 
 type mockState struct{}
 
-func (s mockState) ValidateAndAddTxToPool(tx *types.Transaction, layerID types.LayerID) error {
+func (s mockState) ValidateAndAddTxToPool(*types.Transaction, types.LayerID) error {
 	panic("implement me")
 }
 func (s mockState) LoadState(types.LayerID) error                         { return nil }
