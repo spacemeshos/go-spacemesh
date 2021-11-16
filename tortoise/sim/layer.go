@@ -18,10 +18,11 @@ func nextConfDefaults() nextConf {
 }
 
 type nextConf struct {
-	Reorder  uint32
-	FailHare bool
-	Coinflip bool
-	VoteGen  VotesGenerator
+	Reorder   uint32
+	FailHare  bool
+	EmptyHare bool
+	Coinflip  bool
+	VoteGen   VotesGenerator
 }
 
 // WithNextReorder configures when reordered layer should be returned.
@@ -42,6 +43,13 @@ func WithNextReorder(delay uint32) NextOpt {
 func WithoutInputVector() NextOpt {
 	return func(c *nextConf) {
 		c.FailHare = true
+	}
+}
+
+// WithEmptyInputVector will save empty input vector.
+func WithEmptyInputVector() NextOpt {
+	return func(c *nextConf) {
+		c.EmptyHare = true
 	}
 }
 
@@ -112,8 +120,16 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		}
 		layer.AddBlock(block)
 	}
+	if cfg.FailHare && cfg.EmptyHare {
+		g.logger.With().Panic("both FailHare and EmptyHare can't be used together")
+	}
 	if !cfg.FailHare {
 		if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), layer.BlocksIDs()); err != nil {
+			g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
+		}
+	}
+	if cfg.EmptyHare {
+		if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), []types.BlockID{}); err != nil {
 			g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
 		}
 	}

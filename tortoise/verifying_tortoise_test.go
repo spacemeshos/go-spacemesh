@@ -3103,6 +3103,9 @@ func splitVoting(n int) sim.VotesGenerator {
 			bids    = last.BlocksIDs()
 			half    = len(bids) / 2
 		)
+		if len(bids) < 2 {
+			panic("make sure that the previous layer has atleast 2 blocks in it")
+		}
 		if i < n/2 {
 			support = bids[:half]
 		} else {
@@ -3179,4 +3182,111 @@ func TestWeakCoinVoting(t *testing.T) {
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	require.Equal(t, last.Sub(1), verified)
+}
+
+func TestComputeLocalOpinion(t *testing.T) {
+	const (
+		size  = 10
+		hdist = 3
+	)
+	genesis := types.GetEffectiveGenesis()
+	for _, tc := range []struct {
+		desc     string
+		seqs     []sim.Sequence
+		lid      types.LayerID
+		expected vec
+	}{
+		{
+			desc: "ContextuallyValid",
+			seqs: []sim.Sequence{
+				sim.WithSequence(4),
+			},
+			lid:      genesis.Add(1),
+			expected: support,
+		},
+		{
+			desc: "ContextuallyInvalid",
+			seqs: []sim.Sequence{
+				sim.WithSequence(1, sim.WithEmptyInputVector()),
+				sim.WithSequence(1,
+					sim.WithVoteGenerator(gapVote),
+				),
+				sim.WithSequence(hdist),
+			},
+			lid:      genesis.Add(1),
+			expected: against,
+		},
+		{
+			desc: "SupportedByHare",
+			seqs: []sim.Sequence{
+				sim.WithSequence(4),
+			},
+			lid:      genesis.Add(4),
+			expected: support,
+		},
+		{
+			desc: "NotSupportedByHare",
+			seqs: []sim.Sequence{
+				sim.WithSequence(3),
+				sim.WithSequence(1, sim.WithEmptyInputVector()),
+			},
+			lid:      genesis.Add(4),
+			expected: against,
+		},
+		{
+			desc: "WithUnfinishedHare",
+			seqs: []sim.Sequence{
+				sim.WithSequence(3),
+				sim.WithSequence(1, sim.WithoutInputVector()),
+			},
+			lid:      genesis.Add(4),
+			expected: abstain,
+		},
+		{
+			desc: "SupportFromCountedVotes",
+			seqs: []sim.Sequence{
+				sim.WithSequence(hdist+2, sim.WithoutInputVector()),
+			},
+			lid:      genesis.Add(1),
+			expected: support,
+		},
+		{
+			desc: "AbstainFromCountedVotes",
+			seqs: []sim.Sequence{
+				sim.WithSequence(1),
+				sim.WithSequence(hdist+2,
+					sim.WithoutInputVector(),
+					sim.WithVoteGenerator(splitVoting(size)),
+				),
+			},
+			lid:      genesis.Add(2),
+			expected: abstain,
+		},
+		// TODO(dshulyak) figure out sequence that will allow to test against from counted votes
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			s := sim.New(
+				sim.WithLayerSize(size),
+			)
+			s.Setup(sim.WithSetupUnitsRange(1, 1))
+
+			ctx := context.Background()
+			cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+			cfg.LayerSize = size
+			cfg.Hdist = hdist
+			cfg.Zdist = hdist
+			tortoise := NewVerifyingTortoise(ctx, cfg)
+			for _, lid := range sim.GenLayers(s, tc.seqs...) {
+				tortoise.HandleIncomingLayer(ctx, lid)
+			}
+
+			local, err := tortoise.trtl.computeLocalOpinion(wrapContext(ctx), tc.lid)
+			require.NoError(t, err)
+
+			for bid, opinion := range local {
+				require.Equal(t, tc.expected, opinion, "block id %s", bid)
+			}
+		})
+	}
 }
