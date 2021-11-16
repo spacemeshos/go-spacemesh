@@ -30,7 +30,7 @@ type AtxFetcher interface {
 
 // TxFetcher defines an interface for fetching transactions from remote peers.
 type TxFetcher interface {
-	GetTxs(context.Context, []types.TransactionID) error
+	GetTxs(ctx context.Context, ids []types.TransactionID, layerID types.LayerID) error
 }
 
 // PoetProofFetcher defines an interface for fetching PoET proofs from remote peers.

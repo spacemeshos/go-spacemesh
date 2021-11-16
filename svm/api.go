@@ -132,8 +132,8 @@ func (svm *SVM) ValidateNonceAndBalance(transaction *types.Transaction) error {
 // it returns an error if the provided tx is not valid.
 //
 // TODO: Remove this and use a whole separate API for mempool management.
-func (svm *SVM) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	if err := svm.state.ValidateAndAddTxToPool(tx); err != nil {
+func (svm *SVM) ValidateAndAddTxToPool(tx *types.Transaction, layerID types.LayerID) error {
+	if err := svm.state.ValidateAndAddTxToPool(tx, layerID); err != nil {
 		return fmt.Errorf("SVM couldn't validate and/or add transaction to mempool: %w", err)
 	}
 	return nil
@@ -169,7 +169,7 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		return pubsub.ValidationIgnore
 	}
 
-	if err := svm.ValidateAndAddTxToPool(tx); err != nil {
+	if err := svm.ValidateAndAddTxToPool(tx, types.LayerID{}); err != nil {
 		svm.state.With().Error("SVM couldn't validate and/or add transaction to mempool", tx.ID(), log.Err(err))
 		return pubsub.ValidationIgnore
 	}
@@ -182,7 +182,7 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 // HandleSyncTransaction only deserializes transactions and stores them regardless of validity. This is because
 // transactions received via sync are necessarily referenced somewhere meaning that we must have them stored, even if
 // they're invalid, for the data availability of the referencing block.
-func (svm *SVM) HandleSyncTransaction(data []byte) error {
+func (svm *SVM) HandleSyncTransaction(data []byte, layerID types.LayerID) error {
 	var tx mesh.DbTransaction
 	err := types.BytesToInterface(data, &tx)
 	if err != nil {
@@ -192,6 +192,6 @@ func (svm *SVM) HandleSyncTransaction(data []byte) error {
 	if err = tx.CalcAndSetOrigin(); err != nil {
 		return fmt.Errorf("calculate and set origin: %w", err)
 	}
-	svm.state.AddTxToPool(tx.Transaction)
+	svm.state.AddTxToPool(tx.Transaction, layerID)
 	return nil
 }

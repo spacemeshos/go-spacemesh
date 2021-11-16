@@ -133,7 +133,7 @@ func TestBlockBuilder_createBlockLoop_Beacon(t *testing.T) {
 	require.NoError(t, err)
 
 	tx1 := NewTx(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
-	txMempool.Put(tx1.ID(), tx1)
+	txMempool.Put(tx1.ID(), tx1, types.LayerID{})
 
 	// causing it to build a block
 	builder.beginRoundEvent <- layerID
@@ -168,7 +168,7 @@ func TestBlockBuilder_createBlockLoop_NoBeacon(t *testing.T) {
 	assert.NoError(t, err)
 
 	tx1 := NewTx(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
-	txMempool.Put(tx1.ID(), tx1)
+	txMempool.Put(tx1.ID(), tx1, types.LayerID{})
 
 	// causing it to build a block
 	builder.beginRoundEvent <- layerID
@@ -228,9 +228,9 @@ func prepareBuildingBlocks(t *testing.T) (*mempool.TxMempool, []types.Transactio
 		NewTx(t, 3, recipient, signer),
 	}
 	txIDs := []types.TransactionID{trans[0].ID(), trans[1].ID(), trans[2].ID()}
-	txPool.Put(trans[0].ID(), trans[0])
-	txPool.Put(trans[1].ID(), trans[1])
-	txPool.Put(trans[2].ID(), trans[2])
+	txPool.Put(trans[0].ID(), trans[0], types.LayerID{})
+	txPool.Put(trans[1].ID(), trans[1], types.LayerID{})
+	txPool.Put(trans[2].ID(), trans[2], types.LayerID{})
 
 	return txPool, txIDs
 }

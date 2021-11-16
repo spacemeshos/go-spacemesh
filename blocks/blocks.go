@@ -199,7 +199,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 
 	// get the TXs
 	if len(block.TxIDs) > 0 {
-		err := bh.fetcher.GetTxs(ctx, block.TxIDs)
+		err := bh.fetcher.GetTxs(ctx, block.TxIDs, block.LayerIndex)
 		if err != nil {
 			return fmt.Errorf("failed to fetch txs %v e: %v", block.ID(), err)
 		}

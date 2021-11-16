@@ -55,16 +55,16 @@ type state interface {
 	GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
 	GetStateRoot() types.Hash32
 	LoadState(layer types.LayerID) error
-	ValidateAndAddTxToPool(tx *types.Transaction) error
+	ValidateAndAddTxToPool(tx *types.Transaction, layerID types.LayerID) error
 	GetBalance(addr types.Address) uint64
 	GetNonce(addr types.Address) uint64
 	GetAllAccounts() (*types.MultipleAccountsState, error)
 }
 
 type txMemPool interface {
-	Invalidate(id types.TransactionID)
+	Invalidate(txID types.TransactionID, layerID types.LayerID)
 	Get(id types.TransactionID) (*types.Transaction, error)
-	Put(id types.TransactionID, tx *types.Transaction)
+	Put(id types.TransactionID, tx *types.Transaction, layerID types.LayerID)
 }
 
 // AtxDB holds logic for working with atxs.
@@ -490,7 +490,7 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 		msh.removeRejectedFromAccountTxs(account, grouped, l)
 	}
 	for _, tx := range returnedTxs {
-		if err := msh.ValidateAndAddTxToPool(tx); err == nil {
+		if err := msh.ValidateAndAddTxToPool(tx, l); err == nil {
 			// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
 			msh.With().Info("transaction from contextually invalid block re-added to mempool", tx.ID())
 		}
@@ -786,7 +786,7 @@ func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
 
 func (msh *Mesh) invalidateFromPools(blk *types.MiniBlock) {
 	for _, id := range blk.TxIDs {
-		msh.txPool.Invalidate(id)
+		msh.txPool.Invalidate(id, blk.LayerIndex)
 	}
 }
 

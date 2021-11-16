@@ -78,7 +78,7 @@ func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, bl []*types.Bloc
 
 type MockState struct{}
 
-func (MockState) ValidateAndAddTxToPool(*types.Transaction) error {
+func (MockState) ValidateAndAddTxToPool(*types.Transaction, types.LayerID) error {
 	return nil
 }
 
@@ -136,11 +136,11 @@ func (m *MockTxMemPool) Get(ID types.TransactionID) (*types.Transaction, error) 
 	return m.db[ID], nil
 }
 
-func (m *MockTxMemPool) Put(ID types.TransactionID, t *types.Transaction) {
-	m.db[ID] = t
+func (m *MockTxMemPool) Put(id types.TransactionID, tx *types.Transaction, layerID types.LayerID) {
+	m.db[id] = tx
 }
 
-func (MockTxMemPool) Invalidate(types.TransactionID) {
+func (MockTxMemPool) Invalidate(types.TransactionID, types.LayerID) {
 }
 
 func getMesh(tb testing.TB, id string) *Mesh {
@@ -686,7 +686,7 @@ func addBlockWithTxs(r *require.Assertions, msh *Mesh, id types.LayerID, valid b
 	blk := types.NewExistingBlock(id, []byte("data"), nil)
 	for _, tx := range txs {
 		blk.TxIDs = append(blk.TxIDs, tx.ID())
-		msh.txPool.Put(tx.ID(), tx)
+		msh.txPool.Put(tx.ID(), tx, types.LayerID{})
 	}
 	blk.Initialize()
 	err := msh.SaveContextualValidity(blk.ID(), blk.LayerIndex, valid)
@@ -705,7 +705,7 @@ func addManyTXsToPool(r *require.Assertions, msh *Mesh, numOfTxs int) ([]types.T
 		r.NoError(err)
 		txs[i] = tx
 		txIDs[i] = tx.ID()
-		msh.txPool.Put(tx.ID(), tx)
+		msh.txPool.Put(tx.ID(), tx, types.LayerID{})
 	}
 	return txIDs, txs
 }

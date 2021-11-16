@@ -32,7 +32,7 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.Equal(prevBalance, balance)
 
 	tx1 := newTx(t, 4, 50, signer)
-	pool.Put(tx1.ID(), tx1)
+	pool.Put(tx1.ID(), tx1, types.LayerID{})
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+1, nonce)
 	r.Equal(prevBalance-50, balance)
@@ -40,7 +40,7 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.ElementsMatch([]*types.Transaction{tx1}, pool.GetTxsByAddress(tx1.Recipient))
 
 	tx2 := newTx(t, 5, 150, signer)
-	pool.Put(tx2.ID(), tx2)
+	pool.Put(tx2.ID(), tx2, types.LayerID{})
 	nonce, balance = pool.GetProjection(origin, prevNonce, prevBalance)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
@@ -48,7 +48,7 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.ElementsMatch([]*types.Transaction{tx1}, pool.GetTxsByAddress(tx1.Recipient))
 	r.ElementsMatch([]*types.Transaction{tx2}, pool.GetTxsByAddress(tx2.Recipient))
 
-	pool.Invalidate(tx1.ID())
+	pool.Invalidate(tx1.ID(), types.LayerID{})
 	nonce, balance = pool.GetProjection(origin, prevNonce+1, prevBalance-50)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
@@ -81,7 +81,7 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 	for i := uint64(0); i < numTxs; i++ {
 		tx := newTx(t, prevNonce+i, 50, signer)
 		ids[i] = tx.ID()
-		pool.Put(ids[i], tx)
+		pool.Put(ids[i], tx, types.LayerID{})
 	}
 
 	nonce, balance := pool.GetProjection(origin, prevNonce, prevBalance)
@@ -157,14 +157,14 @@ func BenchmarkTxPoolWithAccounts(b *testing.B) {
 
 func addBatch(pool *TxMempool, txBatch []*types.Transaction, txIDBatch []types.TransactionID, wg *sync.WaitGroup) {
 	for i, tx := range txBatch {
-		pool.Put(txIDBatch[i], tx)
+		pool.Put(txIDBatch[i], tx, types.LayerID{})
 	}
 	wg.Done()
 }
 
 func invalidateBatch(pool *TxMempool, txIDBatch []types.TransactionID, wg *sync.WaitGroup) {
 	for _, txID := range txIDBatch {
-		pool.Invalidate(txID)
+		pool.Invalidate(txID, types.LayerID{})
 	}
 	wg.Done()
 }

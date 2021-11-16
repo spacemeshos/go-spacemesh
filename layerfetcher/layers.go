@@ -31,7 +31,7 @@ type blockHandler interface {
 
 // TxProcessor is an interface for handling TX data received in sync.
 type TxProcessor interface {
-	HandleSyncTransaction(data []byte) error
+	HandleSyncTransaction(data []byte, layerID types.LayerID) error
 }
 
 // layerDB is an interface that returns layer data and blocks.
@@ -457,12 +457,12 @@ func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byt
 	return nil
 }
 
-func (l *Logic) getTxResult(ctx context.Context, hash types.Hash32, data []byte) error {
+func (l *Logic) getTxResult(ctx context.Context, hash types.Hash32, layerID types.LayerID, data []byte) error {
 	l.log.WithContext(ctx).With().Debug("got response for TX",
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
 
-	if err := l.txs.HandleSyncTransaction(data); err != nil {
+	if err := l.txs.HandleSyncTransaction(data, layerID); err != nil {
 		return fmt.Errorf("handle tx sync data: %w", err)
 	}
 
@@ -605,9 +605,9 @@ func (l *Logic) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
 }
 
 // GetTxs fetches the txs provided as IDs and validates them, returns an error if one TX failed to be fetched.
-func (l *Logic) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
-	hashes := make([]types.Hash32, 0, len(IDs))
-	for _, atxID := range IDs {
+func (l *Logic) GetTxs(ctx context.Context, ids []types.TransactionID, layerID types.LayerID) error {
+	hashes := make([]types.Hash32, 0, len(ids))
+	for _, atxID := range ids {
 		hashes = append(hashes, atxID.Hash32())
 	}
 	results := l.fetcher.GetHashes(hashes, fetch.TXDB, false)
@@ -618,7 +618,7 @@ func (l *Logic) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
 			continue
 		}
 		if !res.IsLocal {
-			err := l.getTxResult(ctx, hash, res.Data)
+			err := l.getTxResult(ctx, hash, layerID, res.Data)
 			if err != nil {
 				return err
 			}

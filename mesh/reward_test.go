@@ -29,7 +29,7 @@ func (s *MockMapState) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
-func (s *MockMapState) ValidateAndAddTxToPool(tx *types.Transaction) error {
+func (s *MockMapState) ValidateAndAddTxToPool(tx *types.Transaction, layerID types.LayerID) error {
 	s.Pool = append(s.Pool, tx)
 	return nil
 }
@@ -362,7 +362,7 @@ func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id typ
 		}
 		txs := srcMesh.getTxs(b.TxIDs, l.Index())
 		for _, tx := range txs {
-			dstMesh.txPool.Put(tx.ID(), tx)
+			dstMesh.txPool.Put(tx.ID(), tx, types.LayerID{})
 		}
 		atx, err := srcMesh.GetFullAtx(b.ATXID)
 		assert.NoError(t, err)

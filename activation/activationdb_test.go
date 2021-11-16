@@ -74,7 +74,7 @@ func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
-func (MockState) ValidateAndAddTxToPool(*types.Transaction) error {
+func (MockState) ValidateAndAddTxToPool(*types.Transaction, types.LayerID) error {
 	panic("implement me")
 }
 
@@ -120,8 +120,8 @@ func (MockTxMemPool) Get(types.TransactionID) (*types.Transaction, error) {
 	return &types.Transaction{}, nil
 }
 
-func (MockTxMemPool) Put(types.TransactionID, *types.Transaction) {}
-func (MockTxMemPool) Invalidate(types.TransactionID)              {}
+func (MockTxMemPool) Put(types.TransactionID, *types.Transaction, types.LayerID) {}
+func (MockTxMemPool) Invalidate(types.TransactionID, types.LayerID)              {}
 
 func ConfigTst() mesh.Config {
 	return mesh.Config{
