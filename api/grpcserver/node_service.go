@@ -145,7 +145,18 @@ func (s NodeService) UpdatePoetServer(ctx context.Context, req *pb.UpdatePoetSer
 // StatusStream exposes a stream of node status updates.
 func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
-	statusStream := events.GetStatusChannel()
+
+	var statusStream <-chan interface{}
+
+	if statusSubscription := events.SubscribeStatus(); statusSubscription != nil {
+		defer func() {
+			if err := statusSubscription.Close(); err != nil {
+				log.With().Panic("Failed to close status subscription: " + err.Error())
+			}
+		}()
+
+		statusStream = statusSubscription.Out()
+	}
 
 	for {
 		select {
@@ -183,15 +194,28 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 // ErrorStream exposes a stream of node errors.
 func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
-	errorStream := events.GetErrorChannel()
+
+	var errorStream <-chan interface{}
+
+	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
+		defer func() {
+			if err := errorsSubscription.Close(); err != nil {
+				log.With().Panic("Failed to close errors subscription: " + err.Error())
+			}
+		}()
+
+		errorStream = errorsSubscription.Out()
+	}
 
 	for {
 		select {
-		case nodeError, ok := <-errorStream:
+		case nodeErrorEvent, ok := <-errorStream:
 			if !ok {
 				log.Info("ErrorStream closed, shutting down")
 				return nil
 			}
+
+			nodeError := nodeErrorEvent.(events.NodeError)
 
 			resp := &pb.ErrorStreamResponse{Error: &pb.NodeError{
 				Level:      convertErrorLevel(nodeError.Level),

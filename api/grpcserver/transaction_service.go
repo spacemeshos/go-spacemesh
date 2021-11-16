@@ -178,13 +178,31 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	}
 
 	// The tx channel tells us about newly received and newly created transactions
-	channelTx := events.GetNewTxChannel()
 	// The layer channel tells us about status updates
-	channelLayer := events.GetLayerChannel()
+	var channelTx, channelLayer <-chan interface{}
+
+	if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
+		defer func() {
+			if err := txsSubscription.Close(); err != nil {
+				log.With().Panic("Failed to close txs subscription: " + err.Error())
+			}
+		}()
+		channelTx = txsSubscription.Out()
+	}
+
+	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
+		defer func() {
+			if err := layersSubscription.Close(); err != nil {
+				log.With().Panic("Failed to close layers subscription: " + err.Error())
+			}
+		}()
+
+		channelLayer = layersSubscription.Out()
+	}
 
 	for {
 		select {
-		case tx, ok := <-channelTx:
+		case txEvent, ok := <-channelTx:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -193,6 +211,8 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				log.Info("tx channel closed, shutting down")
 				return nil
 			}
+
+			tx := txEvent.(events.Transaction)
 
 			// Filter
 			for _, txid := range in.TransactionId {
@@ -223,7 +243,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 					break
 				}
 			}
-		case layer, ok := <-channelLayer:
+		case layerEvent, ok := <-channelLayer:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -233,6 +253,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				return nil
 			}
 
+			layer := layerEvent.(events.LayerUpdate)
 			// Transaction objects do not have an associated status. The status we assign them here is based on the
 			// status of the layer (really, the block) they're contained in. Here, we receive updates to layer status.
 			// In order to update tx status, we have to read every transaction in the layer.

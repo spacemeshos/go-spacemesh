@@ -271,18 +271,39 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 
 	// Subscribe to the various streams
 	var (
-		channelAccount chan types.Address
-		channelReward  chan events.Reward
-		channelReceipt chan events.TxReceipt
+		channelAccount <-chan interface{}
+		channelReward  <-chan interface{}
+		channelReceipt <-chan interface{}
 	)
 	if filterAccount {
-		channelAccount = events.GetAccountChannel()
+		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
+			defer func() {
+				if err := accountSubscription.Close(); err != nil {
+					log.With().Panic("Failed to close account subscription: " + err.Error())
+				}
+			}()
+			channelAccount = accountSubscription.Out()
+		}
 	}
 	if filterReward {
-		channelReward = events.GetRewardChannel()
+		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
+			defer func() {
+				if err := rewardsSubscription.Close(); err != nil {
+					log.With().Panic("Failed to close rewards subscription: " + err.Error())
+				}
+			}()
+			channelReward = rewardsSubscription.Out()
+		}
 	}
 	if filterReceipt {
-		channelReceipt = events.GetReceiptChannel()
+		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
+			defer func() {
+				if err := receiptsSubscription.Close(); err != nil {
+					log.With().Panic("Failed to close account subscription: " + err.Error())
+				}
+			}()
+			channelReceipt = receiptsSubscription.Out()
+		}
 	}
 
 	for {
@@ -313,7 +334,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
-		case reward, ok := <-channelReward:
+		case rewardEvent, ok := <-channelReward:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -322,6 +343,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				log.Info("reward channel closed, shutting down")
 				return nil
 			}
+			reward := rewardEvent.(events.Reward)
 			// Apply address filter
 			if reward.Coinbase == addr {
 				resp := &pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
@@ -340,7 +362,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
-		case receipt, ok := <-channelReceipt:
+		case receiptEvent, ok := <-channelReceipt:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -349,6 +371,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				log.Info("receipt channel closed, shutting down")
 				return nil
 			}
+			receipt := receiptEvent.(events.TxReceipt)
 			// Apply address filter
 			if receipt.Address == addr {
 				resp := &pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Receipt{
@@ -388,17 +411,30 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 	}
 	smesherIDBytes := in.Id.Id
 
+	var channelReward <-chan interface{}
+
 	// subscribe to the rewards channel
-	channelReward := events.GetRewardChannel()
+	if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
+		defer func() {
+			if err := rewardsSubscription.Close(); err != nil {
+				log.With().Panic("Failed to close rewards subscription: " + err.Error())
+			}
+		}()
+
+		channelReward = rewardsSubscription.Out()
+	}
 
 	for {
 		select {
-		case reward, ok := <-channelReward:
+		case rewardEvent, ok := <-channelReward:
 			if !ok {
 				// shut down the reward channel
 				log.Info("Reward channel closed, shutting down")
 				return nil
 			}
+
+			reward := rewardEvent.(events.Reward)
+
 			// filter on the smesherID
 			if comp := bytes.Compare(reward.Smesher.ToBytes(), smesherIDBytes); comp == 0 {
 				resp := &pb.SmesherRewardStreamResponse{
@@ -448,29 +484,57 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 
 	// Subscribe to the various streams
 	var (
-		channelAccount chan types.Address
-		channelReward  chan events.Reward
-		channelReceipt chan events.TxReceipt
-		channelLayer   chan events.LayerUpdate
+		channelAccount <-chan interface{}
+		channelReward  <-chan interface{}
+		channelReceipt <-chan interface{}
+		channelLayer   <-chan interface{}
 	)
 	if filterAccount {
-		channelAccount = events.GetAccountChannel()
+		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
+			defer func() {
+				if err := accountSubscription.Close(); err != nil {
+					log.With().Panic("Failed to close account subscription: " + err.Error())
+				}
+			}()
+			channelAccount = accountSubscription.Out()
+		}
 	}
 	if filterReward {
-		channelReward = events.GetRewardChannel()
+		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
+			defer func() {
+				if err := rewardsSubscription.Close(); err != nil {
+					log.With().Panic("Failed to close rewards subscription: " + err.Error())
+				}
+			}()
+			channelReward = rewardsSubscription.Out()
+		}
 	}
 	if filterReceipt {
-		channelReceipt = events.GetReceiptChannel()
+		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
+			defer func() {
+				if err := receiptsSubscription.Close(); err != nil {
+					log.With().Panic("Failed to close receipts subscription: " + err.Error())
+				}
+			}()
+			channelReceipt = receiptsSubscription.Out()
+		}
 	}
 	if filterState {
 		// Whenever new state is applied to the mesh, a new layer is reported.
 		// There is no separate reporting specifically for new state.
-		channelLayer = events.GetLayerChannel()
+		if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
+			defer func() {
+				if err := layersSubscription.Close(); err != nil {
+					log.With().Panic("Failed to close layers subscription: " + err.Error())
+				}
+			}()
+			channelLayer = layersSubscription.Out()
+		}
 	}
 
 	for {
 		select {
-		case updatedAccount, ok := <-channelAccount:
+		case updatedAccountEvent, ok := <-channelAccount:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -479,6 +543,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Info("account channel closed, shutting down")
 				return nil
 			}
+			updatedAccount := updatedAccountEvent.(events.Account).Address
 			// The Reporter service just sends us the account address. We are responsible
 			// for looking up the other required data here. Get the account balance and
 			// nonce.
@@ -493,7 +558,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case reward, ok := <-channelReward:
+		case rewardEvent, ok := <-channelReward:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -502,6 +567,9 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Info("reward channel closed, shutting down")
 				return nil
 			}
+
+			reward := rewardEvent.(events.Reward)
+
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
 					Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
@@ -517,7 +585,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case receipt, ok := <-channelReceipt:
+		case receiptEvent, ok := <-channelReceipt:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -526,6 +594,9 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Info("receipt channel closed, shutting down")
 				return nil
 			}
+
+			receipt := receiptEvent.(events.TxReceipt)
+
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Receipt{
 				Receipt: &pb.TransactionReceipt{
 					Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
@@ -540,7 +611,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case layer, ok := <-channelLayer:
+		case layerEvent, ok := <-channelLayer:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -549,6 +620,9 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 				log.Info("layer channel closed, shutting down")
 				return nil
 			}
+
+			layer := layerEvent.(events.LayerUpdate)
+
 			root, err := s.Mesh.GetLayerStateRoot(layer.LayerID)
 			if err != nil {
 				log.Error("error retrieving layer data: %s", err)
