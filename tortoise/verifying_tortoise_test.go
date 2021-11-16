@@ -196,7 +196,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 					continue
 				}
 
-				weight, err := trtl.voteWeightByID(context.TODO(), bid, i)
+				weight, err := trtl.voteWeightByID(context.TODO(), bid)
 				require.NoError(t, err)
 				sum = sum.Add(opinionVote.Multiply(weight))
 			}
@@ -1689,53 +1689,6 @@ func TestVerifyLayers(t *testing.T) {
 		r.NoError(alg.trtl.verifyLayers(wrapContext(context.TODO())))
 		r.Equal(int(l5ID.Uint32()), int(alg.trtl.Verified.Uint32()))
 	})
-}
-
-func TestLayerVoteVector(t *testing.T) {
-	r := require.New(t)
-
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
-	var blockIDs []types.BlockID
-	for _, block := range l1Blocks {
-		blockIDs = append(blockIDs, block.ID())
-	}
-
-	// empty input: expect empty output
-	emptyVec := make([]types.BlockID, 0, 0)
-	voteMap := alg.trtl.layerVoteVector(emptyVec, emptyVec)
-	r.Equal(map[types.BlockID]vec{}, voteMap)
-
-	// nil input vector: abstain on all blocks in layer
-	voteMap = alg.trtl.layerVoteVector(blockIDs, nil)
-	r.Len(blockIDs, 3)
-	r.Equal(map[types.BlockID]vec{
-		blockIDs[0]: abstain,
-		blockIDs[1]: abstain,
-		blockIDs[2]: abstain,
-	}, voteMap)
-
-	// empty input vector: vote against everything
-	voteMap = alg.trtl.layerVoteVector(blockIDs, make([]types.BlockID, 0, 0))
-	r.Len(blockIDs, 3)
-	r.Equal(map[types.BlockID]vec{
-		blockIDs[0]: against,
-		blockIDs[1]: against,
-		blockIDs[2]: against,
-	}, voteMap)
-
-	// adds support for blocks in input vector
-	voteMap = alg.trtl.layerVoteVector(blockIDs, blockIDs[1:])
-	r.Len(blockIDs, 3)
-	r.Equal(map[types.BlockID]vec{
-		blockIDs[0]: against,
-		blockIDs[1]: support,
-		blockIDs[2]: support,
-	}, voteMap)
 }
 
 func TestSumVotesForBlock(t *testing.T) {
