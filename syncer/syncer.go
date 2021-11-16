@@ -50,6 +50,9 @@ const (
 
 	// the max amount of layer delays syncer can tolerate before it tries to validate a layer.
 	maxHareDelayLayers uint32 = 10
+
+	// the max number of attempts syncer tries to advance the processed layer within a sync run.
+	maxAttemptWithinRun = 3
 )
 
 type syncState uint32
@@ -307,28 +310,25 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	var (
 		vQueue chan *types.Layer
 		vDone  chan struct{}
-
-		target = s.mesh.ProcessedLayer()
 		// number of attempts to start a validation goroutine
-		attempt = 1
+		attempt = 0
 		// whether the data sync succeed. validation failure is not checked by design.
 		success = true
 	)
-	attemptFunc := func() (bool, types.LayerID) {
+
+	attemptFunc := func() bool {
 		var (
-			layer       *types.Layer
-			syncedLayer types.LayerID
-			err         error
+			layer *types.Layer
+			err   error
 		)
 		// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis
 		// and retry in the next sync run if validation fails.
-		// our clock starts ticking from 1 so it is safe to skip layer 0
+		// our clock starts ticking from 1, so it is safe to skip layer 0
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
 			if layer, err = s.syncLayer(ctx, layerID); err != nil {
-				return false, layerID
+				return false
 			}
-			syncedLayer = layerID
 			vQueue <- layer
 			logger.With().Debug("finished data sync", layerID)
 		}
@@ -337,12 +337,18 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 			log.FieldNamed("latest", s.mesh.LatestLayer()),
 			log.FieldNamed("processed", s.mesh.ProcessedLayer()))
-		return true, syncedLayer
+		return true
 	}
+
 	// check if we are on target. if not, do the sync loop again
-	for ; success && target != s.ticker.GetCurrentLayer().Sub(1); attempt++ {
+	for success && !s.stateOnTarget() {
+		attempt++
+		if attempt > maxAttemptWithinRun {
+			logger.Info("all data synced but unable to advance processed layer after max attempts")
+			break
+		}
 		vQueue, vDone = s.startValidating(ctx, s.run, attempt)
-		success, target = attemptFunc()
+		success = attemptFunc()
 		close(vQueue)
 		select {
 		case <-vDone:
@@ -386,25 +392,36 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	}
 }
 
+func (s *Syncer) stateOnTarget() bool {
+	return !s.mesh.ProcessedLayer().Before(s.ticker.GetCurrentLayer().Sub(1))
+}
+
 func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	currSyncState := s.getSyncState()
 	current := s.ticker.GetCurrentLayer()
 
+	// for the gossipSync/notSynced states, we check if the mesh state is on target before we advance sync state.
+	// but for the synced state, we don't check the mesh state because gossip+hare+tortoise are in charge of
+	// advancing processed/verified layers.  syncer is just auxiliary that fetches data in case of a temporary
+	// network outage.
 	switch currSyncState {
 	case synced:
-		// while synced, gossip+hare+tortoise will be in charge of advancing processed/verified layers.
-		// syncer is just auxiliary that fetches data in case of a temporary network outage.
 		latest := s.mesh.LatestLayer()
 		if !success && isTooFarBehind(current, latest, s.logger.WithContext(ctx)) {
 			s.setSyncState(ctx, notSynced)
 		}
 	case gossipSync:
+		if !success || !s.stateOnTarget() {
+			// push out the target synced layer
+			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
+			break
+		}
 		// if we have gossip-synced to the target synced layer, we are ready to participate in consensus
-		if success && !s.getTargetSyncedLayer().After(current) {
+		if !s.getTargetSyncedLayer().After(current) {
 			s.setSyncState(ctx, synced)
 		}
 	case notSynced:
-		if success {
+		if success && s.stateOnTarget() {
 			// wait till s.ticker.GetCurrentLayer() + numGossipSyncLayers to participate in consensus
 			s.setSyncState(ctx, gossipSync)
 			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
@@ -473,7 +490,7 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 		s.logger.WithContext(ctx).With().Debug("getting atxs", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
-			// dont fail sync if we cannot fetch atxs for the current epoch before the last layer
+			// don't fail sync if we cannot fetch atxs for the current epoch before the last layer
 			if !atCurrentEpoch || atLastLayerOfEpoch {
 				s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", layerID, epoch, log.Err(err))
 				return fmt.Errorf("get epoch ATXs: %w", err)
