@@ -104,20 +104,15 @@ func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingT
 // LatestComplete returns the latest verified layer.
 func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
 	trtl.mu.RLock()
-	verified := trtl.trtl.Verified
-	trtl.mu.RUnlock()
-	return verified
+	defer trtl.mu.RUnlock()
+	return trtl.trtl.Verified
 }
 
 // BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
 func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	trtl.mu.RLock()
 	defer trtl.mu.RUnlock()
-	block, diffs, err := trtl.trtl.BaseBlock(ctx)
-	if err != nil {
-		return types.BlockID{}, nil, err
-	}
-	return block, diffs, err
+	return trtl.trtl.BaseBlock(ctx)
 }
 
 // HandleIncomingLayer processes all layer block votes
