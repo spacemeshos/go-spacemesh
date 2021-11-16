@@ -459,7 +459,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 
 	// Subscribe to the stream of transactions and activations
 	var (
-		txStream          chan events.TransactionWithValidity
+		txStream          chan events.TransactionWithLayerAndValidity
 		activationsStream chan *types.ActivationTx
 	)
 	if filterTx {
@@ -509,12 +509,14 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 				return nil
 			}
 			// Apply address filter
-			// TODO(dshulyak) include layerID when streamed too
 			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.Recipient == addr) {
 				resp := &pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_MeshTransaction{
-							MeshTransaction: &pb.MeshTransaction{Transaction: convertTransaction(tx.Transaction)},
+							MeshTransaction: &pb.MeshTransaction{
+								Transaction: convertTransaction(tx.Transaction),
+								LayerId:     &pb.LayerNumber{Number: tx.LayerID.Uint32()},
+							},
 						},
 					},
 				}
