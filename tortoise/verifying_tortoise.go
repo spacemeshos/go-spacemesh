@@ -816,8 +816,6 @@ func (t *turtle) handleLayerBlocks(ctx *tcontext, layerID types.LayerID) error {
 }
 
 func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.LayerID) (map[types.BlockID]bool, error) {
-	// note: if the following checks fail, we just return rather than trying to verify later layers.
-	// we don't presently support verifying layer N+1 when layer N hasn't been verified.
 	localOpinion, err := t.getLocalOpinion(ctx, lid)
 	if err != nil {
 		return nil, err
@@ -995,11 +993,8 @@ func (t *turtle) verifyLayers(ctx *tcontext) error {
 			logger.With().Info("verified candidate layer", log.FieldNamed("new_verified", t.Verified))
 		} else {
 			healed, err := t.healingTortoise(ctx, logger, candidateLayerID)
-			if err != nil {
+			if err != nil || !healed {
 				return err
-			}
-			if !healed {
-				return nil
 			}
 		}
 	}
