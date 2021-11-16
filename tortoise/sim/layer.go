@@ -12,7 +12,7 @@ type NextOpt func(*nextConf)
 
 func nextConfDefaults() nextConf {
 	return nextConf{
-		VoteGen: perfectVoting,
+		VoteGen: PerfectVoting,
 	}
 }
 
@@ -80,7 +80,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		// TODO base block selection algorithm must be selected as an option
 		// so that erroneous base block selection can be defined as a failure condition
 
-		voting := cfg.VoteGen(g.rng, g.layers)
+		voting := cfg.VoteGen(g.rng, g.layers, i)
 		data := make([]byte, 20)
 		g.rng.Read(data)
 		block := &types.Block{
