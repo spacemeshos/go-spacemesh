@@ -280,7 +280,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 	// calc p
 	if committeeSize > int(totalWeight) {
-		logger.With().Warning("committee size is greater than total weight",
+		logger.With().Debug("committee size is greater than total weight",
 			log.Int("committee_size", committeeSize),
 			log.Uint64("total_weight", totalWeight),
 		)
