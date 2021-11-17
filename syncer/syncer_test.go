@@ -119,12 +119,6 @@ func (mv *mockValidator) HandleLateBlocks(_ context.Context, blocks []*types.Blo
 	return blocks[0].Layer(), blocks[0].Layer().Sub(1)
 }
 
-func feedLayerResultNTimes(from, to types.LayerID, mf *mockFetcher, msh *mesh.Mesh, n int) {
-	for i := 0; i < n; i++ {
-		feedLayerResult(from, to, mf, msh)
-	}
-}
-
 func feedLayerResult(from, to types.LayerID, mf *mockFetcher, msh *mesh.Mesh) {
 	for i := from; !i.After(to); i = i.Add(1) {
 		msh.SetZeroBlockLayer(i)
@@ -381,7 +375,7 @@ func TestSynchronize_MaxAttemptWithinRun(t *testing.T) {
 	}()
 
 	// allow synchronize to finish
-	feedLayerResultNTimes(current, lastLayer.Sub(1), mf, mm, maxAttemptWithinRun)
+	feedLayerResult(current, lastLayer.Sub(1), mf, mm)
 	wg.Wait()
 
 	assert.False(t, syncer.stateOnTarget())
@@ -454,10 +448,7 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 	}()
 
 	// allow synchronize to finish
-	// for 1st attempt
 	feedLayerResult(gLayer.Add(1), lyr, mf, mm)
-	// for 2nd/3rd attempt
-	feedLayerResultNTimes(lyr, lyr, mf, mm, 2)
 	wg.Wait()
 
 	assert.False(t, syncer.stateOnTarget())
@@ -508,10 +499,7 @@ func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 	}()
 
 	// allow synchronize to finish
-	// for 1st attempt
 	feedLayerResult(gLayer.Add(1), lyr, mf, mm)
-	// for 2nd/3rd attempt
-	feedLayerResultNTimes(lyr, lyr, mf, mm, 2)
 	wg.Wait()
 
 	assert.False(t, syncer.stateOnTarget())
@@ -579,10 +567,7 @@ func TestSynchronize_HareValidateLayersTooDelayed(t *testing.T) {
 	}()
 
 	// allow synchronize to finish
-	// for 1st attempt
 	feedLayerResult(gLayer.Add(1), latestLyr.Sub(1), mf, mm)
-	// for 2nd/3rd attempt
-	feedLayerResultNTimes(gLayer.Add(2), latestLyr.Sub(1), mf, mm, 2)
 	wg.Wait()
 
 	assert.False(t, syncer.stateOnTarget())

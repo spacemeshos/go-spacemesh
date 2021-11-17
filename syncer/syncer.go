@@ -317,6 +317,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		attempt = 0
 		// whether the data sync succeed. validation failure is not checked by design.
 		success = true
+		// the last layer that is synced in this run
+		lastSynced = s.mesh.ProcessedLayer()
 	)
 
 	attemptFunc := func() bool {
@@ -329,8 +331,15 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		// our clock starts ticking from 1, so it is safe to skip layer 0
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
-			if layer, err = s.syncLayer(ctx, layerID); err != nil {
-				return false
+			if layerID.After(lastSynced) {
+				lastSynced = layerID
+				if layer, err = s.syncLayer(ctx, layerID); err != nil {
+					return false
+				}
+			} else {
+				if layer, err = s.mesh.GetLayer(layerID); err != nil {
+					return false
+				}
 			}
 			vQueue <- layer
 			logger.With().Debug("finished data sync", layerID)
