@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
@@ -89,6 +90,7 @@ type Syncer struct {
 
 	conf      Configuration
 	ticker    layerTicker
+	beacons   blocks.BeaconGetter
 	mesh      *mesh.Mesh
 	validator layerValidator
 	fetcher   layerFetcher
@@ -118,12 +120,13 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new Syncer instance.
-func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
+func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beacons blocks.BeaconGetter, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
 	return &Syncer{
 		logger:            logger,
 		conf:              conf,
 		ticker:            ticker,
+		beacons:           beacons,
 		mesh:              mesh,
 		validator:         mesh,
 		fetcher:           fetcher,
@@ -314,6 +317,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		attempt = 0
 		// whether the data sync succeed. validation failure is not checked by design.
 		success = true
+		// the last layer that is synced in this run
+		lastSynced = s.mesh.ProcessedLayer()
 	)
 
 	attemptFunc := func() bool {
@@ -326,8 +331,15 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		// our clock starts ticking from 1, so it is safe to skip layer 0
 		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
 		for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
-			if layer, err = s.syncLayer(ctx, layerID); err != nil {
-				return false
+			if layerID.After(lastSynced) {
+				lastSynced = layerID
+				if layer, err = s.syncLayer(ctx, layerID); err != nil {
+					return false
+				}
+			} else {
+				if layer, err = s.mesh.GetLayer(layerID); err != nil {
+					return false
+				}
 			}
 			vQueue <- layer
 			logger.With().Debug("finished data sync", layerID)
@@ -507,9 +519,20 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
 	lag := s.mesh.LatestLayer().Sub(layerID.Uint32())
 	if s.patrol.IsHareInCharge(layerID) && lag.Value < maxHareDelayLayers {
-		s.logger.With().Debug("skip validating layer", layerID)
+		s.logger.With().Info("skip validating layer: hare still working", layerID)
 		return false
 	}
+
+	epoch := layerID.GetEpoch()
+	if epoch.IsGenesis() {
+		return true
+	}
+
+	if _, err := s.beacons.GetBeacon(epoch); err != nil {
+		s.logger.With().Info("skip validating layer: beacon not available", layerID.GetEpoch())
+		return false
+	}
+
 	return true
 }
 
@@ -531,9 +554,12 @@ func (s *Syncer) startValidating(ctx context.Context, run uint64, attempt int) (
 			if s.isClosed() {
 				return nil
 			}
-			if s.shouldValidate(layer.Index()) {
-				s.validateLayer(ctx, layer)
+			if !s.shouldValidate(layer.Index()) {
+				// layers should be validated in order. once we skip one layer, there is no point
+				// continuing with later layers
+				break
 			}
+			s.validateLayer(ctx, layer)
 		}
 		close(done)
 		logger.Debug("validation done for run #%v attempt #%v", run, attempt)
