@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
@@ -89,6 +90,7 @@ type Syncer struct {
 
 	conf      Configuration
 	ticker    layerTicker
+	beacons   blocks.BeaconGetter
 	mesh      *mesh.Mesh
 	validator layerValidator
 	fetcher   layerFetcher
@@ -118,12 +120,13 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new Syncer instance.
-func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
+func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beacons blocks.BeaconGetter, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
 	return &Syncer{
 		logger:            logger,
 		conf:              conf,
 		ticker:            ticker,
+		beacons:           beacons,
 		mesh:              mesh,
 		validator:         mesh,
 		fetcher:           fetcher,
@@ -507,9 +510,20 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
 	lag := s.mesh.LatestLayer().Sub(layerID.Uint32())
 	if s.patrol.IsHareInCharge(layerID) && lag.Value < maxHareDelayLayers {
-		s.logger.With().Debug("skip validating layer", layerID)
+		s.logger.With().Info("skip validating layer: hare still working", layerID)
 		return false
 	}
+
+	epoch := layerID.GetEpoch()
+	if epoch.IsGenesis() {
+		return true
+	}
+
+	if _, err := s.beacons.GetBeacon(epoch); err != nil {
+		s.logger.With().Info("skip validating layer: beacon not available", layerID.GetEpoch())
+		return false
+	}
+
 	return true
 }
 
