@@ -82,7 +82,6 @@ COPY . .
 RUN make build
 RUN make hare
 RUN make p2p
-RUN make sync
 RUN make harness
 
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
@@ -92,7 +91,6 @@ FROM linux AS spacemesh
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-spacemesh /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-hare /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-p2p /bin/
-COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-sync /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-harness /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/libgpu-setup.so /bin/
 
