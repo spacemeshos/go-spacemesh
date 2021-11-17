@@ -426,8 +426,10 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 	lyr := gLayer.Add(3)
 	for l := types.NewLayerID(1); !l.After(gLayer.Add(2)); l = l.Add(1) {
 		l := l
+		if !l.GetEpoch().IsGenesis() {
+			beacons.EXPECT().GetBeacon(l.GetEpoch()).Return(l.GetEpoch().ToBytes(), nil).Times(1)
+		}
 		patrol.EXPECT().IsHareInCharge(l).Return(false).Times(1)
-		beacons.EXPECT().GetBeacon(l.GetEpoch()).Return(l.GetEpoch().ToBytes(), nil).Times(1)
 		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(ctx context.Context, layer *types.Layer) {
 				assert.Equal(t, l, layer.Index())
