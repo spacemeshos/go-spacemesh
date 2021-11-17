@@ -276,6 +276,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 		choices       []types.BlockID // choices from the best to the least bad
 
 		// TODO change it per https://github.com/spacemeshos/go-spacemesh/issues/2920
+		// in current interpretation Last is the last layer that was sent to us after hare completed
 		votinglid = t.Last
 	)
 
@@ -302,6 +303,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 		}
 		logger.With().Info("chose base block",
 			bid,
+			lid,
 			log.Int("against_count", len(exceptions[0])),
 			log.Int("support_count", len(exceptions[1])),
 			log.Int("neutral_count", len(exceptions[2])))
@@ -422,16 +424,14 @@ func (t *turtle) calculateExceptions(
 		for bid, opinion := range local {
 			usecoinflip := opinion == abstain && lid.Before(t.layerCutoff())
 			if usecoinflip {
-				if votinglid.After(types.GetEffectiveGenesis().Add(1)) {
-					coin, exist := t.bdp.GetCoinflip(ctx, votinglid.Sub(1))
-					if !exist {
-						return nil, fmt.Errorf("coinflip is not recorded in %s", votinglid.Sub(1))
-					}
-					if coin {
-						opinion = support
-					} else {
-						opinion = against
-					}
+				coin, exist := t.bdp.GetCoinflip(ctx, votinglid)
+				if !exist {
+					return nil, fmt.Errorf("coinflip is not recorded in %s", votinglid.Sub(1))
+				}
+				if coin {
+					opinion = support
+				} else {
+					opinion = against
 				}
 			}
 			logger := logger.WithFields(
@@ -469,24 +469,12 @@ func (t *turtle) calculateExceptions(
 }
 
 // voteWeight returns the weight to assign to one block's vote for another.
-// Note: weight depends on more than just the weight of the voting block. It also depends on contextual factors such as
-// whether or not the block's ATX was received on time, and on how old the layer is.
-// TODO: for now it's probably sufficient to adjust weight based on whether the ATX was received on time, or late, for
-//   the current epoch. See https://github.com/spacemeshos/go-spacemesh/issues/2540.
 func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block) (uint64, error) {
-	logger := t.logger.WithContext(ctx)
-
 	atxHeader, err := t.atxdb.GetAtxHeader(votingBlock.ATXID)
 	if err != nil {
 		return 0, fmt.Errorf("get ATX header: %w", err)
 	}
-
-	blockWeight := atxHeader.GetWeight()
-	logger.With().Debug("voting block atx was timely",
-		votingBlock.ID(),
-		votingBlock.ATXID,
-		log.Uint64("block_weight", blockWeight))
-	return blockWeight, nil
+	return atxHeader.GetWeight(), nil
 }
 
 func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID types.BlockID) (uint64, error) {
@@ -1157,10 +1145,14 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.GlobalThreshold, t.AvgLayerSize, t.Last.Difference(candidateLayerID))
 			logger.With().Debug("self healing calculated global opinion on candidate block",
 				log.Named("global_opinion", globalOpinionOnBlock),
-				sum)
+				sum,
+			)
 
 			if globalOpinionOnBlock == abstain {
-				logger.With().Info("self healing failed to verify candidate layer, will reattempt later")
+				logger.With().Info("self healing failed to verify candidate layer, will reattempt later",
+					log.Named("global_opinion", globalOpinionOnBlock),
+					sum,
+				)
 				return
 			}
 
