@@ -11,18 +11,23 @@ import (
 type NextOpt func(*nextConf)
 
 func nextConfDefaults() nextConf {
-	return nextConf{
+	conf := nextConf{
 		VoteGen:  PerfectVoting,
 		Coinflip: true,
 	}
+	conf.HareFraction.Nominator = 1
+	conf.HareFraction.Denominator = 1
+	return conf
 }
 
 type nextConf struct {
-	Reorder   uint32
-	FailHare  bool
-	EmptyHare bool
-	Coinflip  bool
-	VoteGen   VotesGenerator
+	Reorder      uint32
+	FailHare     bool
+	HareFraction struct {
+		Nominator, Denominator int
+	}
+	Coinflip bool
+	VoteGen  VotesGenerator
 }
 
 // WithNextReorder configures when reordered layer should be returned.
@@ -49,7 +54,16 @@ func WithoutInputVector() NextOpt {
 // WithEmptyInputVector will save empty input vector.
 func WithEmptyInputVector() NextOpt {
 	return func(c *nextConf) {
-		c.EmptyHare = true
+		c.HareFraction.Nominator = 0
+	}
+}
+
+// WithPartialHare will set input vector only to a fraction of all known blocks.
+// Input vector will be limited to nominator*size/denominator.
+func WithPartialHare(nominator, denominator int) NextOpt {
+	return func(c *nextConf) {
+		c.HareFraction.Nominator = nominator
+		c.HareFraction.Denominator = denominator
 	}
 }
 
@@ -120,19 +134,15 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		}
 		layer.AddBlock(block)
 	}
-	if cfg.FailHare && cfg.EmptyHare {
-		g.logger.With().Panic("both FailHare and EmptyHare can't be used together")
-	}
+
 	if !cfg.FailHare {
-		if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), layer.BlocksIDs()); err != nil {
+		bids := layer.BlocksIDs()
+		frac := len(bids) * cfg.HareFraction.Nominator / cfg.HareFraction.Denominator
+		if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), bids[:frac]); err != nil {
 			g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
 		}
 	}
-	if cfg.EmptyHare {
-		if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), []types.BlockID{}); err != nil {
-			g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
-		}
-	}
+
 	g.State.MeshDB.RecordCoinflip(context.Background(), layer.Index(), cfg.Coinflip)
 	g.layers = append(g.layers, layer)
 	g.nextLayer = g.nextLayer.Add(1)

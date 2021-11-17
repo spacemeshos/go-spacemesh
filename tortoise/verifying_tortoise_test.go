@@ -2013,7 +2013,7 @@ func TestHealBalanceAttack(t *testing.T) {
 	// first counts votes in order to determine the local opinion on the layer with the late block. once the local
 	// opinion has been established, blocks will immediately begin explicitly voting for or against the block, and
 	// the local opinion will no longer be abstain.
-	mdb.RecordCoinflip(context.TODO(), lastUnhealedLayer.Sub(2), true)
+	mdb.RecordCoinflip(context.TODO(), lastUnhealedLayer.Sub(1), true)
 
 	// after healing begins, we need a few more layers until the global opinion of the block passes the threshold
 	finalLayer := lastUnhealedLayer.Add(9)
@@ -3127,7 +3127,7 @@ func ensureBlockLayerWithin(tb testing.TB, bdp blockDataProvider, bid types.Bloc
 
 func TestWeakCoinVoting(t *testing.T) {
 	const (
-		size  = 10
+		size  = 6
 		hdist = 3
 	)
 	s := sim.New(
@@ -3140,16 +3140,19 @@ func TestWeakCoinVoting(t *testing.T) {
 	cfg.LayerSize = size
 	cfg.Hdist = hdist
 	cfg.Zdist = hdist
+	cfg.ConfidenceParam = 0
+
 	var (
 		tortoise       = NewVerifyingTortoise(ctx, cfg)
 		verified, last types.LayerID
 		genesis        = types.GetEffectiveGenesis()
 	)
+
 	for _, lid := range sim.GenLayers(s,
 		sim.WithSequence(5),
 		sim.WithSequence(hdist+1,
 			sim.WithCoin(true), // declare support
-			sim.WithoutInputVector(),
+			sim.WithEmptyInputVector(),
 			sim.WithVoteGenerator(splitVoting(size)),
 		),
 	) {
@@ -3165,23 +3168,57 @@ func TestWeakCoinVoting(t *testing.T) {
 	ensureBlockLayerWithin(t, s.State.MeshDB, base, genesis.Add(5), genesis.Add(5))
 
 	against, support, neutral := exceptions[0], exceptions[1], exceptions[2]
-	require.Empty(t, against, "NOT IMPLEMENTED")
-	// support for all layers before last - hdist
+
+	require.Empty(t, against, "implicit voting")
+	require.Empty(t, neutral, "empty input vector")
+
+	// support for all layers in range of (verified, last - hdist)
 	for _, bid := range support {
 		ensureBlockLayerWithin(t, s.State.MeshDB, bid, genesis.Add(5), last.Sub(hdist).Sub(1))
 	}
-	// neutral for layers within hdist
-	for _, bid := range neutral {
-		ensureBlockLayerWithin(t, s.State.MeshDB, bid, last.Sub(hdist), last)
-	}
-	// test that honest nodes can switch to verifying tortoise from this condition
-	// TODO(dshulyak) compute how many layers we need to wait here and add a test to know
-	// when we switch to good blocks from recent layers
-	for i := 0; i < 11; i++ {
+
+	// test that by voting honestly node can switch to verifying tortoise from this condition
+	//
+	// NOTE(dshulyak) this is about weight required to recover from split-votes.
+	// on 7th layer we have enough weight to heal genesis + 5 and all layers afterwards.
+	// consider figuring out some arithmetic for it.
+	for i := 0; i < 7; i++ {
 		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	require.Equal(t, last.Sub(1), verified)
+}
+
+func TestVoteAgainstSupportedByBaseBlock(t *testing.T) {
+	const size = 10
+	s := sim.New(
+		sim.WithLayerSize(size),
+	)
+	s.Setup()
+
+	ctx := context.Background()
+	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg.LayerSize = size
+	cfg.WindowSize = 10
+
+	var (
+		tortoise       = NewVerifyingTortoise(ctx, cfg)
+		last, verified types.LayerID
+	)
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(2),
+	) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified)
+	for lid := verified.Sub(1); !lid.After(last); lid = lid.Add(1) {
+		bids, err := s.State.MeshDB.LayerBlockIds(lid)
+		require.NoError(t, err)
+		require.NoError(t, s.State.MeshDB.SaveContextualValidity(bids[0], lid, false))
+		require.NoError(t, s.State.MeshDB.SaveLayerInputVectorByID(ctx, lid, bids[1:]))
+	}
+	_, exceptions, _ := tortoise.BaseBlock(ctx)
+	fmt.Println(exceptions)
 }
 
 func TestComputeLocalOpinion(t *testing.T) {
