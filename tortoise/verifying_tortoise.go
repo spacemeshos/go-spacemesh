@@ -183,12 +183,12 @@ func (t *turtle) evict(ctx context.Context) {
 		return
 	}
 	logger.With().Info("attempting eviction",
-		log.FieldNamed("effective_genesis", types.GetEffectiveGenesis()),
+		log.Named("effective_genesis", types.GetEffectiveGenesis()),
 		log.Uint32("hdist", t.Hdist),
-		log.FieldNamed("verified", t.Verified),
+		log.Named("verified", t.Verified),
 		log.Uint32("window_size", t.WindowSize),
-		log.FieldNamed("last_evicted", t.LastEvicted),
-		log.FieldNamed("window_start", windowStart))
+		log.Named("last_evicted", t.LastEvicted),
+		log.Named("window_start", windowStart))
 
 	// evict from last evicted to the beginning of our window
 	if err := t.state.Evict(ctx, windowStart); err != nil {
@@ -225,7 +225,7 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 			exceptionBlock, err := t.bdp.GetBlock(exceptionBlockID)
 			if err != nil {
 				logger.With().Error("inconsistent state: can't find block from diff list",
-					log.FieldNamed("exception_block_id", exceptionBlockID),
+					log.Named("exception_block_id", exceptionBlockID),
 					log.Err(err),
 				)
 				return false
@@ -235,27 +235,27 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 
 		if lid.Before(baseBlockLayer) {
 			logger.With().Error("good block candidate contains exception for block older than its base block",
-				log.FieldNamed("older_block", exceptionBlockID),
-				log.FieldNamed("older_layer", lid),
-				log.FieldNamed("base_block_layer", baseBlockLayer))
+				log.Named("older_block", exceptionBlockID),
+				log.Named("older_layer", lid),
+				log.Named("base_block_layer", baseBlockLayer))
 			return false
 		}
 
 		v, err := t.getLocalBlockOpinion(ctx, lid, exceptionBlockID)
 		if err != nil {
 			logger.With().Error("unable to get single block opinion for block in exception list",
-				log.FieldNamed("older_block", exceptionBlockID),
-				log.FieldNamed("older_layer", lid),
-				log.FieldNamed("base_block_layer", baseBlockLayer),
+				log.Named("older_block", exceptionBlockID),
+				log.Named("older_layer", lid),
+				log.Named("base_block_layer", baseBlockLayer),
 				log.Err(err))
 			return false
 		}
 
 		if v != voteVector {
 			logger.With().Debug("not adding block to good blocks because its vote differs from local opinion",
-				log.FieldNamed("older_block", exceptionBlockID),
-				log.FieldNamed("older_layer", lid),
-				log.FieldNamed("local_opinion", v),
+				log.Named("older_block", exceptionBlockID),
+				log.Named("older_layer", lid),
+				log.Named("local_opinion", v),
 				log.String("block_exception_vote", className))
 			return false
 		}
@@ -396,7 +396,7 @@ func (t *turtle) calculateExceptions(
 	baseBlockLayerID types.LayerID,
 	baseBlockOpinion Opinion, // candidate base block's opinion vector
 ) ([]map[types.BlockID]struct{}, error) {
-	logger := t.logger.WithContext(ctx).WithFields(log.FieldNamed("base_block_layer_id", baseBlockLayerID))
+	logger := t.logger.WithContext(ctx).WithFields(log.Named("base_block_layer_id", baseBlockLayerID))
 
 	// using maps prevents duplicates
 	againstDiff := make(map[types.BlockID]struct{})
@@ -420,7 +420,7 @@ func (t *turtle) calculateExceptions(
 		startLayer = types.GetEffectiveGenesis()
 	}
 	for layerID := startLayer; !layerID.After(t.Last); layerID = layerID.Add(1) {
-		logger := logger.WithFields(log.FieldNamed("diff_layer_id", layerID))
+		logger := logger.WithFields(log.Named("diff_layer_id", layerID))
 		logger.Debug("checking input vector diffs")
 
 		layerBlockIds, err := t.getLayerBlocksIDs(ctx, layerID)
@@ -547,8 +547,8 @@ func (t *turtle) getBaseBlockOpinions(bid types.BlockID) Opinion {
 
 func (t *turtle) processBlock(ctx context.Context, block *types.Block) error {
 	logger := t.logger.WithContext(ctx).WithFields(
-		log.FieldNamed("processing_block_id", block.ID()),
-		log.FieldNamed("processing_block_layer", block.LayerIndex))
+		log.Named("processing_block_id", block.ID()),
+		log.Named("processing_block_layer", block.LayerIndex))
 
 	// When a new block arrives, we look up the block it points to in our table,
 	// and add the corresponding vector (multiplied by the block weight) to our own vote-totals vector.
@@ -626,7 +626,7 @@ func (t *turtle) processBlocks(ctx *tcontext, blocks []*types.Block) error {
 		// make sure we don't write data on old blocks whose layer has already been evicted
 		if b.LayerIndex.Before(t.LastEvicted) {
 			logger.With().Warning("not processing block from layer older than last evicted layer",
-				log.FieldNamed("last_evicted", t.LastEvicted))
+				log.Named("last_evicted", t.LastEvicted))
 			continue
 		}
 		if b.LayerIndex.Before(lastLayerID) {
@@ -648,8 +648,8 @@ func (t *turtle) processBlocks(ctx *tcontext, blocks []*types.Block) error {
 
 	if t.Last.Before(lastLayerID) {
 		logger.With().Warning("got blocks for new layer before receiving layer, updating highest layer seen",
-			log.FieldNamed("previous_highest", t.Last),
-			log.FieldNamed("new_highest", lastLayerID))
+			log.Named("previous_highest", t.Last),
+			log.Named("new_highest", lastLayerID))
 		t.Last = lastLayerID
 	}
 
@@ -693,7 +693,7 @@ func (t *turtle) determineBlockGoodness(ctx *tcontext, block *types.Block) bool 
 	logger := t.logger.WithContext(ctx).WithFields(
 		block.ID(),
 		block.LayerIndex,
-		log.FieldNamed("base_block_id", block.BaseBlock))
+		log.Named("base_block_id", block.BaseBlock))
 	// Go over all blocks, in order. Mark block i "good" if:
 	// (1) it has the right beacon value
 	if !t.blockHasGoodBeacon(block, logger) {
@@ -827,6 +827,15 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 
 	contextualValidity := make(map[types.BlockID]bool, len(localOpinion))
 
+	filter := func(votingBlockID types.BlockID) bool {
+		if _, isgood := t.GoodBlocksIndex[votingBlockID]; !isgood {
+			logger.With().Debug("not counting vote of block not marked good",
+				log.Named("voting_block", votingBlockID))
+			return false
+		}
+		return true
+	}
+
 	// Count the votes of good blocks. localOpinionOnBlock is our local opinion on this block.
 	// Declare the vote vector "verified" up to position k if the total weight exceeds the confidence threshold in
 	// all positions up to k: in other words, we can verify a layer k if the total weight of the global opinion
@@ -835,17 +844,11 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 		// count the votes of the input vote vector by summing the voting weight of good blocks
 		logger.With().Debug("summing votes for candidate layer block",
 			bid,
-			log.FieldNamed("layer_start", lid.Add(1)),
-			log.FieldNamed("layer_end", t.Last),
+			log.Named("layer_start", lid.Add(1)),
+			log.Named("layer_end", t.Last),
 		)
-		sum, err := t.sumVotesForBlock(ctx, bid, lid.Add(1), func(votingBlockID types.BlockID) bool {
-			if _, isgood := t.GoodBlocksIndex[votingBlockID]; !isgood {
-				logger.With().Debug("not counting vote of block not marked good",
-					log.FieldNamed("voting_block", votingBlockID))
-				return false
-			}
-			return true
-		})
+
+		sum, err := t.sumVotesForBlock(ctx, bid, lid.Add(1), filter)
 		if err != nil {
 			return nil, fmt.Errorf("error summing votes for block %v in candidate layer %v: %w",
 				bid, lid, err)
@@ -855,11 +858,11 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 		globalOpinionOnBlock := calculateOpinionWithThreshold(
 			t.logger, sum, t.GlobalThreshold, t.AvgLayerSize, t.Last.Difference(lid))
 		logger.With().Debug("verifying tortoise calculated global opinion on block",
-			log.FieldNamed("block_voted_on", bid),
+			log.Named("block_voted_on", bid),
 			lid,
-			log.FieldNamed("global_vote_sum", sum),
-			log.FieldNamed("global_opinion", globalOpinionOnBlock),
-			log.FieldNamed("local_opinion", localOpinionOnBlock))
+			log.Named("global_vote_sum", sum),
+			log.Named("global_opinion", globalOpinionOnBlock),
+			log.Named("local_opinion", localOpinionOnBlock))
 
 		// At this point, we have all of the data we need to make a decision on this block. There are three possible
 		// outcomes:
@@ -870,12 +873,6 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 		consensusMatches := globalOpinionOnBlock == localOpinionOnBlock
 		globalOpinionDecided := globalOpinionOnBlock != abstain
 
-		if consensusMatches && globalOpinionDecided {
-			// Opinion on this block is decided, save and keep going
-			contextualValidity[bid] = globalOpinionOnBlock == support
-			continue
-		}
-
 		// If, for any block in this layer, the global opinion (summed block votes) disagrees with our vote (the
 		// input vector), or if the global opinion is abstain, then we do not verify this layer. This could be the
 		// result of a reorg (e.g., resolution of a network partition), or a malicious peer during sync, or
@@ -883,8 +880,8 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 		if !consensusMatches {
 			logger.With().Warning("global opinion on block differs from our vote, cannot verify layer",
 				bid,
-				log.FieldNamed("global_opinion", globalOpinionOnBlock),
-				log.FieldNamed("local_opinion", localOpinionOnBlock))
+				log.Named("global_opinion", globalOpinionOnBlock),
+				log.Named("local_opinion", localOpinionOnBlock))
 			return nil, nil
 		}
 
@@ -900,10 +897,12 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 		if !globalOpinionDecided {
 			logger.With().Warning("global opinion on block is abstain, cannot verify layer",
 				bid,
-				log.FieldNamed("global_opinion", globalOpinionOnBlock),
-				log.FieldNamed("local_opinion", localOpinionOnBlock))
+				log.Named("global_opinion", globalOpinionOnBlock),
+				log.Named("local_opinion", localOpinionOnBlock))
 			return nil, nil
 		}
+
+		contextualValidity[bid] = globalOpinionOnBlock == support
 	}
 	return contextualValidity, nil
 }
@@ -915,9 +914,9 @@ func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log, lid types.LayerI
 	// self healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
 	// we only consider the local opinion for recent layers.
 	logger.With().Debug("considering attempting to heal layer",
-		log.FieldNamed("layer_cutoff", t.layerCutoff()),
+		log.Named("layer_cutoff", t.layerCutoff()),
 		log.Uint32("zdist", t.Zdist),
-		log.FieldNamed("last_layer_received", t.Last),
+		log.Named("last_layer_received", t.Last),
 		log.Uint32("confidence_param", t.ConfidenceParam))
 	if !(lid.Before(t.layerCutoff()) && t.Last.Difference(lid) > t.Zdist+t.ConfidenceParam) {
 		return false, nil
@@ -948,8 +947,8 @@ func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log, lid types.LayerI
 			// if we fail to process a layer, there's probably no point in trying to rescore blocks
 			// in later layers, so just print an error and bail
 			logger.With().Error("error trying to rescore good blocks in healed layers",
-				log.FieldNamed("layer_from", lastVerified),
-				log.FieldNamed("layer_to", t.Last),
+				log.Named("layer_from", lastVerified),
+				log.Named("layer_to", t.Last),
 				log.Err(err))
 			return false, err
 		}
@@ -960,15 +959,15 @@ func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log, lid types.LayerI
 // loops over all layers from the last verified up to a new target layer and attempts to verify each in turn.
 func (t *turtle) verifyLayers(ctx *tcontext) error {
 	logger := t.logger.WithContext(ctx).WithFields(
-		log.FieldNamed("verification_target", t.Last),
-		log.FieldNamed("old_verified", t.Verified))
+		log.Named("verification_target", t.Last),
+		log.Named("old_verified", t.Verified))
 
 	// attempt to verify each layer from the last verified up to one prior to the newly-arrived layer.
 	// this is the full range of unverified layers that we might possibly be able to verify at this point.
 	// Note: t.Verified is initialized to the effective genesis layer, so the first candidate layer here necessarily
 	// follows and is post-genesis. There's no need for an additional check here.
 	for candidateLayerID := t.Verified.Add(1); candidateLayerID.Before(t.Last); candidateLayerID = candidateLayerID.Add(1) {
-		logger := logger.WithFields(log.FieldNamed("candidate_layer", candidateLayerID))
+		logger := logger.WithFields(log.Named("candidate_layer", candidateLayerID))
 
 		// it's possible that self healing already verified a layer
 		if !t.Verified.Before(candidateLayerID) {
@@ -990,7 +989,7 @@ func (t *turtle) verifyLayers(ctx *tcontext) error {
 				}
 			}
 			t.Verified = candidateLayerID
-			logger.With().Info("verified candidate layer", log.FieldNamed("new_verified", t.Verified))
+			logger.With().Info("verified candidate layer", log.Named("new_verified", t.Verified))
 		} else {
 			healed, err := t.healingTortoise(ctx, logger, candidateLayerID)
 			if err != nil || !healed {
@@ -1058,7 +1057,7 @@ func (t *turtle) layerOpinionVector(ctx *tcontext, lid types.LayerID) ([]types.B
 		log.Int("num_blocks", len(layerBids)))
 	supported := make([]types.BlockID, 0, len(layerBids))
 	for _, bid := range layerBids {
-		logger := logger.WithFields(log.FieldNamed("candidate_block_id", bid))
+		logger := logger.WithFields(log.Named("candidate_block_id", bid))
 		sum, err := t.sumVotesForBlock(ctx, bid, lid.Add(1), func(id types.BlockID) bool { return true })
 		if err != nil {
 			return nil, fmt.Errorf("error summing votes for block %v in old layer %v: %w",
@@ -1068,7 +1067,7 @@ func (t *turtle) layerOpinionVector(ctx *tcontext, lid types.LayerID) ([]types.B
 		localOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.LocalThreshold, t.AvgLayerSize, 1)
 		logger.With().Debug("local opinion on block in old layer",
 			sum,
-			log.FieldNamed("local_opinion", localOpinionOnBlock))
+			log.Named("local_opinion", localOpinionOnBlock))
 		if localOpinionOnBlock == support {
 			supported = append(supported, bid)
 		} else if localOpinionOnBlock == abstain {
@@ -1093,7 +1092,7 @@ func (t *turtle) layerOpinionVector(ctx *tcontext, lid types.LayerID) ([]types.B
 				logger.With().Info("rescoring all blocks in old layer using weak coin",
 					log.Int("count", len(layerBids)),
 					log.Bool("coinflip", coin),
-					log.FieldNamed("coinflip_layer", t.Last.Sub(1)))
+					log.Named("coinflip_layer", t.Last.Sub(1)))
 				if coin {
 					// heads on the weak coin means vote for all blocks in the layer
 					return layerBids, nil
@@ -1117,17 +1116,17 @@ func (t *turtle) sumVotesForBlock(
 ) (sum vec, err error) {
 	sum = abstain
 	logger := t.logger.WithContext(ctx).WithFields(
-		log.FieldNamed("start_layer", startLayer),
-		log.FieldNamed("end_layer", t.Last),
-		log.FieldNamed("block_voting_on", blockID),
-		log.FieldNamed("layer_voting_on", startLayer.Sub(1)))
+		log.Named("start_layer", startLayer),
+		log.Named("end_layer", t.Last),
+		log.Named("block_voting_on", blockID),
+		log.Named("layer_voting_on", startLayer.Sub(1)))
 	for voteLayer := startLayer; !voteLayer.After(t.Last); voteLayer = voteLayer.Add(1) {
 		logger := logger.WithFields(voteLayer)
 		// logger.With().Debug("summing layer votes",
 		// 	log.Int("count", len(t.BlockOpinionsByLayer[voteLayer])))
 		for votingBlockID, votingBlockOpinion := range t.BlockOpinionsByLayer[voteLayer] {
 			if !filter(votingBlockID) {
-				logger.Debug("voting block did not pass filter, not counting its vote", log.FieldNamed("voting_block", votingBlockID))
+				logger.Debug("voting block did not pass filter, not counting its vote", log.Named("voting_block", votingBlockID))
 				continue
 			}
 
@@ -1136,8 +1135,8 @@ func (t *turtle) sumVotesForBlock(
 			// note: in this case, the weight is already factored into the vote, so no need to fetch weight.
 			if opinionVote, exists := votingBlockOpinion[blockID]; exists {
 				// logger.With().Debug("added block opinion to vote sum",
-				// 	log.FieldNamed("voting_block", votingBlockID),
-				// 	log.FieldNamed("vote", opinionVote),
+				// 	log.Named("voting_block", votingBlockID),
+				// 	log.Named("vote", opinionVote),
 				// 	sum)
 				sum = sum.Add(opinionVote)
 			} else {
@@ -1167,11 +1166,11 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 
 	for candidateLayerID := pbaseOld.Add(1); candidateLayerID.Before(targetLayerID); candidateLayerID = candidateLayerID.Add(1) {
 		logger := t.logger.WithContext(ctx).WithFields(
-			log.FieldNamed("old_verified_layer", pbaseOld),
-			log.FieldNamed("last_verified_layer", pbaseNew),
-			log.FieldNamed("target_layer", targetLayerID),
-			log.FieldNamed("candidate_layer", candidateLayerID),
-			log.FieldNamed("last_layer_received", t.Last),
+			log.Named("old_verified_layer", pbaseOld),
+			log.Named("last_verified_layer", pbaseNew),
+			log.Named("target_layer", targetLayerID),
+			log.Named("candidate_layer", candidateLayerID),
+			log.Named("last_layer_received", t.Last),
 			log.Uint32("hdist", t.Hdist))
 
 		// we should never run on layers newer than Hdist back (from last layer received)
@@ -1184,7 +1183,7 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 		}
 		if candidateLayerID.After(latestLayerWeCanVerify) {
 			logger.With().Error("cannot heal layer that's not at least hdist layers old",
-				log.FieldNamed("highest_healable_layer", latestLayerWeCanVerify))
+				log.Named("highest_healable_layer", latestLayerWeCanVerify))
 			return
 		}
 
@@ -1200,7 +1199,7 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 
 		// record the contextual validity for all blocks in this layer
 		for _, blockID := range layerBlockIds {
-			logger := logger.WithFields(log.FieldNamed("candidate_block_id", blockID))
+			logger := logger.WithFields(log.Named("candidate_block_id", blockID))
 
 			// count all votes for or against this block by all blocks in later layers. for blocks with a different
 			// beacon values, we delay their votes by badBeaconVoteDelays layers
@@ -1213,7 +1212,7 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 			// check that the total weight exceeds the global threshold
 			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.GlobalThreshold, t.AvgLayerSize, t.Last.Difference(candidateLayerID))
 			logger.With().Debug("self healing calculated global opinion on candidate block",
-				log.FieldNamed("global_opinion", globalOpinionOnBlock),
+				log.Named("global_opinion", globalOpinionOnBlock),
 				sum)
 
 			if globalOpinionOnBlock == abstain {
