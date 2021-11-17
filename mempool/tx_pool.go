@@ -104,7 +104,7 @@ func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction) {
 	t.addToAddr(tx.Origin(), id)
 	t.addToAddr(tx.Recipient, id)
 	t.mu.Unlock()
-	events.ReportNewTx(tx)
+	events.ReportNewTx(types.LayerID{}, tx)
 }
 
 // Invalidate removes transaction from pool.
@@ -123,7 +123,7 @@ func (t *TxMempool) Invalidate(id types.TransactionID) {
 			// We only report those transactions that are being dropped from the txpool here as
 			// conflicting since they won't be reported anywhere else. There is no need to report
 			// the initial tx here since it'll be reported as part of a new block/layer anyway.
-			events.ReportTxWithValidity(tx, false)
+			events.ReportTxWithValidity(types.LayerID{}, tx, false)
 		}
 		t.removeFromAddr(tx.Origin(), id)
 		t.removeFromAddr(tx.Recipient, id)

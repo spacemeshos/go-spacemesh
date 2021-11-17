@@ -494,7 +494,7 @@ func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
 	m.poolByTxid[id] = tx
 	m.poolByAddress[tx.Recipient] = id
 	m.poolByAddress[tx.Origin()] = id
-	events.ReportNewTx(tx)
+	events.ReportNewTx(types.LayerID{}, tx)
 }
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
@@ -1978,7 +1978,7 @@ func TestTransactionService(t *testing.T) {
 			events.CloseEventReporter()
 			err := events.InitializeEventReporterWithOptions("", 1, true)
 			require.NoError(t, err)
-			events.ReportNewTx(globalTx)
+			events.ReportNewTx(types.LayerID{}, globalTx)
 			wg.Wait()
 		}},
 		{"TransactionsStateStream_All", func(t *testing.T) {
@@ -2005,7 +2005,7 @@ func TestTransactionService(t *testing.T) {
 			events.CloseEventReporter()
 			err := events.InitializeEventReporterWithOptions("", 1, true)
 			require.NoError(t, err)
-			events.ReportNewTx(globalTx)
+			events.ReportNewTx(types.LayerID{}, globalTx)
 			wg.Wait()
 		}},
 		// Submit a tx, then receive it over the stream
@@ -2226,14 +2226,14 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	require.NoError(t, err)
 
 	// publish a tx
-	events.ReportNewTx(globalTx)
+	events.ReportNewTx(types.LayerID{}, globalTx)
 
 	// publish an activation
 	events.ReportNewActivation(globalAtx)
 
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
-	events.ReportNewTx(globalTx2)
+	events.ReportNewTx(types.LayerID{}, globalTx2)
 	events.ReportNewActivation(globalAtx2)
 
 	// close the stream

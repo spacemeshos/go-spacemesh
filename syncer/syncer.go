@@ -50,6 +50,9 @@ const (
 
 	// the max amount of layer delays syncer can tolerate before it tries to validate a layer.
 	maxHareDelayLayers uint32 = 10
+
+	// the max number of attempts syncer tries to advance the processed layer within a sync run.
+	maxAttemptWithinRun = 3
 )
 
 type syncState uint32
@@ -274,6 +277,8 @@ func (s *Syncer) getTargetSyncedLayer() types.LayerID {
 	return *(*types.LayerID)(atomic.LoadPointer(&s.targetSyncedLayer))
 }
 
+// synchronize sync data up to the currentLayer-1 and wait for the layers to be validated.
+// it returns false if the data sync failed.
 func (s *Syncer) synchronize(ctx context.Context) bool {
 	ctx = log.WithNewSessionID(ctx)
 	logger := s.logger.WithContext(ctx)
@@ -283,11 +288,16 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		return false
 	}
 
+	if s.ticker.GetCurrentLayer().Uint32() == 0 {
+		return false
+	}
+
 	// at most one synchronize process can run at any time
 	if !s.setSyncerBusy() {
 		logger.Info("sync is already running, giving up")
 		return false
 	}
+
 	// no need to worry about race condition for s.run. only one instance of synchronize can run at a time
 	s.run++
 	logger.With().Info(fmt.Sprintf("starting sync run #%v", s.run),
@@ -297,49 +307,66 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
 
 	s.setStateBeforeSync(ctx)
-	// start a dedicated process for validation.
-	// do not use an unbuffered channel for vQueue. we don't want it to block if the receiver isn't ready. i.e.
-	// if validation for the last layer is still running
-	vQueue := make(chan *types.Layer, s.ticker.GetCurrentLayer().Uint32())
-	vDone := make(chan struct{})
-	s.eg.Go(func() error {
-		s.startValidating(ctx, s.run, vQueue, vDone)
-		return nil
-	})
-	success := false
-	defer func() {
-		close(vQueue)
-		<-vDone
-		s.setStateAfterSync(ctx, success)
-		logger.With().Info(fmt.Sprintf("finished sync run #%v", s.run),
-			log.Bool("success", success),
-			log.String("sync_state", s.getSyncState().String()),
+	var (
+		vQueue chan *types.Layer
+		vDone  chan struct{}
+		// number of attempts to start a validation goroutine
+		attempt = 0
+		// whether the data sync succeed. validation failure is not checked by design.
+		success = true
+	)
+
+	attemptFunc := func() bool {
+		var (
+			layer *types.Layer
+			err   error
+		)
+		// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis
+		// and retry in the next sync run if validation fails.
+		// our clock starts ticking from 1, so it is safe to skip layer 0
+		// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
+		for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
+			if layer, err = s.syncLayer(ctx, layerID); err != nil {
+				return false
+			}
+			vQueue <- layer
+			logger.With().Debug("finished data sync", layerID)
+		}
+		logger.With().Debug("data is synced, waiting for validation",
+			log.Int("attempt", attempt),
 			log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 			log.FieldNamed("latest", s.mesh.LatestLayer()),
 			log.FieldNamed("processed", s.mesh.ProcessedLayer()))
-		s.setSyncerIdle()
-	}()
+		return true
+	}
 
-	// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis.
-	// our clock starts ticking from 1 so it is safe to skip layer 0
-	// always sync to currentLayer-1 to reduce race with gossip and hare/tortoise
-	for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
-		var layer *types.Layer
-		var err error
-		if layer, err = s.syncLayer(ctx, layerID); err != nil {
-			logger.With().Error("failed to sync to layer", layerID, log.Err(err))
+	// check if we are on target. if not, do the sync loop again
+	for success && !s.stateOnTarget() {
+		attempt++
+		if attempt > maxAttemptWithinRun {
+			logger.Info("all data synced but unable to advance processed layer after max attempts")
+			break
+		}
+		vQueue, vDone = s.startValidating(ctx, s.run, attempt)
+		success = attemptFunc()
+		close(vQueue)
+		select {
+		case <-vDone:
+		case <-s.shutdownCtx.Done():
 			return false
 		}
-
-		vQueue <- layer
-		logger.With().Debug("finished data sync", layerID)
 	}
-	logger.With().Debug("data is synced, waiting for validation",
+
+	s.setStateAfterSync(ctx, success)
+	logger.With().Info(fmt.Sprintf("finished sync run #%v", s.run),
+		log.Bool("success", success),
+		log.Int("attempt", attempt),
+		log.String("sync_state", s.getSyncState().String()),
 		log.FieldNamed("current", s.ticker.GetCurrentLayer()),
 		log.FieldNamed("latest", s.mesh.LatestLayer()),
 		log.FieldNamed("processed", s.mesh.ProcessedLayer()))
-	success = true
-	return true
+	s.setSyncerIdle()
+	return success
 }
 
 func isTooFarBehind(current, latest types.LayerID, logger log.Logger) bool {
@@ -365,25 +392,36 @@ func (s *Syncer) setStateBeforeSync(ctx context.Context) {
 	}
 }
 
+func (s *Syncer) stateOnTarget() bool {
+	return !s.mesh.ProcessedLayer().Before(s.ticker.GetCurrentLayer().Sub(1))
+}
+
 func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	currSyncState := s.getSyncState()
 	current := s.ticker.GetCurrentLayer()
 
+	// for the gossipSync/notSynced states, we check if the mesh state is on target before we advance sync state.
+	// but for the synced state, we don't check the mesh state because gossip+hare+tortoise are in charge of
+	// advancing processed/verified layers.  syncer is just auxiliary that fetches data in case of a temporary
+	// network outage.
 	switch currSyncState {
 	case synced:
-		// while synced, gossip+hare+tortoise will be in charge of advancing processed/verified layers.
-		// syncer is just auxiliary that fetches data in case of a temporary network outage.
 		latest := s.mesh.LatestLayer()
 		if !success && isTooFarBehind(current, latest, s.logger.WithContext(ctx)) {
 			s.setSyncState(ctx, notSynced)
 		}
 	case gossipSync:
+		if !success || !s.stateOnTarget() {
+			// push out the target synced layer
+			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
+			break
+		}
 		// if we have gossip-synced to the target synced layer, we are ready to participate in consensus
-		if success && !s.getTargetSyncedLayer().After(current) {
+		if !s.getTargetSyncedLayer().After(current) {
 			s.setSyncState(ctx, synced)
 		}
 	case notSynced:
-		if success {
+		if success && s.stateOnTarget() {
 			// wait till s.ticker.GetCurrentLayer() + numGossipSyncLayers to participate in consensus
 			s.setSyncState(ctx, gossipSync)
 			s.setTargetSyncedLayer(ctx, current.Add(numGossipSyncLayers))
@@ -452,7 +490,7 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 		s.logger.WithContext(ctx).With().Debug("getting atxs", epoch, layerID)
 		ctx = log.WithNewRequestID(ctx, layerID.GetEpoch())
 		if err := s.fetcher.GetEpochATXs(ctx, epoch); err != nil {
-			// dont fail sync if we cannot fetch atxs for the current epoch before the last layer
+			// don't fail sync if we cannot fetch atxs for the current epoch before the last layer
 			if !atCurrentEpoch || atLastLayerOfEpoch {
 				s.logger.WithContext(ctx).With().Error("failed to fetch epoch atxs", layerID, epoch, log.Err(err))
 				return fmt.Errorf("get epoch ATXs: %w", err)
@@ -476,21 +514,32 @@ func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
 }
 
 // start a dedicated process to validate layers one by one.
-func (s *Syncer) startValidating(ctx context.Context, run uint64, queue chan *types.Layer, done chan struct{}) {
+// it is caller's responsibility to close the returned "queue" channel to signal end of workload.
+// "done" channel will be closed once all workload in "queue" is completed.
+func (s *Syncer) startValidating(ctx context.Context, run uint64, attempt int) (chan *types.Layer, chan struct{}) {
 	logger := s.logger.WithContext(ctx).WithName("validation")
-	logger.Debug("validation started for run #%v", run)
-	defer func() {
+
+	// start a dedicated process for validation.
+	// do not use an unbuffered channel for queue. we don't want it to block if the receiver isn't ready.
+	// i.e. if validation for the last layer is still running
+	queue := make(chan *types.Layer, s.ticker.GetCurrentLayer().Uint32())
+	done := make(chan struct{})
+
+	s.eg.Go(func() error {
+		logger.Debug("validation started for run #%v attempt #%v", run, attempt)
+		for layer := range queue {
+			if s.isClosed() {
+				return nil
+			}
+			if s.shouldValidate(layer.Index()) {
+				s.validateLayer(ctx, layer)
+			}
+		}
 		close(done)
-		logger.Debug("validation done for run #%v", run)
-	}()
-	for layer := range queue {
-		if s.isClosed() {
-			return
-		}
-		if s.shouldValidate(layer.Index()) {
-			s.validateLayer(ctx, layer)
-		}
-	}
+		logger.Debug("validation done for run #%v attempt #%v", run, attempt)
+		return nil
+	})
+	return queue, done
 }
 
 func (s *Syncer) validateLayer(ctx context.Context, layer *types.Layer) {
