@@ -61,6 +61,9 @@ func WithEmptyInputVector() NextOpt {
 // WithPartialHare will set input vector only to a fraction of all known blocks.
 // Input vector will be limited to nominator*size/denominator.
 func WithPartialHare(nominator, denominator int) NextOpt {
+	if denominator == 0 {
+		panic("denominator can't be zero")
+	}
 	return func(c *nextConf) {
 		c.HareFraction.Nominator = nominator
 		c.HareFraction.Denominator = denominator
