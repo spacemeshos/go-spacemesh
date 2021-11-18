@@ -416,7 +416,7 @@ func (t *turtle) calculateExceptions(
 			if !ok {
 				v = against
 			}
-			if simplifyVote(v) != voteVec {
+			if !equalVotes(voteVec, v) {
 				logger.With().Debug("added vote diff", log.Named("opinion", v))
 				if lid.Before(baselid) {
 					logger.With().Warning("added exception before base block layer, this block will not be marked good")

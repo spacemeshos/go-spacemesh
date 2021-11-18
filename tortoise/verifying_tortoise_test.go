@@ -3199,26 +3199,56 @@ func TestVoteAgainstSupportedByBaseBlock(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
 	cfg.LayerSize = size
-	cfg.WindowSize = 10
+	cfg.WindowSize = 1
+	cfg.Hdist = 1 // for eviction
+	cfg.Zdist = 1
 
 	var (
 		tortoise       = NewVerifyingTortoise(ctx, cfg)
 		last, verified types.LayerID
+		genesis        = types.GetEffectiveGenesis()
 	)
 	for _, last = range sim.GenLayers(s,
-		sim.WithSequence(2),
+		sim.WithSequence(3),
 	) {
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	require.Equal(t, last.Sub(1), verified)
-	for lid := verified.Sub(1); !lid.After(last); lid = lid.Add(1) {
+
+	// change local opinion for verified last.Sub(1) to be different from blocks opinion
+	unsupported := map[types.BlockID]struct{}{}
+	for lid := genesis.Add(1); !lid.After(last); lid = lid.Add(1) {
 		bids, err := s.State.MeshDB.LayerBlockIds(lid)
 		require.NoError(t, err)
 		require.NoError(t, s.State.MeshDB.SaveContextualValidity(bids[0], lid, false))
 		require.NoError(t, s.State.MeshDB.SaveLayerInputVectorByID(ctx, lid, bids[1:]))
+		unsupported[bids[0]] = struct{}{}
 	}
-	_, exceptions, _ := tortoise.BaseBlock(ctx)
-	fmt.Println(exceptions)
+	base, exceptions, _ := tortoise.BaseBlock(ctx)
+	ensureBlockLayerWithin(t, s.State.MeshDB, base, genesis.Add(1), genesis.Add(1))
+	require.Empty(t, exceptions[0])
+	require.Empty(t, exceptions[2])
+	require.Len(t, exceptions[1], (size-1)*int(last.Difference(genesis)))
+	for _, bid := range exceptions[1] {
+		require.NotContains(t, unsupported, bid)
+	}
+
+	// because we are comparing with local opinion only within sliding window
+	// we will never find inconsistencies for the leftmost block in sliding window
+	// and it will not include against votes explicitly, as you can see above
+	delete(tortoise.trtl.BlockOpinionsByLayer, genesis.Add(1))
+	base, exceptions, _ = tortoise.BaseBlock(ctx)
+	ensureBlockLayerWithin(t, s.State.MeshDB, base, last, last)
+	require.Empty(t, exceptions[2])
+	require.Len(t, exceptions[0], 2)
+	for _, bid := range exceptions[0] {
+		ensureBlockLayerWithin(t, s.State.MeshDB, bid, genesis.Add(1), last.Sub(1))
+		require.Contains(t, unsupported, bid)
+	}
+	require.Len(t, exceptions[1], (size - 1))
+	for _, bid := range exceptions[1] {
+		require.NotContains(t, unsupported, bid)
+	}
 }
 
 func TestComputeLocalOpinion(t *testing.T) {
