@@ -359,6 +359,43 @@ func (b *Block) MinerID() *signing.PublicKey {
 	return b.minerID
 }
 
+// ToBallot transforms a Block to a Ballot during the transition period to unified content block.
+// it uses BlockID for BallotID directly.
+// TODO: calculate BallotID from InnerBallot.
+func (b *Block) ToBallot() *Ballot {
+	refBallot := *EmptyBallotID
+	if b.RefBlock != nil {
+		refBallot = BallotID(*b.RefBlock)
+	}
+	return &Ballot{
+		InnerBallot: InnerBallot{
+			AtxID:            b.ATXID,
+			EligibilityProof: VotingEligibilityProof{J: b.EligibilityProof.J, Sig: b.EligibilityProof.Sig},
+			BaseBallot:       BallotID(b.BaseBlock),
+			AgainstDiff:      b.AgainstDiff,
+			ForDiff:          b.ForDiff,
+			NeutralDiff:      b.NeutralDiff,
+			RefBallot:        refBallot,
+			ActiveSet:        b.ActiveSet,
+			Beacon:           b.TortoiseBeacon,
+			layerID:          b.LayerIndex,
+		},
+		// TODO: populate Signature when Block is retired
+		Signature: nil,
+		ballotID:  BallotID(b.ID()),
+		smesherID: b.minerID,
+	}
+}
+
+// ToBallots converts a list of Block to a list of Ballot.
+func ToBallots(blocks []*Block) []*Ballot {
+	ballots := make([]*Ballot, 0, len(blocks))
+	for _, b := range blocks {
+		ballots = append(ballots, b.ToBallot())
+	}
+	return ballots
+}
+
 // DBBlock is a Block structure as it is stored in DB.
 type DBBlock struct {
 	MiniBlock
