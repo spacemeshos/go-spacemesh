@@ -412,7 +412,11 @@ func (t *turtle) calculateExceptions(
 
 		// helper function for adding diffs
 		addDiffs := func(logger log.Log, bid types.BlockID, voteVec vec, diffMap map[types.BlockID]struct{}) {
-			if v, ok := baseopinion[bid]; !ok || simplifyVote(v) != voteVec {
+			v, ok := baseopinion[bid]
+			if !ok {
+				v = against
+			}
+			if !equalVotes(voteVec, v) {
 				logger.With().Debug("added vote diff", log.Named("opinion", v))
 				if lid.Before(baselid) {
 					logger.With().Warning("added exception before base block layer, this block will not be marked good")
@@ -441,20 +445,19 @@ func (t *turtle) calculateExceptions(
 			)
 			switch opinion {
 			case support:
+				// add exceptions for blocks that base block doesn't support
 				addDiffs(logger, bid, support, forDiff)
 			case abstain:
+				// NOTE special case, we can abstain on whole layer not on individual block
+				// and only within hdist from last layer. before hdist opinion is always casted
+				// accordingly to weakcoin
 				addDiffs(logger, bid, abstain, neutralDiff)
 			case against:
-				// Finally, we need to consider the case where the base block supports a block in this layer that is not in our
-				// input vector (e.g., one we haven't seen), by adding a diff against the block.
-				// We do not explicitly add votes against blocks that the base block does _not_ support, since by not voting to
-				// support a block in an old layer, we are implicitly voting against it. But if the base block does explicitly
-				// support a block and we disagree, we need to add a vote against here.
+				// add exceptions for blocks that base block supports
 				//
-				// TODO(dshulyak) consider what is written above and in https://github.com/spacemeshos/go-spacemesh/issues/2424
-				// but generally we will not process a block if dependencies are not fetched
-				// so the block that has some unknown to us dependency will not be even added to tortoise state
-				// addDiffs(bid, logger, against, againstDiff)
+				// we don't save the block unless all of the dependencies are saved.
+				// condition where block has a vote that is not in our local view is impossible.
+				addDiffs(logger, bid, against, againstDiff)
 			}
 		}
 	}
@@ -666,10 +669,8 @@ func (t *turtle) determineBlockGoodness(ctx *tcontext, block *types.Block) bool 
 		t.checkBlockAndGetLocalOpinion(ctx, block.ForDiff, "support", support, baselid, logger) &&
 		t.checkBlockAndGetLocalOpinion(ctx, block.AgainstDiff, "against", against, baselid, logger) &&
 		t.checkBlockAndGetLocalOpinion(ctx, block.NeutralDiff, "abstain", abstain, baselid, logger) {
-		logger.Debug("block is good")
 		return true
 	}
-	logger.Debug("block is not good")
 	return false
 }
 
@@ -785,12 +786,8 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 	contextualValidity := make(map[types.BlockID]bool, len(localOpinion))
 
 	filter := func(votingBlockID types.BlockID) bool {
-		if _, isgood := t.GoodBlocksIndex[votingBlockID]; !isgood {
-			logger.With().Debug("not counting vote of block not marked good",
-				log.Named("voting_block", votingBlockID))
-			return false
-		}
-		return true
+		_, isgood := t.GoodBlocksIndex[votingBlockID]
+		return isgood
 	}
 
 	// Count the votes of good blocks. localOpinionOnBlock is our local opinion on this block.
@@ -1045,8 +1042,8 @@ func (t *turtle) sumVotesForBlock(
 	blockID types.BlockID, // the block we're summing votes for/against
 	startLayer types.LayerID,
 	filter func(types.BlockID) bool,
-) (sum vec, err error) {
-	sum = abstain
+) (vec, error) {
+	sum := abstain
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.Named("start_layer", startLayer),
 		log.Named("end_layer", t.Last),
@@ -1054,11 +1051,9 @@ func (t *turtle) sumVotesForBlock(
 		log.Named("layer_voting_on", startLayer.Sub(1)))
 	for voteLayer := startLayer; !voteLayer.After(t.Last); voteLayer = voteLayer.Add(1) {
 		logger := logger.WithFields(voteLayer)
-		// logger.With().Debug("summing layer votes",
-		// 	log.Int("count", len(t.BlockOpinionsByLayer[voteLayer])))
 		for votingBlockID, votingBlockOpinion := range t.BlockOpinionsByLayer[voteLayer] {
 			if !filter(votingBlockID) {
-				logger.Debug("voting block did not pass filter, not counting its vote", log.Named("voting_block", votingBlockID))
+				logger.With().Debug("voting block did not pass filter, not counting its vote", log.Named("voting_block", votingBlockID))
 				continue
 			}
 
@@ -1066,10 +1061,6 @@ func (t *turtle) sumVotesForBlock(
 			// no opinion (on a block in an older layer) counts as an explicit vote against the block.
 			// note: in this case, the weight is already factored into the vote, so no need to fetch weight.
 			if opinionVote, exists := votingBlockOpinion[blockID]; exists {
-				// logger.With().Debug("added block opinion to vote sum",
-				// 	log.Named("voting_block", votingBlockID),
-				// 	log.Named("vote", opinionVote),
-				// 	sum)
 				sum = sum.Add(opinionVote)
 			} else {
 				// in this case, we still need to fetch the block's voting weight.
@@ -1085,7 +1076,7 @@ func (t *turtle) sumVotesForBlock(
 			}
 		}
 	}
-	return
+	return sum, nil
 }
 
 // Manually count all votes for all layers since the last verified layer, up to the newly-arrived layer (there's no
