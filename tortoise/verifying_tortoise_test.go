@@ -196,7 +196,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 					continue
 				}
 
-				weight, err := trtl.voteWeightByID(context.TODO(), bid, i)
+				weight, err := trtl.voteWeightByID(context.TODO(), bid)
 				require.NoError(t, err)
 				sum = sum.Add(opinionVote.Multiply(weight))
 			}
@@ -842,88 +842,6 @@ func TestPersistAndRecover(t *testing.T) {
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(2).Uint32()), int(alg2.LatestComplete().Uint32()), "wrong latest complete layer")
 }
 
-func TestLayerOpinionVector(t *testing.T) {
-	r := require.New(t)
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-
-	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-	l0 := mesh.GenesisLayer()
-
-	// recent layer missing from mesh: should abstain and keep waiting
-	l1ID := l0.Index().Add(1)
-	opinionVec, err := alg.trtl.layerOpinionVector(wrapContext(context.TODO()), l1ID)
-	r.NoError(err)
-	r.Nil(opinionVec)
-
-	// hare failed for layer: should vote against all blocks
-	mdb.InputVectorBackupFunc = func(types.LayerID) ([]types.BlockID, error) {
-		return nil, database.ErrNotFound
-	}
-	opinionVec, err = alg.trtl.layerOpinionVector(wrapContext(context.TODO()), l1ID)
-	r.NoError(err)
-	r.Nil(opinionVec)
-
-	// old layer missing from mesh: should vote against all blocks
-	// older than zdist, not as old as hdist
-	// simulate old layer by advancing Last
-	l2ID := l1ID.Add(1)
-	alg.trtl.Last = types.NewLayerID(defaultTestZdist).Add(l2ID.Uint32()).Add(1)
-	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-	opinionVec, err = alg.trtl.layerOpinionVector(wrapContext(context.TODO()), l2ID)
-	r.NoError(err)
-	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
-
-	// very old layer (more than hdist layers back)
-	// if the layer isn't in the mesh, it's an error
-	alg.trtl.Last = types.NewLayerID(defaultTestHdist).Add(l2ID.Uint32()).Add(1)
-	opinionVec, err = alg.trtl.layerOpinionVector(wrapContext(context.TODO()), l2ID)
-	r.ErrorIs(err, database.ErrNotFound)
-	r.Nil(opinionVec)
-
-	// same layer in mesh, but no contextual validity info
-	// expect error about missing weak coin
-	alg.trtl.Last = l0.Index()
-	l1 := createTurtleLayer(t, l1ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
-	for _, b := range l1.Blocks() {
-		r.NoError(mdb.AddBlock(b))
-	}
-	alg.trtl.Last = l1ID
-	l2 := createTurtleLayer(t, l2ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
-	for _, b := range l2.Blocks() {
-		r.NoError(mdb.AddBlock(b))
-	}
-	alg.trtl.Last = types.NewLayerID(defaultTestHdist).Add(l2ID.Uint32()).Add(1)
-	opinionVec, err = alg.trtl.layerOpinionVector(wrapContext(context.TODO()), l2ID)
-	r.Error(err)
-	r.Contains(err.Error(), errstrNoCoinflip)
-	r.Nil(opinionVec)
-
-	// coinflip true: expect support for all layer blocks
-	mdb.RecordCoinflip(context.TODO(), alg.trtl.Last.Sub(1), true)
-	opinionVec, err = alg.trtl.layerOpinionVector(wrapContext(context.TODO()), l2ID)
-	r.NoError(err)
-	r.Equal(l2.Hash(), types.CalcBlocksHash32(types.SortBlockIDs(opinionVec), nil))
-
-	// coinflip false: expect vote against all blocks in layer
-	mdb.RecordCoinflip(context.TODO(), alg.trtl.Last.Sub(1), false)
-	opinionVec, err = alg.trtl.layerOpinionVector(wrapContext(context.TODO()), l2ID)
-	r.NoError(err)
-	r.Equal(make([]types.BlockID, 0, 0), opinionVec)
-
-	// for a verified layer, we expect the set of contextually valid blocks
-	for _, b := range l2.Blocks() {
-		r.NoError(mdb.SaveContextualValidity(b.ID(), l2ID, true))
-	}
-	alg.trtl.Verified = l2ID
-	opinionVec, err = alg.trtl.layerOpinionVector(wrapContext(context.TODO()), l2ID)
-	r.NoError(err)
-	// this is the easiest way to compare a set of blockIDs
-	r.Equal(l2.Hash(), types.CalcBlocksHash32(types.SortBlockIDs(opinionVec), nil))
-}
-
 func TestBaseBlock(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh(t)
@@ -1120,14 +1038,14 @@ func TestCalculateExceptions(t *testing.T) {
 
 	// genesis layer
 	l0ID := types.GetEffectiveGenesis()
-	votes, err := alg.trtl.calculateExceptions(wrapContext(context.TODO()), l0ID, Opinion{})
+	votes, err := alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l0ID, Opinion{})
 	r.NoError(err)
 	// expect votes in support of all genesis blocks
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), 0)
 
 	// layer greater than last processed: expect support only for genesis
 	l1ID := l0ID.Add(1)
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
 	r.NoError(err)
 	expectVotes(votes, 0, 1, 0)
 
@@ -1135,7 +1053,7 @@ func TestCalculateExceptions(t *testing.T) {
 	alg.trtl.Last = l1ID
 
 	// missing layer data
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
 	r.NoError(err)
 	expectVotes(votes, 0, 1, 0)
 
@@ -1145,14 +1063,14 @@ func TestCalculateExceptions(t *testing.T) {
 	r.NoError(addLayerToMesh(mdb, l1))
 	alg.trtl.Last = l1ID
 	mdb.InputVectorBackupFunc = nil
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
 	r.NoError(err)
 	// expect no against, FOR only for l0, and NEUTRAL for l1
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), defaultTestLayerSize)
 
 	// adding diffs for: support all blocks in the layer
 	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
 	r.NoError(err)
 	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks())+defaultTestLayerSize, 0)
 
@@ -1160,7 +1078,7 @@ func TestCalculateExceptions(t *testing.T) {
 	mdb.InputVectorBackupFunc = nil
 	// we cannot store an empty vector here (it comes back as nil), so just put another block ID in it
 	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, []types.BlockID{mesh.GenesisBlock().ID()}))
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, Opinion{})
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
 	r.NoError(err)
 
 	// we don't explicitly vote against blocks in the layer, we implicitly vote against them by not voting for them
@@ -1174,7 +1092,7 @@ func TestCalculateExceptions(t *testing.T) {
 		l1.Blocks()[1].ID():      support,
 		l1.Blocks()[2].ID():      support,
 	}
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, opinion)
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, opinion)
 	r.NoError(err)
 	expectVotes(votes, 0, 0, 0)
 
@@ -1185,7 +1103,7 @@ func TestCalculateExceptions(t *testing.T) {
 		l1.Blocks()[1].ID():      against,
 		l1.Blocks()[2].ID():      against,
 	}
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l1ID, opinion)
+	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, opinion)
 	r.NoError(err)
 	expectVotes(votes, 0, 4, 0)
 
@@ -1202,7 +1120,7 @@ func TestCalculateExceptions(t *testing.T) {
 		}
 		l3 = createTurtleLayer(t, l3ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 		alg.trtl.Last = l2ID
-		votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l2ID, Opinion{})
+		votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l2ID, Opinion{})
 		r.Error(err)
 		r.Contains(err.Error(), errstrTooManyExceptions, "expected too many exceptions error")
 		r.Nil(votes)
@@ -1226,7 +1144,7 @@ func TestCalculateExceptions(t *testing.T) {
 		l5ID := l4ID.Add(1)
 		createTurtleLayer(t, l5ID, mdb, atxdb, alg.BaseBlock, mdb.LayerBlockIds, defaultTestLayerSize)
 		alg.trtl.Last = l4ID
-		votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), l3ID, Opinion{})
+		votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l3ID, Opinion{})
 		r.NoError(err)
 		// expect votes FOR the blocks in the two intervening layers between the base block layer and the last layer
 		expectVotes(votes, 0, 2*defaultTestLayerSize, 0)
@@ -1691,53 +1609,6 @@ func TestVerifyLayers(t *testing.T) {
 	})
 }
 
-func TestLayerVoteVector(t *testing.T) {
-	r := require.New(t)
-
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
-	var blockIDs []types.BlockID
-	for _, block := range l1Blocks {
-		blockIDs = append(blockIDs, block.ID())
-	}
-
-	// empty input: expect empty output
-	emptyVec := make([]types.BlockID, 0, 0)
-	voteMap := alg.trtl.layerVoteVector(emptyVec, emptyVec)
-	r.Equal(map[types.BlockID]vec{}, voteMap)
-
-	// nil input vector: abstain on all blocks in layer
-	voteMap = alg.trtl.layerVoteVector(blockIDs, nil)
-	r.Len(blockIDs, 3)
-	r.Equal(map[types.BlockID]vec{
-		blockIDs[0]: abstain,
-		blockIDs[1]: abstain,
-		blockIDs[2]: abstain,
-	}, voteMap)
-
-	// empty input vector: vote against everything
-	voteMap = alg.trtl.layerVoteVector(blockIDs, make([]types.BlockID, 0, 0))
-	r.Len(blockIDs, 3)
-	r.Equal(map[types.BlockID]vec{
-		blockIDs[0]: against,
-		blockIDs[1]: against,
-		blockIDs[2]: against,
-	}, voteMap)
-
-	// adds support for blocks in input vector
-	voteMap = alg.trtl.layerVoteVector(blockIDs, blockIDs[1:])
-	r.Len(blockIDs, 3)
-	r.Equal(map[types.BlockID]vec{
-		blockIDs[0]: against,
-		blockIDs[1]: support,
-		blockIDs[2]: support,
-	}, voteMap)
-}
-
 func TestSumVotesForBlock(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh(t)
@@ -2121,7 +1992,7 @@ func TestHealBalanceAttack(t *testing.T) {
 			baseBlockID = l5BaseBlock2
 		}
 
-		evm, err := alg.trtl.calculateExceptions(wrapContext(context.TODO()), l5ID, alg.trtl.BlockOpinionsByLayer[l5ID][baseBlockID])
+		evm, err := alg.trtl.calculateExceptions(wrapContext(context.TODO()), alg.trtl.Last, l5ID, alg.trtl.BlockOpinionsByLayer[l5ID][baseBlockID])
 		r.NoError(err)
 		return baseBlockID, [][]types.BlockID{
 			blockMapToArray(evm[0]),
@@ -2142,7 +2013,7 @@ func TestHealBalanceAttack(t *testing.T) {
 	// first counts votes in order to determine the local opinion on the layer with the late block. once the local
 	// opinion has been established, blocks will immediately begin explicitly voting for or against the block, and
 	// the local opinion will no longer be abstain.
-	mdb.RecordCoinflip(context.TODO(), lastUnhealedLayer.Sub(2), true)
+	mdb.RecordCoinflip(context.TODO(), lastUnhealedLayer.Sub(1), true)
 
 	// after healing begins, we need a few more layers until the global opinion of the block passes the threshold
 	finalLayer := lastUnhealedLayer.Add(9)
@@ -3219,6 +3090,207 @@ func TestBaseBlockPrioritization(t *testing.T) {
 			block, err := s.State.MeshDB.GetBlock(base)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, block.LayerIndex)
+		})
+	}
+}
+
+// splitVoting partitions votes into two halves.
+func splitVoting(n int) sim.VotesGenerator {
+	return func(_ *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+		var (
+			support []types.BlockID
+			last    = layers[len(layers)-1]
+			bids    = last.BlocksIDs()
+			half    = len(bids) / 2
+		)
+		if len(bids) < 2 {
+			panic("make sure that the previous layer has atleast 2 blocks in it")
+		}
+		if i < n/2 {
+			support = bids[:half]
+		} else {
+			support = bids[half:]
+		}
+		return sim.Voting{Base: support[0], Support: support}
+	}
+}
+
+func ensureBlockLayerWithin(tb testing.TB, bdp blockDataProvider, bid types.BlockID, from, to types.LayerID) {
+	tb.Helper()
+
+	block, err := bdp.GetBlock(bid)
+	require.NoError(tb, err)
+	require.True(tb, !block.LayerIndex.Before(from) && !block.LayerIndex.After(to),
+		"%s not in [%s,%s]", block.LayerIndex, from, to,
+	)
+}
+
+func TestWeakCoinVoting(t *testing.T) {
+	const (
+		size  = 6
+		hdist = 3
+	)
+	s := sim.New(
+		sim.WithLayerSize(size),
+	)
+	s.Setup(sim.WithSetupUnitsRange(1, 1))
+
+	ctx := context.Background()
+	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg.LayerSize = size
+	cfg.Hdist = hdist
+	cfg.Zdist = hdist
+	cfg.ConfidenceParam = 0
+
+	var (
+		tortoise       = NewVerifyingTortoise(ctx, cfg)
+		verified, last types.LayerID
+		genesis        = types.GetEffectiveGenesis()
+	)
+
+	for _, lid := range sim.GenLayers(s,
+		sim.WithSequence(5),
+		sim.WithSequence(hdist+1,
+			sim.WithCoin(true), // declare support
+			sim.WithEmptyInputVector(),
+			sim.WithVoteGenerator(splitVoting(size)),
+		),
+	) {
+		last = lid
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
+	}
+	// 5th layer after genesis verifies 4th
+	// and later layers can't verify previous as they are split
+	require.Equal(t, genesis.Add(4), verified)
+	base, exceptions, err := tortoise.BaseBlock(ctx)
+	require.NoError(t, err)
+	// last block that is consistent with local opinion
+	ensureBlockLayerWithin(t, s.State.MeshDB, base, genesis.Add(5), genesis.Add(5))
+
+	against, support, neutral := exceptions[0], exceptions[1], exceptions[2]
+	require.Empty(t, against, "NOT IMPLEMENTED")
+	require.Empty(t, neutral, "empty input vector")
+
+	// support for all layers in range of (verified, last - hdist)
+	for _, bid := range support {
+		ensureBlockLayerWithin(t, s.State.MeshDB, bid, genesis.Add(5), last.Sub(hdist).Sub(1))
+	}
+
+	// test that by voting honestly node can switch to verifying tortoise from this condition
+	//
+	// NOTE(dshulyak) this is about weight required to recover from split-votes.
+	// on 7th layer we have enough weight to heal genesis + 5 and all layers afterwards.
+	// consider figuring out some arithmetic for it.
+	for i := 0; i < 7; i++ {
+		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified)
+}
+
+func TestComputeLocalOpinion(t *testing.T) {
+	const (
+		size  = 10
+		hdist = 3
+	)
+	genesis := types.GetEffectiveGenesis()
+	for _, tc := range []struct {
+		desc     string
+		seqs     []sim.Sequence
+		lid      types.LayerID
+		expected vec
+	}{
+		{
+			desc: "ContextuallyValid",
+			seqs: []sim.Sequence{
+				sim.WithSequence(4),
+			},
+			lid:      genesis.Add(1),
+			expected: support,
+		},
+		{
+			desc: "ContextuallyInvalid",
+			seqs: []sim.Sequence{
+				sim.WithSequence(1, sim.WithEmptyInputVector()),
+				sim.WithSequence(1,
+					sim.WithVoteGenerator(gapVote),
+				),
+				sim.WithSequence(hdist),
+			},
+			lid:      genesis.Add(1),
+			expected: against,
+		},
+		{
+			desc: "SupportedByHare",
+			seqs: []sim.Sequence{
+				sim.WithSequence(4),
+			},
+			lid:      genesis.Add(4),
+			expected: support,
+		},
+		{
+			desc: "NotSupportedByHare",
+			seqs: []sim.Sequence{
+				sim.WithSequence(3),
+				sim.WithSequence(1, sim.WithEmptyInputVector()),
+			},
+			lid:      genesis.Add(4),
+			expected: against,
+		},
+		{
+			desc: "WithUnfinishedHare",
+			seqs: []sim.Sequence{
+				sim.WithSequence(3),
+				sim.WithSequence(1, sim.WithoutInputVector()),
+			},
+			lid:      genesis.Add(4),
+			expected: abstain,
+		},
+		{
+			desc: "SupportFromCountedVotes",
+			seqs: []sim.Sequence{
+				sim.WithSequence(hdist+2, sim.WithoutInputVector()),
+			},
+			lid:      genesis.Add(1),
+			expected: support,
+		},
+		{
+			desc: "AbstainFromCountedVotes",
+			seqs: []sim.Sequence{
+				sim.WithSequence(1),
+				sim.WithSequence(hdist+2,
+					sim.WithoutInputVector(),
+					sim.WithVoteGenerator(splitVoting(size)),
+				),
+			},
+			lid:      genesis.Add(2),
+			expected: abstain,
+		},
+		// TODO(dshulyak) figure out sequence that will allow to test against from counted votes
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			s := sim.New(
+				sim.WithLayerSize(size),
+			)
+			s.Setup(sim.WithSetupUnitsRange(1, 1))
+
+			ctx := context.Background()
+			cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+			cfg.LayerSize = size
+			cfg.Hdist = hdist
+			cfg.Zdist = hdist
+			tortoise := NewVerifyingTortoise(ctx, cfg)
+			for _, lid := range sim.GenLayers(s, tc.seqs...) {
+				tortoise.HandleIncomingLayer(ctx, lid)
+			}
+
+			local, err := tortoise.trtl.computeLocalOpinion(wrapContext(ctx), tc.lid)
+			require.NoError(t, err)
+
+			for bid, opinion := range local {
+				require.Equal(t, tc.expected, opinion, "block id %s", bid)
+			}
 		})
 	}
 }

@@ -12,14 +12,17 @@ type NextOpt func(*nextConf)
 
 func nextConfDefaults() nextConf {
 	return nextConf{
-		VoteGen: PerfectVoting,
+		VoteGen:  PerfectVoting,
+		Coinflip: true,
 	}
 }
 
 type nextConf struct {
-	Reorder  uint32
-	FailHare bool
-	VoteGen  VotesGenerator
+	Reorder   uint32
+	FailHare  bool
+	EmptyHare bool
+	Coinflip  bool
+	VoteGen   VotesGenerator
 }
 
 // WithNextReorder configures when reordered layer should be returned.
@@ -43,10 +46,24 @@ func WithoutInputVector() NextOpt {
 	}
 }
 
+// WithEmptyInputVector will save empty input vector.
+func WithEmptyInputVector() NextOpt {
+	return func(c *nextConf) {
+		c.EmptyHare = true
+	}
+}
+
 // WithVoteGenerator declares vote generator for a layer.
 func WithVoteGenerator(gen VotesGenerator) NextOpt {
 	return func(c *nextConf) {
 		c.VoteGen = gen
+	}
+}
+
+// WithCoin is to setup weak coin for voting. By default coin will support blocks.
+func WithCoin(coin bool) NextOpt {
+	return func(c *nextConf) {
+		c.Coinflip = coin
 	}
 }
 
@@ -103,13 +120,20 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		}
 		layer.AddBlock(block)
 	}
+	if cfg.FailHare && cfg.EmptyHare {
+		g.logger.With().Panic("both FailHare and EmptyHare can't be used together")
+	}
 	if !cfg.FailHare {
 		if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), layer.BlocksIDs()); err != nil {
 			g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
 		}
 	}
-	// TODO parametrize coinflip
-	g.State.MeshDB.RecordCoinflip(context.Background(), layer.Index(), true)
+	if cfg.EmptyHare {
+		if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), []types.BlockID{}); err != nil {
+			g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
+		}
+	}
+	g.State.MeshDB.RecordCoinflip(context.Background(), layer.Index(), cfg.Coinflip)
 	g.layers = append(g.layers, layer)
 	g.nextLayer = g.nextLayer.Add(1)
 	return layer.Index()

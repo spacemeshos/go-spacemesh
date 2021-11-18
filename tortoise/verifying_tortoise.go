@@ -263,33 +263,6 @@ func (t *turtle) checkBlockAndGetLocalOpinion(
 	return true
 }
 
-func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]vec, error) {
-	bids, err := t.getLayerBlocksIDs(ctx, lid)
-	if err != nil {
-		return nil, err
-	}
-	supported, err := t.layerOpinionVector(ctx, lid)
-	if err != nil {
-		return nil, err
-	}
-	return t.layerVoteVector(bids, supported), nil
-}
-
-func (t *turtle) layerVoteVector(bids, supported []types.BlockID) map[types.BlockID]vec {
-	opinion := map[types.BlockID]vec{}
-	defaultOpinion := against
-	if supported == nil { //nolint
-		defaultOpinion = abstain
-	}
-	for _, on := range bids {
-		opinion[on] = defaultOpinion
-	}
-	for _, on := range supported { //nolint
-		opinion[on] = support
-	}
-	return opinion
-}
-
 // BaseBlock selects a base block from sliding window based on a following priorities in order:
 // - choose good block
 // - choose block with the least difference to the local opinion
@@ -301,6 +274,10 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 		logger        = t.logger.WithContext(ctx)
 		disagreements = map[types.BlockID]types.LayerID{}
 		choices       []types.BlockID // choices from the best to the least bad
+
+		// TODO change it per https://github.com/spacemeshos/go-spacemesh/issues/2920
+		// in current interpretation Last is the last layer that was sent to us after hare completed
+		votinglid = t.Last
 	)
 
 	for lid := t.LastEvicted.Add(1); !lid.After(t.Last); lid = lid.Add(1) {
@@ -319,13 +296,14 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 
 	for _, bid := range choices {
 		lid := t.BlockLayer[bid]
-		exceptions, err := t.calculateExceptions(tctx, lid, t.BlockOpinionsByLayer[lid][bid])
+		exceptions, err := t.calculateExceptions(tctx, votinglid, lid, t.BlockOpinionsByLayer[lid][bid])
 		if err != nil {
 			logger.With().Warning("error calculating vote exceptions for block", bid, log.Err(err))
 			continue
 		}
 		logger.With().Info("chose base block",
 			bid,
+			lid,
 			log.Int("against_count", len(exceptions[0])),
 			log.Int("support_count", len(exceptions[1])),
 			log.Int("neutral_count", len(exceptions[2])))
@@ -393,10 +371,11 @@ func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, bid types.
 // opinion.
 func (t *turtle) calculateExceptions(
 	ctx *tcontext,
-	baseBlockLayerID types.LayerID,
-	baseBlockOpinion Opinion, // candidate base block's opinion vector
+	votinglid,
+	baselid types.LayerID,
+	baseopinion Opinion, // candidate base block's opinion vector
 ) ([]map[types.BlockID]struct{}, error) {
-	logger := t.logger.WithContext(ctx).WithFields(log.Named("base_block_layer_id", baseBlockLayerID))
+	logger := t.logger.WithContext(ctx).WithFields(log.Named("base_block_layer_id", baselid))
 
 	// using maps prevents duplicates
 	againstDiff := make(map[types.BlockID]struct{})
@@ -404,7 +383,7 @@ func (t *turtle) calculateExceptions(
 	neutralDiff := make(map[types.BlockID]struct{})
 
 	// we support all genesis blocks by default
-	if baseBlockLayerID == types.GetEffectiveGenesis() {
+	if baselid == types.GetEffectiveGenesis() {
 		for _, i := range types.BlockIDs(mesh.GenesisLayer().Blocks()) {
 			forDiff[i] = struct{}{}
 		}
@@ -419,75 +398,65 @@ func (t *turtle) calculateExceptions(
 	if startLayer.Before(types.GetEffectiveGenesis()) {
 		startLayer = types.GetEffectiveGenesis()
 	}
-	for layerID := startLayer; !layerID.After(t.Last); layerID = layerID.Add(1) {
-		logger := logger.WithFields(log.Named("diff_layer_id", layerID))
+	for lid := startLayer; !lid.After(t.Last); lid = lid.Add(1) {
+		logger := logger.WithFields(log.Named("diff_layer_id", lid))
 		logger.Debug("checking input vector diffs")
 
-		layerBlockIds, err := t.getLayerBlocksIDs(ctx, layerID)
+		local, err := t.getLocalOpinion(ctx, lid)
 		if err != nil {
 			if errors.Is(err, database.ErrNotFound) {
 				continue
 			}
-			return nil, fmt.Errorf("layer block IDs: %w", err)
+			return nil, err
 		}
 
 		// helper function for adding diffs
-		addDiffs := func(bid types.BlockID, voteClass string, voteVec vec, diffMap map[types.BlockID]struct{}) {
-			if v, ok := baseBlockOpinion[bid]; !ok || simplifyVote(v) != voteVec {
-				logger.With().Debug("added vote diff",
-					log.Named("diff_block", bid),
-					log.String("diff_class", voteClass),
-					log.Named("opinion", v),
-				)
-				if layerID.Before(baseBlockLayerID) {
-					logger.With().Warning("added exception before base block layer, this block will not be marked good",
-						log.Named("diff_block", bid),
-						log.String("diff_class", voteClass))
+		addDiffs := func(logger log.Log, bid types.BlockID, voteVec vec, diffMap map[types.BlockID]struct{}) {
+			if v, ok := baseopinion[bid]; !ok || simplifyVote(v) != voteVec {
+				logger.With().Debug("added vote diff", log.Named("opinion", v))
+				if lid.Before(baselid) {
+					logger.With().Warning("added exception before base block layer, this block will not be marked good")
 				}
 				diffMap[bid] = struct{}{}
 			}
 		}
 
-		// get local opinion for layer
-		layerInputVector, err := t.layerOpinionVector(ctx, layerID)
-		if err != nil {
-			// an error here signifies a real database failure
-			logger.With().Error(errstrUnableToCalculateLocalOpinion, log.Err(err))
-			return nil, err
-		}
-
-		// otherwise, nil means we should abstain
-		if layerInputVector == nil {
-			// still waiting for Hare results, vote neutral and move on
-			logger.With().Debug("input vector is empty, adding neutral diffs", log.Err(err))
-			for _, b := range layerBlockIds {
-				addDiffs(b, "neutral", abstain, neutralDiff)
+		for bid, opinion := range local {
+			usecoinflip := opinion == abstain && lid.Before(t.layerCutoff())
+			if usecoinflip {
+				coin, exist := t.bdp.GetCoinflip(ctx, votinglid)
+				if !exist {
+					return nil, fmt.Errorf("coinflip is not recorded in %s", votinglid)
+				}
+				if coin {
+					opinion = support
+				} else {
+					opinion = against
+				}
 			}
-			continue
+			logger := logger.WithFields(
+				log.Bool("use_coinflip", usecoinflip),
+				log.Named("diff_block", bid),
+				log.String("diff_class", opinion.String()),
+			)
+			switch opinion {
+			case support:
+				addDiffs(logger, bid, support, forDiff)
+			case abstain:
+				addDiffs(logger, bid, abstain, neutralDiff)
+			case against:
+				// Finally, we need to consider the case where the base block supports a block in this layer that is not in our
+				// input vector (e.g., one we haven't seen), by adding a diff against the block.
+				// We do not explicitly add votes against blocks that the base block does _not_ support, since by not voting to
+				// support a block in an old layer, we are implicitly voting against it. But if the base block does explicitly
+				// support a block and we disagree, we need to add a vote against here.
+				//
+				// TODO(dshulyak) consider what is written above and in https://github.com/spacemeshos/go-spacemesh/issues/2424
+				// but generally we will not process a block if dependencies are not fetched
+				// so the block that has some unknown to us dependency will not be even added to tortoise state
+				// addDiffs(bid, logger, against, againstDiff)
+			}
 		}
-		logger.With().Debug("got local opinion vector for layer", log.Int("count", len(layerInputVector)))
-
-		inInputVector := make(map[types.BlockID]struct{})
-
-		// Add diffs FOR blocks that are in the input vector, but where the base block has no opinion or does not
-		// explicitly support the block
-		for _, b := range layerInputVector {
-			inInputVector[b] = struct{}{}
-			addDiffs(b, "support", support, forDiff)
-		}
-
-		// Finally, we need to consider the case where the base block supports a block in this layer that is not in our
-		// input vector (e.g., one we haven't seen), by adding a diff against the block.
-		// We do not explicitly add votes against blocks that the base block does _not_ support, since by not voting to
-		// support a block in an old layer, we are implicitly voting against it. But if the base block does explicitly
-		// support a block and we disagree, we need to add a vote against here.
-		// TODO: this is not currently possible since base block opinions aren't indexed by layer. See
-		//   https://github.com/spacemeshos/go-spacemesh/issues/2424
-		//for b, v := range baseBlockOpinion.BlockOpinions {
-		//	if _, ok := inInputVector[b]; !ok && v != against {
-		//		addDiffs(b, "against", against, againstDiff)
-		//	}
-		//}
 	}
 
 	// check if exceeded max no. exceptions
@@ -500,27 +469,15 @@ func (t *turtle) calculateExceptions(
 }
 
 // voteWeight returns the weight to assign to one block's vote for another.
-// Note: weight depends on more than just the weight of the voting block. It also depends on contextual factors such as
-// whether or not the block's ATX was received on time, and on how old the layer is.
-// TODO: for now it's probably sufficient to adjust weight based on whether the ATX was received on time, or late, for
-//   the current epoch. See https://github.com/spacemeshos/go-spacemesh/issues/2540.
 func (t *turtle) voteWeight(ctx context.Context, votingBlock *types.Block) (uint64, error) {
-	logger := t.logger.WithContext(ctx)
-
 	atxHeader, err := t.atxdb.GetAtxHeader(votingBlock.ATXID)
 	if err != nil {
 		return 0, fmt.Errorf("get ATX header: %w", err)
 	}
-
-	blockWeight := atxHeader.GetWeight()
-	logger.With().Debug("voting block atx was timely",
-		votingBlock.ID(),
-		votingBlock.ATXID,
-		log.Uint64("block_weight", blockWeight))
-	return blockWeight, nil
+	return atxHeader.GetWeight(), nil
 }
 
-func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID, blockVotedOn types.BlockID) (uint64, error) {
+func (t *turtle) voteWeightByID(ctx context.Context, votingBlockID types.BlockID) (uint64, error) {
 	block, err := t.bdp.GetBlock(votingBlockID)
 	if err != nil {
 		return 0, fmt.Errorf("get block: %w", err)
@@ -1009,54 +966,62 @@ func (t *turtle) layerCutoff() types.LayerID {
 	return t.Last.Sub(t.Hdist)
 }
 
-// return the set of blocks we currently consider valid for the layer. it's based on both local and global opinion,
-// depending how old the layer is, and uses weak coin to break ties.
-func (t *turtle) layerOpinionVector(ctx *tcontext, lid types.LayerID) ([]types.BlockID, error) {
+func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]vec, error) {
 	var (
-		logger = t.logger.WithContext(ctx).WithFields(lid)
-
-		voteAbstain    []types.BlockID
-		voteAgainstAll = []types.BlockID{}
+		logger  = t.logger.WithContext(ctx).WithFields(lid)
+		opinion = Opinion{}
 	)
+	bids, err := getLayerBlocksIDs(ctx, t.bdp, lid)
+	if err != nil {
+		return nil, fmt.Errorf("layer block IDs: %w", err)
+	}
+	for _, bid := range bids {
+		opinion[bid] = against
+	}
 
 	if !lid.Before(t.layerCutoff()) {
 		// for newer layers, we vote according to the local opinion (input vector, from hare or sync)
-		opinionVec, err := t.getInputVector(ctx, lid)
+		opinionVec, err := getInputVector(ctx, t.bdp, lid)
 		if err != nil {
 			if t.Last.After(types.NewLayerID(t.Zdist)) && lid.Before(t.Last.Sub(t.Zdist)) {
 				// Layer has passed the Hare abort distance threshold, so we give up waiting for Hare results. At this point
 				// our opinion on this layer is that we vote against blocks (i.e., we support an empty layer).
-				return voteAgainstAll, nil
+				return opinion, nil
 			}
 			// Hare hasn't failed and layer has not passed the Hare abort threshold, so we abstain while we keep waiting
 			// for Hare results.
 			logger.With().Warning("local opinion abstains on all blocks in layer", log.Err(err))
-			return voteAbstain, nil
+			for _, bid := range bids {
+				opinion[bid] = abstain
+			}
+			return opinion, nil
 		}
-		logger.With().Debug("got contextually valid blocks for layer",
-			log.Int("count", len(opinionVec)))
-		return opinionVec, nil
+		for _, bid := range opinionVec {
+			opinion[bid] = support
+		}
+		return opinion, nil
 	}
 
 	// for layers older than hdist, we vote according to global opinion
 	if !lid.After(t.Verified) {
 		// this layer has been verified, so we should be able to read the set of contextual blocks
 		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
-		return t.getValidBlocks(ctx, lid)
+		valid, err := getValidBlocks(ctx, t.bdp, lid)
+		if err != nil {
+			return nil, err
+		}
+		for _, bid := range valid {
+			opinion[bid] = support
+		}
+		return opinion, nil
 	}
 
 	// this layer has not yet been verified
 	// we must have an opinion about older layers at this point. if the layer hasn't been verified yet, count votes
-	// and see if they pass the local threshold. if not, use the current weak coin instead to determine our vote for
-	// the blocks in the layer.
-	layerBids, err := t.getLayerBlocksIDs(ctx, lid)
-	if err != nil {
-		return nil, fmt.Errorf("layer block IDs: %w", err)
-	}
+	// and see if they pass the local threshold.
 	logger.With().Debug("counting votes for and against blocks in old, unverified layer",
-		log.Int("num_blocks", len(layerBids)))
-	supported := make([]types.BlockID, 0, len(layerBids))
-	for _, bid := range layerBids {
+		log.Int("num_blocks", len(bids)))
+	for _, bid := range bids {
 		logger := logger.WithFields(log.Named("candidate_block_id", bid))
 		sum, err := t.sumVotesForBlock(ctx, bid, lid.Add(1), func(id types.BlockID) bool { return true })
 		if err != nil {
@@ -1064,48 +1029,15 @@ func (t *turtle) layerOpinionVector(ctx *tcontext, lid types.LayerID) ([]types.B
 				bid, lid, err)
 		}
 
-		localOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.LocalThreshold, t.AvgLayerSize, 1)
+		local := calculateOpinionWithThreshold(t.logger, sum, t.LocalThreshold, t.AvgLayerSize, 1)
 		logger.With().Debug("local opinion on block in old layer",
 			sum,
-			log.Named("local_opinion", localOpinionOnBlock))
-		if localOpinionOnBlock == support {
-			supported = append(supported, bid)
-		} else if localOpinionOnBlock == abstain {
-			// abstain means the votes for and against this block did not cross the local threshold.
-			// if any block in this layer doesn't cross the local threshold, rescore the entire layer using the
-			// weak coin.
-			// note: we use the weak coin not for the layer of the block being voted on but rather for the
-			// layer in which the voting block is created. this is because the weak coin must be generated late
-			// enough that any adversarial block that depends on the value of the coin will not be accepted by
-			// honest parties.
-			// we use the weak coin for the _previous_ layer since we expect to receive blocks for a layer
-			// before hare finishes for that layer, i.e., before the weak coin value is ready for the layer.
-			// TODO: update this logic per https://github.com/spacemeshos/go-spacemesh/issues/2688
-
-			// TODO: if we rescore old blocks, it's very likely that newly-created blocks will contain
-			//   exceptions for those blocks, and their opinion will differ from their base blocks for blocks
-			//   older than the base blocks, which will cause those blocks not to be marked good. is there
-			//   anything we can do about this? e.g., explicitly pick base blocks that agree with the new
-			//   opinion, or pick older base blocks.
-			//   see https://github.com/spacemeshos/go-spacemesh/issues/2678
-			if coin, exists := t.bdp.GetCoinflip(ctx, t.Last.Sub(1)); exists {
-				logger.With().Info("rescoring all blocks in old layer using weak coin",
-					log.Int("count", len(layerBids)),
-					log.Bool("coinflip", coin),
-					log.Named("coinflip_layer", t.Last.Sub(1)))
-				if coin {
-					// heads on the weak coin means vote for all blocks in the layer
-					return layerBids, nil
-				}
-				// tails on the weak coin means vote against all blocks in the layer
-				return voteAgainstAll, nil
-			}
-			return nil, fmt.Errorf("%s %v", errstrNoCoinflip, t.Last.Sub(1))
-		} // (nothing to do if local opinion is against, just don't include block in output)
+			log.Named("local_opinion", local),
+		)
+		opinion[bid] = local
 	}
-	logger.With().Debug("local opinion supports blocks in old, unverified layer",
-		log.Int("count", len(supported)))
-	return supported, nil
+
+	return opinion, nil
 }
 
 func (t *turtle) sumVotesForBlock(
@@ -1141,7 +1073,7 @@ func (t *turtle) sumVotesForBlock(
 				sum = sum.Add(opinionVote)
 			} else {
 				// in this case, we still need to fetch the block's voting weight.
-				weight, err := t.voteWeightByID(ctx, votingBlockID, blockID)
+				weight, err := t.voteWeightByID(ctx, votingBlockID)
 				if err != nil {
 					return sum, fmt.Errorf("error getting vote weight for block %v: %w",
 						votingBlockID, err)
@@ -1191,7 +1123,7 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 		// Note: we look at ALL blocks we've seen for the layer, not just those we've previously marked contextually valid
 		logger.Info("self healing attempting to verify candidate layer")
 
-		layerBlockIds, err := t.getLayerBlocksIDs(ctx, candidateLayerID)
+		layerBlockIds, err := getLayerBlocksIDs(ctx, t.bdp, candidateLayerID)
 		if err != nil {
 			logger.Error("inconsistent state: can't find layer in database, cannot heal")
 			return
@@ -1213,10 +1145,14 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.GlobalThreshold, t.AvgLayerSize, t.Last.Difference(candidateLayerID))
 			logger.With().Debug("self healing calculated global opinion on candidate block",
 				log.Named("global_opinion", globalOpinionOnBlock),
-				sum)
+				sum,
+			)
 
 			if globalOpinionOnBlock == abstain {
-				logger.With().Info("self healing failed to verify candidate layer, will reattempt later")
+				logger.With().Info("self healing failed to verify candidate layer, will reattempt later",
+					log.Named("global_opinion", globalOpinionOnBlock),
+					sum,
+				)
 				return
 			}
 
