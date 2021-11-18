@@ -683,7 +683,7 @@ func (t *turtle) blockHasGoodBeacon(block *types.Block, logger log.Log) bool {
 
 	epochBeacon, err := t.beacons.GetBeacon(layerID.GetEpoch())
 	if err != nil {
-		logger.Error("failed to get beacon for epoch", layerID.GetEpoch())
+		logger.With().Error("failed to get beacon for epoch", layerID.GetEpoch(), log.Err(err))
 		return false
 	}
 

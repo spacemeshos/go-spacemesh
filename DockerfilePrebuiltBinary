@@ -28,7 +28,6 @@ FROM linux AS spacemesh
 COPY go-spacemesh /bin/go-spacemesh
 COPY go-hare /bin/go-hare
 COPY go-p2p /bin/go-p2p
-COPY go-sync /bin/go-sync
 COPY go-harness /bin/go-harness
 COPY libgpu-setup.so /bin/
 
