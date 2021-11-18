@@ -95,13 +95,13 @@ install:
 build: go-spacemesh
 .PHONY: build
 
-hare p2p sync: get-gpu-setup
+hare p2p: get-gpu-setup
 	cd cmd/$@ ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
 go-spacemesh: get-gpu-setup
 	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) $(GOTAGS) .
 harness: get-gpu-setup
 	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
-.PHONY: hare p2p sync harness go-spacemesh
+.PHONY: hare p2p harness go-spacemesh
 
 tidy:
 	go mod tidy
@@ -126,7 +126,7 @@ endif
 
 # available only for linux host because CGO usage
 ifeq ($(HOST_OS),linux)
-docker-local-build: go-spacemesh hare p2p sync harness
+docker-local-build: go-spacemesh hare p2p harness
 	cd build; docker build -f ../DockerfilePrebuiltBinary -t $(DOCKER_IMAGE) .
 .PHONY: docker-local-build
 endif
@@ -268,17 +268,6 @@ endif
 dockertest-hare: dockerbuild-test dockerrun-hare
 .PHONY: dockertest-hare
 
-dockerrun-sync:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v sync/test_sync.py --tc-file=sync/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-
-.PHONY: dockerrun-sync
-
-dockertest-sync: dockerbuild-test dockerrun-sync
-.PHONY: dockertest-sync
-
 dockerrun-late-nodes:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
@@ -288,16 +277,6 @@ endif
 
 dockertest-late-nodes: dockerbuild-test dockerrun-late-nodes
 .PHONY: dockertest-late-nodes
-
-dockerrun-genesis-voting:
-ifndef ES_PASS
-	$(error ES_PASS is not set)
-endif
-	$(DOCKERRUN) pytest -s -v sync/genesis/test_genesis_voting.py --tc-file=sync/genesis/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-genesis-voting
-
-dockertest-genesis-voting: dockerbuild-test dockerrun-genesis-voting
-.PHONY: dockertest-genesis-voting
 
 dockerrun-blocks-add-node:
 ifndef ES_PASS

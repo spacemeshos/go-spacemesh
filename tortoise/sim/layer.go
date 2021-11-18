@@ -134,7 +134,6 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		}
 		layer.AddBlock(block)
 	}
-
 	if !cfg.FailHare {
 		bids := layer.BlocksIDs()
 		frac := len(bids) * cfg.HareFraction.Nominator / cfg.HareFraction.Denominator
@@ -142,7 +141,6 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 			g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
 		}
 	}
-
 	g.State.MeshDB.RecordCoinflip(context.Background(), layer.Index(), cfg.Coinflip)
 	g.layers = append(g.layers, layer)
 	g.nextLayer = g.nextLayer.Add(1)
