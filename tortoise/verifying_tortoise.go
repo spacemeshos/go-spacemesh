@@ -426,7 +426,7 @@ func (t *turtle) calculateExceptions(
 			if usecoinflip {
 				coin, exist := t.bdp.GetCoinflip(ctx, votinglid)
 				if !exist {
-					return nil, fmt.Errorf("coinflip is not recorded in %s", votinglid.Sub(1))
+					return nil, fmt.Errorf("coinflip is not recorded in %s", votinglid)
 				}
 				if coin {
 					opinion = support
@@ -1022,7 +1022,7 @@ func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[type
 	logger.With().Debug("counting votes for and against blocks in old, unverified layer",
 		log.Int("num_blocks", len(bids)))
 	for _, bid := range bids {
-		logger := logger.WithFields(log.FieldNamed("candidate_block_id", bid))
+		logger := logger.WithFields(log.Named("candidate_block_id", bid))
 		sum, err := t.sumVotesForBlock(ctx, bid, lid.Add(1), func(id types.BlockID) bool { return true })
 		if err != nil {
 			return nil, fmt.Errorf("error summing votes for block %v in old layer %v: %w",
@@ -1032,7 +1032,7 @@ func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[type
 		local := calculateOpinionWithThreshold(t.logger, sum, t.LocalThreshold, t.AvgLayerSize, 1)
 		logger.With().Debug("local opinion on block in old layer",
 			sum,
-			log.FieldNamed("local_opinion", local),
+			log.Named("local_opinion", local),
 		)
 		opinion[bid] = local
 	}
