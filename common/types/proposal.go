@@ -4,7 +4,7 @@ package types
 type ProposalID Hash20
 
 // EmptyProposalID is a canonical empty ProposalID.
-var EmptyProposalID = &ProposalID{}
+var EmptyProposalID = ProposalID{}
 
 const (
 	// ProposalIDSize in bytes.

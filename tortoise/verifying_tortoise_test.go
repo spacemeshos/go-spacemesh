@@ -146,7 +146,7 @@ func randomBallotID() types.BallotID {
 	_, err := rand.Read(b)
 	// Note that err == nil only if we read len(b) bytes.
 	if err != nil {
-		return *types.EmptyBallotID
+		return types.EmptyBallotID
 	}
 	return types.BallotID(types.CalcHash32(b).ToHash20())
 }
@@ -1287,10 +1287,10 @@ func TestProcessBlock(t *testing.T) {
 		r.NoError(mdb.AddBlock(block))
 		alg.trtl.BlockLayer[block.ID()] = block.LayerIndex
 		ballot := l1Ballots[i]
-		alg.trtl.BallotLayer[ballot.ID()] = ballot.Layer()
+		alg.trtl.BallotLayer[ballot.ID()] = ballot.LayerIndex()
 	}
 	alg.trtl.BlockLayer[l2Blocks[0].ID()] = l2Blocks[0].LayerIndex
-	alg.trtl.BallotLayer[l2Ballots[0].ID()] = l2Ballots[0].Layer()
+	alg.trtl.BallotLayer[l2Ballots[0].ID()] = l2Ballots[0].LayerIndex()
 	r.NoError(alg.trtl.processBallot(context.TODO(), l3Ballots[0]))
 	expectedOpinionVector := Opinion{
 		l1Blocks[0].ID(): abstain,                                   // from exception
@@ -2819,7 +2819,7 @@ func randomBlock(tb testing.TB, lyrID types.LayerID, beacon []byte, refBlockID *
 	return block
 }
 
-func TestBlockHasGoodBeacon(t *testing.T) {
+func TestBallotHasGoodBeacon(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -3245,7 +3245,7 @@ func TestVoteAgainstSupportedByBaseBlock(t *testing.T) {
 	// because we are comparing with local opinion only within sliding window
 	// we will never find inconsistencies for the leftmost block in sliding window
 	// and it will not include against votes explicitly, as you can see above
-	delete(tortoise.trtl.BlockOpinionsByLayer, genesis.Add(1))
+	delete(tortoise.trtl.BallotOpinionsByLayer, genesis.Add(1))
 	base, exceptions, _ = tortoise.BaseBlock(ctx)
 	ensureBlockLayerWithin(t, s.State.MeshDB, base, last, last)
 	require.Empty(t, exceptions[2])

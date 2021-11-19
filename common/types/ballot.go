@@ -17,7 +17,7 @@ const (
 type BallotID Hash20
 
 // EmptyBallotID is a canonical empty BallotID.
-var EmptyBallotID = &BallotID{}
+var EmptyBallotID = BallotID{}
 
 // Ballot contains the smesher's signed vote on the mesh history.
 type Ballot struct {
@@ -65,7 +65,7 @@ type InnerBallot struct {
 	//  N+3  | UCB_D base:UCB_B, for:[UCB_B], against:[], neutral:[UCB_C]
 	// -----------------------------------------------------------------------------------------------
 	//  (hare succeeded for N+2 but failed for N+3)
-	//  N+4  | UCB_E base:UCB_C, for:[UCB_C], against:[UCB_D], neutral:[]
+	//  N+4  | UCB_E base:UCB_C, for:[UCB_C], against:[], neutral:[]
 	// -----------------------------------------------------------------------------------------------
 	// NOTE on neutral votes: a base block is by default neutral on all blocks and layers that come after it, so
 	// there's no need to explicitly add neutral votes for more recent layers.
@@ -80,14 +80,19 @@ type InnerBallot struct {
 
 	// the first Ballot the smesher cast in the epoch. this Ballot is a special Ballot that contains information
 	// that cannot be changed mid-epoch.
-	// - ActiveSet: from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
-	// - Beacon: the beacon value the smesher recorded for this epoch
 	RefBallot BallotID
-	ActiveSet *[]ATXID
-	Beacon    []byte
+	EpochData *EpochData
 
 	// the following fields are kept private and from being serialized
 	layerID LayerID // derived from EligibilityProof
+}
+
+// EpochData contains information that cannot be changed mid-epoch.
+type EpochData struct {
+	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
+	ActiveSet []ATXID
+	// the beacon value the smesher recorded for this epoch
+	Beacon []byte
 }
 
 // VotingEligibilityProof includes the required values that, along with the smesher's VRF public key,
@@ -106,8 +111,8 @@ func (b *Ballot) ID() BallotID {
 	return b.ballotID
 }
 
-// Layer returns the LayerID of this Ballot.
-func (b *Ballot) Layer() LayerID {
+// LayerIndex returns the LayerID of this Ballot.
+func (b *Ballot) LayerIndex() LayerID {
 	return b.layerID
 }
 
@@ -118,15 +123,18 @@ func (b *Ballot) SmesherID() *signing.PublicKey {
 
 // Fields returns an array of LoggableFields for logging.
 func (b *Ballot) Fields() []log.LoggableField {
-	activeSet := 0
-	if b.ActiveSet != nil {
-		activeSet = len(*b.ActiveSet)
+	var (
+		activeSetSize = 0
+		beacon        []byte
+	)
+	if b.EpochData != nil {
+		activeSetSize = len(b.EpochData.ActiveSet)
+		beacon = b.EpochData.Beacon
 	}
-
 	return []log.LoggableField{
 		b.ID(),
-		b.Layer(),
-		b.Layer().GetEpoch(),
+		b.LayerIndex(),
+		b.LayerIndex().GetEpoch(),
 		log.FieldNamed("miner_id", b.SmesherID()),
 		log.String("base_block", b.BaseBallot.String()),
 		log.Int("supports", len(b.ForDiff)),
@@ -135,8 +143,8 @@ func (b *Ballot) Fields() []log.LoggableField {
 		b.AtxID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_block", b.RefBallot),
-		log.Int("active_set_size", activeSet),
-		log.String("beacon", BytesToHash(b.Beacon).ShortString()),
+		log.Int("active_set_size", activeSetSize),
+		log.String("beacon", BytesToHash(beacon).ShortString()),
 	}
 }
 

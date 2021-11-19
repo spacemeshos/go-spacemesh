@@ -363,10 +363,23 @@ func (b *Block) MinerID() *signing.PublicKey {
 // it uses BlockID for BallotID directly.
 // TODO: calculate BallotID from InnerBallot.
 func (b *Block) ToBallot() *Ballot {
-	refBallot := *EmptyBallotID
+	var (
+		refBallot = EmptyBallotID
+		epochData *EpochData
+		activeSet []ATXID
+	)
 	if b.RefBlock != nil {
 		refBallot = BallotID(*b.RefBlock)
+	} else {
+		if b.ActiveSet != nil {
+			activeSet = *b.ActiveSet
+		}
+		epochData = &EpochData{
+			ActiveSet: activeSet,
+			Beacon:    b.TortoiseBeacon,
+		}
 	}
+
 	return &Ballot{
 		InnerBallot: InnerBallot{
 			AtxID:            b.ATXID,
@@ -376,8 +389,7 @@ func (b *Block) ToBallot() *Ballot {
 			ForDiff:          b.ForDiff,
 			NeutralDiff:      b.NeutralDiff,
 			RefBallot:        refBallot,
-			ActiveSet:        b.ActiveSet,
-			Beacon:           b.TortoiseBeacon,
+			EpochData:        epochData,
 			layerID:          b.LayerIndex,
 		},
 		// TODO: populate Signature when Block is retired

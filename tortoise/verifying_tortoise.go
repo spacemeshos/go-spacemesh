@@ -21,11 +21,11 @@ type atxDataProvider interface {
 }
 
 var (
-	errNoBaseBlockFound     = errors.New("no good base block within exception vector limit")
+	errNoBaseBallotFound    = errors.New("no good base ballot within exception vector limit")
 	errNotSorted            = errors.New("input blocks are not sorted by layerID")
 	errstrNoCoinflip        = "no weak coin value for layer"
-	errstrTooManyExceptions = "too many exceptions to base block vote"
-	errstrConflictingVotes  = "conflicting votes found in block"
+	errstrTooManyExceptions = "too many exceptions to base ballot vote"
+	errstrConflictingVotes  = "conflicting votes found in ballot"
 )
 
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
@@ -265,11 +265,11 @@ func (t *turtle) checkBallotAndGetLocalOpinion(
 	return true
 }
 
-// BaseBlock selects a base block from sliding window based on a following priorities in order:
-// - choose good block
-// - choose block with the least difference to the local opinion
-// - choose block from higher layer
-// - otherwise deterministically select block with lowest id.
+// BaseBlock selects a base ballot from sliding window based on a following priorities in order:
+// - choose good ballot
+// - choose ballot with the least difference to the local opinion
+// - choose ballot from higher layer
+// - otherwise deterministically select ballot with lowest id.
 // TODO: return a Ballot instead.
 func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	var (
@@ -301,7 +301,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 		lid := t.BallotLayer[ballotID]
 		exceptions, err := t.calculateExceptions(tctx, votinglid, lid, t.BallotOpinionsByLayer[lid][ballotID])
 		if err != nil {
-			logger.With().Warning("error calculating vote exceptions for block", ballotID, log.Err(err))
+			logger.With().Warning("error calculating vote exceptions for ballot", ballotID, log.Err(err))
 			continue
 		}
 		logger.With().Info("chose base ballot",
@@ -311,7 +311,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 			log.Int("support_count", len(exceptions[1])),
 			log.Int("neutral_count", len(exceptions[2])))
 
-		metrics.LayerDistanceToBaseBlock.WithLabelValues().Observe(float64(t.Last.Value - lid.Value))
+		metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.Last.Value - lid.Value))
 
 		return types.BlockID(ballotID), [][]types.BlockID{
 			blockMapToArray(exceptions[0]),
@@ -321,10 +321,10 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	}
 
 	// TODO: special error encoding when exceeding exception list size
-	return types.BlockID{}, nil, errNoBaseBlockFound
+	return types.BlockID{}, nil, errNoBaseBallotFound
 }
 
-// firstDisagreement returns first layer where local opinion is different from blocks opinion within sliding window.
+// firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
 func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, ballotID types.BallotID, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
 	var (
 		opinions = t.BallotOpinionsByLayer[blid][ballotID]
@@ -335,9 +335,9 @@ func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, ballotID t
 		consistent = t.Last
 	)
 
-	// if the block is good we know that there are no exceptions that precede base block.
-	// in such case current block will not fix any previous disagreements of the base block.
-	// or if the base block completely agrees with local opinion compute disagreements after base block.
+	// if the ballot is good we know that there are no exceptions that precede base ballot.
+	// in such case current ballot will not fix any previous disagreements of the base ballot.
+	// or if the base ballot completely agrees with local opinion compute disagreements after base ballot.
 	if _, exist := t.GoodBallotsIndex[ballotID]; exist {
 		block, err := t.bdp.GetBlock(types.BlockID(ballotID))
 		if err != nil {
@@ -377,7 +377,7 @@ func (t *turtle) calculateExceptions(
 	ctx *tcontext,
 	votinglid,
 	baselid types.LayerID,
-	baseopinion Opinion, // candidate base block's opinion vector
+	baseopinion Opinion, // candidate base ballot's opinion vector
 ) ([]map[types.BlockID]struct{}, error) {
 	logger := t.logger.WithContext(ctx).WithFields(log.Named("base_ballot_layer_id", baselid))
 
@@ -394,9 +394,9 @@ func (t *turtle) calculateExceptions(
 	}
 
 	// Add latest layers input vector results to the diff
-	// Note: a block may only be selected as a candidate base block if it's marked "good", and it may only be marked
-	// "good" if its own base block is marked "good" and all exceptions it contains agree with our local opinion.
-	// We only look for and store exceptions within the sliding window set of layers as an optimization, but a block
+	// Note: a ballot may only be selected as a candidate base ballot if it's marked "good", and it may only be marked
+	// "good" if its own base ballot is marked "good" and all exceptions it contains agree with our local opinion.
+	// We only look for and store exceptions within the sliding window set of layers as an optimization, but a ballot
 	// can contain exceptions from any layer, back to genesis.
 	startLayer := t.LastEvicted.Add(1)
 	if startLayer.Before(types.GetEffectiveGenesis()) {
@@ -423,7 +423,7 @@ func (t *turtle) calculateExceptions(
 			if !equalVotes(voteVec, v) {
 				logger.With().Debug("added vote diff", log.Named("opinion", v))
 				if lid.Before(baselid) {
-					logger.With().Warning("added exception before base block layer, this block will not be marked good")
+					logger.With().Warning("added exception before base ballot layer, this ballot will not be marked good")
 				}
 				diffMap[bid] = struct{}{}
 			}
@@ -450,18 +450,18 @@ func (t *turtle) calculateExceptions(
 			)
 			switch opinion {
 			case support:
-				// add exceptions for blocks that base block doesn't support
+				// add exceptions for blocks that base ballot doesn't support
 				addDiffs(logger, bid, support, forDiff)
 			case abstain:
 				// NOTE special case, we can abstain on whole layer not on individual block
-				// and only within hdist from last layer. before hdist opinion is always casted
+				// and only within hdist from last layer. before hdist opinion is always cast
 				// accordingly to weakcoin
 				addDiffs(logger, bid, abstain, neutralDiff)
 			case against:
-				// add exceptions for blocks that base block supports
+				// add exceptions for blocks that base ballot supports
 				//
-				// we don't save the block unless all of the dependencies are saved.
-				// condition where block has a vote that is not in our local view is impossible.
+				// we don't save the ballot unless all the dependencies are saved.
+				// condition where ballot has a vote that is not in our local view is impossible.
 				addDiffs(logger, bid, against, againstDiff)
 			}
 		}
@@ -513,7 +513,7 @@ func (t *turtle) getBaseBallotOpinions(bid types.BallotID) Opinion {
 func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error {
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.Named("processing_ballot_id", ballot.ID()),
-		log.Named("processing_ballot_layer", ballot.Layer()))
+		log.Named("processing_ballot_layer", ballot.LayerIndex()))
 
 	// When a new ballot arrives, we look up the ballot it points to in our table,
 	// and add the corresponding vector (multiplied by the ballot weight) to our own vote-totals vector.
@@ -574,9 +574,9 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 			opinion[blk] = nvote
 		}
 	}
-	t.BallotLayer[ballot.ID()] = ballot.Layer()
+	t.BallotLayer[ballot.ID()] = ballot.LayerIndex()
 	logger.With().Debug("adding or updating ballot opinion")
-	t.BallotOpinionsByLayer[ballot.Layer()][ballot.ID()] = opinion
+	t.BallotOpinionsByLayer[ballot.LayerIndex()][ballot.ID()] = opinion
 	return nil
 }
 
@@ -584,24 +584,23 @@ func (t *turtle) processBallots(ctx *tcontext, ballots []*types.Ballot) error {
 	logger := t.logger.WithContext(ctx)
 	lastLayerID := types.NewLayerID(0)
 
-	// process the votes in all layer blocks and update tables
 	filteredBallots := make([]*types.Ballot, 0, len(ballots))
 	for _, b := range ballots {
-		logger := logger.WithFields(b.ID(), b.Layer())
+		logger := logger.WithFields(b.ID(), b.LayerIndex())
 		// make sure we don't write data on old ballots whose layer has already been evicted
-		if b.Layer().Before(t.LastEvicted) {
-			logger.With().Warning("not processing block from layer older than last evicted layer",
+		if b.LayerIndex().Before(t.LastEvicted) {
+			logger.With().Warning("not processing ballot from layer older than last evicted layer",
 				log.Named("last_evicted", t.LastEvicted))
 			continue
 		}
-		if b.Layer().Before(lastLayerID) {
+		if b.LayerIndex().Before(lastLayerID) {
 			return errNotSorted
-		} else if b.Layer().After(lastLayerID) {
-			lastLayerID = b.Layer()
+		} else if b.LayerIndex().After(lastLayerID) {
+			lastLayerID = b.LayerIndex()
 		}
 
-		if _, ok := t.BallotOpinionsByLayer[b.Layer()]; !ok {
-			t.BallotOpinionsByLayer[b.Layer()] = make(map[types.BallotID]Opinion, t.AvgLayerSize)
+		if _, ok := t.BallotOpinionsByLayer[b.LayerIndex()]; !ok {
+			t.BallotOpinionsByLayer[b.LayerIndex()] = make(map[types.BallotID]Opinion, t.AvgLayerSize)
 		}
 		if err := t.processBallot(ctx, b); err != nil {
 			logger.With().Error("error processing ballot", log.Err(err))
@@ -613,7 +612,7 @@ func (t *turtle) processBallots(ctx *tcontext, ballots []*types.Ballot) error {
 	t.scoreBallots(ctx, filteredBallots)
 
 	if t.Last.Before(lastLayerID) {
-		logger.With().Warning("got blocks for new layer before receiving layer, updating highest layer seen",
+		logger.With().Warning("got ballots for new layer before receiving layer, updating highest layer seen",
 			log.Named("previous_highest", t.Last),
 			log.Named("new_highest", lastLayerID))
 		t.Last = lastLayerID
@@ -638,13 +637,13 @@ func (t *turtle) scoreBallots(ctx *tcontext, ballots []*types.Ballot) {
 	for _, b := range ballots {
 		if t.determineBallotGoodness(ctx, b) {
 			// note: we have no way of warning if a ballot was previously marked as not good
-			logger.With().Debug("marking block good", b.ID(), b.Layer())
+			logger.With().Debug("marking ballot good", b.ID(), b.LayerIndex())
 			t.GoodBallotsIndex[b.ID()] = false // false means good ballot, not flushed
 			numGood++
 		} else {
-			logger.With().Info("not marking ballot good", b.ID(), b.Layer())
+			logger.With().Info("not marking ballot good", b.ID(), b.LayerIndex())
 			if _, isGood := t.GoodBallotsIndex[b.ID()]; isGood {
-				logger.With().Warning("marking previously good ballot as not good", b.ID(), b.Layer())
+				logger.With().Warning("marking previously good ballot as not good", b.ID(), b.LayerIndex())
 				delete(t.GoodBallotsIndex, b.ID())
 			}
 		}
@@ -658,8 +657,8 @@ func (t *turtle) scoreBallots(ctx *tcontext, ballots []*types.Ballot) {
 func (t *turtle) determineBallotGoodness(ctx *tcontext, ballot *types.Ballot) bool {
 	logger := t.logger.WithContext(ctx).WithFields(
 		ballot.ID(),
-		ballot.Layer(),
-		log.Named("base_block_id", ballot.BaseBallot))
+		ballot.LayerIndex(),
+		log.Named("base_ballot_id", ballot.BaseBallot))
 	// Go over all ballots, in order. Mark ballot i "good" if:
 	// (1) it has the right beacon value
 	if !t.ballotHasGoodBeacon(ballot, logger) {
@@ -671,7 +670,7 @@ func (t *turtle) determineBallotGoodness(ctx *tcontext, ballot *types.Ballot) bo
 	} else if baselid, exist := t.BallotLayer[ballot.BaseBallot]; !exist {
 		logger.With().Error("inconsistent state: base ballot not found")
 	} else if true &&
-		// (3) all diffs appear after the base block and are consistent with the current local opinion
+		// (3) all diffs appear after the base ballot and are consistent with the current local opinion
 		t.checkBallotAndGetLocalOpinion(ctx, ballot.ForDiff, "support", support, baselid, logger) &&
 		t.checkBallotAndGetLocalOpinion(ctx, ballot.AgainstDiff, "against", against, baselid, logger) &&
 		t.checkBallotAndGetLocalOpinion(ctx, ballot.NeutralDiff, "abstain", abstain, baselid, logger) {
@@ -681,7 +680,7 @@ func (t *turtle) determineBallotGoodness(ctx *tcontext, ballot *types.Ballot) bo
 }
 
 func (t *turtle) ballotHasGoodBeacon(ballot *types.Ballot, logger log.Log) bool {
-	layerID := ballot.Layer()
+	layerID := ballot.LayerIndex()
 
 	// first check if we have it in the cache
 	if _, bad := t.badBeaconBallots[ballot.ID()]; bad {
@@ -710,11 +709,11 @@ func (t *turtle) ballotHasGoodBeacon(ballot *types.Ballot, logger log.Log) bool 
 
 func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) ([]byte, error) {
 	refBallotID := ballot.ID()
-	if ballot.RefBallot != *types.EmptyBallotID {
+	if ballot.RefBallot != types.EmptyBallotID {
 		refBallotID = ballot.RefBallot
 	}
 
-	epoch := ballot.Layer().GetEpoch()
+	epoch := ballot.LayerIndex().GetEpoch()
 	beacons, ok := t.refBallotBeacons[epoch]
 	if ok {
 		if beacon, ok := beacons[refBallotID]; ok {
@@ -724,8 +723,12 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) ([]byte, 
 		t.refBallotBeacons[epoch] = make(map[types.BallotID][]byte)
 	}
 
-	beacon := ballot.Beacon
-	if ballot.RefBallot != *types.EmptyBallotID {
+	var beacon []byte
+	if ballot.EpochData != nil {
+		beacon = ballot.EpochData.Beacon
+	} else if ballot.RefBallot == types.EmptyBallotID {
+		logger.With().Panic("ref ballot missing epoch data", ballot.ID())
+	} else {
 		refBlock, err := t.bdp.GetBlock(types.BlockID(refBallotID))
 		if err != nil {
 			logger.With().Error("failed to find ref ballot",
@@ -752,7 +755,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, layerID types.LayerID)
 	if err := t.handleLayer(tctx, layerID); err != nil {
 		return err
 	}
-	// attempt to verify layers up to the latest one for which we have new block data
+	// attempt to verify layers up to the latest one for which we have new ballots
 	return t.verifyLayers(tctx)
 }
 
@@ -765,7 +768,7 @@ func (t *turtle) handleLayer(ctx *tcontext, layerID types.LayerID) error {
 	}
 
 	// Note: we don't compare newlyr and t.Verified, so this method could be called again on an already-verified layer.
-	// That would update the stored block opinions but it would not attempt to re-verify an already-verified layer.
+	// That would update the stored opinions, but it would not attempt to re-verify an already-verified layer.
 
 	// read layer blocks
 	layerBlocks, err := t.bdp.LayerBlocks(layerID)
@@ -807,8 +810,8 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 	// all positions up to k: in other words, we can verify a layer k if the total weight of the global opinion
 	// exceeds the confidence threshold, and agrees with local opinion.
 	for bid, localOpinionOnBlock := range localOpinion {
-		// count the votes of the input vote vector by summing the voting weight of good blocks
-		logger.With().Debug("summing votes for candidate layer block",
+		// count the votes of the input vote vector by summing the weighted votes on the block
+		logger.With().Debug("summing votes for block",
 			bid,
 			log.Named("layer_start", lid.Add(1)),
 			log.Named("layer_end", t.Last),
@@ -907,7 +910,7 @@ func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log, lid types.LayerI
 
 	// reinitialize context because contextually valid blocks were changed
 	ctx = wrapContext(ctx)
-	// rescore goodness of blocks in all intervening layers on the basis of new information
+	// rescore goodness of ballots in all intervening layers on the basis of new information
 	for layerID := lastVerified.Add(1); !layerID.After(t.Last); layerID = layerID.Add(1) {
 		if err := t.scoreBallotsByLayerID(ctx, layerID); err != nil {
 			// if we fail to process a layer, there's probably no point in trying to rescore ballots
