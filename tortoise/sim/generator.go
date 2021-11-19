@@ -63,7 +63,6 @@ func withLayers(layers []*types.Layer) GenOpt {
 
 type config struct {
 	Path           string
-	FirstLayer     types.LayerID
 	LayerSize      uint32
 	LayersPerEpoch uint32
 }
@@ -98,9 +97,6 @@ func New(opts ...GenOpt) *Generator {
 
 	g.beacons = &beaconStore{}
 	g.State = State{MeshDB: mdb, AtxDB: atxdb, Beacons: g.beacons}
-	g.layers = append(g.layers, mesh.GenesisLayer())
-	last := g.layers[len(g.layers)-1]
-	g.nextLayer = last.Index().Add(1)
 	return g
 }
 
@@ -165,9 +161,14 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 		opt(&conf)
 	}
 
-	// TODO(dshulyak) do we need to support more than one beacon per setup?
-	// tortoise is not really about epochs, the only dependency is to
-	// get the correct beacon based on layer's epoch
+	if len(g.layers) == 0 {
+		g.layers = append(g.layers, mesh.GenesisLayer())
+	}
+	last := g.layers[len(g.layers)-1]
+	g.nextLayer = last.Index().Add(1)
+
+	// TODO(dshulyak) this needs to be improved to store multiple beacons
+	// after partition - the previous beacon should remain in the store
 	if conf.Beacon != nil {
 		g.beacons.beacon = conf.Beacon
 	} else {

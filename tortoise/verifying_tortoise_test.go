@@ -3363,3 +3363,87 @@ func TestComputeLocalOpinion(t *testing.T) {
 		})
 	}
 }
+
+func TestRecoverFromFullPartition(t *testing.T) {
+	const size = 10
+	s1 := sim.New(
+		sim.WithLayerSize(size),
+	)
+	s1.Setup()
+
+	ctx := context.Background()
+	cfg := defaultConfigFromSimState(t, s1.State)
+	cfg.LayerSize = size
+	cfg.Hdist = 2
+	cfg.Zdist = 2
+	cfg.ConfidenceParam = 0
+
+	var (
+		tortoise1                  = NewVerifyingTortoise(ctx, cfg)
+		tortoise2                  = NewVerifyingTortoise(ctx, cfg)
+		last, verified1, verified2 types.LayerID
+	)
+
+	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
+		last = s1.Next()
+		_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
+		_, verified2, _ = tortoise2.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified1)
+	require.Equal(t, last.Sub(1), verified2)
+
+	gens := s1.Split()
+	require.Len(t, gens, 2)
+	s1, s2 := gens[0], gens[1]
+
+	// FIXME needs improvement
+	tortoise2.trtl.bdp = s2.State.MeshDB
+	tortoise2.trtl.atxdb = s2.State.AtxDB
+	tortoise2.trtl.beacons = s2.State.Beacons
+
+	partitionStart := last
+	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
+		last = s1.Next()
+
+		_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
+		_, verified2, _ = tortoise2.HandleIncomingLayer(ctx, s2.Next())
+	}
+	require.Equal(t, last.Sub(1), verified1)
+	require.Equal(t, last.Sub(1), verified2)
+
+	// sync missing state
+	// make enough progress so that blocks with other beacons are considered
+	// and then do rerun
+	partitionEnd := last
+	s1.Merge(s2)
+
+	for i := 0; i < int(cfg.BadBeaconVoteDelayLayers); i++ {
+		last = s1.Next()
+		_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
+	}
+	require.NoError(t, tortoise1.rerun(ctx))
+	last = s1.Next()
+	_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
+	require.Equal(t, last.Sub(1), verified1)
+
+	// verify that all blocks that were created in s2 during partition are
+	// contextually valid in s1 state.
+	// this is not the case right, this is a negative test case
+	for lid := partitionStart.Add(1); lid.Before(partitionEnd); lid = lid.Add(1) {
+		bids, err := s2.State.MeshDB.LayerBlockIds(lid)
+		require.NoError(t, err)
+		for _, bid := range bids {
+			valid, err := s1.State.MeshDB.ContextualValidity(bid)
+			require.NoError(t, err)
+			assert.False(t, valid, "block %s at layer %s", bid, lid)
+		}
+	}
+	// for some reason only blocks from last layer in the partition are valid
+	bids, err := s2.State.MeshDB.LayerBlockIds(partitionEnd)
+	require.NoError(t, err)
+	for _, bid := range bids {
+		valid, err := s1.State.MeshDB.ContextualValidity(bid)
+		require.NoError(t, err)
+		assert.True(t, valid, "block %s at layer %s", bid, partitionEnd)
+	}
+}

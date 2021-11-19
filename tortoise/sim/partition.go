@@ -42,17 +42,30 @@ func splitConfDefaults() splitConf {
 type splitConf struct {
 	Partitions []Fraction
 	// TODO(dshulyak) support both transient and full partitions
-	// in transient partition miners still have the same atxs and beacons
 	//
 	// transient partitions can be configured without splitting state, in transient partitions
 	// - votes are splitted
 	// - hare will not reach consensus (or will reach only in one of the partition)
-	// all of this can be done by option to Next
+	// - but atxs and beacons remain the same
+	//
+	// for now transient can be configured by options to Next
 }
 
 // Split generator into multiple partitions.
 // First generator will use original tortoise state (mesh, activations).
+//
+// This has an issue, original beacon is preserved only in the first generator
+// therefore rerun after merge will work only in the first generator.
 func (g *Generator) Split(opts ...SplitOpt) []*Generator {
+	// Split everything that would be changed after long network partition
+	// - activations
+	// - beacons
+	// - number of miners in each partition
+	//
+	//  things that should remain the same:
+	// - blocks, contextually valid blocks and input vectors before partition
+	// - activations before partition
+
 	conf := splitConfDefaults()
 	for _, opt := range opts {
 		opt(&conf)
@@ -71,41 +84,70 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 		share := total * int(part.Nominator) / int(part.Denominator)
 		if i == 0 {
 			gens[i] = g
-			g.Setup(WithSetupMinerRange(share, share))
+			g.Setup(
+				WithSetupMinerRange(share, share),
+				withBeacon(g.beacons.beacon),
+			)
 		} else {
-			layers := make([]*types.Layer, len(g.layers))
-			copy(layers, g.layers)
 			gens[i] = New(
 				withRng(g.rng),
 				withConf(g.conf),
-				withLayers(layers),
 				WithLogger(g.logger),
 			)
-			g.Setup(WithSetupMinerRange(share, share))
+			gens[i].mergeAll(g) // merging *all* previous history
+			gens[i].Setup(WithSetupMinerRange(share, share))
 		}
 	}
 	return gens
 }
 
-// Merge other Generator state into this Generator state. This is to simulate state exchange after partition.
-func (g *Generator) Merge(other *Generator) {
-	// don't merge beacon, as it is not supposed to be merged.
-
-	g.activations = append(g.activations, other.activations...)
-	for _, key := range other.keys {
-		for _, existing := range g.keys {
-			if key == existing {
-				continue
+func (g *Generator) mergeAll(other *Generator) {
+	g.Merge(other)
+	for _, layer := range g.layers {
+		bids, err := other.State.MeshDB.GetLayerInputVectorByID(layer.Index())
+		if err != nil {
+			g.logger.With().Panic("load layer input vector", log.Err(err))
+		}
+		err = g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), bids)
+		if err != nil {
+			g.logger.With().Panic("save layer input vector", log.Err(err))
+		}
+		bidsmap, err := other.State.MeshDB.LayerContextuallyValidBlocks(context.Background(), layer.Index())
+		if err != nil {
+			g.logger.With().Panic("load contextually valid blocks", log.Err(err))
+		}
+		for bid := range bidsmap {
+			if err := g.State.MeshDB.SaveContextualValidity(bid, layer.Index(), true); err != nil {
+				g.logger.With().Panic("save contextual validity", bid, log.Err(err))
 			}
+		}
+	}
+}
+
+// Merge other Generator state into this Generator state.
+func (g *Generator) Merge(other *Generator) {
+	for _, key := range other.keys {
+		var exists bool
+		for _, existing := range g.keys {
+			exists = key == existing
+			if exists {
+				break
+			}
+		}
+		if !exists {
 			g.keys = append(g.keys, key)
 		}
 	}
 
 	for _, atxid := range other.activations {
+		var exists bool
 		for _, existing := range g.activations {
-			if atxid == existing {
-				continue
+			exists = atxid == existing
+			if exists {
+				break
 			}
+		}
+		if !exists {
 			atx, err := other.State.AtxDB.GetFullAtx(atxid)
 			if err != nil {
 				g.logger.With().Panic("failed to get atx", atxid, log.Err(err))
@@ -118,15 +160,27 @@ func (g *Generator) Merge(other *Generator) {
 	}
 
 	for i, layer := range other.layers {
+		if len(g.layers)-1 < i {
+			g.layers = append(g.layers, types.NewLayer(layer.Index()))
+		}
 		for _, block := range layer.Blocks() {
-			rst, _ := g.State.MeshDB.GetBlock(block.ID())
-			if rst != nil {
-				continue
+			var exists bool
+			for _, existing := range g.layers[i].BlocksIDs() {
+				exists = block.ID() == existing
+				if exists {
+					break
+				}
 			}
-			if err := g.State.MeshDB.AddBlock(block); err != nil {
-				g.logger.With().Panic("failed to save block", block.ID(), log.Err(err))
+			if !exists {
+				rst, _ := g.State.MeshDB.GetBlock(block.ID())
+				if rst != nil {
+					continue
+				}
+				if err := g.State.MeshDB.AddBlock(block); err != nil {
+					g.logger.With().Panic("failed to save block", block.ID(), log.Err(err))
+				}
+				g.layers[i].AddBlock(block)
 			}
-			g.layers[i].AddBlock(block)
 		}
 	}
 }
