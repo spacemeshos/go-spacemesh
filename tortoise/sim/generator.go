@@ -5,6 +5,7 @@ import (
 	"math/rand"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -42,6 +43,24 @@ func WithPath(path string) GenOpt {
 	}
 }
 
+func withRng(rng *rand.Rand) GenOpt {
+	return func(g *Generator) {
+		g.rng = rng
+	}
+}
+
+func withConf(conf config) GenOpt {
+	return func(g *Generator) {
+		g.conf = conf
+	}
+}
+
+func withLayers(layers []*types.Layer) GenOpt {
+	return func(g *Generator) {
+		g.layers = layers
+	}
+}
+
 type config struct {
 	Path           string
 	FirstLayer     types.LayerID
@@ -52,15 +71,15 @@ type config struct {
 func defaults() config {
 	return config{
 		LayerSize:      30,
-		FirstLayer:     types.GetEffectiveGenesis().Add(1),
 		LayersPerEpoch: types.GetLayersPerEpoch(),
 	}
 }
 
 // State is state that can be used by tortoise.
 type State struct {
-	MeshDB *mesh.DB
-	AtxDB  *activation.DB
+	MeshDB  *mesh.DB
+	AtxDB   *activation.DB
+	Beacons blocks.BeaconGetter
 }
 
 // New creates Generator instance.
@@ -77,9 +96,11 @@ func New(opts ...GenOpt) *Generator {
 	mdb := newMeshDB(g.logger, g.conf)
 	atxdb := newAtxDB(g.logger, mdb, g.conf)
 
-	g.State = State{MeshDB: mdb, AtxDB: atxdb}
+	g.beacons = &beaconStore{}
+	g.State = State{MeshDB: mdb, AtxDB: atxdb, Beacons: g.beacons}
 	g.layers = append(g.layers, mesh.GenesisLayer())
-	g.nextLayer = g.conf.FirstLayer
+	last := g.layers[len(g.layers)-1]
+	g.nextLayer = last.Index().Add(1)
 	return g
 }
 
@@ -96,7 +117,9 @@ type Generator struct {
 	reordered   map[types.LayerID]types.LayerID
 	layers      []*types.Layer
 	activations []types.ATXID
-	keys        []*signing.EdSigner
+
+	beacons *beaconStore
+	keys    []*signing.EdSigner
 }
 
 // SetupOpt configures setup.
@@ -116,9 +139,16 @@ func WithSetupUnitsRange(low, high int) SetupOpt {
 	}
 }
 
+func withBeacon(beacon []byte) SetupOpt {
+	return func(conf *setupConf) {
+		conf.Beacon = beacon
+	}
+}
+
 type setupConf struct {
 	Miners [2]int
 	Units  [2]int
+	Beacon []byte
 }
 
 func defaultSetupConf() setupConf {
@@ -133,6 +163,16 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	conf := defaultSetupConf()
 	for _, opt := range opts {
 		opt(&conf)
+	}
+
+	// TODO(dshulyak) do we need to support more than one beacon per setup?
+	// tortoise is not really about epochs, the only dependency is to
+	// get the correct beacon based on layer's epoch
+	if conf.Beacon != nil {
+		g.beacons.beacon = conf.Beacon
+	} else {
+		g.beacons.beacon = make([]byte, 32)
+		g.rng.Read(g.beacons.beacon)
 	}
 
 	miners := intInRange(g.rng, conf.Miners)

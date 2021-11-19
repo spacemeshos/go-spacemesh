@@ -422,7 +422,7 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+		cfg := defaultConfigFromSimState(t, s.State)
 		cfg.LayerSize = size
 		tortoise := NewVerifyingTortoise(ctx, cfg)
 
@@ -444,7 +444,7 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+		cfg := defaultConfigFromSimState(t, s.State)
 		cfg.LayerSize = size
 		tortoise := NewVerifyingTortoise(ctx, cfg)
 
@@ -490,7 +490,7 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+		cfg := defaultConfigFromSimState(t, s.State)
 		cfg.LayerSize = size
 		tortoise := NewVerifyingTortoise(ctx, cfg)
 
@@ -680,7 +680,7 @@ func TestEviction(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	cfg.LayerSize = size
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 	trtl := tortoise.trtl
@@ -950,6 +950,12 @@ func defaultConfig(tb testing.TB, mdb *mesh.DB, atxdb atxDataProvider) Config {
 		RerunInterval:            defaultTestRerunInterval,
 		Log:                      logtest.New(tb),
 	}
+}
+
+func defaultConfigFromSimState(tb testing.TB, state sim.State) Config {
+	cfg := defaultConfig(tb, state.MeshDB, state.AtxDB)
+	cfg.Beacons = state.Beacons
+	return cfg
 }
 
 func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
@@ -2723,7 +2729,7 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	var (
@@ -2963,7 +2969,7 @@ func TestBaseBlockGenesis(t *testing.T) {
 	ctx := context.Background()
 
 	s := sim.New()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	base, exceptions, err := tortoise.BaseBlock(ctx)
@@ -2995,7 +3001,7 @@ func TestBaseBlockEvictedBlock(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	cfg.LayerSize = size
 	cfg.WindowSize = 10
 	tortoise := NewVerifyingTortoise(ctx, cfg)
@@ -3075,7 +3081,7 @@ func TestBaseBlockPrioritization(t *testing.T) {
 			s.Setup()
 
 			ctx := context.Background()
-			cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+			cfg := defaultConfigFromSimState(t, s.State)
 			cfg.LayerSize = size
 			cfg.WindowSize = tc.window
 			cfg.Log = logtest.New(t)
@@ -3136,7 +3142,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	s.Setup(sim.WithSetupUnitsRange(1, 1))
 
 	ctx := context.Background()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	cfg.LayerSize = size
 	cfg.Hdist = hdist
 	cfg.Zdist = hdist
@@ -3197,7 +3203,7 @@ func TestVoteAgainstSupportedByBaseBlock(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	cfg.LayerSize = size
 	cfg.WindowSize = 1
 	cfg.Hdist = 1 // for eviction
@@ -3339,7 +3345,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 			s.Setup(sim.WithSetupUnitsRange(1, 1))
 
 			ctx := context.Background()
-			cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+			cfg := defaultConfigFromSimState(t, s.State)
 			cfg.LayerSize = size
 			cfg.Hdist = hdist
 			cfg.Zdist = hdist
