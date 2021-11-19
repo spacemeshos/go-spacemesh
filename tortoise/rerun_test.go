@@ -104,7 +104,7 @@ func TestRerunEvictConcurrent(t *testing.T) {
 	st := state{log: logtest.New(t), db: cfg.Database}
 	require.NoError(t, st.Recover())
 	require.Equal(t, last.Sub(1), st.Verified)
-	for lid := range st.BlockOpinionsByLayer {
+	for lid := range st.BallotOpinionsByLayer {
 		require.True(t, lid.After(st.LastEvicted))
 	}
 }

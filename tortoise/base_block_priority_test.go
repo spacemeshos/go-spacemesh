@@ -10,7 +10,7 @@ import (
 )
 
 func TestPrioritizeBlocks(t *testing.T) {
-	blocks := []types.BlockID{
+	ballots := []types.BallotID{
 		{1},
 		{2},
 		{3},
@@ -18,60 +18,60 @@ func TestPrioritizeBlocks(t *testing.T) {
 	}
 	for _, tc := range []struct {
 		desc         string
-		goodBlocks   map[types.BlockID]bool
-		disagrements map[types.BlockID]types.LayerID
-		blockLayer   map[types.BlockID]types.LayerID
-		expect       []types.BlockID
+		goodBallots  map[types.BallotID]bool
+		disagrements map[types.BallotID]types.LayerID
+		ballotLayer  map[types.BallotID]types.LayerID
+		expect       []types.BallotID
 	}{
 		{
 			desc:   "SortLexically",
-			expect: blocks,
+			expect: ballots,
 		},
 		{
-			desc:       "PrioritizeGoodBlocks",
-			expect:     append([]types.BlockID{blocks[3]}, blocks[:3]...),
-			goodBlocks: map[types.BlockID]bool{blocks[3]: false},
+			desc:        "PrioritizeGoodBlocks",
+			expect:      append([]types.BallotID{ballots[3]}, ballots[:3]...),
+			goodBallots: map[types.BallotID]bool{ballots[3]: false},
 		},
 		{
 			desc:   "PrioritizeWithHigherDisagreementLayer",
-			expect: append([]types.BlockID{blocks[3], blocks[2]}, blocks[:2]...),
-			goodBlocks: map[types.BlockID]bool{
-				blocks[2]: false,
-				blocks[3]: false,
+			expect: append([]types.BallotID{ballots[3], ballots[2]}, ballots[:2]...),
+			goodBallots: map[types.BallotID]bool{
+				ballots[2]: false,
+				ballots[3]: false,
 			},
-			disagrements: map[types.BlockID]types.LayerID{
-				blocks[2]: types.NewLayerID(9),
-				blocks[3]: types.NewLayerID(10),
+			disagrements: map[types.BallotID]types.LayerID{
+				ballots[2]: types.NewLayerID(9),
+				ballots[3]: types.NewLayerID(10),
 			},
 		},
 		{
 			desc:   "PrioritizeByHigherLayer",
-			expect: append([]types.BlockID{blocks[3], blocks[2]}, blocks[:2]...),
-			goodBlocks: map[types.BlockID]bool{
-				blocks[2]: false,
-				blocks[3]: false,
+			expect: append([]types.BallotID{ballots[3], ballots[2]}, ballots[:2]...),
+			goodBallots: map[types.BallotID]bool{
+				ballots[2]: false,
+				ballots[3]: false,
 			},
-			disagrements: map[types.BlockID]types.LayerID{
-				blocks[2]: types.NewLayerID(9),
-				blocks[3]: types.NewLayerID(9),
+			disagrements: map[types.BallotID]types.LayerID{
+				ballots[2]: types.NewLayerID(9),
+				ballots[3]: types.NewLayerID(9),
 			},
-			blockLayer: map[types.BlockID]types.LayerID{
-				blocks[2]: types.NewLayerID(9),
-				blocks[3]: types.NewLayerID(10),
+			ballotLayer: map[types.BallotID]types.LayerID{
+				ballots[2]: types.NewLayerID(9),
+				ballots[3]: types.NewLayerID(10),
 			},
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			rst := make([]types.BlockID, len(blocks))
-			copy(rst, blocks)
+			rst := make([]types.BallotID, len(ballots))
+			copy(rst, ballots)
 
 			rng := rand.New(rand.NewSource(10001))
 			rng.Shuffle(len(rst), func(i, j int) {
 				rst[i], rst[j] = rst[j], rst[i]
 			})
 
-			prioritizeBlocks(rst, tc.goodBlocks, tc.disagrements, tc.blockLayer)
+			prioritizeBallots(rst, tc.goodBallots, tc.disagrements, tc.ballotLayer)
 			require.Equal(t, tc.expect, rst)
 		})
 	}
