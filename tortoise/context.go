@@ -43,12 +43,12 @@ func (t *turtle) getLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.Bl
 	return opinion, nil
 }
 
-func (t *turtle) getInputVector(ctx *tcontext, lid types.LayerID) ([]types.BlockID, error) {
+func getInputVector(ctx *tcontext, bdp blockDataProvider, lid types.LayerID) ([]types.BlockID, error) {
 	bids, exist := ctx.inputVectors[lid]
 	if exist {
 		return bids, nil
 	}
-	bids, err := t.bdp.GetLayerInputVectorByID(lid)
+	bids, err := bdp.GetLayerInputVectorByID(lid)
 	if err != nil {
 		return nil, fmt.Errorf("read input vector blocks for layer %s: %w", lid, err)
 	}
@@ -56,12 +56,12 @@ func (t *turtle) getInputVector(ctx *tcontext, lid types.LayerID) ([]types.Block
 	return bids, nil
 }
 
-func (t *turtle) getValidBlocks(ctx *tcontext, lid types.LayerID) ([]types.BlockID, error) {
+func getValidBlocks(ctx *tcontext, bdp blockDataProvider, lid types.LayerID) ([]types.BlockID, error) {
 	bids, exist := ctx.validBlocks[lid]
 	if exist {
 		return bids, nil
 	}
-	bidsmap, err := t.bdp.LayerContextuallyValidBlocks(ctx, lid)
+	bidsmap, err := bdp.LayerContextuallyValidBlocks(ctx, lid)
 	if err != nil {
 		return nil, fmt.Errorf("read valid blocks for layer %s: %w", lid, err)
 	}
@@ -70,12 +70,12 @@ func (t *turtle) getValidBlocks(ctx *tcontext, lid types.LayerID) ([]types.Block
 	return bids, nil
 }
 
-func (t *turtle) getLayerBlocksIDs(ctx *tcontext, lid types.LayerID) ([]types.BlockID, error) {
+func getLayerBlocksIDs(ctx *tcontext, bdp blockDataProvider, lid types.LayerID) ([]types.BlockID, error) {
 	bids, exist := ctx.layerBlocks[lid]
 	if exist {
 		return bids, nil
 	}
-	bids, err := t.bdp.LayerBlockIds(lid)
+	bids, err := bdp.LayerBlockIds(lid)
 	if err != nil {
 		return nil, fmt.Errorf("read blocks for layer %s: %w", lid, err)
 	}

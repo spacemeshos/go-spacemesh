@@ -594,7 +594,7 @@ func (app *App) initServices(ctx context.Context,
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
 		AlwaysListen: app.Config.AlwaysListen,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, tBeacon, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	tBeacon.SetSyncState(newSyncer)
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxDB, tBeacon, vrfSigner, nodeID, newSyncer.ListenToGossip, app.addLogger(BlockOracle, lg))
