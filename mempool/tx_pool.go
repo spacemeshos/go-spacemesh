@@ -97,18 +97,18 @@ func getRandIdxs(numOfTxs, spaceSize int) map[uint64]struct{} {
 }
 
 // Put inserts a transaction into the mem pool. It indexes it by source and dest addresses as well.
-func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction, layerID types.LayerID) {
+func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction) {
 	t.mu.Lock()
 	t.txs[id] = tx
 	t.getOrCreate(tx.Origin()).Add(types.LayerID{}, tx)
 	t.addToAddr(tx.Origin(), id)
 	t.addToAddr(tx.Recipient, id)
 	t.mu.Unlock()
-	events.ReportNewTx(types.LayerID{}, tx)
+	events.ReportNewTx(tx)
 }
 
 // Invalidate removes transaction from pool.
-func (t *TxMempool) Invalidate(txID types.TransactionID, layerID types.LayerID) {
+func (t *TxMempool) Invalidate(txID types.TransactionID) {
 	t.mu.Lock()
 	if tx, found := t.txs[txID]; found {
 		if pendingTxs, found := t.accounts[tx.Origin()]; found {
@@ -123,7 +123,7 @@ func (t *TxMempool) Invalidate(txID types.TransactionID, layerID types.LayerID) 
 			// We only report those transactions that are being dropped from the txpool here as
 			// conflicting since they won't be reported anywhere else. There is no need to report
 			// the initial tx here since it'll be reported as part of a new block/layer anyway.
-			events.ReportTxWithValidity(layerID, tx, false)
+			events.ReportTxWithValidity(tx, false)
 		}
 		t.removeFromAddr(tx.Origin(), txID)
 		t.removeFromAddr(tx.Recipient, txID)
