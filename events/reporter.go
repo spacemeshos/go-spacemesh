@@ -35,7 +35,7 @@ func EventHook() func(entry zapcore.Entry) error {
 }
 
 // ReportNewTx dispatches incoming events to the reporter singleton.
-func ReportNewTx(tx *types.Transaction) {
+func ReportNewTx(layerID types.LayerID, tx *types.Transaction) {
 	Publish(NewTx{
 		ID:          tx.ID().String(),
 		Origin:      tx.Origin().String(),
@@ -43,28 +43,16 @@ func ReportNewTx(tx *types.Transaction) {
 		Amount:      tx.Amount,
 		Fee:         tx.Fee,
 	})
-	ReportTxWithValidity(tx, true)
-}
-
-// ReportNewTxWithLayer dispatches incoming events to the reporter singleton with adding layer ID to them.
-func ReportNewTxWithLayer(tx *types.Transaction, layerID types.LayerID) {
-	Publish(NewTx{
-		ID:          tx.ID().String(),
-		Origin:      tx.Origin().String(),
-		Destination: tx.Recipient.String(),
-		Amount:      tx.Amount,
-		Fee:         tx.Fee,
-	})
-	ReportTxWithLayerAndValidity(tx, layerID, true)
+	ReportTxWithValidity(layerID, tx, true)
 }
 
 // ReportTxWithValidity reports a tx along with whether it was just invalidated.
-func ReportTxWithValidity(tx *types.Transaction, valid bool) {
+func ReportTxWithValidity(layerID types.LayerID, tx *types.Transaction, valid bool) {
 	mu.RLock()
 	defer mu.RUnlock()
 	txWithValidity := TransactionWithLayerAndValidity{
 		Transaction: tx,
-		LayerID:     types.LayerID{},
+		LayerID:     layerID,
 		Valid:       valid,
 	}
 	if reporter != nil {
@@ -77,30 +65,6 @@ func ReportTxWithValidity(tx *types.Transaction, valid bool) {
 				log.Debug("reported tx on channelTransaction: %v", txWithValidity)
 			default:
 				log.Debug("not reporting tx as no one is listening: %v", txWithValidity)
-			}
-		}
-	}
-}
-
-// ReportTxWithLayerAndValidity reports a tx along with layer and whether it was just invalidated.
-func ReportTxWithLayerAndValidity(tx *types.Transaction, layerID types.LayerID, valid bool) {
-	mu.RLock()
-	defer mu.RUnlock()
-	txWithLayerAndValidity := TransactionWithLayerAndValidity{
-		Transaction: tx,
-		LayerID:     layerID,
-		Valid:       valid,
-	}
-	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelTransaction <- txWithLayerAndValidity
-			log.Debug("reported tx on channelTransaction: %v", txWithLayerAndValidity)
-		} else {
-			select {
-			case reporter.channelTransaction <- txWithLayerAndValidity:
-				log.Debug("reported tx on channelTransaction: %v", txWithLayerAndValidity)
-			default:
-				log.Debug("not reporting tx as no one is listening: %v", txWithLayerAndValidity)
 			}
 		}
 	}
