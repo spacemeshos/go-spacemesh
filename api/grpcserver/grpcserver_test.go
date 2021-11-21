@@ -2344,6 +2344,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 	err = events.InitializeEventReporterWithOptions("")
 	require.NoError(t, err)
 
+	// Ensure receiving has started.
 	time.Sleep(10 * time.Millisecond)
 
 	// publish a receipt
@@ -2351,6 +2352,9 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		Address: addr1,
 		Index:   receiptIndex,
 	})
+
+	// Wait before every event to ensure their ordering.
+	time.Sleep(10 * time.Millisecond)
 
 	// publish a reward
 	events.ReportRewardReceived(events.Reward{
@@ -2360,12 +2364,17 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		Coinbase:    addr1,
 	})
 
+	time.Sleep(10 * time.Millisecond)
+
 	// publish an account data update
 	events.ReportAccountUpdate(addr1)
 
+	time.Sleep(10 * time.Millisecond)
 	// test streaming a reward and account update that should be filtered out
 	// these should not be received
 	events.ReportAccountUpdate(addr2)
+
+	time.Sleep(10 * time.Millisecond)
 	events.ReportRewardReceived(events.Reward{Coinbase: addr2})
 
 	// close the stream
@@ -2462,6 +2471,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		Index:   receiptIndex,
 	})
 
+	time.Sleep(10 * time.Millisecond)
 	// publish a reward
 	events.ReportRewardReceived(events.Reward{
 		Layer:       layerFirst,
@@ -2470,12 +2480,15 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		Coinbase:    addr1,
 	})
 
+	time.Sleep(10 * time.Millisecond)
 	// publish an account data update
 	events.ReportAccountUpdate(addr1)
 
 	// publish a new layer
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: layer.Index(),
 		Status:  events.LayerStatusTypeConfirmed,
@@ -2646,7 +2659,7 @@ func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
 
 	default:
-		require.Fail(t, "inner account data item has wrong data type")
+		require.Fail(t, fmt.Sprintf("inner account data item has wrong data type: %T", dataItem))
 	}
 }
 
