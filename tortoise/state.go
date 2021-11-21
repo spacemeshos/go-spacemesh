@@ -27,11 +27,11 @@ type state struct {
 	// if true only non-flushed items will be persisted
 	diffMode bool
 
-	// cache ref blocks by epoch
-	refBlockBeacons map[types.EpochID]map[types.BlockID][]byte
-	// cache blocks with bad beacons. this cache is mainly for self-healing where we only have BlockID
+	// cache ref ballot by epoch
+	refBallotBeacons map[types.EpochID]map[types.BallotID][]byte
+	// cache ballots with bad beacons. this cache is mainly for self-healing where we only have BallotID
 	// in the opinions map to work with.
-	badBeaconBlocks map[types.BlockID]struct{}
+	badBeaconBallots map[types.BallotID]struct{}
 
 	// last layer processed: note that tortoise does not have a concept of "current" layer (and it's not aware of the
 	// current time or latest tick). As far as Tortoise is concerned, Last is the current layer. This is a subjective
@@ -40,11 +40,13 @@ type state struct {
 	Last        types.LayerID
 	LastEvicted types.LayerID
 	Verified    types.LayerID
-	// if key exists in the map the block is good. if value is true it was written to the disk.
-	GoodBlocksIndex map[types.BlockID]bool
+	// if key exists in the map the ballot is good. if value is true it was written to the disk.
+	GoodBallotsIndex map[types.BallotID]bool
 	// use 2D array to be able to iterate from the latest elements easily
-	BlockOpinionsByLayer map[types.LayerID]map[types.BlockID]Opinion
-	// BlockLayer stores reverse mapping from BlockOpinionsByLayer
+	BallotOpinionsByLayer map[types.LayerID]map[types.BallotID]Opinion
+	// BallotLayer stores reverse mapping from BallotOpinionsByLayer
+	BallotLayer map[types.BallotID]types.LayerID
+	// BlockLayer stores mapping from BlockID to LayerID
 	BlockLayer map[types.BlockID]types.LayerID
 }
 
@@ -52,12 +54,12 @@ func (s *state) Persist() error {
 	batch := s.db.NewBatch()
 
 	var b bytes.Buffer
-	for id, flushed := range s.GoodBlocksIndex {
+	for id, flushed := range s.GoodBallotsIndex {
 		if flushed && s.diffMode {
 			continue
 		}
-		s.GoodBlocksIndex[id] = true
-		encodeGoodBlockKey(&b, id)
+		s.GoodBallotsIndex[id] = true
+		encodeGoodBallotKey(&b, id)
 		if err := batch.Put(b.Bytes(), nil); err != nil {
 			return fmt.Errorf("put 'good' namespace into batch: %w", err)
 		}
@@ -68,15 +70,15 @@ func (s *state) Persist() error {
 	}
 	batch.Reset()
 
-	for layer, blocks := range s.BlockOpinionsByLayer {
-		for block1, opinions := range blocks {
-			for block2, opinion := range opinions {
+	for layer, ballots := range s.BallotOpinionsByLayer {
+		for ballot, opinions := range ballots {
+			for block, opinion := range opinions {
 				if opinion.Flushed && s.diffMode {
 					continue
 				}
 				opinion.Flushed = true
-				opinions[block2] = opinion
-				encodeOpinionKey(&b, layer, block1, block2)
+				opinions[block] = opinion
+				encodeOpinionKey(&b, layer, ballot, block)
 
 				buf, err := codec.Encode(opinion)
 				if err != nil {
@@ -110,8 +112,9 @@ func (s *state) Persist() error {
 }
 
 func (s *state) Recover() error {
-	s.GoodBlocksIndex = map[types.BlockID]bool{}
-	s.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
+	s.GoodBallotsIndex = map[types.BallotID]bool{}
+	s.BallotOpinionsByLayer = map[types.LayerID]map[types.BallotID]Opinion{}
+	s.BallotLayer = map[types.BallotID]types.LayerID{}
 	s.BlockLayer = map[types.BlockID]types.LayerID{}
 
 	buf, err := s.db.Get([]byte(namespaceLast))
@@ -135,10 +138,10 @@ func (s *state) Recover() error {
 	it := s.db.Find([]byte(namespaceGood))
 	defer it.Release()
 	for it.Next() {
-		s.GoodBlocksIndex[decodeBlock(it.Key()[1:])] = true
+		s.GoodBallotsIndex[decodeBallot(it.Key()[1:])] = true
 	}
 	if it.Error() != nil {
-		return fmt.Errorf("good blocks iterator: %w", it.Error())
+		return fmt.Errorf("good ballot iterator: %w", it.Error())
 	}
 
 	it = s.db.Find([]byte(namespaceOpinions))
@@ -146,23 +149,25 @@ func (s *state) Recover() error {
 	for it.Next() {
 		layer := decodeLayerKey(it.Key())
 		offset := 1 + types.LayerIDSize
-		block1 := decodeBlock(it.Key()[offset : offset+types.BlockIDSize])
+		ballot := decodeBallot(it.Key()[offset : offset+types.BallotIDSize])
 
-		s.BlockLayer[block1] = layer
+		s.BallotLayer[ballot] = layer
+		// TODO: find a way to persist block->layer mapping independently with unified content block
+		s.BlockLayer[types.BlockID(ballot)] = layer
 
-		if _, exist := s.BlockOpinionsByLayer[layer]; !exist {
-			s.BlockOpinionsByLayer[layer] = map[types.BlockID]Opinion{}
+		if _, exist := s.BallotOpinionsByLayer[layer]; !exist {
+			s.BallotOpinionsByLayer[layer] = map[types.BallotID]Opinion{}
 		}
-		if _, exist := s.BlockOpinionsByLayer[layer][block1]; !exist {
-			s.BlockOpinionsByLayer[layer][block1] = Opinion{}
+		if _, exist := s.BallotOpinionsByLayer[layer][ballot]; !exist {
+			s.BallotOpinionsByLayer[layer][ballot] = Opinion{}
 		}
-		block2 := decodeBlock(it.Key()[offset+types.BlockIDSize:])
+		block := decodeBlock(it.Key()[offset+types.BlockIDSize:])
 
 		var opinion vec
 		if err := codec.Decode(it.Value(), &opinion); err != nil {
 			return fmt.Errorf("decode opinion with codec: %w", err)
 		}
-		s.BlockOpinionsByLayer[layer][block1][block2] = opinion
+		s.BallotOpinionsByLayer[layer][ballot][block] = opinion
 	}
 	if err := it.Error(); err != nil {
 		return fmt.Errorf("opinion iterator: %w", it.Error())
@@ -182,30 +187,31 @@ func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
 	for layerToEvict := s.LastEvicted.Add(1); layerToEvict.Before(windowStart); layerToEvict = layerToEvict.Add(1) {
 		logger.With().Debug("evicting layer",
 			layerToEvict,
-			log.Int("blocks", len(s.BlockOpinionsByLayer[layerToEvict])))
-		for blk := range s.BlockOpinionsByLayer[layerToEvict] {
-			if s.GoodBlocksIndex[blk] {
-				encodeGoodBlockKey(&b, blk)
+			log.Int("ballots", len(s.BallotOpinionsByLayer[layerToEvict])))
+		for ballot := range s.BallotOpinionsByLayer[layerToEvict] {
+			if s.GoodBallotsIndex[ballot] {
+				encodeGoodBallotKey(&b, ballot)
 				if err := batch.Delete(b.Bytes()); err != nil {
-					return fmt.Errorf("delete good block in batch %x: %w", b.Bytes(), err)
+					return fmt.Errorf("delete good ballot in batch %x: %w", b.Bytes(), err)
 				}
 				b.Reset()
 			}
-			delete(s.GoodBlocksIndex, blk)
-			delete(s.BlockLayer, blk)
-			delete(s.badBeaconBlocks, blk)
-			for blk2, opinion := range s.BlockOpinionsByLayer[layerToEvict][blk] {
+			delete(s.GoodBallotsIndex, ballot)
+			delete(s.BallotLayer, ballot)
+			delete(s.BlockLayer, types.BlockID(ballot))
+			delete(s.badBeaconBallots, ballot)
+			for block, opinion := range s.BallotOpinionsByLayer[layerToEvict][ballot] {
 				if !opinion.Flushed {
 					continue
 				}
-				encodeOpinionKey(&b, layerToEvict, blk, blk2)
+				encodeOpinionKey(&b, layerToEvict, ballot, block)
 				if err := batch.Delete(b.Bytes()); err != nil {
 					return fmt.Errorf("delete opinion in batch %x: %w", b.Bytes(), err)
 				}
 				b.Reset()
 			}
 		}
-		delete(s.BlockOpinionsByLayer, layerToEvict)
+		delete(s.BallotOpinionsByLayer, layerToEvict)
 		if layerToEvict.GetEpoch() < oldestEpoch {
 			epochToEvict[layerToEvict.GetEpoch()] = struct{}{}
 		}
@@ -215,16 +221,22 @@ func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
 		batch.Reset()
 	}
 	for epoch := range epochToEvict {
-		delete(s.refBlockBeacons, epoch)
+		delete(s.refBallotBeacons, epoch)
 	}
 	s.LastEvicted = windowStart.Sub(1)
 	return nil
 }
 
+func decodeBallot(key []byte) types.BallotID {
+	var ballotID types.BallotID
+	copy(ballotID[:], key)
+	return ballotID
+}
+
 func decodeBlock(key []byte) types.BlockID {
-	var block types.BlockID
-	copy(block[:], key)
-	return block
+	var bid types.BlockID
+	copy(bid[:], key)
+	return bid
 }
 
 func encodeLayerKey(layer types.LayerID) []byte {
@@ -235,14 +247,14 @@ func decodeLayerKey(key []byte) types.LayerID {
 	return types.NewLayerID(util.BytesToUint32BE(key[1 : 1+types.LayerIDSize]))
 }
 
-func encodeGoodBlockKey(b *bytes.Buffer, bid types.BlockID) {
+func encodeGoodBallotKey(b *bytes.Buffer, ballot types.BallotID) {
 	b.WriteString(namespaceGood)
-	b.Write(bid.Bytes())
+	b.Write(ballot.Bytes())
 }
 
-func encodeOpinionKey(b *bytes.Buffer, layer types.LayerID, bid1, bid2 types.BlockID) {
+func encodeOpinionKey(b *bytes.Buffer, layer types.LayerID, ballot types.BallotID, block types.BlockID) {
 	b.WriteString(namespaceOpinions)
 	b.Write(encodeLayerKey(layer))
-	b.Write(bid1.Bytes())
-	b.Write(bid2.Bytes())
+	b.Write(ballot.Bytes())
+	b.Write(block.Bytes())
 }

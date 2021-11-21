@@ -46,5 +46,8 @@ func newMeshDB(logger log.Log, conf config) *mesh.DB {
 }
 
 func intInRange(rng *rand.Rand, ints [2]int) int {
+	if ints[0] == ints[1] {
+		return ints[0]
+	}
 	return rng.Intn(ints[1]-ints[0]) + ints[0]
 }

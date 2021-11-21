@@ -11,14 +11,22 @@ import (
 type NextOpt func(*nextConf)
 
 func nextConfDefaults() nextConf {
-	return nextConf{
-		VoteGen: PerfectVoting,
+	conf := nextConf{
+		VoteGen:  PerfectVoting,
+		Coinflip: true,
 	}
+	conf.HareFraction.Nominator = 1
+	conf.HareFraction.Denominator = 1
+	return conf
 }
 
 type nextConf struct {
-	Reorder  uint32
-	FailHare bool
+	Reorder      uint32
+	FailHare     bool
+	HareFraction struct {
+		Nominator, Denominator int
+	}
+	Coinflip bool
 	VoteGen  VotesGenerator
 }
 
@@ -43,10 +51,36 @@ func WithoutInputVector() NextOpt {
 	}
 }
 
+// WithEmptyInputVector will save empty input vector.
+func WithEmptyInputVector() NextOpt {
+	return func(c *nextConf) {
+		c.HareFraction.Nominator = 0
+	}
+}
+
+// WithPartialHare will set input vector only to a fraction of all known blocks.
+// Input vector will be limited to nominator*size/denominator.
+func WithPartialHare(nominator, denominator int) NextOpt {
+	if denominator == 0 {
+		panic("denominator can't be zero")
+	}
+	return func(c *nextConf) {
+		c.HareFraction.Nominator = nominator
+		c.HareFraction.Denominator = denominator
+	}
+}
+
 // WithVoteGenerator declares vote generator for a layer.
 func WithVoteGenerator(gen VotesGenerator) NextOpt {
 	return func(c *nextConf) {
 		c.VoteGen = gen
+	}
+}
+
+// WithCoin is to setup weak coin for voting. By default coin will support blocks.
+func WithCoin(coin bool) NextOpt {
+	return func(c *nextConf) {
+		c.Coinflip = coin
 	}
 }
 
@@ -104,12 +138,13 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		layer.AddBlock(block)
 	}
 	if !cfg.FailHare {
-		if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), layer.BlocksIDs()); err != nil {
+		bids := layer.BlocksIDs()
+		frac := len(bids) * cfg.HareFraction.Nominator / cfg.HareFraction.Denominator
+		if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), bids[:frac]); err != nil {
 			g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
 		}
 	}
-	// TODO parametrize coinflip
-	g.State.MeshDB.RecordCoinflip(context.Background(), layer.Index(), true)
+	g.State.MeshDB.RecordCoinflip(context.Background(), layer.Index(), cfg.Coinflip)
 	g.layers = append(g.layers, layer)
 	g.nextLayer = g.nextLayer.Add(1)
 	return layer.Index()
