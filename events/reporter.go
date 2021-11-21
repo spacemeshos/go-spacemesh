@@ -18,10 +18,6 @@ import (
 // reporter is the event reporter singleton.
 var reporter *EventReporter
 
-func GetBus() event.Bus {
-	return reporter.bus
-}
-
 // we use a mutex to ensure thread safety.
 var mu sync.RWMutex
 
