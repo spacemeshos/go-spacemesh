@@ -643,8 +643,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Report two errors and make sure they're both received
 	go func() {
+		// Ensure order
+		time.Sleep(10 * time.Millisecond)
 		errlog.Error("test123")
+		time.Sleep(10 * time.Millisecond)
 		errlog.Error("test456")
+		time.Sleep(10 * time.Millisecond)
 		assert.Panics(t, func() {
 			errlog.Panic("testPANIC")
 		})
