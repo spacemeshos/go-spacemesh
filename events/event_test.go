@@ -133,7 +133,7 @@ func TestReportError(t *testing.T) {
 	stream := SubscribeErrors()
 	require.Nil(t, stream, "expected stream not to be initialized")
 
-	err := InitializeEventReporterWithOptions("", 1, false)
+	err := InitializeEventReporterWithOptions("")
 	require.NoError(t, err)
 	stream = SubscribeErrors()
 	defer stream.Close()
@@ -205,7 +205,7 @@ func TestReportNodeStatus(t *testing.T) {
 		commChannel <- struct{}{}
 
 		status := <-stream.Out()
-		require.Equal(t, struct{}{}, status)
+		require.Equal(t, Status{}, status)
 
 		close(commChannel)
 	}()

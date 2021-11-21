@@ -1962,12 +1962,19 @@ func TestTransactionService(t *testing.T) {
 				Id: globalTx.ID().Bytes(),
 			})
 
+			events.CloseEventReporter()
+
+			require.NoError(t, events.InitializeEventReporterWithOptions(""))
+
+			stream, err := c.TransactionsStateStream(context.Background(), req)
+			require.NoError(t, err)
+
 			wg := sync.WaitGroup{}
 			wg.Add(1)
+
 			go func() {
 				defer wg.Done()
-				stream, err := c.TransactionsStateStream(context.Background(), req)
-				require.NoError(t, err)
+
 				res, err := stream.Recv()
 				require.NoError(t, err)
 				require.Nil(t, res.Transaction)
@@ -1975,9 +1982,8 @@ func TestTransactionService(t *testing.T) {
 				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
 			}()
 
-			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("", 1, true)
-			require.NoError(t, err)
+			// Wait until stream starts receiving to ensure that it catches the event.
+			time.Sleep(10 * time.Millisecond)
 			events.ReportNewTx(types.LayerID{}, globalTx)
 			wg.Wait()
 		}},
@@ -2003,8 +2009,11 @@ func TestTransactionService(t *testing.T) {
 			}()
 
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("", 1, true)
+			err := events.InitializeEventReporterWithOptions("")
 			require.NoError(t, err)
+
+			// Wait until stream starts receiving to ensure that it catches the event.
+			time.Sleep(10 * time.Millisecond)
 			events.ReportNewTx(types.LayerID{}, globalTx)
 			wg.Wait()
 		}},
@@ -2059,7 +2068,7 @@ func TestTransactionService(t *testing.T) {
 
 			// SUBMIT
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("", 1, true)
+			err := events.InitializeEventReporterWithOptions("")
 			require.NoError(t, err)
 			serializedTx, err := types.InterfaceToBytes(globalTx)
 			require.NoError(t, err, "error serializing tx")
@@ -2213,24 +2222,37 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 		require.NoError(t, err, "got error from stream")
 		checkAccountMeshDataItemActivation(t, res.Datum.Datum)
 
-		// look for EOF
 		// third and fourth events streamed should not be received! they should be
 		// filtered out
-		_, err = stream.Recv()
-		require.Equal(t, io.EOF, err, "expected EOF from stream")
+		errCh := make(chan error, 1)
+		go func() {
+			_, err = stream.Recv()
+			errCh <- err
+		}()
+
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+
+		select {
+		case <-errCh:
+			t.Errorf("should not receive")
+		case <-timer.C:
+			return
+		}
 	}()
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("", 0, true)
+	err = events.InitializeEventReporterWithOptions("")
 	require.NoError(t, err)
+
+	// Wait until stream starts receiving to ensure that it catches the event.
+	time.Sleep(10 * time.Millisecond)
 
 	// publish a tx
 	events.ReportNewTx(types.LayerID{}, globalTx)
-
 	// publish an activation
 	events.ReportNewActivation(globalAtx)
-
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
 	events.ReportNewTx(types.LayerID{}, globalTx2)
@@ -2298,17 +2320,31 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		require.NoError(t, err, "got error from stream")
 		checkAccountDataItemAccount(t, res.Datum.Datum)
 
-		// look for EOF
 		// the next two events streamed should not be received! they should be
 		// filtered out
-		_, err = stream.Recv()
-		require.Equal(t, io.EOF, err, "expected EOF from stream")
+		errCh := make(chan error, 1)
+		go func() {
+			_, err = stream.Recv()
+			errCh <- err
+		}()
+
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+
+		select {
+		case <-errCh:
+			t.Errorf("should not receive")
+		case <-timer.C:
+			return
+		}
 	}()
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("", 0, true)
+	err = events.InitializeEventReporterWithOptions("")
 	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
@@ -2396,14 +2432,29 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		// look for EOF
 		// the next two events streamed should not be received! they should be
 		// filtered out
-		_, err = stream.Recv()
-		require.Equal(t, io.EOF, err, "expected EOF from stream")
+		errCh := make(chan error, 1)
+		go func() {
+			_, err = stream.Recv()
+			errCh <- err
+		}()
+
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+
+		select {
+		case <-errCh:
+			t.Errorf("should not receive")
+		case <-timer.C:
+			return
+		}
 	}()
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("", 0, true)
+	err = events.InitializeEventReporterWithOptions("")
 	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
@@ -2480,15 +2531,30 @@ func TestLayerStream_comprehensive(t *testing.T) {
 		checkLayer(t, res.Layer)
 
 		// look for EOF
-		_, err = stream.Recv()
-		require.Equal(t, io.EOF, err, "expected EOF from stream")
+		errCh := make(chan error, 1)
+		go func() {
+			_, err = stream.Recv()
+			errCh <- err
+		}()
+
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+
+		select {
+		case <-errCh:
+			t.Errorf("should not receive")
+		case <-timer.C:
+			return
+		}
 	}()
 
 	// initialize the streamer
-	require.NoError(t, events.InitializeEventReporterWithOptions("", 0, true))
+	require.NoError(t, events.InitializeEventReporterWithOptions(""))
 
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: layer.Index(),
 		Status:  events.LayerStatusTypeConfirmed,

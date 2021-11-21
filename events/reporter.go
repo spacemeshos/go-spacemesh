@@ -18,6 +18,10 @@ import (
 // reporter is the event reporter singleton.
 var reporter *EventReporter
 
+func GetBus() event.Bus {
+	return reporter.bus
+}
+
 // we use a mutex to ensure thread safety.
 var mu sync.RWMutex
 
@@ -384,13 +388,13 @@ func SubscribeReceipts() event.Subscription {
 // InitializeEventReporter initializes the event reporting interface.
 func InitializeEventReporter(url string) error {
 	// By default use zero-buffer channels and non-blocking.
-	return InitializeEventReporterWithOptions(url, 0, false)
+	return InitializeEventReporterWithOptions(url)
 }
 
 // InitializeEventReporterWithOptions initializes the event reporting interface with
 // a nonzero channel buffer. This is useful for testing, where we want reporting to
 // block.
-func InitializeEventReporterWithOptions(url string, bufsize int, blocking bool) error {
+func InitializeEventReporterWithOptions(url string) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if reporter != nil {

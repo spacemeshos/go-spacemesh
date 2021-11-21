@@ -308,7 +308,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 
 	for {
 		select {
-		case updatedAccount, ok := <-channelAccount:
+		case updatedAccountEvent, ok := <-channelAccount:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -317,6 +317,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				log.Info("account channel closed, shutting down")
 				return nil
 			}
+			updatedAccount := updatedAccountEvent.(events.Account).Address
 			// Apply address filter
 			if updatedAccount == addr {
 				// The Reporter service just sends us the account address. We are responsible
