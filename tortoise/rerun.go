@@ -18,7 +18,7 @@ type rerunResult struct {
 }
 
 // updateFromRerun must be called while holding appropriate mutex (see struct definition).
-func (t *ThreadSafeVerifyingTortoise) updateFromRerun(ctx context.Context) (bool, types.LayerID) {
+func (t *Tortoise) updateFromRerun(ctx context.Context) (bool, types.LayerID) {
 	var (
 		logger   = t.logger.WithContext(ctx).With()
 		reverted bool
@@ -69,7 +69,7 @@ func (t *ThreadSafeVerifyingTortoise) updateFromRerun(ctx context.Context) (bool
 	return reverted, observed
 }
 
-func (t *ThreadSafeVerifyingTortoise) rerunLoop(ctx context.Context, period time.Duration) {
+func (t *Tortoise) rerunLoop(ctx context.Context, period time.Duration) {
 	timer := time.NewTimer(period)
 	defer timer.Stop()
 	for {
@@ -83,7 +83,7 @@ func (t *ThreadSafeVerifyingTortoise) rerunLoop(ctx context.Context, period time
 	}
 }
 
-func (t *ThreadSafeVerifyingTortoise) rerun(ctx context.Context) error {
+func (t *Tortoise) rerun(ctx context.Context) error {
 	t.mu.RLock()
 	last := t.trtl.Last
 	t.mu.RUnlock()

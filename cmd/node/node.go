@@ -279,7 +279,7 @@ type App struct {
 	svm            *svm.SVM
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
-	tortoise       *tortoise.ThreadSafeVerifyingTortoise
+	tortoise       *tortoise.Tortoise
 
 	host *p2p.Host
 
@@ -522,7 +522,7 @@ func (app *App) initServices(ctx context.Context,
 		app.addLogger(TBeaconLogger, lg))
 
 	var msh *mesh.Mesh
-	var trtl *tortoise.ThreadSafeVerifyingTortoise
+	var trtl *tortoise.Tortoise
 	trtlStateDB, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "turtle"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create turtle DB: %w", err)
@@ -530,22 +530,22 @@ func (app *App) initServices(ctx context.Context,
 	app.closers = append(app.closers, trtlStateDB)
 	trtlCfg := tortoise.Config{
 		LayerSize:                layerSize,
-		Database:                 trtlStateDB,
-		MeshDatabase:             mdb,
-		ATXDB:                    atxDB,
-		Beacons:                  tBeacon,
 		Hdist:                    app.Config.Hdist,
 		Zdist:                    app.Config.Zdist,
 		ConfidenceParam:          app.Config.ConfidenceParam,
 		WindowSize:               app.Config.WindowSize,
 		GlobalThreshold:          app.Config.GlobalThreshold,
 		LocalThreshold:           app.Config.LocalThreshold,
-		Log:                      app.addLogger(TrtlLogger, lg),
 		RerunInterval:            time.Minute * time.Duration(app.Config.TortoiseRerunInterval),
 		BadBeaconVoteDelayLayers: app.Config.LayersPerEpoch,
+		MaxExceptions:            int(app.Config.Hdist) * app.Config.LayerAvgSize,
 	}
 
-	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
+	trtl = tortoise.New(trtlStateDB, mdb, atxDB, tBeacon,
+		tortoise.WithContext(ctx),
+		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
+		tortoise.WithConfig(trtlCfg),
+	)
 	svm := svm.New(processor, app.addLogger(SVMLogger, lg))
 
 	if mdb.PersistentData() {

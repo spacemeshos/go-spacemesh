@@ -17,27 +17,25 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/organizer"
 )
 
-// Config holds the arguments and dependencies to create a verifying tortoise instance.
+// Config for protocol parameters.
 type Config struct {
 	LayerSize                uint32
-	Database                 database.Database
-	MeshDatabase             blockDataProvider
-	Beacons                  blocks.BeaconGetter
-	ATXDB                    atxDataProvider
-	Hdist                    uint32   // hare lookback distance: the distance over which we use the input vector/hare results
-	Zdist                    uint32   // hare result wait distance: the distance over which we're willing to wait for hare results
-	ConfidenceParam          uint32   // confidence wait distance: how long we wait for global consensus to be established
-	GlobalThreshold          *big.Rat // threshold required to finalize blocks and layers
-	LocalThreshold           *big.Rat // threshold that determines whether a node votes based on local or global opinion
-	WindowSize               uint32   // tortoise sliding window: how many layers we store data for
-	Log                      log.Log
+	Hdist                    uint32        // hare lookback distance: the distance over which we use the input vector/hare results
+	Zdist                    uint32        // hare result wait distance: the distance over which we're willing to wait for hare results
+	ConfidenceParam          uint32        // confidence wait distance: how long we wait for global consensus to be established
+	GlobalThreshold          *big.Rat      // threshold required to finalize blocks and layers
+	LocalThreshold           *big.Rat      // threshold that determines whether a node votes based on local or global opinion
+	WindowSize               uint32        // tortoise sliding window: how many layers we store data for
 	RerunInterval            time.Duration // how often to rerun from genesis
 	BadBeaconVoteDelayLayers uint32        // number of layers to delay votes for blocks with bad beacon values during self-healing
+	MaxExceptions            int           // if candidate for base block has more than max exceptions it will be ignored
 }
 
-// ThreadSafeVerifyingTortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
-type ThreadSafeVerifyingTortoise struct {
+// Tortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
+type Tortoise struct {
 	logger log.Log
+	ctx    context.Context
+	cfg    Config
 
 	eg     errgroup.Group
 	cancel context.CancelFunc
@@ -54,62 +52,88 @@ type ThreadSafeVerifyingTortoise struct {
 	trtl      *turtle
 }
 
-// NewVerifyingTortoise creates ThreadSafeVerifyingTortoise instance.
-func NewVerifyingTortoise(ctx context.Context, cfg Config) *ThreadSafeVerifyingTortoise {
-	if cfg.Hdist < cfg.Zdist {
-		cfg.Log.With().Panic("hdist must be >= zdist", log.Uint32("hdist", cfg.Hdist), log.Uint32("zdist", cfg.Zdist))
+// Opt for configuring tortoise.
+type Opt func(t *Tortoise)
+
+// WithLogger defines logger for tortoise.
+func WithLogger(logger log.Log) Opt {
+	return func(t *Tortoise) {
+		t.logger = logger
 	}
-	alg := &ThreadSafeVerifyingTortoise{
-		trtl: newTurtle(
-			cfg.Log,
-			cfg.Database,
-			cfg.MeshDatabase,
-			cfg.ATXDB,
-			cfg.Beacons,
-			cfg.Hdist,
-			cfg.Zdist,
-			cfg.ConfidenceParam,
-			cfg.WindowSize,
-			cfg.LayerSize,
-			cfg.GlobalThreshold,
-			cfg.LocalThreshold,
-			cfg.BadBeaconVoteDelayLayers,
-		),
-		logger: cfg.Log,
+}
+
+// WithContext defines context for tortoise.
+func WithContext(ctx context.Context) Opt {
+	return func(t *Tortoise) {
+		t.ctx = ctx
 	}
-	if err := alg.trtl.Recover(); err != nil {
+}
+
+// WithConfig defines protocol parameters.
+func WithConfig(cfg Config) Opt {
+	return func(t *Tortoise) {
+		t.cfg = cfg
+	}
+}
+
+// New creates Tortoise instance.
+func New(db database.Database, mdb blockDataProvider, atxdb atxDataProvider, beacons blocks.BeaconGetter, opts ...Opt) *Tortoise {
+	t := &Tortoise{
+		ctx:    context.Background(),
+		logger: log.NewNop(),
+	}
+	for _, opt := range opts {
+		opt(t)
+	}
+
+	if t.cfg.Hdist < t.cfg.Zdist {
+		t.logger.With().Panic("hdist must be >= zdist",
+			log.Uint32("hdist", t.cfg.Hdist),
+			log.Uint32("zdist", t.cfg.Zdist),
+		)
+	}
+	t.trtl = newTurtle(
+		t.logger,
+		db,
+		mdb,
+		atxdb,
+		beacons,
+		t.cfg,
+	)
+
+	if err := t.trtl.Recover(); err != nil {
 		if errors.Is(err, database.ErrNotFound) {
-			alg.trtl.init(ctx, mesh.GenesisLayer())
+			t.trtl.init(t.ctx, mesh.GenesisLayer())
 		} else {
-			cfg.Log.With().Panic("can't recover turtle state", log.Err(err))
+			t.logger.With().Panic("can't recover turtle state", log.Err(err))
 		}
 	}
-	alg.org = organizer.New(
-		organizer.WithLogger(cfg.Log),
-		organizer.WithLastLayer(alg.trtl.Last),
+	t.org = organizer.New(
+		organizer.WithLogger(t.logger),
+		organizer.WithLastLayer(t.trtl.Last),
 	)
-	ctx, cancel := context.WithCancel(ctx)
-	alg.cancel = cancel
+	ctx, cancel := context.WithCancel(t.ctx)
+	t.cancel = cancel
 	// TODO(dshulyak) with low rerun interval it is possible to start a rerun
 	// when initial sync is in progress, or right after sync
-	if cfg.RerunInterval != 0 {
-		alg.eg.Go(func() error {
-			alg.rerunLoop(ctx, cfg.RerunInterval)
+	if t.cfg.RerunInterval != 0 {
+		t.eg.Go(func() error {
+			t.rerunLoop(ctx, t.cfg.RerunInterval)
 			return nil
 		})
 	}
-	return alg
+	return t
 }
 
 // LatestComplete returns the latest verified layer.
-func (trtl *ThreadSafeVerifyingTortoise) LatestComplete() types.LayerID {
+func (trtl *Tortoise) LatestComplete() types.LayerID {
 	trtl.mu.RLock()
 	defer trtl.mu.RUnlock()
 	return trtl.trtl.Verified
 }
 
 // BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
-func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
+func (trtl *Tortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
 	trtl.mu.RLock()
 	defer trtl.mu.RUnlock()
 	return trtl.trtl.BaseBlock(ctx)
@@ -117,7 +141,7 @@ func (trtl *ThreadSafeVerifyingTortoise) BaseBlock(ctx context.Context) (types.B
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes.
-func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
+func (trtl *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
 	trtl.mu.Lock()
 	defer trtl.mu.Unlock()
 
@@ -150,7 +174,7 @@ func (trtl *ThreadSafeVerifyingTortoise) HandleIncomingLayer(ctx context.Context
 }
 
 // Persist saves a copy of the current tortoise state to the database.
-func (trtl *ThreadSafeVerifyingTortoise) Persist(ctx context.Context) error {
+func (trtl *Tortoise) Persist(ctx context.Context) error {
 	trtl.mu.RLock()
 	defer trtl.mu.RUnlock()
 	trtl.persistMu.Lock()
@@ -164,7 +188,7 @@ func (trtl *ThreadSafeVerifyingTortoise) Persist(ctx context.Context) error {
 }
 
 // Stop background workers.
-func (trtl *ThreadSafeVerifyingTortoise) Stop() {
+func (trtl *Tortoise) Stop() {
 	trtl.cancel()
 	trtl.eg.Wait()
 }
