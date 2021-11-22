@@ -19,16 +19,33 @@ import (
 
 // Config for protocol parameters.
 type Config struct {
+	Hdist           uint32        `mapstructure:"tortoise-hdist"`            // hare/input vector lookback distance
+	Zdist           uint32        `mapstructure:"tortoise-zdist"`            // hare result wait distance
+	ConfidenceParam uint32        `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
+	WindowSize      uint32        `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
+	GlobalThreshold *big.Rat      `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
+	LocalThreshold  *big.Rat      `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
+	RerunInterval   time.Duration `mapstructure:"tortoise-rerun-interval"`
+	MaxExceptions   int           `mapstructure:"tortoise-max-exceptions"` // if candidate for base block has more than max exceptions it will be ignored
+
 	LayerSize                uint32
-	Hdist                    uint32        // hare lookback distance: the distance over which we use the input vector/hare results
-	Zdist                    uint32        // hare result wait distance: the distance over which we're willing to wait for hare results
-	ConfidenceParam          uint32        // confidence wait distance: how long we wait for global consensus to be established
-	GlobalThreshold          *big.Rat      // threshold required to finalize blocks and layers
-	LocalThreshold           *big.Rat      // threshold that determines whether a node votes based on local or global opinion
-	WindowSize               uint32        // tortoise sliding window: how many layers we store data for
-	RerunInterval            time.Duration // how often to rerun from genesis
-	BadBeaconVoteDelayLayers uint32        // number of layers to delay votes for blocks with bad beacon values during self-healing
-	MaxExceptions            int           // if candidate for base block has more than max exceptions it will be ignored
+	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
+}
+
+// DefaultConfig for Tortoise.
+func DefaultConfig() Config {
+	return Config{
+		LayerSize:                30,
+		Hdist:                    10,
+		Zdist:                    8,
+		ConfidenceParam:          2,
+		WindowSize:               100,
+		GlobalThreshold:          big.NewRat(60, 100),
+		LocalThreshold:           big.NewRat(20, 100),
+		RerunInterval:            24 * time.Hour,
+		BadBeaconVoteDelayLayers: 6,
+		MaxExceptions:            30 * 100, // 100 layers of average size
+	}
 }
 
 // Tortoise is a thread safe verifying tortoise wrapper, it just locks all actions.
@@ -81,6 +98,7 @@ func New(db database.Database, mdb blockDataProvider, atxdb atxDataProvider, bea
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
+		cfg:    DefaultConfig(),
 	}
 	for _, opt := range opts {
 		opt(t)

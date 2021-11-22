@@ -299,9 +299,9 @@ func (app *App) Initialize() (err error) {
 	// hare's max time duration to run consensus for a layer
 	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration // pre-round + 4 rounds per iteration
 	maxHareLayerDurationSec := app.Config.HARE.WakeupDelta + maxHareRoundsPerLayer*app.Config.HARE.RoundDuration
-	if app.Config.LayerDurationSec*int(app.Config.Zdist) <= maxHareLayerDurationSec {
+	if app.Config.LayerDurationSec*int(app.Config.Tortoise.Zdist) <= maxHareLayerDurationSec {
 		log.With().Error("incompatible params",
-			log.Uint32("tortoise_zdist", app.Config.Zdist),
+			log.Uint32("tortoise_zdist", app.Config.Tortoise.Zdist),
 			log.Int("layer_duration", app.Config.LayerDurationSec),
 			log.Int("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
@@ -528,18 +528,9 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("create turtle DB: %w", err)
 	}
 	app.closers = append(app.closers, trtlStateDB)
-	trtlCfg := tortoise.Config{
-		LayerSize:                layerSize,
-		Hdist:                    app.Config.Hdist,
-		Zdist:                    app.Config.Zdist,
-		ConfidenceParam:          app.Config.ConfidenceParam,
-		WindowSize:               app.Config.WindowSize,
-		GlobalThreshold:          app.Config.GlobalThreshold,
-		LocalThreshold:           app.Config.LocalThreshold,
-		RerunInterval:            time.Minute * time.Duration(app.Config.TortoiseRerunInterval),
-		BadBeaconVoteDelayLayers: app.Config.LayersPerEpoch,
-		MaxExceptions:            int(app.Config.Hdist) * app.Config.LayerAvgSize,
-	}
+	trtlCfg := app.Config.Tortoise
+	trtlCfg.LayerSize = layerSize
+	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 
 	trtl = tortoise.New(trtlStateDB, mdb, atxDB, tBeacon,
 		tortoise.WithContext(ctx),
@@ -575,7 +566,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	bCfg := blocks.Config{
-		Depth:       app.Config.Hdist,
+		Depth:       app.Config.Tortoise.Hdist,
 		GoldenATXID: goldenATXID,
 	}
 	blockListener := blocks.NewBlockHandler(bCfg, fetcherWrapped, msh, eValidator, app.addLogger(BlockListenerLogger, lg))

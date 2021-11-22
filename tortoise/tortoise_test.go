@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -155,16 +154,16 @@ func randomBallotID() types.BallotID {
 const (
 	defaultTestLayerSize  = 3
 	defaultTestWindowSize = 30
+	defaultVoteDelays     = 6
 )
 
 var (
-	defaultTestHdist           = config.DefaultConfig().Hdist
-	defaultTestZdist           = config.DefaultConfig().Zdist
-	defaultVoteDelays          = config.DefaultConfig().LayersPerEpoch
+	defaultTestHdist           = DefaultConfig().Hdist
+	defaultTestZdist           = DefaultConfig().Zdist
 	defaultTestGlobalThreshold = big.NewRat(6, 10)
 	defaultTestLocalThreshold  = big.NewRat(2, 10)
 	defaultTestRerunInterval   = time.Hour
-	defaultTestConfidenceParam = config.DefaultConfig().ConfidenceParam
+	defaultTestConfidenceParam = DefaultConfig().ConfidenceParam
 )
 
 func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) {
@@ -419,7 +418,7 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfig()
+		cfg := defaultTestConfig()
 		cfg.LayerSize = size
 		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
@@ -441,7 +440,7 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfig()
+		cfg := defaultTestConfig()
 		cfg.LayerSize = size
 		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
@@ -487,7 +486,7 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfig()
+		cfg := defaultTestConfig()
 		cfg.LayerSize = size
 		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
@@ -677,7 +676,7 @@ func TestEviction(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig()
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 	trtl := tortoise.trtl
@@ -800,7 +799,7 @@ func TestPersistAndRecover(t *testing.T) {
 
 	mdb.InputVectorBackupFunc = getHareResults
 	atxdb := getAtxDB()
-	cfg := defaultConfig()
+	cfg := defaultTestConfig()
 	db := database.NewMemDatabase()
 	alg := New(db, mdb, atxdb, mockedBeacons(t), WithConfig(cfg))
 
@@ -901,7 +900,7 @@ func defaultTurtle(tb testing.TB) *turtle {
 		getInMemMesh(tb),
 		getAtxDB(),
 		mockedBeacons(tb),
-		defaultConfig(),
+		defaultTestConfig(),
 	)
 }
 
@@ -924,7 +923,7 @@ func TestCloneTurtle(t *testing.T) {
 	r.NotEqual(trtl.Last, trtl2.Last)
 }
 
-func defaultConfig() Config {
+func defaultTestConfig() Config {
 	return Config{
 		LayerSize:                defaultTestLayerSize,
 		Hdist:                    defaultTestHdist,
@@ -945,7 +944,7 @@ func tortoiseFromSimState(state sim.State, opts ...Opt) *Tortoise {
 
 func defaultAlgorithm(tb testing.TB, mdb *mesh.DB) *Tortoise {
 	tb.Helper()
-	return New(database.NewMemDatabase(), mdb, getAtxDB(), mockedBeacons(tb), WithConfig(defaultConfig()))
+	return New(database.NewMemDatabase(), mdb, getAtxDB(), mockedBeacons(tb), WithConfig(defaultTestConfig()))
 }
 
 func TestGetLocalBlockOpinion(t *testing.T) {
@@ -2728,7 +2727,7 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig()
+	cfg := defaultTestConfig()
 	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
 	var (
@@ -2755,7 +2754,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig()
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 
 	var layers []types.LayerID
@@ -2781,7 +2780,7 @@ func BenchmarkTortoiseBaseBlockSelection(b *testing.B) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig()
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 100
 	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
@@ -2968,7 +2967,7 @@ func TestBaseBlockGenesis(t *testing.T) {
 	ctx := context.Background()
 
 	s := sim.New()
-	cfg := defaultConfig()
+	cfg := defaultTestConfig()
 	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
 	base, exceptions, err := tortoise.BaseBlock(ctx)
@@ -3000,7 +2999,7 @@ func TestBaseBlockEvictedBlock(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig()
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 10
 	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
@@ -3080,7 +3079,7 @@ func TestBaseBlockPrioritization(t *testing.T) {
 			s.Setup()
 
 			ctx := context.Background()
-			cfg := defaultConfig()
+			cfg := defaultTestConfig()
 			cfg.LayerSize = size
 			cfg.WindowSize = tc.window
 			tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
@@ -3140,7 +3139,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	s.Setup(sim.WithSetupUnitsRange(1, 1))
 
 	ctx := context.Background()
-	cfg := defaultConfig()
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.Hdist = hdist
 	cfg.Zdist = hdist
@@ -3201,7 +3200,7 @@ func TestVoteAgainstSupportedByBaseBlock(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig()
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 1
 	cfg.Hdist = 1 // for eviction
@@ -3343,7 +3342,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 			s.Setup(sim.WithSetupUnitsRange(1, 1))
 
 			ctx := context.Background()
-			cfg := defaultConfig()
+			cfg := defaultTestConfig()
 			cfg.LayerSize = size
 			cfg.Hdist = hdist
 			cfg.Zdist = hdist
@@ -3370,7 +3369,7 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	s1.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig()
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.Hdist = 2
 	cfg.Zdist = 2

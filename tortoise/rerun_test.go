@@ -80,7 +80,7 @@ func TestRerunEvictConcurrent(t *testing.T) {
 	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
-	cfg := defaultConfig()
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	tortoise := tortoiseFromSimState(s.State, WithLogger(logtest.New(t)), WithConfig(cfg))
 
