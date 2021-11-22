@@ -839,7 +839,7 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	app = New(WithLog(logtest.New(t)), WithConfig(getTestDefaultConfig()))
 	require.NoError(t, app.Initialize())
 
-	conf.Zdist = 5
+	conf.Tortoise.Zdist = 5
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	err := app.Initialize()
 	assert.EqualError(t, err, "incompatible tortoise hare params")

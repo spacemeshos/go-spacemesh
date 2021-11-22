@@ -27,7 +27,7 @@ bootstrap:
     remote-data: 'true'
     storage-path: 'spacemesh-sync-data'
     version: 'TwoAndHalfDaysSim/'
-    hdist: '5'
+    tortoise-hdist: '5'
 client:
   image: 'spacemeshos/go-spacemesh:develop'
   command: '/bin/go-sync'
@@ -45,7 +45,7 @@ client:
     remote-data: 'true'
     storage-path: 'spacemesh-sync-data'
     version: 'TwoAndHalfDaysSim/'
-    hdist: '5'
+    tortoise-hdist: '5'
 elastic:
   host: elastic.spacemesh.io
   port: 9200

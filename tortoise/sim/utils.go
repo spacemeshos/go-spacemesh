@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -50,4 +51,16 @@ func intInRange(rng *rand.Rand, ints [2]int) int {
 		return ints[0]
 	}
 	return rng.Intn(ints[1]-ints[0]) + ints[0]
+}
+
+var _ blocks.BeaconGetter = (*beaconStore)(nil)
+
+// TODO(dshulyak) replaced it with real beacon store so that we can enable persistence
+// for benchmarks.
+type beaconStore struct {
+	beacon []byte
+}
+
+func (b *beaconStore) GetBeacon(types.EpochID) ([]byte, error) {
+	return b.beacon, nil
 }
