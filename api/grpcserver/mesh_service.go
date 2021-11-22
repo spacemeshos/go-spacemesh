@@ -264,6 +264,14 @@ func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address
 	return txIDs, nil
 }
 
+func convertLayerID(l types.LayerID) *pb.LayerNumber {
+	if layerID := l.Uint32(); layerID != 0 {
+		return &pb.LayerNumber{Number: layerID}
+	}
+
+	return nil
+}
+
 func convertTransaction(t *types.Transaction) *pb.Transaction {
 	return &pb.Transaction{
 		Id: &pb.TransactionId{Id: t.ID().Bytes()},
@@ -515,7 +523,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 						Datum: &pb.AccountMeshData_MeshTransaction{
 							MeshTransaction: &pb.MeshTransaction{
 								Transaction: convertTransaction(tx.Transaction),
-								LayerId:     &pb.LayerNumber{Number: tx.LayerID.Uint32()},
+								LayerId:     convertLayerID(tx.LayerID),
 							},
 						},
 					},
