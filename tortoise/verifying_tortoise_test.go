@@ -3364,7 +3364,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 	}
 }
 
-func TestRecoverFromFullPartition(t *testing.T) {
+func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	const size = 10
 	s1 := sim.New(
 		sim.WithLayerSize(size),
@@ -3426,9 +3426,8 @@ func TestRecoverFromFullPartition(t *testing.T) {
 	_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
 	require.Equal(t, last.Sub(1), verified1)
 
-	// verify that all blocks that were created in s2 during partition are
-	// contextually valid in s1 state.
-	// this is not the case right, this is a negative test case
+	// succesfull test should verify that all blocks that were created in s2
+	// during partition are contextually valid in s1 state.
 	for lid := partitionStart.Add(1); lid.Before(partitionEnd); lid = lid.Add(1) {
 		bids, err := s2.State.MeshDB.LayerBlockIds(lid)
 		require.NoError(t, err)

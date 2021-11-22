@@ -65,13 +65,14 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 	//  things that should remain the same:
 	// - blocks, contextually valid blocks and input vectors before partition
 	// - activations before partition
+	// - beacons before partition
 
 	conf := splitConfDefaults()
 	for _, opt := range opts {
 		opt(&conf)
 	}
 	if len(conf.Partitions) < 2 {
-		panic("should be atlest two parititions")
+		panic("should be at least two parititions")
 	}
 	gens := make([]*Generator, len(conf.Partitions))
 	total := len(g.activations)
