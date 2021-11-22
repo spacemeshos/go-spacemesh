@@ -2248,14 +2248,20 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// Wait until stream starts receiving to ensure that it catches the event.
 	time.Sleep(10 * time.Millisecond)
-
 	// publish a tx
 	events.ReportNewTx(types.LayerID{}, globalTx)
+
+	// Wait until stream starts receiving to ensure that it catches the event.
+	time.Sleep(10 * time.Millisecond)
 	// publish an activation
 	events.ReportNewActivation(globalAtx)
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
+	// Wait until stream starts receiving to ensure that it catches the event.
+	time.Sleep(10 * time.Millisecond)
 	events.ReportNewTx(types.LayerID{}, globalTx2)
+	// Wait until stream starts receiving to ensure that it catches the event.
+	time.Sleep(10 * time.Millisecond)
 	events.ReportNewActivation(globalAtx2)
 
 	// close the stream
