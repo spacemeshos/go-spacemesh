@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -186,10 +185,9 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 
 func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
-	cfg := Config{}
 
 	fetch := newFetchMock()
-	s := NewBlockHandler(cfg, fetch, &meshMock{}, &verifierMock{}, logtest.New(t))
+	s := NewBlockHandler(fetch, &meshMock{}, &verifierMock{})
 	b := &types.Block{}
 
 	err := s.blockSyntacticValidation(context.TODO(), b)
@@ -205,12 +203,58 @@ func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	r.ErrorIs(err, errDupTx)
 }
 
+func TestBlockHandler_BlockSyntacticValidation_InvalidExceptions(t *testing.T) {
+	var (
+		ctx   = context.TODO()
+		fetch = newFetchMock()
+		max   = 4
+		b     = NewBlockHandler(fetch, &meshMock{}, &verifierMock{}, WithMaxExceptions(max))
+	)
+	for _, tc := range []struct {
+		desc                      string
+		support, against, neutral []types.BlockID
+		err                       error
+	}{
+		{
+			desc:    "Overflow",
+			err:     errExceptionsOverlow,
+			support: []types.BlockID{{1}, {2}, {3}, {4}, {5}},
+		},
+		{
+			desc:    "ConflictSupportAgainst",
+			err:     errConflictingExceptions,
+			support: []types.BlockID{{1}},
+			against: []types.BlockID{{1}},
+		},
+		{
+			desc:    "ConflictAgainstAbstain",
+			err:     errConflictingExceptions,
+			neutral: []types.BlockID{{1}},
+			against: []types.BlockID{{1}},
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			block := &types.Block{
+				MiniBlock: types.MiniBlock{
+					BlockHeader: types.BlockHeader{
+						ForDiff:     tc.support,
+						AgainstDiff: tc.against,
+						NeutralDiff: tc.neutral,
+					},
+				},
+			}
+			require.ErrorIs(t, b.blockSyntacticValidation(ctx, block), tc.err)
+		})
+	}
+}
+
 func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	r := require.New(t)
 	fetch := newFetchMock()
 	atxpool := activation.NewAtxMemPool()
-	cfg := Config{}
-	s := NewBlockHandler(cfg, fetch, &meshMock{}, &verifierMock{}, logtest.New(t))
+
+	s := NewBlockHandler(fetch, &meshMock{}, &verifierMock{})
 	a := atx("")
 	atxpool.Put(a)
 	b := &types.Block{}

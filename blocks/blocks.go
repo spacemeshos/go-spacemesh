@@ -39,8 +39,9 @@ type blockValidator interface {
 
 // BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip.
 type BlockHandler struct {
-	log.Log
-	cfg       Config
+	logger log.Log
+	cfg    Config
+
 	fetcher   system.Fetcher
 	mesh      mesh
 	validator blockValidator
@@ -51,21 +52,49 @@ type Config struct {
 	MaxExceptions int
 }
 
+// defaultConfig fro BlockHandler.
+func defaultConfig() Config {
+	return Config{
+		MaxExceptions: 1000,
+	}
+}
+
+// Opt for configuring BlockHandler.
+type Opt func(b *BlockHandler)
+
+// WithMaxExceptions defines max allowed exceptions in a block.
+func WithMaxExceptions(max int) Opt {
+	return func(b *BlockHandler) {
+		b.cfg.MaxExceptions = max
+	}
+}
+
+// WithLogger defines logger for BlockHandler.
+func WithLogger(logger log.Log) Opt {
+	return func(b *BlockHandler) {
+		b.logger = logger
+	}
+}
+
 // NewBlockHandler creates new BlockHandler.
-func NewBlockHandler(cfg Config, fetcher system.Fetcher, m mesh, v blockValidator, lg log.Log) *BlockHandler {
-	return &BlockHandler{
-		Log:       lg,
-		cfg:       cfg,
+func NewBlockHandler(fetcher system.Fetcher, m mesh, v blockValidator, opts ...Opt) *BlockHandler {
+	b := &BlockHandler{
+		logger:    log.NewNop(),
+		cfg:       defaultConfig(),
 		fetcher:   fetcher,
 		mesh:      m,
 		validator: v,
 	}
+	for _, opt := range opts {
+		opt(b)
+	}
+	return b
 }
 
 // HandleBlock handles blocks from gossip.
 func (bh *BlockHandler) HandleBlock(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
 	if err := bh.HandleBlockData(ctx, msg); err != nil {
-		bh.WithContext(ctx).With().Warning("error handling block data", log.Err(err))
+		bh.logger.WithContext(ctx).With().Warning("error handling block data", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
@@ -73,7 +102,7 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, _ peer.ID, msg []byte) 
 
 // HandleBlockData handles blocks from gossip and sync.
 func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte) error {
-	logger := bh.WithContext(ctx)
+	logger := bh.logger.WithContext(ctx)
 	logger.Info("handling data for new block")
 	start := time.Now()
 
@@ -159,6 +188,7 @@ func validateExceptions(block *types.Block, max int) error {
 				return fmt.Errorf("%w: block %s is referenced multiple times in exceptions of block %s",
 					errConflictingExceptions, bid, block.ID())
 			}
+			exceptions[bid] = struct{}{}
 		}
 	}
 	if len(exceptions) > max {
@@ -174,7 +204,11 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 		ctx = log.WithRequestID(ctx, reqID, block.Layer())
 	}
 
-	bh.WithContext(ctx).With().Debug("syntactically validating block", block.ID())
+	bh.logger.WithContext(ctx).With().Debug("syntactically validating block", block.ID())
+
+	if err := validateExceptions(block, bh.cfg.MaxExceptions); err != nil {
+		return err
+	}
 
 	// if there is a reference block - first validate it
 	if block.RefBlock != nil {
@@ -194,9 +228,6 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	if err := bh.fastValidation(block); err != nil {
 		return fmt.Errorf("fast validation: %w", err)
 	}
-	if err := validateExceptions(block, bh.cfg.MaxExceptions); err != nil {
-		return err
-	}
 
 	// get the TXs
 	if len(block.TxIDs) > 0 {
@@ -212,12 +243,12 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 		return fmt.Errorf("failed to fetch view %v e: %v", block.ID(), err)
 	}
 
-	bh.WithContext(ctx).With().Debug("validation done: block is syntactically valid", block.ID())
+	bh.logger.WithContext(ctx).With().Debug("validation done: block is syntactically valid", block.ID())
 	return nil
 }
 
 func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block) error {
-	bh.WithContext(ctx).With().Debug("block handler fetching all atxs referenced by block", blk.ID())
+	bh.logger.WithContext(ctx).With().Debug("block handler fetching all atxs referenced by block", blk.ID())
 
 	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
 	atxs := []types.ATXID{blk.ATXID}
