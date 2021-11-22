@@ -192,6 +192,7 @@ func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, rewards map[ty
 			layer,
 		)
 		tp.AddBalance(account, reward)
+		events.ReportAccountUpdate(account)
 	}
 
 	newHash, err := tp.Commit()
@@ -239,6 +240,8 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 		}
 		events.ReportValidTx(tx, err == nil)
 		events.ReportNewTx(layerID, tx)
+		events.ReportAccountUpdate(tx.Origin())
+		events.ReportAccountUpdate(tx.Recipient)
 	}
 	return
 }
