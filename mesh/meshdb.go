@@ -30,7 +30,6 @@ type DB struct {
 	unappliedTxs          database.Database
 	inputVector           database.Database
 	blockMutex            sync.RWMutex
-	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
 	coinflipMu            sync.RWMutex
 	coinflips             map[types.LayerID]bool // weak coinflip results from Hare
 	lhMutex               sync.Mutex
@@ -79,7 +78,6 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 		contextualValidity: vdb,
 		unappliedTxs:       utx,
 		inputVector:        iv,
-		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
 		exit:               make(chan struct{}),
 	}
@@ -120,7 +118,6 @@ func NewMemMeshDB(logger log.Log) *DB {
 		transactions:       database.NewMemDatabase(),
 		unappliedTxs:       database.NewMemDatabase(),
 		inputVector:        database.NewMemDatabase(),
-		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
 		exit:               make(chan struct{}),
 	}
@@ -826,7 +823,7 @@ func (m *DB) removeFromAccountTxs(account types.Address, accepted map[types.Addr
 	return m.removePending(account, accepted[account])
 }
 
-func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction, layer types.LayerID) error {
+func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction) error {
 	return m.removePending(account, rejected[account])
 }
 

@@ -3,7 +3,6 @@ package mesh
 import (
 	"context"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
@@ -486,72 +485,6 @@ func TestMesh_WakeUp(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, len(txIDs1), len(rBlock1.TxIDs), "block TX size was wrong")
 	assert.Equal(t, block1.Data, rBlock1.MiniBlock.Data, "block content was wrong")
-}
-
-func TestMesh_OrphanBlocks(t *testing.T) {
-	msh := getMesh(t, "t6")
-	t.Cleanup(func() {
-		msh.Close()
-	})
-	r := require.New(t)
-	txIDs1, _ := addManyTXsToPool(r, msh, 4)
-	txIDs2, _ := addManyTXsToPool(r, msh, 3)
-	txIDs3, _ := addManyTXsToPool(r, msh, 6)
-	txIDs4, _ := addManyTXsToPool(r, msh, 7)
-	txIDs5, _ := addManyTXsToPool(r, msh, 3)
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), txIDs1)
-	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data2"), txIDs2)
-	block3 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data3"), txIDs3)
-	block4 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data4"), txIDs4)
-	block5 := types.NewExistingBlock(types.NewLayerID(3), []byte("data data data5"), txIDs5)
-	block5.ForDiff = append(block5.ForDiff, block1.ID())
-	block5.ForDiff = append(block5.ForDiff, block2.ID())
-	block5.ForDiff = append(block5.ForDiff, block3.ID())
-	block5.ForDiff = append(block5.ForDiff, block4.ID())
-	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block1))
-	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block2))
-	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block3))
-	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block4))
-	arr, _ := msh.GetOrphanBlocksBefore(types.NewLayerID(3))
-	assert.Equal(t, 4, len(arr), "wrong number of orphaned blocks")
-	arr2, _ := msh.GetOrphanBlocksBefore(types.NewLayerID(2))
-	assert.Equal(t, 2, len(arr2), "wrong number of orphaned blocks")
-	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block5))
-	time.Sleep(1 * time.Second)
-	arr3, _ := msh.GetOrphanBlocksBefore(types.NewLayerID(4))
-	assert.Equal(t, 1, len(arr3), "wrong number of orphaned blocks")
-}
-
-func TestMesh_OrphanBlocksClearEmptyLayers(t *testing.T) {
-	msh := getMesh(t, "t6")
-	t.Cleanup(func() {
-		msh.Close()
-	})
-	r := require.New(t)
-	txIDs1, _ := addManyTXsToPool(r, msh, 4)
-	txIDs2, _ := addManyTXsToPool(r, msh, 3)
-	txIDs3, _ := addManyTXsToPool(r, msh, 6)
-	txIDs4, _ := addManyTXsToPool(r, msh, 7)
-	txIDs5, _ := addManyTXsToPool(r, msh, 3)
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data1"), txIDs1)
-	block2 := types.NewExistingBlock(types.NewLayerID(1), []byte("data data data2"), txIDs2)
-	block3 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data3"), txIDs3)
-	block4 := types.NewExistingBlock(types.NewLayerID(2), []byte("data data data4"), txIDs4)
-	block5 := types.NewExistingBlock(types.NewLayerID(3), []byte("data data data5"), txIDs5)
-	block5.ForDiff = append(block5.ForDiff, block1.ID())
-	block5.ForDiff = append(block5.ForDiff, block2.ID())
-	block5.ForDiff = append(block5.ForDiff, block3.ID())
-	block5.ForDiff = append(block5.ForDiff, block4.ID())
-	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block1))
-	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block2))
-	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block3))
-	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block4))
-	arr, _ := msh.GetOrphanBlocksBefore(types.NewLayerID(3))
-	assert.Equal(t, 4, len(arr), "wrong number of orphaned blocks")
-	arr2, _ := msh.GetOrphanBlocksBefore(types.NewLayerID(2))
-	assert.Equal(t, 2, len(arr2), "wrong number of orphaned blocks")
-	assert.NoError(t, msh.AddBlockWithTxs(context.TODO(), block5))
-	assert.Equal(t, 1, len(msh.orphanBlocks))
 }
 
 func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) {

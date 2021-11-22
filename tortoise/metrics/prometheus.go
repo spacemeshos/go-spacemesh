@@ -11,11 +11,11 @@ const (
 	Subsystem = "tortoise"
 )
 
-// LayerDistanceToBaseBlock checks how far back a node needs to find a good block.
-var LayerDistanceToBaseBlock = metrics.NewHistogramWithBuckets(
-	"layer_distance_to_base_block",
+// LayerDistanceToBaseBallot checks how far back a node needs to find a good ballot.
+var LayerDistanceToBaseBallot = metrics.NewHistogramWithBuckets(
+	"layer_distance_to_base_ballot",
 	Subsystem,
-	"How far back a node needs to find a good block",
+	"How far back a node needs to find a good ballot",
 	[]string{},
 	prometheus.ExponentialBuckets(1, 2, 16),
 )

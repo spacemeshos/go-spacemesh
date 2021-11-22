@@ -67,7 +67,6 @@ const (
 	P2PLogger            = "p2p"
 	PostLogger           = "post"
 	StateDbLogger        = "stateDbStore"
-	StateLogger          = "state"
 	AtxDbStoreLogger     = "atxDbStore"
 	TBeaconDbStoreLogger = "tbDbStore"
 	TBeaconLogger        = "tBeacon"
@@ -89,8 +88,6 @@ const (
 	BlockListenerLogger  = "blockListener"
 	PoetListenerLogger   = "poetListener"
 	NipostBuilderLogger  = "nipostBuilder"
-	AtxBuilderLogger     = "atxBuilder"
-	GossipListener       = "gossipListener"
 	Fetcher              = "fetcher"
 	LayerFetcher         = "layerFetcher"
 	TimeSyncLogger       = "timesync"
@@ -657,10 +654,8 @@ func (app *App) initServices(ctx context.Context,
 		GoldenATXID:     goldenATXID,
 		LayersPerEpoch:  layersPerEpoch,
 	}
-	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn,
-		atxDB, app.host, msh, layersPerEpoch, nipostBuilder,
-		postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg),
-		activation.WithContext(ctx),
+	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxDB, app.host, nipostBuilder,
+		postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg), activation.WithContext(ctx),
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {

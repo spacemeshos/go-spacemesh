@@ -6,31 +6,31 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// prioritizeBlocks will sort blocks inplace according to internal prioritization.
-func prioritizeBlocks(
-	blocks []types.BlockID,
-	goodBlocks map[types.BlockID]bool, // existence of the block means that the block is good, ignore the value here
-	disagreements map[types.BlockID]types.LayerID,
-	blockLayer map[types.BlockID]types.LayerID,
+// prioritizeBallots will sort ballots inplace according to internal prioritization.
+func prioritizeBallots(
+	ballots []types.BallotID,
+	goodBallots map[types.BallotID]bool, // existence of the ballot means that the ballot is good, ignore the value here
+	disagreements map[types.BallotID]types.LayerID,
+	ballotLayer map[types.BallotID]types.LayerID,
 ) {
-	sort.Slice(blocks, func(i, j int) bool {
-		ibid := blocks[i]
-		jbid := blocks[j]
-		// prioritize good blocks
-		_, iexist := goodBlocks[ibid]
-		_, jexist := goodBlocks[jbid]
+	sort.Slice(ballots, func(i, j int) bool {
+		ibid := ballots[i]
+		jbid := ballots[j]
+		// prioritize good ballots
+		_, iexist := goodBallots[ibid]
+		_, jexist := goodBallots[jbid]
 		if iexist != jexist {
 			return iexist
 		}
-		// prioritize blocks with less disagreements to a local opinion
+		// prioritize ballots with less disagreements to a local opinion
 		if disagreements[ibid] != disagreements[jbid] {
 			return disagreements[ibid].After(disagreements[jbid])
 		}
-		// priortize blocks from higher layers
-		if blockLayer[ibid] != blockLayer[jbid] {
-			return blockLayer[ibid].After(blockLayer[jbid])
+		// prioritize ballots from higher layers
+		if ballotLayer[ibid] != ballotLayer[jbid] {
+			return ballotLayer[ibid].After(ballotLayer[jbid])
 		}
-		// otherwise just sort determistically
+		// otherwise just sort deterministically
 		return ibid.Compare(jbid)
 	})
 }
