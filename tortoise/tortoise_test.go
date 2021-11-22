@@ -15,9 +15,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -154,16 +154,16 @@ func randomBallotID() types.BallotID {
 const (
 	defaultTestLayerSize  = 3
 	defaultTestWindowSize = 30
+	defaultVoteDelays     = 6
 )
 
 var (
-	defaultTestHdist           = config.DefaultConfig().Hdist
-	defaultTestZdist           = config.DefaultConfig().Zdist
-	defaultVoteDelays          = config.DefaultConfig().LayersPerEpoch
+	defaultTestHdist           = DefaultConfig().Hdist
+	defaultTestZdist           = DefaultConfig().Zdist
 	defaultTestGlobalThreshold = big.NewRat(6, 10)
 	defaultTestLocalThreshold  = big.NewRat(2, 10)
 	defaultTestRerunInterval   = time.Hour
-	defaultTestConfidenceParam = config.DefaultConfig().ConfidenceParam
+	defaultTestConfidenceParam = DefaultConfig().ConfidenceParam
 )
 
 func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) {
@@ -197,7 +197,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 				sum = sum.Add(opinionVote.Multiply(weight))
 			}
 		}
-		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.GlobalThreshold, trtl.AvgLayerSize, 1)
+		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.GlobalThreshold, trtl.LayerSize, 1)
 		require.Equal(t, vote, globalOpinion, "test block %v expected vote %v but got %v", i, vote, sum)
 	}
 }
@@ -310,7 +310,7 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer int, vot
 	}
 
 	trtl = defaultTurtle(t)
-	trtl.AvgLayerSize = uint32(blocksPerLayer)
+	trtl.LayerSize = uint32(blocksPerLayer)
 	trtl.bdp = msh
 	trtl.init(context.TODO(), mesh.GenesisLayer())
 
@@ -418,9 +418,9 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfigFromSimState(t, s.State)
+		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := NewVerifyingTortoise(ctx, cfg)
+		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
 		var (
 			last     types.LayerID
@@ -440,9 +440,9 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfigFromSimState(t, s.State)
+		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := NewVerifyingTortoise(ctx, cfg)
+		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
 		var (
 			last     types.LayerID
@@ -486,9 +486,9 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfigFromSimState(t, s.State)
+		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := NewVerifyingTortoise(ctx, cfg)
+		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
 		var (
 			last     types.LayerID
@@ -553,7 +553,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 	}
 
 	trtl := defaultTurtle(t)
-	trtl.AvgLayerSize = uint32(blocksPerLayer)
+	trtl.LayerSize = uint32(blocksPerLayer)
 	trtl.bdp = msh
 	gen := mesh.GenesisLayer()
 	trtl.init(context.TODO(), gen)
@@ -676,9 +676,9 @@ func TestEviction(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfigFromSimState(t, s.State)
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise := NewVerifyingTortoise(ctx, cfg)
+	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 	trtl := tortoise.trtl
 
 	for i := 0; i < 100; i++ {
@@ -799,9 +799,9 @@ func TestPersistAndRecover(t *testing.T) {
 
 	mdb.InputVectorBackupFunc = getHareResults
 	atxdb := getAtxDB()
-	cfg := defaultConfig(t, mdb, getAtxDB())
-	cfg.ATXDB = atxdb
-	alg := NewVerifyingTortoise(context.TODO(), cfg)
+	cfg := defaultTestConfig()
+	db := database.NewMemDatabase()
+	alg := New(db, mdb, atxdb, mockedBeacons(t), WithConfig(cfg))
 
 	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
@@ -815,7 +815,7 @@ func TestPersistAndRecover(t *testing.T) {
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 
 	// now recover
-	alg2 := NewVerifyingTortoise(context.TODO(), cfg)
+	alg2 := New(db, mdb, atxdb, mockedBeacons(t), WithConfig(cfg))
 	require.Equal(t, alg.LatestComplete(), alg2.LatestComplete())
 	require.Equal(t, alg.trtl.bdp, alg2.trtl.bdp)
 	require.Equal(t, alg.trtl.LastEvicted, alg2.trtl.LastEvicted)
@@ -884,32 +884,30 @@ func TestBaseBlock(t *testing.T) {
 	expectBaseBlockLayer(l2.Index(), 0, defaultTestLayerSize, 0)
 }
 
-func defaultTurtle(tb testing.TB) *turtle {
-	mdb := getInMemMesh(tb)
+func mockedBeacons(tb testing.TB) blocks.BeaconGetter {
+	tb.Helper()
+
 	ctrl := gomock.NewController(tb)
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
 	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
+	return mockBeacons
+}
+
+func defaultTurtle(tb testing.TB) *turtle {
 	return newTurtle(
 		logtest.New(tb),
 		database.NewMemDatabase(),
-		mdb,
+		getInMemMesh(tb),
 		getAtxDB(),
-		mockBeacons,
-		defaultTestHdist,
-		defaultTestZdist,
-		defaultTestConfidenceParam,
-		defaultTestWindowSize,
-		defaultTestLayerSize,
-		defaultTestGlobalThreshold,
-		defaultTestLocalThreshold,
-		defaultVoteDelays,
+		mockedBeacons(tb),
+		defaultTestConfig(),
 	)
 }
 
 func TestCloneTurtle(t *testing.T) {
 	r := require.New(t)
 	trtl := defaultTurtle(t)
-	trtl.AvgLayerSize++              // make sure defaults aren't being read
+	trtl.LayerSize++                 // make sure defaults aren't being read
 	trtl.Last = types.NewLayerID(10) // state should not be cloned
 	trtl2 := trtl.cloneTurtleParams()
 	r.Equal(trtl.bdp, trtl2.bdp)
@@ -917,25 +915,17 @@ func TestCloneTurtle(t *testing.T) {
 	r.Equal(trtl.Zdist, trtl2.Zdist)
 	r.Equal(trtl.ConfidenceParam, trtl2.ConfidenceParam)
 	r.Equal(trtl.WindowSize, trtl2.WindowSize)
-	r.Equal(trtl.AvgLayerSize, trtl2.AvgLayerSize)
-	r.Equal(trtl.badBeaconVoteDelayLayers, trtl2.badBeaconVoteDelayLayers)
+	r.Equal(trtl.LayerSize, trtl2.LayerSize)
+	r.Equal(trtl.BadBeaconVoteDelayLayers, trtl2.BadBeaconVoteDelayLayers)
 	r.Equal(trtl.GlobalThreshold, trtl2.GlobalThreshold)
 	r.Equal(trtl.LocalThreshold, trtl2.LocalThreshold)
 	r.Equal(trtl.RerunInterval, trtl2.RerunInterval)
 	r.NotEqual(trtl.Last, trtl2.Last)
 }
 
-func defaultConfig(tb testing.TB, mdb *mesh.DB, atxdb atxDataProvider) Config {
-	tb.Helper()
-	ctrl := gomock.NewController(tb)
-	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
-	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
+func defaultTestConfig() Config {
 	return Config{
 		LayerSize:                defaultTestLayerSize,
-		Database:                 database.NewMemDatabase(),
-		MeshDatabase:             mdb,
-		Beacons:                  mockBeacons,
-		ATXDB:                    atxdb,
 		Hdist:                    defaultTestHdist,
 		Zdist:                    defaultTestZdist,
 		ConfidenceParam:          defaultTestConfidenceParam,
@@ -944,18 +934,17 @@ func defaultConfig(tb testing.TB, mdb *mesh.DB, atxdb atxDataProvider) Config {
 		GlobalThreshold:          defaultTestGlobalThreshold,
 		LocalThreshold:           defaultTestLocalThreshold,
 		RerunInterval:            defaultTestRerunInterval,
-		Log:                      logtest.New(tb),
+		MaxExceptions:            int(defaultTestHdist) * defaultTestLayerSize * 100,
 	}
 }
 
-func defaultConfigFromSimState(tb testing.TB, state sim.State) Config {
-	cfg := defaultConfig(tb, state.MeshDB, state.AtxDB)
-	cfg.Beacons = state.Beacons
-	return cfg
+func tortoiseFromSimState(state sim.State, opts ...Opt) *Tortoise {
+	return New(database.NewMemDatabase(), state.MeshDB, state.AtxDB, state.Beacons, opts...)
 }
 
-func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
-	return NewVerifyingTortoise(context.TODO(), defaultConfig(t, mdb, getAtxDB()))
+func defaultAlgorithm(tb testing.TB, mdb *mesh.DB) *Tortoise {
+	tb.Helper()
+	return New(database.NewMemDatabase(), mdb, getAtxDB(), mockedBeacons(tb), WithConfig(defaultTestConfig()))
 }
 
 func TestGetLocalBlockOpinion(t *testing.T) {
@@ -1866,7 +1855,7 @@ func TestHealing(t *testing.T) {
 		// delete good blocks data
 		alg.trtl.GoodBallotsIndex = make(map[types.BallotID]bool, 0)
 
-		alg.trtl.badBeaconVoteDelayLayers = 1
+		alg.trtl.BadBeaconVoteDelayLayers = 1
 		alg.trtl.Hdist = 0
 		alg.trtl.heal(wrapContext(context.TODO()), l7ID)
 		checkVerifiedLayer(t, alg.trtl, l4ID)
@@ -1885,7 +1874,7 @@ func TestHealingAfterPartition(t *testing.T) {
 
 	// use a larger number of blocks per layer to give us more scope for testing
 	const goodLayerSize = defaultTestLayerSize * 10
-	alg.trtl.AvgLayerSize = goodLayerSize
+	alg.trtl.LayerSize = goodLayerSize
 
 	// create several good layers
 	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
@@ -2137,7 +2126,7 @@ func TestMultiTortoise(t *testing.T) {
 		atxdb1 := getAtxDB()
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
-		alg1.trtl.AvgLayerSize = layerSize
+		alg1.trtl.LayerSize = layerSize
 		alg1.logger = alg1.logger.Named("trtl1")
 		alg1.trtl.logger = alg1.logger
 
@@ -2145,7 +2134,7 @@ func TestMultiTortoise(t *testing.T) {
 		atxdb2 := getAtxDB()
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
-		alg2.trtl.AvgLayerSize = layerSize
+		alg2.trtl.LayerSize = layerSize
 		alg2.logger = alg2.logger.Named("trtl2")
 		alg2.trtl.logger = alg2.logger
 
@@ -2192,7 +2181,7 @@ func TestMultiTortoise(t *testing.T) {
 		atxdb1 := getAtxDB()
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
-		alg1.trtl.AvgLayerSize = layerSize
+		alg1.trtl.LayerSize = layerSize
 		alg1.logger = alg1.logger.Named("trtl1")
 		alg1.trtl.logger = alg1.logger
 
@@ -2200,7 +2189,7 @@ func TestMultiTortoise(t *testing.T) {
 		atxdb2 := getAtxDB()
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
-		alg2.trtl.AvgLayerSize = layerSize
+		alg2.trtl.LayerSize = layerSize
 		alg2.logger = alg2.logger.Named("trtl2")
 		alg2.trtl.logger = alg2.logger
 
@@ -2416,7 +2405,7 @@ func TestMultiTortoise(t *testing.T) {
 		atxdb1 := getAtxDB()
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
-		alg1.trtl.AvgLayerSize = layerSize
+		alg1.trtl.LayerSize = layerSize
 		alg1.logger = alg1.logger.Named("trtl1")
 		alg1.trtl.logger = alg1.logger
 
@@ -2424,7 +2413,7 @@ func TestMultiTortoise(t *testing.T) {
 		atxdb2 := getAtxDB()
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
-		alg2.trtl.AvgLayerSize = layerSize
+		alg2.trtl.LayerSize = layerSize
 		alg2.logger = alg2.logger.Named("trtl2")
 		alg2.trtl.logger = alg2.logger
 
@@ -2552,7 +2541,7 @@ func TestMultiTortoise(t *testing.T) {
 		atxdb1 := getAtxDB()
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
-		alg1.trtl.AvgLayerSize = layerSize
+		alg1.trtl.LayerSize = layerSize
 		alg1.logger = alg1.logger.Named("trtl1")
 		alg1.trtl.logger = alg1.logger
 
@@ -2560,7 +2549,7 @@ func TestMultiTortoise(t *testing.T) {
 		atxdb2 := getAtxDB()
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
-		alg2.trtl.AvgLayerSize = layerSize
+		alg2.trtl.LayerSize = layerSize
 		alg2.logger = alg2.logger.Named("trtl2")
 		alg2.trtl.logger = alg2.logger
 
@@ -2568,7 +2557,7 @@ func TestMultiTortoise(t *testing.T) {
 		atxdb3 := getAtxDB()
 		alg3 := defaultAlgorithm(t, mdb3)
 		alg3.trtl.atxdb = atxdb3
-		alg3.trtl.AvgLayerSize = layerSize
+		alg3.trtl.LayerSize = layerSize
 		alg3.logger = alg3.logger.Named("trtl3")
 		alg3.trtl.logger = alg3.logger
 
@@ -2729,8 +2718,8 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfigFromSimState(t, s.State)
-	tortoise := NewVerifyingTortoise(ctx, cfg)
+	cfg := defaultTestConfig()
+	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
 	var (
 		last     types.LayerID
@@ -2756,7 +2745,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig(b, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 
 	var layers []types.LayerID
@@ -2766,7 +2755,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tortoise := NewVerifyingTortoise(ctx, cfg)
+		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 		for _, lid := range layers {
 			tortoise.HandleIncomingLayer(ctx, lid)
 		}
@@ -2782,10 +2771,10 @@ func BenchmarkTortoiseBaseBlockSelection(b *testing.B) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig(b, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 100
-	tortoise := NewVerifyingTortoise(ctx, cfg)
+	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
 	var last, verified types.LayerID
 	for i := 0; i < 400; i++ {
@@ -2950,7 +2939,7 @@ func outOfWindowBaseBlock(n, window int) sim.VotesGenerator {
 
 // tortoiseVoting is for testing that protocol makes progress using heuristic that we are
 // using for the network.
-func tortoiseVoting(tortoise *ThreadSafeVerifyingTortoise) sim.VotesGenerator {
+func tortoiseVoting(tortoise *Tortoise) sim.VotesGenerator {
 	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 		base, exceptions, err := tortoise.BaseBlock(context.Background())
 		if err != nil {
@@ -2969,8 +2958,8 @@ func TestBaseBlockGenesis(t *testing.T) {
 	ctx := context.Background()
 
 	s := sim.New()
-	cfg := defaultConfigFromSimState(t, s.State)
-	tortoise := NewVerifyingTortoise(ctx, cfg)
+	cfg := defaultTestConfig()
+	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
 	base, exceptions, err := tortoise.BaseBlock(ctx)
 	require.NoError(t, err)
@@ -3001,10 +2990,10 @@ func TestBaseBlockEvictedBlock(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfigFromSimState(t, s.State)
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 10
-	tortoise := NewVerifyingTortoise(ctx, cfg)
+	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
 	var last, verified types.LayerID
 	// turn GenLayers into on-demand generator, so that later case can be placed as a step
@@ -3081,11 +3070,10 @@ func TestBaseBlockPrioritization(t *testing.T) {
 			s.Setup()
 
 			ctx := context.Background()
-			cfg := defaultConfigFromSimState(t, s.State)
+			cfg := defaultTestConfig()
 			cfg.LayerSize = size
 			cfg.WindowSize = tc.window
-			cfg.Log = logtest.New(t)
-			tortoise := NewVerifyingTortoise(ctx, cfg)
+			tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 
 			for _, lid := range sim.GenLayers(s, tc.seqs...) {
 				tortoise.HandleIncomingLayer(ctx, lid)
@@ -3142,14 +3130,14 @@ func TestWeakCoinVoting(t *testing.T) {
 	s.Setup(sim.WithSetupUnitsRange(1, 1))
 
 	ctx := context.Background()
-	cfg := defaultConfigFromSimState(t, s.State)
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.Hdist = hdist
 	cfg.Zdist = hdist
 	cfg.ConfidenceParam = 0
 
 	var (
-		tortoise       = NewVerifyingTortoise(ctx, cfg)
+		tortoise       = tortoiseFromSimState(s.State, WithConfig(cfg))
 		verified, last types.LayerID
 		genesis        = types.GetEffectiveGenesis()
 	)
@@ -3203,14 +3191,14 @@ func TestVoteAgainstSupportedByBaseBlock(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfigFromSimState(t, s.State)
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 1
 	cfg.Hdist = 1 // for eviction
 	cfg.Zdist = 1
 
 	var (
-		tortoise       = NewVerifyingTortoise(ctx, cfg)
+		tortoise       = tortoiseFromSimState(s.State, WithConfig(cfg))
 		last, verified types.LayerID
 		genesis        = types.GetEffectiveGenesis()
 	)
@@ -3345,11 +3333,11 @@ func TestComputeLocalOpinion(t *testing.T) {
 			s.Setup(sim.WithSetupUnitsRange(1, 1))
 
 			ctx := context.Background()
-			cfg := defaultConfigFromSimState(t, s.State)
+			cfg := defaultTestConfig()
 			cfg.LayerSize = size
 			cfg.Hdist = hdist
 			cfg.Zdist = hdist
-			tortoise := NewVerifyingTortoise(ctx, cfg)
+			tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
 			for _, lid := range sim.GenLayers(s, tc.seqs...) {
 				tortoise.HandleIncomingLayer(ctx, lid)
 			}
@@ -3372,15 +3360,15 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	s1.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfigFromSimState(t, s1.State)
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.Hdist = 2
 	cfg.Zdist = 2
 	cfg.ConfidenceParam = 0
 
 	var (
-		tortoise1                  = NewVerifyingTortoise(ctx, cfg)
-		tortoise2                  = NewVerifyingTortoise(ctx, cfg)
+		tortoise1                  = tortoiseFromSimState(s1.State, WithConfig(cfg))
+		tortoise2                  = tortoiseFromSimState(s1.State, WithConfig(cfg))
 		last, verified1, verified2 types.LayerID
 	)
 
