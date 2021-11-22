@@ -566,8 +566,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	bCfg := blocks.Config{
-		Depth:       app.Config.Tortoise.Hdist,
-		GoldenATXID: goldenATXID,
+		MaxExceptions: trtlCfg.MaxExceptions,
 	}
 	blockListener := blocks.NewBlockHandler(bCfg, fetcherWrapped, msh, eValidator, app.addLogger(BlockListenerLogger, lg))
 
