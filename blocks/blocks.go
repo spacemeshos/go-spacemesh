@@ -20,19 +20,16 @@ import (
 const NewBlockProtocol = "newBlock"
 
 var (
-	errDupTx         = errors.New("duplicate TransactionID in block")
-	errDupAtx        = errors.New("duplicate ATXID in block")
-	errNoActiveSet   = errors.New("block does not declare active set")
-	errZeroActiveSet = errors.New("block declares empty active set")
+	errDupTx                 = errors.New("duplicate TransactionID in block")
+	errDupAtx                = errors.New("duplicate ATXID in block")
+	errNoActiveSet           = errors.New("block does not declare active set")
+	errZeroActiveSet         = errors.New("block declares empty active set")
+	errConflictingExceptions = errors.New("conflicting exceptions")
 )
-
-type forBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 
 type mesh interface {
 	GetBlock(types.BlockID) (*types.Block, error)
 	AddBlockWithTxs(context.Context, *types.Block) error
-	ProcessedLayer() types.LayerID
-	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 }
 
 type blockValidator interface {
@@ -43,7 +40,6 @@ type blockValidator interface {
 type BlockHandler struct {
 	log.Log
 	fetcher     system.Fetcher
-	traverse    forBlockInView
 	depth       uint32
 	mesh        mesh
 	validator   blockValidator
@@ -61,7 +57,6 @@ func NewBlockHandler(cfg Config, fetcher system.Fetcher, m mesh, v blockValidato
 	return &BlockHandler{
 		Log:         lg,
 		fetcher:     fetcher,
-		traverse:    m.ForBlockInView,
 		depth:       cfg.Depth,
 		mesh:        m,
 		validator:   v,
@@ -72,7 +67,7 @@ func NewBlockHandler(cfg Config, fetcher system.Fetcher, m mesh, v blockValidato
 // HandleBlock handles blocks from gossip.
 func (bh *BlockHandler) HandleBlock(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
 	if err := bh.HandleBlockData(ctx, msg); err != nil {
-		bh.WithContext(ctx).With().Error("error handling block data", log.Err(err))
+		bh.WithContext(ctx).With().Warning("error handling block data", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
@@ -96,28 +91,19 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte) error 
 
 	// check if known
 	if _, err := bh.mesh.GetBlock(blk.ID()); err == nil {
-		logger.Info("we already know this block")
+		logger.Info("received known block")
 		return nil
 	}
 	logger.With().Info("got new block", blk.Fields()...)
 
 	if err := bh.blockSyntacticValidation(ctx, &blk); err != nil {
-		logger.With().Error("failed to validate block", log.Err(err))
-		return fmt.Errorf("failed to validate block %v", err)
+		return fmt.Errorf("failed to validate block %w", err)
 	}
 
 	saveMetrics(blk)
 
 	if err := bh.mesh.AddBlockWithTxs(ctx, &blk); err != nil {
-		logger.With().Error("failed to add block to database", log.Err(err))
-		// we return nil here so that the block will still be propagated
-		return nil
-	}
-
-	if !blk.Layer().After(bh.mesh.ProcessedLayer()) { //|| blk.Layer() == bh.mesh.getValidatingLayer() {
-		logger.With().Warning("block is late",
-			log.FieldNamed("processed_layer", bh.mesh.ProcessedLayer()),
-			log.FieldNamed("miner_id", blk.MinerID()))
+		return fmt.Errorf("persisting block %s: %w", blk.ID(), err)
 	}
 
 	logger.With().Debug("time to process block", log.Duration("duration", time.Since(start)))
@@ -166,6 +152,20 @@ func blockDependencies(blk *types.Block) []types.BlockID {
 	return combined
 }
 
+func validateNoConflicts(block *types.Block) error {
+	exceptions := map[types.BlockID]struct{}{}
+	for _, diff := range [][]types.BlockID{block.ForDiff, block.NeutralDiff, block.AgainstDiff} {
+		for _, bid := range diff {
+			_, exist := exceptions[bid]
+			if exist {
+				return fmt.Errorf("%w: block %s is referenced multiple times in exceptions of block %s",
+					errConflictingExceptions, bid, block.ID())
+			}
+		}
+	}
+	return nil
+}
+
 func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block) error {
 	// Add layer to context, for logging purposes, since otherwise the context will be lost here below
 	if reqID, ok := log.ExtractRequestID(ctx); ok {
@@ -189,12 +189,11 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	}
 
 	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
-	// TODO: validate that there are no conflicts in the vote exception lists (e.g., that the block does not both
-	//   support and vote against a given block)
-	//   See https://github.com/spacemeshos/go-spacemesh/issues/2369
 	if err := bh.fastValidation(block); err != nil {
-		bh.WithContext(ctx).With().Error("failed fast validation", block.ID(), log.Err(err))
 		return fmt.Errorf("fast validation: %w", err)
+	}
+	if err := validateNoConflicts(block); err != nil {
+		return err
 	}
 
 	// get the TXs

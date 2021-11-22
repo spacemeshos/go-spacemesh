@@ -205,10 +205,6 @@ func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	r.ErrorIs(err, errDupTx)
 }
 
-func mockForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
-	return nil
-}
-
 func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	r := require.New(t)
 	fetch := newFetchMock()
@@ -217,7 +213,6 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 		3, goldenATXID,
 	}
 	s := NewBlockHandler(cfg, fetch, &meshMock{}, &verifierMock{}, logtest.New(t))
-	s.traverse = mockForBlockInView
 	a := atx("")
 	atxpool.Put(a)
 	b := &types.Block{}

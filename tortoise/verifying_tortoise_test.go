@@ -1252,14 +1252,6 @@ func TestProcessBlock(t *testing.T) {
 	alg.trtl.BallotOpinionsByLayer[l2ID] = make(map[types.BallotID]Opinion, defaultTestLayerSize)
 	alg.trtl.BallotOpinionsByLayer[l1ID] = make(map[types.BallotID]Opinion, defaultTestLayerSize)
 
-	// malicious (conflicting) voting pattern
-	l2Ballots[0].BaseBallot = types.BallotID(mesh.GenesisBlock().ID())
-	l2Ballots[0].ForDiff = []types.BlockID{l1Blocks[1].ID()}
-	l2Ballots[0].AgainstDiff = l2Ballots[0].ForDiff
-	err := alg.trtl.processBallot(context.TODO(), l2Ballots[0])
-	r.Error(err)
-	r.Contains(err.Error(), errstrConflictingVotes)
-
 	// add vote diffs: make sure that base block votes flow through, but that block votes override them, and that the
 	// data structure is correctly updated, and that weights are calculated correctly
 
@@ -1723,8 +1715,7 @@ func TestSumWeightedVotesForBlock(t *testing.T) {
 		block := generateBlock(t, l1ID, bbp, atxdb, thisWeight)
 		r.NoError(mdb.AddBlock(block))
 
-		// update t.Last and process block votes
-		r.NoError(alg.trtl.handleLayer(wrapContext(context.TODO()), l1ID))
+		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l1ID))
 
 		// check
 		sum, err := alg.trtl.sumVotesForBlock(context.TODO(), genesisBlockID, l1ID, filterPassAll)
