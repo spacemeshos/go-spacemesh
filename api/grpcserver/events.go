@@ -1,5 +1,7 @@
 package grpcserver
 
+const subscriptionChanBufSize = 1 << 16
+
 func consumeEvents(inputCh <-chan interface{}) <-chan interface{} {
 	outputCh := make(chan interface{}, subscriptionChanBufSize)
 

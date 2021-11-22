@@ -250,8 +250,6 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 
 // STREAMS
 
-const subscriptionChanBufSize = 1 << 16
-
 // AccountDataStream exposes a stream of account-related data.
 func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, stream pb.GlobalStateService_AccountDataStreamServer) error {
 	log.Info("GRPC GlobalStateService.AccountDataStream")
