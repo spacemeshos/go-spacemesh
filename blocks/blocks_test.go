@@ -124,7 +124,7 @@ func (f fetchMock) GetPoetProof(ctx context.Context, ID types.Hash32) error {
 	return f.returnError()
 }
 
-func (f fetchMock) GetTxs(ctx context.Context, ids []types.TransactionID) error {
+func (f fetchMock) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
 	return f.returnError()
 }
 

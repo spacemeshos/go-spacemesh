@@ -108,9 +108,9 @@ func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction) {
 }
 
 // Invalidate removes transaction from pool.
-func (t *TxMempool) Invalidate(txID types.TransactionID) {
+func (t *TxMempool) Invalidate(id types.TransactionID) {
 	t.mu.Lock()
-	if tx, found := t.txs[txID]; found {
+	if tx, found := t.txs[id]; found {
 		if pendingTxs, found := t.accounts[tx.Origin()]; found {
 			// Once a tx appears in a block we want to invalidate all of this nonce's variants. The mempool currently
 			// only accepts one version, but this future-proofs it.
@@ -125,8 +125,8 @@ func (t *TxMempool) Invalidate(txID types.TransactionID) {
 			// the initial tx here since it'll be reported as part of a new block/layer anyway.
 			events.ReportTxWithValidity(types.LayerID{}, tx, false)
 		}
-		t.removeFromAddr(tx.Origin(), txID)
-		t.removeFromAddr(tx.Recipient, txID)
+		t.removeFromAddr(tx.Origin(), id)
+		t.removeFromAddr(tx.Recipient, id)
 	}
 	t.mu.Unlock()
 }

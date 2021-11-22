@@ -136,8 +136,8 @@ func (m *MockTxMemPool) Get(ID types.TransactionID) (*types.Transaction, error) 
 	return m.db[ID], nil
 }
 
-func (m *MockTxMemPool) Put(id types.TransactionID, tx *types.Transaction) {
-	m.db[id] = tx
+func (m *MockTxMemPool) Put(ID types.TransactionID, t *types.Transaction) {
+	m.db[ID] = t
 }
 
 func (MockTxMemPool) Invalidate(types.TransactionID) {

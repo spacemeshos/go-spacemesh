@@ -105,17 +105,17 @@ func (mr *MockFetcherMockRecorder) GetPoetProof(arg0, arg1 interface{}) *gomock.
 }
 
 // GetTxs mocks base method
-func (m *MockFetcher) GetTxs(ctx context.Context, ids []types.TransactionID) error {
+func (m *MockFetcher) GetTxs(arg0 context.Context, arg1 []types.TransactionID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTxs", ctx, ids)
+	ret := m.ctrl.Call(m, "GetTxs", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetTxs indicates an expected call of GetTxs
-func (mr *MockFetcherMockRecorder) GetTxs(ctx, ids interface{}) *gomock.Call {
+func (mr *MockFetcherMockRecorder) GetTxs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTxs", reflect.TypeOf((*MockFetcher)(nil).GetTxs), ctx, ids)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTxs", reflect.TypeOf((*MockFetcher)(nil).GetTxs), arg0, arg1)
 }
 
 // MockBlockFetcher is a mock of BlockFetcher interface
@@ -244,17 +244,17 @@ func (m *MockTxFetcher) EXPECT() *MockTxFetcherMockRecorder {
 }
 
 // GetTxs mocks base method
-func (m *MockTxFetcher) GetTxs(ctx context.Context, ids []types.TransactionID) error {
+func (m *MockTxFetcher) GetTxs(arg0 context.Context, arg1 []types.TransactionID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTxs", ctx, ids)
+	ret := m.ctrl.Call(m, "GetTxs", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // GetTxs indicates an expected call of GetTxs
-func (mr *MockTxFetcherMockRecorder) GetTxs(ctx, ids interface{}) *gomock.Call {
+func (mr *MockTxFetcherMockRecorder) GetTxs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTxs", reflect.TypeOf((*MockTxFetcher)(nil).GetTxs), ctx, ids)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTxs", reflect.TypeOf((*MockTxFetcher)(nil).GetTxs), arg0, arg1)
 }
 
 // MockPoetProofFetcher is a mock of PoetProofFetcher interface

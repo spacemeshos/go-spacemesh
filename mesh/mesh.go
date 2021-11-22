@@ -62,7 +62,7 @@ type state interface {
 }
 
 type txMemPool interface {
-	Invalidate(txID types.TransactionID)
+	Invalidate(id types.TransactionID)
 	Get(id types.TransactionID) (*types.Transaction, error)
 	Put(id types.TransactionID, tx *types.Transaction)
 }
