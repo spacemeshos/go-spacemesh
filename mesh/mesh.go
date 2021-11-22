@@ -101,7 +101,7 @@ type Mesh struct {
 }
 
 // NewMesh creates a new instant of a mesh.
-func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
+func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, fetcher system.BlockFetcher, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
 	msh := &Mesh{
 		Log:                 logger,
 		fetch:               fetcher,
@@ -132,8 +132,8 @@ func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txM
 }
 
 // NewRecoveredMesh creates new instance of mesh with recovered mesh data fom database.
-func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
-	msh := NewMesh(db, atxDb, rewardConfig, trtl, txPool, state, logger)
+func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Config, fetcher system.BlockFetcher, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
+	msh := NewMesh(db, atxDb, rewardConfig, fetcher, trtl, txPool, state, logger)
 
 	latest, err := db.general.Get(constLATEST)
 	if err != nil {
@@ -155,7 +155,7 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 		logger.With().Panic("failed to recover latest layer in state", log.Err(err))
 	}
 
-	err = state.LoadState(msh.LatestLayerInState())
+	_, err = state.Rewind(msh.LatestLayerInState())
 	if err != nil {
 		logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 	}
