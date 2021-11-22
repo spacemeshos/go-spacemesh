@@ -155,7 +155,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 			}
 		}()
 
-		statusStream = statusSubscription.Out()
+		statusStream = consumeEvents(statusSubscription.Out())
 	}
 
 	for {
@@ -204,7 +204,7 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 			}
 		}()
 
-		errorStream = errorsSubscription.Out()
+		errorStream = consumeEvents(errorsSubscription.Out())
 	}
 
 	for {

@@ -475,7 +475,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 					log.With().Panic("Failed to close txs subscription: " + err.Error())
 				}
 			}()
-			txStream = txsSubscription.Out()
+			txStream = consumeEvents(txsSubscription.Out())
 		}
 	}
 	if filterActivations {
@@ -485,7 +485,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 					log.With().Panic("Failed to close activations subscription: " + err.Error())
 				}
 			}()
-			activationsStream = activationsSubscription.Out()
+			activationsStream = consumeEvents(activationsSubscription.Out())
 		}
 	}
 
@@ -569,7 +569,7 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 			}
 		}()
 
-		layerStream = layersSubscription.Out()
+		layerStream = consumeEvents(layersSubscription.Out())
 	}
 
 	for {

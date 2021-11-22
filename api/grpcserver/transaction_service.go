@@ -187,7 +187,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 				log.With().Panic("Failed to close txs subscription: " + err.Error())
 			}
 		}()
-		channelTx = txsSubscription.Out()
+		channelTx = consumeEvents(txsSubscription.Out())
 	}
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
@@ -197,7 +197,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 			}
 		}()
 
-		channelLayer = layersSubscription.Out()
+		channelLayer = consumeEvents(layersSubscription.Out())
 	}
 
 	for {

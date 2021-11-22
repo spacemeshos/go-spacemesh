@@ -250,6 +250,8 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 
 // STREAMS
 
+const subscriptionChanBufSize = 1 << 16
+
 // AccountDataStream exposes a stream of account-related data.
 func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, stream pb.GlobalStateService_AccountDataStreamServer) error {
 	log.Info("GRPC GlobalStateService.AccountDataStream")
@@ -282,7 +284,8 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					log.With().Panic("Failed to close account subscription: " + err.Error())
 				}
 			}()
-			channelAccount = accountSubscription.Out()
+
+			channelAccount = consumeEvents(accountSubscription.Out())
 		}
 	}
 	if filterReward {
@@ -292,7 +295,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					log.With().Panic("Failed to close rewards subscription: " + err.Error())
 				}
 			}()
-			channelReward = rewardsSubscription.Out()
+			channelReward = consumeEvents(rewardsSubscription.Out())
 		}
 	}
 	if filterReceipt {
@@ -302,7 +305,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					log.With().Panic("Failed to close account subscription: " + err.Error())
 				}
 			}()
-			channelReceipt = receiptsSubscription.Out()
+			channelReceipt = consumeEvents(receiptsSubscription.Out())
 		}
 	}
 
@@ -422,7 +425,7 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 			}
 		}()
 
-		channelReward = rewardsSubscription.Out()
+		channelReward = consumeEvents(rewardsSubscription.Out())
 	}
 
 	for {
@@ -497,7 +500,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					log.With().Panic("Failed to close account subscription: " + err.Error())
 				}
 			}()
-			channelAccount = accountSubscription.Out()
+			channelAccount = consumeEvents(accountSubscription.Out())
 		}
 	}
 	if filterReward {
@@ -507,7 +510,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					log.With().Panic("Failed to close rewards subscription: " + err.Error())
 				}
 			}()
-			channelReward = rewardsSubscription.Out()
+			channelReward = consumeEvents(rewardsSubscription.Out())
 		}
 	}
 	if filterReceipt {
@@ -517,7 +520,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					log.With().Panic("Failed to close receipts subscription: " + err.Error())
 				}
 			}()
-			channelReceipt = receiptsSubscription.Out()
+			channelReceipt = consumeEvents(receiptsSubscription.Out())
 		}
 	}
 	if filterState {
@@ -529,7 +532,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 					log.With().Panic("Failed to close layers subscription: " + err.Error())
 				}
 			}()
-			channelLayer = layersSubscription.Out()
+			channelLayer = consumeEvents(layersSubscription.Out())
 		}
 	}
 
