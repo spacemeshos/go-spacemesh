@@ -18,7 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	p2pConfig "github.com/spacemeshos/go-spacemesh/p2p/config"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
@@ -38,7 +38,7 @@ var (
 type Config struct {
 	BaseConfig      `mapstructure:"main"`
 	Genesis         *apiConfig.GenesisConfig `mapstructure:"genesis"`
-	P2P             p2pConfig.Config         `mapstructure:"p2p"`
+	P2P             p2p.Config               `mapstructure:"p2p"`
 	API             apiConfig.Config         `mapstructure:"api"`
 	HARE            hareConfig.Config        `mapstructure:"hare"`
 	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
@@ -157,7 +157,7 @@ type SmeshingConfig struct {
 func DefaultConfig() Config {
 	return Config{
 		BaseConfig:      defaultBaseConfig(),
-		P2P:             p2pConfig.DefaultConfig(),
+		P2P:             p2p.DefaultConfig(),
 		API:             apiConfig.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
@@ -175,7 +175,7 @@ func DefaultConfig() Config {
 func DefaultTestConfig() Config {
 	conf := DefaultConfig()
 	conf.BaseConfig = defaultTestConfig()
-	conf.P2P = p2pConfig.DefaultTestConfig()
+	conf.P2P = p2p.DefaultConfig()
 	conf.API = apiConfig.DefaultTestConfig()
 	return conf
 }
@@ -200,8 +200,8 @@ func defaultBaseConfig() BaseConfig {
 		PoETServer:            "127.0.0.1",
 		GoldenATXID:           "0x5678", // TODO: Change the value
 		Hdist:                 10,
-		Zdist:                 5,
-		ConfidenceParam:       5,
+		Zdist:                 8,
+		ConfidenceParam:       2,
 		WindowSize:            100,                 // should be "a few thousand layers" in production
 		GlobalThreshold:       big.NewRat(60, 100), // fraction
 		LocalThreshold:        big.NewRat(20, 100), // fraction

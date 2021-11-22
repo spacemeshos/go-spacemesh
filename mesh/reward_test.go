@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 var goldenATXID = types.ATXID(types.HexToHash32("77777"))
@@ -65,7 +67,10 @@ func getMeshWithMapState(tb testing.TB, id string, state state) (*Mesh, *AtxDbMo
 	lg := logtest.New(tb)
 	mshDb := NewMemMeshDB(lg)
 	mshDb.contextualValidity = &ContextualValidityMock{}
-	return NewMesh(mshDb, atxDb, ConfigTst(), &MeshValidatorMock{}, newMockTxMemPool(), state, lg), atxDb
+	ctrl := gomock.NewController(tb)
+	mockFetch := mocks.NewMockBlockFetcher(ctrl)
+	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
+	return NewMesh(mshDb, atxDb, ConfigTst(), mockFetch, &MeshValidatorMock{}, newMockTxMemPool(), state, lg), atxDb
 }
 
 func addTransactionsWithFee(t testing.TB, mesh *DB, bl *types.Block, numOfTxs int, fee int64) int64 {
@@ -298,37 +303,6 @@ func TestMesh_updateStateWithLayer_SameInputFromSyncing(t *testing.T) {
 	msh.ValidateLayer(context.TODO(), lyr)
 
 	// s2 state should be unchanged
-	require.Equal(t, oldTxs, s.Txs)
-}
-
-func TestMesh_updateStateWithLayer_LateBlock(t *testing.T) {
-	gLyr := types.GetEffectiveGenesis()
-	finalLyr := gLyr.Add(10)
-
-	// s is the state where a node advance its state via syncing with peers
-	s := &MockMapState{Rewards: make(map[types.Address]uint64)}
-	msh, atxDB := getMeshWithMapState(t, "t1", s)
-	t.Cleanup(func() {
-		msh.Close()
-	})
-	createMeshFromSyncing(t, finalLyr, msh, atxDB)
-	oldTxs := make([]*types.Transaction, len(s.Txs))
-	copy(oldTxs, s.Txs)
-	require.Greater(t, len(oldTxs), 0)
-
-	oldLyr, err := msh.GetLayer(finalLyr.Sub(4))
-	require.NoError(t, err)
-
-	blk := oldLyr.Blocks()[0]
-	msh.HandleLateBlock(context.TODO(), blk)
-	// a seen late block should not change the state
-	require.Equal(t, oldTxs, s.Txs)
-
-	// a not-before-seen late block should not change the state either
-	nodeID := types.NodeID{Key: strconv.Itoa(999), VRFPublicKey: []byte("ccccc")}
-	blk, _ = createBlock(t, msh, oldLyr.Index(), nodeID, 200, atxDB)
-	msh.HandleLateBlock(context.TODO(), blk)
-	// a late block we haven't seen should not the state
 	require.Equal(t, oldTxs, s.Txs)
 }
 

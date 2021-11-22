@@ -96,6 +96,9 @@ func (t *Trie) Prove(key []byte, fromLevel uint, proofDb database.Putter) error 
 // nodes of the longest existing prefix of the key (at least the root node), ending
 // with the node that proves the absence of the key.
 func (t *SecureTrie) Prove(key []byte, fromLevel uint, proofDb database.Putter) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	return t.trie.Prove(key, fromLevel, proofDb)
 }
 

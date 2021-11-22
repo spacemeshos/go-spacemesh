@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -33,15 +34,6 @@ var (
 const AtxProtocol = "AtxGossip"
 
 const defaultPoetRetryInterval = 5 * time.Second
-
-type meshProvider interface {
-	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
-	LatestLayer() types.LayerID
-}
-
-type broadcaster interface {
-	Broadcast(ctx context.Context, channel string, data []byte) error
-}
 
 type poetNumberOfTickProvider struct{}
 
@@ -127,8 +119,7 @@ type Builder struct {
 	goldenATXID       types.ATXID
 	layersPerEpoch    uint32
 	db                atxDBProvider
-	net               broadcaster
-	mesh              meshProvider
+	publisher         pubsub.Publisher
 	tickProvider      poetNumberOfTickProvider
 	nipostBuilder     nipostBuilder
 	postSetupProvider PostSetupProvider
@@ -137,7 +128,7 @@ type Builder struct {
 	// pendingATX is created with current commitment and nipst from current challenge.
 	pendingATX            *types.ActivationTx
 	layerClock            layerClock
-	mtx                   sync.Mutex
+	mu                    sync.Mutex
 	store                 bytesStore
 	syncer                syncer
 	log                   log.Log
@@ -177,8 +168,8 @@ func WithContext(ctx context.Context) BuilderOption {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, net broadcaster, mesh meshProvider,
-	layersPerEpoch uint32, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
+func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, publisher pubsub.Publisher,
+	nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
 		parentCtx:         context.Background(),
@@ -188,8 +179,7 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 		goldenATXID:       conf.GoldenATXID,
 		layersPerEpoch:    conf.LayersPerEpoch,
 		db:                db,
-		net:               net,
-		mesh:              mesh,
+		publisher:         publisher,
 		nipostBuilder:     nipostBuilder,
 		postSetupProvider: postSetupProvider,
 		layerClock:        layerClock,
@@ -215,14 +205,14 @@ func (b *Builder) Smeshing() bool {
 // session will be preceded. Changing of the post potions (e.g., number of labels),
 // after initial setup, is supported.
 func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) error {
-	b.mtx.Lock()
+	b.mu.Lock()
 	if b.exited != nil {
 		select {
 		case <-b.exited:
 			// we are here if StartSession failed and method returned with error
 			// in this case it is expected that the user may call StartSmeshing without StopSmeshing first
 		default:
-			b.mtx.Unlock()
+			b.mu.Unlock()
 			return errors.New("already started")
 		}
 	}
@@ -233,7 +223,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 	exited := make(chan struct{})
 	ctx, b.stop = context.WithCancel(b.parentCtx)
 	b.exited = exited
-	b.mtx.Unlock()
+	b.mu.Unlock()
 
 	doneChan, err := b.postSetupProvider.StartSession(opts)
 	if err != nil {
@@ -263,8 +253,9 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 
 // StopSmeshing stops the atx builder.
 func (b *Builder) StopSmeshing(deleteFiles bool) error {
-	b.mtx.Lock()
-	defer b.mtx.Unlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	if b.exited == nil {
 		return errors.New("not started")
 	}
@@ -608,7 +599,7 @@ func (b *Builder) signAndBroadcast(ctx context.Context, atx *types.ActivationTx)
 	if err != nil {
 		return 0, fmt.Errorf("failed to serialize ATX: %v", err)
 	}
-	if err := b.net.Broadcast(ctx, AtxProtocol, buf); err != nil {
+	if err := b.publisher.Publish(ctx, AtxProtocol, buf); err != nil {
 		return 0, fmt.Errorf("failed to broadcast ATX: %v", err)
 	}
 	return len(buf), nil

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -22,7 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
@@ -134,7 +135,7 @@ func getTestDefaultConfig() *config.Config {
 		return nil
 	}
 	// is set to 0 to make sync start immediately when node starts
-	cfg.P2P.SwarmConfig.RandomConnections = 0
+	cfg.P2P.TargetOutbound = 0
 
 	cfg.POST = activation.DefaultPostConfig()
 	cfg.POST.LabelsPerUnit = 32
@@ -158,6 +159,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.LayersPerEpoch = 3
 	cfg.TxsPerBlock = 100
 	cfg.Hdist = 5
+	cfg.Zdist = 5
 
 	cfg.LayerDurationSec = 20
 	cfg.HareEligibility.ConfidenceParam = 4
@@ -188,9 +190,9 @@ func ActivateGrpcServer(smApp *App) {
 	smApp.Config.API.StartTransactionService = true
 	smApp.Config.API.GrpcServerPort = 9094
 	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
-	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.P2P)
+	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.host)
 	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.txPool)
-	smApp.txService = grpcserver.NewTransactionService(smApp.P2P, smApp.mesh, smApp.txPool, smApp.syncer)
+	smApp.txService = grpcserver.NewTransactionService(smApp.host, smApp.mesh, smApp.txPool, smApp.syncer)
 	smApp.gatewaySvc.RegisterService(smApp.grpcAPIService)
 	smApp.globalstateSvc.RegisterService(smApp.grpcAPIService)
 	smApp.txService.RegisterService(smApp.grpcAPIService)
@@ -214,13 +216,10 @@ func GracefulShutdown(apps []*App) {
 	log.Info("graceful shutdown end")
 }
 
-type network interface {
-	NewNode() *service.Node
-}
-
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
-func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle, poetClient *activation.HTTPPoetClient, clock TickProvider, net network, edSgn *signing.EdSigner) (*App, error) {
+func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
+	poetClient *activation.HTTPPoetClient, clock TickProvider, host *p2p.Host, edSgn *signing.EdSigner) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg
 	smApp.Config.GenesisTime = genesisTime
@@ -230,6 +229,7 @@ func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	smApp.Config.POST.MaxNumUnits = smApp.Config.SMESHING.Opts.NumUnits << 5
 	smApp.Config.SMESHING.Opts.NumUnits = smApp.Config.SMESHING.Opts.NumUnits << (i % 5)
 
+	smApp.host = host
 	smApp.edSgn = edSgn
 
 	pub := edSgn.PublicKey()
@@ -240,13 +240,12 @@ func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 
-	swarm := net.NewNode()
 	dbStorepath := storePath
 
 	hareOracle := newLocalOracle(rolacle, 5, nodeID)
 	hareOracle.Register(true, pub.String())
 
-	err = smApp.initServices(context.TODO(), nodeID, swarm, dbStorepath, edSgn, false, hareOracle,
+	err = smApp.initServices(context.TODO(), nodeID, dbStorepath, edSgn, false, hareOracle,
 		uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
 	if err != nil {
 		return nil, err
@@ -260,7 +259,10 @@ func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
 	cfg := getTestDefaultConfig()
 	cfg.LayerAvgSize = layerAvgSize
-	net := service.NewSimulator()
+	mesh, err := mocknet.FullMeshLinked(context.Background(), numOfInstances)
+	if err != nil {
+		logger.With().Panic("failed to initialize mocknet", log.Err(err))
+	}
 	path := dbPath + time.Now().Format(time.RFC3339)
 
 	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
@@ -293,7 +295,12 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 	for i := 0; i < numOfInstances; i++ {
 		dbStorepath := path + string(name)
 		edSgn := signing.NewEdSigner()
-		smApp, err := InitSingleInstance(logger, *cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, net, edSgn)
+		host, err := p2p.Upgrade(mesh.Hosts()[i], p2p.WithLog(logger), p2p.WithConfig(cfg.P2P))
+		if err != nil {
+			logger.With().Error("failed to initialize host", log.Err(err))
+			return
+		}
+		smApp, err := InitSingleInstance(logger, *cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, host, edSgn)
 		if err != nil {
 			logger.With().Error("cannot run multi node", log.Err(err))
 			return
@@ -301,6 +308,7 @@ func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLay
 		apps = append(apps, smApp)
 		name++
 	}
+	mesh.ConnectAllButSelf()
 
 	eventDb := collector.NewMemoryCollector()
 	collect := collector.NewCollector(eventDb, pubsubAddr)

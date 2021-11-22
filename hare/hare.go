@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spacemeshos/go-spacemesh/blocks"
@@ -18,12 +19,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 // LayerBuffer is the number of layer results we keep at a given time.
 const LayerBuffer = 20
 
-type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, clock RoundClock, terminationReport chan TerminationOutput) Consensus
+type consensusFactory func(cfg config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput, certificationReport chan CertificationOutput) Consensus
 
 // Consensus represents an item that acts like a consensus process.
 type Consensus interface {
@@ -42,6 +44,9 @@ type TerminationOutput interface {
 	Coinflip() bool
 	Completed() bool
 }
+
+// CertificationOutput represents an certification output of a consensus process.
+type CertificationOutput = types.LayerID
 
 // RoundClock is a timer interface.
 type RoundClock interface {
@@ -63,7 +68,7 @@ type Hare struct {
 	log.Log
 	config config.Config
 
-	network    NetworkService
+	publisher  pubsub.Publisher
 	layerClock LayerClock
 
 	newRoundClock func(LayerID types.LayerID) RoundClock
@@ -87,6 +92,8 @@ type Hare struct {
 	outputChan chan TerminationOutput
 	mu         sync.RWMutex
 	outputs    map[types.LayerID][]types.BlockID
+	certChan   chan types.LayerID
+	certified  map[types.LayerID]struct{}
 
 	factory consensusFactory
 
@@ -98,7 +105,8 @@ type Hare struct {
 // New returns a new Hare struct.
 func New(
 	conf config.Config,
-	p2p NetworkService,
+	pid peer.ID,
+	publisher pubsub.PublishSubsciber,
 	sign Signer,
 	nid types.NodeID,
 	syncState syncStateFunc,
@@ -118,7 +126,7 @@ func New(
 
 	h.Log = logger
 	h.config = conf
-	h.network = p2p
+	h.publisher = publisher
 	h.layerClock = layerClock
 	h.newRoundClock = func(layerID types.LayerID) RoundClock {
 		layerTime := layerClock.LayerToTime(layerID)
@@ -132,7 +140,8 @@ func New(
 	}
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
-	h.broker = newBroker(p2p, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
+	h.broker = newBroker(pid, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
+	publisher.Register(protoName, h.broker.HandleMessage)
 	h.sign = sign
 
 	h.mesh = mesh
@@ -144,11 +153,12 @@ func New(
 	// todo: this should be loaded from global config
 	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
+	h.certChan = make(chan CertificationOutput, h.bufferSize)
 	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) // we keep results about LayerBuffer past layers
-	h.factory = func(conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p NetworkService, clock RoundClock, terminationReport chan TerminationOutput) Consensus {
-		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, ev, clock, logger)
+	h.certified = make(map[types.LayerID]struct{}, h.bufferSize)
+	h.factory = func(conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput, certificationReport chan CertificationOutput) Consensus {
+		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, certificationReport, ev, clock, logger)
 	}
-
 	h.nid = nid
 
 	return h
@@ -189,18 +199,21 @@ var ErrTooLate = errors.New("consensus process finished too late")
 
 // records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
-	set := output.Set()
-	blocks := make([]types.BlockID, len(set.values))
-	i := 0
-	for v := range set.values {
-		blocks[i] = v
-		i++
+	layerID := output.ID()
+	var blocks []types.BlockID
+	if output.Completed() {
+		h.WithContext(ctx).With().Info("hare terminated with success", layerID)
+		set := output.Set()
+		blocks = make([]types.BlockID, 0, set.len())
+		for _, v := range set.elements() {
+			blocks = append(blocks, v)
+		}
+	} else {
+		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
 	}
+	h.mesh.HandleValidatedLayer(ctx, layerID, blocks)
 
-	id := output.ID()
-	h.mesh.HandleValidatedLayer(ctx, id, blocks)
-
-	if h.outOfBufferRange(id) {
+	if h.outOfBufferRange(layerID) {
 		return ErrTooLate
 	}
 
@@ -209,9 +222,23 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	if uint32(len(h.outputs)) >= h.bufferSize {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
-	h.outputs[id] = blocks
-
+	h.outputs[layerID] = blocks
 	return nil
+}
+
+func (h *Hare) certify(ctx context.Context, id types.LayerID) {
+	if h.outOfBufferRange(id) {
+		// ignore
+		return
+	}
+
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if uint32(len(h.certified)) >= h.bufferSize {
+		delete(h.certified, h.oldestResultInBuffer())
+	}
+
+	h.certified[id] = struct{}{}
 }
 
 // the logic that happens when a new layer arrives.
@@ -237,6 +264,12 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	}
 
 	var err error
+	beacon, err := h.beacons.GetBeacon(id.GetEpoch())
+	if err != nil {
+		logger.Info("not starting hare since beacon is not retrieved")
+		return false, nil
+	}
+
 	defer func() {
 		// it must not return without starting consensus process or mark result as fail
 		// except if it's genesis layer
@@ -244,12 +277,6 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 			h.outputChan <- procReport{id, &Set{}, false, notCompleted}
 		}
 	}()
-
-	beacon, err := h.beacons.GetBeacon(id.GetEpoch())
-	if err != nil {
-		logger.Info("not starting hare since beacon is not retrieved")
-		return false, nil
-	}
 
 	// call to start the calculation of active set size beforehand
 	go func() {
@@ -276,7 +303,9 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		return false, nil
 	}
 
+	h.layerLock.RLock()
 	blocks := h.getGoodBlocks(h.lastLayer, beacon, logger)
+	h.layerLock.RUnlock()
 	logger.With().Info("starting hare consensus with blocks", log.Int("num_blocks", len(blocks)))
 	set := NewSet(blocks)
 
@@ -286,7 +315,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		logger.With().Error("could not register consensus process on broker", log.Err(err))
 		return false, fmt.Errorf("broker register: %w", err)
 	}
-	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.network, clock, h.outputChan)
+	cp := h.factory(h.config, instID, set, h.rolacle, h.sign, h.publisher, clock, h.outputChan, h.certChan)
 	cp.SetInbox(c)
 	if err = cp.Start(ctx); err != nil {
 		logger.With().Error("could not start consensus process", log.Err(err))
@@ -375,20 +404,27 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 				log.Bool("coinflip", coin))
 			h.mesh.RecordCoinflip(ctx, layerID, coin)
 
-			if out.Completed() { // CP completed, collect the output
-				logger.With().Info("collecting results for completed hare instance", layerID)
-				if err := h.collectOutput(ctx, out); err != nil {
-					logger.With().Warning("error collecting output from hare", log.Err(err))
-				}
-			} else {
-				// Notify the mesh that Hare failed
-				h.WithContext(ctx).With().Info("recording hare instance failure", layerID)
-				h.mesh.InvalidateLayer(ctx, layerID)
+			if err := h.collectOutput(ctx, out); err != nil {
+				logger.With().Warning("error collecting output from hare", log.Err(err))
 			}
 			h.broker.Unregister(ctx, out.ID())
 			logger.With().Info("number of consensus processes (after unregister)",
 				log.Int32("count", atomic.AddInt32(&h.totalCPs, -1)))
 			metrics.TotalConsensusProcesses.With(prometheus.Labels{"layer": out.ID().String()}).Dec()
+		case <-h.CloseChannel():
+			return
+		}
+	}
+}
+
+// listens to outputs arriving from consensus processes.
+func (h *Hare) certificationLoop(ctx context.Context) {
+	h.WithContext(ctx).With().Info("starting sertificatin collection loop")
+	for {
+		select {
+		case out := <-h.certChan:
+			ctx := log.WithNewSessionID(ctx)
+			h.certify(ctx, out)
 		case <-h.CloseChannel():
 			return
 		}
@@ -409,7 +445,7 @@ func (h *Hare) tickLoop(ctx context.Context) {
 				if err != nil {
 					h.With().Error("failed to handle tick", log.Err(err))
 				} else if !started {
-					h.WithContext(ctx).With().Warning("consensus not started for layer", layer)
+					h.WithContext(ctx).With().Warning("consensus not started for layer", l)
 				}
 			}(layer)
 		case <-h.CloseChannel():
@@ -426,6 +462,7 @@ func (h *Hare) Start(ctx context.Context) error {
 	ctxBroker := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_broker"))
 	ctxTickLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_tickloop"))
 	ctxOutputLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_outputloop"))
+	ctxCertLoop := log.WithNewSessionID(ctx, log.String("protocol", protoName+"_certloop"))
 
 	if err := h.broker.Start(ctxBroker); err != nil {
 		return fmt.Errorf("start broker: %w", err)
@@ -433,6 +470,7 @@ func (h *Hare) Start(ctx context.Context) error {
 
 	go h.tickLoop(ctxTickLoop)
 	go h.outputCollectionLoop(ctxOutputLoop)
+	go h.certificationLoop(ctxCertLoop)
 
 	return nil
 }

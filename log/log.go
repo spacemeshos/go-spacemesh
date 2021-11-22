@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"os"
+	"sync"
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -23,8 +24,11 @@ var logwriter io.Writer
 // default encoders.
 var defaultEncoder = zap.NewDevelopmentEncoderConfig()
 
-// Level returns the zapcore level of logging.
-func Level() zapcore.Level {
+// Level is an alias to zapcore.Level.
+type Level = zapcore.Level
+
+// DefaultLevel returns the zapcore level of logging.
+func DefaultLevel() Level {
 	return zapcore.InfoLevel
 }
 
@@ -47,11 +51,30 @@ func encoder() zapcore.Encoder {
 }
 
 // AppLog is the local app singleton logger.
-var AppLog Log
+var (
+	mu     sync.RWMutex
+	AppLog Log
+)
+
+// GetLogger gets logger.
+func GetLogger() Log {
+	mu.RLock()
+	defer mu.RUnlock()
+
+	return AppLog
+}
+
+// SetLogger sets logger.
+func SetLogger(logger Log) {
+	mu.Lock()
+	defer mu.Unlock()
+
+	AppLog = logger
+}
 
 // SetupGlobal overwrites global logger.
 func SetupGlobal(logger Log) {
-	AppLog = NewFromLog(logger.logger.Named(mainLoggerName))
+	SetLogger(NewFromLog(logger.logger.Named(mainLoggerName)))
 }
 
 func init() {
@@ -62,7 +85,7 @@ func init() {
 }
 
 func initLogging() {
-	AppLog = NewDefault(mainLoggerName)
+	SetLogger(NewDefault(mainLoggerName))
 }
 
 // JSONLog turns JSON format on or off.
@@ -95,7 +118,7 @@ func RegisterHooks(lg Log, hooks ...func(zapcore.Entry) error) Log {
 
 // NewDefault creates a Log with the default log level.
 func NewDefault(module string) Log {
-	return NewWithLevel(module, zap.NewAtomicLevelAt(Level()))
+	return NewWithLevel(module, zap.NewAtomicLevelAt(DefaultLevel()))
 }
 
 // NewFromLog creates a Log from an existing zap-compatible log.
@@ -107,35 +130,35 @@ func NewFromLog(l *zap.Logger) Log {
 
 // Info prints formatted info level log message.
 func Info(msg string, args ...interface{}) {
-	AppLog.Info(msg, args...)
+	GetLogger().Info(msg, args...)
 }
 
 // Debug prints formatted debug level log message.
 func Debug(msg string, args ...interface{}) {
-	AppLog.Debug(msg, args...)
+	GetLogger().Debug(msg, args...)
 }
 
 // Error prints formatted error level log message.
 func Error(msg string, args ...interface{}) {
-	AppLog.Error(msg, args...)
+	GetLogger().Error(msg, args...)
 }
 
 // Warning prints formatted warning level log message.
 func Warning(msg string, args ...interface{}) {
-	AppLog.Warning(msg, args...)
+	GetLogger().Warning(msg, args...)
 }
 
 // With returns a FieldLogger which you can append fields to.
 func With() FieldLogger {
-	return FieldLogger{AppLog.logger, AppLog.name}
+	return FieldLogger{GetLogger().logger, GetLogger().name}
 }
 
 // Event returns a field logger with the Event field set to true.
 func Event() FieldLogger {
-	return AppLog.Event()
+	return GetLogger().Event()
 }
 
 // Panic writes the log message and then panics.
 func Panic(msg string, args ...interface{}) {
-	AppLog.Panic(msg, args...)
+	GetLogger().Panic(msg, args...)
 }

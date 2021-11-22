@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
 	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
@@ -18,8 +19,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
-	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -109,33 +110,26 @@ func (his *HareWrapper) checkResult(t *testing.T, id types.LayerID) {
 }
 
 type p2pManipulator struct {
-	nd           *service.Node
+	nd           pubsub.PublishSubsciber
 	stalledLayer types.LayerID
 	err          error
 }
 
-func (m *p2pManipulator) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
-	ch := m.nd.RegisterGossipProtocol(protocol, prio)
-	wch := make(chan service.GossipMessage)
-
-	go func() {
-		for {
-			x := <-ch
-			wch <- x
-		}
-	}()
-
-	return wch
+func (m *p2pManipulator) Register(protocol string, handler pubsub.GossipHandler) {
+	m.nd.Register(protocol, handler)
 }
 
-func (m *p2pManipulator) Broadcast(ctx context.Context, protocol string, payload []byte) error {
+func (m *p2pManipulator) Publish(ctx context.Context, protocol string, payload []byte) error {
 	msg, _ := MessageFromBuffer(payload)
 	if msg.InnerMsg.InstanceID == m.stalledLayer && msg.InnerMsg.K < 8 && msg.InnerMsg.K != preRound {
 		return m.err
 	}
 
-	e := m.nd.Broadcast(ctx, protocol, payload)
-	return fmt.Errorf("broadcast: %w", e)
+	if err := m.nd.Publish(ctx, protocol, payload); err != nil {
+		return fmt.Errorf("broadcast: %w", err)
+	}
+
+	return nil
 }
 
 type trueOracle struct{}
@@ -167,9 +161,14 @@ func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types
 func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
 
-	totalNodes := 20
+	totalNodes := 15
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 1, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
-	sim := service.NewSimulator()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	require.NoError(t, err)
+
 	test.initialSets = make([]*Set, totalNodes)
 	set1 := NewSetFromValues(value1)
 	test.fill(set1, 0, totalNodes-1)
@@ -177,15 +176,19 @@ func Test_consensusIterations(t *testing.T) {
 	oracle := &trueOracle{}
 	i := 0
 	creationFunc := func() {
-		s := sim.NewNode()
-		p2pm := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
-		proc := createConsensusProcess(t, true, cfg, oracle, p2pm, test.initialSets[i], types.NewLayerID(1), t.Name())
+		host := mesh.Hosts()[i]
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		require.NoError(t, err)
+		p2pm := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
+		proc, broker := createConsensusProcess(t, true, cfg, oracle, p2pm, test.initialSets[i], types.NewLayerID(1), t.Name())
 		test.procs = append(test.procs, proc)
+		test.brokers = append(test.brokers, broker)
 		i++
 	}
 	test.Create(totalNodes, creationFunc)
+	require.NoError(t, mesh.ConnectAllButSelf())
 	test.Start()
-	test.WaitForTimedTermination(t, 30*time.Second)
+	test.WaitForTimedTermination(t, 40*time.Second)
 }
 
 func isSynced(context.Context) bool {
@@ -221,7 +224,7 @@ func (mbp *mockBlockProvider) GetBlock(bID types.BlockID) (*types.Block, error) 
 	return nil, nil
 }
 
-func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, p2p NetworkService, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
+func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))
@@ -237,7 +240,7 @@ func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, p2p Networ
 	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
 	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
 
-	hare := New(tcfg, p2p, ed, nodeID, isSynced, &mockBlockProvider{lyrBlocks: lyrBlocks}, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
+	hare := New(tcfg, pid, p2p, ed, nodeID, isSynced, &mockBlockProvider{lyrBlocks: lyrBlocks}, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare
@@ -373,14 +376,14 @@ func (c *SharedRoundClock) advanceRound() {
 type SimRoundClock struct {
 	clocks map[types.LayerID]*SharedRoundClock
 	m      sync.Mutex
-	s      NetworkService
+	s      pubsub.PublishSubsciber
 }
 
-func (c *SimRoundClock) RegisterGossipProtocol(protocol string, prio priorityq.Priority) chan service.GossipMessage {
-	return c.s.RegisterGossipProtocol(protocol, prio)
+func (c *SimRoundClock) Register(protocol string, handler pubsub.GossipHandler) {
+	c.s.Register(protocol, handler)
 }
 
-func (c *SimRoundClock) Broadcast(ctx context.Context, protocol string, payload []byte) error {
+func (c *SimRoundClock) Publish(ctx context.Context, protocol string, payload []byte) error {
 	instanceID, cnt := extractInstanceID(payload)
 
 	c.m.Lock()
@@ -388,7 +391,7 @@ func (c *SimRoundClock) Broadcast(ctx context.Context, protocol string, payload 
 	clock.IncMessages(cnt)
 	c.m.Unlock()
 
-	if err := c.s.Broadcast(ctx, protocol, payload); err != nil {
+	if err := c.s.Publish(ctx, protocol, payload); err != nil {
 		return fmt.Errorf("failed to broadcast: %w", err)
 	}
 	return nil
@@ -406,7 +409,7 @@ func (c *SimRoundClock) NewRoundClock(layerID types.LayerID) RoundClock {
 	return c.clocks[layerID]
 }
 
-func NewSimRoundClock(s NetworkService, clocks map[types.LayerID]*SharedRoundClock) *SimRoundClock {
+func NewSimRoundClock(s pubsub.PublishSubsciber, clocks map[types.LayerID]*SharedRoundClock) *SimRoundClock {
 	return &SimRoundClock{
 		clocks: clocks,
 		s:      s,
@@ -415,16 +418,20 @@ func NewSimRoundClock(s NetworkService, clocks map[types.LayerID]*SharedRoundClo
 
 // Test - run multiple CPs simultaneously.
 func Test_multipleCPs(t *testing.T) {
-	// NOTE(dshulyak) spams with overwriting sessionID in context
 	logtest.SetupGlobal(t)
 
 	types.SetLayersPerEpoch(4)
 	r := require.New(t)
 	totalCp := uint32(3)
 	test := newHareWrapper(totalCp)
-	totalNodes := 20
+	totalNodes := 10
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 5, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
-	sim := service.NewSimulator()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	require.NoError(t, err)
+
 	test.initialSets = make([]*Set, totalNodes)
 	oracle := &trueOracle{}
 
@@ -435,17 +442,30 @@ func Test_multipleCPs(t *testing.T) {
 			lyrBlocks[j] = append(lyrBlocks[j], blk)
 		}
 	}
+	pubsubs := []*pubsub.PubSub{}
 	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	for i := 0; i < totalNodes; i++ {
-		s := sim.NewNode()
-		src := NewSimRoundClock(s, scMap)
-		h := createMaatuf(t, cfg, test.clock, src, oracle, t.Name(), lyrBlocks)
+		host := mesh.Hosts()[i]
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		require.NoError(t, err)
+		src := NewSimRoundClock(ps, scMap)
+		pubsubs = append(pubsubs, ps)
+		// p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
+		h := createMaatuf(t, cfg, test.clock, host.ID(), src, oracle, t.Name(), lyrBlocks)
 		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
-
+	require.NoError(t, mesh.ConnectAllButSelf())
+	require.Eventually(t, func() bool {
+		for _, ps := range pubsubs {
+			if len(ps.ProtocolPeers(protoName)) != len(mesh.Hosts())-1 {
+				return false
+			}
+		}
+		return true
+	}, 5*time.Second, 10*time.Millisecond)
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 			test.clock.advanceLayer()
@@ -453,7 +473,7 @@ func Test_multipleCPs(t *testing.T) {
 		}
 	}()
 
-	test.WaitForTimedTermination(t, 60*time.Second)
+	test.WaitForTimedTermination(t, 80*time.Second)
 }
 
 // Test - run multiple CPs where one of them runs more than one iteration.
@@ -464,9 +484,14 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	r := require.New(t)
 	totalCp := uint32(4)
 	test := newHareWrapper(totalCp)
-	totalNodes := 20
+	totalNodes := 10
 	cfg := config.Config{N: totalNodes, F: totalNodes/2 - 1, RoundDuration: 3, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 100}
-	sim := service.NewSimulator()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	mesh, err := mocknet.FullMeshLinked(ctx, totalNodes)
+	require.NoError(t, err)
+
 	test.initialSets = make([]*Set, totalNodes)
 	oracle := &trueOracle{}
 
@@ -477,18 +502,30 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 			lyrBlocks[j] = append(lyrBlocks[j], blk)
 		}
 	}
+	pubsubs := []*pubsub.PubSub{}
 	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
 	for i := 0; i < totalNodes; i++ {
-		s := sim.NewNode()
-		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
+		host := mesh.Hosts()[i]
+		ps, err := pubsub.New(ctx, logtest.New(t), host, pubsub.DefaultConfig())
+		require.NoError(t, err)
+		pubsubs = append(pubsubs, ps)
+		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		src := NewSimRoundClock(mp2p, scMap)
-		h := createMaatuf(t, cfg, test.clock, src, oracle, t.Name(), lyrBlocks)
+		h := createMaatuf(t, cfg, test.clock, host.ID(), src, oracle, t.Name(), lyrBlocks)
 		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
-
+	require.NoError(t, mesh.ConnectAllButSelf())
+	require.Eventually(t, func() bool {
+		for _, ps := range pubsubs {
+			if len(ps.ProtocolPeers(protoName)) != len(mesh.Hosts())-1 {
+				return false
+			}
+		}
+		return true
+	}, 5*time.Second, 10*time.Millisecond)
 	go func() {
 		for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 			test.clock.advanceLayer()
@@ -496,5 +533,5 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		}
 	}()
 
-	test.WaitForTimedTermination(t, 50*time.Second)
+	test.WaitForTimedTermination(t, 100*time.Second)
 }

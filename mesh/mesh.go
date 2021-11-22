@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh/metrics"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
@@ -39,7 +40,6 @@ type tortoise interface {
 	HandleIncomingLayer(context.Context, types.LayerID) (oldPbase, newPbase types.LayerID, reverted bool)
 	LatestComplete() types.LayerID
 	Persist(context.Context) error
-	HandleLateBlocks(context.Context, []*types.Block) (types.LayerID, types.LayerID)
 }
 
 // Validator interface to be used in tests to mock validation flow.
@@ -81,6 +81,7 @@ type Mesh struct {
 	AtxDB
 	state
 	Validator
+	fetch  system.BlockFetcher
 	trtl   tortoise
 	txPool txMemPool
 	config Config
@@ -103,6 +104,7 @@ type Mesh struct {
 func NewMesh(db *DB, atxDb AtxDB, rewardConfig Config, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
 	msh := &Mesh{
 		Log:                 logger,
+		fetch:               fetcher,
 		trtl:                trtl,
 		txPool:              txPool,
 		state:               state,
@@ -153,7 +155,7 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 		logger.With().Panic("failed to recover latest layer in state", log.Err(err))
 	}
 
-	_, err = state.Rewind(msh.LatestLayerInState())
+	err = state.LoadState(msh.LatestLayerInState())
 	if err != nil {
 		logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 	}
@@ -427,20 +429,6 @@ func (msh *Mesh) getValidBlockIDs(ctx context.Context, layerID types.LayerID) ([
 	return validBlockIDs, nil
 }
 
-// HandleLateBlock process a late (contextually invalid) block.
-func (msh *Mesh) HandleLateBlock(ctx context.Context, b *types.Block) {
-	msh.WithContext(ctx).With().Info("validate late block",
-		b.ID(),
-		b.ATXID,
-		log.FieldNamed("miner_id", b.MinerID()))
-	// TODO: handle late blocks in batches, see https://github.com/spacemeshos/go-spacemesh/issues/2412
-	oldPbase, newPbase := msh.trtl.HandleLateBlocks(ctx, []*types.Block{b})
-	if err := msh.trtl.Persist(ctx); err != nil {
-		msh.WithContext(ctx).With().Error("could not persist tortoise on late block", b.ID(), b.Layer())
-	}
-	msh.pushLayersToState(ctx, oldPbase, newPbase)
-}
-
 // apply the state of a range of layers, including re-adding transactions from invalid blocks to the mempool.
 func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types.LayerID) {
 	logger := msh.WithContext(ctx).WithFields(
@@ -499,7 +487,7 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 	returnedTxs := msh.getTxs(uniqueTxIds(invalidBlocks, seenTxIds), l)
 	grouped, accounts := msh.removeFromUnappliedTxs(returnedTxs)
 	for account := range accounts {
-		msh.removeRejectedFromAccountTxs(account, grouped, l)
+		msh.removeRejectedFromAccountTxs(account, grouped)
 	}
 	for _, tx := range returnedTxs {
 		if err := msh.ValidateAndAddTxToPool(tx); err == nil {
@@ -558,11 +546,19 @@ func (msh *Mesh) applyState(l *types.Layer) {
 }
 
 // HandleValidatedLayer receives hare output once it finishes running for a given layer.
-func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
+func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, blockIDs []types.BlockID) {
 	logger := msh.WithContext(ctx).WithFields(validatedLayer)
-	var blocks []*types.Block
 
-	for _, blockID := range layer {
+	// when HandleValidatedLayer is called by hare, we may not have all the blocks in the hare output.
+	// so try harder to fetch the blocks from peers.
+	if len(blockIDs) > 0 && !validatedLayer.GetEpoch().IsGenesis() {
+		if err := msh.fetch.GetBlocks(ctx, blockIDs); err != nil {
+			logger.With().Warning("not all blocks are available locally", validatedLayer, log.Err(err))
+		}
+	}
+
+	var blocks []*types.Block
+	for _, blockID := range blockIDs {
 		block, err := msh.GetBlock(blockID)
 		if err != nil {
 			// stop processing this hare result, wait until tortoise pushes this layer into state
@@ -574,7 +570,7 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 		blocks = append(blocks, block)
 	}
 
-	metrics.LayerNumBlocks.WithLabelValues().Observe(float64(len(layer)))
+	metrics.LayerNumBlocks.WithLabelValues().Observe(float64(len(blockIDs)))
 
 	// report that hare "approved" this layer
 	events.ReportLayerUpdate(events.LayerUpdate{
@@ -781,8 +777,6 @@ func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
 	}
 
 	msh.setLatestLayer(blk.Layer())
-	// add new block to orphans
-	msh.handleOrphanBlocks(blk)
 	events.ReportNewBlock(blk)
 	logger.Info("added block to database")
 	return nil
@@ -812,9 +806,6 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 			}
 			continue
 		}
-		if err = tx.CalcAndSetOrigin(); err != nil {
-			return fmt.Errorf("calc and set origin: %w", err)
-		}
 		txs = append(txs, tx)
 	}
 	if err := msh.writeTransactions(blk, txs...); err != nil {
@@ -829,63 +820,6 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 	msh.invalidateFromPools(&blk.MiniBlock)
 
 	return nil
-}
-
-// todo better thread safety.
-func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
-	msh.mutex.Lock()
-	defer msh.mutex.Unlock()
-	if _, ok := msh.orphanBlocks[blk.Layer()]; !ok {
-		msh.orphanBlocks[blk.Layer()] = make(map[types.BlockID]struct{})
-	}
-	msh.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
-	msh.With().Debug("added block to orphans", blk.ID())
-	for _, b := range append(blk.ForDiff, append(blk.AgainstDiff, blk.NeutralDiff...)...) {
-		for layerID, layermap := range msh.orphanBlocks {
-			if _, has := layermap[b]; has {
-				msh.With().Debug("delete block from orphans", b)
-				delete(layermap, b)
-				if len(layermap) == 0 {
-					delete(msh.orphanBlocks, layerID)
-				}
-				break
-			}
-		}
-	}
-}
-
-// GetOrphanBlocksBefore returns all known orphan blocks with layerID < l.
-func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
-	msh.mutex.RLock()
-	defer msh.mutex.RUnlock()
-	ids := map[types.BlockID]struct{}{}
-	for key, val := range msh.orphanBlocks {
-		if key.Before(l) {
-			for bid := range val {
-				ids[bid] = struct{}{}
-			}
-		}
-	}
-
-	blocks, err := msh.LayerBlockIds(l.Sub(1))
-	if err != nil {
-		return nil, fmt.Errorf("failed getting latest layer %v err %v", l.Sub(1), err)
-	}
-
-	// add last layer blocks
-	for _, b := range blocks {
-		ids[b] = struct{}{}
-	}
-
-	idArr := make([]types.BlockID, 0, len(ids))
-	for i := range ids {
-		idArr = append(idArr, i)
-	}
-
-	idArr = types.SortBlockIDs(idArr)
-
-	msh.Info("orphans for layer %d are %v", l, idArr)
-	return idArr, nil
 }
 
 type layerRewardsInfo struct {

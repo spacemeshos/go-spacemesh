@@ -63,7 +63,8 @@ func SetLayersPerEpoch(layers uint32) {
 	atomic.StoreUint32(&effectiveGenesis, layers*2-1)
 }
 
-func getLayersPerEpoch() uint32 {
+// GetLayersPerEpoch returns number of layers per epoch.
+func GetLayersPerEpoch() uint32 {
 	return atomic.LoadUint32(&layersPerEpoch)
 }
 
@@ -88,7 +89,7 @@ type LayerID struct {
 
 // GetEpoch returns the epoch number of this LayerID.
 func (l LayerID) GetEpoch() EpochID {
-	return EpochID(l.Value / getLayersPerEpoch())
+	return EpochID(l.Value / GetLayersPerEpoch())
 }
 
 // Add layers to the layer. Panics on wraparound.
@@ -112,7 +113,7 @@ func (l LayerID) Sub(layers uint32) LayerID {
 
 // OrdinalInEpoch returns layer ordinal in epoch.
 func (l LayerID) OrdinalInEpoch() uint32 {
-	return l.Value % getLayersPerEpoch()
+	return l.Value % GetLayersPerEpoch()
 }
 
 // FirstInEpoch returns whether this LayerID is first in epoch.
@@ -356,6 +357,55 @@ func (b Block) ShortString() string {
 // MinerID returns this block's miner's Edwards public key.
 func (b *Block) MinerID() *signing.PublicKey {
 	return b.minerID
+}
+
+// ToBallot transforms a Block to a Ballot during the transition period to unified content block.
+// it uses BlockID for BallotID directly.
+// TODO: calculate BallotID from InnerBallot.
+func (b *Block) ToBallot() *Ballot {
+	var (
+		refBallot = EmptyBallotID
+		epochData *EpochData
+		activeSet []ATXID
+	)
+	if b.RefBlock != nil {
+		refBallot = BallotID(*b.RefBlock)
+	} else {
+		if b.ActiveSet != nil {
+			activeSet = *b.ActiveSet
+		}
+		epochData = &EpochData{
+			ActiveSet: activeSet,
+			Beacon:    b.TortoiseBeacon,
+		}
+	}
+
+	return &Ballot{
+		InnerBallot: InnerBallot{
+			AtxID:            b.ATXID,
+			EligibilityProof: VotingEligibilityProof{J: b.EligibilityProof.J, Sig: b.EligibilityProof.Sig},
+			BaseBallot:       BallotID(b.BaseBlock),
+			AgainstDiff:      b.AgainstDiff,
+			ForDiff:          b.ForDiff,
+			NeutralDiff:      b.NeutralDiff,
+			RefBallot:        refBallot,
+			EpochData:        epochData,
+			layerID:          b.LayerIndex,
+		},
+		// TODO: populate Signature when Block is retired
+		Signature: nil,
+		ballotID:  BallotID(b.ID()),
+		smesherID: b.minerID,
+	}
+}
+
+// ToBallots converts a list of Block to a list of Ballot.
+func ToBallots(blocks []*Block) []*Ballot {
+	ballots := make([]*Ballot, 0, len(blocks))
+	for _, b := range blocks {
+		ballots = append(ballots, b.ToBallot())
+	}
+	return ballots
 }
 
 // DBBlock is a Block structure as it is stored in DB.

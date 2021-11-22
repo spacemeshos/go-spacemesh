@@ -17,7 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/metrics"
@@ -51,7 +51,6 @@ type coin interface {
 	FinishRound(context.Context)
 	Get(context.Context, types.EpochID, types.RoundID) bool
 	FinishEpoch(context.Context, types.EpochID)
-	HandleSerializedMessage(context.Context, service.GossipMessage, service.Fetcher)
 }
 
 type eligibilityChecker interface {
@@ -82,7 +81,7 @@ type SyncState interface {
 func New(
 	conf Config,
 	nodeID types.NodeID,
-	net broadcaster,
+	publisher pubsub.Publisher,
 	atxDB activationDB,
 	edSigner signing.Signer,
 	edVerifier signing.VerifyExtractor,
@@ -97,7 +96,8 @@ func New(
 		logger:                  logger,
 		config:                  conf,
 		nodeID:                  nodeID,
-		net:                     net,
+		theta:                   new(big.Float).SetRat(conf.Theta),
+		publisher:               publisher,
 		atxDB:                   atxDB,
 		edSigner:                edSigner,
 		edVerifier:              edVerifier,
@@ -130,13 +130,14 @@ type TortoiseBeacon struct {
 	config      Config
 	nodeID      types.NodeID
 	sync        SyncState
-	net         broadcaster
+	publisher   pubsub.Publisher
 	atxDB       activationDB
 	edSigner    signing.Signer
 	edVerifier  signing.VerifyExtractor
 	vrfSigner   signing.Signer
 	vrfVerifier signing.Verifier
 	weakCoin    coin
+	theta       *big.Float
 
 	clock       layerClock
 	layerTicker chan types.LayerID
@@ -615,11 +616,14 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	logger := tb.logger.WithContext(ctx).WithFields(epoch)
 	proposedSignature := buildSignedProposal(ctx, tb.vrfSigner, epoch, tb.logger)
 
+	tb.mu.RLock()
 	logger.With().Debug("calculated proposal signature",
 		log.String("signature", string(proposedSignature)),
 		log.Uint64("total_weight", tb.epochWeight))
 
 	passes := tb.proposalChecker.IsProposalEligible(proposedSignature)
+	tb.mu.RUnlock()
+
 	if !passes {
 		logger.With().Debug("proposal to be sent doesn't pass threshold",
 			log.String("proposal", string(proposedSignature)))
@@ -675,7 +679,6 @@ func (tb *TortoiseBeacon) getProposalChannel(ctx context.Context, epoch types.Ep
 			select {
 			case msg := <-ch:
 				logger.With().Warning("proposal channel for next epoch is full, dropping oldest msg",
-					log.String("sender", msg.gossip.Sender().String()),
 					log.String("message", msg.message.String()))
 			default:
 			}
@@ -797,6 +800,10 @@ func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.Epoc
 	// TODO(nkryuchkov): also send a bit vector
 	// TODO(nkryuchkov): initialize margin vector to initial votes
 	// TODO(nkryuchkov): use weight
+
+	tb.mu.RLock()
+	defer tb.mu.RUnlock()
+
 	return tb.sendFirstRoundVote(ctx, epoch, tb.incomingProposals)
 }
 
@@ -858,7 +865,7 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 
 func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) *big.Int {
 	v, _ := new(big.Float).Mul(
-		new(big.Float).SetRat(tb.config.Theta),
+		tb.theta,
 		new(big.Float).SetUint64(epochWeight),
 	).Int(nil)
 
@@ -892,7 +899,7 @@ func atxThresholdFraction(kappa uint64, q *big.Rat, epochWeight uint64) *big.Flo
 		return big.NewFloat(0)
 	}
 
-	// threshold(k, q, W) = 1 - (2 ^ (- (k/((1-q)*W))
+	// threshold(k, q, W) = 1 - (2 ^ (- (k/((1-q)*W))))
 	// Floating point: 1 - math.Pow(2.0, -(float64(tb.config.Kappa)/((1.0-tb.config.Q)*float64(epochWeight))))
 	// Fixed point:
 	v := new(big.Float).Sub(
@@ -971,16 +978,22 @@ func buildProposal(epoch types.EpochID, logger log.Log) []byte {
 	return b
 }
 
-func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, channel string, data interface{}) error {
+func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, protocol string, data interface{}) error {
 	serialized, err := types.InterfaceToBytes(data)
 	if err != nil {
 		tb.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
 	}
 
-	if err := tb.net.Broadcast(ctx, channel, serialized); err != nil {
-		return fmt.Errorf("broadcast: %w", err)
-	}
-
+	// NOTE(dshulyak) moved to goroutine because self-broadcast is applied synchronously
+	tb.eg.Go(func() error {
+		if err := tb.publisher.Publish(ctx, protocol, serialized); err != nil {
+			tb.logger.With().Error("failed to broadcast",
+				log.String("protocol", protocol),
+				log.Err(err),
+			)
+		}
+		return nil
+	})
 	return nil
 }
 

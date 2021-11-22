@@ -3,10 +3,12 @@ package hare
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
+	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
 	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
@@ -14,7 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -98,7 +101,7 @@ func (h *testHare) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
 }
 func (h *testHare) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {}
 
-func createTestHare(tb testing.TB, tcfg config.Config, clock *mockClock, p2p NetworkService, rolacle Rolacle, name string, bp meshProvider) *Hare {
+func createTestHare(tb testing.TB, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, rolacle Rolacle, name string, bp meshProvider) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: pub.Bytes()}
@@ -110,7 +113,7 @@ func createTestHare(tb testing.TB, tcfg config.Config, clock *mockClock, p2p Net
 	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
-	hare := New(tcfg, p2p, ed, nodeID, isSynced, bp, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
+	hare := New(tcfg, pid, p2p, ed, nodeID, isSynced, bp, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, clock, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 	return hare
 }
@@ -127,16 +130,20 @@ func runNodesFor(t *testing.T, nodes, leaders, maxLayers, limitIterations, concu
 		LimitConcurrent: maxLayers,
 	}
 
-	sim := service.NewSimulator()
+	mesh, err := mocknet.FullMeshLinked(context.TODO(), nodes)
+	require.NoError(t, err)
 	for i := 0; i < nodes; i++ {
-		s := sim.NewNode()
-		mp2p := &p2pManipulator{nd: s, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
+		host := mesh.Hosts()[i]
+		ps, err := pubsub.New(context.TODO(), logtest.New(t), host, pubsub.DefaultConfig())
+		require.NoError(t, err)
+		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		h := &testHare{nil, oracle, bp, validate, i}
-		h.Hare = createTestHare(t, cfg, w.clock, mp2p, h, t.Name(), h)
+		h.Hare = createTestHare(t, cfg, w.clock, host.ID(), mp2p, h, t.Name(), h)
 		w.hare = append(w.hare, h.Hare)
 		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
+	require.NoError(t, mesh.ConnectAllButSelf())
 
 	return w
 }
@@ -145,6 +152,8 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 	types.SetLayersPerEpoch(1)
 	const nodes = 5
 	const layers = 2
+
+	var mu sync.RWMutex
 	m := [layers][nodes]int{}
 
 	w := runNodesFor(t, nodes, 2, layers, 2, 5,
@@ -159,11 +168,17 @@ func Test_HarePreRoundEmptySet(t *testing.T) {
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
+
+			mu.Lock()
 			m[l][hare.N] = len(blocks) + 1
+			mu.Unlock()
 		})
 
 	w.LayerTicker(100 * time.Millisecond)
 	time.Sleep(time.Second * 6)
+
+	mu.RLock()
+	defer mu.RUnlock()
 
 	for x := range m {
 		for y := range m[x] {

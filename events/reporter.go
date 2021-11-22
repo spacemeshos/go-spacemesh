@@ -35,7 +35,7 @@ func EventHook() func(entry zapcore.Entry) error {
 }
 
 // ReportNewTx dispatches incoming events to the reporter singleton.
-func ReportNewTx(tx *types.Transaction) {
+func ReportNewTx(layerID types.LayerID, tx *types.Transaction) {
 	Publish(NewTx{
 		ID:          tx.ID().String(),
 		Origin:      tx.Origin().String(),
@@ -43,15 +43,16 @@ func ReportNewTx(tx *types.Transaction) {
 		Amount:      tx.Amount,
 		Fee:         tx.Fee,
 	})
-	ReportTxWithValidity(tx, true)
+	ReportTxWithValidity(layerID, tx, true)
 }
 
 // ReportTxWithValidity reports a tx along with whether it was just invalidated.
-func ReportTxWithValidity(tx *types.Transaction, valid bool) {
+func ReportTxWithValidity(layerID types.LayerID, tx *types.Transaction, valid bool) {
 	mu.RLock()
 	defer mu.RUnlock()
-	txWithValidity := TransactionWithValidity{
+	txWithValidity := TransactionWithLayerAndValidity{
 		Transaction: tx,
+		LayerID:     layerID,
 		Valid:       valid,
 	}
 	if reporter != nil {
@@ -286,7 +287,7 @@ func ReportAccountUpdate(a types.Address) {
 }
 
 // GetNewTxChannel returns a channel of new transactions.
-func GetNewTxChannel() chan TransactionWithValidity {
+func GetNewTxChannel() chan TransactionWithLayerAndValidity {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -405,11 +406,15 @@ func SubscribeToLayers(newLayerCh timesync.LayerTimer) {
 		// This will block, so run in a goroutine
 		go func() {
 			for {
+				mu.RLock()
+				stopChan := reporter.stopChan
+				mu.RUnlock()
+
 				select {
 				case layer := <-newLayerCh:
 					log.With().Debug("reporter got new layer", layer)
 					ReportNodeStatusUpdate()
-				case <-reporter.stopChan:
+				case <-stopChan:
 					return
 				}
 			}
@@ -466,15 +471,16 @@ type Reward struct {
 	Smesher types.NodeID
 }
 
-// TransactionWithValidity wraps a tx with its validity info.
-type TransactionWithValidity struct {
+// TransactionWithLayerAndValidity wraps a tx with its layer ID and validity info.
+type TransactionWithLayerAndValidity struct {
 	Transaction *types.Transaction
+	LayerID     types.LayerID
 	Valid       bool
 }
 
 // EventReporter is the struct that receives incoming events and dispatches them.
 type EventReporter struct {
-	channelTransaction chan TransactionWithValidity
+	channelTransaction chan TransactionWithLayerAndValidity
 	channelActivation  chan *types.ActivationTx
 	channelLayer       chan LayerUpdate
 	channelError       chan NodeError
@@ -488,7 +494,7 @@ type EventReporter struct {
 
 func newEventReporter(bufsize int, blocking bool) *EventReporter {
 	return &EventReporter{
-		channelTransaction: make(chan TransactionWithValidity, bufsize),
+		channelTransaction: make(chan TransactionWithLayerAndValidity, bufsize),
 		channelActivation:  make(chan *types.ActivationTx, bufsize),
 		channelLayer:       make(chan LayerUpdate, bufsize),
 		channelStatus:      make(chan struct{}, bufsize),

@@ -54,6 +54,10 @@ type Field zap.Field
 // Field satisfies loggable field interface.
 func (f Field) Field() Field { return f }
 
+// Named is an alias to FieldNamed.
+// FieldNamed returns a field with the provided name instead of the default.
+var Named = FieldNamed
+
 // FieldNamed returns a field with the provided name instead of the default.
 func FieldNamed(name string, field LoggableField) Field {
 	if field == nil || (reflect.ValueOf(field).Kind() == reflect.Ptr && reflect.ValueOf(field).IsNil()) {
@@ -162,6 +166,11 @@ func (l Log) SetLevel(level *zap.AtomicLevel) Log {
 // Check if following level is supported by the logger.
 func (l Log) Check(level zapcore.Level) bool {
 	return l.logger.Check(level, "") != nil
+}
+
+// Core returns logger engine.
+func (l Log) Core() zapcore.Core {
+	return l.logger.Core()
 }
 
 // WithName appends a name to a current name.

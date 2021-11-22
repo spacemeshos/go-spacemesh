@@ -18,6 +18,7 @@ package trie
 
 import (
 	"fmt"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -35,6 +36,7 @@ import (
 //
 // SecureTrie is not safe for concurrent use.
 type SecureTrie struct {
+	mu               sync.Mutex
 	trie             Trie
 	hashKeyBuf       [types.Hash32Length]byte
 	secKeyCache      map[string][]byte
@@ -78,6 +80,9 @@ func (t *SecureTrie) Get(key []byte) []byte {
 // The value bytes must not be modified by the caller.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	return t.trie.TryGet(t.hashKey(key))
 }
 
@@ -88,6 +93,9 @@ func (t *SecureTrie) TryGet(key []byte) ([]byte, error) {
 // The value bytes must not be modified by the caller while they are
 // stored in the trie.
 func (t *SecureTrie) Update(key, value []byte) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	if err := t.TryUpdate(key, value); err != nil {
 		log.Error(fmt.Sprintf("Unhandled trie error: %v", err))
 	}
@@ -121,6 +129,9 @@ func (t *SecureTrie) Delete(key []byte) {
 // TryDelete removes any existing value for key from the trie.
 // If a node was not found in the database, a MissingNodeError is returned.
 func (t *SecureTrie) TryDelete(key []byte) error {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	hk := t.hashKey(key)
 	delete(t.getSecKeyCache(), string(hk))
 	return t.trie.TryDelete(hk)
@@ -142,6 +153,9 @@ func (t *SecureTrie) GetKey(shaKey []byte) []byte {
 // Committing flushes nodes from memory. Subsequent Get calls will load nodes
 // from the database.
 func (t *SecureTrie) Commit(onleaf LeafCallback) (root types.Hash32, err error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	// Write all the pre-images to the actual disk database
 	if len(t.getSecKeyCache()) > 0 {
 		t.trie.db.lock.Lock()
@@ -159,6 +173,9 @@ func (t *SecureTrie) Commit(onleaf LeafCallback) (root types.Hash32, err error) 
 // Hash returns the root hash of SecureTrie. It does not write to the
 // database and can be used even if the trie doesn't have one.
 func (t *SecureTrie) Hash() types.Hash32 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	return t.trie.Hash()
 }
 
@@ -170,7 +187,15 @@ func (t *SecureTrie) Root() []byte {
 
 // Copy returns a copy of SecureTrie.
 func (t *SecureTrie) Copy() *SecureTrie {
-	cpy := *t
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	cpy := SecureTrie{
+		trie:             t.trie,
+		hashKeyBuf:       t.hashKeyBuf,
+		secKeyCache:      t.secKeyCache,
+		secKeyCacheOwner: t.secKeyCacheOwner,
+	}
 	return &cpy
 }
 

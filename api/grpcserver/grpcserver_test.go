@@ -11,6 +11,7 @@ import (
 	"io/ioutil"
 	"math"
 	"math/big"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -18,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/golang/protobuf/jsonpb"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/empty"
@@ -37,8 +39,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/node"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -142,36 +143,8 @@ type NetworkMock struct {
 	broadcasted  []byte
 }
 
-func (s *NetworkMock) SubscribePeerEvents() (conn, disc chan p2pcrypto.PublicKey) {
-	return make(chan p2pcrypto.PublicKey), make(chan p2pcrypto.PublicKey)
-}
-
-func (s *NetworkMock) Broadcast(_ context.Context, _ string, payload []byte) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	if s.broadCastErr {
-		return errors.New("error during broadcast")
-	}
-	s.broadcasted = payload
-	return nil
-}
-
-func (s *NetworkMock) GetBroadcast() []byte {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	return s.broadcasted
-}
-
-func (s *NetworkMock) SetErr(err bool) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	s.broadCastErr = err
-}
-
-func (s *NetworkMock) GetErr() bool {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	return s.broadCastErr
+func (s *NetworkMock) PeerCount() uint64 {
+	return 0
 }
 
 type TxAPIMock struct {
@@ -521,7 +494,7 @@ func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
 	m.poolByTxid[id] = tx
 	m.poolByAddress[tx.Recipient] = id
 	m.poolByAddress[tx.Origin()] = id
-	events.ReportNewTx(tx)
+	events.ReportNewTx(types.LayerID{}, tx)
 }
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
@@ -540,9 +513,6 @@ func (m MempoolMock) GetTxsByAddress(addr types.Address) (txs []*types.Transacti
 }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
-	err := networkMock.Broadcast(context.TODO(), "", []byte{0x00})
-	require.NoError(t, err)
-
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort)
 
@@ -585,12 +555,24 @@ func callEndpoint(t *testing.T, endpoint, payload string) (string, int) {
 	return string(buf), resp.StatusCode
 }
 
+func getUnboundedPort(optionalPort int) (int, error) {
+	l, e := net.Listen("tcp", fmt.Sprintf(":%v", optionalPort))
+	if e != nil {
+		l, e = net.Listen("tcp", ":0")
+		if e != nil {
+			return 0, fmt.Errorf("listen TCP: %w", e)
+		}
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
 func TestNewServersConfig(t *testing.T) {
 	logtest.SetupGlobal(t)
-	port1, err := node.GetUnboundedPort("tcp", 0)
+	port1, err := getUnboundedPort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
-	port2, err := node.GetUnboundedPort("tcp", 0)
+	port2, err := getUnboundedPort(0)
 	require.NoError(t, err, "Should be able to establish a connection on a port")
 
 	grpcService := NewServerWithInterface(port1, "localhost")
@@ -699,7 +681,9 @@ func TestNodeService(t *testing.T) {
 		{"Shutdown", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			called := false
-			cmd.Cancel = func() { called = true }
+
+			cmd.SetCancel(func() { called = true })
+
 			require.Equal(t, false, called, "cmd.Shutdown() not yet called")
 			req := &pb.ShutdownRequest{}
 			res, err := c.Shutdown(context.Background(), req)
@@ -1764,7 +1748,11 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	logtest.SetupGlobal(t)
 	req := require.New(t)
 	syncer := &SyncerMock{}
-	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, syncer)
+	ctrl := gomock.NewController(t)
+	publisher := mocks.NewMockPublisher(ctrl)
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+
+	grpcService := NewTransactionService(publisher, txAPI, mempoolMock, syncer)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1806,7 +1794,18 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 func TestTransactionService(t *testing.T) {
 	logtest.SetupGlobal(t)
 
-	grpcService := NewTransactionService(&networkMock, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	ctrl := gomock.NewController(t)
+	publisher := mocks.NewMockPublisher(ctrl)
+	var receivedMu sync.Mutex
+	received := []byte{}
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+		receivedMu.Lock()
+		defer receivedMu.Unlock()
+
+		received = msg
+		return nil
+	})
+	grpcService := NewTransactionService(publisher, txAPI, mempoolMock, &SyncerMock{isSynced: true})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1979,7 +1978,7 @@ func TestTransactionService(t *testing.T) {
 			events.CloseEventReporter()
 			err := events.InitializeEventReporterWithOptions("", 1, true)
 			require.NoError(t, err)
-			events.ReportNewTx(globalTx)
+			events.ReportNewTx(types.LayerID{}, globalTx)
 			wg.Wait()
 		}},
 		{"TransactionsStateStream_All", func(t *testing.T) {
@@ -2006,7 +2005,7 @@ func TestTransactionService(t *testing.T) {
 			events.CloseEventReporter()
 			err := events.InitializeEventReporterWithOptions("", 1, true)
 			require.NoError(t, err)
-			events.ReportNewTx(globalTx)
+			events.ReportNewTx(types.LayerID{}, globalTx)
 			wg.Wait()
 		}},
 		// Submit a tx, then receive it over the stream
@@ -2031,9 +2030,9 @@ func TestTransactionService(t *testing.T) {
 				// Wait until the data is available
 				wgBroadcast.Wait()
 
-				// Read it
-				data := networkMock.GetBroadcast()
-
+				receivedMu.Lock()
+				data := received
+				receivedMu.Unlock()
 				// Deserialize
 				tx, err := types.BytesToTransaction(data)
 				require.NotNil(t, tx, "expected transaction")
@@ -2227,14 +2226,14 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	require.NoError(t, err)
 
 	// publish a tx
-	events.ReportNewTx(globalTx)
+	events.ReportNewTx(types.LayerID{}, globalTx)
 
 	// publish an activation
 	events.ReportNewActivation(globalAtx)
 
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
-	events.ReportNewTx(globalTx2)
+	events.ReportNewTx(types.LayerID{}, globalTx2)
 	events.ReportNewActivation(globalAtx2)
 
 	// close the stream
@@ -2791,7 +2790,11 @@ func TestDebugService(t *testing.T) {
 
 func TestGatewayService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewGatewayService(&networkMock)
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	publisher := mocks.NewMockPublisher(ctrl)
+
+	svc := NewGatewayService(publisher)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2815,10 +2818,10 @@ func TestGatewayService(t *testing.T) {
 	// This should work. Any nonzero byte string should work as we don't perform any additional validation.
 	poetMessage = []byte("123")
 	req.Data = poetMessage
+
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Eq(poetMessage)).Return(nil)
 	res, err = c.BroadcastPoet(context.Background(), req)
 	require.NotNil(t, res, "expected request to succeed")
 	require.Equal(t, int32(code.Code_OK), res.Status.Code)
 	require.NoError(t, err, "expected request to succeed")
-	require.Equal(t, networkMock.GetBroadcast(), poetMessage,
-		"expected network mock to broadcast input poet message")
 }

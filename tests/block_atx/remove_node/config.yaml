@@ -22,7 +22,7 @@ bootstrap:
       memory: '2048M'
       cpu: '2'
   args:
-    randcon: '8'
+    target-outbound: '8'
     hare-committee-size: '800'
     hare-max-adversaries: '399'
     hare-round-duration-sec: '7'
@@ -68,7 +68,7 @@ client:
       memory: '2048M'
       cpu: '2'
   args:
-    randcon: '8'
+    target-outbound: '8'
     hare-committee-size: '800'
     hare-max-adversaries: '399'
     hare-round-duration-sec: '7'
@@ -114,7 +114,7 @@ clientv2:
       memory: '2048M'
       cpu: '2'
   args:
-    randcon: '8'
+    target-outbound: '8'
     hare-committee-size: '800'
     hare-max-adversaries: '399'
     hare-round-duration-sec: '7'

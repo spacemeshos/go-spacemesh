@@ -17,10 +17,9 @@ import (
 	lyrMocks "github.com/spacemeshos/go-spacemesh/layerfetcher/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/p2p/p2pcrypto"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
-	"github.com/spacemeshos/go-spacemesh/p2p/service"
+	srvmocks "github.com/spacemeshos/go-spacemesh/p2p/server/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -45,36 +44,46 @@ func randomBlockID() types.BlockID {
 	return types.BlockID(types.CalcHash32(b).ToHash20())
 }
 
-type mockNet struct {
-	peers       []peers.Peer
-	layerBlocks map[peers.Peer][]byte
-	errors      map[peers.Peer]error
-	timeouts    map[peers.Peer]struct{}
+func randPeer(tb testing.TB) p2p.Peer {
+	tb.Helper()
+	buf := make([]byte, 20)
+	_, err := rand.Read(buf)
+	require.NoError(tb, err)
+	return p2p.Peer(buf)
 }
 
-func newMockNet() *mockNet {
+type mockNet struct {
+	server.Host
+	peers       []p2p.Peer
+	layerBlocks map[p2p.Peer][]byte
+	errors      map[p2p.Peer]error
+	timeouts    map[p2p.Peer]struct{}
+}
+
+func newMockNet(tb testing.TB) *mockNet {
+	ctrl := gomock.NewController(tb)
+	h := srvmocks.NewMockHost(ctrl)
+	h.EXPECT().SetStreamHandler(gomock.Any(), gomock.Any()).AnyTimes()
 	return &mockNet{
-		layerBlocks: make(map[peers.Peer][]byte),
-		errors:      make(map[peers.Peer]error),
-		timeouts:    make(map[peers.Peer]struct{}),
+		Host:        h,
+		layerBlocks: make(map[p2p.Peer][]byte),
+		errors:      make(map[p2p.Peer]error),
+		timeouts:    make(map[p2p.Peer]struct{}),
 	}
 }
-func (m *mockNet) GetPeers() []peers.Peer    { return m.peers }
-func (m *mockNet) PeerCount() uint64         { return uint64(len(m.peers)) }
-func (m *mockNet) GetRandomPeer() peers.Peer { return m.peers[0] }
-func (m *mockNet) SendRequest(_ context.Context, msgType server.MessageType, _ []byte, address p2pcrypto.PublicKey, resHandler func(msg []byte), errorHandler func(err error)) error {
-	if _, ok := m.timeouts[address]; ok {
+func (m *mockNet) GetPeers() []p2p.Peer { return m.peers }
+func (m *mockNet) PeerCount() uint64    { return uint64(len(m.peers)) }
+
+func (m *mockNet) Request(_ context.Context, pid p2p.Peer, _ []byte, resHandler func(msg []byte), errorHandler func(err error)) error {
+	if _, ok := m.timeouts[pid]; ok {
 		errorHandler(errors.New("peer timeout"))
 		return nil
 	}
-	switch msgType {
-	case server.LayerBlocksMsg:
-		if data, ok := m.layerBlocks[address]; ok {
-			resHandler(data)
-			return nil
-		}
+	if data, ok := m.layerBlocks[pid]; ok {
+		resHandler(data)
+		return nil
 	}
-	return m.errors[address]
+	return m.errors[pid]
 }
 func (mockNet) Close() {}
 
@@ -106,13 +115,13 @@ func (m mockFetcher) GetHashes(_ []types.Hash32, _ fetch.Hint, _ bool) map[types
 
 type mockBlocks struct{}
 
-func (m mockBlocks) HandleBlockData(_ context.Context, _ []byte, _ service.Fetcher) error {
+func (m mockBlocks) HandleBlockData(_ context.Context, _ []byte) error {
 	panic("implement me")
 }
 
 type mockAtx struct{}
 
-func (m mockAtx) HandleAtxData(_ context.Context, _ []byte, _ service.Fetcher) error {
+func (m mockAtx) HandleAtxData(_ context.Context, _ []byte) error {
 	panic("implement me")
 }
 
@@ -120,13 +129,15 @@ func NewMockLogic(net *mockNet, layers layerDB, blocks blockHandler, atxs atxHan
 	l := &Logic{
 		log:            log,
 		fetcher:        fetcher,
-		net:            net,
+		host:           net,
 		layerBlocksRes: make(map[types.LayerID]*layerResult),
 		layerBlocksChs: make(map[types.LayerID][]chan LayerPromiseResult),
 		atxs:           atxs,
 		blockHandler:   blocks,
 		layerDB:        layers,
 	}
+	l.blocksrv = net
+	l.atxsrv = net
 	return l
 }
 
@@ -146,7 +157,7 @@ func TestLayerBlocksReqReceiver_Success(t *testing.T) {
 	db.EXPECT().LayerBlockIds(lyrID).Return(blocks, nil).Times(1)
 	db.EXPECT().GetLayerInputVectorByID(lyrID).Return(blocks[1:], nil).Times(1)
 
-	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
+	l := NewMockLogic(newMockNet(t), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
 	require.NoError(t, err)
@@ -174,7 +185,7 @@ func TestLayerBlocksReqReceiver_SuccessEmptyLayer(t *testing.T) {
 	db.EXPECT().LayerBlockIds(lyrID).Return([]types.BlockID{}, nil).Times(1)
 	db.EXPECT().GetLayerInputVectorByID(lyrID).Return([]types.BlockID{}, nil).Times(1)
 
-	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
+	l := NewMockLogic(newMockNet(t), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
 	require.NoError(t, err)
 	var got layerBlocks
@@ -198,7 +209,7 @@ func TestLayerBlocksReqReceiver_LayerNotFound(t *testing.T) {
 	db.EXPECT().GetAggregatedLayerHash(lyrID).Return(randomHash()).Times(1)
 	db.EXPECT().LayerBlockIds(lyrID).Return(nil, database.ErrNotFound).Times(1)
 
-	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
+	l := NewMockLogic(newMockNet(t), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
 	assert.Equal(t, ErrInternal, err)
 	assert.Empty(t, out)
@@ -214,7 +225,7 @@ func TestLayerBlocksReqReceiver_GetBlockIDsUnknownError(t *testing.T) {
 	db.EXPECT().GetLayerHash(lyrID).Return(randomHash()).Times(1)
 	db.EXPECT().GetAggregatedLayerHash(lyrID).Return(randomHash()).Times(1)
 	db.EXPECT().LayerBlockIds(lyrID).Return(nil, errors.New("whatever")).Times(1)
-	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
+	l := NewMockLogic(newMockNet(t), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
 	assert.Nil(t, out)
@@ -233,7 +244,7 @@ func TestLayerBlocksReqReceiver_GetInputVectorError(t *testing.T) {
 	db.EXPECT().LayerBlockIds(lyrID).Return([]types.BlockID{}, nil).Times(1)
 	db.EXPECT().GetLayerInputVectorByID(lyrID).Return(nil, errors.New("whatever")).Times(1)
 
-	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
+	l := NewMockLogic(newMockNet(t), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
 	assert.Equal(t, ErrInternal, err)
 	assert.Empty(t, out)
@@ -246,7 +257,7 @@ func TestLayerBlocksReqReceiver_RequestedHigherLayer(t *testing.T) {
 	db := lyrMocks.NewMocklayerDB(ctrl)
 	db.EXPECT().ProcessedLayer().Return(processed).Times(1)
 
-	l := NewMockLogic(newMockNet(), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
+	l := NewMockLogic(newMockNet(t), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	out, err := l.layerBlocksReqReceiver(context.TODO(), processed.Add(1).Bytes())
 	assert.ErrorIs(t, err, errLayerNotProcessed)
 	assert.Empty(t, out)
@@ -292,10 +303,10 @@ func generateEmptyLayer() []byte {
 }
 
 func TestPollLayerBlocks_AllHaveBlockData(t *testing.T) {
-	net := newMockNet()
+	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {
-		peer := p2pcrypto.NewRandomPubkey()
+		peer := randPeer(t)
 		net.peers = append(net.peers, peer)
 		net.layerBlocks[peer] = generateLayerBlocks(i + 1)
 	}
@@ -317,10 +328,10 @@ func TestPollLayerBlocks_AllHaveBlockData(t *testing.T) {
 }
 
 func TestPollLayerBlocks_FetchBlockError(t *testing.T) {
-	net := newMockNet()
+	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {
-		peer := p2pcrypto.NewRandomPubkey()
+		peer := randPeer(t)
 		net.peers = append(net.peers, peer)
 		net.layerBlocks[peer] = generateLayerBlocks(i + 1)
 	}
@@ -339,10 +350,10 @@ func TestPollLayerBlocks_FetchBlockError(t *testing.T) {
 func TestPollLayerBlocks_OnlyOneHasBlockData(t *testing.T) {
 	types.SetLayersPerEpoch(5)
 
-	net := newMockNet()
+	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {
-		peer := p2pcrypto.NewRandomPubkey()
+		peer := randPeer(t)
 		net.peers = append(net.peers, peer)
 		if i == 2 {
 			net.layerBlocks[peer] = generateLayerBlocks(i + 1)
@@ -366,10 +377,10 @@ func TestPollLayerBlocks_OnlyOneHasBlockData(t *testing.T) {
 func TestPollLayerBlocks_OneZeroLayerAmongstErrors(t *testing.T) {
 	types.SetLayersPerEpoch(5)
 
-	net := newMockNet()
+	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {
-		peer := p2pcrypto.NewRandomPubkey()
+		peer := randPeer(t)
 		net.peers = append(net.peers, peer)
 		if i == numPeers-1 {
 			net.layerBlocks[peer] = generateEmptyLayer()
@@ -391,10 +402,10 @@ func TestPollLayerBlocks_OneZeroLayerAmongstErrors(t *testing.T) {
 }
 
 func TestPollLayerBlocks_ZeroLayer(t *testing.T) {
-	net := newMockNet()
+	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {
-		peer := p2pcrypto.NewRandomPubkey()
+		peer := randPeer(t)
 		net.peers = append(net.peers, peer)
 		net.layerBlocks[peer] = generateEmptyLayer()
 	}
@@ -441,9 +452,9 @@ func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
 	}
 	data, err := codec.Encode(blocks)
 	require.NoError(t, err)
-	net := newMockNet()
+	net := newMockNet(t)
 	for i := 0; i < 2; i++ {
-		peer := p2pcrypto.NewRandomPubkey()
+		peer := randPeer(t)
 		net.peers = append(net.peers, peer)
 		net.layerBlocks[peer] = data
 	}
@@ -454,10 +465,10 @@ func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
 }
 
 func TestPollLayerBlocks_FailureToSaveZeroLayerIgnored(t *testing.T) {
-	net := newMockNet()
+	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {
-		peer := p2pcrypto.NewRandomPubkey()
+		peer := randPeer(t)
 		net.peers = append(net.peers, peer)
 		net.layerBlocks[peer] = generateEmptyLayer()
 	}
@@ -475,10 +486,10 @@ func TestPollLayerBlocks_FailureToSaveZeroLayerIgnored(t *testing.T) {
 }
 
 func TestPollLayerBlocks_FailedToSaveInputVector(t *testing.T) {
-	net := newMockNet()
+	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {
-		peer := p2pcrypto.NewRandomPubkey()
+		peer := randPeer(t)
 		net.peers = append(net.peers, peer)
 		net.layerBlocks[peer] = generateLayerBlocks(i + 1)
 	}

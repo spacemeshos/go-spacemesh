@@ -18,14 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 )
 
-type layerMutex struct {
-	m            sync.Mutex
-	layerWorkers uint32
-}
-
-// ErrInvalidLayer signifies that hare has failed for a given layer, thus marking it invalid.
-var ErrInvalidLayer = errors.New("layer invalid")
-
 // DB represents a mesh database instance.
 type DB struct {
 	log.Log
@@ -38,9 +30,8 @@ type DB struct {
 	unappliedTxs          database.Database
 	inputVector           database.Database
 	blockMutex            sync.RWMutex
-	orphanBlocks          map[types.LayerID]map[types.BlockID]struct{}
-	invalidatedLayers     map[types.LayerID]struct{} // layers for which Hare has failed
-	coinflips             map[types.LayerID]bool     // weak coinflip results from Hare
+	coinflipMu            sync.RWMutex
+	coinflips             map[types.LayerID]bool // weak coinflip results from Hare
 	lhMutex               sync.Mutex
 	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
 	exit                  chan struct{}
@@ -87,8 +78,6 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 		contextualValidity: vdb,
 		unappliedTxs:       utx,
 		inputVector:        iv,
-		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
-		invalidatedLayers:  make(map[types.LayerID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
 		exit:               make(chan struct{}),
 	}
@@ -129,8 +118,6 @@ func NewMemMeshDB(logger log.Log) *DB {
 		transactions:       database.NewMemDatabase(),
 		unappliedTxs:       database.NewMemDatabase(),
 		inputVector:        database.NewMemDatabase(),
-		orphanBlocks:       make(map[types.LayerID]map[types.BlockID]struct{}),
-		invalidatedLayers:  make(map[types.LayerID]struct{}),
 		coinflips:          make(map[types.LayerID]bool),
 		exit:               make(chan struct{}),
 	}
@@ -356,28 +343,24 @@ func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) err
 	return nil
 }
 
-// InvalidateLayer receives notification from Hare that it failed for a layer. If Hare explicitly fails for a
-// layer, we consider all blocks in that layer to be invalid. Note that simply not having received a layer from Hare
-// as _validated_ is not sufficient information since we might still be waiting for Hare to finish for the layer. This
-// method lets us know that Hare has given up.
-// Note: this method is only called from the Hare's outputCollectionLoop, and there should only ever be one of those
-// running. If it is called on any other code paths, it will need to be made goroutine safe.
-func (m *DB) InvalidateLayer(ctx context.Context, layerID types.LayerID) {
-	m.WithContext(ctx).With().Info("recording hare invalidated layer in mesh", layerID)
-	m.invalidatedLayers[layerID] = struct{}{}
-}
-
 // RecordCoinflip saves the weak coinflip result to memory for the given layer.
 func (m *DB) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
 	m.WithContext(ctx).With().Info("recording coinflip result for layer in mesh",
 		layerID,
 		log.Bool("coinflip", coinflip))
+
+	m.coinflipMu.Lock()
+	defer m.coinflipMu.Unlock()
+
 	m.coinflips[layerID] = coinflip
 }
 
 // GetCoinflip returns the weak coinflip result for the given layer.
 func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) {
+	m.coinflipMu.Lock()
 	coin, exists := m.coinflips[layerID]
+	m.coinflipMu.Unlock()
+
 	return coin, exists
 }
 
@@ -840,7 +823,7 @@ func (m *DB) removeFromAccountTxs(account types.Address, accepted map[types.Addr
 	return m.removePending(account, accepted[account])
 }
 
-func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction, layer types.LayerID) error {
+func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction) error {
 	return m.removePending(account, rejected[account])
 }
 

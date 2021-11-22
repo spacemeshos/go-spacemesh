@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -51,6 +52,10 @@ func (a vec) Multiply(x uint64) vec {
 	return a
 }
 
+func equalVotes(i, j vec) bool {
+	return simplifyVote(i) == simplifyVote(j)
+}
+
 func simplifyVote(v vec) vec {
 	if v.Support > v.Against {
 		return support
@@ -73,9 +78,15 @@ func (a vec) String() string {
 	return "abstain"
 }
 
+// Some methods of *big.Rat change its internal data without mutexes, which causes data races.
+var thetaMu sync.Mutex
+
 // calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
 // and theta, layer size and delta.
 func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, layerSize uint32, delta uint32) vec {
+	thetaMu.Lock()
+	defer thetaMu.Unlock()
+
 	threshold := new(big.Int).Set(theta.Num())
 	threshold.
 		Mul(threshold, big.NewInt(int64(delta))).

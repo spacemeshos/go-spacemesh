@@ -1,6 +1,7 @@
 package tortoise
 
 import (
+	"context"
 	"math/rand"
 	"path/filepath"
 	"reflect"
@@ -18,46 +19,72 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
+func min(x, y uint32) uint32 {
+	if x < y {
+		return x
+	}
+	return y
+}
+
+func max(x, y uint32) uint32 {
+	if x > y {
+		return x
+	}
+	return y
+}
+
 func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng *rand.Rand) *state {
 	return func(rng *rand.Rand) *state {
-		st := &state{db: database.NewMemDatabase(), log: logtest.New(tb)}
-		var layers [3]types.LayerID
-		for i := range layers {
-			layer, ok := quick.Value(reflect.TypeOf(types.LayerID{}), rng)
-			require.True(tb, ok)
-			layers[i] = layer.Interface().(types.LayerID)
-		}
+		st := &state{db: db, log: logger}
 
-		st.Last = layers[0]
-		st.Verified = layers[1]
-		st.LastEvicted = layers[2]
+		verifiedGen, ok := quick.Value(reflect.TypeOf(uint32(0)), rng)
+		require.True(tb, ok)
+		verified := verifiedGen.Interface().(uint32)
+		// verified between 200 and 1000
+		verified = max(200, min(verified, 1000))
 
-		st.GoodBlocksIndex = map[types.BlockID]bool{}
-		st.BlockOpinionsByLayer = map[types.LayerID]map[types.BlockID]Opinion{}
+		st.Last = types.NewLayerID(verified + 100)
+		st.Verified = types.NewLayerID(verified)
+
+		st.GoodBallotsIndex = map[types.BallotID]bool{}
+		st.BallotOpinionsByLayer = map[types.LayerID]map[types.BallotID]Opinion{}
+		st.BallotLayer = map[types.BallotID]types.LayerID{}
+		st.BlockLayer = map[types.BlockID]types.LayerID{}
+		st.refBallotBeacons = make(map[types.EpochID]map[types.BallotID][]byte)
 
 		for i := 0; i < 200; i++ {
-			layerGen, ok := quick.Value(reflect.TypeOf(types.LayerID{}), rng)
+			layerGen, ok := quick.Value(reflect.TypeOf(uint32(0)), rng)
 			require.True(tb, ok)
-			block1Gen, ok := quick.Value(reflect.TypeOf(types.BlockID{}), rng)
+			ballotGen, ok := quick.Value(reflect.TypeOf(types.BallotID{}), rng)
 			require.True(tb, ok)
-			block2Gen, ok := quick.Value(reflect.TypeOf(types.BlockID{}), rng)
+			blockGen, ok := quick.Value(reflect.TypeOf(types.BlockID{}), rng)
 			require.True(tb, ok)
 
-			layer := layerGen.Interface().(types.LayerID)
-			if _, exist := st.BlockOpinionsByLayer[layer]; !exist {
-				st.BlockOpinionsByLayer[layer] = map[types.BlockID]Opinion{}
+			layerVal := layerGen.Interface().(uint32)
+			layer := types.NewLayerID(layerVal % verified)
+			if _, exist := st.BallotOpinionsByLayer[layer]; !exist {
+				st.BallotOpinionsByLayer[layer] = map[types.BallotID]Opinion{}
 			}
-			block1 := block1Gen.Interface().(types.BlockID)
-			if _, exist := st.BlockOpinionsByLayer[layer][block1]; !exist {
-				st.BlockOpinionsByLayer[layer][block1] = Opinion{}
+			ballot := ballotGen.Interface().(types.BallotID)
+			if _, exist := st.BallotOpinionsByLayer[layer][ballot]; !exist {
+				st.BallotOpinionsByLayer[layer][ballot] = Opinion{}
+				st.BallotLayer[ballot] = layer
 			}
-			st.GoodBlocksIndex[block1] = false
-			block2 := block2Gen.Interface().(types.BlockID)
+			st.BlockLayer[types.BlockID(ballot)] = layer
+
+			epoch := layer.GetEpoch()
+			if _, ok := st.refBallotBeacons[epoch]; !ok {
+				st.refBallotBeacons[epoch] = make(map[types.BallotID][]byte)
+			}
+			st.refBallotBeacons[epoch][ballot] = randomBytes(tb, 32)
+
+			st.GoodBallotsIndex[ballot] = false
+			block := blockGen.Interface().(types.BlockID)
 			vecGen, ok := quick.Value(reflect.TypeOf(vec{}), rng)
 			require.True(tb, ok)
 			val := vecGen.Interface().(vec)
 			val.Flushed = false
-			st.BlockOpinionsByLayer[layer][block1][block2] = val
+			st.BallotOpinionsByLayer[layer][ballot][block] = val
 		}
 		return st
 	}
@@ -70,8 +97,8 @@ func TestStateRecover(t *testing.T) {
 		if !assert.NoError(t, st.Persist()) {
 			return false
 		}
-		st.BlockOpinionsByLayer = nil
-		st.GoodBlocksIndex = nil
+		st.BallotOpinionsByLayer = nil
+		st.GoodBallotsIndex = nil
 		for i := 0; i < 2; i++ {
 			if err := st.Recover(); err != nil {
 				return false
@@ -92,34 +119,28 @@ func TestStateRecover(t *testing.T) {
 
 func TestStateEvict(t *testing.T) {
 	require.NoError(t, quick.Check(func(st *state) bool {
-		layers := make([]types.LayerID, 0, len(st.BlockOpinionsByLayer))
-		for layer := range st.BlockOpinionsByLayer {
+		layers := make([]types.LayerID, 0, len(st.BallotOpinionsByLayer))
+		for layer := range st.BallotOpinionsByLayer {
 			layers = append(layers, layer)
 		}
 		sort.Slice(layers, func(i, j int) bool {
 			return layers[i].Before(layers[j])
 		})
-		st.LastEvicted = layers[len(layers)/2]
+		// persist everything, otherwise evict will only delete data from memory
 		if !assert.NoError(t, st.Persist()) {
 			return false
 		}
 
-		for layer := range st.BlockOpinionsByLayer {
-			if layer.After(st.LastEvicted) {
-				continue
-			}
-			for block := range st.BlockOpinionsByLayer[layer] {
-				delete(st.GoodBlocksIndex, block)
-			}
-			delete(st.BlockOpinionsByLayer, layer)
+		if !assert.NoError(t, st.Evict(context.TODO(), layers[len(layers)/2])) {
+			return false
 		}
-		if !assert.NoError(t, st.Evict()) {
+
+		// persists layers including LastEvicted, as it is recovered and compared in the test
+		if !assert.NoError(t, st.Persist()) {
 			return false
 		}
 
 		original := *st
-		st.BlockOpinionsByLayer = nil
-		st.GoodBlocksIndex = nil
 		if !assert.NoError(t, st.Recover()) {
 			return false
 		}
@@ -136,6 +157,41 @@ func TestStateEvict(t *testing.T) {
 func TestStateRecoverNotFound(t *testing.T) {
 	st := makeStateGen(t, database.NewMemDatabase(), logtest.New(t))(rand.New(rand.NewSource(1001)))
 	require.ErrorIs(t, st.Recover(), database.ErrNotFound)
+}
+
+func TestEvictBeaconByEpoch(t *testing.T) {
+	st := makeStateGen(t, database.NewMemDatabase(), logtest.New(t))(rand.New(rand.NewSource(1001)))
+	st.refBallotBeacons = make(map[types.EpochID]map[types.BallotID][]byte)
+
+	for b, l := range st.BallotLayer {
+		epoch := l.GetEpoch()
+		if _, ok := st.refBallotBeacons[epoch]; !ok {
+			st.refBallotBeacons[epoch] = make(map[types.BallotID][]byte)
+		}
+		st.refBallotBeacons[epoch][b] = randomBytes(t, 32)
+	}
+	layers := make([]types.LayerID, 0, len(st.BallotOpinionsByLayer))
+	for layer := range st.BallotOpinionsByLayer {
+		layers = append(layers, layer)
+	}
+	sort.Slice(layers, func(i, j int) bool {
+		return layers[i].Before(layers[j])
+	})
+
+	epochSize := len(st.refBallotBeacons)
+	windowStart := layers[len(layers)/2]
+	earliestEpoch := windowStart.GetEpoch()
+	assert.NotEmpty(t, st.refBallotBeacons[earliestEpoch])
+	require.NoError(t, st.Evict(context.TODO(), windowStart))
+
+	// beacon cache should be evicted
+	assert.LessOrEqual(t, len(st.refBallotBeacons), epochSize)
+	// windowStart's epoch should still be there
+	assert.NotEmpty(t, st.refBallotBeacons[earliestEpoch])
+	// every epoch should be >= earliestEpoch
+	for epoch := range st.refBallotBeacons {
+		assert.GreaterOrEqual(t, epoch, earliestEpoch)
+	}
 }
 
 func BenchmarkStatePersist(b *testing.B) {

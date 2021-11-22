@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/p2p/peers"
 )
 
 // NodeService is a grpc server that provides the NodeService, which exposes node-related
@@ -39,11 +38,11 @@ func (s NodeService) RegisterService(server *Server) {
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	net api.NetworkAPI, tx api.TxAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI) *NodeService {
+	peers api.PeerCounter, tx api.TxAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI) *NodeService {
 	return &NodeService{
 		Mesh:        tx,
 		GenTime:     genTime,
-		PeerCounter: peers.Start(net, peers.WithLog(log.NewDefault("grpcserver.NodeService"))),
+		PeerCounter: peers,
 		Syncer:      syncer,
 		AtxAPI:      atxapi,
 	}
@@ -118,7 +117,9 @@ func (s NodeService) SyncStart(ctx context.Context, _ *pb.SyncStartRequest) (*pb
 // Shutdown requests a graceful shutdown.
 func (s NodeService) Shutdown(context.Context, *pb.ShutdownRequest) (*pb.ShutdownResponse, error) {
 	log.Info("GRPC NodeService.Shutdown")
-	cmd.Cancel()
+
+	cmd.Cancel()()
+
 	return &pb.ShutdownResponse{
 		Status: &rpcstatus.Status{Code: int32(code.Code_OK)},
 	}, nil
@@ -211,9 +212,7 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 }
 
 // Close closes underlying services.
-func (s NodeService) Close() {
-	s.PeerCounter.Close()
-}
+func (s NodeService) Close() {}
 
 // Convert internal error level into level understood by the API.
 func convertErrorLevel(level zapcore.Level) pb.LogLevel {
