@@ -25,6 +25,7 @@ var (
 	errNoActiveSet           = errors.New("block does not declare active set")
 	errZeroActiveSet         = errors.New("block declares empty active set")
 	errConflictingExceptions = errors.New("conflicting exceptions")
+	errExceptionsOverlow     = errors.New("too many exceptions")
 )
 
 type mesh interface {
@@ -39,28 +40,25 @@ type blockValidator interface {
 // BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip.
 type BlockHandler struct {
 	log.Log
-	fetcher     system.Fetcher
-	depth       uint32
-	mesh        mesh
-	validator   blockValidator
-	goldenATXID types.ATXID
+	cfg       Config
+	fetcher   system.Fetcher
+	mesh      mesh
+	validator blockValidator
 }
 
 // Config defines configuration for block handler.
 type Config struct {
-	Depth       uint32
-	GoldenATXID types.ATXID
+	MaxExceptions int
 }
 
 // NewBlockHandler creates new BlockHandler.
 func NewBlockHandler(cfg Config, fetcher system.Fetcher, m mesh, v blockValidator, lg log.Log) *BlockHandler {
 	return &BlockHandler{
-		Log:         lg,
-		fetcher:     fetcher,
-		depth:       cfg.Depth,
-		mesh:        m,
-		validator:   v,
-		goldenATXID: cfg.GoldenATXID,
+		Log:       lg,
+		cfg:       cfg,
+		fetcher:   fetcher,
+		mesh:      m,
+		validator: v,
 	}
 }
 
@@ -152,7 +150,7 @@ func blockDependencies(blk *types.Block) []types.BlockID {
 	return combined
 }
 
-func validateNoConflicts(block *types.Block) error {
+func validateExceptions(block *types.Block, max int) error {
 	exceptions := map[types.BlockID]struct{}{}
 	for _, diff := range [][]types.BlockID{block.ForDiff, block.NeutralDiff, block.AgainstDiff} {
 		for _, bid := range diff {
@@ -162,6 +160,10 @@ func validateNoConflicts(block *types.Block) error {
 					errConflictingExceptions, bid, block.ID())
 			}
 		}
+	}
+	if len(exceptions) > max {
+		return fmt.Errorf("%w: %d exceptions with max allowed %d in blocks %s",
+			errExceptionsOverlow, len(exceptions), max, block.ID())
 	}
 	return nil
 }
@@ -192,7 +194,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	if err := bh.fastValidation(block); err != nil {
 		return fmt.Errorf("fast validation: %w", err)
 	}
-	if err := validateNoConflicts(block); err != nil {
+	if err := validateExceptions(block, bh.cfg.MaxExceptions); err != nil {
 		return err
 	}
 

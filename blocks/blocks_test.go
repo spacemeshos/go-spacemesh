@@ -186,7 +186,7 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 
 func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 	r := require.New(t)
-	cfg := Config{3, goldenATXID}
+	cfg := Config{}
 
 	fetch := newFetchMock()
 	s := NewBlockHandler(cfg, fetch, &meshMock{}, &verifierMock{}, logtest.New(t))
@@ -209,9 +209,7 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	r := require.New(t)
 	fetch := newFetchMock()
 	atxpool := activation.NewAtxMemPool()
-	cfg := Config{
-		3, goldenATXID,
-	}
+	cfg := Config{}
 	s := NewBlockHandler(cfg, fetch, &meshMock{}, &verifierMock{}, logtest.New(t))
 	a := atx("")
 	atxpool.Put(a)
