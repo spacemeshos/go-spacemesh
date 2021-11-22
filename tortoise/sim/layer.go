@@ -11,23 +11,19 @@ import (
 type NextOpt func(*nextConf)
 
 func nextConfDefaults() nextConf {
-	conf := nextConf{
-		VoteGen:  PerfectVoting,
-		Coinflip: true,
+	return nextConf{
+		VoteGen:      PerfectVoting,
+		Coinflip:     true,
+		HareFraction: Frac(1, 1),
 	}
-	conf.HareFraction.Nominator = 1
-	conf.HareFraction.Denominator = 1
-	return conf
 }
 
 type nextConf struct {
 	Reorder      uint32
 	FailHare     bool
-	HareFraction struct {
-		Nominator, Denominator int
-	}
-	Coinflip bool
-	VoteGen  VotesGenerator
+	HareFraction Fraction
+	Coinflip     bool
+	VoteGen      VotesGenerator
 }
 
 // WithNextReorder configures when reordered layer should be returned.
@@ -65,8 +61,7 @@ func WithPartialHare(nominator, denominator int) NextOpt {
 		panic("denominator can't be zero")
 	}
 	return func(c *nextConf) {
-		c.HareFraction.Nominator = nominator
-		c.HareFraction.Denominator = denominator
+		c.HareFraction = Frac(nominator, denominator)
 	}
 }
 
@@ -111,9 +106,6 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		atxid := g.activations[miner]
 		signer := g.keys[miner]
 
-		// TODO base block selection algorithm must be selected as an option
-		// so that erroneous base block selection can be defined as a failure condition
-
 		voting := cfg.VoteGen(g.rng, g.layers, i)
 		data := make([]byte, 20)
 		g.rng.Read(data)
@@ -128,6 +120,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 					NeutralDiff: voting.Abstain,
 					Data:        data,
 				},
+				TortoiseBeacon: g.beacons.beacon,
 			},
 		}
 		block.Signature = signer.Sign(block.Bytes())

@@ -418,7 +418,7 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+		cfg := defaultConfigFromSimState(t, s.State)
 		cfg.LayerSize = size
 		tortoise := NewVerifyingTortoise(ctx, cfg)
 
@@ -440,7 +440,7 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+		cfg := defaultConfigFromSimState(t, s.State)
 		cfg.LayerSize = size
 		tortoise := NewVerifyingTortoise(ctx, cfg)
 
@@ -486,7 +486,7 @@ func TestLayerPatterns(t *testing.T) {
 		s.Setup()
 
 		ctx := context.Background()
-		cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+		cfg := defaultConfigFromSimState(t, s.State)
 		cfg.LayerSize = size
 		tortoise := NewVerifyingTortoise(ctx, cfg)
 
@@ -676,7 +676,7 @@ func TestEviction(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	cfg.LayerSize = size
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 	trtl := tortoise.trtl
@@ -946,6 +946,12 @@ func defaultConfig(tb testing.TB, mdb *mesh.DB, atxdb atxDataProvider) Config {
 		RerunInterval:            defaultTestRerunInterval,
 		Log:                      logtest.New(tb),
 	}
+}
+
+func defaultConfigFromSimState(tb testing.TB, state sim.State) Config {
+	cfg := defaultConfig(tb, state.MeshDB, state.AtxDB)
+	cfg.Beacons = state.Beacons
+	return cfg
 }
 
 func defaultAlgorithm(t *testing.T, mdb *mesh.DB) *ThreadSafeVerifyingTortoise {
@@ -2732,7 +2738,7 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	var (
@@ -2972,7 +2978,7 @@ func TestBaseBlockGenesis(t *testing.T) {
 	ctx := context.Background()
 
 	s := sim.New()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	tortoise := NewVerifyingTortoise(ctx, cfg)
 
 	base, exceptions, err := tortoise.BaseBlock(ctx)
@@ -3004,7 +3010,7 @@ func TestBaseBlockEvictedBlock(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	cfg.LayerSize = size
 	cfg.WindowSize = 10
 	tortoise := NewVerifyingTortoise(ctx, cfg)
@@ -3084,7 +3090,7 @@ func TestBaseBlockPrioritization(t *testing.T) {
 			s.Setup()
 
 			ctx := context.Background()
-			cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+			cfg := defaultConfigFromSimState(t, s.State)
 			cfg.LayerSize = size
 			cfg.WindowSize = tc.window
 			cfg.Log = logtest.New(t)
@@ -3145,7 +3151,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	s.Setup(sim.WithSetupUnitsRange(1, 1))
 
 	ctx := context.Background()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	cfg.LayerSize = size
 	cfg.Hdist = hdist
 	cfg.Zdist = hdist
@@ -3206,7 +3212,7 @@ func TestVoteAgainstSupportedByBaseBlock(t *testing.T) {
 	s.Setup()
 
 	ctx := context.Background()
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultConfigFromSimState(t, s.State)
 	cfg.LayerSize = size
 	cfg.WindowSize = 1
 	cfg.Hdist = 1 // for eviction
@@ -3348,7 +3354,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 			s.Setup(sim.WithSetupUnitsRange(1, 1))
 
 			ctx := context.Background()
-			cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+			cfg := defaultConfigFromSimState(t, s.State)
 			cfg.LayerSize = size
 			cfg.Hdist = hdist
 			cfg.Zdist = hdist
@@ -3364,5 +3370,88 @@ func TestComputeLocalOpinion(t *testing.T) {
 				require.Equal(t, tc.expected, opinion, "block id %s", bid)
 			}
 		})
+	}
+}
+
+func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
+	const size = 10
+	s1 := sim.New(
+		sim.WithLayerSize(size),
+	)
+	s1.Setup()
+
+	ctx := context.Background()
+	cfg := defaultConfigFromSimState(t, s1.State)
+	cfg.LayerSize = size
+	cfg.Hdist = 2
+	cfg.Zdist = 2
+	cfg.ConfidenceParam = 0
+
+	var (
+		tortoise1                  = NewVerifyingTortoise(ctx, cfg)
+		tortoise2                  = NewVerifyingTortoise(ctx, cfg)
+		last, verified1, verified2 types.LayerID
+	)
+
+	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
+		last = s1.Next()
+		_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
+		_, verified2, _ = tortoise2.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified1)
+	require.Equal(t, last.Sub(1), verified2)
+
+	gens := s1.Split()
+	require.Len(t, gens, 2)
+	s1, s2 := gens[0], gens[1]
+
+	// FIXME needs improvement
+	tortoise2.trtl.bdp = s2.State.MeshDB
+	tortoise2.trtl.atxdb = s2.State.AtxDB
+	tortoise2.trtl.beacons = s2.State.Beacons
+
+	partitionStart := last
+	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
+		last = s1.Next()
+
+		_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
+		_, verified2, _ = tortoise2.HandleIncomingLayer(ctx, s2.Next())
+	}
+	require.Equal(t, last.Sub(1), verified1)
+	require.Equal(t, last.Sub(1), verified2)
+
+	// sync missing state
+	// make enough progress so that blocks with other beacons are considered
+	// and then do rerun
+	partitionEnd := last
+	s1.Merge(s2)
+
+	for i := 0; i < int(cfg.BadBeaconVoteDelayLayers); i++ {
+		last = s1.Next()
+		_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
+	}
+	require.NoError(t, tortoise1.rerun(ctx))
+	last = s1.Next()
+	_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
+	require.Equal(t, last.Sub(1), verified1)
+
+	// succesfull test should verify that all blocks that were created in s2
+	// during partition are contextually valid in s1 state.
+	for lid := partitionStart.Add(1); lid.Before(partitionEnd); lid = lid.Add(1) {
+		bids, err := s2.State.MeshDB.LayerBlockIds(lid)
+		require.NoError(t, err)
+		for _, bid := range bids {
+			valid, err := s1.State.MeshDB.ContextualValidity(bid)
+			require.NoError(t, err)
+			assert.False(t, valid, "block %s at layer %s", bid, lid)
+		}
+	}
+	// for some reason only blocks from last layer in the partition are valid
+	bids, err := s2.State.MeshDB.LayerBlockIds(partitionEnd)
+	require.NoError(t, err)
+	for _, bid := range bids {
+		valid, err := s1.State.MeshDB.ContextualValidity(bid)
+		require.NoError(t, err)
+		assert.True(t, valid, "block %s at layer %s", bid, partitionEnd)
 	}
 }
