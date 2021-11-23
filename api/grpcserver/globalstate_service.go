@@ -277,32 +277,20 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 	)
 	if filterAccount {
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
-			defer func() {
-				if err := accountSubscription.Close(); err != nil {
-					log.With().Panic("Failed to close account subscription: " + err.Error())
-				}
-			}()
+			defer closeSubscription(accountSubscription)
 
 			channelAccount = consumeEvents(accountSubscription.Out())
 		}
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
-			defer func() {
-				if err := rewardsSubscription.Close(); err != nil {
-					log.With().Panic("Failed to close rewards subscription: " + err.Error())
-				}
-			}()
+			defer closeSubscription(rewardsSubscription)
 			channelReward = consumeEvents(rewardsSubscription.Out())
 		}
 	}
 	if filterReceipt {
 		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
-			defer func() {
-				if err := receiptsSubscription.Close(); err != nil {
-					log.With().Panic("Failed to close account subscription: " + err.Error())
-				}
-			}()
+			defer closeSubscription(receiptsSubscription)
 			channelReceipt = consumeEvents(receiptsSubscription.Out())
 		}
 	}
@@ -417,11 +405,7 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 
 	// subscribe to the rewards channel
 	if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
-		defer func() {
-			if err := rewardsSubscription.Close(); err != nil {
-				log.With().Panic("Failed to close rewards subscription: " + err.Error())
-			}
-		}()
+		defer closeSubscription(rewardsSubscription)
 
 		channelReward = consumeEvents(rewardsSubscription.Out())
 	}
@@ -493,31 +477,19 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 	)
 	if filterAccount {
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
-			defer func() {
-				if err := accountSubscription.Close(); err != nil {
-					log.With().Panic("Failed to close account subscription: " + err.Error())
-				}
-			}()
+			defer closeSubscription(accountSubscription)
 			channelAccount = consumeEvents(accountSubscription.Out())
 		}
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
-			defer func() {
-				if err := rewardsSubscription.Close(); err != nil {
-					log.With().Panic("Failed to close rewards subscription: " + err.Error())
-				}
-			}()
+			defer closeSubscription(rewardsSubscription)
 			channelReward = consumeEvents(rewardsSubscription.Out())
 		}
 	}
 	if filterReceipt {
 		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
-			defer func() {
-				if err := receiptsSubscription.Close(); err != nil {
-					log.With().Panic("Failed to close receipts subscription: " + err.Error())
-				}
-			}()
+			defer closeSubscription(receiptsSubscription)
 			channelReceipt = consumeEvents(receiptsSubscription.Out())
 		}
 	}
@@ -525,11 +497,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		// Whenever new state is applied to the mesh, a new layer is reported.
 		// There is no separate reporting specifically for new state.
 		if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
-			defer func() {
-				if err := layersSubscription.Close(); err != nil {
-					log.With().Panic("Failed to close layers subscription: " + err.Error())
-				}
-			}()
+			defer closeSubscription(layersSubscription)
 			channelLayer = consumeEvents(layersSubscription.Out())
 		}
 	}
