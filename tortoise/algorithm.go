@@ -120,11 +120,10 @@ func New(db database.Database, mdb blockDataProvider, atxdb atxDataProvider, bea
 	)
 
 	if err := t.trtl.Recover(); err != nil {
-		if errors.Is(err, database.ErrNotFound) {
-			t.trtl.init(t.ctx, mesh.GenesisLayer())
-		} else {
+		if !errors.Is(err, database.ErrNotFound) {
 			t.logger.With().Panic("can't recover turtle state", log.Err(err))
 		}
+		t.trtl.init(t.ctx, mesh.GenesisLayer())
 	}
 	t.org = organizer.New(
 		organizer.WithLogger(t.logger),
