@@ -83,19 +83,19 @@ var thetaMu sync.Mutex
 
 // calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
 // and theta, layer size and delta.
-func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, layerSize uint32, delta uint32) vec {
+func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, weight uint64, delta uint32) vec {
 	thetaMu.Lock()
 	defer thetaMu.Unlock()
 
 	threshold := new(big.Int).Set(theta.Num())
 	threshold.
 		Mul(threshold, big.NewInt(int64(delta))).
-		Mul(threshold, big.NewInt(int64(layerSize)))
+		Mul(threshold, big.NewInt(int64(weight)))
 
 	logger.With().Debug("threshold opinion",
 		v,
 		log.String("theta", theta.String()),
-		log.Uint32("layer_size", layerSize),
+		log.Uint64("average_weight", weight),
 		log.Uint32("delta", delta),
 		log.String("threshold", threshold.String()))
 
@@ -109,6 +109,20 @@ func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, layerS
 		return against
 	}
 	return abstain
+}
+
+func computeAverageWeight(atxdb atxDataProvider, eid types.EpochID, size uint32) (uint64, error) {
+	total, active, err := atxdb.GetEpochWeight(eid)
+	if err != nil {
+		return 0, fmt.Errorf("epoch weight %s: %w", eid, err)
+	}
+	if uint32(len(active)) <= size {
+		return total, nil
+	}
+	rst := big.NewRat(int64(size), int64(len(active)))
+	rst.Mul(rst, new(big.Rat).SetUint64(total))
+	val, _ := rst.Float64()
+	return uint64(val), nil
 }
 
 // Opinion is opinions on other blocks.

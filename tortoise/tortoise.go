@@ -16,6 +16,7 @@ import (
 
 type atxDataProvider interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
+	GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error)
 }
 
 var (
@@ -61,6 +62,7 @@ func newTurtle(
 			log:                   lg,
 			refBallotBeacons:      map[types.EpochID]map[types.BallotID][]byte{},
 			badBeaconBallots:      map[types.BallotID]struct{}{},
+			averageEpochWeight:    map[types.EpochID]uint64{},
 			GoodBallotsIndex:      map[types.BallotID]bool{},
 			BallotOpinionsByLayer: map[types.LayerID]map[types.BallotID]Opinion{},
 			BallotLayer:           map[types.BallotID]types.LayerID{},
@@ -742,10 +744,13 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 			return nil, fmt.Errorf("error summing votes for block %v in candidate layer %v: %w",
 				bid, lid, err)
 		}
-
+		weight, err := t.getAverageWeight(ctx, lid)
+		if err != nil {
+			return nil, err
+		}
 		// check that the total weight exceeds the global threshold
 		globalOpinionOnBlock := calculateOpinionWithThreshold(
-			t.logger, sum, t.GlobalThreshold, t.LayerSize, t.Last.Difference(lid))
+			t.logger, sum, t.GlobalThreshold, weight, t.Last.Difference(lid))
 		logger.With().Debug("verifying tortoise calculated global opinion on block",
 			log.Named("block_voted_on", bid),
 			lid,
@@ -960,8 +965,11 @@ func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[type
 			return nil, fmt.Errorf("error summing votes for block %v in old layer %v: %w",
 				bid, lid, err)
 		}
-
-		local := calculateOpinionWithThreshold(t.logger, sum, t.LocalThreshold, t.LayerSize, 1)
+		weight, err := t.getAverageWeight(ctx, lid)
+		if err != nil {
+			return nil, err
+		}
+		local := calculateOpinionWithThreshold(t.logger, sum, t.LocalThreshold, weight, 1)
 		logger.With().Debug("local opinion on block in old layer",
 			sum,
 			log.Named("local_opinion", local),
@@ -1067,8 +1075,12 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 				return
 			}
 
+			weight, err := t.getAverageWeight(ctx, candidateLayerID)
+			if err != nil {
+				return
+			}
 			// check that the total weight exceeds the global threshold
-			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.GlobalThreshold, t.LayerSize, t.Last.Difference(candidateLayerID))
+			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.GlobalThreshold, weight, t.Last.Difference(candidateLayerID))
 			logger.With().Debug("self healing calculated global opinion on candidate block",
 				log.Named("global_opinion", globalOpinionOnBlock),
 				sum,
@@ -1110,4 +1122,19 @@ func (t *turtle) ballotFilterForHealing(candidateLayerID types.LayerID, logger l
 		}
 		return lid.Uint32() > t.BadBeaconVoteDelayLayers && lid.Sub(t.BadBeaconVoteDelayLayers).After(candidateLayerID)
 	}
+}
+
+func (t *turtle) getAverageWeight(ctx context.Context, lid types.LayerID) (uint64, error) {
+	eid := lid.GetEpoch()
+	weight, exist := t.averageEpochWeight[eid]
+	if exist {
+		return weight, nil
+	}
+	weight, err := computeAverageWeight(t.atxdb, eid, t.LayerSize)
+	if err != nil {
+		return 0, err
+	}
+	t.logger.WithContext(ctx).With().Info("computed average weight for epoch", eid, log.Uint64("weight", weight))
+	t.averageEpochWeight[eid] = weight
+	return weight, nil
 }

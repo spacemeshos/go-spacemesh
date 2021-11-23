@@ -120,6 +120,18 @@ func (madp *mockAtxDataProvider) StoreAtx(_ types.EpochID, atx *types.Activation
 	return nil
 }
 
+func (madp *mockAtxDataProvider) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error) {
+	var (
+		ids    []types.ATXID
+		weight uint64
+	)
+	for atxid, atxheader := range madp.atxDB {
+		ids = append(ids, atxid)
+		weight += atxheader.GetWeight()
+	}
+	return weight, ids, nil
+}
+
 func getPersistentMesh(tb testing.TB) *mesh.DB {
 	db, err := mesh.NewPersistentMeshDB(tb.TempDir(), 10, log.NewNop())
 	require.NoError(tb, err)
@@ -197,7 +209,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 				sum = sum.Add(opinionVote.Multiply(weight))
 			}
 		}
-		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.GlobalThreshold, trtl.LayerSize, 1)
+		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.GlobalThreshold, uint64(trtl.LayerSize), 1)
 		require.Equal(t, vote, globalOpinion, "test block %v expected vote %v but got %v", i, vote, sum)
 	}
 }
