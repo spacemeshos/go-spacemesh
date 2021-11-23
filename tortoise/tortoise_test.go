@@ -1274,10 +1274,10 @@ func TestProcessBlock(t *testing.T) {
 		r.NoError(mdb.AddBlock(block))
 		alg.trtl.BlockLayer[block.ID()] = block.LayerIndex
 		ballot := l1Ballots[i]
-		alg.trtl.BallotLayer[ballot.ID()] = ballot.LayerIndex()
+		alg.trtl.BallotLayer[ballot.ID()] = ballot.LayerIndex
 	}
 	alg.trtl.BlockLayer[l2Blocks[0].ID()] = l2Blocks[0].LayerIndex
-	alg.trtl.BallotLayer[l2Ballots[0].ID()] = l2Ballots[0].LayerIndex()
+	alg.trtl.BallotLayer[l2Ballots[0].ID()] = l2Ballots[0].LayerIndex
 	r.NoError(alg.trtl.processBallot(context.TODO(), l3Ballots[0]))
 	expectedOpinionVector := Opinion{
 		l1Blocks[0].ID(): abstain,                                   // from exception

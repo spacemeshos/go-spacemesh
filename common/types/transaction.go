@@ -13,6 +13,11 @@ import (
 // TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
 type TransactionID Hash32
 
+const (
+	// TransactionIDSize in bytes.
+	TransactionIDSize = Hash32Length
+)
+
 // Hash32 returns the TransactionID as a Hash32.
 func (id TransactionID) Hash32() Hash32 {
 	return Hash32(id)
