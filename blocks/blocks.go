@@ -52,7 +52,7 @@ type Config struct {
 	MaxExceptions int
 }
 
-// defaultConfig fro BlockHandler.
+// defaultConfig for BlockHandler.
 func defaultConfig() Config {
 	return Config{
 		MaxExceptions: 1000,
@@ -130,7 +130,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte) error 
 	saveMetrics(blk)
 
 	if err := bh.mesh.AddBlockWithTxs(ctx, &blk); err != nil {
-		return fmt.Errorf("persisting block %s: %w", blk.ID(), err)
+		return fmt.Errorf("adding block %s: %w", blk.ID(), err)
 	}
 
 	logger.With().Debug("time to process block", log.Duration("duration", time.Since(start)))
