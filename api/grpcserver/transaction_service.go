@@ -180,8 +180,8 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	// The tx channel tells us about newly received and newly created transactions
 	// The layer channel tells us about status updates
 	var (
-		txCh, layerCh              <-chan interface{}
-		txBufFull, layerBufferFull <-chan struct{}
+		txCh, layerCh           <-chan interface{}
+		txBufFull, layerBufFull <-chan struct{}
 	)
 
 	if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
@@ -192,7 +192,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
 		defer closeSubscription(layersSubscription)
 
-		layerCh, layerBufferFull = consumeEvents(context.Background(), layersSubscription.Out())
+		layerCh, layerBufFull = consumeEvents(context.Background(), layersSubscription.Out())
 	}
 
 	for {
@@ -200,7 +200,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 		case <-txBufFull:
 			log.Info("tx buffer is full, shutting down")
 			return fmt.Errorf("tx buffer is full")
-		case <-layerBufferFull:
+		case <-layerBufFull:
 			log.Info("layer buffer is full, shutting down")
 			return fmt.Errorf("layer buffer is full")
 		case txEvent, ok := <-txCh:
