@@ -119,10 +119,10 @@ func computeAverageWeight(atxdb atxDataProvider, eid types.EpochID, size uint32)
 	if uint32(len(active)) <= size {
 		return total, nil
 	}
-	rst := big.NewRat(int64(size), int64(len(active)))
-	rst.Mul(rst, new(big.Rat).SetUint64(total))
-	val, _ := rst.Float64()
-	return uint64(val), nil
+	rst := new(big.Int).SetUint64(total)
+	rst.Mul(rst, big.NewInt(int64(size)))
+	rst.Div(rst, big.NewInt(int64(len(active))))
+	return rst.Uint64(), nil
 }
 
 // Opinion is opinions on other blocks.

@@ -188,8 +188,9 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 			StartTick: 1,
 			EndTick:   2,
 		}, address, nil, uint(units), nil)
+		atx.PubLayerID = g.nextLayer.Sub(1)
 		g.activations[i] = atx.ID()
-		if err := g.State.AtxDB.StoreAtx(context.Background(), g.nextLayer.GetEpoch(), atx); err != nil {
+		if err := g.State.AtxDB.StoreAtx(context.Background(), g.nextLayer.Sub(1).GetEpoch(), atx); err != nil {
 			g.logger.With().Panic("failed to store atx", log.Err(err))
 		}
 

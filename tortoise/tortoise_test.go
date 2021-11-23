@@ -3445,3 +3445,26 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 		assert.True(t, valid, "block %s at layer %s", bid, partitionEnd)
 	}
 }
+
+func TestVerifyLayerByWeightNotSize(t *testing.T) {
+	const size = 10
+	s := sim.New(
+		sim.WithLayerSize(size),
+	)
+	// change weight to be atleast the same as size
+	s.Setup(sim.WithSetupUnitsRange(size, size))
+
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
+
+	var last, verified types.LayerID
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(2),
+		sim.WithSequence(1, sim.WithLayerSizeOverwrite(1)),
+	) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(2), verified)
+}
