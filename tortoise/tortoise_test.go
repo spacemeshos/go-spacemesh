@@ -368,11 +368,6 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 	require.NoError(t, trtl.HandleIncomingLayer(context.TODO(), l))
 }
 
-var (
-	atxHeader = makeAtxHeaderWithWeight(1)
-	atx       = &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
-)
-
 func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
 	return makeLayerWithBeacon(t, layerID, trtl, nil, blocksPerLayer, atxdb, msh, inputVectorFn)
 }
@@ -393,11 +388,13 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 	logger.Debug("exception lists for layer", layerID, "(against, support, neutral):", lists)
 	lyr := types.NewLayer(layerID)
 
-	// for now just create a single ATX for all of the blocks with a weight of one
-	atx.CalcAndSetID()
-	require.NoError(t, atxdb.StoreAtx(layerID.GetEpoch(), atx))
-
 	for i := 0; i < blocksPerLayer; i++ {
+		atxHeader := makeAtxHeaderWithWeight(1)
+		atxHeader.NIPostChallenge.NodeID.Key = fmt.Sprintf("key-%d", i)
+		atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
+		atx.CalcAndSetID()
+		require.NoError(t, atxdb.StoreAtx(layerID.GetEpoch(), atx))
+
 		blk := &types.Block{
 			MiniBlock: types.MiniBlock{
 				BlockHeader: types.BlockHeader{
@@ -603,13 +600,13 @@ func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider,
 	logger.Debug("\tfor\t", lists[1])
 	logger.Debug("\tneutral\t", lists[2])
 
-	// for now just create a single ATX for all of the blocks with a constant weight
-	atxHeader := makeAtxHeaderWithWeight(weight)
-	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
-	atx.CalcAndSetID()
-	require.NoError(t, atxdb.StoreAtx(l.GetEpoch(), atx))
-
 	for i := 0; i < n; i++ {
+		atxHeader := makeAtxHeaderWithWeight(weight)
+		atxHeader.NIPostChallenge.NodeID.Key = fmt.Sprintf("key-%d", i)
+		atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
+		atx.CalcAndSetID()
+		require.NoError(t, atxdb.StoreAtx(l.GetEpoch(), atx))
+
 		blk := &types.Block{
 			MiniBlock: types.MiniBlock{
 				BlockHeader: types.BlockHeader{
@@ -956,7 +953,10 @@ func tortoiseFromSimState(state sim.State, opts ...Opt) *Tortoise {
 
 func defaultAlgorithm(tb testing.TB, mdb *mesh.DB) *Tortoise {
 	tb.Helper()
-	return New(database.NewMemDatabase(), mdb, getAtxDB(), mockedBeacons(tb), WithConfig(defaultTestConfig()))
+	return New(database.NewMemDatabase(), mdb, getAtxDB(), mockedBeacons(tb),
+		WithConfig(defaultTestConfig()),
+		WithLogger(logtest.New(tb)),
+	)
 }
 
 func TestGetLocalBlockOpinion(t *testing.T) {
@@ -1420,8 +1420,7 @@ func TestVerifyLayers(t *testing.T) {
 	alg.trtl.GoodBallotsIndex[l3Ballots[1].ID()] = false
 	alg.trtl.GoodBallotsIndex[l3Ballots[2].ID()] = false
 
-	// TODO(nkryuchkov): uncomment when it's used
-	var /*l2BlockIDs,*/ l3BlockIDs, l4BlockIDs, l5BlockIDs []types.BlockID
+	var l3BlockIDs, l4BlockIDs, l5BlockIDs []types.BlockID
 	for _, block := range l3Blocks {
 		r.NoError(mdb.AddBlock(block))
 		l3BlockIDs = append(l3BlockIDs, block.ID())
