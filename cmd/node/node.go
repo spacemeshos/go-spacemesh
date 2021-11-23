@@ -565,11 +565,10 @@ func (app *App) initServices(ctx context.Context,
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	bCfg := blocks.Config{
-		Depth:       app.Config.Tortoise.Hdist,
-		GoldenATXID: goldenATXID,
-	}
-	blockListener := blocks.NewBlockHandler(bCfg, fetcherWrapped, msh, eValidator, app.addLogger(BlockListenerLogger, lg))
+	blockListener := blocks.NewBlockHandler(fetcherWrapped, msh, eValidator,
+		blocks.WithLogger(app.addLogger(BlockListenerLogger, lg)),
+		blocks.WithMaxExceptions(trtlCfg.MaxExceptions),
+	)
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, app.host, app.addLogger(Fetcher, lg))
 

@@ -485,8 +485,6 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 
 	// TODO: this logic would be simpler if For and Against were a single list
 	//   see https://github.com/spacemeshos/go-spacemesh/issues/2369
-	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
-	//   see https://github.com/spacemeshos/go-spacemesh/issues/2673
 	lth := len(ballot.ForDiff) +
 		len(ballot.NeutralDiff) +
 		len(ballot.AgainstDiff) +
@@ -497,19 +495,12 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 		opinion[bid] = support.Multiply(voteWeight)
 	}
 	for _, bid := range ballot.AgainstDiff {
-		// this could only happen in malicious ballots, and they should not pass a syntax check, but check here just
-		// to be extra safe
-		if _, alreadyVoted := opinion[bid]; alreadyVoted {
-			return fmt.Errorf("%s %v", errstrConflictingVotes, ballot.ID())
-		}
 		opinion[bid] = against.Multiply(voteWeight)
 	}
 	for _, bid := range ballot.NeutralDiff {
-		if _, alreadyVoted := opinion[bid]; alreadyVoted {
-			return fmt.Errorf("%s %v", errstrConflictingVotes, ballot.ID())
-		}
 		opinion[bid] = abstain
 	}
+
 	for blk, vote := range baseBallotOpinion {
 		// ignore opinions on very old blocks
 		_, exist := t.BlockLayer[blk]
@@ -529,9 +520,7 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 
 func (t *turtle) processBallots(ctx *tcontext, ballots []*types.Ballot) error {
 	logger := t.logger.WithContext(ctx)
-	lastLayerID := types.NewLayerID(0)
 
-	filteredBallots := make([]*types.Ballot, 0, len(ballots))
 	for _, b := range ballots {
 		logger := logger.WithFields(b.ID(), b.LayerIndex())
 		// make sure we don't write data on old ballots whose layer has already been evicted
@@ -540,31 +529,15 @@ func (t *turtle) processBallots(ctx *tcontext, ballots []*types.Ballot) error {
 				log.Named("last_evicted", t.LastEvicted))
 			continue
 		}
-		if b.LayerIndex().Before(lastLayerID) {
-			return errNotSorted
-		} else if b.LayerIndex().After(lastLayerID) {
-			lastLayerID = b.LayerIndex()
-		}
-
 		if _, ok := t.BallotOpinionsByLayer[b.LayerIndex()]; !ok {
 			t.BallotOpinionsByLayer[b.LayerIndex()] = make(map[types.BallotID]Opinion, t.LayerSize)
 		}
 		if err := t.processBallot(ctx, b); err != nil {
-			logger.With().Error("error processing ballot", log.Err(err))
-		} else {
-			filteredBallots = append(filteredBallots, b)
+			return err
 		}
 	}
 
-	t.scoreBallots(ctx, filteredBallots)
-
-	if t.Last.Before(lastLayerID) {
-		logger.With().Warning("got ballots for new layer before receiving layer, updating highest layer seen",
-			log.Named("previous_highest", t.Last),
-			log.Named("new_highest", lastLayerID))
-		t.Last = lastLayerID
-	}
-
+	t.scoreBallots(ctx, ballots)
 	return nil
 }
 
