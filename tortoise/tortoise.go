@@ -521,12 +521,11 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 func (t *turtle) processBallots(ctx *tcontext, ballots []*types.Ballot) error {
 	logger := t.logger.WithContext(ctx)
 
-	// process the votes in all layer blocks and update tables
 	for _, b := range ballots {
 		logger := logger.WithFields(b.ID(), b.LayerIndex())
-		// make sure we don't write data on old blocks whose layer has already been evicted
+		// make sure we don't write data on old ballots whose layer has already been evicted
 		if b.LayerIndex().Before(t.LastEvicted) {
-			logger.With().Warning("not processing block from layer older than last evicted layer",
+			logger.With().Warning("not processing ballot from layer older than last evicted layer",
 				log.Named("last_evicted", t.LastEvicted))
 			continue
 		}
