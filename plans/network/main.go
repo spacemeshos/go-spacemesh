@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/poet/server"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"math/big"
 	"strings"
 	"time"
 
@@ -105,6 +106,7 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	poets := env.IntParam("poets")
 	gateways := env.IntParam("gateways")
 	genesisOffset := env.IntParam("genesis_timestamp_offset")
+	genActiveSet := env.TestInstanceCount - poets
 
 	seq := int(client.MustSignalAndWait(ctx, "role-allocation", env.TestInstanceCount))
 
@@ -171,7 +173,7 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 
 	ra.Add("gateway", gateways, func(r *role) {
 		env.RecordMessage("hello im gateway")
-		nd, err := InitNode(ctx, createMinerConfig())
+		nd, err := InitNode(ctx, createMinerConfig(genActiveSet))
 
 		if err != nil {
 			env.RecordFailure(err)
@@ -215,7 +217,7 @@ func Start(env *runtime.RunEnv, initCtx *run.InitContext) error {
 	ra.Add("miner", env.TestInstanceCount-1-poets-gateways, func(r *role) {
 
 		env.RecordMessage("hello im miner")
-		minercfg := createMinerConfig()
+		minercfg := createMinerConfig(genActiveSet)
 		minercfg.GenesisTime = genesisTime
 
 		env.RecordMessage("miner waiting for poet message")
@@ -314,7 +316,7 @@ func TestMiner(ctx context.Context) (string, error) {
 
 }
 
-func createMinerConfig() *config.Config {
+func createMinerConfig(genActiveSet int) *config.Config {
 	cfg := config.DefaultConfig()
 	cfg.POST = activation.DefaultPostConfig()
 	cfg.POST.LabelsPerUnit = 32
@@ -328,22 +330,26 @@ func createMinerConfig() *config.Config {
 	cfg.SMESHING.Opts.ComputeProviderID = int(initialization.CPUProviderID())
 
 	cfg.HARE.N = 800
-	cfg.HARE.F = 399
-	cfg.HARE.RoundDuration = 7
+	cfg.HARE.F = 320
+	cfg.HARE.RoundDuration = 10
 	cfg.HARE.WakeupDelta = 20
-	cfg.HARE.ExpectedLeaders = 10
+	cfg.HARE.ExpectedLeaders = 240
+	cfg.HARE.LimitConcurrent = 5
+	cfg.HARE.LimitIterations = 10
+	cfg.GenesisActiveSet = genActiveSet
 	//cfg.HARE.SuperHare = true
-	cfg.LayerAvgSize = 50
-	cfg.LayersPerEpoch = 3
-	cfg.TxsPerBlock = 100
-	cfg.Hdist = 5
 
-	cfg.LayerDurationSec = 60
-	cfg.HareEligibility.ConfidenceParam = 6
+	cfg.LayerAvgSize = 30
+	cfg.LayersPerEpoch = 3
+	cfg.LayerDurationSec = 30
+	cfg.SyncRequestTimeout = 1000
+	cfg.SyncInterval = 3
+	cfg.Hdist = 10
+	cfg.TxsPerBlock = 100
+
+	cfg.HareEligibility.ConfidenceParam = 25
 	cfg.HareEligibility.EpochOffset = 0
-	cfg.SyncRequestTimeout = 10000
-	//cfg.SyncInterval = 2
-	//cfg.SyncValidationDelta = 5
+
 	//
 	//cfg.FETCH.RequestTimeout = 10
 	//cfg.FETCH.MaxRetiresForPeer = 5
@@ -356,7 +362,9 @@ func createMinerConfig() *config.Config {
 
 	ppcfg := p2p.DefaultConfig()
 	p_ppcfg := &ppcfg
-	p_ppcfg.TargetOutbound = 1
+
+	p_ppcfg.TargetOutbound = 3
+	p_ppcfg.NetworkID = 20
 	cfg.P2P = *p_ppcfg
 
 	cfg.LOGGING.AppLoggerLevel = "info"
@@ -386,6 +394,34 @@ func createMinerConfig() *config.Config {
 	cfg.LOGGING.AtxBuilderLoggerLevel = "info"
 	cfg.LOGGING.HareBeaconLoggerLevel = "info"
 	cfg.LOGGING.TimeSyncLoggerLevel = "info"
+
+
+	cfg.POST.BitsPerLabel = 8
+	cfg.POST.LabelsPerUnit= 32
+	cfg.POST.MinNumUnits = 2
+	cfg.POST.MaxNumUnits = 4
+	cfg.POST.K1 = 2000
+	cfg.POST.K2 = 4
+
+
+	cfg.TortoiseBeacon.FirstVotingRoundDuration = time.Second*6
+	cfg.TortoiseBeacon.GracePeriodDuration = time.Second*1
+	cfg.TortoiseBeacon.Kappa = 400000
+	cfg.TortoiseBeacon.ProposalDuration = time.Second*3
+	cfg.TortoiseBeacon.Q = big.NewRat(1, 3)
+	cfg.TortoiseBeacon.RoundsNumber = 6
+	cfg.TortoiseBeacon.Theta = big.NewRat(1,25000)
+	cfg.TortoiseBeacon.VotesLimit = 20
+	cfg.TortoiseBeacon.VotingRoundDuration = time.Second*5
+	cfg.TortoiseBeacon.WeakCoinRoundDuration= time.Second*1
+
+	cfg.SMESHING.Opts = activation.PostSetupOpts{
+		DataDir: "/root/data/post",
+		NumUnits: 2,
+		NumFiles: 1,
+		//ComputeProviderID: 0,
+		Throttle: true,
+	}
 
 	apicfg := apiConfig.DefaultConfig()
 	papicfg := &apicfg
