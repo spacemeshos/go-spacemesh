@@ -485,19 +485,22 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 
 	// TODO: this logic would be simpler if For and Against were a single list
 	//   see https://github.com/spacemeshos/go-spacemesh/issues/2369
-	// TODO: save and vote against blocks that exceed the max exception list size (DoS prevention)
-	//   see https://github.com/spacemeshos/go-spacemesh/issues/2673
 	lth := len(ballot.ForDiff) +
 		len(ballot.NeutralDiff) +
 		len(ballot.AgainstDiff) +
 		len(baseBallotOpinion)
 	opinion := make(map[types.BlockID]vec, lth)
 
-	for _, exceptions := range [...][]types.BlockID{ballot.ForDiff, ballot.AgainstDiff, ballot.NeutralDiff} {
-		for _, bid := range exceptions {
-			opinion[bid] = support.Multiply(voteWeight)
-		}
+	for _, bid := range ballot.ForDiff {
+		opinion[bid] = support.Multiply(voteWeight)
 	}
+	for _, bid := range ballot.AgainstDiff {
+		opinion[bid] = against.Multiply(voteWeight)
+	}
+	for _, bid := range ballot.NeutralDiff {
+		opinion[bid] = abstain
+	}
+
 	for blk, vote := range baseBallotOpinion {
 		// ignore opinions on very old blocks
 		_, exist := t.BlockLayer[blk]
