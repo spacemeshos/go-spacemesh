@@ -5,12 +5,14 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 func init() {
@@ -74,67 +76,6 @@ var (
 	atx3 = types.ATXID(three)
 )
 
-type fetchMock struct {
-	retError       bool
-	getBlockCalled map[types.BlockID]int
-	getAtxCalled   map[types.ATXID]int
-	getTxsCalled   map[types.TransactionID]int
-}
-
-func (f fetchMock) FetchBlock(ctx context.Context, ID types.BlockID) error {
-	f.getBlockCalled[ID]++
-	return f.returnError()
-}
-
-func (f fetchMock) ListenToGossip() bool {
-	return true
-}
-
-func (f fetchMock) IsSynced(context.Context) bool {
-	return true
-}
-
-func newFetchMock() *fetchMock {
-	return &fetchMock{
-		retError:       false,
-		getBlockCalled: make(map[types.BlockID]int),
-		getAtxCalled:   make(map[types.ATXID]int),
-		getTxsCalled:   make(map[types.TransactionID]int),
-	}
-}
-
-func (f fetchMock) returnError() error {
-	if f.retError {
-		return fmt.Errorf("error")
-	}
-	return nil
-}
-
-func (f *fetchMock) GetBlock(ID types.BlockID) error {
-	f.getBlockCalled[ID]++
-	return f.returnError()
-}
-
-func (f fetchMock) FetchAtx(ctx context.Context, ID types.ATXID) error {
-	return f.returnError()
-}
-
-func (f fetchMock) GetPoetProof(ctx context.Context, ID types.Hash32) error {
-	return f.returnError()
-}
-
-func (f fetchMock) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
-	return f.returnError()
-}
-
-func (f fetchMock) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
-	return f.returnError()
-}
-
-func (f fetchMock) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
-	return f.returnError()
-}
-
 type meshMock struct{}
 
 func (m meshMock) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
@@ -184,10 +125,13 @@ func Test_validateUniqueTxAtx(t *testing.T) {
 }
 
 func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockFetch := mocks.NewMockFetcher(ctrl)
+
 	r := require.New(t)
 
-	fetch := newFetchMock()
-	s := NewBlockHandler(fetch, &meshMock{}, &verifierMock{})
+	s := NewBlockHandler(mockFetch, &meshMock{}, &verifierMock{})
 	b := &types.Block{}
 
 	err := s.blockSyntacticValidation(context.TODO(), b)
@@ -199,14 +143,18 @@ func TestBlockHandler_BlockSyntacticValidation(t *testing.T) {
 
 	b.ActiveSet = &[]types.ATXID{atx1, atx2, atx3}
 	b.TxIDs = []types.TransactionID{txid1, txid2, txid1}
+	mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	err = s.blockSyntacticValidation(context.TODO(), b)
 	r.ErrorIs(err, errDupTx)
 }
 
 func TestBlockHandler_BlockSyntacticValidation_InvalidExceptions(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	var (
 		ctx   = context.TODO()
-		fetch = newFetchMock()
+		fetch = mocks.NewMockFetcher(ctrl)
 		max   = 4
 		b     = NewBlockHandler(fetch, &meshMock{}, &verifierMock{}, WithMaxExceptions(max))
 	)
@@ -250,11 +198,13 @@ func TestBlockHandler_BlockSyntacticValidation_InvalidExceptions(t *testing.T) {
 }
 
 func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
-	r := require.New(t)
-	fetch := newFetchMock()
-	atxpool := activation.NewAtxMemPool()
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockFetch := mocks.NewMockFetcher(ctrl)
 
-	s := NewBlockHandler(fetch, &meshMock{}, &verifierMock{})
+	r := require.New(t)
+	atxpool := activation.NewAtxMemPool()
+	s := NewBlockHandler(mockFetch, &meshMock{}, &verifierMock{})
 	a := atx("")
 	atxpool.Put(a)
 	b := &types.Block{}
@@ -266,14 +216,15 @@ func TestBlockHandler_BlockSyntacticValidation_syncRefBlock(t *testing.T) {
 	block1ID := block1.ID()
 	b.RefBlock = &block1ID
 	b.ATXID = a.ID()
-	fetch.retError = true
+	mockFetch.EXPECT().FetchBlock(gomock.Any(), block1ID).Return(fmt.Errorf("error")).Times(1)
 	err := s.blockSyntacticValidation(context.TODO(), b)
 	r.Equal(err, fmt.Errorf("failed to fetch ref block %v e: error", *b.RefBlock))
 
-	fetch.retError = false
+	mockFetch.EXPECT().FetchBlock(gomock.Any(), block1ID).Return(nil).Times(1)
+	mockFetch.EXPECT().GetAtxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	err = s.blockSyntacticValidation(context.TODO(), b)
 	r.NoError(err)
-	assert.Equal(t, 2, fetch.getBlockCalled[block1ID])
 }
 
 func TestBlockHandler_AtxSetID(t *testing.T) {

@@ -182,7 +182,7 @@ func TestBlockOracleEmptyActiveSet(t *testing.T) {
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, beaconProvider, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))
 
 	_, proofs, _, err := blockOracle.BlockEligible(types.NewLayerID(layersPerEpoch * 3))
-	r.EqualError(err, "zero total weight not allowed")
+	r.EqualError(err, "oracle get num slots: zero total weight not allowed")
 	r.Nil(proofs)
 }
 
@@ -566,5 +566,5 @@ func TestBlockEligibility_calc(t *testing.T) {
 	o := NewMinerBlockOracle(10, 1, atxDb, mockBeaconProvider(t), vrfsgn, nodeID, func() bool { return true }, logtest.New(t).WithName(t.Name()))
 	o.atx = atxH.ActivationTxHeader
 	_, _, err := o.calcEligibilityProofs(0, 1)
-	r.EqualError(err, "zero total weight not allowed") // a hack to make sure we got genesis active set size on genesis
+	r.EqualError(err, "oracle get num slots: zero total weight not allowed") // a hack to make sure we got genesis active set size on genesis
 }
