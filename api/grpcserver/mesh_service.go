@@ -466,40 +466,27 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 	filterActivations := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0
 
 	// Subscribe to the stream of transactions and activations
-	var (
-		txCh, activationsCh           <-chan interface{}
-		txBufFull, activationsBufFull <-chan struct{}
-	)
+	var txCh, activationsCh <-chan interface{}
 
 	if filterTx {
 		if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
 			defer closeSubscription(txsSubscription)
-			txCh, txBufFull = consumeEvents(context.Background(), txsSubscription.Out())
+			txCh = consumeEvents(context.Background(), txsSubscription.Out())
 		}
 	}
 	if filterActivations {
 		if activationsSubscription := events.SubscribeActivations(); activationsSubscription != nil {
 			defer closeSubscription(activationsSubscription)
-			activationsCh, activationsBufFull = consumeEvents(context.Background(), activationsSubscription.Out())
+			activationsCh = consumeEvents(context.Background(), activationsSubscription.Out())
 		}
 	}
 
 	for {
 		select {
-		case <-txBufFull:
-			log.Info("tx buffer is full, shutting down")
-			return fmt.Errorf("tx buffer is full")
-		case <-activationsBufFull:
-			log.Info("activations buffer is full, shutting down")
-			return fmt.Errorf("activations buffer is full")
 		case activationEvent, ok := <-activationsCh:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("ActivationStream closed, shutting down")
-				return nil
+				log.Info("activations stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
 
 			activation := activationEvent.(events.ActivationTx).ActivationTx
@@ -524,12 +511,8 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 			}
 		case txEvent, ok := <-txCh:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("NewTxStream closed, shutting down")
-				return nil
+				log.Info("tx stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
 			tx := txEvent.(events.Transaction)
 			// Apply address filter
@@ -561,25 +544,19 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
 	log.Info("GRPC MeshService.LayerStream")
 
-	var (
-		layerCh       <-chan interface{}
-		layersBufFull <-chan struct{}
-	)
+	var layerCh <-chan interface{}
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
 		defer closeSubscription(layersSubscription)
-		layerCh, layersBufFull = consumeEvents(context.Background(), layersSubscription.Out())
+		layerCh = consumeEvents(context.Background(), layersSubscription.Out())
 	}
 
 	for {
 		select {
-		case <-layersBufFull:
-			log.Info("layer buffer is full, shutting down")
-			return fmt.Errorf("account buffer is full")
 		case layerEvent, ok := <-layerCh:
 			if !ok {
-				log.Info("LayerStream closed, shutting down")
-				return nil
+				log.Info("layers stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
 			layer := layerEvent.(events.LayerUpdate)
 			pbLayer, err := s.readLayer(stream.Context(), layer.LayerID, convertLayerStatus(layer.Status))

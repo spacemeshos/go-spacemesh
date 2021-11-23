@@ -146,27 +146,21 @@ func (s NodeService) UpdatePoetServer(ctx context.Context, req *pb.UpdatePoetSer
 func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
 
-	var (
-		statusCh      <-chan interface{}
-		statusBufFull <-chan struct{}
-	)
+	var statusCh <-chan interface{}
 
 	if statusSubscription := events.SubscribeStatus(); statusSubscription != nil {
 		defer closeSubscription(statusSubscription)
-		statusCh, statusBufFull = consumeEvents(context.Background(), statusSubscription.Out())
+		statusCh = consumeEvents(context.Background(), statusSubscription.Out())
 	}
 
 	for {
 		select {
-		case <-statusBufFull:
-			log.Info("status buffer is full, shutting down")
-			return fmt.Errorf("status buffer is full")
 		case _, ok := <-statusCh:
 			// statusCh works a bit differently than the other streams. It doesn't actually
 			// send us data. Instead, it just notifies us that there's new data to be read.
 			if !ok {
-				log.Info("StatusStream closed, shutting down")
-				return nil
+				log.Info("status stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
 			curLayer, latestLayer, verifiedLayer := s.getLayers()
 
@@ -196,26 +190,19 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
 
-	var (
-		errorsCh      <-chan interface{}
-		errorsBufFull <-chan struct{}
-	)
+	var errorsCh <-chan interface{}
 
 	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
 		defer closeSubscription(errorsSubscription)
-
-		errorsCh, errorsBufFull = consumeEvents(context.Background(), errorsSubscription.Out())
+		errorsCh = consumeEvents(context.Background(), errorsSubscription.Out())
 	}
 
 	for {
 		select {
-		case <-errorsBufFull:
-			log.Info("errors buffer is full, shutting down")
-			return fmt.Errorf("errors buffer is full")
 		case nodeErrorEvent, ok := <-errorsCh:
 			if !ok {
-				log.Info("ErrorStream closed, shutting down")
-				return nil
+				log.Info("errors stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
 
 			nodeError := nodeErrorEvent.(events.NodeError)

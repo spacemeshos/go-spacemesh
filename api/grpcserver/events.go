@@ -10,27 +10,25 @@ import (
 
 const subscriptionChanBufSize = 1 << 16
 
-func consumeEvents(ctx context.Context, in <-chan interface{}) (out <-chan interface{}, bufFull <-chan struct{}) {
-	outCh := make(chan interface{}, subscriptionChanBufSize)
-	bufFullCh := make(chan struct{})
+func consumeEvents(ctx context.Context, in <-chan interface{}) <-chan interface{} {
+	out := make(chan interface{}, subscriptionChanBufSize)
 
 	go func() {
-		defer close(outCh)
+		defer close(out)
 
 		for e := range in {
 			select {
 			case <-ctx.Done():
 				return
-			case outCh <- e:
+			case out <- e:
 			default:
 				log.With().Debug("subscriber's event buffer is full")
-				close(bufFullCh)
 				return
 			}
 		}
 	}()
 
-	return outCh, bufFullCh
+	return out
 }
 
 func closeSubscription(accountSubscription event.Subscription) {
