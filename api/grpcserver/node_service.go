@@ -146,18 +146,23 @@ func (s NodeService) UpdatePoetServer(ctx context.Context, req *pb.UpdatePoetSer
 func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
 
-	var statusStream <-chan interface{}
+	var (
+		statusCh      <-chan interface{}
+		statusBufFull <-chan struct{}
+	)
 
 	if statusSubscription := events.SubscribeStatus(); statusSubscription != nil {
 		defer closeSubscription(statusSubscription)
-
-		statusStream = consumeEvents(statusSubscription.Out())
+		statusCh, statusBufFull = consumeEvents(context.Background(), statusSubscription.Out())
 	}
 
 	for {
 		select {
-		case _, ok := <-statusStream:
-			// statusStream works a bit differently than the other streams. It doesn't actually
+		case <-statusBufFull:
+			log.Info("status buffer is full, shutting down")
+			return fmt.Errorf("status buffer is full")
+		case _, ok := <-statusCh:
+			// statusCh works a bit differently than the other streams. It doesn't actually
 			// send us data. Instead, it just notifies us that there's new data to be read.
 			if !ok {
 				log.Info("StatusStream closed, shutting down")
@@ -191,17 +196,23 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
 
-	var errorStream <-chan interface{}
+	var (
+		errorsCh      <-chan interface{}
+		errorsBufFull <-chan struct{}
+	)
 
 	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
 		defer closeSubscription(errorsSubscription)
 
-		errorStream = consumeEvents(errorsSubscription.Out())
+		errorsCh, errorsBufFull = consumeEvents(context.Background(), errorsSubscription.Out())
 	}
 
 	for {
 		select {
-		case nodeErrorEvent, ok := <-errorStream:
+		case <-errorsBufFull:
+			log.Info("errors buffer is full, shutting down")
+			return fmt.Errorf("errors buffer is full")
+		case nodeErrorEvent, ok := <-errorsCh:
 			if !ok {
 				log.Info("ErrorStream closed, shutting down")
 				return nil

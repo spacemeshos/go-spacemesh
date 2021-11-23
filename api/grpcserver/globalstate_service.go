@@ -271,33 +271,45 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 
 	// Subscribe to the various streams
 	var (
-		channelAccount <-chan interface{}
-		channelReward  <-chan interface{}
-		channelReceipt <-chan interface{}
+		accountCh       <-chan interface{}
+		rewardsCh       <-chan interface{}
+		receiptsCh      <-chan interface{}
+		accountBufFull  <-chan struct{}
+		rewardsBufFull  <-chan struct{}
+		receiptsBufFull <-chan struct{}
 	)
 	if filterAccount {
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
 			defer closeSubscription(accountSubscription)
 
-			channelAccount = consumeEvents(accountSubscription.Out())
+			accountCh, accountBufFull = consumeEvents(stream.Context(), accountSubscription.Out())
 		}
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
 			defer closeSubscription(rewardsSubscription)
-			channelReward = consumeEvents(rewardsSubscription.Out())
+			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription.Out())
 		}
 	}
 	if filterReceipt {
 		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
 			defer closeSubscription(receiptsSubscription)
-			channelReceipt = consumeEvents(receiptsSubscription.Out())
+			receiptsCh, receiptsBufFull = consumeEvents(stream.Context(), receiptsSubscription.Out())
 		}
 	}
 
 	for {
 		select {
-		case updatedAccountEvent, ok := <-channelAccount:
+		case <-accountBufFull:
+			log.Info("account buffer is full, shutting down")
+			return fmt.Errorf("account buffer is full")
+		case <-rewardsBufFull:
+			log.Info("rewards buffer is full, shutting down")
+			return fmt.Errorf("rewards buffer is full")
+		case <-receiptsBufFull:
+			log.Info("receipts buffer is full, shutting down")
+			return fmt.Errorf("receipts buffer is full")
+		case updatedAccountEvent, ok := <-accountCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -324,7 +336,8 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
-		case rewardEvent, ok := <-channelReward:
+
+		case rewardEvent, ok := <-rewardsCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -352,7 +365,8 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
-		case receiptEvent, ok := <-channelReceipt:
+
+		case receiptEvent, ok := <-receiptsCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -379,6 +393,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
+
 		case <-stream.Context().Done():
 			log.Info("AccountDataStream closing stream, client disconnected")
 			return nil
@@ -401,18 +416,23 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 	}
 	smesherIDBytes := in.Id.Id
 
-	var channelReward <-chan interface{}
+	var (
+		rewardsCh      <-chan interface{}
+		rewardsBufFull <-chan struct{}
+	)
 
 	// subscribe to the rewards channel
 	if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
 		defer closeSubscription(rewardsSubscription)
-
-		channelReward = consumeEvents(rewardsSubscription.Out())
+		rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription.Out())
 	}
 
 	for {
 		select {
-		case rewardEvent, ok := <-channelReward:
+		case <-rewardsBufFull:
+			log.Info("rewards buffer is full, shutting down")
+			return fmt.Errorf("rewards buffer is full")
+		case rewardEvent, ok := <-rewardsCh:
 			if !ok {
 				// shut down the reward channel
 				log.Info("Reward channel closed, shutting down")
@@ -470,27 +490,31 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 
 	// Subscribe to the various streams
 	var (
-		channelAccount <-chan interface{}
-		channelReward  <-chan interface{}
-		channelReceipt <-chan interface{}
-		channelLayer   <-chan interface{}
+		accountCh       <-chan interface{}
+		rewardsCh       <-chan interface{}
+		receiptsCh      <-chan interface{}
+		layersCh        <-chan interface{}
+		accountBufFull  <-chan struct{}
+		rewardsBufFull  <-chan struct{}
+		receiptsBufFull <-chan struct{}
+		layersBufFull   <-chan struct{}
 	)
 	if filterAccount {
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
 			defer closeSubscription(accountSubscription)
-			channelAccount = consumeEvents(accountSubscription.Out())
+			accountCh, accountBufFull = consumeEvents(stream.Context(), accountSubscription.Out())
 		}
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
 			defer closeSubscription(rewardsSubscription)
-			channelReward = consumeEvents(rewardsSubscription.Out())
+			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription.Out())
 		}
 	}
 	if filterReceipt {
 		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
 			defer closeSubscription(receiptsSubscription)
-			channelReceipt = consumeEvents(receiptsSubscription.Out())
+			receiptsCh, receiptsBufFull = consumeEvents(stream.Context(), receiptsSubscription.Out())
 		}
 	}
 	if filterState {
@@ -498,13 +522,25 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		// There is no separate reporting specifically for new state.
 		if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
 			defer closeSubscription(layersSubscription)
-			channelLayer = consumeEvents(layersSubscription.Out())
+			layersCh, layersBufFull = consumeEvents(stream.Context(), layersSubscription.Out())
 		}
 	}
 
 	for {
 		select {
-		case updatedAccountEvent, ok := <-channelAccount:
+		case <-accountBufFull:
+			log.Info("account buffer is full, shutting down")
+			return fmt.Errorf("account buffer is full")
+		case <-rewardsBufFull:
+			log.Info("rewards buffer is full, shutting down")
+			return fmt.Errorf("rewards buffer is full")
+		case <-receiptsBufFull:
+			log.Info("receipts buffer is full, shutting down")
+			return fmt.Errorf("receipts buffer is full")
+		case <-layersBufFull:
+			log.Info("layers buffer is full, shutting down")
+			return fmt.Errorf("layers buffer is full")
+		case updatedAccountEvent, ok := <-accountCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -528,7 +564,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case rewardEvent, ok := <-channelReward:
+		case rewardEvent, ok := <-rewardsCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -555,7 +591,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case receiptEvent, ok := <-channelReceipt:
+		case receiptEvent, ok := <-receiptsCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -581,7 +617,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case layerEvent, ok := <-channelLayer:
+		case layerEvent, ok := <-layersCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,

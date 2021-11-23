@@ -466,24 +466,33 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 	filterActivations := in.Filter.AccountMeshDataFlags&uint32(pb.AccountMeshDataFlag_ACCOUNT_MESH_DATA_FLAG_ACTIVATIONS) != 0
 
 	// Subscribe to the stream of transactions and activations
-	var txStream, activationsStream <-chan interface{}
+	var (
+		txCh, activationsCh           <-chan interface{}
+		txBufFull, activationsBufFull <-chan struct{}
+	)
 
 	if filterTx {
 		if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
 			defer closeSubscription(txsSubscription)
-			txStream = consumeEvents(txsSubscription.Out())
+			txCh, txBufFull = consumeEvents(context.Background(), txsSubscription.Out())
 		}
 	}
 	if filterActivations {
 		if activationsSubscription := events.SubscribeActivations(); activationsSubscription != nil {
 			defer closeSubscription(activationsSubscription)
-			activationsStream = consumeEvents(activationsSubscription.Out())
+			activationsCh, activationsBufFull = consumeEvents(context.Background(), activationsSubscription.Out())
 		}
 	}
 
 	for {
 		select {
-		case activationEvent, ok := <-activationsStream:
+		case <-txBufFull:
+			log.Info("tx buffer is full, shutting down")
+			return fmt.Errorf("tx buffer is full")
+		case <-activationsBufFull:
+			log.Info("activations buffer is full, shutting down")
+			return fmt.Errorf("activations buffer is full")
+		case activationEvent, ok := <-activationsCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -513,7 +522,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
-		case txEvent, ok := <-txStream:
+		case txEvent, ok := <-txCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -552,17 +561,22 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
 	log.Info("GRPC MeshService.LayerStream")
 
-	var layerStream <-chan interface{}
+	var (
+		layerCh       <-chan interface{}
+		layersBufFull <-chan struct{}
+	)
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
 		defer closeSubscription(layersSubscription)
-
-		layerStream = consumeEvents(layersSubscription.Out())
+		layerCh, layersBufFull = consumeEvents(context.Background(), layersSubscription.Out())
 	}
 
 	for {
 		select {
-		case layerEvent, ok := <-layerStream:
+		case <-layersBufFull:
+			log.Info("layer buffer is full, shutting down")
+			return fmt.Errorf("account buffer is full")
+		case layerEvent, ok := <-layerCh:
 			if !ok {
 				log.Info("LayerStream closed, shutting down")
 				return nil

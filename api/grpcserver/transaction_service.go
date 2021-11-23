@@ -179,22 +179,31 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 
 	// The tx channel tells us about newly received and newly created transactions
 	// The layer channel tells us about status updates
-	var channelTx, channelLayer <-chan interface{}
+	var (
+		txCh, layerCh              <-chan interface{}
+		txBufFull, layerBufferFull <-chan struct{}
+	)
 
 	if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
 		defer closeSubscription(txsSubscription)
-		channelTx = consumeEvents(txsSubscription.Out())
+		txCh, txBufFull = consumeEvents(context.Background(), txsSubscription.Out())
 	}
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
 		defer closeSubscription(layersSubscription)
 
-		channelLayer = consumeEvents(layersSubscription.Out())
+		layerCh, layerBufferFull = consumeEvents(context.Background(), layersSubscription.Out())
 	}
 
 	for {
 		select {
-		case txEvent, ok := <-channelTx:
+		case <-txBufFull:
+			log.Info("tx buffer is full, shutting down")
+			return fmt.Errorf("tx buffer is full")
+		case <-layerBufferFull:
+			log.Info("layer buffer is full, shutting down")
+			return fmt.Errorf("layer buffer is full")
+		case txEvent, ok := <-txCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
@@ -235,7 +244,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 					break
 				}
 			}
-		case layerEvent, ok := <-channelLayer:
+		case layerEvent, ok := <-layerCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
 				// to this stream but continuing to listen to the other stream,
