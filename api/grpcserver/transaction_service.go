@@ -182,20 +182,12 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	var channelTx, channelLayer <-chan interface{}
 
 	if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
-		defer func() {
-			if err := txsSubscription.Close(); err != nil {
-				log.With().Panic("Failed to close txs subscription: " + err.Error())
-			}
-		}()
+		defer closeSubscription(txsSubscription)
 		channelTx = consumeEvents(txsSubscription.Out())
 	}
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
-		defer func() {
-			if err := layersSubscription.Close(); err != nil {
-				log.With().Panic("Failed to close layers subscription: " + err.Error())
-			}
-		}()
+		defer closeSubscription(layersSubscription)
 
 		channelLayer = consumeEvents(layersSubscription.Out())
 	}

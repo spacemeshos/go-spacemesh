@@ -470,21 +470,13 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 
 	if filterTx {
 		if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
-			defer func() {
-				if err := txsSubscription.Close(); err != nil {
-					log.With().Panic("Failed to close txs subscription: " + err.Error())
-				}
-			}()
+			defer closeSubscription(txsSubscription)
 			txStream = consumeEvents(txsSubscription.Out())
 		}
 	}
 	if filterActivations {
 		if activationsSubscription := events.SubscribeActivations(); activationsSubscription != nil {
-			defer func() {
-				if err := activationsSubscription.Close(); err != nil {
-					log.With().Panic("Failed to close activations subscription: " + err.Error())
-				}
-			}()
+			defer closeSubscription(activationsSubscription)
 			activationsStream = consumeEvents(activationsSubscription.Out())
 		}
 	}
@@ -563,11 +555,7 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 	var layerStream <-chan interface{}
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
-		defer func() {
-			if err := layersSubscription.Close(); err != nil {
-				log.With().Panic("Failed to close layers subscription: " + err.Error())
-			}
-		}()
+		defer closeSubscription(layersSubscription)
 
 		layerStream = consumeEvents(layersSubscription.Out())
 	}

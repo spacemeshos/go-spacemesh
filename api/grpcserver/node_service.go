@@ -149,11 +149,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 	var statusStream <-chan interface{}
 
 	if statusSubscription := events.SubscribeStatus(); statusSubscription != nil {
-		defer func() {
-			if err := statusSubscription.Close(); err != nil {
-				log.With().Panic("Failed to close status subscription: " + err.Error())
-			}
-		}()
+		defer closeSubscription(statusSubscription)
 
 		statusStream = consumeEvents(statusSubscription.Out())
 	}
@@ -198,11 +194,7 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 	var errorStream <-chan interface{}
 
 	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
-		defer func() {
-			if err := errorsSubscription.Close(); err != nil {
-				log.With().Panic("Failed to close errors subscription: " + err.Error())
-			}
-		}()
+		defer closeSubscription(errorsSubscription)
 
 		errorStream = consumeEvents(errorsSubscription.Out())
 	}
