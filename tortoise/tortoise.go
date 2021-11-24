@@ -21,7 +21,6 @@ type atxDataProvider interface {
 var (
 	errNoBaseBallotFound    = errors.New("no good base ballot within exception vector limit")
 	errNotSorted            = errors.New("input blocks are not sorted by layerID")
-	errstrNoCoinflip        = "no weak coin value for layer"
 	errstrTooManyExceptions = "too many exceptions to base ballot vote"
 	errstrConflictingVotes  = "conflicting votes found in ballot"
 )
@@ -460,7 +459,7 @@ func (t *turtle) getBaseBallotOpinions(bid types.BallotID) Opinion {
 func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error {
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.Named("processing_ballot_id", ballot.ID()),
-		log.Named("processing_ballot_layer", ballot.LayerIndex()))
+		log.Named("processing_ballot_layer", ballot.LayerIndex))
 
 	// When a new ballot arrives, we look up the ballot it points to in our table,
 	// and add the corresponding vector (multiplied by the ballot weight) to our own vote-totals vector.
@@ -512,9 +511,9 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 			opinion[blk] = nvote
 		}
 	}
-	t.BallotLayer[ballot.ID()] = ballot.LayerIndex()
+	t.BallotLayer[ballot.ID()] = ballot.LayerIndex
 	logger.With().Debug("adding or updating ballot opinion")
-	t.BallotOpinionsByLayer[ballot.LayerIndex()][ballot.ID()] = opinion
+	t.BallotOpinionsByLayer[ballot.LayerIndex][ballot.ID()] = opinion
 	return nil
 }
 
@@ -522,15 +521,15 @@ func (t *turtle) processBallots(ctx *tcontext, ballots []*types.Ballot) error {
 	logger := t.logger.WithContext(ctx)
 
 	for _, b := range ballots {
-		logger := logger.WithFields(b.ID(), b.LayerIndex())
+		logger := logger.WithFields(b.ID(), b.LayerIndex)
 		// make sure we don't write data on old ballots whose layer has already been evicted
-		if b.LayerIndex().Before(t.LastEvicted) {
+		if b.LayerIndex.Before(t.LastEvicted) {
 			logger.With().Warning("not processing ballot from layer older than last evicted layer",
 				log.Named("last_evicted", t.LastEvicted))
 			continue
 		}
-		if _, ok := t.BallotOpinionsByLayer[b.LayerIndex()]; !ok {
-			t.BallotOpinionsByLayer[b.LayerIndex()] = make(map[types.BallotID]Opinion, t.LayerSize)
+		if _, ok := t.BallotOpinionsByLayer[b.LayerIndex]; !ok {
+			t.BallotOpinionsByLayer[b.LayerIndex] = make(map[types.BallotID]Opinion, t.LayerSize)
 		}
 		if err := t.processBallot(ctx, b); err != nil {
 			return err
@@ -557,13 +556,13 @@ func (t *turtle) scoreBallots(ctx *tcontext, ballots []*types.Ballot) {
 	for _, b := range ballots {
 		if t.determineBallotGoodness(ctx, b) {
 			// note: we have no way of warning if a ballot was previously marked as not good
-			logger.With().Debug("marking ballot good", b.ID(), b.LayerIndex())
+			logger.With().Debug("marking ballot good", b.ID(), b.LayerIndex)
 			t.GoodBallotsIndex[b.ID()] = false // false means good ballot, not flushed
 			numGood++
 		} else {
-			logger.With().Info("not marking ballot good", b.ID(), b.LayerIndex())
+			logger.With().Info("not marking ballot good", b.ID(), b.LayerIndex)
 			if _, isGood := t.GoodBallotsIndex[b.ID()]; isGood {
-				logger.With().Warning("marking previously good ballot as not good", b.ID(), b.LayerIndex())
+				logger.With().Warning("marking previously good ballot as not good", b.ID(), b.LayerIndex)
 				delete(t.GoodBallotsIndex, b.ID())
 			}
 		}
@@ -577,7 +576,7 @@ func (t *turtle) scoreBallots(ctx *tcontext, ballots []*types.Ballot) {
 func (t *turtle) determineBallotGoodness(ctx *tcontext, ballot *types.Ballot) bool {
 	logger := t.logger.WithContext(ctx).WithFields(
 		ballot.ID(),
-		ballot.LayerIndex(),
+		ballot.LayerIndex,
 		log.Named("base_ballot_id", ballot.BaseBallot))
 	// Go over all ballots, in order. Mark ballot i "good" if:
 	// (1) it has the right beacon value
@@ -600,7 +599,7 @@ func (t *turtle) determineBallotGoodness(ctx *tcontext, ballot *types.Ballot) bo
 }
 
 func (t *turtle) ballotHasGoodBeacon(ballot *types.Ballot, logger log.Log) bool {
-	layerID := ballot.LayerIndex()
+	layerID := ballot.LayerIndex
 
 	// first check if we have it in the cache
 	if _, bad := t.badBeaconBallots[ballot.ID()]; bad {
@@ -633,7 +632,7 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) ([]byte, 
 		refBallotID = ballot.RefBallot
 	}
 
-	epoch := ballot.LayerIndex().GetEpoch()
+	epoch := ballot.LayerIndex.GetEpoch()
 	beacons, ok := t.refBallotBeacons[epoch]
 	if ok {
 		if beacon, ok := beacons[refBallotID]; ok {
