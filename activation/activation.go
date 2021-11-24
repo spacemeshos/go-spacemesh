@@ -35,11 +35,6 @@ const AtxProtocol = "AtxGossip"
 
 const defaultPoetRetryInterval = 5 * time.Second
 
-type meshProvider interface {
-	GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error)
-	LatestLayer() types.LayerID
-}
-
 type poetNumberOfTickProvider struct{}
 
 func (provider *poetNumberOfTickProvider) NumOfTicks() uint64 {
@@ -125,7 +120,6 @@ type Builder struct {
 	layersPerEpoch    uint32
 	db                atxDBProvider
 	publisher         pubsub.Publisher
-	mesh              meshProvider
 	tickProvider      poetNumberOfTickProvider
 	nipostBuilder     nipostBuilder
 	postSetupProvider PostSetupProvider
@@ -174,8 +168,8 @@ func WithContext(ctx context.Context) BuilderOption {
 }
 
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
-func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, publisher pubsub.Publisher, mesh meshProvider,
-	layersPerEpoch uint32, nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
+func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, publisher pubsub.Publisher,
+	nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
 	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
 	b := &Builder{
 		parentCtx:         context.Background(),
@@ -186,7 +180,6 @@ func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvide
 		layersPerEpoch:    conf.LayersPerEpoch,
 		db:                db,
 		publisher:         publisher,
-		mesh:              mesh,
 		nipostBuilder:     nipostBuilder,
 		postSetupProvider: postSetupProvider,
 		layerClock:        layerClock,

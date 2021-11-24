@@ -67,7 +67,6 @@ const (
 	P2PLogger            = "p2p"
 	PostLogger           = "post"
 	StateDbLogger        = "stateDbStore"
-	StateLogger          = "state"
 	AtxDbStoreLogger     = "atxDbStore"
 	TBeaconDbStoreLogger = "tbDbStore"
 	TBeaconLogger        = "tBeacon"
@@ -89,8 +88,6 @@ const (
 	BlockListenerLogger  = "blockListener"
 	PoetListenerLogger   = "poetListener"
 	NipostBuilderLogger  = "nipostBuilder"
-	AtxBuilderLogger     = "atxBuilder"
-	GossipListener       = "gossipListener"
 	Fetcher              = "fetcher"
 	LayerFetcher         = "layerFetcher"
 	TimeSyncLogger       = "timesync"
@@ -282,7 +279,7 @@ type App struct {
 	svm            *svm.SVM
 	layerFetch     *layerfetcher.Logic
 	ptimesync      *peersync.Sync
-	tortoise       *tortoise.ThreadSafeVerifyingTortoise
+	tortoise       *tortoise.Tortoise
 
 	host *p2p.Host
 
@@ -302,9 +299,9 @@ func (app *App) Initialize() (err error) {
 	// hare's max time duration to run consensus for a layer
 	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration // pre-round + 4 rounds per iteration
 	maxHareLayerDurationSec := app.Config.HARE.WakeupDelta + maxHareRoundsPerLayer*app.Config.HARE.RoundDuration
-	if app.Config.LayerDurationSec*int(app.Config.Zdist) <= maxHareLayerDurationSec {
+	if app.Config.LayerDurationSec*int(app.Config.Tortoise.Zdist) <= maxHareLayerDurationSec {
 		log.With().Error("incompatible params",
-			log.Uint32("tortoise_zdist", app.Config.Zdist),
+			log.Uint32("tortoise_zdist", app.Config.Tortoise.Zdist),
 			log.Int("layer_duration", app.Config.LayerDurationSec),
 			log.Int("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
@@ -525,30 +522,21 @@ func (app *App) initServices(ctx context.Context,
 		app.addLogger(TBeaconLogger, lg))
 
 	var msh *mesh.Mesh
-	var trtl *tortoise.ThreadSafeVerifyingTortoise
+	var trtl *tortoise.Tortoise
 	trtlStateDB, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "turtle"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create turtle DB: %w", err)
 	}
 	app.closers = append(app.closers, trtlStateDB)
-	trtlCfg := tortoise.Config{
-		LayerSize:                layerSize,
-		Database:                 trtlStateDB,
-		MeshDatabase:             mdb,
-		ATXDB:                    atxDB,
-		Beacons:                  tBeacon,
-		Hdist:                    app.Config.Hdist,
-		Zdist:                    app.Config.Zdist,
-		ConfidenceParam:          app.Config.ConfidenceParam,
-		WindowSize:               app.Config.WindowSize,
-		GlobalThreshold:          app.Config.GlobalThreshold,
-		LocalThreshold:           app.Config.LocalThreshold,
-		Log:                      app.addLogger(TrtlLogger, lg),
-		RerunInterval:            time.Minute * time.Duration(app.Config.TortoiseRerunInterval),
-		BadBeaconVoteDelayLayers: app.Config.LayersPerEpoch,
-	}
+	trtlCfg := app.Config.Tortoise
+	trtlCfg.LayerSize = layerSize
+	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 
-	trtl = tortoise.NewVerifyingTortoise(ctx, trtlCfg)
+	trtl = tortoise.New(trtlStateDB, mdb, atxDB, tBeacon,
+		tortoise.WithContext(ctx),
+		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
+		tortoise.WithConfig(trtlCfg),
+	)
 	svm := svm.New(processor, app.addLogger(SVMLogger, lg))
 
 	if mdb.PersistentData() {
@@ -577,11 +565,10 @@ func (app *App) initServices(ctx context.Context,
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	bCfg := blocks.Config{
-		Depth:       app.Config.Hdist,
-		GoldenATXID: goldenATXID,
-	}
-	blockListener := blocks.NewBlockHandler(bCfg, fetcherWrapped, msh, eValidator, app.addLogger(BlockListenerLogger, lg))
+	blockListener := blocks.NewBlockHandler(fetcherWrapped, msh, eValidator,
+		blocks.WithLogger(app.addLogger(BlockListenerLogger, lg)),
+		blocks.WithMaxExceptions(trtlCfg.MaxExceptions),
+	)
 
 	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, app.host, app.addLogger(Fetcher, lg))
 
@@ -594,7 +581,7 @@ func (app *App) initServices(ctx context.Context,
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
 		AlwaysListen: app.Config.AlwaysListen,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, tBeacon, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	tBeacon.SetSyncState(newSyncer)
 	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxDB, tBeacon, vrfSigner, nodeID, newSyncer.ListenToGossip, app.addLogger(BlockOracle, lg))
@@ -657,10 +644,8 @@ func (app *App) initServices(ctx context.Context,
 		GoldenATXID:     goldenATXID,
 		LayersPerEpoch:  layersPerEpoch,
 	}
-	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn,
-		atxDB, app.host, msh, layersPerEpoch, nipostBuilder,
-		postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg),
-		activation.WithContext(ctx),
+	atxBuilder := activation.NewBuilder(builderConfig, nodeID, sgn, atxDB, app.host, nipostBuilder,
+		postSetupMgr, clock, newSyncer, store, app.addLogger("atxBuilder", lg), activation.WithContext(ctx),
 	)
 
 	syncHandler := func(_ context.Context, _ p2p.Peer, _ []byte) pubsub.ValidationResult {

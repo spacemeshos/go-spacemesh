@@ -80,9 +80,9 @@ func TestRerunEvictConcurrent(t *testing.T) {
 	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
-	cfg := defaultConfig(t, s.State.MeshDB, s.State.AtxDB)
+	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise := NewVerifyingTortoise(ctx, cfg)
+	tortoise := tortoiseFromSimState(s.State, WithLogger(logtest.New(t)), WithConfig(cfg))
 
 	for i := 0; i < int(cfg.WindowSize); i++ {
 		tortoise.HandleIncomingLayer(ctx, s.Next())
@@ -101,10 +101,10 @@ func TestRerunEvictConcurrent(t *testing.T) {
 	tortoise.HandleIncomingLayer(ctx, last)
 	require.NoError(t, tortoise.Persist(ctx))
 
-	st := state{log: logtest.New(t), db: cfg.Database}
+	st := state{log: logtest.New(t), db: tortoise.trtl.db}
 	require.NoError(t, st.Recover())
 	require.Equal(t, last.Sub(1), st.Verified)
-	for lid := range st.BlockOpinionsByLayer {
+	for lid := range st.BallotOpinionsByLayer {
 		require.True(t, lid.After(st.LastEvicted))
 	}
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals"
 )
 
 // VRFValidationFunction is the VRF validation function.
@@ -77,7 +78,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	weight = atx.GetWeight()
 	vrfPubkey := atx.NodeID.VRFPublicKey
 
-	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(weight, totalWeight, v.committeeSize, v.layersPerEpoch)
+	numberOfEligibleBlocks, err := proposals.GetNumEligibleSlots(weight, totalWeight, v.committeeSize, v.layersPerEpoch)
 	if err != nil {
 		return false, fmt.Errorf("failed to get number of eligible blocks: %v", err)
 	}
@@ -88,9 +89,9 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 			numberOfEligibleBlocks, totalWeight)
 	}
 
-	message, err := serializeVRFMessage(epochBeacon, epochNumber, counter)
+	message, err := proposals.SerializeVRFMessage(epochBeacon, epochNumber, counter)
 	if err != nil {
-		return false, err
+		return false, fmt.Errorf("validator serialize vrf: %w", err)
 	}
 	vrfSig := block.EligibilityProof.Sig
 
@@ -102,7 +103,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 
 	v.log.Info("validated tortoise beacon eligibility vrf of beacon %v in epoch %v (counter: %v)", beaconShortString, epochNumber, counter)
 
-	eligibleLayer := calcEligibleLayer(epochNumber, v.layersPerEpoch, vrfSig)
+	eligibleLayer := proposals.CalcEligibleLayer(epochNumber, v.layersPerEpoch, vrfSig)
 
 	if block.LayerIndex != eligibleLayer {
 		return false, fmt.Errorf("block layer (%v) does not match eligibility layer (%v)",

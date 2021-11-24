@@ -8,9 +8,9 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/proposals"
 )
 
 type activationDB interface {
@@ -135,24 +135,24 @@ func (bo *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID) (map
 	logger = logger.WithFields(log.Uint64("weight", weight), log.Uint64("total_weight", totalWeight))
 	logger.Info("calculating eligibility")
 
-	numberOfEligibleBlocks, err := getNumberOfEligibleBlocks(weight, totalWeight, bo.committeeSize, bo.layersPerEpoch)
+	numberOfEligibleBlocks, err := proposals.GetNumEligibleSlots(weight, totalWeight, bo.committeeSize, bo.layersPerEpoch)
 	if err != nil {
 		logger.With().Error("failed to get number of eligible blocks", log.Err(err))
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("oracle get num slots: %w", err)
 	}
 
 	eligibilityProofs := map[types.LayerID][]types.BlockEligibilityProof{}
 	for counter := uint32(0); counter < numberOfEligibleBlocks; counter++ {
-		message, err := serializeVRFMessage(beacon, epoch, counter)
+		message, err := proposals.SerializeVRFMessage(beacon, epoch, counter)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, fmt.Errorf("oracle serialize vrf: %w", err)
 		}
 		vrfSig := bo.vrfSigner.Sign(message)
 
 		logger.Debug("signed vrf message, beacon %v, epoch %v, counter: %v, vrfSig: %v",
 			beaconDbgStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
 
-		eligibleLayer := calcEligibleLayer(epoch, bo.layersPerEpoch, vrfSig)
+		eligibleLayer := proposals.CalcEligibleLayer(epoch, bo.layersPerEpoch, vrfSig)
 		eligibilityProofs[eligibleLayer] = append(eligibilityProofs[eligibleLayer], types.BlockEligibilityProof{
 			J:   counter,
 			Sig: vrfSig,
@@ -198,23 +198,6 @@ func (bo *Oracle) getValidAtxForEpoch(validForEpoch types.EpochID) (*types.Activ
 	return atx, nil
 }
 
-func calcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig []byte) types.LayerID {
-	vrfInteger := util.BytesToUint64(vrfSig)
-	eligibleLayerOffset := vrfInteger % uint64(layersPerEpoch)
-	return epochNumber.FirstLayer().Add(uint32(eligibleLayerOffset))
-}
-
-func getNumberOfEligibleBlocks(weight, totalWeight uint64, committeeSize uint32, layersPerEpoch uint32) (uint32, error) {
-	if totalWeight == 0 {
-		return 0, errors.New("zero total weight not allowed")
-	}
-	numberOfEligibleBlocks := weight * uint64(committeeSize) * uint64(layersPerEpoch) / totalWeight // TODO: ensure no overflow
-	if numberOfEligibleBlocks == 0 {
-		numberOfEligibleBlocks = 1
-	}
-	return uint32(numberOfEligibleBlocks), nil
-}
-
 func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, error) {
 	latestATXID, err := bo.atxDB.GetNodeAtxIDForEpoch(bo.nodeID, targetEpoch)
 	if err != nil {
@@ -225,23 +208,4 @@ func (bo *Oracle) getATXIDForEpoch(targetEpoch types.EpochID) (types.ATXID, erro
 	}
 	bo.log.With().Info("latest atx id found", latestATXID)
 	return latestATXID, nil
-}
-
-type vrfMessage struct {
-	EpochBeacon []byte
-	EpochNumber types.EpochID
-	Counter     uint32
-}
-
-func serializeVRFMessage(epochBeacon []byte, epochNumber types.EpochID, counter uint32) ([]byte, error) {
-	m := vrfMessage{
-		EpochBeacon: epochBeacon,
-		EpochNumber: epochNumber,
-		Counter:     counter,
-	}
-	serialized, err := types.InterfaceToBytes(&m)
-	if err != nil {
-		return nil, fmt.Errorf("failed to serialize vrf message: %v", err)
-	}
-	return serialized, nil
 }

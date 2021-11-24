@@ -487,7 +487,7 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 	returnedTxs := msh.getTxs(uniqueTxIds(invalidBlocks, seenTxIds), l)
 	grouped, accounts := msh.removeFromUnappliedTxs(returnedTxs)
 	for account := range accounts {
-		msh.removeRejectedFromAccountTxs(account, grouped, l)
+		msh.removeRejectedFromAccountTxs(account, grouped)
 	}
 	for _, tx := range returnedTxs {
 		if err := msh.ValidateAndAddTxToPool(tx); err == nil {
@@ -763,6 +763,12 @@ func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
 	logger := msh.WithContext(ctx).WithFields(blk.ID())
 	logger.With().Debug("adding block to mesh", blk.Fields()...)
 
+	if !blk.Layer().After(msh.ProcessedLayer()) {
+		logger.With().Warning("block is late",
+			log.FieldNamed("processed_layer", msh.ProcessedLayer()),
+			log.FieldNamed("miner_id", blk.MinerID()))
+	}
+
 	if err := msh.StoreTransactionsFromPool(blk); err != nil {
 		logger.With().Error("not all txs were processed", log.Err(err))
 	}
@@ -777,8 +783,6 @@ func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
 	}
 
 	msh.setLatestLayer(blk.Layer())
-	// add new block to orphans
-	msh.handleOrphanBlocks(blk)
 	events.ReportNewBlock(blk)
 	logger.Info("added block to database")
 	return nil
@@ -822,63 +826,6 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 	msh.invalidateFromPools(&blk.MiniBlock)
 
 	return nil
-}
-
-// todo better thread safety.
-func (msh *Mesh) handleOrphanBlocks(blk *types.Block) {
-	msh.mutex.Lock()
-	defer msh.mutex.Unlock()
-	if _, ok := msh.orphanBlocks[blk.Layer()]; !ok {
-		msh.orphanBlocks[blk.Layer()] = make(map[types.BlockID]struct{})
-	}
-	msh.orphanBlocks[blk.Layer()][blk.ID()] = struct{}{}
-	msh.With().Debug("added block to orphans", blk.ID())
-	for _, b := range append(blk.ForDiff, append(blk.AgainstDiff, blk.NeutralDiff...)...) {
-		for layerID, layermap := range msh.orphanBlocks {
-			if _, has := layermap[b]; has {
-				msh.With().Debug("delete block from orphans", b)
-				delete(layermap, b)
-				if len(layermap) == 0 {
-					delete(msh.orphanBlocks, layerID)
-				}
-				break
-			}
-		}
-	}
-}
-
-// GetOrphanBlocksBefore returns all known orphan blocks with layerID < l.
-func (msh *Mesh) GetOrphanBlocksBefore(l types.LayerID) ([]types.BlockID, error) {
-	msh.mutex.RLock()
-	defer msh.mutex.RUnlock()
-	ids := map[types.BlockID]struct{}{}
-	for key, val := range msh.orphanBlocks {
-		if key.Before(l) {
-			for bid := range val {
-				ids[bid] = struct{}{}
-			}
-		}
-	}
-
-	blocks, err := msh.LayerBlockIds(l.Sub(1))
-	if err != nil {
-		return nil, fmt.Errorf("failed getting latest layer %v err %v", l.Sub(1), err)
-	}
-
-	// add last layer blocks
-	for _, b := range blocks {
-		ids[b] = struct{}{}
-	}
-
-	idArr := make([]types.BlockID, 0, len(ids))
-	for i := range ids {
-		idArr = append(idArr, i)
-	}
-
-	idArr = types.SortBlockIDs(idArr)
-
-	msh.Info("orphans for layer %d are %v", l, idArr)
-	return idArr, nil
 }
 
 type layerRewardsInfo struct {
