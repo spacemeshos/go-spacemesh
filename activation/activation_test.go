@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 // ========== Vars / Consts ==========
@@ -856,8 +858,11 @@ func TestActivationDB_FetchAtxReferences(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	r := require.New(t)
 
-	fetcher := newFetchMock()
-	activationDb := NewDB(database.NewMemDatabase(), fetcher, &MockIDStore{},
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockFetch := mocks.NewMockFetcher(ctrl)
+
+	activationDb := NewDB(database.NewMemDatabase(), mockFetch, &MockIDStore{},
 		mesh.NewMemMeshDB(logtest.New(t).WithName("meshDB")), layersPerEpoch,
 		goldenATXID, &ValidatorMock{}, logtest.New(t).WithName("atxDB"))
 	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
@@ -884,15 +889,10 @@ func TestActivationDB_FetchAtxReferences(t *testing.T) {
 
 	atxList := []*types.ActivationTx{atx1, atx2, atx3, atx4, atx5}
 
+	mockFetch.EXPECT().FetchAtx(gomock.Any(), prevAtxID).Return(nil).Times(5)
 	for _, atx := range atxList {
 		r.NoError(activationDb.FetchAtxReferences(context.TODO(), atx))
 	}
-
-	expected := map[types.ATXID]int{
-		prevAtxID: 5,
-	}
-
-	r.EqualValues(expected, fetcher.atxCalled)
 }
 
 func newActivationTx(

@@ -109,6 +109,7 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte) error 
 	var blk types.Block
 	if err := types.BytesToInterface(data, &blk); err != nil {
 		logger.With().Error("received invalid block", log.Err(err))
+		return fmt.Errorf("malformed block %w", err)
 	}
 
 	// set the block id when received

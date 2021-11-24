@@ -2,6 +2,9 @@ package types
 
 import (
 	"bytes"
+	"fmt"
+
+	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -83,8 +86,8 @@ type InnerBallot struct {
 	RefBallot BallotID
 	EpochData *EpochData
 
-	// the following fields are kept private and from being serialized
-	layerID LayerID // derived from EligibilityProof
+	// the layer ID in which this ballot is eligible for. this will be validated via EligibilityProof
+	LayerIndex LayerID
 }
 
 // EpochData contains information that cannot be changed mid-epoch.
@@ -92,6 +95,7 @@ type EpochData struct {
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
 	ActiveSet []ATXID
 	// the beacon value the smesher recorded for this epoch
+	// TODO relace with types.Beacon after the transition period to unified content block
 	Beacon []byte
 }
 
@@ -106,14 +110,35 @@ type VotingEligibilityProof struct {
 	Sig []byte
 }
 
+// Initialize calculates and sets the Ballot's cached ballotID and smesherID.
+// this should be called once all the other fields of the Ballot are set.
+func (b *Ballot) Initialize() error {
+	if b.ID() != EmptyBallotID {
+		return fmt.Errorf("ballot already initialized")
+	}
+
+	bytes := b.Bytes()
+	b.ballotID = BallotID(CalcHash32(bytes).ToHash20())
+	pubkey, err := ed25519.ExtractPublicKey(bytes, b.Signature)
+	if err != nil {
+		return fmt.Errorf("ballot extract key: %w", err)
+	}
+	b.smesherID = signing.NewPublicKey(pubkey)
+	return nil
+}
+
+// Bytes returns the serialization of the InnerBallot.
+func (b *Ballot) Bytes() []byte {
+	bytes, err := InterfaceToBytes(b.InnerBallot)
+	if err != nil {
+		log.Panic("failed to serialize ballot: %v", err)
+	}
+	return bytes
+}
+
 // ID returns the BallotID.
 func (b *Ballot) ID() BallotID {
 	return b.ballotID
-}
-
-// LayerIndex returns the LayerID of this Ballot.
-func (b *Ballot) LayerIndex() LayerID {
-	return b.layerID
 }
 
 // SmesherID returns the smesher's Edwards public key.
@@ -133,16 +158,16 @@ func (b *Ballot) Fields() []log.LoggableField {
 	}
 	return []log.LoggableField{
 		b.ID(),
-		b.LayerIndex(),
-		b.LayerIndex().GetEpoch(),
-		log.FieldNamed("miner_id", b.SmesherID()),
-		log.String("base_block", b.BaseBallot.String()),
+		b.LayerIndex,
+		b.LayerIndex.GetEpoch(),
+		log.FieldNamed("smesher_id", b.SmesherID()),
+		log.FieldNamed("base_ballot", b.BaseBallot),
 		log.Int("supports", len(b.ForDiff)),
 		log.Int("againsts", len(b.AgainstDiff)),
 		log.Int("abstains", len(b.NeutralDiff)),
 		b.AtxID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
-		log.FieldNamed("ref_block", b.RefBallot),
+		log.FieldNamed("ref_ballot", b.RefBallot),
 		log.Int("active_set_size", activeSetSize),
 		log.String("beacon", BytesToHash(beacon).ShortString()),
 	}
@@ -165,7 +190,7 @@ func (id BallotID) AsHash32() Hash32 {
 
 // Field returns a log field. Implements the LoggableField interface.
 func (id BallotID) Field() log.Field {
-	return log.String("ballot_id", id.AsHash32().ShortString())
+	return log.String("ballot_id", id.String())
 }
 
 // Compare returns true if other (the given BallotID) is less than this BallotID, by lexicographic comparison.
