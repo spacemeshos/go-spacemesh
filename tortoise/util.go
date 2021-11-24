@@ -82,26 +82,25 @@ func (a vec) String() string {
 var thetaMu sync.Mutex
 
 // calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
-// and theta, layer size and delta.
-func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, layerSize uint32, delta uint32) vec {
+// theta, and expected vote weight.
+func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, weight *big.Float) vec {
 	thetaMu.Lock()
 	defer thetaMu.Unlock()
 
-	threshold := new(big.Int).Set(theta.Num())
-	threshold.
-		Mul(threshold, big.NewInt(int64(delta))).
-		Mul(threshold, big.NewInt(int64(layerSize)))
+	threshold := new(big.Float).SetInt(theta.Num())
+	threshold.Mul(threshold, weight)
+	threshold.Quo(threshold, new(big.Float).SetInt(theta.Denom()))
 
 	logger.With().Debug("threshold opinion",
 		v,
 		log.String("theta", theta.String()),
-		log.Uint32("layer_size", layerSize),
-		log.Uint32("delta", delta),
-		log.String("threshold", threshold.String()))
+		log.Stringer("expected_weight", weight),
+		log.Stringer("threshold", threshold),
+	)
 
 	exceedsThreshold := func(val uint64) bool {
-		v := new(big.Int).SetUint64(val)
-		return v.Mul(v, theta.Denom()).Cmp(threshold) == 1
+		v := new(big.Float).SetUint64(val)
+		return v.Cmp(threshold) == 1
 	}
 	if v.Support > v.Against && exceedsThreshold(v.Support-v.Against) {
 		return support
@@ -113,3 +112,11 @@ func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, layerS
 
 // Opinion is opinions on other blocks.
 type Opinion map[types.BlockID]vec
+
+func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
+	arr := make([]types.BlockID, 0, len(m))
+	for b := range m {
+		arr = append(arr, b)
+	}
+	return arr
+}

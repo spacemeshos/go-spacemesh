@@ -96,6 +96,7 @@ func getAtxDB() *mockAtxDataProvider {
 type mockAtxDataProvider struct {
 	mockAtxHeader *types.ActivationTxHeader
 	atxDB         map[types.ATXID]*types.ActivationTxHeader
+	epochWeight   uint64
 	firstTime     time.Time
 }
 
@@ -118,6 +119,14 @@ func (madp *mockAtxDataProvider) StoreAtx(_ types.EpochID, atx *types.Activation
 		madp.firstTime = time.Now()
 	}
 	return nil
+}
+
+func (madp *mockAtxDataProvider) storeEpochWeight(weight uint64) {
+	madp.epochWeight = weight
+}
+
+func (madp *mockAtxDataProvider) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error) {
+	return madp.epochWeight, nil, nil
 }
 
 func getPersistentMesh(tb testing.TB) *mesh.DB {
@@ -197,7 +206,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 				sum = sum.Add(opinionVote.Multiply(weight))
 			}
 		}
-		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.GlobalThreshold, trtl.LayerSize, 1)
+		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.GlobalThreshold, big.NewFloat(float64(trtl.LayerSize)))
 		require.Equal(t, vote, globalOpinion, "test block %v expected vote %v but got %v", i, vote, sum)
 	}
 }
@@ -356,11 +365,6 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 	require.NoError(t, trtl.HandleIncomingLayer(context.TODO(), l))
 }
 
-var (
-	atxHeader = makeAtxHeaderWithWeight(1)
-	atx       = &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
-)
-
 func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
 	return makeLayerWithBeacon(t, layerID, trtl, nil, blocksPerLayer, atxdb, msh, inputVectorFn)
 }
@@ -381,7 +385,8 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 	logger.Debug("exception lists for layer", layerID, "(against, support, neutral):", lists)
 	lyr := types.NewLayer(layerID)
 
-	// for now just create a single ATX for all of the blocks with a weight of one
+	atxHeader := makeAtxHeaderWithWeight(1)
+	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 	atx.CalcAndSetID()
 	require.NoError(t, atxdb.StoreAtx(layerID.GetEpoch(), atx))
 
@@ -413,14 +418,14 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 
 func TestLayerPatterns(t *testing.T) {
 	const size = 10 // more blocks means a longer test
-	t.Run("many good layers", func(t *testing.T) {
+	t.Run("happy", func(t *testing.T) {
 		s := sim.New(sim.WithLayerSize(size))
 		s.Setup()
 
 		ctx := context.Background()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -442,7 +447,7 @@ func TestLayerPatterns(t *testing.T) {
 		ctx := context.Background()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -457,23 +462,9 @@ func TestLayerPatterns(t *testing.T) {
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
 		}
 		require.Equal(t, genesis.Add(5), verified)
-		vote := abstain
-		numLayersToFullyHeal := 0
-		for i := 0; vote == abstain; i++ {
-			// fast-forward to the point where Zdist is past, we've stopped waiting for hare results for the bad
-			// layers and started voting against them, and we've accumulated votes for ConfidenceParam layers
-			netVote := vec{Against: uint64(i * size)}
-			// Zdist + ConfidenceParam (+ a margin of one due to the math) layers have already passed, so that's our
-			// delta
-			vote = calculateOpinionWithThreshold(logtest.New(t), netVote, cfg.GlobalThreshold, size, uint32(i+1)+cfg.Zdist+cfg.ConfidenceParam)
-			// safety cutoff
-			if i > 100 {
-				panic("failed to accumulate enough votes")
-			}
-			numLayersToFullyHeal++
-		}
+
 		for _, lid := range sim.GenLayers(s,
-			sim.WithSequence(numLayersToFullyHeal),
+			sim.WithSequence(11),
 		) {
 			last = lid
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
@@ -591,7 +582,6 @@ func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider,
 	logger.Debug("\tfor\t", lists[1])
 	logger.Debug("\tneutral\t", lists[2])
 
-	// for now just create a single ATX for all of the blocks with a constant weight
 	atxHeader := makeAtxHeaderWithWeight(weight)
 	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 	atx.CalcAndSetID()
@@ -944,7 +934,10 @@ func tortoiseFromSimState(state sim.State, opts ...Opt) *Tortoise {
 
 func defaultAlgorithm(tb testing.TB, mdb *mesh.DB) *Tortoise {
 	tb.Helper()
-	return New(database.NewMemDatabase(), mdb, getAtxDB(), mockedBeacons(tb), WithConfig(defaultTestConfig()))
+	return New(database.NewMemDatabase(), mdb, getAtxDB(), mockedBeacons(tb),
+		WithConfig(defaultTestConfig()),
+		WithLogger(logtest.New(tb)),
+	)
 }
 
 func TestGetLocalBlockOpinion(t *testing.T) {
@@ -1346,6 +1339,8 @@ func TestVerifyLayers(t *testing.T) {
 
 	mdb := getInMemMesh(t)
 	atxdb := getAtxDB()
+	atxdb.storeEpochWeight(uint64(defaultTestLayerSize * types.GetLayersPerEpoch()))
+
 	alg := defaultAlgorithm(t, mdb)
 	alg.trtl.atxdb = atxdb
 	l1ID := types.GetEffectiveGenesis().Add(1)
@@ -1722,6 +1717,9 @@ func TestHealing(t *testing.T) {
 
 	mdb := getInMemMesh(t)
 	alg := defaultAlgorithm(t, mdb)
+	atxdb := getAtxDB()
+	atxdb.storeEpochWeight(uint64(defaultTestLayerSize * types.GetLayersPerEpoch()))
+	alg.trtl.atxdb = atxdb
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -1750,7 +1748,8 @@ func TestHealing(t *testing.T) {
 	})
 
 	alg.trtl.Last = l0ID
-	atxdb := getAtxDB()
+	atxdb = getAtxDB()
+	atxdb.storeEpochWeight(uint64(defaultTestLayerSize * types.GetLayersPerEpoch()))
 	alg.trtl.atxdb = atxdb
 	l1 := makeLayerWithBeacon(t, l1ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 	l2 := makeLayerWithBeacon(t, l2ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
@@ -1875,6 +1874,7 @@ func TestHealingAfterPartition(t *testing.T) {
 	// use a larger number of blocks per layer to give us more scope for testing
 	const goodLayerSize = defaultTestLayerSize * 10
 	alg.trtl.LayerSize = goodLayerSize
+	atxdb.storeEpochWeight(uint64(goodLayerSize * types.GetLayersPerEpoch()))
 
 	// create several good layers
 	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
@@ -2082,38 +2082,90 @@ func TestVectorArithmetic(t *testing.T) {
 }
 
 func TestCalculateOpinionWithThreshold(t *testing.T) {
-	r := require.New(t)
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 100), 1, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 100), 10, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 1, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 10, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 100), 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 10, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 1, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 10, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 1, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 1, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 10, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 10, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 10, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(11), big.NewRat(1, 10), 10, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 1, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 10, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 1, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 1, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 10, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 10, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 10, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(11), big.NewRat(1, 10), 10, 10))
-
-	// a more realistic example
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 72, Against: 9}, defaultTestGlobalThreshold, defaultTestLayerSize, 3))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 12, Against: 9}, defaultTestGlobalThreshold, defaultTestLayerSize, 3))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 9, Against: 18}, defaultTestGlobalThreshold, defaultTestLayerSize, 3))
+	for _, tc := range []struct {
+		desc      string
+		expect    vec
+		vote      vec
+		threshold *big.Rat
+		weight    *big.Float
+	}{
+		{
+			desc:      "Support",
+			expect:    support,
+			vote:      vec{Support: 6},
+			threshold: big.NewRat(1, 2),
+			weight:    big.NewFloat(10),
+		},
+		{
+			desc:      "SupportDelta",
+			expect:    support,
+			vote:      vec{Support: 12, Against: 6},
+			threshold: big.NewRat(1, 2),
+			weight:    big.NewFloat(10),
+		},
+		{
+			desc:      "Abstain",
+			expect:    abstain,
+			vote:      vec{Support: 5},
+			threshold: big.NewRat(1, 2),
+			weight:    big.NewFloat(10),
+		},
+		{
+			desc:      "AbstainDelta",
+			expect:    abstain,
+			vote:      vec{Support: 11, Against: 6},
+			threshold: big.NewRat(1, 2),
+			weight:    big.NewFloat(10),
+		},
+		{
+			desc:      "Against",
+			expect:    against,
+			vote:      vec{Against: 6},
+			threshold: big.NewRat(1, 2),
+			weight:    big.NewFloat(10),
+		},
+		{
+			desc:      "AgainstDelta",
+			expect:    against,
+			vote:      vec{Support: 6, Against: 12},
+			threshold: big.NewRat(1, 2),
+			weight:    big.NewFloat(10),
+		},
+		{
+			desc:      "ComplexSupport",
+			expect:    support,
+			vote:      vec{Support: 162, Against: 41},
+			threshold: big.NewRat(60, 100),
+			weight:    big.NewFloat(200),
+		},
+		{
+			desc:      "ComplexAbstain",
+			expect:    abstain,
+			vote:      vec{Support: 162, Against: 42},
+			threshold: big.NewRat(60, 100),
+			weight:    big.NewFloat(200),
+		},
+		{
+			desc:      "ComplexAbstain2",
+			expect:    abstain,
+			vote:      vec{Support: 42, Against: 162},
+			threshold: big.NewRat(60, 100),
+			weight:    big.NewFloat(200),
+		},
+		{
+			desc:      "ComplexAgainst",
+			expect:    against,
+			vote:      vec{Support: 41, Against: 162},
+			threshold: big.NewRat(60, 100),
+			weight:    big.NewFloat(200),
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			require.Equal(t, tc.expect,
+				calculateOpinionWithThreshold(logtest.New(t), tc.vote, tc.threshold, tc.weight))
+		})
+	}
 }
 
 func TestMultiTortoise(t *testing.T) {
@@ -2124,6 +2176,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
+		atxdb1.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
 		alg1.trtl.LayerSize = layerSize
@@ -2132,6 +2185,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb2 := getInMemMesh(t)
 		atxdb2 := getAtxDB()
+		atxdb2.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.LayerSize = layerSize
@@ -2179,6 +2233,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
+		atxdb1.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
 		alg1.trtl.LayerSize = layerSize
@@ -2187,6 +2242,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb2 := getInMemMesh(t)
 		atxdb2 := getAtxDB()
+		atxdb2.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.LayerSize = layerSize
@@ -2268,6 +2324,10 @@ func TestMultiTortoise(t *testing.T) {
 		// after a while (we simulate the distance here), minority tortoise eventually begins producing more blocks
 		for i := 0; i < healingDistance; i++ {
 			layerID = layerID.Add(1)
+
+			// technically only minority (mdb2) will not make progress without weakcoin
+			mdb1.RecordCoinflip(context.TODO(), layerID, true)
+			mdb2.RecordCoinflip(context.TODO(), layerID, true)
 
 			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
@@ -2403,6 +2463,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
+		atxdb1.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
 		alg1.trtl.LayerSize = layerSize
@@ -2411,6 +2472,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb2 := getInMemMesh(t)
 		atxdb2 := getAtxDB()
+		atxdb2.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.LayerSize = layerSize
@@ -2539,6 +2601,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
+		atxdb1.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
 		alg1.trtl.LayerSize = layerSize
@@ -2547,6 +2610,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb2 := getInMemMesh(t)
 		atxdb2 := getAtxDB()
+		atxdb2.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.LayerSize = layerSize
@@ -2555,6 +2619,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb3 := getInMemMesh(t)
 		atxdb3 := getAtxDB()
+		atxdb3.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
 		alg3 := defaultAlgorithm(t, mdb3)
 		alg3.trtl.atxdb = atxdb3
 		alg3.trtl.LayerSize = layerSize
@@ -2710,6 +2775,81 @@ func TestMultiTortoise(t *testing.T) {
 		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 		checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
 	})
+}
+
+func TestComputeExpectedWeight(t *testing.T) {
+	genesis := types.GetEffectiveGenesis()
+	layers := types.GetLayersPerEpoch()
+	require.EqualValues(t, 4, layers, "expecting layers per epoch to be 4. adjust test if it will change")
+	for _, tc := range []struct {
+		desc         string
+		target, last types.LayerID
+		totals       []uint64 // total weights starting from (target, last]
+		expect       *big.Float
+	}{
+		{
+			desc:   "SingleIncompleteEpoch",
+			target: genesis,
+			last:   genesis.Add(2),
+			totals: []uint64{10},
+			expect: big.NewFloat(5),
+		},
+		{
+			desc:   "SingleCompleteEpoch",
+			target: genesis,
+			last:   genesis.Add(4),
+			totals: []uint64{10},
+			expect: big.NewFloat(10),
+		},
+		{
+			desc:   "ExpectZeroEpoch",
+			target: genesis,
+			last:   genesis.Add(8),
+			totals: []uint64{10, 0},
+			expect: big.NewFloat(10),
+		},
+		{
+			desc:   "MultipleIncompleteEpochs",
+			target: genesis.Add(2),
+			last:   genesis.Add(7),
+			totals: []uint64{8, 12},
+			expect: big.NewFloat(13),
+		},
+		{
+			desc:   "IncompleteEdges",
+			target: genesis.Add(2),
+			last:   genesis.Add(13),
+			totals: []uint64{4, 12, 12, 4},
+			expect: big.NewFloat(2 + 12 + 12 + 1),
+		},
+		{
+			desc:   "MultipleCompleteEpochs",
+			target: genesis,
+			last:   genesis.Add(8),
+			totals: []uint64{8, 12},
+			expect: big.NewFloat(20),
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			var (
+				ctrl         = gomock.NewController(t)
+				atxdb        = mocks.NewMockatxDataProvider(ctrl)
+				epochWeights = map[types.EpochID]uint64{}
+				first        = tc.target.Add(1).GetEpoch()
+			)
+			atxdb.EXPECT().GetEpochWeight(gomock.Any()).DoAndReturn(func(eid types.EpochID) (uint64, []types.ATXID, error) {
+				pos := eid - first
+				if len(tc.totals) <= int(pos) {
+					return 0, nil, fmt.Errorf("invalid test: have only %d weights, want position %d", len(tc.totals), pos)
+				}
+				return tc.totals[pos], nil, nil
+			}).AnyTimes()
+			weight, err := computeExpectedVoteWeight(atxdb, epochWeights, tc.target, tc.last)
+			require.NoError(t, err)
+			require.Equal(t, tc.expect.String(), weight.String())
+		})
+	}
 }
 
 func TestOutOfOrderLayersAreVerified(t *testing.T) {
@@ -3127,7 +3267,10 @@ func TestWeakCoinVoting(t *testing.T) {
 	s := sim.New(
 		sim.WithLayerSize(size),
 	)
-	s.Setup(sim.WithSetupUnitsRange(1, 1))
+	s.Setup(
+		sim.WithSetupUnitsRange(1, 1),
+		sim.WithSetupMinerRange(size, size),
+	)
 
 	ctx := context.Background()
 	cfg := defaultTestConfig()
@@ -3137,7 +3280,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	cfg.ConfidenceParam = 0
 
 	var (
-		tortoise       = tortoiseFromSimState(s.State, WithConfig(cfg))
+		tortoise       = tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
 		verified, last types.LayerID
 		genesis        = types.GetEffectiveGenesis()
 	)
@@ -3433,4 +3576,27 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 		require.NoError(t, err)
 		assert.True(t, valid, "block %s at layer %s", bid, partitionEnd)
 	}
+}
+
+func TestVerifyLayerByWeightNotSize(t *testing.T) {
+	const size = 10
+	s := sim.New(
+		sim.WithLayerSize(size),
+	)
+	// change weight to be atleast the same as size
+	s.Setup(sim.WithSetupUnitsRange(size, size))
+
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
+
+	var last, verified types.LayerID
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(2),
+		sim.WithSequence(1, sim.WithLayerSizeOverwrite(1)),
+	) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(2), verified)
 }

@@ -15,6 +15,7 @@ func nextConfDefaults() nextConf {
 		VoteGen:      PerfectVoting,
 		Coinflip:     true,
 		HareFraction: Frac(1, 1),
+		LayerSize:    -1,
 	}
 }
 
@@ -23,6 +24,7 @@ type nextConf struct {
 	FailHare     bool
 	HareFraction Fraction
 	Coinflip     bool
+	LayerSize    int
 	VoteGen      VotesGenerator
 }
 
@@ -65,6 +67,13 @@ func WithPartialHare(nominator, denominator int) NextOpt {
 	}
 }
 
+// WithLayerSizeOverwrite overwrite expected layer size.
+func WithLayerSizeOverwrite(size int) NextOpt {
+	return func(c *nextConf) {
+		c.LayerSize = size
+	}
+}
+
 // WithVoteGenerator declares vote generator for a layer.
 func WithVoteGenerator(gen VotesGenerator) NextOpt {
 	return func(c *nextConf) {
@@ -100,8 +109,16 @@ func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 }
 
 func (g *Generator) genLayer(cfg nextConf) types.LayerID {
+	if g.nextLayer.Sub(1).GetEpoch() < g.nextLayer.GetEpoch() && g.nextLayer.Sub(1) != types.GetEffectiveGenesis() {
+		g.renewAtxs()
+	}
+
 	layer := types.NewLayer(g.nextLayer)
-	for i := 0; i < int(g.conf.LayerSize); i++ {
+	size := int(g.conf.LayerSize)
+	if cfg.LayerSize >= 0 {
+		size = cfg.LayerSize
+	}
+	for i := 0; i < size; i++ {
 		miner := g.rng.Intn(len(g.activations))
 		atxid := g.activations[miner]
 		signer := g.keys[miner]

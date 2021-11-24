@@ -149,7 +149,7 @@ type setupConf struct {
 
 func defaultSetupConf() setupConf {
 	return setupConf{
-		Miners: [2]int{30, 100},
+		Miners: [2]int{30, 30},
 		Units:  [2]int{1, 10},
 	}
 }
@@ -179,20 +179,41 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	miners := intInRange(g.rng, conf.Miners)
 	g.activations = make([]types.ATXID, miners)
 
+	for i := 0; i < miners; i++ {
+		g.keys = append(g.keys, signing.NewEdSignerFromRand(g.rng))
+	}
+
 	for i := range g.activations {
 		units := intInRange(g.rng, conf.Units)
 		address := types.Address{}
 		_, _ = g.rng.Read(address[:])
-		atx := types.NewActivationTx(types.NIPostChallenge{
-			NodeID:    types.NodeID{Key: address.Hex()},
-			StartTick: 1,
-			EndTick:   2,
-		}, address, nil, uint(units), nil)
+
+		nipost := types.NIPostChallenge{
+			NodeID:     types.NodeID{Key: address.Hex()},
+			StartTick:  1,
+			EndTick:    2,
+			PubLayerID: g.nextLayer.Sub(1),
+		}
+		atx := types.NewActivationTx(nipost, address, nil, uint(units), nil)
+
 		g.activations[i] = atx.ID()
-		if err := g.State.AtxDB.StoreAtx(context.Background(), g.nextLayer.GetEpoch(), atx); err != nil {
+		if err := g.State.AtxDB.StoreAtx(context.Background(), g.nextLayer.Sub(1).GetEpoch(), atx); err != nil {
 			g.logger.With().Panic("failed to store atx", log.Err(err))
 		}
+	}
+}
 
-		g.keys = append(g.keys, signing.NewEdSignerFromRand(g.rng))
+func (g *Generator) renewAtxs() {
+	for i, atxid := range g.activations {
+		atx, err := g.State.AtxDB.GetFullAtx(atxid)
+		if err != nil {
+			g.logger.With().Panic("failed to fetch atx", atxid, log.Err(err))
+		}
+		atx.PubLayerID = g.nextLayer.Sub(1)
+		atx.CalcAndSetID()
+		if err := g.State.AtxDB.StoreAtx(context.Background(), g.nextLayer.Sub(1).GetEpoch(), atx); err != nil {
+			g.logger.With().Panic("failed to store atx", log.Err(err))
+		}
+		g.activations[i] = atx.ID()
 	}
 }
