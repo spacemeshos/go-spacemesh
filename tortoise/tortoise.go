@@ -719,7 +719,7 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 	if err != nil {
 		return nil, err
 	}
-	logger.Info("verifying: expected voting weight for layer", log.Uint64("weight", weight), lid)
+	logger.With().Info("verifying: expected voting weight for layer", log.Uint64("weight", weight), lid)
 
 	// Count the votes of good ballots. localOpinionOnBlock is our local opinion on this block.
 	// Declare the vote vector "verified" up to position k if the total weight exceeds the confidence threshold in
@@ -948,7 +948,7 @@ func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[type
 	if err != nil {
 		return nil, err
 	}
-	logger.Info("local opinion: expected voting weight for layer", log.Uint64("weight", weight), lid)
+	logger.With().Info("local opinion: expected voting weight for layer", log.Uint64("weight", weight), lid)
 
 	// this layer has not yet been verified
 	// we must have an opinion about older layers at this point. if the layer hasn't been verified yet, count votes
@@ -1062,7 +1062,7 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 			logger.Error("failed to compute expected vote weight", log.Err(err))
 			return
 		}
-		logger.Info("healing: expected voting weight for layer", log.Uint64("weight", weight), candidateLayerID)
+		logger.With().Info("healing: expected voting weight for layer", log.Uint64("weight", weight), candidateLayerID)
 
 		// record the contextual validity for all blocks in this layer
 		for _, blockID := range layerBlockIds {

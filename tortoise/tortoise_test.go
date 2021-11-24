@@ -422,14 +422,14 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 
 func TestLayerPatterns(t *testing.T) {
 	const size = 10 // more blocks means a longer test
-	t.Run("many good layers", func(t *testing.T) {
+	t.Run("happy", func(t *testing.T) {
 		s := sim.New(sim.WithLayerSize(size))
 		s.Setup()
 
 		ctx := context.Background()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -451,7 +451,7 @@ func TestLayerPatterns(t *testing.T) {
 		ctx := context.Background()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -466,23 +466,9 @@ func TestLayerPatterns(t *testing.T) {
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
 		}
 		require.Equal(t, genesis.Add(5), verified)
-		vote := abstain
-		numLayersToFullyHeal := 0
-		for i := 0; vote == abstain; i++ {
-			// fast-forward to the point where Zdist is past, we've stopped waiting for hare results for the bad
-			// layers and started voting against them, and we've accumulated votes for ConfidenceParam layers
-			netVote := vec{Against: uint64(i * size)}
-			// Zdist + ConfidenceParam (+ a margin of one due to the math) layers have already passed, so that's our
-			// delta
-			vote = calculateOpinionWithThreshold(logtest.New(t), netVote, cfg.GlobalThreshold, size)
-			// safety cutoff
-			if i > 100 {
-				panic("failed to accumulate enough votes")
-			}
-			numLayersToFullyHeal++
-		}
+
 		for _, lid := range sim.GenLayers(s,
-			sim.WithSequence(numLayersToFullyHeal),
+			sim.WithSequence(11),
 		) {
 			last = lid
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
@@ -3268,7 +3254,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	cfg.ConfidenceParam = 0
 
 	var (
-		tortoise       = tortoiseFromSimState(s.State, WithConfig(cfg))
+		tortoise       = tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
 		verified, last types.LayerID
 		genesis        = types.GetEffectiveGenesis()
 	)

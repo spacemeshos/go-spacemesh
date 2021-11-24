@@ -109,6 +109,10 @@ func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 }
 
 func (g *Generator) genLayer(cfg nextConf) types.LayerID {
+	if g.nextLayer.Sub(1).GetEpoch() < g.nextLayer.GetEpoch() && g.nextLayer.Sub(1) != types.GetEffectiveGenesis() {
+		g.renewAtxs()
+	}
+
 	layer := types.NewLayer(g.nextLayer)
 	size := int(g.conf.LayerSize)
 	if cfg.LayerSize >= 0 {
