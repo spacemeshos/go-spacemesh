@@ -2816,6 +2816,13 @@ func TestComputeExpectedWeight(t *testing.T) {
 			expect: big.NewFloat(13),
 		},
 		{
+			desc:   "IncompleteEdges",
+			target: genesis.Add(2),
+			last:   genesis.Add(13),
+			totals: []uint64{4, 12, 12, 4},
+			expect: big.NewFloat(2 + 12 + 12 + 1),
+		},
+		{
 			desc:   "MultipleCompleteEpochs",
 			target: genesis,
 			last:   genesis.Add(8),
