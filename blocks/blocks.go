@@ -20,19 +20,17 @@ import (
 const NewBlockProtocol = "newBlock"
 
 var (
-	errDupTx         = errors.New("duplicate TransactionID in block")
-	errDupAtx        = errors.New("duplicate ATXID in block")
-	errNoActiveSet   = errors.New("block does not declare active set")
-	errZeroActiveSet = errors.New("block declares empty active set")
+	errDupTx                 = errors.New("duplicate TransactionID in block")
+	errDupAtx                = errors.New("duplicate ATXID in block")
+	errNoActiveSet           = errors.New("block does not declare active set")
+	errZeroActiveSet         = errors.New("block declares empty active set")
+	errConflictingExceptions = errors.New("conflicting exceptions")
+	errExceptionsOverlow     = errors.New("too many exceptions")
 )
-
-type forBlockInView func(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 
 type mesh interface {
 	GetBlock(types.BlockID) (*types.Block, error)
 	AddBlockWithTxs(context.Context, *types.Block) error
-	ProcessedLayer() types.LayerID
-	ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error
 }
 
 type blockValidator interface {
@@ -41,38 +39,62 @@ type blockValidator interface {
 
 // BlockHandler is the struct responsible for storing meta data needed to process blocks from gossip.
 type BlockHandler struct {
-	log.Log
-	fetcher     system.Fetcher
-	traverse    forBlockInView
-	depth       uint32
-	mesh        mesh
-	validator   blockValidator
-	goldenATXID types.ATXID
+	logger log.Log
+	cfg    Config
+
+	fetcher   system.Fetcher
+	mesh      mesh
+	validator blockValidator
 }
 
 // Config defines configuration for block handler.
 type Config struct {
-	Depth       uint32
-	GoldenATXID types.ATXID
+	MaxExceptions int
+}
+
+// defaultConfig for BlockHandler.
+func defaultConfig() Config {
+	return Config{
+		MaxExceptions: 1000,
+	}
+}
+
+// Opt for configuring BlockHandler.
+type Opt func(b *BlockHandler)
+
+// WithMaxExceptions defines max allowed exceptions in a block.
+func WithMaxExceptions(max int) Opt {
+	return func(b *BlockHandler) {
+		b.cfg.MaxExceptions = max
+	}
+}
+
+// WithLogger defines logger for BlockHandler.
+func WithLogger(logger log.Log) Opt {
+	return func(b *BlockHandler) {
+		b.logger = logger
+	}
 }
 
 // NewBlockHandler creates new BlockHandler.
-func NewBlockHandler(cfg Config, fetcher system.Fetcher, m mesh, v blockValidator, lg log.Log) *BlockHandler {
-	return &BlockHandler{
-		Log:         lg,
-		fetcher:     fetcher,
-		traverse:    m.ForBlockInView,
-		depth:       cfg.Depth,
-		mesh:        m,
-		validator:   v,
-		goldenATXID: cfg.GoldenATXID,
+func NewBlockHandler(fetcher system.Fetcher, m mesh, v blockValidator, opts ...Opt) *BlockHandler {
+	b := &BlockHandler{
+		logger:    log.NewNop(),
+		cfg:       defaultConfig(),
+		fetcher:   fetcher,
+		mesh:      m,
+		validator: v,
 	}
+	for _, opt := range opts {
+		opt(b)
+	}
+	return b
 }
 
 // HandleBlock handles blocks from gossip.
 func (bh *BlockHandler) HandleBlock(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
 	if err := bh.HandleBlockData(ctx, msg); err != nil {
-		bh.WithContext(ctx).With().Error("error handling block data", log.Err(err))
+		bh.logger.WithContext(ctx).With().Warning("error handling block data", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
@@ -80,13 +102,14 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, _ peer.ID, msg []byte) 
 
 // HandleBlockData handles blocks from gossip and sync.
 func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte) error {
-	logger := bh.WithContext(ctx)
+	logger := bh.logger.WithContext(ctx)
 	logger.Info("handling data for new block")
 	start := time.Now()
 
 	var blk types.Block
 	if err := types.BytesToInterface(data, &blk); err != nil {
 		logger.With().Error("received invalid block", log.Err(err))
+		return fmt.Errorf("malformed block %w", err)
 	}
 
 	// set the block id when received
@@ -96,28 +119,19 @@ func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte) error 
 
 	// check if known
 	if _, err := bh.mesh.GetBlock(blk.ID()); err == nil {
-		logger.Info("we already know this block")
+		logger.Info("received known block")
 		return nil
 	}
 	logger.With().Info("got new block", blk.Fields()...)
 
 	if err := bh.blockSyntacticValidation(ctx, &blk); err != nil {
-		logger.With().Error("failed to validate block", log.Err(err))
-		return fmt.Errorf("failed to validate block %v", err)
+		return fmt.Errorf("failed to validate block %w", err)
 	}
 
 	saveMetrics(blk)
 
 	if err := bh.mesh.AddBlockWithTxs(ctx, &blk); err != nil {
-		logger.With().Error("failed to add block to database", log.Err(err))
-		// we return nil here so that the block will still be propagated
-		return nil
-	}
-
-	if !blk.Layer().After(bh.mesh.ProcessedLayer()) { //|| blk.Layer() == bh.mesh.getValidatingLayer() {
-		logger.With().Warning("block is late",
-			log.FieldNamed("processed_layer", bh.mesh.ProcessedLayer()),
-			log.FieldNamed("miner_id", blk.MinerID()))
+		return fmt.Errorf("adding block %s: %w", blk.ID(), err)
 	}
 
 	logger.With().Debug("time to process block", log.Duration("duration", time.Since(start)))
@@ -166,13 +180,36 @@ func blockDependencies(blk *types.Block) []types.BlockID {
 	return combined
 }
 
+func validateExceptions(block *types.Block, max int) error {
+	exceptions := map[types.BlockID]struct{}{}
+	for _, diff := range [][]types.BlockID{block.ForDiff, block.NeutralDiff, block.AgainstDiff} {
+		for _, bid := range diff {
+			_, exist := exceptions[bid]
+			if exist {
+				return fmt.Errorf("%w: block %s is referenced multiple times in exceptions of block %s",
+					errConflictingExceptions, bid, block.ID())
+			}
+			exceptions[bid] = struct{}{}
+		}
+	}
+	if len(exceptions) > max {
+		return fmt.Errorf("%w: %d exceptions with max allowed %d in blocks %s",
+			errExceptionsOverlow, len(exceptions), max, block.ID())
+	}
+	return nil
+}
+
 func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *types.Block) error {
 	// Add layer to context, for logging purposes, since otherwise the context will be lost here below
 	if reqID, ok := log.ExtractRequestID(ctx); ok {
 		ctx = log.WithRequestID(ctx, reqID, block.Layer())
 	}
 
-	bh.WithContext(ctx).With().Debug("syntactically validating block", block.ID())
+	bh.logger.WithContext(ctx).With().Debug("syntactically validating block", block.ID())
+
+	if err := validateExceptions(block, bh.cfg.MaxExceptions); err != nil {
+		return err
+	}
 
 	// if there is a reference block - first validate it
 	if block.RefBlock != nil {
@@ -189,11 +226,7 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 	}
 
 	// fast validation checks if there are no duplicate ATX in active set and no duplicate TXs as well
-	// TODO: validate that there are no conflicts in the vote exception lists (e.g., that the block does not both
-	//   support and vote against a given block)
-	//   See https://github.com/spacemeshos/go-spacemesh/issues/2369
 	if err := bh.fastValidation(block); err != nil {
-		bh.WithContext(ctx).With().Error("failed fast validation", block.ID(), log.Err(err))
 		return fmt.Errorf("fast validation: %w", err)
 	}
 
@@ -211,12 +244,12 @@ func (bh BlockHandler) blockSyntacticValidation(ctx context.Context, block *type
 		return fmt.Errorf("failed to fetch view %v e: %v", block.ID(), err)
 	}
 
-	bh.WithContext(ctx).With().Debug("validation done: block is syntactically valid", block.ID())
+	bh.logger.WithContext(ctx).With().Debug("validation done: block is syntactically valid", block.ID())
 	return nil
 }
 
 func (bh *BlockHandler) fetchAllReferencedAtxs(ctx context.Context, blk *types.Block) error {
-	bh.WithContext(ctx).With().Debug("block handler fetching all atxs referenced by block", blk.ID())
+	bh.logger.WithContext(ctx).With().Debug("block handler fetching all atxs referenced by block", blk.ID())
 
 	// As block with empty or Golden ATXID is considered syntactically invalid, explicit check is not needed here.
 	atxs := []types.ATXID{blk.ATXID}

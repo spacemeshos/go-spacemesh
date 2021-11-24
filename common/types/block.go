@@ -390,7 +390,7 @@ func (b *Block) ToBallot() *Ballot {
 			NeutralDiff:      b.NeutralDiff,
 			RefBallot:        refBallot,
 			EpochData:        epochData,
-			layerID:          b.LayerIndex,
+			LayerIndex:       b.LayerIndex,
 		},
 		// TODO: populate Signature when Block is retired
 		Signature: nil,

@@ -763,6 +763,12 @@ func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
 	logger := msh.WithContext(ctx).WithFields(blk.ID())
 	logger.With().Debug("adding block to mesh", blk.Fields()...)
 
+	if !blk.Layer().After(msh.ProcessedLayer()) {
+		logger.With().Warning("block is late",
+			log.FieldNamed("processed_layer", msh.ProcessedLayer()),
+			log.FieldNamed("miner_id", blk.MinerID()))
+	}
+
 	if err := msh.StoreTransactionsFromPool(blk); err != nil {
 		logger.With().Error("not all txs were processed", log.Err(err))
 	}
