@@ -87,18 +87,19 @@ func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, weight
 	thetaMu.Lock()
 	defer thetaMu.Unlock()
 
-	threshold := new(big.Int).Set(theta.Num())
-	threshold.Mul(threshold, big.NewInt(int64(weight)))
+	threshold := new(big.Float).SetInt(theta.Num())
+	threshold.Mul(threshold, new(big.Float).SetUint64(weight))
+	threshold.Quo(threshold, new(big.Float).SetInt(theta.Denom()))
 
 	logger.With().Debug("threshold opinion",
 		v,
 		log.String("theta", theta.String()),
-		log.Uint64("average_weight", weight),
+		log.Uint64("expected_weight", weight),
 		log.String("threshold", threshold.String()))
 
 	exceedsThreshold := func(val uint64) bool {
-		v := new(big.Int).SetUint64(val)
-		return v.Mul(v, theta.Denom()).Cmp(threshold) == 1
+		v := new(big.Float).SetUint64(val)
+		return v.Cmp(threshold) == 1
 	}
 	if v.Support > v.Against && exceedsThreshold(v.Support-v.Against) {
 		return support
