@@ -5,6 +5,17 @@ import (
 	"time"
 )
 
+// RandomBytes generates random data in bytes for testing.
+func RandomBytes(size int) []byte {
+	rand.Seed(time.Now().UnixNano())
+	b := make([]byte, size)
+	_, err := rand.Read(b)
+	if err != nil {
+		return nil
+	}
+	return b
+}
+
 // RandomATXID generates a random ATXID for testing.
 func RandomATXID() ATXID {
 	rand.Seed(time.Now().UnixNano())

@@ -249,6 +249,11 @@ func (tb *TortoiseBeacon) ReportBeaconFromBlock(epoch types.EpochID, blockID typ
 	}
 }
 
+// ReportBeaconFromBallot reports the beacon value in a ballot along with the smesher's weight unit.
+func (tb *TortoiseBeacon) ReportBeaconFromBallot(types.EpochID, types.BallotID, []byte, uint64) {
+	// TODO: implement me
+}
+
 func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types.BlockID, beacon []byte, weight uint64) {
 	beaconStr := types.BytesToHash(beacon).ShortString()
 

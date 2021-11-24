@@ -550,6 +550,12 @@ func (l *Logic) FetchBlock(ctx context.Context, id types.BlockID) error {
 	return res.Err
 }
 
+// GetBallots gets data for the specified BallotIDs and validates them.
+func (l *Logic) GetBallots(context.Context, []types.BallotID) error {
+	// TODO: implement me
+	return nil
+}
+
 // GetAtxs gets the data for given atx ids IDs and validates them. returns an error if at least one ATX cannot be fetched.
 func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	hashes := make([]types.Hash32, 0, len(IDs))
