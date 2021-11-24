@@ -83,19 +83,20 @@ var thetaMu sync.Mutex
 
 // calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
 // theta, and expected vote weight.
-func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, weight uint64) vec {
+func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, weight *big.Float) vec {
 	thetaMu.Lock()
 	defer thetaMu.Unlock()
 
 	threshold := new(big.Float).SetInt(theta.Num())
-	threshold.Mul(threshold, new(big.Float).SetUint64(weight))
+	threshold.Mul(threshold, weight)
 	threshold.Quo(threshold, new(big.Float).SetInt(theta.Denom()))
 
 	logger.With().Debug("threshold opinion",
 		v,
 		log.String("theta", theta.String()),
-		log.Uint64("expected_weight", weight),
-		log.String("threshold", threshold.String()))
+		log.Stringer("expected_weight", weight),
+		log.Stringer("threshold", threshold),
+	)
 
 	exceedsThreshold := func(val uint64) bool {
 		v := new(big.Float).SetUint64(val)

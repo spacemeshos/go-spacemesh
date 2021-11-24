@@ -73,6 +73,11 @@ func String(name, val string) Field {
 	return Field(zap.String(name, val))
 }
 
+// Stringer returns an fmt.Sringer Field.
+func Stringer(name string, val fmt.Stringer) Field {
+	return Field(zap.Stringer(name, val))
+}
+
 // Binary will encode binary content in base64 when logged.
 func Binary(name string, val []byte) Field {
 	return Field(zap.Binary(name, val))

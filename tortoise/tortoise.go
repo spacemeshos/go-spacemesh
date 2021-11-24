@@ -718,7 +718,7 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 	if err != nil {
 		return nil, err
 	}
-	logger.With().Info("verifying: expected voting weight for layer", log.Uint64("weight", weight), lid)
+	logger.With().Info("verifying: expected voting weight for layer", log.Stringer("weight", weight), lid)
 
 	// Count the votes of good ballots. localOpinionOnBlock is our local opinion on this block.
 	// Declare the vote vector "verified" up to position k if the total weight exceeds the confidence threshold in
@@ -947,7 +947,7 @@ func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[type
 	if err != nil {
 		return nil, err
 	}
-	logger.With().Info("local opinion: expected voting weight for layer", log.Uint64("weight", weight), lid)
+	logger.With().Info("local opinion: expected voting weight for layer", log.Stringer("weight", weight), lid)
 
 	// this layer has not yet been verified
 	// we must have an opinion about older layers at this point. if the layer hasn't been verified yet, count votes
@@ -1061,7 +1061,7 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 			logger.Error("failed to compute expected vote weight", log.Err(err))
 			return
 		}
-		logger.With().Info("healing: expected voting weight for layer", log.Uint64("weight", weight), candidateLayerID)
+		logger.With().Info("healing: expected voting weight for layer", log.Stringer("weight", weight), candidateLayerID)
 
 		// record the contextual validity for all blocks in this layer
 		for _, blockID := range layerBlockIds {
@@ -1134,7 +1134,7 @@ func getEpochWeight(atxdb atxDataProvider, epochWeight map[types.EpochID]uint64,
 }
 
 // computeExpectedVoteWeight computes the expected weight for a block in the target layer, from summing up votes from ballots up to and including last layer.
-func computeExpectedVoteWeight(atxdb atxDataProvider, epochWeight map[types.EpochID]uint64, target, last types.LayerID) (uint64, error) {
+func computeExpectedVoteWeight(atxdb atxDataProvider, epochWeight map[types.EpochID]uint64, target, last types.LayerID) (*big.Float, error) {
 	var (
 		total  = new(big.Float)
 		layers = uint64(types.GetLayersPerEpoch())
@@ -1143,12 +1143,11 @@ func computeExpectedVoteWeight(atxdb atxDataProvider, epochWeight map[types.Epoc
 	for lid := target.Add(1); !lid.After(last); lid = lid.Add(1) {
 		weight, err := getEpochWeight(atxdb, epochWeight, lid.GetEpoch())
 		if err != nil {
-			return 0, err
+			return nil, err
 		}
 		layerWeight := new(big.Float).SetUint64(weight)
 		layerWeight.Quo(layerWeight, new(big.Float).SetUint64(layers))
 		total.Add(total, layerWeight)
 	}
-	rst, _ := total.Uint64()
-	return rst, nil
+	return total, nil
 }
