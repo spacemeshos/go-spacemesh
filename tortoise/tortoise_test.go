@@ -209,7 +209,7 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 				sum = sum.Add(opinionVote.Multiply(weight))
 			}
 		}
-		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.GlobalThreshold, uint64(trtl.LayerSize), 1)
+		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.GlobalThreshold, uint64(trtl.LayerSize))
 		require.Equal(t, vote, globalOpinion, "test block %v expected vote %v but got %v", i, vote, sum)
 	}
 }
@@ -474,7 +474,7 @@ func TestLayerPatterns(t *testing.T) {
 			netVote := vec{Against: uint64(i * size)}
 			// Zdist + ConfidenceParam (+ a margin of one due to the math) layers have already passed, so that's our
 			// delta
-			vote = calculateOpinionWithThreshold(logtest.New(t), netVote, cfg.GlobalThreshold, size, uint32(i+1)+cfg.Zdist+cfg.ConfidenceParam)
+			vote = calculateOpinionWithThreshold(logtest.New(t), netVote, cfg.GlobalThreshold, size)
 			// safety cutoff
 			if i > 100 {
 				panic("failed to accumulate enough votes")
@@ -2093,38 +2093,158 @@ func TestVectorArithmetic(t *testing.T) {
 }
 
 func TestCalculateOpinionWithThreshold(t *testing.T) {
-	r := require.New(t)
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 100), 1, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 100), 10, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 1, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 10, 1))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 100), 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), abstain, big.NewRat(1, 10), 10, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 1, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 10, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 1, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 1, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 100), 10, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 10, 1))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(10), big.NewRat(1, 10), 10, 10))
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), support.Multiply(11), big.NewRat(1, 10), 10, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 1, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 10, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 1, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 1, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 100), 10, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 10, 1))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 1, 10))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(10), big.NewRat(1, 10), 10, 10))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), against.Multiply(11), big.NewRat(1, 10), 10, 10))
+	for _, tc := range []struct {
+		desc      string
+		expect    vec
+		vote      vec
+		threshold *big.Rat
+		weight    uint64
+	}{
+		{
+			desc:      "Support",
+			expect:    support,
+			vote:      vec{Support: 6},
+			threshold: big.NewRat(1, 2),
+			weight:    10,
+		},
+		{
+			desc:      "SupportDelta",
+			expect:    support,
+			vote:      vec{Support: 12, Against: 6},
+			threshold: big.NewRat(1, 2),
+			weight:    10,
+		},
+		{
+			desc:      "Abstain",
+			expect:    abstain,
+			vote:      vec{Support: 5},
+			threshold: big.NewRat(1, 2),
+			weight:    10,
+		},
+		{
+			desc:      "AbstainDelta",
+			expect:    abstain,
+			vote:      vec{Support: 11, Against: 6},
+			threshold: big.NewRat(1, 2),
+			weight:    10,
+		},
+		{
+			desc:      "Against",
+			expect:    against,
+			vote:      vec{Against: 6},
+			threshold: big.NewRat(1, 2),
+			weight:    10,
+		},
+		{
+			desc:      "AgainstDelta",
+			expect:    against,
+			vote:      vec{Support: 6, Against: 12},
+			threshold: big.NewRat(1, 2),
+			weight:    10,
+		},
+		{
+			desc:      "ComplexSupport",
+			expect:    support,
+			vote:      vec{Support: 162, Against: 41},
+			threshold: big.NewRat(60, 100),
+			weight:    200,
+		},
+		{
+			desc:      "ComplexAbstain",
+			expect:    abstain,
+			vote:      vec{Support: 162, Against: 42},
+			threshold: big.NewRat(60, 100),
+			weight:    200,
+		},
+		{
+			desc:      "ComplexAbstain2",
+			expect:    abstain,
+			vote:      vec{Support: 42, Against: 162},
+			threshold: big.NewRat(60, 100),
+			weight:    200,
+		},
+		{
+			desc:      "ComplexAgainst",
+			expect:    against,
+			vote:      vec{Support: 41, Against: 162},
+			threshold: big.NewRat(60, 100),
+			weight:    200,
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			require.Equal(t, tc.expect,
+				calculateOpinionWithThreshold(logtest.New(t), tc.vote, tc.threshold, tc.weight))
+		})
+	}
+}
 
-	// a more realistic example
-	r.Equal(support, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 72, Against: 9}, defaultTestGlobalThreshold, defaultTestLayerSize, 3))
-	r.Equal(abstain, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 12, Against: 9}, defaultTestGlobalThreshold, defaultTestLayerSize, 3))
-	r.Equal(against, calculateOpinionWithThreshold(logtest.New(t), vec{Support: 9, Against: 18}, defaultTestGlobalThreshold, defaultTestLayerSize, 3))
+func TestComputeExpectedWeight(t *testing.T) {
+	genesis := types.GetEffectiveGenesis()
+	layers := types.GetLayersPerEpoch()
+	require.EqualValues(t, 4, layers, "expecting layers per epoch to be 4. adjust test if it will change")
+	for _, tc := range []struct {
+		desc         string
+		target, last types.LayerID
+		totals       []uint64 // total weights starting from (target, last]
+		expect       uint64
+	}{
+		{
+			desc:   "SingleIncompleteEpoch",
+			target: genesis,
+			last:   genesis.Add(2),
+			totals: []uint64{10},
+			expect: 5,
+		},
+		{
+			desc:   "SingleCompleteEpoch",
+			target: genesis,
+			last:   genesis.Add(4),
+			totals: []uint64{10},
+			expect: 10,
+		},
+		{
+			desc:   "ExpectZeroEpoch",
+			target: genesis,
+			last:   genesis.Add(8),
+			totals: []uint64{10, 0},
+			expect: 10,
+		},
+		{
+			desc:   "MultipleIncompleteEpochs",
+			target: genesis.Add(2),
+			last:   genesis.Add(7),
+			totals: []uint64{8, 12},
+			expect: 13,
+		},
+		{
+			desc:   "MultipleCompleteEpochs",
+			target: genesis,
+			last:   genesis.Add(8),
+			totals: []uint64{8, 12},
+			expect: 20,
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			var (
+				ctrl         = gomock.NewController(t)
+				atxdb        = mocks.NewMockatxDataProvider(ctrl)
+				epochWeights = map[types.EpochID]uint64{}
+				first        = tc.target.Add(1).GetEpoch()
+			)
+			atxdb.EXPECT().GetEpochWeight(gomock.Any()).DoAndReturn(func(eid types.EpochID) (uint64, []types.ATXID, error) {
+				pos := eid - first
+				if len(tc.totals) <= int(pos) {
+					return 0, nil, fmt.Errorf("invalid test: have only %d weights, want position %d", len(tc.totals), pos)
+				}
+				return tc.totals[pos], nil, nil
+			}).AnyTimes()
+			weight, err := computeExpectedVoteWeight(atxdb, epochWeights, tc.target, tc.last)
+			require.NoError(t, err)
+			require.Equal(t, int(tc.expect), int(weight))
+		})
+	}
 }
 
 func TestMultiTortoise(t *testing.T) {

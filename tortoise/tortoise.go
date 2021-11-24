@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -14,11 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
-type atxDataProvider interface {
-	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
-	GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error)
-}
-
 var (
 	errNoBaseBallotFound    = errors.New("no good base ballot within exception vector limit")
 	errNotSorted            = errors.New("input blocks are not sorted by layerID")
@@ -26,14 +22,6 @@ var (
 	errstrTooManyExceptions = "too many exceptions to base ballot vote"
 	errstrConflictingVotes  = "conflicting votes found in ballot"
 )
-
-func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
-	arr := make([]types.BlockID, 0, len(m))
-	for b := range m {
-		arr = append(arr, b)
-	}
-	return arr
-}
 
 type turtle struct {
 	Config
@@ -62,7 +50,7 @@ func newTurtle(
 			log:                   lg,
 			refBallotBeacons:      map[types.EpochID]map[types.BallotID][]byte{},
 			badBeaconBallots:      map[types.BallotID]struct{}{},
-			averageEpochWeight:    map[types.EpochID]uint64{},
+			epochWeight:           map[types.EpochID]uint64{},
 			GoodBallotsIndex:      map[types.BallotID]bool{},
 			BallotOpinionsByLayer: map[types.LayerID]map[types.BallotID]Opinion{},
 			BallotLayer:           map[types.BallotID]types.LayerID{},
@@ -727,6 +715,12 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 		return isgood
 	}
 
+	weight, err := computeExpectedVoteWeight(t.atxdb, t.epochWeight, lid, t.Last)
+	if err != nil {
+		return nil, err
+	}
+	logger.Info("verifying: expected voting weight for layer", log.Uint64("weight", weight), lid)
+
 	// Count the votes of good ballots. localOpinionOnBlock is our local opinion on this block.
 	// Declare the vote vector "verified" up to position k if the total weight exceeds the confidence threshold in
 	// all positions up to k: in other words, we can verify a layer k if the total weight of the global opinion
@@ -744,13 +738,10 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 			return nil, fmt.Errorf("error summing votes for block %v in candidate layer %v: %w",
 				bid, lid, err)
 		}
-		weight, err := t.getAverageWeight(ctx, lid)
-		if err != nil {
-			return nil, err
-		}
+
 		// check that the total weight exceeds the global threshold
 		globalOpinionOnBlock := calculateOpinionWithThreshold(
-			t.logger, sum, t.GlobalThreshold, weight, t.Last.Difference(lid))
+			t.logger, sum, t.GlobalThreshold, weight)
 		logger.With().Debug("verifying tortoise calculated global opinion on block",
 			log.Named("block_voted_on", bid),
 			lid,
@@ -953,6 +944,12 @@ func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[type
 		return opinion, nil
 	}
 
+	weight, err := computeExpectedVoteWeight(t.atxdb, t.epochWeight, lid, t.Last)
+	if err != nil {
+		return nil, err
+	}
+	logger.Info("local opinion: expected voting weight for layer", log.Uint64("weight", weight), lid)
+
 	// this layer has not yet been verified
 	// we must have an opinion about older layers at this point. if the layer hasn't been verified yet, count votes
 	// and see if they pass the local threshold.
@@ -965,11 +962,8 @@ func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[type
 			return nil, fmt.Errorf("error summing votes for block %v in old layer %v: %w",
 				bid, lid, err)
 		}
-		weight, err := t.getAverageWeight(ctx, lid)
-		if err != nil {
-			return nil, err
-		}
-		local := calculateOpinionWithThreshold(t.logger, sum, t.LocalThreshold, weight, 1)
+
+		local := calculateOpinionWithThreshold(t.logger, sum, t.LocalThreshold, weight)
 		logger.With().Debug("local opinion on block in old layer",
 			sum,
 			log.Named("local_opinion", local),
@@ -1059,9 +1053,16 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 
 		layerBlockIds, err := getLayerBlocksIDs(ctx, t.bdp, candidateLayerID)
 		if err != nil {
-			logger.Error("inconsistent state: can't find layer in database, cannot heal")
+			logger.Error("inconsistent state: can't find layer in database, cannot heal", log.Err(err))
 			return
 		}
+
+		weight, err := computeExpectedVoteWeight(t.atxdb, t.epochWeight, candidateLayerID, t.Last)
+		if err != nil {
+			logger.Error("failed to compute expected vote weight", log.Err(err))
+			return
+		}
+		logger.Info("healing: expected voting weight for layer", log.Uint64("weight", weight), candidateLayerID)
 
 		// record the contextual validity for all blocks in this layer
 		for _, blockID := range layerBlockIds {
@@ -1075,12 +1076,8 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 				return
 			}
 
-			weight, err := t.getAverageWeight(ctx, candidateLayerID)
-			if err != nil {
-				return
-			}
 			// check that the total weight exceeds the global threshold
-			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.GlobalThreshold, weight, t.Last.Difference(candidateLayerID))
+			globalOpinionOnBlock := calculateOpinionWithThreshold(t.logger, sum, t.GlobalThreshold, weight)
 			logger.With().Debug("self healing calculated global opinion on candidate block",
 				log.Named("global_opinion", globalOpinionOnBlock),
 				sum,
@@ -1124,17 +1121,35 @@ func (t *turtle) ballotFilterForHealing(candidateLayerID types.LayerID, logger l
 	}
 }
 
-func (t *turtle) getAverageWeight(ctx context.Context, lid types.LayerID) (uint64, error) {
-	eid := lid.GetEpoch()
-	weight, exist := t.averageEpochWeight[eid]
+func getEpochWeight(atxdb atxDataProvider, epochWeight map[types.EpochID]uint64, eid types.EpochID) (uint64, error) {
+	weight, exist := epochWeight[eid]
 	if exist {
 		return weight, nil
 	}
-	weight, err := computeAverageWeight(t.atxdb, eid, t.LayerSize)
+	weight, _, err := atxdb.GetEpochWeight(eid)
 	if err != nil {
-		return 0, err
+		return 0, fmt.Errorf("epoch weight %s: %w", eid, err)
 	}
-	t.logger.WithContext(ctx).With().Info("computed average weight for epoch", eid, log.Uint64("weight", weight))
-	t.averageEpochWeight[eid] = weight
+	epochWeight[eid] = weight
 	return weight, nil
+}
+
+// computeExpectedVoteWeight computes the expected weight for a block in the target layer, from summing up votes from ballots up to and including last layer.
+func computeExpectedVoteWeight(atxdb atxDataProvider, epochWeight map[types.EpochID]uint64, target, last types.LayerID) (uint64, error) {
+	var (
+		total  = new(big.Float)
+		layers = uint64(types.GetLayersPerEpoch())
+	)
+	// TODO(dshulyak) this can be improved by computing weight for epoch at once
+	for lid := target.Add(1); !lid.After(last); lid = lid.Add(1) {
+		weight, err := getEpochWeight(atxdb, epochWeight, lid.GetEpoch())
+		if err != nil {
+			return 0, err
+		}
+		layerWeight := new(big.Float).SetUint64(weight)
+		layerWeight.Quo(layerWeight, new(big.Float).SetUint64(layers))
+		total.Add(total, layerWeight)
+	}
+	rst, _ := total.Uint64()
+	return rst, nil
 }

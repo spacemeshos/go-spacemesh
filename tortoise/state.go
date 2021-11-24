@@ -33,8 +33,8 @@ type state struct {
 	// in the opinions map to work with.
 	badBeaconBallots map[types.BallotID]struct{}
 
-	// averageEpochWeight average weight of atx's that target keyed epoch
-	averageEpochWeight map[types.EpochID]uint64
+	// epochWeight average weight of atx's that target keyed epoch
+	epochWeight map[types.EpochID]uint64
 
 	// last layer processed: note that tortoise does not have a concept of "current" layer (and it's not aware of the
 	// current time or latest tick). As far as Tortoise is concerned, Last is the current layer. This is a subjective
@@ -225,7 +225,7 @@ func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
 	}
 	for epoch := range epochToEvict {
 		delete(s.refBallotBeacons, epoch)
-		delete(s.averageEpochWeight, epoch)
+		delete(s.epochWeight, epoch)
 	}
 	s.LastEvicted = windowStart.Sub(1)
 	return nil
