@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -566,5 +567,5 @@ func TestBlockEligibility_calc(t *testing.T) {
 	o := NewMinerBlockOracle(10, 1, atxDb, mockBeaconProvider(t), vrfsgn, nodeID, func() bool { return true }, logtest.New(t).WithName(t.Name()))
 	o.atx = atxH.ActivationTxHeader
 	_, _, err := o.calcEligibilityProofs(0, 1)
-	r.EqualError(err, "oracle get num slots: zero total weight not allowed") // a hack to make sure we got genesis active set size on genesis
+	r.ErrorIs(err, proposals.ErrZeroTotalWeight) // a hack to make sure we got genesis active set size on genesis
 }

@@ -8,6 +8,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 )
 
+// ErrZeroTotalWeight is returned when zero total epoch weight is used when calculating eligible slots.
+var ErrZeroTotalWeight = errors.New("zero total weight not allowed")
+
 // CalcEligibleLayer calculates the eligible layer from the VRF signature.
 func CalcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig []byte) types.LayerID {
 	vrfInteger := util.BytesToUint64(vrfSig)
@@ -18,7 +21,7 @@ func CalcEligibleLayer(epochNumber types.EpochID, layersPerEpoch uint32, vrfSig 
 // GetNumEligibleSlots calculates the number of eligible slots for a smesher in an epoch.
 func GetNumEligibleSlots(weight, totalWeight uint64, committeeSize uint32, layersPerEpoch uint32) (uint32, error) {
 	if totalWeight == 0 {
-		return 0, errors.New("zero total weight not allowed")
+		return 0, ErrZeroTotalWeight
 	}
 	numberOfEligibleBlocks := weight * uint64(committeeSize) * uint64(layersPerEpoch) / totalWeight // TODO: ensure no overflow
 	if numberOfEligibleBlocks == 0 {

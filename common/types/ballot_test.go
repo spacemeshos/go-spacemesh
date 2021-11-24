@@ -45,5 +45,5 @@ func TestBallot_Initialize_BadSignature(t *testing.T) {
 	}
 	b.Signature = signing.NewEdSigner().Sign(b.Bytes())[1:]
 	err := b.Initialize()
-	assert.EqualError(t, err, "ballot initialize: ed25519: bad signature format")
+	assert.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
 }

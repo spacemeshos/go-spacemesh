@@ -121,7 +121,7 @@ func (b *Ballot) Initialize() error {
 	b.ballotID = BallotID(CalcHash32(bytes).ToHash20())
 	pubkey, err := ed25519.ExtractPublicKey(bytes, b.Signature)
 	if err != nil {
-		return fmt.Errorf("ballot initialize: %w", err)
+		return fmt.Errorf("ballot extract key: %w", err)
 	}
 	b.smesherID = signing.NewPublicKey(pubkey)
 	return nil
