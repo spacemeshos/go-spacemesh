@@ -975,6 +975,268 @@ func TestGetLocalBlockOpinion(t *testing.T) {
 	r.Equal(against, vec)
 }
 
+func TestVerifyLayers(t *testing.T) {
+	r := require.New(t)
+
+	mdb := getInMemMesh(t)
+	atxdb := getAtxDB()
+	alg := defaultAlgorithm(t, mdb)
+	alg.trtl.atxdb = atxdb
+	l1ID := types.GetEffectiveGenesis().Add(1)
+	l2ID := l1ID.Add(1)
+	l2Blocks := generateBlocks(t, l2ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+	l3ID := l2ID.Add(1)
+	l3Blocks := generateBlocks(t, l3ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+	l4ID := l3ID.Add(1)
+	l4Blocks := generateBlocks(t, l4ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+	l5ID := l4ID.Add(1)
+	l5Blocks := generateBlocks(t, l5ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+	l6ID := l5ID.Add(1)
+	l6Blocks := generateBlocks(t, l6ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+
+	// layer missing in database
+	alg.trtl.Last = l2ID
+	err := alg.trtl.verifyLayers(wrapContext(context.TODO()))
+	r.ErrorIs(err, database.ErrNotFound)
+
+	// empty layer: local opinion vector is nil, abstains on all blocks in layer
+	// no contextual validity data recorded
+	// layer should be verified
+	r.NoError(mdb.AddZeroBlockLayer(l1ID))
+
+	mdbWrapper := meshWrapper{
+		blockDataWriter: mdb,
+		saveContextualValidityFn: func(types.BlockID, types.LayerID, bool) error {
+			r.Fail("should not save contextual validity")
+			return nil
+		},
+	}
+	alg.trtl.bdp = mdbWrapper
+	err = alg.trtl.verifyLayers(wrapContext(context.TODO()))
+	r.NoError(err)
+	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))
+
+	for _, block := range l2Blocks {
+		r.NoError(mdb.AddBlock(block))
+	}
+	// L3 blocks support all L2 blocks
+	l2SupportVec := Opinion{
+		l2Blocks[0].ID(): support,
+		l2Blocks[1].ID(): support,
+		l2Blocks[2].ID(): support,
+	}
+	l3Ballots := types.ToBallots(l3Blocks)
+	alg.trtl.BallotOpinionsByLayer[l3ID] = map[types.BallotID]Opinion{
+		l3Ballots[0].ID(): l2SupportVec,
+		l3Ballots[1].ID(): l2SupportVec,
+		l3Ballots[2].ID(): l2SupportVec,
+	}
+	alg.trtl.Last = l3ID
+
+	// voting blocks not marked good, both global and local opinion is abstain, verified layer does not advance
+	r.NoError(alg.trtl.verifyLayers(wrapContext(context.TODO())))
+	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))
+
+	// now mark voting blocks good
+	alg.trtl.GoodBallotsIndex[l3Ballots[0].ID()] = false
+	alg.trtl.GoodBallotsIndex[l3Ballots[1].ID()] = false
+	alg.trtl.GoodBallotsIndex[l3Ballots[2].ID()] = false
+
+	// TODO(nkryuchkov): uncomment when it's used
+	var /*l2BlockIDs,*/ l3BlockIDs, l4BlockIDs, l5BlockIDs []types.BlockID
+	for _, block := range l3Blocks {
+		r.NoError(mdb.AddBlock(block))
+		l3BlockIDs = append(l3BlockIDs, block.ID())
+	}
+
+	// consensus doesn't match: fail to verify candidate layer
+	// global opinion: good, local opinion: abstain
+	r.NoError(alg.trtl.verifyLayers(wrapContext(context.TODO())))
+	r.Equal(int(l1ID.Uint32()), int(alg.trtl.Verified.Uint32()))
+
+	// mark local opinion of L2 good so verified layer advances
+	// do the reverse for L3: local opinion is good, global opinion is undecided
+	// TODO(nkryuchkov): remove or uncomment when it's used
+	//for _, block := range l2Blocks {
+	//	l2BlockIDs = append(l2BlockIDs, block.ID())
+	//}
+	mdbWrapper.inputVectorBackupFn = mdb.LayerBlockIds
+	mdbWrapper.saveContextualValidityFn = nil
+	alg.trtl.bdp = mdbWrapper
+	for _, block := range l4Blocks {
+		r.NoError(mdb.AddBlock(block))
+		l4BlockIDs = append(l4BlockIDs, block.ID())
+	}
+	for _, block := range l5Blocks {
+		r.NoError(mdb.AddBlock(block))
+		l5BlockIDs = append(l5BlockIDs, block.ID())
+	}
+	for _, block := range l6Blocks {
+		r.NoError(mdb.AddBlock(block))
+	}
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l3ID, l3BlockIDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l4ID, l4BlockIDs))
+	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l5ID, l5BlockIDs))
+	l4Votes := Opinion{
+		// support these so global opinion is support
+		l2Blocks[0].ID(): support,
+		l2Blocks[1].ID(): support,
+		l2Blocks[2].ID(): support,
+
+		// abstain
+		l3Blocks[0].ID(): abstain,
+		l3Blocks[1].ID(): abstain,
+		l3Blocks[2].ID(): abstain,
+	}
+	l4Ballots := types.ToBallots(l4Blocks)
+	alg.trtl.BallotOpinionsByLayer[l4ID] = map[types.BallotID]Opinion{
+		l4Ballots[0].ID(): l4Votes,
+		l4Ballots[1].ID(): l4Votes,
+		l4Ballots[2].ID(): l4Votes,
+	}
+	alg.trtl.Last = l4ID
+	alg.trtl.GoodBallotsIndex[l4Ballots[0].ID()] = false
+	alg.trtl.GoodBallotsIndex[l4Ballots[1].ID()] = false
+	alg.trtl.GoodBallotsIndex[l4Ballots[2].ID()] = false
+	l5Votes := Opinion{
+		l2Blocks[0].ID(): support,
+		l2Blocks[1].ID(): support,
+		l2Blocks[2].ID(): support,
+		l3Blocks[0].ID(): abstain,
+		l3Blocks[1].ID(): abstain,
+		l3Blocks[2].ID(): abstain,
+		l4Blocks[0].ID(): support,
+		l4Blocks[1].ID(): support,
+		l4Blocks[2].ID(): support,
+	}
+	l5Ballots := types.ToBallots(l5Blocks)
+	alg.trtl.BallotOpinionsByLayer[l5ID] = map[types.BallotID]Opinion{
+		l5Ballots[0].ID(): l5Votes,
+		l5Ballots[1].ID(): l5Votes,
+		l5Ballots[2].ID(): l5Votes,
+	}
+	alg.trtl.GoodBallotsIndex[l5Ballots[0].ID()] = false
+	alg.trtl.GoodBallotsIndex[l5Ballots[1].ID()] = false
+	alg.trtl.GoodBallotsIndex[l5Ballots[2].ID()] = false
+	l6Votes := Opinion{
+		l2Blocks[0].ID(): support,
+		l2Blocks[1].ID(): support,
+		l2Blocks[2].ID(): support,
+		l3Blocks[0].ID(): abstain,
+		l3Blocks[1].ID(): abstain,
+		l3Blocks[2].ID(): abstain,
+		l4Blocks[0].ID(): support,
+		l4Blocks[1].ID(): support,
+		l4Blocks[2].ID(): support,
+		l5Blocks[0].ID(): support,
+		l5Blocks[1].ID(): support,
+		l5Blocks[2].ID(): support,
+	}
+	l6Ballots := types.ToBallots(l6Blocks)
+	alg.trtl.BallotOpinionsByLayer[l6ID] = map[types.BallotID]Opinion{
+		l6Ballots[0].ID(): l6Votes,
+		l6Ballots[1].ID(): l6Votes,
+		l6Ballots[2].ID(): l6Votes,
+	}
+	alg.trtl.GoodBallotsIndex[l6Ballots[0].ID()] = false
+	alg.trtl.GoodBallotsIndex[l6Ballots[1].ID()] = false
+	alg.trtl.GoodBallotsIndex[l6Ballots[2].ID()] = false
+
+	// verified layer advances one step, but L3 is not verified because global opinion is undecided, so verification
+	// stops there
+	t.Run("global opinion undecided", func(t *testing.T) {
+		err = alg.trtl.verifyLayers(wrapContext(context.TODO()))
+		r.NoError(err)
+		r.Equal(int(l2ID.Uint32()), int(alg.trtl.Verified.Uint32()))
+	})
+
+	l4Votes = Opinion{
+		l2Blocks[0].ID(): support,
+		l2Blocks[1].ID(): support,
+		l2Blocks[2].ID(): support,
+
+		// change from abstain to support
+		l3Blocks[0].ID(): support,
+		l3Blocks[1].ID(): support,
+		l3Blocks[2].ID(): support,
+	}
+
+	// weight not exceeded
+	t.Run("weight not exceeded", func(t *testing.T) {
+		// modify vote so one block votes in support of L3 blocks, two blocks continue to abstain, so threshold not met
+		alg.trtl.BallotOpinionsByLayer[l4ID][l4Ballots[0].ID()] = l4Votes
+		err = alg.trtl.verifyLayers(wrapContext(context.TODO()))
+		r.NoError(err)
+		r.Equal(int(l2ID.Uint32()), int(alg.trtl.Verified.Uint32()))
+	})
+
+	t.Run("healing handoff", func(t *testing.T) {
+		// test self-healing: self-healing can verify layers that are stuck for specific reasons, i.e., where local and
+		// global opinion differ (or local opinion is missing).
+		alg.trtl.Hdist = 1
+		alg.trtl.Zdist = 1
+		alg.trtl.ConfidenceParam = 1
+
+		// add more votes in favor of l3 blocks
+		alg.trtl.BallotOpinionsByLayer[l4ID][l4Ballots[1].ID()] = l4Votes
+		alg.trtl.BallotOpinionsByLayer[l4ID][l4Ballots[2].ID()] = l4Votes
+		l5Votes := Opinion{
+			l2Blocks[0].ID(): support,
+			l2Blocks[1].ID(): support,
+			l2Blocks[2].ID(): support,
+			l3Blocks[0].ID(): support,
+			l3Blocks[1].ID(): support,
+			l3Blocks[2].ID(): support,
+			l4Blocks[0].ID(): support,
+			l4Blocks[1].ID(): support,
+			l4Blocks[2].ID(): support,
+		}
+		alg.trtl.BallotOpinionsByLayer[l5ID] = map[types.BallotID]Opinion{
+			l5Ballots[0].ID(): l5Votes,
+			l5Ballots[1].ID(): l5Votes,
+			l5Ballots[2].ID(): l5Votes,
+		}
+		l6Votes := Opinion{
+			l2Blocks[0].ID(): support,
+			l2Blocks[1].ID(): support,
+			l2Blocks[2].ID(): support,
+			l3Blocks[0].ID(): support,
+			l3Blocks[1].ID(): support,
+			l3Blocks[2].ID(): support,
+			l4Blocks[0].ID(): support,
+			l4Blocks[1].ID(): support,
+			l4Blocks[2].ID(): support,
+			l5Blocks[0].ID(): support,
+			l5Blocks[1].ID(): support,
+			l5Blocks[2].ID(): support,
+		}
+		alg.trtl.BallotOpinionsByLayer[l6ID] = map[types.BallotID]Opinion{
+			l6Ballots[0].ID(): l6Votes,
+			l6Ballots[1].ID(): l6Votes,
+			l6Ballots[2].ID(): l6Votes,
+		}
+
+		// simulate a layer that's older than the LayerCutoff, and older than Zdist+ConfidenceParam, but not verified,
+		// that has no contextually valid blocks in the database. this should trigger self-healing.
+
+		// perform some surgery: erase just enough good blocks data so that ordinary tortoise verification fails for
+		// one layer, triggering self-healing, but leave enough good blocks data so that ordinary tortoise can
+		// subsequently verify a later layer after self-healing has finished. this works because self-healing does not
+		// rely on local data, including the set of good blocks.
+		delete(alg.trtl.GoodBallotsIndex, l4Ballots[0].ID())
+		delete(alg.trtl.GoodBallotsIndex, l4Ballots[1].ID())
+		delete(alg.trtl.GoodBallotsIndex, l4Ballots[2].ID())
+		delete(alg.trtl.GoodBallotsIndex, l5Ballots[0].ID())
+
+		// self-healing should advance verification two steps, over the
+		// previously stuck layer (l3) and the following layer (l4) since it's old enough, then hand control back to the
+		// ordinary verifying tortoise which should continue and verify l5.
+		alg.trtl.Last = l4ID.Add(alg.trtl.Hdist + 1)
+		r.NoError(alg.trtl.verifyLayers(wrapContext(context.TODO())))
+		r.Equal(int(l5ID.Uint32()), int(alg.trtl.Verified.Uint32()))
+	})
+}
+
 func TestCheckBlockAndGetInputVector(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh(t)
@@ -1414,6 +1676,200 @@ func TestSumVotesForBlock(t *testing.T) {
 	r.Equal(against.Multiply(9), sum)
 }
 
+func TestHealing(t *testing.T) {
+	r := require.New(t)
+
+	mdb := getInMemMesh(t)
+	alg := defaultAlgorithm(t, mdb)
+
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	alg.trtl.beacons = mockBeacons
+
+	goodBeacon := randomBytes(t, 32)
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(goodBeacon, nil).AnyTimes()
+
+	l0ID := types.GetEffectiveGenesis()
+	l1ID := l0ID.Add(1)
+	l2ID := l1ID.Add(1)
+
+	// don't attempt to heal recent layers
+	t.Run("don't heal recent layers", func(t *testing.T) {
+		checkVerifiedLayer(t, alg.trtl, l0ID)
+
+		// while bootstrapping there should be no healing
+		alg.trtl.heal(wrapContext(context.TODO()), l2ID)
+		checkVerifiedLayer(t, alg.trtl, l0ID)
+
+		// later, healing should not occur on layers not at least Hdist back
+		alg.trtl.Last = types.NewLayerID(alg.trtl.Hdist + 1)
+		alg.trtl.heal(wrapContext(context.TODO()), l2ID)
+		checkVerifiedLayer(t, alg.trtl, l0ID)
+	})
+
+	alg.trtl.Last = l0ID
+	atxdb := getAtxDB()
+	alg.trtl.atxdb = atxdb
+	l1 := makeLayerWithBeacon(t, l1ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	l2 := makeLayerWithBeacon(t, l2ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+
+	// healing should work even when there is no local opinion on a layer (i.e., no output vector, while waiting
+	// for hare results)
+	t.Run("does not depend on local opinion", func(t *testing.T) {
+		checkVerifiedLayer(t, alg.trtl, l0ID)
+		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l1ID))
+		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l2ID))
+
+		// reducing hdist will allow verification to start happening
+		alg.trtl.Hdist = 1
+		// alg.trtl.Last = l2ID
+		alg.trtl.heal(wrapContext(context.TODO()), l2ID)
+		checkVerifiedLayer(t, alg.trtl, l1ID)
+	})
+
+	l3ID := l2ID.Add(1)
+
+	// can heal when global and local opinion differ
+	t.Run("local and global opinions differ", func(t *testing.T) {
+		checkVerifiedLayer(t, alg.trtl, l1ID)
+
+		// store input vector for already-processed layers
+		var l1BlockIDs, l2BlockIDs []types.BlockID
+		for _, block := range l1.Blocks() {
+			l1BlockIDs = append(l1BlockIDs, block.ID())
+		}
+		for _, block := range l2.Blocks() {
+			l2BlockIDs = append(l2BlockIDs, block.ID())
+		}
+		require.NoError(t, mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, l1BlockIDs))
+		require.NoError(t, mdb.SaveLayerInputVectorByID(context.TODO(), l2ID, l2BlockIDs))
+
+		// then create and process one more new layer
+		// prevent base block from referencing earlier (approved) layers
+		alg.trtl.Last = l0ID
+		makeLayerWithBeacon(t, l3ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l3ID))
+
+		// make sure local opinion supports L2
+		localOpinionVec, err := alg.trtl.getLocalOpinion(wrapContext(context.TODO()), l2ID)
+		require.NoError(t, err)
+		for _, bid := range l2BlockIDs {
+			r.Contains(localOpinionVec, bid)
+			r.Equal(support, localOpinionVec[bid])
+		}
+
+		alg.trtl.heal(wrapContext(context.TODO()), l3ID)
+		checkVerifiedLayer(t, alg.trtl, l2ID)
+
+		// make sure contextual validity is updated
+		for _, bid := range l2BlockIDs {
+			valid, err := mdb.ContextualValidity(bid)
+			r.NoError(err)
+			// global opinion should be against all the blocks in this layer since blocks in subsequent
+			// layers don't vote for them
+			r.False(valid)
+		}
+	})
+
+	l4ID := l3ID.Add(1)
+
+	// healing should count votes of non-good blocks
+	t.Run("counts votes of non-good blocks", func(t *testing.T) {
+		checkVerifiedLayer(t, alg.trtl, l2ID)
+
+		// create and process several more layers
+		// but don't save layer input vectors, so local opinion is abstain
+		makeLayerWithBeacon(t, l4ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
+
+		// delete good blocks data
+		oldGoodBallotsIndex := alg.trtl.GoodBallotsIndex
+		alg.trtl.GoodBallotsIndex = make(map[types.BallotID]bool, 0)
+
+		alg.trtl.heal(wrapContext(context.TODO()), l4ID)
+		checkVerifiedLayer(t, alg.trtl, l3ID)
+		alg.trtl.GoodBallotsIndex = oldGoodBallotsIndex
+	})
+
+	l5ID := l4ID.Add(1)
+	l6ID := l5ID.Add(1)
+	l7ID := l6ID.Add(1)
+
+	// healing should count votes of non-good blocks
+	t.Run("counts votes of bad-beacon blocks", func(t *testing.T) {
+		checkVerifiedLayer(t, alg.trtl, l3ID)
+		badBeacon := randomBytes(t, 32)
+
+		// create and process several more layers with the wrong beacon.
+		// but don't save layer input vectors, so local opinion is abstain
+		makeLayerWithBeacon(t, l5ID, alg.trtl, badBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		makeLayerWithBeacon(t, l6ID, alg.trtl, badBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		makeLayerWithBeacon(t, l7ID, alg.trtl, badBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l5ID))
+		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l6ID))
+		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l7ID))
+		checkVerifiedLayer(t, alg.trtl, l3ID)
+
+		// delete good blocks data
+		alg.trtl.GoodBallotsIndex = make(map[types.BallotID]bool, 0)
+
+		alg.trtl.BadBeaconVoteDelayLayers = 1
+		alg.trtl.Hdist = 0
+		alg.trtl.heal(wrapContext(context.TODO()), l7ID)
+		checkVerifiedLayer(t, alg.trtl, l4ID)
+	})
+}
+
+// can heal when half of votes are missing (doesn't meet threshold)
+// this requires waiting an epoch or two before the active set size is reduced enough to cross the threshold
+// see https://github.com/spacemeshos/go-spacemesh/issues/2497 for an idea about making this faster.
+func TestHealingAfterPartition(t *testing.T) {
+	mdb := getInMemMesh(t)
+	atxdb := getAtxDB()
+	alg := defaultAlgorithm(t, mdb)
+	alg.trtl.atxdb = atxdb
+	l0ID := types.GetEffectiveGenesis()
+
+	// use a larger number of blocks per layer to give us more scope for testing
+	const goodLayerSize = defaultTestLayerSize * 10
+	alg.trtl.LayerSize = goodLayerSize
+
+	// create several good layers
+	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(4), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(5), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
+
+	// create a few layers with half the number of blocks
+	makeAndProcessLayer(t, l0ID.Add(6), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(7), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(8), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+
+	// verification should fail, global opinion should be abstain since not enough votes
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
+
+	// once we start receiving full layers again, verification should restart immediately. this scenario doesn't
+	// actually require healing, since local and global opinions are the same, and the threshold is just > 1/2.
+	makeAndProcessLayer(t, l0ID.Add(9), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
+
+	// then we start receiving fewer blocks again
+	for i := 0; types.NewLayerID(uint32(i)).Before(types.NewLayerID(alg.trtl.Zdist + alg.trtl.ConfidenceParam)); i++ {
+		makeAndProcessLayer(t, l0ID.Add(10+uint32(i)), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+	}
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
+
+	// healing would begin here, but without enough blocks to accumulate votes to cross the global threshold, we're
+	// effectively stuck (until, in practice, active set size would be reduced in a following epoch and the remaining
+	// miners would produce more blocks--this is tested in the app tests)
+	firstHealedLayer := l0ID.Add(10 + uint32(alg.trtl.Zdist+alg.trtl.ConfidenceParam))
+	makeAndProcessLayer(t, firstHealedLayer, alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
+}
+
 func TestSumWeightedVotesForBlock(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh(t)
@@ -1708,6 +2164,602 @@ func TestCalculateOpinionWithThreshold(t *testing.T) {
 				calculateOpinionWithThreshold(logtest.New(t), tc.vote, tc.threshold, tc.weight))
 		})
 	}
+}
+
+func TestMultiTortoise(t *testing.T) {
+	r := require.New(t)
+
+	t.Run("happy path", func(t *testing.T) {
+		const layerSize = defaultTestLayerSize * 2
+
+		mdb1 := getInMemMesh(t)
+		atxdb1 := getAtxDB()
+		alg1 := defaultAlgorithm(t, mdb1)
+		alg1.trtl.atxdb = atxdb1
+		alg1.trtl.LayerSize = layerSize
+		alg1.logger = alg1.logger.Named("trtl1")
+		alg1.trtl.logger = alg1.logger
+
+		mdb2 := getInMemMesh(t)
+		atxdb2 := getAtxDB()
+		alg2 := defaultAlgorithm(t, mdb2)
+		alg2.trtl.atxdb = atxdb2
+		alg2.trtl.LayerSize = layerSize
+		alg2.logger = alg2.logger.Named("trtl2")
+		alg2.trtl.logger = alg2.logger
+
+		makeAndProcessLayerMultiTortoise := func(layerID types.LayerID) {
+			// simulate producing blocks in parallel
+			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+
+			// these will produce identical sets of blocks, so throw away half of each
+			// (we could probably get away with just using, say, A's blocks, but to be more thorough we also want
+			// to test the BaseBlock provider of each tortoise)
+			blocksA = blocksA[:layerSize/2]
+			blocksB = blocksB[len(blocksA):]
+			blocks := append(blocksA, blocksB...)
+
+			// add all blocks to both tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+		}
+
+		// make and process a bunch of layers and make sure both tortoises can verify them
+		for i := 1; i < 5; i++ {
+			layerID := types.GetEffectiveGenesis().Add(uint32(i))
+
+			makeAndProcessLayerMultiTortoise(layerID)
+
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+		}
+	})
+
+	t.Run("unequal partition and rejoin", func(t *testing.T) {
+		const layerSize = 10
+
+		mdb1 := getInMemMesh(t)
+		atxdb1 := getAtxDB()
+		alg1 := defaultAlgorithm(t, mdb1)
+		alg1.trtl.atxdb = atxdb1
+		alg1.trtl.LayerSize = layerSize
+		alg1.logger = alg1.logger.Named("trtl1")
+		alg1.trtl.logger = alg1.logger
+
+		mdb2 := getInMemMesh(t)
+		atxdb2 := getAtxDB()
+		alg2 := defaultAlgorithm(t, mdb2)
+		alg2.trtl.atxdb = atxdb2
+		alg2.trtl.LayerSize = layerSize
+		alg2.logger = alg2.logger.Named("trtl2")
+		alg2.trtl.logger = alg2.logger
+
+		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB []*types.Block) {
+			// simulate producing blocks in parallel
+			blocksA = generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB = generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+
+			// 90/10 split
+			blocksA = blocksA[:layerSize-1]
+			blocksB = blocksB[layerSize-1:]
+			return
+		}
+
+		// a bunch of good layers
+		lastVerified := types.GetEffectiveGenesis()
+		layerID := types.GetEffectiveGenesis()
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB := makeBlocks(layerID)
+			var blocks []*types.Block
+			blocks = append(blocksA, blocksB...)
+
+			// add all blocks to both tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// both should make progress
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+			lastVerified = layerID.Sub(1)
+		}
+
+		// keep track of all blocks on each side of the partition
+		var forkBlocksA, forkBlocksB []*types.Block
+		beforePartition := layerID
+		// simulate a partition
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB := makeBlocks(layerID)
+			forkBlocksA = append(forkBlocksA, blocksA...)
+			forkBlocksB = append(forkBlocksB, blocksB...)
+
+			// add A's blocks to A only, B's to B
+			var blockIDsA, blockIDsB []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// majority tortoise is unaffected, minority tortoise gets stuck
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+		}
+
+		// these extra layers account for the time needed to generate enough votes to "catch up" and pass
+		// the threshold.
+		healingDistance := 12
+
+		// after a while (we simulate the distance here), minority tortoise eventually begins producing more blocks
+		for i := 0; i < healingDistance; i++ {
+			layerID = layerID.Add(1)
+
+			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
+			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
+			// an ongoing partition.
+			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			forkBlocksA = append(forkBlocksA, blocksA...)
+			var blockIDsA, blockIDsB []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			forkBlocksB = append(forkBlocksB, blocksB...)
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// majority tortoise is unaffected, minority tortoise is still stuck
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+		}
+
+		// finally, the minority tortoise heals and regains parity with the majority tortoise
+		layerID = layerID.Add(1)
+		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+		forkBlocksA = append(forkBlocksA, blocksA...)
+		var blockIDsA, blockIDsB []types.BlockID
+		for _, block := range blocksA {
+			blockIDsA = append(blockIDsA, block.ID())
+			r.NoError(mdb1.AddBlock(block))
+		}
+		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+		alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+		forkBlocksB = append(forkBlocksB, blocksB...)
+		for _, block := range blocksB {
+			blockIDsB = append(blockIDsB, block.ID())
+			r.NoError(mdb2.AddBlock(block))
+		}
+		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+		alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+		// minority node is healed
+		lastVerified = layerID.Sub(1)
+		checkVerifiedLayer(t, alg1.trtl, lastVerified)
+		checkVerifiedLayer(t, alg2.trtl, lastVerified)
+
+		// now simulate a rejoin
+		// send each tortoise's blocks to the other (simulated resync)
+		// (of layers 18-40)
+		// TODO(nkryuchkov): remove or uncomment when it's used
+		// var forkBlockIDsA, forkBlockIDsB []types.BlockID
+		for _, block := range forkBlocksA {
+			// forkBlockIDsA = append(forkBlockIDsA, block.ID())
+			r.NoError(mdb2.AddBlock(block))
+		}
+
+		for _, block := range forkBlocksB {
+			// forkBlockIDsB = append(forkBlockIDsB, block.ID())
+			r.NoError(mdb1.AddBlock(block))
+		}
+
+		for lid := beforePartition.Add(1); !lid.After(layerID); lid = lid.Add(1) {
+			r.NoError(alg1.trtl.HandleIncomingLayer(context.TODO(), lid))
+			r.NoError(alg2.trtl.HandleIncomingLayer(context.TODO(), lid))
+		}
+
+		// now continue for a few layers after rejoining, during which the minority tortoise will be stuck
+		// because its opinions about which blocks are valid/invalid are wrong and disagree with the majority
+		// opinion. these ten layers represent its healing distance. after it heals, it will converge to the
+		// majority opinion.
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB := makeBlocks(layerID)
+			var blocks []*types.Block
+			blocks = append(blocksA, blocksB...)
+
+			// add all blocks to both tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// majority tortoise is unaffected, minority tortoise remains stuck
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+		}
+
+		// minority tortoise begins healing
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB := makeBlocks(layerID)
+			var blocks []*types.Block
+			blocks = append(blocksA, blocksB...)
+
+			// add all blocks to both tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// majority tortoise is unaffected, minority tortoise begins to heal but its verifying tortoise
+			// is still stuck
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, lastVerified.Add(uint32(i+1)))
+		}
+
+		// TODO: finish adding support for reorgs. minority tortoise should complete healing and successfully
+		//   hand off back to verifying tortoise.
+	})
+
+	t.Run("equal partition", func(t *testing.T) {
+		const layerSize = 10
+
+		mdb1 := getInMemMesh(t)
+		atxdb1 := getAtxDB()
+		alg1 := defaultAlgorithm(t, mdb1)
+		alg1.trtl.atxdb = atxdb1
+		alg1.trtl.LayerSize = layerSize
+		alg1.logger = alg1.logger.Named("trtl1")
+		alg1.trtl.logger = alg1.logger
+
+		mdb2 := getInMemMesh(t)
+		atxdb2 := getAtxDB()
+		alg2 := defaultAlgorithm(t, mdb2)
+		alg2.trtl.atxdb = atxdb2
+		alg2.trtl.LayerSize = layerSize
+		alg2.logger = alg2.logger.Named("trtl2")
+		alg2.trtl.logger = alg2.logger
+
+		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB []*types.Block) {
+			// simulate producing blocks in parallel
+			blocksA = generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB = generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+
+			// 50/50 split
+			blocksA = blocksA[:layerSize/2]
+			blocksB = blocksB[layerSize/2:]
+			return
+		}
+
+		// a bunch of good layers
+		lastVerified := types.GetEffectiveGenesis()
+		layerID := types.GetEffectiveGenesis()
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB := makeBlocks(layerID)
+			var blocks []*types.Block
+			blocks = append(blocksA, blocksB...)
+
+			// add all blocks to both tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// both should make progress
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+			lastVerified = layerID.Sub(1)
+		}
+
+		// simulate a partition
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB := makeBlocks(layerID)
+
+			// add A's blocks to A only, B's to B
+			var blockIDsA, blockIDsB []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// both nodes get stuck
+			checkVerifiedLayer(t, alg1.trtl, lastVerified)
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+		}
+
+		// after a while (we simulate the distance here), both nodes eventually begin producing more blocks
+		// in the case of a 50/50 split, this happens quickly
+		for i := uint32(0); i < 2; i++ {
+			layerID = layerID.Add(1)
+
+			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
+			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
+			// an ongoing partition.
+			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			var blockIDsA, blockIDsB []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			// both nodes still stuck
+			checkVerifiedLayer(t, alg1.trtl, lastVerified)
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+		}
+
+		// finally, both nodes heal and get unstuck
+		layerID = layerID.Add(1)
+		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+		var blockIDsA, blockIDsB []types.BlockID
+		for _, block := range blocksA {
+			blockIDsA = append(blockIDsA, block.ID())
+			r.NoError(mdb1.AddBlock(block))
+		}
+		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+		alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+		for _, block := range blocksB {
+			blockIDsB = append(blockIDsB, block.ID())
+			r.NoError(mdb2.AddBlock(block))
+		}
+		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+		alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+		// both nodes are healed
+		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+	})
+
+	t.Run("three-way partition", func(t *testing.T) {
+		const layerSize = 12
+
+		mdb1 := getInMemMesh(t)
+		atxdb1 := getAtxDB()
+		alg1 := defaultAlgorithm(t, mdb1)
+		alg1.trtl.atxdb = atxdb1
+		alg1.trtl.LayerSize = layerSize
+		alg1.logger = alg1.logger.Named("trtl1")
+		alg1.trtl.logger = alg1.logger
+
+		mdb2 := getInMemMesh(t)
+		atxdb2 := getAtxDB()
+		alg2 := defaultAlgorithm(t, mdb2)
+		alg2.trtl.atxdb = atxdb2
+		alg2.trtl.LayerSize = layerSize
+		alg2.logger = alg2.logger.Named("trtl2")
+		alg2.trtl.logger = alg2.logger
+
+		mdb3 := getInMemMesh(t)
+		atxdb3 := getAtxDB()
+		alg3 := defaultAlgorithm(t, mdb3)
+		alg3.trtl.atxdb = atxdb3
+		alg3.trtl.LayerSize = layerSize
+		alg3.logger = alg3.logger.Named("trtl3")
+		alg3.trtl.logger = alg3.logger
+
+		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB, blocksC []*types.Block) {
+			// simulate producing blocks in parallel
+			blocksA = generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB = generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			blocksC = generateBlocks(t, layerID, layerSize, alg3.BaseBlock, atxdb3, 1)
+
+			// three-way split
+			blocksA = blocksA[:layerSize/3]
+			blocksB = blocksB[layerSize/3 : layerSize*2/3]
+			blocksC = blocksC[layerSize*2/3:]
+			return
+		}
+
+		// a bunch of good layers
+		lastVerified := types.GetEffectiveGenesis()
+		layerID := types.GetEffectiveGenesis()
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB, blocksC := makeBlocks(layerID)
+			var blocks []*types.Block
+			blocks = append(blocksA, blocksB...)
+			blocks = append(blocks, blocksC...)
+
+			// add all blocks to all tortoises
+			var blockIDs []types.BlockID
+			for _, block := range blocks {
+				blockIDs = append(blockIDs, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+				r.NoError(mdb2.AddBlock(block))
+				r.NoError(mdb3.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+			alg3.HandleIncomingLayer(context.TODO(), layerID)
+
+			// all should make progress
+			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+			checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
+			lastVerified = layerID.Sub(1)
+		}
+
+		// simulate a partition
+		for i := 0; i < 10; i++ {
+			layerID = layerID.Add(1)
+			blocksA, blocksB, blocksC := makeBlocks(layerID)
+
+			// add each blocks to their own
+			var blockIDsA, blockIDsB, blockIDsC []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			for _, block := range blocksC {
+				blockIDsC = append(blockIDsC, block.ID())
+				r.NoError(mdb3.AddBlock(block))
+			}
+			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
+			alg3.HandleIncomingLayer(context.TODO(), layerID)
+
+			// all nodes get stuck
+			checkVerifiedLayer(t, alg1.trtl, lastVerified)
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+			checkVerifiedLayer(t, alg3.trtl, lastVerified)
+		}
+
+		// after a while (we simulate the distance here), all nodes eventually begin producing more blocks
+		for i := uint32(0); i < 6; i++ {
+			layerID = layerID.Add(1)
+
+			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
+			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
+			// an ongoing partition.
+			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			var blockIDsA, blockIDsB, blockIDsC []types.BlockID
+			for _, block := range blocksA {
+				blockIDsA = append(blockIDsA, block.ID())
+				r.NoError(mdb1.AddBlock(block))
+			}
+			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			for _, block := range blocksB {
+				blockIDsB = append(blockIDsB, block.ID())
+				r.NoError(mdb2.AddBlock(block))
+			}
+			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+			blocksC := generateBlocks(t, layerID, layerSize, alg3.BaseBlock, atxdb3, 1)
+			for _, block := range blocksC {
+				blockIDsC = append(blockIDsC, block.ID())
+				r.NoError(mdb3.AddBlock(block))
+			}
+			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
+			alg3.HandleIncomingLayer(context.TODO(), layerID)
+
+			// nodes still stuck
+			checkVerifiedLayer(t, alg1.trtl, lastVerified)
+			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+			checkVerifiedLayer(t, alg3.trtl, lastVerified)
+		}
+
+		// finally, all nodes heal and get unstuck
+		layerID = layerID.Add(1)
+		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+		var blockIDsA, blockIDsB, blockIDsC []types.BlockID
+		for _, block := range blocksA {
+			blockIDsA = append(blockIDsA, block.ID())
+			r.NoError(mdb1.AddBlock(block))
+		}
+		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+		alg1.HandleIncomingLayer(context.TODO(), layerID)
+
+		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+		for _, block := range blocksB {
+			blockIDsB = append(blockIDsB, block.ID())
+			r.NoError(mdb2.AddBlock(block))
+		}
+		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+		alg2.HandleIncomingLayer(context.TODO(), layerID)
+
+		blocksC := generateBlocks(t, layerID, layerSize, alg3.BaseBlock, atxdb3, 1)
+		for _, block := range blocksC {
+			blockIDsC = append(blockIDsC, block.ID())
+			r.NoError(mdb3.AddBlock(block))
+		}
+		r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
+		alg3.HandleIncomingLayer(context.TODO(), layerID)
+
+		// all nodes are healed
+		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
+	})
 }
 
 func TestComputeExpectedWeight(t *testing.T) {
