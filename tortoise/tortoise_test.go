@@ -425,7 +425,7 @@ func TestLayerPatterns(t *testing.T) {
 		ctx := context.Background()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -447,7 +447,7 @@ func TestLayerPatterns(t *testing.T) {
 		ctx := context.Background()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -479,7 +479,7 @@ func TestLayerPatterns(t *testing.T) {
 		ctx := context.Background()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 
 		var (
 			last     types.LayerID
@@ -668,7 +668,7 @@ func TestEviction(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 	trtl := tortoise.trtl
 
 	for i := 0; i < 100; i++ {
@@ -2859,7 +2859,7 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 
 	ctx := context.Background()
 	cfg := defaultTestConfig()
-	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 
 	var (
 		last     types.LayerID
@@ -2895,7 +2895,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 		for _, lid := range layers {
 			tortoise.HandleIncomingLayer(ctx, lid)
 		}
@@ -2914,7 +2914,7 @@ func BenchmarkTortoiseBaseBlockSelection(b *testing.B) {
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 100
-	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 
 	var last, verified types.LayerID
 	for i := 0; i < 400; i++ {
@@ -3099,7 +3099,7 @@ func TestBaseBlockGenesis(t *testing.T) {
 
 	s := sim.New()
 	cfg := defaultTestConfig()
-	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 
 	base, exceptions, err := tortoise.BaseBlock(ctx)
 	require.NoError(t, err)
@@ -3133,7 +3133,7 @@ func TestBaseBlockEvictedBlock(t *testing.T) {
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 10
-	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 
 	var last, verified types.LayerID
 	// turn GenLayers into on-demand generator, so that later case can be placed as a step
@@ -3151,7 +3151,7 @@ func TestBaseBlockEvictedBlock(t *testing.T) {
 	for i := 0; i < 10; i++ {
 		base, exceptions, err := tortoise.BaseBlock(ctx)
 		require.NoError(t, err)
-		ensureBaseAndExceptionsFromLayer(t, last, base, exceptions, s.State.MeshDB)
+		ensureBaseAndExceptionsFromLayer(t, last, base, exceptions, s.GetState(0).MeshDB)
 
 		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
@@ -3213,7 +3213,7 @@ func TestBaseBlockPrioritization(t *testing.T) {
 			cfg := defaultTestConfig()
 			cfg.LayerSize = size
 			cfg.WindowSize = tc.window
-			tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+			tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 
 			for _, lid := range sim.GenLayers(s, tc.seqs...) {
 				tortoise.HandleIncomingLayer(ctx, lid)
@@ -3221,7 +3221,7 @@ func TestBaseBlockPrioritization(t *testing.T) {
 
 			base, _, err := tortoise.BaseBlock(ctx)
 			require.NoError(t, err)
-			block, err := s.State.MeshDB.GetBlock(base)
+			block, err := s.GetState(0).MeshDB.GetBlock(base)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, block.LayerIndex)
 		})
@@ -3280,7 +3280,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	cfg.ConfidenceParam = 0
 
 	var (
-		tortoise       = tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise       = tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 		verified, last types.LayerID
 		genesis        = types.GetEffectiveGenesis()
 	)
@@ -3302,7 +3302,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	base, exceptions, err := tortoise.BaseBlock(ctx)
 	require.NoError(t, err)
 	// last block that is consistent with local opinion
-	ensureBlockLayerWithin(t, s.State.MeshDB, base, genesis.Add(5), genesis.Add(5))
+	ensureBlockLayerWithin(t, s.GetState(0).MeshDB, base, genesis.Add(5), genesis.Add(5))
 
 	against, support, neutral := exceptions[0], exceptions[1], exceptions[2]
 
@@ -3311,7 +3311,7 @@ func TestWeakCoinVoting(t *testing.T) {
 
 	// support for all layers in range of (verified, last - hdist)
 	for _, bid := range support {
-		ensureBlockLayerWithin(t, s.State.MeshDB, bid, genesis.Add(5), last.Sub(hdist).Sub(1))
+		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis.Add(5), last.Sub(hdist).Sub(1))
 	}
 
 	// test that by voting honestly node can switch to verifying tortoise from this condition
@@ -3341,7 +3341,7 @@ func TestVoteAgainstSupportedByBaseBlock(t *testing.T) {
 	cfg.Zdist = 1
 
 	var (
-		tortoise       = tortoiseFromSimState(s.State, WithConfig(cfg))
+		tortoise       = tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 		last, verified types.LayerID
 		genesis        = types.GetEffectiveGenesis()
 	)
@@ -3355,14 +3355,14 @@ func TestVoteAgainstSupportedByBaseBlock(t *testing.T) {
 	// change local opinion for verified last.Sub(1) to be different from blocks opinion
 	unsupported := map[types.BlockID]struct{}{}
 	for lid := genesis.Add(1); !lid.After(last); lid = lid.Add(1) {
-		bids, err := s.State.MeshDB.LayerBlockIds(lid)
+		bids, err := s.GetState(0).MeshDB.LayerBlockIds(lid)
 		require.NoError(t, err)
-		require.NoError(t, s.State.MeshDB.SaveContextualValidity(bids[0], lid, false))
-		require.NoError(t, s.State.MeshDB.SaveLayerInputVectorByID(ctx, lid, bids[1:]))
+		require.NoError(t, s.GetState(0).MeshDB.SaveContextualValidity(bids[0], lid, false))
+		require.NoError(t, s.GetState(0).MeshDB.SaveLayerInputVectorByID(ctx, lid, bids[1:]))
 		unsupported[bids[0]] = struct{}{}
 	}
 	base, exceptions, _ := tortoise.BaseBlock(ctx)
-	ensureBlockLayerWithin(t, s.State.MeshDB, base, genesis.Add(1), genesis.Add(1))
+	ensureBlockLayerWithin(t, s.GetState(0).MeshDB, base, genesis.Add(1), genesis.Add(1))
 	require.Empty(t, exceptions[0])
 	require.Empty(t, exceptions[2])
 	require.Len(t, exceptions[1], (size-1)*int(last.Difference(genesis)))
@@ -3375,11 +3375,11 @@ func TestVoteAgainstSupportedByBaseBlock(t *testing.T) {
 	// and it will not include against votes explicitly, as you can see above
 	delete(tortoise.trtl.BallotOpinionsByLayer, genesis.Add(1))
 	base, exceptions, _ = tortoise.BaseBlock(ctx)
-	ensureBlockLayerWithin(t, s.State.MeshDB, base, last, last)
+	ensureBlockLayerWithin(t, s.GetState(0).MeshDB, base, last, last)
 	require.Empty(t, exceptions[2])
 	require.Len(t, exceptions[0], 2)
 	for _, bid := range exceptions[0] {
-		ensureBlockLayerWithin(t, s.State.MeshDB, bid, genesis.Add(1), last.Sub(1))
+		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis.Add(1), last.Sub(1))
 		require.Contains(t, unsupported, bid)
 	}
 	require.Len(t, exceptions[1], (size - 1))
@@ -3480,7 +3480,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 			cfg.LayerSize = size
 			cfg.Hdist = hdist
 			cfg.Zdist = hdist
-			tortoise := tortoiseFromSimState(s.State, WithConfig(cfg))
+			tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 			for _, lid := range sim.GenLayers(s, tc.seqs...) {
 				tortoise.HandleIncomingLayer(ctx, lid)
 			}
@@ -3499,6 +3499,7 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	const size = 10
 	s1 := sim.New(
 		sim.WithLayerSize(size),
+		sim.WithStates(2),
 	)
 	s1.Setup(
 		sim.WithSetupMinerRange(30, 30),
@@ -3513,8 +3514,8 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	cfg.ConfidenceParam = 0
 
 	var (
-		tortoise1                  = tortoiseFromSimState(s1.State, WithConfig(cfg), WithLogger(logtest.New(t)))
-		tortoise2                  = tortoiseFromSimState(s1.State, WithConfig(cfg))
+		tortoise1                  = tortoiseFromSimState(s1.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+		tortoise2                  = tortoiseFromSimState(s1.GetState(1), WithConfig(cfg))
 		last, verified1, verified2 types.LayerID
 	)
 
@@ -3531,9 +3532,6 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	s1, s2 := gens[0], gens[1]
 
 	// FIXME needs improvement
-	tortoise2.trtl.bdp = s2.State.MeshDB
-	tortoise2.trtl.atxdb = s2.State.AtxDB
-	tortoise2.trtl.beacons = s2.State.Beacons
 
 	partitionStart := last
 	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
@@ -3566,10 +3564,10 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	// succesfull test should verify that all blocks that were created in s2
 	// during partition are contextually valid in s1 state.
 	for lid := partitionStart.Add(1); !lid.After(partitionEnd); lid = lid.Add(1) {
-		bids, err := s2.State.MeshDB.LayerBlockIds(lid)
+		bids, err := s2.GetState(0).MeshDB.LayerBlockIds(lid)
 		require.NoError(t, err)
 		for _, bid := range bids {
-			valid, err := s1.State.MeshDB.ContextualValidity(bid)
+			valid, err := s1.GetState(0).MeshDB.ContextualValidity(bid)
 			require.NoError(t, err)
 			assert.True(t, valid, "block %s at layer %s", bid, lid)
 		}
@@ -3587,7 +3585,7 @@ func TestVerifyLayerByWeightNotSize(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	tortoise := tortoiseFromSimState(s.State, WithConfig(cfg), WithLogger(logtest.New(t)))
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var last, verified types.LayerID
 	for _, last = range sim.GenLayers(s,

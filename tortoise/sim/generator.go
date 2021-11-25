@@ -1,11 +1,8 @@
 package sim
 
 import (
-	"context"
 	"math/rand"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -43,6 +40,16 @@ func WithPath(path string) GenOpt {
 	}
 }
 
+// WithStates creates n states.
+func WithStates(n int) GenOpt {
+	if n == 0 {
+		panic("generator without attached state is not supported")
+	}
+	return func(g *Generator) {
+		g.conf.StateInstances = n
+	}
+}
+
 func withRng(rng *rand.Rand) GenOpt {
 	return func(g *Generator) {
 		g.rng = rng
@@ -65,6 +72,7 @@ type config struct {
 	Path           string
 	LayerSize      uint32
 	LayersPerEpoch uint32
+	StateInstances int
 }
 
 func defaults() config {
@@ -72,13 +80,6 @@ func defaults() config {
 		LayerSize:      30,
 		LayersPerEpoch: types.GetLayersPerEpoch(),
 	}
-}
-
-// State is state that can be used by tortoise.
-type State struct {
-	MeshDB  *mesh.DB
-	AtxDB   *activation.DB
-	Beacons blocks.BeaconGetter
 }
 
 // New creates Generator instance.
@@ -92,11 +93,16 @@ func New(opts ...GenOpt) *Generator {
 	for _, opt := range opts {
 		opt(g)
 	}
-	mdb := newMeshDB(g.logger, g.conf)
-	atxdb := newAtxDB(g.logger, mdb, g.conf)
-
-	g.beacons = newBeaconStore()
-	g.State = State{MeshDB: mdb, AtxDB: atxdb, Beacons: g.beacons}
+	for i := 0; i < g.conf.StateInstances; i++ {
+		mdb := newMeshDB(g.logger, g.conf)
+		g.states = append(g.states,
+			State{
+				MeshDB:  mdb,
+				AtxDB:   newAtxDB(g.logger, mdb, g.conf),
+				Beacons: newBeaconStore(),
+			},
+		)
+	}
 	return g
 }
 
@@ -106,7 +112,7 @@ type Generator struct {
 	rng    *rand.Rand
 	conf   config
 
-	State State
+	states []State
 
 	nextLayer types.LayerID
 	// key is when to return => value is the layer to return
@@ -115,8 +121,7 @@ type Generator struct {
 	units       [2]int
 	activations []types.ATXID
 
-	beacons *beaconStore
-	keys    []*signing.EdSigner
+	keys []*signing.EdSigner
 }
 
 // SetupOpt configures setup.
@@ -149,6 +154,23 @@ func defaultSetupConf() setupConf {
 	}
 }
 
+// GetState at index.
+func (g *Generator) GetState(i int) State {
+	return g.states[i]
+}
+
+func (g *Generator) addState(state State) {
+	g.states = append(g.states, state)
+}
+
+func (g *Generator) popState(i int) State {
+	state := g.states[i]
+	copy(g.states[i:], g.states[i+1:])
+	g.states[len(g.states)-1] = State{}
+	g.states = g.states[:len(g.states)-1]
+	return state
+}
+
 // Setup should be called before running Next.
 func (g *Generator) Setup(opts ...SetupOpt) {
 	conf := defaultSetupConf()
@@ -162,15 +184,15 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	last := g.layers[len(g.layers)-1]
 	g.nextLayer = last.Index().Add(1)
 
-	g.genBeacon()
-
 	miners := intInRange(g.rng, conf.Miners)
 	g.activations = make([]types.ATXID, miners)
 
 	for i := 0; i < miners; i++ {
 		g.keys = append(g.keys, signing.NewEdSignerFromRand(g.rng))
 	}
+}
 
+func (g *Generator) generateAtxs() {
 	for i := range g.activations {
 		units := intInRange(g.rng, g.units)
 		address := types.Address{}
@@ -185,23 +207,9 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 		atx := types.NewActivationTx(nipost, address, nil, uint(units), nil)
 
 		g.activations[i] = atx.ID()
-		if err := g.State.AtxDB.StoreAtx(context.Background(), g.nextLayer.Sub(1).GetEpoch(), atx); err != nil {
-			g.logger.With().Panic("failed to store atx", log.Err(err))
-		}
-	}
-}
 
-func (g *Generator) renewAtxs() {
-	for i, atxid := range g.activations {
-		atx, err := g.State.AtxDB.GetFullAtx(atxid)
-		if err != nil {
-			g.logger.With().Panic("failed to fetch atx", atxid, log.Err(err))
+		for _, state := range g.states {
+			state.OnActivationTx(atx)
 		}
-		atx.PubLayerID = g.nextLayer.Sub(1)
-		atx.CalcAndSetID()
-		if err := g.State.AtxDB.StoreAtx(context.Background(), g.nextLayer.Sub(1).GetEpoch(), atx); err != nil {
-			g.logger.With().Panic("failed to store atx", log.Err(err))
-		}
-		g.activations[i] = atx.ID()
 	}
 }
