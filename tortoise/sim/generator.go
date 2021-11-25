@@ -95,7 +95,7 @@ func New(opts ...GenOpt) *Generator {
 	mdb := newMeshDB(g.logger, g.conf)
 	atxdb := newAtxDB(g.logger, mdb, g.conf)
 
-	g.beacons = &beaconStore{}
+	g.beacons = newBeaconStore()
 	g.State = State{MeshDB: mdb, AtxDB: atxdb, Beacons: g.beacons}
 	return g
 }
@@ -112,6 +112,7 @@ type Generator struct {
 	// key is when to return => value is the layer to return
 	reordered   map[types.LayerID]types.LayerID
 	layers      []*types.Layer
+	units       [2]int
 	activations []types.ATXID
 
 	beacons *beaconStore
@@ -135,12 +136,6 @@ func WithSetupUnitsRange(low, high int) SetupOpt {
 	}
 }
 
-func withBeacon(beacon []byte) SetupOpt {
-	return func(conf *setupConf) {
-		conf.Beacon = beacon
-	}
-}
-
 type setupConf struct {
 	Miners [2]int
 	Units  [2]int
@@ -160,21 +155,14 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	for _, opt := range opts {
 		opt(&conf)
 	}
-
+	g.units = conf.Units
 	if len(g.layers) == 0 {
 		g.layers = append(g.layers, mesh.GenesisLayer())
 	}
 	last := g.layers[len(g.layers)-1]
 	g.nextLayer = last.Index().Add(1)
 
-	// TODO(dshulyak) this needs to be improved to store multiple beacons
-	// after partition - the previous beacon should remain in the store
-	if conf.Beacon != nil {
-		g.beacons.beacon = conf.Beacon
-	} else {
-		g.beacons.beacon = make([]byte, 32)
-		g.rng.Read(g.beacons.beacon)
-	}
+	g.genBeacon()
 
 	miners := intInRange(g.rng, conf.Miners)
 	g.activations = make([]types.ATXID, miners)
@@ -184,7 +172,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	}
 
 	for i := range g.activations {
-		units := intInRange(g.rng, conf.Units)
+		units := intInRange(g.rng, g.units)
 		address := types.Address{}
 		_, _ = g.rng.Read(address[:])
 

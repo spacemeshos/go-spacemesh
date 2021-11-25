@@ -87,7 +87,7 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 			gens[i] = g
 			g.Setup(
 				WithSetupMinerRange(share, share),
-				withBeacon(g.beacons.beacon),
+				WithSetupUnitsRange(g.units[0], g.units[1]),
 			)
 		} else {
 			gens[i] = New(
@@ -96,7 +96,10 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 				WithLogger(g.logger),
 			)
 			gens[i].mergeAll(g) // merging *all* previous history
-			gens[i].Setup(WithSetupMinerRange(share, share))
+			gens[i].Setup(
+				WithSetupMinerRange(share, share),
+				WithSetupUnitsRange(g.units[0], g.units[1]),
+			)
 		}
 	}
 	return gens
@@ -104,6 +107,7 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 
 func (g *Generator) mergeAll(other *Generator) {
 	g.Merge(other)
+	g.beacons.Copy(other.beacons)
 	for _, layer := range g.layers {
 		bids, err := other.State.MeshDB.GetLayerInputVectorByID(layer.Index())
 		if err != nil {

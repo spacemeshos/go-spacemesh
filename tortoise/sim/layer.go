@@ -108,9 +108,21 @@ func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 	return lid
 }
 
+func (g *Generator) genBeacon() {
+	eid := g.nextLayer.Sub(1).GetEpoch()
+	beacon, _ := g.beacons.GetBeacon(eid)
+	if beacon != nil {
+		return
+	}
+	beacon = make([]byte, 32)
+	g.rng.Read(beacon)
+	g.beacons.StoreBeacon(eid, beacon)
+}
+
 func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 	if g.nextLayer.Sub(1).GetEpoch() < g.nextLayer.GetEpoch() && g.nextLayer.Sub(1) != types.GetEffectiveGenesis() {
 		g.renewAtxs()
+		g.genBeacon()
 	}
 
 	layer := types.NewLayer(g.nextLayer)
@@ -126,6 +138,10 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		voting := cfg.VoteGen(g.rng, g.layers, i)
 		data := make([]byte, 20)
 		g.rng.Read(data)
+		beacon, err := g.beacons.GetBeacon(g.nextLayer.GetEpoch() - 1)
+		if err != nil {
+			g.logger.With().Panic("failed to get a beacon", log.Err(err))
+		}
 		block := &types.Block{
 			MiniBlock: types.MiniBlock{
 				BlockHeader: types.BlockHeader{
@@ -137,7 +153,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 					NeutralDiff: voting.Abstain,
 					Data:        data,
 				},
-				TortoiseBeacon: g.beacons.beacon,
+				TortoiseBeacon: beacon,
 			},
 		}
 		block.Signature = signer.Sign(block.Bytes())
