@@ -41,6 +41,7 @@ type state struct {
 	// view of time, but Tortoise receives layers as soon as Hare finishes processing them or when they are received via
 	// gossip, and there's nothing for Tortoise to verify without new data anyway.
 	Last        types.LayerID
+	Processed   types.LayerID
 	LastEvicted types.LayerID
 	Verified    types.LayerID
 	// if key exists in the map the ballot is good. if value is true it was written to the disk.

@@ -101,6 +101,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 	consensus.init(ctx, mesh.GenesisLayer())
 	tracer := &validityTracer{blockDataProvider: consensus.bdp}
 	consensus.bdp = tracer
+	consensus.Last = last
 
 	for lid := types.GetEffectiveGenesis(); !lid.After(last); lid = lid.Add(1) {
 		if err := consensus.HandleIncomingLayer(ctx, lid); err != nil {

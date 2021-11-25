@@ -3500,7 +3500,10 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	s1 := sim.New(
 		sim.WithLayerSize(size),
 	)
-	s1.Setup()
+	s1.Setup(
+		sim.WithSetupMinerRange(30, 30),
+		sim.WithSetupUnitsRange(1, 1),
+	)
 
 	ctx := context.Background()
 	cfg := defaultTestConfig()
@@ -3510,7 +3513,7 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	cfg.ConfidenceParam = 0
 
 	var (
-		tortoise1                  = tortoiseFromSimState(s1.State, WithConfig(cfg))
+		tortoise1                  = tortoiseFromSimState(s1.State, WithConfig(cfg), WithLogger(logtest.New(t)))
 		tortoise2                  = tortoiseFromSimState(s1.State, WithConfig(cfg))
 		last, verified1, verified2 types.LayerID
 	)
@@ -3535,7 +3538,6 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	partitionStart := last
 	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
 		last = s1.Next()
-
 		_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
 		_, verified2, _ = tortoise2.HandleIncomingLayer(ctx, s2.Next())
 	}
@@ -3548,33 +3550,29 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	partitionEnd := last
 	s1.Merge(s2)
 
-	for i := 0; i < int(cfg.BadBeaconVoteDelayLayers); i++ {
-		last = s1.Next()
+	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
+		// after partition is healed s1 and s2 should vote differently based on
+		// current local opinion
+
+		last = s1.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise1)))
 		_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
 	}
 	require.NoError(t, tortoise1.rerun(ctx))
-	last = s1.Next()
+	last = s1.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise1)))
+
 	_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
 	require.Equal(t, last.Sub(1), verified1)
 
 	// succesfull test should verify that all blocks that were created in s2
 	// during partition are contextually valid in s1 state.
-	for lid := partitionStart.Add(1); lid.Before(partitionEnd); lid = lid.Add(1) {
+	for lid := partitionStart.Add(1); !lid.After(partitionEnd); lid = lid.Add(1) {
 		bids, err := s2.State.MeshDB.LayerBlockIds(lid)
 		require.NoError(t, err)
 		for _, bid := range bids {
 			valid, err := s1.State.MeshDB.ContextualValidity(bid)
 			require.NoError(t, err)
-			assert.False(t, valid, "block %s at layer %s", bid, lid)
+			assert.True(t, valid, "block %s at layer %s", bid, lid)
 		}
-	}
-	// for some reason only blocks from last layer in the partition are valid
-	bids, err := s2.State.MeshDB.LayerBlockIds(partitionEnd)
-	require.NoError(t, err)
-	for _, bid := range bids {
-		valid, err := s1.State.MeshDB.ContextualValidity(bid)
-		require.NoError(t, err)
-		assert.True(t, valid, "block %s at layer %s", bid, partitionEnd)
 	}
 }
 
