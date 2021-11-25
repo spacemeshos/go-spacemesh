@@ -66,7 +66,7 @@ type beaconStore struct {
 }
 
 func (b *beaconStore) GetBeacon(eid types.EpochID) ([]byte, error) {
-	beacon, exist := b.beacons[eid]
+	beacon, exist := b.beacons[eid-1]
 	if !exist {
 		return nil, database.ErrNotFound
 	}

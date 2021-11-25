@@ -67,8 +67,8 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 	for _, opt := range opts {
 		opt(&conf)
 	}
-	if len(conf.Partitions) == 1 {
-		panic("can't beacome partition of itself")
+	if len(g.states) == 1 {
+		panic("initailize with more then one state")
 	}
 	if len(conf.Partitions) > len(g.states) {
 		panic("can partition only only less then existing states")

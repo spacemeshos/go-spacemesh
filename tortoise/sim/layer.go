@@ -134,7 +134,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		voting := cfg.VoteGen(g.rng, g.layers, i)
 		data := make([]byte, 20)
 		g.rng.Read(data)
-		beacon, err := g.states[0].Beacons.GetBeacon(g.nextLayer.GetEpoch() - 1)
+		beacon, err := g.states[0].Beacons.GetBeacon(g.nextLayer.GetEpoch())
 		if err != nil {
 			g.logger.With().Panic("failed to get a beacon", log.Err(err))
 		}

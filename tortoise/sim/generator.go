@@ -79,6 +79,7 @@ func defaults() config {
 	return config{
 		LayerSize:      30,
 		LayersPerEpoch: types.GetLayersPerEpoch(),
+		StateInstances: 1,
 	}
 }
 
@@ -93,15 +94,9 @@ func New(opts ...GenOpt) *Generator {
 	for _, opt := range opts {
 		opt(g)
 	}
+	// TODO support multiple persist states.
 	for i := 0; i < g.conf.StateInstances; i++ {
-		mdb := newMeshDB(g.logger, g.conf)
-		g.states = append(g.states,
-			State{
-				MeshDB:  mdb,
-				AtxDB:   newAtxDB(g.logger, mdb, g.conf),
-				Beacons: newBeaconStore(),
-			},
-		)
+		g.states = append(g.states, newState(g.logger, g.conf))
 	}
 	return g
 }

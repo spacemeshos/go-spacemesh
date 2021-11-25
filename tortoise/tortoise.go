@@ -869,28 +869,29 @@ func (t *turtle) verifyLayers(ctx *tcontext) error {
 			contextualValidity map[types.BlockID]bool
 			err                error
 		)
-		if !candlid.Before(t.layerCutoff()) {
+		// during rerun verifying tortoise prematurely verifies layers, which full tortoise won't be a
+		// able to verify because of additional eligible ballots with wrong beacon
+		if !(candlid.Before(t.layerCutoff()) && t.Last.Difference(candlid) > t.Zdist+t.ConfidenceParam) {
 			contextualValidity, err = t.verifyingTortoise(ctx, logger, candlid)
 			if err != nil {
 				return err
 			}
 		}
 		if contextualValidity != nil {
-			// Declare the vote vector "verified" up to this layer and record the contextual validity for all blocks in this
-			// layer
 			for blk, v := range contextualValidity {
 				if err := t.bdp.SaveContextualValidity(blk, candlid, v); err != nil {
 					logger.With().Error("error saving contextual validity on block", blk, log.Err(err))
+					return fmt.Errorf("saving contextual validity for %s: %w", blk, err)
 				}
 			}
 			t.Verified = candlid
-			logger.With().Info("verified candidate layer", log.Named("new_verified", t.Verified))
 		} else {
 			healed, err := t.healingTortoise(ctx, logger, candlid)
 			if err != nil || !healed {
 				return err
 			}
 		}
+		logger.With().Info("verified candidate layer", log.Named("new_verified", t.Verified))
 	}
 	return nil
 }
@@ -1081,7 +1082,7 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 
 			// count all votes for or against this block by all blocks in later layers. for ballots with a different
 			// beacon values, we delay their votes by badBeaconVoteDelays layers
-			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID.Add(1), t.ballotFilterForHealing(candidateLayerID, logger))
+			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID.Add(1), t.ballotFilterForHealing(logger))
 			if err != nil {
 				logger.Error("error summing votes for candidate block in candidate layer", log.Err(err))
 				return
@@ -1117,8 +1118,8 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 
 // only ballots with the correct beacon value are considered good ballots and their votes counted by
 // verifying tortoise. for ballots with a different beacon values, we count their votes only in self-healing mode
-// and delay their votes by badBeaconVoteDelays layers.
-func (t *turtle) ballotFilterForHealing(candidateLayerID types.LayerID, logger log.Log) func(types.BallotID) bool {
+// if they are from previous epoch.
+func (t *turtle) ballotFilterForHealing(logger log.Log) func(types.BallotID) bool {
 	return func(ballotID types.BallotID) bool {
 		if _, bad := t.badBeaconBallots[ballotID]; !bad {
 			return true
@@ -1128,6 +1129,9 @@ func (t *turtle) ballotFilterForHealing(candidateLayerID types.LayerID, logger l
 			logger.With().Error("inconsistent state: ballot not found", ballotID)
 			return false
 		}
+		// if candidate layer is 11 and vote with bad beacon is in 12, but current is 100
+		// we should obviously count such vote.
+		// is there any case
 		return lid.GetEpoch() < t.Last.GetEpoch()
 	}
 }

@@ -1356,7 +1356,7 @@ func TestVerifyLayers(t *testing.T) {
 	l6Blocks := generateBlocks(t, l6ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 
 	// layer missing in database
-	alg.trtl.Last = l2ID
+	alg.trtl.Processed = l2ID
 	err := alg.trtl.verifyLayers(wrapContext(context.TODO()))
 	r.ErrorIs(err, database.ErrNotFound)
 
@@ -1392,7 +1392,7 @@ func TestVerifyLayers(t *testing.T) {
 		l3Ballots[1].ID(): l2SupportVec,
 		l3Ballots[2].ID(): l2SupportVec,
 	}
-	alg.trtl.Last = l3ID
+	alg.trtl.Processed = l3ID
 
 	// voting blocks not marked good, both global and local opinion is abstain, verified layer does not advance
 	r.NoError(alg.trtl.verifyLayers(wrapContext(context.TODO())))
@@ -1455,7 +1455,7 @@ func TestVerifyLayers(t *testing.T) {
 		l4Ballots[1].ID(): l4Votes,
 		l4Ballots[2].ID(): l4Votes,
 	}
-	alg.trtl.Last = l4ID
+	alg.trtl.Processed = l4ID
 	alg.trtl.GoodBallotsIndex[l4Ballots[0].ID()] = false
 	alg.trtl.GoodBallotsIndex[l4Ballots[1].ID()] = false
 	alg.trtl.GoodBallotsIndex[l4Ballots[2].ID()] = false
@@ -1593,6 +1593,7 @@ func TestVerifyLayers(t *testing.T) {
 		// previously stuck layer (l3) and the following layer (l4) since it's old enough, then hand control back to the
 		// ordinary verifying tortoise which should continue and verify l5.
 		alg.trtl.Last = l4ID.Add(alg.trtl.Hdist + 1)
+		alg.trtl.Processed = l4ID.Add(alg.trtl.Hdist + 1)
 		r.NoError(alg.trtl.verifyLayers(wrapContext(context.TODO())))
 		r.Equal(int(l5ID.Uint32()), int(alg.trtl.Verified.Uint32()))
 	})
@@ -1632,7 +1633,7 @@ func TestSumVotesForBlock(t *testing.T) {
 	filterRejectAll := func(types.BallotID) bool { return false }
 
 	// if we reject all blocks, we expect an abstain outcome
-	alg.trtl.Last = l2ID
+	alg.trtl.Processed = l2ID
 	sum, err := alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterRejectAll)
 	r.NoError(err)
 	r.Equal(abstain, sum)
@@ -1854,10 +1855,10 @@ func TestHealing(t *testing.T) {
 		// delete good blocks data
 		alg.trtl.GoodBallotsIndex = make(map[types.BallotID]bool, 0)
 
-		alg.trtl.BadBeaconVoteDelayLayers = 1
+		alg.trtl.Last = l7ID.Add(types.GetLayersPerEpoch())
 		alg.trtl.Hdist = 0
 		alg.trtl.heal(wrapContext(context.TODO()), l7ID)
-		checkVerifiedLayer(t, alg.trtl, l4ID)
+		checkVerifiedLayer(t, alg.trtl, l6ID)
 	})
 }
 
@@ -3025,12 +3026,13 @@ func TestBallotFilterForHealing(t *testing.T) {
 	// we don't count votes in bad beacon block for badBeaconVoteDelays layers
 	i := uint32(1)
 	for ; i <= defaultVoteDelays; i++ {
-		filter := trtl.ballotFilterForHealing(layerID.Sub(i), logger)
+		filter := trtl.ballotFilterForHealing(logger)
 		assert.True(t, filter(goodBallot.ID()))
 		assert.False(t, filter(badBallot.ID()))
 	}
 	// now we count the bad beacon block's votes
-	filter := trtl.ballotFilterForHealing(layerID.Sub(i), logger)
+	trtl.Last = layerID.Add(10)
+	filter := trtl.ballotFilterForHealing(logger)
 	assert.True(t, filter(goodBallot.ID()))
 	assert.True(t, filter(badBallot.ID()))
 }
@@ -3531,8 +3533,6 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	require.Len(t, gens, 2)
 	s1, s2 := gens[0], gens[1]
 
-	// FIXME needs improvement
-
 	partitionStart := last
 	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
 		last = s1.Next()
@@ -3549,22 +3549,37 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	s1.Merge(s2)
 
 	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
-		// after partition is healed s1 and s2 should vote differently based on
-		// current local opinion
-
-		last = s1.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise1)))
+		last = s1.Next(sim.WithVoteGenerator(func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+			if i < size/2 {
+				return tortoiseVoting(tortoise1)(rng, layers, i)
+			}
+			return tortoiseVoting(tortoise2)(rng, layers, i)
+		}))
 		_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
+		_, verified2, _ = tortoise2.HandleIncomingLayer(ctx, last)
 	}
-	require.NoError(t, tortoise1.rerun(ctx))
-	last = s1.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise1)))
 
-	_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
+	require.NoError(t, tortoise1.rerun(ctx))
+	require.NoError(t, tortoise2.rerun(ctx))
+
+	for i := 0; i < int(types.GetLayersPerEpoch())*2; i++ {
+		last = s1.Next(sim.WithVoteGenerator(func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+			if i < size/2 {
+				return tortoiseVoting(tortoise1)(rng, layers, i)
+			}
+			return tortoiseVoting(tortoise2)(rng, layers, i)
+		}))
+		_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
+		_, verified2, _ = tortoise2.HandleIncomingLayer(ctx, last)
+	}
+
 	require.Equal(t, last.Sub(1), verified1)
+	require.Equal(t, last.Sub(1), verified2)
 
 	// succesfull test should verify that all blocks that were created in s2
 	// during partition are contextually valid in s1 state.
 	for lid := partitionStart.Add(1); !lid.After(partitionEnd); lid = lid.Add(1) {
-		bids, err := s2.GetState(0).MeshDB.LayerBlockIds(lid)
+		bids, err := s1.GetState(1).MeshDB.LayerBlockIds(lid)
 		require.NoError(t, err)
 		for _, bid := range bids {
 			valid, err := s1.GetState(0).MeshDB.ContextualValidity(bid)
