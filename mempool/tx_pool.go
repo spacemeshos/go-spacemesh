@@ -105,6 +105,8 @@ func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction) {
 	t.addToAddr(tx.Recipient, id)
 	t.mu.Unlock()
 	events.ReportNewTx(types.LayerID{}, tx)
+	events.ReportAccountUpdate(tx.Origin())
+	events.ReportAccountUpdate(tx.Recipient)
 }
 
 // Invalidate removes transaction from pool.
