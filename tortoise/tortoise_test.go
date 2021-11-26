@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"math"
 	"math/big"
 	mrand "math/rand"
 	"strconv"
@@ -178,7 +177,7 @@ var (
 func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) {
 	logger := logtest.New(t)
 	for _, i := range blocks {
-		sum := abstain
+		sum := big.NewFloat(0)
 		blk, _ := trtl.bdp.GetBlock(i)
 
 		wind := types.NewLayerID(0)
@@ -196,14 +195,13 @@ func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) 
 				blk.LayerIndex)
 
 			for bid, opinionVote := range trtl.BallotOpinionsByLayer[l] {
-				opinionVote, ok := opinionVote[i]
+				ovote, ok := opinionVote[i]
 				if !ok {
 					continue
 				}
-
-				weight, err := trtl.voteWeightByID(bid)
-				require.NoError(t, err)
-				sum = sum.Add(opinionVote.Multiply(weight))
+				weight, exists := trtl.BallotWeight[bid]
+				require.True(t, exists, "ballot %s weight is not computed", bid)
+				sum = addVoteToSum(ovote, sum, weight)
 			}
 		}
 		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.GlobalThreshold, big.NewFloat(float64(trtl.LayerSize)))
@@ -1205,133 +1203,283 @@ func TestScoreBallots(t *testing.T) {
 	r.NotContains(alg.trtl.GoodBallotsIndex, l1Ballots[0].ID())
 }
 
-func TestProcessBlock(t *testing.T) {
-	r := require.New(t)
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-	blocksPerLayer := 4
-	baseBlockVoteWeight := uint(2)
+func TestSumVotes(t *testing.T) {
+	type testBallot struct {
+		Base                      [2]int   // [layer, ballot] tuple
+		Support, Against, Abstain [][2]int // list of [layer, ballot] tuples
+		ATX                       int
+	}
 
-	// blocks in this layer will use the genesis block as their base block
-	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Blocks := generateBlocks(t, l1ID, blocksPerLayer, alg.BaseBlock, atxdb, 1)
-	l1Ballots := types.ToBallots(generateBlocks(t, l1ID, blocksPerLayer, alg.BaseBlock, atxdb, 1))
-	// add one block from the layer
-	r.NoError(mdb.AddBlock(l1Blocks[0]))
-	ballotWithMissingBaseBallot := l1Ballots[0]
-	ballotWithMissingBaseBallot.BaseBallot = l1Ballots[1].ID()
+	getDiff := func(layers [][]*types.Ballot, choices [][2]int) []types.BlockID {
+		var rst []types.BlockID
+		for _, choice := range choices {
+			rst = append(rst, types.BlockID(layers[choice[0]][choice[1]].ID()))
+		}
+		return rst
+	}
 
-	// blocks in this layer will use a block from the previous layer as their base block
-	baseBlockProviderFn := func(context.Context) (types.BlockID, [][]types.BlockID, error) {
-		return l1Blocks[0].ID(), make([][]types.BlockID, blocksPerLayer), nil
-	}
-	l2ID := l1ID.Add(1)
-	l2Blocks := generateBlocks(t, l2ID, blocksPerLayer, baseBlockProviderFn, atxdb, baseBlockVoteWeight)
-	l2Ballots := types.ToBallots(l2Blocks)
+	ctx := context.TODO()
+	genesis := types.GetEffectiveGenesis()
 
-	alg.trtl.BallotOpinionsByLayer[l2ID] = make(map[types.BallotID]Opinion, defaultTestLayerSize)
-	alg.trtl.BallotOpinionsByLayer[l1ID] = make(map[types.BallotID]Opinion, defaultTestLayerSize)
+	for _, tc := range []struct {
+		desc      string
+		activeset []uint         // list of weights in activeset
+		layers    [][]testBallot // list of layers with ballots
+		target    [2]int
+		expect    *big.Float
+		filter    func(types.BallotID) bool
+	}{
+		{
+			desc:      "TwoLayersSupport",
+			activeset: []uint{10, 10, 10},
+			layers: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
+				{
+					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 2, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+				},
+				{
+					{ATX: 0, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
+					{ATX: 1, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
+					{ATX: 2, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
+				},
+			},
+			target: [2]int{0, 0},
+			expect: big.NewFloat(15),
+			filter: func(types.BallotID) bool { return true },
+		},
+		{
+			desc:      "ConflictWithBase",
+			activeset: []uint{10, 10, 10},
+			layers: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
+				{
+					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 2, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+				},
+				{
+					{
+						ATX: 0, Base: [2]int{1, 1},
+						Support: [][2]int{{1, 1}, {1, 0}, {1, 2}},
+						Against: [][2]int{{0, 1}, {0, 0}, {0, 2}},
+					},
+					{
+						ATX: 1, Base: [2]int{1, 1},
+						Support: [][2]int{{1, 1}, {1, 0}, {1, 2}},
+						Against: [][2]int{{0, 1}, {0, 0}, {0, 2}},
+					},
+					{
+						ATX: 2, Base: [2]int{1, 1},
+						Support: [][2]int{{1, 1}, {1, 0}, {1, 2}},
+						Against: [][2]int{{0, 1}, {0, 0}, {0, 2}},
+					},
+				},
+			},
+			target: [2]int{0, 0},
+			expect: big.NewFloat(0),
+			filter: func(types.BallotID) bool { return true },
+		},
+		{
+			desc:      "UnequalWeights",
+			activeset: []uint{80, 40, 20},
+			layers: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
+				{
+					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 2, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+				},
+				{
+					{ATX: 0, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
+					{ATX: 0, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
+					{ATX: 1, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
+				},
+				{
+					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}, {2, 2}}},
+					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}, {2, 2}}},
+					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}, {2, 2}}},
+					{ATX: 1, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}, {2, 2}}},
+				},
+			},
+			target: [2]int{0, 0},
+			expect: big.NewFloat(140),
+			filter: func(types.BallotID) bool { return true },
+		},
+		{
+			desc:      "UnequalWeightsVoteFromAtxMissing",
+			activeset: []uint{80, 40, 20},
+			layers: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
+				{
+					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 2, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+				},
+				{
+					{ATX: 0, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}}},
+					{ATX: 0, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}}},
+				},
+				{
+					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}}},
+					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}}},
+					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}}},
+				},
+			},
+			target: [2]int{0, 0},
+			expect: big.NewFloat(100),
+			filter: func(types.BallotID) bool { return true },
+		},
+		{
+			desc:      "OneLayerSupport",
+			activeset: []uint{10, 10, 10},
+			layers: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
+				{
+					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 2, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+				},
+			},
+			target: [2]int{0, 0},
+			expect: big.NewFloat(7.5),
+			filter: func(types.BallotID) bool { return true },
+		},
+		{
+			desc:      "OneBlockAbstain",
+			activeset: []uint{10, 10, 10},
+			layers: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
+				{
+					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 2, Base: [2]int{0, 1}, Abstain: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+				},
+			},
+			target: [2]int{0, 0},
+			expect: big.NewFloat(5),
+			filter: func(types.BallotID) bool { return true },
+		},
+		{
+			desc:      "OneBlockAagaisnt",
+			activeset: []uint{10, 10, 10},
+			layers: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
+				{
+					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 2, Base: [2]int{0, 1}, Against: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+				},
+			},
+			target: [2]int{0, 0},
+			expect: big.NewFloat(2.5),
+			filter: func(types.BallotID) bool { return true },
+		},
+		{
+			desc:      "MajorityAgainst",
+			activeset: []uint{10, 10, 10},
+			layers: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
+				{
+					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 1, Base: [2]int{0, 1}, Against: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 2, Base: [2]int{0, 1}, Against: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+				},
+			},
+			target: [2]int{0, 0},
+			expect: big.NewFloat(-2.5),
+			filter: func(types.BallotID) bool { return true },
+		},
+		{
+			desc:      "NoVotes",
+			activeset: []uint{10, 10, 10},
+			layers: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
+			},
+			target: [2]int{0, 0},
+			expect: big.NewFloat(0),
+			filter: func(types.BallotID) bool { return true },
+		},
+		{
+			desc:      "IgnoreVotes",
+			activeset: []uint{10, 10, 10},
+			layers: [][]testBallot{
+				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
+				{
+					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 1, Base: [2]int{0, 1}, Against: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 2, Base: [2]int{0, 1}, Against: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+				},
+			},
+			target: [2]int{0, 0},
+			expect: big.NewFloat(0),
+			filter: func(types.BallotID) bool { return false },
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			atxdb := mocks.NewMockatxDataProvider(ctrl)
+			activeset := []types.ATXID{}
+			for i, weight := range tc.activeset {
+				header := makeAtxHeaderWithWeight(weight)
+				atxid := types.ATXID{byte(i)}
+				header.SetID(&atxid)
+				atxdb.EXPECT().GetAtxHeader(atxid).Return(header, nil).AnyTimes()
+				activeset = append(activeset, atxid)
+			}
 
-	// add vote diffs: make sure that base block votes flow through, but that block votes override them, and that the
-	// data structure is correctly updated, and that weights are calculated correctly
+			tortoise := defaultAlgorithm(t, getInMemMesh(t))
+			tortoise.trtl.atxdb = atxdb
+			consensus := tortoise.trtl
 
-	// add base block to DB
-	r.NoError(mdb.AddBlock(l2Blocks[0]))
-	baseBlockProviderFn = func(context.Context) (types.BlockID, [][]types.BlockID, error) {
-		return l2Blocks[0].ID(), make([][]types.BlockID, blocksPerLayer), nil
+			layers := [][]*types.Ballot{}
+			for i, layer := range tc.layers {
+				layerBallots := []*types.Ballot{}
+				lid := genesis.Add(uint32(i) + 1)
+				for j, b := range layer {
+					ballot := &types.Ballot{
+						InnerBallot: types.InnerBallot{
+							EligibilityProof: types.VotingEligibilityProof{J: uint32(j)},
+							AtxID:            activeset[b.ATX],
+							EpochData:        &types.EpochData{ActiveSet: activeset},
+							LayerIndex:       lid,
+						},
+					}
+					// don't vote on genesis for simplicity,
+					// since we don't care about block goodness in this test
+					if i > 0 {
+						ballot.ForDiff = getDiff(layers, b.Support)
+						ballot.AgainstDiff = getDiff(layers, b.Against)
+						ballot.NeutralDiff = getDiff(layers, b.Abstain)
+						ballot.BaseBallot = layers[b.Base[0]][b.Base[1]].ID()
+					}
+					ballot.Initialize()
+					layerBallots = append(layerBallots, ballot)
+				}
+				layers = append(layers, layerBallots)
+
+				require.NoError(t, consensus.processBallots(wrapContext(ctx), layerBallots))
+				consensus.Processed = lid
+				consensus.Last = lid
+			}
+			bid := types.BlockID(layers[tc.target[0]][tc.target[1]].ID())
+			lid := genesis.Add(uint32(tc.target[0] + 2)) // +2 so that we count votes after target
+			rst, err := consensus.sumVotesForBlock(ctx, bid, lid, tc.filter)
+			require.NoError(t, err)
+			require.Equal(t, tc.expect.String(), rst.String())
+		})
 	}
-	baseBallotOpinionVector := Opinion{
-		l1Blocks[0].ID(): against.Multiply(uint64(baseBlockVoteWeight)), // disagrees with block below
-		l1Blocks[1].ID(): support.Multiply(uint64(baseBlockVoteWeight)), // disagrees with block below
-		l1Blocks[2].ID(): abstain,                                       // disagrees with block below
-		l1Blocks[3].ID(): against.Multiply(uint64(baseBlockVoteWeight)), // agrees with block below
-	}
-	alg.trtl.BallotOpinionsByLayer[l2ID][l2Ballots[0].ID()] = baseBallotOpinionVector
-	l3ID := l2ID.Add(1)
-	blockVoteWeight := uint(3)
-	l3Blocks := generateBlocks(t, l3ID, blocksPerLayer, baseBlockProviderFn, atxdb, blockVoteWeight)
-	l3Ballots := types.ToBallots(l3Blocks)
-	l3Ballots[0].AgainstDiff = []types.BlockID{
-		l1Blocks[1].ID(),
-	}
-	l3Ballots[0].ForDiff = []types.BlockID{}
-	l3Ballots[0].NeutralDiff = []types.BlockID{
-		l1Blocks[0].ID(),
-	}
-	alg.trtl.BallotOpinionsByLayer[l3ID] = make(map[types.BallotID]Opinion, blocksPerLayer)
-	// these must be in the mesh or we'll get an error when processing a block (l3Blocks[0])
-	// with a base block (l2Blocks[0]) that contains an opinion on them
-	for i, block := range l1Blocks[1:] {
-		r.NoError(mdb.AddBlock(block))
-		alg.trtl.BlockLayer[block.ID()] = block.LayerIndex
-		ballot := l1Ballots[i]
-		alg.trtl.BallotLayer[ballot.ID()] = ballot.LayerIndex
-	}
-	alg.trtl.BlockLayer[l2Blocks[0].ID()] = l2Blocks[0].LayerIndex
-	alg.trtl.BallotLayer[l2Ballots[0].ID()] = l2Ballots[0].LayerIndex
-	r.NoError(alg.trtl.processBallot(context.TODO(), l3Ballots[0]))
-	expectedOpinionVector := Opinion{
-		l1Blocks[0].ID(): abstain,                                   // from exception
-		l1Blocks[1].ID(): against.Multiply(uint64(blockVoteWeight)), // from exception
-		l1Blocks[2].ID(): abstain,                                   // from base block
-		l1Blocks[3].ID(): against.Multiply(uint64(blockVoteWeight)), // from base block, reweighted
-	}
-	r.Equal(baseBallotOpinionVector, alg.trtl.BallotOpinionsByLayer[l2ID][l2Ballots[0].ID()])
-	r.Equal(expectedOpinionVector, alg.trtl.BallotOpinionsByLayer[l3ID][l3Ballots[0].ID()])
 }
 
-func makeAtxHeaderWithWeight(weight uint) (mockAtxHeader *types.ActivationTxHeader) {
-	mockAtxHeader = &types.ActivationTxHeader{NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: "fakekey"}}}
-	mockAtxHeader.StartTick = 0
-	mockAtxHeader.EndTick = 1
-	mockAtxHeader.NumUnits = weight
-	return
-}
-
-func TestVoteWeight(t *testing.T) {
-	r := require.New(t)
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-	totalSpace := 100
-	atxdb.mockAtxHeader = makeAtxHeaderWithWeight(uint(totalSpace))
-	someBlocks := types.ToBallots(generateBlocks(t, types.GetEffectiveGenesis().Add(1), 1, alg.BaseBlock, atxdb, 1))
-	weight, err := alg.trtl.voteWeight(someBlocks[0])
-	r.NoError(err)
-	r.Equal(totalSpace, int(weight))
-}
-
-func TestVoteWeightInOpinion(t *testing.T) {
-	r := require.New(t)
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-	weight := uint(2)
-
-	// add one base block that votes for (genesis) base block with weight > 1
-	atxdb.mockAtxHeader = makeAtxHeaderWithWeight(weight)
-	genesisBlockID := mesh.GenesisBlock().ID()
-	l1ID := types.GetEffectiveGenesis().Add(1)
-	makeAndProcessLayer(t, l1ID, alg.trtl, 1, atxdb, mdb, mdb.LayerBlockIds)
-	layerBlockIDs, err := mdb.LayerBlockIds(l1ID)
-	r.NoError(err)
-	r.Len(layerBlockIDs, 1)
-	blockID := layerBlockIDs[0]
-	ballotID := types.BallotID(blockID)
-
-	// make sure opinion is set correctly
-	r.Equal(support.Multiply(uint64(weight)), alg.trtl.BallotOpinionsByLayer[l1ID][ballotID][genesisBlockID])
-
-	// make sure the only exception added was for the base block itself
-	l2 := makeLayer(t, l1ID, alg.trtl, 1, atxdb, mdb, mdb.LayerBlockIds)
-	r.Len(l2.BlocksIDs(), 1)
-	l2Ballot := l2.Blocks()[0].ToBallot()
-	r.Len(l2Ballot.ForDiff, 1)
-	r.Equal(blockID, l2Ballot.ForDiff[0])
+func makeAtxHeaderWithWeight(weight uint) *types.ActivationTxHeader {
+	header := &types.ActivationTxHeader{
+		NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: "key"}},
+	}
+	header.StartTick = 0
+	header.EndTick = 1
+	header.NumUnits = weight
+	return header
 }
 
 func TestVerifyLayers(t *testing.T) {
@@ -1597,116 +1745,6 @@ func TestVerifyLayers(t *testing.T) {
 		r.NoError(alg.trtl.verifyLayers(wrapContext(context.TODO())))
 		r.Equal(int(l5ID.Uint32()), int(alg.trtl.Verified.Uint32()))
 	})
-}
-
-func TestSumVotesForBlock(t *testing.T) {
-	r := require.New(t)
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-
-	// store a bunch of votes against a block
-	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Blocks := generateBlocks(t, l1ID, 4, alg.BaseBlock, atxdb, 1)
-	for _, block := range l1Blocks {
-		r.NoError(mdb.AddBlock(block))
-	}
-	blockWeReallyDislike := l1Blocks[0]
-	blockWeReallyLike := l1Blocks[1]
-	blockWeReallyDontCare := l1Blocks[2]
-	blockWeNeverSaw := l1Blocks[3]
-	l2ID := l1ID.Add(1)
-	l2Blocks := generateBlocks(t, l2ID, 9, alg.BaseBlock, atxdb, 1)
-	for _, block := range l2Blocks {
-		r.NoError(mdb.AddBlock(block))
-	}
-	l2Ballots := types.ToBallots(l2Blocks)
-	alg.trtl.BallotOpinionsByLayer[l2ID] = map[types.BallotID]Opinion{
-		l2Ballots[0].ID(): {blockWeReallyDislike.ID(): against},
-		l2Ballots[1].ID(): {blockWeReallyDislike.ID(): against},
-		l2Ballots[2].ID(): {blockWeReallyDislike.ID(): against},
-	}
-
-	// test filter
-	filterPassAll := func(types.BallotID) bool { return true }
-	filterRejectAll := func(types.BallotID) bool { return false }
-
-	// if we reject all blocks, we expect an abstain outcome
-	alg.trtl.Processed = l2ID
-	sum, err := alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterRejectAll)
-	r.NoError(err)
-	r.Equal(abstain, sum)
-
-	// if we allow all blocks to vote, we expect an against outcome
-	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterPassAll)
-	r.NoError(err)
-	r.Equal(against.Multiply(3), sum)
-
-	// add more blocks
-	alg.trtl.BallotOpinionsByLayer[l2ID] = map[types.BallotID]Opinion{
-		l2Ballots[0].ID(): {blockWeReallyDislike.ID(): against},
-		l2Ballots[1].ID(): {blockWeReallyDislike.ID(): against},
-		l2Ballots[2].ID(): {blockWeReallyDislike.ID(): against},
-		l2Ballots[3].ID(): {blockWeReallyLike.ID(): support},
-		l2Ballots[4].ID(): {blockWeReallyLike.ID(): support},
-		l2Ballots[5].ID(): {blockWeReallyDontCare.ID(): abstain},
-		l2Ballots[6].ID(): {},
-		l2Ballots[7].ID(): {},
-		l2Ballots[8].ID(): {},
-	}
-	// some blocks explicitly vote against, others have no opinion
-	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDislike.ID(), l2ID, filterPassAll)
-	r.NoError(err)
-	r.Equal(against.Multiply(9), sum)
-	// some blocks vote for, others have no opinion
-	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyLike.ID(), l2ID, filterPassAll)
-	r.NoError(err)
-	r.Equal(support.Multiply(2).Add(against.Multiply(7)), sum)
-	// one block votes neutral, others have no opinion
-	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeReallyDontCare.ID(), l2ID, filterPassAll)
-	r.NoError(err)
-	r.Equal(abstain.Multiply(1).Add(against.Multiply(8)), sum)
-
-	// vote missing: counts against
-	sum, err = alg.trtl.sumVotesForBlock(context.TODO(), blockWeNeverSaw.ID(), l2ID, filterPassAll)
-	r.NoError(err)
-	r.Equal(against.Multiply(9), sum)
-}
-
-func TestSumWeightedVotesForBlock(t *testing.T) {
-	r := require.New(t)
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-	numBlocks := 5
-	genesisBlockID := mesh.GenesisBlock().ID()
-	l1ID := types.GetEffectiveGenesis().Add(1)
-	filterPassAll := func(id types.BallotID) bool { return true }
-
-	// use the same base block for all newly-created blocks
-	b, lists, err := alg.BaseBlock(context.TODO())
-	r.NoError(err)
-	bbp := func(context.Context) (types.BlockID, [][]types.BlockID, error) {
-		return b, lists, nil
-	}
-
-	// create several voting blocks with different weights
-	netWeight := uint(0)
-	for i := 0; i < numBlocks; i++ {
-		thisWeight := uint(1) << i
-		netWeight += thisWeight
-		block := generateBlock(t, l1ID, bbp, atxdb, thisWeight)
-		r.NoError(mdb.AddBlock(block))
-
-		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l1ID))
-
-		// check
-		sum, err := alg.trtl.sumVotesForBlock(context.TODO(), genesisBlockID, l1ID, filterPassAll)
-		r.NoError(err)
-		r.EqualValues(netWeight, sum.Support-sum.Against)
-	}
 }
 
 func checkVerifiedLayer(t *testing.T, trtl *turtle, layerID types.LayerID) {
@@ -2042,121 +2080,67 @@ func TestHealBalanceAttack(t *testing.T) {
 	r.Equal(true, valid)
 }
 
-func TestVectorArithmetic(t *testing.T) {
-	r := require.New(t)
-	r.Equal(abstain, abstain.Add(abstain))
-	r.Equal(support, abstain.Add(support))
-	r.Equal(support, support.Add(abstain))
-	r.Equal(against, abstain.Add(against))
-	r.Equal(against, against.Add(abstain))
-	r.Equal(vec{Support: 1, Against: 1}, against.Add(support))
-	r.Equal(abstain, simplifyVote(against.Add(support)))
-	r.Equal(vec{Support: 1, Against: 1}, support.Add(against))
-	r.Equal(abstain, simplifyVote(support.Add(against)))
-	r.Equal(support, simplifyVote(support.Add(support)))
-	r.Equal(against, simplifyVote(against.Add(against)))
-	r.Equal(support, simplifyVote(vec{Support: 100, Against: 10}))
-	r.Equal(against, simplifyVote(vec{Support: 10, Against: 100}))
-	r.Equal(abstain, simplifyVote(abstain))
-	r.Equal(abstain, abstain.Multiply(1))
-	r.Equal(support, support.Multiply(1))
-	r.Equal(against, against.Multiply(1))
-	r.Equal(abstain, abstain.Multiply(0))
-	r.Equal(abstain, support.Multiply(0))
-	r.Equal(abstain, against.Multiply(0))
-	r.Equal(support.Add(abstain), abstain.Add(support))
-	r.Equal(against.Add(abstain), abstain.Add(against))
-	r.Equal(support.Multiply(2), support.Add(support))
-	r.Equal(against.Multiply(2), against.Add(against))
-
-	// test wraparound
-	bigVec := vec{Support: math.MaxUint64, Against: math.MaxUint64}
-	r.NotPanics(func() { bigVec.Add(abstain) })
-	r.NotPanics(func() { abstain.Add(bigVec) })
-	r.PanicsWithError(errOverflow.Error(), func() { bigVec.Add(support) })
-	r.PanicsWithError(errOverflow.Error(), func() { support.Add(bigVec) })
-	r.NotPanics(func() { bigVec.Multiply(0) })
-	r.NotPanics(func() { bigVec.Multiply(1) })
-	r.PanicsWithError(errOverflow.Error(), func() { bigVec.Multiply(2) })
-	r.NotPanics(func() { support.Multiply(math.MaxUint64) })
-	r.PanicsWithError(errOverflow.Error(), func() { support.Add(support).Multiply(math.MaxUint64) })
-}
-
 func TestCalculateOpinionWithThreshold(t *testing.T) {
 	for _, tc := range []struct {
 		desc      string
 		expect    vec
-		vote      vec
+		vote      *big.Float
 		threshold *big.Rat
 		weight    *big.Float
 	}{
 		{
 			desc:      "Support",
 			expect:    support,
-			vote:      vec{Support: 6},
-			threshold: big.NewRat(1, 2),
-			weight:    big.NewFloat(10),
-		},
-		{
-			desc:      "SupportDelta",
-			expect:    support,
-			vote:      vec{Support: 12, Against: 6},
+			vote:      big.NewFloat(6),
 			threshold: big.NewRat(1, 2),
 			weight:    big.NewFloat(10),
 		},
 		{
 			desc:      "Abstain",
 			expect:    abstain,
-			vote:      vec{Support: 5},
+			vote:      big.NewFloat(3),
 			threshold: big.NewRat(1, 2),
 			weight:    big.NewFloat(10),
 		},
 		{
-			desc:      "AbstainDelta",
+			desc:      "AbstainZero",
 			expect:    abstain,
-			vote:      vec{Support: 11, Against: 6},
+			vote:      big.NewFloat(0),
 			threshold: big.NewRat(1, 2),
 			weight:    big.NewFloat(10),
 		},
 		{
 			desc:      "Against",
 			expect:    against,
-			vote:      vec{Against: 6},
-			threshold: big.NewRat(1, 2),
-			weight:    big.NewFloat(10),
-		},
-		{
-			desc:      "AgainstDelta",
-			expect:    against,
-			vote:      vec{Support: 6, Against: 12},
+			vote:      big.NewFloat(-6),
 			threshold: big.NewRat(1, 2),
 			weight:    big.NewFloat(10),
 		},
 		{
 			desc:      "ComplexSupport",
 			expect:    support,
-			vote:      vec{Support: 162, Against: 41},
+			vote:      big.NewFloat(121),
 			threshold: big.NewRat(60, 100),
 			weight:    big.NewFloat(200),
 		},
 		{
 			desc:      "ComplexAbstain",
 			expect:    abstain,
-			vote:      vec{Support: 162, Against: 42},
+			vote:      big.NewFloat(120),
 			threshold: big.NewRat(60, 100),
 			weight:    big.NewFloat(200),
 		},
 		{
 			desc:      "ComplexAbstain2",
 			expect:    abstain,
-			vote:      vec{Support: 42, Against: 162},
+			vote:      big.NewFloat(-120),
 			threshold: big.NewRat(60, 100),
 			weight:    big.NewFloat(200),
 		},
 		{
 			desc:      "ComplexAgainst",
 			expect:    against,
-			vote:      vec{Support: 41, Against: 162},
+			vote:      big.NewFloat(-121),
 			threshold: big.NewRat(60, 100),
 			weight:    big.NewFloat(200),
 		},

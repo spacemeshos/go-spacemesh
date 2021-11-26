@@ -1,8 +1,6 @@
 package tortoise
 
 import (
-	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 
@@ -10,72 +8,33 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-var errOverflow = errors.New("vector overflow")
-
 var (
-	// correction vectors type
-	// Opinion vectors.
-	support = vec{Support: 1, Against: 0}
-	against = vec{Support: 0, Against: 1}
-	abstain = vec{Support: 0, Against: 0}
+	// correction vectors type.
+	support = vec{Sign: 1}
+	against = vec{Sign: -1}
+	abstain = vec{Sign: 0}
 )
 
 type vec struct {
-	Support, Against uint64
-	Flushed          bool
-}
-
-// Field returns a log field. Implements the LoggableField interface.
-func (a vec) Field() log.Field {
-	return log.String("vote_vector", fmt.Sprintf("(+%d, -%d)", a.Support, a.Against))
-}
-
-func (a vec) Add(v vec) vec {
-	a.Support += v.Support
-	a.Against += v.Against
-	a.Flushed = false
-	if a.Support < v.Support || a.Against < v.Against {
-		panic(errOverflow)
-	}
-	return a
-}
-
-func (a vec) Multiply(x uint64) vec {
-	one := a.Support * x
-	two := a.Against * x
-	if x != 0 && (one/x != a.Support || two/x != a.Against) {
-		panic(errOverflow)
-	}
-	a.Flushed = false
-	a.Support = one
-	a.Against = two
-	return a
+	Sign    int8
+	Flushed bool
 }
 
 func equalVotes(i, j vec) bool {
-	return simplifyVote(i) == simplifyVote(j)
-}
-
-func simplifyVote(v vec) vec {
-	if v.Support > v.Against {
-		return support
-	}
-
-	if v.Against > v.Support {
-		return against
-	}
-	return abstain
+	return i.Sign == j.Sign
 }
 
 func (a vec) String() string {
-	v := simplifyVote(a)
-	if v == support {
+	switch a.Sign {
+	case 1:
 		return "support"
-	}
-	if v == against {
+	case -1:
 		return "against"
+	case 0:
+		return "abstain"
+	default:
+		panic("sign should be 0/-1/1")
 	}
-	return "abstain"
 }
 
 // Some methods of *big.Rat change its internal data without mutexes, which causes data races.
@@ -83,7 +42,7 @@ var thetaMu sync.Mutex
 
 // calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
 // theta, and expected vote weight.
-func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, weight *big.Float) vec {
+func calculateOpinionWithThreshold(logger log.Log, vote *big.Float, theta *big.Rat, weight *big.Float) vec {
 	thetaMu.Lock()
 	defer thetaMu.Unlock()
 
@@ -92,21 +51,23 @@ func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, weight
 	threshold.Quo(threshold, new(big.Float).SetInt(theta.Denom()))
 
 	logger.With().Debug("threshold opinion",
-		v,
-		log.String("theta", theta.String()),
+		log.Stringer("vote", vote),
+		log.Stringer("theta", theta),
 		log.Stringer("expected_weight", weight),
 		log.Stringer("threshold", threshold),
 	)
 
-	exceedsThreshold := func(val uint64) bool {
-		v := new(big.Float).SetUint64(val)
-		return v.Cmp(threshold) == 1
+	switch vote.Sign() {
+	case 1:
+		if vote.Cmp(threshold) == 1 {
+			return support
+		}
+	case -1:
+		if vote.Abs(vote).Cmp(threshold) == 1 {
+			return against
+		}
 	}
-	if v.Support > v.Against && exceedsThreshold(v.Support-v.Against) {
-		return support
-	} else if v.Against > v.Support && exceedsThreshold(v.Against-v.Support) {
-		return against
-	}
+	// either vote is 0 or it didn't cross the threshold
 	return abstain
 }
 
@@ -119,4 +80,16 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 		arr = append(arr, b)
 	}
 	return arr
+}
+
+func addVoteToSum(vote vec, sum, weight *big.Float) *big.Float {
+	adjusted := weight
+	if vote == against {
+		// copy is needed only if we modify sign
+		adjusted = new(big.Float).Mul(weight, big.NewFloat(-1))
+	}
+	if vote != abstain {
+		sum = sum.Add(sum, adjusted)
+	}
+	return sum
 }

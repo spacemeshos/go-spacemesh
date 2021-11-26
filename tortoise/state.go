@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -48,6 +49,8 @@ type state struct {
 	GoodBallotsIndex map[types.BallotID]bool
 	// use 2D array to be able to iterate from the latest elements easily
 	BallotOpinionsByLayer map[types.LayerID]map[types.BallotID]Opinion
+	// BallotWeight is a weight of a single ballot.
+	BallotWeight map[types.BallotID]*big.Float
 	// BallotLayer stores reverse mapping from BallotOpinionsByLayer
 	BallotLayer map[types.BallotID]types.LayerID
 	// BlockLayer stores mapping from BlockID to LayerID
@@ -202,6 +205,7 @@ func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
 			}
 			delete(s.GoodBallotsIndex, ballot)
 			delete(s.BallotLayer, ballot)
+			delete(s.BallotWeight, ballot)
 			delete(s.BlockLayer, types.BlockID(ballot))
 			delete(s.badBeaconBallots, ballot)
 			for block, opinion := range s.BallotOpinionsByLayer[layerToEvict][ballot] {
