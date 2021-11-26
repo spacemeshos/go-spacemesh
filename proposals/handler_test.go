@@ -17,12 +17,14 @@ import (
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
-var (
+const (
 	layersPerEpoch = uint32(3)
-	layerAveSize   = uint32(10)
-	goldenATXID    = types.ATXID(types.HexToHash32("0x6666666"))
-	errUnknown     = errors.New("unknown")
+	layerAvgSize   = uint32(10)
 )
+
+func genGoldenATXID() types.ATXID {
+	return types.ATXID(types.HexToHash32("0x6666666"))
+}
 
 type mockSet struct {
 	ctrl *gomock.Controller
@@ -33,7 +35,7 @@ type mockSet struct {
 	mv   *mocks.MockeligibilityValidator
 }
 
-type testedHandler struct {
+type testHandler struct {
 	*Handler
 	*mockSet
 }
@@ -50,16 +52,16 @@ func fullMockSet(tb testing.TB) *mockSet {
 	}
 }
 
-func createTestHandler(tb testing.TB) *testedHandler {
+func createTestHandler(tb testing.TB) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(tb)
-	return &testedHandler{
+	return &testHandler{
 		Handler: NewHandler(ms.mf, ms.mbc, ms.mdb, ms.mm,
-			WithGoldenATXID(goldenATXID),
+			WithGoldenATXID(genGoldenATXID()),
 			WithMaxExceptions(3),
 			WithLayerPerEpoch(layersPerEpoch),
-			WithLayerSize(layerAveSize),
-			WithValidator(ms.mv)),
+			WithLayerSize(layerAvgSize),
+			withValidator(ms.mv)),
 		mockSet: ms,
 	}
 }
@@ -156,7 +158,7 @@ func TestBallot_GoldenATXID(t *testing.T) {
 	th := createTestHandler(t)
 	defer th.ctrl.Finish()
 	b := createBallot(t)
-	b.AtxID = goldenATXID
+	b.AtxID = genGoldenATXID()
 	data := encodeBallot(t, b)
 	th.mm.EXPECT().HasBallot(gomock.Any()).Return(false).Times(1)
 	assert.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errInvalidATXID)
@@ -248,6 +250,7 @@ func TestBallot_BallotsNotAvailable(t *testing.T) {
 	b := createBallot(t)
 	data := encodeBallot(t, b)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
+	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.BaseBallot, b.RefBallot}).Return(errUnknown).Times(1)
 	assert.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errUnknown)
 }
@@ -259,6 +262,7 @@ func TestBallot_ATXsNotAvailable(t *testing.T) {
 	data := encodeBallot(t, b)
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.BaseBallot, b.RefBallot}).Return(nil).Times(1)
+	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(errUnknown).Times(1)
 	assert.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errUnknown)
 }
@@ -271,6 +275,7 @@ func TestBallot_BlocksNotAvailable(t *testing.T) {
 	th.mm.EXPECT().HasBallot(b.ID()).Return(false).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{b.BaseBallot, b.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
+	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.ForDiff).Return(errUnknown).Times(1)
 	assert.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errUnknown)
 }
@@ -287,7 +292,7 @@ func TestBallot_ErrorCheckingEligible(t *testing.T) {
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
 			assert.Equal(t, b.ID(), ballot.ID())
-			return false, errUnknown
+			return false, errors.New("unknown")
 		})
 	assert.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errNotEligible)
 }
@@ -416,6 +421,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 			assert.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(errUnknown).Times(1)
 	assert.ErrorIs(t, th.processProposal(context.TODO(), data), errUnknown)
 }
@@ -436,6 +442,7 @@ func TestProposal_FailedToAddProposal(t *testing.T) {
 			return true, nil
 		})
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
+	errUnknown := errors.New("unknown")
 	th.mm.EXPECT().AddProposal(gomock.Any()).DoAndReturn(
 		func(proposal *types.Proposal) error {
 			assert.Equal(t, p.Fields(), proposal.Fields())

@@ -15,9 +15,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-// NewBallotProtocol is the protocol indicator for gossip Ballots.
-const NewBallotProtocol = "newBallot"
-
 // NewProposalProtocol is the protocol indicator for gossip Proposals.
 const NewProposalProtocol = "newProposal"
 
@@ -88,8 +85,8 @@ func WithLayerPerEpoch(layers uint32) Opt {
 	}
 }
 
-// WithValidator defines eligibility validator.
-func WithValidator(v eligibilityValidator) Opt {
+// withValidator defines eligibility validator.
+func withValidator(v eligibilityValidator) Opt {
 	return func(h *Handler) {
 		h.validator = v
 	}
@@ -131,16 +128,6 @@ func NewHandler(f system.Fetcher, bc system.BeaconCollector, db atxDB, m mesh, o
 func (h *Handler) HandleProposal(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
 	if err := h.processProposal(ctx, msg); err != nil {
 		h.logger.WithContext(ctx).With().Error("failed to process proposal gossip", log.Err(err))
-		return pubsub.ValidationIgnore
-	}
-	return pubsub.ValidationAccept
-}
-
-// HandleBallot is the gossip receiver for Ballot.
-// TODO: register this gossip handler.
-func (h *Handler) HandleBallot(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
-	if err := h.HandleBallotData(ctx, msg); err != nil {
-		h.logger.WithContext(ctx).With().Error("failed to process ballot gossip", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
@@ -234,17 +221,17 @@ func (h *Handler) checkBallotSyntacticValidity(ctx context.Context, b *types.Bal
 	h.logger.WithContext(ctx).With().Debug("checking proposal syntactic validity")
 
 	if err := h.checkBallotDataIntegrity(b); err != nil {
-		h.logger.WithContext(ctx).With().Error("ballot integrity check failed", log.Err(err))
+		h.logger.WithContext(ctx).With().Warning("ballot integrity check failed", log.Err(err))
 		return err
 	}
 
 	if err := h.checkBallotDataAvailability(ctx, b); err != nil {
-		h.logger.WithContext(ctx).With().Error("ballot data availability check failed", log.Err(err))
+		h.logger.WithContext(ctx).With().Warning("ballot data availability check failed", log.Err(err))
 		return err
 	}
 
 	if eligible, err := h.validator.CheckEligibility(ctx, b); err != nil || !eligible {
-		h.logger.WithContext(ctx).With().Error("ballot eligibility check failed", log.Err(err))
+		h.logger.WithContext(ctx).With().Warning("ballot eligibility check failed", log.Err(err))
 		return errNotEligible
 	}
 
@@ -286,13 +273,13 @@ func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 		}
 	}
 
-	if err := h.checkExceptions(b, h.cfg.MaxExceptions); err != nil {
+	if err := checkExceptions(b, h.cfg.MaxExceptions); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (h *Handler) checkExceptions(ballot *types.Ballot, max int) error {
+func checkExceptions(ballot *types.Ballot, max int) error {
 	exceptions := map[types.BlockID]struct{}{}
 	for _, diff := range [][]types.BlockID{ballot.ForDiff, ballot.NeutralDiff, ballot.AgainstDiff} {
 		for _, bid := range diff {
