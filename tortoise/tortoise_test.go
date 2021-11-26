@@ -2325,10 +2325,6 @@ func TestMultiTortoise(t *testing.T) {
 		for i := 0; i < healingDistance; i++ {
 			layerID = layerID.Add(1)
 
-			// technically only minority (mdb2) will not make progress without weakcoin
-			mdb1.RecordCoinflip(context.TODO(), layerID, true)
-			mdb2.RecordCoinflip(context.TODO(), layerID, true)
-
 			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
 			// an ongoing partition.
