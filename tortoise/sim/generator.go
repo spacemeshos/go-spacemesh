@@ -5,11 +5,11 @@ import (
 	"math/rand"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // GenOpt for configuring Generator.
@@ -78,7 +78,7 @@ func defaults() config {
 type State struct {
 	MeshDB  *mesh.DB
 	AtxDB   *activation.DB
-	Beacons blocks.BeaconGetter
+	Beacons system.BeaconGetter
 }
 
 // New creates Generator instance.

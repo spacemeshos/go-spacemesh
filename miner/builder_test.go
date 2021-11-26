@@ -11,52 +11,20 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/blocks"
-	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	dbMocks "github.com/spacemeshos/go-spacemesh/database/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mempool"
+	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const selectCount = 100
-
-type mockBlockOracle struct {
-	calls int
-	err   error
-	J     uint32
-}
-
-func (mbo *mockBlockOracle) BlockEligible(types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error) {
-	mbo.calls++
-	return types.ATXID(types.Hash32{1, 2, 3}), []types.BlockEligibilityProof{{J: mbo.J, Sig: []byte{1}}}, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, mbo.err
-}
-
-type mockSyncer struct {
-	notSynced bool
-}
-
-func (mockSyncer) ListenToGossip() bool {
-	return true
-}
-
-func (m mockSyncer) IsSynced(context.Context) bool { return !m.notSynced }
-
-type MockProjector struct{}
-
-func (p *MockProjector) GetProjection(types.Address) (nonce uint64, balance uint64, err error) {
-	return 1, 1000, nil
-}
-
-func init() {
-	types.SetLayersPerEpoch(3)
-}
-
-var mockProjector = &MockProjector{}
 
 func newPublisher(tb testing.TB) pubsub.Publisher {
 	tb.Helper()
@@ -106,6 +74,7 @@ func TestBlockBuilder_StartStop(t *testing.T) {
 }
 
 func TestBlockBuilder_createBlockLoop_Beacon(t *testing.T) {
+	types.SetLayersPerEpoch(3)
 	rand.Seed(0)
 	layerID := types.NewLayerID(7)
 	epoch := layerID.GetEpoch()
@@ -115,8 +84,9 @@ func TestBlockBuilder_createBlockLoop_Beacon(t *testing.T) {
 	builder.TransactionPool = txMempool
 
 	ctrl := gomock.NewController(t)
-	mockTB := mocks.NewMockBeaconGetter(ctrl)
-	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(types.HexToHash32("0x94812631").Bytes(), nil).Times(1)
+	defer ctrl.Finish()
+	mockTB := smocks.NewMockBeaconGetter(ctrl)
+	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBytes(types.BeaconSize), nil).Times(1)
 	builder.beaconProvider = mockTB
 
 	mockDB := dbMocks.NewMockDatabase(ctrl)
@@ -136,7 +106,6 @@ func TestBlockBuilder_createBlockLoop_Beacon(t *testing.T) {
 
 	err = builder.Close()
 	assert.NoError(t, err)
-	ctrl.Finish()
 }
 
 func TestBlockBuilder_createBlockLoop_NoBeacon(t *testing.T) {
@@ -149,7 +118,8 @@ func TestBlockBuilder_createBlockLoop_NoBeacon(t *testing.T) {
 	builder.TransactionPool = txMempool
 
 	ctrl := gomock.NewController(t)
-	mockTB := mocks.NewMockBeaconGetter(ctrl)
+	defer ctrl.Finish()
+	mockTB := smocks.NewMockBeaconGetter(ctrl)
 	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(nil, database.ErrNotFound).Times(1)
 	builder.beaconProvider = mockTB
 
@@ -170,7 +140,6 @@ func TestBlockBuilder_createBlockLoop_NoBeacon(t *testing.T) {
 
 	err = builder.Close()
 	assert.NoError(t, err)
-	ctrl.Finish()
 }
 
 func TestBlockBuilder_BlockIdGeneration(t *testing.T) {
@@ -226,9 +195,10 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	}}
 	builder.TransactionPool = txPool
 	builder.beginRoundEvent = beginRound
-	beacon := types.HexToHash32("0x94812631").Bytes()
+	beacon := types.RandomBytes(types.BeaconSize)
 	ctrl := gomock.NewController(t)
-	mockTB := mocks.NewMockBeaconGetter(ctrl)
+	defer ctrl.Finish()
+	mockTB := smocks.NewMockBeaconGetter(ctrl)
 	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	builder.beaconProvider = mockTB
 	require.NoError(t, builder.Start(context.TODO()))
@@ -250,8 +220,6 @@ func TestBlockBuilder_CreateBlockFlow(t *testing.T) {
 	case <-time.After(500 * time.Millisecond):
 		assert.Fail(t, "timeout on receiving block")
 	}
-
-	ctrl.Finish()
 }
 
 func TestBlockBuilder_CreateBlockFlowNoATX(t *testing.T) {
@@ -270,12 +238,13 @@ func TestBlockBuilder_CreateBlockFlowNoATX(t *testing.T) {
 
 	beacon := types.HexToHash32("0x94812631").Bytes()
 	ctrl := gomock.NewController(t)
-	mockTB := mocks.NewMockBeaconGetter(ctrl)
+	defer ctrl.Finish()
+	mockTB := smocks.NewMockBeaconGetter(ctrl)
 	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	builder.beaconProvider = mockTB
 
-	mbo := &mockBlockOracle{}
-	mbo.err = blocks.ErrMinerHasNoATXInPreviousEpoch
+	mbo := mocks.NewMockblockOracle(ctrl)
+	mbo.EXPECT().BlockEligible(gomock.Any()).Return(*types.EmptyATXID, nil, nil, blocks.ErrMinerHasNoATXInPreviousEpoch)
 	builder.blockOracle = mbo
 	require.NoError(t, builder.Start(context.TODO()))
 
@@ -285,8 +254,6 @@ func TestBlockBuilder_CreateBlockFlowNoATX(t *testing.T) {
 		assert.Fail(t, "miner should not produce blocks")
 	case <-time.After(500 * time.Millisecond):
 	}
-
-	ctrl.Finish()
 }
 
 func TestBlockBuilder_CreateBlockWithRef(t *testing.T) {
@@ -487,23 +454,20 @@ func TestBlockBuilder_createBlock(t *testing.T) {
 }
 
 func TestBlockBuilder_notSynced(t *testing.T) {
-	r := require.New(t)
-	beginRound := make(chan types.LayerID)
-	ms := &mockSyncer{}
-	ms.notSynced = true
-	mbo := &mockBlockOracle{}
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	ms := smocks.NewMockSyncStateProvider(ctrl)
 
+	beginRound := make(chan types.LayerID)
 	builder := createBlockBuilder(t, "a", newPublisher(t))
 	builder.syncer = ms
-	builder.blockOracle = mbo
 	builder.beginRoundEvent = beginRound
+
+	ms.EXPECT().IsSynced(gomock.Any()).Return(false).Times(2)
 	require.NoError(t, builder.Start(context.TODO()))
-	t.Cleanup(func() {
-		builder.Close()
-	})
 	beginRound <- types.NewLayerID(1)
 	beginRound <- types.NewLayerID(2)
-	r.Equal(0, mbo.calls)
+	builder.Close()
 }
 
 type mockBBP struct {
@@ -519,6 +483,15 @@ func (b *mockBBP) BaseBlock(context.Context) (types.BlockID, [][]types.BlockID, 
 }
 
 func createBlockBuilder(t *testing.T, ID string, publisher pubsub.Publisher) *BlockBuilder {
+	ctrl := gomock.NewController(t)
+	ms := smocks.NewMockSyncStateProvider(ctrl)
+	ms.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	mbo := mocks.NewMockblockOracle(ctrl)
+	mbo.EXPECT().BlockEligible(gomock.Any()).Return(
+		types.ATXID(types.Hash32{1, 2, 3}), []types.BlockEligibilityProof{{J: 0, Sig: []byte{1}}}, []types.ATXID{atx1, atx2, atx3, atx4, atx5}, nil).AnyTimes()
+	mp := mocks.NewMockprojector(ctrl)
+	mp.EXPECT().GetProjection(gomock.Any()).Return(uint64(1), uint64(1000), nil).AnyTimes()
+
 	beginRound := make(chan types.LayerID)
 	cfg := Config{
 		MinerID:        types.NodeID{Key: ID},
@@ -528,6 +501,6 @@ func createBlockBuilder(t *testing.T, ID string, publisher pubsub.Publisher) *Bl
 	}
 	bb := NewBlockBuilder(cfg, signing.NewEdSigner(), publisher, beginRound, &mockMesh{}, &mockBBP{f: func() (types.BlockID, [][]types.BlockID, error) {
 		return types.BlockID{}, [][]types.BlockID{{}, {}, {}}, nil
-	}}, &mockBlockOracle{}, nil, &mockSyncer{}, mockProjector, nil, logtest.New(t).WithName(ID))
+	}}, mbo, nil, ms, mp, nil, logtest.New(t).WithName(ID))
 	return bb
 }

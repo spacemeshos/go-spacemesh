@@ -15,8 +15,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/blocks"
-	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -24,6 +22,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
@@ -125,7 +125,7 @@ func (madp *mockAtxDataProvider) storeEpochWeight(weight uint64) {
 	madp.epochWeight = weight
 }
 
-func (madp *mockAtxDataProvider) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error) {
+func (madp *mockAtxDataProvider) GetEpochWeight(_ types.EpochID) (uint64, []types.ATXID, error) {
 	return madp.epochWeight, nil, nil
 }
 
@@ -874,11 +874,11 @@ func TestBaseBlock(t *testing.T) {
 	expectBaseBlockLayer(l2.Index(), 0, defaultTestLayerSize, 0)
 }
 
-func mockedBeacons(tb testing.TB) blocks.BeaconGetter {
+func mockedBeacons(tb testing.TB) system.BeaconGetter {
 	tb.Helper()
 
 	ctrl := gomock.NewController(tb)
-	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
 	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
 	return mockBeacons
 }
@@ -1723,7 +1723,7 @@ func TestHealing(t *testing.T) {
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
 	alg.trtl.beacons = mockBeacons
 
 	goodBeacon := randomBytes(t, 32)
@@ -2949,7 +2949,7 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 	epochBeacon := randomBytes(t, 32)
 	ballot := randomBlock(t, layerID, epochBeacon, nil).ToBallot()
 
-	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
 	trtl := defaultTurtle(t)
 	trtl.beacons = mockBeacons
 
@@ -3005,7 +3005,7 @@ func TestBallotFilterForHealing(t *testing.T) {
 	require.NotEqual(t, epochBeacon, badBeacon)
 	badBallot := randomBlock(t, layerID, badBeacon, nil).ToBallot()
 
-	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
 	trtl := defaultTurtle(t)
 	trtl.beacons = mockBeacons
 
@@ -3378,7 +3378,7 @@ func TestVoteAgainstSupportedByBaseBlock(t *testing.T) {
 		ensureBlockLayerWithin(t, s.State.MeshDB, bid, genesis.Add(1), last.Sub(1))
 		require.Contains(t, unsupported, bid)
 	}
-	require.Len(t, exceptions[1], (size - 1))
+	require.Len(t, exceptions[1], size-1)
 	for _, bid := range exceptions[1] {
 		require.NotContains(t, unsupported, bid)
 	}

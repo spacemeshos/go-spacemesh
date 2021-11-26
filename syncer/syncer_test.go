@@ -14,7 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
@@ -22,7 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
-	sysMocks "github.com/spacemeshos/go-spacemesh/system/mocks"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const (
@@ -135,7 +134,7 @@ func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
 	atxdb := activation.NewDB(atxStore, nil, activation.NewIdentityStore(database.NewMemDatabase()), memdb, layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
 	ctrl := gomock.NewController(t)
-	mockFetch := sysMocks.NewMockBlockFetcher(ctrl)
+	mockFetch := smocks.NewMockBlockFetcher(ctrl)
 	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
 	return mesh.NewMesh(memdb, atxdb, mesh.Config{}, mockFetch, &mockValidator{}, nil, nil, lg.WithName("mesh"))
 }
@@ -147,7 +146,7 @@ var conf = Configuration{
 
 func newSyncer(ctx context.Context, t *testing.T, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, logger log.Log) *Syncer {
 	ctrl := gomock.NewController(t)
-	beacons := bMocks.NewMockBeaconGetter(ctrl)
+	beacons := smocks.NewMockBeaconGetter(ctrl)
 	beacons.EXPECT().GetBeacon(gomock.Any()).Return([]byte("beacons"), nil).AnyTimes()
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
@@ -413,7 +412,7 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 	syncer.patrol = patrol
 	validator := mocks.NewMocklayerValidator(ctrl)
 	syncer.validator = validator
-	beacons := bMocks.NewMockBeaconGetter(ctrl)
+	beacons := smocks.NewMockBeaconGetter(ctrl)
 	syncer.beacons = beacons
 
 	gLayer := types.GetEffectiveGenesis()

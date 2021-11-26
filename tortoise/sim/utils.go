@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var goldenATX = types.ATXID{1, 1, 1}
@@ -53,7 +53,7 @@ func intInRange(rng *rand.Rand, ints [2]int) int {
 	return rng.Intn(ints[1]-ints[0]) + ints[0]
 }
 
-var _ blocks.BeaconGetter = (*beaconStore)(nil)
+var _ system.BeaconGetter = (*beaconStore)(nil)
 
 // TODO(dshulyak) replaced it with real beacon store so that we can enable persistence
 // for benchmarks.

@@ -11,12 +11,12 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./syncer.go
@@ -90,7 +90,7 @@ type Syncer struct {
 
 	conf      Configuration
 	ticker    layerTicker
-	beacons   blocks.BeaconGetter
+	beacons   system.BeaconGetter
 	mesh      *mesh.Mesh
 	validator layerValidator
 	fetcher   layerFetcher
@@ -120,7 +120,7 @@ type Syncer struct {
 }
 
 // NewSyncer creates a new Syncer instance.
-func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beacons blocks.BeaconGetter, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
+func NewSyncer(ctx context.Context, conf Configuration, ticker layerTicker, beacons system.BeaconGetter, mesh *mesh.Mesh, fetcher layerFetcher, patrol layerPatrol, logger log.Log) *Syncer {
 	shutdownCtx, cancel := context.WithCancel(ctx)
 	return &Syncer{
 		logger:            logger,

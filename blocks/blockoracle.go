@@ -11,6 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 type activationDB interface {
@@ -31,7 +32,7 @@ type Oracle struct {
 	committeeSize  uint32
 	layersPerEpoch uint32
 	atxDB          activationDB
-	beaconProvider BeaconGetter
+	beaconProvider system.BeaconGetter
 	vrfSigner      vrfSigner
 	nodeID         types.NodeID
 	isSynced       func() bool
@@ -45,7 +46,7 @@ type Oracle struct {
 }
 
 // NewMinerBlockOracle returns a new Oracle.
-func NewMinerBlockOracle(committeeSize uint32, layersPerEpoch uint32, atxDB activationDB, beaconProvider BeaconGetter, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
+func NewMinerBlockOracle(committeeSize uint32, layersPerEpoch uint32, atxDB activationDB, beaconProvider system.BeaconGetter, vrfSigner vrfSigner, nodeID types.NodeID, isSynced func() bool, log log.Log) *Oracle {
 	return &Oracle{
 		committeeSize:  committeeSize,
 		layersPerEpoch: layersPerEpoch,
