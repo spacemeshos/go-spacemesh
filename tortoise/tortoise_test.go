@@ -174,92 +174,6 @@ var (
 	defaultTestConfidenceParam = DefaultConfig().ConfidenceParam
 )
 
-func requireVote(t *testing.T, trtl *turtle, vote vec, blocks ...types.BlockID) {
-	logger := logtest.New(t)
-	for _, i := range blocks {
-		sum := big.NewFloat(0)
-		blk, _ := trtl.bdp.GetBlock(i)
-
-		wind := types.NewLayerID(0)
-		if blk.LayerIndex.Uint32() > trtl.Hdist {
-			wind = trtl.Last.Sub(trtl.Hdist)
-		}
-		if blk.LayerIndex.Before(wind) {
-			continue
-		}
-
-		for l := trtl.Last; l.After(blk.LayerIndex); l = l.Sub(1) {
-			logger.Info("counting votes of blocks in layer %v on %v (lyr: %v)",
-				l,
-				i.String(),
-				blk.LayerIndex)
-
-			for bid, opinionVote := range trtl.BallotOpinionsByLayer[l] {
-				ovote, ok := opinionVote[i]
-				if !ok {
-					continue
-				}
-				weight, exists := trtl.BallotWeight[bid]
-				require.True(t, exists, "ballot %s weight is not computed", bid)
-				sum = addVoteToSum(ovote, sum, weight)
-			}
-		}
-		globalOpinion := calculateOpinionWithThreshold(trtl.logger, sum, trtl.GlobalThreshold, big.NewFloat(float64(trtl.LayerSize)))
-		require.Equal(t, vote, globalOpinion, "test block %v expected vote %v but got %v", i, vote, sum)
-	}
-}
-
-func TestHandleIncomingLayer(t *testing.T) {
-	t.Run("HappyFlow", func(t *testing.T) {
-		topLayer := types.GetEffectiveGenesis().Add(28)
-		const avgPerLayer = 10
-		// no negative votes, no abstain votes
-		trtl, _, _ := turtleSanity(t, topLayer, avgPerLayer, 0, 0)
-		require.Equal(t, int(topLayer.Sub(1).Uint32()), int(trtl.Verified.Uint32()))
-		blkids := make([]types.BlockID, 0, avgPerLayer*topLayer.Uint32())
-		for l := types.NewLayerID(0); l.Before(topLayer); l = l.Add(1) {
-			lids, _ := trtl.bdp.LayerBlockIds(l)
-			blkids = append(blkids, lids...)
-		}
-		requireVote(t, trtl, support, blkids...)
-	})
-
-	t.Run("VoteNegative", func(t *testing.T) {
-		lyrsAfterGenesis := types.NewLayerID(10)
-		layers := types.GetEffectiveGenesis().Add(lyrsAfterGenesis.Uint32())
-		const avgPerLayer = 10
-		voteNegative := 2
-		// just a couple of negative votes
-		trtl, negs, abs := turtleSanity(t, layers, avgPerLayer, voteNegative, 0)
-		require.Equal(t, int(layers.Sub(1).Uint32()), int(trtl.Verified.Uint32()))
-		poblkids := make([]types.BlockID, 0, avgPerLayer*int(layers.Uint32()))
-		for l := types.NewLayerID(0); l.Before(layers); l = l.Add(1) {
-			lids, _ := trtl.bdp.LayerBlockIds(l)
-			for _, lid := range lids {
-				if !inArr(lid, negs) {
-					poblkids = append(poblkids, lid)
-				}
-			}
-		}
-		require.Len(t, abs, 0)
-		require.Equal(t, len(negs), int(lyrsAfterGenesis.Sub(1).Uint32())*voteNegative) // don't count last layer because no one is voting on it
-
-		// this test is called VoteNegative, but in fact we just abstain on blocks that we disagree with, unless
-		// the base block explicitly supports them.
-		// TODO: add a test for this, pending https://github.com/spacemeshos/go-spacemesh/issues/2424
-		requireVote(t, trtl, abstain, negs...)
-		requireVote(t, trtl, support, poblkids...)
-	})
-
-	t.Run("VoteAbstain", func(t *testing.T) {
-		layers := types.NewLayerID(10)
-		const avgPerLayer = 10
-		trtl, _, abs := turtleSanity(t, layers, avgPerLayer, 0, 10)
-		require.Equal(t, int(types.GetEffectiveGenesis().Uint32()), int(trtl.Verified.Uint32()), "when all votes abstain verification should stay at first layer")
-		requireVote(t, trtl, abstain, abs...)
-	})
-}
-
 func inArr(id types.BlockID, list []types.BlockID) bool {
 	for _, l := range list {
 		if l == id {
@@ -383,7 +297,7 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 	logger.Debug("exception lists for layer", layerID, "(against, support, neutral):", lists)
 	lyr := types.NewLayer(layerID)
 
-	atxHeader := makeAtxHeaderWithWeight(1)
+	atxHeader := makeAtxHeaderWithWeight(uint(blocksPerLayer))
 	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 	atx.CalcAndSetID()
 	require.NoError(t, atxdb.StoreAtx(layerID.GetEpoch(), atx))
@@ -397,6 +311,7 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 					Data:       []byte(strconv.Itoa(i)),
 				},
 				TxIDs:          nil,
+				ActiveSet:      &[]types.ATXID{atx.ID()},
 				TortoiseBeacon: beacon,
 			},
 		}
@@ -580,7 +495,7 @@ func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider,
 	logger.Debug("\tfor\t", lists[1])
 	logger.Debug("\tneutral\t", lists[2])
 
-	atxHeader := makeAtxHeaderWithWeight(weight)
+	atxHeader := makeAtxHeaderWithWeight(weight * uint(n))
 	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
 	atx.CalcAndSetID()
 	require.NoError(t, atxdb.StoreAtx(l.GetEpoch(), atx))
@@ -593,7 +508,8 @@ func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider,
 					LayerIndex: l,
 					Data:       []byte(strconv.Itoa(i)),
 				},
-				TxIDs: nil,
+				ActiveSet: &[]types.ATXID{atx.ID()},
+				TxIDs:     nil,
 			},
 		}
 		blk.BaseBlock = b
