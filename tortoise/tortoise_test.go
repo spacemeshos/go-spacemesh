@@ -239,7 +239,7 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer int, vot
 	atxdb := getAtxDB()
 	trtl.atxdb = atxdb
 	for l = mesh.GenesisLayer().Index().Add(1); !l.After(numLayers); l = l.Add(1) {
-		makeAndProcessLayer(t, l, trtl, blocksPerLayer, atxdb, msh, inputVectorFn)
+		makeAndProcessLayer(t, l, trtl, blocksPerLayer, blocksPerLayer, atxdb, msh, inputVectorFn)
 		logger.Debug("======================== handled layer", l)
 		lastlyr := trtl.BallotOpinionsByLayer[l]
 		for _, v := range lastlyr {
@@ -259,8 +259,8 @@ func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer int, vot
 	return
 }
 
-func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
-	lyr := makeLayer(t, l, trtl, blocksPerLayer, atxdb, msh, inputVectorFn)
+func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
+	lyr := makeLayer(t, l, trtl, natxs, blocksPerLayer, atxdb, msh, inputVectorFn)
 	logger := logtest.New(t)
 
 	// write blocks to database first; the verifying tortoise will subsequently read them
@@ -277,11 +277,11 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, blocksPerL
 	require.NoError(t, trtl.HandleIncomingLayer(context.TODO(), l))
 }
 
-func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
-	return makeLayerWithBeacon(t, layerID, trtl, nil, blocksPerLayer, atxdb, msh, inputVectorFn)
+func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
+	return makeLayerWithBeacon(t, layerID, trtl, nil, natxs, blocksPerLayer, atxdb, msh, inputVectorFn)
 }
 
-func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beacon []byte, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
+func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beacon []byte, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
 	logger := logtest.New(t)
 	logger.Debug("======================== choosing base block for layer", layerID)
 	if inputVectorFn != nil {
@@ -297,21 +297,27 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 	logger.Debug("exception lists for layer", layerID, "(against, support, neutral):", lists)
 	lyr := types.NewLayer(layerID)
 
-	atxHeader := makeAtxHeaderWithWeight(uint(blocksPerLayer))
-	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
-	atx.CalcAndSetID()
-	require.NoError(t, atxdb.StoreAtx(layerID.GetEpoch(), atx))
+	atxs := []types.ATXID{}
+	for i := 0; i < natxs; i++ {
+		atxHeader := makeAtxHeaderWithWeight(1)
+		atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
+		atx.PubLayerID = layerID
+		atx.NodeID.Key = fmt.Sprintf("%d", i)
+		atx.CalcAndSetID()
+		require.NoError(t, atxdb.StoreAtx(layerID.GetEpoch(), atx))
+		atxs = append(atxs, atx.ID())
+	}
 
 	for i := 0; i < blocksPerLayer; i++ {
 		blk := &types.Block{
 			MiniBlock: types.MiniBlock{
 				BlockHeader: types.BlockHeader{
-					ATXID:      atxHeader.ID(),
+					ATXID:      atxs[i%len(atxs)],
 					LayerIndex: layerID,
 					Data:       []byte(strconv.Itoa(i)),
 				},
+				ActiveSet:      &atxs,
 				TxIDs:          nil,
-				ActiveSet:      &[]types.ATXID{atx.ID()},
 				TortoiseBeacon: beacon,
 			},
 		}
@@ -466,7 +472,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 	atxdb := getAtxDB()
 	trtl.atxdb = atxdb
 	for l = types.GetEffectiveGenesis().Add(1); l.Before(types.GetEffectiveGenesis().Add(layers.Uint32())); l = l.Add(1) {
-		makeAndProcessLayer(t, l, trtl, blocksPerLayer, atxdb, msh, layerfuncs[l.Difference(types.GetEffectiveGenesis())-1])
+		makeAndProcessLayer(t, l, trtl, blocksPerLayer, blocksPerLayer, atxdb, msh, layerfuncs[l.Difference(types.GetEffectiveGenesis())-1])
 		logger.Debug("handled layer", l, "verified layer", trtl.Verified,
 			"========================================================================")
 	}
@@ -485,7 +491,7 @@ type (
 	inputVectorProvider func(types.LayerID) ([]types.BlockID, error)
 )
 
-func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider, atxdb atxDataWriter, weight uint) (blocks []*types.Block) {
+func generateBlocks(t *testing.T, l types.LayerID, natxs, nblocks int, bbp baseBlockProvider, atxdb atxDataWriter, weight uint) (blocks []*types.Block) {
 	logger := logtest.New(t)
 	logger.Debug("======================== choosing base block for layer", l)
 	b, lists, err := bbp(context.TODO())
@@ -495,20 +501,25 @@ func generateBlocks(t *testing.T, l types.LayerID, n int, bbp baseBlockProvider,
 	logger.Debug("\tfor\t", lists[1])
 	logger.Debug("\tneutral\t", lists[2])
 
-	atxHeader := makeAtxHeaderWithWeight(weight * uint(n))
-	atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
-	atx.CalcAndSetID()
-	require.NoError(t, atxdb.StoreAtx(l.GetEpoch(), atx))
-
-	for i := 0; i < n; i++ {
+	atxs := []types.ATXID{}
+	for i := 0; i < natxs; i++ {
+		atxHeader := makeAtxHeaderWithWeight(weight)
+		atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
+		atx.PubLayerID = l
+		atx.NodeID.Key = fmt.Sprintf("%d", i)
+		atx.CalcAndSetID()
+		require.NoError(t, atxdb.StoreAtx(l.GetEpoch(), atx))
+		atxs = append(atxs, atx.ID())
+	}
+	for i := 0; i < nblocks; i++ {
 		blk := &types.Block{
 			MiniBlock: types.MiniBlock{
 				BlockHeader: types.BlockHeader{
-					ATXID:      atx.ID(),
+					ATXID:      atxs[i%len(atxs)],
 					LayerIndex: l,
 					Data:       []byte(strconv.Itoa(i)),
 				},
-				ActiveSet: &[]types.ATXID{atx.ID()},
+				ActiveSet: &atxs,
 				TxIDs:     nil,
 			},
 		}
@@ -565,7 +576,7 @@ func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDat
 		panic("database error")
 	}
 	lyr := types.NewLayer(l)
-	for _, block := range generateBlocks(t, l, blocksPerLayer, bbp, atxdb, 1) {
+	for _, block := range generateBlocks(t, l, blocksPerLayer, blocksPerLayer, bbp, atxdb, 1) {
 		lyr.AddBlock(block)
 	}
 
@@ -862,7 +873,7 @@ func TestGetLocalBlockOpinion(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	blocks := generateBlocks(t, l1ID, 2, alg.BaseBlock, atxdb, 1)
+	blocks := generateBlocks(t, l1ID, 2, 2, alg.BaseBlock, atxdb, 1)
 
 	// no input vector for recent layer: expect abstain vote
 	for _, block := range blocks {
@@ -892,7 +903,7 @@ func TestCheckBlockAndGetInputVector(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	blocks := generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1)
+	blocks := generateBlocks(t, l1ID, 3, 3, alg.BaseBlock, atxdb, 1)
 	diffList := []types.BlockID{blocks[0].ID()}
 	lg := logtest.New(t)
 
@@ -1057,7 +1068,7 @@ func TestDetermineBallotGoodness(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Ballots := types.ToBallots(generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1))
+	l1Ballots := types.ToBallots(generateBlocks(t, l1ID, 3, 3, alg.BaseBlock, atxdb, 1))
 
 	// block marked good
 	r.True(alg.trtl.determineBallotGoodness(wrapContext(context.TODO()), l1Ballots[0]))
@@ -1089,7 +1100,7 @@ func TestScoreBallots(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 
 	l1ID := types.GetEffectiveGenesis().Add(1)
-	l1Ballots := types.ToBallots(generateBlocks(t, l1ID, 3, alg.BaseBlock, atxdb, 1))
+	l1Ballots := types.ToBallots(generateBlocks(t, l1ID, 3, 3, alg.BaseBlock, atxdb, 1))
 
 	// adds a block not already marked good
 	r.NotContains(alg.trtl.GoodBallotsIndex, l1Ballots[0].ID())
@@ -1403,21 +1414,28 @@ func TestVerifyLayers(t *testing.T) {
 
 	mdb := getInMemMesh(t)
 	atxdb := getAtxDB()
-	atxdb.storeEpochWeight(uint64(defaultTestLayerSize * types.GetLayersPerEpoch()))
+	atxdb.storeEpochWeight(uint64(defaultTestLayerSize))
 
 	alg := defaultAlgorithm(t, mdb)
 	alg.trtl.atxdb = atxdb
 	l1ID := types.GetEffectiveGenesis().Add(1)
 	l2ID := l1ID.Add(1)
-	l2Blocks := generateBlocks(t, l2ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+	l2Blocks := generateBlocks(t, l2ID, defaultTestLayerSize, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 	l3ID := l2ID.Add(1)
-	l3Blocks := generateBlocks(t, l3ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+	l3Blocks := generateBlocks(t, l3ID, defaultTestLayerSize, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 	l4ID := l3ID.Add(1)
-	l4Blocks := generateBlocks(t, l4ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+	l4Blocks := generateBlocks(t, l4ID, defaultTestLayerSize, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 	l5ID := l4ID.Add(1)
-	l5Blocks := generateBlocks(t, l5ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+	l5Blocks := generateBlocks(t, l5ID, defaultTestLayerSize, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
 	l6ID := l5ID.Add(1)
-	l6Blocks := generateBlocks(t, l6ID, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+	l6Blocks := generateBlocks(t, l6ID, defaultTestLayerSize, defaultTestLayerSize, alg.BaseBlock, atxdb, 1)
+	for _, blocks := range [][]*types.Block{l2Blocks, l3Blocks, l4Blocks, l5Blocks, l6Blocks} {
+		var ballots []*types.Ballot
+		for _, block := range blocks {
+			ballots = append(ballots, block.ToBallot())
+		}
+		require.NoError(t, alg.trtl.processBallots(wrapContext(context.TODO()), ballots))
+	}
 
 	// layer missing in database
 	alg.trtl.Processed = l2ID
@@ -1673,7 +1691,7 @@ func TestHealing(t *testing.T) {
 	mdb := getInMemMesh(t)
 	alg := defaultAlgorithm(t, mdb)
 	atxdb := getAtxDB()
-	atxdb.storeEpochWeight(uint64(defaultTestLayerSize * types.GetLayersPerEpoch()))
+	atxdb.storeEpochWeight(uint64(defaultTestLayerSize))
 	alg.trtl.atxdb = atxdb
 
 	ctrl := gomock.NewController(t)
@@ -1704,10 +1722,10 @@ func TestHealing(t *testing.T) {
 
 	alg.trtl.Last = l0ID
 	atxdb = getAtxDB()
-	atxdb.storeEpochWeight(uint64(defaultTestLayerSize * types.GetLayersPerEpoch()))
+	atxdb.storeEpochWeight(uint64(defaultTestLayerSize))
 	alg.trtl.atxdb = atxdb
-	l1 := makeLayerWithBeacon(t, l1ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	l2 := makeLayerWithBeacon(t, l2ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	l1 := makeLayerWithBeacon(t, l1ID, alg.trtl, goodBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	l2 := makeLayerWithBeacon(t, l2ID, alg.trtl, goodBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 
 	// healing should work even when there is no local opinion on a layer (i.e., no output vector, while waiting
 	// for hare results)
@@ -1743,7 +1761,7 @@ func TestHealing(t *testing.T) {
 		// then create and process one more new layer
 		// prevent base block from referencing earlier (approved) layers
 		alg.trtl.Last = l0ID
-		makeLayerWithBeacon(t, l3ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		makeLayerWithBeacon(t, l3ID, alg.trtl, goodBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l3ID))
 
 		// make sure local opinion supports L2
@@ -1775,7 +1793,7 @@ func TestHealing(t *testing.T) {
 
 		// create and process several more layers
 		// but don't save layer input vectors, so local opinion is abstain
-		makeLayerWithBeacon(t, l4ID, alg.trtl, goodBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		makeLayerWithBeacon(t, l4ID, alg.trtl, goodBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
 
 		// delete good blocks data
@@ -1798,9 +1816,9 @@ func TestHealing(t *testing.T) {
 
 		// create and process several more layers with the wrong beacon.
 		// but don't save layer input vectors, so local opinion is abstain
-		makeLayerWithBeacon(t, l5ID, alg.trtl, badBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-		makeLayerWithBeacon(t, l6ID, alg.trtl, badBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-		makeLayerWithBeacon(t, l7ID, alg.trtl, badBeacon, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		makeLayerWithBeacon(t, l5ID, alg.trtl, badBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		makeLayerWithBeacon(t, l6ID, alg.trtl, badBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+		makeLayerWithBeacon(t, l7ID, alg.trtl, badBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l5ID))
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l6ID))
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l7ID))
@@ -1829,32 +1847,32 @@ func TestHealingAfterPartition(t *testing.T) {
 	// use a larger number of blocks per layer to give us more scope for testing
 	const goodLayerSize = defaultTestLayerSize * 10
 	alg.trtl.LayerSize = goodLayerSize
-	atxdb.storeEpochWeight(uint64(goodLayerSize * types.GetLayersPerEpoch()))
+	atxdb.storeEpochWeight(uint64(goodLayerSize))
 
 	// create several good layers
-	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(4), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(5), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(4), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(5), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
 
 	// create a few layers with half the number of blocks
-	makeAndProcessLayer(t, l0ID.Add(6), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(7), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(8), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(6), alg.trtl, goodLayerSize, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(7), alg.trtl, goodLayerSize, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(8), alg.trtl, goodLayerSize, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
 
 	// verification should fail, global opinion should be abstain since not enough votes
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
 
 	// once we start receiving full layers again, verification should restart immediately. this scenario doesn't
 	// actually require healing, since local and global opinions are the same, and the threshold is just > 1/2.
-	makeAndProcessLayer(t, l0ID.Add(9), alg.trtl, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(9), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
 
 	// then we start receiving fewer blocks again
 	for i := 0; types.NewLayerID(uint32(i)).Before(types.NewLayerID(alg.trtl.Zdist + alg.trtl.ConfidenceParam)); i++ {
-		makeAndProcessLayer(t, l0ID.Add(10+uint32(i)), alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+		makeAndProcessLayer(t, l0ID.Add(10+uint32(i)), alg.trtl, goodLayerSize, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
 	}
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
 
@@ -1862,7 +1880,7 @@ func TestHealingAfterPartition(t *testing.T) {
 	// effectively stuck (until, in practice, active set size would be reduced in a following epoch and the remaining
 	// miners would produce more blocks--this is tested in the app tests)
 	firstHealedLayer := l0ID.Add(10 + uint32(alg.trtl.Zdist+alg.trtl.ConfidenceParam))
-	makeAndProcessLayer(t, firstHealedLayer, alg.trtl, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, firstHealedLayer, alg.trtl, goodLayerSize, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
 }
 
@@ -1878,11 +1896,11 @@ func TestHealBalanceAttack(t *testing.T) {
 	l5ID := l4ID.Add(1)
 
 	// create several good layers and make sure verified layer advances
-	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, layerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, layerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, layerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l4ID, alg.trtl, layerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeLayer(t, l5ID, alg.trtl, layerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, layerSize, layerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, layerSize, layerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, layerSize, layerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeAndProcessLayer(t, l4ID, alg.trtl, layerSize, layerSize, atxdb, mdb, mdb.LayerBlockIds)
+	makeLayer(t, l5ID, alg.trtl, layerSize, layerSize, atxdb, mdb, mdb.LayerBlockIds)
 	checkVerifiedLayer(t, alg.trtl, l0ID.Add(3))
 
 	// everyone will agree on the validity of these blocks
@@ -1894,7 +1912,7 @@ func TestHealBalanceAttack(t *testing.T) {
 	// opinions will differ about the validity of this block
 	// note: we are NOT adding it to the layer input vector, so this node thinks the block is invalid (late)
 	// this means that later blocks/layers with a base block or vote that supports this block will not be marked good
-	l4lateblock := generateBlocks(t, l4ID, 1, alg.BaseBlock, atxdb, 1)[0]
+	l4lateblock := generateBlocks(t, l4ID, layerSize, 1, alg.BaseBlock, atxdb, 1)[0]
 	r.NoError(mdb.AddBlock(l4lateblock))
 	r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
 
@@ -1977,7 +1995,7 @@ func TestHealBalanceAttack(t *testing.T) {
 		// half of blocks use a base block that supports the late block
 		// half use a base block that doesn't support it
 		for j := 0; j < 2; j++ {
-			blocks := generateBlocks(t, layerID, layerSize/2, bbp, atxdb, 1)
+			blocks := generateBlocks(t, layerID, layerSize, layerSize/2, bbp, atxdb, 1)
 			for _, block := range blocks {
 				r.NoError(mdb.AddBlock(block))
 			}
@@ -2077,7 +2095,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
-		atxdb1.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
+		atxdb1.storeEpochWeight(uint64(layerSize))
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
 		alg1.trtl.LayerSize = layerSize
@@ -2086,7 +2104,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb2 := getInMemMesh(t)
 		atxdb2 := getAtxDB()
-		atxdb2.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
+		atxdb2.storeEpochWeight(uint64(layerSize))
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.LayerSize = layerSize
@@ -2095,8 +2113,8 @@ func TestMultiTortoise(t *testing.T) {
 
 		makeAndProcessLayerMultiTortoise := func(layerID types.LayerID) {
 			// simulate producing blocks in parallel
-			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
-			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBlock, atxdb2, 1)
 
 			// these will produce identical sets of blocks, so throw away half of each
 			// (we could probably get away with just using, say, A's blocks, but to be more thorough we also want
@@ -2134,7 +2152,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
-		atxdb1.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
+		atxdb1.storeEpochWeight(uint64(layerSize))
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
 		alg1.trtl.LayerSize = layerSize
@@ -2143,7 +2161,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb2 := getInMemMesh(t)
 		atxdb2 := getAtxDB()
-		atxdb2.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
+		atxdb2.storeEpochWeight(uint64(layerSize))
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.LayerSize = layerSize
@@ -2152,8 +2170,8 @@ func TestMultiTortoise(t *testing.T) {
 
 		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB []*types.Block) {
 			// simulate producing blocks in parallel
-			blocksA = generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
-			blocksB = generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			blocksA = generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB = generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBlock, atxdb2, 1)
 
 			// 90/10 split
 			blocksA = blocksA[:layerSize-1]
@@ -2233,7 +2251,7 @@ func TestMultiTortoise(t *testing.T) {
 			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
 			// an ongoing partition.
-			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBlock, atxdb1, 1)
 			forkBlocksA = append(forkBlocksA, blocksA...)
 			var blockIDsA, blockIDsB []types.BlockID
 			for _, block := range blocksA {
@@ -2243,7 +2261,7 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBlock, atxdb2, 1)
 			forkBlocksB = append(forkBlocksB, blocksB...)
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
@@ -2259,7 +2277,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		// finally, the minority tortoise heals and regains parity with the majority tortoise
 		layerID = layerID.Add(1)
-		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+		blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBlock, atxdb1, 1)
 		forkBlocksA = append(forkBlocksA, blocksA...)
 		var blockIDsA, blockIDsB []types.BlockID
 		for _, block := range blocksA {
@@ -2269,7 +2287,7 @@ func TestMultiTortoise(t *testing.T) {
 		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+		blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBlock, atxdb2, 1)
 		forkBlocksB = append(forkBlocksB, blocksB...)
 		for _, block := range blocksB {
 			blockIDsB = append(blockIDsB, block.ID())
@@ -2364,7 +2382,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
-		atxdb1.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
+		atxdb1.storeEpochWeight(uint64(layerSize))
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
 		alg1.trtl.LayerSize = layerSize
@@ -2373,7 +2391,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb2 := getInMemMesh(t)
 		atxdb2 := getAtxDB()
-		atxdb2.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
+		atxdb2.storeEpochWeight(uint64(layerSize))
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.LayerSize = layerSize
@@ -2382,8 +2400,8 @@ func TestMultiTortoise(t *testing.T) {
 
 		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB []*types.Block) {
 			// simulate producing blocks in parallel
-			blocksA = generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
-			blocksB = generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			blocksA = generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB = generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBlock, atxdb2, 1)
 
 			// 50/50 split
 			blocksA = blocksA[:layerSize/2]
@@ -2451,7 +2469,7 @@ func TestMultiTortoise(t *testing.T) {
 			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
 			// an ongoing partition.
-			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBlock, atxdb1, 1)
 			var blockIDsA, blockIDsB []types.BlockID
 			for _, block := range blocksA {
 				blockIDsA = append(blockIDsA, block.ID())
@@ -2460,7 +2478,7 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBlock, atxdb2, 1)
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
@@ -2475,7 +2493,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		// finally, both nodes heal and get unstuck
 		layerID = layerID.Add(1)
-		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+		blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBlock, atxdb1, 1)
 		var blockIDsA, blockIDsB []types.BlockID
 		for _, block := range blocksA {
 			blockIDsA = append(blockIDsA, block.ID())
@@ -2484,7 +2502,7 @@ func TestMultiTortoise(t *testing.T) {
 		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+		blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBlock, atxdb2, 1)
 		for _, block := range blocksB {
 			blockIDsB = append(blockIDsB, block.ID())
 			r.NoError(mdb2.AddBlock(block))
@@ -2502,7 +2520,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
-		atxdb1.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
+		atxdb1.storeEpochWeight(uint64(layerSize))
 		alg1 := defaultAlgorithm(t, mdb1)
 		alg1.trtl.atxdb = atxdb1
 		alg1.trtl.LayerSize = layerSize
@@ -2511,7 +2529,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb2 := getInMemMesh(t)
 		atxdb2 := getAtxDB()
-		atxdb2.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
+		atxdb2.storeEpochWeight(uint64(layerSize))
 		alg2 := defaultAlgorithm(t, mdb2)
 		alg2.trtl.atxdb = atxdb2
 		alg2.trtl.LayerSize = layerSize
@@ -2520,7 +2538,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		mdb3 := getInMemMesh(t)
 		atxdb3 := getAtxDB()
-		atxdb3.storeEpochWeight(uint64(layerSize) * uint64(types.GetLayersPerEpoch()))
+		atxdb3.storeEpochWeight(uint64(layerSize))
 		alg3 := defaultAlgorithm(t, mdb3)
 		alg3.trtl.atxdb = atxdb3
 		alg3.trtl.LayerSize = layerSize
@@ -2529,9 +2547,9 @@ func TestMultiTortoise(t *testing.T) {
 
 		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB, blocksC []*types.Block) {
 			// simulate producing blocks in parallel
-			blocksA = generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
-			blocksB = generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
-			blocksC = generateBlocks(t, layerID, layerSize, alg3.BaseBlock, atxdb3, 1)
+			blocksA = generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksB = generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBlock, atxdb2, 1)
+			blocksC = generateBlocks(t, layerID, layerSize, layerSize, alg3.BaseBlock, atxdb3, 1)
 
 			// three-way split
 			blocksA = blocksA[:layerSize/3]
@@ -2613,7 +2631,7 @@ func TestMultiTortoise(t *testing.T) {
 			// these blocks will be nearly identical but they will have different base blocks, since the set of blocks
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
 			// an ongoing partition.
-			blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+			blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBlock, atxdb1, 1)
 			var blockIDsA, blockIDsB, blockIDsC []types.BlockID
 			for _, block := range blocksA {
 				blockIDsA = append(blockIDsA, block.ID())
@@ -2622,7 +2640,7 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-			blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+			blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBlock, atxdb2, 1)
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
@@ -2630,7 +2648,7 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
-			blocksC := generateBlocks(t, layerID, layerSize, alg3.BaseBlock, atxdb3, 1)
+			blocksC := generateBlocks(t, layerID, layerSize, layerSize, alg3.BaseBlock, atxdb3, 1)
 			for _, block := range blocksC {
 				blockIDsC = append(blockIDsC, block.ID())
 				r.NoError(mdb3.AddBlock(block))
@@ -2646,7 +2664,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		// finally, all nodes heal and get unstuck
 		layerID = layerID.Add(1)
-		blocksA := generateBlocks(t, layerID, layerSize, alg1.BaseBlock, atxdb1, 1)
+		blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBlock, atxdb1, 1)
 		var blockIDsA, blockIDsB, blockIDsC []types.BlockID
 		for _, block := range blocksA {
 			blockIDsA = append(blockIDsA, block.ID())
@@ -2655,7 +2673,7 @@ func TestMultiTortoise(t *testing.T) {
 		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-		blocksB := generateBlocks(t, layerID, layerSize, alg2.BaseBlock, atxdb2, 1)
+		blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBlock, atxdb2, 1)
 		for _, block := range blocksB {
 			blockIDsB = append(blockIDsB, block.ID())
 			r.NoError(mdb2.AddBlock(block))
@@ -2663,7 +2681,7 @@ func TestMultiTortoise(t *testing.T) {
 		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
-		blocksC := generateBlocks(t, layerID, layerSize, alg3.BaseBlock, atxdb3, 1)
+		blocksC := generateBlocks(t, layerID, layerSize, layerSize, alg3.BaseBlock, atxdb3, 1)
 		for _, block := range blocksC {
 			blockIDsC = append(blockIDsC, block.ID())
 			r.NoError(mdb3.AddBlock(block))
