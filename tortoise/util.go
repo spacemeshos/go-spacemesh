@@ -24,6 +24,10 @@ func equalVotes(i, j vec) bool {
 	return i.Sign == j.Sign
 }
 
+func (a vec) copy() vec {
+	return vec{Sign: a.Sign}
+}
+
 func (a vec) String() string {
 	switch a.Sign {
 	case 1:

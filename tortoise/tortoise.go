@@ -483,7 +483,7 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 			continue
 		}
 		if _, exist := opinion[blk]; !exist {
-			opinion[blk] = vote
+			opinion[blk] = vote.copy()
 		}
 	}
 	t.BlockLayer[types.BlockID(ballot.ID())] = ballot.LayerIndex
