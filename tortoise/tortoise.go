@@ -848,18 +848,12 @@ func (t *turtle) verifyLayers(ctx *tcontext) error {
 		}
 
 		logger.Info("attempting to verify candidate layer")
-		var (
-			contextualValidity map[types.BlockID]bool
-			err                error
-		)
-		// during rerun verifying tortoise prematurely verifies layers, which full tortoise won't be a
-		// able to verify because of additional eligible ballots with wrong beacon
-		if !(candlid.Before(t.layerCutoff()) && t.Last.Difference(candlid) > t.Zdist+t.ConfidenceParam) {
-			contextualValidity, err = t.verifyingTortoise(ctx, logger, candlid)
-			if err != nil {
-				return err
-			}
+
+		contextualValidity, err := t.verifyingTortoise(ctx, logger, candlid)
+		if err != nil {
+			return err
 		}
+
 		if contextualValidity != nil {
 			for blk, v := range contextualValidity {
 				if err := t.bdp.SaveContextualValidity(blk, candlid, v); err != nil {

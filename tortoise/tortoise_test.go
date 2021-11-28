@@ -3422,7 +3422,7 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 		sim.WithStates(2),
 	)
 	s1.Setup(
-		sim.WithSetupMinerRange(30, 30),
+		sim.WithSetupMinerRange(15, 15),
 		sim.WithSetupUnitsRange(1, 1),
 	)
 
@@ -3465,17 +3465,6 @@ func TestNetworkDoesNotRecoverFromFullPartition(t *testing.T) {
 	// and then do rerun
 	partitionEnd := last
 	s1.Merge(s2)
-
-	for i := 0; i < int(types.GetLayersPerEpoch()); i++ {
-		last = s1.Next(sim.WithVoteGenerator(func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
-			if i < size/2 {
-				return tortoiseVoting(tortoise1)(rng, layers, i)
-			}
-			return tortoiseVoting(tortoise2)(rng, layers, i)
-		}))
-		_, verified1, _ = tortoise1.HandleIncomingLayer(ctx, last)
-		_, verified2, _ = tortoise2.HandleIncomingLayer(ctx, last)
-	}
 
 	require.NoError(t, tortoise1.rerun(ctx))
 	require.NoError(t, tortoise2.rerun(ctx))
