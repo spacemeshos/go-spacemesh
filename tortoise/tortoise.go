@@ -943,7 +943,7 @@ func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[type
 		return opinion, nil
 	}
 
-	weight, err := computeExpectedVoteWeight(t.atxdb, t.epochWeight, lid, t.Last)
+	weight, err := computeExpectedVoteWeight(t.atxdb, t.epochWeight, t.Last.Sub(1), t.Last)
 	if err != nil {
 		return nil, err
 	}
