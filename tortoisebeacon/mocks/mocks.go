@@ -15,43 +15,6 @@ import (
 	weakcoin "github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
-// Mockbroadcaster is a mock of broadcaster interface.
-type Mockbroadcaster struct {
-	ctrl     *gomock.Controller
-	recorder *MockbroadcasterMockRecorder
-}
-
-// MockbroadcasterMockRecorder is the mock recorder for Mockbroadcaster.
-type MockbroadcasterMockRecorder struct {
-	mock *Mockbroadcaster
-}
-
-// NewMockbroadcaster creates a new mock instance.
-func NewMockbroadcaster(ctrl *gomock.Controller) *Mockbroadcaster {
-	mock := &Mockbroadcaster{ctrl: ctrl}
-	mock.recorder = &MockbroadcasterMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mockbroadcaster) EXPECT() *MockbroadcasterMockRecorder {
-	return m.recorder
-}
-
-// Broadcast mocks base method.
-func (m *Mockbroadcaster) Broadcast(ctx context.Context, channel string, data []byte) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Broadcast", ctx, channel, data)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Broadcast indicates an expected call of Broadcast.
-func (mr *MockbroadcasterMockRecorder) Broadcast(ctx, channel, data interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Broadcast", reflect.TypeOf((*Mockbroadcaster)(nil).Broadcast), ctx, channel, data)
-}
-
 // Mockcoin is a mock of coin interface.
 type Mockcoin struct {
 	ctrl     *gomock.Controller
@@ -237,41 +200,4 @@ func (m *MocklayerClock) Unsubscribe(arg0 timesync.LayerTimer) {
 func (mr *MocklayerClockMockRecorder) Unsubscribe(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Unsubscribe", reflect.TypeOf((*MocklayerClock)(nil).Unsubscribe), arg0)
-}
-
-// MockSyncState is a mock of SyncState interface.
-type MockSyncState struct {
-	ctrl     *gomock.Controller
-	recorder *MockSyncStateMockRecorder
-}
-
-// MockSyncStateMockRecorder is the mock recorder for MockSyncState.
-type MockSyncStateMockRecorder struct {
-	mock *MockSyncState
-}
-
-// NewMockSyncState creates a new mock instance.
-func NewMockSyncState(ctrl *gomock.Controller) *MockSyncState {
-	mock := &MockSyncState{ctrl: ctrl}
-	mock.recorder = &MockSyncStateMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockSyncState) EXPECT() *MockSyncStateMockRecorder {
-	return m.recorder
-}
-
-// IsSynced mocks base method.
-func (m *MockSyncState) IsSynced(arg0 context.Context) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsSynced", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// IsSynced indicates an expected call of IsSynced.
-func (mr *MockSyncStateMockRecorder) IsSynced(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsSynced", reflect.TypeOf((*MockSyncState)(nil).IsSynced), arg0)
 }

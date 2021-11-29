@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
@@ -29,7 +29,7 @@ type turtle struct {
 
 	atxdb   atxDataProvider
 	bdp     blockDataProvider
-	beacons blocks.BeaconGetter
+	beacons system.BeaconGetter
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance.
@@ -38,7 +38,7 @@ func newTurtle(
 	db database.Database,
 	bdp blockDataProvider,
 	atxdb atxDataProvider,
-	beacons blocks.BeaconGetter,
+	beacons system.BeaconGetter,
 	cfg Config,
 ) *turtle {
 	return &turtle{

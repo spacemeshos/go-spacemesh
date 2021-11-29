@@ -20,36 +20,24 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const (
-	defaultGasLimit = 10
-	defaultFee      = 1
+	defaultGasLimit                  = 10
+	defaultFee                       = 1
+	blockBuildDurationErrorThreshold = 10 * time.Second
+
+	// AtxsPerBlockLimit indicates the maximum number of ATXs a Ballot can reference.
+	AtxsPerBlockLimit = 100
 )
-
-// AtxsPerBlockLimit indicates the maximum number of atxs a block can reference.
-const AtxsPerBlockLimit = 100
-
-const blockBuildDurationErrorThreshold = 10 * time.Second
 
 type signer interface {
 	Sign(m []byte) []byte
 }
 
-type syncer interface {
-	IsSynced(context.Context) bool
-}
-
 type txPool interface {
 	GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionID, []*types.Transaction, error)
-}
-
-type projector interface {
-	GetProjection(types.Address) (nonce, balance uint64, err error)
-}
-
-type blockOracle interface {
-	BlockEligible(types.LayerID) (types.ATXID, []types.BlockEligibilityProof, []types.ATXID, error)
 }
 
 type baseBlockProvider interface {
@@ -72,8 +60,8 @@ type BlockBuilder struct {
 	meshProvider    meshProvider
 	baseBlockP      baseBlockProvider
 	blockOracle     blockOracle
-	beaconProvider  blocks.BeaconGetter
-	syncer          syncer
+	beaconProvider  system.BeaconGetter
+	syncer          system.SyncStateProvider
 	eg              errgroup.Group
 	started         bool
 	atxsPerBlock    int // number of atxs to select per block
@@ -101,8 +89,8 @@ func NewBlockBuilder(
 	msh meshProvider,
 	bbp baseBlockProvider,
 	blockOracle blockOracle,
-	beaconProvider blocks.BeaconGetter,
-	syncer syncer,
+	beaconProvider system.BeaconGetter,
+	syncer system.SyncStateProvider,
 	projector projector,
 	txPool txPool,
 	logger log.Log,

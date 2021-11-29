@@ -16,6 +16,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 var (
@@ -89,9 +91,9 @@ func (a mockActivationDB) GetEpochWeight(epochID types.EpochID) (uint64, []types
 	return uint64(len(a.GetEpochAtxs(epochID-1))) * defaultAtxWeight, nil, nil
 }
 
-func mockBeaconProvider(t *testing.T) BeaconGetter {
+func mockBeaconProvider(t *testing.T) system.BeaconGetter {
 	ctrl := gomock.NewController(t)
-	mockTB := mocks.NewMockBeaconGetter(ctrl)
+	mockTB := smocks.NewMockBeaconGetter(ctrl)
 	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(types.HexToHash32("0x94812631").Bytes(), nil).AnyTimes()
 	return mockTB
 }
@@ -389,7 +391,7 @@ func TestBlockOracleValidatorRefBlock(t *testing.T) {
 	activationDB := &mockActivationDB{atxPublicationLayer: types.NewLayerID(layersPerEpoch)}
 	tBeacon := types.HexToHash32("0x23456781").Bytes()
 	ctrl := gomock.NewController(t)
-	mockTB := mocks.NewMockBeaconGetter(ctrl)
+	mockTB := smocks.NewMockBeaconGetter(ctrl)
 	mockTB.EXPECT().GetBeacon(gomock.Any()).Return(tBeacon, nil).Times(1)
 	lg := logtest.New(t).WithName(nodeID.Key[:5])
 	blockOracle := NewMinerBlockOracle(committeeSize, layersPerEpoch, activationDB, mockTB, vrfsgn, nodeID, func() bool { return true }, lg.WithName("blockOracle"))

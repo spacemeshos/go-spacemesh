@@ -45,3 +45,41 @@ func (mr *MockBeaconCollectorMockRecorder) ReportBeaconFromBallot(arg0, arg1, ar
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportBeaconFromBallot", reflect.TypeOf((*MockBeaconCollector)(nil).ReportBeaconFromBallot), arg0, arg1, arg2, arg3)
 }
+
+// MockBeaconGetter is a mock of BeaconGetter interface.
+type MockBeaconGetter struct {
+	ctrl     *gomock.Controller
+	recorder *MockBeaconGetterMockRecorder
+}
+
+// MockBeaconGetterMockRecorder is the mock recorder for MockBeaconGetter.
+type MockBeaconGetterMockRecorder struct {
+	mock *MockBeaconGetter
+}
+
+// NewMockBeaconGetter creates a new mock instance.
+func NewMockBeaconGetter(ctrl *gomock.Controller) *MockBeaconGetter {
+	mock := &MockBeaconGetter{ctrl: ctrl}
+	mock.recorder = &MockBeaconGetterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockBeaconGetter) EXPECT() *MockBeaconGetterMockRecorder {
+	return m.recorder
+}
+
+// GetBeacon mocks base method.
+func (m *MockBeaconGetter) GetBeacon(arg0 types.EpochID) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBeacon", arg0)
+	ret0, _ := ret[0].([]byte)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBeacon indicates an expected call of GetBeacon.
+func (mr *MockBeaconGetterMockRecorder) GetBeacon(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBeacon", reflect.TypeOf((*MockBeaconGetter)(nil).GetBeacon), arg0)
+}
