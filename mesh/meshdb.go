@@ -161,6 +161,18 @@ func (m *DB) Transactions() database.Getter {
 // ErrAlreadyExist error returned when adding an existing value to the database.
 var ErrAlreadyExist = errors.New("block already exists in database")
 
+// HasBallot returns true if the database has Ballot specified by the BallotID and false otherwise.
+func (m *DB) HasBallot(types.BallotID) bool {
+	// TODO: implement me
+	return false
+}
+
+// GetBallot returns true if the database has Ballot specified by the BallotID and false otherwise.
+func (m *DB) GetBallot(types.BallotID) (*types.Ballot, error) {
+	// TODO: implement me
+	return &types.Ballot{}, nil
+}
+
 // AddBlock adds a block to the database.
 func (m *DB) AddBlock(bl *types.Block) error {
 	m.blockMutex.Lock()

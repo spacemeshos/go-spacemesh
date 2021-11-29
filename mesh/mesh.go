@@ -959,3 +959,15 @@ func getAggregatedLayerHashKey(layerID types.LayerID) []byte {
 	b.Write(layerID.Bytes())
 	return b.Bytes()
 }
+
+// HasProposal returns true if the database has the Proposal specified by the ProposalID and false otherwise.
+func (msh *Mesh) HasProposal(types.ProposalID) bool {
+	// TODO: implement me
+	return false
+}
+
+// AddProposal saves the Proposal into database.
+func (msh *Mesh) AddProposal(*types.Proposal) error {
+	// TODO: implement me
+	return nil
+}
