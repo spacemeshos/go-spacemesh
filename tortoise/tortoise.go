@@ -677,11 +677,22 @@ func (t *turtle) handleLayer(ctx *tcontext, layerID types.LayerID) error {
 		t.logger.WithContext(ctx).Warning("cannot process empty layer block list")
 		return nil
 	}
-	ballots := make([]*types.Ballot, 0, len(layerBlocks))
-	for _, b := range layerBlocks {
-		ballots = append(ballots, b.ToBallot())
+	var refs, other []*types.Ballot
+
+	for _, block := range layerBlocks {
+		ballot := block.ToBallot()
+		if ballot.EpochData != nil {
+			refs = append(refs, ballot)
+		} else {
+			other = append(other, ballot)
+		}
 	}
-	return t.processBallots(ctx, ballots)
+	// ballot weight is computed based on the active set from the reference ballot
+	// other ballots copy the ballot weight from reference ballot
+	if err := t.processBallots(ctx, refs); err != nil {
+		return err
+	}
+	return t.processBallots(ctx, other)
 }
 
 func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.LayerID) (map[types.BlockID]bool, error) {
