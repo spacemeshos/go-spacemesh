@@ -55,12 +55,34 @@ func intInRange(rng *rand.Rand, ints [2]int) int {
 
 var _ system.BeaconGetter = (*beaconStore)(nil)
 
+func newBeaconStore() *beaconStore {
+	return &beaconStore{beacons: map[types.EpochID][]byte{}}
+}
+
 // TODO(dshulyak) replaced it with real beacon store so that we can enable persistence
 // for benchmarks.
 type beaconStore struct {
-	beacon []byte
+	beacons map[types.EpochID][]byte
 }
 
-func (b *beaconStore) GetBeacon(types.EpochID) ([]byte, error) {
-	return b.beacon, nil
+func (b *beaconStore) GetBeacon(eid types.EpochID) ([]byte, error) {
+	beacon, exist := b.beacons[eid-1]
+	if !exist {
+		return nil, database.ErrNotFound
+	}
+	return beacon, nil
+}
+
+func (b *beaconStore) StoreBeacon(eid types.EpochID, beacon []byte) {
+	b.beacons[eid] = beacon
+}
+
+func (b *beaconStore) Copy(other *beaconStore) {
+	for eid, beacon := range other.beacons {
+		_, exist := b.beacons[eid]
+		if exist {
+			continue
+		}
+		b.beacons[eid] = beacon
+	}
 }

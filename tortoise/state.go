@@ -13,11 +13,12 @@ import (
 )
 
 const (
-	namespaceLast     = "l"
-	namespaceEvict    = "e"
-	namespaceVerified = "v"
-	namespaceGood     = "g"
-	namespaceOpinions = "o"
+	namespaceLast      = "l"
+	namespaceProcessed = "p"
+	namespaceEvict     = "e"
+	namespaceVerified  = "v"
+	namespaceGood      = "g"
+	namespaceOpinions  = "o"
 )
 
 type state struct {
@@ -41,6 +42,7 @@ type state struct {
 	// view of time, but Tortoise receives layers as soon as Hare finishes processing them or when they are received via
 	// gossip, and there's nothing for Tortoise to verify without new data anyway.
 	Last        types.LayerID
+	Processed   types.LayerID
 	LastEvicted types.LayerID
 	Verified    types.LayerID
 	// if key exists in the map the ballot is good. if value is true it was written to the disk.
@@ -102,6 +104,9 @@ func (s *state) Persist() error {
 	if err := batch.Put([]byte(namespaceLast), s.Last.Bytes()); err != nil {
 		return fmt.Errorf("put 'last' namespace into batch: %w", err)
 	}
+	if err := batch.Put([]byte(namespaceProcessed), s.Processed.Bytes()); err != nil {
+		return fmt.Errorf("put 'processed' namespace into batch: %w", err)
+	}
 	if err := batch.Put([]byte(namespaceEvict), s.LastEvicted.Bytes()); err != nil {
 		return fmt.Errorf("put 'evict' namespace into batch: %w", err)
 	}
@@ -125,6 +130,12 @@ func (s *state) Recover() error {
 		return fmt.Errorf("get 'last' namespace from DB: %w", err)
 	}
 	s.Last = types.BytesToLayerID(buf)
+
+	buf, err = s.db.Get([]byte(namespaceProcessed))
+	if err != nil {
+		return fmt.Errorf("get 'processed' namespace from DB: %w", err)
+	}
+	s.Processed = types.BytesToLayerID(buf)
 
 	buf, err = s.db.Get([]byte(namespaceVerified))
 	if err != nil {

@@ -1,7 +1,6 @@
 package sim
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -35,7 +34,7 @@ func WithPartitions(parts ...Fraction) SplitOpt {
 
 func splitConfDefaults() splitConf {
 	return splitConf{
-		Partitions: []Fraction{Frac(1, 2), Frac(1, 2)},
+		Partitions: []Fraction{Frac(1, 2)},
 	}
 }
 
@@ -53,9 +52,6 @@ type splitConf struct {
 
 // Split generator into multiple partitions.
 // First generator will use original tortoise state (mesh, activations).
-//
-// This has an issue, original beacon is preserved only in the first generator
-// therefore rerun after merge will work only in the first generator.
 func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 	// Split everything that would be changed after long network partition
 	// - activations
@@ -71,62 +67,43 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 	for _, opt := range opts {
 		opt(&conf)
 	}
-	if len(conf.Partitions) < 2 {
-		panic("should be at least two parititions")
+	if len(g.states) == 1 {
+		panic("initailize with more then one state")
 	}
+	if len(conf.Partitions) > len(g.states) {
+		panic("can partition only only less then existing states")
+	}
+
 	gens := make([]*Generator, len(conf.Partitions))
 	total := len(g.activations)
+	leftover := total
 
 	for i := range gens {
 		part := conf.Partitions[i]
-		if part.Denominator == 0 {
-			panic(fmt.Sprintf("denominator in fraction %v is zero", part))
-		}
 		share := total * int(part.Nominator) / int(part.Denominator)
-		if i == 0 {
-			gens[i] = g
-			g.Setup(
-				WithSetupMinerRange(share, share),
-				withBeacon(g.beacons.beacon),
-			)
-		} else {
-			gens[i] = New(
-				withRng(g.rng),
-				withConf(g.conf),
-				WithLogger(g.logger),
-			)
-			gens[i].mergeAll(g) // merging *all* previous history
-			gens[i].Setup(WithSetupMinerRange(share, share))
-		}
+
+		gens[i] = New(
+			withRng(g.rng),
+			withConf(g.conf),
+			WithLogger(g.logger),
+		)
+		gens[i].addState(g.popState(i + 1))
+		gens[i].mergeLayers(g)
+		gens[i].Setup(
+			WithSetupMinerRange(share, share),
+			WithSetupUnitsRange(g.units[0], g.units[1]),
+		)
+
+		leftover -= share
 	}
-	return gens
+	g.Setup(
+		WithSetupMinerRange(leftover, leftover),
+		WithSetupUnitsRange(g.units[0], g.units[1]),
+	)
+	return append([]*Generator{g}, gens...)
 }
 
-func (g *Generator) mergeAll(other *Generator) {
-	g.Merge(other)
-	for _, layer := range g.layers {
-		bids, err := other.State.MeshDB.GetLayerInputVectorByID(layer.Index())
-		if err != nil {
-			g.logger.With().Panic("load layer input vector", log.Err(err))
-		}
-		err = g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), bids)
-		if err != nil {
-			g.logger.With().Panic("save layer input vector", log.Err(err))
-		}
-		bidsmap, err := other.State.MeshDB.LayerContextuallyValidBlocks(context.Background(), layer.Index())
-		if err != nil {
-			g.logger.With().Panic("load contextually valid blocks", log.Err(err))
-		}
-		for bid := range bidsmap {
-			if err := g.State.MeshDB.SaveContextualValidity(bid, layer.Index(), true); err != nil {
-				g.logger.With().Panic("save contextual validity", bid, log.Err(err))
-			}
-		}
-	}
-}
-
-// Merge other Generator state into this Generator state.
-func (g *Generator) Merge(other *Generator) {
+func (g *Generator) mergeKeys(other *Generator) {
 	for _, key := range other.keys {
 		var exists bool
 		for _, existing := range g.keys {
@@ -139,7 +116,9 @@ func (g *Generator) Merge(other *Generator) {
 			g.keys = append(g.keys, key)
 		}
 	}
+}
 
+func (g *Generator) mergeActivations(other *Generator) {
 	for _, atxid := range other.activations {
 		var exists bool
 		for _, existing := range g.activations {
@@ -149,17 +128,19 @@ func (g *Generator) Merge(other *Generator) {
 			}
 		}
 		if !exists {
-			atx, err := other.State.AtxDB.GetFullAtx(atxid)
+			atx, err := other.GetState(0).AtxDB.GetFullAtx(atxid)
 			if err != nil {
 				g.logger.With().Panic("failed to get atx", atxid, log.Err(err))
 			}
-			if err := g.State.AtxDB.StoreAtx(context.Background(), 0, atx); err != nil {
-				g.logger.With().Panic("failed to save atx", atxid, log.Err(err))
+			for _, state := range g.states {
+				state.OnActivationTx(atx)
 			}
 			g.activations = append(g.activations, atxid)
 		}
 	}
+}
 
+func (g *Generator) mergeLayers(other *Generator) {
 	for i, layer := range other.layers {
 		if len(g.layers)-1 < i {
 			g.layers = append(g.layers, types.NewLayer(layer.Index()))
@@ -173,15 +154,29 @@ func (g *Generator) Merge(other *Generator) {
 				}
 			}
 			if !exists {
-				rst, _ := g.State.MeshDB.GetBlock(block.ID())
+				rst, _ := g.GetState(0).MeshDB.GetBlock(block.ID())
 				if rst != nil {
 					continue
 				}
-				if err := g.State.MeshDB.AddBlock(block); err != nil {
-					g.logger.With().Panic("failed to save block", block.ID(), log.Err(err))
+				for _, state := range g.states {
+					state.OnBlock(block)
 				}
 				g.layers[i].AddBlock(block)
 			}
 		}
 	}
+}
+
+// Merge other Generator state into this Generator state.
+func (g *Generator) Merge(other *Generator) {
+	g.mergeKeys(other)
+	g.mergeActivations(other)
+	other.mergeActivations(g)
+	g.mergeLayers(other)
+	other.mergeLayers(g)
+
+	for _, state := range other.states {
+		g.addState(state)
+	}
+	other.states = nil
 }

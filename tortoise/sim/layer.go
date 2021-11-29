@@ -1,8 +1,6 @@
 package sim
 
 import (
-	"context"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -108,9 +106,19 @@ func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 	return lid
 }
 
+func (g *Generator) genBeacon() {
+	eid := g.nextLayer.Sub(1).GetEpoch()
+	beacon := make([]byte, 32)
+	g.rng.Read(beacon)
+	for _, state := range g.states {
+		state.OnBeacon(eid, beacon)
+	}
+}
+
 func (g *Generator) genLayer(cfg nextConf) types.LayerID {
-	if g.nextLayer.Sub(1).GetEpoch() < g.nextLayer.GetEpoch() && g.nextLayer.Sub(1) != types.GetEffectiveGenesis() {
-		g.renewAtxs()
+	if g.nextLayer.Sub(1).GetEpoch() < g.nextLayer.GetEpoch() {
+		g.generateAtxs()
+		g.genBeacon()
 	}
 
 	layer := types.NewLayer(g.nextLayer)
@@ -126,6 +134,10 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		voting := cfg.VoteGen(g.rng, g.layers, i)
 		data := make([]byte, 20)
 		g.rng.Read(data)
+		beacon, err := g.states[0].Beacons.GetBeacon(g.nextLayer.GetEpoch())
+		if err != nil {
+			g.logger.With().Panic("failed to get a beacon", log.Err(err))
+		}
 		block := &types.Block{
 			MiniBlock: types.MiniBlock{
 				BlockHeader: types.BlockHeader{
@@ -137,24 +149,26 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 					NeutralDiff: voting.Abstain,
 					Data:        data,
 				},
-				TortoiseBeacon: g.beacons.beacon,
+				TortoiseBeacon: beacon,
 			},
 		}
 		block.Signature = signer.Sign(block.Bytes())
 		block.Initialize()
-		if err := g.State.MeshDB.AddBlock(block); err != nil {
-			g.logger.With().Panic("failed to add block", log.Err(err))
+		for _, state := range g.states {
+			state.OnBlock(block)
 		}
 		layer.AddBlock(block)
 	}
 	if !cfg.FailHare {
 		bids := layer.BlocksIDs()
 		frac := len(bids) * cfg.HareFraction.Nominator / cfg.HareFraction.Denominator
-		if err := g.State.MeshDB.SaveLayerInputVectorByID(context.Background(), layer.Index(), bids[:frac]); err != nil {
-			g.logger.With().Panic("failed to save layer input vecotor", log.Err(err))
+		for _, state := range g.states {
+			state.OnInputVector(layer.Index(), bids[:frac])
 		}
 	}
-	g.State.MeshDB.RecordCoinflip(context.Background(), layer.Index(), cfg.Coinflip)
+	for _, state := range g.states {
+		state.OnCoinflip(layer.Index(), cfg.Coinflip)
+	}
 	g.layers = append(g.layers, layer)
 	g.nextLayer = g.nextLayer.Add(1)
 	return layer.Index()
