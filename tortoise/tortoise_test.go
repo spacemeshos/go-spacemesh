@@ -717,10 +717,11 @@ func TestPersistAndRecover(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
+	cfg.WindowSize = 15
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var last, verified types.LayerID
-	for i := 0; i < 20; i++ {
+	for i := 0; i < 30; i++ {
 		last = s.Next()
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
@@ -3505,7 +3506,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				weight, err := computeBallotWeight(atxdb, weights, ballot, tc.layerSize, tc.layersPerEpoch)
 				require.NoError(t, err)
 				require.Equal(t, b.ExpectedWeight.String(), weight.String())
-				require.Equal(t, weight, weights[ballot.ID()], "ballot weight must be saved to the weights map")
+				weights[ballot.ID()] = weight
 			}
 		})
 	}

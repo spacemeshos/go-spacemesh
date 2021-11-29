@@ -420,7 +420,7 @@ func healingTester(dependencies []int) TestScenario {
 			// poet communicates with GRPC server on the first app, so leave first one alone
 			// we need to kill at least half, so round up.
 			// the last apps in the list have the largest voting weight so we should remove them.
-			firstAppToKill := len(suite.apps) - (len(suite.apps) / 2)
+			firstAppToKill := len(suite.apps) - (len(suite.apps)/2 + 1)
 
 			// save data on the nodes we're about to kill for posterity
 			suite.killedApps = suite.apps[firstAppToKill:]

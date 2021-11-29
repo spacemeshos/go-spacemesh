@@ -486,9 +486,12 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 			opinion[blk] = vote.copy()
 		}
 	}
+
+	logger.With().Debug("adding or updating ballot opinion", log.Stringer("ballot_weight", weight))
+
+	t.BallotWeight[ballot.ID()] = weight
 	t.BlockLayer[types.BlockID(ballot.ID())] = ballot.LayerIndex
 	t.BallotLayer[ballot.ID()] = ballot.LayerIndex
-	logger.With().Debug("adding or updating ballot opinion", log.Stringer("ballot_weight", weight))
 	t.BallotOpinionsByLayer[ballot.LayerIndex][ballot.ID()] = opinion
 	return nil
 }
@@ -1184,7 +1187,6 @@ func computeBallotWeight(
 		}
 		rst := new(big.Float).SetUint64(weight)
 		rst.Quo(rst, new(big.Float).SetUint64(uint64(expected)))
-		weights[ballot.ID()] = rst
 		return rst, nil
 	}
 	if ballot.RefBallot == types.EmptyBallotID {
@@ -1194,11 +1196,10 @@ func computeBallotWeight(
 	if !exist {
 		return nil, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
 	}
-	weights[ballot.ID()] = weight
 	return weight, nil
 }
 
-// recoverBallotWeight recovers all weights from database, instead of persisting weights in tortoise database.
+// recoverBallotWeight recovers all weights from database, instead of persisting weights in tortoise state.
 func recoverBallotWeight(
 	mdb blockDataProvider,
 	atxdb atxDataProvider,
@@ -1208,29 +1209,59 @@ func recoverBallotWeight(
 	layersPerEpoch uint32,
 ) error {
 	for _, ballots := range opinions {
-		var refs, other []*types.Ballot
 		for ballotID := range ballots {
-			block, err := mdb.GetBlock(types.BlockID(ballotID))
-			if err != nil {
-				return fmt.Errorf("no ballot %s in database: %w", ballotID, err)
-			}
-			ballot := block.ToBallot()
-			if ballot.EpochData != nil {
-				refs = append(refs, ballot)
-			} else {
-				other = append(other, ballot)
-			}
-		}
-		for _, ballots := range [...][]*types.Ballot{refs, other} {
-			for _, ballot := range ballots {
-				if ballot.AtxID == *types.EmptyATXID {
-					continue
-				}
-				if _, err := computeBallotWeight(atxdb, weights, ballot, layerSize, layersPerEpoch); err != nil {
-					return err
-				}
+			if err := recoverWeightForBallotID(
+				mdb, atxdb, opinions, weights,
+				layerSize, layersPerEpoch, ballotID,
+			); err != nil {
+				return err
 			}
 		}
 	}
+	return nil
+}
+
+func recoverWeightForBallotID(
+	mdb blockDataProvider,
+	atxdb atxDataProvider,
+	opinions map[types.LayerID]map[types.BallotID]Opinion,
+	weights map[types.BallotID]*big.Float,
+	layerSize,
+	layersPerEpoch uint32,
+	ballotID types.BallotID,
+) error {
+	block, err := mdb.GetBlock(types.BlockID(ballotID))
+	if err != nil {
+		return fmt.Errorf("failed to load %s from db: %w", ballotID, err)
+	}
+	if block.ATXID == *types.EmptyATXID {
+		return nil
+	}
+
+	ballot := block.ToBallot()
+
+	var refExist bool
+	if ballot.EpochData == nil {
+		_, refExist = weights[ballot.RefBallot]
+		if !refExist {
+			if err := recoverWeightForBallotID(
+				mdb, atxdb, opinions, weights,
+				layerSize, layersPerEpoch, ballot.RefBallot,
+			); err != nil {
+				return err
+			}
+		}
+	}
+	weight, err := computeBallotWeight(atxdb, weights, ballot, layerSize, layersPerEpoch)
+	if err != nil {
+		return err
+	}
+	// reference ballot can be evicted, in order to guarantee that we won't
+	// add evicted ref ballot - we always delete reference weight if it didn't
+	// exist when we computed weight for current ballot
+	if !refExist && ballot.RefBallot != types.EmptyBallotID {
+		delete(weights, ballot.RefBallot)
+	}
+	weights[ballotID] = weight
 	return nil
 }
