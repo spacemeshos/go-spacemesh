@@ -41,6 +41,9 @@ func (a sign) String() string {
 }
 
 // Some methods of *big.Rat change its internal data without mutexes, which causes data races.
+//
+// TODO(dshulyak) big.Rat is being passed without copy somewhere in the initialization.
+// copy big.Rat to remove this mutex.
 var thetaMu sync.Mutex
 
 // calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
@@ -60,17 +63,12 @@ func calculateOpinionWithThreshold(logger log.Log, vote *big.Float, theta *big.R
 		log.Stringer("threshold", threshold),
 	)
 
-	switch vote.Sign() {
-	case 1:
-		if vote.Cmp(threshold) == 1 {
-			return support
-		}
-	case -1:
-		if vote.Abs(vote).Cmp(threshold) == 1 {
-			return against
-		}
+	if vote.Sign() == 1 && vote.Cmp(threshold) == 1 {
+		return support
 	}
-	// either vote is 0 or it didn't cross the threshold
+	if vote.Sign() == -1 && vote.Abs(vote).Cmp(threshold) == 1 {
+		return against
+	}
 	return abstain
 }
 
