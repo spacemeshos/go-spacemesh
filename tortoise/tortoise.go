@@ -7,12 +7,12 @@ import (
 	"fmt"
 	"math/big"
 
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/proposals"
+	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
@@ -30,7 +30,7 @@ type turtle struct {
 
 	atxdb   atxDataProvider
 	bdp     blockDataProvider
-	beacons blocks.BeaconGetter
+	beacons system.BeaconGetter
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance.
@@ -39,7 +39,7 @@ func newTurtle(
 	db database.Database,
 	bdp blockDataProvider,
 	atxdb atxDataProvider,
-	beacons blocks.BeaconGetter,
+	beacons system.BeaconGetter,
 	cfg Config,
 ) *turtle {
 	return &turtle{
@@ -848,7 +848,6 @@ func (t *turtle) verifyLayers(ctx *tcontext) error {
 		}
 
 		logger.Info("attempting to verify candidate layer")
-
 		contextualValidity, err := t.verifyingTortoise(ctx, logger, candlid)
 		if err != nil {
 			return err
@@ -1099,10 +1098,7 @@ func (t *turtle) ballotFilterForHealing(logger log.Log) func(types.BallotID) boo
 			logger.With().Error("inconsistent state: ballot not found", ballotID)
 			return false
 		}
-		// if candidate layer is 11 and vote with bad beacon is in 12, but current is 100
-		// we should obviously count such vote.
-		// is there any case
-		return lid.GetEpoch() < t.Last.GetEpoch()
+		return t.Last.Difference(lid) > t.BadBeaconVoteDelayLayers
 	}
 }
 

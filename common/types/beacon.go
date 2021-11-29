@@ -10,6 +10,11 @@ import (
 // - determine good ballots in verifying tortoise.
 type Beacon Hash32
 
+const (
+	// BeaconSize in bytes.
+	BeaconSize = Hash32Length
+)
+
 // EmptyBeacon is a canonical empty Beacon.
 var EmptyBeacon = Beacon{}
 

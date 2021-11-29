@@ -5,19 +5,19 @@ import (
 	"encoding/binary"
 	"fmt"
 
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // Beacon provides the value that is under consensus as defined by the hare.
 type Beacon struct {
-	beaconGetter blocks.BeaconGetter
+	beaconGetter system.BeaconGetter
 	log.Log
 }
 
 // NewBeacon returns a new beacon.
-func NewBeacon(beaconGetter blocks.BeaconGetter, logger log.Log) *Beacon {
+func NewBeacon(beaconGetter system.BeaconGetter, logger log.Log) *Beacon {
 	return &Beacon{
 		beaconGetter: beaconGetter,
 		Log:          logger,

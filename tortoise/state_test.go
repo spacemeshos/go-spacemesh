@@ -44,6 +44,7 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 		verified = max(200, min(verified, 1000))
 
 		st.Last = types.NewLayerID(verified + 100)
+		st.Processed = types.NewLayerID(verified + 100)
 		st.Verified = types.NewLayerID(verified)
 
 		st.GoodBallotsIndex = map[types.BallotID]bool{}

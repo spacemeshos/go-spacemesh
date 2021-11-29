@@ -20,6 +20,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 var cfg = config.Config{N: 10, F: 5, RoundDuration: 2, ExpectedLeaders: 5, LimitIterations: 1000, LimitConcurrent: 1000}
@@ -140,26 +142,32 @@ func (mct *mockCommitTracker) BuildCertificate() *certificate {
 	return mct.certificate
 }
 
-type mockSyncer struct {
-	isSync bool
-}
-
-func (s *mockSyncer) IsSynced(context.Context) bool {
-	return s.isSync
-}
-
 func buildMessage(msg *Message) *Msg {
 	return &Msg{Message: msg, PubKey: nil}
 }
 
+func mockSyncState(tb testing.TB) system.SyncStateProvider {
+	ctrl := gomock.NewController(tb)
+	mst := smocks.NewMockSyncStateProvider(ctrl)
+	mst.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	return mst
+}
+
+func mockSyncStateNotSynced(tb testing.TB) system.SyncStateProvider {
+	ctrl := gomock.NewController(tb)
+	mst := smocks.NewMockSyncStateProvider(ctrl)
+	mst.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
+	return mst
+}
+
 func buildBroker(tb testing.TB, testName string) *Broker {
 	return newBroker("self", &mockEligibilityValidator{valid: 1}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, cfg.LimitIterations, util.NewCloser(), logtest.New(tb).WithName(testName))
+		mockSyncState(tb), 10, cfg.LimitIterations, util.NewCloser(), logtest.New(tb).WithName(testName))
 }
 
 func buildBrokerLimit4(tb testing.TB, testName string) *Broker {
 	return newBroker("self", &mockEligibilityValidator{valid: 1}, MockStateQuerier{true, nil},
-		(&mockSyncer{true}).IsSynced, 10, 4, util.NewCloser(), logtest.New(tb).WithName(testName))
+		mockSyncState(tb), 10, 4, util.NewCloser(), logtest.New(tb).WithName(testName))
 }
 
 type mockEligibilityValidator struct {

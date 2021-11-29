@@ -22,19 +22,16 @@ import (
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
-type testSyncState bool
-
-func (ss testSyncState) IsSynced(context.Context) bool {
-	return bool(ss)
-}
-
 func coinValueMock(tb testing.TB, value bool) coin {
 	ctrl := gomock.NewController(tb)
+	defer ctrl.Finish()
+
 	coinMock := mocks.NewMockcoin(ctrl)
 	coinMock.EXPECT().StartEpoch(
 		gomock.Any(),
@@ -57,6 +54,8 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64, hasATX bool) (*To
 	conf := UnitTestConfig()
 
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
 	mockDB := mocks.NewMockactivationDB(ctrl)
 	if hasATX {
 		mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).MaxTimes(3)
@@ -81,9 +80,11 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64, hasATX bool) (*To
 
 	publisher := newPublisher(t)
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
+	ms := smocks.NewMockSyncStateProvider(ctrl)
+	ms.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	tb := New(conf, minerID, publisher, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
 	require.NotNil(t, tb)
-	tb.SetSyncState(testSyncState(true))
+	tb.SetSyncState(ms)
 	tb.setMetricsRegistry(prometheus.NewPedanticRegistry())
 	return tb, clock
 }
@@ -91,6 +92,8 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64, hasATX bool) (*To
 func newPublisher(tb testing.TB) pubsub.Publisher {
 	tb.Helper()
 	ctrl := gomock.NewController(tb)
+	defer ctrl.Finish()
+
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().
 		Publish(gomock.Any(), gomock.Any(), gomock.Any()).
@@ -166,6 +169,7 @@ func TestTortoiseBeaconWithMetrics(t *testing.T) {
 
 	conf := UnitTestConfig()
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	mockDB := mocks.NewMockactivationDB(ctrl)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).AnyTimes()
 	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(10000), nil, nil).AnyTimes()
@@ -190,9 +194,11 @@ func TestTortoiseBeaconWithMetrics(t *testing.T) {
 	require.NoError(t, err)
 
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
+	ms := smocks.NewMockSyncStateProvider(ctrl)
+	ms.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	tb := New(conf, minerID, newPublisher(t), mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
 	require.NotNil(t, tb)
-	tb.SetSyncState(testSyncState(true))
+	tb.SetSyncState(ms)
 
 	require.NoError(t, tb.Start(context.TODO()))
 	t.Cleanup(func() {
@@ -340,6 +346,7 @@ func TestTortoiseBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	mockDB := dbMocks.NewMockDatabase(ctrl)
 	tb := &TortoiseBeacon{
 		logger:  logtest.New(t).WithName("TortoiseBeacon"),
@@ -356,8 +363,6 @@ func TestTortoiseBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	got, errGet := tb.getPersistedBeacon(epoch)
 	assert.Nil(t, got)
 	assert.ErrorIs(t, errGet, errUnknown)
-
-	ctrl.Finish()
 }
 
 func TestTortoiseBeacon_BeaconsCleanupOldEpoch(t *testing.T) {

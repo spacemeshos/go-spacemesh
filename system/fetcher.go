@@ -6,13 +6,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./fetcher.go
+//go:generate mockgen -package=mocks -destination=./mocks/fetcher.go -source=./fetcher.go
 
 // Fetcher is a general interface that defines a component capable of fetching data from remote peers.
 type Fetcher interface {
 	AtxFetcher
 	BlockFetcher
 	PoetProofFetcher
+	BallotFetcher
 	TxFetcher
 }
 
@@ -36,4 +37,9 @@ type TxFetcher interface {
 // PoetProofFetcher defines an interface for fetching PoET proofs from remote peers.
 type PoetProofFetcher interface {
 	GetPoetProof(context.Context, types.Hash32) error
+}
+
+// BallotFetcher defines an interface for fetching Proposal and Ballot from remote peers.
+type BallotFetcher interface {
+	GetBallots(context.Context, []types.BallotID) error
 }
