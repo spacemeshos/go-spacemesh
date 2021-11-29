@@ -3412,6 +3412,115 @@ func TestComputeLocalOpinion(t *testing.T) {
 	}
 }
 
+func TestComputeBallotWeight(t *testing.T) {
+	type testBallot struct {
+		ActiveSet      []int // optional index to atx's to form an active set
+		RefBallot      int   // optional index to the ballot, use it in test if active set is nil
+		ATX            int   // non optional index to this ballot atx
+		ExpectedWeight *big.Float
+	}
+
+	createActiveSet := func(pos []int, atxs []*types.ActivationTxHeader) []types.ATXID {
+		var rst []types.ATXID
+		for _, i := range pos {
+			rst = append(rst, atxs[i].ID())
+		}
+		return rst
+	}
+
+	for _, tc := range []struct {
+		desc                      string
+		atxs                      []uint
+		ballots                   []testBallot
+		layerSize, layersPerEpoch uint32
+	}{
+		{
+			desc:           "FromActiveSet",
+			atxs:           []uint{50, 50, 50},
+			layerSize:      5,
+			layersPerEpoch: 3,
+			ballots: []testBallot{
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10)},
+				{ActiveSet: []int{0, 1, 2}, ATX: 1, ExpectedWeight: big.NewFloat(10)},
+			},
+		},
+		{
+			desc:           "FromRefBallot",
+			atxs:           []uint{50, 50, 50},
+			layerSize:      5,
+			layersPerEpoch: 3,
+			ballots: []testBallot{
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10)},
+				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(10)},
+			},
+		},
+		{
+			desc:           "DifferentActiveSets",
+			atxs:           []uint{50, 50, 100, 100},
+			layerSize:      5,
+			layersPerEpoch: 2,
+			ballots: []testBallot{
+				{ActiveSet: []int{0, 1}, ATX: 0, ExpectedWeight: big.NewFloat(10)},
+				{ActiveSet: []int{2, 3}, ATX: 2, ExpectedWeight: big.NewFloat(20)},
+			},
+		},
+		{
+			desc:           "FetchYourOwnAtx",
+			atxs:           []uint{50, 50, 50},
+			layerSize:      5,
+			layersPerEpoch: 2,
+			ballots: []testBallot{
+				{ActiveSet: []int{0, 2}, ATX: 1, ExpectedWeight: big.NewFloat(10)},
+			},
+		},
+	} {
+		tc := tc
+		t.Run(tc.desc, func(t *testing.T) {
+			var (
+				ballots []*types.Ballot
+				atxs    []*types.ActivationTxHeader
+
+				weights = map[types.BallotID]*big.Float{}
+
+				ctrl  = gomock.NewController(t)
+				atxdb = mocks.NewMockatxDataProvider(ctrl)
+			)
+
+			for i, weight := range tc.atxs {
+				header := makeAtxHeaderWithWeight(weight)
+				atxid := types.ATXID{byte(i)}
+				header.SetID(&atxid)
+				atxdb.EXPECT().GetAtxHeader(atxid).Return(header, nil).AnyTimes()
+				atxs = append(atxs, header)
+			}
+
+			for i, b := range tc.ballots {
+				ballot := &types.Ballot{
+					InnerBallot: types.InnerBallot{
+						EligibilityProof: types.VotingEligibilityProof{J: uint32(i)},
+						AtxID:            atxs[b.ATX].ID(),
+					},
+				}
+				if b.ActiveSet != nil {
+					ballot.EpochData = &types.EpochData{
+						ActiveSet: createActiveSet(b.ActiveSet, atxs),
+					}
+				} else {
+					ballot.RefBallot = ballots[b.RefBallot].ID()
+				}
+
+				ballot.Initialize()
+				ballots = append(ballots, ballot)
+
+				weight, err := computeBallotWeight(atxdb, weights, ballot, tc.layerSize, tc.layersPerEpoch)
+				require.NoError(t, err)
+				require.Equal(t, b.ExpectedWeight.String(), weight.String())
+				require.Equal(t, weight, weights[ballot.ID()], "ballot weight must be saved to the weights map")
+			}
+		})
+	}
+}
+
 func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	const size = 10
 	s1 := sim.New(

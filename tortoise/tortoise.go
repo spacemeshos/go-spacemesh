@@ -1187,7 +1187,9 @@ func computeBallotWeight(
 		weights[ballot.ID()] = rst
 		return rst, nil
 	}
-	// TODO for better error check the empty ref ballot in this case
+	if ballot.RefBallot == types.EmptyBallotID {
+		return nil, fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
+	}
 	weight, exist := weights[ballot.RefBallot]
 	if !exist {
 		return nil, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
