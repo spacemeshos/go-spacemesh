@@ -125,6 +125,16 @@ func New(db database.Database, mdb blockDataProvider, atxdb atxDataProvider, bea
 		}
 		t.trtl.init(t.ctx, mesh.GenesisLayer())
 	}
+	if err := recoverBallotWeight(
+		t.trtl.bdp,
+		t.trtl.atxdb,
+		t.trtl.BallotOpinionsByLayer,
+		t.trtl.BallotWeight,
+		t.cfg.LayerSize,
+		types.GetLayersPerEpoch(),
+	); err != nil {
+		t.logger.With().Panic("failed to recover ballot weights", log.Err(err))
+	}
 	t.org = organizer.New(
 		organizer.WithLogger(t.logger),
 		organizer.WithLastLayer(t.trtl.Last),

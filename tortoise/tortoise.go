@@ -716,7 +716,7 @@ func (t *turtle) verifyingTortoise(ctx *tcontext, logger log.Log, lid types.Laye
 	if err != nil {
 		return nil, err
 	}
-	logger.With().Info("verifying: expected voting weight for layer", log.Stringer("weight", weight), lid)
+	logger.With().Info("verifying: expected voting weight for layer", log.Stringer("weight", weight), lid, lid.GetEpoch())
 
 	// Count the votes of good ballots. localOpinionOnBlock is our local opinion on this block.
 	// Declare the vote vector "verified" up to position k if the total weight exceeds the confidence threshold in
@@ -1196,4 +1196,41 @@ func computeBallotWeight(
 	}
 	weights[ballot.ID()] = weight
 	return weight, nil
+}
+
+// recoverBallotWeight recovers all weights from database, instead of persisting weights in tortoise database.
+func recoverBallotWeight(
+	mdb blockDataProvider,
+	atxdb atxDataProvider,
+	opinions map[types.LayerID]map[types.BallotID]Opinion,
+	weights map[types.BallotID]*big.Float,
+	layerSize,
+	layersPerEpoch uint32,
+) error {
+	for _, ballots := range opinions {
+		var refs, other []*types.Ballot
+		for ballotID := range ballots {
+			block, err := mdb.GetBlock(types.BlockID(ballotID))
+			if err != nil {
+				return fmt.Errorf("no ballot %s in database: %w", ballotID, err)
+			}
+			ballot := block.ToBallot()
+			if ballot.EpochData != nil {
+				refs = append(refs, ballot)
+			} else {
+				other = append(other, ballot)
+			}
+		}
+		for _, ballots := range [...][]*types.Ballot{refs, other} {
+			for _, ballot := range ballots {
+				if ballot.AtxID == *types.EmptyATXID {
+					continue
+				}
+				if _, err := computeBallotWeight(atxdb, weights, ballot, layerSize, layersPerEpoch); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	return nil
 }

@@ -708,49 +708,39 @@ func TestAddToMesh(t *testing.T) {
 }
 
 func TestPersistAndRecover(t *testing.T) {
-	mdb := getPersistentMesh(t)
-
-	getHareResults := mdb.LayerBlockIds
-
-	mdb.InputVectorBackupFunc = getHareResults
-	atxdb := getAtxDB()
+	const size = 10
+	s := sim.New(
+		sim.WithLayerSize(size),
+		sim.WithPath(t.TempDir()),
+	)
+	s.Setup()
+	ctx := context.Background()
 	cfg := defaultTestConfig()
-	db := database.NewMemDatabase()
-	alg := New(db, mdb, atxdb, mockedBeacons(t), WithConfig(cfg))
+	cfg.LayerSize = size
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
-	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
-	require.NoError(t, addLayerToMesh(mdb, l1))
-	alg.HandleIncomingLayer(context.TODO(), l1.Index())
-	require.NoError(t, alg.Persist(context.TODO()))
+	var last, verified types.LayerID
+	for i := 0; i < 20; i++ {
+		last = s.Next()
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified)
+	require.NoError(t, tortoise.Persist(ctx))
 
-	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
-	require.NoError(t, addLayerToMesh(mdb, l2))
-	alg.HandleIncomingLayer(context.TODO(), l2.Index())
-	require.NoError(t, alg.Persist(context.TODO()))
-	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
-
-	// now recover
-	alg2 := New(db, mdb, atxdb, mockedBeacons(t), WithConfig(cfg))
-	require.Equal(t, alg.LatestComplete(), alg2.LatestComplete())
-	require.Equal(t, alg.trtl.bdp, alg2.trtl.bdp)
-	require.Equal(t, alg.trtl.LastEvicted, alg2.trtl.LastEvicted)
-	require.Equal(t, alg.trtl.Verified, alg2.trtl.Verified)
-	require.Equal(t, alg.trtl.WindowSize, alg2.trtl.WindowSize)
-	require.Equal(t, alg.trtl.Last, alg2.trtl.Last)
-	require.Equal(t, alg.trtl.Hdist, alg2.trtl.Hdist)
-	require.Equal(t, alg.trtl.ConfidenceParam, alg2.trtl.ConfidenceParam)
-	require.Equal(t, alg.trtl.Zdist, alg2.trtl.Zdist)
-	require.Equal(t, alg.trtl.RerunInterval, alg2.trtl.RerunInterval)
-
-	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBlock, getHareResults, defaultTestLayerSize)
-	require.NoError(t, addLayerToMesh(mdb, l3))
-
-	alg.HandleIncomingLayer(context.TODO(), l3.Index())
-	alg2.HandleIncomingLayer(context.TODO(), l3.Index())
-
-	// expect identical results
-	require.Equal(t, int(types.GetEffectiveGenesis().Add(2).Uint32()), int(alg.LatestComplete().Uint32()), "wrong latest complete layer")
-	require.Equal(t, int(types.GetEffectiveGenesis().Add(2).Uint32()), int(alg2.LatestComplete().Uint32()), "wrong latest complete layer")
+	tortoise2 := New(
+		tortoise.trtl.db,
+		s.GetState(0).MeshDB,
+		s.GetState(0).AtxDB,
+		s.GetState(0).Beacons,
+		WithConfig(cfg),
+	)
+	require.Equal(t, tortoise.trtl.LastEvicted, tortoise2.trtl.LastEvicted)
+	require.Equal(t, tortoise.trtl.Verified, tortoise2.trtl.Verified)
+	require.Equal(t, tortoise.trtl.Last, tortoise2.trtl.Last)
+	require.Equal(t, tortoise.trtl.Processed, tortoise2.trtl.Processed)
+	require.Equal(t, tortoise.trtl.WindowSize, tortoise2.trtl.WindowSize)
+	require.Equal(t, tortoise.trtl.Last, tortoise2.trtl.Last)
+	require.Equal(t, tortoise.trtl.BallotWeight, tortoise2.trtl.BallotWeight)
 }
 
 func TestBaseBlock(t *testing.T) {
