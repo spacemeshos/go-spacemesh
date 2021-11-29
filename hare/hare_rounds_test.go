@@ -11,7 +11,6 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
-	bMocks "github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
@@ -19,6 +18,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 const skipMoreTests = true
@@ -109,11 +109,11 @@ func createTestHare(tb testing.TB, tcfg config.Config, clock *mockClock, pid p2p
 	ctrl := gomock.NewController(tb)
 	defer ctrl.Finish()
 
-	mockBeacons := bMocks.NewMockBeaconGetter(ctrl)
+	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
 	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
-	hare := New(tcfg, pid, p2p, ed, nodeID, isSynced, bp, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
+	hare := New(tcfg, pid, p2p, ed, nodeID, mockSyncState(tb), bp, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, clock, logtest.New(tb).WithName(name+"_"+ed.PublicKey().ShortString()))
 	return hare
 }

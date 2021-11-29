@@ -8,3 +8,8 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 type BeaconCollector interface {
 	ReportBeaconFromBallot(types.EpochID, types.BallotID, types.Beacon, uint64)
 }
+
+// BeaconGetter gets a beacon value.
+type BeaconGetter interface {
+	GetBeacon(types.EpochID) ([]byte, error)
+}

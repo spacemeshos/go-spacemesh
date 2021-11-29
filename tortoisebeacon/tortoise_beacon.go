@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/metrics"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
@@ -38,10 +39,6 @@ var (
 	ErrZeroEpochWeight     = errors.New("zero epoch weight provided")
 	ErrZeroEpoch           = errors.New("zero epoch provided")
 )
-
-type broadcaster interface {
-	Broadcast(ctx context.Context, channel string, data []byte) error
-}
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./tortoise_beacon.go
 
@@ -70,11 +67,6 @@ type layerClock interface {
 	Subscribe() timesync.LayerTimer
 	Unsubscribe(timesync.LayerTimer)
 	LayerToTime(types.LayerID) time.Time
-}
-
-// SyncState interface to check the state the sync.
-type SyncState interface {
-	IsSynced(context.Context) bool
 }
 
 // New returns a new TortoiseBeacon.
@@ -129,7 +121,7 @@ type TortoiseBeacon struct {
 
 	config      Config
 	nodeID      types.NodeID
-	sync        SyncState
+	sync        system.SyncStateProvider
 	publisher   pubsub.Publisher
 	atxDB       activationDB
 	edSigner    signing.Signer
@@ -174,7 +166,7 @@ type TortoiseBeacon struct {
 }
 
 // SetSyncState updates sync state provider. Must be executed only once.
-func (tb *TortoiseBeacon) SetSyncState(sync SyncState) {
+func (tb *TortoiseBeacon) SetSyncState(sync system.SyncStateProvider) {
 	if tb.sync != nil {
 		tb.logger.Panic("sync state provider can be updated only once")
 	}
