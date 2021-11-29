@@ -3413,7 +3413,6 @@ func TestComputeLocalOpinion(t *testing.T) {
 }
 
 func TestNetworkRecoversFromFullPartition(t *testing.T) {
-	t.Skip("will be unskipped in the next change")
 	const size = 10
 	s1 := sim.New(
 		sim.WithLayerSize(size),
