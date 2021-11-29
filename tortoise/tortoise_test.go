@@ -1855,7 +1855,7 @@ func TestHealing(t *testing.T) {
 		// delete good blocks data
 		alg.trtl.GoodBallotsIndex = make(map[types.BallotID]bool, 0)
 
-		alg.trtl.Last = l7ID.Add(types.GetLayersPerEpoch())
+		alg.trtl.Last = l7ID.Add(types.GetLayersPerEpoch() * 2)
 		alg.trtl.Hdist = 0
 		alg.trtl.heal(wrapContext(context.TODO()), l7ID)
 		checkVerifiedLayer(t, alg.trtl, l6ID)
@@ -3024,6 +3024,7 @@ func TestBallotFilterForHealing(t *testing.T) {
 	assert.False(t, trtl.ballotHasGoodBeacon(badBallot, logger))
 
 	// we don't count votes in bad beacon block for badBeaconVoteDelays layers
+	trtl.Last = layerID
 	i := uint32(1)
 	for ; i <= defaultVoteDelays; i++ {
 		filter := trtl.ballotFilterForHealing(logger)
@@ -3498,13 +3499,14 @@ func TestComputeLocalOpinion(t *testing.T) {
 }
 
 func TestNetworkRecoversFromFullPartition(t *testing.T) {
+	t.Skip("will be unskipped in the next change")
 	const size = 10
 	s1 := sim.New(
 		sim.WithLayerSize(size),
 		sim.WithStates(2),
 	)
 	s1.Setup(
-		sim.WithSetupMinerRange(30, 30),
+		sim.WithSetupMinerRange(15, 15),
 		sim.WithSetupUnitsRange(1, 1),
 	)
 
