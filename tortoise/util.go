@@ -9,26 +9,25 @@ import (
 )
 
 var (
-	// correction vectors type.
-	support = vec{Sign: 1}
-	against = vec{Sign: -1}
-	abstain = vec{Sign: 0}
+	support = sign{Sign: 1}
+	against = sign{Sign: -1}
+	abstain = sign{Sign: 0}
 )
 
-type vec struct {
+type sign struct {
 	Sign    int8
 	Flushed bool
 }
 
-func equalVotes(i, j vec) bool {
+func equalVotes(i, j sign) bool {
 	return i.Sign == j.Sign
 }
 
-func (a vec) copy() vec {
-	return vec{Sign: a.Sign}
+func (a sign) copy() sign {
+	return sign{Sign: a.Sign}
 }
 
-func (a vec) String() string {
+func (a sign) String() string {
 	switch a.Sign {
 	case 1:
 		return "support"
@@ -46,7 +45,7 @@ var thetaMu sync.Mutex
 
 // calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
 // theta, and expected vote weight.
-func calculateOpinionWithThreshold(logger log.Log, vote *big.Float, theta *big.Rat, weight *big.Float) vec {
+func calculateOpinionWithThreshold(logger log.Log, vote *big.Float, theta *big.Rat, weight *big.Float) sign {
 	thetaMu.Lock()
 	defer thetaMu.Unlock()
 
@@ -76,7 +75,7 @@ func calculateOpinionWithThreshold(logger log.Log, vote *big.Float, theta *big.R
 }
 
 // Opinion is opinions on other blocks.
-type Opinion map[types.BlockID]vec
+type Opinion map[types.BlockID]sign
 
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 	arr := make([]types.BlockID, 0, len(m))
@@ -86,7 +85,7 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 	return arr
 }
 
-func addVoteToSum(vote vec, sum, weight *big.Float) *big.Float {
+func addVoteToSum(vote sign, sum, weight *big.Float) *big.Float {
 	adjusted := weight
 	if vote == against {
 		// copy is needed only if we modify sign

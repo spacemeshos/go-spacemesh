@@ -180,7 +180,7 @@ func (s *state) Recover() error {
 		}
 		block := decodeBlock(it.Key()[offset+types.BlockIDSize:])
 
-		var opinion vec
+		var opinion sign
 		if err := codec.Decode(it.Value(), &opinion); err != nil {
 			return fmt.Errorf("decode opinion with codec: %w", err)
 		}

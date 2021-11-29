@@ -81,9 +81,9 @@ func makeStateGen(tb testing.TB, db database.Database, logger log.Log) func(rng 
 
 			st.GoodBallotsIndex[ballot] = false
 			block := blockGen.Interface().(types.BlockID)
-			vecGen, ok := quick.Value(reflect.TypeOf(vec{}), rng)
+			vecGen, ok := quick.Value(reflect.TypeOf(sign{}), rng)
 			require.True(tb, ok)
-			val := vecGen.Interface().(vec)
+			val := vecGen.Interface().(sign)
 			val.Flushed = false
 			st.BallotOpinionsByLayer[layer][ballot][block] = val
 		}

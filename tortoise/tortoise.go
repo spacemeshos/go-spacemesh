@@ -138,7 +138,7 @@ func (t *turtle) evict(ctx context.Context) {
 }
 
 // returns the local opinion on the validity of a block in a layer (support, against, or abstain).
-func (t *turtle) getLocalBlockOpinion(ctx *tcontext, blid types.LayerID, bid types.BlockID) (vec, error) {
+func (t *turtle) getLocalBlockOpinion(ctx *tcontext, blid types.LayerID, bid types.BlockID) (sign, error) {
 	if !blid.After(types.GetEffectiveGenesis()) {
 		return support, nil
 	}
@@ -153,7 +153,7 @@ func (t *turtle) checkBallotAndGetLocalOpinion(
 	ctx *tcontext,
 	diffList []types.BlockID,
 	className string,
-	voteVector vec,
+	voteVector sign,
 	baseBallotLayer types.LayerID,
 	logger log.Logger,
 ) bool {
@@ -354,7 +354,7 @@ func (t *turtle) calculateExceptions(
 		}
 
 		// helper function for adding diffs
-		addDiffs := func(logger log.Log, bid types.BlockID, voteVec vec, diffMap map[types.BlockID]struct{}) {
+		addDiffs := func(logger log.Log, bid types.BlockID, voteVec sign, diffMap map[types.BlockID]struct{}) {
 			v, ok := baseopinion[bid]
 			if !ok {
 				v = against
@@ -464,7 +464,7 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 		len(ballot.NeutralDiff) +
 		len(ballot.AgainstDiff) +
 		len(baseBallotOpinion)
-	opinion := make(map[types.BlockID]vec, lth)
+	opinion := make(map[types.BlockID]sign, lth)
 
 	for _, bid := range ballot.ForDiff {
 		opinion[bid] = support
@@ -892,7 +892,7 @@ func (t *turtle) layerCutoff() types.LayerID {
 	return t.Last.Sub(t.Hdist)
 }
 
-func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]vec, error) {
+func (t *turtle) computeLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]sign, error) {
 	var (
 		logger  = t.logger.WithContext(ctx).WithFields(lid)
 		opinion = Opinion{}

@@ -1909,7 +1909,7 @@ func TestHealBalanceAttack(t *testing.T) {
 	// this primes the block opinions for these blocks, without attempting to verify the previous layer
 	r.NoError(alg.trtl.handleLayer(wrapContext(context.TODO()), l5ID))
 
-	addOpinion := func(lid types.LayerID, ballot types.BallotID, block types.BlockID, vector vec) {
+	addOpinion := func(lid types.LayerID, ballot types.BallotID, block types.BlockID, vector sign) {
 		alg.trtl.BallotOpinionsByLayer[lid][ballot][block] = vector
 		alg.trtl.BallotLayer[ballot] = lid
 	}
@@ -2007,7 +2007,7 @@ func TestHealBalanceAttack(t *testing.T) {
 func TestCalculateOpinionWithThreshold(t *testing.T) {
 	for _, tc := range []struct {
 		desc      string
-		expect    vec
+		expect    sign
 		vote      *big.Float
 		threshold *big.Rat
 		weight    *big.Float
@@ -3305,7 +3305,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 		desc     string
 		seqs     []sim.Sequence
 		lid      types.LayerID
-		expected vec
+		expected sign
 	}{
 		{
 			desc: "ContextuallyValid",
