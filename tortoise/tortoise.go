@@ -677,8 +677,8 @@ func (t *turtle) handleLayer(ctx *tcontext, layerID types.LayerID) error {
 		t.logger.WithContext(ctx).Warning("cannot process empty layer block list")
 		return nil
 	}
-	var refs, other []*types.Ballot
 
+	var refs, other []*types.Ballot
 	for _, block := range layerBlocks {
 		ballot := block.ToBallot()
 		if ballot.EpochData != nil {

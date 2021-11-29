@@ -3457,8 +3457,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified1)
 	require.Equal(t, last.Sub(1), verified2)
 
-	// sync missing state
-	// make enough progress so that blocks with other beacons are considered
+	// sync missing state and rerun immediately, both instances won't make progress
+	// because weight increases, and each side doesn't have enough weight in votes
 	// and then do rerun
 	partitionEnd := last
 	s1.Merge(s2)
@@ -3466,6 +3466,7 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	require.NoError(t, tortoise1.rerun(ctx))
 	require.NoError(t, tortoise2.rerun(ctx))
 
+	// make enough progress to cross global threshold with new votes
 	for i := 0; i < int(types.GetLayersPerEpoch())*2; i++ {
 		last = s1.Next(sim.WithVoteGenerator(func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 			if i < size/2 {
@@ -3480,8 +3481,6 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified1)
 	require.Equal(t, last.Sub(1), verified2)
 
-	// succesfull test should verify that all blocks that were created in s2
-	// during partition are contextually valid in s1 state.
 	for lid := partitionStart.Add(1); !lid.After(partitionEnd); lid = lid.Add(1) {
 		bids, err := s1.GetState(1).MeshDB.LayerBlockIds(lid)
 		require.NoError(t, err)
