@@ -1124,9 +1124,11 @@ func TestScoreBallots(t *testing.T) {
 func TestSumVotes(t *testing.T) {
 	type testBallot struct {
 		Base                      [2]int   // [layer, ballot] tuple
-		Support, Against, Abstain [][2]int // list of [layer, ballot] tuples
+		Support, Against, Abstain [][2]int // list of [layer, block] tuples
 		ATX                       int
 	}
+	type testBlock struct{}
+
 	rng := mrand.New(mrand.NewSource(0))
 	signer := signing.NewEdSignerFromRand(rng)
 
@@ -1142,17 +1144,22 @@ func TestSumVotes(t *testing.T) {
 	genesis := types.GetEffectiveGenesis()
 
 	for _, tc := range []struct {
-		desc      string
-		activeset []uint         // list of weights in activeset
-		layers    [][]testBallot // list of layers with ballots
-		target    [2]int
-		expect    *big.Float
-		filter    func(types.BallotID) bool
+		desc         string
+		activeset    []uint         // list of weights in activeset
+		layerBallots [][]testBallot // list of layers with ballots
+		layerBlocks  [][]testBlock
+		target       [2]int // [layer, block] tuple
+		expect       *big.Float
+		filter       func(types.BallotID) bool
 	}{
 		{
 			desc:      "TwoLayersSupport",
 			activeset: []uint{10, 10, 10},
-			layers: [][]testBallot{
+			layerBlocks: [][]testBlock{
+				{{}, {}, {}},
+				{{}, {}, {}},
+			},
+			layerBallots: [][]testBallot{
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 				{
 					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
@@ -1172,7 +1179,11 @@ func TestSumVotes(t *testing.T) {
 		{
 			desc:      "ConflictWithBase",
 			activeset: []uint{10, 10, 10},
-			layers: [][]testBallot{
+			layerBlocks: [][]testBlock{
+				{{}, {}, {}},
+				{{}, {}, {}},
+			},
+			layerBallots: [][]testBallot{
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 				{
 					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
@@ -1204,7 +1215,12 @@ func TestSumVotes(t *testing.T) {
 		{
 			desc:      "UnequalWeights",
 			activeset: []uint{80, 40, 20},
-			layers: [][]testBallot{
+			layerBlocks: [][]testBlock{
+				{{}, {}, {}},
+				{{}, {}, {}},
+				{{}, {}, {}},
+			},
+			layerBallots: [][]testBallot{
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 				{
 					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
@@ -1230,7 +1246,12 @@ func TestSumVotes(t *testing.T) {
 		{
 			desc:      "UnequalWeightsVoteFromAtxMissing",
 			activeset: []uint{80, 40, 20},
-			layers: [][]testBallot{
+			layerBlocks: [][]testBlock{
+				{{}, {}, {}},
+				{{}, {}, {}},
+				{{}, {}, {}},
+			},
+			layerBallots: [][]testBallot{
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 				{
 					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
@@ -1253,7 +1274,9 @@ func TestSumVotes(t *testing.T) {
 		{
 			desc:      "OneLayerSupport",
 			activeset: []uint{10, 10, 10},
-			layers: [][]testBallot{
+			layerBlocks: [][]testBlock{
+				{{}, {}, {}},
+			}, layerBallots: [][]testBallot{
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 				{
 					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
@@ -1268,7 +1291,10 @@ func TestSumVotes(t *testing.T) {
 		{
 			desc:      "OneBlockAbstain",
 			activeset: []uint{10, 10, 10},
-			layers: [][]testBallot{
+			layerBlocks: [][]testBlock{
+				{{}, {}, {}},
+			},
+			layerBallots: [][]testBallot{
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 				{
 					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
@@ -1283,7 +1309,10 @@ func TestSumVotes(t *testing.T) {
 		{
 			desc:      "OneBlockAagaisnt",
 			activeset: []uint{10, 10, 10},
-			layers: [][]testBallot{
+			layerBlocks: [][]testBlock{
+				{{}, {}, {}},
+			},
+			layerBallots: [][]testBallot{
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 				{
 					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
@@ -1298,7 +1327,10 @@ func TestSumVotes(t *testing.T) {
 		{
 			desc:      "MajorityAgainst",
 			activeset: []uint{10, 10, 10},
-			layers: [][]testBallot{
+			layerBlocks: [][]testBlock{
+				{{}, {}, {}},
+			},
+			layerBallots: [][]testBallot{
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 				{
 					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
@@ -1313,7 +1345,10 @@ func TestSumVotes(t *testing.T) {
 		{
 			desc:      "NoVotes",
 			activeset: []uint{10, 10, 10},
-			layers: [][]testBallot{
+			layerBlocks: [][]testBlock{
+				{{}, {}, {}},
+			},
+			layerBallots: [][]testBallot{
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 			},
 			target: [2]int{0, 0},
@@ -1323,7 +1358,10 @@ func TestSumVotes(t *testing.T) {
 		{
 			desc:      "IgnoreVotes",
 			activeset: []uint{10, 10, 10},
-			layers: [][]testBallot{
+			layerBlocks: [][]testBlock{
+				{{}, {}, {}},
+			},
+			layerBallots: [][]testBallot{
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 				{
 					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
@@ -1353,38 +1391,52 @@ func TestSumVotes(t *testing.T) {
 			tortoise.trtl.atxdb = atxdb
 			consensus := tortoise.trtl
 
-			layers := [][]*types.Block{}
-			for i, layer := range tc.layers {
+			blocks := [][]*types.Block{}
+			for i, layer := range tc.layerBlocks {
 				layerBlocks := []*types.Block{}
-				layerBallots := []*types.Ballot{}
 				lid := genesis.Add(uint32(i) + 1)
-				for j, b := range layer {
+				for j := range layer {
 					block := &types.Block{}
 					block.EligibilityProof = types.BlockEligibilityProof{J: uint32(j)}
-					block.ATXID = activeset[b.ATX]
-					block.ActiveSet = &activeset
 					block.LayerIndex = lid
-					// don't vote on genesis for simplicity,
-					// since we don't care about block goodness in this test
-					if i > 0 {
-						block.ForDiff = getDiff(layers, b.Support)
-						block.AgainstDiff = getDiff(layers, b.Against)
-						block.NeutralDiff = getDiff(layers, b.Abstain)
-						block.BaseBlock = layers[b.Base[0]][b.Base[1]].ID()
-					}
 					block.Signature = signer.Sign(block.Bytes())
 					block.Initialize()
 					layerBlocks = append(layerBlocks, block)
-					layerBallots = append(layerBallots, block.ToBallot())
 				}
-				layers = append(layers, layerBlocks)
 
 				consensus.processBlocks(ctx, layerBlocks)
+				blocks = append(blocks, layerBlocks)
+			}
+
+			ballots := [][]*types.Ballot{}
+			for i, layer := range tc.layerBallots {
+				layerBallots := []*types.Ballot{}
+				lid := genesis.Add(uint32(i) + 1)
+				for j, b := range layer {
+					ballot := &types.Ballot{}
+					ballot.EligibilityProof = types.VotingEligibilityProof{J: uint32(j)}
+					ballot.AtxID = activeset[b.ATX]
+					ballot.EpochData = &types.EpochData{ActiveSet: activeset}
+					ballot.LayerIndex = lid
+					// don't vote on genesis for simplicity,
+					// since we don't care about block goodness in this test
+					if i > 0 {
+						ballot.ForDiff = getDiff(blocks, b.Support)
+						ballot.AgainstDiff = getDiff(blocks, b.Against)
+						ballot.NeutralDiff = getDiff(blocks, b.Abstain)
+						ballot.BaseBallot = ballots[b.Base[0]][b.Base[1]].ID()
+					}
+					ballot.Signature = signer.Sign(ballot.Bytes())
+					ballot.Initialize()
+					layerBallots = append(layerBallots, ballot)
+				}
+				ballots = append(ballots, layerBallots)
+
 				require.NoError(t, consensus.processBallots(wrapContext(ctx), layerBallots))
 				consensus.Processed = lid
 				consensus.Last = lid
 			}
-			bid := types.BlockID(layers[tc.target[0]][tc.target[1]].ID())
+			bid := types.BlockID(blocks[tc.target[0]][tc.target[1]].ID())
 			lid := genesis.Add(uint32(tc.target[0] + 2)) // +2 so that we count votes after target
 			rst, err := consensus.sumVotesForBlock(ctx, bid, lid, tc.filter)
 			require.NoError(t, err)
