@@ -145,16 +145,22 @@ func (s NodeService) UpdatePoetServer(ctx context.Context, req *pb.UpdatePoetSer
 // StatusStream exposes a stream of node status updates.
 func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
-	statusStream := events.GetStatusChannel()
+
+	var statusCh <-chan interface{}
+
+	if statusSubscription := events.SubscribeStatus(); statusSubscription != nil {
+		defer closeSubscription(statusSubscription)
+		statusCh = consumeEvents(context.Background(), statusSubscription.Out())
+	}
 
 	for {
 		select {
-		case _, ok := <-statusStream:
-			// statusStream works a bit differently than the other streams. It doesn't actually
+		case _, ok := <-statusCh:
+			// statusCh works a bit differently than the other streams. It doesn't actually
 			// send us data. Instead, it just notifies us that there's new data to be read.
 			if !ok {
-				log.Info("StatusStream closed, shutting down")
-				return nil
+				log.Info("status stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
 			curLayer, latestLayer, verifiedLayer := s.getLayers()
 
@@ -183,15 +189,23 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 // ErrorStream exposes a stream of node errors.
 func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
-	errorStream := events.GetErrorChannel()
+
+	var errorsCh <-chan interface{}
+
+	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
+		defer closeSubscription(errorsSubscription)
+		errorsCh = consumeEvents(context.Background(), errorsSubscription.Out())
+	}
 
 	for {
 		select {
-		case nodeError, ok := <-errorStream:
+		case nodeErrorEvent, ok := <-errorsCh:
 			if !ok {
-				log.Info("ErrorStream closed, shutting down")
-				return nil
+				log.Info("errors stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
+
+			nodeError := nodeErrorEvent.(events.NodeError)
 
 			resp := &pb.ErrorStreamResponse{Error: &pb.NodeError{
 				Level:      convertErrorLevel(nodeError.Level),
