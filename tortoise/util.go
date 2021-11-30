@@ -82,15 +82,3 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 	}
 	return arr
 }
-
-func addVoteToSum(vote sign, sum, weight *big.Float) *big.Float {
-	adjusted := weight
-	if vote == against {
-		// copy is needed only if we modify sign
-		adjusted = new(big.Float).Mul(weight, big.NewFloat(-1))
-	}
-	if vote != abstain {
-		sum = sum.Add(sum, adjusted)
-	}
-	return sum
-}

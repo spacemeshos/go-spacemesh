@@ -1005,7 +1005,14 @@ func (t *turtle) sumVotesForBlock(
 				logger.With().Debug("no opinion on older block, counted vote against")
 				vote = against
 			}
-			sum = addVoteToSum(vote, sum, weight)
+			adjusted := weight
+			if vote == against {
+				// copy is needed only if we modify sign
+				adjusted = new(big.Float).Mul(weight, big.NewFloat(-1))
+			}
+			if vote != abstain {
+				sum = sum.Add(sum, adjusted)
+			}
 		}
 	}
 	return sum, nil
