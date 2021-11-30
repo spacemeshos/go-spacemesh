@@ -126,6 +126,9 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 	if cfg.LayerSize >= 0 {
 		size = cfg.LayerSize
 	}
+	activeset := make([]types.ATXID, len(g.activations))
+	copy(activeset, g.activations)
+
 	for i := 0; i < size; i++ {
 		miner := g.rng.Intn(len(g.activations))
 		atxid := g.activations[miner]
@@ -149,6 +152,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 					NeutralDiff: voting.Abstain,
 					Data:        data,
 				},
+				ActiveSet:      &activeset,
 				TortoiseBeacon: beacon,
 			},
 		}
