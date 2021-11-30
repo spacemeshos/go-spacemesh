@@ -3456,12 +3456,12 @@ func TestComputeBallotWeight(t *testing.T) {
 			},
 		},
 		{
-			desc:           "FetchYourOwnAtx",
+			desc:           "AtxNotInActiveSet",
 			atxs:           []uint{50, 50, 50},
 			layerSize:      5,
 			layersPerEpoch: 2,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 2}, ATX: 1, ExpectedWeight: big.NewFloat(10)},
+				{ActiveSet: []int{0, 2}, ATX: 1, ExpectedWeight: big.NewFloat(0)},
 			},
 		},
 	} {

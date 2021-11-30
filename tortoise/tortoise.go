@@ -1164,28 +1164,18 @@ func computeBallotWeight(
 	layersPerEpoch uint32,
 ) (*big.Float, error) {
 	if ballot.EpochData != nil {
-		var (
-			total, weight uint64
-			foundWeight   bool
-		)
+		var total, weight uint64
+
 		for _, atxid := range ballot.EpochData.ActiveSet {
 			atx, err := atxdb.GetAtxHeader(atxid)
 			if err != nil {
 				return nil, fmt.Errorf("atx %s in active set of %s is unknown", atxid, ballot.ID())
 			}
-			total += atx.GetWeight()
+			atxweight := atx.GetWeight()
+			total += atxweight
 			if atxid == ballot.AtxID {
-				weight = atx.GetWeight()
-				foundWeight = true
+				weight = atxweight
 			}
-		}
-		// TODO is it valid not to include your own atxid into active set?
-		if !foundWeight {
-			atx, err := atxdb.GetAtxHeader(ballot.AtxID)
-			if err != nil {
-				return nil, fmt.Errorf("atx %s in active set of %s is unknown", ballot.AtxID, ballot.ID())
-			}
-			weight = atx.GetWeight()
 		}
 
 		expected, err := proposals.GetNumEligibleSlots(weight, total, layerSize, layersPerEpoch)
