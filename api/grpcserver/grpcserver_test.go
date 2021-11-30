@@ -2088,6 +2088,45 @@ func TestTransactionService(t *testing.T) {
 
 			wg.Wait()
 		}},
+		{"TransactionsStateStream_ManySubscribers", func(t *testing.T) {
+			logtest.SetupGlobal(t)
+			req := &pb.TransactionsStateStreamRequest{}
+			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
+				Id: globalTx.ID().Bytes(),
+			})
+			req.IncludeTransactions = true
+
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				const subscriberCount = 10
+				streams := make([]pb.TransactionService_TransactionsStateStreamClient, 0, subscriberCount)
+				for i := 0; i < subscriberCount; i++ {
+					stream, err := c.TransactionsStateStream(context.Background(), req)
+					require.NoError(t, err)
+					streams = append(streams, stream)
+				}
+
+				for _, stream := range streams {
+					res, err := stream.Recv()
+					require.NoError(t, err)
+					require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
+					require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+					checkTransaction(t, res.Transaction)
+				}
+			}()
+
+			events.CloseEventReporter()
+			err := events.InitializeEventReporterWithOptions("")
+			require.NoError(t, err)
+
+			// Wait until stream starts receiving to ensure that it catches the event.
+			time.Sleep(10 * time.Millisecond)
+			events.ReportNewTx(types.LayerID{}, globalTx)
+			wg.Wait()
+		}},
 	}
 
 	// Run subtests
