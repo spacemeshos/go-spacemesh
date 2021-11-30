@@ -37,11 +37,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
 
 const (
@@ -89,8 +92,10 @@ var (
 	challenge  = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	globalAtx  = newAtx(challenge, nipost, addr1)
 	globalAtx2 = newAtx(challenge, nipost, addr2)
-	globalTx   = NewTx(0, addr1, signing.NewEdSigner())
-	globalTx2  = NewTx(1, addr2, signing.NewEdSigner())
+	signer1    = signing.NewEdSigner()
+	signer2    = signing.NewEdSigner()
+	globalTx   = NewTx(0, addr1, signer1)
+	globalTx2  = NewTx(1, addr2, signer2)
 	block1     = types.NewExistingBlock(types.LayerID{}, []byte("11111"), nil)
 	block2     = types.NewExistingBlock(types.LayerID{}, []byte("22222"), nil)
 	block3     = types.NewExistingBlock(types.LayerID{}, []byte("33333"), nil)
@@ -2677,7 +2682,7 @@ func checkAccountDataItemReceipt(t *testing.T, dataItem interface{}) {
 		require.Equal(t, uint32(receiptIndex), x.Receipt.Index)
 
 	default:
-		require.Fail(t, "inner account data item has wrong data type")
+		require.Fail(t, "inner account data item has wrong data type: "+fmt.Sprintf("%T", dataItem))
 	}
 }
 
@@ -2909,4 +2914,141 @@ func TestGatewayService(t *testing.T) {
 	require.NotNil(t, res, "expected request to succeed")
 	require.Equal(t, int32(code.Code_OK), res.Status.Code)
 	require.NoError(t, err, "expected request to succeed")
+}
+
+type appliedTxsMock struct{}
+
+func (appliedTxsMock) Put(key []byte, value []byte) error { return nil }
+func (appliedTxsMock) Delete(key []byte) error            { panic("implement me") }
+func (appliedTxsMock) Get(key []byte) ([]byte, error)     { panic("implement me") }
+func (appliedTxsMock) Has(key []byte) (bool, error)       { panic("implement me") }
+func (appliedTxsMock) Close()                             { panic("implement me") }
+func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me") }
+func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
+
+type ProjectorMock struct {
+	nonceDiff   uint64
+	balanceDiff uint64
+}
+
+func (p *ProjectorMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
+	return prevNonce + p.nonceDiff, prevBalance - p.balanceDiff, nil
+}
+
+func TestEventsCalled(t *testing.T) {
+	logtest.SetupGlobal(t)
+
+	ctrl := gomock.NewController(t)
+	publisher := mocks.NewMockPublisher(ctrl)
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+		return nil
+	})
+
+	txService := NewTransactionService(publisher, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	gsService := NewGlobalStateService(txAPI, mempoolMock)
+	shutDown := launchServer(t, txService, gsService)
+	defer shutDown()
+
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
+
+	conn1, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn1.Close())
+	}()
+
+	conn2, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn2.Close())
+	}()
+
+	txClient := pb.NewTransactionServiceClient(conn1)
+	accountClient := pb.NewGlobalStateServiceClient(conn2)
+
+	txReq := &pb.TransactionsStateStreamRequest{}
+	txReq.TransactionId = append(txReq.TransactionId, &pb.TransactionId{
+		Id: globalTx.ID().Bytes(),
+	})
+
+	accountReq1 := &pb.AccountDataStreamRequest{
+		Filter: &pb.AccountDataFilter{
+			AccountId: &pb.AccountId{Address: addr1.Bytes()},
+			AccountDataFlags: uint32(
+				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
+					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT),
+		},
+	}
+
+	originAddr := types.Address{}
+	originAddr.SetBytes(signer1.PublicKey().Bytes())
+	accountReq2 := &pb.AccountDataStreamRequest{
+		Filter: &pb.AccountDataFilter{
+			AccountId: &pb.AccountId{Address: originAddr.Bytes()},
+			AccountDataFlags: uint32(
+				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
+					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT),
+		},
+	}
+
+	events.CloseEventReporter()
+	err = events.InitializeEventReporterWithOptions("")
+	require.NoError(t, err)
+
+	txStream, err := txClient.TransactionsStateStream(context.Background(), txReq)
+	require.NoError(t, err)
+
+	accountStream1, err := accountClient.AccountDataStream(context.Background(), accountReq1)
+	require.NoError(t, err, "stream request returned unexpected error")
+
+	accountStream2, err := accountClient.AccountDataStream(context.Background(), accountReq2)
+	require.NoError(t, err, "stream request returned unexpected error")
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		for i := 0; i < 2; i++ {
+			txRes, err := txStream.Recv()
+			require.NoError(t, err)
+			require.Nil(t, txRes.Transaction)
+			require.Equal(t, globalTx.ID().Bytes(), txRes.TransactionState.Id.Id)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, txRes.TransactionState.State)
+
+			acc1Res, err := accountStream1.Recv()
+			require.NoError(t, err)
+			require.Equal(t, addr1.Bytes(), acc1Res.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+
+			acc2Res, err := accountStream2.Recv()
+			require.NoError(t, err)
+			require.Equal(t, originAddr.Bytes(), acc2Res.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+		}
+
+		acc1res3, err := accountStream1.Recv()
+		require.NoError(t, err)
+		require.Equal(t, addr1.Bytes(), acc1res3.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	pool := mempool.NewTxMemPool()
+	pool.Put(globalTx.ID(), globalTx)
+
+	lg := logtest.New(t).WithName("proc_logger")
+	processor := state.NewTransactionProcessor(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	time.Sleep(100 * time.Millisecond)
+	processor.Process([]*types.Transaction{globalTx}, layerFirst)
+
+	rewards := map[types.Address]uint64{
+		addr1: 1,
+	}
+	time.Sleep(100 * time.Millisecond)
+	processor.ApplyRewards(layerFirst, rewards)
+
+	fmt.Printf("waiting wg\n")
+	wg.Wait()
+	fmt.Printf("waiting wg done\n")
 }
