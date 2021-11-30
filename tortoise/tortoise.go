@@ -490,10 +490,15 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 	logger.With().Debug("adding or updating ballot opinion", log.Stringer("ballot_weight", weight))
 
 	t.BallotWeight[ballot.ID()] = weight
-	t.BlockLayer[types.BlockID(ballot.ID())] = ballot.LayerIndex
 	t.BallotLayer[ballot.ID()] = ballot.LayerIndex
 	t.BallotOpinionsByLayer[ballot.LayerIndex][ballot.ID()] = opinion
 	return nil
+}
+
+func (t *turtle) processBlocks(ctx context.Context, blocks []*types.Block) {
+	for _, block := range blocks {
+		t.BlockLayer[block.ID()] = block.LayerIndex
+	}
 }
 
 func (t *turtle) processBallots(ctx *tcontext, ballots []*types.Ballot) error {
@@ -690,6 +695,7 @@ func (t *turtle) handleLayer(ctx *tcontext, layerID types.LayerID) error {
 			other = append(other, ballot)
 		}
 	}
+	t.processBlocks(ctx, layerBlocks)
 	// ballot weight is computed based on the active set from the reference ballot
 	// other ballots copy the ballot weight from reference ballot
 	if err := t.processBallots(ctx, refs); err != nil {

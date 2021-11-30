@@ -1127,11 +1127,13 @@ func TestSumVotes(t *testing.T) {
 		Support, Against, Abstain [][2]int // list of [layer, ballot] tuples
 		ATX                       int
 	}
+	rng := mrand.New(mrand.NewSource(0))
+	signer := signing.NewEdSignerFromRand(rng)
 
-	getDiff := func(layers [][]*types.Ballot, choices [][2]int) []types.BlockID {
+	getDiff := func(layers [][]*types.Block, choices [][2]int) []types.BlockID {
 		var rst []types.BlockID
 		for _, choice := range choices {
-			rst = append(rst, types.BlockID(layers[choice[0]][choice[1]].ID()))
+			rst = append(rst, layers[choice[0]][choice[1]].ID())
 		}
 		return rst
 	}
@@ -1351,32 +1353,33 @@ func TestSumVotes(t *testing.T) {
 			tortoise.trtl.atxdb = atxdb
 			consensus := tortoise.trtl
 
-			layers := [][]*types.Ballot{}
+			layers := [][]*types.Block{}
 			for i, layer := range tc.layers {
+				layerBlocks := []*types.Block{}
 				layerBallots := []*types.Ballot{}
 				lid := genesis.Add(uint32(i) + 1)
 				for j, b := range layer {
-					ballot := &types.Ballot{
-						InnerBallot: types.InnerBallot{
-							EligibilityProof: types.VotingEligibilityProof{J: uint32(j)},
-							AtxID:            activeset[b.ATX],
-							EpochData:        &types.EpochData{ActiveSet: activeset},
-							LayerIndex:       lid,
-						},
-					}
+					block := &types.Block{}
+					block.EligibilityProof = types.BlockEligibilityProof{J: uint32(j)}
+					block.ATXID = activeset[b.ATX]
+					block.ActiveSet = &activeset
+					block.LayerIndex = lid
 					// don't vote on genesis for simplicity,
 					// since we don't care about block goodness in this test
 					if i > 0 {
-						ballot.ForDiff = getDiff(layers, b.Support)
-						ballot.AgainstDiff = getDiff(layers, b.Against)
-						ballot.NeutralDiff = getDiff(layers, b.Abstain)
-						ballot.BaseBallot = layers[b.Base[0]][b.Base[1]].ID()
+						block.ForDiff = getDiff(layers, b.Support)
+						block.AgainstDiff = getDiff(layers, b.Against)
+						block.NeutralDiff = getDiff(layers, b.Abstain)
+						block.BaseBlock = layers[b.Base[0]][b.Base[1]].ID()
 					}
-					ballot.Initialize()
-					layerBallots = append(layerBallots, ballot)
+					block.Signature = signer.Sign(block.Bytes())
+					block.Initialize()
+					layerBlocks = append(layerBlocks, block)
+					layerBallots = append(layerBallots, block.ToBallot())
 				}
-				layers = append(layers, layerBallots)
+				layers = append(layers, layerBlocks)
 
+				consensus.processBlocks(ctx, layerBlocks)
 				require.NoError(t, consensus.processBallots(wrapContext(ctx), layerBallots))
 				consensus.Processed = lid
 				consensus.Last = lid
