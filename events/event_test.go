@@ -77,12 +77,15 @@ func TestEventReporter(t *testing.T) {
 	ReportNewTx(types.LayerID{}, globalTx)
 
 	// Stream is nil before we initialize it
-	txStream := GetNewTxChannel()
+	txStream := SubscribeTxs()
 	require.Nil(t, txStream, "expected tx stream not to be initialized")
 
 	err := InitializeEventReporter("")
 	require.NoError(t, err)
-	txStream = GetNewTxChannel()
+
+	txStream = SubscribeTxs()
+	defer txStream.Close()
+
 	require.NotNil(t, txStream, "expected tx stream to be initialized")
 
 	// This will not be received as no one is listening
@@ -98,7 +101,7 @@ func TestEventReporter(t *testing.T) {
 		defer wgDone.Done()
 		// report that we're listening
 		wgListening.Done()
-		txWithValidity := <-txStream
+		txWithValidity := (<-txStream.Out()).(Transaction)
 		require.Equal(t, globalTx, txWithValidity.Transaction, "expected same input and output tx")
 	}()
 
@@ -127,12 +130,13 @@ func TestReportError(t *testing.T) {
 	ReportError(nodeErr)
 
 	// Stream is nil before we initialize it
-	stream := GetErrorChannel()
+	stream := SubscribeErrors()
 	require.Nil(t, stream, "expected stream not to be initialized")
 
-	err := InitializeEventReporterWithOptions("", 1, false)
+	err := InitializeEventReporterWithOptions("")
 	require.NoError(t, err)
-	stream = GetErrorChannel()
+	stream = SubscribeErrors()
+	defer stream.Close()
 	require.NotNil(t, stream, "expected stream to be initialized")
 
 	// This one will be buffered
@@ -151,11 +155,11 @@ func TestReportError(t *testing.T) {
 		wgListening.Done()
 
 		// check the error sent directly
-		require.Equal(t, nodeErr, <-stream, "expected same input and output tx")
-		require.Equal(t, nodeErr, <-stream, "expected same input and output tx")
+		require.Equal(t, nodeErr, <-stream.Out(), "expected same input and output tx")
+		require.Equal(t, nodeErr, <-stream.Out(), "expected same input and output tx")
 
 		// now check errors sent through logging
-		msg := <-stream
+		msg := (<-stream.Out()).(NodeError)
 		require.Equal(t, zapcore.ErrorLevel, msg.Level)
 		require.Equal(t, errMsg, msg.Msg)
 	}()
@@ -181,12 +185,13 @@ func TestReportNodeStatus(t *testing.T) {
 	ReportNodeStatusUpdate()
 
 	// Stream is nil before we initialize it
-	stream := GetStatusChannel()
+	stream := SubscribeStatus()
 	require.Nil(t, stream, "expected stream not to be initialized")
 
 	err := InitializeEventReporter("")
 	require.NoError(t, err)
-	stream = GetStatusChannel()
+	stream = SubscribeStatus()
+	defer stream.Close()
 	require.NotNil(t, stream, "expected stream to be initialized")
 
 	// This will not be received as no one is listening
@@ -199,8 +204,8 @@ func TestReportNodeStatus(t *testing.T) {
 		// report that we're listening
 		commChannel <- struct{}{}
 
-		status := <-stream
-		require.Equal(t, struct{}{}, status)
+		status := <-stream.Out()
+		require.Equal(t, Status{}, status)
 
 		close(commChannel)
 	}()
