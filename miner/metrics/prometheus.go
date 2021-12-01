@@ -5,15 +5,15 @@ import (
 )
 
 const (
-	// Subsystem is a subsystem shared by all metrics exposed by this package.
-	Subsystem = "miner"
+	// subsystem is a subsystem shared by all metrics exposed by this package.
+	subsystem = "miner"
 )
 
-// BlockBuildDuration checks block build duration (milliseconds).
-var BlockBuildDuration = metrics.NewHistogramWithBuckets(
-	"block_build_duration",
-	Subsystem,
-	"How long it takes to build a block (milliseconds)",
+// ProposalBuildDuration checks duration to build a proposal in milliseconds.
+var ProposalBuildDuration = metrics.NewHistogramWithBuckets(
+	"proposal_build_duration",
+	subsystem,
+	"duration to build a proposal in milliseconds",
 	[]string{},
 	[]float64{10, 100, 1000, 5 * 1000, 10 * 1000, 60 * 1000, 10 * 60 * 1000, 60 * 60 * 1000},
 )

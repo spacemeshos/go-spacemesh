@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/blocks/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 var errFoo = errors.New("some err")
@@ -19,33 +20,18 @@ type mockAtxDB struct {
 	err  error
 }
 
-func (m mockAtxDB) GetEpochAtxs(types.EpochID) []types.ATXID {
-	return []types.ATXID{}
-}
-
-func (m mockAtxDB) GetIdentity(edID string) (types.NodeID, error) {
-	return types.NodeID{Key: edID, VRFPublicKey: nodeID.VRFPublicKey}, nil
-}
-
-func (m mockAtxDB) GetNodeAtxIDForEpoch(types.NodeID, types.EpochID) (types.ATXID, error) {
-	return types.ATXID{}, m.err
-}
-
 func (m mockAtxDB) GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error) {
 	return m.atxH, m.err
 }
 
-func (m mockAtxDB) GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error) {
-	return 0, nil, nil
-}
-
 func TestBlockEligibilityValidator_getValidAtx(t *testing.T) {
 	types.SetLayersPerEpoch(5)
+	edSigner := signing.NewEdSigner()
 	r := require.New(t)
 	atxdb := &mockAtxDB{err: errFoo}
 	mockBC := mocks.NewMockbeaconCollector(gomock.NewController(t))
 	mockBC.EXPECT().ReportBeaconFromBlock(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Times(0)
-	v := NewBlockEligibilityValidator(10, 5, atxdb, mockBC, validateVRF, nil, logtest.New(t))
+	v := NewBlockEligibilityValidator(10, 5, atxdb, mockBC, signing.VRFVerify, nil, logtest.New(t))
 
 	block := &types.Block{MiniBlock: types.MiniBlock{BlockHeader: types.BlockHeader{LayerIndex: types.NewLayerID(20)}}} // non-genesis
 	block.Signature = edSigner.Sign(block.Bytes())

@@ -30,7 +30,7 @@ func genBeacon() []byte {
 }
 
 type testValidator struct {
-	*validator
+	*Validator
 	*mockSet
 }
 
@@ -38,7 +38,7 @@ func createTestValidator(tb testing.TB) *testValidator {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(tb)
 	return &testValidator{
-		validator: newEligibilityValidator(layerAvgSize, layersPerEpoch, ms.mdb, ms.mbc, ms.mm, logtest.New(tb)),
+		Validator: NewEligibilityValidator(layerAvgSize, layersPerEpoch, ms.mdb, ms.mbc, ms.mm, logtest.New(tb)),
 		mockSet:   ms,
 	}
 }

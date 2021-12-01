@@ -83,3 +83,41 @@ func (mr *MockblockDBMockRecorder) GetBlock(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlock", reflect.TypeOf((*MockblockDB)(nil).GetBlock), arg0)
 }
+
+// MockactivationDB is a mock of activationDB interface.
+type MockactivationDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockactivationDBMockRecorder
+}
+
+// MockactivationDBMockRecorder is the mock recorder for MockactivationDB.
+type MockactivationDBMockRecorder struct {
+	mock *MockactivationDB
+}
+
+// NewMockactivationDB creates a new mock instance.
+func NewMockactivationDB(ctrl *gomock.Controller) *MockactivationDB {
+	mock := &MockactivationDB{ctrl: ctrl}
+	mock.recorder = &MockactivationDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockactivationDB) EXPECT() *MockactivationDBMockRecorder {
+	return m.recorder
+}
+
+// GetAtxHeader mocks base method.
+func (m *MockactivationDB) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHeader, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAtxHeader", arg0)
+	ret0, _ := ret[0].(*types.ActivationTxHeader)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAtxHeader indicates an expected call of GetAtxHeader.
+func (mr *MockactivationDBMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockactivationDB)(nil).GetAtxHeader), arg0)
+}

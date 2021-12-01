@@ -58,7 +58,7 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 
 	seed := []byte("seedseed")
 	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
-	items, _, err := pool.GetTxsForBlock(1, getState)
+	items, _, err := pool.SelectTopNTransactions(1, getState)
 	r.NoError(err)
 	r.Len(items, 1)
 	r.Equal(tx2.ID(), items[0])
@@ -90,7 +90,7 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 
 	seed := []byte("seedseed")
 	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
-	txs, _, err := pool.GetTxsForBlock(5, getState)
+	txs, _, err := pool.SelectTopNTransactions(5, getState)
 	r.NoError(err)
 	r.Len(txs, 5)
 	var txIds []types.TransactionID
