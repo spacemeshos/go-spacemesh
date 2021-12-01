@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -13,11 +14,12 @@ import (
 )
 
 const (
-	namespaceLast     = "l"
-	namespaceEvict    = "e"
-	namespaceVerified = "v"
-	namespaceGood     = "g"
-	namespaceOpinions = "o"
+	namespaceLast      = "l"
+	namespaceProcessed = "p"
+	namespaceEvict     = "e"
+	namespaceVerified  = "v"
+	namespaceGood      = "g"
+	namespaceOpinions  = "o"
 )
 
 type state struct {
@@ -33,17 +35,23 @@ type state struct {
 	// in the opinions map to work with.
 	badBeaconBallots map[types.BallotID]struct{}
 
+	// epochWeight average weight of atx's that target keyed epoch
+	epochWeight map[types.EpochID]uint64
+
 	// last layer processed: note that tortoise does not have a concept of "current" layer (and it's not aware of the
 	// current time or latest tick). As far as Tortoise is concerned, Last is the current layer. This is a subjective
 	// view of time, but Tortoise receives layers as soon as Hare finishes processing them or when they are received via
 	// gossip, and there's nothing for Tortoise to verify without new data anyway.
 	Last        types.LayerID
+	Processed   types.LayerID
 	LastEvicted types.LayerID
 	Verified    types.LayerID
 	// if key exists in the map the ballot is good. if value is true it was written to the disk.
 	GoodBallotsIndex map[types.BallotID]bool
 	// use 2D array to be able to iterate from the latest elements easily
 	BallotOpinionsByLayer map[types.LayerID]map[types.BallotID]Opinion
+	// BallotWeight is a weight of a single ballot.
+	BallotWeight map[types.BallotID]*big.Float
 	// BallotLayer stores reverse mapping from BallotOpinionsByLayer
 	BallotLayer map[types.BallotID]types.LayerID
 	// BlockLayer stores mapping from BlockID to LayerID
@@ -99,6 +107,9 @@ func (s *state) Persist() error {
 	if err := batch.Put([]byte(namespaceLast), s.Last.Bytes()); err != nil {
 		return fmt.Errorf("put 'last' namespace into batch: %w", err)
 	}
+	if err := batch.Put([]byte(namespaceProcessed), s.Processed.Bytes()); err != nil {
+		return fmt.Errorf("put 'processed' namespace into batch: %w", err)
+	}
 	if err := batch.Put([]byte(namespaceEvict), s.LastEvicted.Bytes()); err != nil {
 		return fmt.Errorf("put 'evict' namespace into batch: %w", err)
 	}
@@ -122,6 +133,12 @@ func (s *state) Recover() error {
 		return fmt.Errorf("get 'last' namespace from DB: %w", err)
 	}
 	s.Last = types.BytesToLayerID(buf)
+
+	buf, err = s.db.Get([]byte(namespaceProcessed))
+	if err != nil {
+		return fmt.Errorf("get 'processed' namespace from DB: %w", err)
+	}
+	s.Processed = types.BytesToLayerID(buf)
 
 	buf, err = s.db.Get([]byte(namespaceVerified))
 	if err != nil {
@@ -163,7 +180,7 @@ func (s *state) Recover() error {
 		}
 		block := decodeBlock(it.Key()[offset+types.BlockIDSize:])
 
-		var opinion vec
+		var opinion sign
 		if err := codec.Decode(it.Value(), &opinion); err != nil {
 			return fmt.Errorf("decode opinion with codec: %w", err)
 		}
@@ -198,6 +215,7 @@ func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
 			}
 			delete(s.GoodBallotsIndex, ballot)
 			delete(s.BallotLayer, ballot)
+			delete(s.BallotWeight, ballot)
 			delete(s.BlockLayer, types.BlockID(ballot))
 			delete(s.badBeaconBallots, ballot)
 			for block, opinion := range s.BallotOpinionsByLayer[layerToEvict][ballot] {
@@ -222,6 +240,7 @@ func (s *state) Evict(ctx context.Context, windowStart types.LayerID) error {
 	}
 	for epoch := range epochToEvict {
 		delete(s.refBallotBeacons, epoch)
+		delete(s.epochWeight, epoch)
 	}
 	s.LastEvicted = windowStart.Sub(1)
 	return nil

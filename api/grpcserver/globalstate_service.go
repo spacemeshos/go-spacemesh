@@ -270,32 +270,35 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 	filterReceipt := in.Filter.AccountDataFlags&uint32(pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT) != 0
 
 	// Subscribe to the various streams
-	var (
-		channelAccount chan types.Address
-		channelReward  chan events.Reward
-		channelReceipt chan events.TxReceipt
-	)
+	var accountCh, rewardsCh, receiptsCh <-chan interface{}
+
 	if filterAccount {
-		channelAccount = events.GetAccountChannel()
+		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
+			defer closeSubscription(accountSubscription)
+			accountCh = consumeEvents(stream.Context(), accountSubscription.Out())
+		}
 	}
 	if filterReward {
-		channelReward = events.GetRewardChannel()
+		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
+			defer closeSubscription(rewardsSubscription)
+			rewardsCh = consumeEvents(stream.Context(), rewardsSubscription.Out())
+		}
 	}
 	if filterReceipt {
-		channelReceipt = events.GetReceiptChannel()
+		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
+			defer closeSubscription(receiptsSubscription)
+			receiptsCh = consumeEvents(stream.Context(), receiptsSubscription.Out())
+		}
 	}
 
 	for {
 		select {
-		case updatedAccount, ok := <-channelAccount:
+		case updatedAccountEvent, ok := <-accountCh:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("account channel closed, shutting down")
-				return nil
+				log.Info("account stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
+			updatedAccount := updatedAccountEvent.(events.Account).Address
 			// Apply address filter
 			if updatedAccount == addr {
 				// The Reporter service just sends us the account address. We are responsible
@@ -313,15 +316,13 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
-		case reward, ok := <-channelReward:
+
+		case rewardEvent, ok := <-rewardsCh:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("reward channel closed, shutting down")
-				return nil
+				log.Info("rewards stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
+			reward := rewardEvent.(events.Reward)
 			// Apply address filter
 			if reward.Coinbase == addr {
 				resp := &pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Reward{
@@ -340,15 +341,13 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
-		case receipt, ok := <-channelReceipt:
+
+		case receiptEvent, ok := <-receiptsCh:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("receipt channel closed, shutting down")
-				return nil
+				log.Info("receipts stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
+			receipt := receiptEvent.(events.TxReceipt)
 			// Apply address filter
 			if receipt.Address == addr {
 				resp := &pb.AccountDataStreamResponse{Datum: &pb.AccountData{Datum: &pb.AccountData_Receipt{
@@ -366,6 +365,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
+
 		case <-stream.Context().Done():
 			log.Info("AccountDataStream closing stream, client disconnected")
 			return nil
@@ -388,17 +388,24 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 	}
 	smesherIDBytes := in.Id.Id
 
+	var rewardsCh <-chan interface{}
+
 	// subscribe to the rewards channel
-	channelReward := events.GetRewardChannel()
+	if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
+		defer closeSubscription(rewardsSubscription)
+		rewardsCh = consumeEvents(stream.Context(), rewardsSubscription.Out())
+	}
 
 	for {
 		select {
-		case reward, ok := <-channelReward:
+		case rewardEvent, ok := <-rewardsCh:
 			if !ok {
-				// shut down the reward channel
-				log.Info("Reward channel closed, shutting down")
-				return nil
+				log.Info("rewards stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
+
+			reward := rewardEvent.(events.Reward)
+
 			// filter on the smesherID
 			if comp := bytes.Compare(reward.Smesher.ToBytes(), smesherIDBytes); comp == 0 {
 				resp := &pb.SmesherRewardStreamResponse{
@@ -447,38 +454,43 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 	filterState := in.GlobalStateDataFlags&uint32(pb.GlobalStateDataFlag_GLOBAL_STATE_DATA_FLAG_GLOBAL_STATE_HASH) != 0
 
 	// Subscribe to the various streams
-	var (
-		channelAccount chan types.Address
-		channelReward  chan events.Reward
-		channelReceipt chan events.TxReceipt
-		channelLayer   chan events.LayerUpdate
-	)
+	var accountCh, rewardsCh, receiptsCh, layersCh <-chan interface{}
+
 	if filterAccount {
-		channelAccount = events.GetAccountChannel()
+		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
+			defer closeSubscription(accountSubscription)
+			accountCh = consumeEvents(stream.Context(), accountSubscription.Out())
+		}
 	}
 	if filterReward {
-		channelReward = events.GetRewardChannel()
+		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
+			defer closeSubscription(rewardsSubscription)
+			rewardsCh = consumeEvents(stream.Context(), rewardsSubscription.Out())
+		}
 	}
 	if filterReceipt {
-		channelReceipt = events.GetReceiptChannel()
+		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
+			defer closeSubscription(receiptsSubscription)
+			receiptsCh = consumeEvents(stream.Context(), receiptsSubscription.Out())
+		}
 	}
 	if filterState {
 		// Whenever new state is applied to the mesh, a new layer is reported.
 		// There is no separate reporting specifically for new state.
-		channelLayer = events.GetLayerChannel()
+		if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
+			defer closeSubscription(layersSubscription)
+			layersCh = consumeEvents(stream.Context(), layersSubscription.Out())
+		}
 	}
 
 	for {
 		select {
-		case updatedAccount, ok := <-channelAccount:
+		case updatedAccountEvent, ok := <-accountCh:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("account channel closed, shutting down")
-				return nil
+				log.Info("account stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
+			updatedAccount := updatedAccountEvent.(events.Account).Address
 			// The Reporter service just sends us the account address. We are responsible
 			// for looking up the other required data here. Get the account balance and
 			// nonce.
@@ -493,15 +505,14 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case reward, ok := <-channelReward:
+		case rewardEvent, ok := <-rewardsCh:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("reward channel closed, shutting down")
-				return nil
+				log.Info("rewards stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
+
+			reward := rewardEvent.(events.Reward)
+
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
 				Reward: &pb.Reward{
 					Layer:       &pb.LayerNumber{Number: reward.Layer.Uint32()},
@@ -517,15 +528,14 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case receipt, ok := <-channelReceipt:
+		case receiptEvent, ok := <-receiptsCh:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("receipt channel closed, shutting down")
-				return nil
+				log.Info("receipts stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
+
+			receipt := receiptEvent.(events.TxReceipt)
+
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Receipt{
 				Receipt: &pb.TransactionReceipt{
 					Id: &pb.TransactionId{Id: receipt.ID.Bytes()},
@@ -540,15 +550,14 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case layer, ok := <-channelLayer:
+		case layerEvent, ok := <-layersCh:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("layer channel closed, shutting down")
-				return nil
+				log.Info("layers stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
+
+			layer := layerEvent.(events.LayerUpdate)
+
 			root, err := s.Mesh.GetLayerStateRoot(layer.LayerID)
 			if err != nil {
 				log.Error("error retrieving layer data: %s", err)

@@ -93,8 +93,10 @@ type HareApp struct {
 	monitor *monitoring.Monitor
 }
 
+type mockSyncStateProvider struct{}
+
 // IsSynced returns true always as we assume the node is synced.
-func IsSynced(context.Context) bool {
+func (ms *mockSyncStateProvider) IsSynced(context.Context) bool {
 	return true
 }
 
@@ -191,7 +193,7 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		layerTime: gTime,
 	}
 	hareI := hare.New(app.Config.HARE, host.ID(), host, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}},
-		IsSynced, &mockBlockProvider{}, &mockBeaconGetter{}, hareOracle,
+		&mockSyncStateProvider{}, &mockBlockProvider{}, &mockBeaconGetter{}, hareOracle,
 		layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, mockClock, logger)
 	log.Info("starting hare service")
 	app.ha = hareI

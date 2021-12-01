@@ -1,11 +1,8 @@
 package sim
 
 import (
-	"context"
 	"math/rand"
 
-	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
@@ -43,6 +40,16 @@ func WithPath(path string) GenOpt {
 	}
 }
 
+// WithStates creates n states.
+func WithStates(n int) GenOpt {
+	if n == 0 {
+		panic("generator without attached state is not supported")
+	}
+	return func(g *Generator) {
+		g.conf.StateInstances = n
+	}
+}
+
 func withRng(rng *rand.Rand) GenOpt {
 	return func(g *Generator) {
 		g.rng = rng
@@ -65,20 +72,15 @@ type config struct {
 	Path           string
 	LayerSize      uint32
 	LayersPerEpoch uint32
+	StateInstances int
 }
 
 func defaults() config {
 	return config{
 		LayerSize:      30,
 		LayersPerEpoch: types.GetLayersPerEpoch(),
+		StateInstances: 1,
 	}
-}
-
-// State is state that can be used by tortoise.
-type State struct {
-	MeshDB  *mesh.DB
-	AtxDB   *activation.DB
-	Beacons blocks.BeaconGetter
 }
 
 // New creates Generator instance.
@@ -92,11 +94,10 @@ func New(opts ...GenOpt) *Generator {
 	for _, opt := range opts {
 		opt(g)
 	}
-	mdb := newMeshDB(g.logger, g.conf)
-	atxdb := newAtxDB(g.logger, mdb, g.conf)
-
-	g.beacons = &beaconStore{}
-	g.State = State{MeshDB: mdb, AtxDB: atxdb, Beacons: g.beacons}
+	// TODO support multiple persist states.
+	for i := 0; i < g.conf.StateInstances; i++ {
+		g.states = append(g.states, newState(g.logger, g.conf))
+	}
 	return g
 }
 
@@ -106,16 +107,16 @@ type Generator struct {
 	rng    *rand.Rand
 	conf   config
 
-	State State
+	states []State
 
 	nextLayer types.LayerID
 	// key is when to return => value is the layer to return
 	reordered   map[types.LayerID]types.LayerID
 	layers      []*types.Layer
+	units       [2]int
 	activations []types.ATXID
 
-	beacons *beaconStore
-	keys    []*signing.EdSigner
+	keys []*signing.EdSigner
 }
 
 // SetupOpt configures setup.
@@ -135,12 +136,6 @@ func WithSetupUnitsRange(low, high int) SetupOpt {
 	}
 }
 
-func withBeacon(beacon []byte) SetupOpt {
-	return func(conf *setupConf) {
-		conf.Beacon = beacon
-	}
-}
-
 type setupConf struct {
 	Miners [2]int
 	Units  [2]int
@@ -149,9 +144,26 @@ type setupConf struct {
 
 func defaultSetupConf() setupConf {
 	return setupConf{
-		Miners: [2]int{30, 100},
+		Miners: [2]int{30, 30},
 		Units:  [2]int{1, 10},
 	}
+}
+
+// GetState at index.
+func (g *Generator) GetState(i int) State {
+	return g.states[i]
+}
+
+func (g *Generator) addState(state State) {
+	g.states = append(g.states, state)
+}
+
+func (g *Generator) popState(i int) State {
+	state := g.states[i]
+	copy(g.states[i:], g.states[i+1:])
+	g.states[len(g.states)-1] = State{}
+	g.states = g.states[:len(g.states)-1]
+	return state
 }
 
 // Setup should be called before running Next.
@@ -160,39 +172,39 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	for _, opt := range opts {
 		opt(&conf)
 	}
-
+	g.units = conf.Units
 	if len(g.layers) == 0 {
 		g.layers = append(g.layers, mesh.GenesisLayer())
 	}
 	last := g.layers[len(g.layers)-1]
 	g.nextLayer = last.Index().Add(1)
 
-	// TODO(dshulyak) this needs to be improved to store multiple beacons
-	// after partition - the previous beacon should remain in the store
-	if conf.Beacon != nil {
-		g.beacons.beacon = conf.Beacon
-	} else {
-		g.beacons.beacon = make([]byte, 32)
-		g.rng.Read(g.beacons.beacon)
-	}
-
 	miners := intInRange(g.rng, conf.Miners)
 	g.activations = make([]types.ATXID, miners)
 
+	for i := 0; i < miners; i++ {
+		g.keys = append(g.keys, signing.NewEdSignerFromRand(g.rng))
+	}
+}
+
+func (g *Generator) generateAtxs() {
 	for i := range g.activations {
-		units := intInRange(g.rng, conf.Units)
+		units := intInRange(g.rng, g.units)
 		address := types.Address{}
 		_, _ = g.rng.Read(address[:])
-		atx := types.NewActivationTx(types.NIPostChallenge{
-			NodeID:    types.NodeID{Key: address.Hex()},
-			StartTick: 1,
-			EndTick:   2,
-		}, address, nil, uint(units), nil)
-		g.activations[i] = atx.ID()
-		if err := g.State.AtxDB.StoreAtx(context.Background(), g.nextLayer.GetEpoch(), atx); err != nil {
-			g.logger.With().Panic("failed to store atx", log.Err(err))
-		}
 
-		g.keys = append(g.keys, signing.NewEdSignerFromRand(g.rng))
+		nipost := types.NIPostChallenge{
+			NodeID:     types.NodeID{Key: address.Hex()},
+			StartTick:  1,
+			EndTick:    2,
+			PubLayerID: g.nextLayer.Sub(1),
+		}
+		atx := types.NewActivationTx(nipost, address, nil, uint(units), nil)
+
+		g.activations[i] = atx.ID()
+
+		for _, state := range g.states {
+			state.OnActivationTx(atx)
+		}
 	}
 }

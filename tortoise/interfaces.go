@@ -19,3 +19,8 @@ type blockDataProvider interface {
 	SaveContextualValidity(types.BlockID, types.LayerID, bool) error
 	ContextualValidity(types.BlockID) (bool, error)
 }
+
+type atxDataProvider interface {
+	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
+	GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error)
+}

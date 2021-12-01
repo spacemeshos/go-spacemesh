@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"sort"
 	"strconv"
-	"strings"
 	"sync/atomic"
 
 	"github.com/spacemeshos/ed25519"
@@ -437,13 +436,18 @@ func BlockIDs(blocks []*Block) []BlockID {
 	return ids
 }
 
+type blockIds []BlockID
+
+func (ids blockIds) MarshalLogArray(encoder log.ArrayEncoder) error {
+	for i := range ids {
+		encoder.AppendString(ids[i].String())
+	}
+	return nil
+}
+
 // BlockIdsField returns a list of loggable fields for a given list of BlockIDs.
 func BlockIdsField(ids []BlockID) log.Field {
-	var strs []string
-	for _, a := range ids {
-		strs = append(strs, a.String())
-	}
-	return log.String("block_ids", strings.Join(strs, ", "))
+	return log.Array("block_ids", blockIds(ids))
 }
 
 // Layer contains a list of blocks and their corresponding LayerID.

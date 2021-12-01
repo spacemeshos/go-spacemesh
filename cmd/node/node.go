@@ -63,35 +63,34 @@ const edKeyFileName = "key.bin"
 
 // Logger names.
 const (
-	AppLogger            = "app"
-	P2PLogger            = "p2p"
-	PostLogger           = "post"
-	StateDbLogger        = "stateDbStore"
-	AtxDbStoreLogger     = "atxDbStore"
-	TBeaconDbStoreLogger = "tbDbStore"
-	TBeaconLogger        = "tBeacon"
-	WeakCoinLogger       = "weakCoin"
-	PoetDbStoreLogger    = "poetDbStore"
-	StoreLogger          = "store"
-	PoetDbLogger         = "poetDb"
-	MeshDBLogger         = "meshDb"
-	TrtlLogger           = "trtl"
-	AtxDbLogger          = "atxDb"
-	BlkEligibilityLogger = "blkElgValidator"
-	MeshLogger           = "mesh"
-	SyncLogger           = "sync"
-	BlockOracle          = "blockOracle"
-	HareBeaconLogger     = "hareBeacon"
-	HareOracleLogger     = "hareOracle"
-	HareLogger           = "hare"
-	BlockBuilderLogger   = "blockBuilder"
-	BlockListenerLogger  = "blockListener"
-	PoetListenerLogger   = "poetListener"
-	NipostBuilderLogger  = "nipostBuilder"
-	Fetcher              = "fetcher"
-	LayerFetcher         = "layerFetcher"
-	TimeSyncLogger       = "timesync"
-	SVMLogger            = "SVM"
+	AppLogger             = "app"
+	P2PLogger             = "p2p"
+	PostLogger            = "post"
+	StateDbLogger         = "stateDbStore"
+	AtxDbStoreLogger      = "atxDbStore"
+	TBeaconDbStoreLogger  = "tbDbStore"
+	TBeaconLogger         = "tBeacon"
+	WeakCoinLogger        = "weakCoin"
+	PoetDbStoreLogger     = "poetDbStore"
+	StoreLogger           = "store"
+	PoetDbLogger          = "poetDb"
+	MeshDBLogger          = "meshDb"
+	TrtlLogger            = "trtl"
+	AtxDbLogger           = "atxDb"
+	BlkEligibilityLogger  = "blkElgValidator"
+	MeshLogger            = "mesh"
+	SyncLogger            = "sync"
+	HareBeaconLogger      = "hareBeacon"
+	HareOracleLogger      = "hareOracle"
+	HareLogger            = "hare"
+	ProposalBuilderLogger = "proposalBuilder"
+	BlockListenerLogger   = "blockListener"
+	PoetListenerLogger    = "poetListener"
+	NipostBuilderLogger   = "nipostBuilder"
+	Fetcher               = "fetcher"
+	LayerFetcher          = "layerFetcher"
+	TimeSyncLogger        = "timesync"
+	SVMLogger             = "SVM"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it.
@@ -251,35 +250,34 @@ func New(opts ...Option) *App {
 // App is the cli app singleton.
 type App struct {
 	*cobra.Command
-	nodeID         types.NodeID
-	Config         *config.Config
-	grpcAPIService *grpcserver.Server
-	jsonAPIService *grpcserver.JSONHTTPServer
-	gatewaySvc     *grpcserver.GatewayService
-	globalstateSvc *grpcserver.GlobalStateService
-	txService      *grpcserver.TransactionService
-	syncer         *syncer.Syncer
-	blockListener  *blocks.BlockHandler
-	state          *state.TransactionProcessor
-	blockProducer  *miner.BlockBuilder
-	oracle         *blocks.Oracle
-	txProcessor    *state.TransactionProcessor
-	mesh           *mesh.Mesh
-	clock          TickProvider
-	hare           HareService
-	postSetupMgr   *activation.PostSetupManager
-	atxBuilder     *activation.Builder
-	atxDb          *activation.DB
-	poetListener   *activation.PoetListener
-	edSgn          *signing.EdSigner
-	tortoiseBeacon *tortoisebeacon.TortoiseBeacon
-	closers        []interface{ Close() }
-	log            log.Log
-	txPool         *mempool.TxMempool
-	svm            *svm.SVM
-	layerFetch     *layerfetcher.Logic
-	ptimesync      *peersync.Sync
-	tortoise       *tortoise.Tortoise
+	nodeID          types.NodeID
+	Config          *config.Config
+	grpcAPIService  *grpcserver.Server
+	jsonAPIService  *grpcserver.JSONHTTPServer
+	gatewaySvc      *grpcserver.GatewayService
+	globalstateSvc  *grpcserver.GlobalStateService
+	txService       *grpcserver.TransactionService
+	syncer          *syncer.Syncer
+	blockListener   *blocks.BlockHandler
+	state           *state.TransactionProcessor
+	proposalBuilder *miner.ProposalBuilder
+	txProcessor     *state.TransactionProcessor
+	mesh            *mesh.Mesh
+	clock           TickProvider
+	hare            HareService
+	postSetupMgr    *activation.PostSetupManager
+	atxBuilder      *activation.Builder
+	atxDb           *activation.DB
+	poetListener    *activation.PoetListener
+	edSgn           *signing.EdSigner
+	tortoiseBeacon  *tortoisebeacon.TortoiseBeacon
+	closers         []interface{ Close() }
+	log             log.Log
+	txPool          *mempool.TxMempool
+	svm             *svm.SVM
+	layerFetch      *layerfetcher.Logic
+	ptimesync       *peersync.Sync
+	tortoise        *tortoise.Tortoise
 
 	host *p2p.Host
 
@@ -427,7 +425,7 @@ func (app *App) initServices(ctx context.Context,
 	rolacle hare.Rolacle,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
-	vrfSigner signing.Signer,
+	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32, clock TickProvider) error {
 	app.nodeID = nodeID
 
@@ -552,9 +550,9 @@ func (app *App) initServices(ctx context.Context,
 	eValidator := blocks.NewBlockEligibilityValidator(layerSize, layersPerEpoch, atxDB, tBeacon,
 		signing.VRFVerify, msh, app.addLogger(BlkEligibilityLogger, lg))
 
-	if app.Config.AtxsPerBlock > miner.AtxsPerBlockLimit { // validate limit
+	if app.Config.AtxsPerBlock > miner.ATXsPerBallotLimit { // validate limit
 		return fmt.Errorf("number of atxs per block required is bigger than the limit. atxs_per_block: %d. limit: %d",
-			app.Config.AtxsPerBlock, miner.AtxsPerBlockLimit,
+			app.Config.AtxsPerBlock, miner.ATXsPerBallotLimit,
 		)
 	}
 
@@ -584,7 +582,6 @@ func (app *App) initServices(ctx context.Context,
 	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, tBeacon, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
 	tBeacon.SetSyncState(newSyncer)
-	blockOracle := blocks.NewMinerBlockOracle(layerSize, layersPerEpoch, atxDB, tBeacon, vrfSigner, nodeID, newSyncer.ListenToGossip, app.addLogger(BlockOracle, lg))
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
 	var hOracle hare.Rolacle
@@ -601,27 +598,25 @@ func (app *App) initServices(ctx context.Context,
 	rabbit := app.HareFactory(ctx, mdb, sgn, nodeID, patrol, newSyncer, msh, tBeacon, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
-	minerCfg := miner.Config{
-		DBPath:         filepath.Join(dbStorepath, "builder"),
-		MinerID:        nodeID,
-		AtxsPerBlock:   app.Config.AtxsPerBlock,
-		LayersPerEpoch: layersPerEpoch,
-		TxsPerBlock:    app.Config.TxsPerBlock,
-	}
-
-	blockProducer := miner.NewBlockBuilder(
-		minerCfg,
-		sgn,
-		app.host,
+	proposalBuilder := miner.NewProposalBuilder(
+		ctx,
 		clock.Subscribe(),
+		sgn,
+		vrfSigner,
+		atxDB,
+		app.host,
 		msh,
 		trtl,
-		blockOracle,
 		tBeacon,
 		newSyncer,
 		stateAndMeshProjector,
 		app.txPool,
-		app.addLogger(BlockBuilderLogger, lg))
+		miner.WithDBPath(dbStorepath),
+		miner.WithMinerID(nodeID),
+		miner.WithTxsPerProposal(app.Config.TxsPerBlock),
+		miner.WithLayerSize(layerSize),
+		miner.WithLayerPerEpoch(layersPerEpoch),
+		miner.WithLogger(app.addLogger(ProposalBuilderLogger, lg)))
 
 	poetListener := activation.NewPoetListener(poetDb, app.addLogger(PoetListenerLogger, lg))
 
@@ -667,7 +662,7 @@ func (app *App) initServices(ctx context.Context,
 	app.host.Register(state.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, svm.HandleGossipTransaction))
 	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 
-	app.blockProducer = blockProducer
+	app.proposalBuilder = proposalBuilder
 	app.blockListener = blockListener
 	app.mesh = msh
 	app.syncer = newSyncer
@@ -677,7 +672,6 @@ func (app *App) initServices(ctx context.Context,
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
-	app.oracle = blockOracle
 	app.txProcessor = processor
 	app.atxDb = atxDB
 	app.layerFetch = layerFetch
@@ -726,9 +720,9 @@ func (app *App) HareFactory(
 	sgn hare.Signer,
 	nodeID types.NodeID,
 	patrol *layerpatrol.LayerPatrol,
-	syncer *syncer.Syncer,
+	syncer system.SyncStateProvider,
 	msh *mesh.Mesh,
-	beacons blocks.BeaconGetter,
+	beacons system.BeaconGetter,
 	hOracle hare.Rolacle,
 	idStore *activation.IdentityStore,
 	clock TickProvider,
@@ -746,7 +740,7 @@ func (app *App) HareFactory(
 		app.host,
 		sgn,
 		nodeID,
-		syncer.IsSynced,
+		syncer,
 		msh,
 		beacons,
 		hOracle,
@@ -769,7 +763,7 @@ func (app *App) startServices(ctx context.Context) error {
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
-	if err := app.blockProducer.Start(ctx); err != nil {
+	if err := app.proposalBuilder.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start block producer: %w", err)
 	}
 
@@ -871,11 +865,9 @@ func (app *App) stopServices() {
 		_ = app.grpcAPIService.Close()
 	}
 
-	if app.blockProducer != nil {
-		app.log.Info("closing block producer")
-		if err := app.blockProducer.Close(); err != nil {
-			log.With().Error("cannot stop block producer", log.Err(err))
-		}
+	if app.proposalBuilder != nil {
+		app.log.Info("closing proposal builder")
+		app.proposalBuilder.Close()
 	}
 
 	if app.clock != nil {

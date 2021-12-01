@@ -138,6 +138,8 @@ func getTestDefaultConfig() *config.Config {
 	cfg.P2P.TargetOutbound = 0
 
 	cfg.POST = activation.DefaultPostConfig()
+	cfg.POST.MinNumUnits = 2
+	cfg.POST.MaxNumUnits = 4
 	cfg.POST.LabelsPerUnit = 32
 	cfg.POST.BitsPerLabel = 8
 	cfg.POST.K2 = 4
@@ -226,8 +228,6 @@ func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 
 	smApp.Config.SMESHING.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
-	smApp.Config.POST.MaxNumUnits = smApp.Config.SMESHING.Opts.NumUnits << 5
-	smApp.Config.SMESHING.Opts.NumUnits = smApp.Config.SMESHING.Opts.NumUnits << (i % 5)
 
 	smApp.host = host
 	smApp.edSgn = edSgn

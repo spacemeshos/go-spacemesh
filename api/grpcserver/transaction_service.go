@@ -178,21 +178,29 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	}
 
 	// The tx channel tells us about newly received and newly created transactions
-	channelTx := events.GetNewTxChannel()
 	// The layer channel tells us about status updates
-	channelLayer := events.GetLayerChannel()
+	var txCh, layerCh <-chan interface{}
+
+	if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
+		defer closeSubscription(txsSubscription)
+		txCh = consumeEvents(context.Background(), txsSubscription.Out())
+	}
+
+	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
+		defer closeSubscription(layersSubscription)
+
+		layerCh = consumeEvents(context.Background(), layersSubscription.Out())
+	}
 
 	for {
 		select {
-		case tx, ok := <-channelTx:
+		case txEvent, ok := <-txCh:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("tx channel closed, shutting down")
-				return nil
+				log.Info("tx stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
+
+			tx := txEvent.(events.Transaction)
 
 			// Filter
 			for _, txid := range in.TransactionId {
@@ -223,16 +231,13 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 					break
 				}
 			}
-		case layer, ok := <-channelLayer:
+		case layerEvent, ok := <-layerCh:
 			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("layer channel closed, shutting down")
-				return nil
+				log.Info("tx stream buffer is full, shutting down")
+				return status.Errorf(codes.Canceled, "stream buffer is full")
 			}
 
+			layer := layerEvent.(events.LayerUpdate)
 			// Transaction objects do not have an associated status. The status we assign them here is based on the
 			// status of the layer (really, the block) they're contained in. Here, we receive updates to layer status.
 			// In order to update tx status, we have to read every transaction in the layer.

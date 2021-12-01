@@ -153,3 +153,57 @@ func (mr *MockblockDataProviderMockRecorder) SaveContextualValidity(arg0, arg1, 
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveContextualValidity", reflect.TypeOf((*MockblockDataProvider)(nil).SaveContextualValidity), arg0, arg1, arg2)
 }
+
+// MockatxDataProvider is a mock of atxDataProvider interface.
+type MockatxDataProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockatxDataProviderMockRecorder
+}
+
+// MockatxDataProviderMockRecorder is the mock recorder for MockatxDataProvider.
+type MockatxDataProviderMockRecorder struct {
+	mock *MockatxDataProvider
+}
+
+// NewMockatxDataProvider creates a new mock instance.
+func NewMockatxDataProvider(ctrl *gomock.Controller) *MockatxDataProvider {
+	mock := &MockatxDataProvider{ctrl: ctrl}
+	mock.recorder = &MockatxDataProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockatxDataProvider) EXPECT() *MockatxDataProviderMockRecorder {
+	return m.recorder
+}
+
+// GetAtxHeader mocks base method.
+func (m *MockatxDataProvider) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHeader, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAtxHeader", arg0)
+	ret0, _ := ret[0].(*types.ActivationTxHeader)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAtxHeader indicates an expected call of GetAtxHeader.
+func (mr *MockatxDataProviderMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockatxDataProvider)(nil).GetAtxHeader), arg0)
+}
+
+// GetEpochWeight mocks base method.
+func (m *MockatxDataProvider) GetEpochWeight(epochID types.EpochID) (uint64, []types.ATXID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEpochWeight", epochID)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].([]types.ATXID)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetEpochWeight indicates an expected call of GetEpochWeight.
+func (mr *MockatxDataProviderMockRecorder) GetEpochWeight(epochID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEpochWeight", reflect.TypeOf((*MockatxDataProvider)(nil).GetEpochWeight), epochID)
+}

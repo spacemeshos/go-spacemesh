@@ -16,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/priorityq"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 const inboxCapacity = 1024 // inbox size per instance
@@ -41,9 +42,9 @@ type Broker struct {
 	log.Log
 	mu             sync.RWMutex
 	pid            peer.ID
-	eValidator     validator     // provides eligibility validation
-	stateQuerier   StateQuerier  // provides activeness check
-	isNodeSynced   syncStateFunc // provider function to check if the node is currently synced
+	eValidator     validator                // provides eligibility validation
+	stateQuerier   StateQuerier             // provides activeness check
+	nodeSyncState  system.SyncStateProvider // provider function to check if the node is currently synced
 	layersPerEpoch uint16
 	queue          priorityq.PriorityQueue
 	queueChannel   chan struct{} // used to synchronize the message queues
@@ -61,14 +62,14 @@ type Broker struct {
 	queueMessageWg *sync.WaitGroup
 }
 
-func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syncState syncStateFunc, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
+func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syncState system.SyncStateProvider, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
 	return &Broker{
 		Closer:         closer,
 		Log:            log,
 		pid:            pid,
 		eValidator:     eValidator,
 		stateQuerier:   stateQuerier,
-		isNodeSynced:   syncState,
+		nodeSyncState:  syncState,
 		layersPerEpoch: layersPerEpoch,
 		syncState:      make(map[uint32]bool),
 		outbox:         make(map[uint32]chan *Msg),
@@ -373,7 +374,7 @@ func (b *Broker) updateSynchronicity(ctx context.Context, id types.LayerID) {
 
 	// not exist means unknown, check & set
 
-	if !b.isNodeSynced(ctx) {
+	if !b.nodeSyncState.IsSynced(ctx) {
 		b.WithContext(ctx).With().Info("node is not synced, marking layer as not synced", types.LayerID(id))
 		b.syncState[id.Uint32()] = false // mark not synced
 		return

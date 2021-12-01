@@ -1,8 +1,6 @@
 package tortoise
 
 import (
-	"errors"
-	"fmt"
 	"math/big"
 	"sync"
 
@@ -10,106 +8,77 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-var errOverflow = errors.New("vector overflow")
-
 var (
-	// correction vectors type
-	// Opinion vectors.
-	support = vec{Support: 1, Against: 0}
-	against = vec{Support: 0, Against: 1}
-	abstain = vec{Support: 0, Against: 0}
+	support = sign{Sign: 1}
+	against = sign{Sign: -1}
+	abstain = sign{Sign: 0}
 )
 
-type vec struct {
-	Support, Against uint64
-	Flushed          bool
+type sign struct {
+	Sign    int8
+	Flushed bool
 }
 
-// Field returns a log field. Implements the LoggableField interface.
-func (a vec) Field() log.Field {
-	return log.String("vote_vector", fmt.Sprintf("(+%d, -%d)", a.Support, a.Against))
+func equalVotes(i, j sign) bool {
+	return i.Sign == j.Sign
 }
 
-func (a vec) Add(v vec) vec {
-	a.Support += v.Support
-	a.Against += v.Against
-	a.Flushed = false
-	if a.Support < v.Support || a.Against < v.Against {
-		panic(errOverflow)
-	}
-	return a
+func (a sign) copy() sign {
+	return sign{Sign: a.Sign}
 }
 
-func (a vec) Multiply(x uint64) vec {
-	one := a.Support * x
-	two := a.Against * x
-	if x != 0 && (one/x != a.Support || two/x != a.Against) {
-		panic(errOverflow)
-	}
-	a.Flushed = false
-	a.Support = one
-	a.Against = two
-	return a
-}
-
-func equalVotes(i, j vec) bool {
-	return simplifyVote(i) == simplifyVote(j)
-}
-
-func simplifyVote(v vec) vec {
-	if v.Support > v.Against {
-		return support
-	}
-
-	if v.Against > v.Support {
-		return against
-	}
-	return abstain
-}
-
-func (a vec) String() string {
-	v := simplifyVote(a)
-	if v == support {
+func (a sign) String() string {
+	switch a.Sign {
+	case 1:
 		return "support"
-	}
-	if v == against {
+	case -1:
 		return "against"
+	case 0:
+		return "abstain"
+	default:
+		panic("sign should be 0/-1/1")
 	}
-	return "abstain"
 }
 
 // Some methods of *big.Rat change its internal data without mutexes, which causes data races.
+//
+// TODO(dshulyak) big.Rat is being passed without copy somewhere in the initialization.
+// copy big.Rat to remove this mutex.
 var thetaMu sync.Mutex
 
 // calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
-// and theta, layer size and delta.
-func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, layerSize uint32, delta uint32) vec {
+// theta, and expected vote weight.
+func calculateOpinionWithThreshold(logger log.Log, vote *big.Float, theta *big.Rat, weight *big.Float) sign {
 	thetaMu.Lock()
 	defer thetaMu.Unlock()
 
-	threshold := new(big.Int).Set(theta.Num())
-	threshold.
-		Mul(threshold, big.NewInt(int64(delta))).
-		Mul(threshold, big.NewInt(int64(layerSize)))
+	threshold := new(big.Float).SetInt(theta.Num())
+	threshold.Mul(threshold, weight)
+	threshold.Quo(threshold, new(big.Float).SetInt(theta.Denom()))
 
 	logger.With().Debug("threshold opinion",
-		v,
-		log.String("theta", theta.String()),
-		log.Uint32("layer_size", layerSize),
-		log.Uint32("delta", delta),
-		log.String("threshold", threshold.String()))
+		log.Stringer("vote", vote),
+		log.Stringer("theta", theta),
+		log.Stringer("expected_weight", weight),
+		log.Stringer("threshold", threshold),
+	)
 
-	exceedsThreshold := func(val uint64) bool {
-		v := new(big.Int).SetUint64(val)
-		return v.Mul(v, theta.Denom()).Cmp(threshold) == 1
-	}
-	if v.Support > v.Against && exceedsThreshold(v.Support-v.Against) {
+	if vote.Sign() == 1 && vote.Cmp(threshold) == 1 {
 		return support
-	} else if v.Against > v.Support && exceedsThreshold(v.Against-v.Support) {
+	}
+	if vote.Sign() == -1 && vote.Abs(vote).Cmp(threshold) == 1 {
 		return against
 	}
 	return abstain
 }
 
 // Opinion is opinions on other blocks.
-type Opinion map[types.BlockID]vec
+type Opinion map[types.BlockID]sign
+
+func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
+	arr := make([]types.BlockID, 0, len(m))
+	for b := range m {
+		arr = append(arr, b)
+	}
+	return arr
+}

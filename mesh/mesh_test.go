@@ -81,7 +81,7 @@ func (MockState) ValidateAndAddTxToPool(*types.Transaction) error {
 	return nil
 }
 
-func (MockState) LoadState(types.LayerID) error {
+func (MockState) Rewind(types.LayerID) (types.Hash32, error) {
 	panic("implement me")
 }
 

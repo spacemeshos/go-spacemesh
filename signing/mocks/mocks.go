@@ -5,63 +5,36 @@
 package mocks
 
 import (
+	reflect "reflect"
+
 	gomock "github.com/golang/mock/gomock"
 	signing "github.com/spacemeshos/go-spacemesh/signing"
-	reflect "reflect"
 )
 
-// MockSigner is a mock of Signer interface
+// MockSigner is a mock of Signer interface.
 type MockSigner struct {
 	ctrl     *gomock.Controller
 	recorder *MockSignerMockRecorder
 }
 
-// MockSignerMockRecorder is the mock recorder for MockSigner
+// MockSignerMockRecorder is the mock recorder for MockSigner.
 type MockSignerMockRecorder struct {
 	mock *MockSigner
 }
 
-// NewMockSigner creates a new mock instance
+// NewMockSigner creates a new mock instance.
 func NewMockSigner(ctrl *gomock.Controller) *MockSigner {
 	mock := &MockSigner{ctrl: ctrl}
 	mock.recorder = &MockSignerMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockSigner) EXPECT() *MockSignerMockRecorder {
 	return m.recorder
 }
 
-// Sign mocks base method
-func (m *MockSigner) Sign(arg0 []byte) []byte {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Sign", arg0)
-	ret0, _ := ret[0].([]byte)
-	return ret0
-}
-
-// Sign indicates an expected call of Sign
-func (mr *MockSignerMockRecorder) Sign(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*MockSigner)(nil).Sign), arg0)
-}
-
-// PublicKey mocks base method
-func (m *MockSigner) PublicKey() *signing.PublicKey {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "PublicKey")
-	ret0, _ := ret[0].(*signing.PublicKey)
-	return ret0
-}
-
-// PublicKey indicates an expected call of PublicKey
-func (mr *MockSignerMockRecorder) PublicKey() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublicKey", reflect.TypeOf((*MockSigner)(nil).PublicKey))
-}
-
-// LittleEndian mocks base method
+// LittleEndian mocks base method.
 func (m *MockSigner) LittleEndian() bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "LittleEndian")
@@ -69,36 +42,64 @@ func (m *MockSigner) LittleEndian() bool {
 	return ret0
 }
 
-// LittleEndian indicates an expected call of LittleEndian
+// LittleEndian indicates an expected call of LittleEndian.
 func (mr *MockSignerMockRecorder) LittleEndian() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LittleEndian", reflect.TypeOf((*MockSigner)(nil).LittleEndian))
 }
 
-// MockVerifier is a mock of Verifier interface
+// PublicKey mocks base method.
+func (m *MockSigner) PublicKey() *signing.PublicKey {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PublicKey")
+	ret0, _ := ret[0].(*signing.PublicKey)
+	return ret0
+}
+
+// PublicKey indicates an expected call of PublicKey.
+func (mr *MockSignerMockRecorder) PublicKey() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PublicKey", reflect.TypeOf((*MockSigner)(nil).PublicKey))
+}
+
+// Sign mocks base method.
+func (m *MockSigner) Sign(arg0 []byte) []byte {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Sign", arg0)
+	ret0, _ := ret[0].([]byte)
+	return ret0
+}
+
+// Sign indicates an expected call of Sign.
+func (mr *MockSignerMockRecorder) Sign(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Sign", reflect.TypeOf((*MockSigner)(nil).Sign), arg0)
+}
+
+// MockVerifier is a mock of Verifier interface.
 type MockVerifier struct {
 	ctrl     *gomock.Controller
 	recorder *MockVerifierMockRecorder
 }
 
-// MockVerifierMockRecorder is the mock recorder for MockVerifier
+// MockVerifierMockRecorder is the mock recorder for MockVerifier.
 type MockVerifierMockRecorder struct {
 	mock *MockVerifier
 }
 
-// NewMockVerifier creates a new mock instance
+// NewMockVerifier creates a new mock instance.
 func NewMockVerifier(ctrl *gomock.Controller) *MockVerifier {
 	mock := &MockVerifier{ctrl: ctrl}
 	mock.recorder = &MockVerifierMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockVerifier) EXPECT() *MockVerifierMockRecorder {
 	return m.recorder
 }
 
-// Verify mocks base method
+// Verify mocks base method.
 func (m *MockVerifier) Verify(pub *signing.PublicKey, msg, sig []byte) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Verify", pub, msg, sig)
@@ -106,50 +107,36 @@ func (m *MockVerifier) Verify(pub *signing.PublicKey, msg, sig []byte) bool {
 	return ret0
 }
 
-// Verify indicates an expected call of Verify
+// Verify indicates an expected call of Verify.
 func (mr *MockVerifierMockRecorder) Verify(pub, msg, sig interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockVerifier)(nil).Verify), pub, msg, sig)
 }
 
-// MockVerifyExtractor is a mock of VerifyExtractor interface
+// MockVerifyExtractor is a mock of VerifyExtractor interface.
 type MockVerifyExtractor struct {
 	ctrl     *gomock.Controller
 	recorder *MockVerifyExtractorMockRecorder
 }
 
-// MockVerifyExtractorMockRecorder is the mock recorder for MockVerifyExtractor
+// MockVerifyExtractorMockRecorder is the mock recorder for MockVerifyExtractor.
 type MockVerifyExtractorMockRecorder struct {
 	mock *MockVerifyExtractor
 }
 
-// NewMockVerifyExtractor creates a new mock instance
+// NewMockVerifyExtractor creates a new mock instance.
 func NewMockVerifyExtractor(ctrl *gomock.Controller) *MockVerifyExtractor {
 	mock := &MockVerifyExtractor{ctrl: ctrl}
 	mock.recorder = &MockVerifyExtractorMockRecorder{mock}
 	return mock
 }
 
-// EXPECT returns an object that allows the caller to indicate expected use
+// EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockVerifyExtractor) EXPECT() *MockVerifyExtractorMockRecorder {
 	return m.recorder
 }
 
-// Verify mocks base method
-func (m *MockVerifyExtractor) Verify(pub *signing.PublicKey, msg, sig []byte) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Verify", pub, msg, sig)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// Verify indicates an expected call of Verify
-func (mr *MockVerifyExtractorMockRecorder) Verify(pub, msg, sig interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockVerifyExtractor)(nil).Verify), pub, msg, sig)
-}
-
-// Extract mocks base method
+// Extract mocks base method.
 func (m *MockVerifyExtractor) Extract(msg, sig []byte) (*signing.PublicKey, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Extract", msg, sig)
@@ -158,8 +145,22 @@ func (m *MockVerifyExtractor) Extract(msg, sig []byte) (*signing.PublicKey, erro
 	return ret0, ret1
 }
 
-// Extract indicates an expected call of Extract
+// Extract indicates an expected call of Extract.
 func (mr *MockVerifyExtractorMockRecorder) Extract(msg, sig interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Extract", reflect.TypeOf((*MockVerifyExtractor)(nil).Extract), msg, sig)
+}
+
+// Verify mocks base method.
+func (m *MockVerifyExtractor) Verify(pub *signing.PublicKey, msg, sig []byte) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Verify", pub, msg, sig)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// Verify indicates an expected call of Verify.
+func (mr *MockVerifyExtractorMockRecorder) Verify(pub, msg, sig interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Verify", reflect.TypeOf((*MockVerifyExtractor)(nil).Verify), pub, msg, sig)
 }

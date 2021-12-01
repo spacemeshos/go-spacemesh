@@ -162,3 +162,16 @@ func Event() FieldLogger {
 func Panic(msg string, args ...interface{}) {
 	GetLogger().Panic(msg, args...)
 }
+
+type (
+	// ObjectMarshaller is an alias to zapcore.ObjectMarshaller.
+	ObjectMarshaller = zapcore.ObjectMarshaler
+	// ObjectEncoder is an alias to zapcore.ObjectEncoder.
+	ObjectEncoder = zapcore.ObjectEncoder
+	// ArrayMarshaler is an alias to zapcore.ArrayMarshaller.
+	ArrayMarshaler = zapcore.ArrayMarshaler
+	// ArrayMarshalerFunc is an alias to zapcore.ArrayMarshallerFunc.
+	ArrayMarshalerFunc = zapcore.ArrayMarshalerFunc
+	// ArrayEncoder is an alias to zapcore.ArrayEncoder.
+	ArrayEncoder = zapcore.ArrayEncoder
+)

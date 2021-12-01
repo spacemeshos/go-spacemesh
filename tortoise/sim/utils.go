@@ -5,11 +5,11 @@ import (
 	"path/filepath"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 var goldenATX = types.ATXID{1, 1, 1}
@@ -53,14 +53,36 @@ func intInRange(rng *rand.Rand, ints [2]int) int {
 	return rng.Intn(ints[1]-ints[0]) + ints[0]
 }
 
-var _ blocks.BeaconGetter = (*beaconStore)(nil)
+var _ system.BeaconGetter = (*beaconStore)(nil)
+
+func newBeaconStore() *beaconStore {
+	return &beaconStore{beacons: map[types.EpochID][]byte{}}
+}
 
 // TODO(dshulyak) replaced it with real beacon store so that we can enable persistence
 // for benchmarks.
 type beaconStore struct {
-	beacon []byte
+	beacons map[types.EpochID][]byte
 }
 
-func (b *beaconStore) GetBeacon(types.EpochID) ([]byte, error) {
-	return b.beacon, nil
+func (b *beaconStore) GetBeacon(eid types.EpochID) ([]byte, error) {
+	beacon, exist := b.beacons[eid-1]
+	if !exist {
+		return nil, database.ErrNotFound
+	}
+	return beacon, nil
+}
+
+func (b *beaconStore) StoreBeacon(eid types.EpochID, beacon []byte) {
+	b.beacons[eid] = beacon
+}
+
+func (b *beaconStore) Copy(other *beaconStore) {
+	for eid, beacon := range other.beacons {
+		_, exist := b.beacons[eid]
+		if exist {
+			continue
+		}
+		b.beacons[eid] = beacon
+	}
 }

@@ -12,7 +12,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/prometheus/client_golang/prometheus"
 
-	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -20,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
 
 // LayerBuffer is the number of layer results we keep at a given time.
@@ -78,7 +78,7 @@ type Hare struct {
 	sign Signer
 
 	mesh    meshProvider
-	beacons blocks.BeaconGetter
+	beacons system.BeaconGetter
 	rolacle Rolacle
 	patrol  layerPatrol
 
@@ -109,9 +109,9 @@ func New(
 	publisher pubsub.PublishSubsciber,
 	sign Signer,
 	nid types.NodeID,
-	syncState syncStateFunc,
+	syncState system.SyncStateProvider,
 	mesh meshProvider,
-	beacons blocks.BeaconGetter,
+	beacons system.BeaconGetter,
 	rolacle Rolacle,
 	patrol layerPatrol,
 	layersPerEpoch uint16,

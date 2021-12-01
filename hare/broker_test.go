@@ -480,11 +480,10 @@ func TestBroker_updateSynchronicity(t *testing.T) {
 	r := require.New(t)
 
 	b := buildBroker(t, t.Name())
-	b.isNodeSynced = trueFunc
 	b.updateSynchronicity(context.TODO(), types.NewLayerID(1))
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
 
-	b.isNodeSynced = falseFunc
+	b.nodeSyncState = mockSyncStateNotSynced(t)
 	b.updateSynchronicity(context.TODO(), types.NewLayerID(1))
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
 
@@ -497,14 +496,13 @@ func TestBroker_updateSynchronicity(t *testing.T) {
 func TestBroker_isSynced(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
-	b.isNodeSynced = trueFunc
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
 
-	b.isNodeSynced = falseFunc
+	b.nodeSyncState = mockSyncStateNotSynced(t)
 	r.True(b.isSynced(context.TODO(), types.NewLayerID(1)))
 	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
 
-	b.isNodeSynced = trueFunc
+	b.nodeSyncState = mockSyncState(t)
 	r.False(b.isSynced(context.TODO(), types.NewLayerID(2)))
 
 	closeBrokerAndWait(t, b)
@@ -514,7 +512,6 @@ func TestBroker_Register4(t *testing.T) {
 	r := require.New(t)
 	b := buildBroker(t, t.Name())
 	b.Start(context.TODO())
-	b.isNodeSynced = trueFunc
 	c, e := b.Register(context.TODO(), types.NewLayerID(1))
 	r.Nil(e)
 
@@ -522,7 +519,7 @@ func TestBroker_Register4(t *testing.T) {
 	r.Equal(b.outbox[1], c)
 	b.mu.RUnlock()
 
-	b.isNodeSynced = falseFunc
+	b.nodeSyncState = mockSyncStateNotSynced(t)
 	_, e = b.Register(context.TODO(), types.NewLayerID(2))
 	r.NotNil(e)
 
@@ -535,7 +532,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	require.NoError(t, b.Start(context.TODO()))
 
 	// unknown-->invalid, ignore
-	b.isNodeSynced = falseFunc
+	b.nodeSyncState = mockSyncStateNotSynced(t)
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message
 	m.InnerMsg.InstanceID = instanceID1
 	msg := newMockGossipMsg(m).Message
@@ -551,7 +548,7 @@ func TestBroker_eventLoop(t *testing.T) {
 	r.NotNil(e)
 
 	// register to unknown->valid
-	b.isNodeSynced = trueFunc
+	b.nodeSyncState = mockSyncState(t)
 	c, e := b.Register(context.TODO(), instanceID2)
 	r.Nil(e)
 
@@ -579,7 +576,7 @@ func TestBroker_eventLoop2(t *testing.T) {
 	require.NoError(t, b.Start(context.TODO()))
 
 	// invalid instance
-	b.isNodeSynced = falseFunc
+	b.nodeSyncState = mockSyncStateNotSynced(t)
 	_, e := b.Register(context.TODO(), instanceID4)
 	r.NotNil(e)
 	m := BuildPreRoundMsg(signing.NewEdSigner(), NewSetFromValues(value1), nil).Message

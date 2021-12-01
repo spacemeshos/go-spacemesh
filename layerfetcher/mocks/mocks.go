@@ -112,18 +112,18 @@ func (m *MockTxProcessor) EXPECT() *MockTxProcessorMockRecorder {
 	return m.recorder
 }
 
-// HandleTxSyncData mocks base method.
-func (m *MockTxProcessor) HandleTxSyncData(data []byte) error {
+// HandleSyncTransaction mocks base method.
+func (m *MockTxProcessor) HandleSyncTransaction(data []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleTxSyncData", data)
+	ret := m.ctrl.Call(m, "HandleSyncTransaction", data)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// HandleTxSyncData indicates an expected call of HandleTxSyncData.
-func (mr *MockTxProcessorMockRecorder) HandleTxSyncData(data interface{}) *gomock.Call {
+// HandleSyncTransaction indicates an expected call of HandleSyncTransaction.
+func (mr *MockTxProcessorMockRecorder) HandleSyncTransaction(data interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleTxSyncData", reflect.TypeOf((*MockTxProcessor)(nil).HandleTxSyncData), data)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncTransaction", reflect.TypeOf((*MockTxProcessor)(nil).HandleSyncTransaction), data)
 }
 
 // MocklayerDB is a mock of layerDB interface.
@@ -387,6 +387,20 @@ func (m *Mocknetwork) GetPeers() []peer.ID {
 func (mr *MocknetworkMockRecorder) GetPeers() *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPeers", reflect.TypeOf((*Mocknetwork)(nil).GetPeers))
+}
+
+// Network mocks base method.
+func (m *Mocknetwork) Network() network.Network {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "Network")
+	ret0, _ := ret[0].(network.Network)
+	return ret0
+}
+
+// Network indicates an expected call of Network.
+func (mr *MocknetworkMockRecorder) Network() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Network", reflect.TypeOf((*Mocknetwork)(nil).Network))
 }
 
 // NewStream mocks base method.

@@ -10,7 +10,7 @@ import (
 func wrapContext(ctx context.Context) *tcontext {
 	return &tcontext{
 		Context:      ctx,
-		localOpinion: map[types.LayerID]map[types.BlockID]vec{},
+		localOpinion: map[types.LayerID]map[types.BlockID]sign{},
 		layerBlocks:  map[types.LayerID][]types.BlockID{},
 		inputVectors: map[types.LayerID][]types.BlockID{},
 		validBlocks:  map[types.LayerID][]types.BlockID{},
@@ -21,7 +21,7 @@ func wrapContext(ctx context.Context) *tcontext {
 type tcontext struct {
 	context.Context
 	// generated local opinion from computeLocalOpinon
-	localOpinion map[types.LayerID]map[types.BlockID]vec
+	localOpinion map[types.LayerID]map[types.BlockID]sign
 	// all blocks that we know about
 	layerBlocks map[types.LayerID][]types.BlockID
 	// hare's input vectors
@@ -30,7 +30,7 @@ type tcontext struct {
 	validBlocks map[types.LayerID][]types.BlockID
 }
 
-func (t *turtle) getLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]vec, error) {
+func (t *turtle) getLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]sign, error) {
 	opinion, exists := ctx.localOpinion[lid]
 	if exists {
 		return opinion, nil

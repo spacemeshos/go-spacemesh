@@ -73,6 +73,11 @@ func String(name, val string) Field {
 	return Field(zap.String(name, val))
 }
 
+// Stringer returns an fmt.Sringer Field.
+func Stringer(name string, val fmt.Stringer) Field {
+	return Field(zap.Stringer(name, val))
+}
+
 // Binary will encode binary content in base64 when logged.
 func Binary(name string, val []byte) Field {
 	return Field(zap.Binary(name, val))
@@ -126,6 +131,16 @@ func Duration(name string, val time.Duration) Field {
 // Err returns an error field.
 func Err(v error) Field {
 	return Field(zap.NamedError("errmsg", v))
+}
+
+// Object for logging struct fields in namespace.
+func Object(namespace string, object ObjectMarshaller) Field {
+	return Field(zap.Object(namespace, object))
+}
+
+// Array for logging array efficiently.
+func Array(name string, array ArrayMarshaler) Field {
+	return Field(zap.Array(name, array))
 }
 
 // LoggableField as an interface to enable every type to be used as a log field.
