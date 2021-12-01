@@ -179,25 +179,38 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 
 	// The tx channel tells us about newly received and newly created transactions
 	// The layer channel tells us about status updates
-	var txCh, layerCh <-chan interface{}
+	var (
+		txCh, layerCh           <-chan interface{}
+		txBufFull, layerBufFull <-chan struct{}
+	)
 
 	if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
 		defer closeSubscription(txsSubscription)
-		txCh = consumeEvents(context.Background(), txsSubscription.Out())
+		txCh, txBufFull = consumeEvents(context.Background(), txsSubscription.Out())
 	}
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
 		defer closeSubscription(layersSubscription)
 
-		layerCh = consumeEvents(context.Background(), layersSubscription.Out())
+		layerCh, layerBufFull = consumeEvents(context.Background(), layersSubscription.Out())
 	}
 
 	for {
 		select {
+		case <-txBufFull:
+			log.Info("tx buffer is full, shutting down")
+			return fmt.Errorf("tx buffer is full")
+		case <-layerBufFull:
+			log.Info("layer buffer is full, shutting down")
+			return fmt.Errorf("layer buffer is full")
 		case txEvent, ok := <-txCh:
 			if !ok {
-				log.Info("tx stream buffer is full, shutting down")
-				return status.Errorf(codes.Canceled, "stream buffer is full")
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("tx channel closed, shutting down")
+				return nil
 			}
 
 			tx := txEvent.(events.Transaction)
@@ -236,8 +249,12 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 			}
 		case layerEvent, ok := <-layerCh:
 			if !ok {
-				log.Info("tx stream buffer is full, shutting down")
-				return status.Errorf(codes.Canceled, "stream buffer is full")
+				// we could handle this more gracefully, by no longer listening
+				// to this stream but continuing to listen to the other stream,
+				// but in practice one should never be closed while the other is
+				// still running, so it doesn't matter
+				log.Info("layer channel closed, shutting down")
+				return nil
 			}
 
 			layer := layerEvent.(events.LayerUpdate)
