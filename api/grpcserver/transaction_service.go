@@ -236,12 +236,9 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 					if in.IncludeTransactions {
 						res.Transaction = convertTransaction(tx.Transaction)
 					}
-					// fmt.Printf("sending to stream\n")
 					if err := stream.Send(res); err != nil {
-						// fmt.Printf("sent to stream with err %v\n", err)
 						return fmt.Errorf("send stream: %w", err)
 					}
-					// fmt.Printf("sent to stream\n")
 
 					// Don't match on any other transactions
 					break

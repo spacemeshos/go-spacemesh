@@ -3125,7 +3125,5 @@ func TestEventsCalled(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	processor.ApplyRewards(layerFirst, rewards)
 
-	fmt.Printf("waiting wg\n")
 	wg.Wait()
-	fmt.Printf("waiting wg done\n")
 }
