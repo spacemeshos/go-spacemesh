@@ -2158,10 +2158,13 @@ func TestTransactionService(t *testing.T) {
 			err := events.InitializeEventReporterWithOptions("")
 			require.NoError(t, err)
 
-			// Wait until stream starts receiving to ensure that it catches the event.
+			time.Sleep(100 * time.Millisecond)
+
 			for i := 0; i < subscriptionChanBufSize*2; i++ {
 				events.ReportNewTx(types.LayerID{}, globalTx)
 			}
+
+			wg.Wait()
 		}},
 	}
 
