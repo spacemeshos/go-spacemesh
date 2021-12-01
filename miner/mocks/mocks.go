@@ -235,3 +235,42 @@ func (mr *MockactivationDBMockRecorder) GetNodeAtxIDForEpoch(nodeID, targetEpoch
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeAtxIDForEpoch", reflect.TypeOf((*MockactivationDB)(nil).GetNodeAtxIDForEpoch), nodeID, targetEpoch)
 }
+
+// Mockprojector is a mock of projector interface.
+type Mockprojector struct {
+	ctrl     *gomock.Controller
+	recorder *MockprojectorMockRecorder
+}
+
+// MockprojectorMockRecorder is the mock recorder for Mockprojector.
+type MockprojectorMockRecorder struct {
+	mock *Mockprojector
+}
+
+// NewMockprojector creates a new mock instance.
+func NewMockprojector(ctrl *gomock.Controller) *Mockprojector {
+	mock := &Mockprojector{ctrl: ctrl}
+	mock.recorder = &MockprojectorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *Mockprojector) EXPECT() *MockprojectorMockRecorder {
+	return m.recorder
+}
+
+// GetProjection mocks base method.
+func (m *Mockprojector) GetProjection(arg0 types.Address) (uint64, uint64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProjection", arg0)
+	ret0, _ := ret[0].(uint64)
+	ret1, _ := ret[1].(uint64)
+	ret2, _ := ret[2].(error)
+	return ret0, ret1, ret2
+}
+
+// GetProjection indicates an expected call of GetProjection.
+func (mr *MockprojectorMockRecorder) GetProjection(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProjection", reflect.TypeOf((*Mockprojector)(nil).GetProjection), arg0)
+}

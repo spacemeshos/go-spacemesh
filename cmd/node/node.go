@@ -597,6 +597,7 @@ func (app *App) initServices(ctx context.Context,
 
 	rabbit := app.HareFactory(ctx, mdb, sgn, nodeID, patrol, newSyncer, msh, tBeacon, hOracle, idStore, clock, lg)
 
+	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
 		clock.Subscribe(),
@@ -608,7 +609,7 @@ func (app *App) initServices(ctx context.Context,
 		trtl,
 		tBeacon,
 		newSyncer,
-		pendingtxs.NewStateAndMeshProjector(processor, msh).GetProjection,
+		stateAndMeshProjector,
 		app.txPool,
 		miner.WithDBPath(dbStorepath),
 		miner.WithMinerID(nodeID),

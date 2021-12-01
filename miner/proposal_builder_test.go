@@ -57,9 +57,10 @@ func createBuilder(tb testing.TB) *testBuilder {
 		mBeacon: smocks.NewMockBeaconGetter(ctrl),
 		mSync:   smocks.NewMockSyncStateProvider(ctrl),
 	}
-	projector := func(types.Address) (uint64, uint64, error) { return uint64(1), uint64(1000), nil }
+	mProjector := mocks.NewMockprojector(ctrl)
+	mProjector.EXPECT().GetProjection(gomock.Any()).Return(uint64(1), uint64(1000), nil).AnyTimes()
 	pb.ProposalBuilder = NewProposalBuilder(context.TODO(), make(chan types.LayerID), edSigner, vrfSigner,
-		pb.mAtxDB, pb.mPubSub, pb.mMesh, pb.mBaseBP, pb.mBeacon, pb.mSync, projector, pb.mTxPool,
+		pb.mAtxDB, pb.mPubSub, pb.mMesh, pb.mBaseBP, pb.mBeacon, pb.mSync, mProjector, pb.mTxPool,
 		WithLogger(logtest.New(tb)),
 		WithLayerSize(20),
 		WithLayerPerEpoch(3),

@@ -176,6 +176,7 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 	return eligibilityProofs, activeSet, nil
 }
 
+// TODO: use zapcore.ObjectEncoder and zapcore.ArrayEncoder to do this more efficiently.
 func prettyPrintProofs(proofs map[types.LayerID][]types.VotingEligibilityProof) string {
 	// Sort the layer map so we can print the layer data in order
 	keys := make([]types.LayerID, 0, len(proofs))

@@ -36,8 +36,6 @@ var (
 	errNoBeacon  = errors.New("not building proposals: missing beacon")
 )
 
-type projectionFunc func(types.Address) (uint64, uint64, error)
-
 // ProposalBuilder builds Proposals for a miner.
 type ProposalBuilder struct {
 	logger      log.Log
@@ -58,7 +56,7 @@ type ProposalBuilder struct {
 	proposalOracle     proposalOracle
 	beaconProvider     system.BeaconGetter
 	syncer             system.SyncStateProvider
-	projector          projectionFunc
+	projector          projector
 }
 
 // config defines configuration for the ProposalBuilder.
@@ -146,7 +144,7 @@ func NewProposalBuilder(
 	bbp baseBallotProvider,
 	beaconProvider system.BeaconGetter,
 	syncer system.SyncStateProvider,
-	projector projectionFunc,
+	projector projector,
 	txPool txPool,
 	opts ...Opt,
 ) *ProposalBuilder {
@@ -392,7 +390,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	logger.With().Info("eligible for one or more proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
 	for _, eligibilityProof := range proofs {
-		txList, _, err := pb.txPool.SelectTopNTransactions(pb.cfg.txsPerProposal, pb.projector)
+		txList, _, err := pb.txPool.SelectTopNTransactions(pb.cfg.txsPerProposal, pb.projector.GetProjection)
 		if err != nil {
 			events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to get txs for proposal")
 			logger.With().Error("failed to get txs for proposal", log.Err(err))
