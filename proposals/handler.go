@@ -85,7 +85,7 @@ func WithLayerPerEpoch(layers uint32) Opt {
 	}
 }
 
-// withValidator defines eligibility validator.
+// withValidator defines eligibility Validator.
 func withValidator(v eligibilityValidator) Opt {
 	return func(h *Handler) {
 		h.validator = v
@@ -118,7 +118,7 @@ func NewHandler(f system.Fetcher, bc system.BeaconCollector, db atxDB, m mesh, o
 		opt(b)
 	}
 	if b.validator == nil {
-		b.validator = newEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, db, bc, m, b.logger)
+		b.validator = NewEligibilityValidator(b.cfg.LayerSize, b.cfg.LayersPerEpoch, db, bc, m, b.logger)
 	}
 	return b
 }
