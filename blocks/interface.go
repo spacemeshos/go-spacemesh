@@ -13,3 +13,7 @@ type beaconCollector interface {
 type blockDB interface {
 	GetBlock(types.BlockID) (*types.Block, error)
 }
+
+type activationDB interface {
+	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
+}

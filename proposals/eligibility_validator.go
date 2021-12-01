@@ -19,9 +19,9 @@ var (
 	errIncorrectLayerIndex = errors.New("ballot has incorrect layer index")
 )
 
-// validator validates the eligibility of a Ballot.
+// Validator validates the eligibility of a Ballot.
 // the validation focuses on eligibility only and assumes the Ballot to be valid otherwise.
-type validator struct {
+type Validator struct {
 	avgLayerSize   uint32
 	layersPerEpoch uint32
 	atxDB          atxDB
@@ -30,10 +30,10 @@ type validator struct {
 	logger         log.Log
 }
 
-// newEligibilityValidator returns a new EligibilityValidator.
-func newEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, db atxDB, bc system.BeaconCollector, m mesh, lg log.Log) *validator {
-	return &validator{
+// NewEligibilityValidator returns a new EligibilityValidator.
+func NewEligibilityValidator(
+	avgLayerSize, layersPerEpoch uint32, db atxDB, bc system.BeaconCollector, m mesh, lg log.Log) *Validator {
+	return &Validator{
 		avgLayerSize:   avgLayerSize,
 		layersPerEpoch: layersPerEpoch,
 		atxDB:          db,
@@ -44,7 +44,7 @@ func newEligibilityValidator(
 }
 
 // CheckEligibility checks that a ballot is eligible in the layer that it specifies.
-func (v *validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) (bool, error) {
+func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) (bool, error) {
 	var (
 		weight, totalWeight uint64
 		err                 error
@@ -127,7 +127,7 @@ func (v *validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	return true, nil
 }
 
-func (v validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
+func (v Validator) getBallotATX(ctx context.Context, ballot *types.Ballot) (*types.ActivationTxHeader, error) {
 	if ballot.AtxID == *types.EmptyATXID {
 		v.logger.WithContext(ctx).Panic("empty ATXID in ballot")
 	}

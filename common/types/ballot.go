@@ -173,6 +173,34 @@ func (b *Ballot) Fields() []log.LoggableField {
 	}
 }
 
+// MarshalLogObject implements logging encoder for Ballot.
+func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
+	var (
+		activeSetSize = 0
+		beacon        []byte
+	)
+
+	if b.EpochData != nil {
+		activeSetSize = len(b.EpochData.ActiveSet)
+		beacon = b.EpochData.Beacon
+	}
+
+	encoder.AddString("id", b.ID().String())
+	encoder.AddUint32("layer", b.LayerIndex.Value)
+	encoder.AddUint32("epoch", uint32(b.LayerIndex.GetEpoch()))
+	encoder.AddString("smesher", b.SmesherID().String())
+	encoder.AddString("base_ballot", b.BaseBallot.String())
+	encoder.AddInt("supports", len(b.ForDiff))
+	encoder.AddInt("againsts", len(b.AgainstDiff))
+	encoder.AddInt("abstains", len(b.NeutralDiff))
+	encoder.AddString("atx", b.AtxID.String())
+	encoder.AddUint32("eligibility_counter", b.EligibilityProof.J)
+	encoder.AddString("ref_ballot", b.RefBallot.String())
+	encoder.AddInt("active_set_size", activeSetSize)
+	encoder.AddString("beacon", BytesToHash(beacon).ShortString())
+	return nil
+}
+
 // String returns a short prefix of the hex representation of the ID.
 func (id BallotID) String() string {
 	return id.AsHash32().ShortString()

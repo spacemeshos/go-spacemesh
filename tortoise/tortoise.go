@@ -440,7 +440,7 @@ func (t *turtle) processBallot(ctx context.Context, ballot *types.Ballot) error 
 	// When a new ballot arrives, we look up the ballot it points to in our table,
 	// and add the corresponding vector (multiplied by the ballot weight) to our own vote-totals vector.
 	// We then add the vote difference vector and the explicit vote vector to our vote-totals vector.
-	logger.With().Debug("processing ballot", ballot.Fields()...)
+	logger.With().Debug("processing ballot", log.Object("ballot", ballot))
 
 	logger.With().Debug("ballot adds support for",
 		log.Int("count", len(ballot.ForDiff)),

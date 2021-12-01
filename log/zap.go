@@ -133,6 +133,16 @@ func Err(v error) Field {
 	return Field(zap.NamedError("errmsg", v))
 }
 
+// Object for logging struct fields in namespace.
+func Object(namespace string, object ObjectMarshaller) Field {
+	return Field(zap.Object(namespace, object))
+}
+
+// Array for logging array efficiently.
+func Array(name string, array ArrayMarshaler) Field {
+	return Field(zap.Array(name, array))
+}
+
 // LoggableField as an interface to enable every type to be used as a log field.
 type LoggableField interface {
 	Field() Field
