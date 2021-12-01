@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -29,8 +28,8 @@ type blockHandler interface {
 	HandleBlockData(context.Context, []byte) error
 }
 
-// TxProcessor is an interface for handling TX data received in sync.
-type TxProcessor interface {
+// txProcessor is an interface for handling TX data received in sync.
+type txProcessor interface {
 	HandleSyncTransaction(data []byte) error
 }
 
@@ -105,7 +104,7 @@ type Logic struct {
 	poetProofs       poetDB
 	atxs             atxHandler
 	blockHandler     blockHandler
-	txs              TxProcessor
+	txs              txProcessor
 	layerDB          layerDB
 	atxIds           atxIDsDB
 	goldenATXID      types.ATXID
@@ -113,13 +112,15 @@ type Logic struct {
 
 // Config defines configuration for layer fetching logic.
 type Config struct {
-	RequestTimeout int
-	GoldenATXID    types.ATXID
+	fetch.Config
+	GoldenATXID types.ATXID
 }
 
 // DefaultConfig returns default configuration for layer fetching logic.
 func DefaultConfig() Config {
-	return Config{RequestTimeout: 10}
+	return Config{
+		Config: fetch.DefaultConfig(),
+	}
 }
 
 const (
@@ -128,11 +129,11 @@ const (
 )
 
 // NewLogic creates a new instance of layer fetching logic.
-func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDB, atxIDs atxIDsDB, txs TxProcessor,
-	host network, fetcher fetch.Fetcher, layers layerDB, log log.Log) *Logic {
+func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDB, atxIDs atxIDsDB, txs txProcessor,
+	host *p2p.Host, dbStores fetch.LocalDataSource, layers layerDB, log log.Log) *Logic {
 	l := &Logic{
 		log:            log,
-		fetcher:        fetcher,
+		fetcher:        fetch.NewFetch(ctx, cfg.Config, host, dbStores, log.WithName("-fetch")),
 		host:           host,
 		layerBlocksRes: make(map[types.LayerID]*layerResult),
 		layerBlocksChs: make(map[types.LayerID][]chan LayerPromiseResult),
@@ -157,14 +158,6 @@ func (l *Logic) Start() {
 // Close closes all running workers.
 func (l *Logic) Close() {
 	l.fetcher.Stop()
-}
-
-// AddDBs adds dbs that will be queried when sync requests are received. these databases will be exposed to external callers.
-func (l *Logic) AddDBs(blockDB, AtxDB, TxDB, poetDB database.Getter) {
-	l.fetcher.AddDB(fetch.BlockDB, blockDB)
-	l.fetcher.AddDB(fetch.ATXDB, AtxDB)
-	l.fetcher.AddDB(fetch.TXDB, TxDB)
-	l.fetcher.AddDB(fetch.POETDB, poetDB)
 }
 
 // epochATXsReqReceiver returns the ATXs for the specified epoch.

@@ -29,6 +29,9 @@ const (
 	POETDB  Hint = "POETDB"
 )
 
+// LocalDataSource defines the mapping between hint for local data source and the actual data source.
+type LocalDataSource map[Hint]database.Getter
+
 // priority defines whether Data will be fetched at once or batched and waited for up to "batchTimeout"
 // until fetched.
 type priority uint16
@@ -59,7 +62,6 @@ var ErrExceedMaxRetries = errors.New("fetch failed after max retries for request
 type Fetcher interface {
 	GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashDataPromiseResult
 	GetHashes(hash []types.Hash32, hint Hint, validateHash bool) map[types.Hash32]chan HashDataPromiseResult
-	AddDB(hint Hint, db database.Getter)
 	Stop()
 	Start()
 }
@@ -168,6 +170,7 @@ type Fetch struct {
 	cfg Config
 	log log.Log
 	dbs map[Hint]database.Getter
+
 	// activeRequests contains requests that are not processed
 	activeRequests map[types.Hash32][]*request
 	// pendingRequests contains requests that have been processed and are waiting for responses
@@ -187,11 +190,11 @@ type Fetch struct {
 }
 
 // NewFetch creates a new Fetch struct.
-func NewFetch(ctx context.Context, cfg Config, h *p2p.Host, logger log.Log) *Fetch {
+func NewFetch(ctx context.Context, cfg Config, h *p2p.Host, dbs map[Hint]database.Getter, logger log.Log) *Fetch {
 	f := &Fetch{
 		cfg:             cfg,
 		log:             logger,
-		dbs:             make(map[Hint]database.Getter),
+		dbs:             dbs,
 		activeRequests:  make(map[types.Hash32][]*request),
 		pendingRequests: make(map[types.Hash32][]*request),
 		requestReceiver: make(chan request),
@@ -252,14 +255,6 @@ func (f *Fetch) stopped() bool {
 	default:
 		return false
 	}
-}
-
-// AddDB adds a DB with corresponding hint
-// all network peersProvider will be able to query this DB.
-func (f *Fetch) AddDB(hint Hint, db database.Getter) {
-	f.dbLock.Lock()
-	f.dbs[hint] = db
-	f.dbLock.Unlock()
 }
 
 // handleNewRequest batches low priority requests and sends a high priority request to the peers right away.
@@ -333,9 +328,7 @@ func (f *Fetch) FetchRequestHandler(ctx context.Context, data []byte) ([]byte, e
 	// this will iterate all requests and populate appropriate Responses, if there are any missing items they will not
 	// be included in the response at all
 	for _, r := range requestBatch.Requests {
-		f.dbLock.RLock()
 		db, ok := f.dbs[r.Hint]
-		f.dbLock.RUnlock()
 		if !ok {
 			f.log.WithContext(ctx).With().Warning("hint not found in database", log.String("hint", string(r.Hint)))
 			continue
@@ -625,9 +618,7 @@ func (f *Fetch) GetHash(hash types.Hash32, h Hint, validateHash bool) chan HashD
 	}
 
 	// check if we already have this hash locally
-	f.dbLock.RLock()
 	db, ok := f.dbs[h]
-	f.dbLock.RUnlock()
 	if !ok {
 		f.log.With().Panic("tried to fetch Data from DB that doesn't exist locally",
 			log.String("hint", string(h)))
