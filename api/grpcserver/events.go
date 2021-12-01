@@ -14,7 +14,11 @@ func consumeEvents(ctx context.Context, in <-chan interface{}) <-chan interface{
 	out := make(chan interface{}, subscriptionChanBufSize)
 
 	go func() {
-		defer close(out)
+		defer func() {
+			close(out)
+			for range in {
+			}
+		}()
 
 		for e := range in {
 			select {
