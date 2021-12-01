@@ -10,6 +10,18 @@ import (
 
 const subscriptionChanBufSize = 1 << 16
 
+// Errors for cases with a full event buffer.
+var (
+	errTxBufferFull          = "tx buffer is full"
+	errLayerBufferFull       = "layer buffer is full"
+	errAccountBufferFull     = "account buffer is full"
+	errRewardsBufferFull     = "rewards buffer is full"
+	errReceiptsBufferFull    = "receipts buffer is full"
+	errActivationsBufferFull = "activations buffer is full"
+	errStatusBufferFull      = "status buffer is full"
+	errErrorsBufferFull      = "errors buffer is full"
+)
+
 func consumeEvents(ctx context.Context, in <-chan interface{}) (out <-chan interface{}, bufFull <-chan struct{}) {
 	outCh := make(chan interface{}, subscriptionChanBufSize)
 	bufFullCh := make(chan struct{})

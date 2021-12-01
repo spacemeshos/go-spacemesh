@@ -160,7 +160,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 		select {
 		case <-statusBufFull:
 			log.Info("status buffer is full, shutting down")
-			return fmt.Errorf("status buffer is full")
+			return status.Error(codes.Canceled, errStatusBufferFull)
 		case _, ok := <-statusCh:
 			// statusCh works a bit differently than the other streams. It doesn't actually
 			// send us data. Instead, it just notifies us that there's new data to be read.
@@ -211,7 +211,7 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 		select {
 		case <-errorsBufFull:
 			log.Info("errors buffer is full, shutting down")
-			return fmt.Errorf("errors buffer is full")
+			return status.Error(codes.Canceled, errErrorsBufferFull)
 		case nodeErrorEvent, ok := <-errorsCh:
 			if !ok {
 				log.Info("ErrorStream closed, shutting down")

@@ -488,10 +488,10 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 		select {
 		case <-txBufFull:
 			log.Info("tx buffer is full, shutting down")
-			return fmt.Errorf("tx buffer is full")
+			return status.Error(codes.Canceled, errTxBufferFull)
 		case <-activationsBufFull:
 			log.Info("activations buffer is full, shutting down")
-			return fmt.Errorf("activations buffer is full")
+			return status.Error(codes.Canceled, errActivationsBufferFull)
 		case activationEvent, ok := <-activationsCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
@@ -575,7 +575,7 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 		select {
 		case <-layersBufFull:
 			log.Info("layer buffer is full, shutting down")
-			return fmt.Errorf("account buffer is full")
+			return status.Error(codes.Canceled, errAccountBufferFull)
 		case layerEvent, ok := <-layerCh:
 			if !ok {
 				log.Info("LayerStream closed, shutting down")

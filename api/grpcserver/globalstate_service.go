@@ -302,13 +302,13 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		select {
 		case <-accountBufFull:
 			log.Info("account buffer is full, shutting down")
-			return fmt.Errorf("account buffer is full")
+			return status.Error(codes.Canceled, errAccountBufferFull)
 		case <-rewardsBufFull:
 			log.Info("rewards buffer is full, shutting down")
-			return fmt.Errorf("rewards buffer is full")
+			return status.Error(codes.Canceled, errRewardsBufferFull)
 		case <-receiptsBufFull:
 			log.Info("receipts buffer is full, shutting down")
-			return fmt.Errorf("receipts buffer is full")
+			return status.Error(codes.Canceled, errReceiptsBufferFull)
 		case updatedAccountEvent, ok := <-accountCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening
@@ -431,7 +431,7 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 		select {
 		case <-rewardsBufFull:
 			log.Info("rewards buffer is full, shutting down")
-			return fmt.Errorf("rewards buffer is full")
+			return status.Error(codes.Canceled, errRewardsBufferFull)
 		case rewardEvent, ok := <-rewardsCh:
 			if !ok {
 				// shut down the reward channel
@@ -530,16 +530,16 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		select {
 		case <-accountBufFull:
 			log.Info("account buffer is full, shutting down")
-			return fmt.Errorf("account buffer is full")
+			return status.Error(codes.Canceled, errAccountBufferFull)
 		case <-rewardsBufFull:
 			log.Info("rewards buffer is full, shutting down")
-			return fmt.Errorf("rewards buffer is full")
+			return status.Error(codes.Canceled, errRewardsBufferFull)
 		case <-receiptsBufFull:
 			log.Info("receipts buffer is full, shutting down")
-			return fmt.Errorf("receipts buffer is full")
+			return status.Error(codes.Canceled, errReceiptsBufferFull)
 		case <-layersBufFull:
 			log.Info("layers buffer is full, shutting down")
-			return fmt.Errorf("layers buffer is full")
+			return status.Error(codes.Canceled, errLayerBufferFull)
 		case updatedAccountEvent, ok := <-accountCh:
 			if !ok {
 				// we could handle this more gracefully, by no longer listening

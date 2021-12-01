@@ -2143,15 +2143,14 @@ func TestTransactionService(t *testing.T) {
 				stream, err := c.TransactionsStateStream(context.Background(), req)
 				require.NoError(t, err)
 
-				time.Sleep(10 * time.Second)
-
-				fmt.Printf("receiving from stream\n")
-				res, err := stream.Recv()
-				fmt.Printf("received from stream\n")
-				require.NoError(t, err)
-				require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
-				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
-				checkTransaction(t, res.Transaction)
+				for i := 0; i < subscriptionChanBufSize; i++ {
+					_, err := stream.Recv()
+					if err != nil {
+						st, ok := status.FromError(err)
+						require.True(t, ok)
+						require.Equal(t, st.Message(), errTxBufferFull)
+					}
+				}
 			}()
 
 			events.CloseEventReporter()
