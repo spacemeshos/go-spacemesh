@@ -10,25 +10,39 @@ import (
 
 const subscriptionChanBufSize = 1 << 16
 
-func consumeEvents(ctx context.Context, in <-chan interface{}) <-chan interface{} {
-	out := make(chan interface{}, subscriptionChanBufSize)
+// Errors for cases with a full event buffer.
+var (
+	errTxBufferFull          = "tx buffer is full"
+	errLayerBufferFull       = "layer buffer is full"
+	errAccountBufferFull     = "account buffer is full"
+	errRewardsBufferFull     = "rewards buffer is full"
+	errReceiptsBufferFull    = "receipts buffer is full"
+	errActivationsBufferFull = "activations buffer is full"
+	errStatusBufferFull      = "status buffer is full"
+	errErrorsBufferFull      = "errors buffer is full"
+)
+
+func consumeEvents(ctx context.Context, subscription event.Subscription) (out <-chan interface{}, bufFull <-chan struct{}) {
+	outCh := make(chan interface{}, subscriptionChanBufSize)
+	bufFullCh := make(chan struct{})
 
 	go func() {
-		defer close(out)
+		defer closeSubscription(subscription)
 
-		for e := range in {
+		for e := range subscription.Out() {
 			select {
 			case <-ctx.Done():
 				return
-			case out <- e:
+			case outCh <- e:
 			default:
 				log.With().Debug("subscriber's event buffer is full")
+				close(bufFullCh)
 				return
 			}
 		}
 	}()
 
-	return out
+	return outCh, bufFullCh
 }
 
 func closeSubscription(accountSubscription event.Subscription) {

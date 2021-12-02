@@ -179,27 +179,28 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 
 	// The tx channel tells us about newly received and newly created transactions
 	// The layer channel tells us about status updates
-	var txCh, layerCh <-chan interface{}
+	var (
+		txCh, layerCh           <-chan interface{}
+		txBufFull, layerBufFull <-chan struct{}
+	)
 
 	if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
-		defer closeSubscription(txsSubscription)
-		txCh = consumeEvents(context.Background(), txsSubscription.Out())
+		txCh, txBufFull = consumeEvents(context.Background(), txsSubscription)
 	}
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
-		defer closeSubscription(layersSubscription)
-
-		layerCh = consumeEvents(context.Background(), layersSubscription.Out())
+		layerCh, layerBufFull = consumeEvents(context.Background(), layersSubscription)
 	}
 
 	for {
 		select {
-		case txEvent, ok := <-txCh:
-			if !ok {
-				log.Info("tx stream buffer is full, shutting down")
-				return status.Errorf(codes.Canceled, "stream buffer is full")
-			}
-
+		case <-txBufFull:
+			log.Info("tx buffer is full, shutting down")
+			return status.Error(codes.Canceled, errTxBufferFull)
+		case <-layerBufFull:
+			log.Info("layer buffer is full, shutting down")
+			return status.Error(codes.Canceled, errLayerBufferFull)
+		case txEvent := <-txCh:
 			tx := txEvent.(events.Transaction)
 
 			// Filter
@@ -231,12 +232,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 					break
 				}
 			}
-		case layerEvent, ok := <-layerCh:
-			if !ok {
-				log.Info("tx stream buffer is full, shutting down")
-				return status.Errorf(codes.Canceled, "stream buffer is full")
-			}
-
+		case layerEvent := <-layerCh:
 			layer := layerEvent.(events.LayerUpdate)
 			// Transaction objects do not have an associated status. The status we assign them here is based on the
 			// status of the layer (really, the block) they're contained in. Here, we receive updates to layer status.
