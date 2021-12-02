@@ -151,20 +151,20 @@ func (m *MockbaseBallotProvider) EXPECT() *MockbaseBallotProviderMockRecorder {
 	return m.recorder
 }
 
-// BaseBlock mocks base method.
-func (m *MockbaseBallotProvider) BaseBlock(arg0 context.Context) (types.BlockID, [][]types.BlockID, error) {
+// BaseBallot mocks base method.
+func (m *MockbaseBallotProvider) BaseBallot(arg0 context.Context) (types.BallotID, [][]types.BlockID, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BaseBlock", arg0)
-	ret0, _ := ret[0].(types.BlockID)
+	ret := m.ctrl.Call(m, "BaseBallot", arg0)
+	ret0, _ := ret[0].(types.BallotID)
 	ret1, _ := ret[1].([][]types.BlockID)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
 
-// BaseBlock indicates an expected call of BaseBlock.
-func (mr *MockbaseBallotProviderMockRecorder) BaseBlock(arg0 interface{}) *gomock.Call {
+// BaseBallot indicates an expected call of BaseBallot.
+func (mr *MockbaseBallotProviderMockRecorder) BaseBallot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BaseBlock", reflect.TypeOf((*MockbaseBallotProvider)(nil).BaseBlock), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BaseBallot", reflect.TypeOf((*MockbaseBallotProvider)(nil).BaseBallot), arg0)
 }
 
 // MockactivationDB is a mock of activationDB interface.

@@ -11,6 +11,7 @@ import (
 type blockDataProvider interface {
 	LayerContextuallyValidBlocks(context.Context, types.LayerID) (map[types.BlockID]struct{}, error)
 	GetBlock(types.BlockID) (*types.Block, error)
+	GetBallot(id types.BallotID) (*types.Ballot, error)
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
 	LayerBlocks(types.LayerID) ([]*types.Block, error)
 

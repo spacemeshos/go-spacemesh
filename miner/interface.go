@@ -21,7 +21,7 @@ type txPool interface {
 }
 
 type baseBallotProvider interface {
-	BaseBlock(context.Context) (types.BlockID, [][]types.BlockID, error)
+	BaseBallot(context.Context) (types.BallotID, [][]types.BlockID, error)
 }
 
 type activationDB interface {

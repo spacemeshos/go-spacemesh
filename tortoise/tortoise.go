@@ -18,9 +18,7 @@ import (
 
 var (
 	errNoBaseBallotFound    = errors.New("no good base ballot within exception vector limit")
-	errNotSorted            = errors.New("input blocks are not sorted by layerID")
 	errstrTooManyExceptions = "too many exceptions to base ballot vote"
-	errstrConflictingVotes  = "conflicting votes found in ballot"
 )
 
 type turtle struct {
@@ -204,13 +202,12 @@ func (t *turtle) checkBallotAndGetLocalOpinion(
 	return true
 }
 
-// BaseBlock selects a base ballot from sliding window based on a following priorities in order:
+// BaseBallot selects a base ballot from sliding window based on a following priorities in order:
 // - choose good ballot
 // - choose ballot with the least difference to the local opinion
 // - choose ballot from higher layer
 // - otherwise deterministically select ballot with lowest id.
-// TODO: return a Ballot instead.
-func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
+func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.BlockID, error) {
 	var (
 		tctx          = wrapContext(ctx)
 		logger        = t.logger.WithContext(ctx)
@@ -252,7 +249,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 
 		metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.Last.Value - lid.Value))
 
-		return types.BlockID(ballotID), [][]types.BlockID{
+		return ballotID, [][]types.BlockID{
 			blockMapToArray(exceptions[0]),
 			blockMapToArray(exceptions[1]),
 			blockMapToArray(exceptions[2]),
@@ -260,7 +257,7 @@ func (t *turtle) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockI
 	}
 
 	// TODO: special error encoding when exceeding exception list size
-	return types.BlockID{}, nil, errNoBaseBallotFound
+	return types.EmptyBallotID, nil, errNoBaseBallotFound
 }
 
 // firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
