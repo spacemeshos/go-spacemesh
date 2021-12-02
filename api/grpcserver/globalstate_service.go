@@ -282,19 +282,19 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
 			defer closeSubscription(accountSubscription)
 
-			accountCh, accountBufFull = consumeEvents(stream.Context(), accountSubscription.Out())
+			accountCh, accountBufFull = consumeEvents(stream.Context(), accountSubscription)
 		}
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
 			defer closeSubscription(rewardsSubscription)
-			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription.Out())
+			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
 		}
 	}
 	if filterReceipt {
 		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
 			defer closeSubscription(receiptsSubscription)
-			receiptsCh, receiptsBufFull = consumeEvents(stream.Context(), receiptsSubscription.Out())
+			receiptsCh, receiptsBufFull = consumeEvents(stream.Context(), receiptsSubscription)
 		}
 	}
 
@@ -424,7 +424,7 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 	// subscribe to the rewards channel
 	if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
 		defer closeSubscription(rewardsSubscription)
-		rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription.Out())
+		rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
 	}
 
 	for {
@@ -502,19 +502,19 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 	if filterAccount {
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
 			defer closeSubscription(accountSubscription)
-			accountCh, accountBufFull = consumeEvents(stream.Context(), accountSubscription.Out())
+			accountCh, accountBufFull = consumeEvents(stream.Context(), accountSubscription)
 		}
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
 			defer closeSubscription(rewardsSubscription)
-			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription.Out())
+			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
 		}
 	}
 	if filterReceipt {
 		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
 			defer closeSubscription(receiptsSubscription)
-			receiptsCh, receiptsBufFull = consumeEvents(stream.Context(), receiptsSubscription.Out())
+			receiptsCh, receiptsBufFull = consumeEvents(stream.Context(), receiptsSubscription)
 		}
 	}
 	if filterState {
@@ -522,7 +522,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		// There is no separate reporting specifically for new state.
 		if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
 			defer closeSubscription(layersSubscription)
-			layersCh, layersBufFull = consumeEvents(stream.Context(), layersSubscription.Out())
+			layersCh, layersBufFull = consumeEvents(stream.Context(), layersSubscription)
 		}
 	}
 

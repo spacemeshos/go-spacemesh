@@ -186,13 +186,13 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 
 	if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
 		defer closeSubscription(txsSubscription)
-		txCh, txBufFull = consumeEvents(context.Background(), txsSubscription.Out())
+		txCh, txBufFull = consumeEvents(context.Background(), txsSubscription)
 	}
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
 		defer closeSubscription(layersSubscription)
 
-		layerCh, layerBufFull = consumeEvents(context.Background(), layersSubscription.Out())
+		layerCh, layerBufFull = consumeEvents(context.Background(), layersSubscription)
 	}
 
 	for {

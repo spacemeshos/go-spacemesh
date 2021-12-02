@@ -22,18 +22,17 @@ var (
 	errErrorsBufferFull      = "errors buffer is full"
 )
 
-func consumeEvents(ctx context.Context, in <-chan interface{}) (out <-chan interface{}, bufFull <-chan struct{}) {
+func consumeEvents(ctx context.Context, subscription event.Subscription) (out <-chan interface{}, bufFull <-chan struct{}) {
 	outCh := make(chan interface{}, subscriptionChanBufSize)
 	bufFullCh := make(chan struct{})
 
 	go func() {
 		defer func() {
 			close(outCh)
-			for range in {
-			}
+			closeSubscription(subscription)
 		}()
 
-		for e := range in {
+		for e := range subscription.Out() {
 			select {
 			case <-ctx.Done():
 				return
