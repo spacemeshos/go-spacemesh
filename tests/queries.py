@@ -566,7 +566,7 @@ def assert_equal_state_roots(indx, ns):
 
 
 # =====================================================================================
-# Assert No ATX Validation Errors
+# Assert No Failed ATX Validation Logs
 # =====================================================================================
 
 

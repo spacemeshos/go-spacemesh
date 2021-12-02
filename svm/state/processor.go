@@ -277,7 +277,7 @@ func (tp *TransactionProcessor) ApplyTransaction(tx *types.Transaction, layerID 
 	}
 
 	if !tp.checkNonce(tx) {
-		tp.Log.With().Error(errNonce,
+		tp.Log.With().Warning(errNonce,
 			log.Uint64("nonce_correct", tp.GetNonce(tx.Origin())),
 			log.Uint64("nonce_actual", tx.AccountNonce))
 		return fmt.Errorf(errNonce)

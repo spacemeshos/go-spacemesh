@@ -70,7 +70,7 @@ func (ev *eligibilityValidator) validateRole(ctx context.Context, m *Msg) (bool,
 		return false, fmt.Errorf("validate eligibility: %w", err)
 	}
 	if !res {
-		logger.With().Error("eligibility validator: sender is not eligible to participate",
+		logger.With().Warning("eligibility validator: sender is not eligible to participate",
 			log.String("sender_id", pub.ShortString()))
 		return false, nil
 	}
