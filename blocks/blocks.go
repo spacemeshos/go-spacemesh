@@ -103,7 +103,7 @@ func (bh *BlockHandler) HandleBlock(ctx context.Context, _ peer.ID, msg []byte) 
 // HandleBlockData handles blocks from gossip and sync.
 func (bh *BlockHandler) HandleBlockData(ctx context.Context, data []byte) error {
 	logger := bh.logger.WithContext(ctx)
-	logger.Info("handling data for new block")
+	logger.Debug("handling data for new block")
 	start := time.Now()
 
 	var blk types.Block

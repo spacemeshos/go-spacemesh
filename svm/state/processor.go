@@ -186,7 +186,7 @@ func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Ha
 // ApplyRewards applies reward reward to miners vector for layer.
 func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, rewards map[types.Address]uint64) {
 	for account, reward := range rewards {
-		tp.Log.With().Info("reward applied",
+		tp.Log.With().Debug("reward applied",
 			log.String("account", account.Short()),
 			log.Uint64("reward", reward),
 			layer,

@@ -267,7 +267,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 		return 0, fixed.Fixed{}, fixed.Fixed{}, true, err
 	}
 
-	logger.With().Info("preparing eligibility check",
+	logger.With().Debug("preparing eligibility check",
 		log.Uint64("miner_weight", minerWeight),
 		log.Uint64("total_weight", totalWeight),
 	)

@@ -103,7 +103,7 @@ func (h *Handshake) start(ctx context.Context, sub event.Subscription) {
 				h.eg.Go(func() error {
 					logger.Debug("handshake with peer")
 					if err := h.Request(ctx, id.Peer); err != nil {
-						logger.Warning("failed to complete handshake with peer",
+						logger.With().Warning("failed to complete handshake with peer",
 							log.Err(err),
 						)
 						_ = h.h.Network().ClosePeer(id.Peer)
