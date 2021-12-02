@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"sort"
-	"strings"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -20,11 +19,28 @@ var (
 	errEmptyActiveSet               = errors.New("empty active set for epoch")
 )
 
-type epochCache struct {
+type oracleCache struct {
 	epoch     types.EpochID
 	atx       *types.ActivationTxHeader
 	activeSet []types.ATXID
 	proofs    map[types.LayerID][]types.VotingEligibilityProof
+}
+
+// MarshalLogObject implements logging encoder for oracleCache.
+func (oc *oracleCache) MarshalLogObject(encoder log.ObjectEncoder) error {
+	// Sort the layer map to log the layer data in order
+	keys := make([]types.LayerID, 0, len(oc.proofs))
+	for k := range oc.proofs {
+		keys = append(keys, k)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		return keys[i].Before(keys[j])
+	})
+	for _, lyr := range keys {
+		encoder.AddUint32("layer", lyr.Uint32())
+		encoder.AddInt("slots", len(oc.proofs[lyr]))
+	}
+	return nil
 }
 
 // Oracle provides proposal eligibility proofs for the miner.
@@ -38,7 +54,7 @@ type Oracle struct {
 	log       log.Log
 
 	mu    sync.Mutex
-	cache epochCache
+	cache oracleCache
 }
 
 func newMinerOracle(layerSize, layersPerEpoch uint32, atxDB activationDB, vrfSigner *signing.VRFSigner, nodeID types.NodeID, log log.Log) *Oracle {
@@ -91,7 +107,7 @@ func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon []byte) (types
 		return *types.EmptyATXID, nil, nil, err
 	}
 
-	o.cache = epochCache{
+	o.cache = oracleCache{
 		epoch:     epoch,
 		atx:       atx,
 		activeSet: activeSet,
@@ -172,25 +188,6 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 	logger.With().Info("proposal eligibility calculated",
 		log.Uint32("total_num_slots", numEligibleSlots),
 		log.Int("num_layers_eligible", len(eligibilityProofs)),
-		log.String("layers_to_num_proposals", prettyPrintProofs(eligibilityProofs)))
+		log.Object("layers_to_num_proposals", &o.cache))
 	return eligibilityProofs, activeSet, nil
-}
-
-// TODO: use zapcore.ObjectEncoder and zapcore.ArrayEncoder to do this more efficiently.
-func prettyPrintProofs(proofs map[types.LayerID][]types.VotingEligibilityProof) string {
-	// Sort the layer map so we can print the layer data in order
-	keys := make([]types.LayerID, 0, len(proofs))
-	for k := range proofs {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		return keys[i].Before(keys[j])
-	})
-
-	// Pretty-print the number of proposals per eligible layer
-	var prettyStrings []string
-	for k := range keys {
-		prettyStrings = append(prettyStrings, fmt.Sprintf("layer %s: %d", keys[k].String(), len(proofs[keys[k]])))
-	}
-	return strings.Join(prettyStrings, ", ")
 }
