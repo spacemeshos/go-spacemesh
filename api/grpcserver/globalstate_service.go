@@ -309,15 +309,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 		case <-receiptsBufFull:
 			log.Info("receipts buffer is full, shutting down")
 			return status.Error(codes.Canceled, errReceiptsBufferFull)
-		case updatedAccountEvent, ok := <-accountCh:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("account channel closed, shutting down")
-				return nil
-			}
+		case updatedAccountEvent := <-accountCh:
 			updatedAccount := updatedAccountEvent.(events.Account).Address
 			// Apply address filter
 			if updatedAccount == addr {
@@ -337,15 +329,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				}
 			}
 
-		case rewardEvent, ok := <-rewardsCh:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("reward channel closed, shutting down")
-				return nil
-			}
+		case rewardEvent := <-rewardsCh:
 			reward := rewardEvent.(events.Reward)
 			// Apply address filter
 			if reward.Coinbase == addr {
@@ -366,15 +350,7 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 				}
 			}
 
-		case receiptEvent, ok := <-receiptsCh:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("receipt channel closed, shutting down")
-				return nil
-			}
+		case receiptEvent := <-receiptsCh:
 			receipt := receiptEvent.(events.TxReceipt)
 			// Apply address filter
 			if receipt.Address == addr {
@@ -540,15 +516,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		case <-layersBufFull:
 			log.Info("layers buffer is full, shutting down")
 			return status.Error(codes.Canceled, errLayerBufferFull)
-		case updatedAccountEvent, ok := <-accountCh:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("account channel closed, shutting down")
-				return nil
-			}
+		case updatedAccountEvent := <-accountCh:
 			updatedAccount := updatedAccountEvent.(events.Account).Address
 			// The Reporter service just sends us the account address. We are responsible
 			// for looking up the other required data here. Get the account balance and
@@ -564,16 +532,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case rewardEvent, ok := <-rewardsCh:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("reward channel closed, shutting down")
-				return nil
-			}
-
+		case rewardEvent := <-rewardsCh:
 			reward := rewardEvent.(events.Reward)
 
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Reward{
@@ -591,16 +550,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case receiptEvent, ok := <-receiptsCh:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("receipt channel closed, shutting down")
-				return nil
-			}
-
+		case receiptEvent := <-receiptsCh:
 			receipt := receiptEvent.(events.TxReceipt)
 
 			resp := &pb.GlobalStateStreamResponse{Datum: &pb.GlobalStateData{Datum: &pb.GlobalStateData_Receipt{
@@ -617,16 +567,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 			if err := stream.Send(resp); err != nil {
 				return fmt.Errorf("send to stream: %w", err)
 			}
-		case layerEvent, ok := <-layersCh:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("layer channel closed, shutting down")
-				return nil
-			}
-
+		case layerEvent := <-layersCh:
 			layer := layerEvent.(events.LayerUpdate)
 
 			root, err := s.Mesh.GetLayerStateRoot(layer.LayerID)

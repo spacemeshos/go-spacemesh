@@ -492,16 +492,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 		case <-activationsBufFull:
 			log.Info("activations buffer is full, shutting down")
 			return status.Error(codes.Canceled, errActivationsBufferFull)
-		case activationEvent, ok := <-activationsCh:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("ActivationStream closed, shutting down")
-				return nil
-			}
-
+		case activationEvent := <-activationsCh:
 			activation := activationEvent.(events.ActivationTx).ActivationTx
 			// Apply address filter
 			if activation.Coinbase == addr {
@@ -522,15 +513,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
-		case txEvent, ok := <-txCh:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("NewTxStream closed, shutting down")
-				return nil
-			}
+		case txEvent := <-txCh:
 			tx := txEvent.(events.Transaction)
 			// Apply address filter
 			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.Recipient == addr) {

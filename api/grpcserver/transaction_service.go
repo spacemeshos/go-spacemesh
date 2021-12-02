@@ -203,16 +203,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 		case <-layerBufFull:
 			log.Info("layer buffer is full, shutting down")
 			return status.Error(codes.Canceled, errLayerBufferFull)
-		case txEvent, ok := <-txCh:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("tx channel closed, shutting down")
-				return nil
-			}
-
+		case txEvent := <-txCh:
 			tx := txEvent.(events.Transaction)
 
 			// Filter
@@ -244,16 +235,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 					break
 				}
 			}
-		case layerEvent, ok := <-layerCh:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("layer channel closed, shutting down")
-				return nil
-			}
-
+		case layerEvent := <-layerCh:
 			layer := layerEvent.(events.LayerUpdate)
 			// Transaction objects do not have an associated status. The status we assign them here is based on the
 			// status of the layer (really, the block) they're contained in. Here, we receive updates to layer status.
