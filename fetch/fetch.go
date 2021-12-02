@@ -506,7 +506,7 @@ func (f *Fetch) sendBatch(requests []requestMessage) {
 	f.activeBatchM.Unlock()
 	// timeout function will be called if no response was received for the hashes sent
 	errorFunc := func(err error) {
-		f.log.With().Error("error occurred for sendbatch",
+		f.log.With().Warning("error occurred for sendbatch",
 			log.String("batch_hash", batch.ID.ShortString()),
 			log.Err(err))
 		f.handleHashError(batch.ID, err)

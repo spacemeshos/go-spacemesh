@@ -472,7 +472,7 @@ func (proc *consensusProcess) handleMessage(ctx context.Context, m *Msg) {
 		}
 
 		// not an early message but also contextually invalid
-		logger.With().Error("late message failed contextual validation, discarding", log.Err(err))
+		logger.With().Warning("late message failed contextual validation, discarding", log.Err(err))
 		return
 	}
 

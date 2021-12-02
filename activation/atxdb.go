@@ -186,11 +186,14 @@ func (db *DB) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error {
 		log.FieldNamed("atx_node_id", atx.NodeID),
 		atx.PubLayerID)
 	if err := db.ContextuallyValidateAtx(atx.ActivationTxHeader); err != nil {
-		db.log.WithContext(ctx).With().Error("atx failed contextual validation",
+		db.log.WithContext(ctx).With().Warning("atx failed contextual validation",
 			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID),
 			log.Err(err))
 		// TODO: Blacklist this miner
+		// NOTE(nkryuchkov): Sometimes, this case may be seen in devnet logs
+		// with error: "last atx is not the one referenced",
+		// perhaps we need to add a threshold for blacklisting.
 	} else {
 		db.log.WithContext(ctx).With().Info("atx is valid", atx.ID())
 	}
