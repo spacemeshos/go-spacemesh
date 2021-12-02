@@ -27,10 +27,7 @@ func consumeEvents(ctx context.Context, subscription event.Subscription) (out <-
 	bufFullCh := make(chan struct{})
 
 	go func() {
-		defer func() {
-			close(outCh)
-			closeSubscription(subscription)
-		}()
+		defer closeSubscription(subscription)
 
 		for e := range subscription.Out() {
 			select {

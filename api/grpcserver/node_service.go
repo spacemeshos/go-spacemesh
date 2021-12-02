@@ -152,7 +152,6 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 	)
 
 	if statusSubscription := events.SubscribeStatus(); statusSubscription != nil {
-		defer closeSubscription(statusSubscription)
 		statusCh, statusBufFull = consumeEvents(context.Background(), statusSubscription)
 	}
 
@@ -202,8 +201,6 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 	)
 
 	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
-		defer closeSubscription(errorsSubscription)
-
 		errorsCh, errorsBufFull = consumeEvents(context.Background(), errorsSubscription)
 	}
 

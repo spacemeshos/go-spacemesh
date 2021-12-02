@@ -280,20 +280,16 @@ func (s GlobalStateService) AccountDataStream(in *pb.AccountDataStreamRequest, s
 	)
 	if filterAccount {
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
-			defer closeSubscription(accountSubscription)
-
 			accountCh, accountBufFull = consumeEvents(stream.Context(), accountSubscription)
 		}
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
-			defer closeSubscription(rewardsSubscription)
 			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
 		}
 	}
 	if filterReceipt {
 		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
-			defer closeSubscription(receiptsSubscription)
 			receiptsCh, receiptsBufFull = consumeEvents(stream.Context(), receiptsSubscription)
 		}
 	}
@@ -399,7 +395,6 @@ func (s GlobalStateService) SmesherRewardStream(in *pb.SmesherRewardStreamReques
 
 	// subscribe to the rewards channel
 	if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
-		defer closeSubscription(rewardsSubscription)
 		rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
 	}
 
@@ -477,19 +472,16 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 	)
 	if filterAccount {
 		if accountSubscription := events.SubscribeAccount(); accountSubscription != nil {
-			defer closeSubscription(accountSubscription)
 			accountCh, accountBufFull = consumeEvents(stream.Context(), accountSubscription)
 		}
 	}
 	if filterReward {
 		if rewardsSubscription := events.SubscribeRewards(); rewardsSubscription != nil {
-			defer closeSubscription(rewardsSubscription)
 			rewardsCh, rewardsBufFull = consumeEvents(stream.Context(), rewardsSubscription)
 		}
 	}
 	if filterReceipt {
 		if receiptsSubscription := events.SubscribeReceipts(); receiptsSubscription != nil {
-			defer closeSubscription(receiptsSubscription)
 			receiptsCh, receiptsBufFull = consumeEvents(stream.Context(), receiptsSubscription)
 		}
 	}
@@ -497,7 +489,6 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		// Whenever new state is applied to the mesh, a new layer is reported.
 		// There is no separate reporting specifically for new state.
 		if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
-			defer closeSubscription(layersSubscription)
 			layersCh, layersBufFull = consumeEvents(stream.Context(), layersSubscription)
 		}
 	}

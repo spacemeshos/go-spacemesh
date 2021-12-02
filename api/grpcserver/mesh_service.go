@@ -473,13 +473,11 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 
 	if filterTx {
 		if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
-			defer closeSubscription(txsSubscription)
 			txCh, txBufFull = consumeEvents(context.Background(), txsSubscription)
 		}
 	}
 	if filterActivations {
 		if activationsSubscription := events.SubscribeActivations(); activationsSubscription != nil {
-			defer closeSubscription(activationsSubscription)
 			activationsCh, activationsBufFull = consumeEvents(context.Background(), activationsSubscription)
 		}
 	}
@@ -550,7 +548,6 @@ func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService
 	)
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
-		defer closeSubscription(layersSubscription)
 		layerCh, layersBufFull = consumeEvents(context.Background(), layersSubscription)
 	}
 
