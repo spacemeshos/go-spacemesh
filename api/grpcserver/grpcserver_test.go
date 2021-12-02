@@ -3012,7 +3012,7 @@ func (p *ProjectorMock) GetProjection(addr types.Address, prevNonce, prevBalance
 	return prevNonce + p.nonceDiff, prevBalance - p.balanceDiff, nil
 }
 
-func TestEventsCalled(t *testing.T) {
+func TestEventsReceived(t *testing.T) {
 	logtest.SetupGlobal(t)
 
 	ctrl := gomock.NewController(t)
