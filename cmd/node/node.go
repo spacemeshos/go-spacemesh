@@ -87,7 +87,6 @@ const (
 	BlockListenerLogger   = "blockListener"
 	PoetListenerLogger    = "poetListener"
 	NipostBuilderLogger   = "nipostBuilder"
-	Fetcher               = "fetcher"
 	LayerFetcher          = "layerFetcher"
 	TimeSyncLogger        = "timesync"
 	SVMLogger             = "SVM"
@@ -568,10 +567,13 @@ func (app *App) initServices(ctx context.Context,
 		blocks.WithMaxExceptions(trtlCfg.MaxExceptions),
 	)
 
-	remoteFetchService := fetch.NewFetch(ctx, app.Config.FETCH, app.host, app.addLogger(Fetcher, lg))
-
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.LAYERS, blockListener, atxDB, poetDb, atxDB, svm, app.host, remoteFetchService, msh, app.addLogger(LayerFetcher, lg))
-	layerFetch.AddDBs(mdb.Blocks(), atxdbstore, mdb.Transactions(), poetDbStore)
+	dbStores := fetch.LocalDataSource{
+		fetch.BlockDB: mdb.Blocks(),
+		fetch.ATXDB:   atxdbstore,
+		fetch.TXDB:    mdb.Transactions(),
+		fetch.POETDB:  poetDbStore,
+	}
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.FETCH, blockListener, atxDB, poetDb, atxDB, svm, app.host, dbStores, msh, app.addLogger(LayerFetcher, lg))
 	fetcherWrapped.Fetcher = layerFetch
 
 	patrol := layerpatrol.New()

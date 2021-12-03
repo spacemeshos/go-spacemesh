@@ -63,7 +63,7 @@ type Tortoise struct {
 	// update will be set to non-nil after rerun completes, and must be set to nil once
 	// used to replace trtl.
 	update *rerunResult
-	// persistMu is needed to allow concurrent BaseBlock and Persist call
+	// persistMu is needed to allow concurrent BaseBallot and Persist call
 	// but to prevent multiple concurrent Persist calls
 	persistMu sync.Mutex
 	trtl      *turtle
@@ -159,11 +159,11 @@ func (trtl *Tortoise) LatestComplete() types.LayerID {
 	return trtl.trtl.Verified
 }
 
-// BaseBlock chooses a base block and creates a differences list. needs the hare results for latest layers.
-func (trtl *Tortoise) BaseBlock(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
+// BaseBallot chooses a base ballot and creates a differences list. needs the hare results for latest layers.
+func (trtl *Tortoise) BaseBallot(ctx context.Context) (types.BallotID, [][]types.BlockID, error) {
 	trtl.mu.RLock()
 	defer trtl.mu.RUnlock()
-	return trtl.trtl.BaseBlock(ctx)
+	return trtl.trtl.BaseBallot(ctx)
 }
 
 // HandleIncomingLayer processes all layer block votes

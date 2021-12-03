@@ -54,10 +54,10 @@ func TestRerunAndRevert(t *testing.T) {
 	// global opinion: add a bunch of blocks that vote against l1 blocks
 	// for these blocks to be good, they must have an old base block, since they'll get exception votes on
 	// more recent blocks
-	baseBlockFn := func(ctx context.Context) (types.BlockID, [][]types.BlockID, error) {
-		return mesh.GenesisBlock().ID(), [][]types.BlockID{nil, nil, nil}, nil
+	baseBallotFn := func(ctx context.Context) (types.BallotID, [][]types.BlockID, error) {
+		return types.BallotID(mesh.GenesisBlock().ID()), [][]types.BlockID{nil, nil, nil}, nil
 	}
-	l2 := createTurtleLayer(t, l2ID, mdb, atxdb, baseBlockFn, mdb.LayerBlockIds, defaultTestLayerSize*3)
+	l2 := createTurtleLayer(t, l2ID, mdb, atxdb, baseBallotFn, mdb.LayerBlockIds, defaultTestLayerSize*3)
 	for _, block := range l2.Blocks() {
 		r.NoError(mdb.AddBlock(block))
 	}

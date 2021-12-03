@@ -166,6 +166,8 @@ func Panic(msg string, args ...interface{}) {
 type (
 	// ObjectMarshaller is an alias to zapcore.ObjectMarshaller.
 	ObjectMarshaller = zapcore.ObjectMarshaler
+	// ObjectMarshallerFunc is an alias to zapcore.ObjectMarshallerFunc.
+	ObjectMarshallerFunc = zapcore.ObjectMarshalerFunc
 	// ObjectEncoder is an alias to zapcore.ObjectEncoder.
 	ObjectEncoder = zapcore.ObjectEncoder
 	// ArrayMarshaler is an alias to zapcore.ArrayMarshaller.

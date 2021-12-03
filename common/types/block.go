@@ -472,6 +472,11 @@ func (l *Layer) Blocks() []*Block {
 	return l.blocks
 }
 
+// Ballots returns the list of ballots in this layer.
+func (l *Layer) Ballots() []*Ballot {
+	return ToBallots(l.blocks)
+}
+
 // BlocksIDs returns the list of IDs of blocks in this layer.
 func (l *Layer) BlocksIDs() []BlockID {
 	blockIDs := make([]BlockID, len(l.blocks))

@@ -173,8 +173,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.FETCH.MaxRetriesForPeer = 5
 	cfg.FETCH.BatchSize = 5
 	cfg.FETCH.BatchTimeout = 5
-
-	cfg.LAYERS.RequestTimeout = 10
 	cfg.GoldenATXID = "0x5678"
 
 	cfg.TortoiseBeacon = tortoisebeacon.NodeSimUnitTestConfig()

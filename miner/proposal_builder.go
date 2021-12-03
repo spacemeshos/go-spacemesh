@@ -257,11 +257,10 @@ func (pb *ProposalBuilder) createProposal(
 		logger.Panic("attempt to create proposal during genesis")
 	}
 
-	bid, diffs, err := pb.baseBallotProvider.BaseBlock(ctx)
+	base, diffs, err := pb.baseBallotProvider.BaseBallot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get base ballot: %w", err)
 	}
-	base := types.BallotID(bid)
 	ib := &types.InnerBallot{
 		AtxID:            atxID,
 		EligibilityProof: proofs,
@@ -304,45 +303,16 @@ func (pb *ProposalBuilder) createProposal(
 		// TODO: add signature
 	}
 
-	mb := toMiniBlock(&p)
-	blockBytes, err := types.InterfaceToBytes(mb)
+	bl := p.ToBlock()
+	blockBytes, err := types.InterfaceToBytes(bl.MiniBlock)
 	if err != nil {
 		logger.With().Panic("failed to serialize block", log.Err(err))
 	}
-
-	bl := &types.Block{MiniBlock: *mb, Signature: pb.signer.Sign(blockBytes)}
+	bl.Signature = pb.signer.Sign(blockBytes)
 	bl.Initialize()
 
 	logger.Event().Info("block created", bl.Fields()...)
 	return bl, nil
-}
-
-func toMiniBlock(p *types.Proposal) *types.MiniBlock {
-	mb := &types.MiniBlock{
-		BlockHeader: types.BlockHeader{
-			LayerIndex: p.LayerIndex,
-			ATXID:      p.AtxID,
-			EligibilityProof: types.BlockEligibilityProof{
-				J:   p.EligibilityProof.J,
-				Sig: p.EligibilityProof.Sig,
-			},
-			Data:        nil,
-			BaseBlock:   types.BlockID(p.BaseBallot),
-			AgainstDiff: p.AgainstDiff,
-			ForDiff:     p.ForDiff,
-			NeutralDiff: p.NeutralDiff,
-		},
-		TxIDs: p.TxIDs,
-	}
-	if p.RefBallot != types.EmptyBallotID {
-		refBid := types.BlockID(p.RefBallot)
-		mb.RefBlock = &refBid
-	}
-	if p.EpochData != nil {
-		mb.ActiveSet = &p.EpochData.ActiveSet
-		mb.TortoiseBeacon = p.EpochData.Beacon
-	}
-	return mb
 }
 
 func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerID) error {

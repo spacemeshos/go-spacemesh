@@ -129,33 +129,35 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 	activeset := make([]types.ATXID, len(g.activations))
 	copy(activeset, g.activations)
 
+	miners := make(map[int]uint32, size)
 	for i := 0; i < size; i++ {
 		miner := g.rng.Intn(len(g.activations))
 		atxid := g.activations[miner]
 		signer := g.keys[miner]
+		proof := types.VotingEligibilityProof{J: miners[miner]}
+		miners[miner]++
 
 		voting := cfg.VoteGen(g.rng, g.layers, i)
-		data := make([]byte, 20)
-		g.rng.Read(data)
 		beacon, err := g.states[0].Beacons.GetBeacon(g.nextLayer.GetEpoch())
 		if err != nil {
 			g.logger.With().Panic("failed to get a beacon", log.Err(err))
 		}
-		block := &types.Block{
-			MiniBlock: types.MiniBlock{
-				BlockHeader: types.BlockHeader{
-					LayerIndex:  g.nextLayer,
-					ATXID:       atxid,
-					BaseBlock:   voting.Base,
-					ForDiff:     voting.Support,
-					AgainstDiff: voting.Against,
-					NeutralDiff: voting.Abstain,
-					Data:        data,
+		ballot := types.Ballot{
+			InnerBallot: types.InnerBallot{
+				AtxID:            atxid,
+				BaseBallot:       voting.Base,
+				EligibilityProof: proof,
+				AgainstDiff:      voting.Against,
+				ForDiff:          voting.Support,
+				NeutralDiff:      voting.Abstain,
+				LayerIndex:       g.nextLayer,
+				EpochData: &types.EpochData{
+					ActiveSet: activeset,
+					Beacon:    beacon,
 				},
-				ActiveSet:      &activeset,
-				TortoiseBeacon: beacon,
 			},
 		}
+		block := &types.Block{MiniBlock: *ballot.ToMiniBlock()}
 		block.Signature = signer.Sign(block.Bytes())
 		block.Initialize()
 		for _, state := range g.states {

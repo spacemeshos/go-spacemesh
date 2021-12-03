@@ -87,6 +87,13 @@ func (p *Proposal) Fields() []log.LoggableField {
 	return append(p.Ballot.Fields(), p.ID())
 }
 
+// ToBlock transforms a Proposal to a Block during the transition period to unified content block.
+func (p *Proposal) ToBlock() *Block {
+	mb := p.Ballot.ToMiniBlock()
+	mb.TxIDs = p.TxIDs
+	return &Block{MiniBlock: *mb}
+}
+
 // String returns a short prefix of the hex representation of the ID.
 func (id ProposalID) String() string {
 	return id.AsHash32().ShortString()

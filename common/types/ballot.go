@@ -201,6 +201,35 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
+// ToMiniBlock transforms a Ballot to a MiniBlock during the transition period to unified content block.
+// it DOES NOT populate the TxIDs.
+func (b *Ballot) ToMiniBlock() *MiniBlock {
+	mb := &MiniBlock{
+		BlockHeader: BlockHeader{
+			LayerIndex: b.LayerIndex,
+			ATXID:      b.AtxID,
+			EligibilityProof: BlockEligibilityProof{
+				J:   b.EligibilityProof.J,
+				Sig: b.EligibilityProof.Sig,
+			},
+			Data:        nil,
+			BaseBlock:   BlockID(b.BaseBallot),
+			AgainstDiff: b.AgainstDiff,
+			ForDiff:     b.ForDiff,
+			NeutralDiff: b.NeutralDiff,
+		},
+	}
+	if b.RefBallot != EmptyBallotID {
+		refBid := BlockID(b.RefBallot)
+		mb.RefBlock = &refBid
+	}
+	if b.EpochData != nil {
+		mb.ActiveSet = &b.EpochData.ActiveSet
+		mb.TortoiseBeacon = b.EpochData.Beacon
+	}
+	return mb
+}
+
 // String returns a short prefix of the hex representation of the ID.
 func (id BallotID) String() string {
 	return id.AsHash32().ShortString()

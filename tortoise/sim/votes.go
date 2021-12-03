@@ -8,7 +8,7 @@ import (
 
 // Voting contains blocks voting.
 type Voting struct {
-	Base                      types.BlockID
+	Base                      types.BallotID
 	Support, Against, Abstain []types.BlockID
 }
 
@@ -21,6 +21,7 @@ type VotesGenerator func(rng *rand.Rand, layers []*types.Layer, i int) Voting
 func PerfectVoting(rng *rand.Rand, layers []*types.Layer, _ int) Voting {
 	baseLayer := layers[len(layers)-1]
 	support := layers[len(layers)-1].BlocksIDs()
-	base := baseLayer.Blocks()[rng.Intn(len(baseLayer.Blocks()))]
+	ballots := baseLayer.Ballots()
+	base := ballots[rng.Intn(len(ballots))]
 	return Voting{Base: base.ID(), Support: support}
 }

@@ -116,10 +116,9 @@ func defaultFetch(tb testing.TB) (*Fetch, *mockNet) {
 		Responses:  make(map[types.Hash32]responseMessage),
 	}
 	lg := logtest.New(tb)
-	f := NewFetch(context.TODO(), cfg, nil, lg)
+	dbs := LocalDataSource{"db": database.NewMemDatabase(), "db2": database.NewMemDatabase()}
+	f := NewFetch(context.TODO(), cfg, nil, dbs, lg)
 	f.net = mckNet
-	f.AddDB("db", database.NewMemDatabase())
-	f.AddDB("db2", database.NewMemDatabase())
 
 	return f, mckNet
 }
@@ -130,9 +129,8 @@ func customFetch(tb testing.TB, cfg Config) (*Fetch, *mockNet) {
 		Responses:  make(map[types.Hash32]responseMessage),
 	}
 	lg := logtest.New(tb)
-	f := NewFetch(context.TODO(), cfg, nil, lg)
+	f := NewFetch(context.TODO(), cfg, nil, LocalDataSource{"db": database.NewMemDatabase()}, lg)
 	f.net = mckNet
-	f.AddDB("db", database.NewMemDatabase())
 	return f, mckNet
 }
 

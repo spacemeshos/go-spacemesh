@@ -168,9 +168,12 @@ func (m *DB) HasBallot(types.BallotID) bool {
 }
 
 // GetBallot returns true if the database has Ballot specified by the BallotID and false otherwise.
-func (m *DB) GetBallot(types.BallotID) (*types.Ballot, error) {
-	// TODO: implement me
-	return &types.Ballot{}, nil
+func (m *DB) GetBallot(ballotID types.BallotID) (*types.Ballot, error) {
+	block, err := m.GetBlock(types.BlockID(ballotID))
+	if err == nil {
+		return block.ToBallot(), nil
+	}
+	return nil, err
 }
 
 // AddBlock adds a block to the database.

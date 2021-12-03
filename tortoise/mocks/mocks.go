@@ -50,6 +50,21 @@ func (mr *MockblockDataProviderMockRecorder) ContextualValidity(arg0 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ContextualValidity", reflect.TypeOf((*MockblockDataProvider)(nil).ContextualValidity), arg0)
 }
 
+// GetBallot mocks base method.
+func (m *MockblockDataProvider) GetBallot(id types.BallotID) (*types.Ballot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBallot", id)
+	ret0, _ := ret[0].(*types.Ballot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBallot indicates an expected call of GetBallot.
+func (mr *MockblockDataProviderMockRecorder) GetBallot(id interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*MockblockDataProvider)(nil).GetBallot), id)
+}
+
 // GetBlock mocks base method.
 func (m *MockblockDataProvider) GetBlock(arg0 types.BlockID) (*types.Block, error) {
 	m.ctrl.T.Helper()
