@@ -133,7 +133,7 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 	host *p2p.Host, dbStores fetch.LocalDataSource, layers layerDB, log log.Log) *Logic {
 	l := &Logic{
 		log:            log,
-		fetcher:        fetch.NewFetch(ctx, cfg.Config, host, dbStores, log.WithName("-fetch")),
+		fetcher:        fetch.NewFetch(ctx, cfg.Config, host, dbStores, log.WithName("fetch")),
 		host:           host,
 		layerBlocksRes: make(map[types.LayerID]*layerResult),
 		layerBlocksChs: make(map[types.LayerID][]chan LayerPromiseResult),

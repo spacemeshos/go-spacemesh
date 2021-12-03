@@ -26,23 +26,6 @@ type oracleCache struct {
 	proofs    map[types.LayerID][]types.VotingEligibilityProof
 }
 
-// MarshalLogObject implements logging encoder for oracleCache.
-func (oc *oracleCache) MarshalLogObject(encoder log.ObjectEncoder) error {
-	// Sort the layer map to log the layer data in order
-	keys := make([]types.LayerID, 0, len(oc.proofs))
-	for k := range oc.proofs {
-		keys = append(keys, k)
-	}
-	sort.Slice(keys, func(i, j int) bool {
-		return keys[i].Before(keys[j])
-	})
-	for _, lyr := range keys {
-		encoder.AddUint32("layer", lyr.Uint32())
-		encoder.AddInt("slots", len(oc.proofs[lyr]))
-	}
-	return nil
-}
-
 // Oracle provides proposal eligibility proofs for the miner.
 type Oracle struct {
 	avgLayerSize   uint32
@@ -188,6 +171,20 @@ func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beaco
 	logger.With().Info("proposal eligibility calculated",
 		log.Uint32("total_num_slots", numEligibleSlots),
 		log.Int("num_layers_eligible", len(eligibilityProofs)),
-		log.Object("layers_to_num_proposals", &o.cache))
+		log.Object("layers_to_num_proposals", log.ObjectMarshallerFunc(func(encoder log.ObjectEncoder) error {
+			// Sort the layer map to log the layer data in order
+			keys := make([]types.LayerID, 0, len(eligibilityProofs))
+			for k := range eligibilityProofs {
+				keys = append(keys, k)
+			}
+			sort.Slice(keys, func(i, j int) bool {
+				return keys[i].Before(keys[j])
+			})
+			for _, lyr := range keys {
+				encoder.AddUint32("layer", lyr.Uint32())
+				encoder.AddInt("slots", len(eligibilityProofs[lyr]))
+			}
+			return nil
+		})))
 	return eligibilityProofs, activeSet, nil
 }
