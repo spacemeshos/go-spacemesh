@@ -396,11 +396,11 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) err
 	tctx := wrapContext(ctx)
 	// unconditionally set the layer to the last one that we have seen once tortoise or sync
 	// submits this layer. it doesn't matter if we fail to process it.
-	if t.Last.Before(lid) {
-		t.Last = lid
+	if t.common.last.Before(lid) {
+		t.common.last = lid
 	}
-	if t.Processed.Before(lid) {
-		t.Processed = lid
+	if t.common.processed.Before(lid) {
+		t.common.processed = lid
 	}
 	return t.processLayer(tctx, lid)
 }
@@ -410,25 +410,18 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	if err != nil {
 		return fmt.Errorf("failed to read blocks for layer %s: %w", lid, err)
 	}
-	var (
-		refs, other []*types.Ballot
-	)
+
+	original := make([]*types.Ballot, 0, len(blocks))
 	for _, block := range blocks {
-		ballot := block.ToBallot()
-		if ballot.EpochData != nil {
-			refs = append(refs, ballot)
-		} else {
-			other = append(other, ballot)
-		}
+		original = append(original, block.ToBallot())
 	}
+
 	t.processBlocks(lid, blocks)
 
-	// we should keep local opinion in memory, but it is it no very convenient
-	// because within hdist it may change due to the dependency on the current layer
-	// so we need to re-evalute it every layer.
-	localOpinion := Opinion{}
-
-	ballots, err := t.processBallots(ctx, lid, refs, other)
+	// TODO(dshulyak) we should keep local opinion in memory, but it is it no very convenient
+	// because within hdist it may change due to the dependency on the current layer.
+	// maybe keep in memory but update it every time within hdist?
+	ballots, localOpinion, err := t.processBallots(ctx, lid, original)
 	if err != nil {
 		return err
 	}
@@ -436,8 +429,18 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	current := t.common.verified
 	newVerified := t.verifying.processLayer(lid, localOpinion, ballots)
 	if newVerified.After(current) {
+		for lid := current.Add(1); !lid.After(newVerified); lid = lid.Add(1) {
+			for _, bid := range t.common.blocks[lid] {
+				sign := localOpinion[bid]
+				if sign == abstain {
+					t.logger.With().Panic("bug: layer should not be verified if there is an undecided block")
+				}
+				if err := t.bdp.SaveContextualValidity(bid, lid, sign == support); err != nil {
+					return fmt.Errorf("saving validity for %s: %w", bid, err)
+				}
+			}
+		}
 		t.common.verified = newVerified
-		// made progress. save contextual validity on blocks between current + 1 up to last new verified
 	}
 	// TODO(dshulyak) check if there are any layers that can be verified by full tortoise
 	// if yes switch to full tortoise:
@@ -456,16 +459,28 @@ func (t *turtle) processBlocks(lid types.LayerID, blocks []*types.Block) {
 
 }
 
-func (t *turtle) processBallots(ctx *tcontext, lid types.LayerID, refs, other []*types.Ballot) ([]tortoiseBallot, error) {
+func (t *turtle) processBallots(ctx *tcontext, lid types.LayerID, original []*types.Ballot) ([]tortoiseBallot, Opinion, error) {
 	var (
-		ballots    = make([]tortoiseBallot, 0, len(refs)+len(other))
-		ballotsIDs = make([]types.BallotID, 0, len(refs)+len(other))
+		ballots     = make([]tortoiseBallot, 0, len(original))
+		ballotsIDs  = make([]types.BallotID, 0, len(original))
+		processed   = t.common.processed
+		min         = t.common.last // just max value
+		refs, other []*types.Ballot
 	)
+
+	for _, ballot := range original {
+		if ballot.EpochData != nil {
+			refs = append(refs, ballot)
+		} else {
+			other = append(other, ballot)
+		}
+	}
+
 	for _, part := range [...][]*types.Ballot{refs, other} {
 		for _, ballot := range part {
 			ballotWeight, err := computeBallotWeight(t.atxdb, t.common.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			t.common.ballotWeight[ballot.ID()] = weight{Float: ballotWeight}
 
@@ -473,16 +488,45 @@ func (t *turtle) processBallots(ctx *tcontext, lid types.LayerID, refs, other []
 			t.ballotHasGoodBeacon(ballot, t.logger)
 
 			ballotsIDs = append(ballotsIDs, ballot.ID())
+
+			baselid := t.common.ballotLayer[ballot.BaseBallot]
+			if baselid.Before(min) {
+				min = baselid
+			}
+			votes := Opinion{}
+			for lid := baselid; lid.Before(processed); lid = lid.Add(1) {
+				for _, bid := range t.common.blocks[lid] {
+					votes[bid] = against
+				}
+			}
+			for _, bid := range ballot.ForDiff {
+				votes[bid] = support
+			}
+			for _, bid := range ballot.NeutralDiff {
+				votes[bid] = abstain
+			}
+			for _, bid := range ballot.AgainstDiff {
+				votes[bid] = against
+			}
+
 			ballots = append(ballots, tortoiseBallot{
 				id:     ballot.ID(),
 				base:   ballot.BaseBallot,
 				weight: weight{Float: ballotWeight},
-				votes:  Opinion{},
+				votes:  votes,
 			})
 		}
 	}
 	t.common.ballots[lid] = ballotsIDs
-	return ballots, nil
+
+	opinion := Opinion{}
+	for lid := min; lid.Before(processed); lid = lid.Add(1) {
+		if err := t.addLocalOpinion(ctx, lid, opinion); err != nil {
+			return nil, nil, err
+		}
+	}
+
+	return ballots, opinion, nil
 }
 
 func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log, lid types.LayerID) (bool, error) {

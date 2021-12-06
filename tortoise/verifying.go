@@ -59,7 +59,8 @@ func (v *verifying) verifyLayers(logger log.Log, localOpinion Opinion) types.Lay
 	localThreshold = localThreshold.add(v.epochWeight[v.last.GetEpoch()])
 	localThreshold = localThreshold.fraction(v.LocalThreshold)
 
-	for lid := v.verified.Add(1); lid.Before(v.last); lid = lid.Add(1) {
+	for lid := v.verified.Add(1); lid.Before(v.processed); lid = lid.Add(1) {
+		// expected weight is always based on last
 		threshold := getExpectedWeight(v.epochWeight, lid, v.last)
 		threshold = threshold.fraction(v.GlobalThreshold)
 		threshold = threshold.add(localThreshold)
@@ -111,7 +112,7 @@ func (v *verifying) isGood(logger log.Log, localOpinion Opinion, ballot tortoise
 	logger = logger.WithFields(ballot.id, log.Stringer("base", ballot.base))
 
 	if _, exists := v.badBeaconBallots[ballot.id]; exists {
-		logger.With().Debug("ballot has bad beacon")
+		logger.With().Debug("ballot has a bad beacon")
 		return false
 	}
 
