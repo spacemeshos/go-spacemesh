@@ -529,7 +529,7 @@ func (app *App) initServices(ctx context.Context,
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 
-	trtl = tortoise.New(trtlStateDB, mdb, atxDB, tBeacon,
+	trtl = tortoise.New(mdb, atxDB, tBeacon,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),

@@ -8,27 +8,16 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-var (
-	support = sign{Sign: 1}
-	against = sign{Sign: -1}
-	abstain = sign{Sign: 0}
+const (
+	support = 1
+	against = -1
+	abstain = 0
 )
 
-type sign struct {
-	Sign    int8
-	Flushed bool
-}
-
-func equalVotes(i, j sign) bool {
-	return i.Sign == j.Sign
-}
-
-func (a sign) copy() sign {
-	return sign{Sign: a.Sign}
-}
+type sign int8
 
 func (a sign) String() string {
-	switch a.Sign {
+	switch a {
 	case 1:
 		return "support"
 	case -1:
@@ -81,4 +70,52 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 		arr = append(arr, b)
 	}
 	return arr
+}
+
+// weight represents any weight in the tortoise.
+//
+// TODO(dshulyak) needs to be replaced with fixed float
+// both for performance and safety.
+type weight struct {
+	*big.Float
+}
+
+func (w weight) add(other weight) weight {
+	if w.Float == nil {
+		w.Float = big.NewFloat(0)
+	}
+	w.Float.Add(w.Float, w.Float)
+	return w
+}
+
+func (w weight) sub(other weight) weight {
+	if w.Float == nil {
+		w.Float = big.NewFloat(0)
+	}
+	w.Float.Sub(w.Float, other.Float)
+	return w
+}
+
+func (w weight) fraction(frac *big.Rat) weight {
+	threshold := new(big.Float).SetInt(frac.Num())
+	threshold.Mul(threshold, w.Float)
+	threshold.Quo(threshold, new(big.Float).SetInt(frac.Denom()))
+	w.Float = threshold
+	return w
+}
+
+func (w weight) cmp(other weight) sign {
+	if w.Float.Sign() == 1 && w.Float.Cmp(other.Float) == 1 {
+		return support
+	}
+	if w.Float.Sign() == -1 && new(big.Float).Abs(w.Float).Cmp(other.Float) == 1 {
+		return against
+	}
+	return abstain
+}
+
+type tortoiseBallot struct {
+	id, base types.BallotID
+	votes    Opinion
+	weight   weight
 }

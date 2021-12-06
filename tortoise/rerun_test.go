@@ -101,10 +101,10 @@ func TestRerunEvictConcurrent(t *testing.T) {
 	tortoise.HandleIncomingLayer(ctx, last)
 	require.NoError(t, tortoise.Persist(ctx))
 
-	st := state{log: logtest.New(t), db: tortoise.trtl.db}
-	require.NoError(t, st.Recover())
-	require.Equal(t, last.Sub(1), st.Verified)
-	for lid := range st.BallotOpinionsByLayer {
-		require.True(t, lid.After(st.LastEvicted))
-	}
+	// st := state{log: logtest.New(t), db: tortoise.trtl.db}
+	// require.NoError(t, st.Recover())
+	// require.Equal(t, last.Sub(1), st.Verified)
+	// for lid := range st.BallotOpinionsByLayer {
+	// 	require.True(t, lid.After(st.LastEvicted))
+	// }
 }

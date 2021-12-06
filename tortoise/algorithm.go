@@ -2,7 +2,6 @@ package tortoise
 
 import (
 	"context"
-	"errors"
 	"math/big"
 	"sync"
 	"time"
@@ -10,7 +9,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -94,7 +92,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New creates Tortoise instance.
-func New(db database.Database, mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGetter, opts ...Opt) *Tortoise {
+func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGetter, opts ...Opt) *Tortoise {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
@@ -112,29 +110,13 @@ func New(db database.Database, mdb blockDataProvider, atxdb atxDataProvider, bea
 	}
 	t.trtl = newTurtle(
 		t.logger,
-		db,
 		mdb,
 		atxdb,
 		beacons,
 		t.cfg,
 	)
+	t.trtl.init(t.ctx, mesh.GenesisLayer())
 
-	if err := t.trtl.Recover(); err != nil {
-		if !errors.Is(err, database.ErrNotFound) {
-			t.logger.With().Panic("can't recover turtle state", log.Err(err))
-		}
-		t.trtl.init(t.ctx, mesh.GenesisLayer())
-	}
-	if err := recoverBallotWeight(
-		t.trtl.bdp,
-		t.trtl.atxdb,
-		t.trtl.BallotOpinionsByLayer,
-		t.trtl.BallotWeight,
-		t.cfg.LayerSize,
-		types.GetLayersPerEpoch(),
-	); err != nil {
-		t.logger.With().Panic("failed to recover ballot weights", log.Err(err))
-	}
 	t.org = organizer.New(
 		organizer.WithLogger(t.logger),
 		organizer.WithLastLayer(t.trtl.Last),
