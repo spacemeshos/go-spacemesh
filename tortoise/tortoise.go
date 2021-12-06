@@ -391,17 +391,17 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) ([]byte, 
 // HandleIncomingLayer processes all layer ballot votes
 // returns the old pbase and new pbase after taking into account ballot votes.
 func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) error {
-	defer t.evict(ctx)
+	// defer t.evict(ctx)
 
 	tctx := wrapContext(ctx)
-	// unconditionally set the layer to the last one that we have seen once tortoise or sync
-	// submits this layer. it doesn't matter if we fail to process it.
+
 	if t.common.last.Before(lid) {
 		t.common.last = lid
 	}
 	if t.common.processed.Before(lid) {
 		t.common.processed = lid
 	}
+
 	return t.processLayer(tctx, lid)
 }
 
@@ -420,7 +420,9 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 
 	// TODO(dshulyak) we should keep local opinion in memory, but it is it no very convenient
 	// because within hdist it may change due to the dependency on the current layer.
-	// maybe keep in memory but update it every time within hdist?
+	// maybe keep in memory but update it for layers within hdist every time new layer is received?
+	//
+	// load local opinion for blocks inbetween [min base ballot layer, last processed layer)
 	ballots, localOpinion, err := t.processBallots(ctx, lid, original)
 	if err != nil {
 		return err
