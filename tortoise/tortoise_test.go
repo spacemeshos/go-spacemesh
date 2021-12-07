@@ -296,7 +296,7 @@ func TestLayerPatterns(t *testing.T) {
 			last = lid
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
 		}
-		require.Equal(t, last.Sub(cfg.Hdist).Sub(1), verified)
+		require.Equal(t, last.Sub(1), verified)
 	})
 
 	t.Run("HealAfterBadGoodBadGoodBad", func(t *testing.T) {
@@ -322,7 +322,7 @@ func TestLayerPatterns(t *testing.T) {
 			last = lid
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
 		}
-		require.Equal(t, last.Sub(cfg.Hdist).Sub(1), verified)
+		require.Equal(t, last.Sub(1), verified)
 	})
 }
 
@@ -1256,7 +1256,7 @@ func TestMultiTortoise(t *testing.T) {
 		// minority node is healed
 		lastVerified = layerID.Sub(1).Sub(alg1.cfg.Hdist)
 		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 
 		// now simulate a rejoin
 		// send each tortoise's blocks to the other (simulated resync)
@@ -1302,7 +1302,7 @@ func TestMultiTortoise(t *testing.T) {
 
 			// majority tortoise is unaffected, minority tortoise remains stuck
 			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-			checkVerifiedLayer(t, alg2.trtl, lastVerified)
+			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 		}
 
 		// minority tortoise begins healing
@@ -1327,7 +1327,7 @@ func TestMultiTortoise(t *testing.T) {
 		// majority tortoise is unaffected, minority tortoise begins to heal but its verifying tortoise
 		// is still stuck
 		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1).Sub(alg2.cfg.Hdist))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 	})
 
 	t.Run("equal partition", func(t *testing.T) {
@@ -1464,8 +1464,8 @@ func TestMultiTortoise(t *testing.T) {
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 		// both nodes can't switch from full tortoise
-		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
-		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
+		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
 	})
 
 	t.Run("three-way partition", func(t *testing.T) {
@@ -1643,9 +1643,9 @@ func TestMultiTortoise(t *testing.T) {
 		alg3.HandleIncomingLayer(context.TODO(), layerID)
 
 		// all nodes are healed
-		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
-		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
-		checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
+		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
 	})
 }
 
@@ -2209,7 +2209,7 @@ func TestWeakCoinVoting(t *testing.T) {
 		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
-	require.Equal(t, last.Sub(1).Sub(hdist), verified)
+	require.Equal(t, last.Sub(1), verified)
 }
 
 func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {

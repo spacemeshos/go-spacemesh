@@ -9,10 +9,14 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
+)
+
+const (
+	verifyingMode = iota + 1
+	fullMode
 )
 
 var (
@@ -27,6 +31,8 @@ type turtle struct {
 	atxdb   atxDataProvider
 	bdp     blockDataProvider
 	beacons system.BeaconGetter
+
+	mode int8
 
 	common    commonState
 	verifying *verifying
@@ -46,6 +52,7 @@ func newTurtle(
 		common:  newCommonState(),
 		full:    newFullState(),
 		logger:  logger,
+		mode:    verifyingMode,
 		bdp:     bdp,
 		atxdb:   atxdb,
 		beacons: beacons,
@@ -171,6 +178,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		// consistent with our local opinion.
 		ballotID = goodChoices[0]
 		ballotLID = t.common.good
+		t.logger.With().Info("considering good base ballot", ballotID, ballotLID)
 		// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
 		exceptions, err = t.calculateExceptions(tctx, votinglid, t.common.good, t.common.good, Opinion{})
 	}
@@ -448,17 +456,19 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	if err != nil {
 		return err
 	}
-	// local opinion may change within hdist. this solution might be a bottleneck during rerun
-	// reconsider while working on https://github.com/spacemeshos/go-spacemesh/issues/2980
-	if err := t.updateLocalOpinion(ctx, t.common.verified.Add(1), t.common.processed); err != nil {
-		return err
-	}
-	localOpinion := t.common.localOpinion
-	t.verifying.processLayer(lid, localOpinion, ballots)
 
-	for {
+	if t.mode == verifyingMode {
+		// local opinion may change within hdist. this solution might be a bottleneck during rerun
+		// reconsider while working on https://github.com/spacemeshos/go-spacemesh/issues/2980
+		if err := t.updateLocalOpinion(ctx, t.common.verified.Add(1), t.common.processed); err != nil {
+			return err
+		}
+		localOpinion := t.common.localOpinion
+		t.verifying.processLayer(lid, localOpinion, ballots)
+
 		current := t.common.verified
 		newVerified := t.verifying.verifyLayers(localOpinion)
+
 		if newVerified.After(current) {
 			for lid := current.Add(1); !lid.After(newVerified); lid = lid.Add(1) {
 				for _, bid := range t.common.blocks[lid] {
@@ -475,40 +485,29 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			if t.common.verified == t.common.processed.Sub(1) {
 				return nil
 			}
-		} else {
-			// save votes, check if we were able to make progress with full tortoise.
-			// reset verifying tortoise weights, reprocess ballots afterwards
-			t.keepVotes(ballots)
-			prevVerified := t.common.verified
-			healed, err := t.healingTortoise(wrapContext(ctx), t.logger, t.common.verified.Add(1))
-			if !healed || err != nil {
-				return err
-			}
-
-			t.logger.With().Info("switching from full to verifying tortoise",
-				log.Stringer("verified", t.common.verified),
-			)
-			t.verifying.resetWeights()
-			if err := t.updateLocalOpinion(wrapContext(ctx), prevVerified.Add(1), t.common.processed); err != nil {
-				return err
-			}
-			for lid := prevVerified.Add(1); !lid.After(t.common.processed); lid = lid.Add(1) {
-				original := make([]*types.Ballot, 0, len(t.common.ballots[lid]))
-				for _, ballotID := range t.common.ballots[lid] {
-					ballot, err := t.bdp.GetBallot(ballotID)
-					if err != nil {
-						return fmt.Errorf("fetching ballot %s: %w", ballotID, err)
-					}
-					original = append(original, ballot)
-				}
-				ballots, err := t.processBallots(ctx, lid, original)
-				if err != nil {
-					return err
-				}
-				t.verifying.processLayer(lid, t.common.localOpinion, ballots)
-			}
 		}
 	}
+
+	t.keepVotes(ballots)
+	if t.isHealingEnabled(t.common.verified.Add(1)) || t.mode == fullMode {
+		if t.mode == verifyingMode {
+			t.logger.With().Info("switching to full self-healing tortoise",
+				lid,
+				log.Stringer("verified", t.common.verified),
+			)
+			t.mode = fullMode
+		}
+		prevVerified := t.common.verified
+		healed, err := t.healingTortoise(wrapContext(ctx), t.logger)
+		if !healed || err != nil {
+			return err
+		}
+
+		if err := t.updateLocalOpinion(wrapContext(ctx), prevVerified.Add(1), t.common.verified); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (t *turtle) updateLayerState(lid types.LayerID) error {
@@ -624,26 +623,24 @@ func (t *turtle) keepVotes(ballots []tortoiseBallot) {
 	}
 }
 
-func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log, lid types.LayerID) (bool, error) {
+func (t *turtle) isHealingEnabled(lid types.LayerID) bool {
 	// Verifying tortoise will wait `zdist' layers for consensus, then an additional `ConfidenceParam'
 	// layers until all other nodes achieve consensus. If it's still stuck after this point, i.e., if the gap
 	// between this unverified candidate layer and the latest layer is greater than this distance, then we trigger
 	// self healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
 	// we only consider the local opinion for recent layers.
-	logger.With().Debug("considering attempting to heal layer",
-		log.Named("layer_cutoff", t.layerCutoff()),
+	return lid.Before(t.layerCutoff()) && t.common.last.Difference(lid) > t.Zdist+t.ConfidenceParam
+}
+
+func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log) (bool, error) {
+	logger.With().Info("start self-healing tortoise",
+		log.Stringer("verified_layer", t.common.verified),
+		log.Stringer("layer_cutoff", t.layerCutoff()),
 		log.Uint32("zdist", t.Zdist),
-		log.Named("last_layer_received", t.common.last),
-		log.Uint32("confidence_param", t.ConfidenceParam))
-	if !(lid.Before(t.layerCutoff()) && t.common.last.Difference(lid) > t.Zdist+t.ConfidenceParam) {
-		return false, nil
-	}
-	logger.With().Info("start self-healing with verified layer", t.common.verified)
+		log.Stringer("last_layer_received", t.common.last),
+		log.Uint32("confidence_param", t.ConfidenceParam),
+	)
 	lastLayer := t.common.processed
-	// don't attempt to heal layers newer than Hdist
-	if lastLayer.After(t.layerCutoff()) {
-		lastLayer = t.layerCutoff()
-	}
 	lastVerified := t.common.verified
 	t.heal(ctx, lastLayer)
 	logger.With().Info("finished self-healing with verified layer", t.common.verified)
@@ -745,7 +742,7 @@ func (t *turtle) sumVotesForBlock(
 			votes := t.full.votes[ballotID]
 			if votes == nil {
 				return weightFromUint64(0), fmt.Errorf("bug: sum votes can't be executed for a layer %s where ballot %s votes do not exist",
-					ballotID, votelid,
+					votelid, ballotID,
 				)
 			}
 			ballotWeight, exists := t.common.ballotWeight[ballotID]
@@ -790,20 +787,6 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 			log.Uint32("hdist", t.Hdist),
 		)
 
-		// we should never run on layers newer than Hdist back (from last layer received)
-		// when bootstrapping, don't attempt any verification at all
-		var latestLayerWeCanVerify types.LayerID
-		if t.common.last.Before(types.NewLayerID(t.Hdist)) {
-			latestLayerWeCanVerify = mesh.GenesisLayer().Index()
-		} else {
-			latestLayerWeCanVerify = t.common.last.Sub(t.Hdist)
-		}
-		if candidateLayerID.After(latestLayerWeCanVerify) {
-			logger.With().Error("cannot heal layer that's not at least hdist layers old",
-				log.Named("highest_healable_layer", latestLayerWeCanVerify))
-			return
-		}
-
 		// Calculate the global opinion on all blocks in the layer
 		// Note: we look at ALL blocks we've seen for the layer, not just those we've previously marked contextually valid
 		logger.Info("self healing attempting to verify candidate layer")
@@ -828,7 +811,7 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 			// beacon values, we delay their votes by badBeaconVoteDelays layers
 			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID.Add(1), t.ballotFilterForHealing(logger))
 			if err != nil {
-				logger.Error("error summing votes for candidate block in candidate layer", log.Err(err))
+				logger.With().Error("error summing votes for candidate block in candidate layer", log.Err(err))
 				return
 			}
 
