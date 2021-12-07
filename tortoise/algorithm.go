@@ -119,7 +119,7 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 
 	t.org = organizer.New(
 		organizer.WithLogger(t.logger),
-		organizer.WithLastLayer(t.trtl.Last),
+		organizer.WithLastLayer(t.trtl.common.last),
 	)
 	ctx, cancel := context.WithCancel(t.ctx)
 	t.cancel = cancel
@@ -138,7 +138,7 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 func (trtl *Tortoise) LatestComplete() types.LayerID {
 	trtl.mu.RLock()
 	defer trtl.mu.RUnlock()
-	return trtl.trtl.Verified
+	return trtl.trtl.common.verified
 }
 
 // BaseBallot chooses a base ballot and creates a differences list. needs the hare results for latest layers.
@@ -155,7 +155,7 @@ func (trtl *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.Lay
 	defer trtl.mu.Unlock()
 
 	var (
-		old    = trtl.trtl.Verified
+		old    = trtl.trtl.common.verified
 		logger = trtl.logger.WithContext(ctx).With()
 	)
 
@@ -175,11 +175,11 @@ func (trtl *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.Lay
 		}
 		logger.Info("finished handling incoming layer",
 			log.FieldNamed("old_pbase", old),
-			log.FieldNamed("new_pbase", trtl.trtl.Verified),
+			log.FieldNamed("new_pbase", trtl.trtl.common.verified),
 			log.FieldNamed("incoming_layer", lid))
 	})
 
-	return old, trtl.trtl.Verified, reverted
+	return old, trtl.trtl.common.verified, reverted
 }
 
 // Persist saves a copy of the current tortoise state to the database.

@@ -5,7 +5,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func newVerifying(logger log.Log, config Config, common commonState) *verifying {
+func newVerifying(logger log.Log, config Config, common *commonState) *verifying {
 	return &verifying{
 		logger:       logger.Named("verifying"),
 		Config:       config,
@@ -19,7 +19,7 @@ type verifying struct {
 	logger log.Log
 
 	Config
-	commonState
+	*commonState
 
 	goodBallots map[types.BallotID]struct{}
 	// weight of good ballots in the layer
@@ -32,9 +32,9 @@ func (v *verifying) processLayer(lid types.LayerID, localOpinion Opinion, ballot
 	logger := v.logger.WithFields(lid)
 
 	expected := v.epochWeight[lid.GetEpoch()]
-	counted := v.sumGoodBallots(logger, localOpinion, ballots)
+	counted, count := v.sumGoodBallots(logger, localOpinion, ballots)
 
-	uncounted := weight{}
+	uncounted := weightFromUint64(0)
 	uncounted = uncounted.add(expected)
 	uncounted = uncounted.sub(counted)
 
@@ -49,23 +49,27 @@ func (v *verifying) processLayer(lid types.LayerID, localOpinion Opinion, ballot
 		log.Stringer("expected", expected),
 		log.Stringer("uncounted", uncounted),
 		log.Int("ballots_count", len(ballots)),
+		log.Int("good_ballots_count", count),
 	)
+	if count > 0 {
+		v.good = lid
+	}
 
 	return v.verifyLayers(logger, localOpinion)
 }
 
 func (v *verifying) verifyLayers(logger log.Log, localOpinion Opinion) types.LayerID {
-	localThreshold := weight{}
+	localThreshold := weightFromUint64(0)
 	localThreshold = localThreshold.add(v.epochWeight[v.last.GetEpoch()])
 	localThreshold = localThreshold.fraction(v.LocalThreshold)
 
 	for lid := v.verified.Add(1); lid.Before(v.processed); lid = lid.Add(1) {
-		// expected weight is always based on last
-		threshold := getExpectedWeight(v.epochWeight, lid, v.last)
+		// TODO(dshulyak) expected weight must be based always on the last layer.
+		threshold := computeExpectedWeight(v.epochWeight, lid, v.processed)
 		threshold = threshold.fraction(v.GlobalThreshold)
 		threshold = threshold.add(localThreshold)
 
-		votingWeight := weight{}
+		votingWeight := weightFromUint64(0)
 		votingWeight = votingWeight.add(v.totalWeight)
 		votingWeight = votingWeight.sub(v.layerWeights[lid])
 
@@ -96,16 +100,18 @@ func (v *verifying) verifyLayers(logger log.Log, localOpinion Opinion) types.Lay
 	return v.last.Sub(1)
 }
 
-func (v *verifying) sumGoodBallots(logger log.Log, localOpinion map[types.BlockID]sign, ballots []tortoiseBallot) weight {
-	sum := weight{}
+func (v *verifying) sumGoodBallots(logger log.Log, localOpinion map[types.BlockID]sign, ballots []tortoiseBallot) (weight, int) {
+	sum := weightFromUint64(0)
+	n := 0
 	for _, ballot := range ballots {
 		if !v.isGood(logger, localOpinion, ballot) {
 			continue
 		}
 		v.goodBallots[ballot.id] = struct{}{}
 		sum = sum.add(ballot.weight)
+		n++
 	}
-	return sum
+	return sum, n
 }
 
 func (v *verifying) isGood(logger log.Log, localOpinion Opinion, ballot tortoiseBallot) bool {
@@ -145,12 +151,4 @@ func (v *verifying) isGood(logger log.Log, localOpinion Opinion, ballot tortoise
 
 	logger.With().Debug("ballot is good", ballot.id)
 	return true
-}
-
-func getExpectedWeight(weights map[types.EpochID]weight, from, to types.LayerID) weight {
-	total := weight{}
-	for lid := from.Add(1); !from.After(to); lid = lid.Add(1) {
-		total = total.add(weights[lid.GetEpoch()])
-	}
-	return total
 }

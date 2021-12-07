@@ -166,82 +166,6 @@ var (
 	defaultTestConfidenceParam = DefaultConfig().ConfidenceParam
 )
 
-// voteNegative - the number of blocks to vote negative per layer
-// voteAbstain - the number of layers to vote abstain because we always abstain on a whole layer.
-func turtleSanity(t *testing.T, numLayers types.LayerID, blocksPerLayer int, voteNegative, voteAbstain int) (trtl *turtle, negative, abstain []types.BlockID) {
-	msh := getInMemMesh(t)
-	logger := logtest.New(t)
-	newlyrs := make(map[types.LayerID]struct{})
-
-	inputVectorFn := func(l types.LayerID) (ids []types.BlockID, err error) {
-		if l.Before(mesh.GenesisLayer().Index()) {
-			panic("shouldn't happen")
-		}
-		if l == mesh.GenesisLayer().Index() {
-			return types.BlockIDs(mesh.GenesisLayer().Blocks()), nil
-		}
-
-		_, exist := newlyrs[l]
-
-		if !exist && l != numLayers {
-			newlyrs[l] = struct{}{}
-		}
-
-		blks, err := msh.LayerBlockIds(l)
-		if err != nil {
-			t.Log(err)
-			panic("db err")
-		}
-
-		if voteAbstain > 0 {
-			if !exist && l != numLayers {
-				voteAbstain--
-				abstain = append(abstain, blks...)
-			}
-			return nil, errors.New("hare didn't finish")
-		}
-
-		if voteNegative == 0 {
-			return blks, nil
-		}
-
-		sorted := types.SortBlockIDs(blks)
-
-		if !exist && l != numLayers {
-			negative = append(negative, sorted[:voteNegative]...)
-		}
-		return sorted[voteNegative:], nil
-	}
-
-	trtl = defaultTurtle(t)
-	trtl.LayerSize = uint32(blocksPerLayer)
-	trtl.bdp = msh
-	trtl.init(context.TODO(), mesh.GenesisLayer())
-
-	var l types.LayerID
-	atxdb := getAtxDB()
-	trtl.atxdb = atxdb
-	for l = mesh.GenesisLayer().Index().Add(1); !l.After(numLayers); l = l.Add(1) {
-		makeAndProcessLayer(t, l, trtl, blocksPerLayer, blocksPerLayer, atxdb, msh, inputVectorFn)
-		logger.Debug("======================== handled layer", l)
-		lastlyr := trtl.BallotOpinionsByLayer[l]
-		for _, v := range lastlyr {
-			logger.Debug("block opinion map size", len(v))
-			// the max. number of layers we store opinions for is the window size (since last evicted) + 3.
-			// eviction happens _after_ blocks for a new layer N have been processed, and that layer hasn't yet
-			// been verified. at this point in time,
-			// tortoise window := N - 1 (last verified) - windowSize - 1 (first layer to evict) - 1 (layer not yet evicted)
-			if (len(v)) > blocksPerLayer*int(trtl.WindowSize+3) {
-				t.Errorf("layer opinion table exceeded max size, LEAK! size: %v, maxsize: %v",
-					len(v), blocksPerLayer*int(trtl.WindowSize+3))
-			}
-			break
-		}
-	}
-
-	return
-}
-
 func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
 	lyr := makeLayer(t, l, trtl, natxs, blocksPerLayer, atxdb, msh, inputVectorFn)
 	logger := logtest.New(t)
@@ -326,7 +250,7 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 
 func TestLayerPatterns(t *testing.T) {
 	const size = 10 // more blocks means a longer test
-	t.Run("happy", func(t *testing.T) {
+	t.Run("Good", func(t *testing.T) {
 		s := sim.New(sim.WithLayerSize(size))
 		s.Setup()
 
@@ -348,7 +272,7 @@ func TestLayerPatterns(t *testing.T) {
 		require.Equal(t, last.Sub(1), verified)
 	})
 
-	t.Run("heal after bad layers", func(t *testing.T) {
+	t.Run("HealAfterBad", func(t *testing.T) {
 		s := sim.New(sim.WithLayerSize(size))
 		s.Setup()
 
@@ -380,7 +304,7 @@ func TestLayerPatterns(t *testing.T) {
 		require.Equal(t, last.Sub(1), verified)
 	})
 
-	t.Run("heal after good bad good bad good pattern", func(t *testing.T) {
+	t.Run("HealAfterBadGoodBadGoodBad", func(t *testing.T) {
 		s := sim.New(sim.WithLayerSize(size))
 		s.Setup()
 
@@ -462,15 +386,13 @@ func TestAbstainsInMiddle(t *testing.T) {
 	trtl.atxdb = atxdb
 	for l = types.GetEffectiveGenesis().Add(1); l.Before(types.GetEffectiveGenesis().Add(layers.Uint32())); l = l.Add(1) {
 		makeAndProcessLayer(t, l, trtl, blocksPerLayer, blocksPerLayer, atxdb, msh, layerfuncs[l.Difference(types.GetEffectiveGenesis())-1])
-		logger.Debug("handled layer", l, "verified layer", trtl.Verified,
-			"========================================================================")
 	}
 
 	// verification will get stuck as of the first layer with conflicting local and global opinions.
 	// block votes aren't counted because blocks aren't marked good, because they contain exceptions older
 	// than their base block.
 	// self-healing will not run because the layers aren't old enough.
-	require.Equal(t, int(types.GetEffectiveGenesis().Add(uint32(initialNumGood)).Uint32()), int(trtl.Verified.Uint32()),
+	require.Equal(t, int(types.GetEffectiveGenesis().Add(uint32(initialNumGood)).Uint32()), int(trtl.common.verified.Uint32()),
 		"verification should advance after hare finishes")
 	// todo: also check votes with requireVote
 }
@@ -551,82 +473,21 @@ func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDat
 	return lyr
 }
 
-func TestEviction(t *testing.T) {
-	const size = 10
-	s := sim.New(
-		sim.WithLayerSize(size),
-	)
-	s.Setup()
-
-	ctx := context.Background()
-	cfg := defaultTestConfig()
-	cfg.LayerSize = size
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
-	trtl := tortoise.trtl
-
-	for i := 0; i < 100; i++ {
-		tortoise.HandleIncomingLayer(ctx, s.Next())
-	}
-
-	// old data were evicted
-	require.EqualValues(t, trtl.Verified.Sub(tortoise.trtl.WindowSize+1).Uint32(), trtl.LastEvicted.Uint32())
-
-	checkBlockLayer := func(bid types.BlockID, layerAfter types.LayerID) types.LayerID {
-		blk, err := trtl.bdp.GetBlock(bid)
-		require.NoError(t, err, "error reading block data")
-		require.True(t, !blk.LayerIndex.Before(layerAfter),
-			"opinion on ancient block should have been evicted: block %v layer %v maxdepth %v lastevicted %v windowsize %v",
-			blk.ID(), blk.LayerIndex, layerAfter, trtl.LastEvicted, trtl.WindowSize)
-		return blk.LayerIndex
-	}
-
-	count := 0
-	for _, blks := range trtl.BallotOpinionsByLayer {
-		count += len(blks)
-		for ballotID, opinion := range blks {
-			lid := checkBlockLayer(types.BlockID(ballotID), trtl.LastEvicted)
-
-			// check deep opinion layers
-			for bid := range opinion {
-				// check that child (opinion) block layer is within window size from parent block layer
-				// we allow a leeway of three layers:
-				// 1. eviction evicts one layer prior to window start (Verified - WindowSize)
-				// 2. Verified layer lags Last processed layer by one
-				// 3. block opinions are added before block layer is finished processing
-				checkBlockLayer(bid, lid.Sub(trtl.WindowSize+3))
-			}
-		}
-	}
-}
-
-func TestEviction2(t *testing.T) {
-	layers := types.NewLayerID(uint32(defaultTestWindowSize) * 3)
-	avgPerLayer := 10
-	trtl, _, _ := turtleSanity(t, layers, avgPerLayer, 0, 0)
-	require.Equal(t, int(defaultTestWindowSize)+2, len(trtl.BallotOpinionsByLayer))
-	count := 0
-	for _, blks := range trtl.BallotOpinionsByLayer {
-		count += len(blks)
-	}
-	require.Equal(t, (int(defaultTestWindowSize)+2)*avgPerLayer, count)
-	require.Equal(t, (int(defaultTestWindowSize)+2)*avgPerLayer, len(trtl.GoodBallotsIndex)) // all blocks should be good
-}
-
 func TestLayerCutoff(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh(t)
 	alg := defaultAlgorithm(t, mdb)
 
 	// cutoff should be zero if we haven't seen at least Hdist layers yet
-	alg.trtl.Last = types.NewLayerID(alg.trtl.Hdist - 1)
+	alg.trtl.common.last = types.NewLayerID(alg.trtl.Hdist - 1)
 	r.Equal(0, int(alg.trtl.layerCutoff().Uint32()))
-	alg.trtl.Last = types.NewLayerID(alg.trtl.Hdist)
+	alg.trtl.common.last = types.NewLayerID(alg.trtl.Hdist)
 	r.Equal(0, int(alg.trtl.layerCutoff().Uint32()))
 
 	// otherwise, cutoff should be Hdist layers before Last
-	alg.trtl.Last = types.NewLayerID(alg.trtl.Hdist + 1)
+	alg.trtl.common.last = types.NewLayerID(alg.trtl.Hdist + 1)
 	r.Equal(1, int(alg.trtl.layerCutoff().Uint32()))
-	alg.trtl.Last = types.NewLayerID(alg.trtl.Hdist + 100)
+	alg.trtl.common.last = types.NewLayerID(alg.trtl.Hdist + 100)
 	r.Equal(100, int(alg.trtl.layerCutoff().Uint32()))
 }
 
@@ -673,42 +534,6 @@ func TestAddToMesh(t *testing.T) {
 	require.NoError(t, addLayerToMesh(mdb, l4))
 	alg.HandleIncomingLayer(context.TODO(), l4.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(3).Uint32()), int(alg.LatestComplete().Uint32()), "wrong latest complete layer")
-}
-
-func TestPersistAndRecover(t *testing.T) {
-	const size = 10
-	s := sim.New(
-		sim.WithLayerSize(size),
-		sim.WithPath(t.TempDir()),
-	)
-	s.Setup()
-	ctx := context.Background()
-	cfg := defaultTestConfig()
-	cfg.LayerSize = size
-	cfg.WindowSize = 15
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
-
-	var last, verified types.LayerID
-	for i := 0; i < 30; i++ {
-		last = s.Next()
-		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
-	}
-	require.Equal(t, last.Sub(1), verified)
-	require.NoError(t, tortoise.Persist(ctx))
-
-	tortoise2 := New(
-		s.GetState(0).MeshDB,
-		s.GetState(0).AtxDB,
-		s.GetState(0).Beacons,
-		WithConfig(cfg),
-	)
-	require.Equal(t, tortoise.trtl.LastEvicted, tortoise2.trtl.LastEvicted)
-	require.Equal(t, tortoise.trtl.Verified, tortoise2.trtl.Verified)
-	require.Equal(t, tortoise.trtl.Last, tortoise2.trtl.Last)
-	require.Equal(t, tortoise.trtl.Processed, tortoise2.trtl.Processed)
-	require.Equal(t, tortoise.trtl.WindowSize, tortoise2.trtl.WindowSize)
-	require.Equal(t, tortoise.trtl.Last, tortoise2.trtl.Last)
-	require.Equal(t, tortoise.trtl.BallotWeight, tortoise2.trtl.BallotWeight)
 }
 
 func TestBaseBallot(t *testing.T) {
@@ -779,8 +604,8 @@ func defaultTurtle(tb testing.TB) *turtle {
 func TestCloneTurtle(t *testing.T) {
 	r := require.New(t)
 	trtl := defaultTurtle(t)
-	trtl.LayerSize++                 // make sure defaults aren't being read
-	trtl.Last = types.NewLayerID(10) // state should not be cloned
+	trtl.LayerSize++                        // make sure defaults aren't being read
+	trtl.common.last = types.NewLayerID(10) // state should not be cloned
 	trtl2 := trtl.cloneTurtleParams()
 	r.Equal(trtl.bdp, trtl2.bdp)
 	r.Equal(trtl.Hdist, trtl2.Hdist)
@@ -792,7 +617,7 @@ func TestCloneTurtle(t *testing.T) {
 	r.Equal(trtl.GlobalThreshold, trtl2.GlobalThreshold)
 	r.Equal(trtl.LocalThreshold, trtl2.LocalThreshold)
 	r.Equal(trtl.RerunInterval, trtl2.RerunInterval)
-	r.NotEqual(trtl.Last, trtl2.Last)
+	r.NotEqual(trtl.common.last, trtl2.common.last)
 }
 
 func defaultTestConfig() Config {
@@ -820,136 +645,6 @@ func defaultAlgorithm(tb testing.TB, mdb *mesh.DB) *Tortoise {
 		WithConfig(defaultTestConfig()),
 		WithLogger(logtest.New(tb)),
 	)
-}
-
-func TestCalculateExceptions(t *testing.T) {
-	r := require.New(t)
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-
-	// helper function for checking votes
-	expectVotes := func(votes []map[types.BlockID]struct{}, numAgainst, numFor, numNeutral int) {
-		r.Len(votes, 3, "vote vector size is wrong")
-		r.Len(votes[0], numAgainst) // against
-		r.Len(votes[1], numFor)     // for
-		r.Len(votes[2], numNeutral) // neutral
-	}
-
-	// genesis layer
-	l0ID := types.GetEffectiveGenesis()
-	votes, err := alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l0ID, Opinion{})
-	r.NoError(err)
-	// expect votes in support of all genesis blocks
-	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), 0)
-
-	// layer greater than last processed: expect support only for genesis
-	l1ID := l0ID.Add(1)
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
-	r.NoError(err)
-	expectVotes(votes, 0, 1, 0)
-
-	// now advance the processed layer
-	alg.trtl.Last = l1ID
-
-	// missing layer data
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
-	r.NoError(err)
-	expectVotes(votes, 0, 1, 0)
-
-	// layer opinion vector is nil (abstains): recent layer, in mesh, no input vector
-	alg.trtl.Last = l0ID
-	l1 := createTurtleLayer(t, l1ID, mdb, atxdb, alg.BaseBallot, mdb.LayerBlockIds, defaultTestLayerSize)
-	r.NoError(addLayerToMesh(mdb, l1))
-	alg.trtl.Last = l1ID
-	mdb.InputVectorBackupFunc = nil
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
-	r.NoError(err)
-	// expect no against, FOR only for l0, and NEUTRAL for l1
-	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), defaultTestLayerSize)
-
-	// adding diffs for: support all blocks in the layer
-	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
-	r.NoError(err)
-	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks())+defaultTestLayerSize, 0)
-
-	// adding diffs against: vote against all blocks in the layer
-	mdb.InputVectorBackupFunc = nil
-	// we cannot store an empty vector here (it comes back as nil), so just put another block ID in it
-	r.NoError(mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, []types.BlockID{mesh.GenesisBlock().ID()}))
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, Opinion{})
-	r.NoError(err)
-
-	// we don't explicitly vote against blocks in the layer, we implicitly vote against them by not voting for them
-	expectVotes(votes, 0, len(mesh.GenesisLayer().Blocks()), 0)
-
-	// compare opinions: all agree, no exceptions
-	mdb.InputVectorBackupFunc = mdb.LayerBlockIds
-	opinion := Opinion{
-		mesh.GenesisBlock().ID(): support,
-		l1.Blocks()[0].ID():      support,
-		l1.Blocks()[1].ID():      support,
-		l1.Blocks()[2].ID():      support,
-	}
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, opinion)
-	r.NoError(err)
-	expectVotes(votes, 0, 0, 0)
-
-	// compare opinions: all disagree, adds exceptions
-	opinion = Opinion{
-		mesh.GenesisBlock().ID(): against,
-		l1.Blocks()[0].ID():      against,
-		l1.Blocks()[1].ID():      against,
-		l1.Blocks()[2].ID():      against,
-	}
-	votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l1ID, opinion)
-	r.NoError(err)
-	expectVotes(votes, 0, 4, 0)
-
-	l2ID := l1ID.Add(1)
-	l3ID := l2ID.Add(1)
-	var l3 *types.Layer
-
-	// exceeding max exceptions
-	t.Run("exceeding max exceptions", func(t *testing.T) {
-		alg.trtl.MaxExceptions = 10
-		l2 := createTurtleLayer(t, l2ID, mdb, atxdb, alg.BaseBallot, mdb.LayerBlockIds, alg.trtl.MaxExceptions+1)
-		for _, block := range l2.Blocks() {
-			r.NoError(mdb.AddBlock(block))
-		}
-		l3 = createTurtleLayer(t, l3ID, mdb, atxdb, alg.BaseBallot, mdb.LayerBlockIds, defaultTestLayerSize)
-		alg.trtl.Last = l2ID
-		votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l2ID, Opinion{})
-		r.Error(err)
-		r.Contains(err.Error(), errstrTooManyExceptions, "expected too many exceptions error")
-		r.Nil(votes)
-	})
-
-	// TODO: test adding base block opinion in support of a block that disagrees with the local opinion, e.g., a block
-	//   that this node has not seen yet. See https://github.com/spacemeshos/go-spacemesh/issues/2424.
-
-	t.Run("advance sliding window", func(t *testing.T) {
-		// advance the evicted layer until the exception layer slides outside the sliding window
-		for _, block := range l3.Blocks() {
-			r.NoError(mdb.AddBlock(block))
-		}
-		l4ID := l3ID.Add(1)
-		alg.trtl.LastEvicted = l2ID
-		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l3ID))
-		l4 := createTurtleLayer(t, l4ID, mdb, atxdb, alg.BaseBallot, mdb.LayerBlockIds, defaultTestLayerSize)
-		for _, block := range l4.Blocks() {
-			r.NoError(mdb.AddBlock(block))
-		}
-		l5ID := l4ID.Add(1)
-		createTurtleLayer(t, l5ID, mdb, atxdb, alg.BaseBallot, mdb.LayerBlockIds, defaultTestLayerSize)
-		alg.trtl.Last = l4ID
-		votes, err = alg.trtl.calculateExceptions(wrapContext(context.TODO()), types.LayerID{}, l3ID, Opinion{})
-		r.NoError(err)
-		// expect votes FOR the blocks in the two intervening layers between the base ballot layer and the last layer
-		expectVotes(votes, 0, 2*defaultTestLayerSize, 0)
-	})
 }
 
 func TestSumVotes(t *testing.T) {
@@ -1263,9 +958,11 @@ func TestSumVotes(t *testing.T) {
 				}
 				ballots = append(ballots, layerBallots)
 
-				require.NoError(t, consensus.processBallots(wrapContext(ctx), layerBallots))
-				consensus.Processed = lid
-				consensus.Last = lid
+				consensus.common.processed = lid
+				consensus.common.last = lid
+				tballots, _, err := consensus.processBallots(wrapContext(ctx), lid, layerBallots)
+				consensus.keepVotes(tballots)
+				require.NoError(t, err)
 			}
 			bid := types.BlockID(blocks[tc.target[0]][tc.target[1]].ID())
 			lid := genesis.Add(uint32(tc.target[0] + 2)) // +2 so that we count votes after target
@@ -1287,7 +984,7 @@ func makeAtxHeaderWithWeight(weight uint) *types.ActivationTxHeader {
 }
 
 func checkVerifiedLayer(t *testing.T, trtl *turtle, layerID types.LayerID) {
-	require.Equal(t, int(layerID.Uint32()), int(trtl.Verified.Uint32()), "got unexpected value for last verified layer")
+	require.Equal(t, int(layerID.Uint32()), int(trtl.common.verified.Uint32()), "got unexpected value for last verified layer")
 }
 
 func TestHealing(t *testing.T) {
@@ -1320,12 +1017,12 @@ func TestHealing(t *testing.T) {
 		checkVerifiedLayer(t, alg.trtl, l0ID)
 
 		// later, healing should not occur on layers not at least Hdist back
-		alg.trtl.Last = types.NewLayerID(alg.trtl.Hdist + 1)
+		alg.trtl.common.last = types.NewLayerID(alg.trtl.Hdist + 1)
 		alg.trtl.heal(wrapContext(context.TODO()), l2ID)
 		checkVerifiedLayer(t, alg.trtl, l0ID)
 	})
 
-	alg.trtl.Last = l0ID
+	alg.trtl.common.last = l0ID
 	atxdb = getAtxDB()
 	atxdb.storeEpochWeight(uint64(defaultTestLayerSize))
 	alg.trtl.atxdb = atxdb
@@ -1365,7 +1062,7 @@ func TestHealing(t *testing.T) {
 
 		// then create and process one more new layer
 		// prevent base ballot from referencing earlier (approved) layers
-		alg.trtl.Last = l0ID
+		alg.trtl.common.last = l0ID
 		makeLayerWithBeacon(t, l3ID, alg.trtl, goodBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l3ID))
 
@@ -1391,25 +1088,6 @@ func TestHealing(t *testing.T) {
 	})
 
 	l4ID := l3ID.Add(1)
-
-	// healing should count votes of non-good blocks
-	t.Run("counts votes of non-good blocks", func(t *testing.T) {
-		checkVerifiedLayer(t, alg.trtl, l2ID)
-
-		// create and process several more layers
-		// but don't save layer input vectors, so local opinion is abstain
-		makeLayerWithBeacon(t, l4ID, alg.trtl, goodBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l4ID))
-
-		// delete good blocks data
-		oldGoodBallotsIndex := alg.trtl.GoodBallotsIndex
-		alg.trtl.GoodBallotsIndex = make(map[types.BallotID]bool, 0)
-
-		alg.trtl.heal(wrapContext(context.TODO()), l4ID)
-		checkVerifiedLayer(t, alg.trtl, l3ID)
-		alg.trtl.GoodBallotsIndex = oldGoodBallotsIndex
-	})
-
 	l5ID := l4ID.Add(1)
 	l6ID := l5ID.Add(1)
 	l7ID := l6ID.Add(1)
@@ -1429,10 +1107,7 @@ func TestHealing(t *testing.T) {
 		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l7ID))
 		checkVerifiedLayer(t, alg.trtl, l3ID)
 
-		// delete good blocks data
-		alg.trtl.GoodBallotsIndex = make(map[types.BallotID]bool, 0)
-
-		alg.trtl.Last = l7ID.Add(types.GetLayersPerEpoch() * 2)
+		alg.trtl.common.last = l7ID.Add(types.GetLayersPerEpoch() * 2)
 		alg.trtl.Hdist = 0
 		alg.trtl.heal(wrapContext(context.TODO()), l7ID)
 		checkVerifiedLayer(t, alg.trtl, l6ID)
@@ -2225,7 +1900,7 @@ func TestComputeExpectedWeight(t *testing.T) {
 			var (
 				ctrl         = gomock.NewController(t)
 				atxdb        = mocks.NewMockatxDataProvider(ctrl)
-				epochWeights = map[types.EpochID]uint64{}
+				epochWeights = map[types.EpochID]weight{}
 				first        = tc.target.Add(1).GetEpoch()
 			)
 			atxdb.EXPECT().GetEpochWeight(gomock.Any()).DoAndReturn(func(eid types.EpochID) (uint64, []types.ATXID, error) {
@@ -2235,8 +1910,12 @@ func TestComputeExpectedWeight(t *testing.T) {
 				}
 				return tc.totals[pos], nil, nil
 			}).AnyTimes()
-			weight, err := computeExpectedVoteWeight(atxdb, epochWeights, tc.target, tc.last)
-			require.NoError(t, err)
+			for lid := tc.target.Add(1); !lid.After(tc.last); lid = lid.Add(1) {
+				_, err := computeEpochWeight(atxdb, epochWeights, lid.GetEpoch())
+				require.NoError(t, err)
+			}
+
+			weight := computeExpectedWeight(epochWeights, tc.target, tc.last)
 			require.Equal(t, tc.expect.String(), weight.String())
 		})
 	}
@@ -2403,8 +2082,8 @@ func TestBallotFilterForHealing(t *testing.T) {
 	trtl := defaultTurtle(t)
 	trtl.beacons = mockBeacons
 
-	trtl.BallotLayer[goodBallot.ID()] = layerID
-	trtl.BallotLayer[badBallot.ID()] = layerID
+	trtl.common.ballotLayer[goodBallot.ID()] = layerID
+	trtl.common.ballotLayer[badBallot.ID()] = layerID
 
 	logger := logtest.New(t)
 	// cause the bad beacon block to be cached
@@ -2413,7 +2092,7 @@ func TestBallotFilterForHealing(t *testing.T) {
 	assert.False(t, trtl.ballotHasGoodBeacon(badBallot, logger))
 
 	// we don't count votes in bad beacon block for badBeaconVoteDelays layers
-	trtl.Last = layerID
+	trtl.common.last = layerID
 	i := uint32(1)
 	for ; i <= defaultVoteDelays; i++ {
 		filter := trtl.ballotFilterForHealing(logger)
@@ -2421,7 +2100,7 @@ func TestBallotFilterForHealing(t *testing.T) {
 		assert.False(t, filter(badBallot.ID()))
 	}
 	// now we count the bad beacon block's votes
-	trtl.Last = layerID.Add(10)
+	trtl.common.last = layerID.Add(10)
 	filter := trtl.ballotFilterForHealing(logger)
 	assert.True(t, filter(goodBallot.ID()))
 	assert.True(t, filter(badBallot.ID()))
@@ -2778,7 +2457,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	// because we are comparing with local opinion only within sliding window
 	// we will never find inconsistencies for the leftmost block in sliding window
 	// and it will not include against votes explicitly, as you can see above
-	delete(tortoise.trtl.BallotOpinionsByLayer, genesis.Add(1))
+	delete(tortoise.trtl.common.ballots, genesis.Add(1))
 	base, exceptions, _ = tortoise.BaseBallot(ctx)
 	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, base, last, last)
 	require.Empty(t, exceptions[2])
@@ -2969,7 +2648,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				ballots []*types.Ballot
 				atxs    []*types.ActivationTxHeader
 
-				weights = map[types.BallotID]*big.Float{}
+				weights = map[types.BallotID]weight{}
 
 				ctrl  = gomock.NewController(t)
 				atxdb = mocks.NewMockatxDataProvider(ctrl)

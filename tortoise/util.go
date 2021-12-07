@@ -72,6 +72,10 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 	return arr
 }
 
+func weightFromUint64(value uint64) weight {
+	return weight{Float: new(big.Float).SetUint64(value)}
+}
+
 // weight represents any weight in the tortoise.
 //
 // TODO(dshulyak) needs to be replaced with fixed float
@@ -80,23 +84,45 @@ type weight struct {
 	*big.Float
 }
 
-func (w weight) add(other weight) weight {
+func (w *weight) ensure() {
 	if w.Float == nil {
-		w.Float = big.NewFloat(0)
+		w.Float = new(big.Float)
 	}
-	w.Float.Add(w.Float, w.Float)
+}
+
+func (w weight) add(other weight) weight {
+	w.ensure()
+	w.Float.Add(w.Float, other.Float)
 	return w
 }
 
 func (w weight) sub(other weight) weight {
-	if w.Float == nil {
-		w.Float = big.NewFloat(0)
-	}
+	w.ensure()
 	w.Float.Sub(w.Float, other.Float)
 	return w
 }
 
+func (w weight) div(other weight) weight {
+	w.ensure()
+	w.Float.Quo(w.Float, other.Float)
+	return w
+}
+
+func (w weight) neg() weight {
+	w.ensure()
+	w.Float.Neg(w.Float)
+	return w
+}
+
+func (w weight) copy() weight {
+	w.ensure()
+	other := weight{Float: new(big.Float)}
+	other.Float = other.Float.Copy(w.Float)
+	return other
+}
+
 func (w weight) fraction(frac *big.Rat) weight {
+	w.ensure()
 	threshold := new(big.Float).SetInt(frac.Num())
 	threshold.Mul(threshold, w.Float)
 	threshold.Quo(threshold, new(big.Float).SetInt(frac.Denom()))
@@ -105,6 +131,7 @@ func (w weight) fraction(frac *big.Rat) weight {
 }
 
 func (w weight) cmp(other weight) sign {
+	w.ensure()
 	if w.Float.Sign() == 1 && w.Float.Cmp(other.Float) == 1 {
 		return support
 	}
@@ -112,6 +139,11 @@ func (w weight) cmp(other weight) sign {
 		return against
 	}
 	return abstain
+}
+
+func (w weight) String() string {
+	w.ensure()
+	return w.Float.String()
 }
 
 type tortoiseBallot struct {

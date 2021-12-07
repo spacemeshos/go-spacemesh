@@ -36,11 +36,11 @@ func (t *Tortoise) updateFromRerun(ctx context.Context) (bool, types.LayerID) {
 		updated   = completed.Consensus
 		err       error
 	)
-	if current.Last.After(updated.Last) && err == nil {
+	if current.common.last.After(updated.common.last) && err == nil {
 		start := time.Now()
 		logger.Info("tortoise received more layers while rerun was in progress. running a catchup",
-			log.FieldNamed("last", current.Last),
-			log.FieldNamed("rerun-last", updated.Last))
+			log.FieldNamed("last", current.common.last),
+			log.FieldNamed("rerun-last", updated.common.last))
 
 		err = catchupToCurrent(ctx, current, updated)
 		if err != nil {
@@ -77,7 +77,7 @@ func (t *Tortoise) rerunLoop(ctx context.Context, period time.Duration) {
 
 func (t *Tortoise) rerun(ctx context.Context) error {
 	t.mu.RLock()
-	last := t.trtl.Last
+	last := t.trtl.common.last
 	t.mu.RUnlock()
 
 	logger := t.logger.WithContext(ctx).WithFields(
@@ -93,7 +93,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 	consensus.init(ctx, mesh.GenesisLayer())
 	tracer := &validityTracer{blockDataProvider: consensus.bdp}
 	consensus.bdp = tracer
-	consensus.Last = last
+	consensus.common.last = last
 
 	for lid := types.GetEffectiveGenesis(); !lid.After(last); lid = lid.Add(1) {
 		if err := consensus.HandleIncomingLayer(ctx, lid); err != nil {
@@ -145,7 +145,7 @@ func (vt *validityTracer) FirstLayer() types.LayerID {
 }
 
 func catchupToCurrent(ctx context.Context, current, updated *turtle) error {
-	for lid := updated.Last.Add(1); !lid.After(current.Last); lid = lid.Add(1) {
+	for lid := updated.common.last.Add(1); !lid.After(current.common.last); lid = lid.Add(1) {
 		if err := updated.HandleIncomingLayer(ctx, lid); err != nil {
 			return err
 		}
