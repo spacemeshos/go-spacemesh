@@ -7,7 +7,7 @@ import (
 
 func newVerifying(logger log.Log, config Config, common *commonState) *verifying {
 	return &verifying{
-		logger:       logger.Named("verifying"),
+		logger:       logger,
 		Config:       config,
 		commonState:  common,
 		goodBallots:  map[types.BallotID]struct{}{},

@@ -2153,7 +2153,7 @@ func ensureBlockLayerWithin(tb testing.TB, bdp blockDataProvider, bid types.Bloc
 func TestWeakCoinVoting(t *testing.T) {
 	const (
 		size  = 6
-		hdist = 1
+		hdist = 2
 	)
 	s := sim.New(
 		sim.WithLayerSize(size),
@@ -2205,11 +2205,11 @@ func TestWeakCoinVoting(t *testing.T) {
 		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis.Add(5), last.Sub(hdist).Sub(1))
 	}
 
-	for i := 0; i < 4; i++ {
+	for i := 0; i < 10; i++ {
 		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
-	require.Equal(t, last.Sub(1), verified)
+	require.Equal(t, last.Sub(1).Sub(hdist), verified)
 }
 
 func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
