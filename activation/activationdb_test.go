@@ -11,7 +11,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/golang/mock/gomock"
 	"github.com/google/uuid"
 	"github.com/spacemeshos/ed25519"
 	"github.com/stretchr/testify/assert"
@@ -21,132 +20,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
-
-func createLayerWithAtx2(t require.TestingT, msh *mesh.Mesh, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
-	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
-		block1.ForDiff = append(block1.ForDiff, votes...)
-		for _, atx := range atxs {
-			*block1.ActiveSet = append(*block1.ActiveSet, atx.ID())
-		}
-	loop:
-		for _, v := range views {
-			for _, vv := range votes {
-				if vv == v {
-					continue loop
-				}
-			}
-			block1.AgainstDiff = append(block1.AgainstDiff, v)
-		}
-		err := msh.AddBlockWithTxs(context.TODO(), block1)
-		require.NoError(t, err)
-		created = append(created, block1.ID())
-	}
-	return
-}
-
-type MeshValidatorMock struct{}
-
-func (m *MeshValidatorMock) Persist(context.Context) error {
-	return nil
-}
-
-func (m *MeshValidatorMock) LatestComplete() types.LayerID {
-	panic("implement me")
-}
-
-func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
-	return layerID.Sub(1), layerID, false
-}
-
-func (m *MeshValidatorMock) HandleLateBlocks(_ context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
-	return blocks[0].Layer().Sub(1), blocks[0].Layer()
-}
-
-type MockState struct{}
-
-func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
-	panic("implement me")
-}
-
-func (MockState) ValidateAndAddTxToPool(*types.Transaction) error {
-	panic("implement me")
-}
-
-func (MockState) Rewind(types.LayerID) (types.Hash32, error) {
-	panic("implement me")
-}
-
-func (MockState) GetStateRoot() types.Hash32 {
-	panic("implement me")
-}
-
-func (MockState) ValidateNonceAndBalance(*types.Transaction) error {
-	panic("implement me")
-}
-
-func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
-	panic("implement me")
-}
-
-func (state *MockState) ApplyLayer(layer types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
-	return make([]*types.Transaction, 0), nil
-}
-
-func (MockState) AddressExists(types.Address) bool {
-	return true
-}
-
-func (MockState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
-	panic("implement me")
-}
-
-func (MockState) GetBalance(types.Address) uint64 {
-	panic("implement me")
-}
-
-func (MockState) GetNonce(types.Address) uint64 {
-	panic("implement me")
-}
-
-type MockTxMemPool struct{}
-
-func (MockTxMemPool) Get(types.TransactionID) (*types.Transaction, error) {
-	return &types.Transaction{}, nil
-}
-
-func (MockTxMemPool) Put(types.TransactionID, *types.Transaction) {}
-func (MockTxMemPool) Invalidate(types.TransactionID)              {}
-
-func ConfigTst() mesh.Config {
-	return mesh.Config{
-		BaseReward: 5000,
-	}
-}
 
 const layersPerEpochBig = 1000
 
-func getAtxDb(tb testing.TB, id string) (*DB, *mesh.Mesh, database.Database) {
+func getAtxDb(tb testing.TB, id string) *DB {
 	lg := logtest.New(tb).WithName(id)
-	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxStore := database.NewMemDatabase()
-	atxdb := NewDB(atxStore, nil, NewIdentityStore(database.NewMemDatabase()), memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
-	ctrl := gomock.NewController(tb)
-	mockFetch := mocks.NewMockBlockFetcher(ctrl)
-	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
-	layers := mesh.NewMesh(memesh, atxdb, ConfigTst(), mockFetch, &MeshValidatorMock{}, &MockTxMemPool{}, &MockState{}, lg.WithName("mesh"))
-	return atxdb, layers, atxStore
-}
-
-func rndStr() string {
-	a := make([]byte, 8)
-	_, _ = rand.Read(a)
-	return string(a)
+	return NewDB(database.NewMemDatabase(), nil, NewIdentityStore(database.NewMemDatabase()), layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg)
 }
 
 func processAtxs(db *DB, atxs []*types.ActivationTx) error {
@@ -159,44 +40,10 @@ func processAtxs(db *DB, atxs []*types.ActivationTx) error {
 	return nil
 }
 
-func createLayerWithAtx(t *testing.T, msh *mesh.Mesh, atxdb *DB, id types.LayerID, numOfBlocks int, atxs []*types.ActivationTx, votes []types.BlockID, views []types.BlockID) (created []types.BlockID) {
-	if numOfBlocks < len(atxs) {
-		panic("not supported")
-	}
-	for i := 0; i < numOfBlocks; i++ {
-		block1 := types.NewExistingBlock(id, []byte(rand.String(8)), nil)
-		block1.ForDiff = append(block1.ForDiff, votes...)
-		var activeSet []types.ATXID
-		if i < len(atxs) {
-			activeSet = append(activeSet, atxs[i].ID())
-		}
-		block1.ActiveSet = &activeSet
-	viewLoop:
-		for _, v := range views {
-			for _, vv := range votes {
-				if v == vv {
-					continue viewLoop
-				}
-			}
-			block1.AgainstDiff = append(block1.AgainstDiff, v)
-		}
-		var actualAtxs []*types.ActivationTx
-		if i < len(atxs) {
-			actualAtxs = atxs[i : i+1]
-		}
-		require.NoError(t, processAtxs(atxdb, actualAtxs))
-		block1.Initialize()
-		err := msh.AddBlockWithTxs(context.TODO(), block1)
-		require.NoError(t, err)
-		created = append(created, block1.ID())
-	}
-	return
-}
-
 func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
 	r := require.New(t)
 
-	atxdb, _, _ := getAtxDb(t, "t6")
+	atxdb := getAtxDb(t, "t6")
 	id1 := types.NodeID{Key: uuid.New().String()}
 	coinbase1 := types.HexToAddress("aaaa")
 	epoch1 := types.EpochID(2)
@@ -217,7 +64,7 @@ func TestActivationDb_GetNodeLastAtxId(t *testing.T) {
 func Test_DBSanity(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpochBig)
 
-	atxdb, _, _ := getAtxDb(t, "t6")
+	atxdb := getAtxDb(t, "t6")
 
 	id1 := types.NodeID{Key: uuid.New().String()}
 	id2 := types.NodeID{Key: uuid.New().String()}
@@ -276,7 +123,7 @@ func Test_DBSanity(t *testing.T) {
 
 func TestMesh_processBlockATXs(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpochBig)
-	atxdb, _, _ := getAtxDb(t, "t6")
+	atxdb := getAtxDb(t, "t6")
 
 	id1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	id2 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
@@ -330,7 +177,7 @@ func assertEpochWeight(t *testing.T, atxdb *DB, epochID types.EpochID, expectedW
 }
 
 func TestActivationDB_ValidateAtx(t *testing.T) {
-	atxdb, layers, _ := getAtxDb(t, "t8")
+	atxdb := getAtxDb(t, "t8")
 
 	signer := signing.NewEdSigner()
 	idx1 := types.NodeID{Key: signer.PublicKey().String(), VRFPublicKey: []byte("anton")}
@@ -352,10 +199,6 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 		assert.NoError(t, err)
 		atx.NIPost = NewNIPostWithChallenge(hash, poetRef)
 	}
-
-	blocks := createLayerWithAtx(t, layers, atxdb, types.NewLayerID(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(10), 10, []*types.ActivationTx{}, blocks, blocks)
-	_ = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
 
 	prevAtx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase1, 100, &types.NIPost{})
 	hash, err := prevAtx.NIPostChallenge.Hash()
@@ -383,7 +226,7 @@ func TestActivationDB_ValidateAtx(t *testing.T) {
 func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpochBig)
 
-	atxdb, layers, _ := getAtxDb(t, "t8")
+	atxdb := getAtxDb(t, "t8")
 	signer := signing.NewEdSigner()
 	idx1 := types.NodeID{Key: signer.PublicKey().String()}
 	idx2 := types.NodeID{Key: uuid.New().String()}
@@ -397,10 +240,7 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
 		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
 	}
-
-	blocks := createLayerWithAtx(t, layers, atxdb, types.NewLayerID(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(10), 10, []*types.ActivationTx{}, blocks, blocks)
-	_ = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
+	require.NoError(t, processAtxs(atxdb, atxs))
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0xba, 0xbe}
@@ -561,23 +401,10 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 }
 
 func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
-	atxdb, layers, _ := getAtxDb(t, "t8")
+	atxdb := getAtxDb(t, "t8")
 	signer := signing.NewEdSigner()
 	idx1 := types.NodeID{Key: signer.PublicKey().String(), VRFPublicKey: []byte("12345")}
 	coinbase := types.HexToAddress("aaaa")
-
-	id1 := types.NodeID{Key: uuid.New().String()}
-	id2 := types.NodeID{Key: uuid.New().String()}
-	id3 := types.NodeID{Key: uuid.New().String()}
-	atxs := []*types.ActivationTx{
-		newActivationTx(id1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
-		newActivationTx(id2, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
-		newActivationTx(id3, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{}),
-	}
-
-	blocks := createLayerWithAtx(t, layers, atxdb, types.NewLayerID(1), 10, atxs, []types.BlockID{}, []types.BlockID{})
-	blocks = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(10), 10, []*types.ActivationTx{}, blocks, blocks)
-	_ = createLayerWithAtx(t, layers, atxdb, types.NewLayerID(100), 10, []*types.ActivationTx{}, blocks, blocks)
 
 	chlng := types.HexToHash32("0x3333")
 	poetRef := []byte{0x56, 0xbe}
@@ -657,7 +484,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 func TestActivationDb_ProcessAtx(t *testing.T) {
 	r := require.New(t)
 
-	atxdb, _, _ := getAtxDb(t, "t8")
+	atxdb := getAtxDb(t, "t8")
 	idx1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
 	coinbase := types.HexToAddress("aaaa")
 	atx := newActivationTx(idx1, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(100), 0, 100, coinbase, 100, &types.NIPost{})
@@ -672,7 +499,7 @@ func TestActivationDb_ProcessAtx(t *testing.T) {
 
 func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 	r := require.New(b)
-	atxdb, layers, _ := getAtxDb(b, "t8")
+	atxdb := getAtxDb(b, "t8")
 
 	const (
 		activesetSize         = 300
@@ -692,11 +519,6 @@ func BenchmarkActivationDb_SyntacticallyValidateAtx(b *testing.B) {
 		hash, err := atx.NIPostChallenge.Hash()
 		r.NoError(err)
 		atx.NIPost = NewNIPostWithChallenge(hash, poetRef)
-	}
-
-	blocks := createLayerWithAtx2(b, layers, types.LayerID{}, blocksPerLayer, atxs, []types.BlockID{}, []types.BlockID{})
-	for i := uint32(1); i < numberOfLayers; i++ {
-		blocks = createLayerWithAtx2(b, layers, types.NewLayerID(i), blocksPerLayer, []*types.ActivationTx{}, blocks, blocks)
 	}
 
 	idx1 := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("anton")}
@@ -734,10 +556,9 @@ func BenchmarkNewActivationDb(b *testing.B) {
 	const tmpPath = "../tmp/atx"
 	lg := logtest.New(b)
 
-	msh := mesh.NewMemMeshDB(lg)
 	store, err := database.NewLDBDatabase(tmpPath, 0, 0, lg.WithName("atxLDB"))
 	r.NoError(err)
-	atxdb := NewDB(store, nil, NewIdentityStore(store), msh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(store, nil, NewIdentityStore(store), layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	const (
 		numOfMiners = 300
@@ -792,7 +613,7 @@ func BenchmarkNewActivationDb(b *testing.B) {
 func TestActivationDb_TopAtx(t *testing.T) {
 	r := require.New(t)
 
-	atxdb, _, _ := getAtxDb(t, "t8")
+	atxdb := getAtxDb(t, "t8")
 
 	// ATX stored should become top ATX
 	atx, err := createAndStoreAtx(atxdb, types.LayerID{}.Add(1))
@@ -832,8 +653,7 @@ func TestActivationDb_ValidateSignedAtx(t *testing.T) {
 	r := require.New(t)
 	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
-	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	ed := signing.NewEdSigner()
 	nodeID := types.NodeID{Key: ed.PublicKey().String(), VRFPublicKey: []byte("bbbbb")}
@@ -877,8 +697,7 @@ func TestActivationDb_AwaitAtx(t *testing.T) {
 
 	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
-	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 	id := types.NodeID{Key: uuid.New().String(), VRFPublicKey: []byte("vrf")}
 	atx := newActivationTx(id, 0, *types.EmptyATXID, *types.EmptyATXID, types.NewLayerID(1), 0, 100, coinbase, 100, &types.NIPost{})
 
@@ -918,8 +737,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 
 	lg := logtest.New(t).WithName("sigValidation")
 	idStore := NewIdentityStore(database.NewMemDatabase())
-	memesh := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, memesh, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
+	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
 	validAtx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, goldenATXID, types.LayerID{}), [20]byte{}, nil, 0, nil)
 	err := atxdb.ContextuallyValidateAtx(validAtx.ActivationTxHeader)
@@ -933,7 +751,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 }
 
 func TestActivateDB_HandleAtxNilNipst(t *testing.T) {
-	atxdb, _, _ := getAtxDb(t, t.Name())
+	atxdb := getAtxDb(t, t.Name())
 	atx := newActivationTx(nodeID, 0, *types.EmptyATXID, *types.EmptyATXID, types.LayerID{}, 0, 0, coinbase, 0, nil)
 	buf, err := types.InterfaceToBytes(atx)
 	require.NoError(t, err)
@@ -946,12 +764,10 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 	lg := logtest.New(b)
 	iddbstore, err := database.NewLDBDatabase(filepath.Join(path, "ids"), 0, 0, lg)
 	require.NoError(b, err)
-	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(path, "mesh"), 20, lg)
-	require.NoError(b, err)
 	idStore := NewIdentityStore(iddbstore)
 	atxdbstore, err := database.NewLDBDatabase(filepath.Join(path, "atx"), 0, 0, lg)
 	require.NoError(b, err)
-	atxdb := NewDB(atxdbstore, nil, idStore, mdb, 288, types.ATXID{}, &Validator{}, lg)
+	atxdb := NewDB(atxdbstore, nil, idStore, 288, types.ATXID{}, &Validator{}, lg)
 
 	var (
 		stop uint64

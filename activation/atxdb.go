@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -95,7 +94,6 @@ type DB struct {
 	idStore
 	atxs            database.Database
 	atxHeaderCache  AtxCache
-	meshDb          *mesh.DB
 	LayersPerEpoch  uint32
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidator
@@ -109,12 +107,11 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity.
-func NewDB(dbStore database.Database, fetcher system.Fetcher, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, fetcher system.Fetcher, idStore idStore, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:         idStore,
 		atxs:            dbStore,
 		atxHeaderCache:  NewAtxCache(600),
-		meshDb:          meshDb,
 		LayersPerEpoch:  layersPerEpoch,
 		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,

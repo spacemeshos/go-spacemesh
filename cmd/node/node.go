@@ -493,7 +493,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxDB := activation.NewDB(atxdbstore, fetcherWrapped, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	atxDB := activation.NewDB(atxdbstore, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 
 	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
