@@ -2014,7 +2014,7 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	cfg.WindowSize = 10
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var last, verified types.LayerID
 	// turn GenLayers into on-demand generator, so that later case can be placed as a step
@@ -2023,12 +2023,12 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 		sim.WithSequence(1, sim.WithVoteGenerator(
 			outOfWindowBaseBallot(1, int(cfg.WindowSize)*2),
 		)),
-		sim.WithSequence(1),
+		sim.WithSequence(2),
 	) {
 		last = lid
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
-		require.Equal(t, last.Sub(1), verified)
 	}
+	require.Equal(t, last.Sub(1), verified)
 	for i := 0; i < 10; i++ {
 		base, exceptions, err := tortoise.BaseBallot(ctx)
 		require.NoError(t, err)
@@ -2094,7 +2094,7 @@ func TestBaseBallotPrioritization(t *testing.T) {
 			cfg := defaultTestConfig()
 			cfg.LayerSize = size
 			cfg.WindowSize = tc.window
-			tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
+			tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 			for _, lid := range sim.GenLayers(s, tc.seqs...) {
 				tortoise.HandleIncomingLayer(ctx, lid)
@@ -2205,11 +2205,6 @@ func TestWeakCoinVoting(t *testing.T) {
 		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis.Add(5), last.Sub(hdist).Sub(1))
 	}
 
-	// test that by voting honestly node can switch to verifying tortoise from this condition
-	//
-	// NOTE(dshulyak) this is about weight required to recover from split-votes.
-	// on 7th layer we have enough weight to heal genesis + 5 and all layers afterwards.
-	// consider figuring out some arithmetic for it.
 	for i := 0; i < 4; i++ {
 		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
@@ -2238,10 +2233,11 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	)
 	for _, last = range sim.GenLayers(s,
 		sim.WithSequence(3),
+		sim.WithSequence(2, sim.WithEmptyInputVector()),
 	) {
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
-	require.Equal(t, last.Sub(1), verified)
+	require.Equal(t, last.Sub(2), verified)
 
 	// change local opinion for verified last.Sub(1) to be different from blocks opinion
 	unsupported := map[types.BlockID]struct{}{}
@@ -2252,28 +2248,28 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 		require.NoError(t, s.GetState(0).MeshDB.SaveLayerInputVectorByID(ctx, lid, bids[1:]))
 		unsupported[bids[0]] = struct{}{}
 	}
-	base, exceptions, _ := tortoise.BaseBallot(ctx)
-	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, base, genesis.Add(1), genesis.Add(1))
+	base, exceptions, err := tortoise.BaseBallot(ctx)
+	require.NoError(t, err)
+	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, base, last.Sub(1), last.Sub(1))
 	require.Empty(t, exceptions[0])
 	require.Empty(t, exceptions[2])
-	require.Len(t, exceptions[1], (size-1)*int(last.Difference(genesis)))
+	require.Len(t, exceptions[1], (size-1)*2)
 	for _, bid := range exceptions[1] {
 		require.NotContains(t, unsupported, bid)
 	}
 
-	// because we are comparing with local opinion only within sliding window
-	// we will never find inconsistencies for the leftmost block in sliding window
-	// and it will not include against votes explicitly, as you can see above
 	delete(tortoise.trtl.common.ballots, genesis.Add(1))
-	base, exceptions, _ = tortoise.BaseBallot(ctx)
+	tortoise.trtl.verifying.goodBallots = map[types.BallotID]struct{}{}
+	base, exceptions, err = tortoise.BaseBallot(ctx)
+	require.NoError(t, err)
 	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, base, last, last)
 	require.Empty(t, exceptions[2])
-	require.Len(t, exceptions[0], 2)
+	require.Len(t, exceptions[0], 1)
 	for _, bid := range exceptions[0] {
 		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis.Add(1), last.Sub(1))
 		require.Contains(t, unsupported, bid)
 	}
-	require.Len(t, exceptions[1], size-1)
+	require.Len(t, exceptions[1], (size-1)*3)
 	for _, bid := range exceptions[1] {
 		require.NotContains(t, unsupported, bid)
 	}

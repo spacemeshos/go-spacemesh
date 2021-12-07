@@ -102,6 +102,38 @@ func (t *turtle) evict(ctx context.Context) {
 	if !t.common.verified.After(types.GetEffectiveGenesis().Add(t.Hdist)) {
 		return
 	}
+	// TODO: fix potential leak when we can't verify but keep receiving layers
+	//    see https://github.com/spacemeshos/go-spacemesh/issues/2671
+
+	windowStart, ok := t.lookbackWindowStart()
+	if !ok {
+		return
+	}
+	if !windowStart.After(t.common.evicted) {
+		return
+	}
+	oldestEpoch := windowStart.GetEpoch()
+	for lid := t.common.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
+		for _, ballot := range t.common.ballots[lid] {
+			delete(t.common.ballotLayer, ballot)
+			delete(t.common.ballotWeight, ballot)
+			delete(t.common.badBeaconBallots, ballot)
+			delete(t.verifying.goodBallots, ballot)
+			delete(t.full.votes, ballot)
+		}
+		delete(t.common.ballots, lid)
+		for _, block := range t.common.blocks[lid] {
+			delete(t.common.blockLayer, block)
+			delete(t.common.localOpinion, block)
+		}
+		delete(t.common.blocks, lid)
+		if lid.GetEpoch() < oldestEpoch {
+			delete(t.common.refBallotBeacons, lid.GetEpoch())
+			delete(t.common.epochWeight, lid.GetEpoch())
+			oldestEpoch = lid.GetEpoch()
+		}
+	}
+	t.common.evicted = windowStart.Sub(1)
 }
 
 // BaseBallot selects a base ballot from sliding window based on a following priorities in order:
@@ -142,7 +174,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
 		exceptions, err = t.calculateExceptions(tctx, votinglid, t.common.good, t.common.good, Opinion{})
 	}
-	if err != nil {
+	if len(goodChoices) == 0 || err != nil {
 		logger.With().Warning("failed to select good base ballot. reverting to the least bad choices", log.Err(err))
 		for lid := t.common.good.Add(1); !lid.After(t.common.processed); lid = lid.Add(1) {
 			for _, ballotID := range t.common.ballots[lid] {
