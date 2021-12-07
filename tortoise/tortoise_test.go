@@ -291,12 +291,12 @@ func TestLayerPatterns(t *testing.T) {
 		require.Equal(t, genesis.Add(5), verified)
 
 		for _, lid := range sim.GenLayers(s,
-			sim.WithSequence(11),
+			sim.WithSequence(21),
 		) {
 			last = lid
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
 		}
-		require.Equal(t, last.Sub(1), verified)
+		require.Equal(t, last.Sub(cfg.Hdist).Sub(1), verified)
 	})
 
 	t.Run("HealAfterBadGoodBadGoodBad", func(t *testing.T) {
@@ -322,7 +322,7 @@ func TestLayerPatterns(t *testing.T) {
 			last = lid
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
 		}
-		require.Equal(t, last.Sub(1), verified)
+		require.Equal(t, last.Sub(cfg.Hdist).Sub(1), verified)
 	})
 }
 
@@ -398,14 +398,8 @@ type (
 )
 
 func generateBlocks(t *testing.T, l types.LayerID, natxs, nblocks int, bbp baseBallotProvider, atxdb atxDataWriter, weight uint) (blocks []*types.Block) {
-	logger := logtest.New(t)
-	logger.Debug("======================== choosing base ballot for layer", l)
 	b, lists, err := bbp(context.TODO())
 	require.NoError(t, err)
-	logger.Debug("the base ballot for layer", l, "is", b, ". exception lists:")
-	logger.Debug("\tagainst\t", lists[0])
-	logger.Debug("\tfor\t", lists[1])
-	logger.Debug("\tneutral\t", lists[2])
 
 	atxs := []types.ATXID{}
 	for i := 0; i < natxs; i++ {
@@ -442,7 +436,6 @@ func generateBlocks(t *testing.T, l types.LayerID, natxs, nblocks int, bbp baseB
 		blk.Signature = signing.NewEdSigner().Sign(b.Bytes())
 		blk.Initialize()
 		blocks = append(blocks, blk)
-		logger.Debug("generated block", blk.ID(), "in layer", l)
 	}
 	return
 }
@@ -982,133 +975,6 @@ func checkVerifiedLayer(t *testing.T, trtl *turtle, layerID types.LayerID) {
 	require.Equal(t, int(layerID.Uint32()), int(trtl.common.verified.Uint32()), "got unexpected value for last verified layer")
 }
 
-func TestHealing(t *testing.T) {
-	r := require.New(t)
-
-	mdb := getInMemMesh(t)
-	alg := defaultAlgorithm(t, mdb)
-	atxdb := getAtxDB()
-	atxdb.storeEpochWeight(uint64(defaultTestLayerSize))
-	alg.trtl.atxdb = atxdb
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
-	alg.trtl.beacons = mockBeacons
-
-	goodBeacon := randomBytes(t, 32)
-	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(goodBeacon, nil).AnyTimes()
-
-	l0ID := types.GetEffectiveGenesis()
-	l1ID := l0ID.Add(1)
-	l2ID := l1ID.Add(1)
-
-	// don't attempt to heal recent layers
-	t.Run("don't heal recent layers", func(t *testing.T) {
-		checkVerifiedLayer(t, alg.trtl, l0ID)
-
-		// while bootstrapping there should be no healing
-		alg.trtl.heal(wrapContext(context.TODO()), l2ID)
-		checkVerifiedLayer(t, alg.trtl, l0ID)
-
-		// later, healing should not occur on layers not at least Hdist back
-		alg.trtl.common.last = types.NewLayerID(alg.trtl.Hdist + 1)
-		alg.trtl.heal(wrapContext(context.TODO()), l2ID)
-		checkVerifiedLayer(t, alg.trtl, l0ID)
-	})
-
-	alg.trtl.common.last = l0ID
-	atxdb = getAtxDB()
-	atxdb.storeEpochWeight(uint64(defaultTestLayerSize))
-	alg.trtl.atxdb = atxdb
-	l1 := makeLayerWithBeacon(t, l1ID, alg.trtl, goodBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	l2 := makeLayerWithBeacon(t, l2ID, alg.trtl, goodBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-
-	// healing should work even when there is no local opinion on a layer (i.e., no output vector, while waiting
-	// for hare results)
-	t.Run("does not depend on local opinion", func(t *testing.T) {
-		checkVerifiedLayer(t, alg.trtl, l0ID)
-		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l1ID))
-		r.NoError(alg.trtl.HandleIncomingLayer(context.TODO(), l2ID))
-
-		// reducing hdist will allow verification to start happening
-		alg.trtl.Hdist = 1
-		// alg.trtl.Last = l2ID
-		alg.trtl.heal(wrapContext(context.TODO()), l2ID)
-		checkVerifiedLayer(t, alg.trtl, l1ID)
-	})
-
-	l3ID := l2ID.Add(1)
-
-	// can heal when global and local opinion differ
-	t.Run("local and global opinions differ", func(t *testing.T) {
-		checkVerifiedLayer(t, alg.trtl, l1ID)
-
-		// store input vector for already-processed layers
-		var l1BlockIDs, l2BlockIDs []types.BlockID
-		for _, block := range l1.Blocks() {
-			l1BlockIDs = append(l1BlockIDs, block.ID())
-		}
-		for _, block := range l2.Blocks() {
-			l2BlockIDs = append(l2BlockIDs, block.ID())
-		}
-		require.NoError(t, mdb.SaveLayerInputVectorByID(context.TODO(), l1ID, l1BlockIDs))
-		require.NoError(t, mdb.SaveLayerInputVectorByID(context.TODO(), l2ID, l2BlockIDs))
-
-		// then create and process one more new layer
-		// prevent base ballot from referencing earlier (approved) layers
-		alg.trtl.common.last = l0ID
-		makeLayerWithBeacon(t, l3ID, alg.trtl, goodBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l3ID))
-
-		// make sure local opinion supports L2
-		localOpinionVec, err := alg.trtl.getLocalOpinion(wrapContext(context.TODO()), l2ID)
-		require.NoError(t, err)
-		for _, bid := range l2BlockIDs {
-			r.Contains(localOpinionVec, bid)
-			r.Equal(support, localOpinionVec[bid])
-		}
-
-		alg.trtl.heal(wrapContext(context.TODO()), l3ID)
-		checkVerifiedLayer(t, alg.trtl, l2ID)
-
-		// make sure contextual validity is updated
-		for _, bid := range l2BlockIDs {
-			valid, err := mdb.ContextualValidity(bid)
-			r.NoError(err)
-			// global opinion should be against all the blocks in this layer since blocks in subsequent
-			// layers don't vote for them
-			r.False(valid)
-		}
-	})
-
-	l4ID := l3ID.Add(1)
-	l5ID := l4ID.Add(1)
-	l6ID := l5ID.Add(1)
-	l7ID := l6ID.Add(1)
-
-	// healing should count votes of non-good blocks
-	t.Run("counts votes of bad-beacon blocks", func(t *testing.T) {
-		checkVerifiedLayer(t, alg.trtl, l3ID)
-		badBeacon := randomBytes(t, 32)
-
-		// create and process several more layers with the wrong beacon.
-		// but don't save layer input vectors, so local opinion is abstain
-		makeLayerWithBeacon(t, l5ID, alg.trtl, badBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-		makeLayerWithBeacon(t, l6ID, alg.trtl, badBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-		makeLayerWithBeacon(t, l7ID, alg.trtl, badBeacon, defaultTestLayerSize, defaultTestLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l5ID))
-		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l6ID))
-		require.NoError(t, alg.trtl.HandleIncomingLayer(context.TODO(), l7ID))
-		checkVerifiedLayer(t, alg.trtl, l3ID)
-
-		alg.trtl.common.last = l7ID.Add(types.GetLayersPerEpoch() * 2)
-		alg.trtl.Hdist = 0
-		alg.trtl.heal(wrapContext(context.TODO()), l7ID)
-		checkVerifiedLayer(t, alg.trtl, l6ID)
-	})
-}
-
 func TestCalculateOpinionWithThreshold(t *testing.T) {
 	for _, tc := range []struct {
 		desc      string
@@ -1388,9 +1254,9 @@ func TestMultiTortoise(t *testing.T) {
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 		// minority node is healed
-		lastVerified = layerID.Sub(1)
-		checkVerifiedLayer(t, alg1.trtl, lastVerified)
-		checkVerifiedLayer(t, alg2.trtl, lastVerified)
+		lastVerified = layerID.Sub(1).Sub(alg1.cfg.Hdist)
+		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
 
 		// now simulate a rejoin
 		// send each tortoise's blocks to the other (simulated resync)
@@ -1440,7 +1306,7 @@ func TestMultiTortoise(t *testing.T) {
 		}
 
 		// minority tortoise begins healing
-		for i := 0; i < 10; i++ {
+		for i := 0; i < 21; i++ {
 			layerID = layerID.Add(1)
 			blocksA, blocksB := makeBlocks(layerID)
 			var blocks []*types.Block
@@ -1457,15 +1323,11 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
-
-			// majority tortoise is unaffected, minority tortoise begins to heal but its verifying tortoise
-			// is still stuck
-			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-			checkVerifiedLayer(t, alg2.trtl, lastVerified.Add(uint32(i+1)))
 		}
-
-		// TODO: finish adding support for reorgs. minority tortoise should complete healing and successfully
-		//   hand off back to verifying tortoise.
+		// majority tortoise is unaffected, minority tortoise begins to heal but its verifying tortoise
+		// is still stuck
+		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1).Sub(alg2.cfg.Hdist))
 	})
 
 	t.Run("equal partition", func(t *testing.T) {
@@ -1601,9 +1463,9 @@ func TestMultiTortoise(t *testing.T) {
 		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
-		// both nodes are healed
-		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
+		// both nodes can't switch from full tortoise
+		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
 	})
 
 	t.Run("three-way partition", func(t *testing.T) {
@@ -1781,9 +1643,9 @@ func TestMultiTortoise(t *testing.T) {
 		alg3.HandleIncomingLayer(context.TODO(), layerID)
 
 		// all nodes are healed
-		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
-		checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1))
+		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
+		checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
+		checkVerifiedLayer(t, alg3.trtl, layerID.Sub(1).Sub(alg1.cfg.Hdist))
 	})
 }
 

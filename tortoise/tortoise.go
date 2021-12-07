@@ -805,6 +805,7 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 			logger.With().Debug("self healing calculated global opinion on candidate block",
 				log.Stringer("global_opinion", sign),
 				log.Stringer("vote_sum", sum),
+				log.Stringer("threshold", threshold),
 			)
 
 			if sign == abstain {
