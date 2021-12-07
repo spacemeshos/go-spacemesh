@@ -2,6 +2,7 @@ package eligibility
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
@@ -10,9 +11,13 @@ import (
 	"github.com/spacemeshos/fixed"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	eCfg "github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
+	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/system"
 )
+
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./oracle.go
 
 const (
 	vrfMsgCacheSize  = 20         // numRounds per layer is <= 2. numConcurrentLayers<=10 (typically <=2) so numRounds*numConcurrentLayers <= 2*10 = 20 is a good upper bound
@@ -20,22 +25,18 @@ const (
 	maxSupportedN    = 1073741824 // higher values result in an overflow
 )
 
-type valueProvider interface {
-	Value(context.Context, types.EpochID) (uint32, error)
-}
+var (
+	errZeroCommitteeSize = errors.New("zero committee size")
+	errEmptyActiveSet    = errors.New("empty active set")
+	errZeroTotalWeight   = errors.New("zero total weight")
+)
 
-type signer interface {
-	Sign(msg []byte) []byte
-}
-
-type addGet interface {
+type cache interface {
 	Add(key, value interface{}) (evicted bool)
 	Get(key interface{}) (value interface{}, ok bool)
 }
 
 type atxProvider interface {
-	// GetMinerWeightsInEpochFromView gets the active set (node IDs) for a set of blocks
-	GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, blocks map[types.BlockID]struct{}) (map[string]uint64, error)
 	// GetEpochAtxs is used to get the tortoise active set for an epoch
 	GetEpochAtxs(types.EpochID) ([]types.ATXID, error)
 	// GetAtxHeader returns the ATX header for an ATX ID
@@ -43,8 +44,8 @@ type atxProvider interface {
 }
 
 type meshProvider interface {
-	// LayerContextuallyValidBlocks returns the set of contextually valid blocks from the mesh for a given layer
-	LayerContextuallyValidBlocks(context.Context, types.LayerID) (map[types.BlockID]struct{}, error)
+	LayerBallots(types.LayerID) ([]*types.Ballot, error)
+	GetBallot(types.BallotID) (*types.Ballot, error)
 }
 
 // a function to verify the message with the signature and its public key.
@@ -53,15 +54,15 @@ type verifierFunc = func(pub, msg, sig []byte) bool
 // Oracle is the hare eligibility oracle.
 type Oracle struct {
 	lock           sync.Mutex
-	beacon         valueProvider
+	beacons        system.BeaconGetter
 	atxdb          atxProvider
 	meshdb         meshProvider
-	vrfSigner      signer
+	vrfSigner      *signing.VRFSigner
 	vrfVerifier    verifierFunc
 	layersPerEpoch uint32
-	vrfMsgCache    addGet
-	activesCache   addGet
-	cfg            eCfg.Config
+	vrfMsgCache    cache
+	activesCache   cache
+	cfg            config.Config
 	log.Log
 }
 
@@ -104,13 +105,13 @@ func safeLayerRange(
 
 // New returns a new eligibility oracle instance.
 func New(
-	beacon valueProvider,
+	beacons system.BeaconGetter,
 	atxdb atxProvider,
 	meshdb meshProvider,
 	vrfVerifier verifierFunc,
-	vrfSigner signer,
+	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32,
-	cfg eCfg.Config,
+	cfg config.Config,
 	logger log.Log) *Oracle {
 	vmc, err := lru.New(vrfMsgCacheSize)
 	if err != nil {
@@ -123,7 +124,7 @@ func New(
 	}
 
 	return &Oracle{
-		beacon:         beacon,
+		beacons:        beacons,
 		atxdb:          atxdb,
 		meshdb:         meshdb,
 		vrfVerifier:    vrfVerifier,
@@ -136,12 +137,6 @@ func New(
 	}
 }
 
-// GetEpochBeacon returns the beacon for the specified epoch.
-func (o *Oracle) GetEpochBeacon(ctx context.Context, epoch types.EpochID) bool {
-	_, err := o.beacon.Value(ctx, epoch)
-	return err == nil
-}
-
 type vrfMessage struct {
 	Beacon uint32
 	Round  uint32
@@ -150,6 +145,24 @@ type vrfMessage struct {
 
 func buildKey(l types.LayerID, r uint32) [2]uint64 {
 	return [2]uint64{uint64(l.Uint32()), uint64(r)}
+}
+
+func encodeBeacon(beacon []byte) uint32 {
+	return binary.LittleEndian.Uint32(beacon)
+}
+
+func (o *Oracle) getBeacon(ctx context.Context, epochID types.EpochID) (uint32, error) {
+	beacon, err := o.beacons.GetBeacon(epochID)
+	if err != nil {
+		return 0, fmt.Errorf("get beacon: %w", err)
+	}
+
+	value := encodeBeacon(beacon)
+	o.WithContext(ctx).With().Debug("hare eligibility beacon value for epoch",
+		epochID,
+		log.String("beacon", types.BytesToHash(beacon).ShortString()),
+		log.Uint32("beacon_val", value))
+	return value, nil
 }
 
 // buildVRFMessage builds the VRF message used as input for the BLS (msg=Beacon##Layer##Round).
@@ -165,7 +178,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	}
 
 	// get value from beacon
-	v, err := o.beacon.Value(ctx, layer.GetEpoch())
+	v, err := o.getBeacon(ctx, layer.GetEpoch())
 	if err != nil {
 		o.WithContext(ctx).With().Error("could not get hare beacon value for epoch",
 			log.Err(err),
@@ -232,7 +245,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 
 	if committeeSize < 1 {
 		logger.Error("committee size must be positive (received %d)", committeeSize)
-		return 0, fixed.Fixed{}, fixed.Fixed{}, true, nil
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errZeroCommitteeSize
 	}
 
 	msg, err := o.buildVRFMessage(ctx, layer, round)
@@ -258,7 +271,7 @@ func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerI
 	// require totalWeight > 0
 	if totalWeight == 0 {
 		logger.Warning("eligibility: total weight is zero")
-		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errors.New("total weight is zero")
+		return 0, fixed.Fixed{}, fixed.Fixed{}, true, errZeroTotalWeight
 	}
 
 	// calc hash & check threshold
@@ -397,7 +410,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	o.lock.Lock()
 	defer o.lock.Unlock()
 
-	// we first try to get the hare active set for a range of safe layers: start with the set of active blocks
+	// we first try to get the hare active set for a range of safe layers
 	safeLayerStart, safeLayerEnd := safeLayerRange(
 		targetLayer, o.cfg.ConfidenceParam, o.layersPerEpoch, o.cfg.EpochOffset)
 	logger.With().Debug("safe layer range",
@@ -436,25 +449,55 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 			log.FieldNamed("safe_layer_end_epoch", safeLayerEnd.GetEpoch()))
 	}
 
-	activeBlockIDs := make(map[types.BlockID]struct{})
+	activeBallots := make(map[types.BallotID]*types.Ballot)
 	for layerID := safeLayerStart; !layerID.After(safeLayerEnd); layerID = layerID.Add(1) {
-		layerBlockIDs, err := o.meshdb.LayerContextuallyValidBlocks(ctx, layerID)
+		ballots, err := o.meshdb.LayerBallots(layerID)
 		if err != nil {
-			return nil, fmt.Errorf("error getting active blocks for layer %v for target layer %v: %w",
+			logger.With().Warning("failed to get layer ballots", layerID, log.Err(err))
+			return nil, fmt.Errorf("error getting ballots for layer %v (target layer %v): %w",
 				layerID, targetLayer, err)
 		}
-		for blockID := range layerBlockIDs {
-			activeBlockIDs[blockID] = struct{}{}
+		for _, b := range ballots {
+			activeBallots[b.ID()] = b
 		}
 	}
-	logger.With().Debug("got blocks in safe layer range, reading active set from blocks",
-		log.Int("count", len(activeBlockIDs)))
+	logger.With().Debug("got ballots in safe layer range, reading active set from ballots",
+		log.Int("count", len(activeBallots)))
 
 	// now read the set of ATXs referenced by these blocks
 	// TODO: can the set of blocks ever span multiple epochs?
-	hareActiveSet, err := o.atxdb.GetMinerWeightsInEpochFromView(safeLayerStart.GetEpoch(), activeBlockIDs)
-	if err != nil {
-		return nil, fmt.Errorf("error getting ATXs for target layer %v: %w", targetLayer, err)
+	hareActiveSet := make(map[string]uint64)
+	seenATXIDs := make(map[types.ATXID]struct{})
+	seenBallots := make(map[types.BallotID]struct{})
+	for _, b := range activeBallots {
+		var (
+			ballot = b
+			err    error
+		)
+		if ballot.RefBallot != types.EmptyBallotID {
+			ballot, err = o.meshdb.GetBallot(ballot.RefBallot)
+			if err != nil {
+				return nil, fmt.Errorf("hare actives (target layer %v) get ref ballot: %w", targetLayer, err)
+			}
+		}
+		if _, exist := seenBallots[ballot.ID()]; exist {
+			continue
+		}
+		seenBallots[ballot.ID()] = struct{}{}
+		if ballot.EpochData == nil {
+			return nil, fmt.Errorf("hare actives (target layer %v)  ref ballot missing epoch data: %v", targetLayer, ballot.ID())
+		}
+		for _, id := range ballot.EpochData.ActiveSet {
+			if _, exist := seenATXIDs[id]; exist {
+				continue
+			}
+			seenATXIDs[id] = struct{}{}
+			atx, err := o.atxdb.GetAtxHeader(id)
+			if err != nil {
+				return nil, fmt.Errorf("hare actives (target layer %v)  get ATX: %w", targetLayer, err)
+			}
+			hareActiveSet[atx.NodeID.Key] = atx.GetWeight()
+		}
 	}
 
 	if len(hareActiveSet) > 0 {
@@ -479,8 +522,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	}
 	logger.With().Debug("got tortoise atxs", log.Int("count", len(atxs)))
 	if len(atxs) == 0 {
-		return nil, fmt.Errorf("empty active set for layer %v in epoch %v",
-			targetLayer, targetLayer.GetEpoch())
+		return nil, fmt.Errorf("%w: layer %v / epoch %v", errEmptyActiveSet, targetLayer, targetLayer.GetEpoch())
 	}
 
 	// extract the nodeIDs and weights

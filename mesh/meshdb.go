@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"bytes"
-	"container/list"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -208,6 +207,15 @@ func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 	return mbk.ToBlock(), nil
 }
 
+// LayerBallots retrieves all ballots from a layer by layer ID.
+func (m *DB) LayerBallots(layerID types.LayerID) ([]*types.Ballot, error) {
+	blocks, err := m.LayerBlocks(layerID)
+	if err != nil {
+		return nil, fmt.Errorf("layer ballots: %w", err)
+	}
+	return types.ToBallots(blocks), nil
+}
+
 // LayerBlocks retrieves all blocks from a layer by layer index.
 func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	ids, err := m.LayerBlockIds(index)
@@ -225,53 +233,6 @@ func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	}
 
 	return blocks, nil
-}
-
-// ForBlockInView traverses all blocks in a view and uses blockHandler func on each block
-// The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
-// and an error indicating that an error occurred while handling the block, the traversing will stop in that case as well (error flow).
-func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
-	blocksToVisit := list.New()
-	for id := range view {
-		blocksToVisit.PushBack(id)
-	}
-	seenBlocks := make(map[types.BlockID]struct{})
-	for blocksToVisit.Len() > 0 {
-		block, err := m.GetBlock(blocksToVisit.Remove(blocksToVisit.Front()).(types.BlockID))
-		if err != nil {
-			return fmt.Errorf("get block: %w", err)
-		}
-
-		// catch blocks that were referenced after more than one layer, and slipped through the stop condition
-		if block.LayerIndex.Before(layer) {
-			continue
-		}
-
-		// execute handler
-		stop, err := blockHandler(block)
-		if err != nil {
-			return fmt.Errorf("block handler: %w", err)
-		}
-
-		if stop {
-			m.Log.With().Debug("ForBlockInView stopped", block.ID())
-			break
-		}
-
-		// stop condition: referenced blocks must be in lower layers, so we don't traverse them
-		if block.LayerIndex == layer {
-			continue
-		}
-
-		// push children to bfs queue
-		for _, id := range append(block.ForDiff, append(block.AgainstDiff, block.NeutralDiff...)...) {
-			if _, found := seenBlocks[id]; !found {
-				seenBlocks[id] = struct{}{}
-				blocksToVisit.PushBack(id)
-			}
-		}
-	}
-	return nil
 }
 
 // LayerBlockIds retrieves all block ids from a layer by layer index.
