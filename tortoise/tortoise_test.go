@@ -387,7 +387,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 	// block votes aren't counted because blocks aren't marked good, because they contain exceptions older
 	// than their base block.
 	// self-healing will not run because the layers aren't old enough.
-	require.Equal(t, int(types.GetEffectiveGenesis().Add(uint32(initialNumGood)).Uint32()), int(trtl.common.verified.Uint32()),
+	require.Equal(t, int(types.GetEffectiveGenesis().Add(uint32(initialNumGood)).Uint32()), int(trtl.verified.Uint32()),
 		"verification should advance after hare finishes")
 	// todo: also check votes with requireVote
 }
@@ -467,15 +467,15 @@ func TestLayerCutoff(t *testing.T) {
 	alg := defaultAlgorithm(t, mdb)
 
 	// cutoff should be zero if we haven't seen at least Hdist layers yet
-	alg.trtl.common.last = types.NewLayerID(alg.trtl.Hdist - 1)
+	alg.trtl.last = types.NewLayerID(alg.trtl.Hdist - 1)
 	r.Equal(0, int(alg.trtl.layerCutoff().Uint32()))
-	alg.trtl.common.last = types.NewLayerID(alg.trtl.Hdist)
+	alg.trtl.last = types.NewLayerID(alg.trtl.Hdist)
 	r.Equal(0, int(alg.trtl.layerCutoff().Uint32()))
 
 	// otherwise, cutoff should be Hdist layers before Last
-	alg.trtl.common.last = types.NewLayerID(alg.trtl.Hdist + 1)
+	alg.trtl.last = types.NewLayerID(alg.trtl.Hdist + 1)
 	r.Equal(1, int(alg.trtl.layerCutoff().Uint32()))
-	alg.trtl.common.last = types.NewLayerID(alg.trtl.Hdist + 100)
+	alg.trtl.last = types.NewLayerID(alg.trtl.Hdist + 100)
 	r.Equal(100, int(alg.trtl.layerCutoff().Uint32()))
 }
 
@@ -592,8 +592,8 @@ func defaultTurtle(tb testing.TB) *turtle {
 func TestCloneTurtle(t *testing.T) {
 	r := require.New(t)
 	trtl := defaultTurtle(t)
-	trtl.LayerSize++                        // make sure defaults aren't being read
-	trtl.common.last = types.NewLayerID(10) // state should not be cloned
+	trtl.LayerSize++                 // make sure defaults aren't being read
+	trtl.last = types.NewLayerID(10) // state should not be cloned
 	trtl2 := trtl.cloneTurtleParams()
 	r.Equal(trtl.bdp, trtl2.bdp)
 	r.Equal(trtl.Hdist, trtl2.Hdist)
@@ -605,7 +605,7 @@ func TestCloneTurtle(t *testing.T) {
 	r.Equal(trtl.GlobalThreshold, trtl2.GlobalThreshold)
 	r.Equal(trtl.LocalThreshold, trtl2.LocalThreshold)
 	r.Equal(trtl.RerunInterval, trtl2.RerunInterval)
-	r.NotEqual(trtl.common.last, trtl2.common.last)
+	r.NotEqual(trtl.last, trtl2.last)
 }
 
 func defaultTestConfig() Config {
@@ -946,8 +946,8 @@ func TestSumVotes(t *testing.T) {
 				}
 				ballots = append(ballots, layerBallots)
 
-				consensus.common.processed = lid
-				consensus.common.last = lid
+				consensus.processed = lid
+				consensus.last = lid
 				tballots, err := consensus.processBallots(wrapContext(ctx), lid, layerBallots)
 				consensus.keepVotes(tballots)
 				require.NoError(t, err)
@@ -972,7 +972,7 @@ func makeAtxHeaderWithWeight(weight uint) *types.ActivationTxHeader {
 }
 
 func checkVerifiedLayer(t *testing.T, trtl *turtle, layerID types.LayerID) {
-	require.Equal(t, int(layerID.Uint32()), int(trtl.common.verified.Uint32()), "got unexpected value for last verified layer")
+	require.Equal(t, int(layerID.Uint32()), int(trtl.verified.Uint32()), "got unexpected value for last verified layer")
 }
 
 func TestCalculateOpinionWithThreshold(t *testing.T) {
@@ -1889,8 +1889,8 @@ func TestBallotFilterForHealing(t *testing.T) {
 	trtl := defaultTurtle(t)
 	trtl.beacons = mockBeacons
 
-	trtl.common.ballotLayer[goodBallot.ID()] = layerID
-	trtl.common.ballotLayer[badBallot.ID()] = layerID
+	trtl.ballotLayer[goodBallot.ID()] = layerID
+	trtl.ballotLayer[badBallot.ID()] = layerID
 
 	logger := logtest.New(t)
 	// cause the bad beacon block to be cached
@@ -1899,7 +1899,7 @@ func TestBallotFilterForHealing(t *testing.T) {
 	assert.False(t, trtl.ballotHasGoodBeacon(badBallot, logger))
 
 	// we don't count votes in bad beacon block for badBeaconVoteDelays layers
-	trtl.common.last = layerID
+	trtl.last = layerID
 	i := uint32(1)
 	for ; i <= defaultVoteDelays; i++ {
 		filter := trtl.ballotFilterForHealing(logger)
@@ -1907,7 +1907,7 @@ func TestBallotFilterForHealing(t *testing.T) {
 		assert.False(t, filter(badBallot.ID()))
 	}
 	// now we count the bad beacon block's votes
-	trtl.common.last = layerID.Add(10)
+	trtl.last = layerID.Add(10)
 	filter := trtl.ballotFilterForHealing(logger)
 	assert.True(t, filter(goodBallot.ID()))
 	assert.True(t, filter(badBallot.ID()))
@@ -2258,7 +2258,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 		require.NotContains(t, unsupported, bid)
 	}
 
-	delete(tortoise.trtl.common.ballots, genesis.Add(1))
+	delete(tortoise.trtl.ballots, genesis.Add(1))
 	tortoise.trtl.verifying.goodBallots = map[types.BallotID]struct{}{}
 	base, exceptions, err = tortoise.BaseBallot(ctx)
 	require.NoError(t, err)
