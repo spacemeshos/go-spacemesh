@@ -206,10 +206,12 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 			logger.With().Warning("error calculating vote exceptions for ballot", ballotID, log.Err(err))
 		}
 	}
+
 	if exceptions == nil {
 		// TODO: special error encoding when exceeding exception list size
 		return types.EmptyBallotID, nil, errNoBaseBallotFound
 	}
+
 	logger.With().Info("chose base ballot",
 		ballotID,
 		ballotLID,
@@ -463,16 +465,15 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		if err := t.updateLocalOpinion(ctx, t.verified.Add(1), t.processed); err != nil {
 			return err
 		}
-		localOpinion := t.localOpinion
-		t.verifying.processLayer(lid, localOpinion, ballots)
+		t.verifying.processLayer(lid, t.localOpinion, ballots)
 
-		current := t.verified
-		newVerified := t.verifying.verifyLayers(localOpinion)
+		previous := t.verified
+		t.verified = t.verifying.verifyLayers(t.localOpinion)
 
-		if newVerified.After(current) {
-			for lid := current.Add(1); !lid.After(newVerified); lid = lid.Add(1) {
+		if t.verified.After(previous) {
+			for lid := previous.Add(1); !lid.After(t.verified); lid = lid.Add(1) {
 				for _, bid := range t.blocks[lid] {
-					sign := localOpinion[bid]
+					sign := t.localOpinion[bid]
 					if sign == abstain {
 						t.logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, bid)
 					}
@@ -481,7 +482,6 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 					}
 				}
 			}
-			t.verified = newVerified
 			if t.verified == t.processed.Sub(1) {
 				return nil
 			}
@@ -497,13 +497,13 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			)
 			t.mode = fullMode
 		}
-		prevVerified := t.verified
-		healed, err := t.healingTortoise(wrapContext(ctx), t.logger)
-		if !healed || err != nil {
-			return err
+		previous := t.verified
+		healed := t.healingTortoise(ctx, t.logger)
+		if !healed {
+			return nil
 		}
 
-		if err := t.updateLocalOpinion(wrapContext(ctx), prevVerified.Add(1), t.verified); err != nil {
+		if err := t.updateLocalOpinion(wrapContext(ctx), previous.Add(1), t.verified); err != nil {
 			return err
 		}
 	}
@@ -632,7 +632,7 @@ func (t *turtle) isHealingEnabled(lid types.LayerID) bool {
 	return lid.Before(t.layerCutoff()) && t.last.Difference(lid) > t.Zdist+t.ConfidenceParam
 }
 
-func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log) (bool, error) {
+func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log) bool {
 	logger.With().Info("start self-healing tortoise",
 		log.Stringer("verified_layer", t.verified),
 		log.Stringer("layer_cutoff", t.layerCutoff()),
@@ -640,19 +640,17 @@ func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log) (bool, error) {
 		log.Stringer("last_layer_received", t.last),
 		log.Uint32("confidence_param", t.ConfidenceParam),
 	)
-	lastLayer := t.processed
 	lastVerified := t.verified
-	t.heal(ctx, lastLayer)
-	logger.With().Info("finished self-healing with verified layer", t.verified)
+	t.heal(ctx, t.processed)
+	logger.With().Info("finished self-healing",
+		log.Stringer("verified_layer", t.verified),
+	)
 
 	if !t.verified.After(lastVerified) {
-		// if self healing didn't make any progress, there's no point in continuing to attempt
-		// verification
-		// give up trying to verify layers and keep waiting
-		logger.With().Info("failed to verify candidate layer, will reattempt later")
-		return false, nil
+		logger.With().Info("failed to verify candidate layer")
+		return false
 	}
-	return true, nil
+	return true
 }
 
 // for layers older than this point, we vote according to global opinion (rather than local opinion).
@@ -791,13 +789,13 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 		// Note: we look at ALL blocks we've seen for the layer, not just those we've previously marked contextually valid
 		logger.Info("self healing attempting to verify candidate layer")
 
-		// TODO(dshulyak) expected computation should use last as an upper boundary
+		// TODO(dshulyak) computation for expected weight should use last as an upper boundary
 		expected := computeExpectedWeight(t.epochWeight, candidateLayerID, t.processed)
 		threshold := weightFromUint64(0)
 		threshold = threshold.add(expected)
 		threshold = threshold.fraction(t.GlobalThreshold)
 
-		logger.With().Info("healing: expected voting weight for layer",
+		logger.With().Info("healing: expected voting weight at the layer",
 			log.Stringer("expected_weight", expected),
 			log.Stringer("threshold", threshold),
 			candidateLayerID,
@@ -827,6 +825,7 @@ func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
 				logger.With().Info("self healing failed to verify candidate layer",
 					log.Stringer("global_opinion", sign),
 					log.Stringer("vote_sum", sum),
+					blockID,
 				)
 				return
 			}
@@ -915,6 +914,7 @@ func computeEpochWeight(atxdb atxDataProvider, epochWeights map[types.EpochID]we
 	return layerWeight, nil
 }
 
+// computes weight for (from, to] layers.
 func computeExpectedWeight(weights map[types.EpochID]weight, from, to types.LayerID) weight {
 	total := weightFromUint64(0)
 	for lid := from.Add(1); !lid.After(to); lid = lid.Add(1) {

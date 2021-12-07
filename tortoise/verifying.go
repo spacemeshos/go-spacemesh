@@ -66,9 +66,7 @@ func (v *verifying) verifyLayers(localOpinion Opinion) types.LayerID {
 	for lid := v.verified.Add(1); lid.Before(v.processed); lid = lid.Add(1) {
 		// TODO(dshulyak) expected weight must be based on the last layer.
 		threshold := computeExpectedWeight(v.epochWeight, lid, v.processed)
-		logger = logger.WithFields(log.Stringer("expected_weight", threshold))
 		threshold = threshold.fraction(v.GlobalThreshold)
-		logger = logger.WithFields(log.Stringer("global_threshold", threshold))
 		threshold = threshold.add(localThreshold)
 
 		votingWeight := weightFromUint64(0)
