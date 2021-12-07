@@ -38,6 +38,8 @@ func (v *verifying) processLayer(lid types.LayerID, localOpinion Opinion, ballot
 		v.good = lid
 	}
 
+	// TODO(dshulyak) counted weight should be reduced by the uncounted weight per conversation with research
+
 	v.layerWeights[lid] = counted
 	v.totalWeight = v.totalWeight.add(counted)
 

@@ -487,7 +487,14 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			}
 		}
 	}
-
+	// keep votes starting from the layer when verifying tortoise failed to make progress
+	// for example, if verifying failed while counting ballots from layer 13 we will
+	// most likely have to use those ballots later in full mode.
+	//
+	// this may change for rerun https://github.com/spacemeshos/go-spacemesh/issues/2980,
+	// verified layer will be expected to be stuck as the expected weight will be high.
+	// so we will have to use different heuristic for switching into full mode
+	// maybe the difference between counted and uncounted weight for a specific layer
 	t.keepVotes(ballots)
 	if t.isHealingEnabled(t.verified.Add(1)) || t.mode == fullMode {
 		if t.mode == verifyingMode {
