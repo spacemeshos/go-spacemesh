@@ -189,8 +189,6 @@ func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, natxs, blocksP
 }
 
 func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beacon []byte, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
-	logger := logtest.New(t)
-	logger.Debug("======================== choosing base block for layer", layerID)
 	if inputVectorFn != nil {
 		oldInputVectorFn := msh.GetInputVectorBackupFunc()
 		defer func() {
@@ -200,8 +198,6 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 	}
 	baseBallotID, lists, err := trtl.BaseBallot(context.TODO())
 	require.NoError(t, err)
-	logger.Debug("base ballot for layer", layerID, "is", baseBallotID)
-	logger.Debug("exception lists for layer", layerID, "(against, support, neutral):", lists)
 	lyr := types.NewLayer(layerID)
 
 	atxs := []types.ATXID{}
@@ -242,7 +238,6 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 		blk.Initialize()
 		lyr.AddBlock(blk)
 		require.NoError(t, msh.AddBlock(blk))
-		logger.Debug("generated block", blk.ID(), "in layer", layerID)
 	}
 
 	return lyr
@@ -960,7 +955,7 @@ func TestSumVotes(t *testing.T) {
 
 				consensus.common.processed = lid
 				consensus.common.last = lid
-				tballots, _, err := consensus.processBallots(wrapContext(ctx), lid, layerBallots)
+				tballots, err := consensus.processBallots(wrapContext(ctx), lid, layerBallots)
 				consensus.keepVotes(tballots)
 				require.NoError(t, err)
 			}
@@ -1112,56 +1107,6 @@ func TestHealing(t *testing.T) {
 		alg.trtl.heal(wrapContext(context.TODO()), l7ID)
 		checkVerifiedLayer(t, alg.trtl, l6ID)
 	})
-}
-
-// can heal when half of votes are missing (doesn't meet threshold)
-// this requires waiting an epoch or two before the active set size is reduced enough to cross the threshold
-// see https://github.com/spacemeshos/go-spacemesh/issues/2497 for an idea about making this faster.
-func TestHealingAfterPartition(t *testing.T) {
-	mdb := getInMemMesh(t)
-	atxdb := getAtxDB()
-	alg := defaultAlgorithm(t, mdb)
-	alg.trtl.atxdb = atxdb
-	l0ID := types.GetEffectiveGenesis()
-
-	// use a larger number of blocks per layer to give us more scope for testing
-	const goodLayerSize = defaultTestLayerSize * 10
-	alg.trtl.LayerSize = goodLayerSize
-	atxdb.storeEpochWeight(uint64(goodLayerSize))
-
-	// create several good layers
-	makeAndProcessLayer(t, l0ID.Add(1), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(2), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(3), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(4), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(5), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
-
-	// create a few layers with half the number of blocks
-	makeAndProcessLayer(t, l0ID.Add(6), alg.trtl, goodLayerSize, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(7), alg.trtl, goodLayerSize, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
-	makeAndProcessLayer(t, l0ID.Add(8), alg.trtl, goodLayerSize, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
-
-	// verification should fail, global opinion should be abstain since not enough votes
-	checkVerifiedLayer(t, alg.trtl, l0ID.Add(4))
-
-	// once we start receiving full layers again, verification should restart immediately. this scenario doesn't
-	// actually require healing, since local and global opinions are the same, and the threshold is just > 1/2.
-	makeAndProcessLayer(t, l0ID.Add(9), alg.trtl, goodLayerSize, goodLayerSize, atxdb, mdb, mdb.LayerBlockIds)
-	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
-
-	// then we start receiving fewer blocks again
-	for i := 0; types.NewLayerID(uint32(i)).Before(types.NewLayerID(alg.trtl.Zdist + alg.trtl.ConfidenceParam)); i++ {
-		makeAndProcessLayer(t, l0ID.Add(10+uint32(i)), alg.trtl, goodLayerSize, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
-	}
-	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
-
-	// healing would begin here, but without enough blocks to accumulate votes to cross the global threshold, we're
-	// effectively stuck (until, in practice, active set size would be reduced in a following epoch and the remaining
-	// miners would produce more blocks--this is tested in the app tests)
-	firstHealedLayer := l0ID.Add(10 + uint32(alg.trtl.Zdist+alg.trtl.ConfidenceParam))
-	makeAndProcessLayer(t, firstHealedLayer, alg.trtl, goodLayerSize, goodLayerSize/2, atxdb, mdb, mdb.LayerBlockIds)
-	checkVerifiedLayer(t, alg.trtl, l0ID.Add(8))
 }
 
 func TestCalculateOpinionWithThreshold(t *testing.T) {
@@ -2346,7 +2291,7 @@ func ensureBlockLayerWithin(tb testing.TB, bdp blockDataProvider, bid types.Bloc
 func TestWeakCoinVoting(t *testing.T) {
 	const (
 		size  = 6
-		hdist = 3
+		hdist = 1
 	)
 	s := sim.New(
 		sim.WithLayerSize(size),
@@ -2403,7 +2348,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	// NOTE(dshulyak) this is about weight required to recover from split-votes.
 	// on 7th layer we have enough weight to heal genesis + 5 and all layers afterwards.
 	// consider figuring out some arithmetic for it.
-	for i := 0; i < 7; i++ {
+	for i := 0; i < 4; i++ {
 		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
@@ -2530,27 +2475,6 @@ func TestComputeLocalOpinion(t *testing.T) {
 			lid:      genesis.Add(4),
 			expected: abstain,
 		},
-		{
-			desc: "SupportFromCountedVotes",
-			seqs: []sim.Sequence{
-				sim.WithSequence(hdist+2, sim.WithoutInputVector()),
-			},
-			lid:      genesis.Add(1),
-			expected: support,
-		},
-		{
-			desc: "AbstainFromCountedVotes",
-			seqs: []sim.Sequence{
-				sim.WithSequence(1),
-				sim.WithSequence(hdist+2,
-					sim.WithoutInputVector(),
-					sim.WithVoteGenerator(splitVoting(size)),
-				),
-			},
-			lid:      genesis.Add(2),
-			expected: abstain,
-		},
-		// TODO(dshulyak) figure out sequence that will allow to test against from counted votes
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
@@ -2703,8 +2627,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	cfg.Hdist = 2
-	cfg.Zdist = 2
+	cfg.Hdist = 1
+	cfg.Zdist = 1
 	cfg.ConfidenceParam = 0
 
 	var (

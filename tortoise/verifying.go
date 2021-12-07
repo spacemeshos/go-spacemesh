@@ -12,6 +12,7 @@ func newVerifying(logger log.Log, config Config, common *commonState) *verifying
 		commonState:  common,
 		goodBallots:  map[types.BallotID]struct{}{},
 		layerWeights: map[types.LayerID]weight{},
+		totalWeight:  weightFromUint64(0),
 	}
 }
 
@@ -28,17 +29,14 @@ type verifying struct {
 	totalWeight weight
 }
 
-func (v *verifying) processLayer(lid types.LayerID, localOpinion Opinion, ballots []tortoiseBallot) types.LayerID {
+func (v *verifying) processLayer(lid types.LayerID, localOpinion Opinion, ballots []tortoiseBallot) {
 	logger := v.logger.WithFields(lid)
 
 	expected := v.epochWeight[lid.GetEpoch()]
 	counted, count := v.sumGoodBallots(logger, localOpinion, ballots)
-
-	uncounted := weightFromUint64(0)
-	uncounted = uncounted.add(expected)
-	uncounted = uncounted.sub(counted)
-
-	counted = counted.sub(uncounted)
+	if count > 0 {
+		v.good = lid
+	}
 
 	v.layerWeights[lid] = counted
 	v.totalWeight = v.totalWeight.add(counted)
@@ -47,26 +45,30 @@ func (v *verifying) processLayer(lid types.LayerID, localOpinion Opinion, ballot
 		log.Stringer("weight", counted),
 		log.Stringer("total", v.totalWeight),
 		log.Stringer("expected", expected),
-		log.Stringer("uncounted", uncounted),
 		log.Int("ballots_count", len(ballots)),
 		log.Int("good_ballots_count", count),
 	)
-	if count > 0 {
-		v.good = lid
-	}
-
-	return v.verifyLayers(logger, localOpinion)
 }
 
-func (v *verifying) verifyLayers(logger log.Log, localOpinion Opinion) types.LayerID {
+func (v *verifying) resetWeights() {
+	v.totalWeight = weightFromUint64(0)
+	v.layerWeights = map[types.LayerID]weight{}
+}
+
+func (v *verifying) verifyLayers(localOpinion Opinion) types.LayerID {
+	logger := v.logger
+
 	localThreshold := weightFromUint64(0)
-	localThreshold = localThreshold.add(v.epochWeight[v.last.GetEpoch()])
+	// TODO(dshulyak) expected weight for local threshold should be based on last layer.
+	localThreshold = localThreshold.add(v.epochWeight[v.processed.GetEpoch()])
 	localThreshold = localThreshold.fraction(v.LocalThreshold)
 
 	for lid := v.verified.Add(1); lid.Before(v.processed); lid = lid.Add(1) {
-		// TODO(dshulyak) expected weight must be based always on the last layer.
+		// TODO(dshulyak) expected weight must be based on the last layer.
 		threshold := computeExpectedWeight(v.epochWeight, lid, v.processed)
+		logger = logger.WithFields(log.Stringer("expected_weight", threshold))
 		threshold = threshold.fraction(v.GlobalThreshold)
+		logger = logger.WithFields(log.Stringer("global_threshold", threshold))
 		threshold = threshold.add(localThreshold)
 
 		votingWeight := weightFromUint64(0)
@@ -77,6 +79,7 @@ func (v *verifying) verifyLayers(logger log.Log, localOpinion Opinion) types.Lay
 			log.Stringer("candidate_layer", lid),
 			log.Stringer("voting_weight", votingWeight),
 			log.Stringer("threshold", threshold),
+			log.Stringer("local_threshol", localThreshold),
 		)
 
 		// 0 - there is not enough weight to cross threshold.
@@ -97,7 +100,7 @@ func (v *verifying) verifyLayers(logger log.Log, localOpinion Opinion) types.Lay
 		v.totalWeight = votingWeight
 		logger.With().Info("candidate layer is verified")
 	}
-	return v.last.Sub(1)
+	return v.processed.Sub(1)
 }
 
 func (v *verifying) sumGoodBallots(logger log.Log, localOpinion map[types.BlockID]sign, ballots []tortoiseBallot) (weight, int) {

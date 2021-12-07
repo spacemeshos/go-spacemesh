@@ -9,9 +9,9 @@ import (
 )
 
 const (
-	support = 1
-	against = -1
-	abstain = 0
+	support sign = 1
+	against sign = -1
+	abstain sign = 0
 )
 
 type sign int8
@@ -84,45 +84,33 @@ type weight struct {
 	*big.Float
 }
 
-func (w *weight) ensure() {
-	if w.Float == nil {
-		w.Float = new(big.Float)
-	}
-}
-
 func (w weight) add(other weight) weight {
-	w.ensure()
 	w.Float.Add(w.Float, other.Float)
 	return w
 }
 
 func (w weight) sub(other weight) weight {
-	w.ensure()
 	w.Float.Sub(w.Float, other.Float)
 	return w
 }
 
 func (w weight) div(other weight) weight {
-	w.ensure()
 	w.Float.Quo(w.Float, other.Float)
 	return w
 }
 
 func (w weight) neg() weight {
-	w.ensure()
 	w.Float.Neg(w.Float)
 	return w
 }
 
 func (w weight) copy() weight {
-	w.ensure()
 	other := weight{Float: new(big.Float)}
 	other.Float = other.Float.Copy(w.Float)
 	return other
 }
 
 func (w weight) fraction(frac *big.Rat) weight {
-	w.ensure()
 	threshold := new(big.Float).SetInt(frac.Num())
 	threshold.Mul(threshold, w.Float)
 	threshold.Quo(threshold, new(big.Float).SetInt(frac.Denom()))
@@ -131,7 +119,6 @@ func (w weight) fraction(frac *big.Rat) weight {
 }
 
 func (w weight) cmp(other weight) sign {
-	w.ensure()
 	if w.Float.Sign() == 1 && w.Float.Cmp(other.Float) == 1 {
 		return support
 	}
@@ -142,7 +129,6 @@ func (w weight) cmp(other weight) sign {
 }
 
 func (w weight) String() string {
-	w.ensure()
 	return w.Float.String()
 }
 
