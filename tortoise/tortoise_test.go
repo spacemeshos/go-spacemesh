@@ -979,71 +979,71 @@ func TestCalculateOpinionWithThreshold(t *testing.T) {
 	for _, tc := range []struct {
 		desc      string
 		expect    sign
-		vote      *big.Float
+		vote      weight
 		threshold *big.Rat
-		weight    *big.Float
+		weight    weight
 	}{
 		{
 			desc:      "Support",
 			expect:    support,
-			vote:      big.NewFloat(6),
+			vote:      weightFromInt64(6),
 			threshold: big.NewRat(1, 2),
-			weight:    big.NewFloat(10),
+			weight:    weightFromInt64(10),
 		},
 		{
 			desc:      "Abstain",
 			expect:    abstain,
-			vote:      big.NewFloat(3),
+			vote:      weightFromInt64(3),
 			threshold: big.NewRat(1, 2),
-			weight:    big.NewFloat(10),
+			weight:    weightFromInt64(10),
 		},
 		{
 			desc:      "AbstainZero",
 			expect:    abstain,
-			vote:      big.NewFloat(0),
+			vote:      weightFromInt64(0),
 			threshold: big.NewRat(1, 2),
-			weight:    big.NewFloat(10),
+			weight:    weightFromInt64(10),
 		},
 		{
 			desc:      "Against",
 			expect:    against,
-			vote:      big.NewFloat(-6),
+			vote:      weightFromInt64(-6),
 			threshold: big.NewRat(1, 2),
-			weight:    big.NewFloat(10),
+			weight:    weightFromInt64(10),
 		},
 		{
 			desc:      "ComplexSupport",
 			expect:    support,
-			vote:      big.NewFloat(121),
+			vote:      weightFromInt64(121),
 			threshold: big.NewRat(60, 100),
-			weight:    big.NewFloat(200),
+			weight:    weightFromInt64(200),
 		},
 		{
 			desc:      "ComplexAbstain",
 			expect:    abstain,
-			vote:      big.NewFloat(120),
+			vote:      weightFromInt64(120),
 			threshold: big.NewRat(60, 100),
-			weight:    big.NewFloat(200),
+			weight:    weightFromInt64(200),
 		},
 		{
 			desc:      "ComplexAbstain2",
 			expect:    abstain,
-			vote:      big.NewFloat(-120),
+			vote:      weightFromInt64(-120),
 			threshold: big.NewRat(60, 100),
-			weight:    big.NewFloat(200),
+			weight:    weightFromInt64(200),
 		},
 		{
 			desc:      "ComplexAgainst",
 			expect:    against,
-			vote:      big.NewFloat(-121),
+			vote:      weightFromInt64(-121),
 			threshold: big.NewRat(60, 100),
-			weight:    big.NewFloat(200),
+			weight:    weightFromInt64(200),
 		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
 			require.Equal(t, tc.expect,
-				calculateOpinionWithThreshold(logtest.New(t), tc.vote, tc.threshold, tc.weight))
+				tc.vote.cmp(tc.weight.fraction(tc.threshold)))
 		})
 	}
 }
