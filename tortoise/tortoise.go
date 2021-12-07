@@ -448,12 +448,12 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		return fmt.Errorf("failed to read blocks for layer %s: %w", lid, err)
 	}
 
+	t.processBlocks(lid, blocks)
+
 	original := make([]*types.Ballot, 0, len(blocks))
 	for _, block := range blocks {
 		original = append(original, block.ToBallot())
 	}
-	t.processBlocks(lid, blocks)
-
 	ballots, err := t.processBallots(ctx, lid, original)
 	if err != nil {
 		return err
@@ -471,20 +471,17 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		t.verified = t.verifying.verifyLayers(t.localOpinion)
 
 		if t.verified.After(previous) {
-			for lid := previous.Add(1); !lid.After(t.verified); lid = lid.Add(1) {
-				for _, bid := range t.blocks[lid] {
-					sign := t.localOpinion[bid]
-					if sign == abstain {
-						t.logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, bid)
-					}
-					if err := t.bdp.SaveContextualValidity(bid, lid, sign == support); err != nil {
-						return fmt.Errorf("saving validity for %s: %w", bid, err)
-					}
-				}
+			if err := persistContextualValidity(t.logger,
+				t.bdp,
+				t.verified.Add(1), t.processed,
+				t.blocks,
+				t.localOpinion,
+			); err != nil {
+				return err
 			}
-			if t.verified == t.processed.Sub(1) {
-				return nil
-			}
+		}
+		if t.verified == t.processed.Sub(1) {
+			return nil
 		}
 	}
 	// keep votes starting from the layer when verifying tortoise failed to make progress
@@ -509,7 +506,8 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		if !healed {
 			return nil
 		}
-
+		// TODO(dshulyak) refactor full tortoise to be consistent with verifying.
+		// update local opinion in memory and persist afterwards.
 		if err := t.updateLocalOpinion(wrapContext(ctx), previous.Add(1), t.verified); err != nil {
 			return err
 		}
@@ -928,4 +926,24 @@ func computeExpectedWeight(weights map[types.EpochID]weight, from, to types.Laye
 		total = total.add(weights[lid.GetEpoch()])
 	}
 	return total
+}
+
+func persistContextualValidity(logger log.Log,
+	bdp blockDataProvider,
+	from, to types.LayerID,
+	blocks map[types.LayerID][]types.BlockID,
+	opinion Opinion,
+) error {
+	for lid := from; !lid.After(to); lid = lid.Add(1) {
+		for _, bid := range blocks[lid] {
+			sign := opinion[bid]
+			if sign == abstain {
+				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, bid)
+			}
+			if err := bdp.SaveContextualValidity(bid, lid, sign == support); err != nil {
+				return fmt.Errorf("saving validity for %s: %w", bid, err)
+			}
+		}
+	}
+	return nil
 }
