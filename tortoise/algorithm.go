@@ -136,7 +136,7 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 			t.trtl.historicallyVerified = t.cfg.Verified
 		}
 
-		t.logger.Info("loading state from disk. make sure to wait until tortoise is ready",
+		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
 			log.Stringer("last_layer", t.cfg.Processed),
 			log.Stringer("historically_verified", t.cfg.Verified),
 		)
@@ -159,6 +159,7 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 	// TODO(dshulyak) with low rerun interval it is possible to start a rerun
 	// when initial sync is in progress, or right after sync
 	if t.cfg.RerunInterval != 0 {
+		t.logger.With().Info("launching rerun loop", log.Duration("interval", t.cfg.RerunInterval))
 		t.eg.Go(func() error {
 			t.rerunLoop(ctx, t.cfg.RerunInterval)
 			return nil
