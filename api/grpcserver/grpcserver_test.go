@@ -3115,13 +3115,13 @@ func TestEventsReceived(t *testing.T) {
 	pool.Put(globalTx.ID(), globalTx)
 
 	lg := logtest.New(t).WithName("svm")
-	processor := svm.New(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
 	time.Sleep(100 * time.Millisecond)
 
 	rewards := map[types.Address]uint64{
 		addr1: 1,
 	}
-	processor.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
+	svm.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
 
 	wg.Wait()
 }
