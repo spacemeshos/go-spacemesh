@@ -3,6 +3,7 @@ package tortoise
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -11,37 +12,30 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/sim"
 )
 
-func TestRerunEvictConcurrent(t *testing.T) {
+func TestRecoverState(t *testing.T) {
 	ctx := context.Background()
-	const size = 30
+	const size = 10
 	s := sim.New(sim.WithLayerSize(size))
 	s.Setup()
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
 	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
-
-	for i := 0; i < int(cfg.WindowSize); i++ {
-		tortoise.HandleIncomingLayer(ctx, s.Next())
+	var last, verified types.LayerID
+	for i := 0; i < 50; i++ {
+		last = s.Next()
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
-	require.NoError(t, tortoise.Persist(ctx))
-	require.NoError(t, tortoise.rerun(ctx))
-	for i := 0; i < int(cfg.WindowSize); i++ {
-		// have to use private trtl to simulate concurrent layers without replacing tortoise instance
-		lid := s.Next()
-		tortoise.org.Iterate(ctx, lid, func(lid types.LayerID) {
-			tortoise.trtl.HandleIncomingLayer(ctx, lid)
-		})
-	}
-	require.NoError(t, tortoise.Persist(ctx))
-	last := s.Next()
-	tortoise.HandleIncomingLayer(ctx, last)
-	require.NoError(t, tortoise.Persist(ctx))
+	require.Equal(t, last.Sub(1), verified)
 
-	// st := state{log: logtest.New(t), db: tortoise.trtl.db}
-	// require.NoError(t, st.Recover())
-	// require.Equal(t, last.Sub(1), st.Verified)
-	// for lid := range st.BallotOpinionsByLayer {
-	// 	require.True(t, lid.After(st.LastEvicted))
-	// }
+	cfg.Processed = last
+	tortoise2 := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	initctx, cancel := context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	for i := 0; i < 5; i++ {
+		// test that it won't block on multiple attempts
+		require.NoError(t, tortoise2.WaitReady(initctx))
+	}
+	_, verified, _ = tortoise2.HandleIncomingLayer(ctx, last)
+	require.Equal(t, last.Sub(1), verified)
 }

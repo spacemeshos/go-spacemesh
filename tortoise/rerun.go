@@ -57,6 +57,7 @@ func (t *Tortoise) updateFromRerun(ctx context.Context) (bool, types.LayerID) {
 		observed = completed.Tracer.FirstLayer()
 	}
 	updated.bdp = current.bdp
+	updated.logger = current.logger
 	t.trtl = updated
 	return reverted, observed
 }

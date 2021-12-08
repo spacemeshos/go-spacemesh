@@ -357,11 +357,6 @@ func (t *turtle) calculateExceptions(
 	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 }
 
-// Persist saves the current tortoise state to the database.
-func (t *turtle) persist() error {
-	return nil
-}
-
 func (t *turtle) ballotHasGoodBeacon(ballot *types.Ballot, logger log.Log) bool {
 	layerID := ballot.LayerIndex
 

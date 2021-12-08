@@ -364,7 +364,7 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 		msh.ValidateLayer(context.TODO(), lyr)
 		assert.Equal(t, lyr.Index(), msh.ProcessedLayer())
 		// make sure processed layer is persisted
-		pLyr, err := msh.recoverProcessedLayer()
+		pLyr, err := msh.GetProcessedLayer()
 		assert.NoError(t, err)
 		assert.Equal(t, lyr.Index(), pLyr)
 	}
@@ -378,7 +378,7 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	msh.ValidateLayer(context.TODO(), gPlus1)
 	assert.Equal(t, gPlus1.Index(), msh.ProcessedLayer())
 	// make sure processed layer is persisted
-	pLyr, err := msh.recoverProcessedLayer()
+	pLyr, err := msh.GetProcessedLayer()
 	r.NoError(err)
 	assert.Equal(t, gPlus1.Index(), pLyr)
 
@@ -386,14 +386,14 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	msh.ValidateLayer(context.TODO(), gPlus3)
 	// processed layer should not advance
 	assert.Equal(t, gPlus1.Index(), msh.ProcessedLayer())
-	pLyr, err = msh.recoverProcessedLayer()
+	pLyr, err = msh.GetProcessedLayer()
 	r.NoError(err)
 	assert.Equal(t, gPlus1.Index(), pLyr)
 
 	msh.ValidateLayer(context.TODO(), gPlus5)
 	// processed layer should not advance
 	assert.Equal(t, gPlus1.Index(), msh.ProcessedLayer())
-	pLyr, err = msh.recoverProcessedLayer()
+	pLyr, err = msh.GetProcessedLayer()
 	r.NoError(err)
 	assert.Equal(t, gPlus1.Index(), pLyr)
 
@@ -401,7 +401,7 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	msh.ValidateLayer(context.TODO(), gPlus2)
 	assert.Equal(t, gPlus3.Index(), msh.ProcessedLayer())
 	// make sure processed layer is persisted
-	pLyr, err = msh.recoverProcessedLayer()
+	pLyr, err = msh.GetProcessedLayer()
 	r.NoError(err)
 	assert.Equal(t, gPlus3.Index(), pLyr)
 
@@ -409,7 +409,7 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	msh.ValidateLayer(context.TODO(), gPlus4)
 	assert.Equal(t, gPlus5.Index(), msh.ProcessedLayer())
 	// make sure processed layer is persisted
-	pLyr, err = msh.recoverProcessedLayer()
+	pLyr, err = msh.GetProcessedLayer()
 	r.NoError(err)
 	assert.Equal(t, gPlus5.Index(), pLyr)
 
@@ -417,7 +417,7 @@ func TestMesh_ProcessedLayer(t *testing.T) {
 	msh.ValidateLayer(context.TODO(), gPlus2)
 	assert.Equal(t, gPlus5.Index(), msh.ProcessedLayer())
 	// make sure processed layer is persisted
-	pLyr, err = msh.recoverProcessedLayer()
+	pLyr, err = msh.GetProcessedLayer()
 	r.NoError(err)
 	assert.Equal(t, gPlus5.Index(), pLyr)
 }
@@ -429,7 +429,7 @@ func TestMesh_PersistProcessedLayer(t *testing.T) {
 	})
 	layerID := types.NewLayerID(3)
 	assert.NoError(t, msh.persistProcessedLayer(layerID))
-	rLyr, err := msh.recoverProcessedLayer()
+	rLyr, err := msh.GetProcessedLayer()
 	assert.NoError(t, err)
 	assert.Equal(t, layerID, rLyr)
 }

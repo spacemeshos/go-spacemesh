@@ -525,9 +525,16 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("create turtle DB: %w", err)
 	}
 	app.closers = append(app.closers, trtlStateDB)
+
+	processed, err := mdb.GetProcessedLayer()
+	if err != nil && !errors.Is(err, database.ErrNotFound) {
+		return fmt.Errorf("failed to load processed layer: %w", err)
+	}
+
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
+	trtlCfg.Processed = processed
 
 	trtl = tortoise.New(mdb, atxDB, tBeacon,
 		tortoise.WithContext(ctx),
@@ -998,8 +1005,15 @@ func (app *App) getIdentityFile() (string, error) {
 }
 
 func (app *App) startSyncer(ctx context.Context) {
+	app.log.With().Info("sync: waiting for p2p host to find outbound peers",
+		log.Int("outbound", app.Config.P2P.TargetOutbound))
 	_, err := app.host.WaitPeers(ctx, app.Config.P2P.TargetOutbound)
 	if err != nil {
+		return
+	}
+	app.log.Info("sync: waiting for tortoise to load state")
+	if err := app.tortoise.WaitReady(ctx); err != nil {
+		app.log.With().Error("sync: tortoise failed to load state", log.Err(err))
 		return
 	}
 	app.syncer.Start(ctx)
