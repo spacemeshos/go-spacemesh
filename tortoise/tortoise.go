@@ -57,7 +57,7 @@ func newTurtle(
 		atxdb:       atxdb,
 		beacons:     beacons,
 	}
-	t.verifying = newVerifying(logger, config, &t.commonState)
+	t.verifying = newVerifying(config, &t.commonState)
 	return t
 }
 
@@ -439,6 +439,8 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) err
 }
 
 func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
+	logger := t.logger.WithContext(ctx).WithFields(lid)
+
 	if err := t.updateLayerState(lid); err != nil {
 		return err
 	}
@@ -465,13 +467,13 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		if err := t.updateLocalOpinion(ctx, t.verified.Add(1), t.processed); err != nil {
 			return err
 		}
-		t.verifying.processLayer(lid, t.localOpinion, ballots)
+		t.verifying.processLayer(logger, lid, t.localOpinion, ballots)
 
 		previous := t.verified
 		t.verified = t.verifying.verifyLayers(t.localOpinion)
 
 		if t.verified.After(previous) {
-			if err := persistContextualValidity(t.logger,
+			if err := persistContextualValidity(logger,
 				t.bdp,
 				previous.Add(1), t.processed.Sub(1),
 				t.blocks,
@@ -495,14 +497,14 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	t.keepVotes(ballots)
 	if t.isHealingEnabled(t.verified.Add(1)) || t.mode == fullMode {
 		if t.mode == verifyingMode {
-			t.logger.With().Info("switching to full self-healing tortoise",
+			logger.With().Info("switching to full self-healing tortoise",
 				lid,
 				log.Stringer("verified", t.verified),
 			)
 			t.mode = fullMode
 		}
 		previous := t.verified
-		healed := t.healingTortoise(ctx, t.logger)
+		healed := t.healingTortoise(ctx, logger)
 		if !healed {
 			return nil
 		}

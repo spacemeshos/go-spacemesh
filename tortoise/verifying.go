@@ -5,9 +5,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func newVerifying(logger log.Log, config Config, common *commonState) *verifying {
+func newVerifying(config Config, common *commonState) *verifying {
 	return &verifying{
-		logger:       logger,
 		Config:       config,
 		commonState:  common,
 		goodBallots:  map[types.BallotID]struct{}{},
@@ -29,9 +28,7 @@ type verifying struct {
 	totalWeight weight
 }
 
-func (v *verifying) processLayer(lid types.LayerID, localOpinion Opinion, ballots []tortoiseBallot) {
-	logger := v.logger.WithFields(lid)
-
+func (v *verifying) processLayer(logger log.Log, lid types.LayerID, localOpinion Opinion, ballots []tortoiseBallot) {
 	expected := v.epochWeight[lid.GetEpoch()]
 	counted, count := v.sumGoodBallots(logger, localOpinion, ballots)
 	if count > 0 {
