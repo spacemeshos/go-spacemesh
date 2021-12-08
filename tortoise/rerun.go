@@ -83,7 +83,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.Bool("rerun", true),
-		log.FieldNamed("last-layer-id", last),
+		log.FieldNamed("last_layer", last),
 	)
 
 	start := time.Now()
@@ -103,7 +103,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 		}
 	}
 	if tracer.Reverted() {
-		logger = logger.WithFields(log.FieldNamed("first-reverted-layer", tracer.FirstLayer()))
+		logger = logger.WithFields(log.FieldNamed("first_reverted_layer", tracer.FirstLayer()))
 	}
 	logger.With().Info("tortoise rerun completed", last, log.Duration("duration", time.Since(start)))
 

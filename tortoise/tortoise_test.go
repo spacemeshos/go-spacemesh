@@ -2485,8 +2485,8 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	cfg.Hdist = 1
-	cfg.Zdist = 1
+	cfg.Hdist = 3
+	cfg.Zdist = 3
 	cfg.ConfidenceParam = 0
 
 	var (

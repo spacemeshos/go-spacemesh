@@ -135,6 +135,7 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 			logger.With().Debug("vote on block is different from the local vote",
 				log.Stringer("local_vote", local),
 				log.Stringer("vote", sign),
+				log.Stringer("block_layer", votelid),
 			)
 			return false
 		}
