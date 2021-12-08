@@ -432,7 +432,8 @@ func (m *DB) persistProcessedLayer(layerID types.LayerID) error {
 	return nil
 }
 
-func (m *DB) recoverProcessedLayer() (types.LayerID, error) {
+// GetProcessedLayer loads processed layer from database.
+func (m *DB) GetProcessedLayer() (types.LayerID, error) {
 	data, err := m.general.Get(constPROCESSED)
 	if err != nil {
 		return types.NewLayerID(0), err

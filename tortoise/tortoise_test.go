@@ -676,43 +676,6 @@ func TestAddToMesh(t *testing.T) {
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(3).Uint32()), int(alg.LatestComplete().Uint32()), "wrong latest complete layer")
 }
 
-func TestPersistAndRecover(t *testing.T) {
-	const size = 10
-	s := sim.New(
-		sim.WithLayerSize(size),
-		sim.WithPath(t.TempDir()),
-	)
-	s.Setup()
-	ctx := context.Background()
-	cfg := defaultTestConfig()
-	cfg.LayerSize = size
-	cfg.WindowSize = 15
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
-
-	var last, verified types.LayerID
-	for i := 0; i < 30; i++ {
-		last = s.Next()
-		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
-	}
-	require.Equal(t, last.Sub(1), verified)
-	require.NoError(t, tortoise.Persist(ctx))
-
-	tortoise2 := New(
-		tortoise.trtl.db,
-		s.GetState(0).MeshDB,
-		s.GetState(0).AtxDB,
-		s.GetState(0).Beacons,
-		WithConfig(cfg),
-	)
-	require.Equal(t, tortoise.trtl.LastEvicted, tortoise2.trtl.LastEvicted)
-	require.Equal(t, tortoise.trtl.Verified, tortoise2.trtl.Verified)
-	require.Equal(t, tortoise.trtl.Last, tortoise2.trtl.Last)
-	require.Equal(t, tortoise.trtl.Processed, tortoise2.trtl.Processed)
-	require.Equal(t, tortoise.trtl.WindowSize, tortoise2.trtl.WindowSize)
-	require.Equal(t, tortoise.trtl.Last, tortoise2.trtl.Last)
-	require.Equal(t, tortoise.trtl.BallotWeight, tortoise2.trtl.BallotWeight)
-}
-
 func TestBaseBallot(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh(t)
@@ -771,7 +734,6 @@ func mockedBeacons(tb testing.TB) system.BeaconGetter {
 func defaultTurtle(tb testing.TB) *turtle {
 	return newTurtle(
 		logtest.New(tb),
-		database.NewMemDatabase(),
 		getInMemMesh(tb),
 		getAtxDB(),
 		mockedBeacons(tb),
@@ -814,12 +776,12 @@ func defaultTestConfig() Config {
 }
 
 func tortoiseFromSimState(state sim.State, opts ...Opt) *Tortoise {
-	return New(database.NewMemDatabase(), state.MeshDB, state.AtxDB, state.Beacons, opts...)
+	return New(state.MeshDB, state.AtxDB, state.Beacons, opts...)
 }
 
 func defaultAlgorithm(tb testing.TB, mdb *mesh.DB) *Tortoise {
 	tb.Helper()
-	return New(database.NewMemDatabase(), mdb, getAtxDB(), mockedBeacons(tb),
+	return New(mdb, getAtxDB(), mockedBeacons(tb),
 		WithConfig(defaultTestConfig()),
 		WithLogger(logtest.New(tb)),
 	)
