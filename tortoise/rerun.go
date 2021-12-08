@@ -79,15 +79,18 @@ func (t *Tortoise) rerunLoop(ctx context.Context, period time.Duration) {
 func (t *Tortoise) rerun(ctx context.Context) error {
 	t.mu.RLock()
 	last := t.trtl.last
+	historicallyVerified := t.trtl.historicallyVerified
 	t.mu.RUnlock()
 
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.Bool("rerun", true),
-		log.FieldNamed("last_layer", last),
 	)
 
 	start := time.Now()
-	logger.With().Info("tortoise rerun started")
+	logger.With().Info("tortoise rerun started",
+		log.FieldNamed("last_layer", last),
+		log.FieldNamed("historically_verified", historicallyVerified),
+	)
 
 	consensus := t.trtl.cloneTurtleParams()
 	consensus.logger = logger
@@ -95,6 +98,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 	tracer := &validityTracer{blockDataProvider: consensus.bdp}
 	consensus.bdp = tracer
 	consensus.last = last
+	consensus.historicallyVerified = historicallyVerified
 
 	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(last); lid = lid.Add(1) {
 		if err := consensus.HandleIncomingLayer(ctx, lid); err != nil {
@@ -102,6 +106,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 			return err
 		}
 	}
+	consensus.historicallyVerified = consensus.verified
 	if tracer.Reverted() {
 		logger = logger.WithFields(log.FieldNamed("first_reverted_layer", tracer.FirstLayer()))
 	}

@@ -441,6 +441,15 @@ func (m *DB) GetProcessedLayer() (types.LayerID, error) {
 	return types.BytesToLayerID(data), nil
 }
 
+// GetVerifiedLayer loads verified layer from database.
+func (m *DB) GetVerifiedLayer() (types.LayerID, error) {
+	data, err := m.general.Get(VERIFIED)
+	if err != nil {
+		return types.NewLayerID(0), err
+	}
+	return types.BytesToLayerID(data), nil
+}
+
 func (m *DB) writeBlock(bl *types.Block) error {
 	block := &types.DBBlock{
 		MiniBlock: bl.MiniBlock,

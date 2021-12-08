@@ -24,6 +24,9 @@ type commonState struct {
 	last types.LayerID
 	// last verified layer
 	verified types.LayerID
+	// historicallyVerified matters only for local opinion for verifying tortoise
+	// during rerun. for live tortoise it is identical to the verified layer.
+	historicallyVerified types.LayerID
 	// last processed layer
 	processed types.LayerID
 	// last layer with good ballots

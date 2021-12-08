@@ -29,6 +29,7 @@ type Config struct {
 	LayerSize                uint32
 	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
 	Processed                types.LayerID
+	Verified                 types.LayerID
 }
 
 // DefaultConfig for Tortoise.
@@ -131,9 +132,13 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 		t.trtl.processed = t.cfg.Processed
 		// TODO(dshulyak) last should be set according to the clock.
 		t.trtl.last = t.cfg.Processed
+		if t.cfg.Verified.After(t.trtl.historicallyVerified) {
+			t.trtl.historicallyVerified = t.cfg.Verified
+		}
 
 		t.logger.Info("loading state from disk. make sure to wait until tortoise is ready",
 			log.Stringer("last_layer", t.cfg.Processed),
+			log.Stringer("historically_verified", t.cfg.Verified),
 		)
 		t.eg.Go(func() error {
 			t.ready <- t.rerun(ctx)

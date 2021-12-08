@@ -530,11 +530,16 @@ func (app *App) initServices(ctx context.Context,
 	if err != nil && !errors.Is(err, database.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
+	verified, err := mdb.GetVerifiedLayer()
+	if err != nil && !errors.Is(err, database.ErrNotFound) {
+		return fmt.Errorf("failed to load verified layer: %w", err)
+	}
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
 	trtlCfg.Processed = processed
+	trtlCfg.Verified = verified
 
 	trtl = tortoise.New(mdb, atxDB, tBeacon,
 		tortoise.WithContext(ctx),

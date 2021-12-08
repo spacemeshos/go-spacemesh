@@ -92,6 +92,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	t.last = genesis
 	t.processed = genesis
 	t.verified = genesis
+	t.historicallyVerified = genesis
 	t.good = genesis
 }
 
@@ -430,7 +431,11 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) err
 	if t.processed.Before(lid) {
 		t.processed = lid
 	}
-	return t.processLayer(tctx, lid)
+	err := t.processLayer(tctx, lid)
+	if t.verified.After(t.historicallyVerified) {
+		t.historicallyVerified = t.verified
+	}
+	return err
 }
 
 func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
@@ -700,7 +705,7 @@ func (t *turtle) addLocalOpinion(ctx *tcontext, lid types.LayerID, opinion Opini
 	}
 
 	// for layers older than hdist, we vote according to global opinion
-	if !lid.After(t.verified) {
+	if !lid.After(t.historicallyVerified) {
 		// this layer has been verified, so we should be able to read the set of contextual blocks
 		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
 		valid, err := getValidBlocks(ctx, t.bdp, lid)
