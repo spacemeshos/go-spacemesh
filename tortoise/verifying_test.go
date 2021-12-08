@@ -122,7 +122,7 @@ func TestVerifyingIsGood(t *testing.T) {
 
 			v := newVerifying(Config{}, &tc.commonState)
 			v.goodBallots[goodbase] = struct{}{}
-			require.Equal(t, tc.expect, v.isGood(logger, tc.localOpinion, tc.ballot))
+			require.Equal(t, tc.expect, v.isGood(logger, tc.ballot))
 		})
 	}
 }

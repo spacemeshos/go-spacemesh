@@ -16,8 +16,6 @@ func newVerifying(config Config, common *commonState) *verifying {
 }
 
 type verifying struct {
-	logger log.Log
-
 	Config
 	*commonState
 
@@ -28,9 +26,9 @@ type verifying struct {
 	totalWeight weight
 }
 
-func (v *verifying) processLayer(logger log.Log, lid types.LayerID, localOpinion Opinion, ballots []tortoiseBallot) {
+func (v *verifying) processLayer(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
 	expected := v.epochWeight[lid.GetEpoch()]
-	counted, count := v.sumGoodBallots(logger, localOpinion, ballots)
+	counted, count := v.sumGoodBallots(logger, ballots)
 	if count > 0 {
 		v.good = lid
 	}
@@ -54,9 +52,7 @@ func (v *verifying) resetWeights() {
 	v.layerWeights = map[types.LayerID]weight{}
 }
 
-func (v *verifying) verifyLayers(localOpinion Opinion) types.LayerID {
-	logger := v.logger
-
+func (v *verifying) verifyLayers(logger log.Log) types.LayerID {
 	localThreshold := weightFromUint64(0)
 	// TODO(dshulyak) expected weight for local threshold should be based on last layer.
 	localThreshold = localThreshold.add(v.epochWeight[v.processed.GetEpoch()])
@@ -89,7 +85,7 @@ func (v *verifying) verifyLayers(localOpinion Opinion) types.LayerID {
 		// if there is any block with neutral local opinion - we can't verify the layer
 		// if it happens outside of hdist - protocol will switch to full tortoise
 		for _, bid := range v.blocks[lid] {
-			if localOpinion[bid] == abstain {
+			if v.localOpinion[bid] == abstain {
 				return lid.Sub(1)
 			}
 		}
@@ -100,11 +96,11 @@ func (v *verifying) verifyLayers(localOpinion Opinion) types.LayerID {
 	return v.processed.Sub(1)
 }
 
-func (v *verifying) sumGoodBallots(logger log.Log, localOpinion map[types.BlockID]sign, ballots []tortoiseBallot) (weight, int) {
+func (v *verifying) sumGoodBallots(logger log.Log, ballots []tortoiseBallot) (weight, int) {
 	sum := weightFromUint64(0)
 	n := 0
 	for _, ballot := range ballots {
-		if !v.isGood(logger, localOpinion, ballot) {
+		if !v.isGood(logger, ballot) {
 			continue
 		}
 		v.goodBallots[ballot.id] = struct{}{}
@@ -114,7 +110,7 @@ func (v *verifying) sumGoodBallots(logger log.Log, localOpinion map[types.BlockI
 	return sum, n
 }
 
-func (v *verifying) isGood(logger log.Log, localOpinion Opinion, ballot tortoiseBallot) bool {
+func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 	logger = logger.WithFields(ballot.id, log.Stringer("base", ballot.base))
 
 	if _, exists := v.badBeaconBallots[ballot.id]; exists {
@@ -140,9 +136,9 @@ func (v *verifying) isGood(logger log.Log, localOpinion Opinion, ballot tortoise
 			return false
 		}
 
-		if localOpinion[id] != sign {
+		if local := v.localOpinion[id]; local != sign {
 			logger.With().Debug("vote on block is different from the local vote",
-				log.Stringer("local_vote", localOpinion[id]),
+				log.Stringer("local_vote", local),
 				log.Stringer("vote", sign),
 			)
 			return false

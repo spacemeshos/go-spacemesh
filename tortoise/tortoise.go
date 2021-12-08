@@ -467,10 +467,10 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		if err := t.updateLocalOpinion(ctx, t.verified.Add(1), t.processed); err != nil {
 			return err
 		}
-		t.verifying.processLayer(logger, lid, t.localOpinion, ballots)
+		t.verifying.processLayer(logger, lid, ballots)
 
 		previous := t.verified
-		t.verified = t.verifying.verifyLayers(t.localOpinion)
+		t.verified = t.verifying.verifyLayers(logger)
 
 		if t.verified.After(previous) {
 			if err := persistContextualValidity(logger,
