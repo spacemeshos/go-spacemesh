@@ -143,6 +143,7 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 		t.eg.Go(func() error {
 			t.ready <- t.rerun(ctx)
 			close(t.ready)
+			t.logger.Info("tortoise is ready")
 			return nil
 		})
 	} else {
