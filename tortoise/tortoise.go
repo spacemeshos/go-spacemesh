@@ -492,7 +492,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	//
 	// this may change for rerun https://github.com/spacemeshos/go-spacemesh/issues/2980,
 	// verified layer will be expected to be stuck as the expected weight will be high.
-	// so we will have to use different heuristic for switching into full mode
+	// so we will have to use different heuristic for switching into full mode.
 	// maybe the difference between counted and uncounted weight for a specific layer
 	t.keepVotes(ballots)
 	if t.isHealingEnabled(t.verified.Add(1)) || t.mode == fullMode {
@@ -630,12 +630,12 @@ func (t *turtle) keepVotes(ballots []tortoiseBallot) {
 	}
 }
 
+// Verifying tortoise will wait `zdist' layers for consensus, then an additional `ConfidenceParam'
+// layers until all other nodes achieve consensus. If it's still stuck after this point, i.e., if the gap
+// between this unverified candidate layer and the latest layer is greater than this distance, then we trigger
+// self healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
+// we only consider the local opinion for recent layers.
 func (t *turtle) isHealingEnabled(lid types.LayerID) bool {
-	// Verifying tortoise will wait `zdist' layers for consensus, then an additional `ConfidenceParam'
-	// layers until all other nodes achieve consensus. If it's still stuck after this point, i.e., if the gap
-	// between this unverified candidate layer and the latest layer is greater than this distance, then we trigger
-	// self healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
-	// we only consider the local opinion for recent layers.
 	return lid.Before(t.layerCutoff()) && t.last.Difference(lid) > t.Zdist+t.ConfidenceParam
 }
 
@@ -730,13 +730,16 @@ func (t *turtle) sumVotesForBlock(
 	startlid types.LayerID,
 	filter func(types.BallotID) bool,
 ) (weight, error) {
-	sum := weightFromUint64(0)
-	end := t.processed
-	logger := t.logger.WithContext(ctx).WithFields(
-		log.Stringer("start_layer", startlid),
-		log.Stringer("end_layer", end),
-		log.Stringer("block_voting_on", blockID),
-		log.Stringer("layer_voting_on", startlid.Sub(1)))
+	var (
+		sum    = weightFromUint64(0)
+		end    = t.processed
+		logger = t.logger.WithContext(ctx).WithFields(
+			log.Stringer("start_layer", startlid),
+			log.Stringer("end_layer", end),
+			log.Stringer("block_voting_on", blockID),
+			log.Stringer("layer_voting_on", startlid.Sub(1)),
+		)
+	)
 	for votelid := startlid; !votelid.After(end); votelid = votelid.Add(1) {
 		logger := logger.WithFields(votelid)
 		for _, ballotID := range t.ballots[votelid] {
@@ -752,12 +755,11 @@ func (t *turtle) sumVotesForBlock(
 			}
 			ballotWeight, exists := t.ballotWeight[ballotID]
 			if !exists {
-				// consider to panic here, it is possible only because of bug in the implementation
 				return weightFromUint64(0), fmt.Errorf("bug: weight for %s is not computed", ballotID)
 			}
 			sign, exists := votes[blockID]
 			if !exists {
-				logger.With().Debug("no opinion on older block, counted vote against")
+				logger.With().Error("bug: no opinion on older block, counted vote against", blockID)
 				sign = against
 			}
 			adjusted := ballotWeight
@@ -765,7 +767,6 @@ func (t *turtle) sumVotesForBlock(
 				// copy is needed only if we modify sign
 				adjusted = ballotWeight.copy().neg()
 			}
-			// TODO(dshulyak) abstain here probably means a programmer mistake
 			if sign != abstain {
 				sum = sum.add(adjusted)
 			}

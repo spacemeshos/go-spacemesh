@@ -27,7 +27,6 @@ type verifying struct {
 }
 
 func (v *verifying) processLayer(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
-	expected := v.epochWeight[lid.GetEpoch()]
 	counted, count := v.sumGoodBallots(logger, ballots)
 	if count > 0 {
 		v.good = lid
@@ -41,15 +40,10 @@ func (v *verifying) processLayer(logger log.Log, lid types.LayerID, ballots []to
 	logger.With().Info("computed weight from good ballots",
 		log.Stringer("weight", counted),
 		log.Stringer("total", v.totalWeight),
-		log.Stringer("expected", expected),
+		log.Stringer("expected", v.epochWeight[lid.GetEpoch()]),
 		log.Int("ballots_count", len(ballots)),
 		log.Int("good_ballots_count", count),
 	)
-}
-
-func (v *verifying) resetWeights() {
-	v.totalWeight = weightFromUint64(0)
-	v.layerWeights = map[types.LayerID]weight{}
 }
 
 func (v *verifying) verifyLayers(logger log.Log) types.LayerID {
@@ -68,17 +62,17 @@ func (v *verifying) verifyLayers(logger log.Log) types.LayerID {
 		votingWeight = votingWeight.add(v.totalWeight)
 		votingWeight = votingWeight.sub(v.layerWeights[lid])
 
-		logger = logger.WithFields(
+		layerLogger := logger.WithFields(
 			log.Stringer("candidate_layer", lid),
 			log.Stringer("voting_weight", votingWeight),
 			log.Stringer("threshold", threshold),
-			log.Stringer("local_threshol", localThreshold),
+			log.Stringer("local_threshold", localThreshold),
 		)
 
 		// 0 - there is not enough weight to cross threshold.
 		// 1 - layer is verified and contextual validity is according to our local opinion.
 		if votingWeight.cmp(threshold) == abstain {
-			logger.With().Warning("candidate layer is not verified")
+			layerLogger.With().Warning("candidate layer is not verified. voting weight is lower than the threshold")
 			return lid.Sub(1)
 		}
 
@@ -86,12 +80,13 @@ func (v *verifying) verifyLayers(logger log.Log) types.LayerID {
 		// if it happens outside of hdist - protocol will switch to full tortoise
 		for _, bid := range v.blocks[lid] {
 			if v.localOpinion[bid] == abstain {
+				layerLogger.With().Warning("candidate layer is not verified. block is undecided", bid)
 				return lid.Sub(1)
 			}
 		}
 
 		v.totalWeight = votingWeight
-		logger.With().Info("candidate layer is verified")
+		layerLogger.With().Info("candidate layer is verified")
 	}
 	return v.processed.Sub(1)
 }
