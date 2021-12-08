@@ -96,7 +96,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 	consensus.bdp = tracer
 	consensus.last = last
 
-	for lid := consensus.verified.Add(1); !lid.After(last); lid = lid.Add(1) {
+	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(last); lid = lid.Add(1) {
 		if err := consensus.HandleIncomingLayer(ctx, lid); err != nil {
 			logger.With().Error("tortoise rerun failed", log.Err(err))
 			return err
