@@ -47,7 +47,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/svm"
-	"github.com/spacemeshos/go-spacemesh/svm/state"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -258,9 +257,7 @@ type App struct {
 	txService       *grpcserver.TransactionService
 	syncer          *syncer.Syncer
 	blockListener   *blocks.BlockHandler
-	state           *state.TransactionProcessor
 	proposalBuilder *miner.ProposalBuilder
-	txProcessor     *state.TransactionProcessor
 	mesh            *mesh.Mesh
 	clock           TickProvider
 	hare            HareService
@@ -485,7 +482,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("create applied txs DB: %w", err)
 	}
 	app.closers = append(app.closers, appliedTxs)
-	processor := state.NewTransactionProcessor(db, appliedTxs, meshAndPoolProjector, app.txPool, lg.WithName("state"))
+	state := svm.New(db, appliedTxs, meshAndPoolProjector, app.txPool, app.addLogger(SVMLogger, lg))
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
 	if goldenATXID == *types.EmptyATXID {
@@ -534,14 +531,13 @@ func (app *App) initServices(ctx context.Context,
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
-	svm := svm.New(processor, app.addLogger(SVMLogger, lg))
 
 	if mdb.PersistentData() {
-		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, fetcherWrapped, trtl, app.txPool, svm, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, fetcherWrapped, trtl, app.txPool, state, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
-		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, fetcherWrapped, trtl, app.txPool, svm, app.addLogger(MeshLogger, lg))
-		if err := svm.SetupGenesis(app.Config.Genesis); err != nil {
+		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, fetcherWrapped, trtl, app.txPool, state, app.addLogger(MeshLogger, lg))
+		if err := state.SetupGenesis(app.Config.Genesis); err != nil {
 			return fmt.Errorf("setup genesis: %w", err)
 		}
 	}
@@ -573,7 +569,7 @@ func (app *App) initServices(ctx context.Context,
 		fetch.TXDB:    mdb.Transactions(),
 		fetch.POETDB:  poetDbStore,
 	}
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.FETCH, blockListener, atxDB, poetDb, atxDB, svm, app.host, dbStores, msh, app.addLogger(LayerFetcher, lg))
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.FETCH, blockListener, atxDB, poetDb, atxDB, state, app.host, dbStores, msh, app.addLogger(LayerFetcher, lg))
 	fetcherWrapped.Fetcher = layerFetch
 
 	patrol := layerpatrol.New()
@@ -599,7 +595,7 @@ func (app *App) initServices(ctx context.Context,
 
 	rabbit := app.HareFactory(ctx, mdb, sgn, nodeID, patrol, newSyncer, msh, tBeacon, hOracle, idStore, clock, lg)
 
-	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(processor, msh)
+	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(state, msh)
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
 		clock.Subscribe(),
@@ -661,7 +657,7 @@ func (app *App) initServices(ctx context.Context,
 		pubsub.ChainGossipHandler(syncHandler, tBeacon.HandleSerializedFollowingVotingMessage))
 	app.host.Register(blocks.NewBlockProtocol, pubsub.ChainGossipHandler(syncHandler, blockListener.HandleBlock))
 	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxDB.HandleGossipAtx))
-	app.host.Register(state.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, svm.HandleGossipTransaction))
+	app.host.Register(svm.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, state.HandleGossipTransaction))
 	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 
 	app.proposalBuilder = proposalBuilder
@@ -669,16 +665,15 @@ func (app *App) initServices(ctx context.Context,
 	app.mesh = msh
 	app.syncer = newSyncer
 	app.clock = clock
-	app.state = processor
+	app.svm = state
 	app.hare = rabbit
 	app.poetListener = poetListener
 	app.atxBuilder = atxBuilder
 	app.postSetupMgr = postSetupMgr
-	app.txProcessor = processor
 	app.atxDb = atxDB
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
-	app.svm = svm
+	app.svm = state
 	app.tortoise = trtl
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
