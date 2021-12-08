@@ -3114,7 +3114,7 @@ func TestEventsReceived(t *testing.T) {
 	pool := mempool.NewTxMemPool()
 	pool.Put(globalTx.ID(), globalTx)
 
-	lg := logtest.New(t).WithName("proc_logger")
+	lg := logtest.New(t).WithName("svm")
 	processor := svm.New(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
 	time.Sleep(100 * time.Millisecond)
 
