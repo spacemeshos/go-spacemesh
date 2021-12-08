@@ -58,7 +58,9 @@ func newFullState() fullState {
 //
 // as long as the verifying tortoise makes progress this state can remain empty.
 // if verifying tortoise get stuck we need to have data for two use cases:
-// - select a base ballot that is the least bad, requires votes after layer with good ballots
+// - select a base ballot that is the least bad, requires votes since genesis,
+//   for now we keep votes only in a small window and only after verifying tortoise is stuck
+//   relevant only if we can't find a good ballot that can fit all votes int the exception limit
 // - verify layers with full vote counting, requires votes from ballots after verified layer
 //
 // TODO(dshulyak) this is a temporary data structure, until full tortoise will be refactored the same

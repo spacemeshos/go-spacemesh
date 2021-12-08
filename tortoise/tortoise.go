@@ -441,6 +441,8 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) err
 func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	logger := t.logger.WithContext(ctx).WithFields(lid)
 
+	logger.With().Info("processing layer")
+
 	if err := t.updateLayerState(lid); err != nil {
 		return err
 	}
@@ -510,7 +512,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		}
 		// TODO(dshulyak) refactor full tortoise to be consistent with verifying.
 		// update local opinion in memory and persist afterwards.
-		if err := t.updateLocalOpinion(wrapContext(ctx), previous.Add(1), t.verified); err != nil {
+		if err := t.updateLocalOpinion(wrapContext(ctx), previous.Add(1), t.processed); err != nil {
 			return err
 		}
 	}

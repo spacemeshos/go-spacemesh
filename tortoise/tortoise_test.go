@@ -2573,3 +2573,89 @@ func TestVerifyLayerByWeightNotSize(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(2), verified)
 }
+
+func TestStateManagement(t *testing.T) {
+	const (
+		size   = 10
+		hdist  = 4
+		window = 2
+	)
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.Hdist = hdist
+	cfg.Zdist = hdist
+	cfg.WindowSize = window
+
+	t.Run("VerifyingState", func(t *testing.T) {
+		s := sim.New(
+			sim.WithLayerSize(size),
+		)
+		s.Setup()
+
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+
+		var last, verified types.LayerID
+		for _, last = range sim.GenLayers(s,
+			sim.WithSequence(20),
+		) {
+			_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+		}
+		require.Equal(t, last.Sub(1), verified)
+
+		require.Empty(t, tortoise.trtl.full.votes)
+
+		evicted := tortoise.trtl.evicted
+		require.Equal(t, verified.Sub(window).Sub(1), evicted)
+		for lid := types.GetEffectiveGenesis(); !lid.After(evicted); lid = lid.Add(1) {
+			require.Empty(t, tortoise.trtl.blocks[lid])
+			require.Empty(t, tortoise.trtl.ballots[lid])
+		}
+
+		for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
+			for _, bid := range tortoise.trtl.blocks[lid] {
+				require.Contains(t, tortoise.trtl.localOpinion, bid, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)
+			}
+			for _, ballot := range tortoise.trtl.ballots[lid] {
+				require.Contains(t, tortoise.trtl.ballotWeight, ballot, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.ballotLayer, ballot, "layer %s", lid)
+			}
+		}
+	})
+	t.Run("FullState", func(t *testing.T) {
+		s := sim.New(
+			sim.WithLayerSize(size),
+		)
+		s.Setup()
+
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+
+		var last, verified types.LayerID
+		for _, last = range sim.GenLayers(s,
+			sim.WithSequence(20, sim.WithEmptyInputVector()),
+		) {
+			_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+		}
+		require.Equal(t, last.Sub(1), verified)
+
+		evicted := tortoise.trtl.evicted
+		require.Equal(t, verified.Sub(window).Sub(1), evicted)
+		for lid := types.GetEffectiveGenesis(); !lid.After(evicted); lid = lid.Add(1) {
+			require.Empty(t, tortoise.trtl.blocks[lid])
+			require.Empty(t, tortoise.trtl.ballots[lid])
+		}
+
+		for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
+			for _, bid := range tortoise.trtl.blocks[lid] {
+				require.Contains(t, tortoise.trtl.localOpinion, bid, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)
+			}
+			for _, ballot := range tortoise.trtl.ballots[lid] {
+				require.Contains(t, tortoise.trtl.full.votes, ballot, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.ballotWeight, ballot, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.ballotLayer, ballot, "layer %s", lid)
+			}
+		}
+	})
+}
