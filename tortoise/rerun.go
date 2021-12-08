@@ -106,6 +106,8 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 			return err
 		}
 	}
+	// there will be a state revert if after rerun we didn't reach original verified layer.
+	// it updated here so that we don't base our local opinion on un-verified layers.
 	consensus.historicallyVerified = consensus.verified
 	if tracer.Reverted() {
 		logger = logger.WithFields(log.FieldNamed("first_reverted_layer", tracer.FirstLayer()))
