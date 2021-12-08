@@ -36,7 +36,7 @@ type turtle struct {
 
 	commonState
 	verifying *verifying
-	full      fullState
+	full      *full
 }
 
 // newTurtle creates a new verifying tortoise algorithm instance.
@@ -50,7 +50,6 @@ func newTurtle(
 	t := &turtle{
 		Config:      config,
 		commonState: newCommonState(),
-		full:        newFullState(),
 		logger:      logger,
 		mode:        verifyingMode,
 		bdp:         bdp,
@@ -58,6 +57,7 @@ func newTurtle(
 		beacons:     beacons,
 	}
 	t.verifying = newVerifying(config, &t.commonState)
+	t.full = newFullTortoise(config, &t.commonState)
 	return t
 }
 
@@ -137,6 +137,7 @@ func (t *turtle) evict(ctx context.Context) {
 			delete(t.badBeaconBallots, ballot)
 			delete(t.verifying.goodBallots, ballot)
 			delete(t.full.votes, ballot)
+			delete(t.full.base, ballot)
 		}
 		delete(t.ballots, lid)
 		for _, block := range t.blocks[lid] {
@@ -180,7 +181,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		// we need only 1 ballot from the most recent layer, this ballot will be by definition the most
 		// consistent with our local opinion.
 		// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
-		exceptions, err = t.calculateExceptions(tctx, votinglid, ballotLID, ballotLID, Opinion{})
+		exceptions, err = t.calculateExceptions(tctx, votinglid, ballotLID, ballotLID, func(types.BlockID) sign { return against })
 	}
 	if ballotID == types.EmptyBallotID || err != nil {
 		logger.With().Warning("failed to select good base ballot. reverting to the least bad choices", log.Err(err))
@@ -199,7 +200,9 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		prioritizeBallots(choices, disagreements, t.ballotLayer)
 		for _, ballotID = range choices {
 			ballotLID = t.ballotLayer[ballotID]
-			exceptions, err = t.calculateExceptions(tctx, votinglid, ballotLID, t.evicted.Add(1), t.full.votes[ballotID])
+			exceptions, err = t.calculateExceptions(tctx, votinglid, ballotLID, t.evicted.Add(1), func(blockID types.BlockID) sign {
+				return t.full.getVote(logger, ballotID, blockID)
+			})
 			if err == nil {
 				break
 			}
@@ -251,23 +254,18 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 
 // firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
 func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, ballotID types.BallotID, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
-	var (
-		// using it as a mark that the votes for block are completely consistent
-		// with a local opinion. so if two blocks have consistent histories select block
-		// from a higher layer as it is more consistent.
-		consistent = t.last
-		opinions   = t.full.votes[ballotID]
-	)
+	// using it as a mark that the votes for block are completely consistent
+	// with a local opinion. so if two blocks have consistent histories select block
+	// from a higher layer as it is more consistent.
+	consistent := t.last
+
 	for lid := t.evicted.Add(1); lid.Before(blid); lid = lid.Add(1) {
 		locals, err := t.getLocalOpinion(ctx, lid)
 		if err != nil {
 			return types.LayerID{}, err
 		}
 		for on, local := range locals {
-			opinion, exist := opinions[on]
-			if !exist {
-				opinion = against
-			}
+			opinion := t.full.getVote(t.logger, ballotID, on)
 			if local != opinion {
 				return lid, nil
 			}
@@ -276,6 +274,8 @@ func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, ballotID t
 	return consistent, nil
 }
 
+type opinionsGetter func(types.BlockID) sign
+
 // calculate and return a list of exceptions, i.e., differences between the opinions of a base ballot and the local
 // opinion.
 func (t *turtle) calculateExceptions(
@@ -283,7 +283,7 @@ func (t *turtle) calculateExceptions(
 	votinglid,
 	baselid,
 	startlid types.LayerID,
-	baseopinion Opinion,
+	getter opinionsGetter,
 ) ([]map[types.BlockID]struct{}, error) {
 	logger := t.logger.WithContext(ctx).WithFields(log.Named("base_ballot_layer_id", baselid))
 
@@ -311,10 +311,8 @@ func (t *turtle) calculateExceptions(
 
 		// helper function for adding diffs
 		addDiffs := func(logger log.Log, bid types.BlockID, voteVec sign, diffMap map[types.BlockID]struct{}) {
-			v, ok := baseopinion[bid]
-			if !ok {
-				v = against
-			}
+			v := getter(bid)
+
 			if voteVec != v {
 				logger.With().Debug("added vote diff", log.Stringer("opinion", v))
 				if lid.Before(baselid) {
@@ -327,7 +325,7 @@ func (t *turtle) calculateExceptions(
 		for bid, opinion := range local {
 			usecoinflip := opinion == abstain && lid.Before(t.layerCutoff())
 			if usecoinflip {
-				sum, err := t.sumVotesForBlock(ctx, bid, lid.Add(1), func(types.BallotID) bool { return true })
+				sum, err := t.full.sumVotesForBlock(logger, bid, lid.Add(1))
 				if err != nil {
 					return nil, err
 				}
@@ -496,7 +494,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		if t.verified.After(previous) {
 			if err := persistContextualValidity(logger,
 				t.bdp,
-				previous.Add(1), t.processed.Sub(1),
+				previous.Add(1), t.verified,
 				t.blocks,
 				t.localOpinion,
 			); err != nil {
@@ -515,7 +513,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	// verified layer will be expected to be stuck as the expected weight will be high.
 	// so we will have to use different heuristic for switching into full mode.
 	// maybe the difference between counted and uncounted weight for a specific layer
-	t.keepVotes(ballots)
+	t.full.processBallots(ballots)
 	if t.isHealingEnabled(t.verified.Add(1)) || t.mode == fullMode {
 		if t.mode == verifyingMode {
 			logger.With().Info("switching to full self-healing tortoise",
@@ -525,14 +523,17 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			t.mode = fullMode
 		}
 		previous := t.verified
-		healed := t.healingTortoise(ctx, logger)
-		if !healed {
-			return nil
-		}
-		// TODO(dshulyak) refactor full tortoise to be consistent with verifying.
-		// update local opinion in memory and persist afterwards.
-		if err := t.updateLocalOpinion(wrapContext(ctx), previous.Add(1), t.processed); err != nil {
-			return err
+		t.verified = t.full.verifyLayers(logger)
+
+		if t.verified.After(previous) {
+			if err := persistContextualValidity(logger,
+				t.bdp,
+				previous.Add(1), t.verified,
+				t.blocks,
+				t.localOpinion,
+			); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -631,26 +632,6 @@ func (t *turtle) updateLocalOpinion(ctx *tcontext, from, to types.LayerID) error
 	return nil
 }
 
-func (t *turtle) keepVotes(ballots []tortoiseBallot) {
-	for _, ballot := range ballots {
-		votes := ballot.votes
-		basevotes := t.full.votes[ballot.base]
-		if len(basevotes) == 0 {
-			t.logger.With().Warning("base votes are empty", ballot.id, log.Stringer("base_ballot", ballot.base))
-		}
-		for vote, sign := range basevotes {
-			votelid, exist := t.blockLayer[vote]
-			if !exist || !votelid.After(t.evicted) {
-				continue
-			}
-			if _, exist := votes[vote]; !exist {
-				votes[vote] = sign
-			}
-		}
-		t.full.votes[ballot.id] = votes
-	}
-}
-
 // the idea here is to give enough room for verifying tortoise to complete. if verifying tortoise fails to verify
 // a layer within last hdist layers or within zdist + confidence param (whichever is larger) we switch to full vote counting.
 //
@@ -664,27 +645,6 @@ func (t *turtle) isHealingEnabled(lid types.LayerID) bool {
 		// we need to wait some distance before switching from verifying to full during rerun
 		// as previous two parameters will be always true even if single layer is not verified.
 		t.processed.Difference(t.verified) > t.ConfidenceParam
-}
-
-func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log) bool {
-	logger.With().Info("start self-healing tortoise",
-		log.Stringer("verified_layer", t.verified),
-		log.Stringer("layer_cutoff", t.layerCutoff()),
-		log.Uint32("zdist", t.Zdist),
-		log.Stringer("last_layer_received", t.last),
-		log.Uint32("confidence_param", t.ConfidenceParam),
-	)
-	lastVerified := t.verified
-	t.heal(ctx, t.processed)
-	logger.With().Info("finished self-healing",
-		log.Stringer("verified_layer", t.verified),
-	)
-
-	if !t.verified.After(lastVerified) {
-		logger.With().Info("failed to verify candidate layer")
-		return false
-	}
-	return true
 }
 
 // for layers older than this point, we vote according to global opinion (rather than local opinion).
@@ -749,149 +709,6 @@ func (t *turtle) addLocalOpinion(ctx *tcontext, lid types.LayerID, opinion Opini
 		opinion[bid] = abstain
 	}
 	return nil
-}
-
-func (t *turtle) sumVotesForBlock(
-	ctx context.Context,
-	blockID types.BlockID, // the block we're summing votes for/against
-	startlid types.LayerID,
-	filter func(types.BallotID) bool,
-) (weight, error) {
-	var (
-		sum    = weightFromUint64(0)
-		end    = t.processed
-		logger = t.logger.WithContext(ctx).WithFields(
-			log.Stringer("start_layer", startlid),
-			log.Stringer("end_layer", end),
-			log.Stringer("block_voting_on", blockID),
-			log.Stringer("layer_voting_on", startlid.Sub(1)),
-		)
-	)
-	for votelid := startlid; !votelid.After(end); votelid = votelid.Add(1) {
-		logger := logger.WithFields(votelid)
-		for _, ballotID := range t.ballots[votelid] {
-			if !filter(ballotID) {
-				logger.With().Debug("voting block did not pass filter, not counting its vote", ballotID)
-				continue
-			}
-			votes := t.full.votes[ballotID]
-			if votes == nil {
-				return weightFromUint64(0), fmt.Errorf("bug: sum votes can't be executed for a layer %s where ballot %s votes do not exist",
-					votelid, ballotID,
-				)
-			}
-			ballotWeight, exists := t.ballotWeight[ballotID]
-			if !exists {
-				return weightFromUint64(0), fmt.Errorf("bug: weight for %s is not computed", ballotID)
-			}
-			sign, exists := votes[blockID]
-			if !exists {
-				logger.With().Error("bug: no opinion on older block, counted vote against", blockID)
-				sign = against
-			}
-			adjusted := ballotWeight
-			if sign == against {
-				// copy is needed only if we modify sign
-				adjusted = ballotWeight.copy().neg()
-			}
-			if sign != abstain {
-				sum = sum.add(adjusted)
-			}
-		}
-	}
-	return sum, nil
-}
-
-// Manually count all votes for all layers since the last verified layer, up to the newly-arrived layer (there's no
-// point in going further since we have no new information about any newer layers). Self-healing does not take into
-// consideration local opinion, it relies solely on global opinion.
-func (t *turtle) heal(ctx *tcontext, targetLayerID types.LayerID) {
-	// These are our starting values
-	pbaseOld := t.verified
-	pbaseNew := t.verified
-
-	for candidateLayerID := pbaseOld.Add(1); candidateLayerID.Before(targetLayerID); candidateLayerID = candidateLayerID.Add(1) {
-		logger := t.logger.WithContext(ctx).WithFields(
-			log.Named("old_verified_layer", pbaseOld),
-			log.Named("last_verified_layer", pbaseNew),
-			log.Named("target_layer", targetLayerID),
-			log.Named("candidate_layer", candidateLayerID),
-			log.Named("last_layer_received", t.last),
-			log.Uint32("hdist", t.Hdist),
-		)
-
-		// Calculate the global opinion on all blocks in the layer
-		// Note: we look at ALL blocks we've seen for the layer, not just those we've previously marked contextually valid
-		logger.Info("self healing attempting to verify candidate layer")
-
-		// TODO(dshulyak) computation for expected weight should use last as an upper boundary
-		expected := computeExpectedWeight(t.epochWeight, candidateLayerID, t.processed)
-		threshold := weightFromUint64(0)
-		threshold = threshold.add(expected)
-		threshold = threshold.fraction(t.GlobalThreshold)
-
-		logger.With().Info("healing: expected voting weight at the layer",
-			log.Stringer("expected_weight", expected),
-			log.Stringer("threshold", threshold),
-			candidateLayerID,
-		)
-
-		// record the contextual validity for all blocks in this layer
-		for _, blockID := range t.blocks[candidateLayerID] {
-			logger := logger.WithFields(log.Stringer("candidate_block_id", blockID))
-
-			// count all votes for or against this block by all blocks in later layers. for ballots with a different
-			// beacon values, we delay their votes by badBeaconVoteDelays layers
-			sum, err := t.sumVotesForBlock(ctx, blockID, candidateLayerID.Add(1), t.ballotFilterForHealing(logger))
-			if err != nil {
-				logger.With().Error("error summing votes for candidate block in candidate layer", log.Err(err))
-				return
-			}
-
-			// check that the total weight exceeds the global threshold
-			sign := sum.cmp(threshold)
-			logger.With().Debug("self healing calculated global opinion on candidate block",
-				log.Stringer("global_opinion", sign),
-				log.Stringer("vote_sum", sum),
-				log.Stringer("threshold", threshold),
-			)
-
-			if sign == abstain {
-				logger.With().Info("self healing failed to verify candidate layer",
-					log.Stringer("global_opinion", sign),
-					log.Stringer("vote_sum", sum),
-					blockID,
-				)
-				return
-			}
-
-			if err := t.bdp.SaveContextualValidity(blockID, candidateLayerID, sign == support); err != nil {
-				logger.With().Error("error saving block contextual validity", blockID, log.Err(err))
-			}
-		}
-
-		t.verified = candidateLayerID
-		pbaseNew = candidateLayerID
-		logger.Info("self healing verified candidate layer")
-	}
-	return
-}
-
-// only ballots with the correct beacon value are considered good ballots and their votes counted by
-// verifying tortoise. for ballots with a different beacon values, we count their votes only in self-healing mode
-// if they are from previous epoch.
-func (t *turtle) ballotFilterForHealing(logger log.Log) func(types.BallotID) bool {
-	return func(ballotID types.BallotID) bool {
-		if _, bad := t.badBeaconBallots[ballotID]; !bad {
-			return true
-		}
-		lid, exist := t.ballotLayer[ballotID]
-		if !exist {
-			logger.With().Error("inconsistent state: ballot not found", ballotID)
-			return false
-		}
-		return t.last.Difference(lid) > t.BadBeaconVoteDelayLayers
-	}
 }
 
 // computeBallotWeight compute and assign ballot weight to the weights map.

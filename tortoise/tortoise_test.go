@@ -635,332 +635,6 @@ func defaultAlgorithm(tb testing.TB, mdb *mesh.DB) *Tortoise {
 	)
 }
 
-func TestSumVotes(t *testing.T) {
-	type testBallot struct {
-		Base                      [2]int   // [layer, ballot] tuple
-		Support, Against, Abstain [][2]int // list of [layer, block] tuples
-		ATX                       int
-	}
-	type testBlock struct{}
-
-	rng := mrand.New(mrand.NewSource(0))
-	signer := signing.NewEdSignerFromRand(rng)
-
-	getDiff := func(layers [][]*types.Block, choices [][2]int) []types.BlockID {
-		var rst []types.BlockID
-		for _, choice := range choices {
-			rst = append(rst, layers[choice[0]][choice[1]].ID())
-		}
-		return rst
-	}
-
-	ctx := context.TODO()
-	genesis := types.GetEffectiveGenesis()
-
-	for _, tc := range []struct {
-		desc         string
-		activeset    []uint         // list of weights in activeset
-		layerBallots [][]testBallot // list of layers with ballots
-		layerBlocks  [][]testBlock
-		target       [2]int // [layer, block] tuple
-		expect       *big.Float
-		filter       func(types.BallotID) bool
-	}{
-		{
-			desc:      "TwoLayersSupport",
-			activeset: []uint{10, 10, 10},
-			layerBlocks: [][]testBlock{
-				{{}, {}, {}},
-				{{}, {}, {}},
-			},
-			layerBallots: [][]testBallot{
-				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
-				{
-					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 2, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-				},
-				{
-					{ATX: 0, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
-					{ATX: 1, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
-					{ATX: 2, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
-				},
-			},
-			target: [2]int{0, 0},
-			expect: big.NewFloat(15),
-			filter: func(types.BallotID) bool { return true },
-		},
-		{
-			desc:      "ConflictWithBase",
-			activeset: []uint{10, 10, 10},
-			layerBlocks: [][]testBlock{
-				{{}, {}, {}},
-				{{}, {}, {}},
-			},
-			layerBallots: [][]testBallot{
-				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
-				{
-					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 2, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-				},
-				{
-					{
-						ATX: 0, Base: [2]int{1, 1},
-						Support: [][2]int{{1, 1}, {1, 0}, {1, 2}},
-						Against: [][2]int{{0, 1}, {0, 0}, {0, 2}},
-					},
-					{
-						ATX: 1, Base: [2]int{1, 1},
-						Support: [][2]int{{1, 1}, {1, 0}, {1, 2}},
-						Against: [][2]int{{0, 1}, {0, 0}, {0, 2}},
-					},
-					{
-						ATX: 2, Base: [2]int{1, 1},
-						Support: [][2]int{{1, 1}, {1, 0}, {1, 2}},
-						Against: [][2]int{{0, 1}, {0, 0}, {0, 2}},
-					},
-				},
-			},
-			target: [2]int{0, 0},
-			expect: big.NewFloat(0),
-			filter: func(types.BallotID) bool { return true },
-		},
-		{
-			desc:      "UnequalWeights",
-			activeset: []uint{80, 40, 20},
-			layerBlocks: [][]testBlock{
-				{{}, {}, {}},
-				{{}, {}, {}},
-				{{}, {}, {}},
-			},
-			layerBallots: [][]testBallot{
-				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
-				{
-					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 2, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-				},
-				{
-					{ATX: 0, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
-					{ATX: 0, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
-					{ATX: 1, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}, {1, 2}}},
-				},
-				{
-					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}, {2, 2}}},
-					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}, {2, 2}}},
-					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}, {2, 2}}},
-					{ATX: 1, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}, {2, 2}}},
-				},
-			},
-			target: [2]int{0, 0},
-			expect: big.NewFloat(140),
-			filter: func(types.BallotID) bool { return true },
-		},
-		{
-			desc:      "UnequalWeightsVoteFromAtxMissing",
-			activeset: []uint{80, 40, 20},
-			layerBlocks: [][]testBlock{
-				{{}, {}, {}},
-				{{}, {}, {}},
-				{{}, {}, {}},
-			},
-			layerBallots: [][]testBallot{
-				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
-				{
-					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 2, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-				},
-				{
-					{ATX: 0, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}}},
-					{ATX: 0, Base: [2]int{1, 1}, Support: [][2]int{{1, 1}, {1, 0}}},
-				},
-				{
-					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}}},
-					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}}},
-					{ATX: 0, Base: [2]int{2, 1}, Support: [][2]int{{2, 1}, {2, 0}}},
-				},
-			},
-			target: [2]int{0, 0},
-			expect: big.NewFloat(100),
-			filter: func(types.BallotID) bool { return true },
-		},
-		{
-			desc:      "OneLayerSupport",
-			activeset: []uint{10, 10, 10},
-			layerBlocks: [][]testBlock{
-				{{}, {}, {}},
-			}, layerBallots: [][]testBallot{
-				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
-				{
-					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 2, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-				},
-			},
-			target: [2]int{0, 0},
-			expect: big.NewFloat(7.5),
-			filter: func(types.BallotID) bool { return true },
-		},
-		{
-			desc:      "OneBlockAbstain",
-			activeset: []uint{10, 10, 10},
-			layerBlocks: [][]testBlock{
-				{{}, {}, {}},
-			},
-			layerBallots: [][]testBallot{
-				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
-				{
-					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 2, Base: [2]int{0, 1}, Abstain: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-				},
-			},
-			target: [2]int{0, 0},
-			expect: big.NewFloat(5),
-			filter: func(types.BallotID) bool { return true },
-		},
-		{
-			desc:      "OneBlockAagaisnt",
-			activeset: []uint{10, 10, 10},
-			layerBlocks: [][]testBlock{
-				{{}, {}, {}},
-			},
-			layerBallots: [][]testBallot{
-				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
-				{
-					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 2, Base: [2]int{0, 1}, Against: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-				},
-			},
-			target: [2]int{0, 0},
-			expect: big.NewFloat(2.5),
-			filter: func(types.BallotID) bool { return true },
-		},
-		{
-			desc:      "MajorityAgainst",
-			activeset: []uint{10, 10, 10},
-			layerBlocks: [][]testBlock{
-				{{}, {}, {}},
-			},
-			layerBallots: [][]testBallot{
-				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
-				{
-					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 1, Base: [2]int{0, 1}, Against: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 2, Base: [2]int{0, 1}, Against: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-				},
-			},
-			target: [2]int{0, 0},
-			expect: big.NewFloat(-2.5),
-			filter: func(types.BallotID) bool { return true },
-		},
-		{
-			desc:      "NoVotes",
-			activeset: []uint{10, 10, 10},
-			layerBlocks: [][]testBlock{
-				{{}, {}, {}},
-			},
-			layerBallots: [][]testBallot{
-				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
-			},
-			target: [2]int{0, 0},
-			expect: big.NewFloat(0),
-			filter: func(types.BallotID) bool { return true },
-		},
-		{
-			desc:      "IgnoreVotes",
-			activeset: []uint{10, 10, 10},
-			layerBlocks: [][]testBlock{
-				{{}, {}, {}},
-			},
-			layerBallots: [][]testBallot{
-				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
-				{
-					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 1, Base: [2]int{0, 1}, Against: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 2, Base: [2]int{0, 1}, Against: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-				},
-			},
-			target: [2]int{0, 0},
-			expect: big.NewFloat(0),
-			filter: func(types.BallotID) bool { return false },
-		},
-	} {
-		tc := tc
-		t.Run(tc.desc, func(t *testing.T) {
-			ctrl := gomock.NewController(t)
-			atxdb := mocks.NewMockatxDataProvider(ctrl)
-			activeset := []types.ATXID{}
-			for i, weight := range tc.activeset {
-				header := makeAtxHeaderWithWeight(weight)
-				atxid := types.ATXID{byte(i)}
-				header.SetID(&atxid)
-				atxdb.EXPECT().GetAtxHeader(atxid).Return(header, nil).AnyTimes()
-				activeset = append(activeset, atxid)
-			}
-
-			tortoise := defaultAlgorithm(t, getInMemMesh(t))
-			tortoise.trtl.atxdb = atxdb
-			consensus := tortoise.trtl
-
-			blocks := [][]*types.Block{}
-			for i, layer := range tc.layerBlocks {
-				layerBlocks := []*types.Block{}
-				lid := genesis.Add(uint32(i) + 1)
-				for j := range layer {
-					block := &types.Block{}
-					block.EligibilityProof = types.BlockEligibilityProof{J: uint32(j)}
-					block.LayerIndex = lid
-					block.Signature = signer.Sign(block.Bytes())
-					block.Initialize()
-					layerBlocks = append(layerBlocks, block)
-				}
-
-				consensus.processBlocks(lid, layerBlocks)
-				blocks = append(blocks, layerBlocks)
-			}
-
-			ballots := [][]*types.Ballot{}
-			for i, layer := range tc.layerBallots {
-				layerBallots := []*types.Ballot{}
-				lid := genesis.Add(uint32(i) + 1)
-				for j, b := range layer {
-					ballot := &types.Ballot{}
-					ballot.EligibilityProof = types.VotingEligibilityProof{J: uint32(j)}
-					ballot.AtxID = activeset[b.ATX]
-					ballot.EpochData = &types.EpochData{ActiveSet: activeset}
-					ballot.LayerIndex = lid
-					// don't vote on genesis for simplicity,
-					// since we don't care about block goodness in this test
-					if i > 0 {
-						ballot.ForDiff = getDiff(blocks, b.Support)
-						ballot.AgainstDiff = getDiff(blocks, b.Against)
-						ballot.NeutralDiff = getDiff(blocks, b.Abstain)
-						ballot.BaseBallot = ballots[b.Base[0]][b.Base[1]].ID()
-					}
-					ballot.Signature = signer.Sign(ballot.Bytes())
-					ballot.Initialize()
-					layerBallots = append(layerBallots, ballot)
-				}
-				ballots = append(ballots, layerBallots)
-
-				consensus.processed = lid
-				consensus.last = lid
-				tballots, err := consensus.processBallots(wrapContext(ctx), lid, layerBallots)
-				consensus.keepVotes(tballots)
-				require.NoError(t, err)
-			}
-			bid := types.BlockID(blocks[tc.target[0]][tc.target[1]].ID())
-			lid := genesis.Add(uint32(tc.target[0] + 2)) // +2 so that we count votes after target
-			rst, err := consensus.sumVotesForBlock(ctx, bid, lid, tc.filter)
-			require.NoError(t, err)
-			require.Equal(t, tc.expect.String(), rst.String())
-		})
-	}
-}
-
 func makeAtxHeaderWithWeight(weight uint) *types.ActivationTxHeader {
 	header := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{NodeID: types.NodeID{Key: "key"}},
@@ -1752,7 +1426,7 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 }
 
-func BenchmarkTortoiseLayerHandling(b *testing.B) {
+func benchmarkLayersHandling(b *testing.B, opts ...sim.NextOpt) {
 	const size = 30
 	s := sim.New(
 		sim.WithLayerSize(size),
@@ -1766,7 +1440,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 
 	var layers []types.LayerID
 	for i := 0; i < 200; i++ {
-		layers = append(layers, s.Next())
+		layers = append(layers, s.Next(opts...))
 	}
 
 	b.ResetTimer()
@@ -1776,6 +1450,14 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 			tortoise.HandleIncomingLayer(ctx, lid)
 		}
 	}
+}
+
+func BenchmarkTortoiseLayerHandlingVerifying(b *testing.B) {
+	benchmarkLayersHandling(b)
+}
+
+func BenchmarkTortoiseLayerHandlingFull(b *testing.B) {
+	benchmarkLayersHandling(b, sim.WithEmptyInputVector())
 }
 
 func BenchmarkTortoiseBaseBallotSelection(b *testing.B) {
@@ -1872,45 +1554,6 @@ func TestGetBallotBeacon(t *testing.T) {
 	got, err = trtl.getBallotBeacon(ballot, logger)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon, got)
-}
-
-func TestBallotFilterForHealing(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	layerID := types.GetEffectiveGenesis().Add(100)
-	epochBeacon := randomBytes(t, 32)
-	goodBallot := randomBlock(t, layerID, epochBeacon, nil).ToBallot()
-	badBeacon := randomBytes(t, 32)
-	require.NotEqual(t, epochBeacon, badBeacon)
-	badBallot := randomBlock(t, layerID, badBeacon, nil).ToBallot()
-
-	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
-	trtl := defaultTurtle(t)
-	trtl.beacons = mockBeacons
-
-	trtl.ballotLayer[goodBallot.ID()] = layerID
-	trtl.ballotLayer[badBallot.ID()] = layerID
-
-	logger := logtest.New(t)
-	// cause the bad beacon block to be cached
-	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(2)
-	assert.True(t, trtl.ballotHasGoodBeacon(goodBallot, logger))
-	assert.False(t, trtl.ballotHasGoodBeacon(badBallot, logger))
-
-	// we don't count votes in bad beacon block for badBeaconVoteDelays layers
-	trtl.last = layerID
-	i := uint32(1)
-	for ; i <= defaultVoteDelays; i++ {
-		filter := trtl.ballotFilterForHealing(logger)
-		assert.True(t, filter(goodBallot.ID()))
-		assert.False(t, filter(badBallot.ID()))
-	}
-	// now we count the bad beacon block's votes
-	trtl.last = layerID.Add(10)
-	filter := trtl.ballotFilterForHealing(logger)
-	assert.True(t, filter(goodBallot.ID()))
-	assert.True(t, filter(badBallot.ID()))
 }
 
 // gapVote will skip one layer in voting.
@@ -2513,7 +2156,7 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	require.NoError(t, tortoise2.rerun(ctx))
 
 	// make enough progress to cross global threshold with new votes
-	for i := 0; i < int(types.GetLayersPerEpoch())*2; i++ {
+	for i := 0; i < int(types.GetLayersPerEpoch())*4; i++ {
 		last = s1.Next(sim.WithVoteGenerator(func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
 			if i < size/2 {
 				return tortoiseVoting(tortoise1)(rng, layers, i)
@@ -2633,7 +2276,7 @@ func TestStateManagement(t *testing.T) {
 			require.Empty(t, tortoise.trtl.ballots[lid])
 		}
 
-		for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
+		for lid := evicted.Add(1); !lid.After(tortoise.trtl.verified); lid = lid.Add(1) {
 			for _, bid := range tortoise.trtl.blocks[lid] {
 				require.Contains(t, tortoise.trtl.localOpinion, bid, "layer %s", lid)
 				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)

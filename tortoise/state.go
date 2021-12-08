@@ -52,7 +52,10 @@ type commonState struct {
 }
 
 func newFullState() fullState {
-	return fullState{votes: map[types.BallotID]Opinion{}}
+	return fullState{
+		votes: map[types.BallotID]Opinion{},
+		base:  map[types.BallotID]types.BallotID{},
+	}
 }
 
 // fullState contains state necessary to run full (self-healing) tortoise.
@@ -67,5 +70,6 @@ func newFullState() fullState {
 // TODO(dshulyak) this is a temporary data structure, until full tortoise will be refactored the same
 // way as verifying tortoise.
 type fullState struct {
+	base  map[types.BallotID]types.BallotID
 	votes map[types.BallotID]Opinion
 }
