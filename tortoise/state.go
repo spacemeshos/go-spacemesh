@@ -29,8 +29,6 @@ type commonState struct {
 	historicallyVerified types.LayerID
 	// last processed layer
 	processed types.LayerID
-	// last layer with good ballots
-	good types.LayerID
 	// last evicted layer
 	evicted types.LayerID
 

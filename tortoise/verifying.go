@@ -28,9 +28,6 @@ type verifying struct {
 
 func (v *verifying) processLayer(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
 	counted, count := v.sumGoodBallots(logger, ballots)
-	if count > 0 {
-		v.good = lid
-	}
 
 	// TODO(dshulyak) counted weight should be reduced by the uncounted weight per conversation with research
 

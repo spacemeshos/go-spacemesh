@@ -166,7 +166,6 @@ func TestVerifyingProcessLayer(t *testing.T) {
 	for _, tc := range []struct {
 		desc         string
 		ballots      [][]tortoiseBallot
-		good         []types.LayerID
 		layerWeights []weight
 		total        []weight
 	}{
@@ -190,7 +189,6 @@ func TestVerifyingProcessLayer(t *testing.T) {
 					},
 				},
 			},
-			good:         []types.LayerID{start.Add(1), start.Add(2)},
 			layerWeights: []weight{weightFromUint64(20), weightFromUint64(10)},
 			total:        []weight{weightFromUint64(20), weightFromUint64(30)},
 		},
@@ -214,7 +212,6 @@ func TestVerifyingProcessLayer(t *testing.T) {
 					},
 				},
 			},
-			good:         []types.LayerID{{}, {}},
 			layerWeights: []weight{weightFromUint64(0), weightFromUint64(0)},
 			total:        []weight{weightFromUint64(0), weightFromUint64(0)},
 		},
@@ -238,7 +235,6 @@ func TestVerifyingProcessLayer(t *testing.T) {
 					},
 				},
 			},
-			good:         []types.LayerID{start.Add(1), start.Add(1)},
 			layerWeights: []weight{weightFromUint64(20), weightFromUint64(0)},
 			total:        []weight{weightFromUint64(20), weightFromUint64(20)},
 		},
@@ -254,7 +250,6 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			for i := range tc.ballots {
 				lid := start.Add(uint32(i + 1))
 				v.processLayer(logger, lid, tc.ballots[i])
-				require.Equal(t, tc.good[i], v.good)
 				require.Equal(t, tc.layerWeights[i], v.layerWeights[lid])
 				require.Equal(t, tc.total[i], v.totalWeight)
 			}

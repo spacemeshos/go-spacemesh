@@ -93,7 +93,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	t.processed = genesis
 	t.verified = genesis
 	t.historicallyVerified = genesis
-	t.good = genesis
+	t.evicted = genesis.Sub(1)
 }
 
 func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
@@ -120,7 +120,16 @@ func (t *turtle) evict(ctx context.Context) {
 	if !windowStart.After(t.evicted) {
 		return
 	}
+
 	oldestEpoch := windowStart.GetEpoch()
+
+	t.logger.With().Debug("evict in memory state",
+		log.Stringer("from_layer", t.evicted.Add(1)),
+		log.Stringer("upto_layer", windowStart),
+		log.Stringer("from_epoch", oldestEpoch),
+		log.Stringer("upto_epoch", windowStart.GetEpoch()),
+	)
+
 	for lid := t.evicted.Add(1); lid.Before(windowStart); lid = lid.Add(1) {
 		for _, ballot := range t.ballots[lid] {
 			delete(t.ballotLayer, ballot)
@@ -151,10 +160,10 @@ func (t *turtle) evict(ctx context.Context) {
 // - otherwise deterministically select ballot with lowest id.
 func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.BlockID, error) {
 	var (
-		tctx                 = wrapContext(ctx)
-		logger               = t.logger.WithContext(ctx)
-		disagreements        = map[types.BallotID]types.LayerID{}
-		goodChoices, choices []types.BallotID
+		tctx          = wrapContext(ctx)
+		logger        = t.logger.WithContext(ctx)
+		disagreements = map[types.BallotID]types.LayerID{}
+		choices       []types.BallotID
 
 		// TODO change it per https://github.com/spacemeshos/go-spacemesh/issues/2920
 		// in current interpretation Last is the last layer that was sent to us after hare completed
@@ -166,26 +175,16 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		err        error
 	)
 
-	for _, ballotID := range t.ballots[t.good] {
-		if _, exist := t.verifying.goodBallots[ballotID]; exist {
-			goodChoices = append(goodChoices, ballotID)
-		}
-	}
-	if len(goodChoices) > 0 {
-		sort.Slice(goodChoices, func(i, j int) bool {
-			return goodChoices[i].Compare(goodChoices[j])
-		})
+	ballotID, ballotLID = t.getGoodBallot(logger)
+	if ballotID != types.EmptyBallotID {
 		// we need only 1 ballot from the most recent layer, this ballot will be by definition the most
 		// consistent with our local opinion.
-		ballotID = goodChoices[0]
-		ballotLID = t.good
-		t.logger.With().Info("considering good base ballot", ballotID, ballotLID)
 		// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
-		exceptions, err = t.calculateExceptions(tctx, votinglid, t.good, t.good, Opinion{})
+		exceptions, err = t.calculateExceptions(tctx, votinglid, ballotLID, ballotLID, Opinion{})
 	}
-	if len(goodChoices) == 0 || err != nil {
+	if ballotID == types.EmptyBallotID || err != nil {
 		logger.With().Warning("failed to select good base ballot. reverting to the least bad choices", log.Err(err))
-		for lid := t.good.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
+		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 			for _, ballotID := range t.ballots[lid] {
 				dis, err := t.firstDisagreement(tctx, lid, ballotID, disagreements)
 				if err != nil {
@@ -200,7 +199,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		prioritizeBallots(choices, disagreements, t.ballotLayer)
 		for _, ballotID = range choices {
 			ballotLID = t.ballotLayer[ballotID]
-			exceptions, err = t.calculateExceptions(tctx, votinglid, ballotLID, disagreements[ballotID], t.full.votes[ballotID])
+			exceptions, err = t.calculateExceptions(tctx, votinglid, ballotLID, t.evicted.Add(1), t.full.votes[ballotID])
 			if err == nil {
 				break
 			}
@@ -228,6 +227,26 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		blockMapToArray(exceptions[1]),
 		blockMapToArray(exceptions[2]),
 	}, nil
+}
+
+func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
+	var choices []types.BallotID
+	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
+		for _, ballotID := range t.ballots[lid] {
+			if _, exist := t.verifying.goodBallots[ballotID]; exist {
+				choices = append(choices, ballotID)
+			}
+		}
+		if len(choices) > 0 {
+			sort.Slice(choices, func(i, j int) bool {
+				return choices[i].Compare(choices[j])
+			})
+
+			t.logger.With().Info("considering good base ballot", choices[0], lid)
+			return choices[0], lid
+		}
+	}
+	return types.BallotID{}, types.LayerID{}
 }
 
 // firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
@@ -632,11 +651,11 @@ func (t *turtle) keepVotes(ballots []tortoiseBallot) {
 	}
 }
 
-// Verifying tortoise will wait `zdist' layers for consensus, then an additional `ConfidenceParam'
-// layers until all other nodes achieve consensus. If it's still stuck after this point, i.e., if the gap
-// between this unverified candidate layer and the latest layer is greater than this distance, then we trigger
-// self healing. But there's no point in trying to heal a layer that's not at least Hdist layers old since
-// we only consider the local opinion for recent layers.
+// the idea here is to give enough room for verifying tortoise to complete. if verifying tortoise fails to verify
+// a layer within last hdist layers or within zdist + confidence param (whichever is larger) we switch to full vote counting.
+//
+// verifying tortoise is a fastpath for full vote counting, that works if everyone is honest and have good synchrony.
+// as for the safety and livenesss both protocols are identical.
 func (t *turtle) isHealingEnabled(lid types.LayerID) bool {
 	return lid.Before(t.layerCutoff()) && t.last.Difference(lid) > t.Zdist+t.ConfidenceParam
 }

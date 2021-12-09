@@ -63,7 +63,7 @@ type Tortoise struct {
 		err error
 	}
 
-	mu  sync.RWMutex
+	mu  sync.Mutex
 	org *organizer.Organizer
 
 	// update will be set to non-nil after rerun completes, and must be set to nil once
@@ -170,15 +170,15 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 
 // LatestComplete returns the latest verified layer.
 func (trtl *Tortoise) LatestComplete() types.LayerID {
-	trtl.mu.RLock()
-	defer trtl.mu.RUnlock()
+	trtl.mu.Lock()
+	defer trtl.mu.Unlock()
 	return trtl.trtl.verified
 }
 
 // BaseBallot chooses a base ballot and creates a differences list. needs the hare results for latest layers.
 func (trtl *Tortoise) BaseBallot(ctx context.Context) (types.BallotID, [][]types.BlockID, error) {
-	trtl.mu.RLock()
-	defer trtl.mu.RUnlock()
+	trtl.mu.Lock()
+	defer trtl.mu.Unlock()
 	return trtl.trtl.BaseBallot(ctx)
 }
 

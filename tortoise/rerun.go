@@ -77,10 +77,10 @@ func (t *Tortoise) rerunLoop(ctx context.Context, period time.Duration) {
 }
 
 func (t *Tortoise) rerun(ctx context.Context) error {
-	t.mu.RLock()
+	t.mu.Lock()
 	last := t.trtl.last
 	historicallyVerified := t.trtl.historicallyVerified
-	t.mu.RUnlock()
+	t.mu.Unlock()
 
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.Bool("rerun", true),

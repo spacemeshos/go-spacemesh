@@ -2222,9 +2222,10 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	cfg.WindowSize = 1
-	cfg.Hdist = 1 // for eviction
+	// cfg.WindowSize = 1
+	cfg.Hdist = 1
 	cfg.Zdist = 1
+	cfg.ConfidenceParam = 0
 
 	var (
 		tortoise       = tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
@@ -2232,47 +2233,33 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 		genesis        = types.GetEffectiveGenesis()
 	)
 	for _, last = range sim.GenLayers(s,
-		sim.WithSequence(3),
-		sim.WithSequence(2, sim.WithEmptyInputVector()),
+		sim.WithSequence(1, sim.WithEmptyInputVector()),
+		sim.WithSequence(2),
 	) {
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
-	require.Equal(t, last.Sub(2), verified)
+	require.Equal(t, last.Sub(1), verified)
 
-	// change local opinion for verified last.Sub(1) to be different from blocks opinion
 	unsupported := map[types.BlockID]struct{}{}
-	for lid := genesis.Add(1); !lid.After(last); lid = lid.Add(1) {
-		bids, err := s.GetState(0).MeshDB.LayerBlockIds(lid)
-		require.NoError(t, err)
-		require.NoError(t, s.GetState(0).MeshDB.SaveContextualValidity(bids[0], lid, false))
-		require.NoError(t, s.GetState(0).MeshDB.SaveLayerInputVectorByID(ctx, lid, bids[1:]))
-		unsupported[bids[0]] = struct{}{}
-	}
-	base, exceptions, err := tortoise.BaseBallot(ctx)
+	bids, err := s.GetState(0).MeshDB.LayerBlockIds(genesis.Add(1))
 	require.NoError(t, err)
-	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, base, last.Sub(1), last.Sub(1))
-	require.Empty(t, exceptions[0])
-	require.Empty(t, exceptions[2])
-	require.Len(t, exceptions[1], (size-1)*2)
-	for _, bid := range exceptions[1] {
-		require.NotContains(t, unsupported, bid)
-	}
+	require.NoError(t, s.GetState(0).MeshDB.SaveContextualValidity(bids[0], genesis.Add(1), false))
+	unsupported[bids[0]] = struct{}{}
 
-	delete(tortoise.trtl.ballots, genesis.Add(1))
+	// remove good ballots and genesis to make tortoise select one of the later blocks.
+	delete(tortoise.trtl.ballots, genesis)
 	tortoise.trtl.verifying.goodBallots = map[types.BallotID]struct{}{}
-	base, exceptions, err = tortoise.BaseBallot(ctx)
+
+	base, exceptions, err := tortoise.BaseBallot(ctx)
 	require.NoError(t, err)
 	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, base, last, last)
 	require.Empty(t, exceptions[2])
-	require.Len(t, exceptions[0], 1)
+	require.Len(t, exceptions[0], 1) // against one block in genesis.Add(1)
 	for _, bid := range exceptions[0] {
 		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis.Add(1), last.Sub(1))
 		require.Contains(t, unsupported, bid)
 	}
-	require.Len(t, exceptions[1], (size-1)*3)
-	for _, bid := range exceptions[1] {
-		require.NotContains(t, unsupported, bid)
-	}
+	require.Len(t, exceptions[1], size+1)
 }
 
 func TestComputeLocalOpinion(t *testing.T) {
