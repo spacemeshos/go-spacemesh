@@ -152,7 +152,7 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 	)
 
 	if statusSubscription := events.SubscribeStatus(); statusSubscription != nil {
-		statusCh, statusBufFull = consumeEvents(context.Background(), statusSubscription)
+		statusCh, statusBufFull = consumeEvents(stream.Context(), statusSubscription)
 	}
 
 	for {
@@ -201,7 +201,7 @@ func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService
 	)
 
 	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
-		errorsCh, errorsBufFull = consumeEvents(context.Background(), errorsSubscription)
+		errorsCh, errorsBufFull = consumeEvents(stream.Context(), errorsSubscription)
 	}
 
 	for {

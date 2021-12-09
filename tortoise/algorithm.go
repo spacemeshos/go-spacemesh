@@ -28,8 +28,7 @@ type Config struct {
 
 	LayerSize                uint32
 	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
-	Processed                types.LayerID
-	Verified                 types.LayerID
+	MeshProcessed            types.LayerID
 }
 
 // DefaultConfig for Tortoise.
@@ -118,7 +117,7 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 	ctx, cancel := context.WithCancel(t.ctx)
 	t.cancel = cancel
 
-	needsRecovery := t.cfg.Processed.After(types.GetEffectiveGenesis())
+	needsRecovery := t.cfg.MeshProcessed.After(types.GetEffectiveGenesis())
 
 	t.trtl = newTurtle(
 		t.logger,
@@ -129,21 +128,16 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 	)
 	t.trtl.init(t.ctx, mesh.GenesisLayer())
 	if needsRecovery {
-		t.trtl.processed = t.cfg.Processed
+		t.trtl.processed = t.cfg.MeshProcessed
 		// TODO(dshulyak) last should be set according to the clock.
-		t.trtl.last = t.cfg.Processed
-		if t.cfg.Verified.After(t.trtl.historicallyVerified) {
-			t.trtl.historicallyVerified = t.cfg.Verified
-		}
+		t.trtl.last = t.cfg.MeshProcessed
 
-		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
-			log.Stringer("last_layer", t.cfg.Processed),
-			log.Stringer("historically_verified", t.cfg.Verified),
+		t.logger.Info("loading state from disk. make sure to wait until tortoise is ready",
+			log.Stringer("last_layer", t.cfg.MeshProcessed),
 		)
 		t.eg.Go(func() error {
 			t.ready <- t.rerun(ctx)
 			close(t.ready)
-			t.logger.Info("tortoise is ready")
 			return nil
 		})
 	} else {

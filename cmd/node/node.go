@@ -493,7 +493,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxDB := activation.NewDB(atxdbstore, fetcherWrapped, idStore, mdb, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	atxDB := activation.NewDB(atxdbstore, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 
 	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
@@ -520,26 +520,16 @@ func (app *App) initServices(ctx context.Context,
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.Tortoise
-	trtlStateDB, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "turtle"), 0, 0, app.addLogger(StateDbLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create turtle DB: %w", err)
-	}
-	app.closers = append(app.closers, trtlStateDB)
 
 	processed, err := mdb.GetProcessedLayer()
 	if err != nil && !errors.Is(err, database.ErrNotFound) {
 		return fmt.Errorf("failed to load processed layer: %w", err)
 	}
-	verified, err := mdb.GetVerifiedLayer()
-	if err != nil && !errors.Is(err, database.ErrNotFound) {
-		return fmt.Errorf("failed to load verified layer: %w", err)
-	}
 
 	trtlCfg := app.Config.Tortoise
 	trtlCfg.LayerSize = layerSize
 	trtlCfg.BadBeaconVoteDelayLayers = app.Config.LayersPerEpoch
-	trtlCfg.Processed = processed
-	trtlCfg.Verified = verified
+	trtlCfg.MeshProcessed = processed
 
 	trtl = tortoise.New(mdb, atxDB, tBeacon,
 		tortoise.WithContext(ctx),
@@ -604,8 +594,7 @@ func (app *App) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else {
 		// regular oracle, build and use it
-		beacon := eligibility.NewBeacon(tBeacon, app.addLogger(HareBeaconLogger, lg))
-		hOracle = eligibility.New(beacon, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(tBeacon, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 

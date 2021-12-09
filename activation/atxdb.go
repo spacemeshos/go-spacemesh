@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -95,7 +94,6 @@ type DB struct {
 	idStore
 	atxs            database.Database
 	atxHeaderCache  AtxCache
-	meshDb          *mesh.DB
 	LayersPerEpoch  uint32
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidator
@@ -109,12 +107,11 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity.
-func NewDB(dbStore database.Database, fetcher system.Fetcher, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, fetcher system.Fetcher, idStore idStore, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:         idStore,
 		atxs:            dbStore,
 		atxHeaderCache:  NewAtxCache(600),
-		meshDb:          meshDb,
 		LayersPerEpoch:  layersPerEpoch,
 		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,
@@ -203,62 +200,6 @@ func (db *DB) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error {
 			log.Err(err))
 	}
 	return nil
-}
-
-func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, targetEpoch types.EpochID) func(b *types.Block) (bool, error) {
-	return func(b *types.Block) (stop bool, err error) {
-		// count unique ATXs
-		if b.ActiveSet == nil {
-			return false, nil
-		}
-		for _, id := range *b.ActiveSet {
-			atx, err := db.GetAtxHeader(id)
-			if err != nil {
-				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortString()) // TODO: handle inconsistent state
-				return false, fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortString())
-			}
-
-			// todo: should we accept only epoch -1 atxs?
-
-			// make sure the target epoch is our epoch
-			if atx.TargetEpoch() != targetEpoch {
-				db.log.With().Debug("atx found in relevant layer, but target epoch doesn't match requested epoch",
-					atx.ID(),
-					log.FieldNamed("atx_target_epoch", atx.TargetEpoch()),
-					log.FieldNamed("requested_epoch", targetEpoch))
-				continue
-			}
-
-			minerWeight[atx.NodeID.Key] = atx.GetWeight()
-		}
-
-		return false, nil
-	}
-}
-
-// GetMinerWeightsInEpochFromView returns a map of miner IDs and each one's weight targeting targetEpoch, by traversing
-// the provided view.
-func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map[types.BlockID]struct{}) (map[string]uint64, error) {
-	if targetEpoch == 0 {
-		return nil, errGenesisEpoch
-	}
-
-	firstLayerOfPrevEpoch := (targetEpoch - 1).FirstLayer()
-
-	minerWeight := make(map[string]uint64)
-
-	traversalFunc := db.createTraversalFuncForMinerWeights(minerWeight, targetEpoch)
-
-	startTime := time.Now()
-	err := db.meshDb.ForBlockInView(view, firstLayerOfPrevEpoch, traversalFunc)
-	if err != nil {
-		return nil, fmt.Errorf("traverse blocks in view: %w", err)
-	}
-	db.log.With().Info("done calculating miner weights",
-		log.Int("numMiners", len(minerWeight)),
-		log.String("duration", time.Now().Sub(startTime).String()))
-
-	return minerWeight, nil
 }
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.

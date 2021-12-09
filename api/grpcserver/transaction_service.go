@@ -185,11 +185,11 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 	)
 
 	if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
-		txCh, txBufFull = consumeEvents(context.Background(), txsSubscription)
+		txCh, txBufFull = consumeEvents(stream.Context(), txsSubscription)
 	}
 
 	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
-		layerCh, layerBufFull = consumeEvents(context.Background(), layersSubscription)
+		layerCh, layerBufFull = consumeEvents(stream.Context(), layersSubscription)
 	}
 
 	for {
