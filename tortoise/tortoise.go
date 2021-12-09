@@ -496,7 +496,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		if t.verified.After(previous) {
 			if err := persistContextualValidity(logger,
 				t.bdp,
-				previous.Add(1), t.processed.Sub(1),
+				previous.Add(1), t.verified,
 				t.blocks,
 				t.localOpinion,
 			); err != nil {
