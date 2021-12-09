@@ -118,6 +118,10 @@ func (t *Transaction) ID() TransactionID {
 	return id
 }
 
+// sep
+// get fee
+// recipient
+
 // Hash32 returns the TransactionID as a Hash32.
 func (t *Transaction) Hash32() Hash32 {
 	return t.ID().Hash32()

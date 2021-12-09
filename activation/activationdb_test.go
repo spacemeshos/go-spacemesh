@@ -74,10 +74,6 @@ func (MockState) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
-func (MockState) ValidateAndAddTxToPool(*types.Transaction) error {
-	panic("implement me")
-}
-
 func (MockState) Rewind(types.LayerID) (types.Hash32, error) {
 	panic("implement me")
 }
