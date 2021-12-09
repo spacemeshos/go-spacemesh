@@ -673,7 +673,6 @@ func (app *App) initServices(ctx context.Context,
 	app.atxDb = atxDB
 	app.layerFetch = layerFetch
 	app.tortoiseBeacon = tBeacon
-	app.svm = state
 	app.tortoise = trtl
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
