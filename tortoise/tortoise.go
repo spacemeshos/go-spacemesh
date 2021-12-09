@@ -104,6 +104,12 @@ func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
 	return t.verified.Sub(t.WindowSize), true
 }
 
+func (t *turtle) updateHistoricallyVerified() {
+	if t.verified.After(t.historicallyVerified) {
+		t.historicallyVerified = t.verified
+	}
+}
+
 // evict makes sure we only keep a window of the last hdist layers.
 func (t *turtle) evict(ctx context.Context) {
 	// Don't evict before we've verified at least hdist layers
@@ -448,11 +454,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) err
 	if t.processed.Before(lid) {
 		t.processed = lid
 	}
-	err := t.processLayer(tctx, lid)
-	if t.verified.After(t.historicallyVerified) {
-		t.historicallyVerified = t.verified
-	}
-	return err
+	return t.processLayer(tctx, lid)
 }
 
 func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
@@ -494,13 +496,14 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		if t.verified.After(previous) {
 			if err := persistContextualValidity(logger,
 				t.bdp,
-				previous.Add(1), t.verified,
+				previous, t.verified,
 				t.blocks,
 				t.localOpinion,
 			); err != nil {
 				return err
 			}
 		}
+		t.updateHistoricallyVerified()
 		if t.verified == t.processed.Sub(1) {
 			return nil
 		}
@@ -514,7 +517,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	// so we will have to use different heuristic for switching into full mode.
 	// maybe the difference between counted and uncounted weight for a specific layer
 	t.full.processBallots(ballots)
-	if t.isHealingEnabled(t.verified.Add(1)) || t.mode == fullMode {
+	if t.isHealingEnabled() || t.mode == fullMode {
 		if t.mode == verifyingMode {
 			logger.With().Info("switching to full self-healing tortoise",
 				lid,
@@ -525,10 +528,11 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		previous := t.verified
 		t.verified = t.full.verifyLayers(logger)
 
+		t.updateHistoricallyVerified()
 		if t.verified.After(previous) {
 			if err := persistContextualValidity(logger,
 				t.bdp,
-				previous.Add(1), t.verified,
+				previous, t.verified,
 				t.blocks,
 				t.localOpinion,
 			); err != nil {
@@ -637,14 +641,15 @@ func (t *turtle) updateLocalOpinion(ctx *tcontext, from, to types.LayerID) error
 //
 // verifying tortoise is a fastpath for full vote counting, that works if everyone is honest and have good synchrony.
 // as for the safety and livenesss both protocols are identical.
-func (t *turtle) isHealingEnabled(lid types.LayerID) bool {
+func (t *turtle) isHealingEnabled() bool {
+	lid := t.verified.Add(1)
 	return lid.Before(t.layerCutoff()) &&
 		t.last.Difference(lid) > t.Zdist &&
 		// unlike previous two parameters we count confidence interval from processed layer
 		// processed layer is significantly lower then the last layer during rerun.
 		// we need to wait some distance before switching from verifying to full during rerun
 		// as previous two parameters will be always true even if single layer is not verified.
-		t.processed.Difference(t.verified) > t.ConfidenceParam
+		t.processed.Difference(lid) > t.ConfidenceParam
 }
 
 // for layers older than this point, we vote according to global opinion (rather than local opinion).
@@ -781,7 +786,7 @@ func persistContextualValidity(logger log.Log,
 	blocks map[types.LayerID][]types.BlockID,
 	opinion Opinion,
 ) error {
-	for lid := from; !lid.After(to); lid = lid.Add(1) {
+	for lid := from.Add(1); !lid.After(to); lid = lid.Add(1) {
 		for _, bid := range blocks[lid] {
 			sign := opinion[bid]
 			if sign == abstain {

@@ -17,9 +17,10 @@ import (
 
 // Config for protocol parameters.
 type Config struct {
-	Hdist           uint32        `mapstructure:"tortoise-hdist"`            // hare/input vector lookback distance
-	Zdist           uint32        `mapstructure:"tortoise-zdist"`            // hare result wait distance
-	ConfidenceParam uint32        `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
+	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare/input vector lookback distance
+	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
+	// how long we are waiting for a switch from verifying to full. relevant during rerun.
+	ConfidenceParam uint32        `mapstructure:"tortoise-confidence-param"`
 	WindowSize      uint32        `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
 	GlobalThreshold *big.Rat      `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
 	LocalThreshold  *big.Rat      `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
@@ -28,8 +29,8 @@ type Config struct {
 
 	LayerSize                uint32
 	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
-	Processed                types.LayerID
-	Verified                 types.LayerID
+	MeshProcessed            types.LayerID
+	MeshVerified             types.LayerID
 }
 
 // DefaultConfig for Tortoise.
@@ -118,7 +119,7 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 	ctx, cancel := context.WithCancel(t.ctx)
 	t.cancel = cancel
 
-	needsRecovery := t.cfg.Processed.After(types.GetEffectiveGenesis())
+	needsRecovery := t.cfg.MeshProcessed.After(types.GetEffectiveGenesis())
 
 	t.trtl = newTurtle(
 		t.logger,
@@ -129,21 +130,19 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 	)
 	t.trtl.init(t.ctx, mesh.GenesisLayer())
 	if needsRecovery {
-		t.trtl.processed = t.cfg.Processed
+		t.trtl.processed = t.cfg.MeshProcessed
 		// TODO(dshulyak) last should be set according to the clock.
-		t.trtl.last = t.cfg.Processed
-		if t.cfg.Verified.After(t.trtl.historicallyVerified) {
-			t.trtl.historicallyVerified = t.cfg.Verified
-		}
+		t.trtl.last = t.cfg.MeshProcessed
+		t.trtl.verified = t.cfg.MeshVerified
+		t.trtl.historicallyVerified = t.cfg.MeshVerified
 
-		t.logger.With().Info("loading state from disk. make sure to wait until tortoise is ready",
-			log.Stringer("last_layer", t.cfg.Processed),
-			log.Stringer("historically_verified", t.cfg.Verified),
+		t.logger.Info("loading state from disk. make sure to wait until tortoise is ready",
+			log.Stringer("last_layer", t.cfg.MeshProcessed),
+			log.Stringer("historically_verified", t.cfg.MeshVerified),
 		)
 		t.eg.Go(func() error {
 			t.ready <- t.rerun(ctx)
 			close(t.ready)
-			t.logger.Info("tortoise is ready")
 			return nil
 		})
 	} else {
