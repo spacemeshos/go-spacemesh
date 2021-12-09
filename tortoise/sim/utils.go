@@ -32,7 +32,7 @@ func newAtxDB(logger log.Log, mdb *mesh.DB, conf config) *activation.DB {
 			panic(err)
 		}
 	}
-	return activation.NewDB(db, nil, nil, mdb, conf.LayersPerEpoch, goldenATX, nil, logger)
+	return activation.NewDB(db, nil, nil, conf.LayersPerEpoch, goldenATX, nil, logger)
 }
 
 func newMeshDB(logger log.Log, conf config) *mesh.DB {
