@@ -104,6 +104,12 @@ func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
 	return t.verified.Sub(t.WindowSize), true
 }
 
+func (t *turtle) updateHistoricallyVerified() {
+	if t.verified.After(t.historicallyVerified) {
+		t.historicallyVerified = t.verified
+	}
+}
+
 // evict makes sure we only keep a window of the last hdist layers.
 func (t *turtle) evict(ctx context.Context) {
 	// Don't evict before we've verified at least hdist layers
@@ -450,11 +456,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) err
 	if t.processed.Before(lid) {
 		t.processed = lid
 	}
-	err := t.processLayer(tctx, lid)
-	if t.verified.After(t.historicallyVerified) {
-		t.historicallyVerified = t.verified
-	}
-	return err
+	return t.processLayer(tctx, lid)
 }
 
 func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
@@ -503,6 +505,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 				return err
 			}
 		}
+		t.updateHistoricallyVerified()
 		if t.verified == t.processed.Sub(1) {
 			return nil
 		}
@@ -531,6 +534,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		}
 		// TODO(dshulyak) refactor full tortoise to be consistent with verifying.
 		// update local opinion in memory and persist afterwards.
+		t.updateHistoricallyVerified()
 		if err := t.updateLocalOpinion(wrapContext(ctx), previous.Add(1), t.processed); err != nil {
 			return err
 		}
