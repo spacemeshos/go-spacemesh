@@ -3123,5 +3123,7 @@ func TestEventsReceived(t *testing.T) {
 	}
 	svm.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
 
+	time.Sleep(100 * time.Millisecond)
+
 	wg.Wait()
 }
