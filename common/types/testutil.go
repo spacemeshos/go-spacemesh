@@ -16,6 +16,11 @@ func RandomBytes(size int) []byte {
 	return b
 }
 
+// RandomBeacon generates random beacon in bytes for testing.
+func RandomBeacon() []byte {
+	return RandomBytes(BeaconSize)
+}
+
 // RandomActiveSet generates a random set of ATXIDs of the specified size.
 func RandomActiveSet(size int) []ATXID {
 	ids := make([]ATXID, 0, size)

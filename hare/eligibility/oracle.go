@@ -1,6 +1,7 @@
 package eligibility
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -13,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -45,7 +47,6 @@ type atxProvider interface {
 
 type meshProvider interface {
 	LayerBallots(types.LayerID) ([]*types.Ballot, error)
-	GetBallot(types.BallotID) (*types.Ballot, error)
 }
 
 // a function to verify the message with the signature and its public key.
@@ -151,7 +152,7 @@ func encodeBeacon(beacon []byte) uint32 {
 	return binary.LittleEndian.Uint32(beacon)
 }
 
-func (o *Oracle) getBeacon(ctx context.Context, epochID types.EpochID) (uint32, error) {
+func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uint32, error) {
 	beacon, err := o.beacons.GetBeacon(epochID)
 	if err != nil {
 		return 0, fmt.Errorf("get beacon: %w", err)
@@ -178,7 +179,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	}
 
 	// get value from beacon
-	v, err := o.getBeacon(ctx, layer.GetEpoch())
+	v, err := o.getBeaconValue(ctx, layer.GetEpoch())
 	if err != nil {
 		o.WithContext(ctx).With().Error("could not get hare beacon value for epoch",
 			log.Err(err),
@@ -440,7 +441,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 			log.FieldNamed("safe_layer_start", safeLayerStart),
 			log.FieldNamed("safe_layer_start_epoch", safeLayerStart.GetEpoch()))
 	} else {
-		// this is an error because GetMinerWeightsInEpochFromView, below, will probably also fail if it's true
 		// TODO: should we panic or return an error instead?
 		logger.With().Error("safe layer range spans multiple epochs, not caching active set results",
 			log.FieldNamed("safe_layer_start", safeLayerStart),
@@ -449,8 +449,24 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 			log.FieldNamed("safe_layer_end_epoch", safeLayerEnd.GetEpoch()))
 	}
 
-	activeBallots := make(map[types.BallotID]*types.Ballot)
+	var (
+		beacons       = make(map[types.EpochID][]byte)
+		activeBallots = make(map[types.BallotID]*types.Ballot)
+		epoch         types.EpochID
+		beacon        []byte
+		err           error
+	)
 	for layerID := safeLayerStart; !layerID.After(safeLayerEnd); layerID = layerID.Add(1) {
+		epoch = layerID.GetEpoch()
+		if _, exist := beacons[epoch]; !exist {
+			if beacon, err = o.beacons.GetBeacon(epoch); err != nil {
+				logger.With().Error("actives failed to get beacon", epoch, log.Err(err))
+				return nil, fmt.Errorf("error getting beacon for epoch %v: %w", epoch, err)
+			}
+			logger.With().Warning("found beacon for epoch", epoch,
+				log.String("epoch_beacon", types.BytesToHash(beacon).ShortString()))
+			beacons[epoch] = beacon
+		}
 		ballots, err := o.meshdb.LayerBallots(layerID)
 		if err != nil {
 			logger.With().Warning("failed to get layer ballots", layerID, log.Err(err))
@@ -467,25 +483,32 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	// now read the set of ATXs referenced by these blocks
 	// TODO: can the set of blocks ever span multiple epochs?
 	hareActiveSet := make(map[string]uint64)
+	badBeaconATXIDs := make(map[types.ATXID]struct{})
 	seenATXIDs := make(map[types.ATXID]struct{})
 	seenBallots := make(map[types.BallotID]struct{})
-	for _, b := range activeBallots {
-		var (
-			ballot = b
-			err    error
-		)
-		if ballot.RefBallot != types.EmptyBallotID {
-			ballot, err = o.meshdb.GetBallot(ballot.RefBallot)
-			if err != nil {
-				return nil, fmt.Errorf("hare actives (target layer %v) get ref ballot: %w", targetLayer, err)
-			}
-		}
+	for _, ballot := range activeBallots {
 		if _, exist := seenBallots[ballot.ID()]; exist {
 			continue
 		}
 		seenBallots[ballot.ID()] = struct{}{}
+		if ballot.ID() == types.BallotID(mesh.GenesisBlock().ID()) {
+			// always accept genesis ballot
+			continue
+		}
 		if ballot.EpochData == nil {
-			return nil, fmt.Errorf("hare actives (target layer %v)  ref ballot missing epoch data: %v", targetLayer, ballot.ID())
+			// not a ref ballot, no beacon value to check
+			continue
+		}
+		beacon = beacons[ballot.LayerIndex.GetEpoch()]
+		if !bytes.Equal(ballot.EpochData.Beacon, beacon) {
+			badBeaconATXIDs[ballot.AtxID] = struct{}{}
+			logger.With().Warning("hare actives find ballot with different beacon",
+				ballot.ID(),
+				ballot.AtxID,
+				ballot.LayerIndex.GetEpoch(),
+				log.String("ballot_beacon", types.BytesToHash(ballot.EpochData.Beacon).ShortString()),
+				log.String("epoch_beacon", types.BytesToHash(beacon).ShortString()))
+			continue
 		}
 		for _, id := range ballot.EpochData.ActiveSet {
 			if _, exist := seenATXIDs[id]; exist {
@@ -494,10 +517,20 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 			seenATXIDs[id] = struct{}{}
 			atx, err := o.atxdb.GetAtxHeader(id)
 			if err != nil {
-				return nil, fmt.Errorf("hare actives (target layer %v)  get ATX: %w", targetLayer, err)
+				return nil, fmt.Errorf("hare actives (target layer %v) get ATX: %w", targetLayer, err)
 			}
 			hareActiveSet[atx.NodeID.Key] = atx.GetWeight()
 		}
+	}
+
+	// remove miners who published ballots with bad beacons
+	for id := range badBeaconATXIDs {
+		atx, err := o.atxdb.GetAtxHeader(id)
+		if err != nil {
+			return nil, fmt.Errorf("hare actives (target layer %v) get bad beacon ATX: %w", targetLayer, err)
+		}
+		delete(hareActiveSet, atx.NodeID.Key)
+		logger.With().Error("smesher removed from hare active set", log.String("node_key", atx.NodeID.Key))
 	}
 
 	if len(hareActiveSet) > 0 {
