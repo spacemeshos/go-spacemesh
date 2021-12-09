@@ -34,7 +34,6 @@ type turtle struct {
 // newTurtle creates a new verifying tortoise algorithm instance.
 func newTurtle(
 	lg log.Log,
-	db database.Database,
 	bdp blockDataProvider,
 	atxdb atxDataProvider,
 	beacons system.BeaconGetter,
@@ -43,9 +42,7 @@ func newTurtle(
 	return &turtle{
 		Config: cfg,
 		state: state{
-			diffMode:              true,
-			db:                    db,
-			log:                   lg,
+			logger:                lg,
 			refBallotBeacons:      map[types.EpochID]map[types.BallotID][]byte{},
 			badBeaconBallots:      map[types.BallotID]struct{}{},
 			epochWeight:           map[types.EpochID]uint64{},
@@ -65,8 +62,7 @@ func newTurtle(
 // cloneTurtleParams creates a new verifying tortoise instance using the params of this instance.
 func (t *turtle) cloneTurtleParams() *turtle {
 	return newTurtle(
-		t.log,
-		t.db,
+		t.logger,
 		t.bdp,
 		t.atxdb,
 		t.beacons,
@@ -89,7 +85,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 		t.GoodBallotsIndex[id] = false // false means good block, not flushed
 	}
 	t.Last = genesisLayer.Index()
-	t.Processed = genesisLayer.Index()
+	t.state.Processed = genesisLayer.Index()
 	t.LastEvicted = genesisLayer.Index().Sub(1)
 	t.Verified = genesisLayer.Index()
 }
@@ -412,11 +408,6 @@ func (t *turtle) calculateExceptions(
 	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 }
 
-// Persist saves the current tortoise state to the database.
-func (t *turtle) persist() error {
-	return t.state.Persist()
-}
-
 func (t *turtle) getBaseBallotOpinions(bid types.BallotID) Opinion {
 	lid, ok := t.BallotLayer[bid]
 	if !ok {
@@ -652,8 +643,8 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) err
 	if t.Last.Before(lid) {
 		t.Last = lid
 	}
-	if t.Processed.Before(lid) {
-		t.Processed = lid
+	if t.state.Processed.Before(lid) {
+		t.state.Processed = lid
 	}
 	if err := t.handleLayer(tctx, lid); err != nil {
 		return err

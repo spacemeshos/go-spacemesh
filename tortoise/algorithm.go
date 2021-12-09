@@ -2,7 +2,6 @@ package tortoise
 
 import (
 	"context"
-	"errors"
 	"math/big"
 	"sync"
 	"time"
@@ -10,7 +9,6 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -30,6 +28,7 @@ type Config struct {
 
 	LayerSize                uint32
 	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
+	MeshProcessed            types.LayerID
 }
 
 // DefaultConfig for Tortoise.
@@ -57,16 +56,19 @@ type Tortoise struct {
 	eg     errgroup.Group
 	cancel context.CancelFunc
 
+	ready    chan error
+	readyErr struct {
+		sync.Mutex
+		err error
+	}
+
 	mu  sync.RWMutex
 	org *organizer.Organizer
 
 	// update will be set to non-nil after rerun completes, and must be set to nil once
 	// used to replace trtl.
 	update *rerunResult
-	// persistMu is needed to allow concurrent BaseBallot and Persist call
-	// but to prevent multiple concurrent Persist calls
-	persistMu sync.Mutex
-	trtl      *turtle
+	trtl   *turtle
 }
 
 // Opt for configuring tortoise.
@@ -94,11 +96,12 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New creates Tortoise instance.
-func New(db database.Database, mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGetter, opts ...Opt) *Tortoise {
+func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGetter, opts ...Opt) *Tortoise {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
 		cfg:    DefaultConfig(),
+		ready:  make(chan error, 1),
 	}
 	for _, opt := range opts {
 		opt(t)
@@ -110,37 +113,43 @@ func New(db database.Database, mdb blockDataProvider, atxdb atxDataProvider, bea
 			log.Uint32("zdist", t.cfg.Zdist),
 		)
 	}
+
+	ctx, cancel := context.WithCancel(t.ctx)
+	t.cancel = cancel
+
+	needsRecovery := t.cfg.MeshProcessed.After(types.GetEffectiveGenesis())
+
 	t.trtl = newTurtle(
 		t.logger,
-		db,
 		mdb,
 		atxdb,
 		beacons,
 		t.cfg,
 	)
+	t.trtl.init(t.ctx, mesh.GenesisLayer())
+	if needsRecovery {
+		t.trtl.Processed = t.cfg.MeshProcessed
+		// TODO(dshulyak) last should be set according to the clock.
+		t.trtl.Last = t.cfg.MeshProcessed
 
-	if err := t.trtl.Recover(); err != nil {
-		if !errors.Is(err, database.ErrNotFound) {
-			t.logger.With().Panic("can't recover turtle state", log.Err(err))
-		}
-		t.trtl.init(t.ctx, mesh.GenesisLayer())
+		t.logger.Info("loading state from disk. make sure to wait until tortoise is ready",
+			log.Stringer("last_layer", t.cfg.MeshProcessed),
+		)
+		t.eg.Go(func() error {
+			t.ready <- t.rerun(ctx)
+			close(t.ready)
+			return nil
+		})
+	} else {
+		t.logger.Info("no state on disk. initialized with genesis")
+		close(t.ready)
 	}
-	if err := recoverBallotWeight(
-		t.trtl.bdp,
-		t.trtl.atxdb,
-		t.trtl.BallotOpinionsByLayer,
-		t.trtl.BallotWeight,
-		t.cfg.LayerSize,
-		types.GetLayersPerEpoch(),
-	); err != nil {
-		t.logger.With().Panic("failed to recover ballot weights", log.Err(err))
-	}
+
 	t.org = organizer.New(
 		organizer.WithLogger(t.logger),
-		organizer.WithLastLayer(t.trtl.Last),
+		organizer.WithLastLayer(t.trtl.Processed),
 	)
-	ctx, cancel := context.WithCancel(t.ctx)
-	t.cancel = cancel
+
 	// TODO(dshulyak) with low rerun interval it is possible to start a rerun
 	// when initial sync is in progress, or right after sync
 	if t.cfg.RerunInterval != 0 {
@@ -200,18 +209,19 @@ func (trtl *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.Lay
 	return old, trtl.trtl.Verified, reverted
 }
 
-// Persist saves a copy of the current tortoise state to the database.
-func (trtl *Tortoise) Persist(ctx context.Context) error {
-	trtl.mu.RLock()
-	defer trtl.mu.RUnlock()
-	trtl.persistMu.Lock()
-	defer trtl.persistMu.Unlock()
-	start := time.Now()
-
-	err := trtl.trtl.persist()
-	trtl.logger.WithContext(ctx).With().Info("persist tortoise",
-		log.Duration("duration", time.Since(start)))
-	return err
+// WaitReady waits until state will be reloaded from disk.
+func (trtl *Tortoise) WaitReady(ctx context.Context) error {
+	select {
+	case err := <-trtl.ready:
+		trtl.readyErr.Lock()
+		defer trtl.readyErr.Unlock()
+		if err != nil {
+			trtl.readyErr.err = err
+		}
+		return trtl.readyErr.err
+	case <-ctx.Done():
+		return ctx.Err() //nolint
+	}
 }
 
 // Stop background workers.
