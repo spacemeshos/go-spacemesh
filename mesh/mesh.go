@@ -38,8 +38,6 @@ var VERIFIED = []byte("verified")
 
 type tortoise interface {
 	HandleIncomingLayer(context.Context, types.LayerID) (oldPbase, newPbase types.LayerID, reverted bool)
-	LatestComplete() types.LayerID
-	Persist(context.Context) error
 }
 
 // Validator interface to be used in tests to mock validation flow.
@@ -141,7 +139,7 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 	}
 	msh.setLatestLayer(types.BytesToLayerID(latest))
 
-	lyr, err := msh.recoverProcessedLayer()
+	lyr, err := msh.GetProcessedLayer()
 	if err != nil {
 		logger.With().Panic("failed to recover processed layer", log.Err(err))
 	}
@@ -159,21 +157,10 @@ func NewRecoveredMesh(ctx context.Context, db *DB, atxDb AtxDB, rewardConfig Con
 	if err != nil {
 		logger.With().Panic("failed to load state for layer", msh.LatestLayerInState(), log.Err(err))
 	}
-	// in case we load a state that was not fully played
-	nextLayer := msh.LatestLayerInState().Add(1)
-	lastComplete := msh.trtl.LatestComplete()
-	if nextLayer.Before(msh.trtl.LatestComplete()) {
-		// todo: add test for this case, or add random kill test on node
-		logger.With().Info("playing layers to state",
-			log.FieldNamed("from_layer", nextLayer),
-			log.FieldNamed("to_layer", lastComplete))
-		msh.pushLayersToState(ctx, nextLayer, lastComplete)
-	}
 
 	msh.With().Info("recovered mesh from disk",
 		log.FieldNamed("latest", msh.LatestLayer()),
 		log.FieldNamed("processed", msh.ProcessedLayer()),
-		log.FieldNamed("verified", msh.trtl.LatestComplete()),
 		log.String("root_hash", state.GetStateRoot().String()))
 
 	return msh
@@ -342,9 +329,6 @@ func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
 		}
 	}
 
-	if err := vl.trtl.Persist(ctx); err != nil {
-		logger.With().Error("could not persist tortoise", log.Err(err))
-	}
 	vl.pushLayersToState(ctx, oldPbase, newPbase)
 	if newPbase.After(oldPbase) {
 		if err := vl.persistLayerHashes(ctx, oldPbase.Add(1), newPbase); err != nil {

@@ -36,13 +36,7 @@ func (t *Tortoise) updateFromRerun(ctx context.Context) (bool, types.LayerID) {
 		updated   = completed.Consensus
 		err       error
 	)
-	// we need to persist after rerun is completed so that eviction will not miss any layers
-	// that were received concurrently.
-	err = updated.Persist()
-	if err != nil {
-		logger.Error("failed to persist state after rerun", log.Err(err))
-		return reverted, observed
-	}
+
 	if current.Last.After(updated.Last) && err == nil {
 		start := time.Now()
 		logger.Info("tortoise received more layers while rerun was in progress. running a catchup",
@@ -63,8 +57,8 @@ func (t *Tortoise) updateFromRerun(ctx context.Context) (bool, types.LayerID) {
 	if reverted {
 		observed = completed.Tracer.FirstLayer()
 	}
-	updated.log = current.log
 	updated.bdp = current.bdp
+	updated.logger = current.logger
 	t.trtl = updated
 	return reverted, observed
 }
