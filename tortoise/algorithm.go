@@ -38,7 +38,7 @@ func DefaultConfig() Config {
 		LayerSize:                30,
 		Hdist:                    10,
 		Zdist:                    8,
-		ConfidenceParam:          2,
+		ConfidenceParam:          5,
 		WindowSize:               100,
 		GlobalThreshold:          big.NewRat(60, 100),
 		LocalThreshold:           big.NewRat(20, 100),

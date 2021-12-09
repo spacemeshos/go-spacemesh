@@ -657,7 +657,13 @@ func (t *turtle) keepVotes(ballots []tortoiseBallot) {
 // verifying tortoise is a fastpath for full vote counting, that works if everyone is honest and have good synchrony.
 // as for the safety and livenesss both protocols are identical.
 func (t *turtle) isHealingEnabled(lid types.LayerID) bool {
-	return lid.Before(t.layerCutoff()) && t.last.Difference(lid) > t.Zdist+t.ConfidenceParam
+	return lid.Before(t.layerCutoff()) &&
+		t.last.Difference(lid) > t.Zdist &&
+		// unlike previous two parameters we count confidence interval from processed layer
+		// processed layer is significantly lower then the last layer during rerun.
+		// we need to wait some distance before switching from verifying to full during rerun
+		// as previous two parameters will be always true even if single layer is not verified.
+		t.processed.Difference(t.verified) > t.ConfidenceParam
 }
 
 func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log) bool {
