@@ -496,7 +496,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		if t.verified.After(previous) {
 			if err := persistContextualValidity(logger,
 				t.bdp,
-				previous.Add(1), t.verified,
+				previous, t.verified,
 				t.blocks,
 				t.localOpinion,
 			); err != nil {
@@ -516,7 +516,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	// so we will have to use different heuristic for switching into full mode.
 	// maybe the difference between counted and uncounted weight for a specific layer
 	t.keepVotes(ballots)
-	if t.isHealingEnabled(t.verified.Add(1)) || t.mode == fullMode {
+	if t.isHealingEnabled() || t.mode == fullMode {
 		if t.mode == verifyingMode {
 			logger.With().Info("switching to full self-healing tortoise",
 				lid,
@@ -656,14 +656,15 @@ func (t *turtle) keepVotes(ballots []tortoiseBallot) {
 //
 // verifying tortoise is a fastpath for full vote counting, that works if everyone is honest and have good synchrony.
 // as for the safety and livenesss both protocols are identical.
-func (t *turtle) isHealingEnabled(lid types.LayerID) bool {
+func (t *turtle) isHealingEnabled() bool {
+	lid := t.verified.Add(1)
 	return lid.Before(t.layerCutoff()) &&
 		t.last.Difference(lid) > t.Zdist &&
 		// unlike previous two parameters we count confidence interval from processed layer
 		// processed layer is significantly lower then the last layer during rerun.
 		// we need to wait some distance before switching from verifying to full during rerun
 		// as previous two parameters will be always true even if single layer is not verified.
-		t.processed.Difference(t.verified) > t.ConfidenceParam
+		t.processed.Difference(lid) > t.ConfidenceParam
 }
 
 func (t *turtle) healingTortoise(ctx *tcontext, logger log.Log) bool {
@@ -964,7 +965,7 @@ func persistContextualValidity(logger log.Log,
 	blocks map[types.LayerID][]types.BlockID,
 	opinion Opinion,
 ) error {
-	for lid := from; !lid.After(to); lid = lid.Add(1) {
+	for lid := from.Add(1); !lid.After(to); lid = lid.Add(1) {
 		for _, bid := range blocks[lid] {
 			sign := opinion[bid]
 			if sign == abstain {
