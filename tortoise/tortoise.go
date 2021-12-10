@@ -380,7 +380,7 @@ func (t *turtle) calculateExceptions(
 	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 }
 
-func (t *turtle) ballotHasGoodBeacon(ballot *types.Ballot, logger log.Log) bool {
+func (t *turtle) markBeaconWithBadBallot(logger log.Log, ballot *types.Ballot) bool {
 	layerID := ballot.LayerIndex
 
 	// first check if we have it in the cache
@@ -516,7 +516,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	// so we will have to use different heuristic for switching into full mode.
 	// maybe the difference between counted and uncounted weight for a specific layer
 	t.full.processBallots(ballots)
-	if t.isHealingEnabled() || t.mode == fullMode {
+	if t.canUseFullMode() || t.mode == fullMode {
 		if t.mode == verifyingMode {
 			logger.With().Info("switching to full self-healing tortoise",
 				lid,
@@ -591,7 +591,7 @@ func (t *turtle) processBallots(ctx *tcontext, lid types.LayerID, original []*ty
 			t.ballotLayer[ballot.ID()] = ballot.LayerIndex
 
 			// TODO(dshulyak) this should not fail without terminating tortoise
-			t.ballotHasGoodBeacon(ballot, t.logger)
+			t.markBeaconWithBadBallot(t.logger, ballot)
 
 			ballotsIDs = append(ballotsIDs, ballot.ID())
 
@@ -635,15 +635,16 @@ func (t *turtle) updateLocalOpinion(ctx *tcontext, from, to types.LayerID) error
 	return nil
 }
 
-// the idea here is to give enough room for verifying tortoise to complete. if verifying tortoise fails to verify
-// a layer within last hdist layers or within zdist + confidence param (whichever is larger) we switch to full vote counting.
+// the idea here is to give enough room for verifying tortoise to complete. during live tortoise execution this will be limited by the hdist.
+// during rerun we need to use another heuristic, as hdist is irrelevant by that time.
 //
 // verifying tortoise is a fastpath for full vote counting, that works if everyone is honest and have good synchrony.
-// as for the safety and livenesss both protocols are identical.
-func (t *turtle) isHealingEnabled() bool {
+// as for the safety and liveness both protocols are identical.
+func (t *turtle) canUseFullMode() bool {
 	lid := t.verified.Add(1)
 	return lid.Before(t.layerCutoff()) &&
-		// unlike previous parameter we count confidence interval from processed layer
+		t.last.Difference(lid) > t.Zdist &&
+		// unlike previous two parameters we count confidence interval from processed layer
 		// processed layer is significantly lower then the last layer during rerun.
 		// we need to wait some distance before switching from verifying to full during rerun
 		// as previous two parameters will be always true even if single layer is not verified.

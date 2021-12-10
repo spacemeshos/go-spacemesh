@@ -27,7 +27,7 @@ type verifying struct {
 }
 
 func (v *verifying) processLayer(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
-	counted, count := v.sumGoodBallots(logger, ballots)
+	counted, goodBallotsCount := v.sumGoodBallots(logger, ballots)
 
 	// TODO(dshulyak) counted weight should be reduced by the uncounted weight per conversation with research
 
@@ -39,7 +39,7 @@ func (v *verifying) processLayer(logger log.Log, lid types.LayerID, ballots []to
 		log.Stringer("total", v.totalWeight),
 		log.Stringer("expected", v.epochWeight[lid.GetEpoch()]),
 		log.Int("ballots_count", len(ballots)),
-		log.Int("good_ballots_count", count),
+		log.Int("good_ballots_count", goodBallotsCount),
 	)
 }
 

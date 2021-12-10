@@ -29,7 +29,7 @@ func (a sign) String() string {
 	}
 }
 
-// Opinion is votes on blocks.
+// Opinion is opinions on other blocks.
 type Opinion map[types.BlockID]sign
 
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {

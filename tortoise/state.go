@@ -43,7 +43,7 @@ type commonState struct {
 	// in the opinions map to work with.
 	badBeaconBallots map[types.BallotID]struct{}
 
-	// epochWeight average weight of atx's that target keyed epoch
+	// epochWeight average weight per layer of atx's that target keyed epoch
 	epochWeight map[types.EpochID]weight
 
 	ballotWeight map[types.BallotID]weight
@@ -52,10 +52,7 @@ type commonState struct {
 }
 
 func newFullState() fullState {
-	return fullState{
-		votes: map[types.BallotID]Opinion{},
-		base:  map[types.BallotID]types.BallotID{},
-	}
+	return fullState{votes: map[types.BallotID]Opinion{}}
 }
 
 // fullState contains state necessary to run full (self-healing) tortoise.
@@ -64,7 +61,7 @@ func newFullState() fullState {
 // if verifying tortoise get stuck we need to have data for two use cases:
 // - select a base ballot that is the least bad, requires votes since genesis,
 //   for now we keep votes only in a small window and only after verifying tortoise is stuck
-//   relevant only if we can't find a good ballot that can fit all votes int the exception limit
+//   relevant only if we can't find a good ballot that can fit all votes in the exception limit
 // - verify layers with full vote counting, requires votes from ballots after verified layer
 //
 // TODO(dshulyak) this is a temporary data structure, until full tortoise will be refactored the same
