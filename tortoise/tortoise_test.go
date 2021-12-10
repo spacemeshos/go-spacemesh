@@ -1836,16 +1836,16 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 	logger := logtest.New(t)
 	// good beacon
 	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	assert.True(t, trtl.ballotHasGoodBeacon(ballot, logger))
+	assert.True(t, trtl.markBeaconWithBadBallot(logger, ballot))
 
 	// bad beacon
 	beacon := randomBytes(t, 32)
 	require.NotEqual(t, epochBeacon, beacon)
 	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(beacon, nil).Times(1)
-	assert.False(t, trtl.ballotHasGoodBeacon(ballot, logger))
+	assert.False(t, trtl.markBeaconWithBadBallot(logger, ballot))
 
 	// ask a bad beacon again won't cause a lookup since it's cached
-	assert.False(t, trtl.ballotHasGoodBeacon(ballot, logger))
+	assert.False(t, trtl.markBeaconWithBadBallot(logger, ballot))
 }
 
 func TestGetBallotBeacon(t *testing.T) {
@@ -1895,8 +1895,8 @@ func TestBallotFilterForHealing(t *testing.T) {
 	logger := logtest.New(t)
 	// cause the bad beacon block to be cached
 	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(2)
-	assert.True(t, trtl.ballotHasGoodBeacon(goodBallot, logger))
-	assert.False(t, trtl.ballotHasGoodBeacon(badBallot, logger))
+	assert.True(t, trtl.markBeaconWithBadBallot(logger, goodBallot))
+	assert.False(t, trtl.markBeaconWithBadBallot(logger, badBallot))
 
 	// we don't count votes in bad beacon block for badBeaconVoteDelays layers
 	trtl.last = layerID

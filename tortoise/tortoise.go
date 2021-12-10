@@ -383,7 +383,7 @@ func (t *turtle) calculateExceptions(
 	return []map[types.BlockID]struct{}{againstDiff, forDiff, neutralDiff}, nil
 }
 
-func (t *turtle) ballotHasGoodBeacon(ballot *types.Ballot, logger log.Log) bool {
+func (t *turtle) markBeaconWithBadBallot(logger log.Log, ballot *types.Ballot) bool {
 	layerID := ballot.LayerIndex
 
 	// first check if we have it in the cache
@@ -519,7 +519,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	// so we will have to use different heuristic for switching into full mode.
 	// maybe the difference between counted and uncounted weight for a specific layer
 	t.keepVotes(ballots)
-	if t.isHealingEnabled() || t.mode == fullMode {
+	if t.canUseFullMode() || t.mode == fullMode {
 		if t.mode == verifyingMode {
 			logger.With().Info("switching to full self-healing tortoise",
 				lid,
@@ -591,7 +591,7 @@ func (t *turtle) processBallots(ctx *tcontext, lid types.LayerID, original []*ty
 			t.ballotLayer[ballot.ID()] = ballot.LayerIndex
 
 			// TODO(dshulyak) this should not fail without terminating tortoise
-			t.ballotHasGoodBeacon(ballot, t.logger)
+			t.markBeaconWithBadBallot(t.logger, ballot)
 
 			ballotsIDs = append(ballotsIDs, ballot.ID())
 
@@ -642,25 +642,25 @@ func (t *turtle) keepVotes(ballots []tortoiseBallot) {
 		if len(basevotes) == 0 {
 			t.logger.With().Warning("base votes are empty", ballot.id, log.Stringer("base_ballot", ballot.base))
 		}
-		for vote, sign := range basevotes {
-			votelid, exist := t.blockLayer[vote]
+		for block, sign := range basevotes {
+			votelid, exist := t.blockLayer[block]
 			if !exist || !votelid.After(t.evicted) {
 				continue
 			}
-			if _, exist := votes[vote]; !exist {
-				votes[vote] = sign
+			if _, exist := votes[block]; !exist {
+				votes[block] = sign
 			}
 		}
 		t.full.votes[ballot.id] = votes
 	}
 }
 
-// the idea here is to give enough room for verifying tortoise to complete. if verifying tortoise fails to verify
-// a layer within last hdist layers or within zdist + confidence param (whichever is larger) we switch to full vote counting.
+// the idea here is to give enough room for verifying tortoise to complete. during live tortoise execution this will be limited by the hdist.
+// during rerun we need to use another heuristic, as hdist is irrelevant by that time.
 //
 // verifying tortoise is a fastpath for full vote counting, that works if everyone is honest and have good synchrony.
-// as for the safety and livenesss both protocols are identical.
-func (t *turtle) isHealingEnabled() bool {
+// as for the safety and liveness both protocols are identical.
+func (t *turtle) canUseFullMode() bool {
 	lid := t.verified.Add(1)
 	return lid.Before(t.layerCutoff()) &&
 		t.last.Difference(lid) > t.Zdist &&
@@ -913,7 +913,7 @@ func computeBallotWeight(
 		for _, atxid := range ballot.EpochData.ActiveSet {
 			atx, err := atxdb.GetAtxHeader(atxid)
 			if err != nil {
-				return weightFromUint64(0), fmt.Errorf("atx %s in active set of %s is unknown", atxid, ballot.ID())
+				return weight{}, fmt.Errorf("atx %s in active set of %s is unknown", atxid, ballot.ID())
 			}
 			atxweight := atx.GetWeight()
 			total += atxweight
@@ -924,17 +924,17 @@ func computeBallotWeight(
 
 		expected, err := proposals.GetNumEligibleSlots(targetWeight, total, layerSize, layersPerEpoch)
 		if err != nil {
-			return weightFromUint64(0), fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
+			return weight{}, fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
 		}
 		rst := weightFromUint64(targetWeight)
 		return rst.div(weightFromUint64(uint64(expected))), nil
 	}
 	if ballot.RefBallot == types.EmptyBallotID {
-		return weightFromUint64(0), fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
+		return weight{}, fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
 	}
 	rst, exist := weights[ballot.RefBallot]
 	if !exist {
-		return rst, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
+		return weight{}, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
 	}
 	return rst, nil
 }
@@ -946,7 +946,7 @@ func computeEpochWeight(atxdb atxDataProvider, epochWeights map[types.EpochID]we
 	}
 	epochWeight, _, err := atxdb.GetEpochWeight(eid)
 	if err != nil {
-		return layerWeight, fmt.Errorf("epoch weight %s: %w", eid, err)
+		return weight{}, fmt.Errorf("epoch weight %s: %w", eid, err)
 	}
 	layerWeight = weightFromUint64(epochWeight)
 	layerWeight = layerWeight.div(weightFromUint64(uint64(types.GetLayersPerEpoch())))
