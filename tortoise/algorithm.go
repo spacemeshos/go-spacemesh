@@ -200,16 +200,9 @@ func (trtl *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.Lay
 		old = observed.Sub(1)
 	}
 	trtl.org.Iterate(ctx, layerID, func(lid types.LayerID) {
-		logger.Info("handling incoming layer",
-			log.FieldNamed("old_pbase", old),
-			log.FieldNamed("incoming_layer", lid))
 		if err := trtl.trtl.HandleIncomingLayer(ctx, lid); err != nil {
 			logger.Error("tortoise errored handling incoming layer", log.Err(err))
 		}
-		logger.Info("finished handling incoming layer",
-			log.FieldNamed("old_pbase", old),
-			log.FieldNamed("new_pbase", trtl.trtl.verified),
-			log.FieldNamed("incoming_layer", lid))
 	})
 
 	return old, trtl.trtl.verified, reverted

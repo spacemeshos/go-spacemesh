@@ -783,7 +783,7 @@ func TestMultiTortoise(t *testing.T) {
 	})
 
 	t.Run("unequal partition and rejoin", func(t *testing.T) {
-		const layerSize = 10
+		const layerSize = 11
 
 		mdb1 := getInMemMesh(t)
 		atxdb1 := getAtxDB()
@@ -808,8 +808,9 @@ func TestMultiTortoise(t *testing.T) {
 			blocksA = generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
 			blocksB = generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
 
-			// 90/10 split
+			// majority > 90
 			blocksA = blocksA[:layerSize-1]
+			// minority < 10
 			blocksB = blocksB[layerSize-1:]
 			return
 		}
@@ -873,7 +874,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		// these extra layers account for the time needed to generate enough votes to "catch up" and pass
 		// the threshold.
-		healingDistance := 12
+		healingDistance := 13
 
 		// after a while (we simulate the distance here), minority tortoise eventually begins producing more blocks
 		for i := 0; i < healingDistance; i++ {
@@ -1090,7 +1091,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		// after a while (we simulate the distance here), both nodes eventually begin producing more blocks
 		// in the case of a 50/50 split, this happens quickly
-		for i := uint32(0); i < 2; i++ {
+		for i := uint32(0); i < 3; i++ {
 			layerID = layerID.Add(1)
 
 			// these blocks will be nearly identical but they will have different base ballots, since the set of blocks
@@ -1252,7 +1253,7 @@ func TestMultiTortoise(t *testing.T) {
 		}
 
 		// after a while (we simulate the distance here), all nodes eventually begin producing more blocks
-		for i := uint32(0); i < 6; i++ {
+		for i := uint32(0); i < 7; i++ {
 			layerID = layerID.Add(1)
 
 			// these blocks will be nearly identical but they will have different base ballots, since the set of blocks

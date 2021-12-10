@@ -99,25 +99,22 @@ func (f *full) sumVotesForBlock(logger log.Log, blockID types.BlockID, startlid 
 // point in going further since we have no new information about any newer layers). Self-healing does not take into
 // consideration local opinion, it relies solely on global opinion.
 func (f *full) verifyLayers(logger log.Log) types.LayerID {
-	for lid := f.verified.Add(1); lid.Before(f.processed); lid = lid.Add(1) {
-		logger.Info("self healing attempting to verify candidate layer")
+	localThreshold := computeLocalThreshold(f.Config, f.epochWeight, f.processed)
 
-		// TODO(dshulyak) computation for expected weight should use last as an upper boundary
-		expected := computeExpectedWeight(f.epochWeight, lid, f.processed)
-		threshold := weightFromUint64(0)
-		threshold = threshold.add(expected)
-		threshold = threshold.fraction(f.GlobalThreshold)
-		// TODO(dshulyak) total threshold needs to include local threshold
+	for lid := f.verified.Add(1); lid.Before(f.processed); lid = lid.Add(1) {
+		// TODO(dshulyak) computation for threshold should use last as an upper boundary
+		threshold := computeGlobalThreshold(f.Config, f.epochWeight, lid, f.processed)
+		threshold = threshold.add(localThreshold)
 
 		layerLogger := logger.WithFields(
 			log.Named("target_layer", f.processed),
 			log.Named("candidate_layer", lid),
 			log.Named("last_layer", f.last),
-			log.Stringer("expected_weight", expected),
 			log.Stringer("threshold", threshold),
+			log.Stringer("local_threshold", localThreshold),
 		)
 
-		layerLogger.With().Info("expected voting weight at the layer")
+		logger.Info("verify candidate layer with full tortoise")
 
 		// record the contextual validity for all blocks in this layer
 		for _, blockID := range f.blocks[lid] {

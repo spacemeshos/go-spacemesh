@@ -22,7 +22,7 @@ type verifying struct {
 	goodBallots map[types.BallotID]struct{}
 	// weight of good ballots in the layer
 	layerWeights map[types.LayerID]weight
-	// total weight of good ballots from verified + 1 up to last
+	// total weight of good ballots from verified + 1 up to last processed
 	totalWeight weight
 }
 
@@ -44,15 +44,11 @@ func (v *verifying) processLayer(logger log.Log, lid types.LayerID, ballots []to
 }
 
 func (v *verifying) verifyLayers(logger log.Log) types.LayerID {
-	localThreshold := weightFromUint64(0)
-	// TODO(dshulyak) expected weight for local threshold should be based on last layer.
-	localThreshold = localThreshold.add(v.epochWeight[v.processed.GetEpoch()])
-	localThreshold = localThreshold.fraction(v.LocalThreshold)
+	localThreshold := computeLocalThreshold(v.Config, v.epochWeight, v.processed)
 
 	for lid := v.verified.Add(1); lid.Before(v.processed); lid = lid.Add(1) {
 		// TODO(dshulyak) expected weight must be based on the last layer.
-		threshold := computeExpectedWeight(v.epochWeight, lid, v.processed)
-		threshold = threshold.fraction(v.GlobalThreshold)
+		threshold := computeGlobalThreshold(v.Config, v.epochWeight, lid, v.processed)
 		threshold = threshold.add(localThreshold)
 
 		votingWeight := weightFromUint64(0)

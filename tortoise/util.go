@@ -1,9 +1,11 @@
 package tortoise
 
 import (
+	"fmt"
 	"math/big"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 const (
@@ -27,7 +29,7 @@ func (a sign) String() string {
 	}
 }
 
-// Opinion is opinions on other blocks.
+// Opinion is votes on blocks.
 type Opinion map[types.BlockID]sign
 
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
@@ -106,4 +108,24 @@ type tortoiseBallot struct {
 	id, base types.BallotID
 	votes    Opinion
 	weight   weight
+}
+
+func persistContextualValidity(logger log.Log,
+	bdp blockDataProvider,
+	from, to types.LayerID,
+	blocks map[types.LayerID][]types.BlockID,
+	opinion Opinion,
+) error {
+	for lid := from.Add(1); !lid.After(to); lid = lid.Add(1) {
+		for _, bid := range blocks[lid] {
+			sign := opinion[bid]
+			if sign == abstain {
+				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, bid)
+			}
+			if err := bdp.SaveContextualValidity(bid, lid, sign == support); err != nil {
+				return fmt.Errorf("saving validity for %s: %w", bid, err)
+			}
+		}
+	}
+	return nil
 }

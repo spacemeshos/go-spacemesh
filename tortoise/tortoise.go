@@ -9,7 +9,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
@@ -460,7 +459,7 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) err
 func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	logger := t.logger.WithContext(ctx).WithFields(lid)
 
-	logger.With().Info("processing layer")
+	logger.With().Info("adding layer to the state")
 
 	if err := t.updateLayerState(lid); err != nil {
 		return err
@@ -644,8 +643,7 @@ func (t *turtle) updateLocalOpinion(ctx *tcontext, from, to types.LayerID) error
 func (t *turtle) isHealingEnabled() bool {
 	lid := t.verified.Add(1)
 	return lid.Before(t.layerCutoff()) &&
-		t.last.Difference(lid) > t.Zdist &&
-		// unlike previous two parameters we count confidence interval from processed layer
+		// unlike previous parameter we count confidence interval from processed layer
 		// processed layer is significantly lower then the last layer during rerun.
 		// we need to wait some distance before switching from verifying to full during rerun
 		// as previous two parameters will be always true even if single layer is not verified.
@@ -712,90 +710,6 @@ func (t *turtle) addLocalOpinion(ctx *tcontext, lid types.LayerID, opinion Opini
 	// and need to switch to full tortoise
 	for _, bid := range bids {
 		opinion[bid] = abstain
-	}
-	return nil
-}
-
-// computeBallotWeight compute and assign ballot weight to the weights map.
-func computeBallotWeight(
-	atxdb atxDataProvider,
-	weights map[types.BallotID]weight,
-	ballot *types.Ballot,
-	layerSize,
-	layersPerEpoch uint32,
-) (weight, error) {
-	if ballot.EpochData != nil {
-		var total, targetWeight uint64
-
-		for _, atxid := range ballot.EpochData.ActiveSet {
-			atx, err := atxdb.GetAtxHeader(atxid)
-			if err != nil {
-				return weightFromUint64(0), fmt.Errorf("atx %s in active set of %s is unknown", atxid, ballot.ID())
-			}
-			atxweight := atx.GetWeight()
-			total += atxweight
-			if atxid == ballot.AtxID {
-				targetWeight = atxweight
-			}
-		}
-
-		expected, err := proposals.GetNumEligibleSlots(targetWeight, total, layerSize, layersPerEpoch)
-		if err != nil {
-			return weightFromUint64(0), fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
-		}
-		rst := weightFromUint64(targetWeight)
-		return rst.div(weightFromUint64(uint64(expected))), nil
-	}
-	if ballot.RefBallot == types.EmptyBallotID {
-		return weightFromUint64(0), fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
-	}
-	rst, exist := weights[ballot.RefBallot]
-	if !exist {
-		return rst, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
-	}
-	return rst, nil
-}
-
-func computeEpochWeight(atxdb atxDataProvider, epochWeights map[types.EpochID]weight, eid types.EpochID) (weight, error) {
-	layerWeight, exist := epochWeights[eid]
-	if exist {
-		return layerWeight, nil
-	}
-	epochWeight, _, err := atxdb.GetEpochWeight(eid)
-	if err != nil {
-		return layerWeight, fmt.Errorf("epoch weight %s: %w", eid, err)
-	}
-	layerWeight = weightFromUint64(epochWeight)
-	layerWeight = layerWeight.div(weightFromUint64(uint64(types.GetLayersPerEpoch())))
-	epochWeights[eid] = layerWeight
-	return layerWeight, nil
-}
-
-// computes weight for (from, to] layers.
-func computeExpectedWeight(weights map[types.EpochID]weight, from, to types.LayerID) weight {
-	total := weightFromUint64(0)
-	for lid := from.Add(1); !lid.After(to); lid = lid.Add(1) {
-		total = total.add(weights[lid.GetEpoch()])
-	}
-	return total
-}
-
-func persistContextualValidity(logger log.Log,
-	bdp blockDataProvider,
-	from, to types.LayerID,
-	blocks map[types.LayerID][]types.BlockID,
-	opinion Opinion,
-) error {
-	for lid := from.Add(1); !lid.After(to); lid = lid.Add(1) {
-		for _, bid := range blocks[lid] {
-			sign := opinion[bid]
-			if sign == abstain {
-				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, bid)
-			}
-			if err := bdp.SaveContextualValidity(bid, lid, sign == support); err != nil {
-				return fmt.Errorf("saving validity for %s: %w", bid, err)
-			}
-		}
 	}
 	return nil
 }
