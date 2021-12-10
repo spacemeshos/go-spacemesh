@@ -926,6 +926,9 @@ func computeBallotWeight(
 		if err != nil {
 			return weight{}, fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
 		}
+		if expected == 0 {
+			return weight{}, fmt.Errorf("bug: proposals.GetNumEligibleSlots should not return 0 expected ballots")
+		}
 		rst := weightFromUint64(targetWeight)
 		return rst.div(weightFromUint64(uint64(expected))), nil
 	}
