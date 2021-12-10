@@ -32,12 +32,6 @@ func (f *full) processBallots(ballots []tortoiseBallot) {
 }
 
 func (f *full) getVote(logger log.Log, ballot types.BallotID, block types.BlockID) sign {
-	bidlayer := f.blockLayer[block]
-	ballotlayer := f.ballotLayer[ballot]
-	if !bidlayer.Before(ballotlayer) {
-		return against
-	}
-
 	sign, exist := f.votes[ballot][block]
 	if !exist {
 		base, exist := f.base[ballot]
