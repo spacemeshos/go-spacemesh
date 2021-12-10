@@ -17,9 +17,10 @@ import (
 
 // Config for protocol parameters.
 type Config struct {
-	Hdist           uint32        `mapstructure:"tortoise-hdist"`            // hare/input vector lookback distance
-	Zdist           uint32        `mapstructure:"tortoise-zdist"`            // hare result wait distance
-	ConfidenceParam uint32        `mapstructure:"tortoise-confidence-param"` // layers to wait for global consensus
+	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare/input vector lookback distance
+	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
+	// how long we are waiting for a switch from verifying to full. relevant during rerun.
+	ConfidenceParam uint32        `mapstructure:"tortoise-confidence-param"`
 	WindowSize      uint32        `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
 	GlobalThreshold *big.Rat      `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
 	LocalThreshold  *big.Rat      `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
@@ -29,6 +30,7 @@ type Config struct {
 	LayerSize                uint32
 	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
 	MeshProcessed            types.LayerID
+	MeshVerified             types.LayerID
 }
 
 // DefaultConfig for Tortoise.
@@ -37,7 +39,7 @@ func DefaultConfig() Config {
 		LayerSize:                30,
 		Hdist:                    10,
 		Zdist:                    8,
-		ConfidenceParam:          2,
+		ConfidenceParam:          5,
 		WindowSize:               100,
 		GlobalThreshold:          big.NewRat(60, 100),
 		LocalThreshold:           big.NewRat(20, 100),
@@ -62,7 +64,7 @@ type Tortoise struct {
 		err error
 	}
 
-	mu  sync.RWMutex
+	mu  sync.Mutex
 	org *organizer.Organizer
 
 	// update will be set to non-nil after rerun completes, and must be set to nil once
@@ -128,12 +130,15 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 	)
 	t.trtl.init(t.ctx, mesh.GenesisLayer())
 	if needsRecovery {
-		t.trtl.Processed = t.cfg.MeshProcessed
+		t.trtl.processed = t.cfg.MeshProcessed
 		// TODO(dshulyak) last should be set according to the clock.
-		t.trtl.Last = t.cfg.MeshProcessed
+		t.trtl.last = t.cfg.MeshProcessed
+		t.trtl.verified = t.cfg.MeshVerified
+		t.trtl.historicallyVerified = t.cfg.MeshVerified
 
 		t.logger.Info("loading state from disk. make sure to wait until tortoise is ready",
 			log.Stringer("last_layer", t.cfg.MeshProcessed),
+			log.Stringer("historically_verified", t.cfg.MeshVerified),
 		)
 		t.eg.Go(func() error {
 			t.ready <- t.rerun(ctx)
@@ -147,12 +152,13 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 
 	t.org = organizer.New(
 		organizer.WithLogger(t.logger),
-		organizer.WithLastLayer(t.trtl.Processed),
+		organizer.WithLastLayer(t.trtl.processed),
 	)
 
 	// TODO(dshulyak) with low rerun interval it is possible to start a rerun
 	// when initial sync is in progress, or right after sync
 	if t.cfg.RerunInterval != 0 {
+		t.logger.With().Info("launching rerun loop", log.Duration("interval", t.cfg.RerunInterval))
 		t.eg.Go(func() error {
 			t.rerunLoop(ctx, t.cfg.RerunInterval)
 			return nil
@@ -163,15 +169,15 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 
 // LatestComplete returns the latest verified layer.
 func (trtl *Tortoise) LatestComplete() types.LayerID {
-	trtl.mu.RLock()
-	defer trtl.mu.RUnlock()
-	return trtl.trtl.Verified
+	trtl.mu.Lock()
+	defer trtl.mu.Unlock()
+	return trtl.trtl.verified
 }
 
 // BaseBallot chooses a base ballot and creates a differences list. needs the hare results for latest layers.
 func (trtl *Tortoise) BaseBallot(ctx context.Context) (types.BallotID, [][]types.BlockID, error) {
-	trtl.mu.RLock()
-	defer trtl.mu.RUnlock()
+	trtl.mu.Lock()
+	defer trtl.mu.Unlock()
 	return trtl.trtl.BaseBallot(ctx)
 }
 
@@ -182,7 +188,7 @@ func (trtl *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.Lay
 	defer trtl.mu.Unlock()
 
 	var (
-		old    = trtl.trtl.Verified
+		old    = trtl.trtl.verified
 		logger = trtl.logger.WithContext(ctx).With()
 	)
 
@@ -202,11 +208,11 @@ func (trtl *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.Lay
 		}
 		logger.Info("finished handling incoming layer",
 			log.FieldNamed("old_pbase", old),
-			log.FieldNamed("new_pbase", trtl.trtl.Verified),
+			log.FieldNamed("new_pbase", trtl.trtl.verified),
 			log.FieldNamed("incoming_layer", lid))
 	})
 
-	return old, trtl.trtl.Verified, reverted
+	return old, trtl.trtl.verified, reverted
 }
 
 // WaitReady waits until state will be reloaded from disk.

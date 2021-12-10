@@ -28,6 +28,7 @@ func TestRecoverState(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 
+	cfg.MeshVerified = verified
 	cfg.MeshProcessed = last
 	tortoise2 := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
 	initctx, cancel := context.WithTimeout(ctx, time.Second)
@@ -37,5 +38,15 @@ func TestRecoverState(t *testing.T) {
 		require.NoError(t, tortoise2.WaitReady(initctx))
 	}
 	_, verified, _ = tortoise2.HandleIncomingLayer(ctx, last)
+	require.Equal(t, last.Sub(1), verified)
+
+	cfg.MeshVerified = last.Sub(1)
+	cfg.MeshProcessed = last
+	tortoise3 := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	initctx, cancel = context.WithTimeout(ctx, time.Second)
+	defer cancel()
+	require.NoError(t, tortoise3.WaitReady(initctx))
+	old, verified, _ := tortoise2.HandleIncomingLayer(ctx, last)
+	require.Equal(t, cfg.MeshVerified, old)
 	require.Equal(t, last.Sub(1), verified)
 }
