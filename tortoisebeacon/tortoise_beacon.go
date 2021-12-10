@@ -98,8 +98,8 @@ func New(
 		weakCoin:                weakCoin,
 		db:                      db,
 		clock:                   clock,
-		beacons:                 make(map[types.EpochID]types.Hash32),
-		beaconsFromBlocks:       make(map[types.EpochID]map[string]*epochBeacon),
+		beacons:                 make(map[types.EpochID]types.Beacon),
+		beaconsFromBlocks:       make(map[types.EpochID]map[types.Beacon]*epochBeacon),
 		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, conf.RoundsNumber),
 		firstRoundIncomingVotes: make(map[string]proposals),
@@ -142,11 +142,11 @@ type TortoiseBeacon struct {
 
 	// beacons store calculated beacons as the result of the tortoise beacon protocol.
 	// the map key is the epoch when beacon is calculated. the beacon is used in the following epoch
-	beacons map[types.EpochID]types.Hash32
+	beacons map[types.EpochID]types.Beacon
 	// beaconsFromBlocks store beacons collected from blocks.
 	// the map key is the epoch when the block is published. the beacon value is calculated in the
 	// previous epoch and used in the current epoch
-	beaconsFromBlocks map[types.EpochID]map[string]*epochBeacon
+	beaconsFromBlocks map[types.EpochID]map[types.Beacon]*epochBeacon
 
 	// TODO(nkryuchkov): have a mixed list of all sorted proposals
 	// have one bit vector: valid proposals
@@ -228,7 +228,7 @@ func (tb *TortoiseBeacon) isClosed() bool {
 }
 
 // ReportBeaconFromBlock reports the beacon value in a block along with the miner's weight unit.
-func (tb *TortoiseBeacon) ReportBeaconFromBlock(epoch types.EpochID, blockID types.BlockID, beacon []byte, weight uint64) {
+func (tb *TortoiseBeacon) ReportBeaconFromBlock(epoch types.EpochID, blockID types.BlockID, beacon types.Beacon, weight uint64) {
 	tb.recordBlockBeacon(epoch, blockID, beacon, weight)
 
 	if _, err := tb.GetBeacon(epoch); err == nil {
@@ -236,29 +236,28 @@ func (tb *TortoiseBeacon) ReportBeaconFromBlock(epoch types.EpochID, blockID typ
 		return
 	}
 
-	if epochBeacon := tb.findMostWeightedBeaconForEpoch(epoch); epochBeacon != nil {
-		tb.setBeacon(epoch-1, types.BytesToHash(epochBeacon))
+	if epochBeacon := tb.findMostWeightedBeaconForEpoch(epoch); epochBeacon != types.EmptyBeacon {
+		tb.setBeacon(epoch-1, epochBeacon)
 	}
 }
 
 // ReportBeaconFromBallot reports the beacon value in a ballot along with the smesher's weight unit.
-func (tb *TortoiseBeacon) ReportBeaconFromBallot(types.EpochID, types.BallotID, []byte, uint64) {
+func (tb *TortoiseBeacon) ReportBeaconFromBallot(types.EpochID, types.BallotID, types.Beacon, uint64) {
 	// TODO: implement me
 }
 
-func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types.BlockID, beacon []byte, weight uint64) {
-	beaconStr := types.BytesToHash(beacon).ShortString()
+func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types.BlockID, beacon types.Beacon, weight uint64) {
+	beaconStr := beacon.ShortString()
 
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
 	if _, ok := tb.beaconsFromBlocks[epochID]; !ok {
-		tb.beaconsFromBlocks[epochID] = make(map[string]*epochBeacon)
+		tb.beaconsFromBlocks[epochID] = make(map[types.Beacon]*epochBeacon)
 	}
-	key := string(beacon)
-	entry, ok := tb.beaconsFromBlocks[epochID][key]
+	entry, ok := tb.beaconsFromBlocks[epochID][beacon]
 	if !ok {
-		tb.beaconsFromBlocks[epochID][key] = &epochBeacon{
+		tb.beaconsFromBlocks[epochID][beacon] = &epochBeacon{
 			weight: weight,
 			blocks: map[types.BlockID]struct{}{blockID: {}},
 		}
@@ -285,19 +284,19 @@ func (tb *TortoiseBeacon) recordBlockBeacon(epochID types.EpochID, blockID types
 		log.Uint64("weight", weight))
 }
 
-func (tb *TortoiseBeacon) findMostWeightedBeaconForEpoch(epoch types.EpochID) []byte {
+func (tb *TortoiseBeacon) findMostWeightedBeaconForEpoch(epoch types.EpochID) types.Beacon {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 	epochBeacons, ok := tb.beaconsFromBlocks[epoch]
 	if !ok {
-		return nil
+		return types.EmptyBeacon
 	}
 	var mostWeight uint64
-	var beacon []byte
+	var beacon types.Beacon
 	numBlocks := 0
 	for k, v := range epochBeacons {
 		if v.weight > mostWeight {
-			beacon = []byte(k)
+			beacon = k
 			mostWeight = v.weight
 		}
 		numBlocks += len(v.blocks)
@@ -307,29 +306,29 @@ func (tb *TortoiseBeacon) findMostWeightedBeaconForEpoch(epoch types.EpochID) []
 
 	if uint32(numBlocks) < tb.config.BeaconSyncNumBlocks {
 		logger.Debug("not enough blocks to determine beacon")
-		return nil
+		return types.EmptyBeacon
 	}
 
 	logger.With().Info("beacon determined for epoch",
-		log.String("beacon", types.BytesToHash(beacon).ShortString()),
+		log.String("beacon", beacon.ShortString()),
 		log.Uint64("weight", mostWeight))
 	return beacon
 }
 
-// GetBeacon returns a Tortoise Beacon value as []byte for a certain epoch or an error if it doesn't exist.
+// GetBeacon returns a Tortoise Beacon value as types.Beacon for a certain epoch or an error if it doesn't exist.
 // TODO(nkryuchkov): consider not using (using DB instead).
-func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
+func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) (types.Beacon, error) {
 	if epochID == 0 {
-		return nil, ErrZeroEpoch
+		return types.EmptyBeacon, ErrZeroEpoch
 	}
 
 	beaconEpoch := epochID - 1
-	if beaconEpoch.IsGenesis() {
-		return types.HexToHash32(genesisBeacon).Bytes(), nil
-	}
-
+	//if beaconEpoch.IsGenesis() {
+	//	return types.HexToBeacon(genesisBeacon), nil
+	//}
+	//
 	beacon := tb.getBeacon(beaconEpoch)
-	if beacon != nil {
+	if beacon != types.EmptyBeacon {
 		return beacon, nil
 	}
 
@@ -342,25 +341,25 @@ func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) ([]byte, error) {
 		tb.logger.With().Warning("beacon not available",
 			epochID,
 			log.Uint32("beacon_epoch", uint32(beaconEpoch)))
-		return nil, ErrBeaconNotCalculated
+		return types.EmptyBeacon, ErrBeaconNotCalculated
 	}
 	tb.logger.With().Error("failed to get beacon from db",
 		epochID,
 		log.Uint32("beacon_epoch", uint32(beaconEpoch)),
 		log.Err(err))
-	return nil, fmt.Errorf("get beacon from DB: %w", err)
+	return types.EmptyBeacon, fmt.Errorf("get beacon from DB: %w", err)
 }
 
-func (tb *TortoiseBeacon) getBeacon(epoch types.EpochID) []byte {
+func (tb *TortoiseBeacon) getBeacon(epoch types.EpochID) types.Beacon {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 	if beacon, ok := tb.beacons[epoch]; ok {
-		return beacon.Bytes()
+		return beacon
 	}
-	return nil
+	return types.EmptyBeacon
 }
 
-func (tb *TortoiseBeacon) setBeacon(epoch types.EpochID, beacon types.Hash32) error {
+func (tb *TortoiseBeacon) setBeacon(epoch types.EpochID, beacon types.Beacon) error {
 	if err := tb.persistBeacon(epoch, beacon); err != nil {
 		return err
 	}
@@ -370,7 +369,7 @@ func (tb *TortoiseBeacon) setBeacon(epoch types.EpochID, beacon types.Hash32) er
 	return nil
 }
 
-func (tb *TortoiseBeacon) persistBeacon(epoch types.EpochID, beacon types.Hash32) error {
+func (tb *TortoiseBeacon) persistBeacon(epoch types.EpochID, beacon types.Beacon) error {
 	if err := tb.db.Put(epoch.ToBytes(), beacon.Bytes()); err != nil {
 		tb.logger.With().Error("failed to persist beacon",
 			epoch,
@@ -381,20 +380,20 @@ func (tb *TortoiseBeacon) persistBeacon(epoch types.EpochID, beacon types.Hash32
 	return nil
 }
 
-func (tb *TortoiseBeacon) getPersistedBeacon(epoch types.EpochID) ([]byte, error) {
-	beacon, err := tb.db.Get(epoch.ToBytes())
+func (tb *TortoiseBeacon) getPersistedBeacon(epoch types.EpochID) (types.Beacon, error) {
+	data, err := tb.db.Get(epoch.ToBytes())
 	if err != nil {
-		return beacon, fmt.Errorf("get from DB: %w", err)
+		return types.EmptyBeacon, fmt.Errorf("get from DB: %w", err)
 	}
 
-	return beacon, nil
+	return types.BytesToBeacon(data), nil
 }
 
 func (tb *TortoiseBeacon) initGenesisBeacons() {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 	for epoch := types.EpochID(0); epoch.IsGenesis(); epoch++ {
-		genesis := types.HexToHash32(genesisBeacon)
+		genesis := types.HexToBeacon(genesisBeacon)
 		tb.beacons[epoch] = genesis
 	}
 }
@@ -1018,7 +1017,7 @@ func (tb *TortoiseBeacon) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 		for beacon, stats := range beacons {
 			stat := &metrics.BeaconStats{
 				Epoch:  epoch,
-				Beacon: types.BytesToHash([]byte(beacon)).ShortString(),
+				Beacon: beacon.ShortString(),
 				Count:  uint64(len(stats.blocks)),
 				Weight: stats.weight,
 			}

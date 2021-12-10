@@ -35,7 +35,7 @@ func (m *MockbeaconCollector) EXPECT() *MockbeaconCollectorMockRecorder {
 }
 
 // ReportBeaconFromBlock mocks base method.
-func (m *MockbeaconCollector) ReportBeaconFromBlock(arg0 types.EpochID, arg1 types.BlockID, arg2 []byte, arg3 uint64) {
+func (m *MockbeaconCollector) ReportBeaconFromBlock(arg0 types.EpochID, arg1 types.BlockID, arg2 types.Beacon, arg3 uint64) {
 	m.ctrl.T.Helper()
 	m.ctrl.Call(m, "ReportBeaconFromBlock", arg0, arg1, arg2, arg3)
 }

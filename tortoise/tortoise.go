@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -401,17 +400,17 @@ func (t *turtle) markBeaconWithBadBallot(logger log.Log, ballot *types.Ballot) b
 	if err != nil {
 		return false
 	}
-	good := bytes.Equal(beacon, epochBeacon)
+	good := beacon == epochBeacon
 	if !good {
 		logger.With().Warning("ballot has different beacon",
-			log.String("ballot_beacon", types.BytesToHash(beacon).ShortString()),
-			log.String("epoch_beacon", types.BytesToHash(epochBeacon).ShortString()))
+			log.String("ballot_beacon", beacon.ShortString()),
+			log.String("epoch_beacon", epochBeacon.ShortString()))
 		t.badBeaconBallots[ballot.ID()] = struct{}{}
 	}
 	return good
 }
 
-func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) ([]byte, error) {
+func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Beacon, error) {
 	refBallotID := ballot.ID()
 	if ballot.RefBallot != types.EmptyBallotID {
 		refBallotID = ballot.RefBallot
@@ -424,10 +423,10 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) ([]byte, 
 			return beacon, nil
 		}
 	} else {
-		t.refBallotBeacons[epoch] = make(map[types.BallotID][]byte)
+		t.refBallotBeacons[epoch] = make(map[types.BallotID]types.Beacon)
 	}
 
-	var beacon []byte
+	var beacon types.Beacon
 	if ballot.EpochData != nil {
 		beacon = ballot.EpochData.Beacon
 	} else if ballot.RefBallot == types.EmptyBallotID {
@@ -437,7 +436,7 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) ([]byte, 
 		if err != nil {
 			logger.With().Error("failed to find ref ballot",
 				log.String("ref_ballot_id", refBallotID.String()))
-			return nil, fmt.Errorf("get ref ballot: %w", err)
+			return types.EmptyBeacon, fmt.Errorf("get ref ballot: %w", err)
 		}
 		beacon = refBlock.TortoiseBeacon
 	}

@@ -62,7 +62,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	}
 
 	beacon := refBallot.EpochData.Beacon
-	if beacon == nil {
+	if beacon == types.EmptyBeacon {
 		return false, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, refBallot.ID())
 	}
 
@@ -104,7 +104,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	}
 	vrfSig := ballot.EligibilityProof.Sig
 
-	beaconStr := types.BytesToHash(beacon).ShortString()
+	beaconStr := beacon.ShortString()
 	if !signing.VRFVerify(vrfPubkey, message, vrfSig) {
 		return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
 			errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
@@ -123,7 +123,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		log.String("beacon", beaconStr),
 		log.Uint32("counter", counter))
 
-	v.beacons.ReportBeaconFromBallot(epoch, ballot.ID(), types.BytesToBeacon(beacon), weight)
+	v.beacons.ReportBeaconFromBallot(epoch, ballot.ID(), beacon, weight)
 	return true, nil
 }
 

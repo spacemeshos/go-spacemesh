@@ -185,10 +185,10 @@ func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, natxs, blo
 }
 
 func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
-	return makeLayerWithBeacon(t, layerID, trtl, nil, natxs, blocksPerLayer, atxdb, msh, inputVectorFn)
+	return makeLayerWithBeacon(t, layerID, trtl, types.EmptyBeacon, natxs, blocksPerLayer, atxdb, msh, inputVectorFn)
 }
 
-func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beacon []byte, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
+func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beacon types.Beacon, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
 	if inputVectorFn != nil {
 		oldInputVectorFn := msh.GetInputVectorBackupFunc()
 		defer func() {
@@ -575,7 +575,7 @@ func mockedBeacons(tb testing.TB) system.BeaconGetter {
 
 	ctrl := gomock.NewController(tb)
 	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
-	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, nil).AnyTimes()
 	return mockBeacons
 }
 
@@ -1805,17 +1805,9 @@ func BenchmarkTortoiseBaseBallotSelection(b *testing.B) {
 	}
 }
 
-func randomBytes(tb testing.TB, size int) []byte {
+func randomBlock(tb testing.TB, lyrID types.LayerID, beacon types.Beacon, refBlockID *types.BlockID) *types.Block {
 	tb.Helper()
-	data := make([]byte, size)
-	_, err := rand.Read(data)
-	require.NoError(tb, err)
-	return data
-}
-
-func randomBlock(tb testing.TB, lyrID types.LayerID, beacon []byte, refBlockID *types.BlockID) *types.Block {
-	tb.Helper()
-	block := types.NewExistingBlock(lyrID, randomBytes(tb, 4), nil)
+	block := types.NewExistingBlock(lyrID, types.RandomBytes(4), nil)
 	block.TortoiseBeacon = beacon
 	block.RefBlock = refBlockID
 	return block
@@ -1826,7 +1818,7 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 	defer ctrl.Finish()
 
 	layerID := types.GetEffectiveGenesis().Add(1)
-	epochBeacon := randomBytes(t, 32)
+	epochBeacon := types.RandomBeacon()
 	ballot := randomBlock(t, layerID, epochBeacon, nil).ToBallot()
 
 	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
@@ -1839,7 +1831,7 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 	assert.True(t, trtl.markBeaconWithBadBallot(logger, ballot))
 
 	// bad beacon
-	beacon := randomBytes(t, 32)
+	beacon := types.RandomBeacon()
 	require.NotEqual(t, epochBeacon, beacon)
 	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(beacon, nil).Times(1)
 	assert.False(t, trtl.markBeaconWithBadBallot(logger, ballot))
@@ -1853,10 +1845,10 @@ func TestGetBallotBeacon(t *testing.T) {
 	defer ctrl.Finish()
 
 	layerID := types.GetEffectiveGenesis().Add(1)
-	beacon := randomBytes(t, 32)
+	beacon := types.RandomBeacon()
 	refBlock := randomBlock(t, layerID, beacon, nil)
 	refBlockID := refBlock.ID()
-	ballot := randomBlock(t, layerID, nil, &refBlockID).ToBallot()
+	ballot := randomBlock(t, layerID, types.EmptyBeacon, &refBlockID).ToBallot()
 
 	mockBdp := mocks.NewMockblockDataProvider(ctrl)
 	trtl := defaultTurtle(t)
@@ -1879,9 +1871,9 @@ func TestBallotFilterForHealing(t *testing.T) {
 	defer ctrl.Finish()
 
 	layerID := types.GetEffectiveGenesis().Add(100)
-	epochBeacon := randomBytes(t, 32)
+	epochBeacon := types.RandomBeacon()
 	goodBallot := randomBlock(t, layerID, epochBeacon, nil).ToBallot()
-	badBeacon := randomBytes(t, 32)
+	badBeacon := types.RandomBeacon()
 	require.NotEqual(t, epochBeacon, badBeacon)
 	badBallot := randomBlock(t, layerID, badBeacon, nil).ToBallot()
 

@@ -19,7 +19,7 @@ const (
 	atxpath  = "atx"
 )
 
-func newAtxDB(logger log.Log, mdb *mesh.DB, conf config) *activation.DB {
+func newAtxDB(logger log.Log, conf config) *activation.DB {
 	var (
 		db  database.Database
 		err error
@@ -56,24 +56,24 @@ func intInRange(rng *rand.Rand, ints [2]int) int {
 var _ system.BeaconGetter = (*beaconStore)(nil)
 
 func newBeaconStore() *beaconStore {
-	return &beaconStore{beacons: map[types.EpochID][]byte{}}
+	return &beaconStore{beacons: map[types.EpochID]types.Beacon{}}
 }
 
 // TODO(dshulyak) replaced it with real beacon store so that we can enable persistence
 // for benchmarks.
 type beaconStore struct {
-	beacons map[types.EpochID][]byte
+	beacons map[types.EpochID]types.Beacon
 }
 
-func (b *beaconStore) GetBeacon(eid types.EpochID) ([]byte, error) {
+func (b *beaconStore) GetBeacon(eid types.EpochID) (types.Beacon, error) {
 	beacon, exist := b.beacons[eid-1]
 	if !exist {
-		return nil, database.ErrNotFound
+		return types.EmptyBeacon, database.ErrNotFound
 	}
 	return beacon, nil
 }
 
-func (b *beaconStore) StoreBeacon(eid types.EpochID, beacon []byte) {
+func (b *beaconStore) StoreBeacon(eid types.EpochID, beacon types.Beacon) {
 	b.beacons[eid] = beacon
 }
 
