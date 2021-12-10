@@ -82,9 +82,7 @@ func mockLayerBallots(tb testing.TB, to *testOracle, layer types.LayerID, beacon
 }
 
 func beaconWithValOne() types.Beacon {
-	beacon := types.RandomBytes(types.BeaconSize)
-	copy(beacon, []byte{1, 0, 0, 0})
-	return types.BytesToBeacon(beacon)
+	return types.Beacon{1}
 }
 
 func createMapWithSize(n int) map[string]uint64 {
