@@ -265,13 +265,21 @@ func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, ballotID t
 	consistent := t.last
 
 	for lid := t.evicted.Add(1); lid.Before(blid); lid = lid.Add(1) {
-		locals, err := t.getLocalOpinion(ctx, lid)
+		localOpinion, err := t.getLocalOpinion(ctx, lid)
 		if err != nil {
 			return types.LayerID{}, err
 		}
-		for on, local := range locals {
-			opinion := t.full.getVote(t.logger, ballotID, on)
-			if local != opinion {
+		for block, local := range localOpinion {
+			vote := t.full.getVote(t.logger, ballotID, block)
+			if local != vote {
+				t.logger.With().Debug("found disagreement on a block",
+					ballotID,
+					block,
+					log.Stringer("block_layer", lid),
+					log.Stringer("ballot_layer", blid),
+					log.Stringer("local_opinion", local),
+					log.Stringer("vote", vote),
+				)
 				return lid, nil
 			}
 		}
@@ -290,7 +298,10 @@ func (t *turtle) calculateExceptions(
 	startlid types.LayerID,
 	getter opinionsGetter,
 ) ([]map[types.BlockID]struct{}, error) {
-	logger := t.logger.WithContext(ctx).WithFields(log.Named("base_ballot_layer_id", baselid))
+	logger := t.logger.WithContext(ctx).WithFields(
+		log.Stringer("base_layer", baselid),
+		log.Stringer("voting_layer", votinglid),
+	)
 
 	againstDiff := make(map[types.BlockID]struct{})
 	forDiff := make(map[types.BlockID]struct{})
@@ -306,8 +317,7 @@ func (t *turtle) calculateExceptions(
 	localThreshold = localThreshold.fraction(t.LocalThreshold)
 
 	for lid := startlid; !lid.After(t.processed); lid = lid.Add(1) {
-		logger := logger.WithFields(log.Named("diff_layer_id", lid))
-		logger.Debug("checking input vector diffs")
+		logger := logger.WithFields(log.Named("block_layer", lid))
 
 		local, err := t.getLocalOpinion(ctx, lid)
 		if err != nil {
@@ -315,27 +325,30 @@ func (t *turtle) calculateExceptions(
 		}
 
 		// helper function for adding diffs
-		addDiffs := func(logger log.Log, bid types.BlockID, voteVec sign, diffMap map[types.BlockID]struct{}) {
+		encodeVotes := func(logger log.Log, bid types.BlockID, voteVec sign, diffMap map[types.BlockID]struct{}) {
 			v := getter(bid)
+			needsException := voteVec != v
 
-			if voteVec != v {
-				logger.With().Debug("added vote diff", log.Stringer("opinion", v))
-				if lid.Before(baselid) {
-					logger.With().Warning("added exception before base ballot layer, this ballot will not be marked good")
-				}
+			logger.With().Debug("encoding vote using local opinion",
+				log.Stringer("base_vote", v),
+				log.Bool("vote_before_base", lid.Before(baselid)),
+				log.Bool("needs_exception", needsException),
+			)
+
+			if needsException {
 				diffMap[bid] = struct{}{}
 			}
 		}
 
 		for bid, opinion := range local {
+			source := "validity/hare"
 			usecoinflip := opinion == abstain && lid.Before(t.layerCutoff())
 			if usecoinflip {
-				sum, err := t.full.sumVotesForBlock(logger, bid, lid.Add(1))
-				if err != nil {
-					return nil, err
-				}
+				sum := t.full.weights[bid]
 				opinion = sum.cmp(localThreshold)
+				source = "local threshold"
 				if opinion == abstain {
+					source = "coinflip"
 					coin, exist := t.bdp.GetCoinflip(ctx, votinglid)
 					if !exist {
 						return nil, fmt.Errorf("coinflip is not recorded in %s", votinglid)
@@ -348,25 +361,25 @@ func (t *turtle) calculateExceptions(
 				}
 			}
 			logger := logger.WithFields(
-				log.Bool("use_coinflip", usecoinflip),
-				log.Named("diff_block", bid),
-				log.String("diff_class", opinion.String()),
+				log.Stringer("block", bid),
+				log.String("local_opinion_source", source),
+				log.String("local_opinion", opinion.String()),
 			)
 			switch opinion {
 			case support:
 				// add exceptions for blocks that base ballot doesn't support
-				addDiffs(logger, bid, support, forDiff)
+				encodeVotes(logger, bid, support, forDiff)
 			case abstain:
 				// NOTE special case, we can abstain on whole layer not on individual block
 				// and only within hdist from last layer. before hdist opinion is always cast
 				// accordingly to weakcoin
-				addDiffs(logger, bid, abstain, neutralDiff)
+				encodeVotes(logger, bid, abstain, neutralDiff)
 			case against:
 				// add exceptions for blocks that base ballot supports
 				//
 				// we don't save the ballot unless all the dependencies are saved.
 				// condition where ballot has a vote that is not in our local view is impossible.
-				addDiffs(logger, bid, against, againstDiff)
+				encodeVotes(logger, bid, against, againstDiff)
 			}
 		}
 	}
@@ -481,6 +494,9 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		return err
 	}
 
+	t.full.processBallots(ballots)
+	t.full.processBlocks(blocks)
+
 	if t.mode == verifyingMode {
 		// local opinion may change within hdist. this solution might be a bottleneck during rerun
 		// reconsider while working on https://github.com/spacemeshos/go-spacemesh/issues/2980
@@ -507,15 +523,15 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			return nil
 		}
 	}
-	// keep votes starting from the layer when verifying tortoise failed to make progress
+
+	// count votes starting from the layer when verifying tortoise failed to make progress
 	// for example, if verifying failed while counting ballots from layer 13 we will
 	// most likely have to use those ballots later in full mode.
-	//
-	// this may change for rerun https://github.com/spacemeshos/go-spacemesh/issues/2980,
+	t.full.countVotes(logger, lid)
+	// condition to switch may change for rerun https://github.com/spacemeshos/go-spacemesh/issues/2980,
 	// verified layer will be expected to be stuck as the expected weight will be high.
 	// so we will have to use different heuristic for switching into full mode.
 	// maybe the difference between counted and uncounted weight for a specific layer
-	t.full.processBallots(ballots)
 	if t.canUseFullMode() || t.mode == fullMode {
 		if t.mode == verifyingMode {
 			logger.With().Info("switching to full self-healing tortoise",
@@ -525,7 +541,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			t.mode = fullMode
 		}
 		previous := t.verified
-		t.verified = t.full.verifyLayers(logger)
+		t.verified = t.full.verify(logger)
 
 		t.updateHistoricallyVerified()
 		if t.verified.After(previous) {
@@ -551,7 +567,7 @@ func (t *turtle) updateLayerState(lid types.LayerID) error {
 	if err != nil {
 		return err
 	}
-	t.logger.With().Info("computed weight for a layer in the epoch", epochID, log.Stringer("weight", layerWeight))
+	t.logger.With().Info("computed weight for layers in an epoch", epochID, log.Stringer("weight", layerWeight))
 	return nil
 }
 

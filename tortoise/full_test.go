@@ -70,7 +70,7 @@ func TestFullBallotFilter(t *testing.T) {
 	}
 }
 
-func TestFullSumVotes(t *testing.T) {
+func TestFullCountVotes(t *testing.T) {
 	type testBallot struct {
 		Base                      [2]int   // [layer, ballot] tuple
 		Support, Against, Abstain [][2]int // list of [layer, block] tuples
@@ -327,6 +327,7 @@ func TestFullSumVotes(t *testing.T) {
 				}
 
 				consensus.processBlocks(lid, layerBlocks)
+				consensus.full.processBlocks(layerBlocks)
 				blocks = append(blocks, layerBlocks)
 			}
 
@@ -359,12 +360,11 @@ func TestFullSumVotes(t *testing.T) {
 				tballots, err := consensus.processBallots(wrapContext(ctx), lid, layerBallots)
 				consensus.full.processBallots(tballots)
 				require.NoError(t, err)
+
+				consensus.full.countVotes(logger, lid)
 			}
 			bid := types.BlockID(blocks[tc.target[0]][tc.target[1]].ID())
-			lid := genesis.Add(uint32(tc.target[0] + 2)) // +2 so that we count votes after target
-			rst, err := consensus.full.sumVotesForBlock(logger, bid, lid)
-			require.NoError(t, err)
-			require.Equal(t, tc.expect.String(), rst.String())
+			require.Equal(t, tc.expect.String(), consensus.full.weights[bid].String())
 		})
 	}
 }

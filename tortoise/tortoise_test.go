@@ -1885,10 +1885,12 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 
 	unsupported := map[types.BlockID]struct{}{}
-	bids, err := s.GetState(0).MeshDB.LayerBlockIds(genesis.Add(1))
-	require.NoError(t, err)
-	require.NoError(t, s.GetState(0).MeshDB.SaveContextualValidity(bids[0], genesis.Add(1), false))
-	unsupported[bids[0]] = struct{}{}
+	for lid := genesis; lid.Before(last); lid = lid.Add(1) {
+		bids, err := s.GetState(0).MeshDB.LayerBlockIds(lid)
+		require.NoError(t, err)
+		require.NoError(t, s.GetState(0).MeshDB.SaveContextualValidity(bids[0], lid, false))
+		unsupported[bids[0]] = struct{}{}
+	}
 
 	// remove good ballots and genesis to make tortoise select one of the later blocks.
 	delete(tortoise.trtl.ballots, genesis)
@@ -1898,12 +1900,12 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	require.NoError(t, err)
 	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, base, last, last)
 	require.Empty(t, exceptions[2])
-	require.Len(t, exceptions[0], 1) // against one block in genesis.Add(1)
+	require.Len(t, exceptions[0], 2) // against one block in genesis + 1 and genesis + 2
 	for _, bid := range exceptions[0] {
-		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis.Add(1), last.Sub(1))
+		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis, last.Sub(1))
 		require.Contains(t, unsupported, bid)
 	}
-	require.Len(t, exceptions[1], size+1)
+	require.Len(t, exceptions[1], size)
 }
 
 func TestComputeLocalOpinion(t *testing.T) {
@@ -2121,8 +2123,10 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	cfg.ConfidenceParam = 0
 
 	var (
-		tortoise1                  = tortoiseFromSimState(s1.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
-		tortoise2                  = tortoiseFromSimState(s1.GetState(1), WithConfig(cfg))
+		tortoise1 = tortoiseFromSimState(s1.GetState(0), WithConfig(cfg),
+			WithLogger(logtest.New(t).Named("first")))
+		tortoise2 = tortoiseFromSimState(s1.GetState(1), WithConfig(cfg),
+			WithLogger(logtest.New(t).Named("second")))
 		last, verified1, verified2 types.LayerID
 	)
 
@@ -2233,8 +2237,6 @@ func TestStateManagement(t *testing.T) {
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 		}
 		require.Equal(t, last.Sub(1), verified)
-
-		require.Empty(t, tortoise.trtl.full.votes)
 
 		evicted := tortoise.trtl.evicted
 		require.Equal(t, verified.Sub(window).Sub(1), evicted)
