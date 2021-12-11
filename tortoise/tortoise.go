@@ -584,8 +584,6 @@ func (t *turtle) processBallots(ctx *tcontext, lid types.LayerID, original []*ty
 	var (
 		ballots     = make([]tortoiseBallot, 0, len(original))
 		ballotsIDs  = make([]types.BallotID, 0, len(original))
-		processed   = t.processed
-		min         = t.last // just max value
 		refs, other []*types.Ballot
 	)
 
@@ -599,7 +597,7 @@ func (t *turtle) processBallots(ctx *tcontext, lid types.LayerID, original []*ty
 
 	for _, part := range [...][]*types.Ballot{refs, other} {
 		for _, ballot := range part {
-			ballotWeight, err := computeBallotWeight(t.atxdb, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
+			ballotWeight, err := computeBallotWeight(t.atxdb, t.bdp, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
 			if err != nil {
 				return nil, err
 			}
@@ -612,11 +610,9 @@ func (t *turtle) processBallots(ctx *tcontext, lid types.LayerID, original []*ty
 			ballotsIDs = append(ballotsIDs, ballot.ID())
 
 			baselid := t.ballotLayer[ballot.BaseBallot]
-			if baselid.Before(min) {
-				min = baselid
-			}
+
 			votes := Opinion{}
-			for lid := baselid; lid.Before(processed); lid = lid.Add(1) {
+			for lid := baselid; lid.Before(t.processed); lid = lid.Add(1) {
 				for _, bid := range t.blocks[lid] {
 					votes[bid] = against
 				}

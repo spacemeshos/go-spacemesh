@@ -10,6 +10,7 @@ import (
 // computeBallotWeight compute and assign ballot weight to the weights map.
 func computeBallotWeight(
 	atxdb atxDataProvider,
+	bdp blockDataProvider,
 	weights map[types.BallotID]weight,
 	ballot *types.Ballot,
 	layerSize,
@@ -42,7 +43,11 @@ func computeBallotWeight(
 	}
 	rst, exist := weights[ballot.RefBallot]
 	if !exist {
-		return rst, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
+		refballot, err := bdp.GetBallot(ballot.RefBallot)
+		if err != nil {
+			return weight{}, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
+		}
+		return computeBallotWeight(atxdb, bdp, weights, refballot, layerSize, layersPerEpoch)
 	}
 	return rst, nil
 }
