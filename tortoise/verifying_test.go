@@ -249,7 +249,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 
 			for i := range tc.ballots {
 				lid := start.Add(uint32(i + 1))
-				v.processLayer(logger, lid, tc.ballots[i])
+				v.countVotes(logger, lid, tc.ballots[i])
 				require.Equal(t, tc.layerWeights[i], v.layerWeights[lid])
 				require.Equal(t, tc.total[i], v.totalWeight)
 			}
@@ -361,7 +361,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			v.layerWeights = tc.layersWeight
 			v.totalWeight = tc.totalWeight
 
-			require.Equal(t, tc.expected, v.verifyLayers(logger))
+			require.Equal(t, tc.expected, v.verify(logger))
 			require.Equal(t, tc.expectedTotalWeight.String(), v.totalWeight.String())
 		})
 	}

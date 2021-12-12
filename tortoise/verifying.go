@@ -26,7 +26,7 @@ type verifying struct {
 	totalWeight weight
 }
 
-func (v *verifying) processLayer(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
+func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
 	counted, goodBallotsCount := v.sumGoodBallots(logger, ballots)
 
 	// TODO(dshulyak) counted weight should be reduced by the uncounted weight per conversation with research
@@ -43,7 +43,7 @@ func (v *verifying) processLayer(logger log.Log, lid types.LayerID, ballots []to
 	)
 }
 
-func (v *verifying) verifyLayers(logger log.Log) types.LayerID {
+func (v *verifying) verify(logger log.Log) types.LayerID {
 	localThreshold := computeLocalThreshold(v.Config, v.epochWeight, v.processed)
 
 	for lid := v.verified.Add(1); lid.Before(v.processed); lid = lid.Add(1) {

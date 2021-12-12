@@ -460,8 +460,7 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) ([]byte, 
 	return beacon, nil
 }
 
-// HandleIncomingLayer processes all layer ballot votes
-// returns the old pbase and new pbase after taking into account ballot votes.
+// HandleIncomingLayer processes all layer ballot votes.
 func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) error {
 	defer t.evict(ctx)
 	tctx := wrapContext(ctx)
@@ -502,33 +501,17 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	t.full.processBallots(ballots)
 	t.full.processBlocks(blocks)
 
+	previous := t.verified
+
 	if t.mode == verifyingMode {
 		// local opinion may change within hdist. this solution might be a bottleneck during rerun
 		// reconsider while working on https://github.com/spacemeshos/go-spacemesh/issues/2980
 		if err := t.updateLocalVotes(ctx, t.verified.Add(1), t.processed); err != nil {
 			return err
 		}
-		t.verifying.processLayer(logger, lid, ballots)
-
-		previous := t.verified
-		t.verified = t.verifying.verifyLayers(logger)
-
-		if t.verified.After(previous) {
-			if err := persistContextualValidity(logger,
-				t.bdp,
-				previous, t.verified,
-				t.blocks,
-				t.localVotes,
-			); err != nil {
-				return err
-			}
-		}
-		t.updateHistoricallyVerified()
-		if t.verified == t.processed.Sub(1) {
-			return nil
-		}
+		t.verifying.countVotes(logger, lid, ballots)
+		t.verified = t.verifying.verify(logger)
 	}
-
 	// condition to switch may change for rerun https://github.com/spacemeshos/go-spacemesh/issues/2980,
 	// verified layer will be expected to be stuck as the expected weight will be high.
 	// so we will have to use different heuristic for switching into full mode.
@@ -542,24 +525,21 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			t.mode = fullMode
 		}
 		// counting votes is what makes full tortoise expensive during rerun.
-		// we want to wait until we know that verifying can't make progress.
+		// we want to wait until we know that verifying can't make progress before they are counted.
+		// storing them in current version is cheap.
 		t.full.countVotes(logger)
-
-		previous := t.verified
 		t.verified = t.full.verify(logger)
-
-		t.updateHistoricallyVerified()
-		if t.verified.After(previous) {
-			if err := persistContextualValidity(logger,
-				t.bdp,
-				previous, t.verified,
-				t.blocks,
-				t.localVotes,
-			); err != nil {
-				return err
-			}
-		}
 	}
+	if err := persistContextualValidity(logger,
+		t.bdp,
+		previous, t.verified,
+		t.blocks,
+		t.localVotes,
+	); err != nil {
+		return err
+	}
+
+	t.updateHistoricallyVerified()
 	return nil
 }
 
