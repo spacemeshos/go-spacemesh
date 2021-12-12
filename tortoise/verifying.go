@@ -112,11 +112,11 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 	}
 
 	baselid := v.ballotLayer[ballot.base]
-	for id, vote := range ballot.votes {
-		votelid, exists := v.blockLayer[id]
+	for block, vote := range ballot.votes {
+		votelid, exists := v.blockLayer[block]
 		// if the layer of the vote is not in the memory then it is definitely before base block layer
 		if !exists || votelid.Before(baselid) {
-			logger.With().Debug("vote on a block before base block",
+			logger.With().Debug("vote on a block that is before base ballot",
 				log.Stringer("base_layer", baselid),
 				log.Stringer("vote_layer", votelid),
 				log.Bool("vote_exists", exists),
@@ -124,16 +124,17 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 			return false
 		}
 
-		if localVote := v.localVotes[id]; localVote != vote {
-			logger.With().Debug("vote on block is different from the local vote",
+		if localVote := v.localVotes[block]; localVote != vote {
+			logger.With().Debug("vote on a block doesn't match a local vote",
 				log.Stringer("local_vote", localVote),
-				log.Stringer("vote", vote),
+				log.Stringer("ballot_vote", vote),
 				log.Stringer("block_layer", votelid),
+				log.Stringer("block", block),
 			)
 			return false
 		}
 	}
 
-	logger.With().Debug("ballot is good", ballot.id)
+	logger.With().Debug("ballot is good")
 	return true
 }
