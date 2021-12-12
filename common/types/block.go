@@ -276,7 +276,7 @@ type MiniBlock struct {
 	TxIDs          []TransactionID
 	ActiveSet      *[]ATXID
 	RefBlock       *BlockID
-	TortoiseBeacon []byte
+	TortoiseBeacon Beacon
 }
 
 // Block includes all of a block's fields, including signature and a cache of the BlockID and MinerID.

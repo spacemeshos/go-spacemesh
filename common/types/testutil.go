@@ -17,8 +17,8 @@ func RandomBytes(size int) []byte {
 }
 
 // RandomBeacon generates random beacon in bytes for testing.
-func RandomBeacon() []byte {
-	return RandomBytes(BeaconSize)
+func RandomBeacon() Beacon {
+	return BytesToBeacon(RandomBytes(BeaconSize))
 }
 
 // RandomActiveSet generates a random set of ATXIDs of the specified size.

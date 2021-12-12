@@ -3,7 +3,6 @@ package eligibility
 import (
 	"context"
 	"errors"
-	"fmt"
 	"math/rand"
 	"strconv"
 	"sync"
@@ -53,7 +52,7 @@ func defaultOracle(t testing.TB) *testOracle {
 	return to
 }
 
-func mockLayerBallots(tb testing.TB, to *testOracle, layer types.LayerID, beacon []byte, numMiners int) {
+func mockLayerBallots(tb testing.TB, to *testOracle, layer types.LayerID, beacon types.Beacon, numMiners int) {
 	tb.Helper()
 	activeSet := types.RandomActiveSet(numMiners)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
@@ -80,6 +79,10 @@ func mockLayerBallots(tb testing.TB, to *testOracle, layer types.LayerID, beacon
 			NumUnits: uint(i + 1),
 		}, nil).Times(1)
 	}
+}
+
+func beaconWithValOne() types.Beacon {
+	return types.Beacon{1}
 }
 
 func createMapWithSize(n int) map[string]uint64 {
@@ -114,7 +117,7 @@ func TestCalcEligibility_BeaconFailure(t *testing.T) {
 	nid := types.NodeID{Key: "fake_node_id"}
 	layer := types.NewLayerID(50)
 	errUnknown := errors.New("unknown")
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(nil, errUnknown).Times(1)
+	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
 
 	res, err := o.CalcEligibility(context.TODO(), layer, 0, 1, nid, []byte{})
 	require.ErrorIs(t, err, errUnknown)
@@ -127,7 +130,7 @@ func TestCalcEligibility_VerifyFailure(t *testing.T) {
 
 	nid := types.NodeID{Key: "fake_node_id"}
 	layer := types.NewLayerID(50)
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.RandomBytes(types.BeaconSize), nil).Times(1)
+	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
 
 	o.vrfVerifier = buildVerifier(false)
 	res, err := o.CalcEligibility(context.TODO(), layer, 0, 1, nid, []byte{})
@@ -180,7 +183,7 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 	defer o.ctrl.Finish()
 
 	layer := types.NewLayerID(50)
-	beacon := []byte{1, 0, 0, 0}
+	beacon := types.BytesToBeacon([]byte{1, 0, 0, 0})
 	mockLayerBallots(t, o, layer, beacon, 5)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
@@ -207,7 +210,7 @@ func TestCalcEligibility_EligibleFromTortoiseActiveSet(t *testing.T) {
 	defer o.ctrl.Finish()
 
 	layer := types.NewLayerID(40)
-	beacon := []byte{1, 0, 0, 0}
+	beacon := beaconWithValOne()
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	require.Equal(t, start, end)
 
@@ -254,7 +257,7 @@ func TestCalcEligibility_WithSpaceUnits(t *testing.T) {
 	defer o.ctrl.Finish()
 
 	layer := types.NewLayerID(50)
-	beacon := []byte{1, 0, 0, 0}
+	beacon := types.BytesToBeacon([]byte{1, 0, 0, 0})
 	mockLayerBallots(t, o, layer, beacon, numOfMiners)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
@@ -373,7 +376,7 @@ func Test_VrfSignVerify(t *testing.T) {
 	defer o.ctrl.Finish()
 
 	layer := types.NewLayerID(50)
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return([]byte{1, 0, 0, 0}, nil).Times(1)
+	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
 	start, end := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
 	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(start.GetEpoch()).Return(beacon, nil).Times(1)
@@ -440,7 +443,7 @@ func Test_Proof_BeaconError(t *testing.T) {
 
 	layer := types.NewLayerID(2)
 	errUnknown := errors.New("unknown")
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(nil, errUnknown).Times(1)
+	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(types.EmptyBeacon, errUnknown).Times(1)
 
 	sig, err := o.Proof(context.TODO(), layer, 3)
 	assert.Nil(t, sig)
@@ -452,7 +455,7 @@ func Test_Proof(t *testing.T) {
 	defer o.ctrl.Finish()
 
 	layer := types.NewLayerID(2)
-	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return([]byte{1, 0, 0, 0}, nil).Times(1)
+	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beaconWithValOne(), nil).Times(1)
 
 	signer := signing.NewEdSigner()
 	edPubkey := signer.PublicKey()
@@ -523,7 +526,7 @@ func TestBuildVRFMessage_BeaconError(t *testing.T) {
 	defer o.ctrl.Finish()
 
 	errUnknown := errors.New("unknown")
-	o.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(nil, errUnknown).Times(1)
+	o.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errUnknown).Times(1)
 	msg, err := o.buildVRFMessage(context.TODO(), types.NewLayerID(1), 1)
 	assert.ErrorIs(t, err, errUnknown)
 	assert.Nil(t, msg)
@@ -535,7 +538,7 @@ func TestBuildVRFMessage(t *testing.T) {
 
 	firstLayer := types.NewLayerID(1)
 	secondLayer := firstLayer.Add(1)
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(beacon, nil).Times(1)
 	m1, err := o.buildVRFMessage(context.TODO(), firstLayer, 2)
 	require.NoError(t, err)
@@ -556,7 +559,7 @@ func TestBuildVRFMessage(t *testing.T) {
 	assert.NotEqual(t, m1, m4)
 
 	// even tho beacon value changed, we will get the same cached VRF message
-	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(types.RandomBytes(types.BeaconSize), nil).Times(0)
+	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(types.RandomBeacon(), nil).Times(0)
 	m5, err := o.buildVRFMessage(context.TODO(), firstLayer, 2)
 	require.NoError(t, err)
 	assert.Equal(t, m1, m5) // check same result (from cache)
@@ -573,7 +576,7 @@ func TestBuildVRFMessage_Concurrency(t *testing.T) {
 	expectAdd := 10
 	wg := sync.WaitGroup{}
 	firstLayer := types.NewLayerID(1)
-	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(types.RandomBytes(types.BeaconSize), nil).AnyTimes()
+	o.mBeacon.EXPECT().GetBeacon(firstLayer.GetEpoch()).Return(types.RandomBeacon(), nil).AnyTimes()
 	for i := 0; i < expectAdd; i++ {
 		key := buildKey(firstLayer, uint32(i))
 		mCache.EXPECT().Add(key, gomock.Any()).Return(false).Times(1)
@@ -925,8 +928,7 @@ func TestMaxSupportedN(t *testing.T) {
 }
 
 func TestEncodeBeacon(t *testing.T) {
-	beacon := []byte{1, 2, 3, 4}
-	expected := uint32(0x4030201) // binary.LittleEndian.Uint32(beaconValue)
-	fmt.Printf("value %v\n", expected)
+	beacon := types.HexToBeacon("0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e")
+	expected := uint32(0x4aadebae)
 	assert.Equal(t, expected, encodeBeacon(beacon))
 }

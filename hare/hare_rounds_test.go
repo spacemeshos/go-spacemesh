@@ -110,7 +110,7 @@ func createTestHare(tb testing.TB, tcfg config.Config, clock *mockClock, pid p2p
 	defer ctrl.Finish()
 
 	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
-	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, nil).AnyTimes()
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
 	hare := New(tcfg, pid, p2p, ed, nodeID, mockSyncState(tb), bp, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
@@ -279,7 +279,7 @@ func Test_HareNotEnoughCommits(t *testing.T) {
 			return 1, nil
 		},
 		func(layer types.LayerID, hare *testHare) ([]*types.Block, error) {
-			return []*types.Block{randomBlock(t, layer, nil)}, nil
+			return []*types.Block{randomBlock(t, layer, types.EmptyBeacon)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
@@ -315,7 +315,7 @@ func Test_HareNotEnoughNotifications(t *testing.T) {
 			return 1, nil
 		},
 		func(layer types.LayerID, hare *testHare) ([]*types.Block, error) {
-			return []*types.Block{randomBlock(t, layer, nil)}, nil
+			return []*types.Block{randomBlock(t, layer, types.EmptyBeacon)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
@@ -348,7 +348,7 @@ func Test_HareComplete(t *testing.T) {
 			return 1, nil
 		},
 		func(layer types.LayerID, hare *testHare) ([]*types.Block, error) {
-			return []*types.Block{randomBlock(t, layer, nil)}, nil
+			return []*types.Block{randomBlock(t, layer, types.EmptyBeacon)}, nil
 		},
 		func(layer types.LayerID, blocks []types.BlockID, hare *testHare) {
 			l := layer.Difference(types.GetEffectiveGenesis()) - 1
