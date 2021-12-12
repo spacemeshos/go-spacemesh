@@ -118,7 +118,10 @@ func (f *full) verify(logger log.Log) types.LayerID {
 			log.Stringer("local_threshold", localThreshold),
 		)
 
-		for _, block := range f.blocks[lid] {
+		blocks := f.blocks[lid]
+		decisions := make([]sign, 0, len(blocks))
+
+		for _, block := range blocks {
 			current := f.weights[block]
 			decision := current.cmp(threshold)
 			if decision == abstain {
@@ -128,9 +131,11 @@ func (f *full) verify(logger log.Log) types.LayerID {
 				)
 				return lid.Sub(1)
 			}
-			f.localVotes[block] = decision
+			decisions = append(decisions, decision)
 		}
-
+		for i, block := range blocks {
+			f.localVotes[block] = decisions[i]
+		}
 		llogger.With().Info("candidate layer is verified by full tortoise")
 	}
 	return f.processed.Sub(1)
