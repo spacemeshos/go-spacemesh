@@ -187,7 +187,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		// we need only 1 ballot from the most recent layer, this ballot will be by definition the most
 		// consistent with our local opinion.
 		// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
-		exceptions, err = t.computeVotes(tctx, votinglid, ballotLID, ballotLID, func(types.BlockID) sign { return against })
+		exceptions, err = t.encodeVotes(tctx, votinglid, ballotLID, ballotLID, func(types.BlockID) sign { return against })
 	}
 	if ballotID == types.EmptyBallotID || err != nil {
 		logger.With().Warning("failed to select good base ballot. reverting to the least bad choices", log.Err(err))
@@ -206,7 +206,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		prioritizeBallots(choices, disagreements, t.ballotLayer)
 		for _, ballotID = range choices {
 			ballotLID = t.ballotLayer[ballotID]
-			exceptions, err = t.computeVotes(tctx, votinglid, ballotLID, t.evicted.Add(1), func(blockID types.BlockID) sign {
+			exceptions, err = t.encodeVotes(tctx, votinglid, ballotLID, t.evicted.Add(1), func(blockID types.BlockID) sign {
 				return t.full.getVote(logger, ballotID, blockID)
 			})
 			if err == nil {
@@ -290,9 +290,8 @@ func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, ballotID t
 
 type opinionsGetter func(types.BlockID) sign
 
-// calculate and return a list of votes, i.e., differences between the votes of a base ballot and the local
-// votes.
-func (t *turtle) computeVotes(
+// encode differences between selected base ballot and local votes.
+func (t *turtle) encodeVotes(
 	ctx *tcontext,
 	votinglid,
 	baselid,
@@ -325,8 +324,7 @@ func (t *turtle) computeVotes(
 			return nil, err
 		}
 
-		// helper function for adding diffs
-		encodeVotes := func(logger log.Log, bid types.BlockID, localVote sign, diffMap map[types.BlockID]struct{}) {
+		addVotes := func(logger log.Log, bid types.BlockID, localVote sign, diffMap map[types.BlockID]struct{}) {
 			baseVote := getter(bid)
 			needsException := localVote != baseVote
 
@@ -373,18 +371,18 @@ func (t *turtle) computeVotes(
 			switch vote {
 			case support:
 				// add exceptions for blocks that base ballot doesn't support
-				encodeVotes(logger, bid, support, forDiff)
+				addVotes(logger, bid, support, forDiff)
 			case abstain:
 				// NOTE special case, we can abstain on whole layer not on individual block
 				// and only within hdist from last layer. before hdist opinion is always cast
 				// accordingly to weakcoin
-				encodeVotes(logger, bid, abstain, neutralDiff)
+				addVotes(logger, bid, abstain, neutralDiff)
 			case against:
 				// add exceptions for blocks that base ballot supports
 				//
 				// we don't save the ballot unless all the dependencies are saved.
 				// condition where ballot has a vote that is not in our local view is impossible.
-				encodeVotes(logger, bid, against, againstDiff)
+				addVotes(logger, bid, against, againstDiff)
 			}
 		}
 	}
