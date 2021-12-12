@@ -108,7 +108,8 @@ func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 
 func (g *Generator) genBeacon() {
 	eid := g.nextLayer.Sub(1).GetEpoch()
-	beacon := types.RandomBeacon()
+	beacon := types.Beacon{}
+	g.rng.Read(beacon[:])
 	for _, state := range g.states {
 		state.OnBeacon(eid, beacon)
 	}
