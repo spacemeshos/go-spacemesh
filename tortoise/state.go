@@ -14,7 +14,7 @@ func newCommonState() commonState {
 		badBeaconBallots: map[types.BallotID]struct{}{},
 		epochWeight:      map[types.EpochID]weight{},
 		ballotWeight:     map[types.BallotID]weight{},
-		localOpinion:     Opinion{},
+		localVotes:       votes{},
 	}
 }
 
@@ -48,11 +48,11 @@ type commonState struct {
 
 	ballotWeight map[types.BallotID]weight
 
-	localOpinion Opinion
+	localVotes votes
 }
 
 func newFullState() fullState {
-	return fullState{votes: map[types.BallotID]Opinion{}}
+	return fullState{votes: map[types.BallotID]votes{}}
 }
 
 // fullState contains state necessary to run full (self-healing) tortoise.
@@ -68,5 +68,5 @@ func newFullState() fullState {
 // way as verifying tortoise.
 type fullState struct {
 	base  map[types.BallotID]types.BallotID
-	votes map[types.BallotID]Opinion
+	votes map[types.BallotID]votes
 }

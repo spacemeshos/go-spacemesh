@@ -29,8 +29,7 @@ func (a sign) String() string {
 	}
 }
 
-// Opinion is opinions on other blocks.
-type Opinion map[types.BlockID]sign
+type votes map[types.BlockID]sign
 
 func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 	arr := make([]types.BlockID, 0, len(m))
@@ -106,7 +105,7 @@ func (w weight) String() string {
 
 type tortoiseBallot struct {
 	id, base types.BallotID
-	votes    Opinion
+	votes    votes
 	weight   weight
 }
 
@@ -114,7 +113,7 @@ func persistContextualValidity(logger log.Log,
 	bdp blockDataProvider,
 	from, to types.LayerID,
 	blocks map[types.LayerID][]types.BlockID,
-	opinion Opinion,
+	opinion votes,
 ) error {
 	for lid := from.Add(1); !lid.After(to); lid = lid.Add(1) {
 		for _, bid := range blocks[lid] {

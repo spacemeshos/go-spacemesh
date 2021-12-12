@@ -27,13 +27,13 @@ type tcontext struct {
 	validBlocks map[types.LayerID][]types.BlockID
 }
 
-func (t *turtle) getLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]sign, error) {
+func (t *turtle) getLocalVotes(ctx *tcontext, lid types.LayerID) (map[types.BlockID]sign, error) {
 	opinion, exists := ctx.localOpinion[lid]
 	if exists {
 		return opinion, nil
 	}
-	opinion = Opinion{}
-	err := t.addLocalOpinion(ctx, lid, opinion)
+	opinion = votes{}
+	err := t.addLocalVotes(ctx, lid, opinion)
 	if err != nil {
 		return nil, err
 	}

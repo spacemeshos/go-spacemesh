@@ -11,7 +11,7 @@ func newFullTortoise(config Config, common *commonState) *full {
 	return &full{
 		Config:       config,
 		commonState:  common,
-		votes:        map[types.BallotID]Opinion{},
+		votes:        map[types.BallotID]votes{},
 		base:         map[types.BallotID]types.BallotID{},
 		weights:      map[types.BlockID]weight{},
 		delayedQueue: list.New(),
@@ -22,7 +22,7 @@ type full struct {
 	Config
 	*commonState
 
-	votes map[types.BallotID]Opinion
+	votes map[types.BallotID]votes
 	base  map[types.BallotID]types.BallotID
 
 	counted      types.LayerID
@@ -65,10 +65,10 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 		ballotWeight := f.ballotWeight[ballot]
 		for lid := f.verified.Add(1); lid.Before(ballotlid); lid = lid.Add(1) {
 			for _, block := range f.blocks[lid] {
-				sign := f.getVote(logger, ballot, block)
+				vote := f.getVote(logger, ballot, block)
 				current := f.weights[block]
 
-				switch sign {
+				switch vote {
 				case support:
 					current = current.add(ballotWeight)
 				case against:
@@ -120,14 +120,15 @@ func (f *full) verify(logger log.Log) types.LayerID {
 
 		for _, block := range f.blocks[lid] {
 			current := f.weights[block]
-			if current.cmp(threshold) == abstain {
+			decision := current.cmp(threshold)
+			if decision == abstain {
 				llogger.With().Warning("candidate layer is not verified. block is undecided in full tortoise.",
 					log.Stringer("block", block),
 					log.Stringer("voting_weight", current),
 				)
 				return lid.Sub(1)
 			}
-			f.localOpinion[block] = current.cmp(threshold)
+			f.localVotes[block] = decision
 		}
 
 		llogger.With().Info("candidate layer is verified by full tortoise")

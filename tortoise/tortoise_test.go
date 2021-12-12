@@ -1984,8 +1984,8 @@ func TestComputeLocalOpinion(t *testing.T) {
 				tortoise.HandleIncomingLayer(ctx, lid)
 			}
 
-			local := Opinion{}
-			err := tortoise.trtl.addLocalOpinion(wrapContext(ctx), tc.lid, local)
+			local := votes{}
+			err := tortoise.trtl.addLocalVotes(wrapContext(ctx), tc.lid, local)
 			require.NoError(t, err)
 
 			for bid, opinion := range local {
@@ -2247,7 +2247,7 @@ func TestStateManagement(t *testing.T) {
 
 		for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
 			for _, bid := range tortoise.trtl.blocks[lid] {
-				require.Contains(t, tortoise.trtl.localOpinion, bid, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.localVotes, bid, "layer %s", lid)
 				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)
 			}
 			for _, ballot := range tortoise.trtl.ballots[lid] {
@@ -2281,7 +2281,7 @@ func TestStateManagement(t *testing.T) {
 
 		for lid := evicted.Add(1); !lid.After(tortoise.trtl.verified); lid = lid.Add(1) {
 			for _, bid := range tortoise.trtl.blocks[lid] {
-				require.Contains(t, tortoise.trtl.localOpinion, bid, "layer %s", lid)
+				require.Contains(t, tortoise.trtl.localVotes, bid, "layer %s", lid)
 				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)
 			}
 			for _, ballot := range tortoise.trtl.ballots[lid] {

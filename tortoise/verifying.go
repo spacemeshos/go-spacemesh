@@ -65,21 +65,21 @@ func (v *verifying) verifyLayers(logger log.Log) types.LayerID {
 		// 0 - there is not enough weight to cross threshold.
 		// 1 - layer is verified and contextual validity is according to our local opinion.
 		if votingWeight.cmp(threshold) == abstain {
-			layerLogger.With().Warning("candidate layer is not verified. voting weight is lower than the threshold")
+			layerLogger.With().Warning("candidate layer is not verified. voting weight from good ballots is lower than the threshold.")
 			return lid.Sub(1)
 		}
 
 		// if there is any block with neutral local opinion - we can't verify the layer
 		// if it happens outside of hdist - protocol will switch to full tortoise
 		for _, bid := range v.blocks[lid] {
-			if v.localOpinion[bid] == abstain {
-				layerLogger.With().Warning("candidate layer is not verified. block is undecided", bid)
+			if v.localVotes[bid] == abstain {
+				layerLogger.With().Warning("candidate layer is not verified. block is undecided according to local votes.", bid)
 				return lid.Sub(1)
 			}
 		}
 
 		v.totalWeight = votingWeight
-		layerLogger.With().Info("candidate layer is verified")
+		layerLogger.With().Info("candidate layer is verified by verifying tortoise")
 	}
 	return v.processed.Sub(1)
 }
@@ -112,7 +112,7 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 	}
 
 	baselid := v.ballotLayer[ballot.base]
-	for id, sign := range ballot.votes {
+	for id, vote := range ballot.votes {
 		votelid, exists := v.blockLayer[id]
 		// if the layer of the vote is not in the memory then it is definitely before base block layer
 		if !exists || votelid.Before(baselid) {
@@ -124,10 +124,10 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 			return false
 		}
 
-		if local := v.localOpinion[id]; local != sign {
+		if localVote := v.localVotes[id]; localVote != vote {
 			logger.With().Debug("vote on block is different from the local vote",
-				log.Stringer("local_vote", local),
-				log.Stringer("vote", sign),
+				log.Stringer("local_vote", localVote),
+				log.Stringer("vote", vote),
 				log.Stringer("block_layer", votelid),
 			)
 			return false
