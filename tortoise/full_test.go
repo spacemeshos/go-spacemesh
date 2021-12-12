@@ -361,7 +361,7 @@ func TestFullCountVotes(t *testing.T) {
 				consensus.full.processBallots(tballots)
 				require.NoError(t, err)
 
-				consensus.full.countVotes(logger, lid)
+				consensus.full.countVotes(logger)
 			}
 			bid := types.BlockID(blocks[tc.target[0]][tc.target[1]].ID())
 			require.Equal(t, tc.expect.String(), consensus.full.weights[bid].String())

@@ -22,8 +22,10 @@ type full struct {
 	Config
 	*commonState
 
-	votes        map[types.BallotID]Opinion
-	base         map[types.BallotID]types.BallotID
+	votes map[types.BallotID]Opinion
+	base  map[types.BallotID]types.BallotID
+
+	counted      types.LayerID
 	weights      map[types.BlockID]weight
 	delayedQueue *list.List
 }
@@ -84,7 +86,7 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 	}
 }
 
-func (f *full) countVotes(logger log.Log, ballotlid types.LayerID) {
+func (f *full) countVotes(logger log.Log) {
 	for front := f.delayedQueue.Front(); front != nil; {
 		delayed := front.Value.(delayedBallots)
 		if f.last.Difference(delayed.lid) <= f.BadBeaconVoteDelayLayers {
@@ -98,8 +100,10 @@ func (f *full) countVotes(logger log.Log, ballotlid types.LayerID) {
 		f.delayedQueue.Remove(front)
 		front = next
 	}
-
-	f.countVotesFromBallots(logger, ballotlid, f.ballots[ballotlid])
+	for lid := f.counted.Add(1); !lid.After(f.processed); lid = lid.Add(1) {
+		f.countVotesFromBallots(logger, lid, f.ballots[lid])
+	}
+	f.counted = f.processed
 }
 
 func (f *full) verify(logger log.Log) types.LayerID {

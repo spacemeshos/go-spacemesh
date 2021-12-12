@@ -93,6 +93,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	t.verified = genesis
 	t.historicallyVerified = genesis
 	t.evicted = genesis.Sub(1)
+	t.full.counted = genesis
 }
 
 func (t *turtle) lookbackWindowStart() (types.LayerID, bool) {
@@ -524,10 +525,6 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 		}
 	}
 
-	// count votes starting from the layer when verifying tortoise failed to make progress
-	// for example, if verifying failed while counting ballots from layer 13 we will
-	// most likely have to use those ballots later in full mode.
-	t.full.countVotes(logger, lid)
 	// condition to switch may change for rerun https://github.com/spacemeshos/go-spacemesh/issues/2980,
 	// verified layer will be expected to be stuck as the expected weight will be high.
 	// so we will have to use different heuristic for switching into full mode.
@@ -540,6 +537,10 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			)
 			t.mode = fullMode
 		}
+		// counting votes is what makes full tortoise expensive during rerun.
+		// we want to wait until we know that verifying can't make progress.
+		t.full.countVotes(logger)
+
 		previous := t.verified
 		t.verified = t.full.verify(logger)
 
