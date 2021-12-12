@@ -65,7 +65,7 @@ func (v *verifying) verifyLayers(logger log.Log) types.LayerID {
 		// 0 - there is not enough weight to cross threshold.
 		// 1 - layer is verified and contextual validity is according to our local opinion.
 		if votingWeight.cmp(threshold) == abstain {
-			layerLogger.With().Warning("candidate layer is not verified. voting weight from good ballots is lower than the threshold.")
+			layerLogger.With().Info("candidate layer is not verified. voting weight from good ballots is lower than the threshold.")
 			return lid.Sub(1)
 		}
 
@@ -73,7 +73,7 @@ func (v *verifying) verifyLayers(logger log.Log) types.LayerID {
 		// if it happens outside of hdist - protocol will switch to full tortoise
 		for _, bid := range v.blocks[lid] {
 			if v.localVotes[bid] == abstain {
-				layerLogger.With().Warning("candidate layer is not verified. block is undecided according to local votes.", bid)
+				layerLogger.With().Info("candidate layer is not verified. block is undecided according to local votes.", bid)
 				return lid.Sub(1)
 			}
 		}

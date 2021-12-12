@@ -122,7 +122,7 @@ func (f *full) verify(logger log.Log) types.LayerID {
 			current := f.weights[block]
 			decision := current.cmp(threshold)
 			if decision == abstain {
-				llogger.With().Warning("candidate layer is not verified. block is undecided in full tortoise.",
+				llogger.With().Info("candidate layer is not verified. block is undecided in full tortoise.",
 					log.Stringer("block", block),
 					log.Stringer("voting_weight", current),
 				)
