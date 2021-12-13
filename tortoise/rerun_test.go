@@ -50,3 +50,36 @@ func TestRecoverState(t *testing.T) {
 	require.Equal(t, cfg.MeshVerified, old)
 	require.Equal(t, last.Sub(1), verified)
 }
+
+func BenchmarkRerun(b *testing.B) {
+	b.Run("Verifying/100", func(b *testing.B) {
+		benchmarkRerun(b, 100, 100)
+	})
+	b.Run("Full/100", func(b *testing.B) {
+		benchmarkRerun(b, 100, 1, sim.WithEmptyInputVector())
+	})
+}
+
+func benchmarkRerun(b *testing.B, size, confidence int, opts ...sim.NextOpt) {
+	const layerSize = 30
+	s := sim.New(
+		sim.WithLayerSize(layerSize),
+		sim.WithPath(b.TempDir()),
+	)
+	s.Setup()
+
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = layerSize
+	cfg.ConfidenceParam = uint32(confidence)
+
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
+	for i := 0; i < size; i++ {
+		tortoise.HandleIncomingLayer(ctx, s.Next())
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		tortoise.rerun(ctx)
+	}
+}

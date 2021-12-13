@@ -119,18 +119,22 @@ func persistContextualValidity(logger log.Log,
 	blocks map[types.LayerID][]types.BlockID,
 	opinion votes,
 ) error {
-	for lid := from.Add(1); !lid.After(to); lid = lid.Add(1) {
+	var err error
+	iterateLayers(from.Add(1), to, func(lid types.LayerID) bool {
 		for _, bid := range blocks[lid] {
 			sign := opinion[bid]
 			if sign == abstain {
 				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, bid)
 			}
-			if err := bdp.SaveContextualValidity(bid, lid, sign == support); err != nil {
-				return fmt.Errorf("saving validity for %s: %w", bid, err)
+			err = bdp.SaveContextualValidity(bid, lid, sign == support)
+			if err != nil {
+				err = fmt.Errorf("saving validity for %s: %w", bid, err)
+				return false
 			}
 		}
-	}
-	return nil
+		return true
+	})
+	return err
 }
 
 func iterateLayers(from, to types.LayerID, callback func(types.LayerID) bool) {
