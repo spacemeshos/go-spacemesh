@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -140,17 +139,6 @@ func addLayerToMesh(m *mesh.DB, layer *types.Layer) error {
 	return nil
 }
 
-func randomBallotID() types.BallotID {
-	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, 8)
-	_, err := rand.Read(b)
-	// Note that err == nil only if we read len(b) bytes.
-	if err != nil {
-		return types.EmptyBallotID
-	}
-	return types.BallotID(types.CalcHash32(b).ToHash20())
-}
-
 const (
 	defaultTestLayerSize  = 3
 	defaultTestWindowSize = 30
@@ -233,9 +221,11 @@ func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beac
 				TxIDs:  nil,
 			},
 		}
-		blk := p.ToBlock()
-		blk.Signature = signing.NewEdSigner().Sign(blk.Bytes())
-		blk.Initialize()
+		signer := signing.NewEdSigner()
+		p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
+		p.Signature = signer.Sign(p.Bytes())
+		p.Initialize()
+		blk := (*types.Block)(p)
 		lyr.AddBlock(blk)
 		require.NoError(t, msh.AddBlock(blk))
 	}
@@ -373,7 +363,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 	trtl := defaultTurtle(t)
 	trtl.LayerSize = uint32(blocksPerLayer)
 	trtl.bdp = msh
-	gen := mesh.GenesisLayer()
+	gen := types.GenesisLayer()
 	trtl.init(context.TODO(), gen)
 
 	var l types.LayerID
@@ -432,9 +422,11 @@ func generateBlocks(t *testing.T, l types.LayerID, natxs, nblocks int, bbp baseB
 				TxIDs:  nil,
 			},
 		}
-		blk := p.ToBlock()
-		blk.Signature = signing.NewEdSigner().Sign(b.Bytes())
-		blk.Initialize()
+		signer := signing.NewEdSigner()
+		p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
+		p.Signature = signer.Sign(p.Bytes())
+		p.Initialize()
+		blk := (*types.Block)(p)
 		blocks = append(blocks, blk)
 	}
 	return
@@ -489,7 +481,7 @@ func TestAddToMesh(t *testing.T) {
 	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
 	alg.trtl.atxdb = atxdb
-	l := mesh.GenesisLayer()
+	l := types.GenesisLayer()
 
 	logger.With().Info("genesis is", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
 	logger.With().Info("genesis is", l.Blocks()[0].Fields()...)
@@ -498,7 +490,7 @@ func TestAddToMesh(t *testing.T) {
 	require.NoError(t, addLayerToMesh(mdb, l1))
 
 	logger.With().Info("first is", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
-	logger.With().Info("first bb is", l1.Index(), l1.Blocks()[0].BaseBlock, types.BlockIdsField(l1.Blocks()[0].ForDiff))
+	logger.With().Info("first bb is", l1.Index(), l1.Blocks()[0].BaseBallot, types.BlockIdsField(l1.Blocks()[0].ForDiff))
 
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
 
@@ -534,7 +526,7 @@ func TestBaseBallot(t *testing.T) {
 	getHareResults := mdb.LayerBlockIds
 	mdb.InputVectorBackupFunc = getHareResults
 
-	l0 := mesh.GenesisLayer()
+	l0 := types.GenesisLayer()
 	expectBaseBallotLayer := func(layerID types.LayerID, numAgainst, numSupport, numNeutral int) {
 		baseBallotID, exceptions, err := alg.BaseBallot(context.TODO())
 		r.NoError(err)
@@ -549,7 +541,7 @@ func TestBaseBallot(t *testing.T) {
 		r.Equal(layerID, baseBallot.LayerIndex, "base ballot is from wrong layer")
 	}
 	// it should support all genesis blocks
-	expectBaseBallotLayer(l0.Index(), 0, len(mesh.GenesisLayer().Blocks()), 0)
+	expectBaseBallotLayer(l0.Index(), 0, len(types.GenesisLayer().Blocks()), 0)
 
 	// add a couple of incoming layers and make sure the base ballot layer advances as well
 	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBallot, getHareResults, defaultTestLayerSize)
@@ -1488,12 +1480,24 @@ func BenchmarkTortoiseBaseBallotSelection(b *testing.B) {
 	}
 }
 
-func randomBlock(tb testing.TB, lyrID types.LayerID, beacon types.Beacon, refBlockID *types.BlockID) *types.Block {
+func randomBallot(tb testing.TB, lyrID types.LayerID, refBallotID types.BallotID) *types.Ballot {
 	tb.Helper()
-	block := types.NewExistingBlock(lyrID, types.RandomBytes(4), nil)
-	block.TortoiseBeacon = beacon
-	block.RefBlock = refBlockID
-	return block
+	ballot := types.RandomBallot()
+	ballot.LayerIndex = lyrID
+	ballot.RefBallot = refBallotID
+	ballot.Initialize()
+	return ballot
+}
+
+func randomRefBallot(tb testing.TB, lyrID types.LayerID, beacon types.Beacon) *types.Ballot {
+	tb.Helper()
+	ballot := types.RandomBallot()
+	ballot.LayerIndex = lyrID
+	ballot.EpochData = &types.EpochData{
+		Beacon: beacon,
+	}
+	ballot.Initialize()
+	return ballot
 }
 
 func TestBallotHasGoodBeacon(t *testing.T) {
@@ -1502,7 +1506,7 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 
 	layerID := types.GetEffectiveGenesis().Add(1)
 	epochBeacon := types.RandomBeacon()
-	ballot := randomBlock(t, layerID, epochBeacon, nil).ToBallot()
+	ballot := randomRefBallot(t, layerID, epochBeacon)
 
 	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
 	trtl := defaultTurtle(t)
@@ -1529,16 +1533,16 @@ func TestGetBallotBeacon(t *testing.T) {
 
 	layerID := types.GetEffectiveGenesis().Add(1)
 	beacon := types.RandomBeacon()
-	refBlock := randomBlock(t, layerID, beacon, nil)
-	refBlockID := refBlock.ID()
-	ballot := randomBlock(t, layerID, types.EmptyBeacon, &refBlockID).ToBallot()
+	refBallot := randomRefBallot(t, layerID, beacon)
+	refBallotID := refBallot.ID()
+	ballot := randomBallot(t, layerID, refBallotID)
 
 	mockBdp := mocks.NewMockblockDataProvider(ctrl)
 	trtl := defaultTurtle(t)
 	trtl.bdp = mockBdp
 
 	logger := logtest.New(t)
-	mockBdp.EXPECT().GetBlock(refBlockID).Return(refBlock, nil).Times(1)
+	mockBdp.EXPECT().GetBallot(refBallotID).Return(refBallot, nil).Times(1)
 	got, err := trtl.getBallotBeacon(ballot, logger)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon, got)
@@ -1618,10 +1622,10 @@ func TestBaseBallotGenesis(t *testing.T) {
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 
 	base, exceptions, err := tortoise.BaseBallot(ctx)
-	genesisBlk := mesh.GenesisBlock()
+	genesisBlk := types.GenesisBlock()
 	require.NoError(t, err)
 	require.Equal(t, exceptions, [][]types.BlockID{{}, {genesisBlk.ID()}, {}})
-	require.Equal(t, mesh.GenesisBlock().ID(), types.BlockID(base))
+	require.Equal(t, types.GenesisBallot().ID(), base)
 }
 
 func ensureBaseAndExceptionsFromLayer(tb testing.TB, lid types.LayerID, base types.BallotID, exceptions [][]types.BlockID, mdb blockDataProvider) {
@@ -1994,7 +1998,6 @@ func TestComputeBallotWeight(t *testing.T) {
 		ATX            int   // non optional index to this ballot atx
 		ExpectedWeight *big.Float
 	}
-
 	createActiveSet := func(pos []int, atxs []*types.ActivationTxHeader) []types.ATXID {
 		var rst []types.ATXID
 		for _, i := range pos {
