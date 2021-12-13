@@ -132,8 +132,8 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 		}
 
 		for _, b := range layer.Blocks() {
-			if b.ActiveSet != nil {
-				atxids = append(atxids, *b.ActiveSet...)
+			if b.EpochData != nil && b.EpochData.ActiveSet != nil {
+				atxids = append(atxids, b.EpochData.ActiveSet...)
 			}
 		}
 	}
@@ -341,8 +341,8 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 		}
 
-		if b.ActiveSet != nil {
-			activations = append(activations, *b.ActiveSet...)
+		if b.EpochData != nil && b.EpochData.ActiveSet != nil {
+			activations = append(activations, b.EpochData.ActiveSet...)
 		}
 
 		var pbTxs []*pb.Transaction
@@ -352,8 +352,8 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		blocks = append(blocks, &pb.Block{
 			Id:           types.Hash20(b.ID()).Bytes(),
 			Transactions: pbTxs,
-			SmesherId:    &pb.SmesherId{Id: b.MinerID().Bytes()},
-			ActivationId: &pb.ActivationId{Id: b.ATXID.Bytes()},
+			SmesherId:    &pb.SmesherId{Id: b.SmesherID().Bytes()},
+			ActivationId: &pb.ActivationId{Id: b.AtxID.Bytes()},
 		})
 	}
 
