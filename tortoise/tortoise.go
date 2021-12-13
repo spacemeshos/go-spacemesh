@@ -221,7 +221,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		return types.EmptyBallotID, nil, errNoBaseBallotFound
 	}
 
-	logger.With().Info("chose base ballot",
+	logger.With().Info("choose base ballot",
 		ballotID,
 		ballotLID,
 		log.Int("against_count", len(exceptions[0])),
@@ -461,14 +461,7 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Be
 // HandleIncomingLayer processes all layer ballot votes.
 func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) error {
 	defer t.evict(ctx)
-	tctx := wrapContext(ctx)
-	if t.last.Before(lid) {
-		t.last = lid
-	}
-	if t.processed.Before(lid) {
-		t.processed = lid
-	}
-	return t.processLayer(tctx, lid)
+	return t.processLayer(wrapContext(ctx), lid)
 }
 
 func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
@@ -476,7 +469,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 
 	logger.With().Info("adding layer to the state")
 
-	if err := t.updateLayerState(lid); err != nil {
+	if err := t.updateLayerState(logger, lid); err != nil {
 		return err
 	}
 
@@ -508,7 +501,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			return err
 		}
 		t.verifying.countVotes(logger, lid, ballots)
-		t.verified = t.verifying.verify(logger)
+		t.verifyLayers(logger, t.verifying)
 	}
 	// condition to switch may change for rerun https://github.com/spacemeshos/go-spacemesh/issues/2980,
 	// verified layer will be expected to be stuck as the expected weight will be high.
@@ -523,7 +516,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			t.mode = fullMode
 		}
 		t.full.countVotes(logger)
-		t.verified = t.full.verify(logger)
+		t.verifyLayers(logger, t.full)
 	}
 	if err := persistContextualValidity(logger,
 		t.bdp,
@@ -538,16 +531,41 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	return nil
 }
 
-func (t *turtle) updateLayerState(lid types.LayerID) error {
-	epochID := lid.GetEpoch()
-	if _, exist := t.epochWeight[epochID]; exist {
-		return nil
+func (t *turtle) verifyLayers(logger log.Log, verifier layerVerifier) {
+	iterateLayers(t.verified.Add(1), t.processed.Sub(1), func(lid types.LayerID) bool {
+		ok := verifier.verify(logger, lid)
+		if !ok {
+			return false
+		}
+		t.verified = lid
+		updateThresholds(logger, t.Config, &t.commonState)
+		return true
+	})
+}
+
+func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
+	lastUpdated := t.last.Before(lid)
+	if lastUpdated {
+		t.last = lid
 	}
-	layerWeight, err := computeEpochWeight(t.atxdb, t.epochWeight, epochID)
-	if err != nil {
-		return err
+	if t.processed.Before(lid) {
+		t.processed = lid
 	}
-	t.logger.With().Info("computed weight for layers in an epoch", epochID, log.Stringer("weight", layerWeight))
+
+	for epoch := t.last.GetEpoch(); epoch >= t.evicted.GetEpoch(); epoch-- {
+		if _, exist := t.epochWeight[epoch]; exist {
+			break
+		}
+		layerWeight, err := computeEpochWeight(t.atxdb, t.epochWeight, epoch)
+		if err != nil {
+			return err
+		}
+		logger.With().Info("computed weight for layers in an epoch", epoch, log.Stringer("weight", layerWeight))
+	}
+
+	if lastUpdated || t.threshold.isNil() {
+		updateThresholds(logger, t.Config, &t.commonState)
+	}
 	return nil
 }
 
@@ -624,8 +642,7 @@ func (t *turtle) updateLocalVotes(ctx *tcontext, from, to types.LayerID) error {
 func (t *turtle) canUseFullMode() bool {
 	lid := t.verified.Add(1)
 	return lid.Before(t.layerCutoff()) &&
-		t.last.Difference(lid) > t.Zdist &&
-		// unlike previous two parameters we count confidence interval from processed layer
+		// unlike previous parameter we count confidence interval from processed layer
 		// processed layer is significantly lower then the last layer during rerun.
 		// we need to wait some distance before switching from verifying to full during rerun
 		// as previous two parameters will be always true even if single layer is not verified.

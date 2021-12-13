@@ -32,6 +32,18 @@ type commonState struct {
 	// last evicted layer
 	evicted types.LayerID
 
+	// localThreshold is changed when the last layer is updated.
+	// computed as config.LocalThreshold * epochWeights[last].
+	//
+	// used as a part of threshold and for voting when block is undecided and outside of hdist.
+	localThreshold weight
+	// globalThreshold is changed when the last or verified layer is updated.
+	// computed as - sum of all layers between verified + 1 up to last * config.GlobalThreshold.
+	globalThreshold weight
+	// threshold is a sum of local and global thresholds.
+	// this is what we are using for deciding a block validity.
+	threshold weight
+
 	blocks      map[types.LayerID][]types.BlockID
 	ballots     map[types.LayerID][]types.BallotID
 	ballotLayer map[types.BallotID]types.LayerID

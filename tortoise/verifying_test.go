@@ -354,14 +354,24 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			state.epochWeight = tc.epochWeight
 			state.verified = tc.verified
 			state.processed = tc.processed
+			state.last = tc.processed
 			state.blocks = tc.blocks
 			state.localVotes = tc.localOpinion
+
+			updateThresholds(logger, tc.config, &state)
 
 			v := newVerifying(tc.config, &state)
 			v.layerWeights = tc.layersWeight
 			v.totalWeight = tc.totalWeight
-
-			require.Equal(t, tc.expected, v.verify(logger))
+			iterateLayers(tc.verified.Add(1), tc.processed.Sub(1), func(lid types.LayerID) bool {
+				if !v.verify(logger, lid) {
+					return false
+				}
+				state.verified = lid
+				updateThresholds(logger, tc.config, &state)
+				return true
+			})
+			require.Equal(t, tc.expected, state.verified)
 			require.Equal(t, tc.expectedTotalWeight.String(), v.totalWeight.String())
 		})
 	}

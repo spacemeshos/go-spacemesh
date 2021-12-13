@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 )
 
@@ -93,4 +94,19 @@ func computeGlobalThreshold(config Config, epochWeight map[types.EpochID]weight,
 	threshold = threshold.add(expected)
 	threshold = threshold.fraction(config.GlobalThreshold)
 	return threshold
+}
+
+func updateThresholds(logger log.Log, config Config, state *commonState) {
+	state.localThreshold = computeLocalThreshold(config, state.epochWeight, state.last)
+	state.globalThreshold = computeGlobalThreshold(config, state.epochWeight, state.verified.Add(1), state.last)
+	state.threshold = weightFromUint64(0)
+	state.threshold = state.threshold.add(state.localThreshold)
+	state.threshold = state.threshold.add(state.globalThreshold)
+	logger.With().Info("updated thresholds",
+		log.Stringer("last_layer", state.last),
+		log.Stringer("target_layer", state.verified.Add(1)),
+		log.Stringer("local_threshold", state.localThreshold),
+		log.Stringer("global_threshold", state.globalThreshold),
+		log.Stringer("threshold", state.threshold),
+	)
 }

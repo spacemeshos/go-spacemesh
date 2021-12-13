@@ -103,6 +103,10 @@ func (w weight) String() string {
 	return w.Float.String()
 }
 
+func (w weight) isNil() bool {
+	return w.Float == nil
+}
+
 type tortoiseBallot struct {
 	id, base types.BallotID
 	votes    votes
@@ -127,4 +131,16 @@ func persistContextualValidity(logger log.Log,
 		}
 	}
 	return nil
+}
+
+func iterateLayers(from, to types.LayerID, callback func(types.LayerID) bool) {
+	for lid := from; !lid.After(to); lid = lid.Add(1) {
+		if !callback(lid) {
+			return
+		}
+	}
+}
+
+type layerVerifier interface {
+	verify(log.Log, types.LayerID) bool
 }
