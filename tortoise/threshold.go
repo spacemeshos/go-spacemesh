@@ -36,7 +36,9 @@ func computeBallotWeight(
 			return weightFromUint64(0), fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
 		}
 		rst := weightFromUint64(targetWeight)
-		return rst.div(weightFromUint64(uint64(expected))), nil
+		rst = rst.div(weightFromUint64(uint64(expected)))
+		weights[ballot.ID()] = rst
+		return rst, nil
 	}
 	if ballot.RefBallot == types.EmptyBallotID {
 		return weightFromUint64(0), fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
@@ -49,6 +51,7 @@ func computeBallotWeight(
 		}
 		return computeBallotWeight(atxdb, bdp, weights, refballot, layerSize, layersPerEpoch)
 	}
+	weights[ballot.ID()] = rst
 	return rst, nil
 }
 

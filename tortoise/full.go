@@ -25,8 +25,12 @@ type full struct {
 	votes map[types.BallotID]votes
 	base  map[types.BallotID]types.BallotID
 
-	counted      types.LayerID
-	weights      map[types.BlockID]weight
+	// counted weights up to this layer. weights are not as long as verifying
+	// tortoise make progress.
+	counted types.LayerID
+	// counted weights of all blocks
+	weights map[types.BlockID]weight
+	// queue of the ballots with bad beacon
 	delayedQueue *list.List
 }
 

@@ -565,58 +565,47 @@ func (t *turtle) processBlocks(lid types.LayerID, blocks []*types.Block) {
 
 func (t *turtle) processBallots(ctx *tcontext, lid types.LayerID, original []*types.Ballot) ([]tortoiseBallot, error) {
 	var (
-		ballots     = make([]tortoiseBallot, 0, len(original))
-		ballotsIDs  = make([]types.BallotID, 0, len(original))
-		refs, other []*types.Ballot
+		ballots    = make([]tortoiseBallot, 0, len(original))
+		ballotsIDs = make([]types.BallotID, 0, len(original))
 	)
 
 	for _, ballot := range original {
-		if ballot.EpochData != nil {
-			refs = append(refs, ballot)
-		} else {
-			other = append(other, ballot)
+		ballotWeight, err := computeBallotWeight(t.atxdb, t.bdp, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
+		if err != nil {
+			return nil, err
 		}
-	}
+		t.ballotLayer[ballot.ID()] = ballot.LayerIndex
 
-	for _, part := range [...][]*types.Ballot{refs, other} {
-		for _, ballot := range part {
-			ballotWeight, err := computeBallotWeight(t.atxdb, t.bdp, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
-			if err != nil {
-				return nil, err
-			}
-			t.ballotWeight[ballot.ID()] = ballotWeight
-			t.ballotLayer[ballot.ID()] = ballot.LayerIndex
+		// TODO(dshulyak) this should not fail without terminating tortoise
+		t.markBeaconWithBadBallot(t.logger, ballot)
 
-			// TODO(dshulyak) this should not fail without terminating tortoise
-			t.markBeaconWithBadBallot(t.logger, ballot)
+		ballotsIDs = append(ballotsIDs, ballot.ID())
 
-			ballotsIDs = append(ballotsIDs, ballot.ID())
+		baselid := t.ballotLayer[ballot.BaseBallot]
 
-			baselid := t.ballotLayer[ballot.BaseBallot]
-
-			votes := votes{}
-			for lid := baselid; lid.Before(t.processed); lid = lid.Add(1) {
-				for _, bid := range t.blocks[lid] {
-					votes[bid] = against
-				}
-			}
-			for _, bid := range ballot.ForDiff {
-				votes[bid] = support
-			}
-			for _, bid := range ballot.NeutralDiff {
-				votes[bid] = abstain
-			}
-			for _, bid := range ballot.AgainstDiff {
+		votes := votes{}
+		for lid := baselid; lid.Before(t.processed); lid = lid.Add(1) {
+			for _, bid := range t.blocks[lid] {
 				votes[bid] = against
 			}
-			ballots = append(ballots, tortoiseBallot{
-				id:     ballot.ID(),
-				base:   ballot.BaseBallot,
-				weight: ballotWeight,
-				votes:  votes,
-			})
 		}
+		for _, bid := range ballot.ForDiff {
+			votes[bid] = support
+		}
+		for _, bid := range ballot.NeutralDiff {
+			votes[bid] = abstain
+		}
+		for _, bid := range ballot.AgainstDiff {
+			votes[bid] = against
+		}
+		ballots = append(ballots, tortoiseBallot{
+			id:     ballot.ID(),
+			base:   ballot.BaseBallot,
+			weight: ballotWeight,
+			votes:  votes,
+		})
 	}
+
 	t.ballots[lid] = ballotsIDs
 	return ballots, nil
 }

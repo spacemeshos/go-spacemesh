@@ -2066,6 +2066,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				weights = map[types.BallotID]weight{}
 
 				ctrl  = gomock.NewController(t)
+				mdb   = mocks.NewMockblockDataProvider(ctrl)
 				atxdb = mocks.NewMockatxDataProvider(ctrl)
 			)
 
@@ -2095,10 +2096,9 @@ func TestComputeBallotWeight(t *testing.T) {
 				ballot.Initialize()
 				ballots = append(ballots, ballot)
 
-				weight, err := computeBallotWeight(atxdb, nil, weights, ballot, tc.layerSize, tc.layersPerEpoch)
+				weight, err := computeBallotWeight(atxdb, mdb, weights, ballot, tc.layerSize, tc.layersPerEpoch)
 				require.NoError(t, err)
 				require.Equal(t, b.ExpectedWeight.String(), weight.String())
-				weights[ballot.ID()] = weight
 			}
 		})
 	}
