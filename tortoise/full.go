@@ -25,10 +25,13 @@ type full struct {
 	votes map[types.BallotID]votes
 	base  map[types.BallotID]types.BallotID
 
-	// counted weights up to this layer. weights are not as long as verifying
-	// tortoise make progress.
+	// counted weights up to this layer.
+	//
+	// counting votes is what makes full tortoise expensive during rerun.
+	// we want to wait until verifying can't make progress before they are counted.
+	// storing them in current version is cheap.
 	counted types.LayerID
-	// counted weights of all blocks
+	// counted weights of all blocks up to counted layer.
 	weights map[types.BlockID]weight
 	// queue of the ballots with bad beacon
 	delayedQueue *list.List

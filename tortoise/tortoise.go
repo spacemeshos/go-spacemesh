@@ -149,6 +149,7 @@ func (t *turtle) evict(ctx context.Context) {
 		for _, block := range t.blocks[lid] {
 			delete(t.blockLayer, block)
 			delete(t.localVotes, block)
+			delete(t.full.weights, block)
 		}
 		delete(t.blocks, lid)
 		if lid.GetEpoch() < oldestEpoch {
@@ -522,9 +523,6 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			)
 			t.mode = fullMode
 		}
-		// counting votes is what makes full tortoise expensive during rerun.
-		// we want to wait until we know that verifying can't make progress before they are counted.
-		// storing them in current version is cheap.
 		t.full.countVotes(logger)
 		t.verified = t.full.verify(logger)
 	}
