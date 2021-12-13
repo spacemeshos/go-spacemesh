@@ -43,7 +43,7 @@ func (m *Message) Field() log.Field {
 // certificate is a collection of messages and the set of values.
 // Typically used as a collection of commit messages.
 type certificate struct {
-	Values  []types.BlockID // the committed set S
+	Values  []types.ProposalID // the committed set S
 	AggMsgs *aggregatedMessages
 }
 
@@ -58,7 +58,7 @@ type innerMessage struct {
 	InstanceID       types.LayerID
 	K                uint32 // the round counter
 	Ki               uint32
-	Values           []types.BlockID     // the set S. optional for commit InnerMsg in a certificate
+	Values           []types.ProposalID  // the set S. optional for commit InnerMsg in a certificate
 	RoleProof        []byte              // role is implicit by InnerMsg type, this is the proof
 	EligibilityCount uint16              // the number of claimed eligibilities
 	Svp              *aggregatedMessages // optional. only for proposal Messages

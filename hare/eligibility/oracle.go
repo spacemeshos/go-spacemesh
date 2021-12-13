@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -490,10 +489,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 			continue
 		}
 		seenBallots[ballot.ID()] = struct{}{}
-		if ballot.ID() == types.BallotID(mesh.GenesisBlock().ID()) {
-			// always accept genesis ballot
-			continue
-		}
 		if ballot.EpochData == nil {
 			// not a ref ballot, no beacon value to check
 			continue

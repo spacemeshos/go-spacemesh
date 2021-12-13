@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -23,21 +22,21 @@ const (
 	lowDefaultSize = 100
 )
 
-func genBlockID(i int) types.BlockID {
-	return types.NewExistingBlock(types.NewLayerID(1), util.Uint32ToBytes(uint32(i)), nil).ID()
+func getProposalID(i int) types.ProposalID {
+	return types.GenLayerProposal(types.NewLayerID(1), nil).ID()
 }
 
 var (
-	value1  = genBlockID(1)
-	value2  = genBlockID(2)
-	value3  = genBlockID(3)
-	value4  = genBlockID(4)
-	value5  = genBlockID(5)
-	value6  = genBlockID(6)
-	value7  = genBlockID(7)
-	value8  = genBlockID(8)
-	value9  = genBlockID(9)
-	value10 = genBlockID(10)
+	value1  = getProposalID(1)
+	value2  = getProposalID(2)
+	value3  = getProposalID(3)
+	value4  = getProposalID(4)
+	value5  = getProposalID(5)
+	value6  = getProposalID(6)
+	value7  = getProposalID(7)
+	value8  = getProposalID(8)
+	value9  = getProposalID(9)
+	value10 = getProposalID(10)
 )
 
 func BuildPreRoundMsg(signing Signer, s *Set, roleProof []byte) *Msg {
