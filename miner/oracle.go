@@ -53,7 +53,7 @@ func newMinerOracle(layerSize, layersPerEpoch uint32, atxDB activationDB, vrfSig
 
 // GetProposalEligibility returns the miner's ATXID and the active set for the layer's epoch, along with the list of eligibility
 // proofs for that layer.
-func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon []byte) (types.ATXID, []types.ATXID, []types.VotingEligibilityProof, error) {
+func (o *Oracle) GetProposalEligibility(lid types.LayerID, beacon types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibilityProof, error) {
 	o.mu.Lock()
 	defer o.mu.Unlock()
 
@@ -127,8 +127,8 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
-func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beacon []byte) (map[types.LayerID][]types.VotingEligibilityProof, []types.ATXID, error) {
-	beaconDbgStr := types.BytesToHash(beacon).ShortString()
+func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beacon types.Beacon) (map[types.LayerID][]types.VotingEligibilityProof, []types.ATXID, error) {
+	beaconDbgStr := beacon.ShortString()
 	logger := o.log.WithFields(epoch, log.String("beacon", beaconDbgStr), log.Uint64("weight", weight))
 
 	// get the previous epoch's total weight

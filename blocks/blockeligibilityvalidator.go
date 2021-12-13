@@ -56,7 +56,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 		return false, fmt.Errorf("failed to get active set from block %v", activeSetBlock.ID())
 	}
 	epochBeacon := activeSetBlock.TortoiseBeacon
-	if epochBeacon == nil {
+	if epochBeacon == types.EmptyBeacon {
 		return false, fmt.Errorf("failed to get tortoise beacon from block %v", activeSetBlock.ID())
 	}
 	// todo: optimize by using reference to active set size and cache active set size to not load all atxsIDs from db
@@ -95,7 +95,7 @@ func (v BlockEligibilityValidator) BlockSignedAndEligible(block *types.Block) (b
 	}
 	vrfSig := block.EligibilityProof.Sig
 
-	beaconShortString := types.BytesToHash(epochBeacon).ShortString()
+	beaconShortString := epochBeacon.ShortString()
 	if !v.validateVRF(vrfPubkey, message, vrfSig) {
 		return false, fmt.Errorf("tortoise beacon eligibility VRF validation failed: beacon %v, epoch %v, counter: %v, vrfSig: %v",
 			beaconShortString, epochNumber, counter, types.BytesToHash(vrfSig).ShortString())

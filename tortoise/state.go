@@ -10,7 +10,7 @@ func newCommonState() commonState {
 		ballots:          map[types.LayerID][]types.BallotID{},
 		ballotLayer:      map[types.BallotID]types.LayerID{},
 		blockLayer:       map[types.BlockID]types.LayerID{},
-		refBallotBeacons: map[types.EpochID]map[types.BallotID][]byte{},
+		refBallotBeacons: map[types.EpochID]map[types.BallotID]types.Beacon{},
 		badBeaconBallots: map[types.BallotID]struct{}{},
 		epochWeight:      map[types.EpochID]weight{},
 		ballotWeight:     map[types.BallotID]weight{},
@@ -38,7 +38,7 @@ type commonState struct {
 	blockLayer  map[types.BlockID]types.LayerID
 
 	// cache ref ballot by epoch
-	refBallotBeacons map[types.EpochID]map[types.BallotID][]byte
+	refBallotBeacons map[types.EpochID]map[types.BallotID]types.Beacon
 	// cache ballots with bad beacons. this cache is mainly for self-healing where we only have BallotID
 	// in the opinions map to work with.
 	badBeaconBallots map[types.BallotID]struct{}

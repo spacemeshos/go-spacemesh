@@ -121,7 +121,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	epoch := layerID.GetEpoch()
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	atxID := types.RandomATXID()
 	activeSet := genActiveSet(t)
 	numSlots := 2
@@ -171,7 +171,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 			assert.Equal(t, refBid, types.BallotID(*b.RefBlock))
 			assert.Equal(t, atxID, b.ATXID)
 			assert.Nil(t, b.ActiveSet)
-			assert.Nil(t, b.TortoiseBeacon)
+			assert.Equal(t, types.EmptyBeacon, b.TortoiseBeacon)
 			assert.Equal(t, []types.TransactionID{tx2.ID()}, b.TxIDs)
 			return nil
 		}).Times(1)
@@ -190,7 +190,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	epoch := layerID.GetEpoch()
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	atxID := types.RandomATXID()
 	activeSet := genActiveSet(t)
 	proofs := genProofs(t, 1)
@@ -252,7 +252,7 @@ func TestBuilder_HandleLayer_NoBeacon(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
-	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(nil, errors.New("unknown")).Times(1)
+	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, errors.New("unknown")).Times(1)
 
 	assert.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errNoBeacon)
 }
@@ -262,7 +262,7 @@ func TestBuilder_HandleLayer_EligibilityError(t *testing.T) {
 	defer b.ctrl.Finish()
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	errUnknown := errors.New("unknown")
@@ -276,7 +276,7 @@ func TestBuilder_HandleLayer_NotEligible(t *testing.T) {
 	defer b.ctrl.Finish()
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), []types.VotingEligibilityProof{}, nil).Times(1)
@@ -289,7 +289,7 @@ func TestBuilder_HandleLayer_SelectTXError(t *testing.T) {
 	defer b.ctrl.Finish()
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
@@ -304,7 +304,7 @@ func TestBuilder_HandleLayer_BaseBlockError(t *testing.T) {
 	defer b.ctrl.Finish()
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
@@ -323,7 +323,7 @@ func TestBuilder_HandleLayer_GetRefBallotError(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	epoch := layerID.GetEpoch()
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
@@ -343,7 +343,7 @@ func TestBuilder_HandleLayer_SaveRefBallotError(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	epoch := layerID.GetEpoch()
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
@@ -366,7 +366,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	epoch := layerID.GetEpoch()
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
@@ -387,7 +387,7 @@ func TestBuilder_HandleLayer_AddBlockError(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	epoch := layerID.GetEpoch()
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
@@ -411,7 +411,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	epoch := layerID.GetEpoch()
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
@@ -439,7 +439,7 @@ func TestBuilder_UniqueBlockID(t *testing.T) {
 	atxID1 := types.RandomATXID()
 	atxID2 := types.RandomATXID()
 	activeSet := genActiveSet(t)
-	beacon := types.RandomBytes(types.BeaconSize)
+	beacon := types.RandomBeacon()
 	builder1.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(types.RandomBallotID(), [][]types.BlockID{nil, nil, nil}, nil).Times(1)
 	builder1.mRefDB.EXPECT().Get(getEpochKey(layerID.GetEpoch())).Return(types.RandomBallotID().Bytes(), nil).Times(1)
 	b1, err := builder1.createProposal(context.TODO(), layerID, types.VotingEligibilityProof{}, atxID1, activeSet, beacon, nil)

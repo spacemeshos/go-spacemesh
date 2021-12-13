@@ -74,7 +74,7 @@ func genMinerATXHeader(id types.ATXID, publishLayer types.LayerID, nodeID types.
 	return atxHeader
 }
 
-func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types.LayerID, atxID types.ATXID, proof types.VotingEligibilityProof, activeSet []types.ATXID, beacon []byte) *types.Ballot {
+func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types.LayerID, atxID types.ATXID, proof types.VotingEligibilityProof, activeSet []types.ATXID, beacon types.Beacon) *types.Ballot {
 	tb.Helper()
 	ballot := &types.Ballot{
 		InnerBallot: types.InnerBallot{
@@ -113,7 +113,7 @@ func createTestOracle(tb testing.TB, layerSize, layersPerEpoch uint32) *testOrac
 type epochATXInfo struct {
 	atx       *types.ActivationTxHeader
 	activeSet []types.ATXID
-	beacon    []byte
+	beacon    types.Beacon
 }
 
 func genATXForTargetEpochs(tb testing.TB, start, end types.EpochID, nodeID types.NodeID, layersPerEpoch uint32) map[types.EpochID]epochATXInfo {
@@ -123,7 +123,7 @@ func genATXForTargetEpochs(tb testing.TB, start, end types.EpochID, nodeID types
 		publishLayer := epoch.FirstLayer().Sub(layersPerEpoch)
 		epochInfo[epoch] = epochATXInfo{
 			atx:       genMinerATXHeader(types.RandomATXID(), publishLayer, nodeID),
-			beacon:    types.RandomBytes(types.BeaconSize),
+			beacon:    types.RandomBeacon(),
 			activeSet: activeSet,
 		}
 	}
@@ -167,7 +167,7 @@ func testMinerOracleAndProposalValidator(t *testing.T, layerSize uint32, layersP
 
 		for _, proof := range proofs {
 			b := genBallotWithEligibility(t, o.edSigner, layer, info.atx.ID(), proof, info.activeSet, info.beacon)
-			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b.ID(), types.BytesToBeacon(info.beacon), uint64(defaultAtxWeight)).Times(1)
+			mbc.EXPECT().ReportBeaconFromBallot(layer.GetEpoch(), b.ID(), info.beacon, uint64(defaultAtxWeight)).Times(1)
 			for _, atxID := range info.activeSet {
 				mdb.EXPECT().GetAtxHeader(atxID).Return(genATXHeader(atxID), nil).Times(1)
 			}
@@ -199,7 +199,7 @@ func TestOracle_OwnATXNotFound(t *testing.T) {
 
 	lid := types.NewLayerID(layersPerEpoch * 3)
 	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(*types.EmptyATXID, database.ErrNotFound).Times(1)
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBytes(types.BeaconSize))
+	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
 	assert.ErrorIs(t, err, errMinerHasNoATXInPreviousEpoch)
 	assert.Equal(t, *types.EmptyATXID, atxID)
 	assert.Len(t, activeSet, 0)
@@ -215,7 +215,7 @@ func TestOracle_OwnATXIDError(t *testing.T) {
 	lid := types.NewLayerID(layersPerEpoch * 3)
 	errUnknown := errors.New("unknown")
 	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(*types.EmptyATXID, errUnknown).Times(1)
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBytes(types.BeaconSize))
+	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
 	assert.ErrorIs(t, err, errUnknown)
 	assert.Equal(t, *types.EmptyATXID, atxID)
 	assert.Len(t, activeSet, 0)
@@ -233,7 +233,7 @@ func TestOracle_OwnATXError(t *testing.T) {
 	errUnknown := errors.New("unknown")
 	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(atxID, nil).Times(1)
 	o.mdb.EXPECT().GetAtxHeader(atxID).Return(nil, errUnknown).Times(1)
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBytes(types.BeaconSize))
+	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
 	assert.ErrorIs(t, err, errUnknown)
 	assert.Equal(t, *types.EmptyATXID, atxID)
 	assert.Len(t, activeSet, 0)
@@ -252,7 +252,7 @@ func TestOracle_ZeroEpochWeight(t *testing.T) {
 	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(atxID, nil).Times(1)
 	o.mdb.EXPECT().GetAtxHeader(atxID).Return(atx, nil).Times(1)
 	o.mdb.EXPECT().GetEpochWeight(lid.GetEpoch()).Return(uint64(0), nil, nil)
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBytes(types.BeaconSize))
+	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
 	assert.ErrorIs(t, err, errZeroEpochWeight)
 	assert.Equal(t, *types.EmptyATXID, atxID)
 	assert.Len(t, activeSet, 0)
@@ -271,7 +271,7 @@ func TestOracle_EmptyActiveSet(t *testing.T) {
 	o.mdb.EXPECT().GetNodeAtxIDForEpoch(o.nodeID, lid.GetEpoch()-1).Return(atxID, nil).Times(1)
 	o.mdb.EXPECT().GetAtxHeader(atxID).Return(atx, nil).Times(1)
 	o.mdb.EXPECT().GetEpochWeight(lid.GetEpoch()).Return(uint64(defaultAtxWeight), nil, nil)
-	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBytes(types.BeaconSize))
+	atxID, activeSet, proofs, err := o.GetProposalEligibility(lid, types.RandomBeacon())
 	assert.ErrorIs(t, err, errEmptyActiveSet)
 	assert.Equal(t, *types.EmptyATXID, atxID)
 	assert.Len(t, activeSet, 0)

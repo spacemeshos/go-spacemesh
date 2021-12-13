@@ -103,7 +103,7 @@ func createRefBallot(tb testing.TB) *types.Ballot {
 	b.RefBallot = types.EmptyBallotID
 	b.EpochData = &types.EpochData{
 		ActiveSet: types.ATXIDList{types.RandomATXID(), types.RandomATXID()},
-		Beacon:    types.RandomBytes(types.BeaconSize),
+		Beacon:    types.RandomBeacon(),
 	}
 	b.Signature = signing.NewEdSigner().Sign(b.Bytes())
 	require.NoError(tb, b.Initialize())
@@ -188,7 +188,7 @@ func TestBallot_RefBallotMissingBeacon(t *testing.T) {
 	th := createTestHandler(t)
 	defer th.ctrl.Finish()
 	b := createRefBallot(t)
-	b.EpochData.Beacon = nil
+	b.EpochData.Beacon = types.EmptyBeacon
 	data := encodeBallot(t, b)
 	th.mm.EXPECT().HasBallot(gomock.Any()).Return(false).Times(1)
 	assert.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errMissingBeacon)

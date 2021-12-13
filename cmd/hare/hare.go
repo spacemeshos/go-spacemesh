@@ -65,7 +65,7 @@ func (mbp *mockBlockProvider) LayerBlocks(lyr types.LayerID) ([]*types.Block, er
 	s := make([]*types.Block, 200)
 	for i := uint64(0); i < 200; i++ {
 		blk := types.NewExistingBlock(lyr, util.Uint64ToBytes(i), nil)
-		blk.TortoiseBeacon = lyr.GetEpoch().ToBytes()
+		blk.TortoiseBeacon = types.BytesToBeacon(lyr.GetEpoch().ToBytes())
 		s[i] = blk
 	}
 	return s, nil
@@ -77,8 +77,8 @@ func (mbp *mockBlockProvider) GetBlock(types.BlockID) (*types.Block, error) {
 
 type mockBeaconGetter struct{}
 
-func (mbg *mockBeaconGetter) GetBeacon(id types.EpochID) ([]byte, error) {
-	return id.ToBytes(), nil
+func (mbg *mockBeaconGetter) GetBeacon(id types.EpochID) (types.Beacon, error) {
+	return types.BytesToBeacon(id.ToBytes()), nil
 }
 
 // HareApp represents an Hare application.
