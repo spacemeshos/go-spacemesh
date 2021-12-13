@@ -28,6 +28,11 @@ type blockHandler interface {
 	HandleBlockData(context.Context, []byte) error
 }
 
+// ballotHandler defines handling function for ballots.
+type ballotHandler interface {
+	HandleBallotData(context.Context, []byte) error
+}
+
 // txProcessor is an interface for handling TX data received in sync.
 type txProcessor interface {
 	HandleSyncTransaction(data []byte) error
@@ -103,6 +108,7 @@ type Logic struct {
 	layerBlocksChs   map[types.LayerID][]chan LayerPromiseResult
 	poetProofs       poetDB
 	atxs             atxHandler
+	ballotHandler    ballotHandler
 	blockHandler     blockHandler
 	txs              txProcessor
 	layerDB          layerDB
@@ -129,7 +135,7 @@ const (
 )
 
 // NewLogic creates a new instance of layer fetching logic.
-func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHandler, poet poetDB, atxIDs atxIDsDB, txs txProcessor,
+func NewLogic(ctx context.Context, cfg Config, ballots ballotHandler, blocks blockHandler, atxs atxHandler, poet poetDB, atxIDs atxIDsDB, txs txProcessor,
 	host *p2p.Host, dbStores fetch.LocalDataSource, layers layerDB, log log.Log) *Logic {
 	l := &Logic{
 		log:            log,
@@ -140,6 +146,7 @@ func NewLogic(ctx context.Context, cfg Config, blocks blockHandler, atxs atxHand
 		poetProofs:     poet,
 		atxs:           atxs,
 		layerDB:        layers,
+		ballotHandler:  ballots,
 		blockHandler:   blocks,
 		atxIds:         atxIDs,
 		txs:            txs,
@@ -475,15 +482,6 @@ func (l *Logic) getPoetResult(ctx context.Context, hash types.Hash32, data []byt
 	return nil
 }
 
-// blockReceiveFunc handles blocks received via fetch.
-func (l *Logic) blockReceiveFunc(ctx context.Context, data []byte) error {
-	if err := l.blockHandler.HandleBlockData(ctx, data); err != nil {
-		return fmt.Errorf("handle block data: %w", err)
-	}
-
-	return nil
-}
-
 // IsSynced indicates if this node is synced.
 func (l *Logic) IsSynced(context.Context) bool {
 	// todo: add this logic
@@ -524,31 +522,6 @@ func (l *Logic) FetchAtx(ctx context.Context, id types.ATXID) error {
 	return nil
 }
 
-// FetchBlock gets data for a single block id and validates it.
-func (l *Logic) FetchBlock(ctx context.Context, id types.BlockID) error {
-	res, open := <-l.fetcher.GetHash(id.AsHash32(), fetch.BlockDB, false)
-	if !open {
-		return fmt.Errorf("stopped on call for id %v", id.String())
-	}
-	if res.Err != nil {
-		return res.Err
-	}
-	if !res.IsLocal {
-		if err := l.blockHandler.HandleBlockData(ctx, res.Data); err != nil {
-			return fmt.Errorf("handle block data: %w", err)
-		}
-
-		return nil
-	}
-	return res.Err
-}
-
-// GetBallots gets data for the specified BallotIDs and validates them.
-func (l *Logic) GetBallots(context.Context, []types.BallotID) error {
-	// TODO: implement me
-	return nil
-}
-
 // GetAtxs gets the data for given atx ids IDs and validates them. returns an error if at least one ATX cannot be fetched.
 func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	hashes := make([]types.Hash32, 0, len(IDs))
@@ -575,30 +548,63 @@ func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	return nil
 }
 
-// GetBlocks gets the data for given block ids and validates the blocks. returns an error if a single atx failed to be
-// fetched or validated.
-func (l *Logic) GetBlocks(ctx context.Context, IDs []types.BlockID) error {
-	l.log.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("numBlocks", len(IDs)))
-	hashes := make([]types.Hash32, 0, len(IDs))
-	for _, blockID := range IDs {
-		hashes = append(hashes, blockID.AsHash32())
-	}
-	results := l.fetcher.GetHashes(hashes, fetch.BlockDB, false)
+type dataReceiver func(context.Context, []byte) error
+
+func (l *Logic) getHashes(ctx context.Context, hashes []types.Hash32, hint fetch.Hint, receiver dataReceiver) []error {
+	errs := make([]error, 0, len(hashes))
+	results := l.fetcher.GetHashes(hashes, hint, false)
 	for hash, resC := range results {
 		res, open := <-resC
 		if !open {
-			l.log.WithContext(ctx).With().Info("block res channel closed", log.String("hash", hash.ShortString()))
+			l.log.WithContext(ctx).With().Info("res channel closed",
+				log.String("hint", string(hint)),
+				log.String("hash", hash.ShortString()))
 			continue
 		}
 		if res.Err != nil {
-			l.log.WithContext(ctx).With().Error("cannot find block", log.String("hash", hash.String()), log.Err(res.Err))
-			return res.Err
+			l.log.WithContext(ctx).With().Warning("cannot find hash",
+				log.String("hint", string(hint)),
+				log.String("hash", hash.String()),
+				log.Err(res.Err))
+			errs = append(errs, res.Err)
+			continue
 		}
 		if !res.IsLocal {
-			if err := l.blockReceiveFunc(ctx, res.Data); err != nil {
-				return err
+			if err := receiver(ctx, res.Data); err != nil {
+				l.log.WithContext(ctx).With().Warning("failed to handle data",
+					log.String("hint", string(hint)),
+					log.String("hash", hash.String()),
+					log.Err(err))
+				errs = append(errs, err)
 			}
 		}
+	}
+	return errs
+}
+
+// GetBallots gets data for the specified BallotIDs and validates them.
+func (l *Logic) GetBallots(ctx context.Context, ids []types.BallotID) error {
+	l.log.WithContext(ctx).With().Debug("requesting ballots from peer", log.Int("num_ballots", len(ids)))
+	hashes := make([]types.Hash32, 0, len(ids))
+	for _, ballotID := range ids {
+		hashes = append(hashes, ballotID.AsHash32())
+	}
+	if errs := l.getHashes(ctx, hashes, fetch.BallotDB, l.ballotHandler.HandleBallotData); len(errs) > 0 {
+		return errs[0]
+	}
+	return nil
+}
+
+// GetBlocks gets the data for given block ids and validates the blocks. returns an error if a single atx failed to be
+// fetched or validated.
+func (l *Logic) GetBlocks(ctx context.Context, ids []types.BlockID) error {
+	l.log.WithContext(ctx).With().Debug("requesting blocks from peer", log.Int("num_blocks", len(ids)))
+	hashes := make([]types.Hash32, 0, len(ids))
+	for _, bid := range ids {
+		hashes = append(hashes, bid.AsHash32())
+	}
+	if errs := l.getHashes(ctx, hashes, fetch.BlockDB, l.blockHandler.HandleBlockData); len(errs) > 0 {
+		return errs[0]
 	}
 	return nil
 }

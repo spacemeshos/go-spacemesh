@@ -13,8 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/fetch"
-	"github.com/spacemeshos/go-spacemesh/fetch/mocks"
-	lyrMocks "github.com/spacemeshos/go-spacemesh/layerfetcher/mocks"
+	fmocks "github.com/spacemeshos/go-spacemesh/fetch/mocks"
+	"github.com/spacemeshos/go-spacemesh/layerfetcher/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
@@ -31,17 +31,6 @@ func randomHash() types.Hash32 {
 		return types.Hash32{}
 	}
 	return types.CalcHash32(b)
-}
-
-// RandomBlockID generates random block id.
-func randomBlockID() types.BlockID {
-	b := make([]byte, 8)
-	_, err := rand.Read(b)
-	// Note that err == nil only if we read len(b) bytes.
-	if err != nil {
-		return types.BlockID{}
-	}
-	return types.BlockID(types.CalcHash32(b).ToHash20())
 }
 
 func randPeer(tb testing.TB) p2p.Peer {
@@ -149,8 +138,8 @@ func TestLayerBlocksReqReceiver_Success(t *testing.T) {
 	processed := lyrID.Add(10)
 	hash := randomHash()
 	aggHash := randomHash()
-	blocks := []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID(), randomBlockID()}
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	blocks := []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()}
+	db := mocks.NewMocklayerDB(ctrl)
 	db.EXPECT().ProcessedLayer().Return(processed).Times(1)
 	db.EXPECT().GetLayerHash(lyrID).Return(hash).Times(1)
 	db.EXPECT().GetAggregatedLayerHash(lyrID).Return(aggHash).Times(1)
@@ -178,7 +167,7 @@ func TestLayerBlocksReqReceiver_SuccessEmptyLayer(t *testing.T) {
 	lyrID := types.NewLayerID(100)
 	processed := lyrID.Add(10)
 	aggHash := randomHash()
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 	db.EXPECT().ProcessedLayer().Return(processed).Times(1)
 	db.EXPECT().GetLayerHash(lyrID).Return(types.EmptyLayerHash).Times(1)
 	db.EXPECT().GetAggregatedLayerHash(lyrID).Return(aggHash).Times(1)
@@ -203,7 +192,7 @@ func TestLayerBlocksReqReceiver_LayerNotFound(t *testing.T) {
 	defer ctrl.Finish()
 
 	lyrID := types.NewLayerID(100)
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 	db.EXPECT().ProcessedLayer().Return(lyrID.Add(10)).Times(1)
 	db.EXPECT().GetLayerHash(lyrID).Return(randomHash()).Times(1)
 	db.EXPECT().GetAggregatedLayerHash(lyrID).Return(randomHash()).Times(1)
@@ -220,7 +209,7 @@ func TestLayerBlocksReqReceiver_GetBlockIDsUnknownError(t *testing.T) {
 	defer ctrl.Finish()
 
 	lyrID := types.NewLayerID(100)
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 	db.EXPECT().ProcessedLayer().Return(lyrID.Add(10)).Times(1)
 	db.EXPECT().GetLayerHash(lyrID).Return(randomHash()).Times(1)
 	db.EXPECT().GetAggregatedLayerHash(lyrID).Return(randomHash()).Times(1)
@@ -237,7 +226,7 @@ func TestLayerBlocksReqReceiver_GetInputVectorError(t *testing.T) {
 	defer ctrl.Finish()
 
 	lyrID := types.NewLayerID(100)
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 	db.EXPECT().ProcessedLayer().Return(lyrID.Add(10)).Times(1)
 	db.EXPECT().GetLayerHash(lyrID).Return(randomHash()).Times(1)
 	db.EXPECT().GetAggregatedLayerHash(lyrID).Return(randomHash()).Times(1)
@@ -254,7 +243,7 @@ func TestLayerBlocksReqReceiver_RequestedHigherLayer(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	processed := types.NewLayerID(99)
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 	db.EXPECT().ProcessedLayer().Return(processed).Times(1)
 
 	l := NewMockLogic(newMockNet(t), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
@@ -268,7 +257,7 @@ func generateLayerBlocks(numInputVector int) []byte {
 }
 
 func generateLayerBlocksWithHash(consistentHash bool, numInputVector int) []byte {
-	blockIDs := []types.BlockID{randomBlockID(), randomBlockID(), randomBlockID(), randomBlockID()}
+	blockIDs := []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()}
 	var hash types.Hash32
 	if consistentHash {
 		hash = types.CalcBlocksHash32(types.SortBlockIDs(blockIDs), nil)
@@ -277,7 +266,7 @@ func generateLayerBlocksWithHash(consistentHash bool, numInputVector int) []byte
 	}
 	iv := make([]types.BlockID, numInputVector)
 	for i := 0; i < numInputVector; i++ {
-		iv[i] = randomBlockID()
+		iv[i] = types.RandomBlockID()
 	}
 	lb := layerBlocks{
 		Blocks:         blockIDs,
@@ -314,7 +303,7 @@ func TestPollLayerBlocks_AllHaveBlockData(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 	db.EXPECT().SaveLayerInputVectorByID(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, iv []types.BlockID) interface{} {
 			assert.Equal(t, numPeers, len(iv))
@@ -327,7 +316,7 @@ func TestPollLayerBlocks_AllHaveBlockData(t *testing.T) {
 	assert.Equal(t, layerID, res.Layer)
 }
 
-func TestPollLayerBlocks_FetchBlockError(t *testing.T) {
+func TestPollLayerBlocks_FetchLayerBlocksError(t *testing.T) {
 	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {
@@ -339,7 +328,7 @@ func TestPollLayerBlocks_FetchBlockError(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 
 	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{fetchError: ErrInternal}, logtest.New(t))
 	res := <-l.PollLayerContent(context.TODO(), layerID)
@@ -365,7 +354,7 @@ func TestPollLayerBlocks_OnlyOneHasBlockData(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 	db.EXPECT().SaveLayerInputVectorByID(gomock.Any(), layerID, gomock.Any()).Return(nil).Times(1)
 
 	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
@@ -392,7 +381,7 @@ func TestPollLayerBlocks_OneZeroLayerAmongstErrors(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 	db.EXPECT().SetZeroBlockLayer(layerID).Return(nil).Times(1)
 
 	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
@@ -411,7 +400,7 @@ func TestPollLayerBlocks_ZeroLayer(t *testing.T) {
 	}
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 
 	layerID := types.NewLayerID(10)
@@ -425,7 +414,7 @@ func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	fetcher := mocks.NewMockFetcher(ctrl)
+	fetcher := fmocks.NewMockFetcher(ctrl)
 	fetcher.EXPECT().GetHashes(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
 		func(hashes []types.Hash32, _ fetch.Hint, _ bool) map[types.Hash32]chan fetch.HashDataPromiseResult {
 			rst := map[types.Hash32]chan fetch.HashDataPromiseResult{}
@@ -459,7 +448,7 @@ func TestPollLayerBlocks_MissingBlocks(t *testing.T) {
 		net.layerBlocks[peer] = data
 	}
 
-	l := NewMockLogic(net, lyrMocks.NewMocklayerDB(ctrl), &mockBlocks{}, &mockAtx{}, fetcher, logtest.New(t))
+	l := NewMockLogic(net, mocks.NewMocklayerDB(ctrl), &mockBlocks{}, &mockAtx{}, fetcher, logtest.New(t))
 	res := <-l.PollLayerContent(context.TODO(), requested)
 	require.ErrorIs(t, res.Err, ErrBlockNotFetched)
 }
@@ -474,7 +463,7 @@ func TestPollLayerBlocks_FailureToSaveZeroLayerIgnored(t *testing.T) {
 	}
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 
 	layerID := types.NewLayerID(10)
@@ -498,11 +487,276 @@ func TestPollLayerBlocks_FailedToSaveInputVector(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	errUnknown := errors.New("whatever")
-	db := lyrMocks.NewMocklayerDB(ctrl)
+	db := mocks.NewMocklayerDB(ctrl)
 	db.EXPECT().SaveLayerInputVectorByID(gomock.Any(), layerID, gomock.Any()).Return(errUnknown).Times(1)
 
 	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	res := <-l.PollLayerContent(context.TODO(), layerID)
 	assert.Equal(t, errUnknown, res.Err)
 	assert.Equal(t, layerID, res.Layer)
+}
+
+type testLogic struct {
+	*Logic
+	ctrl     *gomock.Controller
+	mBallotH *mocks.MockballotHandler
+	mBlocksH *mocks.MockblockHandler
+	mFetcher *fmocks.MockFetcher
+}
+
+func createTestLogic(t *testing.T) *testLogic {
+	ctrl := gomock.NewController(t)
+	tl := &testLogic{
+		ctrl:     ctrl,
+		mBallotH: mocks.NewMockballotHandler(ctrl),
+		mBlocksH: mocks.NewMockblockHandler(ctrl),
+		mFetcher: fmocks.NewMockFetcher(ctrl),
+	}
+	tl.Logic = &Logic{
+		log:           logtest.New(t),
+		ballotHandler: tl.mBallotH,
+		blockHandler:  tl.mBlocksH,
+		fetcher:       tl.mFetcher,
+	}
+	return tl
+}
+
+func TestGetBlocks_FetchAllError(t *testing.T) {
+	l := createTestLogic(t)
+	defer l.ctrl.Finish()
+
+	blocks := []*types.Block{
+		types.GenLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
+		types.GenLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
+	}
+	blockIDs := types.BlockIDs(blocks)
+	hashes := types.BlockIDsToHashes(blockIDs)
+
+	errUnknown := errors.New("unknown")
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for _, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch <- fetch.HashDataPromiseResult{
+			Hash: h,
+			Err:  errUnknown,
+		}
+		results[h] = ch
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BlockDB, false).Return(results).Times(1)
+	assert.ErrorIs(t, l.GetBlocks(context.TODO(), blockIDs), errUnknown)
+}
+
+func TestGetBlocks_FetchSomeError(t *testing.T) {
+	l := createTestLogic(t)
+	defer l.ctrl.Finish()
+
+	blocks := []*types.Block{
+		types.GenLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
+		types.GenLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
+	}
+	blockIDs := types.BlockIDs(blocks)
+	hashes := types.BlockIDsToHashes(blockIDs)
+
+	errUnknown := errors.New("unknown")
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		if i == 0 {
+			ch <- fetch.HashDataPromiseResult{
+				Hash: h,
+				Err:  errUnknown,
+			}
+		} else {
+			data, err := types.InterfaceToBytes(blocks[i])
+			require.NoError(t, err)
+			ch <- fetch.HashDataPromiseResult{
+				Hash: h,
+				Data: data,
+			}
+			l.mBlocksH.EXPECT().HandleBlockData(gomock.Any(), data).Return(nil).Times(1)
+		}
+
+		results[h] = ch
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BlockDB, false).Return(results).Times(1)
+	assert.ErrorIs(t, l.GetBlocks(context.TODO(), blockIDs), errUnknown)
+}
+
+func TestGetBlocks_HandlerError(t *testing.T) {
+	l := createTestLogic(t)
+	defer l.ctrl.Finish()
+
+	blocks := []*types.Block{
+		types.GenLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
+		types.GenLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
+	}
+	blockIDs := types.BlockIDs(blocks)
+	hashes := types.BlockIDsToHashes(blockIDs)
+
+	errUnknown := errors.New("unknown")
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		data, err := types.InterfaceToBytes(blocks[i])
+		require.NoError(t, err)
+		ch <- fetch.HashDataPromiseResult{
+			Hash: h,
+			Data: data,
+		}
+		results[h] = ch
+		l.mBlocksH.EXPECT().HandleBlockData(gomock.Any(), data).Return(errUnknown).Times(1)
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BlockDB, false).Return(results).Times(1)
+	assert.ErrorIs(t, l.GetBlocks(context.TODO(), blockIDs), errUnknown)
+}
+
+func TestGetBlocks(t *testing.T) {
+	l := createTestLogic(t)
+	defer l.ctrl.Finish()
+
+	blocks := []*types.Block{
+		types.GenLayerBlock(types.NewLayerID(10), types.RandomTXSet(10)),
+		types.GenLayerBlock(types.NewLayerID(20), types.RandomTXSet(10)),
+	}
+	blockIDs := types.BlockIDs(blocks)
+	hashes := types.BlockIDsToHashes(blockIDs)
+
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		data, err := types.InterfaceToBytes(blocks[i])
+		require.NoError(t, err)
+		ch <- fetch.HashDataPromiseResult{
+			Hash: h,
+			Data: data,
+		}
+		results[h] = ch
+		l.mBlocksH.EXPECT().HandleBlockData(gomock.Any(), data).Return(nil).Times(1)
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BlockDB, false).Return(results).Times(1)
+	assert.NoError(t, l.GetBlocks(context.TODO(), blockIDs))
+}
+
+func TestGetBallots_FetchAllError(t *testing.T) {
+	l := createTestLogic(t)
+	defer l.ctrl.Finish()
+
+	ballots := []*types.Ballot{
+		types.GenLayerBallot(types.NewLayerID(10)),
+		types.GenLayerBallot(types.NewLayerID(20)),
+	}
+	ballotIDs := types.ToBallotIDs(ballots)
+	hashes := types.BallotIDsToHashes(ballotIDs)
+
+	errUnknown := errors.New("unknown")
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for _, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		ch <- fetch.HashDataPromiseResult{
+			Hash: h,
+			Err:  errUnknown,
+		}
+		results[h] = ch
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BallotDB, false).Return(results).Times(1)
+	assert.ErrorIs(t, l.GetBallots(context.TODO(), ballotIDs), errUnknown)
+}
+
+func TestGetBallots_FetchSomeError(t *testing.T) {
+	l := createTestLogic(t)
+	defer l.ctrl.Finish()
+
+	ballots := []*types.Ballot{
+		types.GenLayerBallot(types.NewLayerID(10)),
+		types.GenLayerBallot(types.NewLayerID(20)),
+	}
+	ballotIDs := types.ToBallotIDs(ballots)
+	hashes := types.BallotIDsToHashes(ballotIDs)
+
+	errUnknown := errors.New("unknown")
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		if i == 0 {
+			ch <- fetch.HashDataPromiseResult{
+				Hash: h,
+				Err:  errUnknown,
+			}
+		} else {
+			data, err := types.InterfaceToBytes(ballots[i])
+			require.NoError(t, err)
+			ch <- fetch.HashDataPromiseResult{
+				Hash: h,
+				Data: data,
+			}
+			l.mBallotH.EXPECT().HandleBallotData(gomock.Any(), data).Return(nil).Times(1)
+		}
+
+		results[h] = ch
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BallotDB, false).Return(results).Times(1)
+	assert.ErrorIs(t, l.GetBallots(context.TODO(), ballotIDs), errUnknown)
+}
+
+func TestGetBallots_HandlerError(t *testing.T) {
+	l := createTestLogic(t)
+	defer l.ctrl.Finish()
+
+	ballots := []*types.Ballot{
+		types.GenLayerBallot(types.NewLayerID(10)),
+		types.GenLayerBallot(types.NewLayerID(20)),
+	}
+	ballotIDs := types.ToBallotIDs(ballots)
+	hashes := types.BallotIDsToHashes(ballotIDs)
+
+	errUnknown := errors.New("unknown")
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		data, err := types.InterfaceToBytes(ballots[i])
+		require.NoError(t, err)
+		ch <- fetch.HashDataPromiseResult{
+			Hash: h,
+			Data: data,
+		}
+		results[h] = ch
+		l.mBallotH.EXPECT().HandleBallotData(gomock.Any(), data).Return(errUnknown).Times(1)
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BallotDB, false).Return(results).Times(1)
+	assert.ErrorIs(t, l.GetBallots(context.TODO(), ballotIDs), errUnknown)
+}
+
+func TestGetBallots(t *testing.T) {
+	l := createTestLogic(t)
+	defer l.ctrl.Finish()
+
+	ballots := []*types.Ballot{
+		types.GenLayerBallot(types.NewLayerID(10)),
+		types.GenLayerBallot(types.NewLayerID(20)),
+	}
+	ballotIDs := types.ToBallotIDs(ballots)
+	hashes := types.BallotIDsToHashes(ballotIDs)
+
+	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
+	for i, h := range hashes {
+		ch := make(chan fetch.HashDataPromiseResult, 1)
+		data, err := types.InterfaceToBytes(ballots[i])
+		require.NoError(t, err)
+		ch <- fetch.HashDataPromiseResult{
+			Hash: h,
+			Data: data,
+		}
+		results[h] = ch
+		l.mBallotH.EXPECT().HandleBallotData(gomock.Any(), data).Return(nil).Times(1)
+	}
+
+	l.mFetcher.EXPECT().GetHashes(hashes, fetch.BallotDB, false).Return(results).Times(1)
+	assert.NoError(t, l.GetBallots(context.TODO(), ballotIDs))
 }

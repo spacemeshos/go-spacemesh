@@ -443,8 +443,8 @@ func TestProposal_FailedToAddProposal(t *testing.T) {
 		})
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
-	th.mm.EXPECT().AddProposal(gomock.Any()).DoAndReturn(
-		func(proposal *types.Proposal) error {
+	th.mm.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, proposal *types.Proposal) error {
 			assert.Equal(t, p.Fields(), proposal.Fields())
 			return errUnknown
 		}).Times(1)
@@ -467,8 +467,8 @@ func TestProposal_ValidProposal(t *testing.T) {
 			return true, nil
 		})
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
-	th.mm.EXPECT().AddProposal(gomock.Any()).DoAndReturn(
-		func(proposal *types.Proposal) error {
+	th.mm.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, proposal *types.Proposal) error {
 			assert.Equal(t, p.Fields(), proposal.Fields())
 			return nil
 		}).Times(1)
@@ -491,8 +491,8 @@ func TestMetrics(t *testing.T) {
 			return true, nil
 		})
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
-	th.mm.EXPECT().AddProposal(gomock.Any()).DoAndReturn(
-		func(proposal *types.Proposal) error {
+	th.mm.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, proposal *types.Proposal) error {
 			assert.Equal(t, p.Fields(), proposal.Fields())
 			return nil
 		}).Times(1)

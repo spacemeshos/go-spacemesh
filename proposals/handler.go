@@ -133,6 +133,11 @@ func (h *Handler) HandleProposal(ctx context.Context, _ peer.ID, msg []byte) pub
 	return pubsub.ValidationAccept
 }
 
+// HandleBlockData handles Block data from sync.
+func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
+	return h.processProposal(ctx, data)
+}
+
 // HandleBallotData handles Ballot data from gossip and sync.
 func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	logger := h.logger.WithContext(ctx)
@@ -191,9 +196,7 @@ func (h *Handler) processProposal(ctx context.Context, data []byte) error {
 	h.logger.WithContext(ctx).With().Debug("proposal is syntactically valid")
 	reportProposalMetrics(&p)
 
-	// TODO: add Proposal/Ballot/TXs to mesh
-
-	if err := h.mesh.AddProposal(&p); err != nil {
+	if err := h.mesh.AddProposalWithTxs(ctx, &p); err != nil {
 		logger.With().Error("failed to save proposal", log.Err(err))
 		return fmt.Errorf("save proposal: %w", err)
 	}
