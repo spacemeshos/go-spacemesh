@@ -2,7 +2,6 @@ package tortoise
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/big"
 	mrand "math/rand"
@@ -327,69 +326,44 @@ func TestLayerPatterns(t *testing.T) {
 }
 
 func TestAbstainsInMiddle(t *testing.T) {
-	logger := logtest.New(t)
-	layers := types.NewLayerID(15)
-	initialNumGood := 5
-	blocksPerLayer := 10
+	const size = 10
+	s := sim.New(
+		sim.WithLayerSize(size),
+	)
+	s.Setup()
 
-	msh := getInMemMesh(t)
-	layerfuncs := make([]func(types.LayerID) ([]types.BlockID, error), 0, layers.Uint32())
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
-	// first 5 layers incl genesis just work
-	for i := 0; i <= initialNumGood; i++ {
-		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
-			logger.Debug("giving good results for layer", id)
-			ids, err = msh.LayerBlockIds(id)
-			if err != nil {
-				return ids, fmt.Errorf("layer block IDs: %w", err)
-			}
-
-			return ids, nil
-		})
+	var last, verified types.LayerID
+	for i := 0; i < 5; i++ {
+		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
+	require.Equal(t, last.Sub(1), verified)
+	expected := last
 
-	// next up two layers that didn't finish
-	newlastlyr := types.NewLayerID(uint32(len(layerfuncs)))
-	for i := newlastlyr; i.Before(newlastlyr.Add(2)); i = i.Add(1) {
-		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
-			logger.Debug("giving bad result for layer", id)
-			return nil, errors.New("simulated hare failure")
-		})
+	for i := 0; i < 2; i++ {
+		last = s.Next(
+			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
+			sim.WithoutInputVector(),
+		)
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
-
-	// more good layers
-	newlastlyr = types.NewLayerID(uint32(len(layerfuncs)))
-	for i := newlastlyr; i.Before(newlastlyr.Add(layers.Difference(newlastlyr))); i = i.Add(1) {
-		layerfuncs = append(layerfuncs, func(id types.LayerID) (ids []types.BlockID, err error) {
-			ids, err = msh.LayerBlockIds(id)
-			if err != nil {
-				return ids, fmt.Errorf("layer block IDs: %w", err)
-			}
-
-			return ids, nil
-		})
-	}
-
-	trtl := defaultTurtle(t)
-	trtl.LayerSize = uint32(blocksPerLayer)
-	trtl.bdp = msh
-	gen := mesh.GenesisLayer()
-	trtl.init(context.TODO(), gen)
-
-	var l types.LayerID
-	atxdb := getAtxDB()
-	trtl.atxdb = atxdb
-	for l = types.GetEffectiveGenesis().Add(1); l.Before(types.GetEffectiveGenesis().Add(layers.Uint32())); l = l.Add(1) {
-		makeAndProcessLayer(t, l, trtl, blocksPerLayer, blocksPerLayer, atxdb, msh, layerfuncs[l.Difference(types.GetEffectiveGenesis())-1])
+	for i := 0; i < 4; i++ {
+		last = s.Next(
+			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
+		)
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
 
 	// verification will get stuck as of the first layer with conflicting local and global opinions.
 	// block votes aren't counted because blocks aren't marked good, because they contain exceptions older
 	// than their base block.
 	// self-healing will not run because the layers aren't old enough.
-	require.Equal(t, int(types.GetEffectiveGenesis().Add(uint32(initialNumGood)).Uint32()), int(trtl.verified.Uint32()),
-		"verification should advance after hare finishes")
-	// todo: also check votes with requireVote
+	require.Equal(t, expected, verified)
 }
 
 type (
@@ -512,11 +486,12 @@ func TestAddToMesh(t *testing.T) {
 
 	// this should fail as the blocks for this layer have not been added to the mesh yet
 	alg.HandleIncomingLayer(context.TODO(), l3a.Index())
-	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
+	require.Equal(t, types.GetEffectiveGenesis().Add(1), alg.LatestComplete())
 
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
 	require.NoError(t, alg.rerun(context.TODO()))
+	alg.updateFromRerun(context.TODO())
 
 	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), mdb, atxdb, alg.BaseBallot, getHareResults, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l4))
@@ -844,7 +819,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		// keep track of all blocks on each side of the partition
 		var forkBlocksA, forkBlocksB []*types.Block
-		beforePartition := layerID
+
 		// simulate a partition
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
@@ -948,40 +923,14 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(mdb1.AddBlock(block))
 		}
 
-		for lid := beforePartition.Add(1); !lid.After(layerID); lid = lid.Add(1) {
-			r.NoError(alg1.trtl.HandleIncomingLayer(context.TODO(), lid))
-			r.NoError(alg2.trtl.HandleIncomingLayer(context.TODO(), lid))
-		}
+		require.NoError(t, alg1.rerun(context.TODO()))
+		require.NoError(t, alg2.rerun(context.TODO()))
 
 		// now continue for a few layers after rejoining, during which the minority tortoise will be stuck
 		// because its opinions about which blocks are valid/invalid are wrong and disagree with the majority
-		// opinion. these ten layers represent its healing distance. after it heals, it will converge to the
+		// opinion. these layers represent its healing distance. after it heals, it will converge to the
 		// majority opinion.
-		for i := 0; i < 10; i++ {
-			layerID = layerID.Add(1)
-			blocksA, blocksB := makeBlocks(layerID)
-			var blocks []*types.Block
-			blocks = append(blocksA, blocksB...)
-
-			// add all blocks to both tortoises
-			var blockIDs []types.BlockID
-			for _, block := range blocks {
-				blockIDs = append(blockIDs, block.ID())
-				r.NoError(mdb1.AddBlock(block))
-				r.NoError(mdb2.AddBlock(block))
-			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			alg1.HandleIncomingLayer(context.TODO(), layerID)
-			alg2.HandleIncomingLayer(context.TODO(), layerID)
-
-			// majority tortoise is unaffected, minority tortoise remains stuck
-			checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
-			checkVerifiedLayer(t, alg2.trtl, layerID.Sub(1))
-		}
-
-		// minority tortoise begins healing
-		for i := 0; i < 21; i++ {
+		for i := 0; i < 32; i++ {
 			layerID = layerID.Add(1)
 			blocksA, blocksB := makeBlocks(layerID)
 			var blocks []*types.Block
@@ -999,6 +948,7 @@ func TestMultiTortoise(t *testing.T) {
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 		}
+
 		// majority tortoise is unaffected, minority tortoise begins to heal but its verifying tortoise
 		// is still stuck
 		checkVerifiedLayer(t, alg1.trtl, layerID.Sub(1))
@@ -1880,7 +1830,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	for lid := genesis; lid.Before(last); lid = lid.Add(1) {
 		bids, err := s.GetState(0).MeshDB.LayerBlockIds(lid)
 		require.NoError(t, err)
-		require.NoError(t, s.GetState(0).MeshDB.SaveContextualValidity(bids[0], lid, false))
+		tortoise.trtl.localVotes[bids[0]] = against
 		unsupported[bids[0]] = struct{}{}
 	}
 
@@ -1892,7 +1842,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	require.NoError(t, err)
 	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, base, last, last)
 	require.Empty(t, exceptions[2])
-	require.Len(t, exceptions[0], 2) // against one block in genesis + 1 and genesis + 2
+	require.Len(t, exceptions[0], len(unsupported))
 	for _, bid := range exceptions[0] {
 		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis, last.Sub(1))
 		require.Contains(t, unsupported, bid)
@@ -1977,7 +1927,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 			}
 
 			local := votes{}
-			err := tortoise.trtl.addLocalVotes(wrapContext(ctx), tc.lid, local)
+			err := tortoise.trtl.addLocalVotes(ctx, logtest.New(t), tc.lid, local)
 			require.NoError(t, err)
 
 			for bid, opinion := range local {

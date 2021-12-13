@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"context"
 	"math/big"
 	mrand "math/rand"
 	"testing"
@@ -89,7 +88,6 @@ func TestFullCountVotes(t *testing.T) {
 		return rst
 	}
 
-	ctx := context.TODO()
 	genesis := types.GetEffectiveGenesis()
 
 	for _, tc := range []struct {
@@ -357,7 +355,7 @@ func TestFullCountVotes(t *testing.T) {
 
 				consensus.processed = lid
 				consensus.last = lid
-				tballots, err := consensus.processBallots(wrapContext(ctx), lid, layerBallots)
+				tballots, err := consensus.processBallots(lid, layerBallots)
 				consensus.full.processBallots(tballots)
 				require.NoError(t, err)
 

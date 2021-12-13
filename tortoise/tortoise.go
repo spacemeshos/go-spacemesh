@@ -167,7 +167,6 @@ func (t *turtle) evict(ctx context.Context) {
 // - otherwise deterministically select ballot with lowest id.
 func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.BlockID, error) {
 	var (
-		tctx          = wrapContext(ctx)
 		logger        = t.logger.WithContext(ctx)
 		disagreements = map[types.BallotID]types.LayerID{}
 		choices       []types.BallotID
@@ -187,13 +186,13 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		// we need only 1 ballot from the most recent layer, this ballot will be by definition the most
 		// consistent with our local opinion.
 		// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
-		exceptions, err = t.encodeVotes(tctx, votinglid, ballotLID, ballotLID, func(types.BlockID) sign { return against })
+		exceptions, err = t.encodeVotes(ctx, votinglid, ballotLID, ballotLID, func(types.BlockID) sign { return against })
 	}
 	if ballotID == types.EmptyBallotID || err != nil {
 		logger.With().Warning("failed to select good base ballot. reverting to the least bad choices", log.Err(err))
 		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 			for _, ballotID := range t.ballots[lid] {
-				dis, err := t.firstDisagreement(tctx, lid, ballotID, disagreements)
+				dis, err := t.firstDisagreement(ctx, lid, ballotID, disagreements)
 				if err != nil {
 					logger.With().Error("failed to compute first disagreement", ballotID, log.Err(err))
 					continue
@@ -206,13 +205,17 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		prioritizeBallots(choices, disagreements, t.ballotLayer)
 		for _, ballotID = range choices {
 			ballotLID = t.ballotLayer[ballotID]
-			exceptions, err = t.encodeVotes(tctx, votinglid, ballotLID, t.evicted.Add(1), func(blockID types.BlockID) sign {
+			exceptions, err = t.encodeVotes(ctx, votinglid, ballotLID, t.evicted.Add(1), func(blockID types.BlockID) sign {
 				return t.full.getVote(logger, ballotID, blockID)
 			})
 			if err == nil {
 				break
 			}
-			logger.With().Warning("error calculating vote exceptions for ballot", ballotID, log.Err(err))
+			logger.With().Warning("error calculating vote exceptions for ballot",
+				ballotID,
+				log.Err(err),
+				log.Stringer("last_layer", t.last),
+			)
 		}
 	}
 
@@ -259,26 +262,23 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 }
 
 // firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
-func (t *turtle) firstDisagreement(ctx *tcontext, blid types.LayerID, ballotID types.BallotID, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
+func (t *turtle) firstDisagreement(ctx context.Context, blid types.LayerID, ballotID types.BallotID, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
 	// using it as a mark that the votes for block are completely consistent
 	// with a local opinion. so if two blocks have consistent histories select block
 	// from a higher layer as it is more consistent.
 	consistent := t.last
 
 	for lid := t.evicted.Add(1); lid.Before(blid); lid = lid.Add(1) {
-		localOpinion, err := t.getLocalVotes(ctx, lid)
-		if err != nil {
-			return types.LayerID{}, err
-		}
-		for block, local := range localOpinion {
+		for _, block := range t.blocks[lid] {
+			localVote := t.localVotes[block]
 			vote := t.full.getVote(t.logger, ballotID, block)
-			if local != vote {
+			if localVote != vote {
 				t.logger.With().Debug("found disagreement on a block",
 					ballotID,
 					block,
 					log.Stringer("block_layer", lid),
 					log.Stringer("ballot_layer", blid),
-					log.Stringer("local_opinion", local),
+					log.Stringer("local_vote", localVote),
 					log.Stringer("vote", vote),
 				)
 				return lid, nil
@@ -292,7 +292,7 @@ type opinionsGetter func(types.BlockID) sign
 
 // encode differences between selected base ballot and local votes.
 func (t *turtle) encodeVotes(
-	ctx *tcontext,
+	ctx context.Context,
 	votinglid,
 	baselid,
 	startlid types.LayerID,
@@ -310,17 +310,12 @@ func (t *turtle) encodeVotes(
 	for lid := startlid; !lid.After(t.processed); lid = lid.Add(1) {
 		logger := logger.WithFields(log.Named("block_layer", lid))
 
-		local, err := t.getLocalVotes(ctx, lid)
-		if err != nil {
-			return nil, err
-		}
-
 		addVotes := func(logger log.Log, bid types.BlockID, localVote sign, diffMap map[types.BlockID]struct{}) {
 			baseVote := getter(bid)
 			needsException := localVote != baseVote
 
 			logFunc := logger.With().Debug
-			if lid.Before(baselid) {
+			if lid.Before(baselid) && needsException {
 				logFunc = logger.With().Warning
 			}
 			logFunc("voting according to the local opinion",
@@ -334,32 +329,34 @@ func (t *turtle) encodeVotes(
 			}
 		}
 
-		for bid, vote := range local {
+		for _, bid := range t.blocks[lid] {
+			localVote := t.localVotes[bid]
 			reason := "validity/hare"
-			usecoinflip := vote == abstain && lid.Before(t.layerCutoff())
+			usecoinflip := localVote == abstain && lid.Before(t.layerCutoff())
 			if usecoinflip {
 				sum := t.full.weights[bid]
-				vote = sum.cmp(t.localThreshold)
+				localVote = sum.cmp(t.localThreshold)
 				reason = "local threshold"
-				if vote == abstain {
+				if localVote == abstain {
 					reason = "coinflip"
 					coin, exist := t.bdp.GetCoinflip(ctx, votinglid)
 					if !exist {
-						return nil, fmt.Errorf("coinflip is not recorded in %s", votinglid)
+						return nil, fmt.Errorf("coinflip is not recorded in %s. required for vote on %s / %s",
+							votinglid, bid, lid)
 					}
 					if coin {
-						vote = support
+						localVote = support
 					} else {
-						vote = against
+						localVote = against
 					}
 				}
 			}
 			logger := logger.WithFields(
 				log.Stringer("block", bid),
-				log.String("local_opinion_reason", reason),
-				log.Stringer("local_opinion", vote),
+				log.String("local_vote_reason", reason),
+				log.Stringer("local_vote", localVote),
 			)
-			switch vote {
+			switch localVote {
 			case support:
 				// add exceptions for blocks that base ballot doesn't support
 				addVotes(logger, bid, support, forDiff)
@@ -378,7 +375,6 @@ func (t *turtle) encodeVotes(
 		}
 	}
 
-	// check if exceeded max no. exceptions
 	explen := len(againstDiff) + len(forDiff) + len(neutralDiff)
 	if explen > t.MaxExceptions {
 		return nil, fmt.Errorf("%s (%v)", errstrTooManyExceptions, explen)
@@ -452,12 +448,10 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Be
 // HandleIncomingLayer processes all layer ballot votes.
 func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) error {
 	defer t.evict(ctx)
-	return t.processLayer(wrapContext(ctx), lid)
+	return t.processLayer(ctx, t.logger.WithContext(ctx).WithFields(lid), lid)
 }
 
-func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
-	logger := t.logger.WithContext(ctx).WithFields(lid)
-
+func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.LayerID) error {
 	logger.With().Info("adding layer to the state")
 
 	if err := t.updateLayerState(logger, lid); err != nil {
@@ -475,7 +469,7 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	for _, block := range blocks {
 		original = append(original, block.ToBallot())
 	}
-	ballots, err := t.processBallots(ctx, lid, original)
+	ballots, err := t.processBallots(lid, original)
 	if err != nil {
 		return err
 	}
@@ -483,16 +477,17 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 	t.full.processBallots(ballots)
 	t.full.processBlocks(blocks)
 
-	previous := t.verified
+	if err := t.updateLocalVotes(ctx, logger); err != nil {
+		return err
+	}
 
+	var (
+		previous = t.verified
+		verifier layerVerifier
+	)
 	if t.mode == verifyingMode {
-		// local opinion may change within hdist. this solution might be a bottleneck during rerun
-		// reconsider while working on https://github.com/spacemeshos/go-spacemesh/issues/2980
-		if err := t.updateLocalVotes(ctx, t.verified.Add(1), t.processed); err != nil {
-			return err
-		}
 		t.verifying.countVotes(logger, lid, ballots)
-		t.verifyLayers(logger, t.verifying)
+		verifier = t.verifying
 	}
 	// condition to switch may change for rerun https://github.com/spacemeshos/go-spacemesh/issues/2980,
 	// verified layer will be expected to be stuck as the expected weight will be high.
@@ -507,8 +502,9 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 			t.mode = fullMode
 		}
 		t.full.countVotes(logger)
-		t.verifyLayers(logger, t.full)
+		verifier = t.full
 	}
+	verifyLayers(logger, t.Config, &t.commonState, verifier)
 	if err := persistContextualValidity(logger,
 		t.bdp,
 		previous, t.verified,
@@ -520,18 +516,6 @@ func (t *turtle) processLayer(ctx *tcontext, lid types.LayerID) error {
 
 	t.updateHistoricallyVerified()
 	return nil
-}
-
-func (t *turtle) verifyLayers(logger log.Log, verifier layerVerifier) {
-	iterateLayers(t.verified.Add(1), t.processed.Sub(1), func(lid types.LayerID) bool {
-		ok := verifier.verify(logger, lid)
-		if !ok {
-			return false
-		}
-		t.verified = lid
-		updateThresholds(logger, t.Config, &t.commonState)
-		return true
-	})
 }
 
 func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
@@ -569,7 +553,7 @@ func (t *turtle) processBlocks(lid types.LayerID, blocks []*types.Block) {
 	t.blocks[lid] = blockIDs
 }
 
-func (t *turtle) processBallots(ctx *tcontext, lid types.LayerID, original []*types.Ballot) ([]tortoiseBallot, error) {
+func (t *turtle) processBallots(lid types.LayerID, original []*types.Ballot) ([]tortoiseBallot, error) {
 	var (
 		ballots    = make([]tortoiseBallot, 0, len(original))
 		ballotsIDs = make([]types.BallotID, 0, len(original))
@@ -616,13 +600,18 @@ func (t *turtle) processBallots(ctx *tcontext, lid types.LayerID, original []*ty
 	return ballots, nil
 }
 
-func (t *turtle) updateLocalVotes(ctx *tcontext, from, to types.LayerID) error {
-	for lid := from; !lid.After(to); lid = lid.Add(1) {
-		if err := t.addLocalVotes(ctx, lid, t.localVotes); err != nil {
-			return err
-		}
-	}
-	return nil
+func (t *turtle) updateLocalVotes(ctx context.Context, logger log.Log) (err error) {
+	from := t.verified.Add(1)
+	to := t.processed
+	logger.With().Debug("updating local votes for layers",
+		log.Stringer("from", from),
+		log.Stringer("to", to),
+	)
+	iterateLayers(from, to, func(lid types.LayerID) bool {
+		err = t.addLocalVotes(ctx, logger, lid, t.localVotes)
+		return err == nil
+	})
+	return err
 }
 
 // the idea here is to give enough room for verifying tortoise to complete. during live tortoise execution this will be limited by the hdist.
@@ -650,18 +639,15 @@ func (t *turtle) layerCutoff() types.LayerID {
 }
 
 // addLocalVotes for layer.
-func (t *turtle) addLocalVotes(ctx *tcontext, lid types.LayerID, opinion votes) error {
-	var (
-		logger = t.logger.WithContext(ctx).WithFields(lid)
-		bids   = t.blocks[lid]
-	)
+func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.LayerID, opinion votes) error {
+	bids := t.blocks[lid]
 	for _, bid := range bids {
 		opinion[bid] = against
 	}
 
 	if !lid.Before(t.layerCutoff()) {
 		// for newer layers, we vote according to the local opinion (input vector, from hare or sync)
-		opinionVec, err := getInputVector(ctx, t.bdp, lid)
+		opinionVec, err := t.bdp.GetLayerInputVectorByID(lid)
 		if err != nil {
 			if t.last.After(types.NewLayerID(t.Zdist)) && lid.Before(t.last.Sub(t.Zdist)) {
 				// Layer has passed the Hare abort distance threshold, so we give up waiting for Hare results. At this point
@@ -686,11 +672,11 @@ func (t *turtle) addLocalVotes(ctx *tcontext, lid types.LayerID, opinion votes) 
 	if !lid.After(t.historicallyVerified) {
 		// this layer has been verified, so we should be able to read the set of contextual blocks
 		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
-		valid, err := getValidBlocks(ctx, t.bdp, lid)
+		valid, err := t.bdp.LayerContextuallyValidBlocks(ctx, lid)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to load contextually balid blocks for layer %s: %w", lid, err)
 		}
-		for _, bid := range valid {
+		for bid := range valid {
 			opinion[bid] = support
 		}
 		return nil

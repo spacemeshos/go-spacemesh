@@ -145,6 +145,18 @@ func iterateLayers(from, to types.LayerID, callback func(types.LayerID) bool) {
 	}
 }
 
+func verifyLayers(logger log.Log, config Config, state *commonState, verifier layerVerifier) {
+	iterateLayers(state.verified.Add(1), state.processed.Sub(1), func(lid types.LayerID) bool {
+		ok := verifier.verify(logger, lid)
+		if !ok {
+			return false
+		}
+		state.verified = lid
+		updateThresholds(logger, config, state)
+		return true
+	})
+}
+
 type layerVerifier interface {
 	verify(log.Log, types.LayerID) bool
 }

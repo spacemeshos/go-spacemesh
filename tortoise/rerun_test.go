@@ -55,6 +55,9 @@ func BenchmarkRerun(b *testing.B) {
 	b.Run("Verifying/100", func(b *testing.B) {
 		benchmarkRerun(b, 100, 100)
 	})
+	b.Run("Verifying/1000", func(b *testing.B) {
+		benchmarkRerun(b, 1000, 1000)
+	})
 	b.Run("Full/100", func(b *testing.B) {
 		benchmarkRerun(b, 100, 1, sim.WithEmptyInputVector())
 	})

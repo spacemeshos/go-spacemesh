@@ -128,7 +128,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		current := f.weights[block]
 		decision := current.cmp(f.threshold)
 		if decision == abstain {
-			logger.With().Info("candidate layer is not verified. block is undecided in full tortoise.",
+			logger.With().Info("candidate layer is not verified. block is undecided in full tortoise",
 				log.Stringer("block", block),
 				log.Stringer("voting_weight", current),
 			)
@@ -137,6 +137,10 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		decisions = append(decisions, decision)
 	}
 	for i, block := range blocks {
+		logger.With().Debug("full tortoise decided on a block",
+			log.Stringer("block", block),
+			log.Stringer("decision", decisions[i]),
+		)
 		f.localVotes[block] = decisions[i]
 	}
 	logger.With().Info("candidate layer is verified by full tortoise")
