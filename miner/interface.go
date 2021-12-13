@@ -9,7 +9,7 @@ import (
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type proposalOracle interface {
-	GetProposalEligibility(types.LayerID, []byte) (types.ATXID, []types.ATXID, []types.VotingEligibilityProof, error)
+	GetProposalEligibility(types.LayerID, types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibilityProof, error)
 }
 
 type meshProvider interface {

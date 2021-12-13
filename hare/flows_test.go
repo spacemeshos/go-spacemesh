@@ -234,7 +234,7 @@ func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.Pe
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
 	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
-	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, nil).AnyTimes()
 
 	hare := New(tcfg, pid, p2p, ed, nodeID, mockSyncState(t), &mockBlockProvider{lyrBlocks: lyrBlocks}, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
@@ -434,7 +434,7 @@ func Test_multipleCPs(t *testing.T) {
 	lyrBlocks := make(map[types.LayerID][]*types.Block)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 		for i := uint64(0); i < 200; i++ {
-			blk := randomBlock(t, j, nil)
+			blk := randomBlock(t, j, types.EmptyBeacon)
 			lyrBlocks[j] = append(lyrBlocks[j], blk)
 		}
 	}
@@ -494,7 +494,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	lyrBlocks := make(map[types.LayerID][]*types.Block)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 		for i := uint64(0); i < 200; i++ {
-			blk := randomBlock(t, j, nil)
+			blk := randomBlock(t, j, types.EmptyBeacon)
 			lyrBlocks[j] = append(lyrBlocks[j], blk)
 		}
 	}

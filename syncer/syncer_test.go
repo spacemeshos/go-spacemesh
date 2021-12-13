@@ -132,7 +132,7 @@ func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 	memdb := mesh.NewMemMeshDB(lg.WithName("meshDB"))
 	atxStore := database.NewMemDatabase()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
-	atxdb := activation.NewDB(atxStore, nil, activation.NewIdentityStore(database.NewMemDatabase()), memdb, layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
+	atxdb := activation.NewDB(atxStore, nil, activation.NewIdentityStore(database.NewMemDatabase()), layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
 	ctrl := gomock.NewController(t)
 	mockFetch := smocks.NewMockBlockFetcher(ctrl)
 	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
@@ -147,7 +147,7 @@ var conf = Configuration{
 func newSyncer(ctx context.Context, t *testing.T, conf Configuration, ticker layerTicker, mesh *mesh.Mesh, fetcher layerFetcher, logger log.Log) *Syncer {
 	ctrl := gomock.NewController(t)
 	beacons := smocks.NewMockBeaconGetter(ctrl)
-	beacons.EXPECT().GetBeacon(gomock.Any()).Return([]byte("beacons"), nil).AnyTimes()
+	beacons.EXPECT().GetBeacon(gomock.Any()).Return(types.RandomBeacon(), nil).AnyTimes()
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().IsHareInCharge(gomock.Any()).Return(false).AnyTimes()
 	return NewSyncer(ctx, conf, ticker, beacons, mesh, fetcher, patrol, logger)
@@ -420,7 +420,7 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 	for l := types.NewLayerID(1); !l.After(gLayer.Add(2)); l = l.Add(1) {
 		l := l
 		if !l.GetEpoch().IsGenesis() {
-			beacons.EXPECT().GetBeacon(l.GetEpoch()).Return(l.GetEpoch().ToBytes(), nil).Times(1)
+			beacons.EXPECT().GetBeacon(l.GetEpoch()).Return(types.BytesToBeacon(l.GetEpoch().ToBytes()), nil).Times(1)
 		}
 		patrol.EXPECT().IsHareInCharge(l).Return(false).Times(1)
 		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -431,7 +431,7 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 			}).Times(1)
 	}
 	patrol.EXPECT().IsHareInCharge(lyr).Return(false).Times(maxAttemptWithinRun)
-	beacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(nil, database.ErrNotFound).Times(maxAttemptWithinRun)
+	beacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(types.EmptyBeacon, database.ErrNotFound).Times(maxAttemptWithinRun)
 
 	ticker.advanceToLayer(lyr.Add(1))
 	syncer.Start(context.TODO())

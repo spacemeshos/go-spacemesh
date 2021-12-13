@@ -13,7 +13,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/crypto"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
@@ -105,14 +104,8 @@ func newMockConsensusProcess(_ config.Config, instanceID types.LayerID, s *Set, 
 	return mcp
 }
 
-func randomBytes(t *testing.T, size int) []byte {
-	data, err := crypto.GetRandomBytes(size)
-	require.NoError(t, err)
-	return data
-}
-
-func randomBlock(t *testing.T, lyrID types.LayerID, beacon []byte) *types.Block {
-	block := types.NewExistingBlock(lyrID, randomBytes(t, 4), nil)
+func randomBlock(t *testing.T, lyrID types.LayerID, beacon types.Beacon) *types.Block {
+	block := types.NewExistingBlock(lyrID, types.RandomBytes(4), nil)
 	block.TortoiseBeacon = beacon
 	return block
 }
@@ -265,7 +258,7 @@ func TestHare_onTick(t *testing.T) {
 	require.NoError(t, h.Start(context.TODO()))
 
 	lyrID := types.GetEffectiveGenesis().Add(1)
-	beacon := randomBytes(t, 32)
+	beacon := types.RandomBeacon()
 	blockSet := []*types.Block{
 		randomBlock(t, lyrID, beacon),
 		randomBlock(t, lyrID, beacon),
@@ -348,10 +341,10 @@ func TestHare_onTick_BeaconFromRefBlocks(t *testing.T) {
 		h.Close()
 	})
 
-	epochBeacon := randomBytes(t, 32)
+	epochBeacon := types.RandomBeacon()
 	blockSet := []*types.Block{
 		randomBlock(t, lyrID, epochBeacon),
-		randomBlock(t, lyrID, nil),
+		randomBlock(t, lyrID, types.EmptyBeacon),
 		randomBlock(t, lyrID, epochBeacon),
 	}
 	refBlock := randomBlock(t, lyrID.Sub(1), epochBeacon)
@@ -417,8 +410,8 @@ func TestHare_onTick_SomeBadBlocks(t *testing.T) {
 	})
 
 	lyrID := types.GetEffectiveGenesis().Add(1)
-	beacon := randomBytes(t, 32)
-	epochBeacon := randomBytes(t, 32)
+	beacon := types.RandomBeacon()
+	epochBeacon := types.RandomBeacon()
 	blockSet := []*types.Block{
 		randomBlock(t, lyrID, epochBeacon),
 		randomBlock(t, lyrID, beacon),
@@ -485,8 +478,8 @@ func TestHare_onTick_NoGoodBlocks(t *testing.T) {
 	})
 
 	lyrID := types.GetEffectiveGenesis().Add(1)
-	beacon := randomBytes(t, 32)
-	epochBeacon := randomBytes(t, 32)
+	beacon := types.RandomBeacon()
+	epochBeacon := types.RandomBeacon()
 	blockSet := []*types.Block{
 		randomBlock(t, lyrID, beacon),
 		randomBlock(t, lyrID, beacon),
@@ -525,7 +518,7 @@ func TestHare_onTick_NoBeacon(t *testing.T) {
 
 	mockMesh := mocks.NewMockmeshProvider(ctrl)
 	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
-	mockBeacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(nil, errors.New("whatever")).Times(1)
+	mockBeacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(types.EmptyBeacon, errors.New("whatever")).Times(1)
 
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	h := New(cfg, "", noopPubSub(t), nil, types.NodeID{}, mockSyncState(t), mockMesh, mockBeacons, moRolacle,
@@ -550,7 +543,7 @@ func TestHare_onTick_NotSynced(t *testing.T) {
 
 	mp := mocks.NewMockmeshProvider(ctrl)
 	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
-	mockBeacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(randomBytes(t, 32), nil).Times(1)
+	mockBeacons.EXPECT().GetBeacon(lyr.GetEpoch()).Return(types.RandomBeacon(), nil).Times(1)
 
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	h := New(cfg, "", noopPubSub(t), nil, types.NodeID{}, mockSyncStateNotSynced(t), mp, mockBeacons, moRolacle,

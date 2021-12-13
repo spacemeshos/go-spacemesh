@@ -2,7 +2,6 @@ package mesh
 
 import (
 	"bytes"
-	"container/list"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -208,6 +207,15 @@ func (m *DB) GetBlock(id types.BlockID) (*types.Block, error) {
 	return mbk.ToBlock(), nil
 }
 
+// LayerBallots retrieves all ballots from a layer by layer ID.
+func (m *DB) LayerBallots(layerID types.LayerID) ([]*types.Ballot, error) {
+	blocks, err := m.LayerBlocks(layerID)
+	if err != nil {
+		return nil, fmt.Errorf("layer ballots: %w", err)
+	}
+	return types.ToBallots(blocks), nil
+}
+
 // LayerBlocks retrieves all blocks from a layer by layer index.
 func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	ids, err := m.LayerBlockIds(index)
@@ -225,53 +233,6 @@ func (m *DB) LayerBlocks(index types.LayerID) ([]*types.Block, error) {
 	}
 
 	return blocks, nil
-}
-
-// ForBlockInView traverses all blocks in a view and uses blockHandler func on each block
-// The block handler func should return two values - a bool indicating whether or not we should stop traversing after the current block (happy flow)
-// and an error indicating that an error occurred while handling the block, the traversing will stop in that case as well (error flow).
-func (m *DB) ForBlockInView(view map[types.BlockID]struct{}, layer types.LayerID, blockHandler func(block *types.Block) (bool, error)) error {
-	blocksToVisit := list.New()
-	for id := range view {
-		blocksToVisit.PushBack(id)
-	}
-	seenBlocks := make(map[types.BlockID]struct{})
-	for blocksToVisit.Len() > 0 {
-		block, err := m.GetBlock(blocksToVisit.Remove(blocksToVisit.Front()).(types.BlockID))
-		if err != nil {
-			return fmt.Errorf("get block: %w", err)
-		}
-
-		// catch blocks that were referenced after more than one layer, and slipped through the stop condition
-		if block.LayerIndex.Before(layer) {
-			continue
-		}
-
-		// execute handler
-		stop, err := blockHandler(block)
-		if err != nil {
-			return fmt.Errorf("block handler: %w", err)
-		}
-
-		if stop {
-			m.Log.With().Debug("ForBlockInView stopped", block.ID())
-			break
-		}
-
-		// stop condition: referenced blocks must be in lower layers, so we don't traverse them
-		if block.LayerIndex == layer {
-			continue
-		}
-
-		// push children to bfs queue
-		for _, id := range append(block.ForDiff, append(block.AgainstDiff, block.NeutralDiff...)...) {
-			if _, found := seenBlocks[id]; !found {
-				seenBlocks[id] = struct{}{}
-				blocksToVisit.PushBack(id)
-			}
-		}
-	}
-	return nil
 }
 
 // LayerBlockIds retrieves all block ids from a layer by layer index.
@@ -328,14 +289,14 @@ func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
 }
 
 // SaveContextualValidity persists opinion on block to the database.
-func (m *DB) SaveContextualValidity(id types.BlockID, _ types.LayerID, valid bool) error {
+func (m *DB) SaveContextualValidity(id types.BlockID, lid types.LayerID, valid bool) error {
 	var v []byte
 	if valid {
 		v = constTrue
 	} else {
 		v = constFalse
 	}
-	m.With().Debug("save block contextual validity", id, log.Bool("validity", valid))
+	m.With().Debug("save block contextual validity", id, lid, log.Bool("validity", valid))
 
 	if err := m.contextualValidity.Put(id.Bytes(), v); err != nil {
 		return fmt.Errorf("put into DB: %w", err)
@@ -432,8 +393,18 @@ func (m *DB) persistProcessedLayer(layerID types.LayerID) error {
 	return nil
 }
 
-func (m *DB) recoverProcessedLayer() (types.LayerID, error) {
+// GetProcessedLayer loads processed layer from database.
+func (m *DB) GetProcessedLayer() (types.LayerID, error) {
 	data, err := m.general.Get(constPROCESSED)
+	if err != nil {
+		return types.NewLayerID(0), err
+	}
+	return types.BytesToLayerID(data), nil
+}
+
+// GetVerifiedLayer loads verified layer from database.
+func (m *DB) GetVerifiedLayer() (types.LayerID, error) {
+	data, err := m.general.Get(VERIFIED)
 	if err != nil {
 		return types.NewLayerID(0), err
 	}
@@ -1022,6 +993,7 @@ func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.Layer
 
 	cvErrors := make(map[string][]types.BlockID)
 	cvErrorCount := 0
+
 	for _, b := range blockIds {
 		valid, err := m.ContextualValidity(b)
 		if err != nil {

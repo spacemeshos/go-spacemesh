@@ -36,18 +36,11 @@ func (t *Tortoise) updateFromRerun(ctx context.Context) (bool, types.LayerID) {
 		updated   = completed.Consensus
 		err       error
 	)
-	// we need to persist after rerun is completed so that eviction will not miss any layers
-	// that were received concurrently.
-	err = updated.Persist()
-	if err != nil {
-		logger.Error("failed to persist state after rerun", log.Err(err))
-		return reverted, observed
-	}
-	if current.Last.After(updated.Last) && err == nil {
+	if current.last.After(updated.last) && err == nil {
 		start := time.Now()
 		logger.Info("tortoise received more layers while rerun was in progress. running a catchup",
-			log.FieldNamed("last", current.Last),
-			log.FieldNamed("rerun-last", updated.Last))
+			log.FieldNamed("last", current.last),
+			log.FieldNamed("rerun-last", updated.last))
 
 		err = catchupToCurrent(ctx, current, updated)
 		if err != nil {
@@ -63,8 +56,8 @@ func (t *Tortoise) updateFromRerun(ctx context.Context) (bool, types.LayerID) {
 	if reverted {
 		observed = completed.Tracer.FirstLayer()
 	}
-	updated.log = current.log
 	updated.bdp = current.bdp
+	updated.logger = current.logger
 	t.trtl = updated
 	return reverted, observed
 }
@@ -84,33 +77,40 @@ func (t *Tortoise) rerunLoop(ctx context.Context, period time.Duration) {
 }
 
 func (t *Tortoise) rerun(ctx context.Context) error {
-	t.mu.RLock()
-	last := t.trtl.Last
-	t.mu.RUnlock()
+	t.mu.Lock()
+	last := t.trtl.last
+	historicallyVerified := t.trtl.historicallyVerified
+	t.mu.Unlock()
 
 	logger := t.logger.WithContext(ctx).WithFields(
 		log.Bool("rerun", true),
-		log.FieldNamed("last-layer-id", last),
 	)
 
 	start := time.Now()
-	logger.With().Info("tortoise rerun started")
+	logger.With().Info("tortoise rerun started",
+		log.FieldNamed("last_layer", last),
+		log.FieldNamed("historically_verified", historicallyVerified),
+	)
 
 	consensus := t.trtl.cloneTurtleParams()
 	consensus.logger = logger
 	consensus.init(ctx, mesh.GenesisLayer())
 	tracer := &validityTracer{blockDataProvider: consensus.bdp}
 	consensus.bdp = tracer
-	consensus.Last = last
+	consensus.last = last
+	consensus.historicallyVerified = historicallyVerified
 
-	for lid := types.GetEffectiveGenesis(); !lid.After(last); lid = lid.Add(1) {
+	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(last); lid = lid.Add(1) {
 		if err := consensus.HandleIncomingLayer(ctx, lid); err != nil {
 			logger.With().Error("tortoise rerun failed", log.Err(err))
 			return err
 		}
 	}
+	// there will be a state revert if after rerun we didn't reach original verified layer.
+	// it updated here so that we don't base our local opinion on un-verified layers.
+	consensus.historicallyVerified = consensus.verified
 	if tracer.Reverted() {
-		logger = logger.WithFields(log.FieldNamed("first-reverted-layer", tracer.FirstLayer()))
+		logger = logger.WithFields(log.FieldNamed("first_reverted_layer", tracer.FirstLayer()))
 	}
 	logger.With().Info("tortoise rerun completed", last, log.Duration("duration", time.Since(start)))
 
@@ -153,7 +153,7 @@ func (vt *validityTracer) FirstLayer() types.LayerID {
 }
 
 func catchupToCurrent(ctx context.Context, current, updated *turtle) error {
-	for lid := updated.Last.Add(1); !lid.After(current.Last); lid = lid.Add(1) {
+	for lid := updated.last.Add(1); !lid.After(current.last); lid = lid.Add(1) {
 		if err := updated.HandleIncomingLayer(ctx, lid); err != nil {
 			return err
 		}

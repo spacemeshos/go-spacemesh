@@ -95,8 +95,7 @@ type EpochData struct {
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
 	ActiveSet []ATXID
 	// the beacon value the smesher recorded for this epoch
-	// TODO relace with types.Beacon after the transition period to unified content block
-	Beacon []byte
+	Beacon Beacon
 }
 
 // VotingEligibilityProof includes the required values that, along with the smesher's VRF public key,
@@ -117,9 +116,9 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("ballot already initialized")
 	}
 
-	bytes := b.Bytes()
-	b.ballotID = BallotID(CalcHash32(bytes).ToHash20())
-	pubkey, err := ed25519.ExtractPublicKey(bytes, b.Signature)
+	data := b.Bytes()
+	b.ballotID = BallotID(CalcHash32(data).ToHash20())
+	pubkey, err := ed25519.ExtractPublicKey(data, b.Signature)
 	if err != nil {
 		return fmt.Errorf("ballot extract key: %w", err)
 	}
@@ -129,11 +128,11 @@ func (b *Ballot) Initialize() error {
 
 // Bytes returns the serialization of the InnerBallot.
 func (b *Ballot) Bytes() []byte {
-	bytes, err := InterfaceToBytes(b.InnerBallot)
+	data, err := InterfaceToBytes(b.InnerBallot)
 	if err != nil {
 		log.Panic("failed to serialize ballot: %v", err)
 	}
-	return bytes
+	return data
 }
 
 // ID returns the BallotID.
@@ -150,7 +149,7 @@ func (b *Ballot) SmesherID() *signing.PublicKey {
 func (b *Ballot) Fields() []log.LoggableField {
 	var (
 		activeSetSize = 0
-		beacon        []byte
+		beacon        Beacon
 	)
 	if b.EpochData != nil {
 		activeSetSize = len(b.EpochData.ActiveSet)
@@ -169,7 +168,7 @@ func (b *Ballot) Fields() []log.LoggableField {
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_ballot", b.RefBallot),
 		log.Int("active_set_size", activeSetSize),
-		log.String("beacon", BytesToHash(beacon).ShortString()),
+		log.String("beacon", beacon.ShortString()),
 	}
 }
 
@@ -177,7 +176,7 @@ func (b *Ballot) Fields() []log.LoggableField {
 func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	var (
 		activeSetSize = 0
-		beacon        []byte
+		beacon        Beacon
 	)
 
 	if b.EpochData != nil {
@@ -197,7 +196,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddUint32("eligibility_counter", b.EligibilityProof.J)
 	encoder.AddString("ref_ballot", b.RefBallot.String())
 	encoder.AddInt("active_set_size", activeSetSize)
-	encoder.AddString("beacon", BytesToHash(beacon).ShortString())
+	encoder.AddString("beacon", beacon.ShortString())
 	return nil
 }
 

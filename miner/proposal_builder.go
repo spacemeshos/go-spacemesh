@@ -248,7 +248,7 @@ func (pb *ProposalBuilder) createProposal(
 	proofs types.VotingEligibilityProof,
 	atxID types.ATXID,
 	activeSet []types.ATXID,
-	beacon []byte,
+	beacon types.Beacon,
 	txIDs []types.TransactionID,
 ) (*types.Block, error) {
 	logger := pb.logger.WithContext(ctx).WithFields(layerID, layerID.GetEpoch())
@@ -317,7 +317,7 @@ func (pb *ProposalBuilder) createProposal(
 
 func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerID) error {
 	var (
-		beacon []byte
+		beacon types.Beacon
 		err    error
 		epoch  = layerID.GetEpoch()
 		logger = pb.logger.WithContext(ctx).WithFields(layerID, epoch)
@@ -337,7 +337,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	}
 
 	logger.With().Info("miner got beacon to build proposals",
-		log.String("beacon", types.BytesToHash(beacon).ShortString()))
+		log.String("beacon", beacon.ShortString()))
 
 	started := time.Now()
 

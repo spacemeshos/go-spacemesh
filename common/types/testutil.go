@@ -16,6 +16,20 @@ func RandomBytes(size int) []byte {
 	return b
 }
 
+// RandomBeacon generates random beacon in bytes for testing.
+func RandomBeacon() Beacon {
+	return BytesToBeacon(RandomBytes(BeaconSize))
+}
+
+// RandomActiveSet generates a random set of ATXIDs of the specified size.
+func RandomActiveSet(size int) []ATXID {
+	ids := make([]ATXID, 0, size)
+	for i := 0; i < size; i++ {
+		ids = append(ids, RandomATXID())
+	}
+	return ids
+}
+
 // RandomATXID generates a random ATXID for testing.
 func RandomATXID() ATXID {
 	rand.Seed(time.Now().UnixNano())
