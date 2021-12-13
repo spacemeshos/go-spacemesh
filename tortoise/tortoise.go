@@ -307,15 +307,6 @@ func (t *turtle) encodeVotes(
 	forDiff := make(map[types.BlockID]struct{})
 	neutralDiff := make(map[types.BlockID]struct{})
 
-	localThreshold := weightFromUint64(0)
-	// TODO(dshulyak) expected weight for local threshold should be based on last layer.
-	weight, err := computeEpochWeight(t.atxdb, t.epochWeight, t.processed.GetEpoch())
-	if err != nil {
-		return nil, err
-	}
-	localThreshold = localThreshold.add(weight)
-	localThreshold = localThreshold.fraction(t.LocalThreshold)
-
 	for lid := startlid; !lid.After(t.processed); lid = lid.Add(1) {
 		logger := logger.WithFields(log.Named("block_layer", lid))
 
@@ -348,7 +339,7 @@ func (t *turtle) encodeVotes(
 			usecoinflip := vote == abstain && lid.Before(t.layerCutoff())
 			if usecoinflip {
 				sum := t.full.weights[bid]
-				vote = sum.cmp(localThreshold)
+				vote = sum.cmp(t.localThreshold)
 				reason = "local threshold"
 				if vote == abstain {
 					reason = "coinflip"
