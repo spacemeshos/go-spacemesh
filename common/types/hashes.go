@@ -112,7 +112,16 @@ func CalcHash12(data []byte) (h Hash12) {
 	return
 }
 
-// CalcBlocksHash32 returns the 32-byte sha256 sum of the block IDs, sorted in lexicographic order. The pre-image is
+// CalcProposalsHash32 returns the 32-byte sha256 sum of the IDs, sorted in lexicographic order. The pre-image is
+// prefixed with additionalBytes.
+func CalcProposalsHash32(view []ProposalID, additionalBytes []byte) Hash32 {
+	sortedView := make([]ProposalID, len(view))
+	copy(sortedView, view)
+	SortProposalIDs(sortedView)
+	return CalcProposalHash32Presorted(sortedView, additionalBytes)
+}
+
+// CalcBlocksHash32 returns the 32-byte sha256 sum of the IDs, sorted in lexicographic order. The pre-image is
 // prefixed with additionalBytes.
 func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 	sortedView := make([]BlockID, len(view))
@@ -121,7 +130,20 @@ func CalcBlocksHash32(view []BlockID, additionalBytes []byte) Hash32 {
 	return CalcBlockHash32Presorted(sortedView, additionalBytes)
 }
 
-// CalcBlockHash32Presorted returns the 32-byte sha256 sum of the block IDs, in the order given. The pre-image is
+// CalcProposalHash32Presorted returns the 32-byte sha256 sum of the IDs, in the order given. The pre-image is
+// prefixed with additionalBytes.
+func CalcProposalHash32Presorted(sortedView []ProposalID, additionalBytes []byte) Hash32 {
+	hash := sha256.New()
+	hash.Write(additionalBytes)
+	for _, id := range sortedView {
+		hash.Write(id.Bytes()) // this never returns an error: https://golang.org/pkg/hash/#Hash
+	}
+	var res Hash32
+	hash.Sum(res[:0])
+	return res
+}
+
+// CalcBlockHash32Presorted returns the 32-byte sha256 sum of the IDs, in the order given. The pre-image is
 // prefixed with additionalBytes.
 func CalcBlockHash32Presorted(sortedView []BlockID, additionalBytes []byte) Hash32 {
 	hash := sha256.New()
@@ -144,16 +166,6 @@ var hashT = reflect.TypeOf(Hash32{})
 // CalcHash32 returns the 32-byte sha256 sum of the given data.
 func CalcHash32(data []byte) Hash32 {
 	return sha256.Sum256(data)
-}
-
-// CalcAggregateHash32 returns the 32-byte sha256 sum of the given data aggregated with previous hash h.
-func CalcAggregateHash32(h Hash32, data []byte) Hash32 {
-	hash := sha256.New()
-	hash.Write(h.Bytes())
-	hash.Write(data) // this never returns an error: https://golang.org/pkg/hash/#Hash
-	var res Hash32
-	hash.Sum(res[:0])
-	return res
 }
 
 // CalcATXHash32 returns the 32-byte sha256 sum of serialization of the given ATX.

@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -14,6 +15,11 @@ const (
 	// BallotIDSize in bytes.
 	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
 	BallotIDSize = Hash32Length
+
+	// GenesisBeacon is the hex value of the beacon used during genesis.
+	GenesisBeacon = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
+
+	genesisSignerKey = "eb3a90aeeb1a020a01f8348d35652a87da79f43b9ac03f9bec00c2c0775abd2371c01b922babb293af8b597fccc913e3d3857bb8cf33e16b430facf2f647b195"
 )
 
 // BallotID is a 20-byte sha256 sum of the serialized ballot used to identify a Ballot.
@@ -48,12 +54,12 @@ type InnerBallot struct {
 	// - calculate the opinion difference on history between the smesher and the base Ballot
 	// - encode the opinion difference in 3 list:
 	//	 - ForDiff
-	//	   contains blocks we support while the base block did not support (i.e. voted against)
-	//	   for blocks we support in layers later than the base block, we also add them to this list
+	//	   contains blocks we support while the base ballot did not support (i.e. voted against)
+	//	   for blocks we support in layers later than the base ballot, we also add them to this list
 	//   - AgainstDiff
-	//     contains blocks we vote against while the base block explicitly supported
+	//     contains blocks we vote against while the base ballot explicitly supported
 	//	 - NeutralDiff
-	//	   contains blocks we vote neutral while the base block explicitly supported or voted against
+	//	   contains blocks we vote neutral while the base ballot explicitly supported or voted against
 	//
 	// example:
 	// layer | unified content block
@@ -107,6 +113,31 @@ type VotingEligibilityProof struct {
 	J uint32
 	// the VRF signature of some epoch specific data and J. one can derive a Ballot's layerID from this signature.
 	Sig []byte
+}
+
+func unsignedGenesisBallot() *Ballot {
+	return &Ballot{
+		InnerBallot: InnerBallot{
+			LayerIndex: GetEffectiveGenesis(),
+			EpochData: &EpochData{
+				Beacon: HexToBeacon(GenesisBeacon),
+			},
+		},
+	}
+}
+
+// GenesisBallot returns the genesis ballot.
+func GenesisBallot() *Ballot {
+	b := unsignedGenesisBallot()
+	signer, err := signing.NewEdSignerFromBuffer(util.Hex2Bytes(genesisSignerKey))
+	if err != nil {
+		log.Panic("failed to get genesis signer %v", err)
+	}
+	b.Signature = signer.Sign(b.Bytes())
+	if err = b.Initialize(); err != nil {
+		log.Panic("failed to get init genesis ballot %v", err)
+	}
+	return b
 }
 
 // Initialize calculates and sets the Ballot's cached ballotID and smesherID.
@@ -200,33 +231,13 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// ToMiniBlock transforms a Ballot to a MiniBlock during the transition period to unified content block.
-// it DOES NOT populate the TxIDs.
-func (b *Ballot) ToMiniBlock() *MiniBlock {
-	mb := &MiniBlock{
-		BlockHeader: BlockHeader{
-			LayerIndex: b.LayerIndex,
-			ATXID:      b.AtxID,
-			EligibilityProof: BlockEligibilityProof{
-				J:   b.EligibilityProof.J,
-				Sig: b.EligibilityProof.Sig,
-			},
-			Data:        nil,
-			BaseBlock:   BlockID(b.BaseBallot),
-			AgainstDiff: b.AgainstDiff,
-			ForDiff:     b.ForDiff,
-			NeutralDiff: b.NeutralDiff,
-		},
+// ToBallotIDs turns a list of Ballot into a list of BallotID.
+func ToBallotIDs(ballots []*Ballot) []BallotID {
+	ids := make([]BallotID, 0, len(ballots))
+	for _, b := range ballots {
+		ids = append(ids, b.ID())
 	}
-	if b.RefBallot != EmptyBallotID {
-		refBid := BlockID(b.RefBallot)
-		mb.RefBlock = &refBid
-	}
-	if b.EpochData != nil {
-		mb.ActiveSet = &b.EpochData.ActiveSet
-		mb.TortoiseBeacon = b.EpochData.Beacon
-	}
-	return mb
+	return ids
 }
 
 // String returns a short prefix of the hex representation of the ID.
@@ -252,4 +263,13 @@ func (id BallotID) Field() log.Field {
 // Compare returns true if other (the given BallotID) is less than this BallotID, by lexicographic comparison.
 func (id BallotID) Compare(other BallotID) bool {
 	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
+}
+
+// BallotIDsToHashes turns a list of BallotID into their Hash32 representation.
+func BallotIDsToHashes(ids []BallotID) []Hash32 {
+	hashes := make([]Hash32, 0, len(ids))
+	for _, id := range ids {
+		hashes = append(hashes, id.AsHash32())
+	}
+	return hashes
 }

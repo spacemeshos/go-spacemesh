@@ -1,10 +1,13 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 
 	"github.com/spacemeshos/ed25519"
 
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -20,6 +23,25 @@ const (
 	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
 	ProposalIDSize = Hash32Length
 )
+
+// GenesisBlock returns the genesis block.
+func GenesisBlock() *Block {
+	p := &Proposal{
+		InnerProposal: InnerProposal{
+			Ballot: *unsignedGenesisBallot(),
+		},
+	}
+	signer, err := signing.NewEdSignerFromBuffer(util.Hex2Bytes(genesisSignerKey))
+	if err != nil {
+		log.Panic("failed to get genesis signer %v", err)
+	}
+	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
+	p.Signature = signer.Sign(p.Bytes())
+	if err = p.Initialize(); err != nil {
+		log.Panic("failed to get init genesis block %v", err)
+	}
+	return (*Block)(p)
+}
 
 // Proposal contains the smesher's signed content proposal for a given layer and vote on the mesh history.
 // Proposal is ephemeral and will be discarded after the unified content block is created. the Ballot within
@@ -87,13 +109,6 @@ func (p *Proposal) Fields() []log.LoggableField {
 	return append(p.Ballot.Fields(), p.ID())
 }
 
-// ToBlock transforms a Proposal to a Block during the transition period to unified content block.
-func (p *Proposal) ToBlock() *Block {
-	mb := p.Ballot.ToMiniBlock()
-	mb.TxIDs = p.TxIDs
-	return &Block{MiniBlock: *mb}
-}
-
 // String returns a short prefix of the hex representation of the ID.
 func (id ProposalID) String() string {
 	return id.AsHash32().ShortString()
@@ -112,4 +127,33 @@ func (id ProposalID) AsHash32() Hash32 {
 // Field returns a log field. Implements the LoggableField interface.
 func (id ProposalID) Field() log.Field {
 	return log.String("proposal_id", id.String())
+}
+
+// Compare returns true if other (the given ProposalID) is less than this ProposalID, by lexicographic comparison.
+func (id ProposalID) Compare(other ProposalID) bool {
+	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
+}
+
+// ToProposalIDs returns a slice of ProposalID corresponding to the given proposals.
+func ToProposalIDs(proposals []*Proposal) []ProposalID {
+	ids := make([]ProposalID, 0, len(proposals))
+	for _, p := range proposals {
+		ids = append(ids, p.ID())
+	}
+	return ids
+}
+
+// ProposalIDsToBlockIDs turns a list of ProposalID into BlockID.
+func ProposalIDsToBlockIDs(pids []ProposalID) []BlockID {
+	bids := make([]BlockID, 0, len(pids))
+	for _, pid := range pids {
+		bids = append(bids, BlockID(pid))
+	}
+	return bids
+}
+
+// SortProposalIDs sorts a list of ProposalID in lexicographic order, in-place.
+func SortProposalIDs(ids []ProposalID) []ProposalID {
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
+	return ids
 }
