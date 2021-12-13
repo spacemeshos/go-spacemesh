@@ -290,7 +290,7 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 				log.Uint64("dest_balance", app.svm.GetBalance(dst)),
 				log.Uint64("sender_nonce", app.svm.GetNonce(addr)),
 				log.Uint64("sender_balance", app.svm.GetBalance(addr)))
-			ok = ok && 0 == app.svm.GetBalance(dst) && app.svm.GetNonce(addr) == 0
+			ok = ok && (app.svm.GetBalance(dst) == 0) && (app.svm.GetNonce(addr) == 0)
 		}
 		if ok {
 			suite.log.Info("zero addresses ok")
@@ -350,7 +350,7 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 				log.Uint64("dest_balance", app.svm.GetBalance(dst)),
 				log.Uint64("sender_nonce", app.svm.GetNonce(addr)),
 				log.Uint64("sender_balance", app.svm.GetBalance(addr)))
-			ok = ok && app.svm.GetBalance(dst) >= 250 && app.svm.GetNonce(addr) == uint64(txsSent)
+			ok = ok && (app.svm.GetBalance(dst) >= 250) && (app.svm.GetNonce(addr) == uint64(txsSent))
 		}
 		if ok {
 			suite.log.Info("addresses ok")
