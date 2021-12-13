@@ -14,7 +14,7 @@ func newState(logger log.Log, conf config) State {
 	return State{
 		logger:  logger,
 		MeshDB:  mdb,
-		AtxDB:   newAtxDB(logger, mdb, conf),
+		AtxDB:   newAtxDB(logger, conf),
 		Beacons: newBeaconStore(),
 	}
 }
@@ -29,7 +29,7 @@ type State struct {
 }
 
 // OnBeacon callback to store generated beacon.
-func (s *State) OnBeacon(eid types.EpochID, beacon []byte) {
+func (s *State) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 	s.Beacons.StoreBeacon(eid, beacon)
 }
 

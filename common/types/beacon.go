@@ -42,9 +42,7 @@ func (b Beacon) Field() log.Field {
 // BytesToBeacon sets b to the Beacon's data.
 // If b is larger than len(h), b will be cropped from the left.
 func BytesToBeacon(b []byte) Beacon {
-	var h Hash32
-	h.SetBytes(b)
-	return Beacon(h)
+	return Beacon(BytesToHash(b))
 }
 
 // HexToBeacon sets byte representation of s to a Beacon.

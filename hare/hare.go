@@ -1,7 +1,6 @@
 package hare
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -332,7 +331,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 // getGoodBlocks finds the "good blocks" for the specified layer. a block is considered a good block if
 // it has the same beacon value as the node's beacon value.
 // any error encountered will be ignored and an empty set is returned.
-func (h *Hare) getGoodBlocks(lyrID types.LayerID, epochBeacon []byte, logger log.Log) []types.BlockID {
+func (h *Hare) getGoodBlocks(lyrID types.LayerID, epochBeacon types.Beacon, logger log.Log) []types.BlockID {
 	blocks, err := h.mesh.LayerBlocks(lyrID)
 	if err != nil {
 		if err != database.ErrNotFound {
@@ -355,13 +354,13 @@ func (h *Hare) getGoodBlocks(lyrID types.LayerID, epochBeacon []byte, logger log
 			beacon = refBlock.TortoiseBeacon
 		}
 
-		if bytes.Equal(beacon, epochBeacon) {
+		if beacon == epochBeacon {
 			goodBlocks = append(goodBlocks, b.ID())
 		} else {
 			logger.With().Warning("block has different beacon value",
 				b.ID(),
-				log.String("block_beacon", types.BytesToHash(beacon).ShortString()),
-				log.String("epoch_beacon", types.BytesToHash(epochBeacon).ShortString()))
+				log.String("block_beacon", beacon.ShortString()),
+				log.String("epoch_beacon", epochBeacon.ShortString()))
 		}
 	}
 	return goodBlocks

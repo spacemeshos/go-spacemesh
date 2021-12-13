@@ -11,7 +11,6 @@ func wrapContext(ctx context.Context) *tcontext {
 	return &tcontext{
 		Context:      ctx,
 		localOpinion: map[types.LayerID]map[types.BlockID]sign{},
-		layerBlocks:  map[types.LayerID][]types.BlockID{},
 		inputVectors: map[types.LayerID][]types.BlockID{},
 		validBlocks:  map[types.LayerID][]types.BlockID{},
 	}
@@ -22,20 +21,19 @@ type tcontext struct {
 	context.Context
 	// generated local opinion from computeLocalOpinon
 	localOpinion map[types.LayerID]map[types.BlockID]sign
-	// all blocks that we know about
-	layerBlocks map[types.LayerID][]types.BlockID
 	// hare's input vectors
 	inputVectors map[types.LayerID][]types.BlockID
 	// contextually valid blocks
 	validBlocks map[types.LayerID][]types.BlockID
 }
 
-func (t *turtle) getLocalOpinion(ctx *tcontext, lid types.LayerID) (map[types.BlockID]sign, error) {
+func (t *turtle) getLocalVotes(ctx *tcontext, lid types.LayerID) (map[types.BlockID]sign, error) {
 	opinion, exists := ctx.localOpinion[lid]
 	if exists {
 		return opinion, nil
 	}
-	opinion, err := t.computeLocalOpinion(ctx, lid)
+	opinion = votes{}
+	err := t.addLocalVotes(ctx, lid, opinion)
 	if err != nil {
 		return nil, err
 	}
@@ -67,18 +65,5 @@ func getValidBlocks(ctx *tcontext, bdp blockDataProvider, lid types.LayerID) ([]
 	}
 	bids = blockMapToArray(bidsmap)
 	ctx.validBlocks[lid] = bids
-	return bids, nil
-}
-
-func getLayerBlocksIDs(ctx *tcontext, bdp blockDataProvider, lid types.LayerID) ([]types.BlockID, error) {
-	bids, exist := ctx.layerBlocks[lid]
-	if exist {
-		return bids, nil
-	}
-	bids, err := bdp.LayerBlockIds(lid)
-	if err != nil {
-		return nil, fmt.Errorf("read blocks for layer %s: %w", lid, err)
-	}
-	ctx.layerBlocks[lid] = bids
 	return bids, nil
 }

@@ -289,14 +289,14 @@ func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
 }
 
 // SaveContextualValidity persists opinion on block to the database.
-func (m *DB) SaveContextualValidity(id types.BlockID, _ types.LayerID, valid bool) error {
+func (m *DB) SaveContextualValidity(id types.BlockID, lid types.LayerID, valid bool) error {
 	var v []byte
 	if valid {
 		v = constTrue
 	} else {
 		v = constFalse
 	}
-	m.With().Debug("save block contextual validity", id, log.Bool("validity", valid))
+	m.With().Debug("save block contextual validity", id, lid, log.Bool("validity", valid))
 
 	if err := m.contextualValidity.Put(id.Bytes(), v); err != nil {
 		return fmt.Errorf("put into DB: %w", err)
@@ -396,6 +396,15 @@ func (m *DB) persistProcessedLayer(layerID types.LayerID) error {
 // GetProcessedLayer loads processed layer from database.
 func (m *DB) GetProcessedLayer() (types.LayerID, error) {
 	data, err := m.general.Get(constPROCESSED)
+	if err != nil {
+		return types.NewLayerID(0), err
+	}
+	return types.BytesToLayerID(data), nil
+}
+
+// GetVerifiedLayer loads verified layer from database.
+func (m *DB) GetVerifiedLayer() (types.LayerID, error) {
+	data, err := m.general.Get(VERIFIED)
 	if err != nil {
 		return types.NewLayerID(0), err
 	}
@@ -984,6 +993,7 @@ func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.Layer
 
 	cvErrors := make(map[string][]types.BlockID)
 	cvErrorCount := 0
+
 	for _, b := range blockIds {
 		valid, err := m.ContextualValidity(b)
 		if err != nil {

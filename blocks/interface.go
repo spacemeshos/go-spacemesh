@@ -7,7 +7,7 @@ import (
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type beaconCollector interface {
-	ReportBeaconFromBlock(types.EpochID, types.BlockID, []byte, uint64)
+	ReportBeaconFromBlock(types.EpochID, types.BlockID, types.Beacon, uint64)
 }
 
 type blockDB interface {
