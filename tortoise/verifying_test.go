@@ -49,7 +49,7 @@ func TestVerifyingIsGood(t *testing.T) {
 			},
 			ballot: tortoiseBallot{
 				id: ballots[0], base: goodbase,
-				votes: Opinion{
+				votes: votes{
 					blocks[0]: support,
 				},
 			},
@@ -65,7 +65,7 @@ func TestVerifyingIsGood(t *testing.T) {
 			},
 			ballot: tortoiseBallot{
 				id: ballots[0], base: goodbase,
-				votes: Opinion{
+				votes: votes{
 					blocks[0]: support,
 				},
 			},
@@ -80,13 +80,13 @@ func TestVerifyingIsGood(t *testing.T) {
 				blockLayer: map[types.BlockID]types.LayerID{
 					blocks[0]: types.NewLayerID(10),
 				},
-				localOpinion: Opinion{
+				localVotes: votes{
 					blocks[0]: against,
 				},
 			},
 			ballot: tortoiseBallot{
 				id: ballots[0], base: goodbase,
-				votes: Opinion{
+				votes: votes{
 					blocks[0]: support,
 				},
 			},
@@ -101,7 +101,7 @@ func TestVerifyingIsGood(t *testing.T) {
 				blockLayer: map[types.BlockID]types.LayerID{
 					blocks[0]: types.NewLayerID(10),
 				},
-				localOpinion: Opinion{
+				localVotes: votes{
 					blocks[0]: support,
 					blocks[1]: against,
 					blocks[2]: against,
@@ -109,7 +109,7 @@ func TestVerifyingIsGood(t *testing.T) {
 			},
 			ballot: tortoiseBallot{
 				id: ballots[0], base: goodbase,
-				votes: Opinion{
+				votes: votes{
 					blocks[0]: support,
 					blocks[1]: against,
 					blocks[2]: against,
@@ -138,7 +138,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 	)
 	genCommonState := func() commonState {
 		state := newCommonState()
-		state.localOpinion = Opinion{
+		state.localVotes = votes{
 			blocks[0]: support,
 			blocks[1]: support,
 			blocks[2]: against,
@@ -175,17 +175,17 @@ func TestVerifyingProcessLayer(t *testing.T) {
 				{
 					{
 						id: ballots[0], base: goodbase, weight: ballotWeight,
-						votes: Opinion{blocks[0]: support},
+						votes: votes{blocks[0]: support},
 					},
 					{
 						id: ballots[1], base: goodbase, weight: ballotWeight,
-						votes: Opinion{blocks[0]: support},
+						votes: votes{blocks[0]: support},
 					},
 				},
 				{
 					{
 						id: ballots[2], base: ballots[0], weight: ballotWeight,
-						votes: Opinion{blocks[0]: support},
+						votes: votes{blocks[0]: support},
 					},
 				},
 			},
@@ -198,17 +198,17 @@ func TestVerifyingProcessLayer(t *testing.T) {
 				{
 					{
 						id: ballots[0], base: badbase, weight: ballotWeight,
-						votes: Opinion{blocks[0]: support},
+						votes: votes{blocks[0]: support},
 					},
 					{
 						id: ballots[1], base: badbase, weight: ballotWeight,
-						votes: Opinion{blocks[0]: support},
+						votes: votes{blocks[0]: support},
 					},
 				},
 				{
 					{
 						id: ballots[2], base: badbase, weight: ballotWeight,
-						votes: Opinion{blocks[0]: support},
+						votes: votes{blocks[0]: support},
 					},
 				},
 			},
@@ -221,17 +221,17 @@ func TestVerifyingProcessLayer(t *testing.T) {
 				{
 					{
 						id: ballots[0], base: goodbase, weight: ballotWeight,
-						votes: Opinion{blocks[0]: support},
+						votes: votes{blocks[0]: support},
 					},
 					{
 						id: ballots[1], base: goodbase, weight: ballotWeight,
-						votes: Opinion{blocks[0]: support},
+						votes: votes{blocks[0]: support},
 					},
 				},
 				{
 					{
 						id: ballots[2], base: badbase, weight: ballotWeight,
-						votes: Opinion{blocks[0]: support},
+						votes: votes{blocks[0]: support},
 					},
 				},
 			},
@@ -249,7 +249,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 
 			for i := range tc.ballots {
 				lid := start.Add(uint32(i + 1))
-				v.processLayer(logger, lid, tc.ballots[i])
+				v.countVotes(logger, lid, tc.ballots[i])
 				require.Equal(t, tc.layerWeights[i], v.layerWeights[lid])
 				require.Equal(t, tc.total[i], v.totalWeight)
 			}
@@ -267,7 +267,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 		totalWeight         weight
 		verified, processed types.LayerID
 		blocks              map[types.LayerID][]types.BlockID
-		localOpinion        Opinion
+		localOpinion        votes
 		config              Config
 
 		expected            types.LayerID
@@ -289,7 +289,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			verified:     start,
 			processed:    start.Add(4),
 			blocks:       map[types.LayerID][]types.BlockID{},
-			localOpinion: Opinion{},
+			localOpinion: votes{},
 			config: Config{
 				LocalThreshold:  big.NewRat(1, 10),
 				GlobalThreshold: big.NewRat(7, 10),
@@ -337,7 +337,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			blocks: map[types.LayerID][]types.BlockID{
 				start.Add(3): {{1}},
 			},
-			localOpinion: Opinion{{1}: abstain},
+			localOpinion: votes{{1}: abstain},
 			config: Config{
 				LocalThreshold:  big.NewRat(1, 10),
 				GlobalThreshold: big.NewRat(7, 10),
@@ -355,13 +355,13 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			state.verified = tc.verified
 			state.processed = tc.processed
 			state.blocks = tc.blocks
-			state.localOpinion = tc.localOpinion
+			state.localVotes = tc.localOpinion
 
 			v := newVerifying(tc.config, &state)
 			v.layerWeights = tc.layersWeight
 			v.totalWeight = tc.totalWeight
 
-			require.Equal(t, tc.expected, v.verifyLayers(logger))
+			require.Equal(t, tc.expected, v.verify(logger))
 			require.Equal(t, tc.expectedTotalWeight.String(), v.totalWeight.String())
 		})
 	}

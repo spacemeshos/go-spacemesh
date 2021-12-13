@@ -22,11 +22,11 @@ type verifying struct {
 	goodBallots map[types.BallotID]struct{}
 	// weight of good ballots in the layer
 	layerWeights map[types.LayerID]weight
-	// total weight of good ballots from verified + 1 up to last
+	// total weight of good ballots from verified + 1 up to last processed
 	totalWeight weight
 }
 
-func (v *verifying) processLayer(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
+func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
 	counted, goodBallotsCount := v.sumGoodBallots(logger, ballots)
 
 	// TODO(dshulyak) counted weight should be reduced by the uncounted weight per conversation with research
@@ -43,16 +43,12 @@ func (v *verifying) processLayer(logger log.Log, lid types.LayerID, ballots []to
 	)
 }
 
-func (v *verifying) verifyLayers(logger log.Log) types.LayerID {
-	localThreshold := weightFromUint64(0)
-	// TODO(dshulyak) expected weight for local threshold should be based on last layer.
-	localThreshold = localThreshold.add(v.epochWeight[v.processed.GetEpoch()])
-	localThreshold = localThreshold.fraction(v.LocalThreshold)
+func (v *verifying) verify(logger log.Log) types.LayerID {
+	localThreshold := computeLocalThreshold(v.Config, v.epochWeight, v.processed)
 
 	for lid := v.verified.Add(1); lid.Before(v.processed); lid = lid.Add(1) {
 		// TODO(dshulyak) expected weight must be based on the last layer.
-		threshold := computeExpectedWeight(v.epochWeight, lid, v.processed)
-		threshold = threshold.fraction(v.GlobalThreshold)
+		threshold := computeGlobalThreshold(v.Config, v.epochWeight, lid, v.processed)
 		threshold = threshold.add(localThreshold)
 
 		votingWeight := weightFromUint64(0)
@@ -69,21 +65,21 @@ func (v *verifying) verifyLayers(logger log.Log) types.LayerID {
 		// 0 - there is not enough weight to cross threshold.
 		// 1 - layer is verified and contextual validity is according to our local opinion.
 		if votingWeight.cmp(threshold) == abstain {
-			layerLogger.With().Warning("candidate layer is not verified. voting weight is lower than the threshold")
+			layerLogger.With().Info("candidate layer is not verified. voting weight from good ballots is lower than the threshold.")
 			return lid.Sub(1)
 		}
 
 		// if there is any block with neutral local opinion - we can't verify the layer
 		// if it happens outside of hdist - protocol will switch to full tortoise
 		for _, bid := range v.blocks[lid] {
-			if v.localOpinion[bid] == abstain {
-				layerLogger.With().Warning("candidate layer is not verified. block is undecided", bid)
+			if v.localVotes[bid] == abstain {
+				layerLogger.With().Info("candidate layer is not verified. block is undecided according to local votes.", bid)
 				return lid.Sub(1)
 			}
 		}
 
 		v.totalWeight = votingWeight
-		layerLogger.With().Info("candidate layer is verified")
+		layerLogger.With().Info("candidate layer is verified by verifying tortoise")
 	}
 	return v.processed.Sub(1)
 }
@@ -116,11 +112,11 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 	}
 
 	baselid := v.ballotLayer[ballot.base]
-	for id, sign := range ballot.votes {
-		votelid, exists := v.blockLayer[id]
+	for block, vote := range ballot.votes {
+		votelid, exists := v.blockLayer[block]
 		// if the layer of the vote is not in the memory then it is definitely before base block layer
 		if !exists || votelid.Before(baselid) {
-			logger.With().Debug("vote on a block before base block",
+			logger.With().Debug("vote on a block that is before base ballot",
 				log.Stringer("base_layer", baselid),
 				log.Stringer("vote_layer", votelid),
 				log.Bool("vote_exists", exists),
@@ -128,16 +124,17 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 			return false
 		}
 
-		if local := v.localOpinion[id]; local != sign {
-			logger.With().Debug("vote on block is different from the local vote",
-				log.Stringer("local_vote", local),
-				log.Stringer("vote", sign),
+		if localVote := v.localVotes[block]; localVote != vote {
+			logger.With().Debug("vote on a block doesn't match a local vote",
+				log.Stringer("local_vote", localVote),
+				log.Stringer("ballot_vote", vote),
 				log.Stringer("block_layer", votelid),
+				log.Stringer("block", block),
 			)
 			return false
 		}
 	}
 
-	logger.With().Debug("ballot is good", ballot.id)
+	logger.With().Debug("ballot is good")
 	return true
 }
