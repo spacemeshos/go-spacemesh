@@ -22,7 +22,7 @@ func computeBallotWeight(
 		for _, atxid := range ballot.EpochData.ActiveSet {
 			atx, err := atxdb.GetAtxHeader(atxid)
 			if err != nil {
-				return weightFromUint64(0), fmt.Errorf("atx %s in active set of %s is unknown", atxid, ballot.ID())
+				return weight{}, fmt.Errorf("atx %s in active set of %s is unknown", atxid, ballot.ID())
 			}
 			atxweight := atx.GetWeight()
 			total += atxweight
@@ -49,7 +49,10 @@ func computeBallotWeight(
 		if err != nil {
 			return weight{}, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
 		}
-		return computeBallotWeight(atxdb, bdp, weights, refballot, layerSize, layersPerEpoch)
+		rst, err = computeBallotWeight(atxdb, bdp, weights, refballot, layerSize, layersPerEpoch)
+		if err != nil {
+			return weight{}, err
+		}
 	}
 	weights[ballot.ID()] = rst
 	return rst, nil
