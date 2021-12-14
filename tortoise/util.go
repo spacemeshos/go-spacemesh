@@ -145,18 +145,6 @@ func iterateLayers(from, to types.LayerID, callback func(types.LayerID) bool) {
 	}
 }
 
-func verifyLayers(logger log.Log, config Config, state *commonState, verifier layerVerifier) {
-	iterateLayers(state.verified.Add(1), state.processed.Sub(1), func(lid types.LayerID) bool {
-		ok := verifier.verify(logger, lid)
-		if !ok {
-			return false
-		}
-		state.verified = lid
-		updateThresholds(logger, config, state)
-		return true
-	})
-}
-
 type layerVerifier interface {
 	verify(log.Log, types.LayerID) bool
 }
@@ -173,3 +161,42 @@ const (
 	reasonLocalThreshold voteReason = "local_threshold"
 	reasonCoinflip       voteReason = "coinflip"
 )
+
+// lsb is a mode, second bit is rerun
+// examples (lsb is on the right, prefix with 6 bits is droppped)
+// 10 - rerun in verifying
+// 00 - live tortoise in verifying
+// 11 - rerun in full
+// 01 - live tortoise in full.
+type mode uint8
+
+func (m mode) String() string {
+	humanize := "verifying"
+	if m.isFull() {
+		humanize = "full"
+	}
+	if m.isRerun() {
+		return "rerun_" + humanize
+	}
+	return humanize
+}
+
+func (m mode) toggleRerun() mode {
+	return m ^ 1<<2
+}
+
+func (m mode) isRerun() bool {
+	return m&(1<<2) > 0
+}
+
+func (m mode) toggleMode() mode {
+	return m ^ 1
+}
+
+func (m mode) isVerifying() bool {
+	return m&1 == 0
+}
+
+func (m mode) isFull() bool {
+	return m&1 > 0
+}

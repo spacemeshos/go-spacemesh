@@ -12,11 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
 
-const (
-	verifyingMode = iota + 1
-	fullMode
-)
-
 var (
 	errNoBaseBallotFound    = errors.New("no good base ballot within exception vector limit")
 	errstrTooManyExceptions = "too many exceptions to base ballot vote"
@@ -30,7 +25,7 @@ type turtle struct {
 	bdp     blockDataProvider
 	beacons system.BeaconGetter
 
-	mode int8
+	mode mode
 
 	commonState
 	verifying *verifying
@@ -49,7 +44,6 @@ func newTurtle(
 		Config:      config,
 		commonState: newCommonState(),
 		logger:      logger,
-		mode:        verifyingMode,
 		bdp:         bdp,
 		atxdb:       atxdb,
 		beacons:     beacons,
@@ -489,30 +483,40 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 		return err
 	}
 
-	var (
-		previous = t.verified
-		verifier layerVerifier
-	)
-	if t.mode == verifyingMode {
+	previous := t.verified
+	if t.mode.isVerifying() {
 		t.verifying.countVotes(logger, lid, ballots)
-		verifier = t.verifying
+		iterateLayers(t.verified.Add(1), t.processed.Sub(1), func(lid types.LayerID) bool {
+			ok := t.verifying.verify(logger, lid)
+			if !ok {
+				return false
+			}
+			t.verified = lid
+			updateThresholds(logger, t.Config, &t.commonState, t.mode)
+			return true
+		})
 	}
-	// condition to switch may change for rerun https://github.com/spacemeshos/go-spacemesh/issues/2980,
-	// verified layer will be expected to be stuck as the expected weight will be high.
-	// so we will have to use different heuristic for switching into full mode.
-	// maybe the difference between counted and uncounted weight for a specific layer
-	if t.canUseFullMode() || t.mode == fullMode {
-		if t.mode == verifyingMode {
+	if t.canUseFullMode() || t.mode.isFull() {
+		if t.mode.isVerifying() {
+			t.mode = t.mode.toggleMode()
 			logger.With().Info("switching to full self-healing tortoise",
 				lid,
 				log.Stringer("verified", t.verified),
+				log.Stringer("mode", t.mode),
 			)
-			t.mode = fullMode
+			updateThresholds(logger, t.Config, &t.commonState, t.mode)
 		}
 		t.full.countVotes(logger)
-		verifier = t.full
+		iterateLayers(t.verified.Add(1), t.processed.Sub(1), func(lid types.LayerID) bool {
+			ok := t.full.verify(logger, lid)
+			if !ok {
+				return false
+			}
+			t.verified = lid
+			updateThresholds(logger, t.Config, &t.commonState, t.mode)
+			return true
+		})
 	}
-	verifyLayers(logger, t.Config, &t.commonState, verifier)
 	if err := persistContextualValidity(logger,
 		t.bdp,
 		previous, t.verified,
@@ -547,7 +551,7 @@ func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
 	}
 
 	if lastUpdated || t.threshold.isNil() {
-		updateThresholds(logger, t.Config, &t.commonState)
+		updateThresholds(logger, t.Config, &t.commonState, t.mode)
 	}
 	return nil
 }
@@ -619,17 +623,12 @@ func (t *turtle) updateLocalVotes(ctx context.Context, logger log.Log, lid types
 
 // the idea here is to give enough room for verifying tortoise to complete. during live tortoise execution this will be limited by the hdist.
 // during rerun we need to use another heuristic, as hdist is irrelevant by that time.
-//
-// verifying tortoise is a fastpath for full vote counting, that works if everyone is honest and have good synchrony.
-// as for the safety and liveness both protocols are identical.
 func (t *turtle) canUseFullMode() bool {
 	lid := t.verified.Add(1)
-	return lid.Before(t.layerCutoff()) &&
-		// unlike previous parameter we count confidence interval from processed layer
-		// processed layer is significantly lower then the last layer during rerun.
-		// we need to wait some distance before switching from verifying to full during rerun
-		// as previous two parameters will be always true even if single layer is not verified.
-		t.processed.Difference(lid) > t.ConfidenceParam
+	if t.mode.isRerun() {
+		return t.processed.Difference(lid) > t.VerifyingModeRerunWindow
+	}
+	return lid.Before(t.layerCutoff())
 }
 
 // for layers older than this point, we vote according to global opinion (rather than local opinion).

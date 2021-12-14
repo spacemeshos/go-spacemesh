@@ -99,9 +99,18 @@ func computeGlobalThreshold(config Config, epochWeight map[types.EpochID]weight,
 	return threshold
 }
 
-func updateThresholds(logger log.Log, config Config, state *commonState) {
+func updateThresholds(logger log.Log, config Config, state *commonState, tortoiseMode mode) {
 	state.localThreshold = computeLocalThreshold(config, state.epochWeight, state.last)
-	state.globalThreshold = computeGlobalThreshold(config, state.epochWeight, state.verified.Add(1), state.last)
+
+	window := state.last
+	genesis := types.GetEffectiveGenesis()
+	if tortoiseMode.isFull() && state.last.After(genesis.Add(config.FullModeRerunWindow)) {
+		window = state.last.Sub(config.FullModeRerunWindow)
+	} else if tortoiseMode.isVerifying() && state.last.After(genesis.Add(config.VerifyingModeRerunWindow)) {
+		window = state.last.Sub(config.VerifyingModeRerunWindow)
+	}
+	state.globalThreshold = computeGlobalThreshold(config, state.epochWeight, state.verified.Add(1), window)
+
 	state.threshold = weightFromUint64(0)
 	state.threshold = state.threshold.add(state.localThreshold)
 	state.threshold = state.threshold.add(state.globalThreshold)
@@ -111,5 +120,6 @@ func updateThresholds(logger log.Log, config Config, state *commonState) {
 		log.Stringer("local_threshold", state.localThreshold),
 		log.Stringer("global_threshold", state.globalThreshold),
 		log.Stringer("threshold", state.threshold),
+		log.Stringer("mode", tortoiseMode),
 	)
 }

@@ -162,7 +162,6 @@ var (
 	defaultTestGlobalThreshold = big.NewRat(6, 10)
 	defaultTestLocalThreshold  = big.NewRat(2, 10)
 	defaultTestRerunInterval   = time.Hour
-	defaultTestConfidenceParam = DefaultConfig().ConfidenceParam
 )
 
 func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
@@ -573,7 +572,6 @@ func TestCloneTurtle(t *testing.T) {
 	r.Equal(trtl.bdp, trtl2.bdp)
 	r.Equal(trtl.Hdist, trtl2.Hdist)
 	r.Equal(trtl.Zdist, trtl2.Zdist)
-	r.Equal(trtl.ConfidenceParam, trtl2.ConfidenceParam)
 	r.Equal(trtl.WindowSize, trtl2.WindowSize)
 	r.Equal(trtl.LayerSize, trtl2.LayerSize)
 	r.Equal(trtl.BadBeaconVoteDelayLayers, trtl2.BadBeaconVoteDelayLayers)
@@ -588,7 +586,6 @@ func defaultTestConfig() Config {
 		LayerSize:                defaultTestLayerSize,
 		Hdist:                    defaultTestHdist,
 		Zdist:                    defaultTestZdist,
-		ConfidenceParam:          defaultTestConfidenceParam,
 		WindowSize:               defaultTestWindowSize,
 		BadBeaconVoteDelayLayers: defaultVoteDelays,
 		GlobalThreshold:          defaultTestGlobalThreshold,
@@ -1754,7 +1751,6 @@ func TestWeakCoinVoting(t *testing.T) {
 	cfg.LayerSize = size
 	cfg.Hdist = hdist
 	cfg.Zdist = hdist
-	cfg.ConfidenceParam = 0
 
 	var (
 		tortoise       = tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
@@ -1811,7 +1807,6 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	// cfg.WindowSize = 1
 	cfg.Hdist = 1
 	cfg.Zdist = 1
-	cfg.ConfidenceParam = 0
 
 	var (
 		tortoise       = tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
@@ -2065,7 +2060,6 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	cfg.LayerSize = size
 	cfg.Hdist = 3
 	cfg.Zdist = 3
-	cfg.ConfidenceParam = 0
 
 	var (
 		tortoise1 = tortoiseFromSimState(s1.GetState(0), WithConfig(cfg),
