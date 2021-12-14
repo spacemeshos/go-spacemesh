@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -175,19 +174,19 @@ func (m *DB) Transactions() database.Getter {
 	return m.transactions
 }
 
-// errAlreadyExist error returned when adding an existing value to the database.
-var errAlreadyExist = errors.New("already exists in database")
-
 // HasBallot returns true if the database has Ballot specified by the BallotID and false otherwise.
 func (m *DB) HasBallot(id types.BallotID) bool {
 	has, err := m.ballots.Has(id.Bytes())
 	return err == nil && has
 }
 
-func (m *DB) addBallot(b *types.Ballot) error {
-	if _, err := m.getBallotBytes(b.ID()); err == nil {
-		m.With().Warning(errAlreadyExist.Error(), b.ID())
-		return errAlreadyExist
+// AddBallot adds a ballot to the database.
+func (m *DB) AddBallot(b *types.Ballot) error {
+	m.blockMutex.Lock()
+	defer m.blockMutex.Unlock()
+	if m.HasBallot(b.ID()) {
+		m.With().Warning("ballot already exists", b.ID())
+		return nil
 	}
 	if err := m.writeBallot(b); err != nil {
 		return fmt.Errorf("write ballot: %w", err)
@@ -278,16 +277,19 @@ func (m *DB) HasProposal(id types.ProposalID) bool {
 // AddProposal adds a proposal to the database.
 func (m *DB) AddProposal(p *types.Proposal) error {
 	m.blockMutex.Lock()
-	defer m.blockMutex.Unlock()
-	if _, err := m.getProposalBytes(p.ID()); err == nil {
-		m.With().Warning(errAlreadyExist.Error(), p.ID())
-		return errAlreadyExist
+	if m.HasProposal(p.ID()) {
+		m.With().Warning("proposal already exists", p.ID())
+		return nil
 	}
 	if err := m.writeProposal(p); err != nil {
 		return fmt.Errorf("write proposal: %w", err)
 	}
+	m.blockMutex.Unlock()
 
-	return m.addBallot(&p.Ballot)
+	if err := m.AddBallot(&p.Ballot); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (m *DB) getProposal(id types.ProposalID) (*types.Proposal, error) {

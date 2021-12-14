@@ -62,31 +62,31 @@ const edKeyFileName = "key.bin"
 
 // Logger names.
 const (
-	AppLogger             = "app"
-	P2PLogger             = "p2p"
-	PostLogger            = "post"
-	StateDbLogger         = "stateDbStore"
-	AtxDbStoreLogger      = "atxDbStore"
-	TBeaconDbStoreLogger  = "tbDbStore"
-	TBeaconLogger         = "tBeacon"
-	WeakCoinLogger        = "weakCoin"
-	PoetDbStoreLogger     = "poetDbStore"
-	StoreLogger           = "store"
-	PoetDbLogger          = "poetDb"
-	MeshDBLogger          = "meshDb"
-	TrtlLogger            = "trtl"
-	AtxDbLogger           = "atxDb"
-	MeshLogger            = "mesh"
-	SyncLogger            = "sync"
-	HareOracleLogger      = "hareOracle"
-	HareLogger            = "hare"
-	ProposalBuilderLogger = "proposalBuilder"
-	BlockListenerLogger   = "blockListener"
-	PoetListenerLogger    = "poetListener"
-	NipostBuilderLogger   = "nipostBuilder"
-	LayerFetcher          = "layerFetcher"
-	TimeSyncLogger        = "timesync"
-	SVMLogger             = "SVM"
+	AppLogger              = "app"
+	P2PLogger              = "p2p"
+	PostLogger             = "post"
+	StateDbLogger          = "stateDbStore"
+	AtxDbStoreLogger       = "atxDbStore"
+	TBeaconDbStoreLogger   = "tbDbStore"
+	TBeaconLogger          = "tBeacon"
+	WeakCoinLogger         = "weakCoin"
+	PoetDbStoreLogger      = "poetDbStore"
+	StoreLogger            = "store"
+	PoetDbLogger           = "poetDb"
+	MeshDBLogger           = "meshDb"
+	TrtlLogger             = "trtl"
+	AtxDbLogger            = "atxDb"
+	MeshLogger             = "mesh"
+	SyncLogger             = "sync"
+	HareOracleLogger       = "hareOracle"
+	HareLogger             = "hare"
+	ProposalBuilderLogger  = "proposalBuilder"
+	ProposalListenerLogger = "proposalListener"
+	PoetListenerLogger     = "poetListener"
+	NipostBuilderLogger    = "nipostBuilder"
+	LayerFetcher           = "layerFetcher"
+	TimeSyncLogger         = "timesync"
+	SVMLogger              = "SVM"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it.
@@ -561,7 +561,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	proposalListener := proposals.NewHandler(fetcherWrapped, tBeacon, atxDB, msh,
-		proposals.WithLogger(app.addLogger(BlockListenerLogger, lg)),
+		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithLayerPerEpoch(layersPerEpoch),
 		proposals.WithLayerSize(layerSize),
 		proposals.WithGoldenATXID(goldenATXID),

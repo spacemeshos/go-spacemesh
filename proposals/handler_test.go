@@ -324,10 +324,15 @@ func TestBallot_Success(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.ForDiff).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
+		func(_ context.Context, ballot *types.Ballot) (bool, error) {
 			assert.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mm.EXPECT().AddBallot(gomock.Any()).DoAndReturn(
+		func(ballot *types.Ballot) error {
+			assert.Equal(t, b.ID(), ballot.ID())
+			return nil
+		}).Times(1)
 	assert.NoError(t, th.HandleBallotData(context.TODO(), data))
 }
 
@@ -343,10 +348,15 @@ func TestBallot_RefBallot(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), atxIDs).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.ForDiff).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
+		func(_ context.Context, ballot *types.Ballot) (bool, error) {
 			assert.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mm.EXPECT().AddBallot(gomock.Any()).DoAndReturn(
+		func(ballot *types.Ballot) error {
+			assert.Equal(t, b.ID(), ballot.ID())
+			return nil
+		}).Times(1)
 	assert.NoError(t, th.HandleBallotData(context.TODO(), data))
 }
 

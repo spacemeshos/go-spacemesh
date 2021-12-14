@@ -738,12 +738,9 @@ func (msh *Mesh) AddProposalWithTxs(ctx context.Context, p *types.Proposal) erro
 		logger.With().Error("not all txs were processed", log.Err(err))
 	}
 
-	// Store block (delete if storing ATXs fails)
+	// Store proposal (delete if storing ATXs fails)
 	if err := msh.DB.AddProposal(p); err != nil {
-		if errors.Is(err, errAlreadyExist) {
-			return nil
-		}
-		logger.With().Error("failed to add block", log.Err(err))
+		logger.With().Error("failed to add proposal", log.Err(err))
 		return err
 	}
 

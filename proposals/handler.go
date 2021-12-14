@@ -32,6 +32,7 @@ var (
 	errExceptionsOverflow    = errors.New("too many exceptions")
 	errDuplicateTX           = errors.New("duplicate TxID in proposal")
 	errDuplicateATX          = errors.New("duplicate ATXID in active set")
+	errKnownBallot           = errors.New("known ballot")
 )
 
 // Handler processes Proposal from gossip and, if deems it valid, propagates it to peers.
@@ -156,7 +157,16 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	}
 
 	logger = logger.WithFields(b.ID(), b.LayerIndex)
-	return h.processBallot(ctx, &b, logger)
+	err := h.processBallot(ctx, &b, logger)
+	if err != nil && err != errKnownBallot {
+		return err
+	} else if err == errKnownBallot {
+		return nil
+	}
+	if err = h.mesh.AddBallot(&b); err != nil {
+		return fmt.Errorf("save ballot: %w", err)
+	}
+	return nil
 }
 
 func (h *Handler) processProposal(ctx context.Context, data []byte) error {
@@ -183,7 +193,7 @@ func (h *Handler) processProposal(ctx context.Context, data []byte) error {
 	}
 	logger.With().Info("new proposal", p.Fields()...)
 
-	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil {
+	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil && err != errKnownBallot {
 		logger.With().Warning("failed to process ballot", log.Err(err))
 		return err
 	}
@@ -207,7 +217,7 @@ func (h *Handler) processProposal(ctx context.Context, data []byte) error {
 func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log.Log) error {
 	if h.mesh.HasBallot(b.ID()) {
 		logger.Info("known ballot")
-		return nil
+		return errKnownBallot
 	}
 	logger.With().Info("new ballot", b.Fields()...)
 

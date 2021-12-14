@@ -16,6 +16,7 @@ type mesh interface {
 	HasProposal(types.ProposalID) bool
 	AddProposalWithTxs(context.Context, *types.Proposal) error
 	HasBallot(types.BallotID) bool
+	AddBallot(*types.Ballot) error
 	GetBallot(types.BallotID) (*types.Ballot, error)
 }
 

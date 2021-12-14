@@ -73,6 +73,20 @@ func (m *Mockmesh) EXPECT() *MockmeshMockRecorder {
 	return m.recorder
 }
 
+// AddBallot mocks base method.
+func (m *Mockmesh) AddBallot(arg0 *types.Ballot) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddBallot", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddBallot indicates an expected call of AddBallot.
+func (mr *MockmeshMockRecorder) AddBallot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBallot", reflect.TypeOf((*Mockmesh)(nil).AddBallot), arg0)
+}
+
 // AddProposalWithTxs mocks base method.
 func (m *Mockmesh) AddProposalWithTxs(arg0 context.Context, arg1 *types.Proposal) error {
 	m.ctrl.T.Helper()
