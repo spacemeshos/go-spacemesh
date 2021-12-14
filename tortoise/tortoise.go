@@ -485,7 +485,7 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 	t.full.processBallots(ballots)
 	t.full.processBlocks(blocks)
 
-	if err := t.updateLocalVotes(ctx, logger); err != nil {
+	if err := t.updateLocalVotes(ctx, logger, lid); err != nil {
 		return err
 	}
 
@@ -608,18 +608,13 @@ func (t *turtle) processBallots(lid types.LayerID, original []*types.Ballot) ([]
 	return ballots, nil
 }
 
-func (t *turtle) updateLocalVotes(ctx context.Context, logger log.Log) (err error) {
-	from := t.verified.Add(1)
-	to := t.processed
-	logger.With().Debug("updating local votes for layers",
-		log.Stringer("from", from),
-		log.Stringer("to", to),
-	)
-	iterateLayers(from, to, func(lid types.LayerID) bool {
-		err = t.addLocalVotes(ctx, logger, lid)
-		return err == nil
-	})
-	return err
+func (t *turtle) updateLocalVotes(ctx context.Context, logger log.Log, lid types.LayerID) (err error) {
+	for lid := range t.undecided {
+		if err := t.addLocalVotes(ctx, logger.WithFields(log.Bool("undecided", true)), lid); err != nil {
+			return err
+		}
+	}
+	return t.addLocalVotes(ctx, logger, lid)
 }
 
 // the idea here is to give enough room for verifying tortoise to complete. during live tortoise execution this will be limited by the hdist.
@@ -648,6 +643,10 @@ func (t *turtle) layerCutoff() types.LayerID {
 
 // addLocalVotes for layer.
 func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.LayerID) error {
+	logger.With().Debug("fetching local votes for layer",
+		log.Stringer("for_layer", lid),
+	)
+
 	if !lid.Before(t.layerCutoff()) {
 		// for newer layers, we vote according to the local opinion (input vector, from hare or sync)
 		opinionVec, err := t.bdp.GetLayerInputVectorByID(lid)
