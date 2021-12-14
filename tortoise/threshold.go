@@ -50,7 +50,10 @@ func computeBallotWeight(
 		if err != nil {
 			return weight{}, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
 		}
-		return computeBallotWeight(atxdb, bdp, weights, refballot, layerSize, layersPerEpoch)
+		rst, err = computeBallotWeight(atxdb, bdp, weights, refballot, layerSize, layersPerEpoch)
+		if err != nil {
+			return weight{}, err
+		}
 	}
 	weights[ballot.ID()] = rst
 	return rst, nil
