@@ -624,11 +624,11 @@ func (t *turtle) updateLocalVotes(ctx context.Context, logger log.Log, lid types
 // the idea here is to give enough room for verifying tortoise to complete. during live tortoise execution this will be limited by the hdist.
 // during rerun we need to use another heuristic, as hdist is irrelevant by that time.
 func (t *turtle) canUseFullMode() bool {
-	lid := t.verified.Add(1)
+	target := t.verified.Add(1)
 	if t.mode.isRerun() {
-		return t.processed.Difference(lid) > t.VerifyingModeRerunWindow
+		return t.processed.Difference(target) > t.VerifyingModeRerunWindow
 	}
-	return lid.Before(t.layerCutoff())
+	return target.Before(t.layerCutoff())
 }
 
 // for layers older than this point, we vote according to global opinion (rather than local opinion).

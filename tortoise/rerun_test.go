@@ -53,7 +53,7 @@ func TestRecoverState(t *testing.T) {
 
 func BenchmarkRerun(b *testing.B) {
 	b.Run("Verifying/100", func(b *testing.B) {
-		benchmarkRerun(b, 100, 100, 0)
+		benchmarkRerun(b, 100, 10, 0)
 	})
 	b.Run("Verifying/1000", func(b *testing.B) {
 		benchmarkRerun(b, 1000, 1000, 0)
@@ -62,10 +62,10 @@ func BenchmarkRerun(b *testing.B) {
 		benchmarkRerun(b, 10000, 10000, 0)
 	})
 	b.Run("Full/100", func(b *testing.B) {
-		benchmarkRerun(b, 100, 0, 100, sim.WithEmptyInputVector())
+		benchmarkRerun(b, 100, 100, 100, sim.WithEmptyInputVector())
 	})
-	b.Run("Full/1000/Window/100", func(b *testing.B) {
-		benchmarkRerun(b, 1000, 0, 100, sim.WithEmptyInputVector())
+	b.Run("Full/100/Window/10", func(b *testing.B) {
+		benchmarkRerun(b, 100, 100, 10, sim.WithEmptyInputVector())
 	})
 }
 
@@ -85,7 +85,7 @@ func benchmarkRerun(b *testing.B, size int, verifyingParam, fullParam uint32, op
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
 	for i := 0; i < size; i++ {
-		tortoise.HandleIncomingLayer(ctx, s.Next())
+		tortoise.HandleIncomingLayer(ctx, s.Next(opts...))
 	}
 
 	b.ResetTimer()

@@ -102,21 +102,22 @@ func computeGlobalThreshold(config Config, epochWeight map[types.EpochID]weight,
 func updateThresholds(logger log.Log, config Config, state *commonState, tortoiseMode mode) {
 	state.localThreshold = computeLocalThreshold(config, state.epochWeight, state.last)
 
+	target := state.verified.Add(1)
 	window := state.last
-	genesis := types.GetEffectiveGenesis()
-	if tortoiseMode.isFull() && state.last.After(genesis.Add(config.FullModeRerunWindow)) {
-		window = state.last.Sub(config.FullModeRerunWindow)
-	} else if tortoiseMode.isVerifying() && state.last.After(genesis.Add(config.VerifyingModeRerunWindow)) {
-		window = state.last.Sub(config.VerifyingModeRerunWindow)
+	if tortoiseMode.isFull() && state.last.Difference(target) > config.FullModeRerunWindow {
+		window = target.Add(config.FullModeRerunWindow)
+	} else if tortoiseMode.isVerifying() && state.last.Difference(target) > config.VerifyingModeRerunWindow {
+		window = target.Add(config.VerifyingModeRerunWindow)
 	}
-	state.globalThreshold = computeGlobalThreshold(config, state.epochWeight, state.verified.Add(1), window)
+	state.globalThreshold = computeGlobalThreshold(config, state.epochWeight, target, window)
 
 	state.threshold = weightFromUint64(0)
 	state.threshold = state.threshold.add(state.localThreshold)
 	state.threshold = state.threshold.add(state.globalThreshold)
 	logger.With().Info("updated thresholds",
+		log.Stringer("window", window),
 		log.Stringer("last_layer", state.last),
-		log.Stringer("target_layer", state.verified.Add(1)),
+		log.Stringer("target_layer", target),
 		log.Stringer("local_threshold", state.localThreshold),
 		log.Stringer("global_threshold", state.globalThreshold),
 		log.Stringer("threshold", state.threshold),

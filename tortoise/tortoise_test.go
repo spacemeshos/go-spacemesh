@@ -592,6 +592,8 @@ func defaultTestConfig() Config {
 		LocalThreshold:           defaultTestLocalThreshold,
 		RerunInterval:            defaultTestRerunInterval,
 		MaxExceptions:            int(defaultTestHdist) * defaultTestLayerSize * 100,
+		VerifyingModeRerunWindow: 10_000,
+		FullModeRerunWindow:      100,
 	}
 }
 
