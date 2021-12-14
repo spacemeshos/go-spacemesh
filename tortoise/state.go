@@ -14,7 +14,9 @@ func newCommonState() commonState {
 		badBeaconBallots: map[types.BallotID]struct{}{},
 		epochWeight:      map[types.EpochID]weight{},
 		ballotWeight:     map[types.BallotID]weight{},
-		localVotes:       votes{},
+		undecided:        map[types.LayerID]struct{}{},
+		hareOutput:       votes{},
+		validity:         votes{},
 	}
 }
 
@@ -60,5 +62,7 @@ type commonState struct {
 
 	ballotWeight map[types.BallotID]weight
 
-	localVotes votes
+	undecided  map[types.LayerID]struct{}
+	hareOutput votes
+	validity   votes
 }

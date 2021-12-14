@@ -122,6 +122,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	)
 
 	blocks := f.blocks[lid]
+	// necessary only to log debug only once for each block
 	decisions := make([]sign, 0, len(blocks))
 
 	for _, block := range blocks {
@@ -141,7 +142,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 			log.Stringer("block", block),
 			log.Stringer("decision", decisions[i]),
 		)
-		f.localVotes[block] = decisions[i]
+		f.validity[block] = decisions[i]
 	}
 	logger.With().Info("candidate layer is verified by full tortoise")
 	return true

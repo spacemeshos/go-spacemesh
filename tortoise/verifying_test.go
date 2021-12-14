@@ -80,7 +80,7 @@ func TestVerifyingIsGood(t *testing.T) {
 				blockLayer: map[types.BlockID]types.LayerID{
 					blocks[0]: types.NewLayerID(10),
 				},
-				localVotes: votes{
+				hareOutput: votes{
 					blocks[0]: against,
 				},
 			},
@@ -101,7 +101,7 @@ func TestVerifyingIsGood(t *testing.T) {
 				blockLayer: map[types.BlockID]types.LayerID{
 					blocks[0]: types.NewLayerID(10),
 				},
-				localVotes: votes{
+				hareOutput: votes{
 					blocks[0]: support,
 					blocks[1]: against,
 					blocks[2]: against,
@@ -134,11 +134,11 @@ func TestVerifyingProcessLayer(t *testing.T) {
 		ballots           = []types.BallotID{{1}, {2}, {3}, {4}}
 		ballotWeight      = weightFromUint64(10)
 		blocks            = []types.BlockID{{11}, {22}, {33}}
-		start             = types.NewLayerID(1)
+		start             = types.GetEffectiveGenesis()
 	)
 	genCommonState := func() commonState {
 		state := newCommonState()
-		state.localVotes = votes{
+		state.hareOutput = votes{
 			blocks[0]: support,
 			blocks[1]: support,
 			blocks[2]: against,
@@ -244,7 +244,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			logger := logtest.New(t)
 
 			state := genCommonState()
-			v := newVerifying(Config{}, &state)
+			v := newVerifying(Config{Hdist: 10}, &state)
 			v.goodBallots[goodbase] = struct{}{}
 
 			for i := range tc.ballots {
@@ -356,7 +356,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			state.processed = tc.processed
 			state.last = tc.processed
 			state.blocks = tc.blocks
-			state.localVotes = tc.localOpinion
+			state.hareOutput = tc.localOpinion
 
 			updateThresholds(logger, tc.config, &state)
 

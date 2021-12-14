@@ -930,7 +930,7 @@ func TestMultiTortoise(t *testing.T) {
 		// because its opinions about which blocks are valid/invalid are wrong and disagree with the majority
 		// opinion. these layers represent its healing distance. after it heals, it will converge to the
 		// majority opinion.
-		for i := 0; i < 32; i++ {
+		for i := 0; i < 100; i++ {
 			layerID = layerID.Add(1)
 			blocksA, blocksB := makeBlocks(layerID)
 			var blocks []*types.Block
@@ -1830,7 +1830,8 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	for lid := genesis; lid.Before(last); lid = lid.Add(1) {
 		bids, err := s.GetState(0).MeshDB.LayerBlockIds(lid)
 		require.NoError(t, err)
-		tortoise.trtl.localVotes[bids[0]] = against
+		tortoise.trtl.validity[bids[0]] = against
+		tortoise.trtl.hareOutput[bids[0]] = against
 		unsupported[bids[0]] = struct{}{}
 	}
 
@@ -1926,12 +1927,14 @@ func TestComputeLocalOpinion(t *testing.T) {
 				tortoise.HandleIncomingLayer(ctx, lid)
 			}
 
-			local := votes{}
-			err := tortoise.trtl.addLocalVotes(ctx, logtest.New(t), tc.lid, local)
+			err := tortoise.trtl.addLocalVotes(ctx, logtest.New(t), tc.lid)
 			require.NoError(t, err)
 
-			for bid, opinion := range local {
-				require.Equal(t, tc.expected, opinion, "block id %s", bid)
+			blocks, err := s.GetState(0).MeshDB.LayerBlockIds(tc.lid)
+			require.NoError(t, err)
+			for _, bid := range blocks {
+				vote, _ := getLocalVote(&tortoise.trtl.commonState, cfg, tc.lid, bid)
+				require.Equal(t, tc.expected, vote, "block id %s", bid)
 			}
 		})
 	}
@@ -2189,7 +2192,6 @@ func TestStateManagement(t *testing.T) {
 
 		for lid := evicted.Add(1); !lid.After(last); lid = lid.Add(1) {
 			for _, bid := range tortoise.trtl.blocks[lid] {
-				require.Contains(t, tortoise.trtl.localVotes, bid, "layer %s", lid)
 				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)
 			}
 			for _, ballot := range tortoise.trtl.ballots[lid] {
@@ -2223,7 +2225,6 @@ func TestStateManagement(t *testing.T) {
 
 		for lid := evicted.Add(1); !lid.After(tortoise.trtl.verified); lid = lid.Add(1) {
 			for _, bid := range tortoise.trtl.blocks[lid] {
-				require.Contains(t, tortoise.trtl.localVotes, bid, "layer %s", lid)
 				require.Contains(t, tortoise.trtl.blockLayer, bid, "layer %s", lid)
 			}
 			for _, ballot := range tortoise.trtl.ballots[lid] {

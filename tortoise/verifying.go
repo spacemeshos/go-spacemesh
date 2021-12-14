@@ -66,10 +66,12 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	// if there is any block with neutral local opinion - we can't verify the layer
 	// if it happens outside of hdist - protocol will switch to full tortoise
 	for _, bid := range v.blocks[lid] {
-		if v.localVotes[bid] == abstain {
+		vote, _ := getLocalVote(v.commonState, v.Config, lid, bid)
+		if vote == abstain {
 			logger.With().Info("candidate layer is not verified. block is undecided according to local votes", bid)
 			return false
 		}
+		v.validity[bid] = vote
 	}
 
 	v.totalWeight = votingWeight
@@ -106,22 +108,23 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 
 	baselid := v.ballotLayer[ballot.base]
 	for block, vote := range ballot.votes {
-		votelid, exists := v.blockLayer[block]
+		blocklid, exists := v.blockLayer[block]
 		// if the layer of the vote is not in the memory then it is definitely before base block layer
-		if !exists || votelid.Before(baselid) {
+		if !exists || blocklid.Before(baselid) {
 			logger.With().Debug("vote on a block that is before base ballot",
 				log.Stringer("base_layer", baselid),
-				log.Stringer("vote_layer", votelid),
+				log.Stringer("vote_layer", blocklid),
 				log.Bool("vote_exists", exists),
 			)
 			return false
 		}
 
-		if localVote := v.localVotes[block]; localVote != vote {
+		if localVote, reason := getLocalVote(v.commonState, v.Config, blocklid, block); localVote != vote {
 			logger.With().Debug("vote on a block doesn't match a local vote",
 				log.Stringer("local_vote", localVote),
+				log.Stringer("local_vote_reason", reason),
 				log.Stringer("ballot_vote", vote),
-				log.Stringer("block_layer", votelid),
+				log.Stringer("block_layer", blocklid),
 				log.Stringer("block", block),
 			)
 			return false

@@ -160,3 +160,16 @@ func verifyLayers(logger log.Log, config Config, state *commonState, verifier la
 type layerVerifier interface {
 	verify(log.Log, types.LayerID) bool
 }
+
+type voteReason string
+
+func (v voteReason) String() string {
+	return string(v)
+}
+
+const (
+	reasonHareOutput     voteReason = "hare"
+	reasonValiditiy      voteReason = "validity"
+	reasonLocalThreshold voteReason = "local_threshold"
+	reasonCoinflip       voteReason = "coinflip"
+)
