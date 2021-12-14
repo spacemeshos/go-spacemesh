@@ -15,7 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/svm/state"
+	"github.com/spacemeshos/go-spacemesh/svm"
 )
 
 // TransactionService exposes transaction data, and a submit tx endpoint.
@@ -90,7 +90,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 		tx.Recipient, len(tx.Recipient), tx.Amount, tx.GasLimit, tx.Fee, tx.ID().ShortString(), tx.AccountNonce)
 
 	go func() {
-		if err := s.publisher.Publish(ctx, state.IncomingTxProtocol, in.Transaction); err != nil {
+		if err := s.publisher.Publish(ctx, svm.IncomingTxProtocol, in.Transaction); err != nil {
 			log.Error("error broadcasting incoming tx: %v", err)
 		}
 	}()

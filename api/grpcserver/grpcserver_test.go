@@ -44,7 +44,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/svm/state"
+	"github.com/spacemeshos/go-spacemesh/svm"
 )
 
 const (
@@ -3114,16 +3114,16 @@ func TestEventsReceived(t *testing.T) {
 	pool := mempool.NewTxMemPool()
 	pool.Put(globalTx.ID(), globalTx)
 
-	lg := logtest.New(t).WithName("proc_logger")
-	processor := state.NewTransactionProcessor(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	lg := logtest.New(t).WithName("svm")
+	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
 	time.Sleep(100 * time.Millisecond)
-	processor.Process([]*types.Transaction{globalTx}, layerFirst)
 
 	rewards := map[types.Address]uint64{
 		addr1: 1,
 	}
+	svm.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
+
 	time.Sleep(100 * time.Millisecond)
-	processor.ApplyRewards(layerFirst, rewards)
 
 	wg.Wait()
 }

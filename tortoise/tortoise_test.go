@@ -930,7 +930,7 @@ func TestMultiTortoise(t *testing.T) {
 		// because its opinions about which blocks are valid/invalid are wrong and disagree with the majority
 		// opinion. these layers represent its healing distance. after it heals, it will converge to the
 		// majority opinion.
-		for i := 0; i < 100; i++ {
+		for i := 0; i < 40; i++ {
 			layerID = layerID.Add(1)
 			blocksA, blocksB := makeBlocks(layerID)
 			var blocks []*types.Block
