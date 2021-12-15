@@ -472,12 +472,28 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) err
 	return t.processLayer(ctx, t.logger.WithContext(ctx).WithFields(lid), lid)
 }
 
+func (t *turtle) switchModes(logger log.Log) {
+	from := t.mode
+	t.mode = from.toggleMode()
+	logger.With().Info("switching tortoise mode",
+		log.Stringer("processed_layer", t.processed),
+		log.Stringer("verified_layer", t.verified),
+		log.Stringer("from_mode", from),
+		log.Stringer("to_mode", t.mode),
+	)
+	updateThresholds(logger, t.Config, &t.commonState, t.mode)
+}
+
 func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.LayerID) error {
 	logger.With().Info("adding layer to the state")
 
 	if err := t.updateLayerState(logger, lid); err != nil {
 		return err
 	}
+	logger = logger.WithFields(
+		log.Stringer("processed_layer", t.processed),
+		log.Stringer("last_layer", t.last),
+	)
 
 	blocks, err := t.bdp.LayerBlocks(lid)
 	if err != nil {
@@ -505,37 +521,48 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 	previous := t.verified
 	if t.mode.isVerifying() {
 		t.verifying.countVotes(logger, lid, ballots)
-		iterateLayers(t.verified.Add(1), t.processed.Sub(1), func(lid types.LayerID) bool {
-			ok := t.verifying.verify(logger, lid)
+		for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
+			ok := t.verifying.verify(logger, target)
 			if !ok {
-				return false
+				break
 			}
-			t.verified = lid
+			t.verified = target
 			updateThresholds(logger, t.Config, &t.commonState, t.mode)
-			return true
-		})
+		}
 	}
 	if t.canUseFullMode() || t.mode.isFull() {
 		if t.mode.isVerifying() {
-			t.mode = t.mode.toggleMode()
-			logger.With().Info("switching to full self-healing tortoise",
-				lid,
-				log.Stringer("verified", t.verified),
-				log.Stringer("mode", t.mode),
-			)
-			// update threshold since we have different windows for vote counting in each mode
-			updateThresholds(logger, t.Config, &t.commonState, t.mode)
+			t.switchModes(logger)
+			// reset accumulated weight as verifying tortoise will run in parallel
+			t.verifying.resetWeights()
 		}
 		t.full.countVotes(logger)
-		iterateLayers(t.verified.Add(1), t.processed.Sub(1), func(lid types.LayerID) bool {
-			ok := t.full.verify(logger, lid)
+		for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
+			ok := t.full.verify(logger, target)
 			if !ok {
-				return false
+				break
 			}
-			t.verified = lid
+			// recompute goodness and accumulated weight of all ballots that can vote for newly verified layer
+			//
+			// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
+			// that accumulated weight has a weight of the layer that is going to be verified.
+			for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
+				t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
+			}
+			restarted := t.verifying.verify(logger, target)
+
+			t.verified = target
 			updateThresholds(logger, t.Config, &t.commonState, t.mode)
-			return true
-		})
+
+			if restarted && t.mode.isFull() {
+				t.switchModes(logger)
+				// TODO(dshulyak) goto to verifying mode for the rest of the layers
+			} else if !restarted {
+				// need to reset accumulated weight, verifying will not try to verify this layer again
+				// hence the accumulated weight will be inconsistent with verified layer.
+				t.verifying.resetWeights()
+			}
+		}
 	}
 	if err := persistContextualValidity(logger,
 		t.bdp,
@@ -548,6 +575,23 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 
 	t.updateHistoricallyVerified()
 	return nil
+}
+
+func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
+	ballots := t.ballots[lid]
+	if len(ballots) == 0 {
+		return nil
+	}
+	tballots := make([]tortoiseBallot, 0, len(ballots))
+	for _, ballot := range ballots {
+		tballots = append(tballots, tortoiseBallot{
+			id:     ballot,
+			base:   t.full.base[ballot],
+			votes:  t.full.votes[ballot],
+			weight: t.ballotWeight[ballot],
+		})
+	}
+	return tballots
 }
 
 func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {

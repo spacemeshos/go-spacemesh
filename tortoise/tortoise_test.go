@@ -2083,6 +2083,41 @@ func TestVerifyLayerByWeightNotSize(t *testing.T) {
 	require.Equal(t, last.Sub(2), verified)
 }
 
+func TestSwitchVerifying(t *testing.T) {
+	ctx := context.Background()
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.Hdist = 2
+	cfg.Zdist = 2
+
+	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	var last, verified types.LayerID
+
+	for i := 0; i < 2; i++ {
+		last = s.Next()
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	for i := 0; i < int(cfg.Hdist)+1; i++ {
+		last = s.Next(
+			sim.WithEmptyInputVector(),
+		)
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
+	_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	require.True(t, tortoise.trtl.mode.isFull(), "full mode")
+	for i := 0; i < 10; i++ {
+		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified)
+	require.True(t, tortoise.trtl.mode.isVerifying(), "verifying mode")
+}
+
 func TestStateManagement(t *testing.T) {
 	const (
 		size   = 10

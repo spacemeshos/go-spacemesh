@@ -26,7 +26,14 @@ type verifying struct {
 	totalWeight weight
 }
 
+func (v *verifying) resetWeights() {
+	v.totalWeight = weightFromUint64(0)
+	v.layerWeights = map[types.LayerID]weight{}
+}
+
 func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
+	logger = logger.WithFields(log.Stringer("ballots_layer", lid))
+
 	counted, goodBallotsCount := v.sumGoodBallots(logger, ballots)
 
 	// TODO(dshulyak) counted weight should be reduced by the uncounted weight per conversation with research
@@ -34,7 +41,7 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tort
 	v.layerWeights[lid] = counted
 	v.totalWeight = v.totalWeight.add(counted)
 
-	logger.With().Info("computed weight from good ballots",
+	logger.With().Info("counted weight from good ballots",
 		log.Stringer("weight", counted),
 		log.Stringer("total", v.totalWeight),
 		log.Stringer("expected", v.epochWeight[lid.GetEpoch()]),
