@@ -102,14 +102,14 @@ func computeThresholdForLayers(config Config, epochWeight map[types.EpochID]weig
 // - when last layer is updated
 // - when verified layer is updated
 // - when switching from one mode into the other.
-func updateThresholds(logger log.Log, config Config, state *commonState, tortoiseMode mode) {
+func updateThresholds(logger log.Log, config Config, state *commonState, tmode mode) {
 	state.localThreshold = computeLocalThreshold(config, state.epochWeight, state.last)
 
 	target := state.verified.Add(1)
 	window := state.last
-	if tortoiseMode.isFull() && state.last.Difference(target) > config.FullModeRerunWindow {
+	if tmode.isFull() && state.last.Difference(target) > config.FullModeRerunWindow {
 		window = target.Add(config.FullModeRerunWindow)
-	} else if tortoiseMode.isVerifying() && state.last.Difference(target) > config.VerifyingModeRerunWindow {
+	} else if tmode.isVerifying() && state.last.Difference(target) > config.VerifyingModeRerunWindow {
 		window = target.Add(config.VerifyingModeRerunWindow)
 	}
 	if window.Before(state.processed) {
@@ -121,9 +121,10 @@ func updateThresholds(logger log.Log, config Config, state *commonState, tortois
 	logger.With().Info("updated thresholds",
 		log.Stringer("window", window),
 		log.Stringer("last_layer", state.last),
+		log.Stringer("processed_layer", state.processed),
 		log.Stringer("target_layer", target),
 		log.Stringer("local_threshold", state.localThreshold),
 		log.Stringer("global_threshold", state.globalThreshold),
-		log.Stringer("mode", tortoiseMode),
+		log.Stringer("mode", tmode),
 	)
 }
