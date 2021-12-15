@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -178,7 +179,7 @@ func (l *Logic) epochATXsReqReceiver(ctx context.Context, msg []byte) ([]byte, e
 	l.log.WithContext(ctx).With().Debug("responded to epoch atxs request",
 		epoch,
 		log.Int("count", len(atxs)))
-	bts, err := types.InterfaceToBytes(atxs)
+	bts, err := codec.Encode(atxs)
 	if err != nil {
 		l.log.WithContext(ctx).With().Panic("failed to serialize epoch atxs", epoch, log.Err(err))
 		return bts, fmt.Errorf("serialize: %w", err)
@@ -214,7 +215,7 @@ func (l *Logic) layerBlocksReqReceiver(ctx context.Context, req []byte) ([]byte,
 		return nil, ErrInternal
 	}
 
-	out, err := types.InterfaceToBytes(b)
+	out, err := codec.Encode(b)
 	if err != nil {
 		l.log.WithContext(ctx).With().Panic("failed to serialize layer blocks response", log.Err(err))
 	}
@@ -309,7 +310,7 @@ func extractPeerResult(logger log.Log, layerID types.LayerID, data []byte, peerE
 	}
 
 	var blocks layerBlocks
-	if err := types.BytesToInterface(data, &blocks); err != nil {
+	if err := codec.Decode(data, &blocks); err != nil {
 		logger.With().Debug("error converting bytes to layerBlocks", log.Err(err))
 		result.err = err
 		return
@@ -413,7 +414,7 @@ func (l *Logic) GetEpochATXs(ctx context.Context, id types.EpochID) error {
 	// build receiver function
 	receiveForPeerFunc := func(data []byte) {
 		var atxsIDs []types.ATXID
-		err := types.BytesToInterface(data, &atxsIDs)
+		err := codec.Decode(data, &atxsIDs)
 		resCh <- epochAtxRes{
 			Error: err,
 			Atxs:  atxsIDs,

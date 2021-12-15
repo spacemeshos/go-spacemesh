@@ -12,6 +12,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacemeshos/ed25519"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
@@ -119,7 +120,7 @@ func (m *Msg) String() string {
 // Bytes returns the message as bytes (without the public key).
 // It panics if the message erred on unmarshal.
 func (m *Msg) Bytes() []byte {
-	buf, err := types.InterfaceToBytes(m.Message)
+	buf, err := codec.Encode(m.Message)
 	if err != nil {
 		log.Panic("could not marshal innermsg before send")
 	}

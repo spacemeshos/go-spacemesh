@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -19,7 +20,7 @@ type Message struct {
 // It returns an error if unmarshal of the provided byte slice failed.
 func MessageFromBuffer(buf []byte) (*Message, error) {
 	msg := &Message{}
-	if err := types.BytesToInterface(buf, msg); err != nil {
+	if err := codec.Decode(buf, msg); err != nil {
 		return msg, fmt.Errorf("serialize: %w", err)
 	}
 
@@ -67,7 +68,7 @@ type innerMessage struct {
 
 // Bytes returns the message as bytes.
 func (im *innerMessage) Bytes() []byte {
-	buf, err := types.InterfaceToBytes(im)
+	buf, err := codec.Encode(im)
 	if err != nil {
 		log.Panic("could not marshal InnerMsg before send")
 	}

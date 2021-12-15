@@ -10,6 +10,7 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/fixed"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -189,7 +190,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 
 	// marshal message
 	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
-	buf, err := types.InterfaceToBytes(&msg)
+	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Panic("failed to encode", log.Err(err))
 	}

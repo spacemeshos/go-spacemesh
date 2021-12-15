@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/proposals/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -84,7 +85,7 @@ func createProposal(tb testing.TB) *types.Proposal {
 
 func encodeProposal(tb testing.TB, p *types.Proposal) []byte {
 	tb.Helper()
-	data, err := types.InterfaceToBytes(p)
+	data, err := codec.Encode(p)
 	require.NoError(tb, err)
 	return data
 }
@@ -112,7 +113,7 @@ func createRefBallot(tb testing.TB) *types.Ballot {
 
 func encodeBallot(tb testing.TB, b *types.Ballot) []byte {
 	tb.Helper()
-	data, err := types.InterfaceToBytes(b)
+	data, err := codec.Encode(b)
 	require.NoError(tb, err)
 	return data
 }
@@ -121,7 +122,7 @@ func TestBallot_MalformedData(t *testing.T) {
 	th := createTestHandler(t)
 	defer th.ctrl.Finish()
 	b := createBallot(t)
-	data, err := types.InterfaceToBytes(b.InnerBallot)
+	data, err := codec.Encode(b.InnerBallot)
 	require.NoError(t, err)
 	assert.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errMalformedData)
 }
@@ -364,7 +365,7 @@ func TestProposal_MalformedData(t *testing.T) {
 	th := createTestHandler(t)
 	defer th.ctrl.Finish()
 	p := createProposal(t)
-	data, err := types.InterfaceToBytes(p.InnerProposal)
+	data, err := codec.Encode(p.InnerProposal)
 	require.NoError(t, err)
 	assert.ErrorIs(t, th.processProposal(context.TODO(), data), errMalformedData)
 }

@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	dbmocks "github.com/spacemeshos/go-spacemesh/database/mocks"
@@ -143,7 +144,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
-			require.NoError(t, types.BytesToInterface(data, &p))
+			require.NoError(t, codec.Decode(data, &p))
 			p.Initialize()
 			assert.Equal(t, types.EmptyBallotID, p.RefBallot)
 			assert.Equal(t, bb1, p.BaseBallot)
@@ -166,7 +167,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
-			require.NoError(t, types.BytesToInterface(data, &p))
+			require.NoError(t, codec.Decode(data, &p))
 			p.Initialize()
 			assert.Equal(t, bb2, p.BaseBallot)
 			assert.Equal(t, refBid, p.RefBallot)
@@ -211,7 +212,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
-			require.NoError(t, types.BytesToInterface(data, &p))
+			require.NoError(t, codec.Decode(data, &p))
 			p.Initialize()
 			assert.Equal(t, types.EmptyBallotID, p.RefBallot)
 			assert.Equal(t, bb, p.BaseBallot)

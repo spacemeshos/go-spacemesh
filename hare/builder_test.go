@@ -6,16 +6,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 func marshallUnmarshall(t *testing.T, msg *Message) *Message {
-	buf, err := types.InterfaceToBytes(&msg)
+	buf, err := codec.Encode(&msg)
 	require.NoError(t, err)
 
 	m := &Message{}
-	require.NoError(t, types.BytesToInterface(buf, m))
+	require.NoError(t, codec.Decode(buf, m))
 	return m
 }
 

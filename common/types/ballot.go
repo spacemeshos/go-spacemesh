@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -128,7 +129,7 @@ func (b *Ballot) Initialize() error {
 
 // Bytes returns the serialization of the InnerBallot.
 func (b *Ballot) Bytes() []byte {
-	data, err := InterfaceToBytes(b.InnerBallot)
+	data, err := codec.Encode(b.InnerBallot)
 	if err != nil {
 		log.Panic("failed to serialize ballot: %v", err)
 	}

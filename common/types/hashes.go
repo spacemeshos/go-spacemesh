@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/sha256-simd"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -170,7 +171,7 @@ func CalcHash32(data []byte) Hash32 {
 
 // CalcATXHash32 returns the 32-byte sha256 sum of serialization of the given ATX.
 func CalcATXHash32(atx *ActivationTx) Hash32 {
-	bytes, err := InterfaceToBytes(&atx.ActivationTxHeader)
+	bytes, err := codec.Encode(&atx.ActivationTxHeader)
 	if err != nil {
 		panic("could not Serialize atx")
 	}

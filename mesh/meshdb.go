@@ -202,7 +202,7 @@ func (m *DB) GetBallot(id types.BallotID) (*types.Ballot, error) {
 		return nil, err
 	}
 	dbb := &types.DBBallot{}
-	if err := types.BytesToInterface(data, dbb); err != nil {
+	if err := codec.Decode(data, dbb); err != nil {
 		return nil, fmt.Errorf("parse ballot: %w", err)
 	}
 	return dbb.ToBallot(), nil
@@ -294,7 +294,7 @@ func (m *DB) getBlock(id types.BlockID) (*types.Block, error) {
 		return nil, err
 	}
 	dbp := &types.DBProposal{}
-	if err := types.BytesToInterface(data, dbp); err != nil {
+	if err := codec.Decode(data, dbp); err != nil {
 		return nil, fmt.Errorf("parse proposal: %w", err)
 	}
 	return dbp.ToBlock(), nil
@@ -306,7 +306,7 @@ func (m *DB) getProposal(id types.ProposalID) (*types.Proposal, error) {
 		return nil, err
 	}
 	dbp := &types.DBProposal{}
-	if err := types.BytesToInterface(data, dbp); err != nil {
+	if err := codec.Decode(data, dbp); err != nil {
 		return nil, fmt.Errorf("parse proposal: %w", err)
 	}
 	ballot, err := m.GetBallot(dbp.BallotID)
@@ -417,7 +417,7 @@ func (m *DB) SaveContextualValidity(id types.BlockID, lid types.LayerID, valid b
 
 // SaveLayerInputVector saves the input vote vector for a layer (hare results).
 func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) error {
-	data, err := types.InterfaceToBytes(vector)
+	data, err := codec.Encode(vector)
 	if err != nil {
 		return fmt.Errorf("serialize vector: %w", err)
 	}
@@ -527,7 +527,7 @@ func (m *DB) writeBallot(b *types.Ballot) error {
 		ID:          b.ID(),
 		Signature:   b.Signature,
 	}
-	if data, err := types.InterfaceToBytes(dbb); err != nil {
+	if data, err := codec.Encode(dbb); err != nil {
 		return fmt.Errorf("could not encode ballot: %w", err)
 	} else if err := m.ballots.Put(b.ID().Bytes(), data); err != nil {
 		return fmt.Errorf("could not add ballot %v to database: %w", b.ID(), err)
@@ -543,7 +543,7 @@ func (m *DB) writeProposal(p *types.Proposal) error {
 		TxIDs:      p.TxIDs,
 		Signature:  p.Signature,
 	}
-	if data, err := types.InterfaceToBytes(dbp); err != nil {
+	if data, err := codec.Encode(dbp); err != nil {
 		return fmt.Errorf("could not encode block: %w", err)
 	} else if err := m.proposals.Put(p.ID().Bytes(), data); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", p.ID(), err)
@@ -763,7 +763,7 @@ func (t DbTransaction) getTransaction() *types.MeshTransaction {
 func (m *DB) writeTransactions(p *types.Proposal, txs ...*types.Transaction) error {
 	batch := m.transactions.NewBatch()
 	for _, t := range txs {
-		bytes, err := types.InterfaceToBytes(newDbTransaction(t, p.ID(), p.LayerIndex))
+		bytes, err := codec.Encode(newDbTransaction(t, p.ID(), p.LayerIndex))
 		if err != nil {
 			return fmt.Errorf("could not marshall tx %v to bytes: %v", t.ID().ShortString(), err)
 		}
@@ -805,7 +805,7 @@ func (m *DB) writeTransactionRewards(l types.LayerID, accountBlockCount map[type
 				return fmt.Errorf("could not convert String to NodeID for %v: %v", smesherString, err)
 			}
 			reward := dbReward{TotalReward: cnt * totalReward, LayerRewardEstimate: cnt * layerReward, SmesherID: *smesherEntry, Coinbase: account}
-			if b, err := types.InterfaceToBytes(&reward); err != nil {
+			if b, err := codec.Encode(&reward); err != nil {
 				return fmt.Errorf("could not marshal reward for %v: %v", account.Short(), err)
 			} else if err := batch.Put(getRewardKey(l, account, *smesherEntry), b); err != nil {
 				return fmt.Errorf("could not write reward to %v to database: %v", account.Short(), err)
@@ -832,7 +832,7 @@ func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err erro
 		}
 		layer := parseLayerIDFromRewardsKey(it.Key())
 		var reward dbReward
-		err = types.BytesToInterface(it.Value(), &reward)
+		err = codec.Decode(it.Value(), &reward)
 		if err != nil {
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
@@ -866,7 +866,7 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Rewa
 		if err != nil {
 			return nil, fmt.Errorf("wrong key in db %s: %v", it.Value(), err)
 		}
-		if err = types.BytesToInterface(rewardBytes, &reward); err != nil {
+		if err = codec.Decode(rewardBytes, &reward); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
 		}
 		rewards = append(rewards, types.Reward{
@@ -1036,7 +1036,7 @@ func (m *DB) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction,
 		return nil, fmt.Errorf("could not find transaction in database %v err=%v", hex.EncodeToString(id[:]), err)
 	}
 	var dbTx DbTransaction
-	err = types.BytesToInterface(tBytes, &dbTx)
+	err = codec.Decode(tBytes, &dbTx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to unmarshal transaction: %v", err)
 	}
@@ -1179,7 +1179,7 @@ func (db *BlockFetcherDB) Get(hash []byte) ([]byte, error) {
 		return nil, fmt.Errorf("get block: %w", err)
 	}
 
-	data, err := types.InterfaceToBytes(blk)
+	data, err := codec.Encode(blk)
 	if err != nil {
 		return data, fmt.Errorf("serialize: %w", err)
 	}
@@ -1205,7 +1205,7 @@ func (db *BallotFetcherDB) Get(hash []byte) ([]byte, error) {
 		return nil, fmt.Errorf("get ballot: %w", err)
 	}
 
-	data, err := types.InterfaceToBytes(blk)
+	data, err := codec.Encode(blk)
 	if err != nil {
 		return data, fmt.Errorf("serialize: %w", err)
 	}

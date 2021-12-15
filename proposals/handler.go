@@ -8,6 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -148,7 +149,7 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	logger.Info("processing ballot")
 
 	var b types.Ballot
-	if err := types.BytesToInterface(data, &b); err != nil {
+	if err := codec.Decode(data, &b); err != nil {
 		logger.With().Error("malformed ballot", log.Err(err))
 		return errMalformedData
 	}
@@ -177,7 +178,7 @@ func (h *Handler) processProposal(ctx context.Context, data []byte) error {
 	logger.Info("processing proposal")
 
 	var p types.Proposal
-	if err := types.BytesToInterface(data, &p); err != nil {
+	if err := codec.Decode(data, &p); err != nil {
 		logger.With().Error("malformed proposal", log.Err(err))
 		return errMalformedData
 	}

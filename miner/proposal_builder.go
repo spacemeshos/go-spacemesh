@@ -11,6 +11,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -386,7 +387,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 			return fmt.Errorf("builder add proposal: %w", err)
 		}
 
-		data, err := types.InterfaceToBytes(p)
+		data, err := codec.Encode(p)
 		if err != nil {
 			logger.With().Panic("failed to serialize proposal", log.Err(err))
 		}

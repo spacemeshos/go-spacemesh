@@ -151,7 +151,7 @@ func TestLayerBlocksReqReceiver_Success(t *testing.T) {
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
 	require.NoError(t, err)
 	var got layerBlocks
-	err = types.BytesToInterface(out, &got)
+	err = codec.Decode(out, &got)
 	require.NoError(t, err)
 	assert.Equal(t, blocks, got.Blocks)
 	assert.Equal(t, blocks[1:], got.InputVector)
@@ -178,7 +178,7 @@ func TestLayerBlocksReqReceiver_SuccessEmptyLayer(t *testing.T) {
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
 	require.NoError(t, err)
 	var got layerBlocks
-	err = types.BytesToInterface(out, &got)
+	err = codec.Decode(out, &got)
 	require.NoError(t, err)
 	assert.Empty(t, got.Blocks)
 	assert.Empty(t, got.InputVector)
@@ -275,7 +275,7 @@ func generateLayerBlocksWithHash(consistentHash bool, numInputVector int) []byte
 		Hash:           hash,
 		AggregatedHash: randomHash(),
 	}
-	out, _ := types.InterfaceToBytes(lb)
+	out, _ := codec.Encode(lb)
 	return out
 }
 
@@ -287,7 +287,7 @@ func generateEmptyLayer() []byte {
 		Hash:           types.EmptyLayerHash,
 		AggregatedHash: randomHash(),
 	}
-	out, _ := types.InterfaceToBytes(lb)
+	out, _ := codec.Encode(lb)
 	return out
 }
 
@@ -568,7 +568,7 @@ func TestGetBlocks_FetchSomeError(t *testing.T) {
 				Err:  errUnknown,
 			}
 		} else {
-			data, err := types.InterfaceToBytes(blocks[i])
+			data, err := codec.Encode(blocks[i])
 			require.NoError(t, err)
 			ch <- fetch.HashDataPromiseResult{
 				Hash: h,
@@ -599,7 +599,7 @@ func TestGetBlocks_HandlerError(t *testing.T) {
 	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
 		ch := make(chan fetch.HashDataPromiseResult, 1)
-		data, err := types.InterfaceToBytes(blocks[i])
+		data, err := codec.Encode(blocks[i])
 		require.NoError(t, err)
 		ch <- fetch.HashDataPromiseResult{
 			Hash: h,
@@ -627,7 +627,7 @@ func TestGetBlocks(t *testing.T) {
 	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
 		ch := make(chan fetch.HashDataPromiseResult, 1)
-		data, err := types.InterfaceToBytes(blocks[i])
+		data, err := codec.Encode(blocks[i])
 		require.NoError(t, err)
 		ch <- fetch.HashDataPromiseResult{
 			Hash: h,
@@ -688,7 +688,7 @@ func TestGetBallots_FetchSomeError(t *testing.T) {
 				Err:  errUnknown,
 			}
 		} else {
-			data, err := types.InterfaceToBytes(ballots[i])
+			data, err := codec.Encode(ballots[i])
 			require.NoError(t, err)
 			ch <- fetch.HashDataPromiseResult{
 				Hash: h,
@@ -719,7 +719,7 @@ func TestGetBallots_HandlerError(t *testing.T) {
 	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
 		ch := make(chan fetch.HashDataPromiseResult, 1)
-		data, err := types.InterfaceToBytes(ballots[i])
+		data, err := codec.Encode(ballots[i])
 		require.NoError(t, err)
 		ch <- fetch.HashDataPromiseResult{
 			Hash: h,
@@ -747,7 +747,7 @@ func TestGetBallots(t *testing.T) {
 	results := make(map[types.Hash32]chan fetch.HashDataPromiseResult, len(hashes))
 	for i, h := range hashes {
 		ch := make(chan fetch.HashDataPromiseResult, 1)
-		data, err := types.InterfaceToBytes(ballots[i])
+		data, err := codec.Encode(ballots[i])
 		require.NoError(t, err)
 		ch <- fetch.HashDataPromiseResult{
 			Hash: h,
