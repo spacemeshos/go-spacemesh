@@ -51,6 +51,56 @@ func TestRecoverState(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 }
 
+func TestRerunDistanceVoteCounting(t *testing.T) {
+	genesis := types.GetEffectiveGenesis()
+	ctx := context.Background()
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.Hdist = 1
+	cfg.Zdist = 1
+
+	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	var last, verified types.LayerID
+
+	const firstBatch = 5
+	misverified := genesis.Add(firstBatch)
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(firstBatch, sim.WithEmptyInputVector()),
+		// in this layer voting is malicious, and it will make that misverified layer will be all invalid
+		sim.WithSequence(1, sim.WithVoteGenerator(gapVote)),
+		// in this layer we skip previously malicious voting
+		sim.WithSequence(1, sim.WithVoteGenerator(gapVote)),
+		sim.WithSequence(5),
+	) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified)
+
+	blocks, err := s.GetState(0).MeshDB.LayerBlockIds(misverified)
+	require.NoError(t, err)
+	for _, block := range blocks {
+		validity, err := s.GetState(0).MeshDB.ContextualValidity(block)
+		require.NoError(t, err)
+		require.False(t, validity, "validity for block %s", block)
+	}
+	require.NoError(t, tortoise.rerun(ctx))
+
+	last = s.Next()
+	previous, verified, reverted := tortoise.HandleIncomingLayer(ctx, last)
+	require.True(t, reverted, "should be reverted")
+	require.Equal(t, misverified, previous.Add(1))
+	require.Equal(t, last.Sub(1), verified)
+	for _, block := range blocks {
+		validity, err := s.GetState(0).MeshDB.ContextualValidity(block)
+		require.NoError(t, err)
+		require.True(t, validity, "validity for block %s", block)
+	}
+}
+
 func BenchmarkRerun(b *testing.B) {
 	b.Run("Verifying/100", func(b *testing.B) {
 		benchmarkRerun(b, 100, 10, 0)
