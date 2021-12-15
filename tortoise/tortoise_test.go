@@ -13,7 +13,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -163,83 +162,6 @@ var (
 	defaultTestLocalThreshold  = big.NewRat(2, 10)
 	defaultTestRerunInterval   = time.Hour
 )
-
-func makeAndProcessLayer(t *testing.T, l types.LayerID, trtl *turtle, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) {
-	lyr := makeLayer(t, l, trtl, natxs, blocksPerLayer, atxdb, msh, inputVectorFn)
-	logger := logtest.New(t)
-
-	// write blocks to database first; the verifying tortoise will subsequently read them
-	if inputVectorFn == nil {
-		// just save the layer contents as the input layer vector (the default behavior)
-		require.NoError(t, msh.SaveLayerInputVectorByID(context.TODO(), lyr.Index(), lyr.BlocksIDs()))
-	} else if blocks, err := inputVectorFn(l); err != nil {
-		logger.With().Warning("error from input vector fn", log.Err(err))
-	} else {
-		// save blocks to db for this layer
-		require.NoError(t, msh.SaveLayerInputVectorByID(context.TODO(), l, blocks))
-	}
-
-	require.NoError(t, trtl.HandleIncomingLayer(context.TODO(), l))
-}
-
-func makeLayer(t *testing.T, layerID types.LayerID, trtl *turtle, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
-	return makeLayerWithBeacon(t, layerID, trtl, types.EmptyBeacon, natxs, blocksPerLayer, atxdb, msh, inputVectorFn)
-}
-
-func makeLayerWithBeacon(t *testing.T, layerID types.LayerID, trtl *turtle, beacon types.Beacon, natxs, blocksPerLayer int, atxdb atxDataWriter, msh blockDataWriter, inputVectorFn func(id types.LayerID) ([]types.BlockID, error)) *types.Layer {
-	if inputVectorFn != nil {
-		oldInputVectorFn := msh.GetInputVectorBackupFunc()
-		defer func() {
-			msh.SetInputVectorBackupFunc(oldInputVectorFn)
-		}()
-		msh.SetInputVectorBackupFunc(inputVectorFn)
-	}
-	baseBallotID, lists, err := trtl.BaseBallot(context.TODO())
-	require.NoError(t, err)
-	lyr := types.NewLayer(layerID)
-
-	atxs := []types.ATXID{}
-	for i := 0; i < natxs; i++ {
-		atxHeader := makeAtxHeaderWithWeight(1)
-		atx := &types.ActivationTx{InnerActivationTx: &types.InnerActivationTx{ActivationTxHeader: atxHeader}}
-		atx.PubLayerID = layerID
-		atx.NodeID.Key = fmt.Sprintf("%d", i)
-		atx.CalcAndSetID()
-		require.NoError(t, atxdb.StoreAtx(layerID.GetEpoch(), atx))
-		atxs = append(atxs, atx.ID())
-	}
-
-	for i := 0; i < blocksPerLayer; i++ {
-		ballot := types.Ballot{
-			InnerBallot: types.InnerBallot{
-				AtxID:            atxs[i%len(atxs)],
-				BaseBallot:       baseBallotID,
-				EligibilityProof: types.VotingEligibilityProof{J: uint32(i)},
-				AgainstDiff:      lists[0],
-				ForDiff:          lists[1],
-				NeutralDiff:      lists[2],
-				LayerIndex:       layerID,
-				EpochData: &types.EpochData{
-					ActiveSet: atxs,
-					Beacon:    beacon,
-				},
-			},
-		}
-		p := &types.Proposal{
-			InnerProposal: types.InnerProposal{
-				Ballot: ballot,
-				TxIDs:  nil,
-			},
-		}
-		blk := p.ToBlock()
-		blk.Signature = signing.NewEdSigner().Sign(blk.Bytes())
-		blk.Initialize()
-		lyr.AddBlock(blk)
-		require.NoError(t, msh.AddBlock(blk))
-	}
-
-	return lyr
-}
 
 func TestLayerPatterns(t *testing.T) {
 	const size = 10 // more blocks means a longer test
