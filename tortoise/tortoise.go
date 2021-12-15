@@ -158,11 +158,14 @@ func (t *turtle) evict(ctx context.Context) {
 }
 
 // BaseBallot selects a base ballot from sliding window based on a following priorities in order:
-// - choose good ballot
+// - choose good ballot if tortoise is in verifying mode
 // - choose ballot with the least difference to the local opinion
 // - choose ballot from higher layer
 // - otherwise deterministically select ballot with lowest id.
 func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.BlockID, error) {
+	// TODO(dshulyak) there are two distinct code pathes in this method.
+	// split them up the same way as with layers processing code.
+
 	var (
 		logger        = t.logger.WithContext(ctx)
 		disagreements = map[types.BallotID]types.LayerID{}
@@ -188,7 +191,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 	}
 
 	if ballotID == types.EmptyBallotID || err != nil {
-		logger.With().Warning("failed to select good base ballot. reverting to the least bad choices", log.Err(err))
+		logger.With().Info("failed to select good base ballot. reverting to the least bad choices", log.Err(err))
 		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 			for _, ballotID := range t.ballots[lid] {
 				dis, err := t.firstDisagreement(ctx, lid, ballotID, disagreements)

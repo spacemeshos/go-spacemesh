@@ -23,7 +23,7 @@ func computeBallotWeight(
 		for _, atxid := range ballot.EpochData.ActiveSet {
 			atx, err := atxdb.GetAtxHeader(atxid)
 			if err != nil {
-				return weightFromUint64(0), fmt.Errorf("atx %s in active set of %s is unknown", atxid, ballot.ID())
+				return weight{}, fmt.Errorf("atx %s in active set of %s is unknown", atxid, ballot.ID())
 			}
 			atxweight := atx.GetWeight()
 			total += atxweight
@@ -34,7 +34,7 @@ func computeBallotWeight(
 
 		expected, err := proposals.GetNumEligibleSlots(targetWeight, total, layerSize, layersPerEpoch)
 		if err != nil {
-			return weightFromUint64(0), fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
+			return weight{}, fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
 		}
 		rst := weightFromUint64(targetWeight)
 		rst = rst.div(weightFromUint64(uint64(expected)))
@@ -42,7 +42,7 @@ func computeBallotWeight(
 		return rst, nil
 	}
 	if ballot.RefBallot == types.EmptyBallotID {
-		return weightFromUint64(0), fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
+		return weight{}, fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
 	}
 	rst, exist := weights[ballot.RefBallot]
 	if !exist {
@@ -66,7 +66,7 @@ func computeEpochWeight(atxdb atxDataProvider, epochWeights map[types.EpochID]we
 	}
 	epochWeight, _, err := atxdb.GetEpochWeight(eid)
 	if err != nil {
-		return layerWeight, fmt.Errorf("epoch weight %s: %w", eid, err)
+		return weight{}, fmt.Errorf("epoch weight %s: %w", eid, err)
 	}
 	layerWeight = weightFromUint64(epochWeight)
 	layerWeight = layerWeight.div(weightFromUint64(uint64(types.GetLayersPerEpoch())))
@@ -111,6 +111,9 @@ func updateThresholds(logger log.Log, config Config, state *commonState, tortois
 		window = target.Add(config.FullModeRerunWindow)
 	} else if tortoiseMode.isVerifying() && state.last.Difference(target) > config.VerifyingModeRerunWindow {
 		window = target.Add(config.VerifyingModeRerunWindow)
+	}
+	if window.Before(state.processed) {
+		window = state.processed
 	}
 	state.globalThreshold = computeThresholdForLayers(config, state.epochWeight, target, window)
 	state.globalThreshold = state.globalThreshold.add(state.localThreshold)
