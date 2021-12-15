@@ -6,7 +6,6 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -15,11 +14,6 @@ const (
 	// BallotIDSize in bytes.
 	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
 	BallotIDSize = Hash32Length
-
-	// GenesisBeacon is the hex value of the beacon used during genesis.
-	GenesisBeacon = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
-
-	genesisSignerKey = "eb3a90aeeb1a020a01f8348d35652a87da79f43b9ac03f9bec00c2c0775abd2371c01b922babb293af8b597fccc913e3d3857bb8cf33e16b430facf2f647b195"
 )
 
 // BallotID is a 20-byte sha256 sum of the serialized ballot used to identify a Ballot.
@@ -115,31 +109,6 @@ type VotingEligibilityProof struct {
 	Sig []byte
 }
 
-func unsignedGenesisBallot() *Ballot {
-	return &Ballot{
-		InnerBallot: InnerBallot{
-			LayerIndex: GetEffectiveGenesis(),
-			EpochData: &EpochData{
-				Beacon: HexToBeacon(GenesisBeacon),
-			},
-		},
-	}
-}
-
-// GenesisBallot returns the genesis ballot.
-func GenesisBallot() *Ballot {
-	b := unsignedGenesisBallot()
-	signer, err := signing.NewEdSignerFromBuffer(util.Hex2Bytes(genesisSignerKey))
-	if err != nil {
-		log.Panic("failed to get genesis signer %v", err)
-	}
-	b.Signature = signer.Sign(b.Bytes())
-	if err = b.Initialize(); err != nil {
-		log.Panic("failed to get init genesis ballot %v", err)
-	}
-	return b
-}
-
 // Initialize calculates and sets the Ballot's cached ballotID and smesherID.
 // this should be called once all the other fields of the Ballot are set.
 func (b *Ballot) Initialize() error {
@@ -149,11 +118,11 @@ func (b *Ballot) Initialize() error {
 
 	data := b.Bytes()
 	b.ballotID = BallotID(CalcHash32(data).ToHash20())
-	pubkey, err := ed25519.ExtractPublicKey(data, b.Signature)
+	id, err := extractPublicKey(data, b.Signature)
 	if err != nil {
-		return fmt.Errorf("ballot extract key: %w", err)
+		return err
 	}
-	b.smesherID = signing.NewPublicKey(pubkey)
+	b.smesherID = id
 	return nil
 }
 
@@ -171,8 +140,19 @@ func (b *Ballot) ID() BallotID {
 	return b.ballotID
 }
 
+func extractPublicKey(data, sig []byte) (*signing.PublicKey, error) {
+	pubkey, err := ed25519.ExtractPublicKey(data, sig)
+	if err != nil {
+		return nil, fmt.Errorf("ballot extract key: %w", err)
+	}
+	return signing.NewPublicKey(pubkey), nil
+}
+
 // SmesherID returns the smesher's Edwards public key.
 func (b *Ballot) SmesherID() *signing.PublicKey {
+	if b.smesherID == nil {
+		b.smesherID, _ = extractPublicKey(b.Bytes(), b.Signature)
+	}
 	return b.smesherID
 }
 
@@ -272,4 +252,22 @@ func BallotIDsToHashes(ids []BallotID) []Hash32 {
 		hashes = append(hashes, id.AsHash32())
 	}
 	return hashes
+}
+
+// DBBallot is a Ballot structure as it is stored in DB.
+type DBBallot struct {
+	InnerBallot
+	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
+	// to break if in future key for database will be changed
+	ID        BallotID
+	Signature []byte
+}
+
+// ToBallot creates a Ballot from data that is stored locally.
+func (b *DBBallot) ToBallot() *Ballot {
+	return &Ballot{
+		ballotID:    b.ID,
+		InnerBallot: b.InnerBallot,
+		Signature:   b.Signature,
+	}
 }

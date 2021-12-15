@@ -381,7 +381,7 @@ func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id typ
 	assert.NoError(t, err)
 	var blockIds []types.BlockID
 	for _, b := range l.Blocks() {
-		if b.ID() == types.GenesisBlock().ID() {
+		if b.ID() == types.GenesisBlockID {
 			continue
 		}
 		txs, missing := srcMesh.GetTransactions(b.TxIDs)
@@ -421,8 +421,6 @@ func (m *meshValidatorBatchMock) ValidateLayer(_ context.Context, lyr *types.Lay
 }
 
 func TestMesh_AccumulateRewards(t *testing.T) {
-	types.SetLayersPerEpoch(1)
-	defer types.SetLayersPerEpoch(3)
 	numOfLayers := 10
 	numOfBlocks := 10
 	maxTxs := 20

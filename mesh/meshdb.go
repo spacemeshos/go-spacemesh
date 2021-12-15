@@ -184,14 +184,15 @@ func (m *DB) HasBallot(id types.BallotID) bool {
 func (m *DB) AddBallot(b *types.Ballot) error {
 	m.blockMutex.Lock()
 	defer m.blockMutex.Unlock()
+	return m.addBallot(b)
+}
+
+func (m *DB) addBallot(b *types.Ballot) error {
 	if m.HasBallot(b.ID()) {
 		m.With().Warning("ballot already exists", b.ID())
 		return nil
 	}
-	if err := m.writeBallot(b); err != nil {
-		return fmt.Errorf("write ballot: %w", err)
-	}
-	return nil
+	return m.writeBallot(b)
 }
 
 // GetBallot returns true if the database has Ballot specified by the BallotID and false otherwise.
@@ -200,14 +201,11 @@ func (m *DB) GetBallot(id types.BallotID) (*types.Ballot, error) {
 	if err != nil {
 		return nil, err
 	}
-	b := &types.Ballot{}
-	if err := types.BytesToInterface(data, b); err != nil {
+	dbb := &types.DBBallot{}
+	if err := types.BytesToInterface(data, dbb); err != nil {
 		return nil, fmt.Errorf("parse ballot: %w", err)
 	}
-	if err := b.Initialize(); err != nil {
-		return nil, fmt.Errorf("ballot init: %w", err)
-	}
-	return b, nil
+	return dbb.ToBallot(), nil
 }
 
 // LayerBallots retrieves all ballots from a layer by layer ID.
@@ -235,11 +233,11 @@ func (m *DB) GetBlock(bid types.BlockID) (*types.Block, error) {
 		return blkh, nil
 	}
 
-	p, err := m.getProposal(types.ProposalID(bid))
+	b, err := m.getBlock(bid)
 	if err != nil {
 		return nil, err
 	}
-	return (*types.Block)(p), nil
+	return b, nil
 }
 
 // LayerBlockIds retrieves all block IDs from the layer specified by layer ID.
@@ -277,19 +275,29 @@ func (m *DB) HasProposal(id types.ProposalID) bool {
 // AddProposal adds a proposal to the database.
 func (m *DB) AddProposal(p *types.Proposal) error {
 	m.blockMutex.Lock()
+	defer m.blockMutex.Unlock()
 	if m.HasProposal(p.ID()) {
 		m.With().Warning("proposal already exists", p.ID())
 		return nil
 	}
-	if err := m.writeProposal(p); err != nil {
-		return fmt.Errorf("write proposal: %w", err)
-	}
-	m.blockMutex.Unlock()
 
-	if err := m.AddBallot(&p.Ballot); err != nil {
+	if err := m.writeProposal(p); err != nil {
 		return err
 	}
-	return nil
+
+	return m.addBallot(&p.Ballot)
+}
+
+func (m *DB) getBlock(id types.BlockID) (*types.Block, error) {
+	data, err := m.getProposalBytes(types.ProposalID(id))
+	if err != nil {
+		return nil, err
+	}
+	dbp := &types.DBProposal{}
+	if err := types.BytesToInterface(data, dbp); err != nil {
+		return nil, fmt.Errorf("parse proposal: %w", err)
+	}
+	return dbp.ToBlock(), nil
 }
 
 func (m *DB) getProposal(id types.ProposalID) (*types.Proposal, error) {
@@ -297,14 +305,15 @@ func (m *DB) getProposal(id types.ProposalID) (*types.Proposal, error) {
 	if err != nil {
 		return nil, err
 	}
-	p := &types.Proposal{}
-	if err := types.BytesToInterface(data, p); err != nil {
+	dbp := &types.DBProposal{}
+	if err := types.BytesToInterface(data, dbp); err != nil {
 		return nil, fmt.Errorf("parse proposal: %w", err)
 	}
-	if err := p.Initialize(); err != nil {
-		return nil, fmt.Errorf("proposal init: %w", err)
+	ballot, err := m.GetBallot(dbp.BallotID)
+	if err != nil {
+		return nil, err
 	}
-	return p, nil
+	return dbp.ToProposal(ballot), nil
 }
 
 // LayerProposals retrieves all proposals from a layer by layer index.
@@ -513,18 +522,30 @@ func (m *DB) GetVerifiedLayer() (types.LayerID, error) {
 }
 
 func (m *DB) writeBallot(b *types.Ballot) error {
-	if ifBytes, err := types.InterfaceToBytes(b); err != nil {
+	dbb := &types.DBBallot{
+		InnerBallot: b.InnerBallot,
+		ID:          b.ID(),
+		Signature:   b.Signature,
+	}
+	if data, err := types.InterfaceToBytes(dbb); err != nil {
 		return fmt.Errorf("could not encode ballot: %w", err)
-	} else if err := m.ballots.Put(b.ID().Bytes(), ifBytes); err != nil {
+	} else if err := m.ballots.Put(b.ID().Bytes(), data); err != nil {
 		return fmt.Errorf("could not add ballot %v to database: %w", b.ID(), err)
 	}
 	return nil
 }
 
 func (m *DB) writeProposal(p *types.Proposal) error {
-	if ifBytes, err := types.InterfaceToBytes(p); err != nil {
+	dbp := &types.DBProposal{
+		ID:         p.ID(),
+		BallotID:   p.Ballot.ID(),
+		LayerIndex: p.LayerIndex,
+		TxIDs:      p.TxIDs,
+		Signature:  p.Signature,
+	}
+	if data, err := types.InterfaceToBytes(dbp); err != nil {
 		return fmt.Errorf("could not encode block: %w", err)
-	} else if err := m.proposals.Put(p.ID().Bytes(), ifBytes); err != nil {
+	} else if err := m.proposals.Put(p.ID().Bytes(), data); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", p.ID(), err)
 	} else if err := m.updateLayerWithProposal(p); err != nil {
 		return fmt.Errorf("could not update layer %v with new block %v: %w", p.LayerIndex, p.ID(), err)

@@ -210,10 +210,6 @@ func (msh *Mesh) setLatestLayer(idx types.LayerID) {
 
 // GetLayer returns Layer i from the database.
 func (msh *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
-	if i == types.GetEffectiveGenesis() {
-		return types.GenesisLayer(), nil
-	}
-
 	mBlocks, err := msh.LayerBlocks(i)
 	if err != nil {
 		return nil, fmt.Errorf("layer blocks: %w", err)

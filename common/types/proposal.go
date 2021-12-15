@@ -7,16 +7,9 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
-
-// ProposalID is a 20-byte sha256 sum of the serialized ballot used to identify a Proposal.
-type ProposalID Hash20
-
-// EmptyProposalID is a canonical empty ProposalID.
-var EmptyProposalID = ProposalID{}
 
 const (
 	// ProposalIDSize in bytes.
@@ -24,24 +17,11 @@ const (
 	ProposalIDSize = Hash32Length
 )
 
-// GenesisBlock returns the genesis block.
-func GenesisBlock() *Block {
-	p := &Proposal{
-		InnerProposal: InnerProposal{
-			Ballot: *unsignedGenesisBallot(),
-		},
-	}
-	signer, err := signing.NewEdSignerFromBuffer(util.Hex2Bytes(genesisSignerKey))
-	if err != nil {
-		log.Panic("failed to get genesis signer %v", err)
-	}
-	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
-	p.Signature = signer.Sign(p.Bytes())
-	if err = p.Initialize(); err != nil {
-		log.Panic("failed to get init genesis block %v", err)
-	}
-	return (*Block)(p)
-}
+// ProposalID is a 20-byte sha256 sum of the serialized ballot used to identify a Proposal.
+type ProposalID Hash20
+
+// EmptyProposalID is a canonical empty ProposalID.
+var EmptyProposalID = ProposalID{}
 
 // Proposal contains the smesher's signed content proposal for a given layer and vote on the mesh history.
 // Proposal is ephemeral and will be discarded after the unified content block is created. the Ballot within
@@ -106,7 +86,7 @@ func (p *Proposal) ID() ProposalID {
 
 // Fields returns an array of LoggableFields for logging.
 func (p *Proposal) Fields() []log.LoggableField {
-	return append(p.Ballot.Fields(), p.ID())
+	return append(p.Ballot.Fields(), p.ID(), log.Int("num_tx", len(p.TxIDs)))
 }
 
 // String returns a short prefix of the hex representation of the ID.
@@ -156,4 +136,40 @@ func ProposalIDsToBlockIDs(pids []ProposalID) []BlockID {
 func SortProposalIDs(ids []ProposalID) []ProposalID {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
 	return ids
+}
+
+// DBProposal is a Proposal structure stored in DB to skip signature verification.
+type DBProposal struct {
+	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
+	// to break if in future key for database will be changed
+	ID         ProposalID
+	BallotID   BallotID
+	LayerIndex LayerID
+	TxIDs      []TransactionID
+	Signature  []byte
+}
+
+// ToBlock creates a Block from data that is stored locally.
+func (b *DBProposal) ToBlock() *Block {
+	return &Block{
+		InnerProposal: InnerProposal{
+			Ballot: Ballot{
+				InnerBallot: InnerBallot{LayerIndex: b.LayerIndex},
+			},
+			TxIDs: b.TxIDs,
+		},
+		proposalID: b.ID,
+	}
+}
+
+// ToProposal creates a Proposal from data that is stored locally.
+func (b *DBProposal) ToProposal(ballot *Ballot) *Proposal {
+	return &Proposal{
+		InnerProposal: InnerProposal{
+			Ballot: *ballot,
+			TxIDs:  b.TxIDs,
+		},
+		Signature:  b.Signature,
+		proposalID: b.ID,
+	}
 }

@@ -1622,10 +1622,9 @@ func TestBaseBallotGenesis(t *testing.T) {
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 
 	base, exceptions, err := tortoise.BaseBallot(ctx)
-	genesisBlk := types.GenesisBlock()
 	require.NoError(t, err)
-	require.Equal(t, exceptions, [][]types.BlockID{{}, {genesisBlk.ID()}, {}})
-	require.Equal(t, types.GenesisBallot().ID(), base)
+	require.Equal(t, exceptions, [][]types.BlockID{{}, {types.GenesisBlockID}, {}})
+	require.Equal(t, types.GenesisBallotID, base)
 }
 
 func ensureBaseAndExceptionsFromLayer(tb testing.TB, lid types.LayerID, base types.BallotID, exceptions [][]types.BlockID, mdb blockDataProvider) {

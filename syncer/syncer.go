@@ -529,7 +529,7 @@ func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
 	}
 
 	if _, err := s.beacons.GetBeacon(epoch); err != nil {
-		s.logger.With().Info("skip validating layer: beacon not available", layerID.GetEpoch())
+		s.logger.With().Info("skip validating layer: beacon not available", layerID, layerID.GetEpoch())
 		return false
 	}
 

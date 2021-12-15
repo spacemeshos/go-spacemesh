@@ -13,9 +13,19 @@ import (
 const (
 	// LayerIDSize in bytes.
 	LayerIDSize = 4
+
+	// GenesisBeacon is the hex value of the beacon used during genesis.
+	GenesisBeacon = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
+
+	// genesisBallotIDHex is the genesis ballot ID in hex.
+	genesisBallotIDHex = "0x7a68f37b1a1903c9b9d428c3bdb0a8188c6b7d888ce63166dc97a9826105f417"
+
+	// genesisBlockIDHex is the genesis block ID in hex.
+	genesisBlockIDHex = "0xbab7a6d8efcb406d121199f93cc7997cf9a97ea83262e72548fe9389a9ac88ae"
 )
 
 var (
+	genesisLayer   *Layer
 	layersPerEpoch uint32
 	// effectiveGenesis marks when actual proposals would start being created in the network. It takes into account
 	// the first genesis epoch and the following epoch in which ATXs are published.
@@ -23,6 +33,11 @@ var (
 
 	// EmptyLayerHash is the layer hash for an empty layer.
 	EmptyLayerHash = Hash32{}
+
+	// GenesisBallotID is the BallotID for the genesis ballot.
+	GenesisBallotID = BallotID(HexToHash32(genesisBallotIDHex).ToHash20())
+	// GenesisBlockID is the BlockID for the genesis block.
+	GenesisBlockID = BlockID(HexToHash32(genesisBlockIDHex).ToHash20())
 )
 
 // SetLayersPerEpoch sets global parameter of layers per epoch, all conversions from layer to epoch use this param.
@@ -38,9 +53,30 @@ func GetLayersPerEpoch() uint32 {
 
 // GenesisLayer returns the genesis layer.
 func GenesisLayer() *Layer {
-	l := NewLayer(GetEffectiveGenesis())
-	l.AddBlock(GenesisBlock())
-	return l
+	if genesisLayer == nil {
+		InitGenesisData()
+	}
+	return genesisLayer
+}
+
+// InitGenesisData generate the genesis data.
+func InitGenesisData() {
+	p := &Proposal{
+		InnerProposal: InnerProposal{
+			Ballot: Ballot{
+				InnerBallot: InnerBallot{
+					LayerIndex: GetEffectiveGenesis(),
+					EpochData: &EpochData{
+						Beacon: HexToBeacon(GenesisBeacon),
+					},
+				},
+				ballotID: GenesisBallotID,
+			},
+		},
+		proposalID: ProposalID(GenesisBlockID),
+	}
+	genesisLayer = NewLayer(GetEffectiveGenesis())
+	genesisLayer.AddProposal(p)
 }
 
 // GetEffectiveGenesis returns when actual proposals would be created.

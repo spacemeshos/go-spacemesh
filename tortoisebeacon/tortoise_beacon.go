@@ -270,7 +270,7 @@ func (tb *TortoiseBeacon) recordBeacon(epochID types.EpochID, bid types.BallotID
 
 	entry.ballots[bid] = struct{}{}
 	entry.weight += weight
-	tb.logger.With().Debug("added beacon from block",
+	tb.logger.With().Debug("added beacon from ballot",
 		epochID,
 		bid,
 		log.String("beacon", beacon.ShortString()),
