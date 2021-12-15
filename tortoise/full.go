@@ -116,7 +116,6 @@ func (f *full) countVotes(logger log.Log) {
 func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	logger = logger.WithFields(
 		log.Stringer("candidate_layer", lid),
-		log.Stringer("threshold", f.threshold),
 		log.Stringer("local_threshold", f.localThreshold),
 		log.Stringer("global_threshold", f.globalThreshold),
 	)
@@ -127,7 +126,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 
 	for _, block := range blocks {
 		current := f.weights[block]
-		decision := current.cmp(f.threshold)
+		decision := current.cmp(f.globalThreshold)
 		if decision == abstain {
 			logger.With().Info("candidate layer is not verified. block is undecided in full tortoise",
 				log.Stringer("block", block),

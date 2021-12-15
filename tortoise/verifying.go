@@ -51,14 +51,13 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	logger = logger.WithFields(
 		log.Stringer("candidate_layer", lid),
 		log.Stringer("voting_weight", votingWeight),
-		log.Stringer("threshold", v.threshold),
 		log.Stringer("local_threshold", v.localThreshold),
 		log.Stringer("global_threshold", v.globalThreshold),
 	)
 
 	// 0 - there is not enough weight to cross threshold.
 	// 1 - layer is verified and contextual validity is according to our local opinion.
-	if votingWeight.cmp(v.threshold) == abstain {
+	if votingWeight.cmp(v.globalThreshold) == abstain {
 		logger.With().Info("candidate layer is not verified. voting weight from good ballots is lower than the threshold")
 		return false
 	}

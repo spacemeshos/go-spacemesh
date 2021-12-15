@@ -85,13 +85,12 @@ func computeExpectedWeight(weights map[types.EpochID]weight, from, to types.Laye
 
 func computeLocalThreshold(config Config, epochWeight map[types.EpochID]weight, lid types.LayerID) weight {
 	threshold := weightFromUint64(0)
-	// TODO(dshulyak) expected weight for local threshold should be based on last layer.
 	threshold = threshold.add(epochWeight[lid.GetEpoch()])
 	threshold = threshold.fraction(config.LocalThreshold)
 	return threshold
 }
 
-func computeGlobalThreshold(config Config, epochWeight map[types.EpochID]weight, target, last types.LayerID) weight {
+func computeThresholdForLayers(config Config, epochWeight map[types.EpochID]weight, target, last types.LayerID) weight {
 	expected := computeExpectedWeight(epochWeight, target, last)
 	threshold := weightFromUint64(0)
 	threshold = threshold.add(expected)
@@ -99,6 +98,10 @@ func computeGlobalThreshold(config Config, epochWeight map[types.EpochID]weight,
 	return threshold
 }
 
+// updateThresholds recomputes local and global thresholds:
+// - when last layer is updated
+// - when verified layer is updated
+// - when switching from one mode into the other.
 func updateThresholds(logger log.Log, config Config, state *commonState, tortoiseMode mode) {
 	state.localThreshold = computeLocalThreshold(config, state.epochWeight, state.last)
 
@@ -109,18 +112,15 @@ func updateThresholds(logger log.Log, config Config, state *commonState, tortois
 	} else if tortoiseMode.isVerifying() && state.last.Difference(target) > config.VerifyingModeRerunWindow {
 		window = target.Add(config.VerifyingModeRerunWindow)
 	}
-	state.globalThreshold = computeGlobalThreshold(config, state.epochWeight, target, window)
+	state.globalThreshold = computeThresholdForLayers(config, state.epochWeight, target, window)
+	state.globalThreshold = state.globalThreshold.add(state.localThreshold)
 
-	state.threshold = weightFromUint64(0)
-	state.threshold = state.threshold.add(state.localThreshold)
-	state.threshold = state.threshold.add(state.globalThreshold)
 	logger.With().Info("updated thresholds",
 		log.Stringer("window", window),
 		log.Stringer("last_layer", state.last),
 		log.Stringer("target_layer", target),
 		log.Stringer("local_threshold", state.localThreshold),
 		log.Stringer("global_threshold", state.globalThreshold),
-		log.Stringer("threshold", state.threshold),
 		log.Stringer("mode", tortoiseMode),
 	)
 }

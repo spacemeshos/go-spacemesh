@@ -504,6 +504,7 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 				log.Stringer("verified", t.verified),
 				log.Stringer("mode", t.mode),
 			)
+			// update threshold since we have different windows for vote counting in each mode
 			updateThresholds(logger, t.Config, &t.commonState, t.mode)
 		}
 		t.full.countVotes(logger)
@@ -550,7 +551,7 @@ func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
 		logger.With().Info("computed weight for layers in an epoch", epoch, log.Stringer("weight", layerWeight))
 	}
 
-	if lastUpdated || t.threshold.isNil() {
+	if lastUpdated || t.globalThreshold.isNil() {
 		updateThresholds(logger, t.Config, &t.commonState, t.mode)
 	}
 	return nil
