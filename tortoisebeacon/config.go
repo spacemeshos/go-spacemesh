@@ -19,7 +19,7 @@ type Config struct {
 	WeakCoinRoundDuration    time.Duration `mapstructure:"tortoise-beacon-weak-coin-round-duration"`    // Weak coin round duration
 	Theta                    *big.Rat      `mapstructure:"tortoise-beacon-theta"`                       // Ratio of votes for reaching consensus
 	VotesLimit               uint64        `mapstructure:"tortoise-beacon-votes-limit"`                 // Maximum allowed number of votes to be sent
-	BeaconSyncNumBallots     uint32        `mapstructure:"tortoise-beacon-sync-num-ballots"`            // Numbers of layers to wait before determining beacon values from ballots when the node didn't participate in previous epoch.
+	BeaconSyncNumBallots     uint32        `mapstructure:"tortoise-beacon-sync-num-blocks"`             // Numbers of layers to wait before determining beacon values from ballots when the node didn't participate in previous epoch.
 }
 
 // DefaultConfig returns the default configuration for the tortoise beacon.
