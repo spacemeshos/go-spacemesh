@@ -421,7 +421,7 @@ func (m *meshValidatorBatchMock) ValidateLayer(_ context.Context, lyr *types.Lay
 }
 
 func TestMesh_AccumulateRewards(t *testing.T) {
-	numOfLayers := 10
+	numOfLayers := uint32(10)
 	numOfBlocks := 10
 	maxTxs := 20
 	batchSize := 6
@@ -432,12 +432,14 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 
 	mesh.Validator = &meshValidatorBatchMock{mesh: mesh, batchSize: uint32(batchSize)}
 
-	var firstLayerRewards int64
-	for i := 0; i < numOfLayers; i++ {
-		reward, _ := createLayer(t, mesh, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDb)
-		if i == 0 {
+	gLayer := types.GetEffectiveGenesis()
+	var firstLayerRewards, total int64
+	for l := gLayer.Add(1); !l.After(gLayer.Add(numOfLayers)); l = l.Add(1) {
+		reward, _ := createLayer(t, mesh, l, numOfBlocks, maxTxs, atxDb)
+		if l == gLayer.Add(1) {
 			firstLayerRewards = reward
 		}
+		total += reward
 	}
 
 	oldTotal := s.TotalReward
@@ -458,9 +460,13 @@ func TestMesh_AccumulateRewards(t *testing.T) {
 	// Rewards will be applied at this point
 	mesh.ValidateLayer(context.TODO(), l6)
 
-	// When distributing rewards to proposals they are rounded down, so we have to allow up to numOfBlocks difference
+	// When distributing rewards to blocks they are rounded down, so we have to allow up to numOfBlocks difference
 	totalPayout := firstLayerRewards + int64(ConfigTst().BaseReward)
-	assert.True(t, totalPayout-int64(s.TotalReward) < int64(numOfBlocks),
+	diff := totalPayout - int64(s.TotalReward)
+	if diff < 0 {
+		diff = 0 - diff
+	}
+	assert.True(t, diff < int64(numOfBlocks),
 		"diff=%v, totalPayout=%v, s.TotalReward=%v, numOfBlocks=%v",
 		totalPayout-int64(s.TotalReward)-int64(numOfBlocks), totalPayout, s.TotalReward, int64(numOfBlocks))
 }
