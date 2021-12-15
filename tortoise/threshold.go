@@ -98,13 +98,7 @@ func computeThresholdForLayers(config Config, epochWeight map[types.EpochID]weig
 	return threshold
 }
 
-// updateThresholds recomputes local and global thresholds:
-// - when last layer is updated
-// - when verified layer is updated
-// - when switching from one mode into the other.
-func updateThresholds(logger log.Log, config Config, state *commonState, tmode mode) {
-	state.localThreshold = computeLocalThreshold(config, state.epochWeight, state.last)
-
+func getConfidenceWindow(config Config, state *commonState, tmode mode) types.LayerID {
 	target := state.verified.Add(1)
 	window := state.last
 	if tmode.isFull() && state.last.Difference(target) > config.FullModeRerunWindow {
@@ -112,9 +106,21 @@ func updateThresholds(logger log.Log, config Config, state *commonState, tmode m
 	} else if tmode.isVerifying() && state.last.Difference(target) > config.VerifyingModeRerunWindow {
 		window = target.Add(config.VerifyingModeRerunWindow)
 	}
+	return window
+}
+
+// updateThresholds recomputes local and global thresholds:
+// - when last layer is updated
+// - when verified layer is updated
+// - when switching from one mode into the other.
+func updateThresholds(logger log.Log, config Config, state *commonState, tmode mode) {
+	state.localThreshold = computeLocalThreshold(config, state.epochWeight, state.last)
+
+	window := getConfidenceWindow(config, state, tmode)
 	if window.Before(state.processed) {
 		window = state.processed
 	}
+	target := state.verified.Add(1)
 	state.globalThreshold = computeThresholdForLayers(config, state.epochWeight, target, window)
 	state.globalThreshold = state.globalThreshold.add(state.localThreshold)
 

@@ -569,8 +569,8 @@ func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
 		}
 		logger.With().Info("computed weight for layers in an epoch", epoch, log.Stringer("weight", layerWeight))
 	}
-
-	if lastUpdated || t.globalThreshold.isNil() {
+	window := getConfidenceWindow(t.Config, &t.commonState, t.mode)
+	if lastUpdated || window.Before(t.processed) || t.globalThreshold.isNil() {
 		updateThresholds(logger, t.Config, &t.commonState, t.mode)
 	}
 	return nil
