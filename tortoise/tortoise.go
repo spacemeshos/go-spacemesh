@@ -174,13 +174,19 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		err        error
 	)
 
-	ballotID, ballotLID = t.getGoodBallot(logger)
-	if ballotID != types.EmptyBallotID {
-		// we need only 1 ballot from the most recent layer, this ballot will be by definition the most
-		// consistent with our local opinion.
-		// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
-		exceptions, err = t.encodeVotes(ctx, ballotLID, ballotLID, func(types.BlockID) sign { return against })
+	// after switching into verifying mode we need to recompute goodness of ballots
+	// it will be handled in https://github.com/spacemeshos/go-spacemesh/issues/2985
+	// for now just disable this optimization.
+	if t.mode.isVerifying() {
+		ballotID, ballotLID = t.getGoodBallot(logger)
+		if ballotID != types.EmptyBallotID {
+			// we need only 1 ballot from the most recent layer, this ballot will be by definition the most
+			// consistent with our local opinion.
+			// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
+			exceptions, err = t.encodeVotes(ctx, ballotLID, ballotLID, func(types.BlockID) sign { return against })
+		}
 	}
+
 	if ballotID == types.EmptyBallotID || err != nil {
 		logger.With().Warning("failed to select good base ballot. reverting to the least bad choices", log.Err(err))
 		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
@@ -236,6 +242,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 
 func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 	var choices []types.BallotID
+
 	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
 		for _, ballotID := range t.ballots[lid] {
 			if _, exist := t.verifying.goodBallots[ballotID]; exist {
@@ -256,12 +263,21 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 
 // firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
 func (t *turtle) firstDisagreement(ctx context.Context, blid types.LayerID, ballotID types.BallotID, disagreements map[types.BallotID]types.LayerID) (types.LayerID, error) {
-	// using it as a mark that the votes for block are completely consistent
-	// with a local opinion. so if two blocks have consistent histories select block
-	// from a higher layer as it is more consistent.
-	consistent := t.last
+	var (
+		// using it as a mark that the votes for block are completely consistent
+		// with a local opinion. so if two blocks have consistent histories select block
+		// from a higher layer as it is more consistent.
+		consistent  = t.last
+		start       = t.evicted
+		base, exist = t.full.base[ballotID]
+		basedis     = disagreements[base]
+	)
+	if exist && basedis != consistent {
+		return basedis, nil
+	}
+	start = t.ballotLayer[base]
 
-	for lid := t.evicted.Add(1); lid.Before(blid); lid = lid.Add(1) {
+	for lid := start; lid.Before(blid); lid = lid.Add(1) {
 		for _, block := range t.blocks[lid] {
 			localVote, _, err := t.getFullVote(ctx, lid, block)
 			if err != nil {
@@ -626,6 +642,7 @@ func (t *turtle) updateLocalVotes(ctx context.Context, logger log.Log, lid types
 // during rerun we need to use another heuristic, as hdist is irrelevant by that time.
 func (t *turtle) canUseFullMode() bool {
 	target := t.verified.Add(1)
+	// TODO(dshulyak) this condition should be enabled when the node is in sync.
 	if t.mode.isRerun() {
 		return t.processed.Difference(target) > t.VerifyingModeRerunWindow
 	}

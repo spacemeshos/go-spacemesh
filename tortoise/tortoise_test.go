@@ -1402,15 +1402,16 @@ func benchmarkLayersHandling(b *testing.B, opts ...sim.NextOpt) {
 	}
 }
 
-func BenchmarkTortoiseLayerHandlingVerifying(b *testing.B) {
-	benchmarkLayersHandling(b)
+func BenchmarkTortoiseLayerHandling(b *testing.B) {
+	b.Run("Verifying", func(b *testing.B) {
+		benchmarkLayersHandling(b)
+	})
+	b.Run("Full", func(b *testing.B) {
+		benchmarkLayersHandling(b, sim.WithEmptyInputVector())
+	})
 }
 
-func BenchmarkTortoiseLayerHandlingFull(b *testing.B) {
-	benchmarkLayersHandling(b, sim.WithEmptyInputVector())
-}
-
-func BenchmarkTortoiseBaseBallotSelection(b *testing.B) {
+func benchmarkBaseBallot(b *testing.B, opts ...sim.NextOpt) {
 	const size = 30
 	s := sim.New(
 		sim.WithLayerSize(size),
@@ -1426,7 +1427,7 @@ func BenchmarkTortoiseBaseBallotSelection(b *testing.B) {
 
 	var last, verified types.LayerID
 	for i := 0; i < 400; i++ {
-		last = s.Next()
+		last = s.Next(opts...)
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	require.Equal(b, last.Sub(1), verified)
@@ -1435,6 +1436,16 @@ func BenchmarkTortoiseBaseBallotSelection(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		tortoise.BaseBallot(ctx)
 	}
+}
+
+func BenchmarkTortoiseBaseBallot(b *testing.B) {
+	b.Run("Verifying", func(b *testing.B) {
+		benchmarkBaseBallot(b)
+	})
+	b.Run("Full", func(b *testing.B) {
+		// hare output will have only 10/30 ballots
+		benchmarkBaseBallot(b, sim.WithPartialHare(1, 3))
+	})
 }
 
 func randomBlock(tb testing.TB, lyrID types.LayerID, beacon types.Beacon, refBlockID *types.BlockID) *types.Block {
