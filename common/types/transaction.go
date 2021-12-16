@@ -118,8 +118,15 @@ func (t *Transaction) ID() TransactionID {
 	return id
 }
 
-// get fee
-// recipient
+// GetFee returns the fee of the transaction.
+func (t *Transaction) GetFee() uint64 {
+	return t.Fee
+}
+
+// GetRecipient returns the transaction recipient.
+func (t *Transaction) GetRecipient() Address {
+	return t.Recipient
+}
 
 // Hash32 returns the TransactionID as a Hash32.
 func (t *Transaction) Hash32() Hash32 {
