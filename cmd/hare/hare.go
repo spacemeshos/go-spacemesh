@@ -61,12 +61,17 @@ func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, boo
 }
 
 func (mbp *mockBlockProvider) LayerProposals(lyr types.LayerID) ([]*types.Proposal, error) {
+	// the proposal IDs in each layer need to be stable across hare instances.
 	s := make([]*types.Proposal, 200)
-	for i := uint64(0); i < 200; i++ {
-		p := types.GenLayerProposal(lyr, nil)
-		p.EpochData = &types.EpochData{
-			Beacon: types.BytesToBeacon(lyr.GetEpoch().ToBytes()),
+	for i := 0; i < 200; i++ {
+		id := types.ProposalID{}
+		copy(id[0:], fmt.Sprintf("%d-%d", i, lyr))
+		dbp := types.DBProposal{
+			ID:         id,
+			LayerIndex: lyr,
 		}
+		p := dbp.ToProposal(&types.Ballot{})
+		p.EpochData = &types.EpochData{Beacon: types.BytesToBeacon(lyr.GetEpoch().ToBytes())}
 		s[i] = p
 	}
 	return s, nil
