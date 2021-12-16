@@ -168,7 +168,7 @@ const (
 // 00 - live tortoise in verifying
 // 11 - rerun in full
 // 01 - live tortoise in full.
-type mode uint8
+type mode [2]bool
 
 func (m mode) String() string {
 	humanize := "verifying"
@@ -182,21 +182,23 @@ func (m mode) String() string {
 }
 
 func (m mode) toggleRerun() mode {
-	return m ^ 1<<2
+	m[1] = !m[1]
+	return m
 }
 
 func (m mode) isRerun() bool {
-	return m&(1<<2) > 0
+	return m[1]
 }
 
 func (m mode) toggleMode() mode {
-	return m ^ 1
+	m[0] = !m[0]
+	return m
 }
 
 func (m mode) isVerifying() bool {
-	return m&1 == 0
+	return !m[0]
 }
 
 func (m mode) isFull() bool {
-	return m&1 > 0
+	return m[0]
 }

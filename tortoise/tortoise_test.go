@@ -505,17 +505,17 @@ func TestCloneTurtle(t *testing.T) {
 
 func defaultTestConfig() Config {
 	return Config{
-		LayerSize:                defaultTestLayerSize,
-		Hdist:                    defaultTestHdist,
-		Zdist:                    defaultTestZdist,
-		WindowSize:               defaultTestWindowSize,
-		BadBeaconVoteDelayLayers: defaultVoteDelays,
-		GlobalThreshold:          defaultTestGlobalThreshold,
-		LocalThreshold:           defaultTestLocalThreshold,
-		RerunInterval:            defaultTestRerunInterval,
-		MaxExceptions:            int(defaultTestHdist) * defaultTestLayerSize * 100,
-		VerifyingModeRerunWindow: 10_000,
-		FullModeRerunWindow:      100,
+		LayerSize:                       defaultTestLayerSize,
+		Hdist:                           defaultTestHdist,
+		Zdist:                           defaultTestZdist,
+		WindowSize:                      defaultTestWindowSize,
+		BadBeaconVoteDelayLayers:        defaultVoteDelays,
+		GlobalThreshold:                 defaultTestGlobalThreshold,
+		LocalThreshold:                  defaultTestLocalThreshold,
+		RerunInterval:                   defaultTestRerunInterval,
+		MaxExceptions:                   int(defaultTestHdist) * defaultTestLayerSize * 100,
+		VerifyingModeVerificationWindow: 10_000,
+		FullModeVerificationWindow:      100,
 	}
 }
 
