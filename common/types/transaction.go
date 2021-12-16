@@ -118,7 +118,6 @@ func (t *Transaction) ID() TransactionID {
 	return id
 }
 
-// sep
 // get fee
 // recipient
 

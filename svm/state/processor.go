@@ -307,17 +307,6 @@ func transfer(db *TransactionProcessor, sender, recipient types.Address, amount 
 	db.AddBalance(recipient, amount)
 }
 
-// ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool
-// it returns an error if the provided tx is not valid.
-func (tp *TransactionProcessor) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	err := tp.ValidateNonceAndBalance(tx)
-	if err != nil {
-		return err
-	}
-	tp.AddTxToPool(tx)
-	return nil
-}
-
 // AddTxToPool exports mempool functionality for adding tx to the pool.
 func (tp *TransactionProcessor) AddTxToPool(tx *types.Transaction) {
 	tp.pool.Put(tx.ID(), tx)

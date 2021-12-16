@@ -53,7 +53,7 @@ type state interface {
 	GetLayerStateRoot(layer types.LayerID) (types.Hash32, error)
 	GetStateRoot() types.Hash32
 	Rewind(layer types.LayerID) (types.Hash32, error)
-	ValidateAndAddTxToPool(tx *types.Transaction) error
+	AddTxToPool(tx *types.Transaction) error
 	GetBalance(addr types.Address) uint64
 	GetNonce(addr types.Address) uint64
 	GetAllAccounts() (*types.MultipleAccountsState, error)
@@ -474,9 +474,12 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 		msh.removeRejectedFromAccountTxs(account, grouped)
 	}
 	for _, tx := range returnedTxs {
-		if err := msh.ValidateAndAddTxToPool(tx); err == nil {
-			// We ignore errors here, since they mean that the tx is no longer valid and we shouldn't re-add it
-			msh.With().Info("transaction from contextually invalid block re-added to mempool", tx.ID())
+		if err := msh.ValidateNonceAndBalance(tx); err == nil {
+			// We ignore errors here, since they mean that the tx is no longer
+			// valid and we shouldn't re-add it.
+			msh.With().Info("contextually invalid block re-added to mempool", tx.ID())
+		} else if err := msh.AddTxToPool(tx); err == nil {
+			msh.With().Info("contextually valid block re-added to mempool", tx.ID())
 		}
 	}
 }
