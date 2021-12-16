@@ -80,7 +80,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	for _, ballot := range genesisLayer.Ballots() {
 		t.ballotLayer[ballot.ID()] = genesis
 		t.ballots[genesis] = []types.BallotID{ballot.ID()}
-		t.verifying.goodBallots[ballot.ID()] = struct{}{}
+		t.verifying.goodBallots[ballot.ID()] = good
 	}
 	t.last = genesis
 	t.processed = genesis
@@ -249,7 +249,7 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 
 	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
 		for _, ballotID := range t.ballots[lid] {
-			if _, exist := t.verifying.goodBallots[ballotID]; exist {
+			if rst := t.verifying.goodBallots[ballotID]; rst == good {
 				choices = append(choices, ballotID)
 			}
 		}
@@ -542,17 +542,33 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 			success = t.full.verify(logger, target)
 
 			if success {
-				// recompute goodness and accumulated weight of all ballots that can vote for newly verified layer
+				// first attempt. reconsider goodness of ballots using output from full tortoise.
 				//
 				// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
 				// that accumulated weight has a weight of the layer that is going to be verified.
 				for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
-					t.verifying.countVotes(
-						logger.WithFields(log.Bool("recounting", true)), lid, t.getTortoiseBallots(lid))
+					t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 				}
 				restarted := t.verifying.verify(logger, target)
 
-				if restarted {
+				// second attempt. find ballots after layer in hdist distance that can be good
+				// and mark them good if base ballot is also can be good.
+				// after hdist - so that atleast one layer is consistent with hare.
+				//
+				// TODO(dshulyak) the only reason why it is not unified with first attempt is hdist condition.
+				if !restarted && target.After(t.layerCutoff()) {
+					t.verifying.resetWeights()
+					if t.verifying.markGoodCut(logger, target, t.getTortoiseBallots(target)) {
+						// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
+						// that accumulated weight has a weight of the layer that is going to be verified.
+						for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
+							t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
+						}
+						restarted = t.verifying.verify(logger, target)
+					}
+				}
+
+				if restarted && t.mode.isFull() {
 					t.switchModes(logger)
 				} else if !restarted {
 					// need to reset accumulated weight, verifying will not try to verify this layer again
