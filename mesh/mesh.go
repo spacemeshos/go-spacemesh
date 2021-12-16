@@ -1,5 +1,5 @@
 // Package mesh defines the main store point for all the block-mesh objects
-// such as blocks, transactions and global state
+// such as proposals, transactions and global state
 package mesh
 
 import (
@@ -20,10 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/system"
-)
-
-const (
-	layerSize = 200
 )
 
 var (
@@ -225,7 +221,7 @@ func (msh *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
 	return l, nil
 }
 
-// GetLayerHash returns layer hash for received blocks.
+// GetLayerHash returns layer hash.
 func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 	h, err := msh.recoverLayerHash(layerID)
 	if err == nil {
@@ -468,7 +464,11 @@ func (msh *Mesh) revertState(ctx context.Context, layerID types.LayerID) error {
 func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l types.LayerID) {
 	seenTxIds := make(map[types.TransactionID]struct{})
 	uniqueTxIds(validBlocks, seenTxIds) // run for the side effect, updating seenTxIds
-	returnedTxs := msh.getTxs(uniqueTxIds(invalidBlocks, seenTxIds), l)
+	returnedTxs, missing := msh.GetTransactions(uniqueTxIds(invalidBlocks, seenTxIds))
+	if len(missing) > 0 {
+		msh.Panic("could not find transactions %v from layer %v", missing, l)
+	}
+
 	grouped, accounts := msh.removeFromUnappliedTxs(returnedTxs)
 	for account := range accounts {
 		msh.removeRejectedFromAccountTxs(account, grouped)
@@ -574,25 +574,6 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 	msh.ValidateLayer(ctx, lyr)
 }
 
-func (msh *Mesh) getInvalidBlocksByHare(ctx context.Context, hareLayer *types.Layer) (invalid []*types.Block) {
-	dbLayer, err := msh.GetLayer(hareLayer.Index())
-	if err != nil {
-		msh.WithContext(ctx).With().Error("failed to get layer", log.Err(err))
-		return
-	}
-	exists := make(map[types.BlockID]struct{})
-	for _, block := range hareLayer.Blocks() {
-		exists[block.ID()] = struct{}{}
-	}
-
-	for _, block := range dbLayer.Blocks() {
-		if _, has := exists[block.ID()]; !has {
-			invalid = append(invalid, block)
-		}
-	}
-	return
-}
-
 // apply the state for a single layer. stores layer results for early layers, and applies previously stored results for
 // now-older layers.
 func (msh *Mesh) updateStateWithLayer(ctx context.Context, layer *types.Layer) {
@@ -682,7 +663,11 @@ func (msh *Mesh) extractUniqueOrderedTransactions(l *types.Layer) (validBlockTxs
 
 	// Get and return unique transactions
 	seenTxIds := make(map[types.TransactionID]struct{})
-	return msh.getTxs(uniqueTxIds(validBlocks, seenTxIds), l.Index())
+	txs, missing := msh.GetTransactions(uniqueTxIds(validBlocks, seenTxIds))
+	if len(missing) > 0 {
+		msh.Panic("could not find transactions %v from layer %v", missing, l)
+	}
+	return txs
 }
 
 func toUint64Slice(b []byte) []uint64 {
@@ -706,14 +691,6 @@ func uniqueTxIds(blocks []*types.Block, seenTxIds map[types.TransactionID]struct
 		}
 	}
 	return txIds
-}
-
-func (msh *Mesh) getTxs(txIds []types.TransactionID, l types.LayerID) []*types.Transaction {
-	txs, missing := msh.GetTransactions(txIds)
-	if len(missing) != 0 {
-		msh.Panic("could not find transactions %v from layer %v", missing, l)
-	}
-	return txs
 }
 
 var errLayerHasBlock = errors.New("layer has block")
@@ -743,53 +720,50 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	return msh.AddZeroBlockLayer(lyr)
 }
 
-// AddBlockWithTxs adds a block to the database
-// blk - the block to add
-// txs - block txs that we dont have in our tx database yet.
-func (msh *Mesh) AddBlockWithTxs(ctx context.Context, blk *types.Block) error {
-	logger := msh.WithContext(ctx).WithFields(blk.ID())
-	logger.With().Debug("adding block to mesh", blk.Fields()...)
+// AddProposalWithTxs adds a proposal to the database
+// p - the proposal to add
+// txs - proposal txs that we don't have in our tx database yet.
+func (msh *Mesh) AddProposalWithTxs(ctx context.Context, p *types.Proposal) error {
+	logger := msh.WithContext(ctx).WithFields(p.ID())
+	logger.With().Debug("adding proposal to mesh", p.Fields()...)
 
-	if !blk.Layer().After(msh.ProcessedLayer()) {
-		logger.With().Warning("block is late",
+	if !p.LayerIndex.After(msh.ProcessedLayer()) {
+		logger.With().Warning("proposal is late",
 			log.FieldNamed("processed_layer", msh.ProcessedLayer()),
-			log.FieldNamed("miner_id", blk.MinerID()))
+			log.FieldNamed("miner_id", p.SmesherID()))
 	}
 
-	if err := msh.StoreTransactionsFromPool(blk); err != nil {
+	if err := msh.storeTransactionsFromPool(p); err != nil {
 		logger.With().Error("not all txs were processed", log.Err(err))
 	}
 
-	// Store block (delete if storing ATXs fails)
-	if err := msh.DB.AddBlock(blk); err != nil {
-		if errors.Is(err, ErrAlreadyExist) {
-			return nil
-		}
-		logger.With().Error("failed to add block", log.Err(err))
+	// Store proposal (delete if storing ATXs fails)
+	if err := msh.DB.AddProposal(p); err != nil {
+		logger.With().Error("failed to add proposal", log.Err(err))
 		return err
 	}
 
-	msh.setLatestLayer(blk.Layer())
-	events.ReportNewBlock(blk)
-	logger.Info("added block to database")
+	msh.setLatestLayer(p.LayerIndex)
+	events.ReportNewProposal(p)
+	logger.Info("added proposal to database")
 	return nil
 }
 
-func (msh *Mesh) invalidateFromPools(blk *types.MiniBlock) {
-	for _, id := range blk.TxIDs {
+func (msh *Mesh) invalidateFromPools(txIDs []types.TransactionID) {
+	for _, id := range txIDs {
 		msh.txPool.Invalidate(id)
 	}
 }
 
-// StoreTransactionsFromPool takes declared txs from provided block blk and writes them to DB. it then invalidates
+// storeTransactionsFromPool takes declared txs from provided proposal and writes them to DB. it then invalidates
 // the transactions from txpool.
-func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
+func (msh *Mesh) storeTransactionsFromPool(p *types.Proposal) error {
 	// Store transactions (doesn't have to be rolled back if other writes fail)
-	if len(blk.TxIDs) == 0 {
+	if len(p.TxIDs) == 0 {
 		return nil
 	}
-	txs := make([]*types.Transaction, 0, len(blk.TxIDs))
-	for _, txID := range blk.TxIDs {
+	txs := make([]*types.Transaction, 0, len(p.TxIDs))
+	for _, txID := range p.TxIDs {
 		tx, err := msh.txPool.Get(txID)
 		if err != nil {
 			// if the transaction is not in the pool it could have been
@@ -801,16 +775,16 @@ func (msh *Mesh) StoreTransactionsFromPool(blk *types.Block) error {
 		}
 		txs = append(txs, tx)
 	}
-	if err := msh.writeTransactions(blk, txs...); err != nil {
-		return fmt.Errorf("could not write transactions of block %v database: %v", blk.ID(), err)
+	if err := msh.writeTransactions(p, txs...); err != nil {
+		return fmt.Errorf("could not write transactions of block %v database: %v", p.ID(), err)
 	}
 
-	if err := msh.addToUnappliedTxs(txs, blk.LayerIndex); err != nil {
+	if err := msh.addToUnappliedTxs(txs, p.LayerIndex); err != nil {
 		return fmt.Errorf("failed to add to unappliedTxs: %v", err)
 	}
 
 	// remove txs from pool
-	msh.invalidateFromPools(&blk.MiniBlock)
+	msh.invalidateFromPools(p.TxIDs)
 
 	return nil
 }
@@ -891,13 +865,13 @@ func (msh *Mesh) getCoinbasesAndSmeshers(l *types.Layer) (coinbasesAndSmeshers m
 	// TODO: fix this when changing the types.NodeID struct, see https://github.com/spacemeshos/go-spacemesh/issues/2269
 	coinbasesAndSmeshers = make(map[types.Address]map[string]uint64)
 	for _, bl := range l.Blocks() {
-		if bl.ATXID == *types.EmptyATXID {
+		if bl.AtxID == *types.EmptyATXID {
 			msh.With().Info("skipping reward distribution for block with no atx", bl.LayerIndex, bl.ID())
 			continue
 		}
-		atx, err := msh.AtxDB.GetAtxHeader(bl.ATXID)
+		atx, err := msh.AtxDB.GetAtxHeader(bl.AtxID)
 		if err != nil {
-			msh.With().Warning("atx from block not found in db", log.Err(err), bl.ID(), bl.ATXID)
+			msh.With().Warning("atx from block not found in db", log.Err(err), bl.ID(), bl.AtxID)
 			continue
 		}
 		coinbases = append(coinbases, atx.Coinbase)
@@ -910,18 +884,6 @@ func (msh *Mesh) getCoinbasesAndSmeshers(l *types.Layer) (coinbasesAndSmeshers m
 	}
 
 	return coinbasesAndSmeshers, coinbases
-}
-
-// GenesisBlock is a is the first static block that xists at the beginning of each network. it exist one layer before actual blocks could be created.
-func GenesisBlock() *types.Block {
-	return types.NewExistingBlock(types.GetEffectiveGenesis(), []byte("genesis"), nil)
-}
-
-// GenesisLayer generates layer 0 should be removed after the genesis flow is implemented.
-func GenesisLayer() *types.Layer {
-	l := types.NewLayer(types.GetEffectiveGenesis())
-	l.AddBlock(GenesisBlock())
-	return l
 }
 
 // GetATXs uses GetFullAtx to return a list of atxs corresponding to atxIds requested.
@@ -945,16 +907,4 @@ func getAggregatedLayerHashKey(layerID types.LayerID) []byte {
 	b.WriteString("ag")
 	b.Write(layerID.Bytes())
 	return b.Bytes()
-}
-
-// HasProposal returns true if the database has the Proposal specified by the ProposalID and false otherwise.
-func (msh *Mesh) HasProposal(types.ProposalID) bool {
-	// TODO: implement me
-	return false
-}
-
-// AddProposal saves the Proposal into database.
-func (msh *Mesh) AddProposal(*types.Proposal) error {
-	// TODO: implement me
-	return nil
 }

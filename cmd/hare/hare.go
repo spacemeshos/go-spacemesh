@@ -15,7 +15,6 @@ import (
 
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -61,17 +60,24 @@ func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
 func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
 }
 
-func (mbp *mockBlockProvider) LayerBlocks(lyr types.LayerID) ([]*types.Block, error) {
-	s := make([]*types.Block, 200)
-	for i := uint64(0); i < 200; i++ {
-		blk := types.NewExistingBlock(lyr, util.Uint64ToBytes(i), nil)
-		blk.TortoiseBeacon = types.BytesToBeacon(lyr.GetEpoch().ToBytes())
-		s[i] = blk
+func (mbp *mockBlockProvider) LayerProposals(lyr types.LayerID) ([]*types.Proposal, error) {
+	// the proposal IDs in each layer need to be stable across hare instances.
+	s := make([]*types.Proposal, 200)
+	for i := 0; i < 200; i++ {
+		id := types.ProposalID{}
+		copy(id[0:], fmt.Sprintf("%d-%d", i, lyr))
+		dbp := types.DBProposal{
+			ID:         id,
+			LayerIndex: lyr,
+		}
+		p := dbp.ToProposal(&types.Ballot{})
+		p.EpochData = &types.EpochData{Beacon: types.BytesToBeacon(lyr.GetEpoch().ToBytes())}
+		s[i] = p
 	}
 	return s, nil
 }
 
-func (mbp *mockBlockProvider) GetBlock(types.BlockID) (*types.Block, error) {
+func (mbp *mockBlockProvider) GetBallot(id types.BallotID) (*types.Ballot, error) {
 	return nil, nil
 }
 

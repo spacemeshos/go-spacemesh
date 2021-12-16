@@ -193,7 +193,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 			suite.T().Fatalf("failed to start poet server: %v", err)
 		}
 
-		timeout := time.After(10 * time.Minute)
+		timeout := time.After(15 * time.Minute)
 
 		// Run setup first. We need to allow this to timeout, and monitor the failure channel too,
 		// as this can also loop forever.
@@ -231,7 +231,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 			}
 		}
 		suite.validateBlocksAndATXs(types.NewLayerID(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
-		oldRoot = suite.apps[0].state.GetStateRoot()
+		oldRoot = suite.apps[0].svm.GetStateRoot()
 		edSgn = suite.apps[0].edSgn
 	}()
 
@@ -287,10 +287,10 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 				app.nodeID,
 				log.FieldNamed("sender", addr),
 				log.FieldNamed("dest", dst),
-				log.Uint64("dest_balance", app.state.GetBalance(dst)),
-				log.Uint64("sender_nonce", app.state.GetNonce(addr)),
-				log.Uint64("sender_balance", app.state.GetBalance(addr)))
-			ok = ok && 0 == app.state.GetBalance(dst) && app.state.GetNonce(addr) == 0
+				log.Uint64("dest_balance", app.svm.GetBalance(dst)),
+				log.Uint64("sender_nonce", app.svm.GetNonce(addr)),
+				log.Uint64("sender_balance", app.svm.GetBalance(addr)))
+			ok = ok && (app.svm.GetBalance(dst) == 0) && (app.svm.GetNonce(addr) == 0)
 		}
 		if ok {
 			suite.log.Info("zero addresses ok")
@@ -347,10 +347,10 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 				app.nodeID,
 				log.FieldNamed("sender", addr),
 				log.FieldNamed("dest", dst),
-				log.Uint64("dest_balance", app.state.GetBalance(dst)),
-				log.Uint64("sender_nonce", app.state.GetNonce(addr)),
-				log.Uint64("sender_balance", app.state.GetBalance(addr)))
-			ok = ok && app.state.GetBalance(dst) >= 250 && app.state.GetNonce(addr) == uint64(txsSent)
+				log.Uint64("dest_balance", app.svm.GetBalance(dst)),
+				log.Uint64("sender_nonce", app.svm.GetNonce(addr)),
+				log.Uint64("sender_balance", app.svm.GetBalance(addr)))
+			ok = ok && (app.svm.GetBalance(dst) >= 250) && (app.svm.GetNonce(addr) == uint64(txsSent))
 		}
 		if ok {
 			suite.log.Info("addresses ok")
@@ -483,8 +483,8 @@ func sameRootTester(dependencies []int) TestScenario {
 			clientsDone := 0
 			for idx2, app2 := range suite.apps {
 				if idx != idx2 {
-					r1 := app.state.IntermediateRoot(false).String()
-					r2 := app2.state.IntermediateRoot(false).String()
+					r1 := app.svm.GetStateRoot().String()
+					r2 := app2.svm.GetStateRoot().String()
 					if r1 == r2 {
 						clientsDone++
 						if clientsDone == len(suite.apps)-1 {
@@ -538,7 +538,7 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 
 func (suite *AppTestSuite) validateReloadStateRoot(app *App, oldRoot types.Hash32) {
 	// test that loaded root is equal
-	assert.Equal(suite.T(), oldRoot, app.state.GetStateRoot())
+	assert.Equal(suite.T(), oldRoot, app.svm.GetStateRoot())
 
 	// start and stop and test for no panics
 	suite.NoError(app.startServices(context.TODO()))

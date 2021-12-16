@@ -52,7 +52,7 @@ func (mr *MockFetcherMockRecorder) FetchAtx(arg0, arg1 interface{}) *gomock.Call
 // FetchBlock mocks base method.
 func (m *MockFetcher) FetchBlock(arg0 context.Context, arg1 types.BlockID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FetchBlock", arg0, arg1)
+	ret := m.ctrl.Call(m, "FetchProposal", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -60,7 +60,7 @@ func (m *MockFetcher) FetchBlock(arg0 context.Context, arg1 types.BlockID) error
 // FetchBlock indicates an expected call of FetchBlock.
 func (mr *MockFetcherMockRecorder) FetchBlock(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchBlock", reflect.TypeOf((*MockFetcher)(nil).FetchBlock), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchProposal", reflect.TypeOf((*MockFetcher)(nil).FetchBlock), arg0, arg1)
 }
 
 // GetAtxs mocks base method.
@@ -119,6 +119,20 @@ func (mr *MockFetcherMockRecorder) GetPoetProof(arg0, arg1 interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPoetProof", reflect.TypeOf((*MockFetcher)(nil).GetPoetProof), arg0, arg1)
 }
 
+// GetProposals mocks base method.
+func (m *MockFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProposals", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetProposals indicates an expected call of GetProposals.
+func (mr *MockFetcherMockRecorder) GetProposals(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockFetcher)(nil).GetProposals), arg0, arg1)
+}
+
 // GetTxs mocks base method.
 func (m *MockFetcher) GetTxs(arg0 context.Context, arg1 []types.TransactionID) error {
 	m.ctrl.T.Helper()
@@ -159,7 +173,7 @@ func (m *MockBlockFetcher) EXPECT() *MockBlockFetcherMockRecorder {
 // FetchBlock mocks base method.
 func (m *MockBlockFetcher) FetchBlock(arg0 context.Context, arg1 types.BlockID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "FetchBlock", arg0, arg1)
+	ret := m.ctrl.Call(m, "FetchProposal", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -167,7 +181,7 @@ func (m *MockBlockFetcher) FetchBlock(arg0 context.Context, arg1 types.BlockID) 
 // FetchBlock indicates an expected call of FetchBlock.
 func (mr *MockBlockFetcherMockRecorder) FetchBlock(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchBlock", reflect.TypeOf((*MockBlockFetcher)(nil).FetchBlock), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FetchProposal", reflect.TypeOf((*MockBlockFetcher)(nil).FetchBlock), arg0, arg1)
 }
 
 // GetBlocks mocks base method.
@@ -182,6 +196,20 @@ func (m *MockBlockFetcher) GetBlocks(arg0 context.Context, arg1 []types.BlockID)
 func (mr *MockBlockFetcherMockRecorder) GetBlocks(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlocks", reflect.TypeOf((*MockBlockFetcher)(nil).GetBlocks), arg0, arg1)
+}
+
+// GetProposals mocks base method.
+func (m *MockBlockFetcher) GetProposals(arg0 context.Context, arg1 []types.ProposalID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProposals", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// GetProposals indicates an expected call of GetProposals.
+func (mr *MockBlockFetcherMockRecorder) GetProposals(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockBlockFetcher)(nil).GetProposals), arg0, arg1)
 }
 
 // MockAtxFetcher is a mock of AtxFetcher interface.

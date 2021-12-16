@@ -36,7 +36,7 @@ func getMeshDB(tb testing.TB) *DB {
 
 func TestMeshDB_New(t *testing.T) {
 	mdb := getMeshDB(t)
-	bl := types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
+	bl := types.GenLayerBlock(types.NewLayerID(1), types.RandomTXSet(10))
 	err := mdb.AddBlock(bl)
 	assert.NoError(t, err)
 	block, err := mdb.GetBlock(bl.ID())
@@ -44,39 +44,137 @@ func TestMeshDB_New(t *testing.T) {
 	assert.True(t, bl.ID() == block.ID())
 }
 
-func TestMeshDB_AddBlock(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
+func TestMeshDB_New_Proposal(t *testing.T) {
+	mdb := getMeshDB(t)
+	bl := types.GenLayerProposal(types.NewLayerID(1), nil)
+	err := mdb.AddProposal(bl)
+	assert.NoError(t, err)
+	block, err := mdb.getProposal(bl.ID())
+	assert.NoError(t, err)
+	assert.True(t, bl.ID() == block.ID())
+}
+
+func TestMeshDB_AddBallot(t *testing.T) {
+	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 1, logtest.New(t))
+	require.NoError(t, err)
 	defer mdb.Close()
-	coinbase := types.HexToAddress("aaaa")
 
-	block1 := types.NewExistingBlock(types.NewLayerID(1), []byte("data1"), nil)
+	layer := types.NewLayerID(123)
+	ballot := types.GenLayerBallot(layer)
+	require.False(t, mdb.HasBallot(ballot.ID()))
 
-	addTransactionsWithFee(t, mdb, block1, 4, rand.Int63n(100))
+	require.NoError(t, mdb.AddBallot(ballot))
+	assert.True(t, mdb.HasBallot(ballot.ID()))
+	got, err := mdb.GetBallot(ballot.ID())
+	require.NoError(t, err)
+	assert.Equal(t, ballot, got)
 
-	poetRef := []byte{0xba, 0x05}
-	atx := newActivationTx(types.NodeID{Key: "aaaa", VRFPublicKey: []byte("bbb")}, 1, types.ATXID{}, types.NewLayerID(5), 1, types.ATXID{}, coinbase, 5, []types.BlockID{}, &types.NIPost{
-		Challenge: &types.Hash32{},
-		Post: &types.Post{
-			Nonce:   0,
-			Indices: []byte(nil),
-		},
-		PostMetadata: &types.PostMetadata{
-			Challenge: poetRef,
-		},
-	})
-	var atxs []types.ATXID
-	atxs = append(atxs, atx.ID())
-	block1.ActiveSet = &atxs
-	err := mdb.AddBlock(block1)
-	assert.NoError(t, err)
+	// copy the ballot and change it slightly
+	ballotNew := *ballot
+	ballotNew.LayerIndex = layer.Add(100)
+	// the copied ballot still has the same BallotID
+	require.Equal(t, ballot.ID(), ballotNew.ID())
+	// this ballot ID already exist, will not overwrite the previous ballot
+	require.NoError(t, mdb.AddBallot(&ballotNew))
+	assert.True(t, mdb.HasBallot(ballot.ID()))
+	gotNew, err := mdb.GetBallot(ballot.ID())
+	require.NoError(t, err)
+	assert.Equal(t, got, gotNew)
+}
 
-	rBlock1, err := mdb.GetBlock(block1.ID())
-	assert.NoError(t, err)
+func TestMeshDB_AddBlockNotCached(t *testing.T) {
+	mdb := NewMemMeshDB(logtest.New(t))
+	mdb.blockCache = newBlockCache(1)
+	defer mdb.Close()
 
-	assert.Equal(t, block1.ID(), rBlock1.ID())
-	assert.Equal(t, block1.MinerID(), rBlock1.MinerID())
-	assert.Equal(t, len(rBlock1.TxIDs), len(block1.TxIDs), "block content was wrong")
-	assert.Equal(t, len(*rBlock1.ActiveSet), len(*block1.ActiveSet), "block content was wrong")
+	txIDs := types.RandomTXSet(100)
+	block := types.GenLayerBlock(types.NewLayerID(10), txIDs)
+	require.NoError(t, mdb.AddBlock(block))
+
+	got, err := mdb.GetBlock(block.ID())
+	require.NoError(t, err)
+
+	assert.Equal(t, block.ID(), got.ID())
+	assert.Equal(t, block.LayerIndex, got.LayerIndex)
+	assert.Equal(t, block.SmesherID(), got.SmesherID())
+	assert.Equal(t, txIDs, got.TxIDs)
+	assert.Equal(t, block.TxIDs, got.TxIDs)
+	require.NotNil(t, got.EpochData)
+	assert.Equal(t, block.EpochData.ActiveSet, got.EpochData.ActiveSet)
+
+	gotP, err := mdb.getProposal(types.ProposalID(block.ID()))
+	require.NoError(t, err)
+
+	assert.Equal(t, block.ID().Bytes(), gotP.ID().Bytes())
+	assert.Equal(t, block.LayerIndex, gotP.LayerIndex)
+	assert.Equal(t, block.SmesherID(), gotP.SmesherID())
+	assert.Equal(t, txIDs, gotP.TxIDs)
+	assert.Equal(t, block.TxIDs, gotP.TxIDs)
+	require.NotNil(t, gotP.EpochData)
+	assert.Equal(t, block.EpochData.ActiveSet, gotP.EpochData.ActiveSet)
+
+	// add second block should cause the first block to be evicted
+	require.NoError(t, mdb.AddBlock(types.GenLayerBlock(types.NewLayerID(10), types.RandomTXSet(100))))
+
+	got2, err := mdb.GetBlock(block.ID())
+	require.NoError(t, err)
+
+	assert.NotEqual(t, got, got2)
+	assert.Equal(t, block.ID(), got2.ID())
+	assert.Equal(t, block.LayerIndex, got2.LayerIndex)
+	// Smesher ID is not restored for block
+	assert.Nil(t, got2.SmesherID())
+	assert.Equal(t, block.TxIDs, got2.TxIDs)
+	assert.Nil(t, got2.EpochData)
+
+	// proposal is unchanged
+	gotP2, err := mdb.getProposal(types.ProposalID(block.ID()))
+	require.NoError(t, err)
+	assert.Equal(t, gotP, gotP2)
+}
+
+func TestMeshDB_AddProposal(t *testing.T) {
+	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 1, logtest.New(t))
+	require.NoError(t, err)
+	defer mdb.Close()
+
+	layer := types.NewLayerID(123)
+	proposal := types.GenLayerProposal(layer, types.RandomTXSet(199))
+	require.False(t, mdb.HasProposal(proposal.ID()))
+	require.False(t, mdb.HasBallot(proposal.Ballot.ID()))
+
+	require.NoError(t, mdb.AddProposal(proposal))
+	assert.True(t, mdb.HasProposal(proposal.ID()))
+	assert.True(t, mdb.HasBallot(proposal.Ballot.ID()))
+
+	got, err := mdb.GetBlock(types.BlockID(proposal.ID()))
+	require.NoError(t, err)
+	gotP := (*types.Proposal)(got)
+	// from cache, so Smesher ID still exist
+	assert.Equal(t, proposal, gotP)
+
+	gotB, err := mdb.GetBallot(proposal.Ballot.ID())
+	require.NoError(t, err)
+	assert.Equal(t, proposal.Ballot, *gotB)
+
+	// copy the proposal and change it slightly
+	proposalNew := *proposal
+	proposalNew.LayerIndex = layer.Add(100)
+	proposal.TxIDs = proposal.TxIDs[1:]
+	// the copied proposal still has the same ProposalID
+	require.Equal(t, proposal.ID(), proposalNew.ID())
+	require.Equal(t, proposal.Ballot.ID(), proposalNew.Ballot.ID())
+	// this proposal ID already exist, will not overwrite the previous proposal
+	require.NoError(t, mdb.AddProposal(&proposalNew))
+	assert.True(t, mdb.HasProposal(proposal.ID()))
+	gotNew, err := mdb.GetBlock(types.BlockID(proposal.ID()))
+	require.NoError(t, err)
+	gotPNew := (*types.Proposal)(gotNew)
+	assert.Equal(t, gotP, gotPNew)
+	// ballot is unchanged too
+	gotBNew, err := mdb.GetBallot(proposal.Ballot.ID())
+	require.NoError(t, err)
+	assert.Equal(t, gotB, gotBNew)
 }
 
 func chooseRandomPattern(blocksInLayer int, patternSize int) []int {
@@ -96,27 +194,27 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 		blocksInPrevLayer := len(blocks)
 		patterns = append(patterns, chooseRandomPattern(blocksInPrevLayer, int(math.Min(float64(blocksInPrevLayer), float64(patternSize)))))
 	}
-	layerBlocks := make([]types.BlockID, 0, blocksInLayer)
+	layerProposals := make([]types.ProposalID, 0, blocksInLayer)
 	for i := 0; i < blocksInLayer; i++ {
-		bl := types.NewExistingBlock(types.NewLayerID(0), []byte(rand.String(8)), nil)
-		voted := make(map[types.BlockID]struct{})
-		layerBlocks = append(layerBlocks, bl.ID())
+		p := types.GenLayerProposal(types.NewLayerID(0), nil)
+		voted := make(map[types.ProposalID]struct{})
+		layerProposals = append(layerProposals, p.ID())
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				bl.ForDiff = append(bl.ForDiff, b.ID())
-				voted[b.ID()] = struct{}{}
+				p.ForDiff = append(p.ForDiff, b.ID())
+				voted[p.ID()] = struct{}{}
 			}
 		}
-		for _, prevBloc := range prev[0].Blocks() {
-			if _, ok := voted[prevBloc.ID()]; !ok {
-				bl.AgainstDiff = append(bl.AgainstDiff, prevBloc.ID())
+		for _, prevProposal := range prev[0].Proposals() {
+			if _, ok := voted[prevProposal.ID()]; !ok {
+				p.AgainstDiff = append(p.AgainstDiff, (types.BlockID)(prevProposal.ID()))
 			}
 		}
-		bl.LayerIndex = index
-		l.AddBlock(bl)
+		p.LayerIndex = index
+		l.AddProposal(p)
 	}
-	lg.Info("Created mesh.LayerID %d with blocks %d", l.Index(), layerBlocks)
+	lg.Info("Created mesh.LayerID %d with proposals %d", l.Index(), layerProposals)
 	return l
 }
 
@@ -130,7 +228,7 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 	defer mdb.Close()
 	defer teardown()
 
-	l := GenesisLayer()
+	l := types.GenesisLayer()
 	gen := l.Blocks()[0]
 
 	err = mdb.AddBlock(gen)
@@ -149,8 +247,8 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 			b.Logf("layers %3d-%3d took %12v\t", i-(batchSize-1), i, time.Since(lStart))
 			lStart = time.Now()
 			for i := 0; i < 100; i++ {
-				for _, b := range lyr.Blocks() {
-					block, err := mdb.GetBlock(b.ID())
+				for _, b := range lyr.Proposals() {
+					block, err := mdb.getProposal(b.ID())
 					r.NoError(err)
 					r.NotNil(block)
 				}
@@ -315,9 +413,9 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 	signer1, addr1 := newSignerAndAddress(r, "thc")
 	signer2, _ := newSignerAndAddress(r, "cbd")
 	_, addr3 := newSignerAndAddress(r, "cbe")
-	blk := &types.Block{}
-	blk.LayerIndex = types.NewLayerID(1)
-	err := mdb.writeTransactions(blk,
+	p := &types.Proposal{}
+	p.LayerIndex = types.NewLayerID(1)
+	err := mdb.writeTransactions(p,
 		newTx(r, signer1, 420, 240),
 		newTx(r, signer1, 421, 241),
 		newTxWithDest(r, signer2, addr1, 0, 100),
@@ -833,8 +931,8 @@ func TestMeshDB_GetMeshTransactions(t *testing.T) {
 
 	signer1, _ := newSignerAndAddress(r, "thc")
 
-	blk := &types.Block{}
-	blk.LayerIndex = types.NewLayerID(1)
+	p := &types.Proposal{}
+	p.LayerIndex = types.NewLayerID(1)
 	var (
 		nonce  uint64
 		ids    []types.TransactionID
@@ -842,10 +940,10 @@ func TestMeshDB_GetMeshTransactions(t *testing.T) {
 	)
 	for i := 1; i <= layers; i++ {
 		nonce++
-		blk.LayerIndex = types.NewLayerID(uint32(i))
+		p.LayerIndex = types.NewLayerID(uint32(i))
 		tx := newTx(r, signer1, nonce, 240)
 		ids = append(ids, tx.ID())
-		r.NoError(mdb.writeTransactions(blk, tx))
+		r.NoError(mdb.writeTransactions(p, tx))
 	}
 	txs, missing := mdb.GetMeshTransactions(ids)
 	r.Len(missing, 0)
@@ -863,13 +961,13 @@ func TestMesh_FindOnce(t *testing.T) {
 	signer1, addr1 := newSignerAndAddress(r, "thc")
 	signer2, _ := newSignerAndAddress(r, "cbd")
 
-	blk := &types.Block{}
+	p := &types.Proposal{}
 	layers := []uint32{1, 10, 100}
 	nonce := uint64(0)
 	for _, layer := range layers {
-		blk.LayerIndex = types.NewLayerID(layer)
+		p.LayerIndex = types.NewLayerID(layer)
 		nonce++
-		err := mdb.writeTransactions(blk,
+		err := mdb.writeTransactions(p,
 			newTx(r, signer1, nonce, 100),
 			newTxWithDest(r, signer2, addr1, nonce, 100),
 		)
@@ -892,16 +990,15 @@ func TestMesh_FindOnce(t *testing.T) {
 	})
 }
 
-func BenchmarkGetBlockHeader(b *testing.B) {
-	// blocks is set to be twice as large as cache to avoid hitting the cache
-	cache := layerSize
-	blocks := make([]*types.Block, cache*2)
+func BenchmarkGetBlock(b *testing.B) {
+	// cache is set to be twice as large as cache to avoid hitting the cache
+	blocks := make([]*types.Block, layerSize*2)
 	db, err := NewPersistentMeshDB(b.TempDir(),
 		1, /*size of the cache is multiplied by a constant (layerSize). for the benchmark it needs to be no more than layerSize*/
 		logtest.New(b))
 	require.NoError(b, err)
 	for i := range blocks {
-		blocks[i] = types.NewExistingBlock(types.NewLayerID(1), []byte(rand.String(8)), nil)
+		blocks[i] = types.GenLayerBlock(types.NewLayerID(1), nil)
 		require.NoError(b, db.AddBlock(blocks[i]))
 	}
 

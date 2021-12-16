@@ -21,10 +21,10 @@ type Rolacle interface {
 }
 
 type meshProvider interface {
-	// LayerBlocks returns the blocks in a layer
-	LayerBlocks(types.LayerID) ([]*types.Block, error)
-	// GetBlock returns the block with the specified block ID
-	GetBlock(types.BlockID) (*types.Block, error)
+	// LayerProposals returns the proposals in a layer
+	LayerProposals(types.LayerID) ([]*types.Proposal, error)
+	// GetBallot returns the ballot with the specified ID
+	GetBallot(types.BallotID) (*types.Ballot, error)
 	// HandleValidatedLayer receives Hare output when it succeeds
 	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
 	// RecordCoinflip records the weak coinflip result for a layer

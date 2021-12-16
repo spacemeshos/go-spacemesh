@@ -44,7 +44,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/svm/state"
+	"github.com/spacemeshos/go-spacemesh/svm"
 )
 
 const (
@@ -96,9 +96,9 @@ var (
 	signer2    = signing.NewEdSigner()
 	globalTx   = NewTx(0, addr1, signer1)
 	globalTx2  = NewTx(1, addr2, signer2)
-	block1     = types.NewExistingBlock(types.LayerID{}, []byte("11111"), nil)
-	block2     = types.NewExistingBlock(types.LayerID{}, []byte("22222"), nil)
-	block3     = types.NewExistingBlock(types.LayerID{}, []byte("33333"), nil)
+	block1     = types.GenLayerBlock(types.LayerID{}, nil)
+	block2     = types.GenLayerBlock(types.LayerID{}, nil)
+	block3     = types.GenLayerBlock(types.LayerID{}, nil)
 	txAPI      = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
@@ -119,9 +119,9 @@ func init() {
 
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
-	block1.ATXID = globalAtx.ID()
+	block1.AtxID = globalAtx.ID()
 	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
-	block1.ActiveSet = &[]types.ATXID{globalAtx.ID(), globalAtx2.ID()}
+	block1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
 	txAPI.returnTx[globalTx.ID()] = globalTx
 	txAPI.returnTx[globalTx2.ID()] = globalTx2
 	types.SetLayersPerEpoch(layersPerEpoch)
@@ -3114,16 +3114,16 @@ func TestEventsReceived(t *testing.T) {
 	pool := mempool.NewTxMemPool()
 	pool.Put(globalTx.ID(), globalTx)
 
-	lg := logtest.New(t).WithName("proc_logger")
-	processor := state.NewTransactionProcessor(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	lg := logtest.New(t).WithName("svm")
+	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
 	time.Sleep(100 * time.Millisecond)
-	processor.Process([]*types.Transaction{globalTx}, layerFirst)
 
 	rewards := map[types.Address]uint64{
 		addr1: 1,
 	}
+	svm.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
+
 	time.Sleep(100 * time.Millisecond)
-	processor.ApplyRewards(layerFirst, rewards)
 
 	wg.Wait()
 }

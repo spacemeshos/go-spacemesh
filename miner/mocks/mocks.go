@@ -75,18 +75,18 @@ func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
 	return m.recorder
 }
 
-// AddBlockWithTxs mocks base method.
-func (m *MockmeshProvider) AddBlockWithTxs(arg0 context.Context, arg1 *types.Block) error {
+// AddProposalWithTxs mocks base method.
+func (m *MockmeshProvider) AddProposalWithTxs(arg0 context.Context, arg1 *types.Proposal) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddBlockWithTxs", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddProposalWithTxs", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// AddBlockWithTxs indicates an expected call of AddBlockWithTxs.
-func (mr *MockmeshProviderMockRecorder) AddBlockWithTxs(arg0, arg1 interface{}) *gomock.Call {
+// AddProposalWithTxs indicates an expected call of AddProposalWithTxs.
+func (mr *MockmeshProviderMockRecorder) AddProposalWithTxs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBlockWithTxs", reflect.TypeOf((*MockmeshProvider)(nil).AddBlockWithTxs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProposalWithTxs", reflect.TypeOf((*MockmeshProvider)(nil).AddProposalWithTxs), arg0, arg1)
 }
 
 // MocktxPool is a mock of txPool interface.

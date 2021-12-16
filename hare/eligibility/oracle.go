@@ -10,10 +10,10 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/fixed"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -190,7 +190,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 
 	// marshal message
 	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
-	buf, err := types.InterfaceToBytes(&msg)
+	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Panic("failed to encode", log.Err(err))
 	}
@@ -490,10 +490,6 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 			continue
 		}
 		seenBallots[ballot.ID()] = struct{}{}
-		if ballot.ID() == types.BallotID(mesh.GenesisBlock().ID()) {
-			// always accept genesis ballot
-			continue
-		}
 		if ballot.EpochData == nil {
 			// not a ref ballot, no beacon value to check
 			continue

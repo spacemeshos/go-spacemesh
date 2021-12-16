@@ -9,13 +9,14 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/blocks"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	dbmocks "github.com/spacemeshos/go-spacemesh/database/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -139,18 +140,19 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(bb1, [][]types.BlockID{nil, nil, nil}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
-	b.mMesh.EXPECT().AddBlockWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-	b.mPubSub.EXPECT().Publish(gomock.Any(), blocks.NewBlockProtocol, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, p string, data []byte) error {
-			var b types.Block
-			require.NoError(t, types.BytesToInterface(data, &b))
-			b.Initialize()
-			assert.Nil(t, b.RefBlock)
-			assert.Equal(t, types.BlockID(bb1), b.BaseBlock)
-			assert.Equal(t, atxID, b.ATXID)
-			assert.Equal(t, activeSet, *b.ActiveSet)
-			assert.Equal(t, beacon, b.TortoiseBeacon)
-			assert.Equal(t, []types.TransactionID{tx1.ID()}, b.TxIDs)
+	b.mMesh.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, data []byte) error {
+			var p types.Proposal
+			require.NoError(t, codec.Decode(data, &p))
+			p.Initialize()
+			assert.Equal(t, types.EmptyBallotID, p.RefBallot)
+			assert.Equal(t, bb1, p.BaseBallot)
+			assert.Equal(t, atxID, p.AtxID)
+			require.NotNil(t, p.EpochData)
+			assert.Equal(t, activeSet, p.EpochData.ActiveSet)
+			assert.Equal(t, beacon, p.EpochData.Beacon)
+			assert.Equal(t, []types.TransactionID{tx1.ID()}, p.TxIDs)
 			return nil
 		}).Times(1)
 
@@ -161,18 +163,17 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mTxPool.EXPECT().SelectTopNTransactions(gomock.Any(), gomock.Any()).Return([]types.TransactionID{tx2.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(bb2, [][]types.BlockID{nil, nil, nil}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(refBid.Bytes(), nil).Times(1)
-	b.mMesh.EXPECT().AddBlockWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-	b.mPubSub.EXPECT().Publish(gomock.Any(), blocks.NewBlockProtocol, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, p string, data []byte) error {
-			var b types.Block
-			require.NoError(t, types.BytesToInterface(data, &b))
-			b.Initialize()
-			assert.Equal(t, types.BlockID(bb2), b.BaseBlock)
-			assert.Equal(t, refBid, types.BallotID(*b.RefBlock))
-			assert.Equal(t, atxID, b.ATXID)
-			assert.Nil(t, b.ActiveSet)
-			assert.Equal(t, types.EmptyBeacon, b.TortoiseBeacon)
-			assert.Equal(t, []types.TransactionID{tx2.ID()}, b.TxIDs)
+	b.mMesh.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, data []byte) error {
+			var p types.Proposal
+			require.NoError(t, codec.Decode(data, &p))
+			p.Initialize()
+			assert.Equal(t, bb2, p.BaseBallot)
+			assert.Equal(t, refBid, p.RefBallot)
+			assert.Equal(t, atxID, p.AtxID)
+			require.Nil(t, p.EpochData)
+			assert.Equal(t, []types.TransactionID{tx2.ID()}, p.TxIDs)
 			return nil
 		}).Times(1)
 
@@ -207,18 +208,19 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(bb, [][]types.BlockID{nil, nil, nil}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
-	b.mMesh.EXPECT().AddBlockWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-	b.mPubSub.EXPECT().Publish(gomock.Any(), blocks.NewBlockProtocol, gomock.Any()).DoAndReturn(
-		func(ctx context.Context, p string, data []byte) error {
-			var b types.Block
-			require.NoError(t, types.BytesToInterface(data, &b))
-			b.Initialize()
-			assert.Nil(t, b.RefBlock)
-			assert.Equal(t, types.BlockID(bb), b.BaseBlock)
-			assert.Equal(t, atxID, b.ATXID)
-			assert.Equal(t, activeSet, *b.ActiveSet)
-			assert.Equal(t, beacon, b.TortoiseBeacon)
-			assert.Equal(t, []types.TransactionID{tx.ID()}, b.TxIDs)
+	b.mMesh.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, data []byte) error {
+			var p types.Proposal
+			require.NoError(t, codec.Decode(data, &p))
+			p.Initialize()
+			assert.Equal(t, types.EmptyBallotID, p.RefBallot)
+			assert.Equal(t, bb, p.BaseBallot)
+			assert.Equal(t, atxID, p.AtxID)
+			assert.NotNil(t, p.EpochData)
+			assert.Equal(t, activeSet, p.EpochData.ActiveSet)
+			assert.Equal(t, beacon, p.EpochData.Beacon)
+			assert.Equal(t, []types.TransactionID{tx.ID()}, p.TxIDs)
 			return nil
 		}).Times(1)
 
@@ -398,7 +400,7 @@ func TestBuilder_HandleLayer_AddBlockError(t *testing.T) {
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
-	b.mMesh.EXPECT().AddBlockWithTxs(gomock.Any(), gomock.Any()).Return(errUnknown).Times(1)
+	b.mMesh.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).Return(errUnknown).Times(1)
 
 	assert.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errUnknown)
 }
@@ -421,8 +423,8 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(types.RandomBallotID(), [][]types.BlockID{nil, nil, nil}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
-	b.mMesh.EXPECT().AddBlockWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
-	b.mPubSub.EXPECT().Publish(gomock.Any(), blocks.NewBlockProtocol, gomock.Any()).Return(errors.New("unknown")).Times(1)
+	b.mMesh.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).Return(errors.New("unknown")).Times(1)
 
 	// publish error is ignored
 	assert.NoError(t, b.handleLayer(context.TODO(), layerID))

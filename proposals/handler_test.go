@@ -11,6 +11,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/proposals/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -84,7 +85,7 @@ func createProposal(tb testing.TB) *types.Proposal {
 
 func encodeProposal(tb testing.TB, p *types.Proposal) []byte {
 	tb.Helper()
-	data, err := types.InterfaceToBytes(p)
+	data, err := codec.Encode(p)
 	require.NoError(tb, err)
 	return data
 }
@@ -112,7 +113,7 @@ func createRefBallot(tb testing.TB) *types.Ballot {
 
 func encodeBallot(tb testing.TB, b *types.Ballot) []byte {
 	tb.Helper()
-	data, err := types.InterfaceToBytes(b)
+	data, err := codec.Encode(b)
 	require.NoError(tb, err)
 	return data
 }
@@ -121,7 +122,7 @@ func TestBallot_MalformedData(t *testing.T) {
 	th := createTestHandler(t)
 	defer th.ctrl.Finish()
 	b := createBallot(t)
-	data, err := types.InterfaceToBytes(b.InnerBallot)
+	data, err := codec.Encode(b.InnerBallot)
 	require.NoError(t, err)
 	assert.ErrorIs(t, th.HandleBallotData(context.TODO(), data), errMalformedData)
 }
@@ -324,10 +325,15 @@ func TestBallot_Success(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{b.AtxID}).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.ForDiff).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
+		func(_ context.Context, ballot *types.Ballot) (bool, error) {
 			assert.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mm.EXPECT().AddBallot(gomock.Any()).DoAndReturn(
+		func(ballot *types.Ballot) error {
+			assert.Equal(t, b.ID(), ballot.ID())
+			return nil
+		}).Times(1)
 	assert.NoError(t, th.HandleBallotData(context.TODO(), data))
 }
 
@@ -343,10 +349,15 @@ func TestBallot_RefBallot(t *testing.T) {
 	th.mf.EXPECT().GetAtxs(gomock.Any(), atxIDs).Return(nil).Times(1)
 	th.mf.EXPECT().GetBlocks(gomock.Any(), b.ForDiff).Return(nil).Times(1)
 	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
+		func(_ context.Context, ballot *types.Ballot) (bool, error) {
 			assert.Equal(t, b.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mm.EXPECT().AddBallot(gomock.Any()).DoAndReturn(
+		func(ballot *types.Ballot) error {
+			assert.Equal(t, b.ID(), ballot.ID())
+			return nil
+		}).Times(1)
 	assert.NoError(t, th.HandleBallotData(context.TODO(), data))
 }
 
@@ -354,7 +365,7 @@ func TestProposal_MalformedData(t *testing.T) {
 	th := createTestHandler(t)
 	defer th.ctrl.Finish()
 	p := createProposal(t)
-	data, err := types.InterfaceToBytes(p.InnerProposal)
+	data, err := codec.Encode(p.InnerProposal)
 	require.NoError(t, err)
 	assert.ErrorIs(t, th.processProposal(context.TODO(), data), errMalformedData)
 }
@@ -443,8 +454,8 @@ func TestProposal_FailedToAddProposal(t *testing.T) {
 		})
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
-	th.mm.EXPECT().AddProposal(gomock.Any()).DoAndReturn(
-		func(proposal *types.Proposal) error {
+	th.mm.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, proposal *types.Proposal) error {
 			assert.Equal(t, p.Fields(), proposal.Fields())
 			return errUnknown
 		}).Times(1)
@@ -467,8 +478,8 @@ func TestProposal_ValidProposal(t *testing.T) {
 			return true, nil
 		})
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
-	th.mm.EXPECT().AddProposal(gomock.Any()).DoAndReturn(
-		func(proposal *types.Proposal) error {
+	th.mm.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, proposal *types.Proposal) error {
 			assert.Equal(t, p.Fields(), proposal.Fields())
 			return nil
 		}).Times(1)
@@ -491,8 +502,8 @@ func TestMetrics(t *testing.T) {
 			return true, nil
 		})
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
-	th.mm.EXPECT().AddProposal(gomock.Any()).DoAndReturn(
-		func(proposal *types.Proposal) error {
+	th.mm.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, proposal *types.Proposal) error {
 			assert.Equal(t, p.Fields(), proposal.Fields())
 			return nil
 		}).Times(1)
