@@ -77,6 +77,10 @@ func (MockState) Rewind(types.LayerID) (types.Hash32, error) {
 	panic("implement me")
 }
 
+func (MockState) AddTxToPool(*types.Transaction) error {
+	return nil
+}
+
 func (MockState) GetStateRoot() types.Hash32 {
 	return [32]byte{}
 }
