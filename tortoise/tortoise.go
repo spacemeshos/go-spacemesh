@@ -547,11 +547,11 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 					t.verifying.countVotes(
 						logger.WithFields(log.Bool("recounting", true)), lid, t.getTortoiseBallots(lid))
 				}
-				recovered := t.verifying.verify(logger, target)
+				restarted := t.verifying.verify(logger, target)
 
-				if recovered && t.mode.isFull() {
+				if restarted && t.mode.isFull() {
 					t.switchModes(logger)
-				} else if !recovered {
+				} else if !restarted {
 					// need to reset accumulated weight, verifying will not try to verify this layer again
 					// hence the accumulated weight will be inconsistent with verified layer.
 					t.verifying.resetWeights()
