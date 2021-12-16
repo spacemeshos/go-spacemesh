@@ -29,6 +29,11 @@ func (s *MockMapState) GetAllAccounts() (*types.MultipleAccountsState, error) {
 	panic("implement me")
 }
 
+func (s *MockMapState) AddTxToPool(tx *types.Transaction) error {
+	s.Pool = append(s.Pool, tx)
+	return nil
+}
+
 func (s MockMapState) Rewind(types.LayerID) (types.Hash32, error)          { panic("implement me") }
 func (MockMapState) GetStateRoot() types.Hash32                            { return [32]byte{} }
 func (MockMapState) ValidateNonceAndBalance(*types.Transaction) error      { panic("implement me") }
