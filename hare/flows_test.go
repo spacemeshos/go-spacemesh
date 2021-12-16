@@ -72,9 +72,9 @@ func (his *HareWrapper) waitForTermination() {
 	for _, p := range his.hare {
 		for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(his.totalCP)); i = i.Add(1) {
 			s := NewEmptySet(10)
-			blks, _ := p.GetResult(i)
-			for _, b := range blks {
-				s.Add(b)
+			proposals, _ := p.GetResult(i)
+			for _, p := range proposals {
+				s.Add(p)
 			}
 			his.outputs[i] = append(his.outputs[i], s)
 		}
@@ -200,7 +200,7 @@ func (m *mockIdentityP) GetIdentity(string) (types.NodeID, error) {
 }
 
 type mockBlockProvider struct {
-	lyrBlocks map[types.LayerID][]*types.Block
+	lyrProposals map[types.LayerID][]*types.Proposal
 }
 
 func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
@@ -212,15 +212,15 @@ func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
 func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
 }
 
-func (mbp *mockBlockProvider) LayerBlocks(lyrID types.LayerID) ([]*types.Block, error) {
-	return mbp.lyrBlocks[lyrID], nil
+func (mbp *mockBlockProvider) LayerProposals(lyrID types.LayerID) ([]*types.Proposal, error) {
+	return mbp.lyrProposals[lyrID], nil
 }
 
-func (mbp *mockBlockProvider) GetBlock(bID types.BlockID) (*types.Block, error) {
+func (mbp *mockBlockProvider) GetBallot(types.BallotID) (*types.Ballot, error) {
 	return nil, nil
 }
 
-func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
+func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, rolacle Rolacle, name string, proposals map[types.LayerID][]*types.Proposal) *Hare {
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))
@@ -236,7 +236,7 @@ func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.Pe
 	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
 	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, nil).AnyTimes()
 
-	hare := New(tcfg, pid, p2p, ed, nodeID, mockSyncState(t), &mockBlockProvider{lyrBlocks: lyrBlocks}, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
+	hare := New(tcfg, pid, p2p, ed, nodeID, mockSyncState(t), &mockBlockProvider{lyrProposals: proposals}, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
 		&MockStateQuerier{true, nil}, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
 
 	return hare
@@ -431,11 +431,14 @@ func Test_multipleCPs(t *testing.T) {
 	test.initialSets = make([]*Set, totalNodes)
 	oracle := &trueOracle{}
 
-	lyrBlocks := make(map[types.LayerID][]*types.Block)
+	proposals := make(map[types.LayerID][]*types.Proposal)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 		for i := uint64(0); i < 200; i++ {
-			blk := randomBlock(t, j, types.EmptyBeacon)
-			lyrBlocks[j] = append(lyrBlocks[j], blk)
+			p := types.GenLayerProposal(j, nil)
+			p.EpochData = &types.EpochData{
+				Beacon: types.EmptyBeacon,
+			}
+			proposals[j] = append(proposals[j], p)
 		}
 	}
 	pubsubs := []*pubsub.PubSub{}
@@ -447,7 +450,7 @@ func Test_multipleCPs(t *testing.T) {
 		src := NewSimRoundClock(ps, scMap)
 		pubsubs = append(pubsubs, ps)
 		// p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
-		h := createMaatuf(t, cfg, test.clock, host.ID(), src, oracle, t.Name(), lyrBlocks)
+		h := createMaatuf(t, cfg, test.clock, host.ID(), src, oracle, t.Name(), proposals)
 		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())
@@ -491,11 +494,14 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	test.initialSets = make([]*Set, totalNodes)
 	oracle := &trueOracle{}
 
-	lyrBlocks := make(map[types.LayerID][]*types.Block)
+	proposals := make(map[types.LayerID][]*types.Proposal)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 		for i := uint64(0); i < 200; i++ {
-			blk := randomBlock(t, j, types.EmptyBeacon)
-			lyrBlocks[j] = append(lyrBlocks[j], blk)
+			p := types.GenLayerProposal(j, nil)
+			p.EpochData = &types.EpochData{
+				Beacon: types.EmptyBeacon,
+			}
+			proposals[j] = append(proposals[j], p)
 		}
 	}
 	pubsubs := []*pubsub.PubSub{}
@@ -507,7 +513,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		pubsubs = append(pubsubs, ps)
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		src := NewSimRoundClock(mp2p, scMap)
-		h := createMaatuf(t, cfg, test.clock, host.ID(), src, oracle, t.Name(), lyrBlocks)
+		h := createMaatuf(t, cfg, test.clock, host.ID(), src, oracle, t.Name(), proposals)
 		h.newRoundClock = src.NewRoundClock
 		test.hare = append(test.hare, h)
 		e := h.Start(context.TODO())

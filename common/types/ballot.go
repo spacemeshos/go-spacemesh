@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -48,12 +49,12 @@ type InnerBallot struct {
 	// - calculate the opinion difference on history between the smesher and the base Ballot
 	// - encode the opinion difference in 3 list:
 	//	 - ForDiff
-	//	   contains blocks we support while the base block did not support (i.e. voted against)
-	//	   for blocks we support in layers later than the base block, we also add them to this list
+	//	   contains blocks we support while the base ballot did not support (i.e. voted against)
+	//	   for blocks we support in layers later than the base ballot, we also add them to this list
 	//   - AgainstDiff
-	//     contains blocks we vote against while the base block explicitly supported
+	//     contains blocks we vote against while the base ballot explicitly supported
 	//	 - NeutralDiff
-	//	   contains blocks we vote neutral while the base block explicitly supported or voted against
+	//	   contains blocks we vote neutral while the base ballot explicitly supported or voted against
 	//
 	// example:
 	// layer | unified content block
@@ -128,7 +129,7 @@ func (b *Ballot) Initialize() error {
 
 // Bytes returns the serialization of the InnerBallot.
 func (b *Ballot) Bytes() []byte {
-	data, err := InterfaceToBytes(b.InnerBallot)
+	data, err := codec.Encode(b.InnerBallot)
 	if err != nil {
 		log.Panic("failed to serialize ballot: %v", err)
 	}
@@ -200,33 +201,13 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	return nil
 }
 
-// ToMiniBlock transforms a Ballot to a MiniBlock during the transition period to unified content block.
-// it DOES NOT populate the TxIDs.
-func (b *Ballot) ToMiniBlock() *MiniBlock {
-	mb := &MiniBlock{
-		BlockHeader: BlockHeader{
-			LayerIndex: b.LayerIndex,
-			ATXID:      b.AtxID,
-			EligibilityProof: BlockEligibilityProof{
-				J:   b.EligibilityProof.J,
-				Sig: b.EligibilityProof.Sig,
-			},
-			Data:        nil,
-			BaseBlock:   BlockID(b.BaseBallot),
-			AgainstDiff: b.AgainstDiff,
-			ForDiff:     b.ForDiff,
-			NeutralDiff: b.NeutralDiff,
-		},
+// ToBallotIDs turns a list of Ballot into a list of BallotID.
+func ToBallotIDs(ballots []*Ballot) []BallotID {
+	ids := make([]BallotID, 0, len(ballots))
+	for _, b := range ballots {
+		ids = append(ids, b.ID())
 	}
-	if b.RefBallot != EmptyBallotID {
-		refBid := BlockID(b.RefBallot)
-		mb.RefBlock = &refBid
-	}
-	if b.EpochData != nil {
-		mb.ActiveSet = &b.EpochData.ActiveSet
-		mb.TortoiseBeacon = b.EpochData.Beacon
-	}
-	return mb
+	return ids
 }
 
 // String returns a short prefix of the hex representation of the ID.
@@ -252,4 +233,33 @@ func (id BallotID) Field() log.Field {
 // Compare returns true if other (the given BallotID) is less than this BallotID, by lexicographic comparison.
 func (id BallotID) Compare(other BallotID) bool {
 	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
+}
+
+// BallotIDsToHashes turns a list of BallotID into their Hash32 representation.
+func BallotIDsToHashes(ids []BallotID) []Hash32 {
+	hashes := make([]Hash32, 0, len(ids))
+	for _, id := range ids {
+		hashes = append(hashes, id.AsHash32())
+	}
+	return hashes
+}
+
+// DBBallot is a Ballot structure as it is stored in DB.
+type DBBallot struct {
+	InnerBallot
+	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
+	// to break if in future key for database will be changed
+	ID        BallotID
+	Signature []byte
+	SmesherID []byte // derived from signature when ballot is received
+}
+
+// ToBallot creates a Ballot from data that is stored locally.
+func (b *DBBallot) ToBallot() *Ballot {
+	return &Ballot{
+		ballotID:    b.ID,
+		InnerBallot: b.InnerBallot,
+		Signature:   b.Signature,
+		smesherID:   signing.NewPublicKey(b.SmesherID),
+	}
 }

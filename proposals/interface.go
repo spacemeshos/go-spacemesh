@@ -14,8 +14,9 @@ type atxDB interface {
 
 type mesh interface {
 	HasProposal(types.ProposalID) bool
-	AddProposal(*types.Proposal) error
+	AddProposalWithTxs(context.Context, *types.Proposal) error
 	HasBallot(types.BallotID) bool
+	AddBallot(*types.Ballot) error
 	GetBallot(types.BallotID) (*types.Ballot, error)
 }
 

@@ -12,7 +12,7 @@ type blockDataProvider interface {
 	LayerContextuallyValidBlocks(context.Context, types.LayerID) (map[types.BlockID]struct{}, error)
 	GetBlock(types.BlockID) (*types.Block, error)
 	GetBallot(id types.BallotID) (*types.Ballot, error)
-	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
+	LayerBallots(types.LayerID) ([]*types.Ballot, error)
 	LayerBlocks(types.LayerID) ([]*types.Block, error)
 
 	GetCoinflip(context.Context, types.LayerID) (bool, bool)

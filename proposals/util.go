@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 )
@@ -43,7 +44,7 @@ func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, counter uint3
 		Epoch:   epoch,
 		Counter: counter,
 	}
-	serialized, err := types.InterfaceToBytes(&m)
+	serialized, err := codec.Encode(&m)
 	if err != nil {
 		return nil, fmt.Errorf("serialize vrf message: %w", err)
 	}

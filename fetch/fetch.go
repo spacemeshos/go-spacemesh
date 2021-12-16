@@ -23,10 +23,11 @@ var emptyHash = types.Hash32{}
 
 // DB hints per DB.
 const (
-	BlockDB Hint = "blocksDB"
-	ATXDB   Hint = "ATXDB"
-	TXDB    Hint = "TXDB"
-	POETDB  Hint = "POETDB"
+	BallotDB Hint = "ballotDB"
+	BlockDB  Hint = "blocksDB"
+	ATXDB    Hint = "ATXDB"
+	TXDB     Hint = "TXDB"
+	POETDB   Hint = "POETDB"
 )
 
 // LocalDataSource defines the mapping between hint for local data source and the actual data source.

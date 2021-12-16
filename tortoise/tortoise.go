@@ -72,15 +72,15 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	)
 	genesis := genesisLayer.Index()
 	for _, blk := range genesisLayer.Blocks() {
-		ballot := blk.ToBallot()
-		id := ballot.ID()
-		t.ballotLayer[id] = genesis
 		t.blockLayer[blk.ID()] = genesis
 		t.blocks[genesis] = []types.BlockID{blk.ID()}
-		t.ballots[genesis] = []types.BallotID{id}
 		t.validity[blk.ID()] = support
 		t.hareOutput[blk.ID()] = support
-		t.verifying.goodBallots[id] = struct{}{}
+	}
+	for _, ballot := range genesisLayer.Ballots() {
+		t.ballotLayer[ballot.ID()] = genesis
+		t.ballots[genesis] = []types.BallotID{ballot.ID()}
+		t.verifying.goodBallots[ballot.ID()] = struct{}{}
 	}
 	t.last = genesis
 	t.processed = genesis
@@ -454,13 +454,16 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Be
 	} else if ballot.RefBallot == types.EmptyBallotID {
 		logger.With().Panic("ref ballot missing epoch data", ballot.ID())
 	} else {
-		refBlock, err := t.bdp.GetBlock(types.BlockID(refBallotID))
+		refBallot, err := t.bdp.GetBallot(refBallotID)
 		if err != nil {
 			logger.With().Error("failed to find ref ballot",
 				log.String("ref_ballot_id", refBallotID.String()))
 			return types.EmptyBeacon, fmt.Errorf("get ref ballot: %w", err)
 		}
-		beacon = refBlock.TortoiseBeacon
+		if refBallot.EpochData == nil {
+			return types.EmptyBeacon, fmt.Errorf("ballot %v missing epoch data", refBallotID)
+		}
+		beacon = refBallot.EpochData.Beacon
 	}
 	t.refBallotBeacons[epoch][refBallotID] = beacon
 	return beacon, nil
@@ -486,9 +489,9 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 
 	t.processBlocks(lid, blocks)
 
-	original := make([]*types.Ballot, 0, len(blocks))
-	for _, block := range blocks {
-		original = append(original, block.ToBallot())
+	original, err := t.bdp.LayerBallots(lid)
+	if err != nil {
+		return fmt.Errorf("failed to read ballots for layer %s: %w", lid, err)
 	}
 	ballots, err := t.processBallots(lid, original)
 	if err != nil {

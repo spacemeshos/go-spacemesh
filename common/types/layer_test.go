@@ -16,32 +16,6 @@ func genByte32() [32]byte {
 	return x
 }
 
-var (
-	txid1 = TransactionID(genByte32())
-	txid2 = TransactionID(genByte32())
-)
-
-var (
-	one   = CalcHash32([]byte("1"))
-	two   = CalcHash32([]byte("2"))
-	three = CalcHash32([]byte("3"))
-)
-
-var (
-	atx1 = ATXID(one)
-	atx2 = ATXID(two)
-	atx3 = ATXID(three)
-)
-
-// Make sure we can print out all the relevant log fields for a block.
-func TestFields(t *testing.T) {
-	t.Skip("this is not a proper test")
-	SetLayersPerEpoch(3)
-	b := &Block{}
-	b.TxIDs = []TransactionID{txid1, txid2, txid1}
-	b.ActiveSet = &[]ATXID{atx1, atx2, atx3}
-}
-
 func TestStringToNodeID(t *testing.T) {
 	pubkey := genByte32()
 	nodeID1 := NodeID{
@@ -361,11 +335,6 @@ func TestLayerID_FirstInEpoch(t *testing.T) {
 			require.EqualValues(t, tc.isFirst, NewLayerID(tc.layer).FirstInEpoch())
 		})
 	}
-}
-
-func TestBlockIDSize(t *testing.T) {
-	var id BlockID
-	require.Len(t, id.Bytes(), BlockIDSize)
 }
 
 func TestLayerIDSize(t *testing.T) {
