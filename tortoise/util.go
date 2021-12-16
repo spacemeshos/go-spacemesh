@@ -9,6 +9,11 @@ import (
 )
 
 const (
+	verifyingTortoise = "verifying"
+	fullTortoise      = "full"
+)
+
+const (
 	support sign = 1
 	against sign = -1
 	abstain sign = 0

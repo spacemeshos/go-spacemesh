@@ -56,6 +56,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	votingWeight = votingWeight.sub(v.layerWeights[lid])
 
 	logger = logger.WithFields(
+		log.String("verifier", verifyingTortoise),
 		log.Stringer("candidate_layer", lid),
 		log.Stringer("voting_weight", votingWeight),
 		log.Stringer("local_threshold", v.localThreshold),
@@ -65,7 +66,8 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	// 0 - there is not enough weight to cross threshold.
 	// 1 - layer is verified and contextual validity is according to our local opinion.
 	if votingWeight.cmp(v.globalThreshold) == abstain {
-		logger.With().Info("candidate layer is not verified. voting weight from good ballots is lower than the threshold")
+		logger.With().Info("candidate layer is not verified." +
+			" voting weight from good ballots is lower than the threshold")
 		return false
 	}
 
@@ -74,14 +76,17 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	for _, bid := range v.blocks[lid] {
 		vote, _ := getLocalVote(v.commonState, v.Config, lid, bid)
 		if vote == abstain {
-			logger.With().Info("candidate layer is not verified. block is undecided according to local votes", bid)
+			logger.With().Info("candidate layer is not verified."+
+				" block is undecided according to local votes",
+				bid,
+			)
 			return false
 		}
 		v.validity[bid] = vote
 	}
 
 	v.totalWeight = votingWeight
-	logger.With().Info("candidate layer is verified by verifying tortoise")
+	logger.With().Info("candidate layer is verified")
 	return true
 }
 
@@ -103,12 +108,12 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 	logger = logger.WithFields(ballot.id, log.Stringer("base", ballot.base))
 
 	if _, exists := v.badBeaconBallots[ballot.id]; exists {
-		logger.With().Debug("ballot has a bad beacon")
+		logger.With().Debug("ballot is not good. ballot has a bad beacon")
 		return false
 	}
 
 	if _, exists := v.goodBallots[ballot.base]; !exists {
-		logger.With().Debug("base ballot is not good")
+		logger.With().Debug("ballot is not good. base is not good")
 		return false
 	}
 
@@ -117,7 +122,7 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 		blocklid, exists := v.blockLayer[block]
 		// if the layer of the vote is not in the memory then it is definitely before base block layer
 		if !exists || blocklid.Before(baselid) {
-			logger.With().Debug("vote on a block that is before base ballot",
+			logger.With().Debug("ballot is not good. vote on a block that is before base ballot",
 				log.Stringer("base_layer", baselid),
 				log.Stringer("vote_layer", blocklid),
 				log.Bool("vote_exists", exists),
@@ -126,11 +131,12 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 		}
 
 		if localVote, reason := getLocalVote(v.commonState, v.Config, blocklid, block); localVote != vote {
-			logger.With().Debug("vote on a block doesn't match a local vote",
+			logger.With().Debug("ballot is not good. vote on a block doesn't match a local vote",
 				log.Stringer("local_vote", localVote),
 				log.Stringer("local_vote_reason", reason),
 				log.Stringer("ballot_vote", vote),
 				log.Stringer("block_layer", blocklid),
+				log.Stringer("base_layer", baselid),
 				log.Stringer("block", block),
 			)
 			return false

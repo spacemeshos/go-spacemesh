@@ -229,6 +229,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 	logger.With().Info("choose base ballot",
 		ballotID,
 		ballotLID,
+		log.Stringer("voting_layer", t.last),
 		log.Int("against_count", len(exceptions[0])),
 		log.Int("support_count", len(exceptions[1])),
 		log.Int("neutral_count", len(exceptions[2])),
@@ -521,47 +522,47 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 	previous := t.verified
 	if t.mode.isVerifying() {
 		t.verifying.countVotes(logger, lid, ballots)
-		for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
-			ok := t.verifying.verify(logger, target)
-			if !ok {
-				break
-			}
-			t.verified = target
-			updateThresholds(logger, t.Config, &t.commonState, t.mode)
-		}
 	}
-	if t.canUseFullMode() || t.mode.isFull() {
+	for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
+		var success bool
 		if t.mode.isVerifying() {
-			t.switchModes(logger)
-			// reset accumulated weight as verifying tortoise will run in parallel
-			t.verifying.resetWeights()
+			success = t.verifying.verify(logger, target)
 		}
-		t.full.countVotes(logger)
-		for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
-			ok := t.full.verify(logger, target)
-			if !ok {
-				break
-			}
-			// recompute goodness and accumulated weight of all ballots that can vote for newly verified layer
-			//
-			// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
-			// that accumulated weight has a weight of the layer that is going to be verified.
-			for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
-				t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
-			}
-			restarted := t.verifying.verify(logger, target)
-
-			t.verified = target
-			updateThresholds(logger, t.Config, &t.commonState, t.mode)
-
-			if restarted && t.mode.isFull() {
+		if !success && (t.canUseFullMode() || t.mode.isFull()) {
+			if t.mode.isVerifying() {
 				t.switchModes(logger)
-				// TODO(dshulyak) goto to verifying mode for the rest of the layers
-			} else if !restarted {
-				// need to reset accumulated weight, verifying will not try to verify this layer again
-				// hence the accumulated weight will be inconsistent with verified layer.
+				// reset accumulated weight as verifying tortoise will re-counting votes
+				// with input from full tortoise.
 				t.verifying.resetWeights()
 			}
+			t.full.countVotes(logger)
+			success = t.full.verify(logger, target)
+
+			if success {
+				// recompute goodness and accumulated weight of all ballots that can vote for newly verified layer
+				//
+				// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
+				// that accumulated weight has a weight of the layer that is going to be verified.
+				for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
+					t.verifying.countVotes(
+						logger.WithFields(log.Bool("recounting", true)), lid, t.getTortoiseBallots(lid))
+				}
+				recovered := t.verifying.verify(logger, target)
+
+				if recovered && t.mode.isFull() {
+					t.switchModes(logger)
+				} else if !recovered {
+					// need to reset accumulated weight, verifying will not try to verify this layer again
+					// hence the accumulated weight will be inconsistent with verified layer.
+					t.verifying.resetWeights()
+				}
+			}
+		}
+		if success {
+			t.verified = target
+			updateThresholds(logger, t.Config, &t.commonState, t.mode)
+		} else {
+			break
 		}
 	}
 	if err := persistContextualValidity(logger,

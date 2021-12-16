@@ -46,8 +46,8 @@ func DefaultConfig() Config {
 		RerunInterval:            24 * time.Hour,
 		BadBeaconVoteDelayLayers: 6,
 		MaxExceptions:            30 * 100, // 100 layers of average size
-		VerifyingModeRerunWindow: 10_000,
-		FullModeRerunWindow:      100,
+		VerifyingModeRerunWindow: 1000,
+		FullModeRerunWindow:      20,
 	}
 }
 
