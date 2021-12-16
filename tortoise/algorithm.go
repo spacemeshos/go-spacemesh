@@ -10,7 +10,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/organizer"
 )
@@ -128,7 +127,7 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 		beacons,
 		t.cfg,
 	)
-	t.trtl.init(t.ctx, mesh.GenesisLayer())
+	t.trtl.init(t.ctx, types.GenesisLayer())
 	if needsRecovery {
 		t.trtl.processed = t.cfg.MeshProcessed
 		// TODO(dshulyak) last should be set according to the clock.

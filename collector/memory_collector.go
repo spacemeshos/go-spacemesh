@@ -9,14 +9,14 @@ import (
 
 // MemoryCollector is an in memory database to store collected events.
 type MemoryCollector struct {
-	events                 map[events.ChannelID][]Event
-	doneCreatingBlockEvent map[uint32][]*events.DoneCreatingBlock
-	doneCreatingAtxEvent   map[uint32][]*events.AtxCreated
-	createdAtxs            map[uint32][]string
-	gotBlockEvent          map[uint32][]*events.NewBlock
-	gotAtxEvent            map[uint32][]*events.NewAtx
-	Atxs                   map[string]uint32
-	tortoiseBeacons        map[types.EpochID][]string
+	events                    map[events.ChannelID][]Event
+	doneCreatingProposalEvent map[uint32][]*events.DoneCreatingProposal
+	doneCreatingAtxEvent      map[uint32][]*events.AtxCreated
+	createdAtxs               map[uint32][]string
+	gotBlockEvent             map[uint32][]*events.NewBlock
+	gotAtxEvent               map[uint32][]*events.NewAtx
+	Atxs                      map[string]uint32
+	tortoiseBeacons           map[types.EpochID][]string
 
 	lck sync.RWMutex
 }
@@ -24,14 +24,14 @@ type MemoryCollector struct {
 // NewMemoryCollector initializes a new memory collector that stores collected events.
 func NewMemoryCollector() *MemoryCollector {
 	return &MemoryCollector{
-		events:                 make(map[events.ChannelID][]Event),
-		doneCreatingBlockEvent: make(map[uint32][]*events.DoneCreatingBlock),
-		doneCreatingAtxEvent:   make(map[uint32][]*events.AtxCreated),
-		gotBlockEvent:          make(map[uint32][]*events.NewBlock),
-		gotAtxEvent:            make(map[uint32][]*events.NewAtx),
-		Atxs:                   make(map[string]uint32),
-		createdAtxs:            make(map[uint32][]string),
-		tortoiseBeacons:        make(map[types.EpochID][]string),
+		events:                    make(map[events.ChannelID][]Event),
+		doneCreatingProposalEvent: make(map[uint32][]*events.DoneCreatingProposal),
+		doneCreatingAtxEvent:      make(map[uint32][]*events.AtxCreated),
+		gotBlockEvent:             make(map[uint32][]*events.NewBlock),
+		gotAtxEvent:               make(map[uint32][]*events.NewAtx),
+		Atxs:                      make(map[string]uint32),
+		createdAtxs:               make(map[uint32][]string),
+		tortoiseBeacons:           make(map[types.EpochID][]string),
 	}
 }
 
@@ -100,10 +100,10 @@ func (c *MemoryCollector) StoreReward(event *events.RewardReceived) error {
 }
 
 // StoreBlockCreated stores block created events by layer.
-func (c *MemoryCollector) StoreBlockCreated(event *events.DoneCreatingBlock) error {
+func (c *MemoryCollector) StoreBlockCreated(event *events.DoneCreatingProposal) error {
 	c.lck.Lock()
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
-	c.doneCreatingBlockEvent[event.Layer] = append(c.doneCreatingBlockEvent[event.Layer], event)
+	c.doneCreatingProposalEvent[event.Layer] = append(c.doneCreatingProposalEvent[event.Layer], event)
 	c.lck.Unlock()
 	return nil
 }
@@ -164,7 +164,7 @@ func (c *MemoryCollector) GetReceivedATXsNum(layer types.LayerID) int {
 func (c *MemoryCollector) GetBlockCreationDone(layer types.LayerID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
-	return len(c.doneCreatingBlockEvent[layer.Uint32()])
+	return len(c.doneCreatingProposalEvent[layer.Uint32()])
 }
 
 // GetNumOfCreatedBlocks returns number of blocks created events received by this miner.
@@ -172,7 +172,7 @@ func (c *MemoryCollector) GetNumOfCreatedBlocks(layer types.LayerID) int {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 	created := 0
-	for _, atx := range c.doneCreatingBlockEvent[layer.Uint32()] {
+	for _, atx := range c.doneCreatingProposalEvent[layer.Uint32()] {
 		if atx.Eligible {
 			created++
 		}

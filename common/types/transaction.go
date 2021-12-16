@@ -138,8 +138,8 @@ func (t *Transaction) String() string {
 // MeshTransaction is stored in the mesh and included in the block.
 type MeshTransaction struct {
 	Transaction
-	LayerID LayerID
-	BlockID BlockID
+	LayerID    LayerID
+	ProposalID ProposalID
 }
 
 // InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).

@@ -14,7 +14,7 @@ type MockDb struct {
 	total int
 }
 
-func (m *MockDb) StoreBlockCreated(event *events.DoneCreatingBlock) error {
+func (m *MockDb) StoreBlockCreated(event *events.DoneCreatingProposal) error {
 	m.msgs[9]++
 	m.total++
 	return nil

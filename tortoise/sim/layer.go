@@ -142,24 +142,29 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		if err != nil {
 			g.logger.With().Panic("failed to get a beacon", log.Err(err))
 		}
-		ballot := types.Ballot{
-			InnerBallot: types.InnerBallot{
-				AtxID:            atxid,
-				BaseBallot:       voting.Base,
-				EligibilityProof: proof,
-				AgainstDiff:      voting.Against,
-				ForDiff:          voting.Support,
-				NeutralDiff:      voting.Abstain,
-				LayerIndex:       g.nextLayer,
-				EpochData: &types.EpochData{
-					ActiveSet: activeset,
-					Beacon:    beacon,
+		p := &types.Proposal{
+			InnerProposal: types.InnerProposal{
+				Ballot: types.Ballot{
+					InnerBallot: types.InnerBallot{
+						AtxID:            atxid,
+						BaseBallot:       voting.Base,
+						EligibilityProof: proof,
+						AgainstDiff:      voting.Against,
+						ForDiff:          voting.Support,
+						NeutralDiff:      voting.Abstain,
+						LayerIndex:       g.nextLayer,
+						EpochData: &types.EpochData{
+							ActiveSet: activeset,
+							Beacon:    beacon,
+						},
+					},
 				},
 			},
 		}
-		block := &types.Block{MiniBlock: *ballot.ToMiniBlock()}
-		block.Signature = signer.Sign(block.Bytes())
-		block.Initialize()
+		p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
+		p.Signature = signer.Sign(p.Bytes())
+		p.Initialize()
+		block := (*types.Block)(p)
 		for _, state := range g.states {
 			state.OnBlock(block)
 		}

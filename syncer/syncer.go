@@ -529,7 +529,7 @@ func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
 	}
 
 	if _, err := s.beacons.GetBeacon(epoch); err != nil {
-		s.logger.With().Info("skip validating layer: beacon not available", layerID.GetEpoch())
+		s.logger.With().Info("skip validating layer: beacon not available", layerID, layerID.GetEpoch())
 		return false
 	}
 
@@ -576,7 +576,7 @@ func (s *Syncer) validateLayer(ctx context.Context, layer *types.Layer) {
 
 	s.logger.WithContext(ctx).With().Debug("validating layer",
 		layer.Index(),
-		log.String("blocks", fmt.Sprint(types.BlockIDs(layer.Blocks()))))
+		log.String("blocks", fmt.Sprint(types.ToProposalIDs(layer.Proposals()))))
 
 	// TODO: re-architect this so the syncer does not need to actually wait for tortoise to finish running.
 	//   It should be sufficient to call GetLayer (above), and maybe, to queue a request to tortoise to analyze this

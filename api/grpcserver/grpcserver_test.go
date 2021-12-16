@@ -96,9 +96,9 @@ var (
 	signer2    = signing.NewEdSigner()
 	globalTx   = NewTx(0, addr1, signer1)
 	globalTx2  = NewTx(1, addr2, signer2)
-	block1     = types.NewExistingBlock(types.LayerID{}, []byte("11111"), nil)
-	block2     = types.NewExistingBlock(types.LayerID{}, []byte("22222"), nil)
-	block3     = types.NewExistingBlock(types.LayerID{}, []byte("33333"), nil)
+	block1     = types.GenLayerBlock(types.LayerID{}, nil)
+	block2     = types.GenLayerBlock(types.LayerID{}, nil)
+	block3     = types.GenLayerBlock(types.LayerID{}, nil)
 	txAPI      = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
@@ -119,9 +119,9 @@ func init() {
 
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
-	block1.ATXID = globalAtx.ID()
+	block1.AtxID = globalAtx.ID()
 	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
-	block1.ActiveSet = &[]types.ATXID{globalAtx.ID(), globalAtx2.ID()}
+	block1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
 	txAPI.returnTx[globalTx.ID()] = globalTx
 	txAPI.returnTx[globalTx2.ID()] = globalTx2
 	types.SetLayersPerEpoch(layersPerEpoch)

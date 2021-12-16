@@ -110,19 +110,19 @@ func (mr *MockblockDataProviderMockRecorder) GetLayerInputVectorByID(arg0 interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerInputVectorByID", reflect.TypeOf((*MockblockDataProvider)(nil).GetLayerInputVectorByID), arg0)
 }
 
-// LayerBlockIds mocks base method.
-func (m *MockblockDataProvider) LayerBlockIds(arg0 types.LayerID) ([]types.BlockID, error) {
+// LayerBallots mocks base method.
+func (m *MockblockDataProvider) LayerBallots(arg0 types.LayerID) ([]*types.Ballot, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LayerBlockIds", arg0)
-	ret0, _ := ret[0].([]types.BlockID)
+	ret := m.ctrl.Call(m, "LayerBallots", arg0)
+	ret0, _ := ret[0].([]*types.Ballot)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// LayerBlockIds indicates an expected call of LayerBlockIds.
-func (mr *MockblockDataProviderMockRecorder) LayerBlockIds(arg0 interface{}) *gomock.Call {
+// LayerBallots indicates an expected call of LayerBallots.
+func (mr *MockblockDataProviderMockRecorder) LayerBallots(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerBlockIds", reflect.TypeOf((*MockblockDataProvider)(nil).LayerBlockIds), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerBallots", reflect.TypeOf((*MockblockDataProvider)(nil).LayerBallots), arg0)
 }
 
 // LayerBlocks mocks base method.

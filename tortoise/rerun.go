@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
 type rerunResult struct {
@@ -94,7 +93,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 
 	consensus := t.trtl.cloneTurtleParams()
 	consensus.logger = logger
-	consensus.init(ctx, mesh.GenesisLayer())
+	consensus.init(ctx, types.GenesisLayer())
 	tracer := &validityTracer{blockDataProvider: consensus.bdp}
 	consensus.bdp = tracer
 	consensus.last = last

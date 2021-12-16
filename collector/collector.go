@@ -30,7 +30,7 @@ type DB interface {
 	StoreAtx(event *events.NewAtx) error
 	StoreAtxValid(event *events.ValidAtx) error
 	StoreReward(event *events.RewardReceived) error
-	StoreBlockCreated(event *events.DoneCreatingBlock) error
+	StoreBlockCreated(event *events.DoneCreatingProposal) error
 	StoreAtxCreated(event *events.AtxCreated) error
 	StoreTortoiseBeaconCalculated(event *events.TortoiseBeaconCalculated) error
 }
@@ -191,7 +191,7 @@ loop:
 				log.Error("cannot write message %v", err)
 			}
 		case data := <-created:
-			var e events.DoneCreatingBlock
+			var e events.DoneCreatingProposal
 			err := types.BytesToInterface(data[size:], &e)
 			if err != nil {
 				log.Error("cannot parse received message %v", err)
