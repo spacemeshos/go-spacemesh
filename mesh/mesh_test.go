@@ -73,12 +73,12 @@ func (m *MeshValidatorMock) HandleIncomingLayer(_ context.Context, layerID types
 
 type MockState struct{}
 
-func (MockState) Rewind(types.LayerID) (types.Hash32, error) {
-	panic("implement me")
-}
-
 func (MockState) AddTxToPool(*types.Transaction) error {
 	return nil
+}
+
+func (MockState) Rewind(types.LayerID) (types.Hash32, error) {
+	panic("implement me")
 }
 
 func (MockState) GetStateRoot() types.Hash32 {
