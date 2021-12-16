@@ -67,9 +67,6 @@ func TestMeshDB_AddBallot(t *testing.T) {
 	assert.True(t, mdb.HasBallot(ballot.ID()))
 	got, err := mdb.GetBallot(ballot.ID())
 	require.NoError(t, err)
-	// Smesher ID is lazily generated
-	assert.NotEqual(t, ballot, got)
-	assert.Equal(t, ballot.SmesherID(), got.SmesherID())
 	assert.Equal(t, ballot, got)
 
 	// copy the ballot and change it slightly
@@ -82,9 +79,6 @@ func TestMeshDB_AddBallot(t *testing.T) {
 	assert.True(t, mdb.HasBallot(ballot.ID()))
 	gotNew, err := mdb.GetBallot(ballot.ID())
 	require.NoError(t, err)
-	// Smesher ID is lazily generated
-	assert.NotEqual(t, got, gotNew)
-	assert.Equal(t, got.SmesherID(), gotNew.SmesherID())
 	assert.Equal(t, got, gotNew)
 }
 
@@ -136,10 +130,6 @@ func TestMeshDB_AddBlockNotCached(t *testing.T) {
 	// proposal is unchanged
 	gotP2, err := mdb.getProposal(types.ProposalID(block.ID()))
 	require.NoError(t, err)
-	// Smesher ID is not generated yet for gotP2
-	assert.NotEqual(t, gotP, gotP2)
-	assert.Equal(t, gotP.SmesherID(), gotP2.SmesherID())
-	// now two proposals should be the same
 	assert.Equal(t, gotP, gotP2)
 }
 
@@ -165,9 +155,6 @@ func TestMeshDB_AddProposal(t *testing.T) {
 
 	gotB, err := mdb.GetBallot(proposal.Ballot.ID())
 	require.NoError(t, err)
-	// Smesher ID is not generated yet for gotB
-	assert.NotEqual(t, proposal.Ballot, *gotB)
-	assert.Equal(t, proposal.SmesherID(), gotB.SmesherID())
 	assert.Equal(t, proposal.Ballot, *gotB)
 
 	// copy the proposal and change it slightly
@@ -187,8 +174,6 @@ func TestMeshDB_AddProposal(t *testing.T) {
 	// ballot is unchanged too
 	gotBNew, err := mdb.GetBallot(proposal.Ballot.ID())
 	require.NoError(t, err)
-	assert.NotEqual(t, gotB, gotBNew)
-	assert.Equal(t, gotB.SmesherID(), gotBNew.SmesherID())
 	assert.Equal(t, gotB, gotBNew)
 }
 

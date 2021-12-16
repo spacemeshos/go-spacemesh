@@ -119,11 +119,11 @@ func (b *Ballot) Initialize() error {
 
 	data := b.Bytes()
 	b.ballotID = BallotID(CalcHash32(data).ToHash20())
-	id, err := extractPublicKey(data, b.Signature)
+	pubkey, err := ed25519.ExtractPublicKey(data, b.Signature)
 	if err != nil {
-		return err
+		return fmt.Errorf("ballot extract key: %w", err)
 	}
-	b.smesherID = id
+	b.smesherID = signing.NewPublicKey(pubkey)
 	return nil
 }
 
@@ -141,19 +141,8 @@ func (b *Ballot) ID() BallotID {
 	return b.ballotID
 }
 
-func extractPublicKey(data, sig []byte) (*signing.PublicKey, error) {
-	pubkey, err := ed25519.ExtractPublicKey(data, sig)
-	if err != nil {
-		return nil, fmt.Errorf("ballot extract key: %w", err)
-	}
-	return signing.NewPublicKey(pubkey), nil
-}
-
 // SmesherID returns the smesher's Edwards public key.
 func (b *Ballot) SmesherID() *signing.PublicKey {
-	if b.smesherID == nil {
-		b.smesherID, _ = extractPublicKey(b.Bytes(), b.Signature)
-	}
 	return b.smesherID
 }
 
@@ -262,6 +251,7 @@ type DBBallot struct {
 	// to break if in future key for database will be changed
 	ID        BallotID
 	Signature []byte
+	SmesherID []byte // derived from signature when ballot is received
 }
 
 // ToBallot creates a Ballot from data that is stored locally.
@@ -270,5 +260,6 @@ func (b *DBBallot) ToBallot() *Ballot {
 		ballotID:    b.ID,
 		InnerBallot: b.InnerBallot,
 		Signature:   b.Signature,
+		smesherID:   signing.NewPublicKey(b.SmesherID),
 	}
 }

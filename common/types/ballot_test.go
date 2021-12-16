@@ -58,11 +58,8 @@ func TestDBBallot(t *testing.T) {
 		InnerBallot: b.InnerBallot,
 		ID:          b.ID(),
 		Signature:   b.Signature,
+		SmesherID:   b.SmesherID().Bytes(),
 	}
 	got := dbb.ToBallot()
-	assert.NotEqual(t, b, got)
-	assert.Equal(t, b.ID(), got.ID())
-	assert.Nil(t, got.smesherID)
-	assert.Equal(t, b.SmesherID(), got.SmesherID())
 	assert.Equal(t, b, got)
 }

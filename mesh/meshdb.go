@@ -526,6 +526,7 @@ func (m *DB) writeBallot(b *types.Ballot) error {
 		InnerBallot: b.InnerBallot,
 		ID:          b.ID(),
 		Signature:   b.Signature,
+		SmesherID:   b.SmesherID().Bytes(),
 	}
 	if data, err := codec.Encode(dbb); err != nil {
 		return fmt.Errorf("could not encode ballot: %w", err)
