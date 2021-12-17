@@ -105,7 +105,7 @@ func (w weight) String() string {
 }
 
 func (w weight) isNil() bool {
-	return w.Float == nil
+	return w.Rat == nil
 }
 
 type tortoiseBallot struct {
