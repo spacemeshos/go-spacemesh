@@ -45,71 +45,72 @@ func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
 }
 
 func weightFromInt64(value int64) weight {
-	return weight{Float: new(big.Float).SetInt64(value)}
+	return weight{Rat: new(big.Rat).SetInt64(value)}
 }
 
 func weightFromUint64(value uint64) weight {
-	return weight{Float: new(big.Float).SetUint64(value)}
+	return weight{Rat: new(big.Rat).SetUint64(value)}
+}
+
+func weightFromFloat64(value float64) weight {
+	return weight{Rat: new(big.Rat).SetFloat64(value)}
 }
 
 // weight represents any weight in the tortoise.
-//
-// TODO(dshulyak) needs to be replaced with fixed float
-// both for performance and safety.
 type weight struct {
-	*big.Float
+	*big.Rat
 }
 
 func (w weight) add(other weight) weight {
-	w.Float.Add(w.Float, other.Float)
+	w.Rat.Add(w.Rat, other.Rat)
 	return w
 }
 
 func (w weight) sub(other weight) weight {
-	w.Float.Sub(w.Float, other.Float)
+	w.Rat.Sub(w.Rat, other.Rat)
 	return w
 }
 
 func (w weight) div(other weight) weight {
-	w.Float.Quo(w.Float, other.Float)
+	w.Rat.Quo(w.Rat, other.Rat)
 	return w
 }
 
 func (w weight) neg() weight {
-	w.Float.Neg(w.Float)
+	w.Rat.Neg(w.Rat)
 	return w
 }
 
 func (w weight) copy() weight {
-	other := weight{Float: new(big.Float)}
-	other.Float = other.Float.Copy(w.Float)
+	other := weight{Rat: new(big.Rat)}
+	other.Rat = other.Rat.Set(w.Rat)
 	return other
 }
 
 func (w weight) fraction(frac *big.Rat) weight {
-	threshold := new(big.Float).SetInt(frac.Num())
-	threshold.Mul(threshold, w.Float)
-	threshold.Quo(threshold, new(big.Float).SetInt(frac.Denom()))
-	w.Float = threshold
+	w.Rat = w.Rat.Mul(w.Rat, frac)
 	return w
 }
 
 func (w weight) cmp(other weight) sign {
-	if w.Float.Sign() == 1 && w.Float.Cmp(other.Float) == 1 {
+	if w.Rat.Sign() == 1 && w.Rat.Cmp(other.Rat) == 1 {
 		return support
 	}
-	if w.Float.Sign() == -1 && new(big.Float).Abs(w.Float).Cmp(other.Float) == 1 {
+	if w.Rat.Sign() == -1 && new(big.Rat).Abs(w.Rat).Cmp(other.Rat) == 1 {
 		return against
 	}
 	return abstain
 }
 
 func (w weight) String() string {
-	return w.Float.String()
+	if w.Rat.IsInt() {
+		return w.Rat.Num().String()
+	}
+	return w.Rat.FloatString(2)
 }
 
 func (w weight) isNil() bool {
-	return w.Float == nil
+	return w.Rat == nil
 }
 
 type tortoiseBallot struct {
