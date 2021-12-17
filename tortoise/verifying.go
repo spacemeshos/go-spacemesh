@@ -57,15 +57,11 @@ func (v *verifying) resetWeights() {
 }
 
 func (v *verifying) checkIsGood(ballot types.BallotID) bool {
-	return v.checkGoodness(ballot, good)
+	return v.goodBallots[ballot] == good
 }
 
 func (v *verifying) checkCanBeGood(ballot types.BallotID) bool {
-	return v.checkGoodness(ballot, canBeGood)
-}
-
-func (v *verifying) checkGoodness(ballot types.BallotID, val goodness) bool {
-	return v.goodBallots[ballot] == val
+	return v.goodBallots[ballot] != bad
 }
 
 func (v *verifying) markGoodCut(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) bool {
