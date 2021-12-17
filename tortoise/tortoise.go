@@ -177,9 +177,8 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		err        error
 	)
 
-	// after switching into verifying mode we need to recompute goodness of ballots
-	// it will be handled in https://github.com/spacemeshos/go-spacemesh/issues/2985
-	// for now just disable this optimization.
+	// goodness of the ballot determined using hare output or tortoise output for old layers.
+	// if tortoise is full mode some ballot in old layer is undecided and we can't use it this optimization.
 	if t.mode.isVerifying() {
 		ballotID, ballotLID = t.getGoodBallot(logger)
 		if ballotID != types.EmptyBallotID {
@@ -534,7 +533,7 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 		if !success && (t.canUseFullMode() || t.mode.isFull()) {
 			if t.mode.isVerifying() {
 				t.switchModes(logger)
-				// reset accumulated weight as verifying tortoise will re-counting votes
+				// reset accumulated weight as verifying tortoise will be re-counting votes
 				// with input from full tortoise.
 				t.verifying.resetWeights()
 			}
@@ -551,9 +550,8 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 				}
 				restarted := t.verifying.verify(logger, target)
 
-				// second attempt. find ballots after layer in hdist distance that can be good
-				// and mark them good if base ballot is also can be good.
-				// after hdist - so that atleast one layer is consistent with hare.
+				// second attempt. find ballots from a layer that voted consistently with hare. check that all base ballots
+				// of those ballots voted consistently with local opinion (e.g. they can be good), mark them good and try verifying again.
 				//
 				// TODO(dshulyak) the only reason why it is not unified with first attempt is hdist condition.
 				if !restarted && target.After(t.layerCutoff()) {
