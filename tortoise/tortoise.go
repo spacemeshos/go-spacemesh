@@ -693,7 +693,9 @@ func (t *turtle) canUseFullMode() bool {
 	target := t.verified.Add(1)
 	// TODO(dshulyak) this condition should be enabled when the node is syncing.
 	if t.mode.isRerun() {
-		return t.processed.Difference(target) > t.VerifyingModeVerificationWindow
+		return t.processed.Difference(target) > t.VerifyingModeVerificationWindow ||
+			// if all layer were exhaused and verifying didn't made progress try switching
+			t.last == t.processed
 	}
 	return target.Before(t.layerCutoff())
 }

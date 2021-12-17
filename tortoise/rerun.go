@@ -80,7 +80,6 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 	t.mu.Lock()
 	last := t.trtl.last
 	historicallyVerified := t.trtl.historicallyVerified
-	tortoiseMode := t.trtl.mode
 	t.mu.Unlock()
 
 	logger := t.logger.WithContext(ctx).WithFields(
@@ -96,7 +95,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 	consensus.bdp = tracer
 	consensus.last = last
 	consensus.historicallyVerified = historicallyVerified
-	consensus.mode = tortoiseMode.toggleRerun()
+	consensus.mode = consensus.mode.toggleRerun()
 
 	logger.With().Info("tortoise rerun started",
 		log.Stringer("last_layer", last),
