@@ -47,3 +47,19 @@ func TestBallot_Initialize_BadSignature(t *testing.T) {
 	err := b.Initialize()
 	assert.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
 }
+
+func TestDBBallot(t *testing.T) {
+	layer := NewLayerID(100)
+	b := GenLayerBallot(layer)
+	assert.Equal(t, layer, b.LayerIndex)
+	assert.NotEqual(t, b.ID(), EmptyBallotID)
+	assert.NotNil(t, b.SmesherID())
+	dbb := &DBBallot{
+		InnerBallot: b.InnerBallot,
+		ID:          b.ID(),
+		Signature:   b.Signature,
+		SmesherID:   b.SmesherID().Bytes(),
+	}
+	got := dbb.ToBallot()
+	assert.Equal(t, b, got)
+}

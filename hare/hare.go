@@ -90,7 +90,7 @@ type Hare struct {
 
 	outputChan chan TerminationOutput
 	mu         sync.RWMutex
-	outputs    map[types.LayerID][]types.BlockID
+	outputs    map[types.LayerID][]types.ProposalID
 	certChan   chan types.LayerID
 	certified  map[types.LayerID]struct{}
 
@@ -153,7 +153,7 @@ func New(
 	h.bufferSize = LayerBuffer // XXX: must be at least the size of `hdist`
 	h.outputChan = make(chan TerminationOutput, h.bufferSize)
 	h.certChan = make(chan CertificationOutput, h.bufferSize)
-	h.outputs = make(map[types.LayerID][]types.BlockID, h.bufferSize) // we keep results about LayerBuffer past layers
+	h.outputs = make(map[types.LayerID][]types.ProposalID, h.bufferSize) // we keep results about LayerBuffer past layers
 	h.certified = make(map[types.LayerID]struct{}, h.bufferSize)
 	h.factory = func(conf config.Config, instanceId types.LayerID, s *Set, oracle Rolacle, signing Signer, p2p pubsub.Publisher, clock RoundClock, terminationReport chan TerminationOutput, certificationReport chan CertificationOutput) Consensus {
 		return newConsensusProcess(conf, instanceId, s, oracle, stateQ, layersPerEpoch, signing, nid, p2p, terminationReport, certificationReport, ev, clock, logger)
@@ -199,18 +199,18 @@ var ErrTooLate = errors.New("consensus process finished too late")
 // records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	layerID := output.ID()
-	var blocks []types.BlockID
+	var proposals []types.ProposalID
 	if output.Completed() {
 		h.WithContext(ctx).With().Info("hare terminated with success", layerID)
 		set := output.Set()
-		blocks = make([]types.BlockID, 0, set.len())
+		proposals = make([]types.ProposalID, 0, set.len())
 		for _, v := range set.elements() {
-			blocks = append(blocks, v)
+			proposals = append(proposals, v)
 		}
 	} else {
 		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
 	}
-	h.mesh.HandleValidatedLayer(ctx, layerID, blocks)
+	h.mesh.HandleValidatedLayer(ctx, layerID, types.ProposalIDsToBlockIDs(proposals))
 
 	if h.outOfBufferRange(layerID) {
 		return ErrTooLate
@@ -221,7 +221,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	if uint32(len(h.outputs)) >= h.bufferSize {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
-	h.outputs[layerID] = blocks
+	h.outputs[layerID] = proposals
 	return nil
 }
 
@@ -303,10 +303,10 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	}
 
 	h.layerLock.RLock()
-	blocks := h.getGoodBlocks(h.lastLayer, beacon, logger)
+	proposals := h.getGoodProposal(h.lastLayer, beacon, logger)
 	h.layerLock.RUnlock()
-	logger.With().Info("starting hare consensus with blocks", log.Int("num_blocks", len(blocks)))
-	set := NewSet(blocks)
+	logger.With().Info("starting hare consensus with proposals", log.Int("num_proposals", len(proposals)))
+	set := NewSet(proposals)
 
 	instID := id
 	c, err := h.broker.Register(ctx, instID)
@@ -328,42 +328,48 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 	return true, nil
 }
 
-// getGoodBlocks finds the "good blocks" for the specified layer. a block is considered a good block if
+// getGoodProposal finds the "good proposals" for the specified layer. a proposal is good if
 // it has the same beacon value as the node's beacon value.
 // any error encountered will be ignored and an empty set is returned.
-func (h *Hare) getGoodBlocks(lyrID types.LayerID, epochBeacon types.Beacon, logger log.Log) []types.BlockID {
-	blocks, err := h.mesh.LayerBlocks(lyrID)
+func (h *Hare) getGoodProposal(lyrID types.LayerID, epochBeacon types.Beacon, logger log.Log) []types.ProposalID {
+	proposals, err := h.mesh.LayerProposals(lyrID)
 	if err != nil {
 		if err != database.ErrNotFound {
-			logger.With().Error("no blocks found for hare, using empty set", log.Err(err))
+			logger.With().Error("no proposals found for hare, using empty set", log.Err(err))
 		}
-		return []types.BlockID{}
+		return []types.ProposalID{}
 	}
 
-	var goodBlocks []types.BlockID
-	for _, b := range blocks {
-		beacon := b.TortoiseBeacon
-		if b.RefBlock != nil {
-			refBlock, err := h.mesh.GetBlock(*b.RefBlock)
-			if err != nil {
-				logger.With().Error("failed to find ref block",
-					b.ID(),
-					log.String("ref_block_id", b.RefBlock.AsHash32().ShortString()))
-				return []types.BlockID{}
-			}
-			beacon = refBlock.TortoiseBeacon
+	var (
+		beacon        types.Beacon
+		goodProposals []types.ProposalID
+	)
+	for _, p := range proposals {
+		if p.EpochData != nil {
+			beacon = p.EpochData.Beacon
+		} else if p.RefBallot == types.EmptyBallotID {
+			logger.With().Error("proposal missing ref ballot", p.ID())
+			return []types.ProposalID{}
+		} else if refBallot, err := h.mesh.GetBallot(p.RefBallot); err != nil {
+			logger.With().Error("failed to get ref ballot", p.ID(), p.RefBallot, log.Err(err))
+			return []types.ProposalID{}
+		} else if refBallot.EpochData == nil {
+			logger.With().Error("ref ballot missing epoch data", refBallot.ID())
+			return []types.ProposalID{}
+		} else {
+			beacon = refBallot.EpochData.Beacon
 		}
 
 		if beacon == epochBeacon {
-			goodBlocks = append(goodBlocks, b.ID())
+			goodProposals = append(goodProposals, p.ID())
 		} else {
-			logger.With().Warning("block has different beacon value",
-				b.ID(),
-				log.String("block_beacon", beacon.ShortString()),
+			logger.With().Warning("proposal has different beacon value",
+				p.ID(),
+				log.String("proposal_beacon", beacon.ShortString()),
 				log.String("epoch_beacon", epochBeacon.ShortString()))
 		}
 	}
-	return goodBlocks
+	return goodProposals
 }
 
 var (
@@ -373,18 +379,19 @@ var (
 
 // GetResult returns the hare output for the provided range.
 // Returns error if the requested layer is too old.
-func (h *Hare) GetResult(lid types.LayerID) ([]types.BlockID, error) {
+func (h *Hare) GetResult(lid types.LayerID) ([]types.ProposalID, error) {
 	if h.outOfBufferRange(lid) {
 		return nil, errTooOld
 	}
 
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	blks, ok := h.outputs[lid]
+	proposals, ok := h.outputs[lid]
 	if !ok {
 		return nil, errNoResult
 	}
-	return blks, nil
+
+	return proposals, nil
 }
 
 // listens to outputs arriving from consensus processes.

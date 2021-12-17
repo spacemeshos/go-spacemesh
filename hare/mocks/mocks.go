@@ -153,19 +153,19 @@ func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
 	return m.recorder
 }
 
-// GetBlock mocks base method.
-func (m *MockmeshProvider) GetBlock(arg0 types.BlockID) (*types.Block, error) {
+// GetBallot mocks base method.
+func (m *MockmeshProvider) GetBallot(arg0 types.BallotID) (*types.Ballot, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlock", arg0)
-	ret0, _ := ret[0].(*types.Block)
+	ret := m.ctrl.Call(m, "GetBallot", arg0)
+	ret0, _ := ret[0].(*types.Ballot)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetBlock indicates an expected call of GetBlock.
-func (mr *MockmeshProviderMockRecorder) GetBlock(arg0 interface{}) *gomock.Call {
+// GetBallot indicates an expected call of GetBallot.
+func (mr *MockmeshProviderMockRecorder) GetBallot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlock", reflect.TypeOf((*MockmeshProvider)(nil).GetBlock), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*MockmeshProvider)(nil).GetBallot), arg0)
 }
 
 // HandleValidatedLayer mocks base method.
@@ -180,19 +180,19 @@ func (mr *MockmeshProviderMockRecorder) HandleValidatedLayer(ctx, validatedLayer
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleValidatedLayer", reflect.TypeOf((*MockmeshProvider)(nil).HandleValidatedLayer), ctx, validatedLayer, layer)
 }
 
-// LayerBlocks mocks base method.
-func (m *MockmeshProvider) LayerBlocks(arg0 types.LayerID) ([]*types.Block, error) {
+// LayerProposals mocks base method.
+func (m *MockmeshProvider) LayerProposals(arg0 types.LayerID) ([]*types.Proposal, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LayerBlocks", arg0)
-	ret0, _ := ret[0].([]*types.Block)
+	ret := m.ctrl.Call(m, "LayerProposals", arg0)
+	ret0, _ := ret[0].([]*types.Proposal)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// LayerBlocks indicates an expected call of LayerBlocks.
-func (mr *MockmeshProviderMockRecorder) LayerBlocks(arg0 interface{}) *gomock.Call {
+// LayerProposals indicates an expected call of LayerProposals.
+func (mr *MockmeshProviderMockRecorder) LayerProposals(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerBlocks", reflect.TypeOf((*MockmeshProvider)(nil).LayerBlocks), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerProposals", reflect.TypeOf((*MockmeshProvider)(nil).LayerProposals), arg0)
 }
 
 // RecordCoinflip mocks base method.

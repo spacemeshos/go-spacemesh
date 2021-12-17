@@ -13,7 +13,7 @@ type proposalOracle interface {
 }
 
 type meshProvider interface {
-	AddBlockWithTxs(context.Context, *types.Block) error
+	AddProposalWithTxs(context.Context, *types.Proposal) error
 }
 
 type txPool interface {

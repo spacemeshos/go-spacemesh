@@ -113,39 +113,38 @@ func (f *full) countVotes(logger log.Log) {
 	f.counted = f.processed
 }
 
-func (f *full) verify(logger log.Log) types.LayerID {
-	localThreshold := computeLocalThreshold(f.Config, f.epochWeight, f.processed)
-	for lid := f.verified.Add(1); lid.Before(f.processed); lid = lid.Add(1) {
-		threshold := computeGlobalThreshold(f.Config, f.epochWeight, lid, f.processed)
-		threshold = threshold.add(localThreshold)
+func (f *full) verify(logger log.Log, lid types.LayerID) bool {
+	logger = logger.WithFields(
+		log.Stringer("candidate_layer", lid),
+		log.Stringer("local_threshold", f.localThreshold),
+		log.Stringer("global_threshold", f.globalThreshold),
+	)
 
-		llogger := logger.WithFields(
-			log.Stringer("candidate_layer", lid),
-			log.Stringer("threshold", threshold),
-			log.Stringer("local_threshold", localThreshold),
-		)
+	blocks := f.blocks[lid]
+	// necessary only to log debug only once for each block
+	decisions := make([]sign, 0, len(blocks))
 
-		blocks := f.blocks[lid]
-		decisions := make([]sign, 0, len(blocks))
-
-		for _, block := range blocks {
-			current := f.weights[block]
-			decision := current.cmp(threshold)
-			if decision == abstain {
-				llogger.With().Info("candidate layer is not verified. block is undecided in full tortoise.",
-					log.Stringer("block", block),
-					log.Stringer("voting_weight", current),
-				)
-				return lid.Sub(1)
-			}
-			decisions = append(decisions, decision)
+	for _, block := range blocks {
+		current := f.weights[block]
+		decision := current.cmp(f.globalThreshold)
+		if decision == abstain {
+			logger.With().Info("candidate layer is not verified. block is undecided in full tortoise",
+				log.Stringer("block", block),
+				log.Stringer("voting_weight", current),
+			)
+			return false
 		}
-		for i, block := range blocks {
-			f.localVotes[block] = decisions[i]
-		}
-		llogger.With().Info("candidate layer is verified by full tortoise")
+		decisions = append(decisions, decision)
 	}
-	return f.processed.Sub(1)
+	for i, block := range blocks {
+		logger.With().Debug("full tortoise decided on a block",
+			log.Stringer("block", block),
+			log.Stringer("decision", decisions[i]),
+		)
+		f.validity[block] = decisions[i]
+	}
+	logger.With().Info("candidate layer is verified by full tortoise")
+	return true
 }
 
 // only ballots with the correct beacon value are considered good ballots and their votes counted by

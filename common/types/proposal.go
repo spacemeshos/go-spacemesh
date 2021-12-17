@@ -1,7 +1,9 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 
 	"github.com/spacemeshos/ed25519"
 
@@ -9,17 +11,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-// ProposalID is a 20-byte sha256 sum of the serialized ballot used to identify a Proposal.
-type ProposalID Hash20
-
-// EmptyProposalID is a canonical empty ProposalID.
-var EmptyProposalID = ProposalID{}
-
 const (
 	// ProposalIDSize in bytes.
 	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
 	ProposalIDSize = Hash32Length
 )
+
+// ProposalID is a 20-byte sha256 sum of the serialized ballot used to identify a Proposal.
+type ProposalID Hash20
+
+// EmptyProposalID is a canonical empty ProposalID.
+var EmptyProposalID = ProposalID{}
 
 // Proposal contains the smesher's signed content proposal for a given layer and vote on the mesh history.
 // Proposal is ephemeral and will be discarded after the unified content block is created. the Ballot within
@@ -84,14 +86,7 @@ func (p *Proposal) ID() ProposalID {
 
 // Fields returns an array of LoggableFields for logging.
 func (p *Proposal) Fields() []log.LoggableField {
-	return append(p.Ballot.Fields(), p.ID())
-}
-
-// ToBlock transforms a Proposal to a Block during the transition period to unified content block.
-func (p *Proposal) ToBlock() *Block {
-	mb := p.Ballot.ToMiniBlock()
-	mb.TxIDs = p.TxIDs
-	return &Block{MiniBlock: *mb}
+	return append(p.Ballot.Fields(), p.ID(), log.Int("num_tx", len(p.TxIDs)))
 }
 
 // String returns a short prefix of the hex representation of the ID.
@@ -112,4 +107,69 @@ func (id ProposalID) AsHash32() Hash32 {
 // Field returns a log field. Implements the LoggableField interface.
 func (id ProposalID) Field() log.Field {
 	return log.String("proposal_id", id.String())
+}
+
+// Compare returns true if other (the given ProposalID) is less than this ProposalID, by lexicographic comparison.
+func (id ProposalID) Compare(other ProposalID) bool {
+	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
+}
+
+// ToProposalIDs returns a slice of ProposalID corresponding to the given proposals.
+func ToProposalIDs(proposals []*Proposal) []ProposalID {
+	ids := make([]ProposalID, 0, len(proposals))
+	for _, p := range proposals {
+		ids = append(ids, p.ID())
+	}
+	return ids
+}
+
+// ProposalIDsToBlockIDs turns a list of ProposalID into BlockID.
+func ProposalIDsToBlockIDs(pids []ProposalID) []BlockID {
+	bids := make([]BlockID, 0, len(pids))
+	for _, pid := range pids {
+		bids = append(bids, BlockID(pid))
+	}
+	return bids
+}
+
+// SortProposalIDs sorts a list of ProposalID in lexicographic order, in-place.
+func SortProposalIDs(ids []ProposalID) []ProposalID {
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
+	return ids
+}
+
+// DBProposal is a Proposal structure stored in DB to skip signature verification.
+type DBProposal struct {
+	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
+	// to break if in future key for database will be changed
+	ID         ProposalID
+	BallotID   BallotID
+	LayerIndex LayerID
+	TxIDs      []TransactionID
+	Signature  []byte
+}
+
+// ToBlock creates a Block from data that is stored locally.
+func (b *DBProposal) ToBlock() *Block {
+	return &Block{
+		InnerProposal: InnerProposal{
+			Ballot: Ballot{
+				InnerBallot: InnerBallot{LayerIndex: b.LayerIndex},
+			},
+			TxIDs: b.TxIDs,
+		},
+		proposalID: b.ID,
+	}
+}
+
+// ToProposal creates a Proposal from data that is stored locally.
+func (b *DBProposal) ToProposal(ballot *Ballot) *Proposal {
+	return &Proposal{
+		InnerProposal: InnerProposal{
+			Ballot: *ballot,
+			TxIDs:  b.TxIDs,
+		},
+		Signature:  b.Signature,
+		proposalID: b.ID,
+	}
 }

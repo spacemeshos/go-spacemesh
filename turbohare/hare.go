@@ -15,6 +15,7 @@ import (
 
 type meshProvider interface {
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
+	LayerProposalIDs(types.LayerID) ([]types.ProposalID, error)
 	RecordCoinflip(context.Context, types.LayerID, bool)
 	SetZeroBlockLayer(types.LayerID) error
 	HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID)
@@ -93,13 +94,24 @@ func (h *SuperHare) Close() {
 }
 
 // GetResult is the implementation for receiving consensus process result.
-func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
-	blks, err := h.mesh.LayerBlockIds(id)
+func (h *SuperHare) GetResult(id types.LayerID) ([]types.ProposalID, error) {
+	proposals, err := h.mesh.LayerProposalIDs(id)
 	if err != nil {
-		h.logger.With().Error("superhare failed to read block ids for layer", id, log.Err(err))
-		return nil, fmt.Errorf("read layer block IDs: %w", err)
+		h.logger.With().Error("superhare failed to read proposal ids for layer", id, log.Err(err))
+		return nil, fmt.Errorf("read layer proposal IDs: %w", err)
 	}
 
-	sort.Slice(blks, func(i, j int) bool { return bytes.Compare(blks[i].Bytes(), blks[j].Bytes()) == -1 })
-	return blks, nil
+	sort.Slice(proposals, func(i, j int) bool { return bytes.Compare(proposals[i].Bytes(), proposals[j].Bytes()) == -1 })
+	return proposals, nil
+}
+
+// GetBlockResult returns the resulting blocks per hare consensus.
+func (h *SuperHare) GetBlockResult(id types.LayerID) ([]types.BlockID, error) {
+	pids, err := h.GetResult(id)
+	if err != nil {
+		h.logger.With().Error("superhare failed to get hare result for layer", id, log.Err(err))
+		return nil, fmt.Errorf("get result: %w", err)
+	}
+
+	return types.ProposalIDsToBlockIDs(pids), nil
 }

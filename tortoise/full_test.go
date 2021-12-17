@@ -1,7 +1,6 @@
 package tortoise
 
 import (
-	"context"
 	mrand "math/rand"
 	"testing"
 
@@ -88,7 +87,6 @@ func TestFullCountVotes(t *testing.T) {
 		return rst
 	}
 
-	ctx := context.TODO()
 	genesis := types.GetEffectiveGenesis()
 
 	for _, tc := range []struct {
@@ -317,12 +315,13 @@ func TestFullCountVotes(t *testing.T) {
 				layerBlocks := []*types.Block{}
 				lid := genesis.Add(uint32(i) + 1)
 				for j := range layer {
-					block := &types.Block{}
-					block.EligibilityProof = types.BlockEligibilityProof{J: uint32(j)}
-					block.LayerIndex = lid
-					block.Signature = signer.Sign(block.Bytes())
-					block.Initialize()
-					layerBlocks = append(layerBlocks, block)
+					p := &types.Proposal{}
+					p.EligibilityProof = types.VotingEligibilityProof{J: uint32(j)}
+					p.LayerIndex = lid
+					p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
+					p.Signature = signer.Sign(p.Bytes())
+					require.NoError(t, p.Initialize())
+					layerBlocks = append(layerBlocks, (*types.Block)(p))
 				}
 
 				consensus.processBlocks(lid, layerBlocks)
@@ -349,20 +348,21 @@ func TestFullCountVotes(t *testing.T) {
 						ballot.BaseBallot = ballots[b.Base[0]][b.Base[1]].ID()
 					}
 					ballot.Signature = signer.Sign(ballot.Bytes())
-					ballot.Initialize()
+					require.NoError(t, ballot.Initialize())
 					layerBallots = append(layerBallots, ballot)
 				}
 				ballots = append(ballots, layerBallots)
 
 				consensus.processed = lid
 				consensus.last = lid
-				tballots, err := consensus.processBallots(wrapContext(ctx), lid, layerBallots)
+				tballots, err := consensus.processBallots(lid, layerBallots)
 				consensus.full.processBallots(tballots)
 				require.NoError(t, err)
+				consensus.full.processBallots(tballots)
 
 				consensus.full.countVotes(logger)
 			}
-			bid := types.BlockID(blocks[tc.target[0]][tc.target[1]].ID())
+			bid := blocks[tc.target[0]][tc.target[1]].ID()
 			require.Equal(t, tc.expect.String(), consensus.full.weights[bid].String())
 		})
 	}

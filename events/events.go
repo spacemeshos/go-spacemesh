@@ -106,15 +106,15 @@ func (NewBlock) GetChannel() ChannelID {
 	return EventNewBlock
 }
 
-// DoneCreatingBlock signals that this miner has created a block.
-type DoneCreatingBlock struct {
+// DoneCreatingProposal signals that this miner has created a block.
+type DoneCreatingProposal struct {
 	Eligible bool
 	Layer    uint32
 	Error    string
 }
 
 // GetChannel gets the message type which means on which this message should be sent.
-func (DoneCreatingBlock) GetChannel() ChannelID {
+func (DoneCreatingProposal) GetChannel() ChannelID {
 	return EventCreatedBlock
 }
 

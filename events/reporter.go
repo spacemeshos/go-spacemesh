@@ -121,20 +121,12 @@ func ReportRewardReceived(r Reward) {
 	}
 }
 
-// ReportNewBlock reports a new block.
-func ReportNewBlock(blk *types.Block) {
+// ReportNewProposal reports a new block.
+func ReportNewProposal(p *types.Proposal) {
 	Publish(NewBlock{
-		ID:    blk.ID().String(),
-		Atx:   blk.ATXID.ShortString(),
-		Layer: blk.LayerIndex.Uint32(),
-	})
-}
-
-// ReportValidBlock reports a block's validity.
-func ReportValidBlock(blockID types.BlockID, valid bool) {
-	Publish(ValidBlock{
-		ID:    blockID.String(),
-		Valid: valid,
+		ID:    p.ID().String(),
+		Atx:   p.AtxID.ShortString(),
+		Layer: p.LayerIndex.Uint32(),
 	})
 }
 
@@ -148,9 +140,9 @@ func ReportValidActivation(activation *types.ActivationTx, valid bool) {
 	Publish(ValidAtx{ID: activation.ShortString(), Valid: valid})
 }
 
-// ReportDoneCreatingBlock reports a created block.
-func ReportDoneCreatingBlock(eligible bool, layer uint32, error string) {
-	Publish(DoneCreatingBlock{
+// ReportDoneCreatingProposal reports a created block.
+func ReportDoneCreatingProposal(eligible bool, layer uint32, error string) {
+	Publish(DoneCreatingProposal{
 		Eligible: eligible,
 		Layer:    layer,
 		Error:    error,

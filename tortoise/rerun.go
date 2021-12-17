@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 )
 
 type rerunResult struct {
@@ -58,6 +57,7 @@ func (t *Tortoise) updateFromRerun(ctx context.Context) (bool, types.LayerID) {
 	}
 	updated.bdp = current.bdp
 	updated.logger = current.logger
+	updated.mode = updated.mode.toggleRerun()
 	t.trtl = updated
 	return reverted, observed
 }
@@ -80,6 +80,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 	t.mu.Lock()
 	last := t.trtl.last
 	historicallyVerified := t.trtl.historicallyVerified
+	tortoiseMode := t.trtl.mode
 	t.mu.Unlock()
 
 	logger := t.logger.WithContext(ctx).WithFields(
@@ -87,18 +88,21 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 	)
 
 	start := time.Now()
-	logger.With().Info("tortoise rerun started",
-		log.FieldNamed("last_layer", last),
-		log.FieldNamed("historically_verified", historicallyVerified),
-	)
 
 	consensus := t.trtl.cloneTurtleParams()
 	consensus.logger = logger
-	consensus.init(ctx, mesh.GenesisLayer())
+	consensus.init(ctx, types.GenesisLayer())
 	tracer := &validityTracer{blockDataProvider: consensus.bdp}
 	consensus.bdp = tracer
 	consensus.last = last
 	consensus.historicallyVerified = historicallyVerified
+	consensus.mode = tortoiseMode.toggleRerun()
+
+	logger.With().Info("tortoise rerun started",
+		log.Stringer("last_layer", last),
+		log.Stringer("historically_verified", historicallyVerified),
+		log.Stringer("mode", consensus.mode),
+	)
 
 	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(last); lid = lid.Add(1) {
 		if err := consensus.HandleIncomingLayer(ctx, lid); err != nil {

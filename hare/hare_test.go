@@ -104,10 +104,17 @@ func newMockConsensusProcess(_ config.Config, instanceID types.LayerID, s *Set, 
 	return mcp
 }
 
-func randomBlock(t *testing.T, lyrID types.LayerID, beacon types.Beacon) *types.Block {
-	block := types.NewExistingBlock(lyrID, types.RandomBytes(4), nil)
-	block.TortoiseBeacon = beacon
-	return block
+func randomProposal(lyrID types.LayerID, beacon types.Beacon) *types.Proposal {
+	p := types.GenLayerProposal(lyrID, nil)
+	p.Ballot.RefBallot = types.EmptyBallotID
+	p.Ballot.EpochData = &types.EpochData{
+		Beacon: beacon,
+	}
+	signer := signing.NewEdSigner()
+	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
+	p.Signature = signer.Sign(p.Bytes())
+	p.Initialize()
+	return p
 }
 
 func createHare(t *testing.T, id p2p.Peer, ps pubsub.PublishSubsciber, msh meshProvider, beacons system.BeaconGetter, clock *mockClock, logger log.Log) *Hare {
@@ -259,14 +266,14 @@ func TestHare_onTick(t *testing.T) {
 
 	lyrID := types.GetEffectiveGenesis().Add(1)
 	beacon := types.RandomBeacon()
-	blockSet := []*types.Block{
-		randomBlock(t, lyrID, beacon),
-		randomBlock(t, lyrID, beacon),
-		randomBlock(t, lyrID, beacon),
+	proposals := []*types.Proposal{
+		randomProposal(lyrID, beacon),
+		randomProposal(lyrID, beacon),
+		randomProposal(lyrID, beacon),
 	}
 	mockBeacons.EXPECT().GetBeacon(lyrID.GetEpoch()).Return(beacon, nil).Times(1)
 	mockMesh.EXPECT().RecordCoinflip(gomock.Any(), lyrID, false).Times(1)
-	mockMesh.EXPECT().LayerBlocks(lyrID).Return(blockSet, nil).Times(1)
+	mockMesh.EXPECT().LayerProposals(lyrID).Return(proposals, nil).Times(1)
 	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), lyrID, gomock.Any()).Times(1)
 
 	var wg sync.WaitGroup
@@ -282,7 +289,7 @@ func TestHare_onTick(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	res1, err := h.GetResult(types.GetEffectiveGenesis().Add(1))
 	assert.NoError(t, err)
-	assert.Equal(t, types.SortBlockIDs(types.BlockIDs(blockSet)), types.SortBlockIDs(res1))
+	assert.Equal(t, types.SortProposalIDs(types.ToProposalIDs(proposals)), types.SortProposalIDs(res1))
 
 	lyrID = lyrID.Add(1)
 	// consensus process is closed, should not process any tick
@@ -341,19 +348,21 @@ func TestHare_onTick_BeaconFromRefBlocks(t *testing.T) {
 		h.Close()
 	})
 
-	epochBeacon := types.RandomBeacon()
-	blockSet := []*types.Block{
-		randomBlock(t, lyrID, epochBeacon),
-		randomBlock(t, lyrID, types.EmptyBeacon),
-		randomBlock(t, lyrID, epochBeacon),
+	beacon := types.RandomBeacon()
+	proposals := []*types.Proposal{
+		randomProposal(lyrID, beacon),
+		randomProposal(lyrID, beacon),
+		randomProposal(lyrID, beacon),
 	}
-	refBlock := randomBlock(t, lyrID.Sub(1), epochBeacon)
-	bID := refBlock.ID()
-	blockSet[1].RefBlock = &bID
-	mockBeacons.EXPECT().GetBeacon(lyrID.GetEpoch()).Return(epochBeacon, nil).Times(1)
+	refBallot := &randomProposal(lyrID.Sub(1), beacon).Ballot
+	proposals[1].EpochData = nil
+	proposals[1].RefBallot = refBallot.ID()
+	// bID := refBlock.ID()
+	// blockSet[1].RefBlock = &bID
+	mockBeacons.EXPECT().GetBeacon(lyrID.GetEpoch()).Return(beacon, nil).Times(1)
 	mockMesh.EXPECT().RecordCoinflip(gomock.Any(), lyrID, false).Times(1)
-	mockMesh.EXPECT().LayerBlocks(lyrID).Return(blockSet, nil).Times(1)
-	mockMesh.EXPECT().GetBlock(bID).Return(refBlock, nil).Times(1)
+	mockMesh.EXPECT().LayerProposals(lyrID).Return(proposals, nil).Times(1)
+	mockMesh.EXPECT().GetBallot(refBallot.ID()).Return(refBallot, nil).Times(1)
 	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), lyrID, gomock.Any()).Times(1)
 
 	var wg sync.WaitGroup
@@ -369,7 +378,7 @@ func TestHare_onTick_BeaconFromRefBlocks(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	res, err := h.GetResult(lyrID)
 	assert.NoError(t, err)
-	assert.Equal(t, types.SortBlockIDs(types.BlockIDs(blockSet)), types.SortBlockIDs(res))
+	assert.Equal(t, types.SortProposalIDs(types.ToProposalIDs(proposals)), types.SortProposalIDs(res))
 }
 
 func TestHare_onTick_SomeBadBlocks(t *testing.T) {
@@ -412,14 +421,14 @@ func TestHare_onTick_SomeBadBlocks(t *testing.T) {
 	lyrID := types.GetEffectiveGenesis().Add(1)
 	beacon := types.RandomBeacon()
 	epochBeacon := types.RandomBeacon()
-	blockSet := []*types.Block{
-		randomBlock(t, lyrID, epochBeacon),
-		randomBlock(t, lyrID, beacon),
-		randomBlock(t, lyrID, epochBeacon),
+	proposals := []*types.Proposal{
+		randomProposal(lyrID, epochBeacon),
+		randomProposal(lyrID, beacon),
+		randomProposal(lyrID, epochBeacon),
 	}
 	mockBeacons.EXPECT().GetBeacon(lyrID.GetEpoch()).Return(epochBeacon, nil).Times(1)
 	mockMesh.EXPECT().RecordCoinflip(gomock.Any(), lyrID, false).Times(1)
-	mockMesh.EXPECT().LayerBlocks(lyrID).Return(blockSet, nil).Times(1)
+	mockMesh.EXPECT().LayerProposals(lyrID).Return(proposals, nil).Times(1)
 	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), lyrID, gomock.Any()).Times(1)
 
 	var wg sync.WaitGroup
@@ -435,8 +444,8 @@ func TestHare_onTick_SomeBadBlocks(t *testing.T) {
 	time.Sleep(100 * time.Millisecond)
 	res, err := h.GetResult(lyrID)
 	assert.NoError(t, err)
-	goodBlocks := []*types.Block{blockSet[0], blockSet[2]}
-	assert.Equal(t, types.SortBlockIDs(types.BlockIDs(goodBlocks)), types.SortBlockIDs(res))
+	goodProposals := []*types.Proposal{proposals[0], proposals[2]}
+	assert.Equal(t, types.SortProposalIDs(types.ToProposalIDs(goodProposals)), types.SortProposalIDs(res))
 }
 
 func TestHare_onTick_NoGoodBlocks(t *testing.T) {
@@ -480,14 +489,14 @@ func TestHare_onTick_NoGoodBlocks(t *testing.T) {
 	lyrID := types.GetEffectiveGenesis().Add(1)
 	beacon := types.RandomBeacon()
 	epochBeacon := types.RandomBeacon()
-	blockSet := []*types.Block{
-		randomBlock(t, lyrID, beacon),
-		randomBlock(t, lyrID, beacon),
-		randomBlock(t, lyrID, beacon),
+	proposals := []*types.Proposal{
+		randomProposal(lyrID, beacon),
+		randomProposal(lyrID, beacon),
+		randomProposal(lyrID, beacon),
 	}
 	mockBeacons.EXPECT().GetBeacon(lyrID.GetEpoch()).Return(epochBeacon, nil).Times(1)
 	mockMesh.EXPECT().RecordCoinflip(gomock.Any(), lyrID, false).Times(1)
-	mockMesh.EXPECT().LayerBlocks(lyrID).Return(blockSet, nil).Times(1)
+	mockMesh.EXPECT().LayerProposals(lyrID).Return(proposals, nil).Times(1)
 	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), lyrID, gomock.Any()).Times(1)
 
 	var wg sync.WaitGroup
@@ -700,7 +709,6 @@ func TestHare_WeakCoin(t *testing.T) {
 		}
 	}
 
-	var empty []types.BlockID
 	// complete + coin flip true
 	mockMesh.EXPECT().RecordCoinflip(gomock.Any(), layerID, true).Times(1)
 	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), layerID, gomock.Any()).Do(
@@ -712,7 +720,7 @@ func TestHare_WeakCoin(t *testing.T) {
 
 	// incomplete + coin flip true
 	mockMesh.EXPECT().RecordCoinflip(gomock.Any(), layerID, true).Times(1)
-	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), layerID, empty).Do(
+	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), layerID, []types.BlockID{}).Do(
 		func(context.Context, types.LayerID, []types.BlockID) {
 			done <- struct{}{}
 		}).Times(1)
@@ -730,7 +738,7 @@ func TestHare_WeakCoin(t *testing.T) {
 
 	// incomplete + coin flip false
 	mockMesh.EXPECT().RecordCoinflip(gomock.Any(), layerID, false).Times(1)
-	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), layerID, empty).Do(
+	mockMesh.EXPECT().HandleValidatedLayer(gomock.Any(), layerID, []types.BlockID{}).Do(
 		func(context.Context, types.LayerID, []types.BlockID) {
 			done <- struct{}{}
 		}).Times(1)
