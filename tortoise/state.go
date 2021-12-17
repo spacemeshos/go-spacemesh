@@ -14,7 +14,9 @@ func newCommonState() commonState {
 		badBeaconBallots: map[types.BallotID]struct{}{},
 		epochWeight:      map[types.EpochID]weight{},
 		ballotWeight:     map[types.BallotID]weight{},
-		localVotes:       votes{},
+		undecided:        map[types.LayerID]struct{}{},
+		hareOutput:       votes{},
+		validity:         votes{},
 	}
 }
 
@@ -32,6 +34,15 @@ type commonState struct {
 	// last evicted layer
 	evicted types.LayerID
 
+	// localThreshold is changed when the last layer is updated.
+	// computed as config.LocalThreshold * epochWeights[last].
+	//
+	// used as a part of threshold and for voting when block is undecided and outside of hdist.
+	localThreshold weight
+	// globalThreshold is changed when the last or verified layer is updated.
+	// computed as - sum of all layers between verified + 1 up to last * config.GlobalThreshold + local threshold.
+	globalThreshold weight
+
 	blocks      map[types.LayerID][]types.BlockID
 	ballots     map[types.LayerID][]types.BallotID
 	ballotLayer map[types.BallotID]types.LayerID
@@ -48,5 +59,7 @@ type commonState struct {
 
 	ballotWeight map[types.BallotID]weight
 
-	localVotes votes
+	undecided  map[types.LayerID]struct{}
+	hareOutput votes
+	validity   votes
 }

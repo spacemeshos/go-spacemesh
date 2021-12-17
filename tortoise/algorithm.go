@@ -19,12 +19,13 @@ type Config struct {
 	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare/input vector lookback distance
 	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
 	// how long we are waiting for a switch from verifying to full. relevant during rerun.
-	ConfidenceParam uint32        `mapstructure:"tortoise-confidence-param"`
-	WindowSize      uint32        `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
-	GlobalThreshold *big.Rat      `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
-	LocalThreshold  *big.Rat      `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
-	RerunInterval   time.Duration `mapstructure:"tortoise-rerun-interval"`
-	MaxExceptions   int           `mapstructure:"tortoise-max-exceptions"` // if candidate for base block has more than max exceptions it will be ignored
+	WindowSize                      uint32        `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
+	GlobalThreshold                 *big.Rat      `mapstructure:"tortoise-global-threshold"` // threshold for finalizing blocks and layers
+	LocalThreshold                  *big.Rat      `mapstructure:"tortoise-local-threshold"`  // threshold for choosing when to use weak coin
+	RerunInterval                   time.Duration `mapstructure:"tortoise-rerun-interval"`
+	MaxExceptions                   int           `mapstructure:"tortoise-max-exceptions"` // if candidate for base block has more than max exceptions it will be ignored
+	VerifyingModeVerificationWindow uint32        `mapstructure:"verifying-mode-verification-window"`
+	FullModeVerificationWindow      uint32        `mapstructure:"full-mode-verification-window"`
 
 	LayerSize                uint32
 	BadBeaconVoteDelayLayers uint32 // number of layers to delay votes for blocks with bad beacon values during self-healing
@@ -35,16 +36,17 @@ type Config struct {
 // DefaultConfig for Tortoise.
 func DefaultConfig() Config {
 	return Config{
-		LayerSize:                30,
-		Hdist:                    10,
-		Zdist:                    8,
-		ConfidenceParam:          5,
-		WindowSize:               100,
-		GlobalThreshold:          big.NewRat(60, 100),
-		LocalThreshold:           big.NewRat(20, 100),
-		RerunInterval:            24 * time.Hour,
-		BadBeaconVoteDelayLayers: 6,
-		MaxExceptions:            30 * 100, // 100 layers of average size
+		LayerSize:                       30,
+		Hdist:                           10,
+		Zdist:                           8,
+		WindowSize:                      100,
+		GlobalThreshold:                 big.NewRat(60, 100),
+		LocalThreshold:                  big.NewRat(20, 100),
+		RerunInterval:                   24 * time.Hour,
+		BadBeaconVoteDelayLayers:        6,
+		MaxExceptions:                   30 * 100, // 100 layers of average size
+		VerifyingModeVerificationWindow: 1000,
+		FullModeVerificationWindow:      20,
 	}
 }
 

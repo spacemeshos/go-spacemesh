@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 )
 
@@ -33,7 +34,7 @@ func computeBallotWeight(
 
 		expected, err := proposals.GetNumEligibleSlots(targetWeight, total, layerSize, layersPerEpoch)
 		if err != nil {
-			return weightFromUint64(0), fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
+			return weight{}, fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
 		}
 		rst := weightFromUint64(targetWeight)
 		rst = rst.div(weightFromUint64(uint64(expected)))
@@ -41,7 +42,7 @@ func computeBallotWeight(
 		return rst, nil
 	}
 	if ballot.RefBallot == types.EmptyBallotID {
-		return weightFromUint64(0), fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
+		return weight{}, fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
 	}
 	rst, exist := weights[ballot.RefBallot]
 	if !exist {
@@ -65,7 +66,7 @@ func computeEpochWeight(atxdb atxDataProvider, epochWeights map[types.EpochID]we
 	}
 	epochWeight, _, err := atxdb.GetEpochWeight(eid)
 	if err != nil {
-		return layerWeight, fmt.Errorf("epoch weight %s: %w", eid, err)
+		return weight{}, fmt.Errorf("epoch weight %s: %w", eid, err)
 	}
 	layerWeight = weightFromUint64(epochWeight)
 	layerWeight = layerWeight.div(weightFromUint64(uint64(types.GetLayersPerEpoch())))
@@ -84,16 +85,52 @@ func computeExpectedWeight(weights map[types.EpochID]weight, from, to types.Laye
 
 func computeLocalThreshold(config Config, epochWeight map[types.EpochID]weight, lid types.LayerID) weight {
 	threshold := weightFromUint64(0)
-	// TODO(dshulyak) expected weight for local threshold should be based on last layer.
 	threshold = threshold.add(epochWeight[lid.GetEpoch()])
 	threshold = threshold.fraction(config.LocalThreshold)
 	return threshold
 }
 
-func computeGlobalThreshold(config Config, epochWeight map[types.EpochID]weight, target, last types.LayerID) weight {
+func computeThresholdForLayers(config Config, epochWeight map[types.EpochID]weight, target, last types.LayerID) weight {
 	expected := computeExpectedWeight(epochWeight, target, last)
 	threshold := weightFromUint64(0)
 	threshold = threshold.add(expected)
 	threshold = threshold.fraction(config.GlobalThreshold)
 	return threshold
+}
+
+func getConfidenceWindow(config Config, state *commonState, tmode mode) types.LayerID {
+	target := state.verified.Add(1)
+	window := state.last
+	if tmode.isFull() && state.last.Difference(target) > config.FullModeVerificationWindow {
+		window = target.Add(config.FullModeVerificationWindow)
+	} else if tmode.isVerifying() && state.last.Difference(target) > config.VerifyingModeVerificationWindow {
+		window = target.Add(config.VerifyingModeVerificationWindow)
+	}
+	return window
+}
+
+// updateThresholds recomputes local and global thresholds:
+// - when last layer is updated
+// - when verified layer is updated
+// - when switching from one mode into the other.
+func updateThresholds(logger log.Log, config Config, state *commonState, tmode mode) {
+	state.localThreshold = computeLocalThreshold(config, state.epochWeight, state.last)
+
+	window := getConfidenceWindow(config, state, tmode)
+	if window.Before(state.processed) {
+		window = state.processed
+	}
+	target := state.verified.Add(1)
+	state.globalThreshold = computeThresholdForLayers(config, state.epochWeight, target, window)
+	state.globalThreshold = state.globalThreshold.add(state.localThreshold)
+
+	logger.With().Info("updated thresholds",
+		log.Stringer("window", window),
+		log.Stringer("last_layer", state.last),
+		log.Stringer("processed_layer", state.processed),
+		log.Stringer("target_layer", target),
+		log.Stringer("local_threshold", state.localThreshold),
+		log.Stringer("global_threshold", state.globalThreshold),
+		log.Stringer("mode", tmode),
+	)
 }

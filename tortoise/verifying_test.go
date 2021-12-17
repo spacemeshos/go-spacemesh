@@ -80,7 +80,7 @@ func TestVerifyingIsGood(t *testing.T) {
 				blockLayer: map[types.BlockID]types.LayerID{
 					blocks[0]: types.NewLayerID(10),
 				},
-				localVotes: votes{
+				hareOutput: votes{
 					blocks[0]: against,
 				},
 			},
@@ -101,7 +101,7 @@ func TestVerifyingIsGood(t *testing.T) {
 				blockLayer: map[types.BlockID]types.LayerID{
 					blocks[0]: types.NewLayerID(10),
 				},
-				localVotes: votes{
+				hareOutput: votes{
 					blocks[0]: support,
 					blocks[1]: against,
 					blocks[2]: against,
@@ -134,11 +134,11 @@ func TestVerifyingProcessLayer(t *testing.T) {
 		ballots           = []types.BallotID{{1}, {2}, {3}, {4}}
 		ballotWeight      = weightFromUint64(10)
 		blocks            = []types.BlockID{{11}, {22}, {33}}
-		start             = types.NewLayerID(1)
+		start             = types.GetEffectiveGenesis()
 	)
 	genCommonState := func() commonState {
 		state := newCommonState()
-		state.localVotes = votes{
+		state.hareOutput = votes{
 			blocks[0]: support,
 			blocks[1]: support,
 			blocks[2]: against,
@@ -244,7 +244,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			logger := logtest.New(t)
 
 			state := genCommonState()
-			v := newVerifying(Config{}, &state)
+			v := newVerifying(Config{Hdist: 10}, &state)
 			v.goodBallots[goodbase] = struct{}{}
 
 			for i := range tc.ballots {
@@ -291,8 +291,9 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			blocks:       map[types.LayerID][]types.BlockID{},
 			localOpinion: votes{},
 			config: Config{
-				LocalThreshold:  big.NewRat(1, 10),
-				GlobalThreshold: big.NewRat(7, 10),
+				LocalThreshold:                  big.NewRat(1, 10),
+				GlobalThreshold:                 big.NewRat(7, 10),
+				VerifyingModeVerificationWindow: 10,
 			},
 			expected:            start.Add(3),
 			expectedTotalWeight: weightFromUint64(10),
@@ -313,8 +314,9 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			verified:    start,
 			processed:   start.Add(4),
 			config: Config{
-				LocalThreshold:  big.NewRat(1, 10),
-				GlobalThreshold: big.NewRat(7, 10),
+				LocalThreshold:                  big.NewRat(1, 10),
+				GlobalThreshold:                 big.NewRat(7, 10),
+				VerifyingModeVerificationWindow: 10,
 			},
 			expected:            start.Add(1),
 			expectedTotalWeight: weightFromUint64(24),
@@ -339,8 +341,9 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			},
 			localOpinion: votes{{1}: abstain},
 			config: Config{
-				LocalThreshold:  big.NewRat(1, 10),
-				GlobalThreshold: big.NewRat(7, 10),
+				LocalThreshold:                  big.NewRat(1, 10),
+				GlobalThreshold:                 big.NewRat(7, 10),
+				VerifyingModeVerificationWindow: 10,
 			},
 			expected:            start.Add(2),
 			expectedTotalWeight: weightFromUint64(20),
@@ -354,14 +357,24 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			state.epochWeight = tc.epochWeight
 			state.verified = tc.verified
 			state.processed = tc.processed
+			state.last = tc.processed
 			state.blocks = tc.blocks
-			state.localVotes = tc.localOpinion
+			state.hareOutput = tc.localOpinion
+
+			updateThresholds(logger, tc.config, &state, mode{})
 
 			v := newVerifying(tc.config, &state)
 			v.layerWeights = tc.layersWeight
 			v.totalWeight = tc.totalWeight
-
-			require.Equal(t, tc.expected, v.verify(logger))
+			iterateLayers(tc.verified.Add(1), tc.processed.Sub(1), func(lid types.LayerID) bool {
+				if !v.verify(logger, lid) {
+					return false
+				}
+				state.verified = lid
+				updateThresholds(logger, tc.config, &state, mode{})
+				return true
+			})
+			require.Equal(t, tc.expected, state.verified)
 			require.Equal(t, tc.expectedTotalWeight.String(), v.totalWeight.String())
 		})
 	}
