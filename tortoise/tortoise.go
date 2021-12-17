@@ -499,7 +499,7 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 		log.Stringer("last_layer", t.last),
 	)
 
-	blocks, err := t.bdp.LayerBlocks(lid)
+	blocks, err := t.bdp.LayerBlockIds(lid)
 	if err != nil {
 		return fmt.Errorf("failed to read blocks for layer %s: %w", lid, err)
 	}
@@ -624,13 +624,11 @@ func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
 	return nil
 }
 
-func (t *turtle) processBlocks(lid types.LayerID, blocks []*types.Block) {
-	blockIDs := make([]types.BlockID, 0, len(blocks))
+func (t *turtle) processBlocks(lid types.LayerID, blocks []types.BlockID) {
 	for _, block := range blocks {
-		blockIDs = append(blockIDs, block.ID())
-		t.blockLayer[block.ID()] = lid
+		t.blockLayer[block] = lid
 	}
-	t.blocks[lid] = blockIDs
+	t.blocks[lid] = blocks
 }
 
 func (t *turtle) processBallots(lid types.LayerID, original []*types.Ballot) ([]tortoiseBallot, error) {

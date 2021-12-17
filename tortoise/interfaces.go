@@ -13,7 +13,7 @@ type blockDataProvider interface {
 	GetBlock(types.BlockID) (*types.Block, error)
 	GetBallot(id types.BallotID) (*types.Ballot, error)
 	LayerBallots(types.LayerID) ([]*types.Ballot, error)
-	LayerBlocks(types.LayerID) ([]*types.Block, error)
+	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
 
 	GetCoinflip(context.Context, types.LayerID) (bool, bool)
 	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)

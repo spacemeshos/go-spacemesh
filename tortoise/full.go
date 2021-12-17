@@ -44,9 +44,9 @@ func (f *full) processBallots(ballots []tortoiseBallot) {
 	}
 }
 
-func (f *full) processBlocks(blocks []*types.Block) {
+func (f *full) processBlocks(blocks []types.BlockID) {
 	for _, block := range blocks {
-		f.weights[block.ID()] = weightFromUint64(0)
+		f.weights[block] = weightFromUint64(0)
 	}
 }
 
