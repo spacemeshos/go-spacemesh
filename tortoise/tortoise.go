@@ -552,7 +552,7 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 				}
 				restarted := t.verifying.verify(logger, target)
 
-				if restarted && t.mode.isFull() {
+				if restarted {
 					t.switchModes(logger)
 				} else if !restarted {
 					// need to reset accumulated weight, verifying will not try to verify this layer again
@@ -691,14 +691,14 @@ func (t *turtle) updateLocalVotes(ctx context.Context, logger log.Log, lid types
 // during rerun we need to use another heuristic, as hdist is irrelevant by that time.
 func (t *turtle) canUseFullMode() bool {
 	target := t.verified.Add(1)
-	// TODO(dshulyak) this condition should be enabled when the node is in sync.
+	// TODO(dshulyak) this condition should be enabled when the node is syncing.
 	if t.mode.isRerun() {
 		return t.processed.Difference(target) > t.VerifyingModeVerificationWindow
 	}
 	return target.Before(t.layerCutoff())
 }
 
-// for layers older than this point, we vote according to global opinion (rather than local opinion).
+// layerCuttoff returns last layer that is in hdist distance.
 func (t *turtle) layerCutoff() types.LayerID {
 	// if we haven't seen at least Hdist layers yet, we always rely on local opinion
 	if t.last.Before(types.NewLayerID(t.Hdist)) {
