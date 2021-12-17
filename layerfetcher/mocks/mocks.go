@@ -89,31 +89,68 @@ func (mr *MockblockHandlerMockRecorder) HandleBlockData(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleBlockData", reflect.TypeOf((*MockblockHandler)(nil).HandleBlockData), arg0, arg1)
 }
 
-// MockTxProcessor is a mock of TxProcessor interface.
-type MockTxProcessor struct {
+// MockballotHandler is a mock of ballotHandler interface.
+type MockballotHandler struct {
 	ctrl     *gomock.Controller
-	recorder *MockTxProcessorMockRecorder
+	recorder *MockballotHandlerMockRecorder
 }
 
-// MockTxProcessorMockRecorder is the mock recorder for MockTxProcessor.
-type MockTxProcessorMockRecorder struct {
-	mock *MockTxProcessor
+// MockballotHandlerMockRecorder is the mock recorder for MockballotHandler.
+type MockballotHandlerMockRecorder struct {
+	mock *MockballotHandler
 }
 
-// NewMockTxProcessor creates a new mock instance.
-func NewMockTxProcessor(ctrl *gomock.Controller) *MockTxProcessor {
-	mock := &MockTxProcessor{ctrl: ctrl}
-	mock.recorder = &MockTxProcessorMockRecorder{mock}
+// NewMockballotHandler creates a new mock instance.
+func NewMockballotHandler(ctrl *gomock.Controller) *MockballotHandler {
+	mock := &MockballotHandler{ctrl: ctrl}
+	mock.recorder = &MockballotHandlerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockTxProcessor) EXPECT() *MockTxProcessorMockRecorder {
+func (m *MockballotHandler) EXPECT() *MockballotHandlerMockRecorder {
+	return m.recorder
+}
+
+// HandleBallotData mocks base method.
+func (m *MockballotHandler) HandleBallotData(arg0 context.Context, arg1 []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HandleBallotData", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// HandleBallotData indicates an expected call of HandleBallotData.
+func (mr *MockballotHandlerMockRecorder) HandleBallotData(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleBallotData", reflect.TypeOf((*MockballotHandler)(nil).HandleBallotData), arg0, arg1)
+}
+
+// MocktxProcessor is a mock of txProcessor interface.
+type MocktxProcessor struct {
+	ctrl     *gomock.Controller
+	recorder *MocktxProcessorMockRecorder
+}
+
+// MocktxProcessorMockRecorder is the mock recorder for MocktxProcessor.
+type MocktxProcessorMockRecorder struct {
+	mock *MocktxProcessor
+}
+
+// NewMocktxProcessor creates a new mock instance.
+func NewMocktxProcessor(ctrl *gomock.Controller) *MocktxProcessor {
+	mock := &MocktxProcessor{ctrl: ctrl}
+	mock.recorder = &MocktxProcessorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktxProcessor) EXPECT() *MocktxProcessorMockRecorder {
 	return m.recorder
 }
 
 // HandleSyncTransaction mocks base method.
-func (m *MockTxProcessor) HandleSyncTransaction(data []byte) error {
+func (m *MocktxProcessor) HandleSyncTransaction(data []byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HandleSyncTransaction", data)
 	ret0, _ := ret[0].(error)
@@ -121,9 +158,9 @@ func (m *MockTxProcessor) HandleSyncTransaction(data []byte) error {
 }
 
 // HandleSyncTransaction indicates an expected call of HandleSyncTransaction.
-func (mr *MockTxProcessorMockRecorder) HandleSyncTransaction(data interface{}) *gomock.Call {
+func (mr *MocktxProcessorMockRecorder) HandleSyncTransaction(data interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncTransaction", reflect.TypeOf((*MockTxProcessor)(nil).HandleSyncTransaction), data)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncTransaction", reflect.TypeOf((*MocktxProcessor)(nil).HandleSyncTransaction), data)
 }
 
 // MocklayerDB is a mock of layerDB interface.

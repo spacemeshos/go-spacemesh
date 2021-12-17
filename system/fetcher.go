@@ -20,7 +20,6 @@ type Fetcher interface {
 // BlockFetcher defines an interface for fetching blocks from remote peers.
 type BlockFetcher interface {
 	GetBlocks(context.Context, []types.BlockID) error
-	FetchBlock(context.Context, types.BlockID) error
 }
 
 // AtxFetcher defines an interface for fetching ATXs from remote peers.

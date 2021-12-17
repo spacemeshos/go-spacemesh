@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -87,7 +88,7 @@ func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types
 			},
 		},
 	}
-	bytes, err := types.InterfaceToBytes(ballot.InnerBallot)
+	bytes, err := codec.Encode(ballot.InnerBallot)
 	require.NoError(tb, err)
 	ballot.Signature = signer.Sign(bytes)
 	ballot.Initialize()

@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -19,7 +20,7 @@ type Message struct {
 // It returns an error if unmarshal of the provided byte slice failed.
 func MessageFromBuffer(buf []byte) (*Message, error) {
 	msg := &Message{}
-	if err := types.BytesToInterface(buf, msg); err != nil {
+	if err := codec.Decode(buf, msg); err != nil {
 		return msg, fmt.Errorf("serialize: %w", err)
 	}
 
@@ -43,7 +44,7 @@ func (m *Message) Field() log.Field {
 // certificate is a collection of messages and the set of values.
 // Typically used as a collection of commit messages.
 type certificate struct {
-	Values  []types.BlockID // the committed set S
+	Values  []types.ProposalID // the committed set S
 	AggMsgs *aggregatedMessages
 }
 
@@ -58,7 +59,7 @@ type innerMessage struct {
 	InstanceID       types.LayerID
 	K                uint32 // the round counter
 	Ki               uint32
-	Values           []types.BlockID     // the set S. optional for commit InnerMsg in a certificate
+	Values           []types.ProposalID  // the set S. optional for commit InnerMsg in a certificate
 	RoleProof        []byte              // role is implicit by InnerMsg type, this is the proof
 	EligibilityCount uint16              // the number of claimed eligibilities
 	Svp              *aggregatedMessages // optional. only for proposal Messages
@@ -67,7 +68,7 @@ type innerMessage struct {
 
 // Bytes returns the message as bytes.
 func (im *innerMessage) Bytes() []byte {
-	buf, err := types.InterfaceToBytes(im)
+	buf, err := codec.Encode(im)
 	if err != nil {
 		log.Panic("could not marshal InnerMsg before send")
 	}

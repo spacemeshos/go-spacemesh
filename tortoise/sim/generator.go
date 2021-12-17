@@ -5,7 +5,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
@@ -174,7 +173,7 @@ func (g *Generator) Setup(opts ...SetupOpt) {
 	}
 	g.units = conf.Units
 	if len(g.layers) == 0 {
-		g.layers = append(g.layers, mesh.GenesisLayer())
+		g.layers = append(g.layers, types.GenesisLayer())
 	}
 	last := g.layers[len(g.layers)-1]
 	g.nextLayer = last.Index().Add(1)

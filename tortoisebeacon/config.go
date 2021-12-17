@@ -19,7 +19,7 @@ type Config struct {
 	WeakCoinRoundDuration    time.Duration `mapstructure:"tortoise-beacon-weak-coin-round-duration"`    // Weak coin round duration
 	Theta                    *big.Rat      `mapstructure:"tortoise-beacon-theta"`                       // Ratio of votes for reaching consensus
 	VotesLimit               uint64        `mapstructure:"tortoise-beacon-votes-limit"`                 // Maximum allowed number of votes to be sent
-	BeaconSyncNumBlocks      uint32        `mapstructure:"tortoise-beacon-sync-num-blocks"`             // Numbers of layers to wait before determining beacon values from blocks when the node didn't participate in previous epoch.
+	BeaconSyncNumBallots     uint32        `mapstructure:"tortoise-beacon-sync-num-blocks"`             // Numbers of layers to wait before determining beacon values from ballots when the node didn't participate in previous epoch.
 }
 
 // DefaultConfig returns the default configuration for the tortoise beacon.
@@ -35,7 +35,7 @@ func DefaultConfig() Config {
 		WeakCoinRoundDuration:    1 * time.Minute,
 		Theta:                    big.NewRat(1, 4),
 		VotesLimit:               100,  // TODO: around 100, find the calculation in the forum
-		BeaconSyncNumBlocks:      1600, // should be 2 clusters of 800 blocks
+		BeaconSyncNumBallots:     1600, // should be 2 clusters of 800 ballots
 	}
 }
 
@@ -52,7 +52,7 @@ func UnitTestConfig() Config {
 		WeakCoinRoundDuration:    20 * time.Millisecond,
 		Theta:                    big.NewRat(1, 25000),
 		VotesLimit:               100,
-		BeaconSyncNumBlocks:      2,
+		BeaconSyncNumBallots:     2,
 	}
 }
 
@@ -69,6 +69,6 @@ func NodeSimUnitTestConfig() Config {
 		WeakCoinRoundDuration:    100 * time.Millisecond,
 		Theta:                    big.NewRat(1, 25000),
 		VotesLimit:               100,
-		BeaconSyncNumBlocks:      10,
+		BeaconSyncNumBallots:     10,
 	}
 }

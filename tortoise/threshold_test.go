@@ -26,9 +26,9 @@ func TestUpdateThresholds(t *testing.T) {
 		{
 			desc: "WindowIsNotShorterThanProcessed",
 			config: Config{
-				LocalThreshold:           big.NewRat(1, 2),
-				GlobalThreshold:          big.NewRat(1, 2),
-				VerifyingModeRerunWindow: 1,
+				LocalThreshold:                  big.NewRat(1, 2),
+				GlobalThreshold:                 big.NewRat(1, 2),
+				VerifyingModeVerificationWindow: 1,
 			},
 			processed: genesis.Add(4),
 			last:      genesis.Add(4),
@@ -42,9 +42,9 @@ func TestUpdateThresholds(t *testing.T) {
 		{
 			desc: "VerifyingLimitIsUsed",
 			config: Config{
-				LocalThreshold:           big.NewRat(1, 2),
-				GlobalThreshold:          big.NewRat(1, 2),
-				VerifyingModeRerunWindow: 2,
+				LocalThreshold:                  big.NewRat(1, 2),
+				GlobalThreshold:                 big.NewRat(1, 2),
+				VerifyingModeVerificationWindow: 2,
 			},
 			processed: genesis.Add(1),
 			last:      genesis.Add(4),
@@ -58,14 +58,14 @@ func TestUpdateThresholds(t *testing.T) {
 		{
 			desc: "FullLimitIsUsed",
 			config: Config{
-				LocalThreshold:      big.NewRat(1, 2),
-				GlobalThreshold:     big.NewRat(1, 2),
-				FullModeRerunWindow: 3,
+				LocalThreshold:             big.NewRat(1, 2),
+				GlobalThreshold:            big.NewRat(1, 2),
+				FullModeVerificationWindow: 3,
 			},
 			processed: genesis.Add(1),
 			last:      genesis.Add(4),
 			verified:  genesis,
-			mode:      mode(0).toggleMode(),
+			mode:      mode{}.toggleMode(),
 			epochWeight: map[types.EpochID]weight{
 				2: weightFromUint64(10),
 			},

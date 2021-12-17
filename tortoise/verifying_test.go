@@ -291,9 +291,9 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			blocks:       map[types.LayerID][]types.BlockID{},
 			localOpinion: votes{},
 			config: Config{
-				LocalThreshold:           big.NewRat(1, 10),
-				GlobalThreshold:          big.NewRat(7, 10),
-				VerifyingModeRerunWindow: 10,
+				LocalThreshold:                  big.NewRat(1, 10),
+				GlobalThreshold:                 big.NewRat(7, 10),
+				VerifyingModeVerificationWindow: 10,
 			},
 			expected:            start.Add(3),
 			expectedTotalWeight: weightFromUint64(10),
@@ -314,9 +314,9 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			verified:    start,
 			processed:   start.Add(4),
 			config: Config{
-				LocalThreshold:           big.NewRat(1, 10),
-				GlobalThreshold:          big.NewRat(7, 10),
-				VerifyingModeRerunWindow: 10,
+				LocalThreshold:                  big.NewRat(1, 10),
+				GlobalThreshold:                 big.NewRat(7, 10),
+				VerifyingModeVerificationWindow: 10,
 			},
 			expected:            start.Add(1),
 			expectedTotalWeight: weightFromUint64(24),
@@ -341,9 +341,9 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			},
 			localOpinion: votes{{1}: abstain},
 			config: Config{
-				LocalThreshold:           big.NewRat(1, 10),
-				GlobalThreshold:          big.NewRat(7, 10),
-				VerifyingModeRerunWindow: 10,
+				LocalThreshold:                  big.NewRat(1, 10),
+				GlobalThreshold:                 big.NewRat(7, 10),
+				VerifyingModeVerificationWindow: 10,
 			},
 			expected:            start.Add(2),
 			expectedTotalWeight: weightFromUint64(20),
@@ -361,7 +361,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			state.blocks = tc.blocks
 			state.hareOutput = tc.localOpinion
 
-			updateThresholds(logger, tc.config, &state, 0)
+			updateThresholds(logger, tc.config, &state, mode{})
 
 			v := newVerifying(tc.config, &state)
 			v.layerWeights = tc.layersWeight
@@ -371,7 +371,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 					return false
 				}
 				state.verified = lid
-				updateThresholds(logger, tc.config, &state, 0)
+				updateThresholds(logger, tc.config, &state, mode{})
 				return true
 			})
 			require.Equal(t, tc.expected, state.verified)

@@ -108,14 +108,8 @@ func (mf *mockFetcher) setATXsErrors(epoch types.EpochID, err error) {
 
 type mockValidator struct{}
 
-func (mv *mockValidator) LatestComplete() types.LayerID { return types.LayerID{} }
-func (mv *mockValidator) Persist(context.Context) error { return nil }
 func (mv *mockValidator) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
 	return layerID, layerID.Sub(1), false
-}
-
-func (mv *mockValidator) HandleLateBlocks(_ context.Context, blocks []*types.Block) (types.LayerID, types.LayerID) {
-	return blocks[0].Layer(), blocks[0].Layer().Sub(1)
 }
 
 func feedLayerResult(from, to types.LayerID, mf *mockFetcher, msh *mesh.Mesh) {
@@ -525,9 +519,9 @@ func TestSynchronize_HareValidateLayersTooDelayed(t *testing.T) {
 	latestLyr := gLayer.Add(maxHareDelayLayers + 1)
 
 	// cause the latest layer to advance
-	blk := types.NewExistingBlock(latestLyr, []byte("data"), nil)
-	blk.Initialize()
-	err := mm.AddBlockWithTxs(context.TODO(), blk)
+	p := types.GenLayerProposal(latestLyr, nil)
+	p.Initialize()
+	err := mm.AddProposalWithTxs(context.TODO(), p)
 	require.NoError(t, err)
 
 	// make sure hare has run for all layers after genesis

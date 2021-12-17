@@ -89,16 +89,17 @@ func TestRerunDistanceVoteCounting(t *testing.T) {
 	}
 	require.NoError(t, tortoise.rerun(ctx))
 
-	last = s.Next()
-	previous, verified, reverted := tortoise.HandleIncomingLayer(ctx, last)
-	require.True(t, reverted, "should be reverted")
-	require.Equal(t, misverified, previous.Add(1))
-	require.Equal(t, last.Sub(1), verified)
 	for _, block := range blocks {
 		validity, err := s.GetState(0).MeshDB.ContextualValidity(block)
 		require.NoError(t, err)
 		require.True(t, validity, "validity for block %s", block)
 	}
+
+	last = s.Next()
+	previous, verified, reverted := tortoise.HandleIncomingLayer(ctx, last)
+	require.True(t, reverted, "should be reverted")
+	require.Equal(t, misverified, previous.Add(1))
+	require.Equal(t, last.Sub(1), verified)
 }
 
 func BenchmarkRerun(b *testing.B) {
@@ -133,8 +134,8 @@ func benchmarkRerun(b *testing.B, size int, verifyingParam, fullParam uint32, op
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = layerSize
-	cfg.VerifyingModeRerunWindow = verifyingParam
-	cfg.FullModeRerunWindow = fullParam
+	cfg.VerifyingModeVerificationWindow = verifyingParam
+	cfg.FullModeVerificationWindow = fullParam
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(b)))
 	for i := 0; i < size; i++ {

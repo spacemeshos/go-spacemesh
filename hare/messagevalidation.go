@@ -404,7 +404,7 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 	}
 
 	maxKi := preRound
-	var maxSet []types.BlockID
+	var maxSet []types.ProposalID
 	for _, status := range msg.InnerMsg.Svp.Messages {
 		// track max
 		if status.InnerMsg.Ki > maxKi || maxKi == preRound {

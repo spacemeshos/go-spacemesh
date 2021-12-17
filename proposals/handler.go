@@ -8,6 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/prometheus/client_golang/prometheus"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
@@ -32,6 +33,7 @@ var (
 	errExceptionsOverflow    = errors.New("too many exceptions")
 	errDuplicateTX           = errors.New("duplicate TxID in proposal")
 	errDuplicateATX          = errors.New("duplicate ATXID in active set")
+	errKnownBallot           = errors.New("known ballot")
 )
 
 // Handler processes Proposal from gossip and, if deems it valid, propagates it to peers.
@@ -126,20 +128,28 @@ func NewHandler(f system.Fetcher, bc system.BeaconCollector, db atxDB, m mesh, o
 // HandleProposal is the gossip receiver for Proposal.
 // TODO: register this gossip handler.
 func (h *Handler) HandleProposal(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
-	if err := h.processProposal(ctx, msg); err != nil {
-		h.logger.WithContext(ctx).With().Error("failed to process proposal gossip", log.Err(err))
+	newCtx := log.WithNewRequestID(ctx)
+	if err := h.processProposal(newCtx, msg); err != nil {
+		h.logger.WithContext(newCtx).With().Error("failed to process proposal gossip", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
 }
 
+// HandleBlockData handles Block data from sync.
+func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
+	newCtx := log.WithNewRequestID(ctx)
+	return h.processProposal(newCtx, data)
+}
+
 // HandleBallotData handles Ballot data from gossip and sync.
 func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
-	logger := h.logger.WithContext(ctx)
+	newCtx := log.WithNewRequestID(ctx)
+	logger := h.logger.WithContext(newCtx)
 	logger.Info("processing ballot")
 
 	var b types.Ballot
-	if err := types.BytesToInterface(data, &b); err != nil {
+	if err := codec.Decode(data, &b); err != nil {
 		logger.With().Error("malformed ballot", log.Err(err))
 		return errMalformedData
 	}
@@ -151,7 +161,16 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	}
 
 	logger = logger.WithFields(b.ID(), b.LayerIndex)
-	return h.processBallot(ctx, &b, logger)
+	err := h.processBallot(ctx, &b, logger)
+	if err != nil && err != errKnownBallot {
+		return err
+	} else if err == errKnownBallot {
+		return nil
+	}
+	if err = h.mesh.AddBallot(&b); err != nil {
+		return fmt.Errorf("save ballot: %w", err)
+	}
+	return nil
 }
 
 func (h *Handler) processProposal(ctx context.Context, data []byte) error {
@@ -159,7 +178,7 @@ func (h *Handler) processProposal(ctx context.Context, data []byte) error {
 	logger.Info("processing proposal")
 
 	var p types.Proposal
-	if err := types.BytesToInterface(data, &p); err != nil {
+	if err := codec.Decode(data, &p); err != nil {
 		logger.With().Error("malformed proposal", log.Err(err))
 		return errMalformedData
 	}
@@ -178,7 +197,7 @@ func (h *Handler) processProposal(ctx context.Context, data []byte) error {
 	}
 	logger.With().Info("new proposal", p.Fields()...)
 
-	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil {
+	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil && err != errKnownBallot {
 		logger.With().Warning("failed to process ballot", log.Err(err))
 		return err
 	}
@@ -191,9 +210,7 @@ func (h *Handler) processProposal(ctx context.Context, data []byte) error {
 	h.logger.WithContext(ctx).With().Debug("proposal is syntactically valid")
 	reportProposalMetrics(&p)
 
-	// TODO: add Proposal/Ballot/TXs to mesh
-
-	if err := h.mesh.AddProposal(&p); err != nil {
+	if err := h.mesh.AddProposalWithTxs(ctx, &p); err != nil {
 		logger.With().Error("failed to save proposal", log.Err(err))
 		return fmt.Errorf("save proposal: %w", err)
 	}
@@ -204,7 +221,7 @@ func (h *Handler) processProposal(ctx context.Context, data []byte) error {
 func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log.Log) error {
 	if h.mesh.HasBallot(b.ID()) {
 		logger.Info("known ballot")
-		return nil
+		return errKnownBallot
 	}
 	logger.With().Info("new ballot", b.Fields()...)
 

@@ -60,7 +60,7 @@ func (mType messageType) String() string {
 // Set represents a unique set of values.
 type Set struct {
 	valuesMu  sync.RWMutex
-	values    map[types.BlockID]struct{}
+	values    map[types.ProposalID]struct{}
 	id        uint32
 	isIDValid bool
 }
@@ -82,7 +82,7 @@ func NewEmptySet(size int) *Set {
 
 // NewSetFromValues creates a set of the provided values.
 // Note: duplicated values are ignored.
-func NewSetFromValues(values ...types.BlockID) *Set {
+func NewSetFromValues(values ...types.ProposalID) *Set {
 	s := &Set{}
 	s.initWithSize(len(values))
 	for _, v := range values {
@@ -96,7 +96,7 @@ func NewSetFromValues(values ...types.BlockID) *Set {
 
 // NewSet creates a set from the provided array of values.
 // Note: duplicated values are ignored.
-func NewSet(data []types.BlockID) *Set {
+func NewSet(data []types.ProposalID) *Set {
 	s := &Set{}
 	s.isIDValid = false
 
@@ -122,13 +122,13 @@ func (s *Set) Clone() *Set {
 }
 
 // Contains returns true if the provided value is contained in the set, false otherwise.
-func (s *Set) Contains(id types.BlockID) bool {
+func (s *Set) Contains(id types.ProposalID) bool {
 	return s.contains(id)
 }
 
 // Add a value to the set.
 // It has no effect if the value already exists in the set.
-func (s *Set) Add(id types.BlockID) {
+func (s *Set) Add(id types.ProposalID) {
 	s.valuesMu.Lock()
 	defer s.valuesMu.Unlock()
 
@@ -142,7 +142,7 @@ func (s *Set) Add(id types.BlockID) {
 
 // Remove a value from the set.
 // It has no effect if the value doesn't exist in the set.
-func (s *Set) Remove(id types.BlockID) {
+func (s *Set) Remove(id types.ProposalID) {
 	s.valuesMu.Lock()
 	defer s.valuesMu.Unlock()
 
@@ -176,12 +176,12 @@ func (s *Set) Equals(g *Set) bool {
 }
 
 // ToSlice returns the array representation of the set.
-func (s *Set) ToSlice() []types.BlockID {
+func (s *Set) ToSlice() []types.ProposalID {
 	s.valuesMu.RLock()
 	defer s.valuesMu.RUnlock()
 
 	// order keys
-	keys := make([]types.BlockID, len(s.values))
+	keys := make([]types.ProposalID, len(s.values))
 	i := 0
 	for k := range s.values {
 		keys[i] = k
@@ -189,7 +189,7 @@ func (s *Set) ToSlice() []types.BlockID {
 	}
 	sort.Slice(keys, func(i, j int) bool { return bytes.Compare(keys[i].Bytes(), keys[j].Bytes()) == -1 })
 
-	l := make([]types.BlockID, 0, len(s.values))
+	l := make([]types.ProposalID, 0, len(s.values))
 	for i := range keys {
 		l = append(l, keys[i])
 	}
@@ -201,7 +201,7 @@ func (s *Set) updateID() {
 	defer s.valuesMu.RUnlock()
 
 	// order keys
-	keys := make([]types.BlockID, len(s.values))
+	keys := make([]types.ProposalID, len(s.values))
 	i := 0
 	for k := range s.values {
 		keys[i] = k
@@ -328,14 +328,14 @@ func (s *Set) init() {
 	s.valuesMu.Lock()
 	defer s.valuesMu.Unlock()
 
-	s.values = make(map[types.BlockID]struct{})
+	s.values = make(map[types.ProposalID]struct{})
 }
 
 func (s *Set) initWithSize(size int) {
 	s.valuesMu.Lock()
 	defer s.valuesMu.Unlock()
 
-	s.values = make(map[types.BlockID]struct{}, size)
+	s.values = make(map[types.ProposalID]struct{}, size)
 }
 
 func (s *Set) len() int {
@@ -345,7 +345,7 @@ func (s *Set) len() int {
 	return len(s.values)
 }
 
-func (s *Set) contains(id types.BlockID) bool {
+func (s *Set) contains(id types.ProposalID) bool {
 	s.valuesMu.RLock()
 	defer s.valuesMu.RUnlock()
 
@@ -353,25 +353,25 @@ func (s *Set) contains(id types.BlockID) bool {
 	return ok
 }
 
-func (s *Set) add(id types.BlockID) {
+func (s *Set) add(id types.ProposalID) {
 	s.valuesMu.Lock()
 	defer s.valuesMu.Unlock()
 
 	s.values[id] = struct{}{}
 }
 
-func (s *Set) remove(id types.BlockID) {
+func (s *Set) remove(id types.ProposalID) {
 	s.valuesMu.Lock()
 	defer s.valuesMu.Unlock()
 
 	delete(s.values, id)
 }
 
-func (s *Set) elements() []types.BlockID {
+func (s *Set) elements() []types.ProposalID {
 	s.valuesMu.RLock()
 	defer s.valuesMu.RUnlock()
 
-	result := make([]types.BlockID, 0, len(s.values))
+	result := make([]types.ProposalID, 0, len(s.values))
 
 	for id := range s.values {
 		result = append(result, id)
