@@ -160,7 +160,7 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		tx.ID(),
 		log.Uint64("nonce", tx.AccountNonce),
 		log.Uint64("amount", tx.Amount),
-		log.Uint64("fee", tx.Fee),
+		log.Uint64("fee", tx.GetFee()),
 		log.Uint64("gas", tx.GasLimit),
 		log.String("recipient", tx.Recipient.String()),
 		log.String("origin", tx.Origin().String()))

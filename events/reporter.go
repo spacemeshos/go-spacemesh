@@ -43,7 +43,7 @@ func ReportNewTx(layerID types.LayerID, tx *types.Transaction) {
 		Origin:      tx.Origin().String(),
 		Destination: tx.Recipient.String(),
 		Amount:      tx.Amount,
-		Fee:         tx.Fee,
+		Fee:         tx.GetFee(),
 	})
 	ReportTxWithValidity(layerID, tx, true)
 }

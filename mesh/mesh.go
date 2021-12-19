@@ -822,7 +822,7 @@ func (msh *Mesh) calculateRewards(l *types.Layer, txs []*types.Transaction, para
 
 	rewards.LayerID = l.Index()
 	for _, tx := range txs {
-		rewards.feesReward += tx.Fee
+		rewards.feesReward += tx.GetFee()
 	}
 
 	rewards.layerReward = calculateLayerReward(l.Index(), params)

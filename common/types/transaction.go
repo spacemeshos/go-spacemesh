@@ -142,7 +142,7 @@ func (t *Transaction) ShortString() string {
 // It implements the fmt.Stringer interface.
 func (t *Transaction) String() string {
 	return fmt.Sprintf("<id: %s, origin: %s, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, fee: %v>",
-		t.ID().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.Fee)
+		t.ID().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.GetFee())
 }
 
 // MeshTransaction is stored in the mesh and included in the block.
