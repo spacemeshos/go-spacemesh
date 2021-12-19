@@ -87,7 +87,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 	}
 
 	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address: %x (len: %v), amount: %v, gas limit: %v, fee: %v, id: %v, nonce: %v",
-		tx.Recipient, len(tx.Recipient), tx.Amount, tx.GasLimit, tx.GetFee(), tx.ID().ShortString(), tx.AccountNonce)
+		tx.GetRecipient(), len(tx.GetRecipient()), tx.Amount, tx.GasLimit, tx.GetFee(), tx.ID().ShortString(), tx.AccountNonce)
 
 	go func() {
 		if err := s.publisher.Publish(ctx, svm.IncomingTxProtocol, in.Transaction); err != nil {

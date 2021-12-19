@@ -711,7 +711,7 @@ func getTransactionOriginKey(l types.LayerID, t *types.Transaction) []byte {
 func getTransactionDestKey(l types.LayerID, t *types.Transaction) []byte {
 	return new(keyBuilder).
 		WithDestPrefix().
-		WithBytes(t.Recipient.Bytes()).
+		WithBytes(t.GetRecipient().Bytes()).
 		WithLayerID(l).
 		WithBytes(t.ID().Bytes()).
 		Bytes()

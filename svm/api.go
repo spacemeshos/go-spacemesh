@@ -162,7 +162,7 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		log.Uint64("amount", tx.Amount),
 		log.Uint64("fee", tx.GetFee()),
 		log.Uint64("gas", tx.GasLimit),
-		log.String("recipient", tx.Recipient.String()),
+		log.String("recipient", string(tx.GetRecipient().String())),
 		log.String("origin", tx.Origin().String()))
 
 	if !svm.AddressExists(tx.Origin()) {

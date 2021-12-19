@@ -241,7 +241,7 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 		events.ReportValidTx(tx, err == nil)
 		events.ReportNewTx(layerID, tx)
 		events.ReportAccountUpdate(tx.Origin())
-		events.ReportAccountUpdate(tx.Recipient)
+		events.ReportAccountUpdate(tx.GetRecipient())
 	}
 	return
 }
@@ -284,7 +284,7 @@ func (tp *TransactionProcessor) ApplyTransaction(tx *types.Transaction, layerID 
 	}
 
 	tp.SetNonce(tx.Origin(), tp.GetNonce(tx.Origin())+1) // TODO: Not thread-safe
-	transfer(tp, tx.Origin(), tx.Recipient, tx.Amount)
+	transfer(tp, tx.Origin(), tx.GetRecipient(), tx.Amount)
 
 	// subtract fee from account, fee will be sent to miners in layers after
 	tp.SubBalance(tx.Origin(), tx.GetFee())
