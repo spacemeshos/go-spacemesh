@@ -44,9 +44,9 @@ func (f *full) processBallots(ballots []tortoiseBallot) {
 	}
 }
 
-func (f *full) processBlocks(blocks []*types.Block) {
+func (f *full) processBlocks(blocks []types.BlockID) {
 	for _, block := range blocks {
-		f.weights[block.ID()] = weightFromUint64(0)
+		f.weights[block] = weightFromUint64(0)
 	}
 }
 
@@ -99,9 +99,12 @@ func (f *full) countVotes(logger log.Log) {
 		if f.last.Difference(delayed.lid) <= f.BadBeaconVoteDelayLayers {
 			break
 		}
-		logger.With().Debug("adding weight from delayed ballots", log.Stringer("ballots_layer", delayed.lid))
+		logger.With().Debug("adding weight from delayed ballots",
+			log.Stringer("ballots_layer", delayed.lid),
+		)
 
-		f.countVotesFromBallots(logger.WithFields(log.Bool("delayed", true)), delayed.lid, delayed.ballots)
+		f.countVotesFromBallots(
+			logger.WithFields(log.Bool("delayed", true)), delayed.lid, delayed.ballots)
 
 		next := front.Next()
 		f.delayedQueue.Remove(front)
@@ -115,6 +118,7 @@ func (f *full) countVotes(logger log.Log) {
 
 func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	logger = logger.WithFields(
+		log.String("verifier", fullTortoise),
 		log.Stringer("candidate_layer", lid),
 		log.Stringer("local_threshold", f.localThreshold),
 		log.Stringer("global_threshold", f.globalThreshold),
@@ -128,7 +132,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		current := f.weights[block]
 		decision := current.cmp(f.globalThreshold)
 		if decision == abstain {
-			logger.With().Info("candidate layer is not verified. block is undecided in full tortoise",
+			logger.With().Info("candidate layer is not verified. not enough weight in votes",
 				log.Stringer("block", block),
 				log.Stringer("voting_weight", current),
 			)
@@ -143,7 +147,7 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 		)
 		f.validity[block] = decisions[i]
 	}
-	logger.With().Info("candidate layer is verified by full tortoise")
+	logger.With().Info("candidate layer is verified")
 	return true
 }
 

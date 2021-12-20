@@ -42,7 +42,7 @@ func DefaultConfig() Config {
 		WindowSize:                      100,
 		GlobalThreshold:                 big.NewRat(60, 100),
 		LocalThreshold:                  big.NewRat(20, 100),
-		RerunInterval:                   24 * time.Hour,
+		RerunInterval:                   time.Hour,
 		BadBeaconVoteDelayLayers:        6,
 		MaxExceptions:                   30 * 100, // 100 layers of average size
 		VerifyingModeVerificationWindow: 1000,

@@ -79,10 +79,10 @@ func TestFullCountVotes(t *testing.T) {
 	rng := mrand.New(mrand.NewSource(0))
 	signer := signing.NewEdSignerFromRand(rng)
 
-	getDiff := func(layers [][]*types.Block, choices [][2]int) []types.BlockID {
+	getDiff := func(layers [][]types.BlockID, choices [][2]int) []types.BlockID {
 		var rst []types.BlockID
 		for _, choice := range choices {
-			rst = append(rst, layers[choice[0]][choice[1]].ID())
+			rst = append(rst, layers[choice[0]][choice[1]])
 		}
 		return rst
 	}
@@ -310,9 +310,9 @@ func TestFullCountVotes(t *testing.T) {
 			tortoise.trtl.atxdb = atxdb
 			consensus := tortoise.trtl
 
-			blocks := [][]*types.Block{}
+			blocks := [][]types.BlockID{}
 			for i, layer := range tc.layerBlocks {
-				layerBlocks := []*types.Block{}
+				layerBlocks := []types.BlockID{}
 				lid := genesis.Add(uint32(i) + 1)
 				for j := range layer {
 					p := &types.Proposal{}
@@ -321,7 +321,7 @@ func TestFullCountVotes(t *testing.T) {
 					p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
 					p.Signature = signer.Sign(p.Bytes())
 					require.NoError(t, p.Initialize())
-					layerBlocks = append(layerBlocks, (*types.Block)(p))
+					layerBlocks = append(layerBlocks, types.BlockID(p.ID()))
 				}
 
 				consensus.processBlocks(lid, layerBlocks)
@@ -362,7 +362,7 @@ func TestFullCountVotes(t *testing.T) {
 
 				consensus.full.countVotes(logger)
 			}
-			bid := blocks[tc.target[0]][tc.target[1]].ID()
+			bid := blocks[tc.target[0]][tc.target[1]]
 			require.Equal(t, tc.expect.String(), consensus.full.weights[bid].String())
 		})
 	}

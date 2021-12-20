@@ -229,6 +229,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 	logger.With().Info("choose base ballot",
 		ballotID,
 		ballotLID,
+		log.Stringer("voting_layer", t.last),
 		log.Int("against_count", len(exceptions[0])),
 		log.Int("support_count", len(exceptions[1])),
 		log.Int("neutral_count", len(exceptions[2])),
@@ -475,14 +476,30 @@ func (t *turtle) HandleIncomingLayer(ctx context.Context, lid types.LayerID) err
 	return t.processLayer(ctx, t.logger.WithContext(ctx).WithFields(lid), lid)
 }
 
+func (t *turtle) switchModes(logger log.Log) {
+	from := t.mode
+	t.mode = from.toggleMode()
+	logger.With().Info("switching tortoise mode",
+		log.Stringer("processed_layer", t.processed),
+		log.Stringer("verified_layer", t.verified),
+		log.Stringer("from_mode", from),
+		log.Stringer("to_mode", t.mode),
+	)
+	updateThresholds(logger, t.Config, &t.commonState, t.mode)
+}
+
 func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.LayerID) error {
 	logger.With().Info("adding layer to the state")
 
 	if err := t.updateLayerState(logger, lid); err != nil {
 		return err
 	}
+	logger = logger.WithFields(
+		log.Stringer("processed_layer", t.processed),
+		log.Stringer("last_layer", t.last),
+	)
 
-	blocks, err := t.bdp.LayerBlocks(lid)
+	blocks, err := t.bdp.LayerBlockIds(lid)
 	if err != nil {
 		return fmt.Errorf("failed to read blocks for layer %s: %w", lid, err)
 	}
@@ -508,37 +525,48 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 	previous := t.verified
 	if t.mode.isVerifying() {
 		t.verifying.countVotes(logger, lid, ballots)
-		iterateLayers(t.verified.Add(1), t.processed.Sub(1), func(lid types.LayerID) bool {
-			ok := t.verifying.verify(logger, lid)
-			if !ok {
-				return false
-			}
-			t.verified = lid
-			updateThresholds(logger, t.Config, &t.commonState, t.mode)
-			return true
-		})
 	}
-	if t.canUseFullMode() || t.mode.isFull() {
+	for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
+		var success bool
 		if t.mode.isVerifying() {
-			t.mode = t.mode.toggleMode()
-			logger.With().Info("switching to full self-healing tortoise",
-				lid,
-				log.Stringer("verified", t.verified),
-				log.Stringer("mode", t.mode),
-			)
-			// update threshold since we have different windows for vote counting in each mode
-			updateThresholds(logger, t.Config, &t.commonState, t.mode)
+			success = t.verifying.verify(logger, target)
 		}
-		t.full.countVotes(logger)
-		iterateLayers(t.verified.Add(1), t.processed.Sub(1), func(lid types.LayerID) bool {
-			ok := t.full.verify(logger, lid)
-			if !ok {
-				return false
+		if !success && (t.canUseFullMode() || t.mode.isFull()) {
+			if t.mode.isVerifying() {
+				t.switchModes(logger)
+				// reset accumulated weight as verifying tortoise will re-counting votes
+				// with input from full tortoise.
+				t.verifying.resetWeights()
 			}
-			t.verified = lid
+			t.full.countVotes(logger)
+			success = t.full.verify(logger, target)
+
+			if success {
+				// recompute goodness and accumulated weight of all ballots that can vote for newly verified layer
+				//
+				// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
+				// that accumulated weight has a weight of the layer that is going to be verified.
+				for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
+					t.verifying.countVotes(
+						logger.WithFields(log.Bool("recounting", true)), lid, t.getTortoiseBallots(lid))
+				}
+				restarted := t.verifying.verify(logger, target)
+
+				if restarted {
+					t.switchModes(logger)
+				} else if !restarted {
+					// need to reset accumulated weight, verifying will not try to verify this layer again
+					// hence the accumulated weight will be inconsistent with verified layer.
+					t.verifying.resetWeights()
+				}
+			}
+		}
+		if success {
+			t.verified = target
 			updateThresholds(logger, t.Config, &t.commonState, t.mode)
-			return true
-		})
+		} else {
+			break
+		}
 	}
 	if err := persistContextualValidity(logger,
 		t.bdp,
@@ -551,6 +579,23 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 
 	t.updateHistoricallyVerified()
 	return nil
+}
+
+func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
+	ballots := t.ballots[lid]
+	if len(ballots) == 0 {
+		return nil
+	}
+	tballots := make([]tortoiseBallot, 0, len(ballots))
+	for _, ballot := range ballots {
+		tballots = append(tballots, tortoiseBallot{
+			id:     ballot,
+			base:   t.full.base[ballot],
+			votes:  t.full.votes[ballot],
+			weight: t.ballotWeight[ballot],
+		})
+	}
+	return tballots
 }
 
 func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
@@ -579,13 +624,11 @@ func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
 	return nil
 }
 
-func (t *turtle) processBlocks(lid types.LayerID, blocks []*types.Block) {
-	blockIDs := make([]types.BlockID, 0, len(blocks))
+func (t *turtle) processBlocks(lid types.LayerID, blocks []types.BlockID) {
 	for _, block := range blocks {
-		blockIDs = append(blockIDs, block.ID())
-		t.blockLayer[block.ID()] = lid
+		t.blockLayer[block] = lid
 	}
-	t.blocks[lid] = blockIDs
+	t.blocks[lid] = blocks
 }
 
 func (t *turtle) processBallots(lid types.LayerID, original []*types.Ballot) ([]tortoiseBallot, error) {
@@ -648,14 +691,16 @@ func (t *turtle) updateLocalVotes(ctx context.Context, logger log.Log, lid types
 // during rerun we need to use another heuristic, as hdist is irrelevant by that time.
 func (t *turtle) canUseFullMode() bool {
 	target := t.verified.Add(1)
-	// TODO(dshulyak) this condition should be enabled when the node is in sync.
+	// TODO(dshulyak) this condition should be enabled when the node is syncing.
 	if t.mode.isRerun() {
-		return t.processed.Difference(target) > t.VerifyingModeVerificationWindow
+		return t.processed.Difference(target) > t.VerifyingModeVerificationWindow ||
+			// if all layer were exhaused and verifying didn't made progress try switching
+			t.last == t.processed
 	}
 	return target.Before(t.layerCutoff())
 }
 
-// for layers older than this point, we vote according to global opinion (rather than local opinion).
+// layerCuttoff returns last layer that is in hdist distance.
 func (t *turtle) layerCutoff() types.LayerID {
 	// if we haven't seen at least Hdist layers yet, we always rely on local opinion
 	if t.last.Before(types.NewLayerID(t.Hdist)) {

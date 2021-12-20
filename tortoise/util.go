@@ -9,6 +9,11 @@ import (
 )
 
 const (
+	verifyingTortoise = "verifying"
+	fullTortoise      = "full"
+)
+
+const (
 	support sign = 1
 	against sign = -1
 	abstain sign = 0
@@ -144,10 +149,6 @@ func iterateLayers(from, to types.LayerID, callback func(types.LayerID) bool) {
 			return
 		}
 	}
-}
-
-type layerVerifier interface {
-	verify(log.Log, types.LayerID) bool
 }
 
 type voteReason string
