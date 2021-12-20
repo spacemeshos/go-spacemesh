@@ -27,6 +27,37 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
+// makeTestTrie create a sample test trie to test node-wise reconstruction.
+func makeTestTrie() (*Database, *Trie, map[string][]byte) {
+	// Create an empty trie
+	triedb := NewDatabase(database.NewMemDatabase())
+	trie, _ := New(types.Hash32{}, triedb)
+
+	// Fill it with some arbitrary data
+	content := make(map[string][]byte)
+	for i := byte(0); i < 255; i++ {
+		// Map the same data under multiple keys
+		key, val := util.LeftPadBytes([]byte{1, i}, 32), []byte{i}
+		content[string(key)] = val
+		trie.Update(key, val)
+
+		key, val = util.LeftPadBytes([]byte{2, i}, 32), []byte{i}
+		content[string(key)] = val
+		trie.Update(key, val)
+
+		// Add some other data to inflate the trie
+		for j := byte(3); j < 13; j++ {
+			key, val = util.LeftPadBytes([]byte{j, i}, 32), []byte{j, i}
+			content[string(key)] = val
+			trie.Update(key, val)
+		}
+	}
+	trie.Commit(nil)
+
+	// Return the generated trie
+	return triedb, trie, content
+}
+
 func TestIterator(t *testing.T) {
 	trie := newEmpty()
 	vals := []struct{ k, v string }{
