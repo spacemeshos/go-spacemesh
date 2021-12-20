@@ -2176,7 +2176,7 @@ func TestTransactionService(t *testing.T) {
 func checkTransaction(t *testing.T, tx *pb.Transaction) {
 	require.Equal(t, globalTx.ID().Bytes(), tx.Id.Id)
 	require.Equal(t, globalTx.Origin().Bytes(), tx.Sender.Address)
-	require.Equal(t, globalTx.GasLimit, tx.GasOffered.GasProvided)
+	require.Equal(t, globalTx.Fee, tx.GasOffered.GasProvided)
 	require.Equal(t, globalTx.Amount, tx.Amount.Value)
 	require.Equal(t, globalTx.AccountNonce, tx.Counter)
 	require.Equal(t, globalTx.Origin().Bytes(), tx.Signature.PublicKey)
@@ -2239,7 +2239,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	resTx := resBlock.Transactions[0]
 	require.Equal(t, globalTx.ID().Bytes(), resTx.Id.Id)
 	require.Equal(t, globalTx.Origin().Bytes(), resTx.Sender.Address)
-	require.Equal(t, globalTx.GasLimit, resTx.GasOffered.GasProvided)
+	require.Equal(t, globalTx.Fee, resTx.GasOffered.GasProvided)
 	require.Equal(t, globalTx.Amount, resTx.Amount.Value)
 	require.Equal(t, globalTx.AccountNonce, resTx.Counter)
 	require.Equal(t, globalTx.Signature[:], resTx.Signature.Signature)
