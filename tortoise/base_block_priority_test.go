@@ -56,12 +56,6 @@ func TestPrioritizeBlocks(t *testing.T) {
 				ballots[2]: types.NewLayerID(9),
 				ballots[3]: types.NewLayerID(9),
 			},
-			ballotLayer: map[types.BallotID]types.LayerID{
-				ballots[0]: types.NewLayerID(9),
-				ballots[1]: types.NewLayerID(9),
-				ballots[2]: types.NewLayerID(9),
-				ballots[3]: types.NewLayerID(10),
-			},
 			badBeaconBallots: map[types.BallotID]struct{}{
 				ballots[0]: {},
 				ballots[3]: {},
