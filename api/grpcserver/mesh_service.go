@@ -287,7 +287,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 			// pre-STF tx, which includes a gas offer but not an amount of gas actually
 			// consumed.
 			// GasPrice:    nil,
-			GasProvided: t.GasLimit,
+			GasProvided: t.Fee,
 		},
 		Amount:  &pb.Amount{Value: t.Amount},
 		Counter: t.AccountNonce,
