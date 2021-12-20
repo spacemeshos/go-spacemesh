@@ -204,7 +204,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 			}
 		}
 
-		prioritizeBallots(choices, disagreements, t.ballotLayer)
+		prioritizeBallots(choices, disagreements, t.ballotLayer, t.badBeaconBallots)
 		for _, ballotID = range choices {
 			ballotLID = t.ballotLayer[ballotID]
 			exceptions, err = t.encodeVotes(ctx, ballotLID, t.evicted.Add(1), func(blockID types.BlockID) sign {
