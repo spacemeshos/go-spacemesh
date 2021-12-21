@@ -86,7 +86,7 @@ func (MockState) GetStateRoot() types.Hash32 {
 }
 
 func (MockState) ValidateNonceAndBalance(*types.Transaction) error {
-	panic("implement me")
+	return nil
 }
 
 func (MockState) GetLayerApplied(types.TransactionID) *types.LayerID {
