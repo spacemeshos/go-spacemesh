@@ -474,12 +474,12 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 		msh.removeRejectedFromAccountTxs(account, grouped)
 	}
 	for _, tx := range returnedTxs {
-
 		err := msh.ValidateNonceAndBalance(tx)
-		if err != nil {
+		if err == nil {
 			err = msh.AddTxToPool(tx)
 		}
-		if err != nil {
+
+		if err == nil {
 			// We ignore errors here, since they mean that the tx is no longer
 			// valid and we shouldn't re-add it.
 			msh.With().Info("transaction from contextually invalid block re-added to mempool", tx.ID())
