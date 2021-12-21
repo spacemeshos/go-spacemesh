@@ -18,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/hare"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/monitoring"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -32,11 +31,6 @@ var Cmd = &cobra.Command{
 		log.JSONLog(true)
 		hareApp := NewHareApp()
 		defer hareApp.Cleanup()
-
-		// monitor app
-		hareApp.updater = monitoring.NewMemoryUpdater()
-		hareApp.monitor = monitoring.NewMonitor(1*time.Second, 5*time.Second, hareApp.updater, make(chan struct{}))
-		hareApp.monitor.Start()
 
 		// start app
 		hareApp.Initialize(cmd)
@@ -90,13 +84,11 @@ func (mbg *mockBeaconGetter) GetBeacon(id types.EpochID) (types.Beacon, error) {
 // HareApp represents an Hare application.
 type HareApp struct {
 	*cmdp.BaseApp
-	host    *p2p.Host
-	oracle  *oracleClient
-	sgn     hare.Signer
-	ha      *hare.Hare
-	clock   *timesync.TimeClock
-	updater *monitoring.MemoryUpdater
-	monitor *monitoring.Monitor
+	host   *p2p.Host
+	oracle *oracleClient
+	sgn    hare.Signer
+	ha     *hare.Hare
+	clock  *timesync.TimeClock
 }
 
 type mockSyncStateProvider struct{}

@@ -26,7 +26,14 @@ type verifying struct {
 	totalWeight weight
 }
 
+func (v *verifying) resetWeights() {
+	v.totalWeight = weightFromUint64(0)
+	v.layerWeights = map[types.LayerID]weight{}
+}
+
 func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
+	logger = logger.WithFields(log.Stringer("ballots_layer", lid))
+
 	counted, goodBallotsCount := v.sumGoodBallots(logger, ballots)
 
 	// TODO(dshulyak) counted weight should be reduced by the uncounted weight per conversation with research
@@ -34,7 +41,7 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tort
 	v.layerWeights[lid] = counted
 	v.totalWeight = v.totalWeight.add(counted)
 
-	logger.With().Info("computed weight from good ballots",
+	logger.With().Info("counted weight from good ballots",
 		log.Stringer("weight", counted),
 		log.Stringer("total", v.totalWeight),
 		log.Stringer("expected", v.epochWeight[lid.GetEpoch()]),
@@ -43,45 +50,44 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tort
 	)
 }
 
-func (v *verifying) verify(logger log.Log) types.LayerID {
-	localThreshold := computeLocalThreshold(v.Config, v.epochWeight, v.processed)
+func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
+	votingWeight := weightFromUint64(0)
+	votingWeight = votingWeight.add(v.totalWeight)
+	votingWeight = votingWeight.sub(v.layerWeights[lid])
 
-	for lid := v.verified.Add(1); lid.Before(v.processed); lid = lid.Add(1) {
-		// TODO(dshulyak) expected weight must be based on the last layer.
-		threshold := computeGlobalThreshold(v.Config, v.epochWeight, lid, v.processed)
-		threshold = threshold.add(localThreshold)
+	logger = logger.WithFields(
+		log.String("verifier", verifyingTortoise),
+		log.Stringer("candidate_layer", lid),
+		log.Stringer("voting_weight", votingWeight),
+		log.Stringer("local_threshold", v.localThreshold),
+		log.Stringer("global_threshold", v.globalThreshold),
+	)
 
-		votingWeight := weightFromUint64(0)
-		votingWeight = votingWeight.add(v.totalWeight)
-		votingWeight = votingWeight.sub(v.layerWeights[lid])
-
-		layerLogger := logger.WithFields(
-			log.Stringer("candidate_layer", lid),
-			log.Stringer("voting_weight", votingWeight),
-			log.Stringer("threshold", threshold),
-			log.Stringer("local_threshold", localThreshold),
-		)
-
-		// 0 - there is not enough weight to cross threshold.
-		// 1 - layer is verified and contextual validity is according to our local opinion.
-		if votingWeight.cmp(threshold) == abstain {
-			layerLogger.With().Info("candidate layer is not verified. voting weight from good ballots is lower than the threshold.")
-			return lid.Sub(1)
-		}
-
-		// if there is any block with neutral local opinion - we can't verify the layer
-		// if it happens outside of hdist - protocol will switch to full tortoise
-		for _, bid := range v.blocks[lid] {
-			if v.localVotes[bid] == abstain {
-				layerLogger.With().Info("candidate layer is not verified. block is undecided according to local votes.", bid)
-				return lid.Sub(1)
-			}
-		}
-
-		v.totalWeight = votingWeight
-		layerLogger.With().Info("candidate layer is verified by verifying tortoise")
+	// 0 - there is not enough weight to cross threshold.
+	// 1 - layer is verified and contextual validity is according to our local opinion.
+	if votingWeight.cmp(v.globalThreshold) == abstain {
+		logger.With().Info("candidate layer is not verified." +
+			" voting weight from good ballots is lower than the threshold")
+		return false
 	}
-	return v.processed.Sub(1)
+
+	// if there is any block with neutral local opinion - we can't verify the layer
+	// if it happens outside of hdist - protocol will switch to full tortoise
+	for _, bid := range v.blocks[lid] {
+		vote, _ := getLocalVote(v.commonState, v.Config, lid, bid)
+		if vote == abstain {
+			logger.With().Info("candidate layer is not verified."+
+				" block is undecided according to local votes",
+				bid,
+			)
+			return false
+		}
+		v.validity[bid] = vote
+	}
+
+	v.totalWeight = votingWeight
+	logger.With().Info("candidate layer is verified")
+	return true
 }
 
 func (v *verifying) sumGoodBallots(logger log.Log, ballots []tortoiseBallot) (weight, int) {
@@ -102,33 +108,35 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 	logger = logger.WithFields(ballot.id, log.Stringer("base", ballot.base))
 
 	if _, exists := v.badBeaconBallots[ballot.id]; exists {
-		logger.With().Debug("ballot has a bad beacon")
+		logger.With().Debug("ballot is not good. ballot has a bad beacon")
 		return false
 	}
 
 	if _, exists := v.goodBallots[ballot.base]; !exists {
-		logger.With().Debug("base ballot is not good")
+		logger.With().Debug("ballot is not good. base is not good")
 		return false
 	}
 
 	baselid := v.ballotLayer[ballot.base]
 	for block, vote := range ballot.votes {
-		votelid, exists := v.blockLayer[block]
+		blocklid, exists := v.blockLayer[block]
 		// if the layer of the vote is not in the memory then it is definitely before base block layer
-		if !exists || votelid.Before(baselid) {
-			logger.With().Debug("vote on a block that is before base ballot",
+		if !exists || blocklid.Before(baselid) {
+			logger.With().Debug("ballot is not good. vote on a block that is before base ballot",
 				log.Stringer("base_layer", baselid),
-				log.Stringer("vote_layer", votelid),
+				log.Stringer("vote_layer", blocklid),
 				log.Bool("vote_exists", exists),
 			)
 			return false
 		}
 
-		if localVote := v.localVotes[block]; localVote != vote {
-			logger.With().Debug("vote on a block doesn't match a local vote",
+		if localVote, reason := getLocalVote(v.commonState, v.Config, blocklid, block); localVote != vote {
+			logger.With().Debug("ballot is not good. vote on a block doesn't match a local vote",
 				log.Stringer("local_vote", localVote),
+				log.Stringer("local_vote_reason", reason),
 				log.Stringer("ballot_vote", vote),
-				log.Stringer("block_layer", votelid),
+				log.Stringer("block_layer", blocklid),
+				log.Stringer("base_layer", baselid),
 				log.Stringer("block", block),
 			)
 			return false

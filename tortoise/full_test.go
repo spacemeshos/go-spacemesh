@@ -1,8 +1,6 @@
 package tortoise
 
 import (
-	"context"
-	"math/big"
 	mrand "math/rand"
 	"testing"
 
@@ -81,15 +79,14 @@ func TestFullCountVotes(t *testing.T) {
 	rng := mrand.New(mrand.NewSource(0))
 	signer := signing.NewEdSignerFromRand(rng)
 
-	getDiff := func(layers [][]*types.Block, choices [][2]int) []types.BlockID {
+	getDiff := func(layers [][]types.BlockID, choices [][2]int) []types.BlockID {
 		var rst []types.BlockID
 		for _, choice := range choices {
-			rst = append(rst, layers[choice[0]][choice[1]].ID())
+			rst = append(rst, layers[choice[0]][choice[1]])
 		}
 		return rst
 	}
 
-	ctx := context.TODO()
 	genesis := types.GetEffectiveGenesis()
 
 	for _, tc := range []struct {
@@ -98,7 +95,7 @@ func TestFullCountVotes(t *testing.T) {
 		layerBallots [][]testBallot // list of layers with ballots
 		layerBlocks  [][]testBlock
 		target       [2]int // [layer, block] tuple
-		expect       *big.Float
+		expect       weight
 	}{
 		{
 			desc:      "TwoLayersSupport",
@@ -121,7 +118,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: big.NewFloat(15),
+			expect: weightFromFloat64(15),
 		},
 		{
 			desc:      "ConflictWithBase",
@@ -156,7 +153,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: big.NewFloat(0),
+			expect: weightFromFloat64(0),
 		},
 		{
 			desc:      "UnequalWeights",
@@ -186,7 +183,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: big.NewFloat(140),
+			expect: weightFromFloat64(140),
 		},
 		{
 			desc:      "UnequalWeightsVoteFromAtxMissing",
@@ -213,7 +210,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: big.NewFloat(100),
+			expect: weightFromFloat64(100),
 		},
 		{
 			desc:      "OneLayerSupport",
@@ -229,7 +226,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: big.NewFloat(7.5),
+			expect: weightFromFloat64(7.5),
 		},
 		{
 			desc:      "OneBlockAbstain",
@@ -246,7 +243,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: big.NewFloat(5),
+			expect: weightFromFloat64(5),
 		},
 		{
 			desc:      "OneBlockAagaisnt",
@@ -263,7 +260,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: big.NewFloat(2.5),
+			expect: weightFromFloat64(2.5),
 		},
 		{
 			desc:      "MajorityAgainst",
@@ -280,7 +277,7 @@ func TestFullCountVotes(t *testing.T) {
 				},
 			},
 			target: [2]int{0, 0},
-			expect: big.NewFloat(-2.5),
+			expect: weightFromFloat64(-2.5),
 		},
 		{
 			desc:      "NoVotes",
@@ -292,7 +289,7 @@ func TestFullCountVotes(t *testing.T) {
 				{{ATX: 0}, {ATX: 1}, {ATX: 2}},
 			},
 			target: [2]int{0, 0},
-			expect: big.NewFloat(0),
+			expect: weightFromFloat64(0),
 		},
 	} {
 		tc := tc
@@ -313,9 +310,9 @@ func TestFullCountVotes(t *testing.T) {
 			tortoise.trtl.atxdb = atxdb
 			consensus := tortoise.trtl
 
-			blocks := [][]*types.Block{}
+			blocks := [][]types.BlockID{}
 			for i, layer := range tc.layerBlocks {
-				layerBlocks := []*types.Block{}
+				layerBlocks := []types.BlockID{}
 				lid := genesis.Add(uint32(i) + 1)
 				for j := range layer {
 					p := &types.Proposal{}
@@ -324,7 +321,7 @@ func TestFullCountVotes(t *testing.T) {
 					p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
 					p.Signature = signer.Sign(p.Bytes())
 					require.NoError(t, p.Initialize())
-					layerBlocks = append(layerBlocks, (*types.Block)(p))
+					layerBlocks = append(layerBlocks, types.BlockID(p.ID()))
 				}
 
 				consensus.processBlocks(lid, layerBlocks)
@@ -358,13 +355,14 @@ func TestFullCountVotes(t *testing.T) {
 
 				consensus.processed = lid
 				consensus.last = lid
-				tballots, err := consensus.processBallots(wrapContext(ctx), lid, layerBallots)
+				tballots, err := consensus.processBallots(lid, layerBallots)
+				consensus.full.processBallots(tballots)
 				require.NoError(t, err)
 				consensus.full.processBallots(tballots)
 
 				consensus.full.countVotes(logger)
 			}
-			bid := blocks[tc.target[0]][tc.target[1]].ID()
+			bid := blocks[tc.target[0]][tc.target[1]]
 			require.Equal(t, tc.expect.String(), consensus.full.weights[bid].String())
 		})
 	}
