@@ -118,7 +118,7 @@ func (t *Transaction) ID() TransactionID {
 	return id
 }
 
-// Fee returns the fee of the transaction.
+// GetFee returns the fee of the transaction.
 func (t *Transaction) GetFee() uint64 {
 	return t.Fee
 }
