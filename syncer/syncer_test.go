@@ -266,7 +266,7 @@ func TestSynchronize_ValidationDoneAfterCurrentAdvanced(t *testing.T) {
 	arrivedOldCurrent := make(chan struct{}, 1)
 	finishOldCurrent := make(chan struct{}, 1)
 	newCurrent := current.Add(2)
-	for l := types.NewLayerID(1); l.Before(newCurrent); l = l.Add(1) {
+	for l := glayer.Add(1); l.Before(newCurrent); l = l.Add(1) {
 		l := l
 		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(ctx context.Context, layer *types.Layer) {
@@ -320,7 +320,7 @@ func TestSynchronize_MaxAttemptWithinRun(t *testing.T) {
 		syncer.Close()
 	})
 
-	for l := types.NewLayerID(1); l.Before(current); l = l.Add(1) {
+	for l := glayer.Add(1); l.Before(current); l = l.Add(1) {
 		l := l
 		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(ctx context.Context, layer *types.Layer) {
@@ -411,11 +411,9 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 
 	gLayer := types.GetEffectiveGenesis()
 	lyr := gLayer.Add(3)
-	for l := types.NewLayerID(1); !l.After(gLayer.Add(2)); l = l.Add(1) {
+	for l := gLayer.Add(1); !l.After(gLayer.Add(2)); l = l.Add(1) {
 		l := l
-		if !l.GetEpoch().IsGenesis() {
-			beacons.EXPECT().GetBeacon(l.GetEpoch()).Return(types.BytesToBeacon(l.GetEpoch().ToBytes()), nil).Times(1)
-		}
+		beacons.EXPECT().GetBeacon(l.GetEpoch()).Return(types.BytesToBeacon(l.GetEpoch().ToBytes()), nil).Times(1)
 		patrol.EXPECT().IsHareInCharge(l).Return(false).Times(1)
 		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
 			func(ctx context.Context, layer *types.Layer) {
@@ -466,7 +464,7 @@ func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 
 	gLayer := types.GetEffectiveGenesis()
 	lyr := gLayer.Add(3)
-	for l := types.NewLayerID(1); !l.After(gLayer.Add(2)); l = l.Add(1) {
+	for l := gLayer.Add(1); !l.After(gLayer.Add(2)); l = l.Add(1) {
 		l := l
 		patrol.EXPECT().IsHareInCharge(l).Return(false).Times(1)
 		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -524,17 +522,6 @@ func TestSynchronize_HareValidateLayersTooDelayed(t *testing.T) {
 	err := mm.AddProposalWithTxs(context.TODO(), p)
 	require.NoError(t, err)
 
-	// make sure hare has run for all layers after genesis
-	for l := types.NewLayerID(1); !l.After(gLayer); l = l.Add(1) {
-		l := l
-		patrol.EXPECT().IsHareInCharge(l).Return(false).Times(1)
-		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, layer *types.Layer) {
-				assert.Equal(t, l, layer.Index())
-				// cause mesh's processed layer to advance
-				mm.HandleValidatedLayer(ctx, l, []types.BlockID{})
-			}).Times(1)
-	}
 	patrol.EXPECT().IsHareInCharge(gLayer.Add(1)).Return(true).Times(1)
 	patrol.EXPECT().IsHareInCharge(gLayer.Add(2)).Return(true).Times(maxAttemptWithinRun)
 	// the 1st layer after genesis, despite having hare started consensus protocol for it,
@@ -634,7 +621,7 @@ func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
 	mf := newMockFetcher()
 	mm := newMemMesh(t, lg)
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
-	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 2))
+	ticker.advanceToLayer(types.NewLayerID(layersPerEpoch * 4))
 	syncer.Start(context.TODO())
 	t.Cleanup(func() {
 		syncer.Close()
@@ -647,7 +634,7 @@ func TestSynchronize_getATXsFailedPastEpoch(t *testing.T) {
 		wg.Done()
 	}()
 
-	mf.setATXsErrors(1, errors.New("no ATXs. should fail sync"))
+	mf.setATXsErrors(3, errors.New("no ATXs. should fail sync"))
 	feedLayerResult(types.GetEffectiveGenesis().Add(1), ticker.GetCurrentLayer(), mf, mm)
 	wg.Wait()
 
@@ -679,14 +666,17 @@ func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
 	assert.True(t, syncer.ListenToGossip())
 	assert.True(t, syncer.IsSynced(context.TODO()))
 
-	mf.setATXsErrors(1, errors.New("no ATXs for current epoch. should fail sync at last layer"))
-	for i := types.NewLayerID(2); i.Before(types.NewLayerID(2 * layersPerEpoch)); i = i.Add(1) {
+	gLayer := types.GetEffectiveGenesis()
+	lyr := types.NewLayerID(4 * layersPerEpoch)
+	mf.setATXsErrors(3, errors.New("no ATXs for current epoch. should fail sync at last layer"))
+	for i := gLayer.Add(1); i.Before(lyr); i = i.Add(1) {
 		ticker.advanceToLayer(i)
 		wg.Add(1)
 		go func() {
 			assert.True(t, syncer.synchronize(context.TODO()))
 			wg.Done()
 		}()
+		feedLayerResult(i, i, mf, mm)
 		wg.Wait()
 
 		assert.True(t, syncer.stateOnTarget())
@@ -694,14 +684,13 @@ func TestSynchronize_getATXsFailedCurrentEpoch(t *testing.T) {
 		assert.True(t, syncer.IsSynced(context.TODO()))
 	}
 
-	lyr := types.NewLayerID(2 * layersPerEpoch)
 	ticker.advanceToLayer(lyr)
 	wg.Add(1)
 	go func() {
 		assert.False(t, syncer.synchronize(context.TODO()))
 		wg.Done()
 	}()
-	feedLayerResult(lyr, lyr, mf, mm)
+	feedLayerResult(lyr.Sub(1), lyr.Sub(1), mf, mm)
 	wg.Wait()
 
 	assert.False(t, syncer.stateOnTarget())
