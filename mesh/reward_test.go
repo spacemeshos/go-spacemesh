@@ -182,7 +182,7 @@ func TestMesh_integration(t *testing.T) {
 					return []*types.Transaction{}, nil
 				}).Times(1)
 			tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
-			tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).Times(1)
+			tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 			tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 		}
 		tm.ValidateLayer(context.TODO(), l)
@@ -213,7 +213,7 @@ func createMeshFromSyncing(t *testing.T, finalLyr types.LayerID, tm *testMesh, a
 					return nil, nil
 				}).Times(1)
 			tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
-			tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).Times(1)
+			tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 			tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 		}
 		tm.ValidateLayer(context.TODO(), types.NewExistingLayer(i, blocks))
@@ -244,7 +244,7 @@ func createMeshFromHareOutput(t *testing.T, finalLyr types.LayerID, tm *testMesh
 					return nil, nil
 				}).Times(1)
 			tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
-			tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).Times(1)
+			tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 			tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 		}
 		tm.HandleValidatedLayer(context.TODO(), i, blockIDs)
@@ -287,7 +287,7 @@ func TestMesh_updateStateWithLayer_SyncingAndHareReachSameState(t *testing.T) {
 					return nil, nil
 				})
 			tm2.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
-			tm2.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).Times(1)
+			tm2.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 			tm2.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 		}
 		tm2.HandleValidatedLayer(context.TODO(), i, blockIDs)
@@ -367,7 +367,7 @@ func TestMesh_updateStateWithLayer_AdvanceInOrder(t *testing.T) {
 		txs2        []*types.Transaction
 		rewards2    = make(map[types.Address]uint64)
 	)
-	tm2.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).Times(1)
+	tm2.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 	tm2.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	for i := gLyr.Add(1); i.Before(finalLyr.Sub(1)); i = i.Add(1) {
 		blockIDs := copyLayer(t, tm1.Mesh, tm2.Mesh, tm2.mockATXDB, i)

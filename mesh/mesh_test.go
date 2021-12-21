@@ -97,6 +97,7 @@ func TestMesh_LayerHash(t *testing.T) {
 	}
 
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(numLayers - 1)
+	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	for i := gLyr.Add(1); !i.After(latestLyr); i = i.Add(1) {
 		thisLyr, err := tm.GetLayer(i)
@@ -141,6 +142,7 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 
 	prevAggHash := tm.GetAggregatedLayerHash(gLyr)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(numLayers - 1)
+	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	for i := gLyr.Add(1); !i.After(latestLyr); i = i.Add(1) {
 		thisLyr, err := tm.GetLayer(i)
@@ -515,7 +517,7 @@ func TestMesh_HandleValidatedLayer(t *testing.T) {
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus2).Return(gLyr, gPlus1, false).Times(1)
 	tm.mockState.EXPECT().ApplyLayer(gPlus1, gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
-	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).Times(1)
+	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	tm.HandleValidatedLayer(context.TODO(), gPlus2, blockIDs)
 
@@ -543,7 +545,7 @@ func TestMesh_HandleValidatedLayer_emptyOutputFromHare(t *testing.T) {
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus2).Return(gLyr, gPlus1, false).Times(1)
 	tm.mockState.EXPECT().ApplyLayer(gPlus1, gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
-	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).Times(1)
+	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	tm.HandleValidatedLayer(context.TODO(), gPlus2, empty)
 
