@@ -18,6 +18,9 @@ import (
 
 const (
 	layerSize = 200
+
+	layerProposals = "p"
+	layerBallots   = "b"
 )
 
 // DB represents a mesh database instance.
@@ -209,16 +212,19 @@ func (m *DB) GetBallot(id types.BallotID) (*types.Ballot, error) {
 }
 
 // LayerBallots retrieves all ballots from a layer by layer ID.
-func (m *DB) LayerBallots(layerID types.LayerID) ([]*types.Ballot, error) {
-	proposals, err := m.LayerProposals(layerID)
-	if err != nil {
-		return nil, fmt.Errorf("layer ballots: %w", err)
-	}
-	ballots := make([]*types.Ballot, 0, len(proposals))
-	for _, p := range proposals {
-		ballots = append(ballots, &p.Ballot)
-	}
-	return ballots, nil
+func (m *DB) LayerBallots(lid types.LayerID) ([]*types.Ballot, error) {
+	var ballots []*types.Ballot
+	err := m.layerIDs(layerBallots, lid, func(id []byte) error {
+		var bid types.BallotID
+		copy(bid[:], id)
+		ballot, err := m.GetBallot(bid)
+		if err != nil {
+			return err
+		}
+		ballots = append(ballots, ballot)
+		return nil
+	})
+	return ballots, err
 }
 
 // AddBlock adds a block to the database.
@@ -241,16 +247,15 @@ func (m *DB) GetBlock(bid types.BlockID) (*types.Block, error) {
 }
 
 // LayerBlockIds retrieves all block IDs from the layer specified by layer ID.
-func (m *DB) LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error) {
-	pids, err := m.LayerProposalIDs(layerID)
-	if err != nil {
-		return nil, err
-	}
-	bids := make([]types.BlockID, 0, len(pids))
-	for _, pid := range pids {
-		bids = append(bids, types.BlockID(pid))
-	}
-	return bids, nil
+func (m *DB) LayerBlockIds(lid types.LayerID) ([]types.BlockID, error) {
+	var ids []types.BlockID
+	err := m.layerIDs(layerProposals, lid, func(id []byte) error {
+		var bid types.BlockID
+		copy(bid[:], id)
+		ids = append(ids, bid)
+		return nil
+	})
+	return ids, err
 }
 
 // LayerBlocks retrieves all blocks from the layer specified by layer ID.
@@ -335,39 +340,58 @@ func (m *DB) LayerProposals(index types.LayerID) ([]*types.Proposal, error) {
 	return proposals, nil
 }
 
-// LayerProposalIDs retrieves all block ids from a layer by layer index.
-func (m *DB) LayerProposalIDs(index types.LayerID) ([]types.ProposalID, error) {
+func (m *DB) layerIDs(namespace string, lid types.LayerID, f func(id []byte) error) error {
 	var (
-		layerBuf = index.Bytes()
-		zero     = false
-		ids      []types.ProposalID
-		it       = m.layers.Find(layerBuf)
+		zero = false
+		n    int
+		buf  = new(bytes.Buffer)
 	)
+	buf.WriteString(namespace)
+	buf.Write(lid.Bytes())
+
+	it := m.layers.Find(buf.Bytes())
 	defer it.Release()
 	for it.Next() {
-		if len(it.Key()) == len(layerBuf) {
+		if len(it.Key()) == buf.Len() {
 			zero = true
 			continue
 		}
-		var id types.ProposalID
-		copy(id[:], it.Key()[len(layerBuf):])
-		ids = append(ids, id)
+		if err := f(it.Key()[buf.Len():]); err != nil {
+			return err
+		}
+		n++
 	}
 	if it.Error() != nil {
-		return nil, fmt.Errorf("iterator: %w", it.Error())
+		return fmt.Errorf("iterator: %w", it.Error())
 	}
-	if zero || len(ids) > 0 {
-		return ids, nil
+	if zero || n > 0 {
+		return nil
 	}
-	return nil, database.ErrNotFound
+	return database.ErrNotFound
+}
+
+// LayerProposalIDs retrieves all block ids from a layer by layer index.
+func (m *DB) LayerProposalIDs(lid types.LayerID) ([]types.ProposalID, error) {
+	var ids []types.ProposalID
+	err := m.layerIDs(layerProposals, lid, func(id []byte) error {
+		var pid types.ProposalID
+		copy(pid[:], id)
+		ids = append(ids, pid)
+		return nil
+	})
+	return ids, err
 }
 
 // AddZeroBlockLayer tags lyr as a layer without blocks.
-func (m *DB) AddZeroBlockLayer(index types.LayerID) error {
-	if err := m.layers.Put(index.Bytes(), nil); err != nil {
-		return fmt.Errorf("put into DB: %w", err)
+func (m *DB) AddZeroBlockLayer(lid types.LayerID) error {
+	for _, namespace := range [...]string{layerBallots, layerProposals} {
+		buf := new(bytes.Buffer)
+		buf.WriteString(namespace)
+		buf.Write(lid.Bytes())
+		if err := m.layers.Put(buf.Bytes(), nil); err != nil {
+			return fmt.Errorf("put into DB: %w", err)
+		}
 	}
-
 	return nil
 }
 
@@ -532,7 +556,10 @@ func (m *DB) writeBallot(b *types.Ballot) error {
 		return fmt.Errorf("could not encode ballot: %w", err)
 	} else if err := m.ballots.Put(b.ID().Bytes(), data); err != nil {
 		return fmt.Errorf("could not add ballot %v to database: %w", b.ID(), err)
+	} else if err := m.updateLayer(layerBallots, b.LayerIndex, b.ID().Bytes()); err != nil {
+		return fmt.Errorf("could not update layer %v with a new ballot %v: %w", b.LayerIndex, b.ID(), err)
 	}
+
 	return nil
 }
 
@@ -548,18 +575,19 @@ func (m *DB) writeProposal(p *types.Proposal) error {
 		return fmt.Errorf("could not encode block: %w", err)
 	} else if err := m.proposals.Put(p.ID().Bytes(), data); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", p.ID(), err)
-	} else if err := m.updateLayerWithProposal(p); err != nil {
-		return fmt.Errorf("could not update layer %v with new block %v: %w", p.LayerIndex, p.ID(), err)
+	} else if err := m.updateLayer(layerProposals, p.LayerIndex, p.ID().Bytes()); err != nil {
+		return fmt.Errorf("could not update layer %v with a new proposal %v: %w", p.LayerIndex, p.ID(), err)
 	}
 
 	m.blockCache.put((*types.Block)(p))
 	return nil
 }
 
-func (m *DB) updateLayerWithProposal(p *types.Proposal) error {
+func (m *DB) updateLayer(namespace string, lid types.LayerID, id []byte) error {
 	var b bytes.Buffer
-	b.Write(p.LayerIndex.Bytes())
-	b.Write(p.ID().Bytes())
+	b.WriteString(namespace)
+	b.Write(lid.Bytes())
+	b.Write(id)
 
 	if err := m.layers.Put(b.Bytes(), nil); err != nil {
 		return fmt.Errorf("put into DB: %w", err)
