@@ -406,7 +406,7 @@ func TestMesh_ExtractUniqueOrderedTransactions(t *testing.T) {
 	l, err := tm.GetLayer(layerID)
 	r.NoError(err)
 
-	validBlocks := extractUniqueOrderedTransactions(l, tm.DB, tm.Log)
+	validBlocks := extractUniqueOrderedTransactions(tm.Log, l, tm.DB)
 
 	r.ElementsMatch(toTransactionIds(tx1, tx2, tx3, tx4), toTransactionIds(validBlocks...))
 }

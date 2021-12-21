@@ -456,14 +456,14 @@ func (msh *Mesh) reInsertTxsToPool(validBlocks, invalidBlocks []*types.Block, l 
 
 func (msh *Mesh) applyState(l *types.Layer) {
 	// Aggregate all blocks' rewards.
-	validBlockTxs := extractUniqueOrderedTransactions(l, msh.DB, msh.Log)
+	validBlockTxs := extractUniqueOrderedTransactions(msh.Log, l, msh.DB)
 	// The reason we are serializing the types.NodeID to a string instead of using it directly as a
 	// key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
 	// the types.NodeID contains a slice, it is not comparable and hence cannot be used as a map key.
 	//
 	// TODO: fix this when changing the types.NodeID struct, see
 	// https://github.com/spacemeshos/go-spacemesh/issues/2269.
-	coinbasesAndSmeshers, coinbases := getCoinbasesAndSmeshers(l, msh.AtxDB, msh.Log)
+	coinbasesAndSmeshers, coinbases := getCoinbasesAndSmeshers(msh.Log, l, msh.AtxDB)
 	var failedTxs []*types.Transaction
 	var svmErr error
 
@@ -476,7 +476,7 @@ func (msh *Mesh) applyState(l *types.Layer) {
 		}
 		failedTxs, svmErr = msh.state.ApplyLayer(l.Index(), validBlockTxs, rewardByMiner)
 		msh.logRewards(&rewards)
-		reportRewards(&rewards, coinbasesAndSmeshers, msh.Log)
+		reportRewards(msh.Log, &rewards, coinbasesAndSmeshers)
 
 		if err := msh.DB.writeTransactionRewards(l.Index(), coinbasesAndSmeshers, rewards.blockTotalReward, rewards.blockLayerReward); err != nil {
 			msh.Log.Error("cannot write reward to db")
@@ -594,7 +594,7 @@ func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, er
 	return hash, fmt.Errorf("get from DB: %w", err)
 }
 
-func extractUniqueOrderedTransactions(l *types.Layer, mdb *DB, logger log.Log) (validBlockTxs []*types.Transaction) {
+func extractUniqueOrderedTransactions(logger log.Log, l *types.Layer, mdb *DB) (validBlockTxs []*types.Transaction) {
 	validBlocks := l.Blocks()
 
 	// Deterministically sort valid blocks
@@ -784,7 +784,7 @@ func calculateRewards(l *types.Layer, txs []*types.Transaction, params Config, c
 	return rewards
 }
 
-func reportRewards(rewards *layerRewardsInfo, coinbasesAndSmeshers map[types.Address]map[string]uint64, logger log.Log) {
+func reportRewards(logger log.Log, rewards *layerRewardsInfo, coinbasesAndSmeshers map[types.Address]map[string]uint64) {
 	// Report the rewards for each coinbase and each smesherID within each coinbase.
 	// This can be thought of as a partition of the reward amongst all the smesherIDs
 	// that added the coinbase into the block.
@@ -807,7 +807,7 @@ func reportRewards(rewards *layerRewardsInfo, coinbasesAndSmeshers map[types.Add
 	}
 }
 
-func getCoinbasesAndSmeshers(l *types.Layer, atxDB AtxDB, logger log.Log) (coinbasesAndSmeshers map[types.Address]map[string]uint64, coinbases []types.Address) {
+func getCoinbasesAndSmeshers(logger log.Log, l *types.Layer, atxDB AtxDB) (coinbasesAndSmeshers map[types.Address]map[string]uint64, coinbases []types.Address) {
 	coinbases = make([]types.Address, 0, len(l.Blocks()))
 	// the reason we are serializing the types.NodeID to a string instead of using it directly as a
 	// key in the map is due to Golang's restriction on only Comparable types used as map keys. Since
