@@ -10,67 +10,16 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
 var goldenATXID = types.ATXID(types.HexToHash32("77777"))
-
-type MockMapState struct {
-	Rewards     map[types.Address]uint64
-	Txs         []*types.Transaction
-	Pool        []*types.Transaction
-	TotalReward uint64
-}
-
-func (s *MockMapState) GetAllAccounts() (*types.MultipleAccountsState, error) {
-	panic("implement me")
-}
-
-func (s *MockMapState) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	s.Pool = append(s.Pool, tx)
-	return nil
-}
-
-func (s MockMapState) Rewind(types.LayerID) (types.Hash32, error)          { panic("implement me") }
-func (MockMapState) GetStateRoot() types.Hash32                            { return [32]byte{} }
-func (MockMapState) ValidateNonceAndBalance(*types.Transaction) error      { panic("implement me") }
-func (MockMapState) GetLayerApplied(types.TransactionID) *types.LayerID    { panic("implement me") }
-func (MockMapState) GetLayerStateRoot(types.LayerID) (types.Hash32, error) { panic("implement me") }
-func (MockMapState) GetBalance(types.Address) uint64                       { panic("implement me") }
-func (MockMapState) GetNonce(types.Address) uint64                         { panic("implement me") }
-
-func (s *MockMapState) ApplyLayer(l types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
-	for miner, reward := range rewards {
-		s.Rewards[miner] = reward
-		s.TotalReward += reward
-	}
-
-	s.Txs = append(s.Txs, txs...)
-	return make([]*types.Transaction, 0), nil
-}
-
-func (s *MockMapState) AddressExists(types.Address) bool {
-	return true
-}
 
 func ConfigTst() Config {
 	return Config{
 		BaseReward: 5000,
 	}
-}
-
-func getMeshWithMapState(tb testing.TB, id string, state state) (*Mesh, *AtxDbMock) {
-	atxDb := NewAtxDbMock()
-	lg := logtest.New(tb)
-	mshDb := NewMemMeshDB(lg)
-	mshDb.contextualValidity = &ContextualValidityMock{}
-	ctrl := gomock.NewController(tb)
-	mockFetch := mocks.NewMockBlockFetcher(ctrl)
-	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
-	return NewMesh(mshDb, atxDb, ConfigTst(), mockFetch, &MeshValidatorMock{}, newMockTxMemPool(), state, lg), atxDb
 }
 
 func addTransactionsWithFee(t testing.TB, mesh *DB, numOfTxs int, fee int64) (int64, []types.TransactionID) {
@@ -96,9 +45,9 @@ func init() {
 }
 
 func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
-	s := &MockMapState{Rewards: make(map[types.Address]uint64)}
-	layers, atxDB := getMeshWithMapState(t, "t1", s)
-	defer layers.Close()
+	tm := createTestMesh(t)
+	defer tm.ctrl.Finish()
+	defer tm.Close()
 
 	totalFee := int64(0)
 	blocksData := []struct {
@@ -112,18 +61,19 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 		{16, rand.Int63n(100), "0xddd"},
 	}
 
+	lyr := types.GetEffectiveGenesis().Add(1)
 	for i, data := range blocksData {
 		coinbase1 := types.HexToAddress(data.addr)
-		atx := newActivationTx(types.NodeID{Key: strconv.Itoa(i + 1), VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, types.NewLayerID(1), 0, goldenATXID, coinbase1, &types.NIPost{})
-		atxDB.AddAtx(atx.ID(), atx)
-		fee, txIDs := addTransactionsWithFee(t, layers.DB, data.numOfTxs, data.fee)
+		atx := newActivationTx(types.NodeID{Key: strconv.Itoa(i + 1), VRFPublicKey: []byte("bbbbb")}, 0, *types.EmptyATXID, lyr, 0, goldenATXID, coinbase1, &types.NIPost{})
+		tm.mockATXDB.AddAtx(atx.ID(), atx)
+		fee, txIDs := addTransactionsWithFee(t, tm.DB, data.numOfTxs, data.fee)
 		totalFee += fee
 		p := &types.Proposal{
 			InnerProposal: types.InnerProposal{
 				Ballot: types.Ballot{
 					InnerBallot: types.InnerBallot{
 						AtxID:      atx.ID(),
-						LayerIndex: types.NewLayerID(1),
+						LayerIndex: lyr,
 					},
 				},
 				TxIDs: txIDs,
@@ -133,26 +83,28 @@ func TestMesh_AccumulateRewards_happyFlow(t *testing.T) {
 		p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
 		p.Signature = signer.Sign(p.Bytes())
 		require.NoError(t, p.Initialize())
-		require.NoError(t, layers.AddProposal(p))
+		require.NoError(t, tm.AddProposal(p))
 	}
 
 	params := NewTestRewardParams()
 
-	l, err := layers.GetLayer(types.NewLayerID(1))
+	l, err := tm.GetLayer(lyr)
 	assert.NoError(t, err)
 
-	txs := layers.extractUniqueOrderedTransactions(l)
-	_, coinbases := layers.getCoinbasesAndSmeshers(l)
-	rewards := layers.calculateRewards(l, txs, layers.config, coinbases)
-	rewardByMiner := map[types.Address]uint64{}
-	for _, coinbase := range coinbases {
-		rewardByMiner[coinbase] = rewards.blockTotalReward
-	}
-	layers.state.ApplyLayer(l.Index(), txs, rewardByMiner)
+	var totalReward uint64
+	tm.mockState.EXPECT().ApplyLayer(l.Index(), gomock.Any(), gomock.Any()).DoAndReturn(
+		func(layer types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+			for _, reward := range rewards {
+				totalReward += reward
+			}
+			return []*types.Transaction{}, nil
+		}).Times(1)
+
+	tm.updateStateWithLayer(context.TODO(), l)
 	totalRewardsCost := totalFee + int64(params.BaseReward)
 	remainder := totalRewardsCost % 4
 
-	assert.Equal(t, totalRewardsCost, int64(s.TotalReward)+remainder)
+	assert.Equal(t, totalRewardsCost, int64(totalReward)+remainder)
 }
 
 func NewTestRewardParams() Config {
@@ -181,6 +133,7 @@ func createBlock(t testing.TB, mesh *Mesh, lyrID types.LayerID, nodeID types.Nod
 	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
 	p.Signature = signer.Sign(p.Bytes())
 	require.NoError(t, p.Initialize())
+	require.NoError(t, mesh.SaveContextualValidity(types.BlockID(p.ID()), lyrID, true))
 	require.NoError(t, mesh.AddProposal(p))
 	return (*types.Block)(p), reward
 }
@@ -197,56 +150,103 @@ func createLayer(t testing.TB, mesh *Mesh, lyrID types.LayerID, numOfBlocks, max
 
 func TestMesh_integration(t *testing.T) {
 	numOfLayers := 10
-	numOfBlocks := 10
-	maxTxs := 20
 
-	s := &MockMapState{Rewards: make(map[types.Address]uint64)}
-	layers, atxDB := getMeshWithMapState(t, "t1", s)
-	defer layers.Close()
+	tm := createTestMesh(t)
+	defer tm.ctrl.Finish()
+	defer tm.Close()
 
 	var l3Rewards int64
-	for i := 1; i <= numOfLayers; i++ {
-		reward, _ := createLayer(t, layers, types.NewLayerID(uint32(i)), numOfBlocks, maxTxs, atxDB)
+	var totalReward uint64
+	gLyr := types.GetEffectiveGenesis()
+	for i := gLyr.Add(1); !i.After(gLyr.Add(uint32(numOfLayers))); i = i.Add(1) {
+		reward, _ := createLayer(t, tm.Mesh, i, numOfBlocks, maxTxs, tm.mockATXDB)
 		// rewards are applied to layers in the past according to the reward maturity param
-		if i == 3 {
+		if i == gLyr.Add(3) {
 			l3Rewards = reward
 		}
 
-		l, err := layers.GetLayer(types.NewLayerID(uint32(i)))
+		l, err := tm.GetLayer(i)
 		assert.NoError(t, err)
-		layers.ValidateLayer(context.TODO(), l)
+
+		oldVerified := i.Sub(2)
+		if oldVerified.Before(gLyr) {
+			oldVerified = gLyr
+		}
+		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(oldVerified, i.Sub(1), false).Times(1)
+		if i.Sub(1).After(gLyr) {
+			tm.mockState.EXPECT().ApplyLayer(i.Sub(1), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(layer types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+					for _, reward := range rewards {
+						totalReward += reward
+					}
+					return []*types.Transaction{}, nil
+				}).Times(1)
+			tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
+			tm.mockState.EXPECT().ValidateAndAddTxToPool(gomock.Any()).Return(nil).AnyTimes()
+		}
+		tm.ValidateLayer(context.TODO(), l)
 	}
 	// since there can be a difference of up to x lerners where x is the number of proposals due to round up of penalties when distributed among all proposals
 	totalPayout := l3Rewards + int64(ConfigTst().BaseReward)
-	assert.True(t, totalPayout-int64(s.TotalReward) < int64(numOfBlocks), " rewards : %v, total %v proposals %v", totalPayout, s.TotalReward, int64(numOfBlocks))
+	assert.True(t, totalPayout-int64(totalReward) < int64(numOfBlocks), " rewards : %v, total %v proposals %v", totalPayout, totalReward, int64(numOfBlocks))
 }
 
-func createMeshFromSyncing(t *testing.T, finalLyr types.LayerID, msh *Mesh, atxDB *AtxDbMock) {
-	numOfBlocks := 10
-	maxTxs := 20
+func createMeshFromSyncing(t *testing.T, finalLyr types.LayerID, tm *testMesh, atxDB *AtxDbMock) ([]*types.Transaction, map[types.Address]uint64) {
 	gLyr := types.GetEffectiveGenesis()
-	for i := types.NewLayerID(1); !i.After(finalLyr); i = i.Add(1) {
-		if i.After(gLyr) {
-			createLayer(t, msh, i, numOfBlocks, maxTxs, atxDB)
+	var allTXs []*types.Transaction
+	allRewards := make(map[types.Address]uint64)
+	for i := gLyr.Add(1); !i.After(finalLyr); i = i.Add(1) {
+		_, blocks := createLayer(t, tm.Mesh, i, numOfBlocks, maxTxs, atxDB)
+		oldVerified := i.Sub(2)
+		if oldVerified.Before(gLyr) {
+			oldVerified = gLyr
 		}
-		lyr, err := msh.GetLayer(i)
-		require.NoError(t, err)
-		msh.ValidateLayer(context.TODO(), lyr)
+		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(oldVerified, i.Sub(1), false).Times(1)
+		if i.Sub(1).After(gLyr) {
+			tm.mockState.EXPECT().ApplyLayer(i.Sub(1), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+					allTXs = append(allTXs, txs...)
+					for addr, reward := range rewards {
+						allRewards[addr] += reward
+					}
+					return nil, nil
+				}).Times(1)
+			tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
+			tm.mockState.EXPECT().ValidateAndAddTxToPool(gomock.Any()).Return(nil).AnyTimes()
+		}
+		tm.ValidateLayer(context.TODO(), types.NewExistingLayer(i, blocks))
 	}
+	return allTXs, allRewards
 }
 
-func createMeshFromHareOutput(t *testing.T, finalLyr types.LayerID, msh *Mesh, atxDB *AtxDbMock) {
-	numOfBlocks := 10
-	maxTxs := 20
+func createMeshFromHareOutput(t *testing.T, finalLyr types.LayerID, tm *testMesh, atxDB *AtxDbMock) ([]*types.Transaction, map[types.Address]uint64) {
 	gLyr := types.GetEffectiveGenesis()
-	for i := types.NewLayerID(1); !i.After(finalLyr); i = i.Add(1) {
-		if i.After(gLyr) {
-			createLayer(t, msh, i, numOfBlocks, maxTxs, atxDB)
+	var allTXs []*types.Transaction
+	allRewards := make(map[types.Address]uint64)
+	for i := gLyr.Add(1); !i.After(finalLyr); i = i.Add(1) {
+		_, blocks := createLayer(t, tm.Mesh, i, numOfBlocks, maxTxs, atxDB)
+		blockIDs := types.BlockIDs(blocks)
+		oldVerified := i.Sub(2)
+		if oldVerified.Before(gLyr) {
+			oldVerified = gLyr
 		}
-		lyr, err := msh.GetLayer(i)
-		require.NoError(t, err)
-		msh.HandleValidatedLayer(context.TODO(), i, lyr.BlocksIDs())
+		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(oldVerified, i.Sub(1), false).Times(1)
+		tm.mockFetch.EXPECT().GetBlocks(gomock.Any(), blockIDs).Times(1)
+		if i.Sub(1).After(gLyr) {
+			tm.mockState.EXPECT().ApplyLayer(i.Sub(1), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+					allTXs = append(allTXs, txs...)
+					for addr, reward := range rewards {
+						allRewards[addr] += reward
+					}
+					return nil, nil
+				}).Times(1)
+			tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
+			tm.mockState.EXPECT().ValidateAndAddTxToPool(gomock.Any()).Return(nil).AnyTimes()
+		}
+		tm.HandleValidatedLayer(context.TODO(), i, blockIDs)
 	}
+	return allTXs, allRewards
 }
 
 // test states are the same when one input is data polled from peers and the other from hare's output.
@@ -254,30 +254,47 @@ func TestMesh_updateStateWithLayer_SyncingAndHareReachSameState(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)
 
-	// s1 is the state where a node advance its state via syncing with peers
-	s1 := &MockMapState{Rewards: make(map[types.Address]uint64)}
-	msh1, atxDB := getMeshWithMapState(t, "t1", s1)
-	t.Cleanup(func() {
-		msh1.Close()
-	})
-	createMeshFromSyncing(t, finalLyr, msh1, atxDB)
+	tm1 := createTestMesh(t)
+	defer tm1.ctrl.Finish()
+	defer tm1.Close()
+	txs1, rewards1 := createMeshFromSyncing(t, finalLyr, tm1, tm1.mockATXDB)
 
-	// s2 is the state where the node advances its state via hare output
-	s2 := &MockMapState{Rewards: make(map[types.Address]uint64)}
-	msh2, atxDB2 := getMeshWithMapState(t, "t2", s2)
-	t.Cleanup(func() {
-		msh2.Close()
-	})
+	tm2 := createTestMesh(t)
+	defer tm2.ctrl.Finish()
+	defer tm2.Close()
 
+	var txs2 []*types.Transaction
+	rewards2 := make(map[types.Address]uint64)
 	// use hare output to advance state to finalLyr
 	for i := gLyr.Add(1); !i.After(finalLyr); i = i.Add(1) {
-		blockIds := copyLayer(t, msh1, msh2, atxDB2, i)
-		msh2.HandleValidatedLayer(context.TODO(), i, blockIds)
+		blockIDs := copyLayer(t, tm1.Mesh, tm2.Mesh, tm2.mockATXDB, i)
+		oldVerified := i.Sub(2)
+		if oldVerified.Before(gLyr) {
+			oldVerified = gLyr
+		}
+		tm2.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(oldVerified, i.Sub(1), false).Times(1)
+		tm2.mockFetch.EXPECT().GetBlocks(gomock.Any(), blockIDs).Times(1)
+		if i.Sub(1).After(gLyr) {
+			tm2.mockState.EXPECT().ApplyLayer(i.Sub(1), gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+					txs2 = append(txs2, txs...)
+					for addr, reward := range rewards {
+						rewards2[addr] += reward
+					}
+					return nil, nil
+				})
+			tm2.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
+			tm2.mockState.EXPECT().ValidateAndAddTxToPool(gomock.Any()).Return(nil).AnyTimes()
+		}
+		tm2.HandleValidatedLayer(context.TODO(), i, blockIDs)
 	}
 
-	// s1 (sync from peers) and s2 (advance via hare output) should have the same state
-	require.Equal(t, s1.Txs, s2.Txs)
-	require.Greater(t, len(s1.Txs), 0)
+	// two meshes should have the same state
+	assert.Equal(t, txs1, txs2)
+	assert.Equal(t, rewards1, rewards2)
+	verified := finalLyr.Sub(1)
+	assert.NotEqual(t, types.EmptyLayerHash, tm1.GetAggregatedLayerHash(verified))
+	assert.Equal(t, tm1.GetAggregatedLayerHash(verified), tm2.GetAggregatedLayerHash(verified))
 }
 
 // test state is the same after same result received from hare.
@@ -285,24 +302,23 @@ func TestMesh_updateStateWithLayer_SameInputFromHare(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)
 
-	// s is the state where a node advance its state via syncing with peers
-	s := &MockMapState{Rewards: make(map[types.Address]uint64)}
-	msh, atxDB := getMeshWithMapState(t, "t2", s)
-	t.Cleanup(func() {
-		msh.Close()
-	})
-	createMeshFromSyncing(t, finalLyr, msh, atxDB)
-	oldTxs := make([]*types.Transaction, len(s.Txs))
-	copy(oldTxs, s.Txs)
-	require.Greater(t, len(oldTxs), 0)
+	tm := createTestMesh(t)
+	defer tm.ctrl.Finish()
+	defer tm.Close()
+	createMeshFromSyncing(t, finalLyr, tm, tm.mockATXDB)
+
+	aggHash := tm.GetAggregatedLayerHash(finalLyr.Sub(1))
+	require.NotEqual(t, types.EmptyLayerHash, aggHash)
 
 	// then hare outputs the same result
-	lyr, err := msh.GetLayer(finalLyr)
+	lyr, err := tm.GetLayer(finalLyr)
 	require.NoError(t, err)
-	msh.HandleValidatedLayer(context.TODO(), finalLyr, lyr.BlocksIDs())
+	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), finalLyr).Return(finalLyr.Sub(1), finalLyr.Sub(1), false).Times(1)
+	tm.mockFetch.EXPECT().GetBlocks(gomock.Any(), lyr.BlocksIDs()).Times(1)
+	tm.HandleValidatedLayer(context.TODO(), finalLyr, lyr.BlocksIDs())
 
-	// s2 state should be unchanged
-	require.Equal(t, oldTxs, s.Txs)
+	// aggregated hash should be unchanged
+	require.Equal(t, aggHash, tm.GetAggregatedLayerHash(finalLyr.Sub(1)))
 }
 
 // test state is the same after same result received from syncing with peers.
@@ -310,70 +326,102 @@ func TestMesh_updateStateWithLayer_SameInputFromSyncing(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)
 
-	// s is the state where a node advance its state via syncing with peers
-	s := &MockMapState{Rewards: make(map[types.Address]uint64)}
-	msh, atxDB := getMeshWithMapState(t, "t1", s)
-	t.Cleanup(func() {
-		msh.Close()
-	})
-	createMeshFromHareOutput(t, finalLyr, msh, atxDB)
-	oldTxs := make([]*types.Transaction, len(s.Txs))
-	copy(oldTxs, s.Txs)
-	require.Greater(t, len(oldTxs), 0)
+	tm := createTestMesh(t)
+	defer tm.ctrl.Finish()
+	defer tm.Close()
+	createMeshFromSyncing(t, finalLyr, tm, tm.mockATXDB)
+
+	aggHash := tm.GetAggregatedLayerHash(finalLyr.Sub(1))
+	require.NotEqual(t, types.EmptyLayerHash, aggHash)
 
 	// sync the last layer from peers
-	lyr, err := msh.GetLayer(finalLyr)
+	lyr, err := tm.GetLayer(finalLyr)
 	require.NoError(t, err)
-	msh.ValidateLayer(context.TODO(), lyr)
+	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), finalLyr).Return(finalLyr.Sub(1), finalLyr.Sub(1), false).Times(1)
+	tm.ValidateLayer(context.TODO(), lyr)
 
-	// s2 state should be unchanged
-	require.Equal(t, oldTxs, s.Txs)
+	// aggregated hash should be unchanged
+	require.Equal(t, aggHash, tm.GetAggregatedLayerHash(finalLyr.Sub(1)))
 }
 
 func TestMesh_updateStateWithLayer_AdvanceInOrder(t *testing.T) {
 	gLyr := types.GetEffectiveGenesis()
 	finalLyr := gLyr.Add(10)
 
-	// s1 is the state where a node advance its state via syncing with peers
-	s1 := &MockMapState{Rewards: make(map[types.Address]uint64)}
-	msh1, atxDB := getMeshWithMapState(t, "t1", s1)
-	t.Cleanup(func() {
-		msh1.Close()
-	})
-	createMeshFromSyncing(t, finalLyr, msh1, atxDB)
+	tm1 := createTestMesh(t)
+	defer tm1.ctrl.Finish()
+	defer tm1.Close()
+	txs1, rewards1 := createMeshFromSyncing(t, finalLyr, tm1, tm1.mockATXDB)
 
-	// s2 is the state where the node advances its state via hare output
-	s2 := &MockMapState{Rewards: make(map[types.Address]uint64)}
-	msh2, atxDB2 := getMeshWithMapState(t, "t2", s2)
-	t.Cleanup(func() {
-		msh2.Close()
-	})
+	tm2 := createTestMesh(t)
+	defer tm2.ctrl.Finish()
+	defer tm2.Close()
 
 	// use hare output to advance state to finalLyr-2
+	var (
+		newVerified types.LayerID
+		txs2        []*types.Transaction
+		rewards2    = make(map[types.Address]uint64)
+	)
+	tm2.mockState.EXPECT().ValidateAndAddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	for i := gLyr.Add(1); i.Before(finalLyr.Sub(1)); i = i.Add(1) {
-		blockIds := copyLayer(t, msh1, msh2, atxDB2, i)
-		msh2.HandleValidatedLayer(context.TODO(), i, blockIds)
+		blockIDs := copyLayer(t, tm1.Mesh, tm2.Mesh, tm2.mockATXDB, i)
+		newVerified = i.Sub(1)
+		oldVerified := i.Sub(2)
+		if oldVerified.Before(gLyr) {
+			oldVerified = gLyr
+		}
+		tm2.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(oldVerified, newVerified, false).Times(1)
+		tm2.mockFetch.EXPECT().GetBlocks(gomock.Any(), blockIDs).Times(1)
+		if newVerified.After(gLyr) {
+			tm2.mockState.EXPECT().ApplyLayer(newVerified, gomock.Any(), gomock.Any()).DoAndReturn(
+				func(_ types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+					txs2 = append(txs2, txs...)
+					for addr, reward := range rewards {
+						rewards2[addr] += reward
+					}
+					return nil, nil
+				}).Times(1)
+			tm2.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
+		}
+		tm2.HandleValidatedLayer(context.TODO(), i, blockIDs)
 	}
-	// s1 is at finalLyr, s2 is at finalLyr-2
-	require.NotEqual(t, s1.Txs, s2.Txs)
+	// tm1 is at finalLyr, tm2 is at finalLyr-2
+	require.Equal(t, finalLyr, tm1.ProcessedLayer())
+	require.Equal(t, finalLyr.Sub(2), tm2.ProcessedLayer())
+	require.Equal(t, tm1.GetLayerHash(finalLyr.Sub(2)), tm2.GetLayerHash(finalLyr.Sub(2)))
 
-	finalMinus2Txs := make([]*types.Transaction, len(s2.Txs))
-	copy(finalMinus2Txs, s2.Txs)
-	require.Greater(t, len(finalMinus2Txs), 0)
-
-	finalMinus1BlockIds := copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
-	// copyLayer(t, msh1, msh2, atxDB2, finalLyr.Sub(1))
-	finalBlockIds := copyLayer(t, msh1, msh2, atxDB2, finalLyr)
+	finalMinus1BlockIds := copyLayer(t, tm1.Mesh, tm2.Mesh, tm2.mockATXDB, finalLyr.Sub(1))
+	finalBlockIds := copyLayer(t, tm1.Mesh, tm2.Mesh, tm2.mockATXDB, finalLyr)
 
 	// now advance s2 to finalLyr
-	msh2.HandleValidatedLayer(context.TODO(), finalLyr, finalBlockIds)
-	// s2 should be unchanged because finalLyr-1 has not been processed
-	require.Equal(t, finalMinus2Txs, s2.Txs)
+	require.Equal(t, finalLyr.Sub(3), newVerified)
+	tm2.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), finalLyr).Return(newVerified, newVerified, false).Times(1)
+	tm2.mockFetch.EXPECT().GetBlocks(gomock.Any(), finalBlockIds).Times(1)
+	tm2.HandleValidatedLayer(context.TODO(), finalLyr, finalBlockIds)
+	require.Equal(t, finalLyr.Sub(2), tm2.ProcessedLayer())
 
-	// advancing s2 to finalLyr-1 should bring s2 to finalLyr
-	msh2.HandleValidatedLayer(context.TODO(), finalLyr.Sub(1), finalMinus1BlockIds)
-	// s2 should be the same as s1 (at finalLyr)
-	require.Equal(t, s1.Txs, s2.Txs)
+	// advancing tm2 to finalLyr-1 should bring tm2 to finalLyr
+	tm2.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), finalLyr.Sub(1)).Return(newVerified, finalLyr.Sub(1), false).Times(1)
+	tm2.mockFetch.EXPECT().GetBlocks(gomock.Any(), finalMinus1BlockIds).Times(1)
+	for i := newVerified.Add(1); i.Before(finalLyr); i = i.Add(1) {
+		tm2.mockState.EXPECT().ApplyLayer(i, gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+				txs2 = append(txs2, txs...)
+				for addr, reward := range rewards {
+					rewards2[addr] += reward
+				}
+				return nil, nil
+			}).Times(1)
+		tm2.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
+	}
+	tm2.HandleValidatedLayer(context.TODO(), finalLyr.Sub(1), finalMinus1BlockIds)
+	assert.Equal(t, finalLyr, tm2.ProcessedLayer())
+
+	// both mesh should be at the same state
+	assert.Equal(t, tm1.GetLayerHash(finalLyr.Sub(1)), tm2.GetLayerHash(finalLyr.Sub(1)))
+	assert.Equal(t, txs1, txs2)
+	assert.Equal(t, rewards1, rewards2)
 }
 
 func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id types.LayerID) []types.BlockID {
@@ -392,86 +440,14 @@ func copyLayer(t *testing.T, srcMesh, dstMesh *Mesh, dstAtxDb *AtxDbMock, id typ
 		atx, err := srcMesh.GetFullAtx(b.AtxID)
 		assert.NoError(t, err)
 		dstAtxDb.AddAtx(atx.ID(), atx)
-		err = dstMesh.AddProposalWithTxs(context.TODO(), (*types.Proposal)(b))
-		assert.NoError(t, err)
+		assert.NoError(t, dstMesh.AddProposalWithTxs(context.TODO(), (*types.Proposal)(b)))
+		assert.NoError(t, dstMesh.SaveContextualValidity(b.ID(), id, true))
 		blockIds = append(blockIds, b.ID())
 	}
 	return blockIds
 }
 
-type meshValidatorBatchMock struct {
-	mesh           *Mesh
-	batchSize      uint32
-	processedLayer types.LayerID
-	layerHash      types.Hash32
-}
-
-func (m *meshValidatorBatchMock) ValidateLayer(_ context.Context, lyr *types.Layer) {
-	m.mesh.setProcessedLayer(lyr)
-	layerID := lyr.Index()
-	if layerID.Uint32() == 0 {
-		return
-	}
-	if layerID.Uint32()%m.batchSize == 0 {
-		m.mesh.pushLayersToState(context.TODO(), layerID.Sub(m.batchSize), layerID)
-		return
-	}
-	prevPBase := layerID.Sub(layerID.Uint32() % m.batchSize)
-	m.mesh.pushLayersToState(context.TODO(), prevPBase, prevPBase)
-}
-
-func TestMesh_AccumulateRewards(t *testing.T) {
-	numOfLayers := uint32(10)
-	numOfBlocks := 10
-	maxTxs := 20
-	batchSize := 6
-
-	s := &MockMapState{Rewards: make(map[types.Address]uint64)}
-	mesh, atxDb := getMeshWithMapState(t, "t1", s)
-	defer mesh.Close()
-
-	mesh.Validator = &meshValidatorBatchMock{mesh: mesh, batchSize: uint32(batchSize)}
-
-	gLayer := types.GetEffectiveGenesis()
-	var firstLayerRewards, total int64
-	for l := gLayer.Add(1); !l.After(gLayer.Add(numOfLayers)); l = l.Add(1) {
-		reward, _ := createLayer(t, mesh, l, numOfBlocks, maxTxs, atxDb)
-		if l == gLayer.Add(1) {
-			firstLayerRewards = reward
-		}
-		total += reward
-	}
-
-	oldTotal := s.TotalReward
-	l4, err := mesh.GetLayer(types.NewLayerID(4))
-	assert.NoError(t, err)
-	// Test negative case
-	mesh.ValidateLayer(context.TODO(), l4)
-	assert.Equal(t, oldTotal, s.TotalReward)
-
-	l5, err := mesh.GetLayer(types.NewLayerID(5))
-	assert.NoError(t, err)
-	// Since batch size is 6, rewards will not be applied yet at this point
-	mesh.ValidateLayer(context.TODO(), l5)
-	assert.Equal(t, oldTotal, s.TotalReward)
-
-	l6, err := mesh.GetLayer(types.NewLayerID(6))
-	assert.NoError(t, err)
-	// Rewards will be applied at this point
-	mesh.ValidateLayer(context.TODO(), l6)
-
-	// When distributing rewards to blocks they are rounded down, so we have to allow up to numOfBlocks difference
-	totalPayout := firstLayerRewards + int64(ConfigTst().BaseReward)
-	diff := totalPayout - int64(s.TotalReward)
-	if diff < 0 {
-		diff = 0 - diff
-	}
-	assert.True(t, diff < int64(numOfBlocks),
-		"diff=%v, totalPayout=%v, s.TotalReward=%v, numOfBlocks=%v",
-		totalPayout-int64(s.TotalReward)-int64(numOfBlocks), totalPayout, s.TotalReward, int64(numOfBlocks))
-}
-
-func TestMesh_calcRewards(t *testing.T) {
+func TestMesh_calculateActualRewards(t *testing.T) {
 	reward, remainder := calculateActualRewards(types.NewLayerID(1), 10000, 10)
 	assert.Equal(t, uint64(1000), reward)
 	assert.Equal(t, uint64(0), remainder)
