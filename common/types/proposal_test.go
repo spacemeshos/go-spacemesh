@@ -5,9 +5,10 @@ import (
 	"testing"
 
 	"code.cloudfoundry.org/bytefmt"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/stretchr/testify/assert"
 )
 
 func TestProposal_IDSize(t *testing.T) {
