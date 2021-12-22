@@ -1,6 +1,7 @@
 module github.com/spacemeshos/go-spacemesh
 
 require (
+	code.cloudfoundry.org/bytefmt v0.0.0-20211005130812-5bb3c17173e5
 	github.com/ALTree/bigfloat v0.0.0-20201218142103-4a33235224ec
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/bits-and-blooms/bitset v1.2.0
