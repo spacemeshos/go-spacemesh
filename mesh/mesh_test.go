@@ -97,7 +97,8 @@ func TestMesh_LayerHash(t *testing.T) {
 	}
 
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(numLayers - 1)
-	tm.mockState.EXPECT().ValidateAndAddTxToPool(gomock.Any()).Return(nil).AnyTimes()
+	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
+	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	for i := gLyr.Add(1); !i.After(latestLyr); i = i.Add(1) {
 		thisLyr, err := tm.GetLayer(i)
 		r.NoError(err)
@@ -141,7 +142,8 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 
 	prevAggHash := tm.GetAggregatedLayerHash(gLyr)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(numLayers - 1)
-	tm.mockState.EXPECT().ValidateAndAddTxToPool(gomock.Any()).Return(nil).AnyTimes()
+	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
+	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	for i := gLyr.Add(1); !i.After(latestLyr); i = i.Add(1) {
 		thisLyr, err := tm.GetLayer(i)
 		r.NoError(err)
@@ -379,7 +381,8 @@ func TestMesh_AddBlockWithTxs_PushTransactions_UpdateUnappliedTxs(t *testing.T) 
 			return nil, nil
 		}).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
-	tm.mockState.EXPECT().ValidateAndAddTxToPool(tx5).Return(nil).Times(1)
+	tm.mockState.EXPECT().ValidateNonceAndBalance(tx5).Return(nil).Times(1)
+	tm.mockState.EXPECT().AddTxToPool(tx5).Return(nil).Times(1)
 	tm.pushLayersToState(context.TODO(), types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(1))
 	r.Equal(4, len(allTXs))
 
@@ -514,7 +517,8 @@ func TestMesh_HandleValidatedLayer(t *testing.T) {
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus2).Return(gLyr, gPlus1, false).Times(1)
 	tm.mockState.EXPECT().ApplyLayer(gPlus1, gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
-	tm.mockState.EXPECT().ValidateAndAddTxToPool(gomock.Any()).Return(nil).AnyTimes()
+	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
+	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	tm.HandleValidatedLayer(context.TODO(), gPlus2, blockIDs)
 
 	// input vector saved
@@ -541,7 +545,8 @@ func TestMesh_HandleValidatedLayer_emptyOutputFromHare(t *testing.T) {
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus2).Return(gLyr, gPlus1, false).Times(1)
 	tm.mockState.EXPECT().ApplyLayer(gPlus1, gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
-	tm.mockState.EXPECT().ValidateAndAddTxToPool(gomock.Any()).Return(nil).AnyTimes()
+	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
+	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	tm.HandleValidatedLayer(context.TODO(), gPlus2, empty)
 
 	// input vector saved

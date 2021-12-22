@@ -246,7 +246,7 @@ func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.
 		return nil, nil
 	}
 	for _, tx := range t.returnTx {
-		if tx.Recipient.String() == account.String() {
+		if tx.GetRecipient().String() == account.String() {
 			txs = append(txs, tx.ID())
 		}
 	}
@@ -497,7 +497,7 @@ func (m MempoolMock) Get(id types.TransactionID) (*types.Transaction, error) {
 
 func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
 	m.poolByTxid[id] = tx
-	m.poolByAddress[tx.Recipient] = id
+	m.poolByAddress[tx.GetRecipient()] = id
 	m.poolByAddress[tx.Origin()] = id
 	events.ReportNewTx(types.LayerID{}, tx)
 }
@@ -2182,7 +2182,7 @@ func checkTransaction(t *testing.T, tx *pb.Transaction) {
 	require.Equal(t, globalTx.Origin().Bytes(), tx.Signature.PublicKey)
 	switch x := tx.Datum.(type) {
 	case *pb.Transaction_CoinTransfer:
-		require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+		require.Equal(t, globalTx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
 			"inner coin transfer tx has bad recipient")
 	default:
 		require.Fail(t, "inner tx has wrong tx data type")
@@ -2249,7 +2249,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	// The Data field is a bit trickier to read
 	switch x := resTx.Datum.(type) {
 	case *pb.Transaction_CoinTransfer:
-		require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+		require.Equal(t, globalTx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
 			"inner coin transfer tx has bad recipient")
 	default:
 		require.Fail(t, "inner tx has wrong tx data type")
@@ -2714,7 +2714,7 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 		// Need to further check tx type
 		switch y := x.MeshTransaction.Transaction.Datum.(type) {
 		case *pb.Transaction_CoinTransfer:
-			require.Equal(t, globalTx.Recipient.Bytes(), y.CoinTransfer.Receiver.Address,
+			require.Equal(t, globalTx.GetRecipient().Bytes(), y.CoinTransfer.Receiver.Address,
 				"inner coin transfer tx has bad recipient")
 		default:
 			require.Fail(t, "inner tx has wrong tx data type")

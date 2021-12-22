@@ -136,14 +136,10 @@ func (svm *SVM) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	return nil
 }
 
-// ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool
-// it returns an error if the provided tx is not valid.
-//
-// TODO: Remove this and use a whole separate API for mempool management.
-func (svm *SVM) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	if err := svm.state.ValidateAndAddTxToPool(tx); err != nil {
-		return fmt.Errorf("SVM couldn't validate and/or add transaction to mempool: %w", err)
-	}
+// AddTxToPool adds the provided transaction to the transaction pool. The caller
+// is responsible for validating tx beforehand with ValidateNonceAndBalance.
+func (svm *SVM) AddTxToPool(tx *types.Transaction) error {
+	svm.state.AddTxToPool(tx)
 	return nil
 }
 
@@ -164,9 +160,9 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		tx.ID(),
 		log.Uint64("nonce", tx.AccountNonce),
 		log.Uint64("amount", tx.Amount),
-		log.Uint64("fee", tx.Fee),
+		log.Uint64("fee", tx.GetFee()),
 		log.Uint64("gas", tx.GasLimit),
-		log.String("recipient", tx.Recipient.String()),
+		log.String("recipient", string(tx.GetRecipient().String())),
 		log.String("origin", tx.Origin().String()))
 
 	if !svm.AddressExists(tx.Origin()) {
@@ -177,8 +173,11 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		return pubsub.ValidationIgnore
 	}
 
-	if err := svm.ValidateAndAddTxToPool(tx); err != nil {
-		svm.state.With().Error("SVM couldn't validate and/or add transaction to mempool", tx.ID(), log.Err(err))
+	if err := svm.ValidateNonceAndBalance(tx); err != nil {
+		svm.state.With().Error("SVM couldn't validate tx before adding it to the mempool", tx.ID(), log.Err(err))
+		return pubsub.ValidationIgnore
+	} else if err := svm.AddTxToPool(tx); err != nil {
+		svm.state.With().Error("SVM couldn't add tx to mempool", tx.ID(), log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 

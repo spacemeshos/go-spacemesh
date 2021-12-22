@@ -277,7 +277,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 		Id: &pb.TransactionId{Id: t.ID().Bytes()},
 		Datum: &pb.Transaction_CoinTransfer{
 			CoinTransfer: &pb.CoinTransferTransaction{
-				Receiver: &pb.AccountId{Address: t.Recipient.Bytes()},
+				Receiver: &pb.AccountId{Address: t.GetRecipient().Bytes()},
 			},
 		},
 		Sender: &pb.AccountId{Address: t.Origin().Bytes()},
@@ -514,7 +514,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 		case txEvent := <-txCh:
 			tx := txEvent.(events.Transaction)
 			// Apply address filter
-			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.Recipient == addr) {
+			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.GetRecipient() == addr) {
 				resp := &pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_MeshTransaction{

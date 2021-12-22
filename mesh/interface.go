@@ -12,7 +12,7 @@ type state interface {
 	ApplyLayer(layer types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error)
 	GetStateRoot() types.Hash32
 	Rewind(layer types.LayerID) (types.Hash32, error)
-	ValidateAndAddTxToPool(tx *types.Transaction) error
+	AddTxToPool(tx *types.Transaction) error
 
 	// below APIs exist to satisfy TxAPI interface
 

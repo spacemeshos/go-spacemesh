@@ -793,7 +793,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		require.Equal(t, tx.Origin().Bytes(), inTx.Signature.PublicKey)
 		switch x := inTx.Datum.(type) {
 		case *pb.Transaction_CoinTransfer:
-			require.Equal(t, tx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+			require.Equal(t, tx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
 				"inner coin transfer tx has bad recipient")
 		default:
 			require.Fail(t, "inner tx has wrong tx data type")

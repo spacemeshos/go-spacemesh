@@ -118,6 +118,16 @@ func (t *Transaction) ID() TransactionID {
 	return id
 }
 
+// GetFee returns the fee of the transaction.
+func (t *Transaction) GetFee() uint64 {
+	return t.Fee
+}
+
+// GetRecipient returns the transaction recipient.
+func (t *Transaction) GetRecipient() Address {
+	return t.Recipient
+}
+
 // Hash32 returns the TransactionID as a Hash32.
 func (t *Transaction) Hash32() Hash32 {
 	return t.ID().Hash32()
@@ -132,7 +142,7 @@ func (t *Transaction) ShortString() string {
 // It implements the fmt.Stringer interface.
 func (t *Transaction) String() string {
 	return fmt.Sprintf("<id: %s, origin: %s, recipient: %s, amount: %v, nonce: %v, gas_limit: %v, fee: %v>",
-		t.ID().ShortString(), t.Origin().Short(), t.Recipient.Short(), t.Amount, t.AccountNonce, t.GasLimit, t.Fee)
+		t.ID().ShortString(), t.Origin().Short(), t.GetRecipient().Short(), t.Amount, t.AccountNonce, t.GasLimit, t.GetFee())
 }
 
 // MeshTransaction is stored in the mesh and included in the block.

@@ -41,9 +41,9 @@ func ReportNewTx(layerID types.LayerID, tx *types.Transaction) {
 	Publish(NewTx{
 		ID:          tx.ID().String(),
 		Origin:      tx.Origin().String(),
-		Destination: tx.Recipient.String(),
+		Destination: tx.GetRecipient().String(),
 		Amount:      tx.Amount,
-		Fee:         tx.Fee,
+		Fee:         tx.GetFee(),
 	})
 	ReportTxWithValidity(layerID, tx, true)
 }

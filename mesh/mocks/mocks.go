@@ -165,18 +165,18 @@ func (mr *MockstateMockRecorder) Rewind(layer interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rewind", reflect.TypeOf((*Mockstate)(nil).Rewind), layer)
 }
 
-// ValidateAndAddTxToPool mocks base method.
-func (m *Mockstate) ValidateAndAddTxToPool(tx *types.Transaction) error {
+// AddTxToPool mocks base method.
+func (m *Mockstate) AddTxToPool(tx *types.Transaction) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ValidateAndAddTxToPool", tx)
+	ret := m.ctrl.Call(m, "AddTxToPool", tx)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// ValidateAndAddTxToPool indicates an expected call of ValidateAndAddTxToPool.
-func (mr *MockstateMockRecorder) ValidateAndAddTxToPool(tx interface{}) *gomock.Call {
+// AddTxToPool indicates an expected call of AddTxToPool.
+func (mr *MockstateMockRecorder) AddTxToPool(tx interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ValidateAndAddTxToPool", reflect.TypeOf((*Mockstate)(nil).ValidateAndAddTxToPool), tx)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTxToPool", reflect.TypeOf((*Mockstate)(nil).AddTxToPool), tx)
 }
 
 // ValidateNonceAndBalance mocks base method.
