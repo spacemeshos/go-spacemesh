@@ -27,7 +27,7 @@ func TestFullBallotFilter(t *testing.T) {
 			desc:             "Good",
 			badBeaconBallots: map[types.BallotID]struct{}{},
 			ballot:           types.BallotID{1},
-			expect:           true,
+			expect:           false,
 		},
 		{
 			desc: "BadFromRecent",
@@ -38,7 +38,7 @@ func TestFullBallotFilter(t *testing.T) {
 			ballotlid: types.NewLayerID(10),
 			last:      types.NewLayerID(11),
 			distance:  2,
-			expect:    false,
+			expect:    true,
 		},
 		{
 			desc: "BadFromOld",
@@ -49,7 +49,7 @@ func TestFullBallotFilter(t *testing.T) {
 			ballotlid: types.NewLayerID(8),
 			last:      types.NewLayerID(11),
 			distance:  2,
-			expect:    true,
+			expect:    false,
 		},
 	} {
 		tc := tc
@@ -63,7 +63,7 @@ func TestFullBallotFilter(t *testing.T) {
 
 			f := newFullTortoise(config, &state)
 
-			require.Equal(t, tc.expect, f.ballotFilter(tc.ballot, tc.ballotlid))
+			require.Equal(t, tc.expect, f.shouldBeDelayed(tc.ballot, tc.ballotlid))
 		})
 	}
 }

@@ -75,6 +75,7 @@ func (v *verifying) markGoodCut(logger log.Log, lid types.LayerID, ballots []tor
 			)
 			v.goodBallots[ballot.id] = good
 			v.goodBallots[ballot.base] = good
+			n++
 		}
 	}
 	return n > 0

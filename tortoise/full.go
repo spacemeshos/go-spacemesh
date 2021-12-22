@@ -65,7 +65,7 @@ func (f *full) getVote(logger log.Log, ballot types.BallotID, block types.BlockI
 func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ballots []types.BallotID) {
 	var delayed []types.BallotID
 	for _, ballot := range ballots {
-		if !f.ballotFilter(ballot, ballotlid) {
+		if f.shouldBeDelayed(ballot, ballotlid) {
 			delayed = append(delayed, ballot)
 			continue
 		}
@@ -151,14 +151,11 @@ func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	return true
 }
 
-// only ballots with the correct beacon value are considered good ballots and their votes counted by
-// verifying tortoise. for ballots with a different beacon values, we count their votes only in self-healing mode
-// and if they are old enough (by default using distance equal to an epoch).
-func (f *full) ballotFilter(ballotID types.BallotID, ballotlid types.LayerID) bool {
-	if _, bad := f.badBeaconBallots[ballotID]; !bad {
-		return true
-	}
-	return f.last.Difference(ballotlid) > f.BadBeaconVoteDelayLayers
+// shouldBeDelayed is true if ballot has a different beacon and it wasn't created sufficiently
+// long time ago.
+func (f *full) shouldBeDelayed(ballotID types.BallotID, ballotlid types.LayerID) bool {
+	_, bad := f.badBeaconBallots[ballotID]
+	return bad && f.last.Difference(ballotlid) <= f.BadBeaconVoteDelayLayers
 }
 
 type delayedBallots struct {
