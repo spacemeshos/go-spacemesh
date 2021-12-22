@@ -17,10 +17,11 @@ func TestPrioritizeBlocks(t *testing.T) {
 		{4},
 	}
 	for _, tc := range []struct {
-		desc         string
-		disagrements map[types.BallotID]types.LayerID
-		ballotLayer  map[types.BallotID]types.LayerID
-		expect       []types.BallotID
+		desc             string
+		disagrements     map[types.BallotID]types.LayerID
+		ballotLayer      map[types.BallotID]types.LayerID
+		badBeaconBallots map[types.BallotID]struct{}
+		expect           []types.BallotID
 	}{
 		{
 			desc:   "SortLexically",
@@ -46,6 +47,20 @@ func TestPrioritizeBlocks(t *testing.T) {
 				ballots[3]: types.NewLayerID(10),
 			},
 		},
+		{
+			desc:   "PrioritizeBallotsWithGoodBeacon",
+			expect: []types.BallotID{ballots[1], ballots[2], ballots[3], ballots[0]},
+			disagrements: map[types.BallotID]types.LayerID{
+				ballots[0]: types.NewLayerID(8),
+				ballots[1]: types.NewLayerID(9),
+				ballots[2]: types.NewLayerID(9),
+				ballots[3]: types.NewLayerID(9),
+			},
+			badBeaconBallots: map[types.BallotID]struct{}{
+				ballots[0]: {},
+				ballots[3]: {},
+			},
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
@@ -57,7 +72,7 @@ func TestPrioritizeBlocks(t *testing.T) {
 				rst[i], rst[j] = rst[j], rst[i]
 			})
 
-			prioritizeBallots(rst, tc.disagrements, tc.ballotLayer)
+			prioritizeBallots(rst, tc.disagrements, tc.ballotLayer, tc.badBeaconBallots)
 			require.Equal(t, tc.expect, rst)
 		})
 	}

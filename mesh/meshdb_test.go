@@ -55,7 +55,7 @@ func TestMeshDB_New_Proposal(t *testing.T) {
 }
 
 func TestMeshDB_AddBallot(t *testing.T) {
-	mdb, err := NewPersistentMeshDB(Path+"/mesh_db/", 1, logtest.New(t))
+	mdb, err := NewPersistentMeshDB(t.TempDir(), 1, logtest.New(t))
 	require.NoError(t, err)
 	defer mdb.Close()
 
@@ -80,6 +80,11 @@ func TestMeshDB_AddBallot(t *testing.T) {
 	gotNew, err := mdb.GetBallot(ballot.ID())
 	require.NoError(t, err)
 	assert.Equal(t, got, gotNew)
+
+	ballots, err := mdb.LayerBallots(gotNew.LayerIndex)
+	require.NoError(t, err)
+	require.Len(t, ballots, 1)
+	require.Equal(t, gotNew, ballots[0])
 }
 
 func TestMeshDB_AddBlockNotCached(t *testing.T) {
