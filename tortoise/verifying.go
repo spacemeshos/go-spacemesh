@@ -25,7 +25,7 @@ func (g goodness) String() string {
 const (
 	bad goodness = iota
 	good
-	// canBeGood is for ballots that have are voting consistently with local opinion
+	// canBeGood is for ballots that are voting consistently with local opinion
 	// within base ballot layer up to ballot layer.
 	canBeGood
 )
