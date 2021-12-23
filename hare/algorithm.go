@@ -9,13 +9,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -496,11 +494,6 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	proc.WithContext(ctx).With().Debug("processing message",
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
-	metrics.MessageTypeCounter.With(prometheus.Labels{
-		"type_id":  m.InnerMsg.Type.String(),
-		"layer":    m.InnerMsg.InstanceID.String(),
-		"reporter": "processMsg",
-	}).Inc()
 
 	switch m.InnerMsg.Type {
 	case pre:
