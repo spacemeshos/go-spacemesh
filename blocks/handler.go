@@ -61,7 +61,7 @@ func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
 	// set the block ID when received
 	b.Initialize()
 
-	logger = logger.WithFields(b.Fields()...)
+	logger = logger.WithFields(log.Object("block", &b))
 
 	if h.mesh.HasBlock(b.ID()) {
 		logger.Info("known block")

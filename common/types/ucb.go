@@ -49,14 +49,13 @@ func (b *UCBlock) ID() BlockID {
 	return b.blockID
 }
 
-// Fields returns an array of LoggableFields for logging.
-func (b *UCBlock) Fields() []log.LoggableField {
-	return []log.LoggableField{
-		b.ID(),
-		b.LayerIndex,
-		log.Int("num_tx", len(b.TxIDs)),
-		log.Int("num_rewards", len(b.Rewards)),
-	}
+// MarshalLogObject implements logging encoder for Block.
+func (b *UCBlock) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("id", b.ID().String())
+	encoder.AddUint32("layer", b.LayerIndex.Value)
+	encoder.AddInt("num_tx", len(b.TxIDs))
+	encoder.AddInt("num_rewards", len(b.Rewards))
+	return nil
 }
 
 // DBBlock is a Block structure stored in DB to skip ID hashing.

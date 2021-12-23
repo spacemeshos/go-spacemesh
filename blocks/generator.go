@@ -104,7 +104,7 @@ func (g *Generator) extractUniqueTXs(layerID types.LayerID, proposals []*types.P
 
 func (g *Generator) calculateSmesherRewards(layerID types.LayerID, proposals []*types.Proposal, txs []*types.Transaction) ([]types.AnyReward, error) {
 	rInfo := calculateRewardPerProposal(layerID, g.cfg, txs, len(proposals))
-	g.logger.With().Info("reward calculated", rInfo.Fields()...)
+	g.logger.With().Info("reward calculated", log.Object("rewards", rInfo))
 	rewards := make([]types.AnyReward, 0, len(proposals))
 	for _, p := range proposals {
 		if p.AtxID == *types.EmptyATXID {

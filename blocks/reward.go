@@ -21,15 +21,15 @@ type layerRewardsInfo struct {
 	layerRewardPer uint64
 }
 
-func (info *layerRewardsInfo) Fields() []log.LoggableField {
-	return []log.LoggableField{
-		info.layerID,
-		log.Uint64("num_proposals", info.numProposals),
-		log.Uint64("total_reward", info.feesReward+info.layerReward),
-		log.Uint64("layer_reward", info.layerReward),
-		log.Uint64("total_reward_per_proposal", info.totalRewardPer),
-		log.Uint64("layer_reward_per_proposal", info.layerRewardPer),
-	}
+// MarshalLogObject implements logging encoder for layerRewardsInfo.
+func (info *layerRewardsInfo) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddUint32("layer", info.layerID.Value)
+	encoder.AddUint64("num_proposals", info.numProposals)
+	encoder.AddUint64("total_reward", info.feesReward+info.layerReward)
+	encoder.AddUint64("layer_reward", info.layerReward)
+	encoder.AddUint64("total_reward_per_proposal", info.totalRewardPer)
+	encoder.AddUint64("layer_reward_per_proposal", info.layerRewardPer)
+	return nil
 }
 
 func calculateLayerReward(cfg RewardConfig) uint64 {
