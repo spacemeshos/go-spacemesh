@@ -520,11 +520,10 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 	if err := t.updateLocalVotes(ctx, logger, lid); err != nil {
 		return err
 	}
+	t.verifying.countVotes(logger, lid, ballots)
 
 	previous := t.verified
-	if t.mode.isVerifying() {
-		t.verifying.countVotes(logger, lid, ballots)
-	}
+
 	for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
 		var success bool
 		if t.mode.isVerifying() {
@@ -541,29 +540,17 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 			success = t.full.verify(logger, target)
 
 			if success {
-				// first attempt. reconsider goodness of ballots using output from full tortoise.
-				//
-				// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
-				// that accumulated weight has a weight of the layer that is going to be verified.
-				for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
-					t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
-				}
-				restarted := t.verifying.verify(logger, target)
-
-				// second attempt. find ballots from a layer that voted consistently with hare. check that all base ballots
-				// of those ballots voted consistently with local opinion (e.g. they can be good), mark them good and try verifying again.
-				//
-				// TODO(dshulyak) the only reason why it is not unified with first attempt is hdist condition.
-				if !restarted && target.After(t.layerCutoff()) {
-					t.verifying.resetWeights()
-					if t.verifying.markGoodCut(logger, target, t.getTortoiseBallots(target)) {
-						// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
-						// that accumulated weight has a weight of the layer that is going to be verified.
-						for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
-							t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
-						}
-						restarted = t.verifying.verify(logger, target)
+				var restarted bool
+				// try to find a cut with ballots that can be good (see verifying tortoise for definition)
+				// if there are such ballots try to bootstrap verifying tortoise by marking them good
+				t.verifying.resetWeights()
+				if t.verifying.markGoodCut(logger, target, t.getTortoiseBallots(target)) {
+					// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
+					// that accumulated weight has a weight of the layer that is going to be verified.
+					for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
+						t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 					}
+					restarted = t.verifying.verify(logger, target)
 				}
 
 				if restarted && t.mode.isFull() {
