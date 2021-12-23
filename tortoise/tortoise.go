@@ -532,15 +532,11 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 		if !success && (t.canUseFullMode() || t.mode.isFull()) {
 			if t.mode.isVerifying() {
 				t.switchModes(logger)
-				// reset accumulated weight as verifying tortoise will be re-counting votes
-				// with input from full tortoise.
-				t.verifying.resetWeights()
 			}
 			t.full.countVotes(logger)
 			success = t.full.verify(logger, target)
 
 			if success {
-				var restarted bool
 				// try to find a cut with ballots that can be good (see verifying tortoise for definition)
 				// if there are such ballots try to bootstrap verifying tortoise by marking them good
 				t.verifying.resetWeights()
@@ -550,15 +546,10 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 					for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
 						t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 					}
-					restarted = t.verifying.verify(logger, target)
-				}
-
-				if restarted && t.mode.isFull() {
-					t.switchModes(logger)
-				} else if !restarted {
-					// need to reset accumulated weight, verifying will not try to verify this layer again
-					// hence the accumulated weight will be inconsistent with verified layer.
-					t.verifying.resetWeights()
+					restarted := t.verifying.verify(logger, target)
+					if restarted && t.mode.isFull() {
+						t.switchModes(logger)
+					}
 				}
 			}
 		}
