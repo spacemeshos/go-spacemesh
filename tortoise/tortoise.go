@@ -546,8 +546,7 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 					for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
 						t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 					}
-					restarted := t.verifying.verify(logger, target)
-					if restarted && t.mode.isFull() {
+					if t.verifying.verify(logger, target) {
 						t.switchModes(logger)
 					}
 				}
