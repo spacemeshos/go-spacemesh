@@ -26,21 +26,20 @@ const (
 // DB represents a mesh database instance.
 type DB struct {
 	log.Log
-	blockCache            blockCache
-	layers                database.Database
-	proposals             database.Database
-	ballots               database.Database
-	transactions          database.Database
-	contextualValidity    database.Database
-	general               database.Database
-	unappliedTxs          database.Database
-	inputVector           database.Database
-	blockMutex            sync.RWMutex
-	coinflipMu            sync.RWMutex
-	coinflips             map[types.LayerID]bool // weak coinflip results from Hare
-	lhMutex               sync.Mutex
-	InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
-	exit                  chan struct{}
+	blockCache         blockCache
+	layers             database.Database
+	proposals          database.Database
+	ballots            database.Database
+	transactions       database.Database
+	contextualValidity database.Database
+	general            database.Database
+	unappliedTxs       database.Database
+	inputVector        database.Database
+	blockMutex         sync.RWMutex
+	coinflipMu         sync.RWMutex
+	coinflips          map[types.LayerID]bool // weak coinflip results from Hare
+	lhMutex            sync.Mutex
+	exit               chan struct{}
 }
 
 // NewPersistentMeshDB creates an instance of a mesh database.
@@ -474,14 +473,8 @@ func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) 
 	return coin, exists
 }
 
-// InputVectorBackupFunc specifies a backup function for testing.
-type InputVectorBackupFunc func(id types.LayerID) ([]types.BlockID, error)
-
 // GetLayerInputVectorByID gets the input vote vector for a layer (hare results).
 func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, error) {
-	if m.InputVectorBackupFunc != nil {
-		return m.InputVectorBackupFunc(layerID)
-	}
 	buf, err := m.inputVector.Get(layerID.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("get from DB: %w", err)
@@ -491,16 +484,6 @@ func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, er
 		return nil, fmt.Errorf("decode with codec: %w", err)
 	}
 	return ids, nil
-}
-
-// SetInputVectorBackupFunc sets the backup function for testing.
-func (m *DB) SetInputVectorBackupFunc(fn InputVectorBackupFunc) {
-	m.InputVectorBackupFunc = fn
-}
-
-// GetInputVectorBackupFunc gets the backup function for testing.
-func (m *DB) GetInputVectorBackupFunc() InputVectorBackupFunc {
-	return m.InputVectorBackupFunc
 }
 
 // SaveLayerInputVectorByID gets the input vote vector for a layer (hare results).

@@ -26,58 +26,6 @@ func init() {
 	types.SetLayersPerEpoch(4)
 }
 
-type blockDataWriter interface {
-	blockDataProvider
-	AddBlock(*types.Block) error
-	SaveLayerInputVectorByID(context.Context, types.LayerID, []types.BlockID) error
-	SetInputVectorBackupFunc(mesh.InputVectorBackupFunc)
-	GetInputVectorBackupFunc() mesh.InputVectorBackupFunc
-}
-
-type meshWrapper struct {
-	blockDataWriter
-	inputVectorBackupFn      func(types.LayerID) ([]types.BlockID, error)
-	saveContextualValidityFn func(types.BlockID, types.LayerID, bool) error
-}
-
-func (mw meshWrapper) SaveContextualValidity(bid types.BlockID, lid types.LayerID, valid bool) error {
-	if mw.saveContextualValidityFn != nil {
-		if err := mw.saveContextualValidityFn(bid, lid, valid); err != nil {
-			return fmt.Errorf("save contextual validity fn: %w", err)
-		}
-
-		return nil
-	}
-
-	if err := mw.blockDataWriter.SaveContextualValidity(bid, lid, valid); err != nil {
-		return fmt.Errorf("get layer input vector by ID: %w", err)
-	}
-
-	return nil
-}
-
-func (mw meshWrapper) GetLayerInputVectorByID(lid types.LayerID) ([]types.BlockID, error) {
-	if mw.inputVectorBackupFn != nil {
-		blocks, err := mw.inputVectorBackupFn(lid)
-		if err != nil {
-			return blocks, fmt.Errorf("input vector backup fn: %w", err)
-		}
-
-		return blocks, nil
-	}
-
-	blocks, err := mw.blockDataWriter.GetLayerInputVectorByID(lid)
-	if err != nil {
-		return blocks, fmt.Errorf("get layer input vector by ID: %w", err)
-	}
-
-	return blocks, nil
-}
-
-func (mw meshWrapper) GetCoinflip(context.Context, types.LayerID) (bool, bool) {
-	return true, true
-}
-
 type atxDataWriter interface {
 	atxDataProvider
 	StoreAtx(types.EpochID, *types.ActivationTx) error
@@ -134,6 +82,10 @@ func addLayerToMesh(m *mesh.DB, layer *types.Layer) error {
 			return fmt.Errorf("add block: %w", err)
 		}
 	}
+	if err := m.SaveLayerInputVectorByID(context.TODO(), layer.Index(), layer.BlocksIDs()); err != nil {
+		panic("database error")
+	}
+
 	return nil
 }
 
@@ -325,24 +277,11 @@ func generateBlocks(t *testing.T, l types.LayerID, natxs, nblocks int, bbp baseB
 	return
 }
 
-func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDataWriter, bbp baseBallotProvider, ivp inputVectorProvider, blocksPerLayer int) *types.Layer {
-	oldInputVectorFn := msh.InputVectorBackupFunc
-	defer func() {
-		msh.InputVectorBackupFunc = oldInputVectorFn
-	}()
-	msh.InputVectorBackupFunc = ivp
-	blocks, err := ivp(l.Sub(1))
-	if err != nil {
-		blocks = nil
-	}
-	if err := msh.SaveLayerInputVectorByID(context.TODO(), l.Sub(1), blocks); err != nil {
-		panic("database error")
-	}
+func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDataWriter, bbp baseBallotProvider, blocksPerLayer int) *types.Layer {
 	lyr := types.NewLayer(l)
 	for _, block := range generateBlocks(t, l, blocksPerLayer, blocksPerLayer, bbp, atxdb, 1) {
 		lyr.AddBlock(block)
 	}
-
 	return lyr
 }
 
@@ -368,9 +307,6 @@ func TestAddToMesh(t *testing.T) {
 	logger := logtest.New(t)
 	mdb := getInMemMesh(t)
 
-	getHareResults := mdb.LayerBlockIds
-
-	mdb.InputVectorBackupFunc = getHareResults
 	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
 	alg.trtl.atxdb = atxdb
@@ -379,7 +315,7 @@ func TestAddToMesh(t *testing.T) {
 	logger.With().Info("genesis is", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
 	logger.With().Info("genesis is", l.Blocks()[0].Fields()...)
 
-	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBallot, getHareResults, defaultTestLayerSize)
+	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
 
 	logger.With().Info("first is", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
@@ -387,24 +323,24 @@ func TestAddToMesh(t *testing.T) {
 
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
 
-	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBallot, getHareResults, defaultTestLayerSize)
+	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l2))
 	alg.HandleIncomingLayer(context.TODO(), l2.Index())
 
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 
-	l3a := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, getHareResults, defaultTestLayerSize+1)
+	l3a := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize+1)
 
 	// this should fail as the blocks for this layer have not been added to the mesh yet
 	alg.HandleIncomingLayer(context.TODO(), l3a.Index())
 	require.Equal(t, types.GetEffectiveGenesis().Add(1), alg.LatestComplete())
 
-	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, getHareResults, defaultTestLayerSize)
+	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l3))
 	require.NoError(t, alg.rerun(context.TODO()))
 	alg.updateFromRerun(context.TODO())
 
-	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), mdb, atxdb, alg.BaseBallot, getHareResults, defaultTestLayerSize)
+	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l4))
 	alg.HandleIncomingLayer(context.TODO(), l4.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(3).Uint32()), int(alg.LatestComplete().Uint32()), "wrong latest complete layer")
@@ -416,9 +352,6 @@ func TestBaseBallot(t *testing.T) {
 	atxdb := getAtxDB()
 	alg := defaultAlgorithm(t, mdb)
 	alg.trtl.atxdb = atxdb
-
-	getHareResults := mdb.LayerBlockIds
-	mdb.InputVectorBackupFunc = getHareResults
 
 	l0 := types.GenesisLayer()
 	expectBaseBallotLayer := func(layerID types.LayerID, numAgainst, numSupport, numNeutral int) {
@@ -438,19 +371,19 @@ func TestBaseBallot(t *testing.T) {
 	expectBaseBallotLayer(l0.Index(), 0, len(types.GenesisLayer().Blocks()), 0)
 
 	// add a couple of incoming layers and make sure the base ballot layer advances as well
-	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBallot, getHareResults, defaultTestLayerSize)
+	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
 	expectBaseBallotLayer(l1.Index(), 0, defaultTestLayerSize, 0)
 
-	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBallot, getHareResults, defaultTestLayerSize)
+	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l2))
 	alg.HandleIncomingLayer(context.TODO(), l2.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 	expectBaseBallotLayer(l2.Index(), 0, defaultTestLayerSize, 0)
 
 	// add a layer that's not in the mesh and make sure it does not advance
-	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, getHareResults, defaultTestLayerSize)
+	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 	expectBaseBallotLayer(l2.Index(), 0, defaultTestLayerSize, 0)

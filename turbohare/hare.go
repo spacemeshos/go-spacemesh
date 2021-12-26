@@ -104,14 +104,3 @@ func (h *SuperHare) GetResult(id types.LayerID) ([]types.ProposalID, error) {
 	sort.Slice(proposals, func(i, j int) bool { return bytes.Compare(proposals[i].Bytes(), proposals[j].Bytes()) == -1 })
 	return proposals, nil
 }
-
-// GetBlockResult returns the resulting blocks per hare consensus.
-func (h *SuperHare) GetBlockResult(id types.LayerID) ([]types.BlockID, error) {
-	pids, err := h.GetResult(id)
-	if err != nil {
-		h.logger.With().Error("superhare failed to get hare result for layer", id, log.Err(err))
-		return nil, fmt.Errorf("get result: %w", err)
-	}
-
-	return types.ProposalIDsToBlockIDs(pids), nil
-}
