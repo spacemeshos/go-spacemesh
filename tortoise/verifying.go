@@ -24,9 +24,13 @@ func (g goodness) String() string {
 
 const (
 	bad goodness = iota
+	// good ballot must:
+	// - agree on a beacon value
+	// - don't vote on blocks before base ballot
+	// - have consistent votes with local opinion
+	// - have a good base ballot.
 	good
-	// canBeGood is for ballots that are voting consistently with local opinion
-	// within base ballot layer up to ballot layer.
+	// canBeGood is the same as good, but doesn't require good base ballot.
 	canBeGood
 )
 
@@ -54,10 +58,6 @@ type verifying struct {
 func (v *verifying) resetWeights() {
 	v.totalWeight = weightFromUint64(0)
 	v.layerWeights = map[types.LayerID]weight{}
-}
-
-func (v *verifying) checkIsGood(ballot types.BallotID) bool {
-	return v.goodBallots[ballot] == good
 }
 
 func (v *verifying) checkCanBeGood(ballot types.BallotID) bool {
@@ -144,7 +144,7 @@ func (v *verifying) sumGoodBallots(logger log.Log, ballots []tortoiseBallot) (we
 	sum := weightFromUint64(0)
 	n := 0
 	for _, ballot := range ballots {
-		rst := v.isGood(logger, ballot)
+		rst := v.determineGoodness(logger, ballot)
 		if rst == bad {
 			continue
 		}
@@ -157,7 +157,7 @@ func (v *verifying) sumGoodBallots(logger log.Log, ballots []tortoiseBallot) (we
 	return sum, n
 }
 
-func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) goodness {
+func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goodness {
 	logger = logger.WithFields(ballot.id, log.Stringer("base", ballot.base))
 
 	if _, exists := v.badBeaconBallots[ballot.id]; exists {
@@ -192,7 +192,7 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) goodness {
 	}
 
 	if rst := v.goodBallots[ballot.base]; rst != good {
-		logger.With().Debug("ballot is not good. base is not good")
+		logger.With().Debug("ballot can be good. only base is not good")
 		return canBeGood
 	}
 

@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
-func TestVerifyingIsGood(t *testing.T) {
+func TestVerifyingDetermineGoodness(t *testing.T) {
 	goodbase := types.BallotID{0}
 	ballots := []types.BallotID{{1}, {2}, {3}}
 	blocks := []types.BlockID{{11}, {22}, {33}}
@@ -127,7 +127,7 @@ func TestVerifyingIsGood(t *testing.T) {
 
 			v := newVerifying(Config{}, &tc.commonState)
 			v.goodBallots[goodbase] = good
-			require.Equal(t, tc.expect, v.isGood(logger, tc.ballot))
+			require.Equal(t, tc.expect, v.determineGoodness(logger, tc.ballot))
 		})
 	}
 }
