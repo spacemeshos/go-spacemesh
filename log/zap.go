@@ -272,3 +272,8 @@ func (fl FieldLogger) Warning(msg string, fields ...LoggableField) {
 func (fl FieldLogger) Panic(msg string, fields ...LoggableField) {
 	fl.l.Panic(msg, unpack(append(fields, String("name", fl.name)))...)
 }
+
+// Fatal prints message with fields.
+func (fl FieldLogger) Fatal(msg string, fields ...LoggableField) {
+	fl.l.Fatal(msg, unpack(append(fields, String("name", fl.name)))...)
+}
