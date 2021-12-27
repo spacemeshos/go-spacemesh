@@ -95,10 +95,10 @@ func (mr *MockblockDataProviderMockRecorder) GetCoinflip(arg0, arg1 interface{})
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCoinflip", reflect.TypeOf((*MockblockDataProvider)(nil).GetCoinflip), arg0, arg1)
 }
 
-// GetLayerInputVectorByID mocks base method.
-func (m *MockblockDataProvider) GetLayerInputVectorByID(arg0 types.LayerID) ([]types.BlockID, error) {
+// GetHareConsensusOutput mocks base method.
+func (m *MockblockDataProvider) GetHareConsensusOutput(arg0 types.LayerID) ([]types.BlockID, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLayerInputVectorByID", arg0)
+	ret := m.ctrl.Call(m, "GetHareConsensusOutput", arg0)
 	ret0, _ := ret[0].([]types.BlockID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
@@ -107,7 +107,7 @@ func (m *MockblockDataProvider) GetLayerInputVectorByID(arg0 types.LayerID) ([]t
 // GetLayerInputVectorByID indicates an expected call of GetLayerInputVectorByID.
 func (mr *MockblockDataProviderMockRecorder) GetLayerInputVectorByID(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerInputVectorByID", reflect.TypeOf((*MockblockDataProvider)(nil).GetLayerInputVectorByID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHareConsensusOutput", reflect.TypeOf((*MockblockDataProvider)(nil).GetHareConsensusOutput), arg0)
 }
 
 // LayerBallots mocks base method.

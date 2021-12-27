@@ -84,7 +84,7 @@ func (testHare) IsIdentityActiveOnConsensusView(context.Context, string, types.L
 	return true, nil
 }
 
-func (h *testHare) HandleValidatedLayer(ctx context.Context, layer types.LayerID, ids []types.BlockID) {
+func (h *testHare) ProcessLayerPerHareOutput(ctx context.Context, layer types.LayerID, ids []types.BlockID) {
 	h.validate(layer, ids, h)
 }
 

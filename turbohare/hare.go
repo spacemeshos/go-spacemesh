@@ -18,7 +18,7 @@ type meshProvider interface {
 	LayerProposalIDs(types.LayerID) ([]types.ProposalID, error)
 	RecordCoinflip(context.Context, types.LayerID, bool)
 	SetZeroBlockLayer(types.LayerID) error
-	HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID)
+	ProcessLayerPerHareOutput(context.Context, types.LayerID, []types.BlockID)
 }
 
 // SuperHare is a method to provide fast hare results without consensus based on received blocks from gossip.
@@ -80,7 +80,7 @@ func (h *SuperHare) Start(ctx context.Context) error {
 							logger.With().Error("failed to set layer as a zero", log.Err(err))
 						}
 					}
-					h.mesh.HandleValidatedLayer(ctx, layerID, blocks)
+					h.mesh.ProcessLayerPerHareOutput(ctx, layerID, blocks)
 				}()
 			}
 		}

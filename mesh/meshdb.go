@@ -34,7 +34,7 @@ type DB struct {
 	contextualValidity database.Database
 	general            database.Database
 	unappliedTxs       database.Database
-	inputVector        database.Database
+	hareOutput         database.Database
 	blockMutex         sync.RWMutex
 	coinflipMu         sync.RWMutex
 	coinflips          map[types.LayerID]bool // weak coinflip results from Hare
@@ -87,7 +87,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 		general:            gdb,
 		contextualValidity: vdb,
 		unappliedTxs:       utx,
-		inputVector:        iv,
+		hareOutput:         iv,
 		coinflips:          make(map[types.LayerID]bool),
 		exit:               make(chan struct{}),
 	}
@@ -101,7 +101,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 			mdb.Log.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
 		}
 	}
-	if err = mdb.SaveLayerInputVectorByID(context.Background(), gLayer.Index(), types.BlockIDs(gLayer.Blocks())); err != nil {
+	if err = mdb.SaveHareConsensusOutput(context.Background(), gLayer.Index(), types.BlockIDs(gLayer.Blocks())); err != nil {
 		log.With().Error("error inserting genesis input vector to db", gLayer.Index(), log.Err(err))
 	}
 	return mdb, err
@@ -129,7 +129,7 @@ func NewMemMeshDB(logger log.Log) *DB {
 		contextualValidity: database.NewMemDatabase(),
 		transactions:       database.NewMemDatabase(),
 		unappliedTxs:       database.NewMemDatabase(),
-		inputVector:        database.NewMemDatabase(),
+		hareOutput:         database.NewMemDatabase(),
 		coinflips:          make(map[types.LayerID]bool),
 		exit:               make(chan struct{}),
 	}
@@ -140,7 +140,7 @@ func NewMemMeshDB(logger log.Log) *DB {
 		_ = mdb.AddBlock(b)
 		_ = mdb.SaveContextualValidity(b.ID(), b.LayerIndex, true)
 	}
-	if err := mdb.SaveLayerInputVectorByID(context.Background(), gLayer.Index(), types.BlockIDs(gLayer.Blocks())); err != nil {
+	if err := mdb.SaveHareConsensusOutput(context.Background(), gLayer.Index(), types.BlockIDs(gLayer.Blocks())); err != nil {
 		logger.With().Error("error inserting genesis input vector to db", gLayer, log.Err(err))
 	}
 	return mdb
@@ -154,7 +154,7 @@ func (m *DB) Close() {
 	m.layers.Close()
 	m.transactions.Close()
 	m.unappliedTxs.Close()
-	m.inputVector.Close()
+	m.hareOutput.Close()
 	m.general.Close()
 	m.contextualValidity.Close()
 }
@@ -446,7 +446,7 @@ func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) err
 		return fmt.Errorf("serialize vector: %w", err)
 	}
 
-	if err := m.inputVector.Put(hash.Bytes(), data); err != nil {
+	if err := m.hareOutput.Put(hash.Bytes(), data); err != nil {
 		return fmt.Errorf("put into DB: %w", err)
 	}
 
@@ -474,9 +474,9 @@ func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) 
 	return coin, exists
 }
 
-// GetLayerInputVectorByID gets the input vote vector for a layer (hare results).
-func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, error) {
-	buf, err := m.inputVector.Get(layerID.Bytes())
+// GetHareConsensusOutput gets the input vote vector for a layer (hare results).
+func (m *DB) GetHareConsensusOutput(layerID types.LayerID) ([]types.BlockID, error) {
+	buf, err := m.hareOutput.Get(layerID.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("get from DB: %w", err)
 	}
@@ -487,8 +487,8 @@ func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, er
 	return ids, nil
 }
 
-// SaveLayerInputVectorByID gets the input vote vector for a layer (hare results).
-func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error {
+// SaveHareConsensusOutput gets the input vote vector for a layer (hare results).
+func (m *DB) SaveHareConsensusOutput(ctx context.Context, id types.LayerID, blks []types.BlockID) error {
 	m.WithContext(ctx).With().Debug("saving input vector", id)
 	// NOTE(dshulyak) there is an implicit dependency in fetcher
 	buf, err := codec.Encode(blks)
@@ -496,7 +496,7 @@ func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blk
 		return fmt.Errorf("encode with codec: %w", err)
 	}
 
-	if err := m.inputVector.Put(id.Bytes(), buf); err != nil {
+	if err := m.hareOutput.Put(id.Bytes(), buf); err != nil {
 		return fmt.Errorf("put into DB: %w", err)
 	}
 

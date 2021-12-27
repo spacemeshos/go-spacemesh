@@ -276,7 +276,7 @@ func TestSynchronize_ValidationDoneAfterCurrentAdvanced(t *testing.T) {
 					<-finishOldCurrent
 				}
 				// cause mesh's processed layer to advance
-				mm.HandleValidatedLayer(ctx, l, []types.BlockID{})
+				mm.ProcessLayerPerHareOutput(ctx, l, []types.BlockID{})
 			}).Times(1)
 	}
 
@@ -326,7 +326,7 @@ func TestSynchronize_MaxAttemptWithinRun(t *testing.T) {
 			func(ctx context.Context, layer *types.Layer) {
 				assert.Equal(t, l, layer.Index())
 				// cause mesh's processed layer to advance
-				mm.HandleValidatedLayer(ctx, l, []types.BlockID{})
+				mm.ProcessLayerPerHareOutput(ctx, l, []types.BlockID{})
 			}).Times(1)
 	}
 
@@ -355,7 +355,7 @@ func TestSynchronize_MaxAttemptWithinRun(t *testing.T) {
 			func(ctx context.Context, layer *types.Layer) {
 				assert.Equal(t, l, layer.Index())
 				// cause mesh's processed layer to advance
-				mm.HandleValidatedLayer(ctx, l, []types.BlockID{})
+				mm.ProcessLayerPerHareOutput(ctx, l, []types.BlockID{})
 				// but also advance current layer
 				ticker.advanceToLayer(ticker.GetCurrentLayer().Add(1))
 			}).Times(1)
@@ -419,7 +419,7 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 			func(ctx context.Context, layer *types.Layer) {
 				assert.Equal(t, l, layer.Index())
 				// cause mesh's processed layer to advance
-				mm.HandleValidatedLayer(ctx, l, []types.BlockID{})
+				mm.ProcessLayerPerHareOutput(ctx, l, []types.BlockID{})
 			}).Times(1)
 	}
 	patrol.EXPECT().IsHareInCharge(lyr).Return(false).Times(maxAttemptWithinRun)
@@ -471,7 +471,7 @@ func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 			func(ctx context.Context, layer *types.Layer) {
 				assert.Equal(t, l, layer.Index())
 				// cause mesh's processed layer to advance
-				mm.HandleValidatedLayer(ctx, l, []types.BlockID{})
+				mm.ProcessLayerPerHareOutput(ctx, l, []types.BlockID{})
 			}).Times(1)
 	}
 	patrol.EXPECT().IsHareInCharge(lyr).Return(true).Times(maxAttemptWithinRun)
@@ -530,7 +530,7 @@ func TestSynchronize_HareValidateLayersTooDelayed(t *testing.T) {
 		func(ctx context.Context, layer *types.Layer) {
 			assert.Equal(t, gLayer.Add(1), layer.Index())
 			// cause mesh's processed layer to advance
-			mm.HandleValidatedLayer(ctx, layer.Index(), []types.BlockID{})
+			mm.ProcessLayerPerHareOutput(ctx, layer.Index(), []types.BlockID{})
 		}).Times(1)
 
 	ticker.advanceToLayer(latestLyr)

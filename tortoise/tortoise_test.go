@@ -82,7 +82,7 @@ func addLayerToMesh(m *mesh.DB, layer *types.Layer) error {
 			return fmt.Errorf("add block: %w", err)
 		}
 	}
-	if err := m.SaveLayerInputVectorByID(context.TODO(), layer.Index(), layer.BlocksIDs()); err != nil {
+	if err := m.SaveHareConsensusOutput(context.TODO(), layer.Index(), layer.BlocksIDs()); err != nil {
 		panic("database error")
 	}
 
@@ -584,8 +584,8 @@ func TestMultiTortoise(t *testing.T) {
 				r.NoError(mdb1.AddBlock(block))
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 		}
@@ -650,8 +650,8 @@ func TestMultiTortoise(t *testing.T) {
 				r.NoError(mdb1.AddBlock(block))
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
@@ -677,13 +677,13 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 			// majority tortoise is unaffected, minority tortoise gets stuck
@@ -709,7 +709,7 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
 			blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
@@ -718,7 +718,7 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 			// majority tortoise is unaffected, minority tortoise is still stuck
@@ -735,7 +735,7 @@ func TestMultiTortoise(t *testing.T) {
 			blockIDsA = append(blockIDsA, block.ID())
 			r.NoError(mdb1.AddBlock(block))
 		}
-		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+		r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
 		blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
@@ -744,7 +744,7 @@ func TestMultiTortoise(t *testing.T) {
 			blockIDsB = append(blockIDsB, block.ID())
 			r.NoError(mdb2.AddBlock(block))
 		}
-		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+		r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 		// minority node is healed
@@ -787,8 +787,8 @@ func TestMultiTortoise(t *testing.T) {
 				r.NoError(mdb1.AddBlock(block))
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 		}
@@ -847,8 +847,8 @@ func TestMultiTortoise(t *testing.T) {
 				r.NoError(mdb1.AddBlock(block))
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
@@ -869,13 +869,13 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 			// both nodes get stuck
@@ -897,7 +897,7 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
 			blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
@@ -905,7 +905,7 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 			// both nodes still stuck
@@ -921,7 +921,7 @@ func TestMultiTortoise(t *testing.T) {
 			blockIDsA = append(blockIDsA, block.ID())
 			r.NoError(mdb1.AddBlock(block))
 		}
-		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+		r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
 		blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
@@ -929,7 +929,7 @@ func TestMultiTortoise(t *testing.T) {
 			blockIDsB = append(blockIDsB, block.ID())
 			r.NoError(mdb2.AddBlock(block))
 		}
-		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+		r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 		// both nodes can't switch from full tortoise
@@ -998,9 +998,9 @@ func TestMultiTortoise(t *testing.T) {
 				r.NoError(mdb2.AddBlock(block))
 				r.NoError(mdb3.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
+			r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 			alg3.HandleIncomingLayer(context.TODO(), layerID)
@@ -1023,21 +1023,21 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
 			for _, block := range blocksB {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 			for _, block := range blocksC {
 				blockIDsC = append(blockIDsC, block.ID())
 				r.NoError(mdb3.AddBlock(block))
 			}
-			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
+			r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsC))
 			alg3.HandleIncomingLayer(context.TODO(), layerID)
 
 			// all nodes get stuck
@@ -1059,7 +1059,7 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsA = append(blockIDsA, block.ID())
 				r.NoError(mdb1.AddBlock(block))
 			}
-			r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
 			blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
@@ -1067,7 +1067,7 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsB = append(blockIDsB, block.ID())
 				r.NoError(mdb2.AddBlock(block))
 			}
-			r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 			blocksC := generateBlocks(t, layerID, layerSize, layerSize, alg3.BaseBallot, atxdb3, 1)
@@ -1075,7 +1075,7 @@ func TestMultiTortoise(t *testing.T) {
 				blockIDsC = append(blockIDsC, block.ID())
 				r.NoError(mdb3.AddBlock(block))
 			}
-			r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
+			r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsC))
 			alg3.HandleIncomingLayer(context.TODO(), layerID)
 
 			// nodes still stuck
@@ -1092,7 +1092,7 @@ func TestMultiTortoise(t *testing.T) {
 			blockIDsA = append(blockIDsA, block.ID())
 			r.NoError(mdb1.AddBlock(block))
 		}
-		r.NoError(mdb1.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsA))
+		r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
 		blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
@@ -1100,7 +1100,7 @@ func TestMultiTortoise(t *testing.T) {
 			blockIDsB = append(blockIDsB, block.ID())
 			r.NoError(mdb2.AddBlock(block))
 		}
-		r.NoError(mdb2.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsB))
+		r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 		blocksC := generateBlocks(t, layerID, layerSize, layerSize, alg3.BaseBallot, atxdb3, 1)
@@ -1108,7 +1108,7 @@ func TestMultiTortoise(t *testing.T) {
 			blockIDsC = append(blockIDsC, block.ID())
 			r.NoError(mdb3.AddBlock(block))
 		}
-		r.NoError(mdb3.SaveLayerInputVectorByID(context.TODO(), layerID, blockIDsC))
+		r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsC))
 		alg3.HandleIncomingLayer(context.TODO(), layerID)
 
 		// all nodes are healed

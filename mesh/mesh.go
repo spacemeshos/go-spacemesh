@@ -34,7 +34,7 @@ var VERIFIED = []byte("verified")
 
 // Validator interface to be used in tests to mock validation flow.
 type Validator interface {
-	ValidateLayer(context.Context, *types.Layer)
+	ProcessLayer(context.Context, *types.Layer)
 }
 
 type txMemPool interface {
@@ -284,39 +284,36 @@ type validator struct {
 	*Mesh
 }
 
-// ValidateLayer performs fairly heavy lifting: it triggers tortoise to process the full contents of the layer (i.e.,
+// ProcessLayer performs fairly heavy lifting: it triggers tortoise to process the full contents of the layer (i.e.,
 // all of its blocks), then to attempt to validate all unvalidated layers up to this layer. It also applies state for
 // newly-validated layers.
-// TODO: rename this. When tortoise passes a layer, we call that "verify." "Validate" sounds too similar and it's
-//   confusing that a layer can be validated without being verified.
-//   See https://github.com/spacemeshos/go-spacemesh/issues/2669
-func (vl *validator) ValidateLayer(ctx context.Context, lyr *types.Layer) {
+func (vl *validator) ProcessLayer(ctx context.Context, lyr *types.Layer) {
 	layerID := lyr.Index()
 	logger := vl.WithContext(ctx).WithFields(layerID)
 	logger.Info("validate layer")
 
 	// pass the layer to tortoise for processing
-	oldPbase, newPbase, reverted := vl.trtl.HandleIncomingLayer(ctx, layerID)
+	oldVerified, newVerified, reverted := vl.trtl.HandleIncomingLayer(ctx, layerID)
 	logger.With().Info("tortoise results",
 		log.Bool("reverted", reverted),
-		log.FieldNamed("old_pbase", oldPbase),
-		log.FieldNamed("new_pbase", newPbase))
+		log.FieldNamed("old_verified", oldVerified),
+		log.FieldNamed("new_verified", newVerified))
 
 	// check for a state reversion: if tortoise reran and detected changes to historical data, it will request that
 	// state be reverted and reapplied. pushLayersToState, below, will handle the reapplication.
 	if reverted {
-		if err := vl.revertState(ctx, oldPbase); err != nil {
+		if err := vl.revertState(ctx, oldVerified); err != nil {
 			logger.With().Error("failed to revert state, unable to validate layer", log.Err(err))
 			return
 		}
 	}
 
-	if newPbase.After(oldPbase) {
-		vl.pushLayersToState(ctx, oldPbase, newPbase)
-		if err := vl.persistLayerHashes(ctx, oldPbase.Add(1), newPbase); err != nil {
+	if newVerified.After(oldVerified) {
+		vl.pushLayersToState(ctx, oldVerified, newVerified)
+		if err := vl.persistLayerHashes(ctx, oldVerified.Add(1), newVerified); err != nil {
 			logger.With().Error("failed to persist layer hashes", log.Err(err))
 		}
-		for lid := oldPbase.Add(1); !lid.After(newPbase); lid = lid.Add(1) {
+		for lid := oldVerified.Add(1); !lid.After(newVerified); lid = lid.Add(1) {
 			events.ReportLayerUpdate(events.LayerUpdate{
 				LayerID: lid,
 				Status:  events.LayerStatusTypeConfirmed,
@@ -397,17 +394,17 @@ func (msh *Mesh) getValidBlockIDs(ctx context.Context, layerID types.LayerID) ([
 }
 
 // apply the state of a range of layers, including re-adding transactions from invalid blocks to the mempool.
-func (msh *Mesh) pushLayersToState(ctx context.Context, oldPbase, newPbase types.LayerID) {
+func (msh *Mesh) pushLayersToState(ctx context.Context, oldVerified, newVerified types.LayerID) {
 	logger := msh.WithContext(ctx).WithFields(
-		log.FieldNamed("old_pbase", oldPbase),
-		log.FieldNamed("new_pbase", newPbase))
+		log.FieldNamed("old_verified", oldVerified),
+		log.FieldNamed("new_verified", newVerified))
 	logger.Info("pushing layers to state")
-	if oldPbase.Before(types.GetEffectiveGenesis()) || newPbase.Before(types.GetEffectiveGenesis()) {
+	if oldVerified.Before(types.GetEffectiveGenesis()) || newVerified.Before(types.GetEffectiveGenesis()) {
 		logger.Panic("tried to push genesis layers")
 	}
 
-	// we never reapply the state of oldPbase. note that state reversions must be handled separately.
-	for layerID := oldPbase.Add(1); !layerID.After(newPbase); layerID = layerID.Add(1) {
+	// we never reapply the state of oldVerified. note that state reversions must be handled separately.
+	for layerID := oldVerified.Add(1); !layerID.After(newVerified); layerID = layerID.Add(1) {
 		l, err := msh.GetLayer(layerID)
 		// TODO: propagate/handle error
 		if err != nil || l == nil {
@@ -496,7 +493,7 @@ func (msh *Mesh) applyState(l *types.Layer) {
 		msh.With().Error("failed to apply transactions",
 			l.Index(), log.Int("num_failed_txs", len(failedTxs)), log.Err(svmErr))
 		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
-		//  e.g. persist the last layer transactions were applied from and use that instead of `oldPbase`
+		//  e.g. persist the last layer transactions were applied from and use that instead of `oldVerified`
 	}
 	msh.removeFromUnappliedTxs(validBlockTxs)
 	msh.With().Info("applied transactions",
@@ -508,11 +505,11 @@ func (msh *Mesh) applyState(l *types.Layer) {
 	msh.setLatestLayerInState(l.Index())
 }
 
-// HandleValidatedLayer receives hare output once it finishes running for a given layer.
-func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, blockIDs []types.BlockID) {
+// ProcessLayerPerHareOutput receives hare output once it finishes running for a given layer.
+func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, validatedLayer types.LayerID, blockIDs []types.BlockID) {
 	logger := msh.WithContext(ctx).WithFields(validatedLayer)
 
-	// when HandleValidatedLayer is called by hare, we may not have all the blocks in the hare output.
+	// when ProcessLayerPerHareOutput is called by hare, we may not have all the blocks in the hare output.
 	// so try harder to fetch the blocks from peers.
 	if len(blockIDs) > 0 && !validatedLayer.GetEpoch().IsGenesis() {
 		if err := msh.fetch.GetBlocks(ctx, blockIDs); err != nil {
@@ -543,11 +540,11 @@ func (msh *Mesh) HandleValidatedLayer(ctx context.Context, validatedLayer types.
 
 	logger.With().Info("saving input vector for layer", log.Int("count_valid_blocks", len(blocks)))
 
-	if err := msh.SaveLayerInputVectorByID(ctx, validatedLayer, types.BlockIDs(blocks)); err != nil {
+	if err := msh.SaveHareConsensusOutput(ctx, validatedLayer, types.BlockIDs(blocks)); err != nil {
 		logger.Error("saving layer input vector failed")
 	}
 	lyr := types.NewExistingLayer(validatedLayer, blocks)
-	msh.ValidateLayer(ctx, lyr)
+	msh.ProcessLayer(ctx, lyr)
 }
 
 // apply the state for a single layer. stores layer results for early layers, and applies previously stored results for

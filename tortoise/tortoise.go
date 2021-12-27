@@ -708,7 +708,7 @@ func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.La
 
 	if !lid.Before(t.layerCutoff()) {
 		// for newer layers, we vote according to the local opinion (input vector, from hare or sync)
-		opinionVec, err := t.bdp.GetLayerInputVectorByID(lid)
+		opinionVec, err := t.bdp.GetHareConsensusOutput(lid)
 		if err != nil {
 			if t.last.After(types.NewLayerID(t.Zdist)) && lid.Before(t.last.Sub(t.Zdist)) {
 				// Layer has passed the Hare abort distance threshold, so we give up waiting for Hare results. At this point
