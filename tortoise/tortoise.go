@@ -80,7 +80,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	for _, ballot := range genesisLayer.Ballots() {
 		t.ballotLayer[ballot.ID()] = genesis
 		t.ballots[genesis] = []types.BallotID{ballot.ID()}
-		t.verifying.goodBallots[ballot.ID()] = struct{}{}
+		t.verifying.goodBallots[ballot.ID()] = good
 	}
 	t.last = genesis
 	t.processed = genesis
@@ -177,9 +177,8 @@ func (t *turtle) BaseBallot(ctx context.Context) (types.BallotID, [][]types.Bloc
 		err        error
 	)
 
-	// after switching into verifying mode we need to recompute goodness of ballots
-	// it will be handled in https://github.com/spacemeshos/go-spacemesh/issues/2985
-	// for now just disable this optimization.
+	// goodness of the ballot determined using hare output or tortoise output for old layers.
+	// if tortoise is full mode some ballot in old layer is undecided and we can't use it this optimization.
 	if t.mode.isVerifying() {
 		ballotID, ballotLID = t.getGoodBallot(logger)
 		if ballotID != types.EmptyBallotID {
@@ -249,7 +248,7 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 
 	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
 		for _, ballotID := range t.ballots[lid] {
-			if _, exist := t.verifying.goodBallots[ballotID]; exist {
+			if rst := t.verifying.goodBallots[ballotID]; rst == good {
 				choices = append(choices, ballotID)
 			}
 		}
@@ -521,11 +520,10 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 	if err := t.updateLocalVotes(ctx, logger, lid); err != nil {
 		return err
 	}
+	t.verifying.countVotes(logger, lid, ballots)
 
 	previous := t.verified
-	if t.mode.isVerifying() {
-		t.verifying.countVotes(logger, lid, ballots)
-	}
+
 	for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
 		var success bool
 		if t.mode.isVerifying() {
@@ -534,30 +532,23 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 		if !success && (t.canUseFullMode() || t.mode.isFull()) {
 			if t.mode.isVerifying() {
 				t.switchModes(logger)
-				// reset accumulated weight as verifying tortoise will re-counting votes
-				// with input from full tortoise.
-				t.verifying.resetWeights()
 			}
 			t.full.countVotes(logger)
 			success = t.full.verify(logger, target)
 
 			if success {
-				// recompute goodness and accumulated weight of all ballots that can vote for newly verified layer
-				//
-				// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
-				// that accumulated weight has a weight of the layer that is going to be verified.
-				for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
-					t.verifying.countVotes(
-						logger.WithFields(log.Bool("recounting", true)), lid, t.getTortoiseBallots(lid))
-				}
-				restarted := t.verifying.verify(logger, target)
-
-				if restarted {
-					t.switchModes(logger)
-				} else if !restarted {
-					// need to reset accumulated weight, verifying will not try to verify this layer again
-					// hence the accumulated weight will be inconsistent with verified layer.
-					t.verifying.resetWeights()
+				// try to find a cut with ballots that can be good (see verifying tortoise for definition)
+				// if there are such ballots try to bootstrap verifying tortoise by marking them good
+				t.verifying.resetWeights()
+				if t.verifying.markGoodCut(logger, target, t.getTortoiseBallots(target)) {
+					// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
+					// that accumulated weight has a weight of the layer that is going to be verified.
+					for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
+						t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
+					}
+					if t.verifying.verify(logger, target) {
+						t.switchModes(logger)
+					}
 				}
 			}
 		}
@@ -617,7 +608,7 @@ func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
 		}
 		logger.With().Info("computed weight for layers in an epoch", epoch, log.Stringer("weight", layerWeight))
 	}
-	window := getConfidenceWindow(t.Config, &t.commonState, t.mode)
+	window := getVerificationWindow(t.Config, &t.commonState, t.mode)
 	if lastUpdated || window.Before(t.processed) || t.globalThreshold.isNil() {
 		updateThresholds(logger, t.Config, &t.commonState, t.mode)
 	}

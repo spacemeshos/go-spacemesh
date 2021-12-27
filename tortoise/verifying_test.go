@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
-func TestVerifyingIsGood(t *testing.T) {
+func TestVerifyingDetermineGoodness(t *testing.T) {
 	goodbase := types.BallotID{0}
 	ballots := []types.BallotID{{1}, {2}, {3}}
 	blocks := []types.BlockID{{11}, {22}, {33}}
@@ -18,7 +18,7 @@ func TestVerifyingIsGood(t *testing.T) {
 		desc string
 		commonState
 		ballot tortoiseBallot
-		expect bool
+		expect goodness
 	}{
 		{
 			desc: "BadBeaconBallot",
@@ -35,6 +35,7 @@ func TestVerifyingIsGood(t *testing.T) {
 				badBeaconBallots: map[types.BallotID]struct{}{},
 			},
 			ballot: tortoiseBallot{id: ballots[0], base: ballots[1]},
+			expect: canBeGood,
 		},
 		{
 			desc: "ExceptionBeforeBaseBallot",
@@ -100,6 +101,8 @@ func TestVerifyingIsGood(t *testing.T) {
 				},
 				blockLayer: map[types.BlockID]types.LayerID{
 					blocks[0]: types.NewLayerID(10),
+					blocks[1]: types.NewLayerID(10),
+					blocks[2]: types.NewLayerID(10),
 				},
 				hareOutput: votes{
 					blocks[0]: support,
@@ -115,6 +118,7 @@ func TestVerifyingIsGood(t *testing.T) {
 					blocks[2]: against,
 				},
 			},
+			expect: good,
 		},
 	} {
 		tc := tc
@@ -122,8 +126,8 @@ func TestVerifyingIsGood(t *testing.T) {
 			logger := logtest.New(t)
 
 			v := newVerifying(Config{}, &tc.commonState)
-			v.goodBallots[goodbase] = struct{}{}
-			require.Equal(t, tc.expect, v.isGood(logger, tc.ballot))
+			v.goodBallots[goodbase] = good
+			require.Equal(t, tc.expect, v.determineGoodness(logger, tc.ballot))
 		})
 	}
 }
@@ -245,7 +249,7 @@ func TestVerifyingProcessLayer(t *testing.T) {
 
 			state := genCommonState()
 			v := newVerifying(Config{Hdist: 10}, &state)
-			v.goodBallots[goodbase] = struct{}{}
+			v.goodBallots[goodbase] = good
 
 			for i := range tc.ballots {
 				lid := start.Add(uint32(i + 1))

@@ -98,7 +98,7 @@ func computeThresholdForLayers(config Config, epochWeight map[types.EpochID]weig
 	return threshold
 }
 
-func getConfidenceWindow(config Config, state *commonState, tmode mode) types.LayerID {
+func getVerificationWindow(config Config, state *commonState, tmode mode) types.LayerID {
 	target := state.verified.Add(1)
 	window := state.last
 	if tmode.isFull() && state.last.Difference(target) > config.FullModeVerificationWindow {
@@ -116,7 +116,7 @@ func getConfidenceWindow(config Config, state *commonState, tmode mode) types.La
 func updateThresholds(logger log.Log, config Config, state *commonState, tmode mode) {
 	state.localThreshold = computeLocalThreshold(config, state.epochWeight, state.last)
 
-	window := getConfidenceWindow(config, state, tmode)
+	window := getVerificationWindow(config, state, tmode)
 	if window.Before(state.processed) {
 		window = state.processed
 	}

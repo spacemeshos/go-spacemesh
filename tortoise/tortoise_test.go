@@ -1701,7 +1701,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 
 	// remove good ballots and genesis to make tortoise select one of the later blocks.
 	delete(tortoise.trtl.ballots, genesis)
-	tortoise.trtl.verifying.goodBallots = map[types.BallotID]struct{}{}
+	tortoise.trtl.verifying.goodBallots = map[types.BallotID]goodness{}
 
 	base, exceptions, err := tortoise.BaseBallot(ctx)
 	require.NoError(t, err)
@@ -2016,7 +2016,7 @@ func TestVerifyLayerByWeightNotSize(t *testing.T) {
 	require.Equal(t, last.Sub(2), verified)
 }
 
-func TestSwitchVerifying(t *testing.T) {
+func TestSwitchVerifyingByUsingFullOutput(t *testing.T) {
 	ctx := context.Background()
 	const size = 10
 	s := sim.New(sim.WithLayerSize(size))
@@ -2045,6 +2045,31 @@ func TestSwitchVerifying(t *testing.T) {
 	require.True(t, tortoise.trtl.mode.isFull(), "full mode")
 	for i := 0; i < 10; i++ {
 		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified)
+	require.True(t, tortoise.trtl.mode.isVerifying(), "verifying mode")
+}
+
+func TestSwitchVerifyingByChangingGoodness(t *testing.T) {
+	ctx := context.Background()
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.Hdist = 2
+	cfg.Zdist = 2
+	cfg.WindowSize = 10
+
+	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	var last, verified types.LayerID
+	// in the test hare is not working from the start, voters
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(20, sim.WithEmptyInputVector()),
+		sim.WithSequence(10),
+	) {
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	require.Equal(t, last.Sub(1), verified)

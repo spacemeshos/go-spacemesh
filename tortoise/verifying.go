@@ -1,15 +1,44 @@
 package tortoise
 
 import (
+	"fmt"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+)
+
+type goodness uint8
+
+func (g goodness) String() string {
+	switch g {
+	case bad:
+		return "bad"
+	case good:
+		return "good"
+	case canBeGood:
+		return "can be good"
+	default:
+		panic(fmt.Sprintf("unknown goodness %d", g))
+	}
+}
+
+const (
+	bad goodness = iota
+	// good ballot must:
+	// - agree on a beacon value
+	// - don't vote on blocks before base ballot
+	// - have consistent votes with local opinion
+	// - have a good base ballot.
+	good
+	// canBeGood is the same as good, but doesn't require good base ballot.
+	canBeGood
 )
 
 func newVerifying(config Config, common *commonState) *verifying {
 	return &verifying{
 		Config:       config,
 		commonState:  common,
-		goodBallots:  map[types.BallotID]struct{}{},
+		goodBallots:  map[types.BallotID]goodness{},
 		layerWeights: map[types.LayerID]weight{},
 		totalWeight:  weightFromUint64(0),
 	}
@@ -19,7 +48,7 @@ type verifying struct {
 	Config
 	*commonState
 
-	goodBallots map[types.BallotID]struct{}
+	goodBallots map[types.BallotID]goodness
 	// weight of good ballots in the layer
 	layerWeights map[types.LayerID]weight
 	// total weight of good ballots from verified + 1 up to last processed
@@ -29,6 +58,27 @@ type verifying struct {
 func (v *verifying) resetWeights() {
 	v.totalWeight = weightFromUint64(0)
 	v.layerWeights = map[types.LayerID]weight{}
+}
+
+func (v *verifying) checkCanBeGood(ballot types.BallotID) bool {
+	return v.goodBallots[ballot] != bad
+}
+
+func (v *verifying) markGoodCut(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) bool {
+	n := 0
+	for _, ballot := range ballots {
+		if v.checkCanBeGood(ballot.base) && v.checkCanBeGood(ballot.id) {
+			logger.With().Info("marking ballots that can be good as good",
+				log.Stringer("ballot_layer", lid),
+				log.Stringer("ballot", ballot.id),
+				log.Stringer("base_ballot", ballot.base),
+			)
+			v.goodBallots[ballot.id] = good
+			v.goodBallots[ballot.base] = good
+			n++
+		}
+	}
+	return n > 0
 }
 
 func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
@@ -94,27 +144,25 @@ func (v *verifying) sumGoodBallots(logger log.Log, ballots []tortoiseBallot) (we
 	sum := weightFromUint64(0)
 	n := 0
 	for _, ballot := range ballots {
-		if !v.isGood(logger, ballot) {
+		rst := v.determineGoodness(logger, ballot)
+		if rst == bad {
 			continue
 		}
-		v.goodBallots[ballot.id] = struct{}{}
-		sum = sum.add(ballot.weight)
-		n++
+		v.goodBallots[ballot.id] = rst
+		if rst == good {
+			sum = sum.add(ballot.weight)
+			n++
+		}
 	}
 	return sum, n
 }
 
-func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
+func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goodness {
 	logger = logger.WithFields(ballot.id, log.Stringer("base", ballot.base))
 
 	if _, exists := v.badBeaconBallots[ballot.id]; exists {
 		logger.With().Debug("ballot is not good. ballot has a bad beacon")
-		return false
-	}
-
-	if _, exists := v.goodBallots[ballot.base]; !exists {
-		logger.With().Debug("ballot is not good. base is not good")
-		return false
+		return bad
 	}
 
 	baselid := v.ballotLayer[ballot.base]
@@ -127,7 +175,7 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 				log.Stringer("vote_layer", blocklid),
 				log.Bool("vote_exists", exists),
 			)
-			return false
+			return bad
 		}
 
 		if localVote, reason := getLocalVote(v.commonState, v.Config, blocklid, block); localVote != vote {
@@ -139,10 +187,15 @@ func (v *verifying) isGood(logger log.Log, ballot tortoiseBallot) bool {
 				log.Stringer("base_layer", baselid),
 				log.Stringer("block", block),
 			)
-			return false
+			return bad
 		}
 	}
 
+	if rst := v.goodBallots[ballot.base]; rst != good {
+		logger.With().Debug("ballot can be good. only base is not good")
+		return canBeGood
+	}
+
 	logger.With().Debug("ballot is good")
-	return true
+	return good
 }
