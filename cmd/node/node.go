@@ -730,7 +730,6 @@ func (app *App) HareFactory(
 ) HareService {
 	if app.Config.HARE.SuperHare {
 		hr := turbohare.New(ctx, app.Config.HARE, msh, clock.Subscribe(), app.addLogger(HareLogger, lg))
-		mdb.InputVectorBackupFunc = hr.GetBlockResult
 		return hr
 	}
 
