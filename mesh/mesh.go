@@ -676,6 +676,12 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	return msh.AddZeroBlockLayer(lyr)
 }
 
+// AddTXsFromProposal adds the TXs in a Proposal into the database.
+func (msh *Mesh) AddTXsFromProposal(context.Context, *types.Proposal) error {
+	// TODO impement me
+	return nil
+}
+
 // AddProposalWithTxs adds a proposal to the database
 // p - the proposal to add
 // txs - proposal txs that we don't have in our tx database yet.

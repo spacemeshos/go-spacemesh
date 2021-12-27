@@ -25,14 +25,14 @@ type Validator struct {
 	avgLayerSize   uint32
 	layersPerEpoch uint32
 	atxDB          atxDB
-	mesh           mesh
+	mesh           meshDB
 	beacons        system.BeaconCollector
 	logger         log.Log
 }
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, db atxDB, bc system.BeaconCollector, m mesh, lg log.Log) *Validator {
+	avgLayerSize, layersPerEpoch uint32, db atxDB, bc system.BeaconCollector, m meshDB, lg log.Log) *Validator {
 	return &Validator{
 		avgLayerSize:   avgLayerSize,
 		layersPerEpoch: layersPerEpoch,

@@ -32,7 +32,8 @@ type mockSet struct {
 	mf   *smocks.MockFetcher
 	mbc  *smocks.MockBeaconCollector
 	mdb  *mocks.MockatxDB
-	mm   *mocks.Mockmesh
+	mm   *mocks.MockmeshDB
+	mp   *mocks.MockproposalDB
 	mv   *mocks.MockeligibilityValidator
 }
 
@@ -48,7 +49,8 @@ func fullMockSet(tb testing.TB) *mockSet {
 		mf:   smocks.NewMockFetcher(ctrl),
 		mbc:  smocks.NewMockBeaconCollector(ctrl),
 		mdb:  mocks.NewMockatxDB(ctrl),
-		mm:   mocks.NewMockmesh(ctrl),
+		mm:   mocks.NewMockmeshDB(ctrl),
+		mp:   mocks.NewMockproposalDB(ctrl),
 		mv:   mocks.NewMockeligibilityValidator(ctrl),
 	}
 }
@@ -57,7 +59,7 @@ func createTestHandler(tb testing.TB) *testHandler {
 	types.SetLayersPerEpoch(layersPerEpoch)
 	ms := fullMockSet(tb)
 	return &testHandler{
-		Handler: NewHandler(ms.mf, ms.mbc, ms.mdb, ms.mm,
+		Handler: NewHandler(ms.mf, ms.mbc, ms.mdb, ms.mm, ms.mp,
 			WithGoldenATXID(genGoldenATXID()),
 			WithMaxExceptions(3),
 			WithLayerPerEpoch(layersPerEpoch),
@@ -367,7 +369,7 @@ func TestProposal_MalformedData(t *testing.T) {
 	p := createProposal(t)
 	data, err := codec.Encode(p.InnerProposal)
 	require.NoError(t, err)
-	assert.ErrorIs(t, th.processProposal(context.TODO(), data), errMalformedData)
+	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errMalformedData)
 }
 
 func TestProposal_BadSignature(t *testing.T) {
@@ -376,7 +378,7 @@ func TestProposal_BadSignature(t *testing.T) {
 	p := createProposal(t)
 	p.Signature = p.Signature[1:]
 	data := encodeProposal(t, p)
-	assert.ErrorIs(t, th.processProposal(context.TODO(), data), errInitialize)
+	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errInitialize)
 }
 
 func TestProposal_KnownProposal(t *testing.T) {
@@ -384,8 +386,8 @@ func TestProposal_KnownProposal(t *testing.T) {
 	defer th.ctrl.Finish()
 	p := createProposal(t)
 	data := encodeProposal(t, p)
-	th.mm.EXPECT().HasProposal(p.ID()).Return(true).Times(1)
-	assert.NoError(t, th.processProposal(context.TODO(), data))
+	th.mp.EXPECT().HasProposal(p.ID()).Return(true).Times(1)
+	assert.NoError(t, th.HandleProposalData(context.TODO(), data))
 }
 
 func TestProposal_DuplicateTXs(t *testing.T) {
@@ -404,7 +406,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 	p.Signature = signer.Sign(p.Bytes())
 	require.NoError(t, p.Initialize())
 	data := encodeProposal(t, p)
-	th.mm.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
+	th.mp.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
 	th.mm.EXPECT().HasBallot(p.Ballot.ID()).Return(false).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.BaseBallot, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
@@ -414,7 +416,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 			assert.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
-	assert.ErrorIs(t, th.processProposal(context.TODO(), data), errDuplicateTX)
+	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errDuplicateTX)
 }
 
 func TestProposal_TXsNotAvailable(t *testing.T) {
@@ -422,7 +424,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 	defer th.ctrl.Finish()
 	p := createProposal(t)
 	data := encodeProposal(t, p)
-	th.mm.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
+	th.mp.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
 	th.mm.EXPECT().HasBallot(p.Ballot.ID()).Return(false).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.BaseBallot, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
@@ -434,7 +436,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 		})
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(errUnknown).Times(1)
-	assert.ErrorIs(t, th.processProposal(context.TODO(), data), errUnknown)
+	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
 }
 
 func TestProposal_FailedToAddProposal(t *testing.T) {
@@ -442,7 +444,7 @@ func TestProposal_FailedToAddProposal(t *testing.T) {
 	defer th.ctrl.Finish()
 	p := createProposal(t)
 	data := encodeProposal(t, p)
-	th.mm.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
+	th.mp.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
 	th.mm.EXPECT().HasBallot(p.Ballot.ID()).Return(false).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.BaseBallot, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
@@ -454,12 +456,12 @@ func TestProposal_FailedToAddProposal(t *testing.T) {
 		})
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
-	th.mm.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
+	th.mp.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, proposal *types.Proposal) error {
-			assert.Equal(t, p.Fields(), proposal.Fields())
+			assert.Equal(t, p, proposal)
 			return errUnknown
 		}).Times(1)
-	assert.ErrorIs(t, th.processProposal(context.TODO(), data), errUnknown)
+	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
 }
 
 func TestProposal_ValidProposal(t *testing.T) {
@@ -467,7 +469,7 @@ func TestProposal_ValidProposal(t *testing.T) {
 	defer th.ctrl.Finish()
 	p := createProposal(t)
 	data := encodeProposal(t, p)
-	th.mm.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
+	th.mp.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
 	th.mm.EXPECT().HasBallot(p.Ballot.ID()).Return(false).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.BaseBallot, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
@@ -478,12 +480,12 @@ func TestProposal_ValidProposal(t *testing.T) {
 			return true, nil
 		})
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
-	th.mm.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
+	th.mp.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, proposal *types.Proposal) error {
-			assert.Equal(t, p.Fields(), proposal.Fields())
+			assert.Equal(t, p, proposal)
 			return nil
 		}).Times(1)
-	assert.NoError(t, th.processProposal(context.TODO(), data))
+	assert.NoError(t, th.HandleProposalData(context.TODO(), data))
 }
 
 func TestMetrics(t *testing.T) {
@@ -491,7 +493,7 @@ func TestMetrics(t *testing.T) {
 	defer th.ctrl.Finish()
 	p := createProposal(t)
 	data := encodeProposal(t, p)
-	th.mm.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
+	th.mp.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
 	th.mm.EXPECT().HasBallot(p.Ballot.ID()).Return(false).Times(1)
 	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.BaseBallot, p.RefBallot}).Return(nil).Times(1)
 	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
@@ -502,12 +504,12 @@ func TestMetrics(t *testing.T) {
 			return true, nil
 		})
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
-	th.mm.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
+	th.mp.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, proposal *types.Proposal) error {
-			assert.Equal(t, p.Fields(), proposal.Fields())
+			assert.Equal(t, p, proposal)
 			return nil
 		}).Times(1)
-	assert.NoError(t, th.processProposal(context.TODO(), data))
+	assert.NoError(t, th.HandleProposalData(context.TODO(), data))
 	counts, err := testutil.GatherAndCount(prometheus.DefaultGatherer, "spacemesh_proposals_proposal_size")
 	require.NoError(t, err)
 	assert.Equal(t, 1, counts)

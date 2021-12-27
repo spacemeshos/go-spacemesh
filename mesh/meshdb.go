@@ -213,7 +213,7 @@ func (m *DB) GetBallot(id types.BallotID) (*types.Ballot, error) {
 // LayerBallots retrieves all ballots from a layer by layer ID.
 func (m *DB) LayerBallots(lid types.LayerID) ([]*types.Ballot, error) {
 	var ballots []*types.Ballot
-	err := m.layerIDs(layerBallots, lid, func(id []byte) error {
+	err := LayerIDs(m.layers, layerBallots, lid, func(id []byte) error {
 		var bid types.BallotID
 		copy(bid[:], id)
 		ballot, err := m.GetBallot(bid)
@@ -248,7 +248,7 @@ func (m *DB) GetBlock(bid types.BlockID) (*types.Block, error) {
 // LayerBlockIds retrieves all block IDs from the layer specified by layer ID.
 func (m *DB) LayerBlockIds(lid types.LayerID) ([]types.BlockID, error) {
 	var ids []types.BlockID
-	err := m.layerIDs(layerProposals, lid, func(id []byte) error {
+	err := LayerIDs(m.layers, layerProposals, lid, func(id []byte) error {
 		var bid types.BlockID
 		copy(bid[:], id)
 		ids = append(ids, bid)
@@ -339,7 +339,8 @@ func (m *DB) LayerProposals(index types.LayerID) ([]*types.Proposal, error) {
 	return proposals, nil
 }
 
-func (m *DB) layerIDs(namespace string, lid types.LayerID, f func(id []byte) error) error {
+// LayerIDs is a utility function that finds namespaced IDs saved in a database as a key.
+func LayerIDs(db database.Database, namespace string, lid types.LayerID, f func(id []byte) error) error {
 	var (
 		zero = false
 		n    int
@@ -348,7 +349,7 @@ func (m *DB) layerIDs(namespace string, lid types.LayerID, f func(id []byte) err
 	buf.WriteString(namespace)
 	buf.Write(lid.Bytes())
 
-	it := m.layers.Find(buf.Bytes())
+	it := db.Find(buf.Bytes())
 	defer it.Release()
 	for it.Next() {
 		if len(it.Key()) == buf.Len() {
@@ -372,7 +373,7 @@ func (m *DB) layerIDs(namespace string, lid types.LayerID, f func(id []byte) err
 // LayerProposalIDs retrieves all block ids from a layer by layer index.
 func (m *DB) LayerProposalIDs(lid types.LayerID) ([]types.ProposalID, error) {
 	var ids []types.ProposalID
-	err := m.layerIDs(layerProposals, lid, func(id []byte) error {
+	err := LayerIDs(m.layers, layerProposals, lid, func(id []byte) error {
 		var pid types.ProposalID
 		copy(pid[:], id)
 		ids = append(ids, pid)

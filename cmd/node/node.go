@@ -556,7 +556,7 @@ func (app *App) initServices(ctx context.Context,
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(fetcherWrapped, tBeacon, atxDB, msh,
+	proposalListener := proposals.NewHandler(fetcherWrapped, tBeacon, atxDB, msh, msh,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithLayerPerEpoch(layersPerEpoch),
 		proposals.WithLayerSize(layerSize),
