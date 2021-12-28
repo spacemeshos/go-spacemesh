@@ -66,11 +66,11 @@ func newDB(opts ...dbOpt) *DB {
 func NewProposalDB(path string, msh meshDB, logger log.Log) (*DB, error) {
 	pdb, err := database.NewLDBDatabase(filepath.Join(path, "proposals"), 0, 0, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize proposals db: %v", err)
+		return nil, fmt.Errorf("failed to initialize proposals db: %w", err)
 	}
 	ldb, err := database.NewLDBDatabase(filepath.Join(path, "proposal_layers"), 0, 0, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize proposal layers db: %v", err)
+		return nil, fmt.Errorf("failed to initialize proposal layers db: %w", err)
 	}
 	return newDB(withProposalDB(pdb), withLayerDB(ldb), withMeshDB(msh), withLogger(logger)), nil
 }
@@ -106,9 +106,9 @@ func (db *DB) AddProposal(ctx context.Context, p *types.Proposal) error {
 		Signature:  p.Signature,
 	}
 	if data, err := codec.Encode(dbp); err != nil {
-		return fmt.Errorf("could not encode dbproposal: %w", err)
+		return fmt.Errorf("could not encode DBProposal: %w", err)
 	} else if err := db.proposals.Put(p.ID().Bytes(), data); err != nil {
-		return fmt.Errorf("could not add dbproposal %v to database: %w", p.ID(), err)
+		return fmt.Errorf("could not add DBProposal %v to database: %w", p.ID(), err)
 	} else if err := db.updateLayer(p); err != nil {
 		return err
 	}
@@ -180,19 +180,22 @@ func (db *DB) Get(hash []byte) ([]byte, error) {
 // LayerProposalIDs retrieves all proposal IDs from the layer specified by layer ID.
 func (db *DB) LayerProposalIDs(lid types.LayerID) ([]types.ProposalID, error) {
 	var ids []types.ProposalID
-	err := mesh.LayerIDs(db.layers, "", lid, func(id []byte) error {
+	if err := mesh.LayerIDs(db.layers, "", lid, func(id []byte) error {
 		var pid types.ProposalID
 		copy(pid[:], id)
 		ids = append(ids, pid)
 		return nil
-	})
-	return ids, fmt.Errorf("layer proposals IDs: %w", err)
+	}); err != nil {
+		return nil, fmt.Errorf("layer proposals IDs: %w", err)
+	}
+
+	return ids, nil
 }
 
 // LayerProposals retrieves all proposals from the layer specified by layer ID.
 func (db *DB) LayerProposals(lid types.LayerID) ([]*types.Proposal, error) {
 	var proposals []*types.Proposal
-	err := mesh.LayerIDs(db.layers, "", lid, func(id []byte) error {
+	if err := mesh.LayerIDs(db.layers, "", lid, func(id []byte) error {
 		var pid types.ProposalID
 		copy(pid[:], id)
 		block, err := db.GetProposal(pid)
@@ -201,6 +204,8 @@ func (db *DB) LayerProposals(lid types.LayerID) ([]*types.Proposal, error) {
 		}
 		proposals = append(proposals, block)
 		return nil
-	})
-	return proposals, fmt.Errorf("layer proposals: %w", err)
+	}); err != nil {
+		return nil, fmt.Errorf("layer proposals: %w", err)
+	}
+	return proposals, nil
 }

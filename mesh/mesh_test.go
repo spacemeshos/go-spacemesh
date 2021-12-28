@@ -521,10 +521,10 @@ func TestMesh_HandleValidatedLayer(t *testing.T) {
 	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	tm.ProcessLayerPerHareOutput(context.TODO(), gPlus2, blockIDs)
 
-	// input vector saved
-	iv, err := tm.GetHareConsensusOutput(gPlus2)
+	// hare output saved
+	hareOutput, err := tm.GetHareConsensusOutput(gPlus2)
 	require.NoError(t, err)
-	assert.Equal(t, blockIDs, iv)
+	assert.Equal(t, blockIDs, hareOutput)
 
 	// but processed layer has advanced
 	assert.Equal(t, gPlus2, tm.ProcessedLayer())
@@ -549,10 +549,10 @@ func TestMesh_HandleValidatedLayer_emptyOutputFromHare(t *testing.T) {
 	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 	tm.ProcessLayerPerHareOutput(context.TODO(), gPlus2, empty)
 
-	// input vector saved
-	iv, err := tm.GetHareConsensusOutput(gPlus2)
+	// hare output saved
+	hareOutput, err := tm.GetHareConsensusOutput(gPlus2)
 	require.NoError(t, err)
-	assert.Nil(t, iv)
+	assert.Nil(t, hareOutput)
 
 	// but processed layer has advanced
 	assert.Equal(t, gPlus2, tm.ProcessedLayer())

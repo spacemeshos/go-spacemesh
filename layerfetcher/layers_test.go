@@ -221,7 +221,7 @@ func TestLayerBlocksReqReceiver_GetBlockIDsUnknownError(t *testing.T) {
 	assert.Equal(t, err, ErrInternal)
 }
 
-func TestLayerBlocksReqReceiver_GetInputVectorError(t *testing.T) {
+func TestLayerBlocksReqReceiver_GetHareOutputError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -252,11 +252,11 @@ func TestLayerBlocksReqReceiver_RequestedHigherLayer(t *testing.T) {
 	assert.Empty(t, out)
 }
 
-func generateLayerBlocks(numInputVector int) []byte {
-	return generateLayerBlocksWithHash(true, numInputVector)
+func generateLayerBlocks(numHareOutput int) []byte {
+	return generateLayerBlocksWithHash(true, numHareOutput)
 }
 
-func generateLayerBlocksWithHash(consistentHash bool, numInputVector int) []byte {
+func generateLayerBlocksWithHash(consistentHash bool, numHareOutput int) []byte {
 	blockIDs := []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()}
 	var hash types.Hash32
 	if consistentHash {
@@ -264,13 +264,13 @@ func generateLayerBlocksWithHash(consistentHash bool, numInputVector int) []byte
 	} else {
 		hash = randomHash()
 	}
-	iv := make([]types.BlockID, numInputVector)
-	for i := 0; i < numInputVector; i++ {
-		iv[i] = types.RandomBlockID()
+	hareOutput := make([]types.BlockID, numHareOutput)
+	for i := 0; i < numHareOutput; i++ {
+		hareOutput[i] = types.RandomBlockID()
 	}
 	lb := layerBlocks{
 		Blocks:         blockIDs,
-		HareOutput:     iv,
+		HareOutput:     hareOutput,
 		ProcessedLayer: types.NewLayerID(10),
 		Hash:           hash,
 		AggregatedHash: randomHash(),
@@ -474,7 +474,7 @@ func TestPollLayerBlocks_FailureToSaveZeroLayerIgnored(t *testing.T) {
 	assert.Equal(t, layerID, res.Layer)
 }
 
-func TestPollLayerBlocks_FailedToSaveInputVector(t *testing.T) {
+func TestPollLayerBlocks_FailedToSaveHareOutput(t *testing.T) {
 	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {

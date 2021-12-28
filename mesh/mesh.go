@@ -538,10 +538,9 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, validatedLayer t
 		Status:  events.LayerStatusTypeApproved,
 	})
 
-	logger.With().Info("saving input vector for layer", log.Int("count_valid_blocks", len(blocks)))
-
+	logger.With().Info("saving hare output for layer", log.Int("num_hare_output", len(blocks)))
 	if err := msh.SaveHareConsensusOutput(ctx, validatedLayer, types.BlockIDs(blocks)); err != nil {
-		logger.Error("saving layer input vector failed")
+		logger.With().Error("saving hare output failed", log.Err(err))
 	}
 	lyr := types.NewExistingLayer(validatedLayer, blocks)
 	msh.ProcessLayer(ctx, lyr)

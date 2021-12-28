@@ -40,22 +40,22 @@ func WithNextReorder(delay uint32) NextOpt {
 	}
 }
 
-// WithoutInputVector will prevent from saving input vector.
-func WithoutInputVector() NextOpt {
+// WithoutHareOutput will prevent from saving hare output.
+func WithoutHareOutput() NextOpt {
 	return func(c *nextConf) {
 		c.FailHare = true
 	}
 }
 
-// WithEmptyInputVector will save empty input vector.
-func WithEmptyInputVector() NextOpt {
+// WithEmptyHareOutput will save an empty vector for hare output.
+func WithEmptyHareOutput() NextOpt {
 	return func(c *nextConf) {
 		c.HareFraction.Nominator = 0
 	}
 }
 
-// WithPartialHare will set input vector only to a fraction of all known blocks.
-// Input vector will be limited to nominator*size/denominator.
+// WithPartialHare will set hare output only to a fraction of all known blocks.
+// hare output will be limited to nominator*size/denominator.
 func WithPartialHare(nominator, denominator int) NextOpt {
 	if denominator == 0 {
 		panic("denominator can't be zero")
@@ -174,7 +174,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		bids := layer.BlocksIDs()
 		frac := len(bids) * cfg.HareFraction.Nominator / cfg.HareFraction.Denominator
 		for _, state := range g.states {
-			state.OnInputVector(layer.Index(), bids[:frac])
+			state.OnHareOutput(layer.Index(), bids[:frac])
 		}
 	}
 	for _, state := range g.states {

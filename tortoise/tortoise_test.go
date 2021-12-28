@@ -143,7 +143,7 @@ func TestLayerPatterns(t *testing.T) {
 		)
 		for _, lid := range sim.GenLayers(s,
 			sim.WithSequence(5),
-			sim.WithSequence(2, sim.WithoutInputVector()),
+			sim.WithSequence(2, sim.WithoutHareOutput()),
 		) {
 			last = lid
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, lid)
@@ -174,9 +174,9 @@ func TestLayerPatterns(t *testing.T) {
 		)
 		for _, lid := range sim.GenLayers(s,
 			sim.WithSequence(5),
-			sim.WithSequence(1, sim.WithoutInputVector()),
+			sim.WithSequence(1, sim.WithoutHareOutput()),
 			sim.WithSequence(2),
-			sim.WithSequence(2, sim.WithoutInputVector()),
+			sim.WithSequence(2, sim.WithoutHareOutput()),
 			sim.WithSequence(30),
 		) {
 			last = lid
@@ -209,7 +209,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		last = s.Next(
 			sim.WithVoteGenerator(tortoiseVoting(tortoise)),
-			sim.WithoutInputVector(),
+			sim.WithoutHareOutput(),
 		)
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
@@ -228,8 +228,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 }
 
 type (
-	baseBallotProvider  func(context.Context) (types.BallotID, [][]types.BlockID, error)
-	inputVectorProvider func(types.LayerID) ([]types.BlockID, error)
+	baseBallotProvider func(context.Context) (types.BallotID, [][]types.BlockID, error)
 )
 
 func generateBlocks(t *testing.T, l types.LayerID, natxs, nblocks int, bbp baseBallotProvider, atxdb atxDataWriter, weight uint) (blocks []*types.Block) {
@@ -1252,7 +1251,7 @@ func BenchmarkTortoiseLayerHandling(b *testing.B) {
 		benchmarkLayersHandling(b)
 	})
 	b.Run("Full", func(b *testing.B) {
-		benchmarkLayersHandling(b, sim.WithEmptyInputVector())
+		benchmarkLayersHandling(b, sim.WithEmptyHareOutput())
 	})
 }
 
@@ -1631,7 +1630,7 @@ func TestWeakCoinVoting(t *testing.T) {
 		sim.WithSequence(5),
 		sim.WithSequence(hdist+1,
 			sim.WithCoin(true), // declare support
-			sim.WithEmptyInputVector(),
+			sim.WithEmptyHareOutput(),
 			sim.WithVoteGenerator(splitVoting(size)),
 		),
 	) {
@@ -1649,7 +1648,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	against, support, neutral := exceptions[0], exceptions[1], exceptions[2]
 
 	require.Empty(t, against, "implicit voting")
-	require.Empty(t, neutral, "empty input vector")
+	require.Empty(t, neutral, "empty hare output")
 
 	// support for all layers in range of (verified, last - hdist)
 	for _, bid := range support {
@@ -1683,7 +1682,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 		genesis        = types.GetEffectiveGenesis()
 	)
 	for _, last = range sim.GenLayers(s,
-		sim.WithSequence(1, sim.WithEmptyInputVector()),
+		sim.WithSequence(1, sim.WithEmptyHareOutput()),
 		sim.WithSequence(2),
 	) {
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
@@ -1738,7 +1737,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 		{
 			desc: "ContextuallyInvalid",
 			seqs: []sim.Sequence{
-				sim.WithSequence(1, sim.WithEmptyInputVector()),
+				sim.WithSequence(1, sim.WithEmptyHareOutput()),
 				sim.WithSequence(1,
 					sim.WithVoteGenerator(gapVote),
 				),
@@ -1759,7 +1758,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 			desc: "NotSupportedByHare",
 			seqs: []sim.Sequence{
 				sim.WithSequence(3),
-				sim.WithSequence(1, sim.WithEmptyInputVector()),
+				sim.WithSequence(1, sim.WithEmptyHareOutput()),
 			},
 			lid:      genesis.Add(4),
 			expected: against,
@@ -1768,7 +1767,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 			desc: "WithUnfinishedHare",
 			seqs: []sim.Sequence{
 				sim.WithSequence(3),
-				sim.WithSequence(1, sim.WithoutInputVector()),
+				sim.WithSequence(1, sim.WithoutHareOutput()),
 			},
 			lid:      genesis.Add(4),
 			expected: abstain,
@@ -2036,7 +2035,7 @@ func TestSwitchVerifyingByUsingFullOutput(t *testing.T) {
 	}
 	for i := 0; i < int(cfg.Hdist)+1; i++ {
 		last = s.Next(
-			sim.WithEmptyInputVector(),
+			sim.WithEmptyHareOutput(),
 		)
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
@@ -2067,7 +2066,7 @@ func TestSwitchVerifyingByChangingGoodness(t *testing.T) {
 	var last, verified types.LayerID
 	// in the test hare is not working from the start, voters
 	for _, last = range sim.GenLayers(s,
-		sim.WithSequence(20, sim.WithEmptyInputVector()),
+		sim.WithSequence(20, sim.WithEmptyHareOutput()),
 		sim.WithSequence(10),
 	) {
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
@@ -2132,7 +2131,7 @@ func TestStateManagement(t *testing.T) {
 
 		var last, verified types.LayerID
 		for _, last = range sim.GenLayers(s,
-			sim.WithSequence(20, sim.WithEmptyInputVector()),
+			sim.WithSequence(20, sim.WithEmptyHareOutput()),
 		) {
 			_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 		}
