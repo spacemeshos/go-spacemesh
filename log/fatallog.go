@@ -4,6 +4,7 @@ import (
 	"fmt"
 )
 
+// Common errors that can happen on node startup.
 var (
 	ErrMalformedConfig            = newFatalErrorWithReason("ERR_MALFORMED_CONFIG", "config file is malformed")
 	ErrBadFlags                   = newFatalErrorWithArgs("ERR_BAD_FLAGS", "bad CLI flags")
@@ -16,16 +17,17 @@ var (
 	ErrVRFSigner                  = newFatalErrorWithReason("ERR_VRF_SIGNER", "could not create VRF signer")
 )
 
-type FatalError struct {
+// fatalError describes a fatal error SMApp needs to know information about.
+type fatalError struct {
 	Code   string
 	Text   string
 	Args   []interface{}
 	Reason error
 }
 
-func newFatalErrorWithArgs(code, text string) func(args ...interface{}) *FatalError {
-	return func(args ...interface{}) *FatalError {
-		return &FatalError{
+func newFatalErrorWithArgs(code, text string) func(args ...interface{}) *fatalError {
+	return func(args ...interface{}) *fatalError {
+		return &fatalError{
 			Code: code,
 			Text: text,
 			Args: args,
@@ -33,9 +35,9 @@ func newFatalErrorWithArgs(code, text string) func(args ...interface{}) *FatalEr
 	}
 }
 
-func newFatalErrorWithReason(code, text string) func(reason error) *FatalError {
-	return func(reason error) *FatalError {
-		return &FatalError{
+func newFatalErrorWithReason(code, text string) func(reason error) *fatalError {
+	return func(reason error) *fatalError {
+		return &fatalError{
 			Code:   code,
 			Text:   text,
 			Reason: reason,
@@ -43,7 +45,7 @@ func newFatalErrorWithReason(code, text string) func(reason error) *FatalError {
 	}
 }
 
-func (fe FatalError) Error() string {
+func (fe fatalError) Error() string {
 	if fe.Reason != nil {
 		return fmt.Sprintf("%v: %v", fe.Text, fe.Reason)
 	}
@@ -55,13 +57,18 @@ func (fe FatalError) Error() string {
 	return fe.Text
 }
 
-func (fe FatalError) Field() Field { return Inline(fe) }
+// Field implements LoggableField.
+func (fe fatalError) Field() Field { return Inline(fe) }
 
-// MarshalLogObject implements logging encoder for layerRewardsInfo.
-func (fe FatalError) MarshalLogObject(encoder ObjectEncoder) error {
+// MarshalLogObject implements logging encoder for fatalError.
+func (fe fatalError) MarshalLogObject(encoder ObjectEncoder) error {
 	encoder.AddString("code", fe.Code)
 	encoder.AddString("error", fe.Error())
-	return encoder.AddArray("args", arrayMarshaler(fe.Args))
+	if err := encoder.AddArray("args", arrayMarshaler(fe.Args)); err != nil {
+		return fmt.Errorf("add array: %w", err)
+	}
+
+	return nil
 }
 
 type arrayMarshaler []interface{}
@@ -69,7 +76,7 @@ type arrayMarshaler []interface{}
 func (args arrayMarshaler) MarshalLogArray(encoder ArrayEncoder) error {
 	for _, arg := range args {
 		if err := encoder.AppendReflected(arg); err != nil {
-			return err
+			return fmt.Errorf("append reflected: %w", err)
 		}
 	}
 	return nil

@@ -47,7 +47,7 @@ func (l Log) Panic(format string, args ...interface{}) {
 	l.logger.Sugar().Panicf(format, args...)
 }
 
-// Fatal prints formatted warning fatal log message.
+// Fatal prints formatted fatal level log message.
 func (l Log) Fatal(format string, args ...interface{}) {
 	l.logger.Sugar().Fatalf(format, args...)
 }
@@ -292,7 +292,7 @@ func (fl FieldLogger) Fatal(msg string, fields ...LoggableField) {
 func processFatalErrors(fields ...LoggableField) []LoggableField {
 	newFields := make([]LoggableField, 0, len(fields))
 	for _, field := range fields {
-		fe := new(FatalError)
+		fe := new(fatalError)
 		if err, ok := field.Field().Interface.(error); ok && errors.As(err, &fe) {
 			newFields = append(newFields, Inline(fe))
 		} else {
