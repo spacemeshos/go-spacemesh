@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime/debug"
@@ -44,6 +45,11 @@ func (l Log) Warning(format string, args ...interface{}) {
 func (l Log) Panic(format string, args ...interface{}) {
 	l.logger.Sugar().Error("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
 	l.logger.Sugar().Panicf(format, args...)
+}
+
+// Fatal prints formatted warning fatal log message.
+func (l Log) Fatal(format string, args ...interface{}) {
+	l.logger.Sugar().Fatalf(format, args...)
 }
 
 // Wrap and export field logic
@@ -136,6 +142,11 @@ func Err(v error) Field {
 // Object for logging struct fields in namespace.
 func Object(namespace string, object ObjectMarshaller) Field {
 	return Field(zap.Object(namespace, object))
+}
+
+// Inline for inline logging.
+func Inline(object ObjectMarshaller) Field {
+	return Field(zap.Inline(object))
 }
 
 // Array for logging array efficiently.
@@ -275,5 +286,19 @@ func (fl FieldLogger) Panic(msg string, fields ...LoggableField) {
 
 // Fatal prints message with fields.
 func (fl FieldLogger) Fatal(msg string, fields ...LoggableField) {
-	fl.l.Fatal(msg, unpack(append(fields, String("name", fl.name)))...)
+	fl.l.Fatal(msg, unpack(append(processFatalErrors(fields...), String("name", fl.name)))...)
+}
+
+func processFatalErrors(fields ...LoggableField) []LoggableField {
+	newFields := make([]LoggableField, 0, len(fields))
+	for _, field := range fields {
+		fe := new(FatalError)
+		if err, ok := field.Field().Interface.(error); ok && errors.As(err, &fe) {
+			newFields = append(newFields, Inline(fe))
+		} else {
+			newFields = append(newFields, field)
+		}
+	}
+
+	return newFields
 }

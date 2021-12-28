@@ -96,10 +96,10 @@ var Cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		conf, err := LoadConfigFromFile()
 		if err != nil {
-			log.With().Fatal("can't load config file", log.Err(err))
+			log.With().Fatal("can't load config file", log.ErrMalformedConfig(err))
 		}
 		if err := cmdp.EnsureCLIFlags(cmd, conf); err != nil {
-			log.With().Fatal("can't ensure that cli flags match config value types", log.Err(err))
+			log.With().Fatal("can't ensure that cli flags match config value types", log.ErrBadFlags(err))
 		}
 
 		if conf.TestMode {
@@ -285,6 +285,7 @@ func (app *App) Initialize() (err error) {
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
 	// vote against all blocks in that layer. so it's important to make sure zdist takes longer than
 	// hare's max time duration to run consensus for a layer
+	// NOTE: on update, the description below needs to be changed too
 	maxHareRoundsPerLayer := 1 + app.Config.HARE.LimitIterations*hare.RoundsPerIteration // pre-round + 4 rounds per iteration
 	maxHareLayerDurationSec := app.Config.HARE.WakeupDelta + maxHareRoundsPerLayer*app.Config.HARE.RoundDuration
 	if app.Config.LayerDurationSec*int(app.Config.Tortoise.Zdist) <= maxHareLayerDurationSec {
@@ -294,16 +295,18 @@ func (app *App) Initialize() (err error) {
 			log.Int("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
 			log.Int("hare_round_duration", app.Config.HARE.RoundDuration))
-		return errors.New("incompatible tortoise hare params")
+
+		desc := "layer-duration-sec * tortoise-zdist <= hare-wakeup-delta + (1 + hare-limit-iterations * 4) * hare-round-duration-sec"
+		return log.ErrIncompatibleTortoiseParams(desc)
 	}
 
-	// override default config in timesync since timesync is using TimeCongigValues
+	// override default config in timesync since timesync is using TimeConfigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	// ensure all data folders exist
-	err = filesystem.ExistOrCreate(app.Config.DataDir())
-	if err != nil {
-		return fmt.Errorf("ensure folders exist: %w", err)
+	dataDir := app.Config.DataDir()
+	if err := filesystem.ExistOrCreate(dataDir); err != nil {
+		return log.ErrEnsureDataDir(dataDir, err)
 	}
 
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
@@ -326,7 +329,7 @@ func (app *App) Initialize() (err error) {
 
 	drift, err := timesync.CheckSystemClockDrift()
 	if err != nil {
-		return fmt.Errorf("check system clock drift: %w", err)
+		return log.ErrClockAway(drift)
 	}
 
 	log.Info("System clock synchronized with ntp. drift: %s", drift)
@@ -1015,16 +1018,17 @@ func (app *App) Start() error {
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		return fmt.Errorf("error reading hostname: %w", err)
+		return log.ErrReadHostName(err)
 	}
+
+	dataDir := app.Config.DataDir()
 	logger.With().Info("starting spacemesh",
-		log.String("data-dir", app.Config.DataDir()),
+		log.String("data-dir", dataDir),
 		log.String("post-dir", app.Config.SMESHING.Opts.DataDir),
 		log.String("hostname", hostname))
 
-	err = filesystem.ExistOrCreate(app.Config.DataDir())
-	if err != nil {
-		return fmt.Errorf("data-dir %s not found or could not be created: %w", app.Config.DataDir(), err)
+	if err := filesystem.ExistOrCreate(dataDir); err != nil {
+		return log.ErrEnsureDataDir(dataDir, err)
 	}
 
 	/* Setup monitoring */
@@ -1049,7 +1053,7 @@ func (app *App) Start() error {
 			// by default all profilers are enabled,
 		})
 		if err != nil {
-			return fmt.Errorf("cannot start profiling client: %w", err)
+			return log.ErrStartProfiling(err)
 		}
 		defer p.Stop()
 	}
@@ -1058,7 +1062,7 @@ func (app *App) Start() error {
 
 	app.edSgn, err = app.LoadOrCreateEdSigner()
 	if err != nil {
-		return fmt.Errorf("could not retrieve identity: %w", err)
+		return log.ErrRetrieveIdentity(err)
 	}
 
 	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer)
@@ -1066,7 +1070,7 @@ func (app *App) Start() error {
 	edPubkey := app.edSgn.PublicKey()
 	vrfSigner, vrfPub, err := signing.NewVRFSigner(app.edSgn.Sign(edPubkey.Bytes()))
 	if err != nil {
-		return fmt.Errorf("failed to create vrf signer: %w", err)
+		return log.ErrVRFSigner(err)
 	}
 
 	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
@@ -1075,7 +1079,7 @@ func (app *App) Start() error {
 
 	/* Initialize all protocol services */
 
-	dbStorepath := app.Config.DataDir()
+	dbStorepath := dataDir
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
 		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.GenesisTime, err)
@@ -1086,7 +1090,7 @@ func (app *App) Start() error {
 	lg.Info("initializing p2p services")
 
 	cfg := app.Config.P2P
-	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
+	cfg.DataDir = filepath.Join(dataDir, "p2p")
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
