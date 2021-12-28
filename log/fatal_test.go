@@ -11,7 +11,7 @@ import (
 	"go.uber.org/zap/zapcore"
 )
 
-func TestFatalLog(t *testing.T) {
+func TestFatalLogWithArgs(t *testing.T) {
 	var buf bytes.Buffer
 	logwriter = &buf
 
