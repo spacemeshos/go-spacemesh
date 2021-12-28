@@ -96,12 +96,10 @@ var Cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		conf, err := LoadConfigFromFile()
 		if err != nil {
-			log.With().Error("can't load config file", log.Err(err))
-			return
+			log.With().Fatal("can't load config file", log.Err(err))
 		}
 		if err := cmdp.EnsureCLIFlags(cmd, conf); err != nil {
-			log.With().Error("can't ensure that cli flags match config value types", log.Err(err))
-			return
+			log.With().Fatal("can't ensure that cli flags match config value types", log.Err(err))
 		}
 
 		if conf.TestMode {
@@ -118,12 +116,10 @@ var Cmd = &cobra.Command{
 		)
 		starter := func() error {
 			if err := app.Initialize(); err != nil {
-				log.With().Error("Failed to initialize node.", log.Err(err))
 				return fmt.Errorf("init node: %w", err)
 			}
 			// This blocks until the context is finished or until an error is produced
 			if err := app.Start(); err != nil {
-				log.With().Error("Failed to start the node. See logs for details.", log.Err(err))
 				return fmt.Errorf("start node: %w", err)
 			}
 
@@ -132,7 +128,7 @@ var Cmd = &cobra.Command{
 		err = starter()
 		app.Cleanup()
 		if err != nil {
-			os.Exit(1)
+			log.With().Fatal("Failed to run the node. See logs for details.", log.Err(err))
 		}
 	},
 }
