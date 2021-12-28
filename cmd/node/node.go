@@ -297,7 +297,7 @@ func (app *App) Initialize() (err error) {
 			log.Int("hare_round_duration", app.Config.HARE.RoundDuration))
 
 		desc := "layer-duration-sec * tortoise-zdist <= hare-wakeup-delta + (1 + hare-limit-iterations * 4) * hare-round-duration-sec"
-		return log.ErrIncompatibleTortoiseParams(desc)
+		return log.ErrTortoiseHareParams(desc)
 	}
 
 	// override default config in timesync since timesync is using TimeConfigValues
