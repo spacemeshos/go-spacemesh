@@ -16,7 +16,10 @@ func TestFatalLogWithArgs(t *testing.T) {
 	logwriter = &buf
 
 	loggerName := "logtest"
+
 	JSONLog(true)
+	defer JSONLog(false)
+
 	logger := NewWithLevel(loggerName, zap.NewAtomicLevelAt(zapcore.InfoLevel)).WithOptions(zap.OnFatal(zapcore.WriteThenPanic))
 
 	testStr := "test001"
