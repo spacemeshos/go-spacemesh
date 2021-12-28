@@ -97,11 +97,9 @@ var Cmd = &cobra.Command{
 		conf, err := LoadConfigFromFile()
 		if err != nil {
 			log.With().Fatal("can't load config file", log.Err(err))
-			return
 		}
 		if err := cmdp.EnsureCLIFlags(cmd, conf); err != nil {
 			log.With().Fatal("can't ensure that cli flags match config value types", log.Err(err))
-			return
 		}
 
 		if conf.TestMode {
