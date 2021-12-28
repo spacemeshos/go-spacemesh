@@ -8,7 +8,7 @@ import (
 var (
 	ErrMalformedConfig            = newFatalError("ERR_MALFORMED_CONFIG", "config file is malformed: %v")
 	ErrBadFlags                   = newFatalError("ERR_BAD_FLAGS", "bad CLI flags: %v")
-	ErrIncompatibleTortoiseParams = newFatalError("ERR_INCOMPATIBLE_TORTOISE_PARAMS", "incompatible tortoise params: %v")
+	ErrIncompatibleTortoiseParams = newFatalError("ERR_INCOMPATIBLE_TORTOISE_PARAMS", "incompatible tortoise hare params: %v")
 	ErrEnsureDataDir              = newFatalError("ERR_ENSURE_DATA_DIR", "could not open/create data dir %v: %v")
 	ErrClockAway                  = newFatalError("ERR_CLOCK_AWAY", "clock drift by %v")
 	ErrReadHostName               = newFatalError("ERR_READ_HOSTNAME", "error reading hostname: %v")
