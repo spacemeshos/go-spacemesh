@@ -185,15 +185,15 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 		beacon = b.EpochData.Beacon
 	}
 
-	encoder.AddString("id", b.ID().String())
-	encoder.AddUint32("layer", b.LayerIndex.Value)
-	encoder.AddUint32("epoch", uint32(b.LayerIndex.GetEpoch()))
+	encoder.AddString("ballot_id", b.ID().String())
+	encoder.AddUint32("layer_id", b.LayerIndex.Value)
+	encoder.AddUint32("epoch_id", uint32(b.LayerIndex.GetEpoch()))
 	encoder.AddString("smesher", b.SmesherID().String())
 	encoder.AddString("base_ballot", b.BaseBallot.String())
 	encoder.AddInt("supports", len(b.ForDiff))
 	encoder.AddInt("againsts", len(b.AgainstDiff))
 	encoder.AddInt("abstains", len(b.NeutralDiff))
-	encoder.AddString("atx", b.AtxID.String())
+	encoder.AddString("atx_id", b.AtxID.String())
 	encoder.AddUint32("eligibility_counter", b.EligibilityProof.J)
 	encoder.AddString("ref_ballot", b.RefBallot.String())
 	encoder.AddInt("active_set_size", activeSetSize)

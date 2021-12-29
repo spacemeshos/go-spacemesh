@@ -138,6 +138,11 @@ func Object(namespace string, object ObjectMarshaller) Field {
 	return Field(zap.Object(namespace, object))
 }
 
+// Inline encodes all fields of the object without namespace.
+func Inline(object ObjectMarshaller) Field {
+	return Field(zap.Inline(object))
+}
+
 // Array for logging array efficiently.
 func Array(name string, array ArrayMarshaler) Field {
 	return Field(zap.Array(name, array))

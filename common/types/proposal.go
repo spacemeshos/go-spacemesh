@@ -91,8 +91,8 @@ func (p *Proposal) Fields() []log.LoggableField {
 
 // MarshalLogObject implements logging interface.
 func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("id", p.ID().String())
-	encoder.AddObject("ballot", &p.Ballot)
+	encoder.AddString("proposal_id", p.ID().String())
+	p.Ballot.MarshalLogObject(encoder)
 	return nil
 }
 
