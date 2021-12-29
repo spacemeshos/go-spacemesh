@@ -120,6 +120,34 @@ func TestVerifyingDetermineGoodness(t *testing.T) {
 			},
 			expect: good,
 		},
+		{
+			desc: "BallotWithAbstainVote",
+			commonState: commonState{
+				badBeaconBallots: map[types.BallotID]struct{}{},
+				ballotLayer: map[types.BallotID]types.LayerID{
+					goodbase: types.NewLayerID(10),
+				},
+				blockLayer: map[types.BlockID]types.LayerID{
+					blocks[0]: types.NewLayerID(10),
+					blocks[1]: types.NewLayerID(10),
+					blocks[2]: types.NewLayerID(10),
+				},
+				hareOutput: votes{
+					blocks[0]: support,
+					blocks[1]: against,
+					blocks[2]: against,
+				},
+			},
+			ballot: tortoiseBallot{
+				id: ballots[0], base: goodbase,
+				votes: votes{
+					blocks[0]: abstain,
+					blocks[1]: abstain,
+					blocks[2]: abstain,
+				},
+			},
+			expect: good,
+		},
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {

@@ -178,6 +178,11 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 			return bad
 		}
 
+		// by protocol abstain vote is consistent with any opinion
+		if vote == abstain {
+			continue
+		}
+
 		if localVote, reason := getLocalVote(v.commonState, v.Config, blocklid, block); localVote != vote {
 			logger.With().Debug("ballot is not good. vote on a block doesn't match a local vote",
 				log.Stringer("local_vote", localVote),
