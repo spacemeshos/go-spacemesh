@@ -44,8 +44,8 @@ type layerDB interface {
 	GetLayerHash(types.LayerID) types.Hash32
 	GetAggregatedLayerHash(types.LayerID) types.Hash32
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
-	GetLayerInputVectorByID(types.LayerID) ([]types.BlockID, error)
-	SaveLayerInputVectorByID(context.Context, types.LayerID, []types.BlockID) error
+	GetHareConsensusOutput(types.LayerID) ([]types.BlockID, error)
+	SaveHareConsensusOutput(context.Context, types.LayerID, []types.BlockID) error
 	ProcessedLayer() types.LayerID
 	SetZeroBlockLayer(types.LayerID) error
 }
@@ -86,10 +86,10 @@ type peerResult struct {
 
 // layerResult captures expected content of a layer across peers.
 type layerResult struct {
-	layerID     types.LayerID
-	blocks      map[types.BlockID]struct{}
-	inputVector []types.BlockID
-	responses   map[p2p.Peer]*peerResult
+	layerID    types.LayerID
+	blocks     map[types.BlockID]struct{}
+	hareOutput []types.BlockID
+	responses  map[p2p.Peer]*peerResult
 }
 
 // LayerPromiseResult is the result of trying to fetch data for an entire layer.
@@ -210,8 +210,8 @@ func (l *Logic) layerBlocksReqReceiver(ctx context.Context, req []byte) ([]byte,
 		return nil, ErrInternal
 	}
 
-	if b.InputVector, err = l.layerDB.GetLayerInputVectorByID(lyrID); err != nil {
-		l.log.WithContext(ctx).With().Warning("failed to get input vector for layer", lyrID, log.Err(err))
+	if b.HareOutput, err = l.layerDB.GetHareConsensusOutput(lyrID); err != nil {
+		l.log.WithContext(ctx).With().Warning("failed to get hare output for layer", lyrID, log.Err(err))
 		return nil, ErrInternal
 	}
 
@@ -287,10 +287,10 @@ func (l *Logic) fetchLayerBlocks(ctx context.Context, layerID types.LayerID, blo
 			toFetch = append(toFetch, blkID)
 		}
 	}
-	// save the largest input vector from peers
+	// save the largest hare output from peers
 	// TODO: revisit this when mesh hash resolution with peers is implemented
-	if len(blocks.InputVector) > len(lyrResult.inputVector) {
-		lyrResult.inputVector = blocks.InputVector
+	if len(blocks.HareOutput) > len(lyrResult.hareOutput) {
+		lyrResult.hareOutput = blocks.HareOutput
 	}
 	l.mutex.Unlock()
 
@@ -381,10 +381,9 @@ func notifyLayerBlocksResult(ctx context.Context, layerID types.LayerID, layerDB
 	}
 
 	if result.Err == nil {
-		// save the input vector
-		if len(lyrResult.inputVector) > 0 {
-			if err := layerDB.SaveLayerInputVectorByID(ctx, layerID, lyrResult.inputVector); err != nil {
-				logger.With().Error("failed to save input vector from peers", log.Err(err))
+		if len(lyrResult.hareOutput) > 0 {
+			if err := layerDB.SaveHareConsensusOutput(ctx, layerID, lyrResult.hareOutput); err != nil {
+				logger.With().Error("failed to save hare output from peers", log.Err(err))
 				result.Err = err
 			}
 		}

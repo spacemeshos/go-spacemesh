@@ -36,7 +36,7 @@ type layerPatrol interface {
 }
 
 type layerValidator interface {
-	ValidateLayer(context.Context, *types.Layer)
+	ProcessLayer(context.Context, *types.Layer)
 }
 
 // Configuration is the config params for syncer.
@@ -582,5 +582,5 @@ func (s *Syncer) validateLayer(ctx context.Context, layer *types.Layer) {
 	//   It should be sufficient to call GetLayer (above), and maybe, to queue a request to tortoise to analyze this
 	//   layer (without waiting for this to finish -- it should be able to run async).
 	//   See https://github.com/spacemeshos/go-spacemesh/issues/2415
-	s.validator.ValidateLayer(ctx, layer)
+	s.validator.ProcessLayer(ctx, layer)
 }

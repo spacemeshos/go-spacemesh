@@ -169,15 +169,15 @@ func (mr *MockmeshProviderMockRecorder) GetBallot(arg0 interface{}) *gomock.Call
 }
 
 // HandleValidatedLayer mocks base method.
-func (m *MockmeshProvider) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
+func (m *MockmeshProvider) ProcessLayerPerHareOutput(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "HandleValidatedLayer", ctx, validatedLayer, layer)
+	m.ctrl.Call(m, "ProcessLayerPerHareOutput", ctx, validatedLayer, layer)
 }
 
 // HandleValidatedLayer indicates an expected call of HandleValidatedLayer.
 func (mr *MockmeshProviderMockRecorder) HandleValidatedLayer(ctx, validatedLayer, layer interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleValidatedLayer", reflect.TypeOf((*MockmeshProvider)(nil).HandleValidatedLayer), ctx, validatedLayer, layer)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayerPerHareOutput", reflect.TypeOf((*MockmeshProvider)(nil).ProcessLayerPerHareOutput), ctx, validatedLayer, layer)
 }
 
 // LayerProposals mocks base method.

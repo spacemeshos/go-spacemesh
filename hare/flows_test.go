@@ -203,7 +203,7 @@ type mockBlockProvider struct {
 	lyrProposals map[types.LayerID][]*types.Proposal
 }
 
-func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
+func (mbp *mockBlockProvider) ProcessLayerPerHareOutput(context.Context, types.LayerID, []types.BlockID) {
 }
 
 func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {

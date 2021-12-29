@@ -59,7 +59,7 @@ func (g *Generator) Split(opts ...SplitOpt) []*Generator {
 	// - number of miners in each partition
 	//
 	//  things that should remain the same:
-	// - blocks, contextually valid blocks and input vectors before partition
+	// - blocks, contextually valid blocks and hare output before partition
 	// - activations before partition
 	// - beacons before partition
 

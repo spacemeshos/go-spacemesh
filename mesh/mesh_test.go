@@ -114,7 +114,7 @@ func TestMesh_LayerHash(t *testing.T) {
 		} else {
 			tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(gLyr, gLyr, false).Times(1)
 		}
-		tm.ValidateLayer(context.TODO(), thisLyr)
+		tm.ProcessLayer(context.TODO(), thisLyr)
 		// for this layer, hash is unchanged because the block contextual validity is not determined yet
 		assert.Equal(t, thisLyr.Hash(), tm.GetLayerHash(i))
 		if prevLyr.Index().After(gLyr) {
@@ -152,7 +152,7 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 		if prevLyr.Index() == gLyr {
 			r.Equal(types.EmptyLayerHash, tm.GetAggregatedLayerHash(i))
 			tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), i).Return(gLyr, gLyr, false).Times(1)
-			tm.ValidateLayer(context.TODO(), thisLyr)
+			tm.ProcessLayer(context.TODO(), thisLyr)
 			r.Equal(types.EmptyLayerHash, tm.GetAggregatedLayerHash(i))
 			continue
 		}
@@ -160,7 +160,7 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 		tm.mockState.EXPECT().ApplyLayer(prevLyr.Index(), gomock.Any(), gomock.Any()).Return(nil, nil).Times(1)
 		r.Equal(types.EmptyLayerHash, tm.GetAggregatedLayerHash(i.Sub(1)))
 		r.Equal(types.EmptyLayerHash, tm.GetAggregatedLayerHash(i))
-		tm.ValidateLayer(context.TODO(), thisLyr)
+		tm.ProcessLayer(context.TODO(), thisLyr)
 		// contextual validity is still not determined for thisLyr, so aggregated hash is not calculated for this layer
 		r.Equal(types.EmptyLayerHash, tm.GetAggregatedLayerHash(i))
 		// but for previous layer hash should already be changed to contain only valid proposals
@@ -519,12 +519,12 @@ func TestMesh_HandleValidatedLayer(t *testing.T) {
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
 	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
-	tm.HandleValidatedLayer(context.TODO(), gPlus2, blockIDs)
+	tm.ProcessLayerPerHareOutput(context.TODO(), gPlus2, blockIDs)
 
-	// input vector saved
-	iv, err := tm.GetLayerInputVectorByID(gPlus2)
+	// hare output saved
+	hareOutput, err := tm.GetHareConsensusOutput(gPlus2)
 	require.NoError(t, err)
-	assert.Equal(t, blockIDs, iv)
+	assert.Equal(t, blockIDs, hareOutput)
 
 	// but processed layer has advanced
 	assert.Equal(t, gPlus2, tm.ProcessedLayer())
@@ -547,12 +547,12 @@ func TestMesh_HandleValidatedLayer_emptyOutputFromHare(t *testing.T) {
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
 	tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 	tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
-	tm.HandleValidatedLayer(context.TODO(), gPlus2, empty)
+	tm.ProcessLayerPerHareOutput(context.TODO(), gPlus2, empty)
 
-	// input vector saved
-	iv, err := tm.GetLayerInputVectorByID(gPlus2)
+	// hare output saved
+	hareOutput, err := tm.GetHareConsensusOutput(gPlus2)
 	require.NoError(t, err)
-	assert.Nil(t, iv)
+	assert.Nil(t, hareOutput)
 
 	// but processed layer has advanced
 	assert.Equal(t, gPlus2, tm.ProcessedLayer())

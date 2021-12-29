@@ -132,6 +132,12 @@ func ProposalIDsToBlockIDs(pids []ProposalID) []BlockID {
 	return bids
 }
 
+// SortProposals sorts a list of Proposal in their ID's lexicographic order, in-place.
+func SortProposals(proposals []*Proposal) []*Proposal {
+	sort.Slice(proposals, func(i, j int) bool { return proposals[i].ID().Compare(proposals[j].ID()) })
+	return proposals
+}
+
 // SortProposalIDs sorts a list of ProposalID in lexicographic order, in-place.
 func SortProposalIDs(ids []ProposalID) []ProposalID {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
