@@ -89,6 +89,13 @@ func (p *Proposal) Fields() []log.LoggableField {
 	return append(p.Ballot.Fields(), p.ID(), log.Int("num_tx", len(p.TxIDs)))
 }
 
+// MarshalLogObject implements logging interface.
+func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("id", p.ID().String())
+	encoder.AddObject("ballot", &p.Ballot)
+	return nil
+}
+
 // String returns a short prefix of the hex representation of the ID.
 func (id ProposalID) String() string {
 	return id.AsHash32().ShortString()
