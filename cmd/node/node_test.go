@@ -842,5 +842,5 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	conf.Tortoise.Zdist = 5
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	err := app.Initialize()
-	assert.Contains(t, err.Error(), "incompatible tortoise hare params")
+	assert.EqualError(t, err, "incompatible tortoise hare params")
 }

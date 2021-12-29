@@ -135,8 +135,12 @@ func Duration(name string, val time.Duration) Field {
 }
 
 // Err returns an error field.
-func Err(v error) Field {
-	return Field(zap.NamedError("errmsg", v))
+func Err(err error) Field {
+	var loggable ObjectMarshaller
+	if errors.As(err, &loggable) {
+		return Field(zap.Inline(loggable))
+	}
+	return Field(zap.NamedError("errmsg", err))
 }
 
 // Object for logging struct fields in namespace.
@@ -286,19 +290,5 @@ func (fl FieldLogger) Panic(msg string, fields ...LoggableField) {
 
 // Fatal prints message with fields.
 func (fl FieldLogger) Fatal(msg string, fields ...LoggableField) {
-	fl.l.Fatal(msg, unpack(append(processFatalErrors(fields...), String("name", fl.name)))...)
-}
-
-func processFatalErrors(fields ...LoggableField) []LoggableField {
-	newFields := make([]LoggableField, 0, len(fields))
-	for _, field := range fields {
-		fe := new(fatalError)
-		if err, ok := field.Field().Interface.(error); ok && errors.As(err, &fe) {
-			newFields = append(newFields, Inline(fe))
-		} else {
-			newFields = append(newFields, field)
-		}
-	}
-
-	return newFields
+	fl.l.Fatal(msg, unpack(append(fields, String("name", fl.name)))...)
 }

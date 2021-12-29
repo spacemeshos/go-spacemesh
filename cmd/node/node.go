@@ -96,10 +96,10 @@ var Cmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		conf, err := LoadConfigFromFile()
 		if err != nil {
-			log.With().Fatal("can't load config file", log.ErrMalformedConfig(err))
+			log.With().Fatal("can't load config file", log.Err(err))
 		}
 		if err := cmdp.EnsureCLIFlags(cmd, conf); err != nil {
-			log.With().Fatal("can't ensure that cli flags match config value types", log.ErrBadFlags(err))
+			log.With().Fatal("can't ensure that cli flags match config value types", log.Err(err))
 		}
 
 		if conf.TestMode {
@@ -280,6 +280,34 @@ func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
+type clockErrorDetails struct {
+	Drift time.Duration
+}
+
+func (c *clockErrorDetails) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddDuration("drift", c.Drift)
+	return nil
+}
+
+type clockError struct {
+	err     error
+	details clockErrorDetails
+}
+
+func (c *clockError) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("code", "ERR_CLOCK_DRIFT")
+	encoder.AddString("error", c.err.Error())
+	if err := encoder.AddObject("details", &c.details); err != nil {
+		return fmt.Errorf("add object: %w", err)
+	}
+
+	return nil
+}
+
+func (c *clockError) Error() string {
+	return c.err.Error()
+}
+
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
@@ -296,17 +324,16 @@ func (app *App) Initialize() (err error) {
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
 			log.Int("hare_round_duration", app.Config.HARE.RoundDuration))
 
-		desc := "layer-duration-sec * tortoise-zdist <= hare-wakeup-delta + (1 + hare-limit-iterations * 4) * hare-round-duration-sec"
-		return log.ErrTortoiseHareParams(desc)
+		return errors.New("incompatible tortoise hare params")
 	}
 
 	// override default config in timesync since timesync is using TimeConfigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	// ensure all data folders exist
-	dataDir := app.Config.DataDir()
-	if err := filesystem.ExistOrCreate(dataDir); err != nil {
-		return log.ErrEnsureDataDir(dataDir, err)
+	err = filesystem.ExistOrCreate(app.Config.DataDir())
+	if err != nil {
+		return fmt.Errorf("ensure folders exist: %w", err)
 	}
 
 	// exit gracefully - e.g. with app Cleanup on sig abort (ctrl-c)
@@ -329,7 +356,12 @@ func (app *App) Initialize() (err error) {
 
 	drift, err := timesync.CheckSystemClockDrift()
 	if err != nil {
-		return log.ErrClockAway(drift)
+		return &clockError{
+			err: err,
+			details: clockErrorDetails{
+				Drift: drift,
+			},
+		}
 	}
 
 	log.Info("System clock synchronized with ntp. drift: %s", drift)
@@ -1018,17 +1050,17 @@ func (app *App) Start() error {
 
 	hostname, err := os.Hostname()
 	if err != nil {
-		return log.ErrReadHostName(err)
+		return fmt.Errorf("error reading hostname: %w", err)
 	}
 
-	dataDir := app.Config.DataDir()
 	logger.With().Info("starting spacemesh",
-		log.String("data-dir", dataDir),
+		log.String("data-dir", app.Config.DataDir()),
 		log.String("post-dir", app.Config.SMESHING.Opts.DataDir),
 		log.String("hostname", hostname))
 
-	if err := filesystem.ExistOrCreate(dataDir); err != nil {
-		return log.ErrEnsureDataDir(dataDir, err)
+	err = filesystem.ExistOrCreate(app.Config.DataDir())
+	if err != nil {
+		return fmt.Errorf("data-dir %s not found or could not be created: %w", app.Config.DataDir(), err)
 	}
 
 	/* Setup monitoring */
@@ -1053,7 +1085,7 @@ func (app *App) Start() error {
 			// by default all profilers are enabled,
 		})
 		if err != nil {
-			return log.ErrStartProfiling(err)
+			return fmt.Errorf("cannot start profiling client: %w", err)
 		}
 		defer p.Stop()
 	}
@@ -1062,7 +1094,7 @@ func (app *App) Start() error {
 
 	app.edSgn, err = app.LoadOrCreateEdSigner()
 	if err != nil {
-		return log.ErrRetrieveIdentity(err)
+		return fmt.Errorf("could not retrieve identity: %w", err)
 	}
 
 	poetClient := activation.NewHTTPPoetClient(app.Config.PoETServer)
@@ -1070,7 +1102,7 @@ func (app *App) Start() error {
 	edPubkey := app.edSgn.PublicKey()
 	vrfSigner, vrfPub, err := signing.NewVRFSigner(app.edSgn.Sign(edPubkey.Bytes()))
 	if err != nil {
-		return log.ErrVRFSigner(err)
+		return fmt.Errorf("failed to create vrf signer: %w", err)
 	}
 
 	nodeID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
@@ -1079,7 +1111,7 @@ func (app *App) Start() error {
 
 	/* Initialize all protocol services */
 
-	dbStorepath := dataDir
+	dbStorepath := app.Config.DataDir()
 	gTime, err := time.Parse(time.RFC3339, app.Config.GenesisTime)
 	if err != nil {
 		return fmt.Errorf("cannot parse genesis time %s: %d", app.Config.GenesisTime, err)
@@ -1090,7 +1122,7 @@ func (app *App) Start() error {
 	lg.Info("initializing p2p services")
 
 	cfg := app.Config.P2P
-	cfg.DataDir = filepath.Join(dataDir, "p2p")
+	cfg.DataDir = filepath.Join(app.Config.DataDir(), "p2p")
 	p2plog := app.addLogger(P2PLogger, lg)
 	// if addLogger won't add a level we will use a default 0 (info).
 	cfg.LogLevel = app.getLevel(P2PLogger)
