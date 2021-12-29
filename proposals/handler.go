@@ -197,7 +197,7 @@ func (h *Handler) HandleProposalData(ctx context.Context, data []byte) error {
 		logger.Info("known proposal")
 		return nil
 	}
-	logger.With().Info("new proposal", p.Fields()...)
+	logger.With().Info("new proposal", log.Object("proposal", &p))
 
 	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil && err != errKnownBallot {
 		logger.With().Warning("failed to process ballot", log.Err(err))
