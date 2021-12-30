@@ -490,37 +490,16 @@ func (t *turtle) switchModes(logger log.Log) {
 func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.LayerID) error {
 	logger.With().Info("adding layer to the state")
 
-	if err := t.updateLayerState(logger, lid); err != nil {
+	if err := t.updateLayer(logger, lid); err != nil {
 		return err
 	}
 	logger = logger.WithFields(
 		log.Stringer("processed_layer", t.processed),
 		log.Stringer("last_layer", t.last),
 	)
-
-	blocks, err := t.bdp.LayerBlockIds(lid)
-	if err != nil {
-		return fmt.Errorf("failed to read blocks for layer %s: %w", lid, err)
-	}
-
-	t.processBlocks(lid, blocks)
-
-	original, err := t.bdp.LayerBallots(lid)
-	if err != nil {
-		return fmt.Errorf("failed to read ballots for layer %s: %w", lid, err)
-	}
-	ballots, err := t.processBallots(lid, original)
-	if err != nil {
+	if err := t.updateState(ctx, logger, lid); err != nil {
 		return err
 	}
-
-	t.full.processBallots(ballots)
-	t.full.processBlocks(blocks)
-
-	if err := t.updateLocalVotes(ctx, logger, lid); err != nil {
-		return err
-	}
-	t.verifying.countVotes(logger, lid, ballots)
 
 	previous := t.verified
 
@@ -589,7 +568,7 @@ func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
 	return tballots
 }
 
-func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
+func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 	lastUpdated := t.last.Before(lid)
 	if lastUpdated {
 		t.last = lid
@@ -612,6 +591,35 @@ func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
 	if lastUpdated || window.Before(t.processed) || t.globalThreshold.isNil() {
 		updateThresholds(logger, t.Config, &t.commonState, t.mode)
 	}
+	return nil
+}
+
+// updateState is to update state that needs to be updated always. there should be no
+// expensive long running computation in this method.
+func (t *turtle) updateState(ctx context.Context, logger log.Log, lid types.LayerID) error {
+	blocks, err := t.bdp.LayerBlockIds(lid)
+	if err != nil {
+		return fmt.Errorf("failed to read blocks for layer %s: %w", lid, err)
+	}
+
+	t.processBlocks(lid, blocks)
+
+	original, err := t.bdp.LayerBallots(lid)
+	if err != nil {
+		return fmt.Errorf("failed to read ballots for layer %s: %w", lid, err)
+	}
+	ballots, err := t.processBallots(lid, original)
+	if err != nil {
+		return err
+	}
+
+	t.full.processBallots(ballots)
+	t.full.processBlocks(blocks)
+
+	if err := t.updateLocalVotes(ctx, logger, lid); err != nil {
+		return err
+	}
+	t.verifying.countVotes(logger, lid, ballots)
 	return nil
 }
 
