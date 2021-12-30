@@ -518,16 +518,14 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 			// any layer can be expected to get verified.
 			// this is infeasible given current performance and may take weeks to finish.
 			catchup := t.processed
-			// t.processed = target
+			t.processed = target
 
 			if t.mode.isVerifying() {
 				t.switchModes(logger)
 			}
 
 			success = t.catchupInFullMode(logger, target, catchup)
-
-			// progress := t.processed
-			// t.processed = catchup
+			t.processed = catchup
 		}
 		if success {
 			t.verified = target
@@ -551,14 +549,14 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 
 func (t *turtle) catchupInFullMode(logger log.Log, target, catchup types.LayerID) bool {
 	toCount := t.full.counted.Add(1)
-	for ; !toCount.After(t.processed); toCount = toCount.Add(1) {
+	for ; !toCount.After(catchup); toCount = toCount.Add(1) {
 		t.full.countLayerVotes(logger, toCount)
 
-		// t.processed = lid
-		// window := getVerificationWindow(t.Config, &t.commonState, t.mode)
-		// if lid.Before(window) {
-		// 	updateThresholds(logger, t.Config, &t.commonState, t.mode)
-		// }
+		t.processed = toCount
+		window := getVerificationWindow(t.Config, &t.commonState, t.mode)
+		if toCount.Before(window) {
+			updateThresholds(logger, t.Config, &t.commonState, t.mode)
+		}
 
 		if t.full.verify(logger, target) {
 			break
@@ -578,7 +576,7 @@ func (t *turtle) catchupInFullMode(logger log.Log, target, catchup types.LayerID
 			t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 		}
 		if t.verifying.verify(logger, target) {
-			for lid := toCount.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
+			for lid := toCount.Add(1); !lid.After(catchup); lid = lid.Add(1) {
 				t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 			}
 			t.switchModes(logger)
