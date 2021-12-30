@@ -37,6 +37,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/errcode"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -295,8 +296,8 @@ type clockError struct {
 }
 
 func (c *clockError) MarshalLogObject(encoder log.ObjectEncoder) error {
-	encoder.AddString("code", "ERR_CLOCK_DRIFT")
-	encoder.AddString("error", c.err.Error())
+	encoder.AddString("code", errcode.ErrClockDrift)
+	encoder.AddString("errmsg", c.err.Error())
 	if err := encoder.AddObject("details", &c.details); err != nil {
 		return fmt.Errorf("add object: %w", err)
 	}
