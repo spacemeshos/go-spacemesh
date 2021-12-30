@@ -524,17 +524,10 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 				t.switchModes(logger)
 			}
 
-			var switched bool
-			success, switched = t.catchupInFullMode(logger, target, catchup)
+			success = t.catchupInFullMode(logger, target, catchup)
 
 			// progress := t.processed
-			t.processed = catchup
-			if switched {
-				t.switchModes(logger)
-				// for lid := progress.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
-				// 	t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
-				// }
-			}
+			// t.processed = catchup
 		}
 		if success {
 			t.verified = target
@@ -556,9 +549,10 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 	return nil
 }
 
-func (t *turtle) catchupInFullMode(logger log.Log, target, catchup types.LayerID) (bool, bool) {
-	for lid := target.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
-		t.full.countLayerVotes(logger, lid)
+func (t *turtle) catchupInFullMode(logger log.Log, target, catchup types.LayerID) bool {
+	toCount := t.full.counted.Add(1)
+	for ; !toCount.After(t.processed); toCount = toCount.Add(1) {
+		t.full.countLayerVotes(logger, toCount)
 
 		// t.processed = lid
 		// window := getVerificationWindow(t.Config, &t.commonState, t.mode)
@@ -566,25 +560,31 @@ func (t *turtle) catchupInFullMode(logger log.Log, target, catchup types.LayerID
 		// 	updateThresholds(logger, t.Config, &t.commonState, t.mode)
 		// }
 
-		if !t.full.verify(logger, target) {
-			continue
+		if t.full.verify(logger, target) {
+			break
 		}
-		// try to find a cut with ballots that can be good (see verifying tortoise for definition)
-		// if there are such ballots try to bootstrap verifying tortoise by marking them good
-		t.verifying.resetWeights()
-		if t.verifying.markGoodCut(logger, target, t.getTortoiseBallots(target)) {
-			// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
-			// that accumulated weight has a weight of the layer that is going to be verified.
-			for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
+	}
+	if !t.full.verify(logger, target) {
+		return false
+	}
+
+	// try to find a cut with ballots that can be good (see verifying tortoise for definition)
+	// if there are such ballots try to bootstrap verifying tortoise by marking them good
+	t.verifying.resetWeights()
+	if t.verifying.markGoodCut(logger, target, t.getTortoiseBallots(target)) {
+		// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
+		// that accumulated weight has a weight of the layer that is going to be verified.
+		for lid := target; !lid.After(toCount); lid = lid.Add(1) {
+			t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
+		}
+		if t.verifying.verify(logger, target) {
+			for lid := toCount.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 				t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 			}
-			if t.verifying.verify(logger, target) {
-				return true, true
-			}
+			t.switchModes(logger)
 		}
-		return true, false
 	}
-	return false, false
+	return true
 }
 
 func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {

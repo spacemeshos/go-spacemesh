@@ -94,6 +94,11 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 }
 
 func (f *full) countLayerVotes(logger log.Log, lid types.LayerID) {
+	if lid.After(f.counted) {
+		f.counted = lid
+	} else {
+		return
+	}
 	for front := f.delayedQueue.Front(); front != nil; {
 		delayed := front.Value.(delayedBallots)
 		if f.last.Difference(delayed.lid) <= f.BadBeaconVoteDelayLayers {
