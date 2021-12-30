@@ -70,7 +70,7 @@ func TestRerunDistanceVoteCounting(t *testing.T) {
 	misverified := genesis.Add(firstBatch)
 	for _, last = range sim.GenLayers(s,
 		sim.WithSequence(firstBatch, sim.WithEmptyHareOutput()),
-		// in this layer voting is malicious, and it will make that misverified layer will be all invalid
+		// in this layer voting is malicious, and it will make that misverified layer will be invalid
 		sim.WithSequence(1, sim.WithVoteGenerator(gapVote)),
 		// in this layer we skip previously malicious voting
 		sim.WithSequence(1, sim.WithVoteGenerator(gapVote)),
