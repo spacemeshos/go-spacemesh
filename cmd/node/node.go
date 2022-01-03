@@ -37,6 +37,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/errcode"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -280,6 +281,34 @@ func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
+type clockErrorDetails struct {
+	Drift time.Duration
+}
+
+func (c *clockErrorDetails) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddDuration("drift", c.Drift)
+	return nil
+}
+
+type clockError struct {
+	err     error
+	details clockErrorDetails
+}
+
+func (c *clockError) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("code", errcode.ErrClockDrift)
+	encoder.AddString("errmsg", c.err.Error())
+	if err := encoder.AddObject("details", &c.details); err != nil {
+		return fmt.Errorf("add object: %w", err)
+	}
+
+	return nil
+}
+
+func (c *clockError) Error() string {
+	return c.err.Error()
+}
+
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
@@ -294,10 +323,11 @@ func (app *App) Initialize() (err error) {
 			log.Int("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
 			log.Int("hare_round_duration", app.Config.HARE.RoundDuration))
+
 		return errors.New("incompatible tortoise hare params")
 	}
 
-	// override default config in timesync since timesync is using TimeCongigValues
+	// override default config in timesync since timesync is using TimeConfigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	// ensure all data folders exist
@@ -326,7 +356,12 @@ func (app *App) Initialize() (err error) {
 
 	drift, err := timesync.CheckSystemClockDrift()
 	if err != nil {
-		return fmt.Errorf("check system clock drift: %w", err)
+		return &clockError{
+			err: err,
+			details: clockErrorDetails{
+				Drift: drift,
+			},
+		}
 	}
 
 	log.Info("System clock synchronized with ntp. drift: %s", drift)
@@ -1017,6 +1052,7 @@ func (app *App) Start() error {
 	if err != nil {
 		return fmt.Errorf("error reading hostname: %w", err)
 	}
+
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
 		log.String("post-dir", app.Config.SMESHING.Opts.DataDir),

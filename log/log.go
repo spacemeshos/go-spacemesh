@@ -148,6 +148,11 @@ func Warning(msg string, args ...interface{}) {
 	GetLogger().Warning(msg, args...)
 }
 
+// Fatal prints formatted error level log message.
+func Fatal(msg string, args ...interface{}) {
+	GetLogger().Fatal(msg, args...)
+}
+
 // With returns a FieldLogger which you can append fields to.
 func With() FieldLogger {
 	return FieldLogger{GetLogger().logger, GetLogger().name}
