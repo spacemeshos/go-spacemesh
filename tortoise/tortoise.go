@@ -484,7 +484,6 @@ func (t *turtle) switchModes(logger log.Log) {
 		log.Stringer("from_mode", from),
 		log.Stringer("to_mode", t.mode),
 	)
-	updateThresholds(logger, t.Config, &t.commonState, t.mode)
 }
 
 func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.LayerID) error {
@@ -494,7 +493,6 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 		return err
 	}
 	logger = logger.WithFields(
-		log.Stringer("processed_layer", t.processed),
 		log.Stringer("last_layer", t.last),
 	)
 	if err := t.updateState(ctx, logger, lid); err != nil {
@@ -509,23 +507,23 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 			success = t.verifying.verify(logger, target)
 		}
 		if !success && (t.canUseFullMode() || t.mode.isFull()) {
-			// patch processed so that threshold will be reset according to full tortoise verification window
-			//
-			// why is it important:
-			// verifying has a large verification window (e.g. 100_000) and if it failed to verify layer
-			// the threshold will be computed according to the catchup layer.
-			// if we won't reset threshold full tortoise will have to count votes for 100_000 layers before
-			// any layer can be expected to get verified.
-			// this is infeasible given current performance and may take weeks to finish.
-			catchup := t.processed
-			t.processed = target
-
 			if t.mode.isVerifying() {
 				t.switchModes(logger)
 			}
 
-			success = t.catchupInFullMode(logger, target, catchup)
-			t.processed = catchup
+			// patch processed so that threshold will be reset according to full tortoise verification window
+			//
+			// why is it important:
+			// verifying has a large verification window (think 1_000_000) and if it failed to verify layer
+			// the threshold will be computed according to that window.
+			// if we won't reset threshold full tortoise will have to count votes for 1_000_000 layers before
+			// any layer can be expected to get verified.
+			// this is infeasible given current performance of the full tortoise and may take weeks to finish.
+			// instead we recompute window using configuration for the full mode (think 2_000 layers)
+			verifyingProcessed := t.processed
+			t.processed = t.full.counted
+			success = t.catchupToVerifyingInFullMode(logger, target, verifyingProcessed)
+			t.processed = verifyingProcessed
 		}
 		if success {
 			t.verified = target
@@ -547,16 +545,13 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 	return nil
 }
 
-func (t *turtle) catchupInFullMode(logger log.Log, target, catchup types.LayerID) bool {
-	toCount := t.full.counted.Add(1)
-	for ; !toCount.After(catchup); toCount = toCount.Add(1) {
-		t.full.countLayerVotes(logger, toCount)
+func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target, upto types.LayerID) bool {
+	counted := maxLayer(t.processed.Add(1), target.Add(1))
+	for ; !counted.After(upto); counted = counted.Add(1) {
+		t.full.countLayerVotes(logger, counted)
 
-		t.processed = toCount
-		window := getVerificationWindow(t.Config, &t.commonState, t.mode)
-		if toCount.Before(window) {
-			updateThresholds(logger, t.Config, &t.commonState, t.mode)
-		}
+		t.processed = counted
+		updateThresholds(logger, t.Config, &t.commonState, t.mode)
 
 		if t.full.verify(logger, target) {
 			break
@@ -572,11 +567,11 @@ func (t *turtle) catchupInFullMode(logger log.Log, target, catchup types.LayerID
 	if t.verifying.markGoodCut(logger, target, t.getTortoiseBallots(target)) {
 		// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
 		// that accumulated weight has a weight of the layer that is going to be verified.
-		for lid := target; !lid.After(toCount); lid = lid.Add(1) {
+		for lid := target; !lid.After(counted); lid = lid.Add(1) {
 			t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 		}
 		if t.verifying.verify(logger, target) {
-			for lid := toCount.Add(1); !lid.After(catchup); lid = lid.Add(1) {
+			for lid := counted.Add(1); !lid.After(upto); lid = lid.Add(1) {
 				t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 			}
 			t.switchModes(logger)

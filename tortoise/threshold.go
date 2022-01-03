@@ -116,10 +116,8 @@ func getVerificationWindow(config Config, state *commonState, tmode mode) types.
 func updateThresholds(logger log.Log, config Config, state *commonState, tmode mode) {
 	state.localThreshold = computeLocalThreshold(config, state.epochWeight, state.last)
 
-	window := getVerificationWindow(config, state, tmode)
-	if window.Before(state.processed) {
-		window = state.processed
-	}
+	window := maxLayer(getVerificationWindow(config, state, tmode), state.processed)
+
 	target := state.verified.Add(1)
 	state.globalThreshold = computeThresholdForLayers(config, state.epochWeight, target, window)
 	state.globalThreshold = state.globalThreshold.add(state.localThreshold)
