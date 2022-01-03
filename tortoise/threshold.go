@@ -98,37 +98,20 @@ func computeThresholdForLayers(config Config, epochWeight map[types.EpochID]weig
 	return threshold
 }
 
-func getVerificationWindow(config Config, state *commonState, tmode mode) types.LayerID {
-	target := state.verified.Add(1)
-	window := state.last
-	if tmode.isFull() && state.last.Difference(target) > config.FullModeVerificationWindow {
-		window = target.Add(config.FullModeVerificationWindow)
-	} else if tmode.isVerifying() && state.last.Difference(target) > config.VerifyingModeVerificationWindow {
-		window = target.Add(config.VerifyingModeVerificationWindow)
+func getVerificationWindow(config Config, tmode mode, target, last types.LayerID) types.LayerID {
+	if tmode.isFull() && last.Difference(target) > config.FullModeVerificationWindow {
+		return target.Add(config.FullModeVerificationWindow)
+	} else if tmode.isVerifying() && last.Difference(target) > config.VerifyingModeVerificationWindow {
+		return target.Add(config.VerifyingModeVerificationWindow)
 	}
-	return window
+	return last
 }
 
-// updateThresholds recomputes local and global thresholds:
-// - when last layer is updated
-// - when verified layer is updated
-// - when switching from one mode into the other.
-func updateThresholds(logger log.Log, config Config, state *commonState, tmode mode) {
-	state.localThreshold = computeLocalThreshold(config, state.epochWeight, state.last)
+func computeThresholds(logger log.Log, config Config, tmode mode, target, last, processed types.LayerID, epochWeight map[types.EpochID]weight) (weight, weight) {
+	localThreshold := computeLocalThreshold(config, epochWeight, last)
 
-	window := maxLayer(getVerificationWindow(config, state, tmode), state.processed)
+	window := maxLayer(getVerificationWindow(config, tmode, target, last), processed)
 
-	target := state.verified.Add(1)
-	state.globalThreshold = computeThresholdForLayers(config, state.epochWeight, target, window)
-	state.globalThreshold = state.globalThreshold.add(state.localThreshold)
-
-	logger.With().Info("updated thresholds",
-		log.Stringer("window", window),
-		log.Stringer("last_layer", state.last),
-		log.Stringer("processed_layer", state.processed),
-		log.Stringer("target_layer", target),
-		log.Stringer("local_threshold", state.localThreshold),
-		log.Stringer("global_threshold", state.globalThreshold),
-		log.Stringer("mode", tmode),
-	)
+	globalThreshold := computeThresholdForLayers(config, epochWeight, target, window)
+	return localThreshold, globalThreshold.add(localThreshold)
 }

@@ -511,23 +511,20 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 				t.switchModes(logger)
 			}
 
-			// patch processed so that threshold will be reset according to full tortoise verification window
-			//
-			// why is it important:
 			// verifying has a large verification window (think 1_000_000) and if it failed to verify layer
 			// the threshold will be computed according to that window.
 			// if we won't reset threshold full tortoise will have to count votes for 1_000_000 layers before
-			// any layer can be expected to get verified.
-			// this is infeasible given current performance of the full tortoise and may take weeks to finish.
+			// any layer can be expected to get verified. this is infeasible given current performance
+			// of the full tortoise and may take weeks to finish.
 			// instead we recompute window using configuration for the full mode (think 2_000 layers)
-			verifyingProcessed := t.processed
-			t.processed = t.full.counted
-			success = t.catchupToVerifyingInFullMode(logger, target, verifyingProcessed)
-			t.processed = verifyingProcessed
+			success = t.catchupToVerifyingInFullMode(logger, target)
 		}
 		if success {
 			t.verified = target
-			updateThresholds(logger, t.Config, &t.commonState, t.mode)
+			t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
+				t.verified.Add(1), t.last, t.processed,
+				t.epochWeight,
+			)
 		} else {
 			break
 		}
@@ -545,13 +542,15 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 	return nil
 }
 
-func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target, upto types.LayerID) bool {
-	counted := maxLayer(t.processed.Add(1), target.Add(1))
-	for ; !counted.After(upto); counted = counted.Add(1) {
+func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target types.LayerID) bool {
+	counted := maxLayer(t.full.counted.Add(1), target.Add(1))
+	for ; !counted.After(t.processed); counted = counted.Add(1) {
 		t.full.countLayerVotes(logger, counted)
 
-		t.processed = counted
-		updateThresholds(logger, t.Config, &t.commonState, t.mode)
+		t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
+			target, t.last, counted,
+			t.epochWeight,
+		)
 
 		if t.full.verify(logger, target) {
 			break
@@ -571,7 +570,7 @@ func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target, upto types
 			t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 		}
 		if t.verifying.verify(logger, target) {
-			for lid := counted.Add(1); !lid.After(upto); lid = lid.Add(1) {
+			for lid := counted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 				t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 			}
 			t.switchModes(logger)
@@ -616,9 +615,12 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 		}
 		logger.With().Info("computed weight for layers in an epoch", epoch, log.Stringer("weight", layerWeight))
 	}
-	window := getVerificationWindow(t.Config, &t.commonState, t.mode)
+	window := getVerificationWindow(t.Config, t.mode, t.verified.Add(1), t.last)
 	if lastUpdated || window.Before(t.processed) || t.globalThreshold.isNil() {
-		updateThresholds(logger, t.Config, &t.commonState, t.mode)
+		t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
+			t.verified.Add(1), t.last, t.processed,
+			t.epochWeight,
+		)
 	}
 	return nil
 }
