@@ -1374,7 +1374,7 @@ func skipLayers(n int) sim.VotesGenerator {
 	return func(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 		position := n + 1
 		if len(layers) < position {
-			panic(fmt.Sprintf("need atleast %d layers", position))
+			panic(fmt.Sprintf("need at least %d layers", position))
 		}
 		baseLayer := layers[len(layers)-position]
 		support := layers[len(layers)-position].BlocksIDs()

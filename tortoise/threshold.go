@@ -107,11 +107,14 @@ func getVerificationWindow(config Config, tmode mode, target, last types.LayerID
 	return last
 }
 
-func computeThresholds(logger log.Log, config Config, tmode mode, target, last, processed types.LayerID, epochWeight map[types.EpochID]weight) (weight, weight) {
+func computeThresholds(logger log.Log, config Config, tmode mode,
+	target, last, processed types.LayerID,
+	epochWeight map[types.EpochID]weight,
+) (local, global weight) {
 	localThreshold := computeLocalThreshold(config, epochWeight, last)
-
-	window := maxLayer(getVerificationWindow(config, tmode, target, last), processed)
-
-	globalThreshold := computeThresholdForLayers(config, epochWeight, target, window)
+	globalThreshold := computeThresholdForLayers(config, epochWeight,
+		target,
+		maxLayer(getVerificationWindow(config, tmode, target, last), processed),
+	)
 	return localThreshold, globalThreshold.add(localThreshold)
 }
