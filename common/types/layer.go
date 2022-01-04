@@ -61,22 +61,22 @@ func GenesisLayer() *Layer {
 
 // InitGenesisData generate the genesis data.
 func InitGenesisData() {
-	p := &Proposal{
-		InnerProposal: InnerProposal{
-			Ballot: Ballot{
-				InnerBallot: InnerBallot{
-					LayerIndex: GetEffectiveGenesis(),
-					EpochData: &EpochData{
-						Beacon: HexToBeacon(GenesisBeacon),
-					},
-				},
-				ballotID: GenesisBallotID,
+	ballot := &Ballot{
+		InnerBallot: InnerBallot{
+			LayerIndex: GetEffectiveGenesis(),
+			EpochData: &EpochData{
+				Beacon: HexToBeacon(GenesisBeacon),
 			},
 		},
-		proposalID: ProposalID(GenesisBlockID),
+		ballotID: GenesisBallotID,
 	}
-	genesisLayer = NewLayer(GetEffectiveGenesis())
-	genesisLayer.AddProposal(p)
+	block := &Block{
+		InnerBlock: InnerBlock{
+			LayerIndex: GetEffectiveGenesis(),
+		},
+		blockID: GenesisBlockID,
+	}
+	genesisLayer = NewExistingLayer(GetEffectiveGenesis(), []*Ballot{ballot}, []*Block{block})
 }
 
 // GetEffectiveGenesis returns when actual proposals would be created.
@@ -246,14 +246,15 @@ func (id NodeID) Field() log.Field { return log.String("node_id", id.Key) }
 
 // Layer contains a list of proposals and their corresponding LayerID.
 type Layer struct {
-	proposals []*Proposal
-	index     LayerID
+	index   LayerID
+	ballots []*Ballot
+	blocks  []*Block
 }
 
 // Field returns a log field. Implements the LoggableField interface.
 func (l *Layer) Field() log.Field {
 	return log.String("layer",
-		fmt.Sprintf("layerhash %s layernum %d numblocks %d", l.Hash().String(), l.index, len(l.proposals)))
+		fmt.Sprintf("layer_id %d num_ballot %d num_blocks %d", l.index, len(l.ballots), len(l.blocks)))
 }
 
 // Index returns the layer's ID.
@@ -261,91 +262,74 @@ func (l *Layer) Index() LayerID {
 	return l.index
 }
 
-// Proposals returns the list of Proposal in this layer.
-func (l *Layer) Proposals() []*Proposal {
-	return l.proposals
-}
-
 // Blocks returns the list of Block in this layer.
 func (l *Layer) Blocks() []*Block {
-	blocks := make([]*Block, 0, len(l.proposals))
-	for _, p := range l.proposals {
-		blocks = append(blocks, (*Block)(p))
-	}
-	return blocks
+	return l.blocks
 }
 
 // BlocksIDs returns the list of IDs for blocks in this layer.
 func (l *Layer) BlocksIDs() []BlockID {
-	ids := make([]BlockID, 0, len(l.proposals))
-	for _, p := range l.proposals {
-		ids = append(ids, BlockID(p.ID()))
-	}
-	return ids
+	return ToBlockIDs(l.blocks)
 }
 
 // Ballots returns the list of ballots in this layer.
 func (l *Layer) Ballots() []*Ballot {
-	ballots := make([]*Ballot, 0, len(l.proposals))
-	for _, p := range l.proposals {
-		ballots = append(ballots, &p.Ballot)
-	}
-	return ballots
+	return l.ballots
 }
 
-// ProposalsIDs returns the list of IDs for proposals in this layer.
-func (l *Layer) ProposalsIDs() []ProposalID {
-	ids := make([]ProposalID, len(l.proposals))
-	for i := range l.proposals {
-		ids[i] = l.proposals[i].ID()
-	}
-	return ids
+// BallotIDs returns the list of IDs for ballots in this layer.
+func (l *Layer) BallotIDs() []BallotID {
+	return ToBallotIDs(l.ballots)
 }
 
-// Hash returns the 32-byte sha256 sum of the block IDs of both contextually valid and invalid proposals in this layer,
-// sorted in lexicographic order.
+// Hash returns the 32-byte sha256 sum of the block IDs in this layer, sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
-	if len(l.proposals) == 0 {
+	if len(l.blocks) == 0 {
 		return EmptyLayerHash
 	}
-	return CalcProposalsHash32(SortProposalIDs(ToProposalIDs(l.proposals)), nil)
+	return CalcBlocksHash32(SortBlockIDs(l.BlocksIDs()), nil)
 }
 
-// AddProposal adds a proposal to this layer. Panics if the proposal's index doesn't match the layer.
-func (l *Layer) AddProposal(p *Proposal) {
-	if p.LayerIndex != l.index {
-		log.Panic("add proposal with wrong layer number act %v exp %v", p.LayerIndex, l.index)
+// AddBallot adds a ballot to this layer. Panics if the ballot's index doesn't match the layer.
+func (l *Layer) AddBallot(b *Ballot) {
+	if b.LayerIndex != l.index {
+		log.Panic("add ballot with wrong layer number act %v exp %v", b.LayerIndex, l.index)
 	}
-	l.proposals = append(l.proposals, p)
+	l.ballots = append(l.ballots, b)
 }
 
 // AddBlock adds a block to this layer. Panics if the block's index doesn't match the layer.
 func (l *Layer) AddBlock(b *Block) {
-	l.AddProposal((*Proposal)(b))
+	if b.LayerIndex != l.index {
+		log.Panic("add block with wrong layer number act %v exp %v", b.LayerIndex, l.index)
+	}
+	l.blocks = append(l.blocks, b)
 }
 
-// SetProposals sets the list of proposals for the layer without validation.
-func (l *Layer) SetProposals(proposals []*Proposal) {
-	l.proposals = proposals
+// SetBallots sets the list of ballots for the layer without validation.
+func (l *Layer) SetBallots(ballots []*Ballot) {
+	l.ballots = ballots
 }
 
 // SetBlocks sets the list of blocks for the layer without validation.
 func (l *Layer) SetBlocks(blocks []*Block) {
-	l.proposals = ToProposals(blocks)
+	l.blocks = blocks
 }
 
 // NewExistingLayer returns a new layer with the given list of blocks without validation.
-func NewExistingLayer(idx LayerID, blocks []*Block) *Layer {
+func NewExistingLayer(idx LayerID, ballots []*Ballot, blocks []*Block) *Layer {
 	return &Layer{
-		proposals: ToProposals(blocks),
-		index:     idx,
+		index:   idx,
+		ballots: ballots,
+		blocks:  blocks,
 	}
 }
 
 // NewLayer returns a layer with no proposals.
 func NewLayer(layerIndex LayerID) *Layer {
 	return &Layer{
-		index:     layerIndex,
-		proposals: make([]*Proposal, 0, 10),
+		index:   layerIndex,
+		ballots: make([]*Ballot, 0, 10),
+		blocks:  make([]*Block, 0, 3),
 	}
 }

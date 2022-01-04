@@ -7,6 +7,7 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -14,6 +15,7 @@ import (
 const (
 	// ProposalIDSize in bytes.
 	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
+	// probably required for fetching by hash between peers.
 	ProposalIDSize = Hash32Length
 )
 
@@ -72,7 +74,7 @@ func (p *Proposal) Initialize() error {
 
 // Bytes returns the serialization of the InnerProposal.
 func (p *Proposal) Bytes() []byte {
-	bytes, err := InterfaceToBytes(p.InnerProposal)
+	bytes, err := codec.Encode(p.InnerProposal)
 	if err != nil {
 		log.Panic("failed to serialize proposal: %v", err)
 	}
@@ -87,6 +89,13 @@ func (p *Proposal) ID() ProposalID {
 // Fields returns an array of LoggableFields for logging.
 func (p *Proposal) Fields() []log.LoggableField {
 	return append(p.Ballot.Fields(), p.ID(), log.Int("num_tx", len(p.TxIDs)))
+}
+
+// MarshalLogObject implements logging interface.
+func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("proposal_id", p.ID().String())
+	p.Ballot.MarshalLogObject(encoder)
+	return nil
 }
 
 // String returns a short prefix of the hex representation of the ID.
@@ -123,15 +132,6 @@ func ToProposalIDs(proposals []*Proposal) []ProposalID {
 	return ids
 }
 
-// ProposalIDsToBlockIDs turns a list of ProposalID into BlockID.
-func ProposalIDsToBlockIDs(pids []ProposalID) []BlockID {
-	bids := make([]BlockID, 0, len(pids))
-	for _, pid := range pids {
-		bids = append(bids, BlockID(pid))
-	}
-	return bids
-}
-
 // SortProposals sorts a list of Proposal in their ID's lexicographic order, in-place.
 func SortProposals(proposals []*Proposal) []*Proposal {
 	sort.Slice(proposals, func(i, j int) bool { return proposals[i].ID().Compare(proposals[j].ID()) })
@@ -144,6 +144,15 @@ func SortProposalIDs(ids []ProposalID) []ProposalID {
 	return ids
 }
 
+// ProposalIDsToHashes turns a list of ProposalID into their Hash32 representation.
+func ProposalIDsToHashes(ids []ProposalID) []Hash32 {
+	hashes := make([]Hash32, 0, len(ids))
+	for _, id := range ids {
+		hashes = append(hashes, id.AsHash32())
+	}
+	return hashes
+}
+
 // DBProposal is a Proposal structure stored in DB to skip signature verification.
 type DBProposal struct {
 	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
@@ -153,19 +162,6 @@ type DBProposal struct {
 	LayerIndex LayerID
 	TxIDs      []TransactionID
 	Signature  []byte
-}
-
-// ToBlock creates a Block from data that is stored locally.
-func (b *DBProposal) ToBlock() *Block {
-	return &Block{
-		InnerProposal: InnerProposal{
-			Ballot: Ballot{
-				InnerBallot: InnerBallot{LayerIndex: b.LayerIndex},
-			},
-			TxIDs: b.TxIDs,
-		},
-		proposalID: b.ID,
-	}
 }
 
 // ToProposal creates a Proposal from data that is stored locally.
