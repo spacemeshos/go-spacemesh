@@ -26,7 +26,7 @@ type meshProvider interface {
 	// GetBallot returns the ballot with the specified ID
 	GetBallot(types.BallotID) (*types.Ballot, error)
 	// HandleValidatedLayer receives Hare output when it succeeds
-	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
+	ProcessLayerPerHareOutput(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
 	// RecordCoinflip records the weak coinflip result for a layer
 	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
 }

@@ -50,31 +50,31 @@ func (mr *MockatxDBMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockatxDB)(nil).GetAtxHeader), arg0)
 }
 
-// Mockmesh is a mock of mesh interface.
-type Mockmesh struct {
+// MockmeshDB is a mock of meshDB interface.
+type MockmeshDB struct {
 	ctrl     *gomock.Controller
-	recorder *MockmeshMockRecorder
+	recorder *MockmeshDBMockRecorder
 }
 
-// MockmeshMockRecorder is the mock recorder for Mockmesh.
-type MockmeshMockRecorder struct {
-	mock *Mockmesh
+// MockmeshDBMockRecorder is the mock recorder for MockmeshDB.
+type MockmeshDBMockRecorder struct {
+	mock *MockmeshDB
 }
 
-// NewMockmesh creates a new mock instance.
-func NewMockmesh(ctrl *gomock.Controller) *Mockmesh {
-	mock := &Mockmesh{ctrl: ctrl}
-	mock.recorder = &MockmeshMockRecorder{mock}
+// NewMockmeshDB creates a new mock instance.
+func NewMockmeshDB(ctrl *gomock.Controller) *MockmeshDB {
+	mock := &MockmeshDB{ctrl: ctrl}
+	mock.recorder = &MockmeshDBMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mockmesh) EXPECT() *MockmeshMockRecorder {
+func (m *MockmeshDB) EXPECT() *MockmeshDBMockRecorder {
 	return m.recorder
 }
 
 // AddBallot mocks base method.
-func (m *Mockmesh) AddBallot(arg0 *types.Ballot) error {
+func (m *MockmeshDB) AddBallot(arg0 *types.Ballot) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddBallot", arg0)
 	ret0, _ := ret[0].(error)
@@ -82,27 +82,27 @@ func (m *Mockmesh) AddBallot(arg0 *types.Ballot) error {
 }
 
 // AddBallot indicates an expected call of AddBallot.
-func (mr *MockmeshMockRecorder) AddBallot(arg0 interface{}) *gomock.Call {
+func (mr *MockmeshDBMockRecorder) AddBallot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBallot", reflect.TypeOf((*Mockmesh)(nil).AddBallot), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBallot", reflect.TypeOf((*MockmeshDB)(nil).AddBallot), arg0)
 }
 
-// AddProposalWithTxs mocks base method.
-func (m *Mockmesh) AddProposalWithTxs(arg0 context.Context, arg1 *types.Proposal) error {
+// AddTXsFromProposal mocks base method.
+func (m *MockmeshDB) AddTXsFromProposal(arg0 context.Context, arg1 *types.Proposal) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddProposalWithTxs", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddTXsFromProposal", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// AddProposalWithTxs indicates an expected call of AddProposalWithTxs.
-func (mr *MockmeshMockRecorder) AddProposalWithTxs(arg0, arg1 interface{}) *gomock.Call {
+// AddTXsFromProposal indicates an expected call of AddTXsFromProposal.
+func (mr *MockmeshDBMockRecorder) AddTXsFromProposal(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProposalWithTxs", reflect.TypeOf((*Mockmesh)(nil).AddProposalWithTxs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTXsFromProposal", reflect.TypeOf((*MockmeshDB)(nil).AddTXsFromProposal), arg0, arg1)
 }
 
 // GetBallot mocks base method.
-func (m *Mockmesh) GetBallot(arg0 types.BallotID) (*types.Ballot, error) {
+func (m *MockmeshDB) GetBallot(arg0 types.BallotID) (*types.Ballot, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBallot", arg0)
 	ret0, _ := ret[0].(*types.Ballot)
@@ -111,13 +111,13 @@ func (m *Mockmesh) GetBallot(arg0 types.BallotID) (*types.Ballot, error) {
 }
 
 // GetBallot indicates an expected call of GetBallot.
-func (mr *MockmeshMockRecorder) GetBallot(arg0 interface{}) *gomock.Call {
+func (mr *MockmeshDBMockRecorder) GetBallot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*Mockmesh)(nil).GetBallot), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*MockmeshDB)(nil).GetBallot), arg0)
 }
 
 // HasBallot mocks base method.
-func (m *Mockmesh) HasBallot(arg0 types.BallotID) bool {
+func (m *MockmeshDB) HasBallot(arg0 types.BallotID) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasBallot", arg0)
 	ret0, _ := ret[0].(bool)
@@ -125,13 +125,50 @@ func (m *Mockmesh) HasBallot(arg0 types.BallotID) bool {
 }
 
 // HasBallot indicates an expected call of HasBallot.
-func (mr *MockmeshMockRecorder) HasBallot(arg0 interface{}) *gomock.Call {
+func (mr *MockmeshDBMockRecorder) HasBallot(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasBallot", reflect.TypeOf((*Mockmesh)(nil).HasBallot), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasBallot", reflect.TypeOf((*MockmeshDB)(nil).HasBallot), arg0)
+}
+
+// MockproposalDB is a mock of proposalDB interface.
+type MockproposalDB struct {
+	ctrl     *gomock.Controller
+	recorder *MockproposalDBMockRecorder
+}
+
+// MockproposalDBMockRecorder is the mock recorder for MockproposalDB.
+type MockproposalDBMockRecorder struct {
+	mock *MockproposalDB
+}
+
+// NewMockproposalDB creates a new mock instance.
+func NewMockproposalDB(ctrl *gomock.Controller) *MockproposalDB {
+	mock := &MockproposalDB{ctrl: ctrl}
+	mock.recorder = &MockproposalDBMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockproposalDB) EXPECT() *MockproposalDBMockRecorder {
+	return m.recorder
+}
+
+// AddProposalWithTxs mocks base method.
+func (m *MockproposalDB) AddProposalWithTxs(arg0 context.Context, arg1 *types.Proposal) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddProposalWithTxs", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddProposalWithTxs indicates an expected call of AddProposalWithTxs.
+func (mr *MockproposalDBMockRecorder) AddProposalWithTxs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProposalWithTxs", reflect.TypeOf((*MockproposalDB)(nil).AddProposalWithTxs), arg0, arg1)
 }
 
 // HasProposal mocks base method.
-func (m *Mockmesh) HasProposal(arg0 types.ProposalID) bool {
+func (m *MockproposalDB) HasProposal(arg0 types.ProposalID) bool {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HasProposal", arg0)
 	ret0, _ := ret[0].(bool)
@@ -139,9 +176,9 @@ func (m *Mockmesh) HasProposal(arg0 types.ProposalID) bool {
 }
 
 // HasProposal indicates an expected call of HasProposal.
-func (mr *MockmeshMockRecorder) HasProposal(arg0 interface{}) *gomock.Call {
+func (mr *MockproposalDBMockRecorder) HasProposal(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasProposal", reflect.TypeOf((*Mockmesh)(nil).HasProposal), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasProposal", reflect.TypeOf((*MockproposalDB)(nil).HasProposal), arg0)
 }
 
 // MockeligibilityValidator is a mock of eligibilityValidator interface.

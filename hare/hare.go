@@ -208,7 +208,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	} else {
 		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
 	}
-	h.mesh.HandleValidatedLayer(ctx, layerID, types.ProposalIDsToBlockIDs(proposals))
+	h.mesh.ProcessLayerPerHareOutput(ctx, layerID, types.ProposalIDsToBlockIDs(proposals))
 
 	if h.outOfBufferRange(layerID) {
 		return ErrTooLate

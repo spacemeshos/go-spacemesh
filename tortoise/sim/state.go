@@ -51,10 +51,10 @@ func (s *State) OnBlock(block *types.Block) {
 	}
 }
 
-// OnInputVector callback to store input vector.
-func (s *State) OnInputVector(lid types.LayerID, vector []types.BlockID) {
-	if err := s.MeshDB.SaveLayerInputVectorByID(context.TODO(), lid, vector); err != nil {
-		s.logger.With().Panic("failed to save input vector", log.Err(err))
+// OnHareOutput callback to store hare output.
+func (s *State) OnHareOutput(lid types.LayerID, vector []types.BlockID) {
+	if err := s.MeshDB.SaveHareConsensusOutput(context.TODO(), lid, vector); err != nil {
+		s.logger.With().Panic("failed to save hare output", log.Err(err))
 	}
 }
 

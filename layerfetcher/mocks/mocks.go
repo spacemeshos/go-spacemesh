@@ -200,6 +200,21 @@ func (mr *MocklayerDBMockRecorder) GetAggregatedLayerHash(arg0 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAggregatedLayerHash", reflect.TypeOf((*MocklayerDB)(nil).GetAggregatedLayerHash), arg0)
 }
 
+// GetHareConsensusOutput mocks base method.
+func (m *MocklayerDB) GetHareConsensusOutput(arg0 types.LayerID) ([]types.BlockID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHareConsensusOutput", arg0)
+	ret0, _ := ret[0].([]types.BlockID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHareConsensusOutput indicates an expected call of GetHareConsensusOutput.
+func (mr *MocklayerDBMockRecorder) GetHareConsensusOutput(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHareConsensusOutput", reflect.TypeOf((*MocklayerDB)(nil).GetHareConsensusOutput), arg0)
+}
+
 // GetLayerHash mocks base method.
 func (m *MocklayerDB) GetLayerHash(arg0 types.LayerID) types.Hash32 {
 	m.ctrl.T.Helper()
@@ -212,21 +227,6 @@ func (m *MocklayerDB) GetLayerHash(arg0 types.LayerID) types.Hash32 {
 func (mr *MocklayerDBMockRecorder) GetLayerHash(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerHash", reflect.TypeOf((*MocklayerDB)(nil).GetLayerHash), arg0)
-}
-
-// GetLayerInputVectorByID mocks base method.
-func (m *MocklayerDB) GetLayerInputVectorByID(arg0 types.LayerID) ([]types.BlockID, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLayerInputVectorByID", arg0)
-	ret0, _ := ret[0].([]types.BlockID)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetLayerInputVectorByID indicates an expected call of GetLayerInputVectorByID.
-func (mr *MocklayerDBMockRecorder) GetLayerInputVectorByID(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerInputVectorByID", reflect.TypeOf((*MocklayerDB)(nil).GetLayerInputVectorByID), arg0)
 }
 
 // LayerBlockIds mocks base method.
@@ -258,18 +258,18 @@ func (mr *MocklayerDBMockRecorder) ProcessedLayer() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessedLayer", reflect.TypeOf((*MocklayerDB)(nil).ProcessedLayer))
 }
 
-// SaveLayerInputVectorByID mocks base method.
-func (m *MocklayerDB) SaveLayerInputVectorByID(arg0 context.Context, arg1 types.LayerID, arg2 []types.BlockID) error {
+// SaveHareConsensusOutput mocks base method.
+func (m *MocklayerDB) SaveHareConsensusOutput(arg0 context.Context, arg1 types.LayerID, arg2 []types.BlockID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveLayerInputVectorByID", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SaveHareConsensusOutput", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SaveLayerInputVectorByID indicates an expected call of SaveLayerInputVectorByID.
-func (mr *MocklayerDBMockRecorder) SaveLayerInputVectorByID(arg0, arg1, arg2 interface{}) *gomock.Call {
+// SaveHareConsensusOutput indicates an expected call of SaveHareConsensusOutput.
+func (mr *MocklayerDBMockRecorder) SaveHareConsensusOutput(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveLayerInputVectorByID", reflect.TypeOf((*MocklayerDB)(nil).SaveLayerInputVectorByID), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveHareConsensusOutput", reflect.TypeOf((*MocklayerDB)(nil).SaveHareConsensusOutput), arg0, arg1, arg2)
 }
 
 // SetZeroBlockLayer mocks base method.

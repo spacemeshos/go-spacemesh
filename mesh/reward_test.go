@@ -185,7 +185,7 @@ func TestMesh_integration(t *testing.T) {
 			tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 			tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 		}
-		tm.ValidateLayer(context.TODO(), l)
+		tm.ProcessLayer(context.TODO(), l)
 	}
 	// since there can be a difference of up to x lerners where x is the number of proposals due to round up of penalties when distributed among all proposals
 	totalPayout := l3Rewards + int64(ConfigTst().BaseReward)
@@ -216,7 +216,7 @@ func createMeshFromSyncing(t *testing.T, finalLyr types.LayerID, tm *testMesh, a
 			tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 			tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 		}
-		tm.ValidateLayer(context.TODO(), types.NewExistingLayer(i, blocks))
+		tm.ProcessLayer(context.TODO(), types.NewExistingLayer(i, blocks))
 	}
 	return allTXs, allRewards
 }
@@ -247,7 +247,7 @@ func createMeshFromHareOutput(t *testing.T, finalLyr types.LayerID, tm *testMesh
 			tm.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 			tm.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 		}
-		tm.HandleValidatedLayer(context.TODO(), i, blockIDs)
+		tm.ProcessLayerPerHareOutput(context.TODO(), i, blockIDs)
 	}
 	return allTXs, allRewards
 }
@@ -290,7 +290,7 @@ func TestMesh_updateStateWithLayer_SyncingAndHareReachSameState(t *testing.T) {
 			tm2.mockState.EXPECT().ValidateNonceAndBalance(gomock.Any()).Return(nil).AnyTimes()
 			tm2.mockState.EXPECT().AddTxToPool(gomock.Any()).Return(nil).AnyTimes()
 		}
-		tm2.HandleValidatedLayer(context.TODO(), i, blockIDs)
+		tm2.ProcessLayerPerHareOutput(context.TODO(), i, blockIDs)
 	}
 
 	// two meshes should have the same state
@@ -319,7 +319,7 @@ func TestMesh_updateStateWithLayer_SameInputFromHare(t *testing.T) {
 	require.NoError(t, err)
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), finalLyr).Return(finalLyr.Sub(1), finalLyr.Sub(1), false).Times(1)
 	tm.mockFetch.EXPECT().GetBlocks(gomock.Any(), lyr.BlocksIDs()).Times(1)
-	tm.HandleValidatedLayer(context.TODO(), finalLyr, lyr.BlocksIDs())
+	tm.ProcessLayerPerHareOutput(context.TODO(), finalLyr, lyr.BlocksIDs())
 
 	// aggregated hash should be unchanged
 	require.Equal(t, aggHash, tm.GetAggregatedLayerHash(finalLyr.Sub(1)))
@@ -342,7 +342,7 @@ func TestMesh_updateStateWithLayer_SameInputFromSyncing(t *testing.T) {
 	lyr, err := tm.GetLayer(finalLyr)
 	require.NoError(t, err)
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), finalLyr).Return(finalLyr.Sub(1), finalLyr.Sub(1), false).Times(1)
-	tm.ValidateLayer(context.TODO(), lyr)
+	tm.ProcessLayer(context.TODO(), lyr)
 
 	// aggregated hash should be unchanged
 	require.Equal(t, aggHash, tm.GetAggregatedLayerHash(finalLyr.Sub(1)))
@@ -389,7 +389,7 @@ func TestMesh_updateStateWithLayer_AdvanceInOrder(t *testing.T) {
 				}).Times(1)
 			tm2.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
 		}
-		tm2.HandleValidatedLayer(context.TODO(), i, blockIDs)
+		tm2.ProcessLayerPerHareOutput(context.TODO(), i, blockIDs)
 	}
 	// tm1 is at finalLyr, tm2 is at finalLyr-2
 	require.Equal(t, finalLyr, tm1.ProcessedLayer())
@@ -403,7 +403,7 @@ func TestMesh_updateStateWithLayer_AdvanceInOrder(t *testing.T) {
 	require.Equal(t, finalLyr.Sub(3), newVerified)
 	tm2.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), finalLyr).Return(newVerified, newVerified, false).Times(1)
 	tm2.mockFetch.EXPECT().GetBlocks(gomock.Any(), finalBlockIds).Times(1)
-	tm2.HandleValidatedLayer(context.TODO(), finalLyr, finalBlockIds)
+	tm2.ProcessLayerPerHareOutput(context.TODO(), finalLyr, finalBlockIds)
 	require.Equal(t, finalLyr.Sub(2), tm2.ProcessedLayer())
 
 	// advancing tm2 to finalLyr-1 should bring tm2 to finalLyr
@@ -420,7 +420,7 @@ func TestMesh_updateStateWithLayer_AdvanceInOrder(t *testing.T) {
 			}).Times(1)
 		tm2.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
 	}
-	tm2.HandleValidatedLayer(context.TODO(), finalLyr.Sub(1), finalMinus1BlockIds)
+	tm2.ProcessLayerPerHareOutput(context.TODO(), finalLyr.Sub(1), finalMinus1BlockIds)
 	assert.Equal(t, finalLyr, tm2.ProcessedLayer())
 
 	// both mesh should be at the same state

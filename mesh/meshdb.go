@@ -34,7 +34,7 @@ type DB struct {
 	contextualValidity database.Database
 	general            database.Database
 	unappliedTxs       database.Database
-	inputVector        database.Database
+	hareOutput         database.Database
 	blockMutex         sync.RWMutex
 	coinflipMu         sync.RWMutex
 	coinflips          map[types.LayerID]bool // weak coinflip results from Hare
@@ -72,7 +72,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
 	}
-	iv, err := database.NewLDBDatabase(filepath.Join(path, "inputvector"), 0, 0, logger)
+	ho, err := database.NewLDBDatabase(filepath.Join(path, "hareoutput"), 0, 0, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
 	}
@@ -87,7 +87,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 		general:            gdb,
 		contextualValidity: vdb,
 		unappliedTxs:       utx,
-		inputVector:        iv,
+		hareOutput:         ho,
 		coinflips:          make(map[types.LayerID]bool),
 		exit:               make(chan struct{}),
 	}
@@ -101,8 +101,8 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 			mdb.Log.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
 		}
 	}
-	if err = mdb.SaveLayerInputVectorByID(context.Background(), gLayer.Index(), types.BlockIDs(gLayer.Blocks())); err != nil {
-		log.With().Error("error inserting genesis input vector to db", gLayer.Index(), log.Err(err))
+	if err = mdb.SaveHareConsensusOutput(context.Background(), gLayer.Index(), types.BlockIDs(gLayer.Blocks())); err != nil {
+		log.With().Error("error inserting genesis block as hare output to db", gLayer.Index(), log.Err(err))
 	}
 	return mdb, err
 }
@@ -129,7 +129,7 @@ func NewMemMeshDB(logger log.Log) *DB {
 		contextualValidity: database.NewMemDatabase(),
 		transactions:       database.NewMemDatabase(),
 		unappliedTxs:       database.NewMemDatabase(),
-		inputVector:        database.NewMemDatabase(),
+		hareOutput:         database.NewMemDatabase(),
 		coinflips:          make(map[types.LayerID]bool),
 		exit:               make(chan struct{}),
 	}
@@ -140,8 +140,8 @@ func NewMemMeshDB(logger log.Log) *DB {
 		_ = mdb.AddBlock(b)
 		_ = mdb.SaveContextualValidity(b.ID(), b.LayerIndex, true)
 	}
-	if err := mdb.SaveLayerInputVectorByID(context.Background(), gLayer.Index(), types.BlockIDs(gLayer.Blocks())); err != nil {
-		logger.With().Error("error inserting genesis input vector to db", gLayer, log.Err(err))
+	if err := mdb.SaveHareConsensusOutput(context.Background(), gLayer.Index(), types.BlockIDs(gLayer.Blocks())); err != nil {
+		logger.With().Error("error inserting genesis block as hare output to db", gLayer, log.Err(err))
 	}
 	return mdb
 }
@@ -154,7 +154,7 @@ func (m *DB) Close() {
 	m.layers.Close()
 	m.transactions.Close()
 	m.unappliedTxs.Close()
-	m.inputVector.Close()
+	m.hareOutput.Close()
 	m.general.Close()
 	m.contextualValidity.Close()
 }
@@ -213,7 +213,7 @@ func (m *DB) GetBallot(id types.BallotID) (*types.Ballot, error) {
 // LayerBallots retrieves all ballots from a layer by layer ID.
 func (m *DB) LayerBallots(lid types.LayerID) ([]*types.Ballot, error) {
 	var ballots []*types.Ballot
-	err := m.layerIDs(layerBallots, lid, func(id []byte) error {
+	err := LayerIDs(m.layers, layerBallots, lid, func(id []byte) error {
 		var bid types.BallotID
 		copy(bid[:], id)
 		ballot, err := m.GetBallot(bid)
@@ -248,7 +248,7 @@ func (m *DB) GetBlock(bid types.BlockID) (*types.Block, error) {
 // LayerBlockIds retrieves all block IDs from the layer specified by layer ID.
 func (m *DB) LayerBlockIds(lid types.LayerID) ([]types.BlockID, error) {
 	var ids []types.BlockID
-	err := m.layerIDs(layerProposals, lid, func(id []byte) error {
+	err := LayerIDs(m.layers, layerProposals, lid, func(id []byte) error {
 		var bid types.BlockID
 		copy(bid[:], id)
 		ids = append(ids, bid)
@@ -339,7 +339,8 @@ func (m *DB) LayerProposals(index types.LayerID) ([]*types.Proposal, error) {
 	return proposals, nil
 }
 
-func (m *DB) layerIDs(namespace string, lid types.LayerID, f func(id []byte) error) error {
+// LayerIDs is a utility function that finds namespaced IDs saved in a database as a key.
+func LayerIDs(db database.Database, namespace string, lid types.LayerID, f func(id []byte) error) error {
 	var (
 		zero = false
 		n    int
@@ -348,7 +349,7 @@ func (m *DB) layerIDs(namespace string, lid types.LayerID, f func(id []byte) err
 	buf.WriteString(namespace)
 	buf.Write(lid.Bytes())
 
-	it := m.layers.Find(buf.Bytes())
+	it := db.Find(buf.Bytes())
 	defer it.Release()
 	for it.Next() {
 		if len(it.Key()) == buf.Len() {
@@ -372,7 +373,7 @@ func (m *DB) layerIDs(namespace string, lid types.LayerID, f func(id []byte) err
 // LayerProposalIDs retrieves all block ids from a layer by layer index.
 func (m *DB) LayerProposalIDs(lid types.LayerID) ([]types.ProposalID, error) {
 	var ids []types.ProposalID
-	err := m.layerIDs(layerProposals, lid, func(id []byte) error {
+	err := LayerIDs(m.layers, layerProposals, lid, func(id []byte) error {
 		var pid types.ProposalID
 		copy(pid[:], id)
 		ids = append(ids, pid)
@@ -438,20 +439,6 @@ func (m *DB) SaveContextualValidity(id types.BlockID, lid types.LayerID, valid b
 	return nil
 }
 
-// SaveLayerInputVector saves the input vote vector for a layer (hare results).
-func (m *DB) SaveLayerInputVector(hash types.Hash32, vector []types.BlockID) error {
-	data, err := codec.Encode(vector)
-	if err != nil {
-		return fmt.Errorf("serialize vector: %w", err)
-	}
-
-	if err := m.inputVector.Put(hash.Bytes(), data); err != nil {
-		return fmt.Errorf("put into DB: %w", err)
-	}
-
-	return nil
-}
-
 // RecordCoinflip saves the weak coinflip result to memory for the given layer.
 func (m *DB) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
 	m.WithContext(ctx).With().Info("recording coinflip result for layer in mesh",
@@ -473,9 +460,9 @@ func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) 
 	return coin, exists
 }
 
-// GetLayerInputVectorByID gets the input vote vector for a layer (hare results).
-func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, error) {
-	buf, err := m.inputVector.Get(layerID.Bytes())
+// GetHareConsensusOutput gets the input vote vector for a layer (hare results).
+func (m *DB) GetHareConsensusOutput(layerID types.LayerID) ([]types.BlockID, error) {
+	buf, err := m.hareOutput.Get(layerID.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("get from DB: %w", err)
 	}
@@ -486,16 +473,16 @@ func (m *DB) GetLayerInputVectorByID(layerID types.LayerID) ([]types.BlockID, er
 	return ids, nil
 }
 
-// SaveLayerInputVectorByID gets the input vote vector for a layer (hare results).
-func (m *DB) SaveLayerInputVectorByID(ctx context.Context, id types.LayerID, blks []types.BlockID) error {
-	m.WithContext(ctx).With().Debug("saving input vector", id)
+// SaveHareConsensusOutput gets the input vote vector for a layer (hare results).
+func (m *DB) SaveHareConsensusOutput(ctx context.Context, id types.LayerID, blks []types.BlockID) error {
+	m.WithContext(ctx).With().Debug("saving hare output", id)
 	// NOTE(dshulyak) there is an implicit dependency in fetcher
 	buf, err := codec.Encode(blks)
 	if err != nil {
 		return fmt.Errorf("encode with codec: %w", err)
 	}
 
-	if err := m.inputVector.Put(id.Bytes(), buf); err != nil {
+	if err := m.hareOutput.Put(id.Bytes(), buf); err != nil {
 		return fmt.Errorf("put into DB: %w", err)
 	}
 

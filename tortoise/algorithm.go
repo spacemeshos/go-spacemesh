@@ -16,7 +16,7 @@ import (
 
 // Config for protocol parameters.
 type Config struct {
-	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare/input vector lookback distance
+	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare output lookback distance
 	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
 	// how long we are waiting for a switch from verifying to full. relevant during rerun.
 	WindowSize                      uint32        `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)

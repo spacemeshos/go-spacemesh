@@ -144,7 +144,7 @@ func TestLayerBlocksReqReceiver_Success(t *testing.T) {
 	db.EXPECT().GetLayerHash(lyrID).Return(hash).Times(1)
 	db.EXPECT().GetAggregatedLayerHash(lyrID).Return(aggHash).Times(1)
 	db.EXPECT().LayerBlockIds(lyrID).Return(blocks, nil).Times(1)
-	db.EXPECT().GetLayerInputVectorByID(lyrID).Return(blocks[1:], nil).Times(1)
+	db.EXPECT().GetHareConsensusOutput(lyrID).Return(blocks[1:], nil).Times(1)
 
 	l := NewMockLogic(newMockNet(t), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 
@@ -154,7 +154,7 @@ func TestLayerBlocksReqReceiver_Success(t *testing.T) {
 	err = codec.Decode(out, &got)
 	require.NoError(t, err)
 	assert.Equal(t, blocks, got.Blocks)
-	assert.Equal(t, blocks[1:], got.InputVector)
+	assert.Equal(t, blocks[1:], got.HareOutput)
 	assert.Equal(t, processed, got.ProcessedLayer)
 	assert.Equal(t, hash, got.Hash)
 	assert.Equal(t, aggHash, got.AggregatedHash)
@@ -172,7 +172,7 @@ func TestLayerBlocksReqReceiver_SuccessEmptyLayer(t *testing.T) {
 	db.EXPECT().GetLayerHash(lyrID).Return(types.EmptyLayerHash).Times(1)
 	db.EXPECT().GetAggregatedLayerHash(lyrID).Return(aggHash).Times(1)
 	db.EXPECT().LayerBlockIds(lyrID).Return([]types.BlockID{}, nil).Times(1)
-	db.EXPECT().GetLayerInputVectorByID(lyrID).Return([]types.BlockID{}, nil).Times(1)
+	db.EXPECT().GetHareConsensusOutput(lyrID).Return([]types.BlockID{}, nil).Times(1)
 
 	l := NewMockLogic(newMockNet(t), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
@@ -181,7 +181,7 @@ func TestLayerBlocksReqReceiver_SuccessEmptyLayer(t *testing.T) {
 	err = codec.Decode(out, &got)
 	require.NoError(t, err)
 	assert.Empty(t, got.Blocks)
-	assert.Empty(t, got.InputVector)
+	assert.Empty(t, got.HareOutput)
 	assert.Equal(t, processed, got.ProcessedLayer)
 	assert.Equal(t, types.EmptyLayerHash, got.Hash)
 	assert.Equal(t, aggHash, got.AggregatedHash)
@@ -221,7 +221,7 @@ func TestLayerBlocksReqReceiver_GetBlockIDsUnknownError(t *testing.T) {
 	assert.Equal(t, err, ErrInternal)
 }
 
-func TestLayerBlocksReqReceiver_GetInputVectorError(t *testing.T) {
+func TestLayerBlocksReqReceiver_GetHareOutputError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
@@ -231,7 +231,7 @@ func TestLayerBlocksReqReceiver_GetInputVectorError(t *testing.T) {
 	db.EXPECT().GetLayerHash(lyrID).Return(randomHash()).Times(1)
 	db.EXPECT().GetAggregatedLayerHash(lyrID).Return(randomHash()).Times(1)
 	db.EXPECT().LayerBlockIds(lyrID).Return([]types.BlockID{}, nil).Times(1)
-	db.EXPECT().GetLayerInputVectorByID(lyrID).Return(nil, errors.New("whatever")).Times(1)
+	db.EXPECT().GetHareConsensusOutput(lyrID).Return(nil, errors.New("whatever")).Times(1)
 
 	l := NewMockLogic(newMockNet(t), db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	out, err := l.layerBlocksReqReceiver(context.TODO(), lyrID.Bytes())
@@ -252,11 +252,11 @@ func TestLayerBlocksReqReceiver_RequestedHigherLayer(t *testing.T) {
 	assert.Empty(t, out)
 }
 
-func generateLayerBlocks(numInputVector int) []byte {
-	return generateLayerBlocksWithHash(true, numInputVector)
+func generateLayerBlocks(numHareOutput int) []byte {
+	return generateLayerBlocksWithHash(true, numHareOutput)
 }
 
-func generateLayerBlocksWithHash(consistentHash bool, numInputVector int) []byte {
+func generateLayerBlocksWithHash(consistentHash bool, numHareOutput int) []byte {
 	blockIDs := []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()}
 	var hash types.Hash32
 	if consistentHash {
@@ -264,13 +264,13 @@ func generateLayerBlocksWithHash(consistentHash bool, numInputVector int) []byte
 	} else {
 		hash = randomHash()
 	}
-	iv := make([]types.BlockID, numInputVector)
-	for i := 0; i < numInputVector; i++ {
-		iv[i] = types.RandomBlockID()
+	hareOutput := make([]types.BlockID, numHareOutput)
+	for i := 0; i < numHareOutput; i++ {
+		hareOutput[i] = types.RandomBlockID()
 	}
 	lb := layerBlocks{
 		Blocks:         blockIDs,
-		InputVector:    iv,
+		HareOutput:     hareOutput,
 		ProcessedLayer: types.NewLayerID(10),
 		Hash:           hash,
 		AggregatedHash: randomHash(),
@@ -282,7 +282,7 @@ func generateLayerBlocksWithHash(consistentHash bool, numInputVector int) []byte
 func generateEmptyLayer() []byte {
 	lb := layerBlocks{
 		Blocks:         []types.BlockID{},
-		InputVector:    nil,
+		HareOutput:     nil,
 		ProcessedLayer: types.NewLayerID(10),
 		Hash:           types.EmptyLayerHash,
 		AggregatedHash: randomHash(),
@@ -304,7 +304,7 @@ func TestPollLayerBlocks_AllHaveBlockData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	db := mocks.NewMocklayerDB(ctrl)
-	db.EXPECT().SaveLayerInputVectorByID(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
+	db.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ types.LayerID, iv []types.BlockID) interface{} {
 			assert.Equal(t, numPeers, len(iv))
 			return nil
@@ -355,7 +355,7 @@ func TestPollLayerBlocks_OnlyOneHasBlockData(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	db := mocks.NewMocklayerDB(ctrl)
-	db.EXPECT().SaveLayerInputVectorByID(gomock.Any(), layerID, gomock.Any()).Return(nil).Times(1)
+	db.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).Return(nil).Times(1)
 
 	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	res := <-l.PollLayerContent(context.TODO(), layerID)
@@ -474,7 +474,7 @@ func TestPollLayerBlocks_FailureToSaveZeroLayerIgnored(t *testing.T) {
 	assert.Equal(t, layerID, res.Layer)
 }
 
-func TestPollLayerBlocks_FailedToSaveInputVector(t *testing.T) {
+func TestPollLayerBlocks_FailedToSaveHareOutput(t *testing.T) {
 	net := newMockNet(t)
 	numPeers := 4
 	for i := 0; i < numPeers; i++ {
@@ -488,7 +488,7 @@ func TestPollLayerBlocks_FailedToSaveInputVector(t *testing.T) {
 	defer ctrl.Finish()
 	errUnknown := errors.New("whatever")
 	db := mocks.NewMocklayerDB(ctrl)
-	db.EXPECT().SaveLayerInputVectorByID(gomock.Any(), layerID, gomock.Any()).Return(errUnknown).Times(1)
+	db.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, gomock.Any()).Return(errUnknown).Times(1)
 
 	l := NewMockLogic(net, db, &mockBlocks{}, &mockAtx{}, &mockFetcher{}, logtest.New(t))
 	res := <-l.PollLayerContent(context.TODO(), layerID)

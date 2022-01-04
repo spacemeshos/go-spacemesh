@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime/debug"
@@ -44,6 +45,11 @@ func (l Log) Warning(format string, args ...interface{}) {
 func (l Log) Panic(format string, args ...interface{}) {
 	l.logger.Sugar().Error("Fatal: goroutine panicked. Stacktrace: ", string(debug.Stack()))
 	l.logger.Sugar().Panicf(format, args...)
+}
+
+// Fatal prints formatted fatal level log message.
+func (l Log) Fatal(format string, args ...interface{}) {
+	l.logger.Sugar().Fatalf(format, args...)
 }
 
 // Wrap and export field logic
@@ -129,13 +135,22 @@ func Duration(name string, val time.Duration) Field {
 }
 
 // Err returns an error field.
-func Err(v error) Field {
-	return Field(zap.NamedError("errmsg", v))
+func Err(err error) Field {
+	var loggable ObjectMarshaller
+	if errors.As(err, &loggable) {
+		return Field(zap.Inline(loggable))
+	}
+	return Field(zap.NamedError("errmsg", err))
 }
 
 // Object for logging struct fields in namespace.
 func Object(namespace string, object ObjectMarshaller) Field {
 	return Field(zap.Object(namespace, object))
+}
+
+// Inline for inline logging.
+func Inline(object ObjectMarshaller) Field {
+	return Field(zap.Inline(object))
 }
 
 // Array for logging array efficiently.
@@ -271,4 +286,9 @@ func (fl FieldLogger) Warning(msg string, fields ...LoggableField) {
 // Panic prints message with fields.
 func (fl FieldLogger) Panic(msg string, fields ...LoggableField) {
 	fl.l.Panic(msg, unpack(append(fields, String("name", fl.name)))...)
+}
+
+// Fatal prints message with fields.
+func (fl FieldLogger) Fatal(msg string, fields ...LoggableField) {
+	fl.l.Fatal(msg, unpack(append(fields, String("name", fl.name)))...)
 }
