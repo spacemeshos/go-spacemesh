@@ -35,9 +35,9 @@ func createTestHandler(t *testing.T) *testHandler {
 	return th
 }
 
-func createBlockData(t *testing.T, layerID types.LayerID, txIDs []types.TransactionID) (*types.UCBlock, []byte) {
+func createBlockData(t *testing.T, layerID types.LayerID, txIDs []types.TransactionID) (*types.Block, []byte) {
 	t.Helper()
-	block := &types.UCBlock{
+	block := &types.Block{
 		InnerBlock: types.InnerBlock{
 			LayerIndex: layerID,
 			TxIDs:      txIDs,
@@ -89,7 +89,7 @@ func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(false).Times(1)
 	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
-	th.mockMesh.EXPECT().AddBlock(block).Return(errUnknown).Times(1)
+	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(errUnknown).Times(1)
 	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data), errUnknown)
 }
 
@@ -101,6 +101,6 @@ func Test_HandleBlockData(t *testing.T) {
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(false).Times(1)
 	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(nil).Times(1)
-	th.mockMesh.EXPECT().AddBlock(block).Return(nil).Times(1)
+	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
 	assert.NoError(t, th.HandleBlockData(context.TODO(), data))
 }

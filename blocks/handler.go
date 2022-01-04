@@ -52,7 +52,7 @@ func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
 	logger := h.logger.WithContext(ctx)
 	logger.Info("processing block")
 
-	var b types.UCBlock
+	var b types.Block
 	if err := codec.Decode(data, &b); err != nil {
 		logger.With().Error("malformed block", log.Err(err))
 		return errMalformedData
@@ -61,20 +61,18 @@ func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
 	// set the block ID when received
 	b.Initialize()
 
-	logger = logger.WithFields(log.Object("block", &b))
-
 	if h.mesh.HasBlock(b.ID()) {
 		logger.Info("known block")
 		return nil
 	}
-	logger.With().Info("new block")
+	logger.With().Info("new block", log.Inline(&b))
 
 	if err := h.checkTransactions(ctx, &b); err != nil {
 		logger.With().Warning("failed to fetch block TXs", log.Err(err))
 		return err
 	}
 
-	if err := h.mesh.AddBlock(&b); err != nil {
+	if err := h.mesh.AddBlockWithTXs(ctx, &b); err != nil {
 		logger.With().Error("failed to save block", log.Err(err))
 		return fmt.Errorf("save block: %w", err)
 	}
@@ -82,7 +80,7 @@ func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
 	return nil
 }
 
-func (h *Handler) checkTransactions(ctx context.Context, b *types.UCBlock) error {
+func (h *Handler) checkTransactions(ctx context.Context, b *types.Block) error {
 	if len(b.TxIDs) == 0 {
 		return nil
 	}
