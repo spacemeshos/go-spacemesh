@@ -20,6 +20,7 @@ const (
 	EventCreatedBlock
 	EventCreatedAtx
 	EventCalculatedTortoiseBeacon
+	EventNewProposal
 )
 
 // publisher is the event publisher singleton.
@@ -98,7 +99,6 @@ func (p *EventPublisher) Close() error {
 type NewBlock struct {
 	ID    string
 	Layer uint32
-	Atx   string
 }
 
 // GetChannel gets the message type which means on which this message should be sent.
@@ -106,7 +106,19 @@ func (NewBlock) GetChannel() ChannelID {
 	return EventNewBlock
 }
 
-// DoneCreatingProposal signals that this miner has created a block.
+// NewProposal is sent when a new proposal is created by this miner.
+type NewProposal struct {
+	ID    string
+	Layer uint32
+	Atx   string
+}
+
+// GetChannel gets the message type which means on which this message should be sent.
+func (NewProposal) GetChannel() ChannelID {
+	return EventNewProposal
+}
+
+// DoneCreatingProposal signals that this miner has created a proposal.
 type DoneCreatingProposal struct {
 	Eligible bool
 	Layer    uint32

@@ -50,7 +50,7 @@ func TestDB_AddProposal_FailToAddTXFromProposal(t *testing.T) {
 	p := types.GenLayerProposal(layerID, types.RandomTXSet(100))
 	td.mockMesh.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
-	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p).Return(errUnknown).Times(1)
+	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(errUnknown).Times(1)
 	assert.ErrorIs(t, td.AddProposal(context.TODO(), p), errUnknown)
 }
 
@@ -59,7 +59,7 @@ func TestDB_AddProposal(t *testing.T) {
 	layerID := types.GetEffectiveGenesis().Add(10)
 	p := types.GenLayerProposal(layerID, types.RandomTXSet(100))
 	td.mockMesh.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
-	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p).Return(nil).Times(1)
+	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
 	assert.NoError(t, td.AddProposal(context.TODO(), p))
 }
 
@@ -73,7 +73,7 @@ func TestDB_HasProposal(t *testing.T) {
 	assert.False(t, td.HasProposal(p2.ID()))
 
 	td.mockMesh.EXPECT().AddBallot(&p1.Ballot).Return(nil).Times(1)
-	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p1).Return(nil).Times(1)
+	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p1.LayerIndex, p1.ID(), p1.TxIDs).Return(nil).Times(1)
 	assert.NoError(t, td.AddProposal(context.TODO(), p1))
 
 	assert.True(t, td.HasProposal(p1.ID()))
@@ -95,7 +95,7 @@ func TestDB_GetProposal(t *testing.T) {
 	assert.Nil(t, got2)
 
 	td.mockMesh.EXPECT().AddBallot(&p1.Ballot).Return(nil).Times(1)
-	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p1).Return(nil).Times(1)
+	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p1.LayerIndex, p1.ID(), p1.TxIDs).Return(nil).Times(1)
 	assert.NoError(t, td.AddProposal(context.TODO(), p1))
 
 	td.mockMesh.EXPECT().GetBallot(p1.Ballot.ID()).Return(&p1.Ballot, nil).Times(1)
@@ -113,7 +113,7 @@ func TestDB_GetProposal_GetBallotError(t *testing.T) {
 	layerID := types.GetEffectiveGenesis().Add(10)
 	p := types.GenLayerProposal(layerID, types.RandomTXSet(100))
 	td.mockMesh.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
-	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p).Return(nil).Times(1)
+	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
 	assert.NoError(t, td.AddProposal(context.TODO(), p))
 
 	errUnknown := errors.New("unknown")
@@ -126,7 +126,7 @@ func TestDB_GetProposal_GetBallotError(t *testing.T) {
 func createAndAddProposals(t *testing.T, td *testDB, layerID types.LayerID) *types.Proposal {
 	p := types.GenLayerProposal(layerID, types.RandomTXSet(100))
 	td.mockMesh.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
-	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p).Return(nil).Times(1)
+	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
 	assert.NoError(t, td.AddProposal(context.TODO(), p))
 	return p
 }
