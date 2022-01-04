@@ -621,7 +621,7 @@ func (l *Logic) GetTxs(ctx context.Context, IDs []types.TransactionID) error {
 		res := <-resC
 		if res.Err != nil {
 			l.log.WithContext(ctx).With().Error("cannot find tx", log.String("hash", hash.String()), log.Err(res.Err))
-			continue
+			return fmt.Errorf("fetch tx %s: %w", hash, res.Err)
 		}
 		if !res.IsLocal {
 			err := l.getTxResult(ctx, hash, res.Data)
