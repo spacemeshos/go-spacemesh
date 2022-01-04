@@ -127,10 +127,7 @@ func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 	atxStore := database.NewMemDatabase()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
 	atxdb := activation.NewDB(atxStore, nil, activation.NewIdentityStore(database.NewMemDatabase()), layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
-	ctrl := gomock.NewController(t)
-	mockFetch := smocks.NewMockBlockFetcher(ctrl)
-	mockFetch.EXPECT().GetBlocks(gomock.Any(), gomock.Any()).AnyTimes()
-	return mesh.NewMesh(memdb, atxdb, mesh.Config{}, mockFetch, &mockValidator{}, nil, nil, lg.WithName("mesh"))
+	return mesh.NewMesh(memdb, atxdb, &mockValidator{}, nil, nil, lg.WithName("mesh"))
 }
 
 var conf = Configuration{
@@ -268,15 +265,16 @@ func TestSynchronize_ValidationDoneAfterCurrentAdvanced(t *testing.T) {
 	newCurrent := current.Add(2)
 	for l := glayer.Add(1); l.Before(newCurrent); l = l.Add(1) {
 		l := l
-		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, layer *types.Layer) {
-				assert.Equal(t, l, layer.Index())
+		validator.EXPECT().ProcessLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, layerID types.LayerID) error {
+				assert.Equal(t, l, layerID)
 				if l == current.Sub(1) {
 					arrivedOldCurrent <- struct{}{}
 					<-finishOldCurrent
 				}
 				// cause mesh's processed layer to advance
-				mm.ProcessLayerPerHareOutput(ctx, l, []types.BlockID{})
+				mm.ProcessLayerPerHareOutput(ctx, l, types.EmptyBlockID)
+				return nil
 			}).Times(1)
 	}
 
@@ -322,11 +320,12 @@ func TestSynchronize_MaxAttemptWithinRun(t *testing.T) {
 
 	for l := glayer.Add(1); l.Before(current); l = l.Add(1) {
 		l := l
-		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, layer *types.Layer) {
-				assert.Equal(t, l, layer.Index())
+		validator.EXPECT().ProcessLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, layerID types.LayerID) error {
+				assert.Equal(t, l, layerID)
 				// cause mesh's processed layer to advance
-				mm.ProcessLayerPerHareOutput(ctx, l, []types.BlockID{})
+				mm.ProcessLayerPerHareOutput(ctx, l, types.EmptyBlockID)
+				return nil
 			}).Times(1)
 	}
 
@@ -351,13 +350,14 @@ func TestSynchronize_MaxAttemptWithinRun(t *testing.T) {
 	lastLayer := current.Add(maxAttemptWithinRun)
 	for l := current; l.Before(lastLayer); l = l.Add(1) {
 		l := l
-		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, layer *types.Layer) {
-				assert.Equal(t, l, layer.Index())
+		validator.EXPECT().ProcessLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, layerID types.LayerID) error {
+				assert.Equal(t, l, layerID)
 				// cause mesh's processed layer to advance
-				mm.ProcessLayerPerHareOutput(ctx, l, []types.BlockID{})
+				mm.ProcessLayerPerHareOutput(ctx, l, types.EmptyBlockID)
 				// but also advance current layer
 				ticker.advanceToLayer(ticker.GetCurrentLayer().Add(1))
+				return nil
 			}).Times(1)
 	}
 
@@ -415,11 +415,12 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 		l := l
 		beacons.EXPECT().GetBeacon(l.GetEpoch()).Return(types.BytesToBeacon(l.GetEpoch().ToBytes()), nil).Times(1)
 		patrol.EXPECT().IsHareInCharge(l).Return(false).Times(1)
-		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, layer *types.Layer) {
-				assert.Equal(t, l, layer.Index())
+		validator.EXPECT().ProcessLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, layerID types.LayerID) error {
+				assert.Equal(t, l, layerID)
 				// cause mesh's processed layer to advance
-				mm.ProcessLayerPerHareOutput(ctx, l, []types.BlockID{})
+				mm.ProcessLayerPerHareOutput(ctx, l, types.EmptyBlockID)
+				return nil
 			}).Times(1)
 	}
 	patrol.EXPECT().IsHareInCharge(lyr).Return(false).Times(maxAttemptWithinRun)
@@ -467,11 +468,12 @@ func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 	for l := gLayer.Add(1); !l.After(gLayer.Add(2)); l = l.Add(1) {
 		l := l
 		patrol.EXPECT().IsHareInCharge(l).Return(false).Times(1)
-		validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-			func(ctx context.Context, layer *types.Layer) {
-				assert.Equal(t, l, layer.Index())
+		validator.EXPECT().ProcessLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, layerID types.LayerID) error {
+				assert.Equal(t, l, layerID)
 				// cause mesh's processed layer to advance
-				mm.ProcessLayerPerHareOutput(ctx, l, []types.BlockID{})
+				mm.ProcessLayerPerHareOutput(ctx, l, types.EmptyBlockID)
+				return nil
 			}).Times(1)
 	}
 	patrol.EXPECT().IsHareInCharge(lyr).Return(true).Times(maxAttemptWithinRun)
@@ -517,20 +519,20 @@ func TestSynchronize_HareValidateLayersTooDelayed(t *testing.T) {
 	latestLyr := gLayer.Add(maxHareDelayLayers + 1)
 
 	// cause the latest layer to advance
-	p := types.GenLayerProposal(latestLyr, nil)
-	p.Initialize()
-	err := mm.AddProposalWithTxs(context.TODO(), p)
+	b := types.GenLayerBlock(latestLyr, nil)
+	err := mm.AddBlockWithTXs(context.TODO(), b)
 	require.NoError(t, err)
 
 	patrol.EXPECT().IsHareInCharge(gLayer.Add(1)).Return(true).Times(1)
 	patrol.EXPECT().IsHareInCharge(gLayer.Add(2)).Return(true).Times(maxAttemptWithinRun)
 	// the 1st layer after genesis, despite having hare started consensus protocol for it,
 	// is too much delayed.
-	validator.EXPECT().ValidateLayer(gomock.Any(), gomock.Any()).DoAndReturn(
-		func(ctx context.Context, layer *types.Layer) {
-			assert.Equal(t, gLayer.Add(1), layer.Index())
+	validator.EXPECT().ProcessLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, layerID types.LayerID) error {
+			assert.Equal(t, gLayer.Add(1), layerID)
 			// cause mesh's processed layer to advance
-			mm.ProcessLayerPerHareOutput(ctx, layer.Index(), []types.BlockID{})
+			mm.ProcessLayerPerHareOutput(ctx, layerID, types.EmptyBlockID)
+			return nil
 		}).Times(1)
 
 	ticker.advanceToLayer(latestLyr)
