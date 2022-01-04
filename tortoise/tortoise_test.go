@@ -228,11 +228,11 @@ func TestAbstainsInMiddle(t *testing.T) {
 }
 
 type (
-	baseBallotProvider func(context.Context) (types.BallotID, [][]types.BlockID, error)
+	baseBallotProvider func(context.Context) (*types.Votes, error)
 )
 
 func generateBlocks(t *testing.T, l types.LayerID, natxs, nblocks int, bbp baseBallotProvider, atxdb atxDataWriter, weight uint) (blocks []*types.Block) {
-	b, lists, err := bbp(context.TODO())
+	votes, err := bbp(context.TODO())
 	require.NoError(t, err)
 
 	atxs := []types.ATXID{}
@@ -249,11 +249,8 @@ func generateBlocks(t *testing.T, l types.LayerID, natxs, nblocks int, bbp baseB
 		ballot := types.Ballot{
 			InnerBallot: types.InnerBallot{
 				AtxID:            atxs[i%len(atxs)],
-				BaseBallot:       b,
+				Votes:            *votes,
 				EligibilityProof: types.VotingEligibilityProof{J: uint32(i)},
-				AgainstDiff:      lists[0],
-				ForDiff:          lists[1],
-				NeutralDiff:      lists[2],
 				LayerIndex:       l,
 				EpochData: &types.EpochData{
 					ActiveSet: atxs,
@@ -354,15 +351,14 @@ func TestBaseBallot(t *testing.T) {
 
 	l0 := types.GenesisLayer()
 	expectBaseBallotLayer := func(layerID types.LayerID, numAgainst, numSupport, numNeutral int) {
-		baseBallotID, exceptions, err := alg.BaseBallot(context.TODO())
+		votes, err := alg.BaseBallot(context.TODO())
 		r.NoError(err)
 		// expect no exceptions
-		r.Len(exceptions, 3, "expected three vote exception arrays")
-		r.Len(exceptions[0], numAgainst, "wrong number of against exception votes")
-		r.Len(exceptions[1], numSupport, "wrong number of support exception votes")
-		r.Len(exceptions[2], numNeutral, "wrong number of neutral exception votes")
+		r.Len(votes.Support, 1)
+		r.Len(votes.Against, 1)
+		r.Len(votes.Abstain, 1)
 		// expect a valid genesis base ballot
-		baseBallot, err := alg.trtl.bdp.GetBallot(baseBallotID)
+		baseBallot, err := alg.trtl.bdp.GetBallot(votes.Base)
 		r.NoError(err)
 		r.Equal(layerID, baseBallot.LayerIndex, "base ballot is from wrong layer")
 	}
@@ -1413,16 +1409,11 @@ func outOfWindowBaseBallot(n, window int) sim.VotesGenerator {
 // using for the network.
 func tortoiseVoting(tortoise *Tortoise) sim.VotesGenerator {
 	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
-		base, exceptions, err := tortoise.BaseBallot(context.Background())
+		votes, err := tortoise.BaseBallot(context.Background())
 		if err != nil {
 			panic(err)
 		}
-		return sim.Voting{
-			Base:    base,
-			Against: exceptions[0],
-			Support: exceptions[1],
-			Abstain: exceptions[2],
-		}
+		return *votes
 	}
 }
 
@@ -1433,21 +1424,20 @@ func TestBaseBallotGenesis(t *testing.T) {
 	cfg := defaultTestConfig()
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 
-	base, exceptions, err := tortoise.BaseBallot(ctx)
+	votes, err := tortoise.BaseBallot(ctx)
 	require.NoError(t, err)
-	require.Equal(t, exceptions, [][]types.BlockID{{}, {types.GenesisBlockID}, {}})
-	require.Equal(t, types.GenesisBallotID, base)
+	require.Equal(t, votes.Support, []types.BlockID{types.GenesisBlockID})
+	require.Equal(t, types.GenesisBallotID, votes.Base)
 }
 
-func ensureBaseAndExceptionsFromLayer(tb testing.TB, lid types.LayerID, base types.BallotID, exceptions [][]types.BlockID, mdb blockDataProvider) {
+func ensureBaseAndExceptionsFromLayer(tb testing.TB, lid types.LayerID, votes *types.Votes, mdb blockDataProvider) {
 	tb.Helper()
 
-	ballot, err := mdb.GetBallot(base)
+	ballot, err := mdb.GetBallot(votes.Base)
 	require.NoError(tb, err)
 	require.Equal(tb, lid, ballot.LayerIndex)
-	require.Empty(tb, exceptions[0])
-	require.Empty(tb, exceptions[2])
-	for _, bid := range exceptions[1] {
+
+	for _, bid := range votes.Support {
 		block, err := mdb.GetBlock(bid)
 		require.NoError(tb, err)
 		require.Equal(tb, lid, block.LayerIndex, "block=%s block layer=%s last=%s", block.ID(), block.LayerIndex, lid)
@@ -1481,9 +1471,9 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 	for i := 0; i < 10; i++ {
-		base, exceptions, err := tortoise.BaseBallot(ctx)
+		votes, err := tortoise.BaseBallot(ctx)
 		require.NoError(t, err)
-		ensureBaseAndExceptionsFromLayer(t, last, base, exceptions, s.GetState(0).MeshDB)
+		ensureBaseAndExceptionsFromLayer(t, last, votes, s.GetState(0).MeshDB)
 
 		last = s.Next(sim.WithVoteGenerator(tortoiseVoting(tortoise)))
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
@@ -1551,9 +1541,9 @@ func TestBaseBallotPrioritization(t *testing.T) {
 				tortoise.HandleIncomingLayer(ctx, lid)
 			}
 
-			base, _, err := tortoise.BaseBallot(ctx)
+			votes, err := tortoise.BaseBallot(ctx)
 			require.NoError(t, err)
-			ballot, err := s.GetState(0).MeshDB.GetBallot(base)
+			ballot, err := s.GetState(0).MeshDB.GetBallot(votes.Base)
 			require.NoError(t, err)
 			require.Equal(t, tc.expected, ballot.LayerIndex)
 		})
@@ -1640,18 +1630,13 @@ func TestWeakCoinVoting(t *testing.T) {
 	// 5th layer after genesis verifies 4th
 	// and later layers can't verify previous as they are split
 	require.Equal(t, genesis.Add(4), verified)
-	base, exceptions, err := tortoise.BaseBallot(ctx)
+	votes, err := tortoise.BaseBallot(ctx)
 	require.NoError(t, err)
 	// last ballot that is consistent with local opinion
-	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, base, genesis.Add(5), genesis.Add(5))
-
-	against, support, neutral := exceptions[0], exceptions[1], exceptions[2]
-
-	require.Empty(t, against, "implicit voting")
-	require.Empty(t, neutral, "empty hare output")
+	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, votes.Base, genesis.Add(5), genesis.Add(5))
 
 	// support for all layers in range of (verified, last - hdist)
-	for _, bid := range support {
+	for _, bid := range votes.Support {
 		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis.Add(5), last.Sub(hdist).Sub(1))
 	}
 
@@ -1702,16 +1687,15 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	delete(tortoise.trtl.ballots, genesis)
 	tortoise.trtl.verifying.goodBallots = map[types.BallotID]goodness{}
 
-	base, exceptions, err := tortoise.BaseBallot(ctx)
+	votes, err := tortoise.BaseBallot(ctx)
 	require.NoError(t, err)
-	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, base, last, last)
-	require.Empty(t, exceptions[2])
-	require.Len(t, exceptions[0], len(unsupported))
-	for _, bid := range exceptions[0] {
+	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, votes.Base, last, last)
+
+	require.Len(t, votes.Support, len(unsupported)+size)
+	for _, bid := range votes.Support {
 		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis, last.Sub(1))
 		require.Contains(t, unsupported, bid)
 	}
-	require.Len(t, exceptions[1], size)
 }
 
 func TestComputeLocalOpinion(t *testing.T) {

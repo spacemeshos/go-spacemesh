@@ -22,8 +22,9 @@ type full struct {
 	Config
 	*commonState
 
-	votes map[types.BallotID]votes
-	base  map[types.BallotID]types.BallotID
+	votes   map[types.BallotID]votes
+	abstain map[types.BallotID]map[types.LayerID]struct{}
+	base    map[types.BallotID]types.BallotID
 
 	// counted weights up to this layer.
 	//
@@ -50,14 +51,19 @@ func (f *full) processBlocks(blocks []types.BlockID) {
 	}
 }
 
-func (f *full) getVote(logger log.Log, ballot types.BallotID, block types.BlockID) sign {
+func (f *full) getVote(logger log.Log, ballot types.BallotID, blocklid types.LayerID, block types.BlockID) sign {
 	sign, exist := f.votes[ballot][block]
 	if !exist {
+		_, exist = f.abstain[ballot][blocklid]
+		if exist {
+			return abstain
+		}
+
 		base, exist := f.base[ballot]
 		if !exist {
 			return against
 		}
-		return f.getVote(logger, base, block)
+		return f.getVote(logger, base, blocklid, block)
 	}
 	return sign
 }
@@ -72,7 +78,7 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 		ballotWeight := f.ballotWeight[ballot]
 		for lid := f.verified.Add(1); lid.Before(ballotlid); lid = lid.Add(1) {
 			for _, block := range f.blocks[lid] {
-				vote := f.getVote(logger, ballot, block)
+				vote := f.getVote(logger, ballot, lid, block)
 				current := f.weights[block]
 
 				switch vote {

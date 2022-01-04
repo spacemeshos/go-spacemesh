@@ -176,7 +176,7 @@ func (trtl *Tortoise) LatestComplete() types.LayerID {
 }
 
 // BaseBallot chooses a base ballot and creates a differences list. needs the hare results for latest layers.
-func (trtl *Tortoise) BaseBallot(ctx context.Context) (types.BallotID, [][]types.BlockID, error) {
+func (trtl *Tortoise) BaseBallot(ctx context.Context) (*types.Votes, error) {
 	trtl.mu.Lock()
 	defer trtl.mu.Unlock()
 	return trtl.trtl.BaseBallot(ctx)

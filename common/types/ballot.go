@@ -82,6 +82,8 @@ type InnerBallot struct {
 	ForDiff     []BlockID
 	NeutralDiff []BlockID
 
+	Votes Votes
+
 	// the first Ballot the smesher cast in the epoch. this Ballot is a special Ballot that contains information
 	// that cannot be changed mid-epoch.
 	RefBallot BallotID
