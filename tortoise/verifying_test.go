@@ -365,7 +365,10 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			state.blocks = tc.blocks
 			state.hareOutput = tc.localOpinion
 
-			updateThresholds(logger, tc.config, &state, mode{})
+			state.localThreshold, state.globalThreshold = computeThresholds(logger, tc.config, mode{},
+				state.verified.Add(1), state.processed, state.processed,
+				state.epochWeight,
+			)
 
 			v := newVerifying(tc.config, &state)
 			v.layerWeights = tc.layersWeight
@@ -375,7 +378,10 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 					return false
 				}
 				state.verified = lid
-				updateThresholds(logger, tc.config, &state, mode{})
+				state.localThreshold, state.globalThreshold = computeThresholds(logger, tc.config, mode{},
+					state.verified.Add(1), state.processed, state.processed,
+					state.epochWeight,
+				)
 				return true
 			})
 			require.Equal(t, tc.expected, state.verified)

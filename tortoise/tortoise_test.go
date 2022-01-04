@@ -1366,15 +1366,22 @@ func TestGetBallotBeacon(t *testing.T) {
 }
 
 // gapVote will skip one layer in voting.
-func gapVote(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
-	if len(layers) < 2 {
-		panic("need atleast 2 layers")
+func gapVote(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+	return skipLayers(1)(rng, layers, i)
+}
+
+func skipLayers(n int) sim.VotesGenerator {
+	return func(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
+		position := n + 1
+		if len(layers) < position {
+			panic(fmt.Sprintf("need at least %d layers", position))
+		}
+		baseLayer := layers[len(layers)-position]
+		support := layers[len(layers)-position].BlocksIDs()
+		ballots := baseLayer.Ballots()
+		base := ballots[rng.Intn(len(ballots))]
+		return sim.Voting{Base: base.ID(), Support: support}
 	}
-	baseLayer := layers[len(layers)-2]
-	support := layers[len(layers)-2].BlocksIDs()
-	ballots := baseLayer.Ballots()
-	base := ballots[rng.Intn(len(ballots))]
-	return sim.Voting{Base: base.ID(), Support: support}
 }
 
 // olderExceptions will vote for block older then base ballot.

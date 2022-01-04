@@ -484,20 +484,150 @@ func (t *turtle) switchModes(logger log.Log) {
 		log.Stringer("from_mode", from),
 		log.Stringer("to_mode", t.mode),
 	)
-	updateThresholds(logger, t.Config, &t.commonState, t.mode)
 }
 
 func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.LayerID) error {
 	logger.With().Info("adding layer to the state")
 
-	if err := t.updateLayerState(logger, lid); err != nil {
+	if err := t.updateLayer(logger, lid); err != nil {
 		return err
 	}
 	logger = logger.WithFields(
-		log.Stringer("processed_layer", t.processed),
 		log.Stringer("last_layer", t.last),
 	)
+	if err := t.updateState(ctx, logger, lid); err != nil {
+		return err
+	}
 
+	previous := t.verified
+
+	for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
+		var success bool
+		if t.mode.isVerifying() {
+			success = t.verifying.verify(logger, target)
+		}
+		if !success && (t.canUseFullMode() || t.mode.isFull()) {
+			if t.mode.isVerifying() {
+				t.switchModes(logger)
+			}
+
+			// verifying has a large verification window (think 1_000_000) and if it failed to verify layer
+			// the threshold will be computed according to that window.
+			// if we won't reset threshold full tortoise will have to count votes for 1_000_000 layers before
+			// any layer can be expected to get verified. this is infeasible given current performance
+			// of the full tortoise and may take weeks to finish.
+			// instead we recompute window using configuration for the full mode (think 2_000 layers)
+			success = t.catchupToVerifyingInFullMode(logger, target)
+		}
+		if success {
+			t.verified = target
+			t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
+				t.verified.Add(1), t.last, t.processed,
+				t.epochWeight,
+			)
+		} else {
+			break
+		}
+	}
+	if err := persistContextualValidity(logger,
+		t.bdp,
+		previous, t.verified,
+		t.blocks,
+		t.validity,
+	); err != nil {
+		return err
+	}
+
+	t.updateHistoricallyVerified()
+	return nil
+}
+
+func (t *turtle) catchupToVerifyingInFullMode(logger log.Log, target types.LayerID) bool {
+	counted := maxLayer(t.full.counted.Add(1), target.Add(1))
+	for ; !counted.After(t.processed); counted = counted.Add(1) {
+		t.full.countLayerVotes(logger, counted)
+
+		t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
+			target, t.last, counted,
+			t.epochWeight,
+		)
+
+		if t.full.verify(logger, target) {
+			break
+		}
+	}
+	if !t.full.verify(logger, target) {
+		return false
+	}
+
+	// try to find a cut with ballots that can be good (see verifying tortoise for definition)
+	// if there are such ballots try to bootstrap verifying tortoise by marking them good
+	t.verifying.resetWeights()
+	if t.verifying.markGoodCut(logger, target, t.getTortoiseBallots(target)) {
+		// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
+		// that accumulated weight has a weight of the layer that is going to be verified.
+		for lid := target; !lid.After(counted); lid = lid.Add(1) {
+			t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
+		}
+		if t.verifying.verify(logger, target) {
+			for lid := counted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
+				t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
+			}
+			t.switchModes(logger)
+		}
+	}
+	return true
+}
+
+func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
+	ballots := t.ballots[lid]
+	if len(ballots) == 0 {
+		return nil
+	}
+	tballots := make([]tortoiseBallot, 0, len(ballots))
+	for _, ballot := range ballots {
+		tballots = append(tballots, tortoiseBallot{
+			id:     ballot,
+			base:   t.full.base[ballot],
+			votes:  t.full.votes[ballot],
+			weight: t.ballotWeight[ballot],
+		})
+	}
+	return tballots
+}
+
+func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
+	lastUpdated := t.last.Before(lid)
+	if lastUpdated {
+		t.last = lid
+	}
+	if t.processed.Before(lid) {
+		t.processed = lid
+	}
+
+	for epoch := t.last.GetEpoch(); epoch >= t.evicted.GetEpoch(); epoch-- {
+		if _, exist := t.epochWeight[epoch]; exist {
+			break
+		}
+		layerWeight, err := computeEpochWeight(t.atxdb, t.epochWeight, epoch)
+		if err != nil {
+			return err
+		}
+		logger.With().Info("computed weight for layers in an epoch", epoch, log.Stringer("weight", layerWeight))
+	}
+	window := getVerificationWindow(t.Config, t.mode, t.verified.Add(1), t.last)
+	if lastUpdated || window.Before(t.processed) || t.globalThreshold.isNil() {
+		t.localThreshold, t.globalThreshold = computeThresholds(logger, t.Config, t.mode,
+			t.verified.Add(1), t.last, t.processed,
+			t.epochWeight,
+		)
+	}
+	return nil
+}
+
+// updateState is to update state that needs to be updated always. there should be no
+// expensive long running computation in this method.
+func (t *turtle) updateState(ctx context.Context, logger log.Log, lid types.LayerID) error {
 	blocks, err := t.bdp.LayerBlockIds(lid)
 	if err != nil {
 		return fmt.Errorf("failed to read blocks for layer %s: %w", lid, err)
@@ -521,97 +651,6 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 		return err
 	}
 	t.verifying.countVotes(logger, lid, ballots)
-
-	previous := t.verified
-
-	for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
-		var success bool
-		if t.mode.isVerifying() {
-			success = t.verifying.verify(logger, target)
-		}
-		if !success && (t.canUseFullMode() || t.mode.isFull()) {
-			if t.mode.isVerifying() {
-				t.switchModes(logger)
-			}
-			t.full.countVotes(logger)
-			success = t.full.verify(logger, target)
-
-			if success {
-				// try to find a cut with ballots that can be good (see verifying tortoise for definition)
-				// if there are such ballots try to bootstrap verifying tortoise by marking them good
-				t.verifying.resetWeights()
-				if t.verifying.markGoodCut(logger, target, t.getTortoiseBallots(target)) {
-					// TODO(dshulyak) it should be enough to start from target + 1. can't do that right now as it is expected
-					// that accumulated weight has a weight of the layer that is going to be verified.
-					for lid := target; !lid.After(t.processed); lid = lid.Add(1) {
-						t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
-					}
-					if t.verifying.verify(logger, target) {
-						t.switchModes(logger)
-					}
-				}
-			}
-		}
-		if success {
-			t.verified = target
-			updateThresholds(logger, t.Config, &t.commonState, t.mode)
-		} else {
-			break
-		}
-	}
-	if err := persistContextualValidity(logger,
-		t.bdp,
-		previous, t.verified,
-		t.blocks,
-		t.validity,
-	); err != nil {
-		return err
-	}
-
-	t.updateHistoricallyVerified()
-	return nil
-}
-
-func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
-	ballots := t.ballots[lid]
-	if len(ballots) == 0 {
-		return nil
-	}
-	tballots := make([]tortoiseBallot, 0, len(ballots))
-	for _, ballot := range ballots {
-		tballots = append(tballots, tortoiseBallot{
-			id:     ballot,
-			base:   t.full.base[ballot],
-			votes:  t.full.votes[ballot],
-			weight: t.ballotWeight[ballot],
-		})
-	}
-	return tballots
-}
-
-func (t *turtle) updateLayerState(logger log.Log, lid types.LayerID) error {
-	lastUpdated := t.last.Before(lid)
-	if lastUpdated {
-		t.last = lid
-	}
-	if t.processed.Before(lid) {
-		t.processed = lid
-	}
-
-	for epoch := t.last.GetEpoch(); epoch >= t.evicted.GetEpoch(); epoch-- {
-		if _, exist := t.epochWeight[epoch]; exist {
-			break
-		}
-		layerWeight, err := computeEpochWeight(t.atxdb, t.epochWeight, epoch)
-		if err != nil {
-			return err
-		}
-		logger.With().Info("computed weight for layers in an epoch", epoch, log.Stringer("weight", layerWeight))
-	}
-	window := getVerificationWindow(t.Config, &t.commonState, t.mode)
-	if lastUpdated || window.Before(t.processed) || t.globalThreshold.isNil() {
-		updateThresholds(logger, t.Config, &t.commonState, t.mode)
-	}
 	return nil
 }
 
