@@ -746,8 +746,8 @@ func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.La
 	)
 
 	if !lid.Before(t.layerCutoff()) {
-		// for newer layers, we vote according to the local opinion (hare output, from hare or sync)
-		hareOutput, err := t.bdp.GetHareConsensusOutput(lid)
+		// for newer layers, we vote according to the local opinion (hare output, from live participation or sync)
+		theOne, err := t.bdp.GetHareConsensusOutput(lid)
 		if err != nil {
 			if t.last.After(types.NewLayerID(t.Zdist)) && lid.Before(t.last.Sub(t.Zdist)) {
 				// Layer has passed the Hare abort distance threshold, so we give up waiting for Hare results. At this point
@@ -761,8 +761,12 @@ func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.La
 			t.undecided[lid] = struct{}{}
 			return nil
 		}
-		for _, bid := range hareOutput {
-			t.hareOutput[bid] = support
+		bids := t.blocks[lid]
+		for _, bid := range bids {
+			t.hareOutput[bid] = against
+		}
+		if theOne != types.EmptyBlockID {
+			t.hareOutput[theOne] = support
 		}
 		return nil
 	}

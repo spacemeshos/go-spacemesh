@@ -145,6 +145,25 @@ func (g *Generator) mergeLayers(other *Generator) {
 		if len(g.layers)-1 < i {
 			g.layers = append(g.layers, types.NewLayer(layer.Index()))
 		}
+		for _, ballot := range layer.Ballots() {
+			var exists bool
+			for _, existing := range g.layers[i].BallotIDs() {
+				exists = ballot.ID() == existing
+				if exists {
+					break
+				}
+			}
+			if !exists {
+				rst, _ := g.GetState(0).MeshDB.GetBallot(ballot.ID())
+				if rst != nil {
+					continue
+				}
+				for _, state := range g.states {
+					state.OnBallot(ballot)
+				}
+				g.layers[i].AddBallot(ballot)
+			}
+		}
 		for _, block := range layer.Blocks() {
 			var exists bool
 			for _, existing := range g.layers[i].BlocksIDs() {

@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -101,10 +102,13 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 	}
 	require.NoError(tb, tortoise.rerun(ctx))
 
-	for _, block := range blocks {
-		validity, err := s.GetState(0).MeshDB.ContextualValidity(block)
-		require.NoError(tb, err)
-		require.Equal(tb, expectedValidity, validity, "validity for block %s", block)
+	validBlocks, err := s.GetState(0).MeshDB.LayerContextuallyValidBlocks(context.TODO(), misverified)
+	require.NoError(tb, err)
+	if expectedValidity {
+		assert.Len(tb, validBlocks, numValidBlock)
+		assert.NotContains(tb, validBlocks, types.EmptyBlockID)
+	} else {
+		assert.Empty(tb, validBlocks)
 	}
 }
 
