@@ -356,6 +356,10 @@ func (t *turtle) encodeVotes(
 				votes.Support = append(votes.Support, bid)
 			case against:
 				votes.Against = append(votes.Against, bid)
+			case abstain:
+				logger.With().Panic("programmer error. layers that are not terminated are skipped earlier",
+					bid, lid,
+				)
 			}
 		}
 	}
@@ -762,9 +766,6 @@ func getLocalVote(state *commonState, config Config, lid types.LayerID, block ty
 		vote, exist := state.hareOutput[block]
 		if exist {
 			return vote, reasonHareOutput
-		}
-		if state.last.After(genesis.Add(config.Zdist)) {
-			limit = state.last.Sub(config.Zdist)
 		}
 		if isUndecided(state, config, lid) {
 			return abstain, reasonHareOutput
