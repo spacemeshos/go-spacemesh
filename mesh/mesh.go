@@ -551,7 +551,7 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 }
 
 // apply the state for a single layer.
-func (msh *Mesh) updateStateWithLayer(ctx context.Context, layerID types.LayerID, hareOutput *types.Block) error {
+func (msh *Mesh) updateStateWithLayer(ctx context.Context, layerID types.LayerID, block *types.Block) error {
 	msh.txMutex.Lock()
 	defer msh.txMutex.Unlock()
 	latest := msh.LatestLayerInState()
@@ -561,8 +561,8 @@ func (msh *Mesh) updateStateWithLayer(ctx context.Context, layerID types.LayerID
 			log.FieldNamed("latest", latest))
 	}
 
-	if hareOutput != nil {
-		if err := msh.applyState(hareOutput); err != nil {
+	if block != nil {
+		if err := msh.applyState(block); err != nil {
 			return err
 		}
 	}
