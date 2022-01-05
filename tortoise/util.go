@@ -67,6 +67,9 @@ func (w weight) add(other weight) weight {
 }
 
 func (w weight) sub(other weight) weight {
+	if other.Rat == nil {
+		return w
+	}
 	w.Rat.Sub(w.Rat, other.Rat)
 	return w
 }

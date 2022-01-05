@@ -254,8 +254,8 @@ func TestVerifyingProcessLayer(t *testing.T) {
 			for i := range tc.ballots {
 				lid := start.Add(uint32(i + 1))
 				v.countVotes(logger, lid, tc.ballots[i])
-				require.Equal(t, tc.layerWeights[i], v.layerWeights[lid])
-				require.Equal(t, tc.total[i], v.totalWeight)
+				require.Equal(t, tc.layerWeights[i], v.goodWeight[lid])
+				require.Equal(t, tc.total[i], v.totalGoodWeight)
 			}
 		})
 	}
@@ -371,8 +371,8 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 			)
 
 			v := newVerifying(tc.config, &state)
-			v.layerWeights = tc.layersWeight
-			v.totalWeight = tc.totalWeight
+			v.goodWeight = tc.layersWeight
+			v.totalGoodWeight = tc.totalWeight
 			iterateLayers(tc.verified.Add(1), tc.processed.Sub(1), func(lid types.LayerID) bool {
 				if !v.verify(logger, lid) {
 					return false
@@ -385,7 +385,7 @@ func TestVerifyingVerifyLayers(t *testing.T) {
 				return true
 			})
 			require.Equal(t, tc.expected, state.verified)
-			require.Equal(t, tc.expectedTotalWeight.String(), v.totalWeight.String())
+			require.Equal(t, tc.expectedTotalWeight.String(), v.totalGoodWeight.String())
 		})
 	}
 }
