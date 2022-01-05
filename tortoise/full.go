@@ -12,6 +12,7 @@ func newFullTortoise(config Config, common *commonState) *full {
 		Config:       config,
 		commonState:  common,
 		votes:        map[types.BallotID]votes{},
+		abstain:      map[types.BallotID]map[types.LayerID]struct{}{},
 		base:         map[types.BallotID]types.BallotID{},
 		weights:      map[types.BlockID]weight{},
 		delayedQueue: list.New(),
@@ -42,6 +43,7 @@ func (f *full) processBallots(ballots []tortoiseBallot) {
 	for _, ballot := range ballots {
 		f.base[ballot.id] = ballot.base
 		f.votes[ballot.id] = ballot.votes
+		f.abstain[ballot.id] = ballot.abstain
 	}
 }
 
@@ -80,7 +82,6 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 			for _, block := range f.blocks[lid] {
 				vote := f.getVote(logger, ballot, lid, block)
 				current := f.weights[block]
-
 				switch vote {
 				case support:
 					current = current.add(ballotWeight)

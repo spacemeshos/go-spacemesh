@@ -626,7 +626,7 @@ func (t *turtle) processBallots(lid types.LayerID, original []*types.Ballot) ([]
 
 		ballotsIDs = append(ballotsIDs, ballot.ID())
 
-		baselid := t.ballotLayer[ballot.BaseBallot]
+		baselid := t.ballotLayer[ballot.Votes.Base]
 
 		abstainVotes := map[types.LayerID]struct{}{}
 		for _, lid := range ballot.Votes.Abstain {
@@ -651,7 +651,7 @@ func (t *turtle) processBallots(lid types.LayerID, original []*types.Ballot) ([]
 
 		ballots = append(ballots, tortoiseBallot{
 			id:      ballot.ID(),
-			base:    ballot.BaseBallot,
+			base:    ballot.Votes.Base,
 			weight:  ballotWeight,
 			votes:   votes,
 			abstain: abstainVotes,

@@ -354,9 +354,9 @@ func TestBaseBallot(t *testing.T) {
 		votes, err := alg.BaseBallot(context.TODO())
 		r.NoError(err)
 		// expect no exceptions
-		r.Len(votes.Support, 1)
-		r.Len(votes.Against, 1)
-		r.Len(votes.Abstain, 1)
+		r.Len(votes.Support, numSupport)
+		r.Len(votes.Against, numAgainst)
+		r.Len(votes.Abstain, numNeutral)
 		// expect a valid genesis base ballot
 		baseBallot, err := alg.trtl.bdp.GetBallot(votes.Base)
 		r.NoError(err)
@@ -1691,11 +1691,12 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	require.NoError(t, err)
 	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, votes.Base, last, last)
 
-	require.Len(t, votes.Support, len(unsupported)+size)
-	for _, bid := range votes.Support {
+	require.Len(t, votes.Against, len(unsupported))
+	for _, bid := range votes.Against {
 		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis, last.Sub(1))
 		require.Contains(t, unsupported, bid)
 	}
+	require.Len(t, votes.Support, size)
 }
 
 func TestComputeLocalOpinion(t *testing.T) {
