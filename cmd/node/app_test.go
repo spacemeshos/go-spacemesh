@@ -578,6 +578,11 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			for _, b := range lyr.Ballots() {
 				datamap[ap.nodeID.Key].layertoballots[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoballots[lyr.Index()], b.ID())
 			}
+			if len(lyr.BallotIDs()) == 0 {
+				// no proposal was created for this layer
+				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], types.EmptyBlockID)
+				datamap[ap.nodeID.Key].layertoballots[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoballots[lyr.Index()], types.EmptyBallotID)
+			}
 		}
 	}
 
@@ -653,7 +658,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	expectedTotalBallots := (totalEpochs - 2) * expectedBallotsPerEpoch
 	actualTotalBallots := totalBallots - genesisBallots
 	suite.Equal(expectedTotalBallots, actualTotalBallots,
-		fmt.Sprintf("got unexpected block count! got: %v, want: %v. totalBallots: %v, genesisBallots: %v, lastLayer: %v, layersPerEpoch: %v, layerAvgSize: %v, totalEpochs: %v, datamap: %v",
+		fmt.Sprintf("got unexpected ballot count! got: %v, want: %v. totalBallots: %v, genesisBallots: %v, lastLayer: %v, layersPerEpoch: %v, layerAvgSize: %v, totalEpochs: %v, datamap: %v",
 			actualTotalBallots, expectedTotalBallots, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
 	expectedTotalBlocks := (totalEpochs - 2) * int(layersPerEpoch)
