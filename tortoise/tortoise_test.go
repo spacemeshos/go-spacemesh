@@ -315,7 +315,7 @@ func TestAddToMesh(t *testing.T) {
 	require.NoError(t, addLayerToMesh(mdb, l1))
 
 	logger.With().Info("first is", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
-	logger.With().Info("first bb is", l1.Index(), l1.Blocks()[0].BaseBallot, types.BlockIdsField(l1.Blocks()[0].ForDiff))
+	logger.With().Info("first bb is", l1.Index(), l1.Blocks()[0].Votes.Base, types.BlockIdsField(l1.Blocks()[0].Votes.Support))
 
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
 

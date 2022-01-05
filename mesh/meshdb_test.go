@@ -207,13 +207,13 @@ func createLayerWithRandVoting(index types.LayerID, prev []*types.Layer, blocksI
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				p.ForDiff = append(p.ForDiff, b.ID())
+				p.Votes.Support = append(p.Votes.Support, b.ID())
 				voted[p.ID()] = struct{}{}
 			}
 		}
 		for _, prevProposal := range prev[0].Proposals() {
 			if _, ok := voted[prevProposal.ID()]; !ok {
-				p.AgainstDiff = append(p.AgainstDiff, (types.BlockID)(prevProposal.ID()))
+				p.Votes.Against = append(p.Votes.Against, (types.BlockID)(prevProposal.ID()))
 			}
 		}
 		p.LayerIndex = index
