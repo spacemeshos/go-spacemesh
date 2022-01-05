@@ -32,6 +32,12 @@ func (m *MockDb) StoreReward(event *events.RewardReceived) error {
 	return nil
 }
 
+func (m *MockDb) StoreProposal(event *events.NewProposal) error {
+	m.msgs[11]++
+	m.total++
+	return nil
+}
+
 func (m *MockDb) StoreBlock(event *events.NewBlock) error {
 	m.msgs[1]++
 	m.total++
@@ -88,9 +94,12 @@ func TestCollectEvents(t *testing.T) {
 	c.Start(false)
 	time.Sleep(2 * time.Second)
 	for i := 0; i < 10010; i++ {
-		orig := events.NewBlock{Layer: 1, ID: "234"}
+		orig := events.NewProposal{Layer: 1, ID: "234", Atx: "atx"}
 		assert.NoError(t, eventPublisher.PublishEvent(orig))
 	}
+
+	orig := events.NewBlock{Layer: 1, ID: "234"}
+	assert.NoError(t, eventPublisher.PublishEvent(orig))
 
 	orig1 := events.ValidBlock{ID: "234", Valid: true}
 	assert.NoError(t, eventPublisher.PublishEvent(orig1))
@@ -110,6 +119,6 @@ func TestCollectEvents(t *testing.T) {
 	time.Sleep(1 * time.Second)
 	c.Stop()
 
-	assert.Equal(t, 10015, m.total)
-	assert.Equal(t, 6, len(m.msgs))
+	assert.Equal(t, 10016, m.total)
+	assert.Equal(t, 7, len(m.msgs))
 }

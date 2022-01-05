@@ -96,16 +96,16 @@ func (mr *MockblockDataProviderMockRecorder) GetCoinflip(arg0, arg1 interface{})
 }
 
 // GetHareConsensusOutput mocks base method.
-func (m *MockblockDataProvider) GetHareConsensusOutput(arg0 types.LayerID) ([]types.BlockID, error) {
+func (m *MockblockDataProvider) GetHareConsensusOutput(arg0 types.LayerID) (types.BlockID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetHareConsensusOutput", arg0)
-	ret0, _ := ret[0].([]types.BlockID)
+	ret0, _ := ret[0].(types.BlockID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetLayerInputVectorByID indicates an expected call of GetLayerInputVectorByID.
-func (mr *MockblockDataProviderMockRecorder) GetLayerInputVectorByID(arg0 interface{}) *gomock.Call {
+// GetHareConsensusOutput indicates an expected call of GetHareConsensusOutput.
+func (mr *MockblockDataProviderMockRecorder) GetHareConsensusOutput(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHareConsensusOutput", reflect.TypeOf((*MockblockDataProvider)(nil).GetHareConsensusOutput), arg0)
 }
@@ -138,21 +138,6 @@ func (m *MockblockDataProvider) LayerBlockIds(layerID types.LayerID) ([]types.Bl
 func (mr *MockblockDataProviderMockRecorder) LayerBlockIds(layerID interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerBlockIds", reflect.TypeOf((*MockblockDataProvider)(nil).LayerBlockIds), layerID)
-}
-
-// LayerBlocks mocks base method.
-func (m *MockblockDataProvider) LayerBlocks(arg0 types.LayerID) ([]*types.Block, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LayerBlocks", arg0)
-	ret0, _ := ret[0].([]*types.Block)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// LayerBlocks indicates an expected call of LayerBlocks.
-func (mr *MockblockDataProviderMockRecorder) LayerBlocks(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerBlocks", reflect.TypeOf((*MockblockDataProvider)(nil).LayerBlocks), arg0)
 }
 
 // LayerContextuallyValidBlocks mocks base method.

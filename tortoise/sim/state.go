@@ -40,6 +40,17 @@ func (s *State) OnActivationTx(atx *types.ActivationTx) {
 	}
 }
 
+// OnBallot callback to store ballot.
+func (s *State) OnBallot(ballot *types.Ballot) {
+	exist, _ := s.MeshDB.GetBallot(ballot.ID())
+	if exist != nil {
+		return
+	}
+	if err := s.MeshDB.AddBallot(ballot); err != nil {
+		s.logger.With().Panic("failed to save ballot", log.Err(err))
+	}
+}
+
 // OnBlock callback to store block.
 func (s *State) OnBlock(block *types.Block) {
 	exist, _ := s.MeshDB.GetBlock(block.ID())
@@ -52,8 +63,8 @@ func (s *State) OnBlock(block *types.Block) {
 }
 
 // OnHareOutput callback to store hare output.
-func (s *State) OnHareOutput(lid types.LayerID, vector []types.BlockID) {
-	if err := s.MeshDB.SaveHareConsensusOutput(context.TODO(), lid, vector); err != nil {
+func (s *State) OnHareOutput(lid types.LayerID, bid types.BlockID) {
+	if err := s.MeshDB.SaveHareConsensusOutput(context.TODO(), lid, bid); err != nil {
 		s.logger.With().Panic("failed to save hare output", log.Err(err))
 	}
 }

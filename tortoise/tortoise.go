@@ -746,7 +746,7 @@ func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.La
 	)
 
 	if !lid.Before(t.layerCutoff()) {
-		// for newer layers, we vote according to the local opinion (hare output, from hare or sync)
+		// for newer layers, we vote according to the local opinion (hare output, from live participation or sync)
 		hareOutput, err := t.bdp.GetHareConsensusOutput(lid)
 		if err != nil {
 			if t.last.After(types.NewLayerID(t.Zdist)) && lid.Before(t.last.Sub(t.Zdist)) {
@@ -761,8 +761,8 @@ func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.La
 			t.undecided[lid] = struct{}{}
 			return nil
 		}
-		for _, bid := range hareOutput {
-			t.hareOutput[bid] = support
+		if hareOutput != types.EmptyBlockID {
+			t.hareOutput[hareOutput] = support
 		}
 		return nil
 	}

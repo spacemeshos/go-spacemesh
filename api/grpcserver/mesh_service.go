@@ -131,7 +131,7 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 
-		for _, b := range layer.Blocks() {
+		for _, b := range layer.Ballots() {
 			if b.EpochData != nil && b.EpochData.ActiveSet != nil {
 				atxids = append(atxids, b.EpochData.ActiveSet...)
 			}
@@ -331,6 +331,8 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		return nil, status.Errorf(codes.Internal, "error reading layer data")
 	}
 
+	// TODO add proposal data as needed.
+
 	for _, b := range layer.Blocks() {
 		txs, missing := s.Mesh.GetTransactions(b.TxIDs)
 		// TODO: Do we ever expect txs to be missing here?
@@ -341,10 +343,6 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 		}
 
-		if b.EpochData != nil && b.EpochData.ActiveSet != nil {
-			activations = append(activations, b.EpochData.ActiveSet...)
-		}
-
 		var pbTxs []*pb.Transaction
 		for _, t := range txs {
 			pbTxs = append(pbTxs, convertTransaction(t))
@@ -352,9 +350,13 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		blocks = append(blocks, &pb.Block{
 			Id:           types.Hash20(b.ID()).Bytes(),
 			Transactions: pbTxs,
-			SmesherId:    &pb.SmesherId{Id: b.SmesherID().Bytes()},
-			ActivationId: &pb.ActivationId{Id: b.AtxID.Bytes()},
 		})
+	}
+
+	for _, b := range layer.Ballots() {
+		if b.EpochData != nil && b.EpochData.ActiveSet != nil {
+			activations = append(activations, b.EpochData.ActiveSet...)
+		}
 	}
 
 	// Extract ATX data from block data

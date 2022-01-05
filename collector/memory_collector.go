@@ -13,6 +13,7 @@ type MemoryCollector struct {
 	doneCreatingProposalEvent map[uint32][]*events.DoneCreatingProposal
 	doneCreatingAtxEvent      map[uint32][]*events.AtxCreated
 	createdAtxs               map[uint32][]string
+	gotProposalEvent          map[uint32][]*events.NewProposal
 	gotBlockEvent             map[uint32][]*events.NewBlock
 	gotAtxEvent               map[uint32][]*events.NewAtx
 	Atxs                      map[string]uint32
@@ -27,6 +28,7 @@ func NewMemoryCollector() *MemoryCollector {
 		events:                    make(map[events.ChannelID][]Event),
 		doneCreatingProposalEvent: make(map[uint32][]*events.DoneCreatingProposal),
 		doneCreatingAtxEvent:      make(map[uint32][]*events.AtxCreated),
+		gotProposalEvent:          make(map[uint32][]*events.NewProposal),
 		gotBlockEvent:             make(map[uint32][]*events.NewBlock),
 		gotAtxEvent:               make(map[uint32][]*events.NewAtx),
 		Atxs:                      make(map[string]uint32),
@@ -38,6 +40,15 @@ func NewMemoryCollector() *MemoryCollector {
 // Event defines global interface for all events to help identify their types, which is channel id.
 type Event interface {
 	GetChannel() events.ChannelID
+}
+
+// StoreProposal stores block received event by layer id.
+func (c *MemoryCollector) StoreProposal(event *events.NewProposal) error {
+	c.lck.Lock()
+	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
+	c.gotProposalEvent[event.Layer] = append(c.gotProposalEvent[event.Layer], event)
+	c.lck.Unlock()
+	return nil
 }
 
 // StoreBlock stores block received event by layer id.

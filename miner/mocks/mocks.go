@@ -52,41 +52,41 @@ func (mr *MockproposalOracleMockRecorder) GetProposalEligibility(arg0, arg1 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposalEligibility", reflect.TypeOf((*MockproposalOracle)(nil).GetProposalEligibility), arg0, arg1)
 }
 
-// MockmeshProvider is a mock of meshProvider interface.
-type MockmeshProvider struct {
+// MockproposalDB is a mock of proposalDB interface.
+type MockproposalDB struct {
 	ctrl     *gomock.Controller
-	recorder *MockmeshProviderMockRecorder
+	recorder *MockproposalDBMockRecorder
 }
 
-// MockmeshProviderMockRecorder is the mock recorder for MockmeshProvider.
-type MockmeshProviderMockRecorder struct {
-	mock *MockmeshProvider
+// MockproposalDBMockRecorder is the mock recorder for MockproposalDB.
+type MockproposalDBMockRecorder struct {
+	mock *MockproposalDB
 }
 
-// NewMockmeshProvider creates a new mock instance.
-func NewMockmeshProvider(ctrl *gomock.Controller) *MockmeshProvider {
-	mock := &MockmeshProvider{ctrl: ctrl}
-	mock.recorder = &MockmeshProviderMockRecorder{mock}
+// NewMockproposalDB creates a new mock instance.
+func NewMockproposalDB(ctrl *gomock.Controller) *MockproposalDB {
+	mock := &MockproposalDB{ctrl: ctrl}
+	mock.recorder = &MockproposalDBMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
+func (m *MockproposalDB) EXPECT() *MockproposalDBMockRecorder {
 	return m.recorder
 }
 
-// AddProposalWithTxs mocks base method.
-func (m *MockmeshProvider) AddProposalWithTxs(arg0 context.Context, arg1 *types.Proposal) error {
+// AddProposal mocks base method.
+func (m *MockproposalDB) AddProposal(arg0 context.Context, arg1 *types.Proposal) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddProposalWithTxs", arg0, arg1)
+	ret := m.ctrl.Call(m, "AddProposal", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// AddProposalWithTxs indicates an expected call of AddProposalWithTxs.
-func (mr *MockmeshProviderMockRecorder) AddProposalWithTxs(arg0, arg1 interface{}) *gomock.Call {
+// AddProposal indicates an expected call of AddProposal.
+func (mr *MockproposalDBMockRecorder) AddProposal(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProposalWithTxs", reflect.TypeOf((*MockmeshProvider)(nil).AddProposalWithTxs), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProposal", reflect.TypeOf((*MockproposalDB)(nil).AddProposal), arg0, arg1)
 }
 
 // MocktxPool is a mock of txPool interface.

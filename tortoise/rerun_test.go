@@ -65,7 +65,7 @@ func testWindowCounting(tb testing.TB, maliciousLayers, verifyingWindow, fullWin
 	ctx := context.Background()
 	const size = 10
 	s := sim.New(sim.WithLayerSize(size))
-	s.Setup()
+	s.Setup(sim.WithSetupUnitsRange(2, 2))
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size

@@ -1,11 +1,10 @@
 package blocks
 
 import (
-	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"math"
-	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -62,16 +61,18 @@ func NewGenerator(atxDB atxProvider, meshDB meshProvider, opts ...GeneratorOpt) 
 }
 
 // GenerateBlock generates a block from the list of Proposal.
-func (g *Generator) GenerateBlock(layerID types.LayerID, proposals []*types.Proposal) (*types.UCBlock, error) {
-	txIDs, txs, err := g.extractUniqueTXs(layerID, proposals)
+func (g *Generator) GenerateBlock(ctx context.Context, layerID types.LayerID, proposals []*types.Proposal) (*types.Block, error) {
+	logger := g.logger.WithContext(ctx).WithFields(layerID, log.Int("num_proposals", len(proposals)))
+	types.SortProposals(proposals)
+	txIDs, txs, err := g.extractOrderedUniqueTXs(layerID, proposals)
 	if err != nil {
 		return nil, err
 	}
-	rewards, err := g.calculateSmesherRewards(layerID, proposals, txs)
+	rewards, err := g.calculateSmesherRewards(logger, layerID, proposals, txs)
 	if err != nil {
 		return nil, err
 	}
-	b := &types.UCBlock{
+	b := &types.Block{
 		InnerBlock: types.InnerBlock{
 			LayerIndex: layerID,
 			Rewards:    rewards,
@@ -79,10 +80,11 @@ func (g *Generator) GenerateBlock(layerID types.LayerID, proposals []*types.Prop
 		},
 	}
 	b.Initialize()
+	logger.With().Info("block generated", log.Inline(b))
 	return b, nil
 }
 
-func (g *Generator) extractUniqueTXs(layerID types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, []*types.Transaction, error) {
+func (g *Generator) extractOrderedUniqueTXs(layerID types.LayerID, proposals []*types.Proposal) ([]types.TransactionID, []*types.Transaction, error) {
 	seen := make(map[types.TransactionID]struct{})
 	var txIDs []types.TransactionID
 	for _, p := range proposals {
@@ -94,6 +96,7 @@ func (g *Generator) extractUniqueTXs(layerID types.LayerID, proposals []*types.P
 			seen[id] = struct{}{}
 		}
 	}
+	types.SortTransactionIDs(txIDs)
 	txs, missing := g.meshDB.GetTransactions(txIDs)
 	if len(missing) > 0 {
 		g.logger.Error("could not find transactions %v from layer %v", missing, layerID)
@@ -102,19 +105,19 @@ func (g *Generator) extractUniqueTXs(layerID types.LayerID, proposals []*types.P
 	return txIDs, txs, nil
 }
 
-func (g *Generator) calculateSmesherRewards(layerID types.LayerID, proposals []*types.Proposal, txs []*types.Transaction) ([]types.AnyReward, error) {
+func (g *Generator) calculateSmesherRewards(logger log.Log, layerID types.LayerID, proposals []*types.Proposal, txs []*types.Transaction) ([]types.AnyReward, error) {
 	rInfo := calculateRewardPerProposal(layerID, g.cfg, txs, len(proposals))
-	g.logger.With().Info("reward calculated", log.Object("rewards", rInfo))
+	logger.With().Info("reward calculated", log.Inline(rInfo))
 	rewards := make([]types.AnyReward, 0, len(proposals))
 	for _, p := range proposals {
 		if p.AtxID == *types.EmptyATXID {
 			// this proposal would not have been validated
-			g.logger.With().Error("proposal with invalid ATXID, skipping reward distribution", p.LayerIndex, p.ID())
+			logger.Error("proposal with invalid ATXID, skipping reward distribution", p.LayerIndex, p.ID())
 			return nil, errInvalidATXID
 		}
 		atx, err := g.atxDB.GetAtxHeader(p.AtxID)
 		if err != nil {
-			g.logger.With().Warning("proposal ATX not found", p.ID(), p.AtxID, log.Err(err))
+			logger.With().Warning("proposal ATX not found", p.ID(), p.AtxID, log.Err(err))
 			return nil, fmt.Errorf("block gen get ATX: %w", err)
 		}
 		rewards = append(rewards, types.AnyReward{
@@ -124,8 +127,5 @@ func (g *Generator) calculateSmesherRewards(layerID types.LayerID, proposals []*
 			LayerReward: rInfo.layerRewardPer,
 		})
 	}
-	sort.Slice(rewards[:], func(i, j int) bool {
-		return bytes.Compare(rewards[i].Address.Bytes(), rewards[j].Address.Bytes()) < 0
-	})
 	return rewards, nil
 }

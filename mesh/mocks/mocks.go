@@ -35,6 +35,20 @@ func (m *Mockstate) EXPECT() *MockstateMockRecorder {
 	return m.recorder
 }
 
+// AddTxToPool mocks base method.
+func (m *Mockstate) AddTxToPool(tx *types.Transaction) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddTxToPool", tx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddTxToPool indicates an expected call of AddTxToPool.
+func (mr *MockstateMockRecorder) AddTxToPool(tx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTxToPool", reflect.TypeOf((*Mockstate)(nil).AddTxToPool), tx)
+}
+
 // AddressExists mocks base method.
 func (m *Mockstate) AddressExists(arg0 types.Address) bool {
 	m.ctrl.T.Helper()
@@ -163,20 +177,6 @@ func (m *Mockstate) Rewind(layer types.LayerID) (types.Hash32, error) {
 func (mr *MockstateMockRecorder) Rewind(layer interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rewind", reflect.TypeOf((*Mockstate)(nil).Rewind), layer)
-}
-
-// AddTxToPool mocks base method.
-func (m *Mockstate) AddTxToPool(tx *types.Transaction) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddTxToPool", tx)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddTxToPool indicates an expected call of AddTxToPool.
-func (mr *MockstateMockRecorder) AddTxToPool(tx interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTxToPool", reflect.TypeOf((*Mockstate)(nil).AddTxToPool), tx)
 }
 
 // ValidateNonceAndBalance mocks base method.

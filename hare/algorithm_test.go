@@ -20,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/system"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -146,28 +145,27 @@ func buildMessage(msg *Message) *Msg {
 	return &Msg{Message: msg, PubKey: nil}
 }
 
-func mockSyncState(tb testing.TB) system.SyncStateProvider {
+type testBroker struct {
+	*Broker
+	ctrl       *gomock.Controller
+	mockStateQ *mocks.MockstateQuerier
+	mockSyncS  *smocks.MockSyncStateProvider
+}
+
+func buildBroker(tb testing.TB, testName string) *testBroker {
+	return buildBrokerWithLimit(tb, testName, cfg.LimitIterations)
+}
+
+func buildBrokerWithLimit(tb testing.TB, testName string, limit int) *testBroker {
 	ctrl := gomock.NewController(tb)
-	mst := smocks.NewMockSyncStateProvider(ctrl)
-	mst.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	return mst
-}
-
-func mockSyncStateNotSynced(tb testing.TB) system.SyncStateProvider {
-	ctrl := gomock.NewController(tb)
-	mst := smocks.NewMockSyncStateProvider(ctrl)
-	mst.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
-	return mst
-}
-
-func buildBroker(tb testing.TB, testName string) *Broker {
-	return newBroker("self", &mockEligibilityValidator{valid: 1}, MockStateQuerier{true, nil},
-		mockSyncState(tb), 10, cfg.LimitIterations, util.NewCloser(), logtest.New(tb).WithName(testName))
-}
-
-func buildBrokerLimit4(tb testing.TB, testName string) *Broker {
-	return newBroker("self", &mockEligibilityValidator{valid: 1}, MockStateQuerier{true, nil},
-		mockSyncState(tb), 10, 4, util.NewCloser(), logtest.New(tb).WithName(testName))
+	mockStateQ := mocks.NewMockstateQuerier(ctrl)
+	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
+	return &testBroker{
+		Broker: newBroker("self", &mockEligibilityValidator{valid: 1}, mockStateQ, mockSyncS,
+			10, limit, util.NewCloser(), logtest.New(tb).WithName(testName)),
+		mockSyncS:  mockSyncS,
+		mockStateQ: mockStateQ,
+	}
 }
 
 type mockEligibilityValidator struct {
@@ -185,6 +183,7 @@ func (mev *mockEligibilityValidator) Validate(ctx context.Context, msg *Msg) boo
 // test that a InnerMsg to a specific set ObjectID is delivered by the broker.
 func TestConsensusProcess_Start(t *testing.T) {
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	inbox, _ := broker.Register(context.TODO(), proc.ID())
@@ -195,7 +194,7 @@ func TestConsensusProcess_Start(t *testing.T) {
 	err = proc.Start(context.TODO())
 	assert.Equal(t, "instance already started", err.Error())
 
-	closeBrokerAndWait(t, broker)
+	closeBrokerAndWait(t, broker.Broker)
 }
 
 func TestConsensusProcess_TerminationLimit(t *testing.T) {
@@ -214,10 +213,10 @@ func TestConsensusProcess_TerminationLimit(t *testing.T) {
 
 func TestConsensusProcess_eventLoop(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
 
 	net := &mockP2p{}
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	c := cfg
 	c.F = 2
@@ -252,6 +251,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 	r := require.New(t)
 	net := &mockP2p{}
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	r.NoError(broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	proc.publisher = net
@@ -290,6 +290,7 @@ func TestConsensusProcess_handleMessage(t *testing.T) {
 
 func TestConsensusProcess_nextRound(t *testing.T) {
 	broker := buildBroker(t, t.Name())
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	require.NoError(t, broker.Start(context.TODO()))
 	proc := generateConsensusProcess(t)
 	proc.inbox, _ = broker.Register(context.TODO(), proc.ID())
@@ -317,7 +318,10 @@ func generateConsensusProcessWithConfig(tb testing.TB, cfg config.Config) *conse
 	output := make(chan TerminationOutput, 1)
 	certs := make(chan CertificationOutput, 1)
 
-	return newConsensusProcess(cfg, instanceID1, s, oracle, NewMockStateQuerier(),
+	ctrl := gomock.NewController(tb)
+	sq := mocks.NewMockstateQuerier(ctrl)
+	sq.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	return newConsensusProcess(cfg, instanceID1, s, oracle, sq,
 		10, edSigner, types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub},
 		noopPubSub(tb), output, certs, truer{}, newRoundClockFromCfg(logger, cfg),
 		logtest.New(tb).WithName(edPubkey.String()))

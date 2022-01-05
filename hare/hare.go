@@ -72,10 +72,13 @@ type Hare struct {
 
 	broker *Broker
 
-	sign Signer
+	sign     Signer
+	blockGen blockGenerator
 
 	mesh    meshProvider
+	pdb     proposalProvider
 	beacons system.BeaconGetter
+	fetcher system.ProposalFetcher
 	rolacle Rolacle
 	patrol  layerPatrol
 
@@ -106,14 +109,17 @@ func New(
 	publisher pubsub.PublishSubsciber,
 	sign Signer,
 	nid types.NodeID,
+	blockGen blockGenerator,
 	syncState system.SyncStateProvider,
 	mesh meshProvider,
+	ppp proposalProvider,
 	beacons system.BeaconGetter,
+	fetch system.ProposalFetcher,
 	rolacle Rolacle,
 	patrol layerPatrol,
 	layersPerEpoch uint16,
 	idProvider identityProvider,
-	stateQ StateQuerier,
+	stateQ stateQuerier,
 	layerClock LayerClock,
 	logger log.Log,
 ) *Hare {
@@ -140,9 +146,12 @@ func New(
 	h.broker = newBroker(pid, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
 	publisher.Register(protoName, h.broker.HandleMessage)
 	h.sign = sign
+	h.blockGen = blockGen
 
 	h.mesh = mesh
+	h.pdb = ppp
 	h.beacons = beacons
+	h.fetcher = fetch
 	h.rolacle = rolacle
 	h.patrol = patrol
 
@@ -165,6 +174,16 @@ func (h *Hare) getLastLayer() types.LayerID {
 	h.layerLock.RLock()
 	defer h.layerLock.RUnlock()
 	return h.lastLayer
+}
+
+func (h *Hare) setLastLayer(layerID types.LayerID) {
+	h.layerLock.Lock()
+	defer h.layerLock.Unlock()
+	if layerID.After(h.lastLayer) {
+		h.lastLayer = layerID
+	} else {
+		h.With().Error("received out of order layer tick", log.FieldNamed("last_layer", h.lastLayer))
+	}
 }
 
 // checks if the provided id is too late/old to be requested.
@@ -197,18 +216,43 @@ var ErrTooLate = errors.New("consensus process finished too late")
 // records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	layerID := output.ID()
-	var proposals []types.ProposalID
+	var pids []types.ProposalID
 	if output.Completed() {
-		h.WithContext(ctx).With().Info("hare terminated with success", layerID)
+		h.WithContext(ctx).With().Info("hare terminated with success", layerID, log.Int("num_proposals", output.Set().Size()))
 		set := output.Set()
-		proposals = make([]types.ProposalID, 0, set.len())
+		pids = make([]types.ProposalID, 0, set.len())
 		for _, v := range set.elements() {
-			proposals = append(proposals, v)
+			pids = append(pids, v)
 		}
 	} else {
 		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
 	}
-	h.mesh.ProcessLayerPerHareOutput(ctx, layerID, types.ProposalIDsToBlockIDs(proposals))
+
+	hareOutput := types.EmptyBlockID
+	if len(pids) > 0 {
+		// fetch proposals from peers if not locally available
+		if err := h.fetcher.GetProposals(ctx, pids); err != nil {
+			h.WithContext(ctx).With().Warning("failed to fetch proposals", log.Err(err))
+			return fmt.Errorf("hare fetch proposals: %w", err)
+		}
+		// now all proposals should be in local DB
+		proposals, err := h.pdb.GetProposals(pids)
+		if err != nil {
+			h.WithContext(ctx).With().Warning("failed to get proposals locally", log.Err(err))
+			return fmt.Errorf("hare get proposals: %w", err)
+		}
+
+		if block, err := h.blockGen.GenerateBlock(ctx, layerID, proposals); err != nil {
+			return fmt.Errorf("hare gen block: %w", err)
+		} else if err = h.mesh.AddBlockWithTXs(ctx, block); err != nil {
+			return fmt.Errorf("hare save block: %w", err)
+		} else {
+			hareOutput = block.ID()
+		}
+	}
+	if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, hareOutput); err != nil {
+		h.WithContext(ctx).With().Warning("mesh failed to process layer", layerID, log.Err(err))
+	}
 
 	if h.outOfBufferRange(layerID) {
 		return ErrTooLate
@@ -219,7 +263,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 	if uint32(len(h.outputs)) >= h.bufferSize {
 		delete(h.outputs, h.oldestResultInBuffer())
 	}
-	h.outputs[layerID] = proposals
+	h.outputs[layerID] = pids
 	return nil
 }
 
@@ -247,13 +291,7 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 		return false, nil
 	}
 
-	h.layerLock.Lock()
-	if id.After(h.lastLayer) {
-		h.lastLayer = id
-	} else {
-		logger.With().Error("received out of order layer tick", log.FieldNamed("last_layer", h.lastLayer))
-	}
-	h.layerLock.Unlock()
+	h.setLastLayer(id)
 
 	if id.GetEpoch().IsGenesis() {
 		logger.Info("not starting hare since we are in genesis epoch")
@@ -329,10 +367,12 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 // it has the same beacon value as the node's beacon value.
 // any error encountered will be ignored and an empty set is returned.
 func (h *Hare) getGoodProposal(lyrID types.LayerID, epochBeacon types.Beacon, logger log.Log) []types.ProposalID {
-	proposals, err := h.mesh.LayerProposals(lyrID)
+	proposals, err := h.pdb.LayerProposals(lyrID)
 	if err != nil {
 		if err != database.ErrNotFound {
 			logger.With().Error("no proposals found for hare, using empty set", log.Err(err))
+		} else if err = h.mesh.SetZeroBallotLayer(lyrID); err != nil {
+			logger.With().Warning("failed to tag zero ballot layer", log.Err(err))
 		}
 		return []types.ProposalID{}
 	}
@@ -374,9 +414,7 @@ var (
 	errNoResult = errors.New("no result for the requested layer")
 )
 
-// GetResult returns the hare output for the provided range.
-// Returns error if the requested layer is too old.
-func (h *Hare) GetResult(lid types.LayerID) ([]types.ProposalID, error) {
+func (h *Hare) getResult(lid types.LayerID) ([]types.ProposalID, error) {
 	if h.outOfBufferRange(lid) {
 		return nil, errTooOld
 	}
@@ -421,7 +459,7 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 
 // listens to outputs arriving from consensus processes.
 func (h *Hare) certificationLoop(ctx context.Context) {
-	h.WithContext(ctx).With().Info("starting sertificatin collection loop")
+	h.WithContext(ctx).With().Info("starting certification collection loop")
 	for {
 		select {
 		case out := <-h.certChan:

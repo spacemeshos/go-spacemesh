@@ -52,7 +52,7 @@ type ProposalBuilder struct {
 	publisher          pubsub.Publisher
 	signer             *signing.EdSigner
 	txPool             txPool
-	meshProvider       meshProvider
+	proposalDB         proposalDB
 	baseBallotProvider baseBallotProvider
 	proposalOracle     proposalOracle
 	beaconProvider     system.BeaconGetter
@@ -141,7 +141,7 @@ func NewProposalBuilder(
 	vrfSigner *signing.VRFSigner,
 	atxDB activationDB,
 	publisher pubsub.Publisher,
-	msh meshProvider,
+	pdb proposalDB,
 	bbp baseBallotProvider,
 	beaconProvider system.BeaconGetter,
 	syncer system.SyncStateProvider,
@@ -158,7 +158,7 @@ func NewProposalBuilder(
 		signer:             signer,
 		layerTimer:         layerTimer,
 		publisher:          publisher,
-		meshProvider:       msh,
+		proposalDB:         pdb,
 		baseBallotProvider: bbp,
 		beaconProvider:     beaconProvider,
 		syncer:             syncer,
@@ -207,7 +207,7 @@ func (pb *ProposalBuilder) Start(ctx context.Context) error {
 // Close stops the loop that listens to layers and build proposals.
 func (pb *ProposalBuilder) Close() {
 	pb.cancel()
-	pb.eg.Wait()
+	_ = pb.eg.Wait()
 	pb.refBallotDB.Close()
 }
 
@@ -302,7 +302,9 @@ func (pb *ProposalBuilder) createProposal(
 	}
 	p.Ballot.Signature = pb.signer.Sign(p.Ballot.Bytes())
 	p.Signature = pb.signer.Sign(p.Bytes())
-	p.Initialize()
+	if err := p.Initialize(); err != nil {
+		logger.Panic("proposal failed to initialize", log.Err(err))
+	}
 
 	logger.Event().Info("proposal created", p.Fields()...)
 	return p, nil
@@ -381,7 +383,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 			}
 		}
 
-		if err := pb.meshProvider.AddProposalWithTxs(ctx, p); err != nil {
+		if err := pb.proposalDB.AddProposal(ctx, p); err != nil {
 			events.ReportDoneCreatingProposal(true, layerID.Uint32(), "failed to add proposal")
 			logger.With().Error("failed to add proposal", p.ID(), log.Err(err))
 			return fmt.Errorf("builder add proposal: %w", err)
