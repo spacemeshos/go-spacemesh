@@ -531,7 +531,7 @@ func TestHare_onTick_NotSynced(t *testing.T) {
 	lyr := types.NewLayerID(199)
 
 	h := createTestHare(t, config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
-	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyr).Return(true, nil).Times(1)
+	h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), lyr).Return(true, nil).AnyTimes()
 	mockSyncS := smocks.NewMockSyncStateProvider(h.ctrl)
 	h.broker.nodeSyncState = mockSyncS
 	require.NoError(t, h.broker.Start(context.TODO()))
