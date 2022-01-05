@@ -228,7 +228,7 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		h.WithContext(ctx).With().Info("hare terminated with failure", layerID)
 	}
 
-	theOne := types.EmptyBlockID
+	hareOutput := types.EmptyBlockID
 	if len(pids) > 0 {
 		// fetch proposals from peers if not locally available
 		if err := h.fetcher.GetProposals(ctx, pids); err != nil {
@@ -247,10 +247,10 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 		} else if err = h.mesh.AddBlockWithTXs(ctx, block); err != nil {
 			return fmt.Errorf("hare save block: %w", err)
 		} else {
-			theOne = block.ID()
+			hareOutput = block.ID()
 		}
 	}
-	if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, theOne); err != nil {
+	if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, hareOutput); err != nil {
 		h.WithContext(ctx).With().Warning("mesh failed to process layer", layerID, log.Err(err))
 	}
 

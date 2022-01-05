@@ -1408,11 +1408,10 @@ func skipLayers(n int) sim.VotesGenerator {
 			panic(fmt.Sprintf("need at least %d layers", position))
 		}
 		baseLayer := layers[len(layers)-position]
-		support := layers[len(layers)-position].BlocksIDs()[0:1]
-		against := layers[len(layers)-position].BlocksIDs()[1:]
+		support := layers[len(layers)-position].BlocksIDs()
 		ballots := baseLayer.Ballots()
 		base := ballots[rng.Intn(len(ballots))]
-		return sim.Voting{Base: base.ID(), Against: against, Support: support}
+		return sim.Voting{Base: base.ID(), Support: support}
 	}
 }
 
@@ -1730,12 +1729,12 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 
 	unsupported := map[types.BlockID]struct{}{}
 	for lid := genesis; lid.Before(last); lid = lid.Add(1) {
-		theOne, err := s.GetState(0).MeshDB.GetHareConsensusOutput(lid)
+		hareOutput, err := s.GetState(0).MeshDB.GetHareConsensusOutput(lid)
 		require.NoError(t, err)
-		if theOne != types.EmptyBlockID {
-			tortoise.trtl.validity[theOne] = against
-			tortoise.trtl.hareOutput[theOne] = against
-			unsupported[theOne] = struct{}{}
+		if hareOutput != types.EmptyBlockID {
+			tortoise.trtl.validity[hareOutput] = against
+			tortoise.trtl.hareOutput[hareOutput] = against
+			unsupported[hareOutput] = struct{}{}
 		}
 	}
 
@@ -1839,10 +1838,10 @@ func TestComputeLocalOpinion(t *testing.T) {
 			for _, bid := range blocks {
 				vote, _ := getLocalVote(&tortoise.trtl.commonState, cfg, tc.lid, bid)
 				if tc.expected == support {
-					theOne, err := s.GetState(0).MeshDB.GetHareConsensusOutput(tc.lid)
+					hareOutput, err := s.GetState(0).MeshDB.GetHareConsensusOutput(tc.lid)
 					require.NoError(t, err)
 					// only one block is supported
-					if bid == theOne {
+					if bid == hareOutput {
 						require.Equal(t, tc.expected, vote, "block id %s", bid)
 					} else {
 						require.Equal(t, against, vote, "block id %s", bid)

@@ -105,6 +105,16 @@ func (g *Generator) genBeacon() {
 	}
 }
 
+func (g *Generator) genTXIDs(n int) []types.TransactionID {
+	txIDs := make([]types.TransactionID, 0, n)
+	for i := 0; i < n; i++ {
+		txid := types.TransactionID{}
+		g.rng.Read(txid[:])
+		txIDs = append(txIDs, txid)
+	}
+	return txIDs
+}
+
 func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 	if g.nextLayer.Sub(1).GetEpoch() < g.nextLayer.GetEpoch() {
 		g.generateAtxs()
@@ -157,19 +167,19 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		layer.AddBallot(ballot)
 	}
 	for i := 0; i < numBlocks; i++ {
-		block := types.GenLayerBlock(g.nextLayer, types.RandomTXSet(100))
+		block := types.GenLayerBlock(g.nextLayer, g.genTXIDs(5))
 		for _, state := range g.states {
 			state.OnBlock(block)
 		}
 		layer.AddBlock(block)
 	}
 	if !cfg.FailHare {
-		theOne := types.EmptyBlockID
+		hareOutput := types.EmptyBlockID
 		if !cfg.EmptyHare {
-			theOne = layer.BlocksIDs()[0]
+			hareOutput = layer.BlocksIDs()[0]
 		}
 		for _, state := range g.states {
-			state.OnHareOutput(layer.Index(), theOne)
+			state.OnHareOutput(layer.Index(), hareOutput)
 		}
 	}
 	for _, state := range g.states {

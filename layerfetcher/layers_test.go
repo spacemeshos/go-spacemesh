@@ -113,7 +113,7 @@ func TestLayerBlocksReqReceiver_Success(t *testing.T) {
 	aggHash := types.RandomHash()
 	ballots := []types.BallotID{types.RandomBallotID(), types.RandomBallotID(), types.RandomBallotID(), types.RandomBallotID()}
 	blocks := []types.BlockID{types.RandomBlockID(), types.RandomBlockID(), types.RandomBlockID()}
-	theOne := blocks[0]
+	hareOutput := blocks[0]
 
 	tl := createTestLogicWithMocknet(t, newMockNet(t))
 	tl.mLayerDB.EXPECT().ProcessedLayer().Return(processed).Times(1)
@@ -121,7 +121,7 @@ func TestLayerBlocksReqReceiver_Success(t *testing.T) {
 	tl.mLayerDB.EXPECT().GetAggregatedLayerHash(lyrID).Return(aggHash).Times(1)
 	tl.mLayerDB.EXPECT().LayerBallotIDs(lyrID).Return(ballots, nil).Times(1)
 	tl.mLayerDB.EXPECT().LayerBlockIds(lyrID).Return(blocks, nil).Times(1)
-	tl.mLayerDB.EXPECT().GetHareConsensusOutput(lyrID).Return(theOne, nil).Times(1)
+	tl.mLayerDB.EXPECT().GetHareConsensusOutput(lyrID).Return(hareOutput, nil).Times(1)
 
 	out, err := tl.layerContentReqReceiver(context.TODO(), lyrID.Bytes())
 	require.NoError(t, err)
@@ -130,7 +130,7 @@ func TestLayerBlocksReqReceiver_Success(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, ballots, got.Ballots)
 	assert.Equal(t, blocks, got.Blocks)
-	assert.Equal(t, theOne, got.HareOutput)
+	assert.Equal(t, hareOutput, got.HareOutput)
 	assert.Equal(t, processed, got.ProcessedLayer)
 	assert.Equal(t, hash, got.Hash)
 	assert.Equal(t, aggHash, got.AggregatedHash)

@@ -84,7 +84,7 @@ func (h *SuperHare) Start(ctx context.Context) error {
 							layerID,
 							log.Err(err))
 					}
-					theOne := types.EmptyBlockID
+					hareOutput := types.EmptyBlockID
 					if len(proposals) == 0 {
 						logger.With().Warning("hare output empty set")
 						if err := h.mesh.SetZeroBallotLayer(layerID); err != nil {
@@ -100,10 +100,10 @@ func (h *SuperHare) Start(ctx context.Context) error {
 						logger.With().Error("failed to save block", log.Err(err))
 						return
 					} else {
-						theOne = block.ID()
+						hareOutput = block.ID()
 					}
 
-					if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, theOne); err != nil {
+					if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, hareOutput); err != nil {
 						logger.With().Error("mesh failed to process layer", layerID, log.Err(err))
 					}
 				}()

@@ -549,8 +549,8 @@ func TestMesh_pushLayersToState(t *testing.T) {
 
 	valids := []*types.Block{block1, block2}
 	types.SortBlocks(valids)
-	theOne := valids[0]
-	for _, txID := range theOne.TxIDs {
+	hareOutput := valids[0]
+	for _, txID := range hareOutput.TxIDs {
 		delete(pendingTXs, txID)
 	}
 
@@ -563,7 +563,7 @@ func TestMesh_pushLayersToState(t *testing.T) {
 
 	tm.mockState.EXPECT().ApplyLayer(layerID, gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ types.LayerID, txs []*types.Transaction, _ map[types.Address]uint64) ([]*types.Transaction, error) {
-			assert.ElementsMatch(t, theOne.TxIDs, types.ToTransactionIDs(txs))
+			assert.ElementsMatch(t, hareOutput.TxIDs, types.ToTransactionIDs(txs))
 			return nil, nil
 		}).Times(1)
 	tm.mockState.EXPECT().GetStateRoot().Return(types.Hash32{}).Times(1)
@@ -577,10 +577,10 @@ func TestMesh_pushLayersToState(t *testing.T) {
 	require.Empty(t, txns)
 
 	// the transactions should be updated with the correct BlockID
-	mtxs, missing := tm.GetMeshTransactions(theOne.TxIDs)
+	mtxs, missing := tm.GetMeshTransactions(hareOutput.TxIDs)
 	require.Empty(t, missing)
 	for _, tx := range mtxs {
-		assert.Equal(t, theOne.ID(), tx.BlockID)
+		assert.Equal(t, hareOutput.ID(), tx.BlockID)
 	}
 }
 
