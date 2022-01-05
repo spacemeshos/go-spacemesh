@@ -137,6 +137,7 @@ func (t *turtle) evict(ctx context.Context) {
 			delete(t.badBeaconBallots, ballot)
 			delete(t.verifying.goodBallots, ballot)
 			delete(t.full.votes, ballot)
+			delete(t.full.abstain, ballot)
 			delete(t.full.base, ballot)
 		}
 		delete(t.ballots, lid)
@@ -566,10 +567,11 @@ func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
 	tballots := make([]tortoiseBallot, 0, len(ballots))
 	for _, ballot := range ballots {
 		tballots = append(tballots, tortoiseBallot{
-			id:     ballot,
-			base:   t.full.base[ballot],
-			votes:  t.full.votes[ballot],
-			weight: t.ballotWeight[ballot],
+			id:      ballot,
+			base:    t.full.base[ballot],
+			votes:   t.full.votes[ballot],
+			abstain: t.full.abstain[ballot],
+			weight:  t.ballotWeight[ballot],
 		})
 	}
 	return tballots
