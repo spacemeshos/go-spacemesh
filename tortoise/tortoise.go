@@ -185,7 +185,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (*types.Votes, error) {
 			// we need only 1 ballot from the most recent layer, this ballot will be by definition the most
 			// consistent with our local opinion.
 			// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
-			votes, err = t.encodeVotes(ctx, ballotLID, ballotLID, func(types.LayerID, types.BlockID) sign { return against })
+			votes, err = t.encodeVotes(ctx, ballotID, ballotLID, ballotLID, func(types.LayerID, types.BlockID) sign { return against })
 		}
 	}
 
@@ -206,7 +206,7 @@ func (t *turtle) BaseBallot(ctx context.Context) (*types.Votes, error) {
 		prioritizeBallots(choices, disagreements, t.ballotLayer, t.badBeaconBallots)
 		for _, ballotID = range choices {
 			ballotLID = t.ballotLayer[ballotID]
-			votes, err = t.encodeVotes(ctx, ballotLID, t.evicted.Add(1), func(lid types.LayerID, blockID types.BlockID) sign {
+			votes, err = t.encodeVotes(ctx, ballotID, ballotLID, t.evicted.Add(1), func(lid types.LayerID, blockID types.BlockID) sign {
 				return t.full.getVote(logger, ballotID, lid, blockID)
 			})
 			if err == nil {
@@ -233,7 +233,6 @@ func (t *turtle) BaseBallot(ctx context.Context) (*types.Votes, error) {
 
 	metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - ballotLID.Value))
 
-	votes.Base = ballotID
 	return votes, nil
 }
 
@@ -302,6 +301,7 @@ type opinionsGetter func(types.LayerID, types.BlockID) sign
 // encode differences between selected base ballot and local votes.
 func (t *turtle) encodeVotes(
 	ctx context.Context,
+	ballot types.BallotID,
 	baselid,
 	startlid types.LayerID,
 	getter opinionsGetter,
@@ -310,7 +310,9 @@ func (t *turtle) encodeVotes(
 		log.Stringer("base_layer", baselid),
 		log.Stringer("last_layer", t.last),
 	)
-	votes := &types.Votes{}
+	votes := &types.Votes{
+		Base: ballot,
+	}
 
 	for lid := startlid; !lid.After(t.processed); lid = lid.Add(1) {
 		logger := logger.WithFields(log.Named("block_layer", lid))

@@ -4,7 +4,7 @@ package types
 type Votes struct {
 	// Base ballot.
 	Base BallotID
-	// Exceptions is the difference between base ballot votes and local opinion.
+	// Support and Against blocks that base ballot votes differently.
 	Support, Against []BlockID
 	// Abstain on layers until they are terminated.
 	Abstain []LayerID
