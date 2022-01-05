@@ -167,7 +167,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		layer.AddBallot(ballot)
 	}
 	for i := 0; i < numBlocks; i++ {
-		block := types.GenLayerBlock(g.nextLayer, g.genTXIDs(5))
+		block := types.GenLayerBlock(g.nextLayer, g.genTXIDs(3))
 		for _, state := range g.states {
 			state.OnBlock(block)
 		}
