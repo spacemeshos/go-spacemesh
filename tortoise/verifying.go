@@ -13,6 +13,8 @@ func (g goodness) String() string {
 	switch g {
 	case bad:
 		return "bad"
+	case abstained:
+		return "abstained"
 	case good:
 		return "good"
 	case canBeGood:
@@ -24,6 +26,7 @@ func (g goodness) String() string {
 
 const (
 	bad goodness = iota
+	abstained
 	// good ballot must:
 	// - agree on a beacon value
 	// - don't vote on blocks before base ballot
@@ -36,11 +39,12 @@ const (
 
 func newVerifying(config Config, common *commonState) *verifying {
 	return &verifying{
-		Config:       config,
-		commonState:  common,
-		goodBallots:  map[types.BallotID]goodness{},
-		layerWeights: map[types.LayerID]weight{},
-		totalWeight:  weightFromUint64(0),
+		Config:          config,
+		commonState:     common,
+		goodBallots:     map[types.BallotID]goodness{},
+		goodWeight:      map[types.LayerID]weight{},
+		abstainedWeight: map[types.LayerID]weight{},
+		totalGoodWeight: weightFromUint64(0),
 	}
 }
 
@@ -49,15 +53,18 @@ type verifying struct {
 	*commonState
 
 	goodBallots map[types.BallotID]goodness
-	// weight of good ballots in the layer
-	layerWeights map[types.LayerID]weight
+	// weight of good ballots in the the layer N
+	goodWeight map[types.LayerID]weight
+	// abstained weight from ballots in layers [N+1, LAST]
+	abstainedWeight map[types.LayerID]weight
 	// total weight of good ballots from verified + 1 up to last processed
-	totalWeight weight
+	totalGoodWeight weight
 }
 
 func (v *verifying) resetWeights() {
-	v.totalWeight = weightFromUint64(0)
-	v.layerWeights = map[types.LayerID]weight{}
+	v.totalGoodWeight = weightFromUint64(0)
+	v.goodWeight = map[types.LayerID]weight{}
+	v.abstainedWeight = map[types.LayerID]weight{}
 }
 
 func (v *verifying) checkCanBeGood(ballot types.BallotID) bool {
@@ -88,12 +95,13 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tort
 
 	// TODO(dshulyak) counted weight should be reduced by the uncounted weight per conversation with research
 
-	v.layerWeights[lid] = counted
-	v.totalWeight = v.totalWeight.add(counted)
+	v.goodWeight[lid] = counted
+	v.abstainedWeight[lid] = weightFromInt64(0)
+	v.totalGoodWeight = v.totalGoodWeight.add(counted)
 
 	logger.With().Info("counted weight from good ballots",
 		log.Stringer("weight", counted),
-		log.Stringer("total", v.totalWeight),
+		log.Stringer("total", v.totalGoodWeight),
 		log.Stringer("expected", v.epochWeight[lid.GetEpoch()]),
 		log.Int("ballots_count", len(ballots)),
 		log.Int("good_ballots_count", goodBallotsCount),
@@ -101,14 +109,16 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tort
 }
 
 func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
-	votingWeight := weightFromUint64(0)
-	votingWeight = votingWeight.add(v.totalWeight)
-	votingWeight = votingWeight.sub(v.layerWeights[lid])
+	votingWeight := weightFromUint64(0).
+		add(v.totalGoodWeight).
+		sub(v.goodWeight[lid]).
+		sub(v.abstainedWeight[lid])
 
 	logger = logger.WithFields(
 		log.String("verifier", verifyingTortoise),
 		log.Stringer("candidate_layer", lid),
 		log.Stringer("voting_weight", votingWeight),
+		log.Stringer("asbtained_weight", v.abstainedWeight[lid]),
 		log.Stringer("local_threshold", v.localThreshold),
 		log.Stringer("global_threshold", v.globalThreshold),
 	)
@@ -135,7 +145,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		v.validity[bid] = vote
 	}
 
-	v.totalWeight = votingWeight
+	v.totalGoodWeight.sub(v.goodWeight[lid])
 	logger.With().Info("candidate layer is verified")
 	return true
 }
@@ -149,7 +159,7 @@ func (v *verifying) sumGoodBallots(logger log.Log, ballots []tortoiseBallot) (we
 			continue
 		}
 		v.goodBallots[ballot.id] = rst
-		if rst == good {
+		if rst == good || rst == abstained {
 			sum = sum.add(ballot.weight)
 			n++
 		}
@@ -166,9 +176,6 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 	}
 
 	baselid := v.ballotLayer[ballot.base]
-
-	// NOTE(dshulyak) abstain votes are ignored in this method.
-	// they suppose to be added in a followup change.
 
 	for block, vote := range ballot.votes {
 		blocklid, exists := v.blockLayer[block]
@@ -193,6 +200,12 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 			)
 			return bad
 		}
+	}
+	if len(ballot.abstain) > 0 {
+		for lid := range ballot.abstain {
+			v.abstainedWeight[lid].add(ballot.weight)
+		}
+		return abstained
 	}
 
 	if rst := v.goodBallots[ballot.base]; rst != good {
