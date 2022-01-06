@@ -199,7 +199,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddInt("supports", len(b.Votes.Support))
 	encoder.AddInt("againsts", len(b.Votes.Against))
 	encoder.AddInt("abstains", len(b.Votes.Abstain))
-	encoder.AddString("atx", b.AtxID.String())
+	encoder.AddString("atx_id", b.AtxID.String())
 	encoder.AddUint32("eligibility_counter", b.EligibilityProof.J)
 	encoder.AddString("ref_ballot", b.RefBallot.String())
 	encoder.AddInt("active_set_size", activeSetSize)
