@@ -1,41 +1,100 @@
 package types
 
 import (
+	"bytes"
 	"sort"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-type (
-	// BlockID is an alias for ProposalID until unified content block is implemented.
-	BlockID ProposalID
-	// Block is an alias for Proposal until unified content block is implemented.
-	Block Proposal
+const (
+	// BlockIDSize in bytes.
+	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
+	// probably required for fetching by hash between peers.
+	BlockIDSize = Hash32Length
 )
+
+// BlockID is a 20-byte sha256 sum of the serialized block used to identify a Block.
+type BlockID Hash20
+
+// EmptyBlockID is a canonical empty BlockID.
+var EmptyBlockID = BlockID{}
+
+// Block contains the content of a layer on the mesh history.
+type Block struct {
+	InnerBlock
+	// the following fields are kept private and from being serialized
+	blockID BlockID
+}
+
+// InnerBlock contains the transactions and rewards of a block.
+type InnerBlock struct {
+	LayerIndex LayerID
+	Rewards    []AnyReward
+	TxIDs      []TransactionID
+}
+
+// AnyReward contains the rewards inforamtion.
+type AnyReward struct {
+	Address   Address
+	SmesherID NodeID
+	// Amount == LayerReward + fee
+	Amount      uint64
+	LayerReward uint64
+}
+
+// Initialize calculates and sets the Block's cached blockID.
+func (b *Block) Initialize() {
+	b.blockID = BlockID(CalcHash32(b.Bytes()).ToHash20())
+}
+
+// Bytes returns the serialization of the InnerBlock.
+func (b *Block) Bytes() []byte {
+	bytes, err := codec.Encode(b.InnerBlock)
+	if err != nil {
+		log.Panic("failed to serialize block: %v", err)
+	}
+	return bytes
+}
+
+// ID returns the BlockID.
+func (b *Block) ID() BlockID {
+	return b.blockID
+}
+
+// MarshalLogObject implements logging encoder for Block.
+func (b *Block) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("block_id", b.ID().String())
+	encoder.AddUint32("layer_id", b.LayerIndex.Value)
+	encoder.AddInt("num_tx", len(b.TxIDs))
+	encoder.AddInt("num_rewards", len(b.Rewards))
+	return nil
+}
 
 // Bytes returns the BlockID as a byte slice.
 func (id BlockID) Bytes() []byte {
-	return ProposalID(id).Bytes()
+	return id.AsHash32().Bytes()
 }
 
-// AsHash32 returns a Hash32 whose first 20 bytes are the bytes of this ProposalID, it is right-padded with zeros.
+// AsHash32 returns a Hash32 whose first 20 bytes are the bytes of this BlockID, it is right-padded with zeros.
 func (id BlockID) AsHash32() Hash32 {
-	return ProposalID(id).AsHash32()
+	return Hash20(id).ToHash32()
 }
 
 // Field returns a log field. Implements the LoggableField interface.
 func (id BlockID) Field() log.Field {
-	return ProposalID(id).Field()
+	return log.String("block_id", id.String())
 }
 
 // String implements the Stringer interface.
 func (id BlockID) String() string {
-	return ProposalID(id).String()
+	return id.AsHash32().ShortString()
 }
 
-// Compare returns true if other (the given ProposalID) is less than this ProposalID, by lexicographic comparison.
+// Compare returns true if other (the given BlockID) is less than this BlockID, by lexicographic comparison.
 func (id BlockID) Compare(other BlockID) bool {
-	return ProposalID(id).Compare(ProposalID(other))
+	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
 }
 
 // BlockIDsToHashes turns a list of BlockID into their Hash32 representation.
@@ -56,24 +115,19 @@ func (ids blockIDs) MarshalLogArray(encoder log.ArrayEncoder) error {
 	return nil
 }
 
-// SortBlockIDs sorts a list of ProposalID in lexicographic order, in-place.
+// SortBlockIDs sorts a list of BlockID in lexicographic order, in-place.
 func SortBlockIDs(ids blockIDs) []BlockID {
 	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
 	return ids
 }
 
-// BlockIdsField returns a list of loggable fields for a given list of ProposalID.
+// BlockIdsField returns a list of loggable fields for a given list of BlockID.
 func BlockIdsField(ids blockIDs) log.Field {
 	return log.Array("block_ids", ids)
 }
 
-// ID returns the ID of the block.
-func (b *Block) ID() BlockID {
-	return BlockID((*Proposal)(b).ID())
-}
-
-// BlockIDs returns a slice of BlockID corresponding to the given proposals.
-func BlockIDs(blocks []*Block) []BlockID {
+// ToBlockIDs returns a slice of BlockID corresponding to the given list of Block.
+func ToBlockIDs(blocks []*Block) []BlockID {
 	ids := make([]BlockID, 0, len(blocks))
 	for _, b := range blocks {
 		ids = append(ids, b.ID())
@@ -81,17 +135,22 @@ func BlockIDs(blocks []*Block) []BlockID {
 	return ids
 }
 
-// ToProposals turns a list of Block into a list of Proposal.
-func ToProposals(blocks []*Block) []*Proposal {
-	proposals := make([]*Proposal, 0, len(blocks))
-	for _, b := range blocks {
-		proposals = append(proposals, (*Proposal)(b))
-	}
-	return proposals
-}
-
 // SortBlocks sort blocks by their IDs.
 func SortBlocks(blks []*Block) []*Block {
 	sort.Slice(blks, func(i, j int) bool { return blks[i].ID().Compare(blks[j].ID()) })
 	return blks
+}
+
+// DBBlock is a Block structure stored in DB to skip ID hashing.
+type DBBlock struct {
+	ID         BlockID
+	InnerBlock InnerBlock
+}
+
+// ToBlock creates a Block from data that is stored locally.
+func (dbb *DBBlock) ToBlock() *Block {
+	return &Block{
+		InnerBlock: dbb.InnerBlock,
+		blockID:    dbb.ID,
+	}
 }

@@ -18,6 +18,13 @@ func RandomBytes(size int) []byte {
 	return b
 }
 
+// RandomHash generates random Hash32 for testing.
+func RandomHash() Hash32 {
+	var h Hash32
+	h.SetBytes(RandomBytes(Hash32Length))
+	return h
+}
+
 // RandomBeacon generates random beacon in bytes for testing.
 func RandomBeacon() Beacon {
 	return BytesToBeacon(RandomBytes(BeaconSize))
@@ -117,7 +124,14 @@ func GenLayerBallot(layerID LayerID) *Ballot {
 
 // GenLayerBlock returns a Block in the given layer with the given data.
 func GenLayerBlock(layerID LayerID, txs []TransactionID) *Block {
-	return (*Block)(GenLayerProposal(layerID, txs))
+	b := &Block{
+		InnerBlock: InnerBlock{
+			LayerIndex: layerID,
+			TxIDs:      txs,
+		},
+	}
+	b.Initialize()
+	return b
 }
 
 // GenLayerProposal returns a Proposal in the given layer with the given data.

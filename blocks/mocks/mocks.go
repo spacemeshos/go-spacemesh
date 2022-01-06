@@ -5,6 +5,7 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -72,18 +73,18 @@ func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
 	return m.recorder
 }
 
-// AddBlock mocks base method.
-func (m *MockmeshProvider) AddBlock(block *types.UCBlock) error {
+// AddBlockWithTXs mocks base method.
+func (m *MockmeshProvider) AddBlockWithTXs(arg0 context.Context, arg1 *types.Block) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddBlock", block)
+	ret := m.ctrl.Call(m, "AddBlockWithTXs", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// AddBlock indicates an expected call of AddBlock.
-func (mr *MockmeshProviderMockRecorder) AddBlock(block interface{}) *gomock.Call {
+// AddBlockWithTXs indicates an expected call of AddBlockWithTXs.
+func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBlock", reflect.TypeOf((*MockmeshProvider)(nil).AddBlock), block)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBlockWithTXs", reflect.TypeOf((*MockmeshProvider)(nil).AddBlockWithTXs), arg0, arg1)
 }
 
 // GetTransactions mocks base method.

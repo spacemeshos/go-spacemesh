@@ -205,3 +205,10 @@ func (m mode) isVerifying() bool {
 func (m mode) isFull() bool {
 	return m[0]
 }
+
+func maxLayer(i, j types.LayerID) types.LayerID {
+	if i.After(j) {
+		return i
+	}
+	return j
+}

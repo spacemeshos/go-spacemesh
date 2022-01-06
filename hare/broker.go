@@ -21,8 +21,6 @@ const inboxCapacity = 1024 // inbox size per instance
 
 type startInstanceError error
 
-type syncStateFunc func(context.Context) bool
-
 type validator interface {
 	Validate(context.Context, *Msg) bool
 }
@@ -41,7 +39,7 @@ type Broker struct {
 	mu             sync.RWMutex
 	pid            peer.ID
 	eValidator     validator                // provides eligibility validation
-	stateQuerier   StateQuerier             // provides activeness check
+	stateQuerier   stateQuerier             // provides activeness check
 	nodeSyncState  system.SyncStateProvider // provider function to check if the node is currently synced
 	layersPerEpoch uint16
 	queue          priorityq.PriorityQueue
@@ -60,7 +58,7 @@ type Broker struct {
 	queueMessageWg *sync.WaitGroup
 }
 
-func newBroker(pid peer.ID, eValidator validator, stateQuerier StateQuerier, syncState system.SyncStateProvider, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
+func newBroker(pid peer.ID, eValidator validator, stateQuerier stateQuerier, syncState system.SyncStateProvider, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
 	return &Broker{
 		Closer:         closer,
 		Log:            log,

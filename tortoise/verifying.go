@@ -122,7 +122,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	}
 
 	// if there is any block with neutral local opinion - we can't verify the layer
-	// if it happens outside of hdist - protocol will switch to full tortoise
+	// if it happens outside hdist - protocol will switch to full tortoise
 	for _, bid := range v.blocks[lid] {
 		vote, _ := getLocalVote(v.commonState, v.Config, lid, bid)
 		if vote == abstain {

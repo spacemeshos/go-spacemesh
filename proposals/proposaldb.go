@@ -92,7 +92,7 @@ func (db *DB) AddProposal(ctx context.Context, p *types.Proposal) error {
 	if err := db.msh.AddBallot(&p.Ballot); err != nil {
 		return fmt.Errorf("proposal add ballot: %w", err)
 	}
-	if err := db.msh.AddTXsFromProposal(ctx, p); err != nil {
+	if err := db.msh.AddTXsFromProposal(ctx, p.LayerIndex, p.ID(), p.TxIDs); err != nil {
 		return fmt.Errorf("proposal add TXs: %w", err)
 	}
 
@@ -113,7 +113,7 @@ func (db *DB) AddProposal(ctx context.Context, p *types.Proposal) error {
 		return err
 	}
 	events.ReportNewProposal(p)
-	db.logger.Info("added proposal to database", p.Fields())
+	db.logger.Info("added proposal to database", log.Inline(p))
 	return nil
 }
 

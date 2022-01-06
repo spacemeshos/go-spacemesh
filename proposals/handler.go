@@ -137,12 +137,6 @@ func (h *Handler) HandleProposal(ctx context.Context, _ peer.ID, msg []byte) pub
 	return pubsub.ValidationAccept
 }
 
-// HandleBlockData handles Block data from sync.
-func (h *Handler) HandleBlockData(ctx context.Context, data []byte) error {
-	newCtx := log.WithNewRequestID(ctx)
-	return h.HandleProposalData(newCtx, data)
-}
-
 // HandleBallotData handles Ballot data from gossip and sync.
 func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	newCtx := log.WithNewRequestID(ctx)
@@ -197,7 +191,7 @@ func (h *Handler) HandleProposalData(ctx context.Context, data []byte) error {
 		logger.Info("known proposal")
 		return nil
 	}
-	logger.With().Info("new proposal", p.Fields()...)
+	logger.With().Info("new proposal", log.Inline(&p))
 
 	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil && err != errKnownBallot {
 		logger.With().Warning("failed to process ballot", log.Err(err))
@@ -212,7 +206,7 @@ func (h *Handler) HandleProposalData(ctx context.Context, data []byte) error {
 	h.logger.WithContext(ctx).With().Debug("proposal is syntactically valid")
 	reportProposalMetrics(&p)
 
-	if err := h.proposalDB.AddProposalWithTxs(ctx, &p); err != nil {
+	if err := h.proposalDB.AddProposal(ctx, &p); err != nil {
 		logger.With().Error("failed to save proposal", log.Err(err))
 		return fmt.Errorf("save proposal: %w", err)
 	}
@@ -225,7 +219,8 @@ func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log
 		logger.Info("known ballot")
 		return errKnownBallot
 	}
-	logger.With().Info("new ballot", log.Object("ballot", b))
+
+	logger.With().Info("new ballot", log.Inline(b))
 
 	if err := h.checkBallotSyntacticValidity(ctx, b); err != nil {
 		logger.With().Error("ballot syntactically invalid", log.Err(err))

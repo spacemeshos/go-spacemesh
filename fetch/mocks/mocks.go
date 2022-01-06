@@ -10,7 +10,6 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
-	database "github.com/spacemeshos/go-spacemesh/database"
 	fetch "github.com/spacemeshos/go-spacemesh/fetch"
 	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 )
@@ -36,18 +35,6 @@ func NewMockFetcher(ctrl *gomock.Controller) *MockFetcher {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockFetcher) EXPECT() *MockFetcherMockRecorder {
 	return m.recorder
-}
-
-// AddDB mocks base method.
-func (m *MockFetcher) AddDB(hint fetch.Hint, db database.Getter) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "AddDB", hint, db)
-}
-
-// AddDB indicates an expected call of AddDB.
-func (mr *MockFetcherMockRecorder) AddDB(hint, db interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddDB", reflect.TypeOf((*MockFetcher)(nil).AddDB), hint, db)
 }
 
 // GetHash mocks base method.

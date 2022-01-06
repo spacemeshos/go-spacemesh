@@ -73,12 +73,4 @@ func TestDBProposal(t *testing.T) {
 	}
 	got := dbb.ToProposal(&p.Ballot)
 	assert.Equal(t, p, got)
-
-	b := (*Block)(p)
-	gotB := dbb.ToBlock()
-	assert.NotEqual(t, b, gotB)
-	assert.Equal(t, b.ID(), gotB.ID())
-	assert.Equal(t, b.LayerIndex, gotB.LayerIndex)
-	assert.Equal(t, b.TxIDs, gotB.TxIDs)
-	assert.Nil(t, gotB.SmesherID())
 }

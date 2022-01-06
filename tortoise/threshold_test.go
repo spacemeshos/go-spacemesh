@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
-func TestUpdateThresholds(t *testing.T) {
+func TestComputeThreshold(t *testing.T) {
 	genesis := types.GetEffectiveGenesis()
 
 	for _, tc := range []struct {
@@ -75,15 +75,12 @@ func TestUpdateThresholds(t *testing.T) {
 	} {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			state := commonState{
-				epochWeight: tc.epochWeight,
-				processed:   tc.processed,
-				last:        tc.last,
-				verified:    tc.verified,
-			}
-			updateThresholds(logtest.New(t), tc.config, &state, tc.mode)
-			require.Equal(t, tc.expectedLocal.String(), state.localThreshold.String())
-			require.Equal(t, tc.expectedGlobal.String(), state.globalThreshold.String())
+			local, global := computeThresholds(
+				logtest.New(t), tc.config, tc.mode,
+				tc.verified.Add(1), tc.last, tc.processed, tc.epochWeight,
+			)
+			require.Equal(t, tc.expectedLocal.String(), local.String())
+			require.Equal(t, tc.expectedGlobal.String(), global.String())
 		})
 	}
 }

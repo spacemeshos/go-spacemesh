@@ -13,8 +13,10 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -77,12 +79,17 @@ func getInMemMesh(tb testing.TB) *mesh.DB {
 
 func addLayerToMesh(m *mesh.DB, layer *types.Layer) error {
 	// add blocks to mDB
+	for _, bl := range layer.Ballots() {
+		if err := m.AddBallot(bl); err != nil {
+			return fmt.Errorf("add ballot: %w", err)
+		}
+	}
 	for _, bl := range layer.Blocks() {
 		if err := m.AddBlock(bl); err != nil {
 			return fmt.Errorf("add block: %w", err)
 		}
 	}
-	if err := m.SaveHareConsensusOutput(context.TODO(), layer.Index(), layer.BlocksIDs()); err != nil {
+	if err := m.SaveHareConsensusOutput(context.TODO(), layer.Index(), layer.BlocksIDs()[0]); err != nil {
 		panic("database error")
 	}
 
@@ -93,6 +100,7 @@ const (
 	defaultTestLayerSize  = 3
 	defaultTestWindowSize = 30
 	defaultVoteDelays     = 6
+	numValidBlock         = 1
 )
 
 var (
@@ -231,7 +239,7 @@ type (
 	baseBallotProvider func(context.Context) (*types.Votes, error)
 )
 
-func generateBlocks(t *testing.T, l types.LayerID, natxs, nblocks int, bbp baseBallotProvider, atxdb atxDataWriter, weight uint) (blocks []*types.Block) {
+func generateBallots(t *testing.T, l types.LayerID, natxs, nballots int, bbp baseBallotProvider, atxdb atxDataWriter, weight uint) []*types.Ballot {
 	votes, err := bbp(context.TODO())
 	require.NoError(t, err)
 
@@ -245,8 +253,9 @@ func generateBlocks(t *testing.T, l types.LayerID, natxs, nblocks int, bbp baseB
 		require.NoError(t, atxdb.StoreAtx(l.GetEpoch(), atx))
 		atxs = append(atxs, atx.ID())
 	}
-	for i := 0; i < nblocks; i++ {
-		ballot := types.Ballot{
+	ballots := make([]*types.Ballot, 0, nballots)
+	for i := 0; i < nballots; i++ {
+		b := &types.Ballot{
 			InnerBallot: types.InnerBallot{
 				AtxID:            atxs[i%len(atxs)],
 				Votes:            *votes,
@@ -257,28 +266,21 @@ func generateBlocks(t *testing.T, l types.LayerID, natxs, nblocks int, bbp baseB
 				},
 			},
 		}
-		p := &types.Proposal{
-			InnerProposal: types.InnerProposal{
-				Ballot: ballot,
-				TxIDs:  nil,
-			},
-		}
 		signer := signing.NewEdSigner()
-		p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
-		p.Signature = signer.Sign(p.Bytes())
-		p.Initialize()
-		blk := (*types.Block)(p)
-		blocks = append(blocks, blk)
+		b.Signature = signer.Sign(b.Bytes())
+		b.Initialize()
+		ballots = append(ballots, b)
 	}
-	return
+	return ballots
 }
 
 func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDataWriter, bbp baseBallotProvider, blocksPerLayer int) *types.Layer {
-	lyr := types.NewLayer(l)
-	for _, block := range generateBlocks(t, l, blocksPerLayer, blocksPerLayer, bbp, atxdb, 1) {
-		lyr.AddBlock(block)
+	ballots := generateBallots(t, l, blocksPerLayer, blocksPerLayer, bbp, atxdb, 1)
+	blocks := []*types.Block{
+		types.GenLayerBlock(l, types.RandomTXSet(rand.Intn(100))),
+		types.GenLayerBlock(l, types.RandomTXSet(rand.Intn(100))),
 	}
-	return lyr
+	return types.NewExistingLayer(l, ballots, blocks)
 }
 
 func TestLayerCutoff(t *testing.T) {
@@ -308,14 +310,11 @@ func TestAddToMesh(t *testing.T) {
 	alg.trtl.atxdb = atxdb
 	l := types.GenesisLayer()
 
-	logger.With().Info("genesis is", l.Index(), types.BlockIdsField(types.BlockIDs(l.Blocks())))
-	logger.With().Info("genesis is", l.Blocks()[0].Fields()...)
+	logger.With().Info("genesis is", l.Index(), types.BlockIdsField(types.ToBlockIDs(l.Blocks())))
+	logger.With().Info("genesis is", log.Object("block", l.Blocks()[0]))
 
 	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
-
-	logger.With().Info("first is", l1.Index(), types.BlockIdsField(types.BlockIDs(l1.Blocks())))
-	logger.With().Info("first bb is", l1.Index(), l1.Blocks()[0].Votes.Base, types.BlockIdsField(l1.Blocks()[0].Votes.Support))
 
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
 
@@ -362,6 +361,7 @@ func TestBaseBallot(t *testing.T) {
 		r.NoError(err)
 		r.Equal(layerID, baseBallot.LayerIndex, "base ballot is from wrong layer")
 	}
+
 	// it should support all genesis blocks
 	expectBaseBallotLayer(l0.Index(), 0, len(types.GenesisLayer().Blocks()), 0)
 
@@ -369,19 +369,19 @@ func TestBaseBallot(t *testing.T) {
 	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
-	expectBaseBallotLayer(l1.Index(), 0, defaultTestLayerSize, 0)
+	expectBaseBallotLayer(l1.Index(), 0, numValidBlock, 0)
 
 	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l2))
 	alg.HandleIncomingLayer(context.TODO(), l2.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
-	expectBaseBallotLayer(l2.Index(), 0, defaultTestLayerSize, 0)
+	expectBaseBallotLayer(l2.Index(), 0, numValidBlock, 0)
 
 	// add a layer that's not in the mesh and make sure it does not advance
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
-	expectBaseBallotLayer(l2.Index(), 0, defaultTestLayerSize, 0)
+	expectBaseBallotLayer(l2.Index(), 0, numValidBlock, 0)
 }
 
 func mockedBeacons(tb testing.TB) system.BeaconGetter {
@@ -562,25 +562,26 @@ func TestMultiTortoise(t *testing.T) {
 
 		makeAndProcessLayerMultiTortoise := func(layerID types.LayerID) {
 			// simulate producing blocks in parallel
-			blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-			blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
 
 			// these will produce identical sets of blocks, so throw away half of each
 			// (we could probably get away with just using, say, A's blocks, but to be more thorough we also want
 			// to test the BaseBallot provider of each tortoise)
-			blocksA = blocksA[:layerSize/2]
-			blocksB = blocksB[len(blocksA):]
-			blocks := append(blocksA, blocksB...)
+			ballotsA = ballotsA[:layerSize/2]
+			ballotsB = ballotsB[len(ballotsA):]
+			blocks := append(ballotsA, ballotsB...)
 
-			// add all blocks to both tortoises
-			var blockIDs []types.BlockID
-			for _, block := range blocks {
-				blockIDs = append(blockIDs, block.ID())
-				r.NoError(mdb1.AddBlock(block))
-				r.NoError(mdb2.AddBlock(block))
+			// add all ballots/blocks to both tortoises
+			for _, ballot := range blocks {
+				r.NoError(mdb1.AddBallot(ballot))
+				r.NoError(mdb2.AddBallot(ballot))
 			}
-			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
+			block := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb1.AddBlock(block))
+			r.NoError(mdb2.AddBlock(block))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, block.ID()))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, block.ID()))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 		}
@@ -617,15 +618,15 @@ func TestMultiTortoise(t *testing.T) {
 		alg2.logger = alg2.logger.Named("trtl2")
 		alg2.trtl.logger = alg2.logger
 
-		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB []*types.Block) {
+		makeBallots := func(layerID types.LayerID) (ballotsA, ballotsB []*types.Ballot) {
 			// simulate producing blocks in parallel
-			blocksA = generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-			blocksB = generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			ballotsA = generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+			ballotsB = generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
 
 			// majority > 90
-			blocksA = blocksA[:layerSize-1]
+			ballotsA = ballotsA[:layerSize-1]
 			// minority < 10
-			blocksB = blocksB[layerSize-1:]
+			ballotsB = ballotsB[layerSize-1:]
 			return
 		}
 
@@ -634,19 +635,20 @@ func TestMultiTortoise(t *testing.T) {
 		layerID := types.GetEffectiveGenesis()
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
-			blocksA, blocksB := makeBlocks(layerID)
-			var blocks []*types.Block
-			blocks = append(blocksA, blocksB...)
+			ballotsA, ballotsB := makeBallots(layerID)
+			var ballots []*types.Ballot
+			ballots = append(ballotsA, ballotsB...)
 
-			// add all blocks to both tortoises
-			var blockIDs []types.BlockID
-			for _, block := range blocks {
-				blockIDs = append(blockIDs, block.ID())
-				r.NoError(mdb1.AddBlock(block))
-				r.NoError(mdb2.AddBlock(block))
+			// add all ballots/blocks to both tortoises
+			for _, ballot := range ballots {
+				r.NoError(mdb1.AddBallot(ballot))
+				r.NoError(mdb2.AddBallot(ballot))
 			}
-			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
+			block := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb1.AddBlock(block))
+			r.NoError(mdb2.AddBlock(block))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, block.ID()))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, block.ID()))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
@@ -657,28 +659,32 @@ func TestMultiTortoise(t *testing.T) {
 		}
 
 		// keep track of all blocks on each side of the partition
-		var forkBlocksA, forkBlocksB []*types.Block
+		var forkballotsA, forkballotsB []*types.Ballot
+		var forkblocksA, forkblocksB []*types.Block
 
 		// simulate a partition
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
-			blocksA, blocksB := makeBlocks(layerID)
-			forkBlocksA = append(forkBlocksA, blocksA...)
-			forkBlocksB = append(forkBlocksB, blocksB...)
+			ballotsA, ballotsB := makeBallots(layerID)
+			forkballotsA = append(forkballotsA, ballotsA...)
+			forkballotsB = append(forkballotsB, ballotsB...)
 
 			// add A's blocks to A only, B's to B
-			var blockIDsA, blockIDsB []types.BlockID
-			for _, block := range blocksA {
-				blockIDsA = append(blockIDsA, block.ID())
-				r.NoError(mdb1.AddBlock(block))
+			for _, ballot := range ballotsA {
+				r.NoError(mdb1.AddBallot(ballot))
 			}
-			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
+			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb1.AddBlock(blockA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
+			forkblocksA = append(forkblocksA, blockA)
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
-			for _, block := range blocksB {
-				blockIDsB = append(blockIDsB, block.ID())
-				r.NoError(mdb2.AddBlock(block))
+			for _, ballot := range ballotsB {
+				r.NoError(mdb2.AddBallot(ballot))
 			}
-			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
+			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb2.AddBlock(blockB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockB.ID()))
+			forkblocksB = append(forkblocksB, blockB)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 			// majority tortoise is unaffected, minority tortoise gets stuck
@@ -697,23 +703,26 @@ func TestMultiTortoise(t *testing.T) {
 			// these blocks will be nearly identical but they will have different base ballots, since the set of blocks
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
 			// an ongoing partition.
-			blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-			forkBlocksA = append(forkBlocksA, blocksA...)
-			var blockIDsA, blockIDsB []types.BlockID
-			for _, block := range blocksA {
-				blockIDsA = append(blockIDsA, block.ID())
-				r.NoError(mdb1.AddBlock(block))
+			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+			forkballotsA = append(forkballotsA, ballotsA...)
+			for _, ballot := range ballotsA {
+				r.NoError(mdb1.AddBallot(ballot))
 			}
-			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
+			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb1.AddBlock(blockA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
+			forkblocksA = append(forkblocksA, blockA)
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-			blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
-			forkBlocksB = append(forkBlocksB, blocksB...)
-			for _, block := range blocksB {
-				blockIDsB = append(blockIDsB, block.ID())
-				r.NoError(mdb2.AddBlock(block))
+			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			forkballotsB = append(forkballotsB, ballotsB...)
+			for _, ballot := range ballotsB {
+				r.NoError(mdb2.AddBallot(ballot))
 			}
-			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
+			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb2.AddBlock(blockB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockB.ID()))
+			forkblocksB = append(forkblocksB, blockB)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 			// majority tortoise is unaffected, minority tortoise is still stuck
@@ -723,23 +732,26 @@ func TestMultiTortoise(t *testing.T) {
 
 		// finally, the minority tortoise heals and regains parity with the majority tortoise
 		layerID = layerID.Add(1)
-		blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-		forkBlocksA = append(forkBlocksA, blocksA...)
-		var blockIDsA, blockIDsB []types.BlockID
-		for _, block := range blocksA {
-			blockIDsA = append(blockIDsA, block.ID())
-			r.NoError(mdb1.AddBlock(block))
+		ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+		forkballotsA = append(forkballotsA, ballotsA...)
+		for _, ballot := range ballotsA {
+			r.NoError(mdb1.AddBallot(ballot))
 		}
-		r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
+		blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+		r.NoError(mdb1.AddBlock(blockA))
+		r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
+		forkblocksA = append(forkblocksA, blockA)
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-		blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
-		forkBlocksB = append(forkBlocksB, blocksB...)
-		for _, block := range blocksB {
-			blockIDsB = append(blockIDsB, block.ID())
-			r.NoError(mdb2.AddBlock(block))
+		ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+		forkballotsB = append(forkballotsB, ballotsB...)
+		for _, ballot := range ballotsB {
+			r.NoError(mdb2.AddBallot(ballot))
 		}
-		r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
+		blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+		r.NoError(mdb2.AddBlock(blockB))
+		r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockB.ID()))
+		forkblocksB = append(forkblocksB, blockB)
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 		// minority node is healed
@@ -750,15 +762,17 @@ func TestMultiTortoise(t *testing.T) {
 		// now simulate a rejoin
 		// send each tortoise's blocks to the other (simulated resync)
 		// (of layers 18-40)
-		// TODO(nkryuchkov): remove or uncomment when it's used
-		// var forkBlockIDsA, forkBlockIDsB []types.BlockID
-		for _, block := range forkBlocksA {
-			// forkBlockIDsA = append(forkBlockIDsA, block.ID())
+		for _, ballot := range forkballotsA {
+			r.NoError(mdb2.AddBallot(ballot))
+		}
+		for _, block := range forkblocksA {
 			r.NoError(mdb2.AddBlock(block))
 		}
 
-		for _, block := range forkBlocksB {
-			// forkBlockIDsB = append(forkBlockIDsB, block.ID())
+		for _, ballot := range forkballotsB {
+			r.NoError(mdb1.AddBallot(ballot))
+		}
+		for _, block := range forkblocksB {
 			r.NoError(mdb1.AddBlock(block))
 		}
 
@@ -771,19 +785,21 @@ func TestMultiTortoise(t *testing.T) {
 		// majority opinion.
 		for i := 0; i < 40; i++ {
 			layerID = layerID.Add(1)
-			blocksA, blocksB := makeBlocks(layerID)
-			var blocks []*types.Block
-			blocks = append(blocksA, blocksB...)
+			ballotsA, ballotsB := makeBallots(layerID)
+			var ballots []*types.Ballot
+			ballots = append(ballotsA, ballotsB...)
 
-			// add all blocks to both tortoises
-			var blockIDs []types.BlockID
-			for _, block := range blocks {
-				blockIDs = append(blockIDs, block.ID())
-				r.NoError(mdb1.AddBlock(block))
-				r.NoError(mdb2.AddBlock(block))
+			// add all ballots/blocks to both tortoises
+			for _, ballot := range ballots {
+				r.NoError(mdb1.AddBallot(ballot))
+				r.NoError(mdb2.AddBallot(ballot))
 			}
-			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
+			block := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb1.AddBlock(block))
+			r.NoError(mdb2.AddBlock(block))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, block.ID()))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, block.ID()))
+
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 		}
@@ -815,14 +831,14 @@ func TestMultiTortoise(t *testing.T) {
 		alg2.logger = alg2.logger.Named("trtl2")
 		alg2.trtl.logger = alg2.logger
 
-		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB []*types.Block) {
+		makeBallots := func(layerID types.LayerID) (ballotsA, ballotsB []*types.Ballot) {
 			// simulate producing blocks in parallel
-			blocksA = generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-			blocksB = generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			ballotsA = generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+			ballotsB = generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
 
 			// 50/50 split
-			blocksA = blocksA[:layerSize/2]
-			blocksB = blocksB[layerSize/2:]
+			ballotsA = ballotsA[:layerSize/2]
+			ballotsB = ballotsB[layerSize/2:]
 			return
 		}
 
@@ -831,19 +847,20 @@ func TestMultiTortoise(t *testing.T) {
 		layerID := types.GetEffectiveGenesis()
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
-			blocksA, blocksB := makeBlocks(layerID)
-			var blocks []*types.Block
-			blocks = append(blocksA, blocksB...)
+			ballotsA, ballotsB := makeBallots(layerID)
+			var ballots []*types.Ballot
+			ballots = append(ballotsA, ballotsB...)
 
-			// add all blocks to both tortoises
-			var blockIDs []types.BlockID
-			for _, block := range blocks {
-				blockIDs = append(blockIDs, block.ID())
-				r.NoError(mdb1.AddBlock(block))
-				r.NoError(mdb2.AddBlock(block))
+			// add all ballots/blocks to both tortoises
+			for _, ballot := range ballots {
+				r.NoError(mdb1.AddBallot(ballot))
+				r.NoError(mdb2.AddBallot(ballot))
 			}
-			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
+			block := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb1.AddBlock(block))
+			r.NoError(mdb2.AddBlock(block))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, block.ID()))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, block.ID()))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
@@ -856,21 +873,22 @@ func TestMultiTortoise(t *testing.T) {
 		// simulate a partition
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
-			blocksA, blocksB := makeBlocks(layerID)
+			ballotsA, ballotsB := makeBallots(layerID)
 
 			// add A's blocks to A only, B's to B
-			var blockIDsA, blockIDsB []types.BlockID
-			for _, block := range blocksA {
-				blockIDsA = append(blockIDsA, block.ID())
-				r.NoError(mdb1.AddBlock(block))
+			for _, ballot := range ballotsA {
+				r.NoError(mdb1.AddBallot(ballot))
 			}
-			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
+			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb1.AddBlock(blockA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
-			for _, block := range blocksB {
-				blockIDsB = append(blockIDsB, block.ID())
-				r.NoError(mdb2.AddBlock(block))
+			for _, ballot := range ballotsB {
+				r.NoError(mdb2.AddBallot(ballot))
 			}
-			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
+			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb2.AddBlock(blockB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockB.ID()))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 			// both nodes get stuck
@@ -886,21 +904,22 @@ func TestMultiTortoise(t *testing.T) {
 			// these blocks will be nearly identical but they will have different base ballots, since the set of blocks
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
 			// an ongoing partition.
-			blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-			var blockIDsA, blockIDsB []types.BlockID
-			for _, block := range blocksA {
-				blockIDsA = append(blockIDsA, block.ID())
-				r.NoError(mdb1.AddBlock(block))
+			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+			for _, ballot := range ballotsA {
+				r.NoError(mdb1.AddBallot(ballot))
 			}
-			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
+			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb1.AddBlock(blockA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-			blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
-			for _, block := range blocksB {
-				blockIDsB = append(blockIDsB, block.ID())
-				r.NoError(mdb2.AddBlock(block))
+			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			for _, ballot := range ballotsB {
+				r.NoError(mdb2.AddBallot(ballot))
 			}
-			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
+			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb2.AddBlock(blockB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockB.ID()))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 			// both nodes still stuck
@@ -910,21 +929,22 @@ func TestMultiTortoise(t *testing.T) {
 
 		// finally, both nodes heal and get unstuck
 		layerID = layerID.Add(1)
-		blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-		var blockIDsA, blockIDsB []types.BlockID
-		for _, block := range blocksA {
-			blockIDsA = append(blockIDsA, block.ID())
-			r.NoError(mdb1.AddBlock(block))
+		ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+		for _, ballot := range ballotsA {
+			r.NoError(mdb1.AddBallot(ballot))
 		}
-		r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
+		blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+		r.NoError(mdb1.AddBlock(blockA))
+		r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-		blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
-		for _, block := range blocksB {
-			blockIDsB = append(blockIDsB, block.ID())
-			r.NoError(mdb2.AddBlock(block))
+		ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+		for _, ballot := range ballotsB {
+			r.NoError(mdb2.AddBallot(ballot))
 		}
-		r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
+		blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+		r.NoError(mdb2.AddBlock(blockB))
+		r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockB.ID()))
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
 		// both nodes can't switch from full tortoise
@@ -962,16 +982,16 @@ func TestMultiTortoise(t *testing.T) {
 		alg3.logger = alg3.logger.Named("trtl3")
 		alg3.trtl.logger = alg3.logger
 
-		makeBlocks := func(layerID types.LayerID) (blocksA, blocksB, blocksC []*types.Block) {
+		makeBallots := func(layerID types.LayerID) (ballotsA, ballotsB, ballotsC []*types.Ballot) {
 			// simulate producing blocks in parallel
-			blocksA = generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-			blocksB = generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
-			blocksC = generateBlocks(t, layerID, layerSize, layerSize, alg3.BaseBallot, atxdb3, 1)
+			ballotsA = generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+			ballotsB = generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			ballotsC = generateBallots(t, layerID, layerSize, layerSize, alg3.BaseBallot, atxdb3, 1)
 
 			// three-way split
-			blocksA = blocksA[:layerSize/3]
-			blocksB = blocksB[layerSize/3 : layerSize*2/3]
-			blocksC = blocksC[layerSize*2/3:]
+			ballotsA = ballotsA[:layerSize/3]
+			ballotsB = ballotsB[layerSize/3 : layerSize*2/3]
+			ballotsC = ballotsC[layerSize*2/3:]
 			return
 		}
 
@@ -980,22 +1000,24 @@ func TestMultiTortoise(t *testing.T) {
 		layerID := types.GetEffectiveGenesis()
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
-			blocksA, blocksB, blocksC := makeBlocks(layerID)
-			var blocks []*types.Block
-			blocks = append(blocksA, blocksB...)
-			blocks = append(blocks, blocksC...)
+			ballotsA, ballotsB, ballotsC := makeBallots(layerID)
+			var ballots []*types.Ballot
+			ballots = append(ballotsA, ballotsB...)
+			ballots = append(ballots, ballotsC...)
 
-			// add all blocks to all tortoises
-			var blockIDs []types.BlockID
-			for _, block := range blocks {
-				blockIDs = append(blockIDs, block.ID())
-				r.NoError(mdb1.AddBlock(block))
-				r.NoError(mdb2.AddBlock(block))
-				r.NoError(mdb3.AddBlock(block))
+			// add all ballots/blocks to all tortoises
+			for _, ballot := range ballots {
+				r.NoError(mdb1.AddBallot(ballot))
+				r.NoError(mdb2.AddBallot(ballot))
+				r.NoError(mdb3.AddBallot(ballot))
 			}
-			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
-			r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, blockIDs))
+			block := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb1.AddBlock(block))
+			r.NoError(mdb2.AddBlock(block))
+			r.NoError(mdb3.AddBlock(block))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, block.ID()))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, block.ID()))
+			r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, block.ID()))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 			alg3.HandleIncomingLayer(context.TODO(), layerID)
@@ -1010,29 +1032,31 @@ func TestMultiTortoise(t *testing.T) {
 		// simulate a partition
 		for i := 0; i < 10; i++ {
 			layerID = layerID.Add(1)
-			blocksA, blocksB, blocksC := makeBlocks(layerID)
+			ballotsA, ballotsB, ballotsC := makeBallots(layerID)
 
 			// add each blocks to their own
-			var blockIDsA, blockIDsB, blockIDsC []types.BlockID
-			for _, block := range blocksA {
-				blockIDsA = append(blockIDsA, block.ID())
-				r.NoError(mdb1.AddBlock(block))
+			for _, block := range ballotsA {
+				r.NoError(mdb1.AddBallot(block))
 			}
-			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
+			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb1.AddBlock(blockA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-			for _, block := range blocksB {
-				blockIDsB = append(blockIDsB, block.ID())
-				r.NoError(mdb2.AddBlock(block))
+			for _, block := range ballotsB {
+				r.NoError(mdb2.AddBallot(block))
 			}
-			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
+			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb2.AddBlock(blockB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockB.ID()))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
-			for _, block := range blocksC {
-				blockIDsC = append(blockIDsC, block.ID())
-				r.NoError(mdb3.AddBlock(block))
+			for _, block := range ballotsC {
+				r.NoError(mdb3.AddBallot(block))
 			}
-			r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsC))
+			blockC := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb3.AddBlock(blockC))
+			r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, blockC.ID()))
 			alg3.HandleIncomingLayer(context.TODO(), layerID)
 
 			// all nodes get stuck
@@ -1048,29 +1072,31 @@ func TestMultiTortoise(t *testing.T) {
 			// these blocks will be nearly identical but they will have different base ballots, since the set of blocks
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
 			// an ongoing partition.
-			blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-			var blockIDsA, blockIDsB, blockIDsC []types.BlockID
-			for _, block := range blocksA {
-				blockIDsA = append(blockIDsA, block.ID())
-				r.NoError(mdb1.AddBlock(block))
+			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+			for _, block := range ballotsA {
+				r.NoError(mdb1.AddBallot(block))
 			}
-			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
+			blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb1.AddBlock(blockA))
+			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-			blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
-			for _, block := range blocksB {
-				blockIDsB = append(blockIDsB, block.ID())
-				r.NoError(mdb2.AddBlock(block))
+			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			for _, block := range ballotsB {
+				r.NoError(mdb2.AddBallot(block))
 			}
-			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
+			blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb2.AddBlock(blockB))
+			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockB.ID()))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
-			blocksC := generateBlocks(t, layerID, layerSize, layerSize, alg3.BaseBallot, atxdb3, 1)
-			for _, block := range blocksC {
-				blockIDsC = append(blockIDsC, block.ID())
-				r.NoError(mdb3.AddBlock(block))
+			ballotsC := generateBallots(t, layerID, layerSize, layerSize, alg3.BaseBallot, atxdb3, 1)
+			for _, block := range ballotsC {
+				r.NoError(mdb3.AddBallot(block))
 			}
-			r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsC))
+			blockC := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+			r.NoError(mdb3.AddBlock(blockC))
+			r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, blockC.ID()))
 			alg3.HandleIncomingLayer(context.TODO(), layerID)
 
 			// nodes still stuck
@@ -1081,29 +1107,31 @@ func TestMultiTortoise(t *testing.T) {
 
 		// finally, all nodes heal and get unstuck
 		layerID = layerID.Add(1)
-		blocksA := generateBlocks(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-		var blockIDsA, blockIDsB, blockIDsC []types.BlockID
-		for _, block := range blocksA {
-			blockIDsA = append(blockIDsA, block.ID())
-			r.NoError(mdb1.AddBlock(block))
+		ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+		for _, block := range ballotsA {
+			r.NoError(mdb1.AddBallot(block))
 		}
-		r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsA))
+		blockA := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+		r.NoError(mdb1.AddBlock(blockA))
+		r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-		blocksB := generateBlocks(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
-		for _, block := range blocksB {
-			blockIDsB = append(blockIDsB, block.ID())
-			r.NoError(mdb2.AddBlock(block))
+		ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+		for _, block := range ballotsB {
+			r.NoError(mdb2.AddBallot(block))
 		}
-		r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsB))
+		blockB := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+		r.NoError(mdb2.AddBlock(blockB))
+		r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockB.ID()))
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
-		blocksC := generateBlocks(t, layerID, layerSize, layerSize, alg3.BaseBallot, atxdb3, 1)
-		for _, block := range blocksC {
-			blockIDsC = append(blockIDsC, block.ID())
-			r.NoError(mdb3.AddBlock(block))
+		ballotsC := generateBallots(t, layerID, layerSize, layerSize, alg3.BaseBallot, atxdb3, 1)
+		for _, block := range ballotsC {
+			r.NoError(mdb3.AddBallot(block))
 		}
-		r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, blockIDsC))
+		blockC := types.GenLayerBlock(layerID, types.RandomTXSet(5))
+		r.NoError(mdb3.AddBlock(blockC))
+		r.NoError(mdb3.SaveHareConsensusOutput(context.TODO(), layerID, blockC.ID()))
 		alg3.HandleIncomingLayer(context.TODO(), layerID)
 
 		// all nodes are healed
@@ -1284,7 +1312,7 @@ func BenchmarkTortoiseBaseBallot(b *testing.B) {
 	})
 	b.Run("Full", func(b *testing.B) {
 		// hare output will have only 10/30 ballots
-		benchmarkBaseBallot(b, sim.WithPartialHare(1, 3))
+		benchmarkBaseBallot(b, sim.WithEmptyHareOutput())
 	})
 }
 
@@ -1362,21 +1390,28 @@ func TestGetBallotBeacon(t *testing.T) {
 }
 
 // gapVote will skip one layer in voting.
-func gapVote(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
-	if len(layers) < 2 {
-		panic("need atleast 2 layers")
+func gapVote(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+	return skipLayers(1)(rng, layers, i)
+}
+
+func skipLayers(n int) sim.VotesGenerator {
+	return func(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
+		position := n + 1
+		if len(layers) < position {
+			panic(fmt.Sprintf("need at least %d layers", position))
+		}
+		baseLayer := layers[len(layers)-position]
+		support := layers[len(layers)-position].BlocksIDs()
+		ballots := baseLayer.Ballots()
+		base := ballots[rng.Intn(len(ballots))]
+		return sim.Voting{Base: base.ID(), Support: support}
 	}
-	baseLayer := layers[len(layers)-2]
-	support := layers[len(layers)-2].BlocksIDs()
-	ballots := baseLayer.Ballots()
-	base := ballots[rng.Intn(len(ballots))]
-	return sim.Voting{Base: base.ID(), Support: support}
 }
 
 // olderExceptions will vote for block older then base ballot.
 func olderExceptions(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
 	if len(layers) < 2 {
-		panic("need atleast 2 layers")
+		panic("need at least 2 layers")
 	}
 	baseLayer := layers[len(layers)-1]
 	ballots := baseLayer.Ballots()
@@ -1458,6 +1493,7 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var last, verified types.LayerID
+
 	// turn GenLayers into on-demand generator, so that later case can be placed as a step
 	for _, lid := range sim.GenLayers(s,
 		sim.WithSequence(30),
@@ -1657,7 +1693,6 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
-	// cfg.WindowSize = 1
 	cfg.Hdist = 1
 	cfg.Zdist = 1
 
@@ -1676,11 +1711,13 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 
 	unsupported := map[types.BlockID]struct{}{}
 	for lid := genesis; lid.Before(last); lid = lid.Add(1) {
-		bids, err := s.GetState(0).MeshDB.LayerBlockIds(lid)
+		hareOutput, err := s.GetState(0).MeshDB.GetHareConsensusOutput(lid)
 		require.NoError(t, err)
-		tortoise.trtl.validity[bids[0]] = against
-		tortoise.trtl.hareOutput[bids[0]] = against
-		unsupported[bids[0]] = struct{}{}
+		if hareOutput != types.EmptyBlockID {
+			tortoise.trtl.validity[hareOutput] = against
+			tortoise.trtl.hareOutput[hareOutput] = against
+			unsupported[hareOutput] = struct{}{}
+		}
 	}
 
 	// remove good ballots and genesis to make tortoise select one of the later blocks.
@@ -1696,7 +1733,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 		ensureBlockLayerWithin(t, s.GetState(0).MeshDB, bid, genesis, last.Sub(1))
 		require.Contains(t, unsupported, bid)
 	}
-	require.Len(t, votes.Support, size)
+	require.Len(t, votes.Support, numValidBlock)
 }
 
 func TestComputeLocalOpinion(t *testing.T) {
@@ -1782,7 +1819,18 @@ func TestComputeLocalOpinion(t *testing.T) {
 			require.NoError(t, err)
 			for _, bid := range blocks {
 				vote, _ := getLocalVote(&tortoise.trtl.commonState, cfg, tc.lid, bid)
-				require.Equal(t, tc.expected, vote, "block id %s", bid)
+				if tc.expected == support {
+					hareOutput, err := s.GetState(0).MeshDB.GetHareConsensusOutput(tc.lid)
+					require.NoError(t, err)
+					// only one block is supported
+					if bid == hareOutput {
+						require.Equal(t, tc.expected, vote, "block id %s", bid)
+					} else {
+						require.Equal(t, against, vote, "block id %s", bid)
+					}
+				} else {
+					require.Equal(t, tc.expected, vote, "block id %s", bid)
+				}
 			}
 		})
 	}
@@ -1966,14 +2014,12 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified1)
 	require.Equal(t, last.Sub(1), verified2)
 
+	// each partition has one valid block
 	for lid := partitionStart.Add(1); !lid.After(partitionEnd); lid = lid.Add(1) {
-		bids, err := s1.GetState(1).MeshDB.LayerBlockIds(lid)
+		validBlocks, err := s1.GetState(0).MeshDB.LayerContextuallyValidBlocks(context.TODO(), lid)
 		require.NoError(t, err)
-		for _, bid := range bids {
-			valid, err := s1.GetState(0).MeshDB.ContextualValidity(bid)
-			require.NoError(t, err)
-			assert.True(t, valid, "block %s at layer %s", bid, lid)
-		}
+		assert.Len(t, validBlocks, numValidBlock*2)
+		assert.NotContains(t, validBlocks, types.EmptyBlockID)
 	}
 }
 

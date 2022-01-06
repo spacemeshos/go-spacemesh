@@ -100,7 +100,12 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 	}
 }
 
-func (f *full) countVotes(logger log.Log) {
+func (f *full) countLayerVotes(logger log.Log, lid types.LayerID) {
+	if !lid.After(f.counted) {
+		return
+	}
+	f.counted = lid
+
 	for front := f.delayedQueue.Front(); front != nil; {
 		delayed := front.Value.(delayedBallots)
 		if f.last.Difference(delayed.lid) <= f.BadBeaconVoteDelayLayers {
@@ -117,8 +122,12 @@ func (f *full) countVotes(logger log.Log) {
 		f.delayedQueue.Remove(front)
 		front = next
 	}
+	f.countVotesFromBallots(logger, lid, f.ballots[lid])
+}
+
+func (f *full) countVotes(logger log.Log) {
 	for lid := f.counted.Add(1); !lid.After(f.processed); lid = lid.Add(1) {
-		f.countVotesFromBallots(logger, lid, f.ballots[lid])
+		f.countLayerVotes(logger, lid)
 	}
 	f.counted = f.processed
 }
@@ -126,6 +135,7 @@ func (f *full) countVotes(logger log.Log) {
 func (f *full) verify(logger log.Log, lid types.LayerID) bool {
 	logger = logger.WithFields(
 		log.String("verifier", fullTortoise),
+		log.Stringer("counted_layer", f.counted),
 		log.Stringer("candidate_layer", lid),
 		log.Stringer("local_threshold", f.localThreshold),
 		log.Stringer("global_threshold", f.globalThreshold),

@@ -13,8 +13,7 @@ type atxDB interface {
 }
 
 type meshDB interface {
-	AddTXsFromProposal(context.Context, *types.Proposal) error
-
+	AddTXsFromProposal(context.Context, types.LayerID, types.ProposalID, []types.TransactionID) error
 	HasBallot(types.BallotID) bool
 	AddBallot(*types.Ballot) error
 	GetBallot(types.BallotID) (*types.Ballot, error)
@@ -22,7 +21,7 @@ type meshDB interface {
 
 type proposalDB interface {
 	HasProposal(types.ProposalID) bool
-	AddProposalWithTxs(context.Context, *types.Proposal) error
+	AddProposal(context.Context, *types.Proposal) error
 }
 
 type eligibilityValidator interface {

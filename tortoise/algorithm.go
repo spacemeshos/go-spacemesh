@@ -202,7 +202,7 @@ func (trtl *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.Lay
 	}
 	trtl.org.Iterate(ctx, layerID, func(lid types.LayerID) {
 		if err := trtl.trtl.HandleIncomingLayer(ctx, lid); err != nil {
-			logger.Error("tortoise errored handling incoming layer", log.Err(err))
+			logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
 		}
 	})
 

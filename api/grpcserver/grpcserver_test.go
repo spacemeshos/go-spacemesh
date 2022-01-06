@@ -96,6 +96,7 @@ var (
 	signer2    = signing.NewEdSigner()
 	globalTx   = NewTx(0, addr1, signer1)
 	globalTx2  = NewTx(1, addr2, signer2)
+	ballot1    = types.GenLayerBallot(types.LayerID{})
 	block1     = types.GenLayerBlock(types.LayerID{}, nil)
 	block2     = types.GenLayerBlock(types.LayerID{}, nil)
 	block3     = types.GenLayerBlock(types.LayerID{}, nil)
@@ -119,9 +120,9 @@ func init() {
 
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
-	block1.AtxID = globalAtx.ID()
+	ballot1.AtxID = globalAtx.ID()
+	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
 	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
-	block1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
 	txAPI.returnTx[globalTx.ID()] = globalTx
 	txAPI.returnTx[globalTx2.ID()] = globalTx2
 	types.SetLayersPerEpoch(layersPerEpoch)
@@ -272,8 +273,9 @@ func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 		return nil, errors.New("haven't received that layer yet")
 	}
 
+	ballots := []*types.Ballot{ballot1}
 	blocks := []*types.Block{block1, block2, block3}
-	return types.NewExistingLayer(tid, blocks), nil
+	return types.NewExistingLayer(tid, ballots, blocks), nil
 }
 
 func (t *TxAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
@@ -2228,9 +2230,6 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	}, "return layer does not contain expected activation data")
 
 	resBlock := l.Blocks[0]
-
-	require.NotNil(t, resBlock.ActivationId)
-	require.NotNil(t, resBlock.SmesherId)
 
 	require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
 	require.Equal(t, types.Hash20(block1.ID()).Bytes(), resBlock.Id)

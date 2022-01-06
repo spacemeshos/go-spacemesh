@@ -34,7 +34,7 @@ type testBuilder struct {
 	mRefDB  *dbmocks.MockDatabase
 	mOracle *mocks.MockproposalOracle
 	mAtxDB  *mocks.MockactivationDB
-	mMesh   *mocks.MockmeshProvider
+	mPDB    *mocks.MockproposalDB
 	mBaseBP *mocks.MockbaseBallotProvider
 	mTxPool *mocks.MocktxPool
 	mPubSub *pubsubmocks.MockPublisher
@@ -51,7 +51,7 @@ func createBuilder(tb testing.TB) *testBuilder {
 		mRefDB:  dbmocks.NewMockDatabase(ctrl),
 		mOracle: mocks.NewMockproposalOracle(ctrl),
 		mAtxDB:  mocks.NewMockactivationDB(ctrl),
-		mMesh:   mocks.NewMockmeshProvider(ctrl),
+		mPDB:    mocks.NewMockproposalDB(ctrl),
 		mBaseBP: mocks.NewMockbaseBallotProvider(ctrl),
 		mTxPool: mocks.NewMocktxPool(ctrl),
 		mPubSub: pubsubmocks.NewMockPublisher(ctrl),
@@ -61,7 +61,7 @@ func createBuilder(tb testing.TB) *testBuilder {
 	mProjector := mocks.NewMockprojector(ctrl)
 	mProjector.EXPECT().GetProjection(gomock.Any()).Return(uint64(1), uint64(1000), nil).AnyTimes()
 	pb.ProposalBuilder = NewProposalBuilder(context.TODO(), make(chan types.LayerID), edSigner, vrfSigner,
-		pb.mAtxDB, pb.mPubSub, pb.mMesh, pb.mBaseBP, pb.mBeacon, pb.mSync, mProjector, pb.mTxPool,
+		pb.mAtxDB, pb.mPubSub, pb.mPDB, pb.mBaseBP, pb.mBeacon, pb.mSync, mProjector, pb.mTxPool,
 		WithLogger(logtest.New(tb)),
 		WithLayerSize(20),
 		WithLayerPerEpoch(3),
@@ -140,12 +140,12 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: bb1}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
-	b.mMesh.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	b.mPDB.EXPECT().AddProposal(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
 			require.NoError(t, codec.Decode(data, &p))
-			p.Initialize()
+			require.NoError(t, p.Initialize())
 			assert.Equal(t, types.EmptyBallotID, p.RefBallot)
 			assert.Equal(t, bb1, p.Votes.Base)
 			assert.Equal(t, atxID, p.AtxID)
@@ -163,12 +163,12 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mTxPool.EXPECT().SelectTopNTransactions(gomock.Any(), gomock.Any()).Return([]types.TransactionID{tx2.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: bb2}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(refBid.Bytes(), nil).Times(1)
-	b.mMesh.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	b.mPDB.EXPECT().AddProposal(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
 			require.NoError(t, codec.Decode(data, &p))
-			p.Initialize()
+			require.NoError(t, p.Initialize())
 			assert.Equal(t, bb2, p.Votes.Base)
 			assert.Equal(t, refBid, p.RefBallot)
 			assert.Equal(t, atxID, p.AtxID)
@@ -208,12 +208,12 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: bb}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
-	b.mMesh.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	b.mPDB.EXPECT().AddProposal(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
 			require.NoError(t, codec.Decode(data, &p))
-			p.Initialize()
+			require.NoError(t, p.Initialize())
 			assert.Equal(t, types.EmptyBallotID, p.RefBallot)
 			assert.Equal(t, bb, p.Votes.Base)
 			assert.Equal(t, atxID, p.AtxID)
@@ -400,7 +400,7 @@ func TestBuilder_HandleLayer_AddBlockError(t *testing.T) {
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
-	b.mMesh.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).Return(errUnknown).Times(1)
+	b.mPDB.EXPECT().AddProposal(gomock.Any(), gomock.Any()).Return(errUnknown).Times(1)
 
 	assert.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errUnknown)
 }
@@ -423,7 +423,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
-	b.mMesh.EXPECT().AddProposalWithTxs(gomock.Any(), gomock.Any()).Return(nil).Times(1)
+	b.mPDB.EXPECT().AddProposal(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).Return(errors.New("unknown")).Times(1)
 
 	// publish error is ignored

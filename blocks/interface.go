@@ -1,6 +1,8 @@
 package blocks
 
 import (
+	"context"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
@@ -12,6 +14,6 @@ type atxProvider interface {
 
 type meshProvider interface {
 	HasBlock(types.BlockID) bool
-	AddBlock(block *types.UCBlock) error
+	AddBlockWithTXs(context.Context, *types.Block) error
 	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
 }
