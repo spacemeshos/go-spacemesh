@@ -149,6 +149,7 @@ func (t *turtle) evict(ctx context.Context) {
 		}
 		delete(t.blocks, lid)
 		delete(t.undecided, lid)
+		delete(t.verifying.layerWeights, lid)
 		if lid.GetEpoch() < oldestEpoch {
 			delete(t.refBallotBeacons, lid.GetEpoch())
 			delete(t.epochWeight, lid.GetEpoch())
@@ -357,7 +358,7 @@ func (t *turtle) encodeVotes(
 			case against:
 				votes.Against = append(votes.Against, bid)
 			case abstain:
-				logger.With().Panic("programmer error. layers that are not terminated are skipped earlier",
+				logger.With().Error("layers that are not terminated should have been encoded earlier",
 					bid, lid,
 				)
 			}
@@ -750,10 +751,7 @@ func isUndecided(state *commonState, config Config, lid types.LayerID) bool {
 		limit = state.last.Sub(config.Zdist)
 	}
 	_, isUndecided := state.undecided[lid]
-	if !lid.Before(limit) && isUndecided {
-		return true
-	}
-	return false
+	return !lid.Before(limit) && isUndecided
 }
 
 func getLocalVote(state *commonState, config Config, lid types.LayerID, block types.BlockID) (sign, voteReason) {
