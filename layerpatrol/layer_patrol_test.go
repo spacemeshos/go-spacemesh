@@ -19,5 +19,9 @@ func Test_GetAndSetHareInCharge(t *testing.T) {
 	// the original layer should no longer be in the buffer
 	assert.False(t, patrol.IsHareInCharge(lyr))
 	// but the next one is still there
-	assert.True(t, patrol.IsHareInCharge(lyr.Add(1)))
+	exists := lyr.Add(1)
+	assert.True(t, patrol.IsHareInCharge(exists))
+
+	patrol.CompleteHare(exists)
+	assert.False(t, patrol.IsHareInCharge(exists))
 }
