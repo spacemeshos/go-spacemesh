@@ -570,7 +570,7 @@ func TestMesh_pushLayersToState(t *testing.T) {
 		tm.mockState.EXPECT().ValidateNonceAndBalance(tx).Return(nil).Times(1)
 		tm.mockState.EXPECT().AddTxToPool(tx).Return(nil).Times(1)
 	}
-	require.NoError(t, tm.pushLayersToState(context.TODO(), types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(1)))
+	require.NoError(t, tm.pushLayersToState(context.TODO(), types.GetEffectiveGenesis().Add(1), types.GetEffectiveGenesis().Add(1)))
 
 	txns = getTxns(t, tm.DB, origin)
 	require.Empty(t, txns)
@@ -723,14 +723,14 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 
 	for lid := genesis.Add(1); !lid.After(last); lid = lid.Add(1) {
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
-			Return(lid.Sub(1), lid, false)
+			Return(maxLayer(lid.Sub(2), genesis), lid.Sub(1), false)
 		tm.mockState.EXPECT().GetStateRoot()
 		tm.SetZeroBlockLayer(lid)
 		tm.ProcessLayer(ctx, lid)
 	}
 
 	require.Equal(t, last, tm.ProcessedLayer())
-	require.Equal(t, last, tm.LatestLayerInState())
+	require.Equal(t, last.Sub(1), tm.LatestLayerInState())
 
 	last = last.Add(1)
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
@@ -746,16 +746,16 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 	for lid := last.Sub(1); !lid.After(last); lid = lid.Add(1) {
 		tm.SetZeroBlockLayer(lid)
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
-			Return(lid, last, false)
-		tm.mockState.EXPECT().GetStateRoot()
+			Return(lid.Sub(1), last.Sub(1), false)
 	}
+	tm.mockState.EXPECT().GetStateRoot()
 	for lid := last.Sub(1); !lid.After(last); lid = lid.Add(1) {
 		tm.ProcessLayer(ctx, lid)
 	}
 
 	require.Empty(t, tm.MissingLayer())
 	require.Equal(t, last, tm.ProcessedLayer())
-	require.Equal(t, last, tm.LatestLayerInState())
+	require.Equal(t, last.Sub(1), tm.LatestLayerInState())
 }
 
 func TestMesh_MissingTransactionsFailure(t *testing.T) {

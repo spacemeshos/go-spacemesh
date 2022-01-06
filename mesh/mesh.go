@@ -319,22 +319,19 @@ func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) er
 		}
 	}
 	// mesh can't skip layer that failed to complete
-	from := minLayer(oldVerified, vl.latestLayerInState)
+	from := minLayer(oldVerified, vl.latestLayerInState).Add(1)
 	to := newVerified
-	logger.With().Debug("pushing layers to the state",
-		log.Stringer("from_layer", from),
-		log.Stringer("to_layer", to),
-	)
-	if to.After(from) {
+
+	if !to.Before(from) {
 		if err := vl.pushLayersToState(ctx, from, to); err != nil {
 			logger.With().Error("failed to push layers to state", log.Err(err))
 			return err
 		}
-		if err := vl.persistLayerHashes(ctx, from.Add(1), to); err != nil {
+		if err := vl.persistLayerHashes(ctx, from, to); err != nil {
 			logger.With().Error("failed to persist layer hashes", log.Err(err))
 			return err
 		}
-		for lid := from.Add(1); !lid.After(to); lid = lid.Add(1) {
+		for lid := from; !lid.After(to); lid = lid.Add(1) {
 			events.ReportLayerUpdate(events.LayerUpdate{
 				LayerID: lid,
 				Status:  events.LayerStatusTypeConfirmed,
@@ -421,11 +418,12 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) 
 	logger.Info("pushing layers to state")
 	if from.Before(types.GetEffectiveGenesis()) || to.Before(types.GetEffectiveGenesis()) {
 		logger.Panic("tried to push genesis layers")
+		return nil
 	}
 
 	missing := msh.MissingLayer()
 	// we never reapply the state of oldVerified. note that state reversions must be handled separately.
-	for layerID := from.Add(1); !layerID.After(to); layerID = layerID.Add(1) {
+	for layerID := from; !layerID.After(to); layerID = layerID.Add(1) {
 		if err := msh.pushLayer(ctx, layerID); err != nil {
 			msh.setMissingLayer(layerID)
 			return err
@@ -824,6 +822,13 @@ func getAggregatedLayerHashKey(layerID types.LayerID) []byte {
 
 func minLayer(i, j types.LayerID) types.LayerID {
 	if i.Before(j) {
+		return i
+	}
+	return j
+}
+
+func maxLayer(i, j types.LayerID) types.LayerID {
+	if i.After(j) {
 		return i
 	}
 	return j
