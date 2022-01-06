@@ -9,7 +9,6 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -61,7 +60,7 @@ type testMesh struct {
 func createTestMesh(t *testing.T) *testMesh {
 	t.Helper()
 	types.SetLayersPerEpoch(3)
-	lg := logtest.New(t, zapcore.DebugLevel)
+	lg := logtest.New(t)
 	mmdb := NewMemMeshDB(lg)
 	ctrl := gomock.NewController(t)
 	tm := &testMesh{
@@ -571,7 +570,7 @@ func TestMesh_pushLayersToState(t *testing.T) {
 		tm.mockState.EXPECT().ValidateNonceAndBalance(tx).Return(nil).Times(1)
 		tm.mockState.EXPECT().AddTxToPool(tx).Return(nil).Times(1)
 	}
-	require.NoError(t, tm.pushLayersToState(context.TODO(), types.GetEffectiveGenesis(), types.GetEffectiveGenesis().Add(1)))
+	require.NoError(t, tm.pushLayersToState(context.TODO(), types.GetEffectiveGenesis().Add(1), types.GetEffectiveGenesis().Add(1)))
 
 	txns = getTxns(t, tm.DB, origin)
 	require.Empty(t, txns)
@@ -711,4 +710,109 @@ func TestMesh_AddBlockWithTXs(t *testing.T) {
 		txns := getTxns(t, tm.DB, tx.Origin())
 		r.Len(txns, 1)
 	}
+}
+
+func TestMesh_ReverifyFailed(t *testing.T) {
+	tm := createTestMesh(t)
+	defer tm.ctrl.Finish()
+	defer tm.Close()
+
+	ctx := context.TODO()
+	genesis := types.GetEffectiveGenesis()
+	last := genesis.Add(10)
+
+	for lid := genesis.Add(1); !lid.After(last); lid = lid.Add(1) {
+		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
+			Return(maxLayer(lid.Sub(2), genesis), lid.Sub(1), false)
+		tm.mockState.EXPECT().GetStateRoot()
+		tm.SetZeroBlockLayer(lid)
+		tm.ProcessLayer(ctx, lid)
+	}
+
+	require.Equal(t, last, tm.ProcessedLayer())
+	require.Equal(t, last.Sub(1), tm.LatestLayerInState())
+
+	last = last.Add(1)
+	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
+		Return(last.Sub(1), last, false)
+
+	// no calls to svm state, as layer will be failed earlier
+	require.Error(t, tm.ProcessLayer(ctx, last))
+	require.Equal(t, last, tm.ProcessedLayer())
+	require.Equal(t, last, tm.missingLayer)
+	require.Equal(t, last.Sub(1), tm.LatestLayerInState())
+
+	last = last.Add(1)
+	for lid := last.Sub(1); !lid.After(last); lid = lid.Add(1) {
+		tm.SetZeroBlockLayer(lid)
+		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
+			Return(lid.Sub(1), last.Sub(1), false)
+	}
+	tm.mockState.EXPECT().GetStateRoot()
+	for lid := last.Sub(1); !lid.After(last); lid = lid.Add(1) {
+		tm.ProcessLayer(ctx, lid)
+	}
+
+	require.Empty(t, tm.MissingLayer())
+	require.Equal(t, last, tm.ProcessedLayer())
+	require.Equal(t, last.Sub(1), tm.LatestLayerInState())
+}
+
+func TestMesh_MissingTransactionsFailure(t *testing.T) {
+	tm := createTestMesh(t)
+	defer tm.ctrl.Finish()
+	defer tm.Close()
+
+	ctx := context.TODO()
+	genesis := types.GetEffectiveGenesis()
+	last := genesis.Add(1)
+
+	block := types.Block{}
+	block.LayerIndex = last
+	block.TxIDs = []types.TransactionID{{1, 1, 1}}
+	require.NoError(t, tm.AddBlock(&block))
+	require.NoError(t, tm.SaveContextualValidity(block.ID(), last, true))
+
+	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
+		Return(genesis, last, false)
+
+	tm.ProcessLayer(ctx, last)
+	require.Equal(t, last, tm.ProcessedLayer())
+	require.Equal(t, genesis, tm.LatestLayerInState())
+}
+
+func TestMesh_ResetAppliedOnRevert(t *testing.T) {
+	tm := createTestMesh(t)
+	defer tm.ctrl.Finish()
+	defer tm.Close()
+
+	ctx := context.TODO()
+	genesis := types.GetEffectiveGenesis()
+	last := genesis.Add(10)
+
+	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
+		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
+			Return(lid.Sub(1), lid, false)
+		tm.mockState.EXPECT().GetStateRoot()
+		tm.SetZeroBlockLayer(lid)
+		require.NoError(t, tm.ProcessLayer(ctx, lid))
+	}
+
+	require.Equal(t, last.Sub(1), tm.ProcessedLayer())
+	require.Equal(t, last.Sub(1), tm.LatestLayerInState())
+
+	failed := genesis.Add(2)
+	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
+		Return(failed.Sub(1), last, true)
+	tm.mockState.EXPECT().Rewind(failed.Sub(1))
+
+	block := types.Block{}
+	block.LayerIndex = failed
+	block.TxIDs = []types.TransactionID{{1, 1, 1}}
+	require.NoError(t, tm.AddBlock(&block))
+	require.NoError(t, tm.SaveContextualValidity(block.ID(), failed, true))
+	tm.ProcessLayer(ctx, last)
+
+	require.Equal(t, last, tm.ProcessedLayer())
+	require.Equal(t, failed.Sub(1), tm.LatestLayerInState())
 }

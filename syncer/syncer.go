@@ -322,6 +322,13 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	)
 
 	attemptFunc := func() bool {
+		if missing := s.mesh.MissingLayer(); (missing != types.LayerID{}) {
+			logger.With().Debug("fetching data for missing layer", missing)
+			if err := s.syncLayer(ctx, missing); err != nil {
+				return false
+			}
+			vQueue <- missing
+		}
 		// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis
 		// and retry in the next sync run if validation fails.
 		// our clock starts ticking from 1, so it is safe to skip layer 0
@@ -345,7 +352,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	}
 
 	// check if we are on target. if not, do the sync loop again
-	for success && !s.stateOnTarget() {
+	for success && (!s.stateOnTarget() || s.mesh.MissingLayer() != types.LayerID{}) {
 		attempt++
 		if attempt > maxAttemptWithinRun {
 			logger.Info("all data synced but unable to advance processed layer after max attempts")
@@ -558,7 +565,7 @@ func (s *Syncer) validateLayer(ctx context.Context, layerID types.LayerID) error
 	//   layer (without waiting for this to finish -- it should be able to run async).
 	//   See https://github.com/spacemeshos/go-spacemesh/issues/2415
 	if err := s.validator.ProcessLayer(ctx, layerID); err != nil {
-		s.logger.WithContext(ctx).Warning("mesh failed to process layer from sync", log.Err(err))
+		s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", log.Err(err))
 		return fmt.Errorf("process layer: %w", err)
 	}
 	return nil
