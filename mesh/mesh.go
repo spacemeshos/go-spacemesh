@@ -10,7 +10,6 @@ import (
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -287,25 +286,36 @@ func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) er
 		log.FieldNamed("old_verified", oldVerified),
 		log.FieldNamed("new_verified", newVerified))
 
+	// set processed layer even if later code will fail, as that failure is not related
+	// to the layer that is being processed
+	vl.setProcessedLayer(layerID)
+
 	// check for a state reversion: if tortoise reran and detected changes to historical data, it will request that
 	// state be reverted and reapplied. pushLayersToState, below, will handle the reapplication.
 	if reverted {
+		vl.setLatestLayerInState(oldVerified)
 		if err := vl.revertState(ctx, oldVerified); err != nil {
 			logger.With().Error("failed to revert state, unable to process layer", log.Err(err))
 			return err
 		}
 	}
-
-	if newVerified.After(oldVerified) {
-		if err := vl.pushLayersToState(ctx, oldVerified, newVerified); err != nil {
+	// mesh can't skip layer that failed to complete
+	from := minLayer(oldVerified, vl.latestLayerInState)
+	to := newVerified
+	logger.With().Debug("pushing layers to the state",
+		log.Stringer("from_layer", from),
+		log.Stringer("to_layer", to),
+	)
+	if to.After(from) {
+		if err := vl.pushLayersToState(ctx, from, to); err != nil {
 			logger.With().Error("failed to push layers to state", log.Err(err))
 			return err
 		}
-		if err := vl.persistLayerHashes(ctx, oldVerified.Add(1), newVerified); err != nil {
+		if err := vl.persistLayerHashes(ctx, from.Add(1), to); err != nil {
 			logger.With().Error("failed to persist layer hashes", log.Err(err))
 			return err
 		}
-		for lid := oldVerified.Add(1); !lid.After(newVerified); lid = lid.Add(1) {
+		for lid := from.Add(1); !lid.After(to); lid = lid.Add(1) {
 			events.ReportLayerUpdate(events.LayerUpdate{
 				LayerID: lid,
 				Status:  events.LayerStatusTypeConfirmed,
@@ -313,7 +323,6 @@ func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) er
 		}
 	}
 
-	vl.setProcessedLayer(layerID)
 	logger.Info("done processing layer")
 	return nil
 }
@@ -365,13 +374,12 @@ func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID)
 
 func (msh *Mesh) getValidBlockIDs(ctx context.Context, layerID types.LayerID) ([]types.BlockID, error) {
 	logger := msh.WithContext(ctx)
-	lyr, err := msh.GetLayer(layerID)
+	blocks, err := msh.LayerBlockIds(layerID)
 	if err != nil {
-		logger.With().Error("failed to get layer", layerID, log.Err(err))
 		return nil, err
 	}
 	var validBlockIDs []types.BlockID
-	for _, bID := range lyr.BlocksIDs() {
+	for _, bID := range blocks {
 		valid, err := msh.ContextualValidity(bID)
 		if err != nil {
 			// block contextual validity is determined by layer. if one block in the layer is not determined,
@@ -387,24 +395,23 @@ func (msh *Mesh) getValidBlockIDs(ctx context.Context, layerID types.LayerID) ([
 }
 
 // apply the state of a range of layers, including re-adding transactions from invalid blocks to the mempool.
-func (msh *Mesh) pushLayersToState(ctx context.Context, oldVerified, newVerified types.LayerID) error {
+func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) error {
 	logger := msh.WithContext(ctx).WithFields(
-		log.FieldNamed("old_verified", oldVerified),
-		log.FieldNamed("new_verified", newVerified))
+		log.Stringer("from_layer", from),
+		log.Stringer("to_layer", to))
 	logger.Info("pushing layers to state")
-	if oldVerified.Before(types.GetEffectiveGenesis()) || newVerified.Before(types.GetEffectiveGenesis()) {
+	if from.Before(types.GetEffectiveGenesis()) || to.Before(types.GetEffectiveGenesis()) {
 		logger.Panic("tried to push genesis layers")
 	}
 
 	// we never reapply the state of oldVerified. note that state reversions must be handled separately.
-	for layerID := oldVerified.Add(1); !layerID.After(newVerified); layerID = layerID.Add(1) {
-		l, err := msh.GetLayer(layerID)
+	for layerID := from.Add(1); !layerID.After(to); layerID = layerID.Add(1) {
+		layerBlocks, err := msh.LayerBlocks(layerID)
 		if err != nil {
-			logger.With().Error("failed to get layer", layerID, log.Err(err))
-			return err
+			return fmt.Errorf("failed to get layer %s: %w", layerID, err)
 		}
 
-		validBlocks, invalidBlocks := msh.BlocksByValidity(l.Blocks())
+		validBlocks, invalidBlocks := msh.BlocksByValidity(layerBlocks)
 		var (
 			applied    *types.Block
 			notApplied = invalidBlocks
@@ -427,10 +434,10 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, oldVerified, newVerified
 
 		msh.Event().Info("end of layer state root",
 			layerID,
-			log.String("state_root", util.Bytes2Hex(msh.state.GetStateRoot().Bytes())),
+			log.Stringer("state_root", msh.state.GetStateRoot()),
 		)
 
-		if err = msh.reInsertTxsToPool(applied, notApplied, l.Index()); err != nil {
+		if err = msh.reInsertTxsToPool(applied, notApplied, layerID); err != nil {
 			logger.With().Error("failed to reinsert TXs to pool", layerID, log.Err(err))
 			return err
 		}
@@ -455,7 +462,7 @@ func (msh *Mesh) reInsertTxsToPool(applied *types.Block, notApplied []*types.Blo
 	}
 	returnedTxs, missing := msh.GetTransactions(uniqueTxIds(notApplied, seenTxIds))
 	if len(missing) > 0 {
-		msh.Panic("could not find transactions %v from layer %v", missing, l)
+		msh.With().Error("could not reinsert transactions", log.Int("missing", len(missing)), l)
 	}
 
 	grouped, accounts, err := msh.removeFromUnappliedTxs(returnedTxs)
@@ -489,7 +496,7 @@ func (msh *Mesh) applyState(block *types.Block) error {
 	}
 	txs, missing := msh.GetTransactions(block.TxIDs)
 	if len(missing) > 0 {
-		msh.Panic("could not find transactions %v from layer %v", missing, block.LayerIndex)
+		return fmt.Errorf("could not find transactions %v from layer %v", missing, block.LayerIndex)
 	}
 	// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
 	failedTxs, svmErr = msh.state.ApplyLayer(block.LayerIndex, txs, rewardByMiner)
@@ -784,4 +791,11 @@ func getAggregatedLayerHashKey(layerID types.LayerID) []byte {
 	b.WriteString("ag")
 	b.Write(layerID.Bytes())
 	return b.Bytes()
+}
+
+func minLayer(i, j types.LayerID) types.LayerID {
+	if i.Before(j) {
+		return i
+	}
+	return j
 }
