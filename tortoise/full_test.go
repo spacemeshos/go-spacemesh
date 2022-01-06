@@ -70,9 +70,10 @@ func TestFullBallotFilter(t *testing.T) {
 
 func TestFullCountVotes(t *testing.T) {
 	type testBallot struct {
-		Base                      [2]int   // [layer, ballot] tuple
-		Support, Against, Abstain [][2]int // list of [layer, block] tuples
-		ATX                       int
+		Base             [2]int   // [layer, ballot] tuple
+		Support, Against [][2]int // list of [layer, block] tuples
+		Abstain          []int    // [layer]
+		ATX              int
 	}
 	type testBlock struct{}
 
@@ -239,7 +240,7 @@ func TestFullCountVotes(t *testing.T) {
 				{
 					{ATX: 0, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
 					{ATX: 1, Base: [2]int{0, 1}, Support: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
-					{ATX: 2, Base: [2]int{0, 1}, Abstain: [][2]int{{0, 1}, {0, 0}, {0, 2}}},
+					{ATX: 2, Base: [2]int{0, 1}, Abstain: []int{0}},
 				},
 			},
 			target: [2]int{0, 0},
@@ -342,10 +343,12 @@ func TestFullCountVotes(t *testing.T) {
 					// don't vote on genesis for simplicity,
 					// since we don't care about block goodness in this test
 					if i > 0 {
-						ballot.ForDiff = getDiff(blocks, b.Support)
-						ballot.AgainstDiff = getDiff(blocks, b.Against)
-						ballot.NeutralDiff = getDiff(blocks, b.Abstain)
-						ballot.BaseBallot = ballots[b.Base[0]][b.Base[1]].ID()
+						ballot.Votes.Support = getDiff(blocks, b.Support)
+						ballot.Votes.Against = getDiff(blocks, b.Against)
+						for _, layerNumber := range b.Abstain {
+							ballot.Votes.Abstain = append(ballot.Votes.Abstain, genesis.Add(uint32(layerNumber)+1))
+						}
+						ballot.Votes.Base = ballots[b.Base[0]][b.Base[1]].ID()
 					}
 					ballot.Signature = signer.Sign(ballot.Bytes())
 					require.NoError(t, ballot.Initialize())

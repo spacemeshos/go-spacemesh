@@ -101,9 +101,11 @@ func RandomTransactionID() TransactionID {
 func RandomBallot() *Ballot {
 	return &Ballot{
 		InnerBallot: InnerBallot{
-			AtxID:      RandomATXID(),
-			BaseBallot: RandomBallotID(),
-			ForDiff:    []BlockID{RandomBlockID(), RandomBlockID()},
+			AtxID: RandomATXID(),
+			Votes: Votes{
+				Base:    RandomBallotID(),
+				Support: []BlockID{RandomBlockID(), RandomBlockID()},
+			},
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
 		},
@@ -112,15 +114,8 @@ func RandomBallot() *Ballot {
 
 // GenLayerBallot generates a Ballot with random content for testing.
 func GenLayerBallot(layerID LayerID) *Ballot {
-	b := &Ballot{
-		InnerBallot: InnerBallot{
-			AtxID:      RandomATXID(),
-			BaseBallot: RandomBallotID(),
-			ForDiff:    []BlockID{RandomBlockID(), RandomBlockID()},
-			RefBallot:  RandomBallotID(),
-			LayerIndex: layerID,
-		},
-	}
+	b := RandomBallot()
+	b.LayerIndex = layerID
 	signer := signing.NewEdSigner()
 	b.Signature = signer.Sign(b.Bytes())
 	b.Initialize()

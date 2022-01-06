@@ -257,17 +257,14 @@ func (pb *ProposalBuilder) createProposal(
 		logger.Panic("attempt to create proposal during genesis")
 	}
 
-	base, diffs, err := pb.baseBallotProvider.BaseBallot(ctx)
+	votes, err := pb.baseBallotProvider.BaseBallot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get base ballot: %w", err)
 	}
 	ib := &types.InnerBallot{
 		AtxID:            atxID,
 		EligibilityProof: proofs,
-		BaseBallot:       base,
-		AgainstDiff:      diffs[0],
-		ForDiff:          diffs[1],
-		NeutralDiff:      diffs[2],
+		Votes:            *votes,
 		LayerIndex:       layerID,
 	}
 

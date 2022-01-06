@@ -124,13 +124,13 @@ func createLayerWithRandVoting(layerID types.LayerID, prev []*types.Layer, ballo
 		for idx, pat := range patterns {
 			for _, id := range pat {
 				b := prev[idx].Blocks()[id]
-				ballot.ForDiff = append(ballot.ForDiff, b.ID())
+				ballot.Votes.Support = append(ballot.Votes.Support, b.ID())
 				voted[ballot.ID()] = struct{}{}
 			}
 		}
 		for _, prevBallot := range prev[0].Ballots() {
 			if _, ok := voted[prevBallot.ID()]; !ok {
-				ballot.AgainstDiff = append(ballot.AgainstDiff, prev[0].BlocksIDs()[0])
+				ballot.Votes.Against = append(ballot.Votes.Against, prev[0].BlocksIDs()[0])
 			}
 		}
 		ballot.LayerIndex = layerID

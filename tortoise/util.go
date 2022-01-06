@@ -116,6 +116,7 @@ func (w weight) isNil() bool {
 type tortoiseBallot struct {
 	id, base types.BallotID
 	votes    votes
+	abstain  map[types.LayerID]struct{}
 	weight   weight
 }
 

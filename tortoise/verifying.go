@@ -166,6 +166,10 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 	}
 
 	baselid := v.ballotLayer[ballot.base]
+
+	// NOTE(dshulyak) abstain votes are ignored in this method.
+	// they suppose to be added in a followup change.
+
 	for block, vote := range ballot.votes {
 		blocklid, exists := v.blockLayer[block]
 		// if the layer of the vote is not in the memory then it is definitely before base block layer

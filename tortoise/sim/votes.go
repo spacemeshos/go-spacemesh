@@ -7,10 +7,7 @@ import (
 )
 
 // Voting contains blocks voting.
-type Voting struct {
-	Base                      types.BallotID
-	Support, Against, Abstain []types.BlockID
-}
+type Voting = types.Votes
 
 // VotesGenerator allows to replace default votes generator.
 // TODO(dshulyak) what is the best way to encapsulate all configuration that is required to generate votes?

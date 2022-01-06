@@ -258,7 +258,7 @@ func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 		return errInvalidATXID
 	}
 
-	if b.BaseBallot == types.EmptyBallotID {
+	if b.Votes.Base == types.EmptyBallotID {
 		return errMissingBaseBallot
 	}
 
@@ -295,7 +295,8 @@ func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 
 func checkExceptions(ballot *types.Ballot, max int) error {
 	exceptions := map[types.BlockID]struct{}{}
-	for _, diff := range [][]types.BlockID{ballot.ForDiff, ballot.NeutralDiff, ballot.AgainstDiff} {
+	// TODO maybe validate that explicit votes do not conflict with abstain layers
+	for _, diff := range [][]types.BlockID{ballot.Votes.Support, ballot.Votes.Against} {
 		for _, bid := range diff {
 			_, exist := exceptions[bid]
 			if exist {
@@ -313,15 +314,14 @@ func checkExceptions(ballot *types.Ballot, max int) error {
 }
 
 func ballotBlockView(b *types.Ballot) []types.BlockID {
-	combined := make([]types.BlockID, 0, len(b.AgainstDiff)+len(b.ForDiff)+len(b.NeutralDiff))
-	combined = append(combined, b.ForDiff...)
-	combined = append(combined, b.AgainstDiff...)
-	combined = append(combined, b.NeutralDiff...)
+	combined := make([]types.BlockID, 0, len(b.Votes.Support)+len(b.Votes.Against))
+	combined = append(combined, b.Votes.Support...)
+	combined = append(combined, b.Votes.Against...)
 	return combined
 }
 
 func (h *Handler) checkBallotDataAvailability(ctx context.Context, b *types.Ballot) error {
-	ballots := []types.BallotID{b.BaseBallot}
+	ballots := []types.BallotID{b.Votes.Base}
 	if b.RefBallot != types.EmptyBallotID {
 		ballots = append(ballots, b.RefBallot)
 	}
@@ -375,7 +375,7 @@ func reportProposalMetrics(p *types.Proposal) {
 }
 
 func reportBallotMetrics(b *types.Ballot) {
-	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeAgainst}).Observe(float64(len(b.AgainstDiff)))
-	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeFor}).Observe(float64(len(b.ForDiff)))
-	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeNeutral}).Observe(float64(len(b.NeutralDiff)))
+	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeAgainst}).Observe(float64(len(b.Votes.Against)))
+	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeFor}).Observe(float64(len(b.Votes.Support)))
+	metrics.NumBlocksInException.With(prometheus.Labels{metrics.DiffTypeLabel: metrics.DiffTypeNeutral}).Observe(float64(len(b.Votes.Abstain)))
 }

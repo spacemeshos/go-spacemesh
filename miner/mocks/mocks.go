@@ -152,13 +152,12 @@ func (m *MockbaseBallotProvider) EXPECT() *MockbaseBallotProviderMockRecorder {
 }
 
 // BaseBallot mocks base method.
-func (m *MockbaseBallotProvider) BaseBallot(arg0 context.Context) (types.BallotID, [][]types.BlockID, error) {
+func (m *MockbaseBallotProvider) BaseBallot(arg0 context.Context) (*types.Votes, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "BaseBallot", arg0)
-	ret0, _ := ret[0].(types.BallotID)
-	ret1, _ := ret[1].([][]types.BlockID)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret0, _ := ret[0].(*types.Votes)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // BaseBallot indicates an expected call of BaseBallot.
