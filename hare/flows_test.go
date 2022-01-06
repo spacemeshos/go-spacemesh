@@ -188,6 +188,7 @@ func createTestHare(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.
 	ctrl := gomock.NewController(t)
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
+	patrol.EXPECT().CompleteHare(gomock.Any()).AnyTimes()
 	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
 	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, nil).AnyTimes()
 	mockIDProvider := mocks.NewMockidentityProvider(ctrl)

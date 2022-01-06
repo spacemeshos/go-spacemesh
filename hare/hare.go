@@ -216,6 +216,8 @@ var ErrTooLate = errors.New("consensus process finished too late")
 // records the provided output.
 func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) error {
 	layerID := output.ID()
+	defer h.patrol.CompleteHare(layerID)
+
 	var pids []types.ProposalID
 	if output.Completed() {
 		h.WithContext(ctx).With().Info("hare terminated with success", layerID, log.Int("num_proposals", output.Set().Size()))
