@@ -57,7 +57,9 @@ type Mesh struct {
 	// latestLayerInState is the latest layer whose contents have been applied to the state
 	latestLayerInState types.LayerID
 	// processedLayer is the latest layer whose votes have been processed
-	processedLayer      types.LayerID
+	processedLayer types.LayerID
+	// see doc for MissingLayer()
+	missingLayer        types.LayerID
 	nextProcessedLayers map[types.LayerID]struct{}
 	maxProcessedLayer   types.LayerID
 	mutex               sync.RWMutex
@@ -152,16 +154,33 @@ func (msh *Mesh) CacheWarmUp(layerSize int) {
 
 // LatestLayerInState returns the latest layer we applied to state.
 func (msh *Mesh) LatestLayerInState() types.LayerID {
-	defer msh.mutex.RUnlock()
 	msh.mutex.RLock()
+	defer msh.mutex.RUnlock()
 	return msh.latestLayerInState
 }
 
 // LatestLayer - returns the latest layer we saw from the network.
 func (msh *Mesh) LatestLayer() types.LayerID {
-	defer msh.mutex.RUnlock()
 	msh.mutex.RLock()
+	defer msh.mutex.RUnlock()
 	return msh.latestLayer
+}
+
+// MissingLayer is a layer in (latestLayerInState, processLayer].
+// this layer is missing critical data (valid blocks or transactions)
+// and can't be applied to the state.
+//
+// First valid layer starts with 1. 0 is empty layer and can be ignored.
+func (msh *Mesh) MissingLayer() types.LayerID {
+	msh.mutex.RLock()
+	defer msh.mutex.RUnlock()
+	return msh.missingLayer
+}
+
+func (msh *Mesh) setMissingLayer(lid types.LayerID) {
+	msh.mutex.Lock()
+	defer msh.mutex.Unlock()
+	msh.missingLayer = lid
 }
 
 // setLatestLayer sets the latest layer we saw from the network.
@@ -404,43 +423,53 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) 
 		logger.Panic("tried to push genesis layers")
 	}
 
+	missing := msh.MissingLayer()
 	// we never reapply the state of oldVerified. note that state reversions must be handled separately.
 	for layerID := from.Add(1); !layerID.After(to); layerID = layerID.Add(1) {
-		layerBlocks, err := msh.LayerBlocks(layerID)
-		if err != nil {
-			return fmt.Errorf("failed to get layer %s: %w", layerID, err)
-		}
-
-		validBlocks, invalidBlocks := msh.BlocksByValidity(layerBlocks)
-		var (
-			applied    *types.Block
-			notApplied = invalidBlocks
-			blocks     = types.SortBlocks(validBlocks)
-		)
-
-		if len(blocks) > 0 {
-			// when tortoise verify multiple blocks in the same layer, we only apply one with the lowest
-			// lexicographical sort order
-			applied = blocks[0]
-			if len(blocks) > 1 {
-				notApplied = append(notApplied, blocks[1:]...)
-			}
-		}
-
-		if err = msh.updateStateWithLayer(ctx, layerID, applied); err != nil {
-			logger.With().Error("failed to update state", layerID, log.Err(err))
+		if err := msh.pushLayer(ctx, layerID); err != nil {
+			msh.setMissingLayer(layerID)
 			return err
 		}
-
-		msh.Event().Info("end of layer state root",
-			layerID,
-			log.Stringer("state_root", msh.state.GetStateRoot()),
-		)
-
-		if err = msh.reInsertTxsToPool(applied, notApplied, layerID); err != nil {
-			logger.With().Error("failed to reinsert TXs to pool", layerID, log.Err(err))
-			return err
+		if layerID == missing {
+			msh.setMissingLayer(types.LayerID{})
 		}
+	}
+	return nil
+}
+
+func (msh *Mesh) pushLayer(ctx context.Context, layerID types.LayerID) error {
+	layerBlocks, err := msh.LayerBlocks(layerID)
+	if err != nil {
+		return fmt.Errorf("failed to get layer %s: %w", layerID, err)
+	}
+
+	validBlocks, invalidBlocks := msh.BlocksByValidity(layerBlocks)
+	var (
+		applied    *types.Block
+		notApplied = invalidBlocks
+		blocks     = types.SortBlocks(validBlocks)
+	)
+
+	if len(blocks) > 0 {
+		// when tortoise verify multiple blocks in the same layer, we only apply one with the lowest
+		// lexicographical sort order
+		applied = blocks[0]
+		if len(blocks) > 1 {
+			notApplied = append(notApplied, blocks[1:]...)
+		}
+	}
+
+	if err = msh.updateStateWithLayer(ctx, layerID, applied); err != nil {
+		return fmt.Errorf("failed to update state %s: %w", layerID, err)
+	}
+
+	msh.Event().Info("end of layer state root",
+		layerID,
+		log.Stringer("state_root", msh.state.GetStateRoot()),
+	)
+
+	if err = msh.reInsertTxsToPool(applied, notApplied, layerID); err != nil {
+		return fmt.Errorf("failed to reinsert TXs to pool %s: %w", layerID, err)
 	}
 	return nil
 }
