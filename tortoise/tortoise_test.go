@@ -2106,6 +2106,49 @@ func TestSwitchVerifyingByChangingGoodness(t *testing.T) {
 	require.True(t, tortoise.trtl.mode.isVerifying(), "verifying mode")
 }
 
+func perfectVotingFirstBaseBallot(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
+	baseLayer := layers[len(layers)-1]
+	support := layers[len(layers)-1].BlocksIDs()[0:1]
+	against := layers[len(layers)-1].BlocksIDs()[1:]
+	ballots := baseLayer.Ballots()
+	base := ballots[0]
+	return sim.Voting{Base: base.ID(), Against: against, Support: support}
+}
+
+func abstainVoting(rng *mrand.Rand, layers []*types.Layer, _ int) sim.Voting {
+	baseLayer := layers[len(layers)-1]
+	ballots := baseLayer.Ballots()
+	return sim.Voting{Base: ballots[0].ID(), Abstain: []types.LayerID{baseLayer.Index()}}
+}
+
+func TestAbstainVotingVerifyingMode(t *testing.T) {
+	ctx := context.Background()
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup(sim.WithSetupUnitsRange(2, 2))
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+
+	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	var last, verified types.LayerID
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(1),
+		sim.WithSequence(10, sim.WithVoteGenerator(
+			sim.VaryingVoting(1, perfectVotingFirstBaseBallot, abstainVoting),
+		)),
+	) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(2), verified)
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(1, sim.WithVoteGenerator(perfectVotingFirstBaseBallot)),
+	) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified)
+}
+
 func TestStateManagement(t *testing.T) {
 	const (
 		size   = 10
