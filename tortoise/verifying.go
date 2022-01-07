@@ -26,6 +26,20 @@ func (g goodness) String() string {
 
 const (
 	bad goodness = iota
+	// ballots may vote abstain for a layer if the hare instance didn't terminate
+	// for that layer. verifying tortoise counts weight from those ballots
+	// but it doesn't count weight for abstained layers.
+	//
+	// for voting tortoise still prioritizes good ballots, ballots that selects base ballot
+	// that abstained will not be marked as a bad ballot. this condition is necessary
+	// to simplify implementation. otherwise verifying tortoise needs to copy abstained
+	// votes from base ballot if they weren't fixed.
+	//
+	// Example:
+	// Block: 0x01 Layer: 9
+	// Ballot: 0xaa Layer: 11 Votes: {Base: 0x01, Support: [0x01], Abstain: [10]}
+	// Assuming that Support is consistent with local opinion verifying tortoise
+	// will count the weight from this ballot for layer 9, but not for layer 10.
 	abstained
 	// good ballot must:
 	// - agree on a beacon value
@@ -53,7 +67,7 @@ type verifying struct {
 	*commonState
 
 	goodBallots map[types.BallotID]goodness
-	// weight of good ballots in the the layer N
+	// weight of good ballots in the layer N
 	goodWeight map[types.LayerID]weight
 	// abstained weight from ballots in layers [N+1, LAST]
 	abstainedWeight map[types.LayerID]weight
@@ -68,7 +82,8 @@ func (v *verifying) resetWeights() {
 }
 
 func (v *verifying) checkCanBeGood(ballot types.BallotID) bool {
-	return v.goodBallots[ballot] != bad
+	val := v.goodBallots[ballot]
+	return val == good || val == canBeGood
 }
 
 func (v *verifying) markGoodCut(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) bool {
@@ -91,16 +106,14 @@ func (v *verifying) markGoodCut(logger log.Log, lid types.LayerID, ballots []tor
 func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
 	logger = logger.WithFields(log.Stringer("ballots_layer", lid))
 
-	counted, goodBallotsCount := v.sumGoodBallots(logger, ballots)
+	goodWeight, goodBallotsCount := v.countGoodBallots(logger, ballots)
 
-	// TODO(dshulyak) counted weight should be reduced by the uncounted weight per conversation with research
-
-	v.goodWeight[lid] = counted
+	v.goodWeight[lid] = goodWeight
 	v.abstainedWeight[lid] = weightFromInt64(0)
-	v.totalGoodWeight = v.totalGoodWeight.add(counted)
+	v.totalGoodWeight = v.totalGoodWeight.add(goodWeight)
 
 	logger.With().Info("counted weight from good ballots",
-		log.Stringer("weight", counted),
+		log.Stringer("good_weight", goodWeight),
 		log.Stringer("total", v.totalGoodWeight),
 		log.Stringer("expected", v.epochWeight[lid.GetEpoch()]),
 		log.Int("ballots_count", len(ballots)),
@@ -109,15 +122,29 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tort
 }
 
 func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
-	votingWeight := weightFromUint64(0).
+	// totalGoodWeight      - weight from good ballots in layers [VERIFIED+1, LAST PROCESSED]
+	// goodWeight[lid]      - weight from good ballots in the layer that is going to be verified
+	// 					      expected to be VERIFIED + 1 (FIXME remove lid parameter)
+	// abstainedWeight[lid] - weight from good ballots in layers (VERIFIED+1, LAST PROCESSED]
+	//                        that abstained from voting for lid (VERIFIED + 1)
+	// TODO(dshulyak) need to know correct values for threshold fractions before implementing next part
+	// expectedWeight       - weight from (VERIFIED+1, LAST] layers,
+	//                        this is the same weight that is used as a base for global threshold
+	// uncountedWeight      - weight that was verifying tortoise didn't count
+	//                        expectedWeight - (totalGoodWeight - goodWeight[lid])
+	// margin               - this is pessimistic margin that is compared with global threshold
+	//                        totalGoodWeight - goodWeight[lid] - abstainedWeight[lid] - uncountedWeight
+	margin := weightFromUint64(0).
 		add(v.totalGoodWeight).
-		sub(v.goodWeight[lid]).
-		sub(v.abstainedWeight[lid])
+		sub(v.goodWeight[lid])
+	if w, exist := v.abstainedWeight[lid]; exist {
+		margin.sub(w)
+	}
 
 	logger = logger.WithFields(
 		log.String("verifier", verifyingTortoise),
 		log.Stringer("candidate_layer", lid),
-		log.Stringer("voting_weight", votingWeight),
+		log.Stringer("margin", margin),
 		log.Stringer("asbtained_weight", v.abstainedWeight[lid]),
 		log.Stringer("local_threshold", v.localThreshold),
 		log.Stringer("global_threshold", v.globalThreshold),
@@ -125,7 +152,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 
 	// 0 - there is not enough weight to cross threshold.
 	// 1 - layer is verified and contextual validity is according to our local opinion.
-	if votingWeight.cmp(v.globalThreshold) == abstain {
+	if margin.cmp(v.globalThreshold) == abstain {
 		logger.With().Info("candidate layer is not verified." +
 			" voting weight from good ballots is lower than the threshold")
 		return false
@@ -150,7 +177,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	return true
 }
 
-func (v *verifying) sumGoodBallots(logger log.Log, ballots []tortoiseBallot) (weight, int) {
+func (v *verifying) countGoodBallots(logger log.Log, ballots []tortoiseBallot) (weight, int) {
 	sum := weightFromUint64(0)
 	n := 0
 	for _, ballot := range ballots {
@@ -161,6 +188,9 @@ func (v *verifying) sumGoodBallots(logger log.Log, ballots []tortoiseBallot) (we
 		v.goodBallots[ballot.id] = rst
 		if rst == good || rst == abstained {
 			sum = sum.add(ballot.weight)
+			for lid := range ballot.abstain {
+				v.abstainedWeight[lid].add(ballot.weight)
+			}
 			n++
 		}
 	}
@@ -201,14 +231,14 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 			return bad
 		}
 	}
-	if len(ballot.abstain) > 0 {
-		for lid := range ballot.abstain {
-			v.abstainedWeight[lid].add(ballot.weight)
-		}
+
+	base := v.goodBallots[ballot.base]
+
+	if base == good && len(ballot.abstain) > 0 {
 		return abstained
 	}
 
-	if rst := v.goodBallots[ballot.base]; rst != good {
+	if base != good {
 		logger.With().Debug("ballot can be good. only base is not good")
 		return canBeGood
 	}
