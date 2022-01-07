@@ -109,7 +109,6 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tort
 	goodWeight, goodBallotsCount := v.countGoodBallots(logger, ballots)
 
 	v.goodWeight[lid] = goodWeight
-	v.abstainedWeight[lid] = weightFromInt64(0)
 	v.totalGoodWeight = v.totalGoodWeight.add(goodWeight)
 
 	logger.With().Info("counted weight from good ballots",
@@ -189,6 +188,9 @@ func (v *verifying) countGoodBallots(logger log.Log, ballots []tortoiseBallot) (
 		if rst == good || rst == abstained {
 			sum = sum.add(ballot.weight)
 			for lid := range ballot.abstain {
+				if _, exist := v.abstainedWeight[lid]; !exist {
+					v.abstainedWeight[lid] = weightFromFloat64(0)
+				}
 				v.abstainedWeight[lid].add(ballot.weight)
 			}
 			n++
@@ -235,6 +237,7 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 	base := v.goodBallots[ballot.base]
 
 	if len(ballot.abstain) > 0 {
+		logger.With().Debug("ballot has abstained on some layers", log.Stringer("base_goodness", base))
 		switch base {
 		case good:
 			return abstained
