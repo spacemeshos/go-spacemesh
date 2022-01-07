@@ -21,6 +21,11 @@ type BlockID Hash20
 // EmptyBlockID is a canonical empty BlockID.
 var EmptyBlockID = BlockID{}
 
+// NewExistingBlock creates a block from stored id and inner parts.
+func NewExistingBlock(id BlockID, inner InnerBlock) Block {
+	return Block{blockID: id, InnerBlock: inner}
+}
+
 // Block contains the content of a layer on the mesh history.
 type Block struct {
 	InnerBlock
