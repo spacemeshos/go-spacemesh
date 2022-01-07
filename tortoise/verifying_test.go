@@ -11,7 +11,8 @@ import (
 )
 
 func TestVerifyingDetermineGoodness(t *testing.T) {
-	goodbase := types.BallotID{0}
+	goodbase := types.BallotID{254}
+	abstainedBase := types.BallotID{255}
 	ballots := []types.BallotID{{1}, {2}, {3}}
 	blocks := []types.BlockID{{11}, {22}, {33}}
 	for _, tc := range []struct {
@@ -93,6 +94,65 @@ func TestVerifyingDetermineGoodness(t *testing.T) {
 			},
 		},
 		{
+			desc: "AbstainedBallot",
+			commonState: commonState{
+				badBeaconBallots: map[types.BallotID]struct{}{},
+				ballotLayer: map[types.BallotID]types.LayerID{
+					goodbase: types.NewLayerID(10),
+				},
+				blockLayer: map[types.BlockID]types.LayerID{
+					blocks[0]: types.NewLayerID(10),
+					blocks[1]: types.NewLayerID(10),
+					blocks[2]: types.NewLayerID(10),
+				},
+				hareOutput: votes{
+					blocks[0]: support,
+					blocks[1]: against,
+					blocks[2]: against,
+				},
+			},
+			ballot: tortoiseBallot{
+				id: ballots[0], base: goodbase,
+				abstain: map[types.LayerID]struct{}{
+					types.NewLayerID(10): {},
+				},
+			},
+			expect: abstained,
+		},
+		{
+			desc: "AbstainedBase",
+			commonState: commonState{
+				badBeaconBallots: map[types.BallotID]struct{}{},
+				ballotLayer: map[types.BallotID]types.LayerID{
+					abstainedBase: types.NewLayerID(10),
+				},
+				blockLayer: map[types.BlockID]types.LayerID{},
+			},
+			ballot: tortoiseBallot{
+				id:   ballots[0],
+				base: abstainedBase,
+				abstain: map[types.LayerID]struct{}{
+					types.NewLayerID(11): {},
+				},
+			},
+			expect: bad,
+		},
+		{
+			desc: "ConsistentWithAbstainedBase",
+			commonState: commonState{
+				badBeaconBallots: map[types.BallotID]struct{}{},
+				ballotLayer: map[types.BallotID]types.LayerID{
+					abstainedBase: types.NewLayerID(10),
+				},
+				blockLayer: map[types.BlockID]types.LayerID{},
+			},
+			ballot: tortoiseBallot{
+				id:   ballots[0],
+				base: abstainedBase,
+			},
+			expect: canBeGood,
+		},
+		{
 			desc: "GoodBallot",
 			commonState: commonState{
 				badBeaconBallots: map[types.BallotID]struct{}{},
@@ -127,7 +187,8 @@ func TestVerifyingDetermineGoodness(t *testing.T) {
 
 			v := newVerifying(Config{}, &tc.commonState)
 			v.goodBallots[goodbase] = good
-			require.Equal(t, tc.expect, v.determineGoodness(logger, tc.ballot))
+			v.goodBallots[abstainedBase] = abstained
+			require.Equal(t, tc.expect.String(), v.determineGoodness(logger, tc.ballot).String())
 		})
 	}
 }

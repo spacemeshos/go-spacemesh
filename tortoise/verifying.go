@@ -234,8 +234,13 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 
 	base := v.goodBallots[ballot.base]
 
-	if base == good && len(ballot.abstain) > 0 {
-		return abstained
+	if len(ballot.abstain) > 0 {
+		switch base {
+		case good:
+			return abstained
+		default:
+			return bad
+		}
 	}
 
 	if base != good {
