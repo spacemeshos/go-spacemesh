@@ -143,6 +143,7 @@ func (n *nonce128) next() []byte {
 
 var nonce nonce128
 
+// GenerateAddress generates an address from a public key.
 func GenerateAddress(publicKey []byte) Address {
 	input := bytes.Repeat([]byte{0x00}, 20)
 	input = append(input, nonce.next()...)
