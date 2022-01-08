@@ -77,7 +77,7 @@ func addTransactions(t testing.TB, mesh *DB, layerID types.LayerID) []types.Tran
 	txs := make([]*types.Transaction, 0, numTXs)
 	txIDs := make([]types.TransactionID, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
-		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, rand.Uint64(), signing.NewEdSigner())
+		tx, err := types.GenerateCallTransaction(signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100, rand.Uint64())
 		require.NoError(t, err)
 		txs = append(txs, tx)
 		txIDs = append(txIDs, tx.ID())
