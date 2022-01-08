@@ -569,7 +569,7 @@ func BenchmarkHash(b *testing.B) {
 	random := rand.New(rand.NewSource(0))
 
 	// Create a realistic account trie to hash
-	addresses := make([][20]byte, b.N)
+	addresses := make([][types.AddressLength]byte, b.N)
 	for i := 0; i < len(addresses); i++ {
 		for j := 0; j < len(addresses[i]); j++ {
 			addresses[i][j] = byte(random.Intn(256))

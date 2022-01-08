@@ -37,7 +37,7 @@ func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me"
 func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
 
 func createTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
-	tx, err := types.NewSignedTx(nonce, destination, amount, 100, fee, signer)
+	tx, err := types.GenerateCallTransaction(signer, destination, nonce, amount, 100, fee)
 	assert.NoError(t, err)
 	return tx
 }
@@ -56,7 +56,7 @@ func TestHandleGossipTransaction_ValidationAccepted(t *testing.T) {
 	svm := New(db, appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
 
 	signer := signing.NewEdSigner()
-	origin := types.BytesToAddress(signer.PublicKey().Bytes())
+	origin := types.GenerateAddress(signer.PublicKey().Bytes())
 	svm.state.SetBalance(origin, 500)
 	svm.state.SetNonce(origin, 3)
 

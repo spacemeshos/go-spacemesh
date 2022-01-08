@@ -27,7 +27,7 @@ func addTransactionsWithFee(t testing.TB, mesh *DB, numOfTxs int, fee int64) (in
 	txs := make([]*types.Transaction, 0, numOfTxs)
 	txIDs := make([]types.TransactionID, 0, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
-		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, uint64(fee), signing.NewEdSigner())
+		tx, err := types.GenerateCallTransaction(signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100, uint64(fee))
 		assert.NoError(t, err)
 		totalFee += fee
 		txs = append(txs, tx)

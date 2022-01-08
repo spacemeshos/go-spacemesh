@@ -471,7 +471,7 @@ func addManyTXsToPool(r *require.Assertions, msh *Mesh, numOfTxs int) ([]types.T
 	txs := make([]*types.Transaction, numOfTxs)
 	txIDs := make([]types.TransactionID, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
-		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, rand.Uint64(), signing.NewEdSigner())
+		tx, err := types.GenerateCallTransaction(signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100, rand.Uint64())
 		r.NoError(err)
 		txs[i] = tx
 		txIDs[i] = tx.ID()

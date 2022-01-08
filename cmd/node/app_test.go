@@ -262,13 +262,12 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 	if err != nil {
 		log.With().Panic("could not build ed signer", log.Err(err))
 	}
-	addr := types.Address{}
-	addr.SetBytes(acc1Signer.PublicKey().Bytes())
+	addr := types.GenerateAddress(acc1Signer.PublicKey().Bytes())
 	dst := types.BytesToAddress([]byte{0x09})
 	txsSent := 25
 	setup := func(suite *AppTestSuite, t *testing.T) {
 		for i := 0; i < txsSent; i++ {
-			tx, err := types.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
+			tx, err := types.GenerateCallTransaction(acc1Signer, dst, uint64(txsSent-i), 10, 1, 1)
 			if err != nil {
 				suite.log.With().Panic("panicked creating signed tx", log.Err(err))
 			}
@@ -307,9 +306,8 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 		log.With().Panic("could not build ed signer", log.Err(err))
 	}
 
-	addr := types.Address{}
-	addr.SetBytes(acc1Signer.PublicKey().Bytes())
-	dst := types.BytesToAddress([]byte{0x02})
+	addr := types.GenerateAddress(acc1Signer.PublicKey().Bytes())
+	dst := types.GenerateAddress([]byte{0x02})
 	txsSent := 25
 	setup := func(suite *AppTestSuite, t *testing.T) {
 		accountRequest := &pb.AccountRequest{AccountId: &pb.AccountId{Address: addr.Bytes()}}
@@ -331,8 +329,9 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 				time.Sleep(250 * time.Millisecond)
 				actNonce = getNonce()
 			}
-			tx, err := types.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
+			tx, err := types.GenerateCallTransaction(acc1Signer, dst, uint64(i), 10, 1, 1)
 			suite.NoError(err, "failed to create signed tx: %s", err)
+
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
 			_, err = suite.apps[0].txService.SubmitTransaction(context.TODO(), pbMsg)

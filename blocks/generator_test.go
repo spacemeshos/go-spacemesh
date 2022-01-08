@@ -52,7 +52,7 @@ func createTransactions(t testing.TB, numOfTxs int) (uint64, []types.Transaction
 	txIDs := make([]types.TransactionID, 0, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
 		fee := uint64(rand.Intn(maxFee))
-		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, fee, signing.NewEdSigner())
+		tx, err := types.GenerateCallTransaction(signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100, fee)
 		require.NoError(t, err)
 		totalFee += fee
 		txs = append(txs, tx)

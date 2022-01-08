@@ -271,21 +271,21 @@ const (
 )
 
 func address() types.Address {
-	var addr [20]byte
+	var addr [types.AddressLength]byte
 	copy(addr[:], "12345678901234567890")
 	return addr
 }
 
 func newTx(r *require.Assertions, signer *signing.EdSigner, nonce, totalAmount uint64) *types.Transaction {
 	feeAmount := uint64(1)
-	tx, err := types.NewSignedTx(nonce, types.Address{}, totalAmount-feeAmount, 3, feeAmount, signer)
+	tx, err := types.GenerateCallTransaction(signer, types.Address{}, nonce, totalAmount-feeAmount, 3, feeAmount)
 	r.NoError(err)
 	return tx
 }
 
 func newTxWithDest(r *require.Assertions, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) *types.Transaction {
 	feeAmount := uint64(1)
-	tx, err := types.NewSignedTx(nonce, dest, totalAmount-feeAmount, 3, feeAmount, signer)
+	tx, err := types.GenerateCallTransaction(signer, dest, nonce, totalAmount-feeAmount, 3, feeAmount)
 	r.NoError(err)
 	return tx
 }
@@ -297,9 +297,7 @@ func newSignerAndAddress(r *require.Assertions, seedStr string) (*signing.EdSign
 	r.NoError(err)
 	signer, err := signing.NewEdSignerFromBuffer(privKey)
 	r.NoError(err)
-	var addr types.Address
-	addr.SetBytes(signer.PublicKey().Bytes())
-	return signer, addr
+	return signer, types.GenerateAddress(signer.PublicKey().Bytes())
 }
 
 func TestMeshDB_GetStateProjection(t *testing.T) {
@@ -701,9 +699,9 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr1},
 		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
 		{Layer: types.NewLayerID(3), TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
-		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)

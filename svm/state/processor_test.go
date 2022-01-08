@@ -59,7 +59,7 @@ func createAccount(state *TransactionProcessor, addr types.Address, balance int6
 }
 
 func createTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
-	tx, err := types.NewSignedTx(nonce, destination, amount, 100, fee, signer)
+	tx, err := types.GenerateCallTransaction(signer, destination, nonce, amount, 100, fee)
 	assert.NoError(t, err)
 	return tx
 }
@@ -96,29 +96,27 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	assert.Equal(s.T(), uint64(1), s.processor.GetNonce(obj1.address))
 
 	want := `{
-	"root": "6de6ffd7eda4c1aa4de66051e4ad05afc1233e089f9e9afaf8174a4dc483fa57",
+	"root": "a51f4367162556c9fca4684c15b219ae65cbe5f47683a977b10050f2242858f5",
 	"accounts": {
-		"0000000000000000000000000000000000000002": {
+		"52e303ac44e600f44c6b2cc625888bd7da9474f7": {
+			"nonce": 1,
+			"balance": 15
+		},
+		"cd0fe35a93a7949a27a24ce0af7d13292ea0a40b": {
 			"nonce": 0,
 			"balance": 44
 		},
-		"0000000000000000000000000000000000000102": {
+		"d77e9c2b79e13ad9c302f8379acd5d784bb58efc": {
 			"nonce": 10,
 			"balance": 2
-		},
-		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"nonce": 1,
-			"balance": 15
 		}
 	}
 }`
-	if got != want {
-		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-	}
+	require.Equal(s.T(), want, got)
 }
 
 func SignerToAddr(signer *signing.EdSigner) types.Address {
-	return types.BytesToAddress(signer.PublicKey().Bytes())
+	return types.GenerateAddress(signer.PublicKey().Bytes())
 }
 
 /*func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_DoubleTrans() {
@@ -164,9 +162,7 @@ func SignerToAddr(signer *signing.EdSigner) types.Address {
 		}
 	}
 }`
-	if got != want {
-		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-	}
+	require.Equal(s.T(), want, got)
 }*/
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors() {
@@ -243,25 +239,23 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	assert.Equal(s.T(), uint64(2), s.processor.GetBalance(obj2.address))
 
 	want := `{
-	"root": "0fb9e074115e49b9a1d33949de2578459c158d8885ca10ad9edcd5d3a84fd67c",
+	"root": "e16774886f0705300590a6ae400f03ea8b341b238033e1bc640962a2b280e12b",
 	"accounts": {
-		"0000000000000000000000000000000000000002": {
+		"52e303ac44e600f44c6b2cc625888bd7da9474f7": {
+			"nonce": 4,
+			"balance": 1
+		},
+		"cd0fe35a93a7949a27a24ce0af7d13292ea0a40b": {
 			"nonce": 0,
 			"balance": 47
 		},
-		"0000000000000000000000000000000000000102": {
+		"d77e9c2b79e13ad9c302f8379acd5d784bb58efc": {
 			"nonce": 10,
 			"balance": 2
-		},
-		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"nonce": 4,
-			"balance": 1
 		}
 	}
 }`
-	if got != want {
-		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-	}
+	require.Equal(s.T(), want, got)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
@@ -311,25 +305,23 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	got := string(processor.Dump())
 
 	want := `{
-	"root": "4b7174d31e60ef1ed970137079e2b8044d9c381422dbcbe16e561d8a51a9f651",
+	"root": "2c56e309875b43bce14cd5b2fcfa08f8aefea683a6af67c2ecb0fdb527328749",
 	"accounts": {
-		"0000000000000000000000000000000000000002": {
-			"nonce": 0,
-			"balance": 44
+		"52e303ac44e600f44c6b2cc625888bd7da9474f7": {
+			"nonce": 2,
+			"balance": 19
 		},
-		"198d6e08b28e813feb01e4a400839b85e18080ce": {
+		"60afce7cbe55ed2bd3b34fdda853c4752b021f68": {
 			"nonce": 11,
 			"balance": 28
 		},
-		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"nonce": 2,
-			"balance": 19
+		"cd0fe35a93a7949a27a24ce0af7d13292ea0a40b": {
+			"nonce": 0,
+			"balance": 44
 		}
 	}
 }`
-	if got != want {
-		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-	}
+	require.Equal(s.T(), want, got)
 
 	err = processor.LoadState(types.NewLayerID(1))
 	assert.NoError(s.T(), err)
@@ -339,25 +331,23 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	assert.Equal(s.T(), uint64(15), processor.GetBalance(obj1.address))
 
 	want = `{
-	"root": "9273645f6b9a62f32500021f5e0a89d3eb6ffd36b1b9f9f82fcaad4555951e97",
+	"root": "fdad7aa48465ee822c9f4bfa1bfb56cad218e95dbe07545861e9baffaf8b03f6",
 	"accounts": {
-		"0000000000000000000000000000000000000002": {
-			"nonce": 0,
-			"balance": 44
+		"52e303ac44e600f44c6b2cc625888bd7da9474f7": {
+			"nonce": 1,
+			"balance": 15
 		},
-		"198d6e08b28e813feb01e4a400839b85e18080ce": {
+		"60afce7cbe55ed2bd3b34fdda853c4752b021f68": {
 			"nonce": 10,
 			"balance": 42
 		},
-		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
-			"nonce": 1,
-			"balance": 15
+		"cd0fe35a93a7949a27a24ce0af7d13292ea0a40b": {
+			"nonce": 0,
+			"balance": 44
 		}
 	}
 }`
-	if got != want {
-		s.T().Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-	}
+	require.Equal(s.T(), want, got)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
@@ -440,7 +430,7 @@ func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *t
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance() {
 	r := require.New(s.T())
 	signer := signing.NewEdSigner()
-	origin := types.BytesToAddress(signer.PublicKey().Bytes())
+	origin := types.GenerateAddress(signer.PublicKey().Bytes())
 	s.processor.SetBalance(origin, 100)
 	s.processor.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
@@ -453,7 +443,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance()
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_WrongNonce() {
 	r := require.New(s.T())
 	signer := signing.NewEdSigner()
-	origin := types.BytesToAddress(signer.PublicKey().Bytes())
+	origin := types.GenerateAddress(signer.PublicKey().Bytes())
 	s.processor.SetBalance(origin, 100)
 	s.processor.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
@@ -466,7 +456,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_W
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_InsufficientBalance() {
 	r := require.New(s.T())
 	signer := signing.NewEdSigner()
-	origin := types.BytesToAddress(signer.PublicKey().Bytes())
+	origin := types.GenerateAddress(signer.PublicKey().Bytes())
 	s.processor.SetBalance(origin, 100)
 	s.processor.SetNonce(origin, 5)
 	s.projector.balanceDiff = 10
@@ -485,7 +475,7 @@ func createSignerTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transa
 	r := require.New(t)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	r.NoError(err)
-	tx, err := types.NewSignedTx(1111, toAddr([]byte{0xde}), 123, 11, 456, signer)
+	tx, err := types.GenerateCallTransaction(signer, toAddr([]byte{0xde}), 1111, 123, 11, 456)
 	r.NoError(err)
 	return tx
 }
@@ -497,10 +487,10 @@ func TestValidateTxSignature(t *testing.T) {
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
-	createAccount(proc, PublicKeyToAccountAddress(pub), 123, 321)
+	createAccount(proc, types.GenerateAddress(pub), 123, 321)
 	tx := createSignerTransaction(t, pri)
 
-	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
+	assert.Equal(t, types.GenerateAddress(pub), tx.Origin())
 	assert.True(t, proc.AddressExists(tx.Origin()))
 
 	// negative flow
@@ -508,7 +498,7 @@ func TestValidateTxSignature(t *testing.T) {
 	tx = createSignerTransaction(t, pri)
 
 	assert.False(t, proc.AddressExists(tx.Origin()))
-	assert.Equal(t, PublicKeyToAccountAddress(pub), tx.Origin())
+	assert.Equal(t, types.GenerateAddress(pub), tx.Origin())
 }
 
 func TestTransactionProcessor_GetStateRoot(t *testing.T) {

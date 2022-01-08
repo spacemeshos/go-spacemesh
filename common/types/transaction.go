@@ -93,10 +93,7 @@ func (t *Transaction) CalcAndSetOrigin() error {
 		return fmt.Errorf("failed to extract transaction pubkey: %v", err)
 	}
 
-	addr := Address{}
-	addr.SetBytes(pubKey)
-
-	t.SetOrigin(addr)
+	t.SetOrigin(GenerateAddress(pubKey))
 
 	return nil
 }
@@ -170,8 +167,13 @@ type Reward struct {
 	Coinbase            Address
 }
 
-// NewSignedTx is used in TESTS ONLY to generate signed txs.
-func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *signing.EdSigner) (*Transaction, error) {
+// GenerateSpawnTransaction generates a spawn transaction.
+func GenerateSpawnTransaction(signer *signing.EdSigner, target Address) *Transaction {
+	return &Transaction{}
+}
+
+// GenerateCallTransaction generates a call transaction.
+func GenerateCallTransaction(signer *signing.EdSigner, rec Address, nonce, amount, gas, fee uint64) (*Transaction, error) {
 	inner := InnerTransaction{
 		AccountNonce: nonce,
 		Recipient:    rec,
@@ -191,9 +193,7 @@ func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *sig
 	}
 
 	copy(sst.Signature[:], signer.Sign(buf))
-	addr := Address{}
-	addr.SetBytes(signer.PublicKey().Bytes())
-	sst.SetOrigin(addr)
+	sst.SetOrigin(GenerateAddress(signer.PublicKey().Bytes()))
 
 	return sst, nil
 }

@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -30,7 +31,7 @@ type StateSuite struct {
 	state *DB
 }
 
-var toAddr = types.BytesToAddress
+var toAddr = types.GenerateAddress
 
 func TestDump(t *testing.T) {
 	s := &StateSuite{}
@@ -52,25 +53,23 @@ func TestDump(t *testing.T) {
 	// check that dump contains the state objects that are in trie
 	got := string(s.state.Dump())
 	want := `{
-	"root": "ba94994b7d4b6590b615f0a8ab543445312fd303fdab013f0b0fba920f8f228b",
+	"root": "82f7388ee4686895dbcb3766bdceb7519209eee49c25e09832db453c62a7dd17",
 	"accounts": {
-		"0000000000000000000000000000000000000001": {
+		"8d97df5ff83db01f7c97ccf9009e0aff4087543b": {
 			"nonce": 0,
 			"balance": 22
 		},
-		"0000000000000000000000000000000000000002": {
+		"cd0fe35a93a7949a27a24ce0af7d13292ea0a40b": {
 			"nonce": 0,
 			"balance": 44
 		},
-		"0000000000000000000000000000000000000102": {
+		"d77e9c2b79e13ad9c302f8379acd5d784bb58efc": {
 			"nonce": 10,
 			"balance": 0
 		}
 	}
 }`
-	if got != want {
-		t.Errorf("dump mismatch:\ngot: %s\nwant: %s\n", got, want)
-	}
+	require.Equal(t, want, got)
 }
 
 func TestLookupPastState(t *testing.T) {

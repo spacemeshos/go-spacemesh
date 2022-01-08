@@ -328,10 +328,11 @@ func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
-	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
+	tx, err := types.GenerateCallTransaction(signer, recipient, nonce, 1, defaultGasLimit, defaultFee)
 	if err != nil {
 		return nil
 	}
+
 	return tx
 }
 
@@ -2316,8 +2317,8 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 		defer timer.Stop()
 
 		select {
-		case <-errCh:
-			t.Errorf("should not receive")
+		case err := <-errCh:
+			t.Errorf("should not receive err %v", err)
 		case <-timer.C:
 			return
 		}
@@ -2420,8 +2421,8 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		defer timer.Stop()
 
 		select {
-		case <-errCh:
-			t.Errorf("should not receive")
+		case err := <-errCh:
+			t.Errorf("should not receive err %v", err)
 		case <-timer.C:
 			return
 		}
@@ -2539,8 +2540,8 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		defer timer.Stop()
 
 		select {
-		case <-errCh:
-			t.Errorf("should not receive")
+		case err := <-errCh:
+			t.Errorf("should not receive err %v", err)
 		case <-timer.C:
 			return
 		}
@@ -2642,8 +2643,8 @@ func TestLayerStream_comprehensive(t *testing.T) {
 		defer timer.Stop()
 
 		select {
-		case <-errCh:
-			t.Errorf("should not receive")
+		case err := <-errCh:
+			t.Errorf("should not receive err %v", err)
 		case <-timer.C:
 			return
 		}
@@ -3058,8 +3059,7 @@ func TestEventsReceived(t *testing.T) {
 		},
 	}
 
-	originAddr := types.Address{}
-	originAddr.SetBytes(signer1.PublicKey().Bytes())
+	originAddr := types.GenerateAddress(signer1.PublicKey().Bytes())
 	accountReq2 := &pb.AccountDataStreamRequest{
 		Filter: &pb.AccountDataFilter{
 			AccountId: &pb.AccountId{Address: originAddr.Bytes()},

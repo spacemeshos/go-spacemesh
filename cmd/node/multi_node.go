@@ -13,9 +13,11 @@ import (
 	"time"
 
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
+	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -176,6 +178,25 @@ func getTestDefaultConfig() *config.Config {
 	cfg.GoldenATXID = "0x5678"
 
 	cfg.TortoiseBeacon = tortoisebeacon.NodeSimUnitTestConfig()
+
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiConfig.Account1Private))
+	if err != nil {
+		log.With().Panic("could not build ed signer", log.Err(err))
+	}
+
+	acc2Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiConfig.Account2Private))
+	if err != nil {
+		log.With().Panic("could not build ed signer", log.Err(err))
+	}
+
+	cfg.Genesis = &apiConfig.GenesisConfig{
+		Accounts: map[string]uint64{
+			// types.GenerateAddress(util.FromHex(apiConfig.Account1Private)).String(): 100000000000000000,
+			// types.GenerateAddress(util.FromHex(apiConfig.Account2Private)).String(): 100000000000000000,
+			types.GenerateAddress(acc1Signer.PublicKey().Bytes()).String(): 100000000000000000,
+			types.GenerateAddress(acc2Signer.PublicKey().Bytes()).String(): 100000000000000000,
+		},
+	}
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
