@@ -699,9 +699,9 @@ func TestMeshDB_testGetRewardsBySmesherChangingLayer(t *testing.T) {
 	rewards, err := mdb.GetRewardsBySmesherID(smesher2)
 	r.NoError(err)
 	r.Equal([]types.Reward{
-		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr1},
 		{Layer: types.NewLayerID(1), TotalReward: 10000, LayerRewardEstimate: 9000, SmesherID: smesher2, Coinbase: addr2},
 		{Layer: types.NewLayerID(3), TotalReward: 30000, LayerRewardEstimate: 29000, SmesherID: smesher2, Coinbase: addr2},
+		{Layer: types.NewLayerID(2), TotalReward: 20000, LayerRewardEstimate: 19000, SmesherID: smesher2, Coinbase: addr1},
 	}, rewards)
 
 	rewards, err = mdb.GetRewardsBySmesherID(smesher1)

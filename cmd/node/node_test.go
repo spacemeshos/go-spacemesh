@@ -716,22 +716,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 
 		app.Config.GenesisTime = time.Now().Add(20 * time.Second).Format(time.RFC3339)
 
-		acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiConfig.Account1Private))
-		if err != nil {
-			log.With().Panic("could not build ed signer", log.Err(err))
-		}
-
-		acc2Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(apiConfig.Account2Private))
-		if err != nil {
-			log.With().Panic("could not build ed signer", log.Err(err))
-		}
-
-		app.Config.Genesis = &apiConfig.GenesisConfig{
-			Accounts: map[string]uint64{
-				types.GenerateAddress(acc1Signer.PublicKey().Bytes()).String(): 100000000000000000,
-				types.GenerateAddress(acc2Signer.PublicKey().Bytes()).String(): 100000000000000000,
-			},
-		}
+		app.Config.Genesis = apiConfig.DefaultTestGenesisConfig()
 
 		// This will block. We need to run the full app here to make sure that
 		// the various services are reporting events correctly. This could probably

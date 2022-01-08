@@ -1,5 +1,11 @@
 package config
 
+import (
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/signing"
+)
+
 // GenesisConfig defines accounts that will exist in state at genesis.
 type GenesisConfig struct {
 	Accounts map[string]uint64 `mapstructure:"accounts"`
@@ -28,5 +34,30 @@ func DefaultGenesisConfig() *GenesisConfig {
 		Account1Address: 100000000000000000,
 		Account2Address: 100000000000000000,
 	}
+	return &g
+}
+
+// DefaultTestGenesisConfig is the default test configuration for the node.
+func DefaultTestGenesisConfig() *GenesisConfig {
+	// NOTE(dshulyak) keys in default config are used in some tests
+	g := GenesisConfig{}
+
+	acc1Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(Account1Private))
+	if err != nil {
+		panic("could not build ed signer")
+	}
+
+	acc2Signer, err := signing.NewEdSignerFromBuffer(util.FromHex(Account2Private))
+	if err != nil {
+		panic("could not build ed signer")
+	}
+
+	// we default to 10^5 SMH per account which is 10^17 smidge
+	// each genesis account starts off with 10^17 smidge
+	g.Accounts = map[string]uint64{
+		types.GenerateAddress(acc1Signer.PublicKey().Bytes()).String(): 100000000000000000,
+		types.GenerateAddress(acc2Signer.PublicKey().Bytes()).String(): 100000000000000000,
+	}
+
 	return &g
 }

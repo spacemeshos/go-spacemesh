@@ -96,19 +96,19 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	assert.Equal(s.T(), uint64(1), s.processor.GetNonce(obj1.address))
 
 	want := `{
-	"root": "a51f4367162556c9fca4684c15b219ae65cbe5f47683a977b10050f2242858f5",
+	"root": "29249ea7f314853b029d4e7439d04a3794ee8e5b0a40efa42ccbb6f977badb02",
 	"accounts": {
-		"52e303ac44e600f44c6b2cc625888bd7da9474f7": {
+		"25888bd7da9474f7e3a7e51297b4111a473c606c": {
 			"nonce": 1,
 			"balance": 15
 		},
-		"cd0fe35a93a7949a27a24ce0af7d13292ea0a40b": {
-			"nonce": 0,
-			"balance": 44
-		},
-		"d77e9c2b79e13ad9c302f8379acd5d784bb58efc": {
+		"9acd5d784bb58efc950cd2eeeee03551a196f75b": {
 			"nonce": 10,
 			"balance": 2
+		},
+		"af7d13292ea0a40ba65b01a805b93ca583b71ce8": {
+			"nonce": 0,
+			"balance": 44
 		}
 	}
 }`
@@ -239,19 +239,19 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	assert.Equal(s.T(), uint64(2), s.processor.GetBalance(obj2.address))
 
 	want := `{
-	"root": "e16774886f0705300590a6ae400f03ea8b341b238033e1bc640962a2b280e12b",
+	"root": "215d2effa083ef73f749c75baaed4a3c3d4bec4475fc94bad545483945e5832a",
 	"accounts": {
-		"52e303ac44e600f44c6b2cc625888bd7da9474f7": {
+		"25888bd7da9474f7e3a7e51297b4111a473c606c": {
 			"nonce": 4,
 			"balance": 1
 		},
-		"cd0fe35a93a7949a27a24ce0af7d13292ea0a40b": {
-			"nonce": 0,
-			"balance": 47
-		},
-		"d77e9c2b79e13ad9c302f8379acd5d784bb58efc": {
+		"9acd5d784bb58efc950cd2eeeee03551a196f75b": {
 			"nonce": 10,
 			"balance": 2
+		},
+		"af7d13292ea0a40ba65b01a805b93ca583b71ce8": {
+			"nonce": 0,
+			"balance": 47
 		}
 	}
 }`
@@ -305,17 +305,17 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	got := string(processor.Dump())
 
 	want := `{
-	"root": "2c56e309875b43bce14cd5b2fcfa08f8aefea683a6af67c2ecb0fdb527328749",
+	"root": "cde9a4fa3f0cacac329e91e3124c2ec5dae31d3cbe76efab0ceb230646ff0e2d",
 	"accounts": {
-		"52e303ac44e600f44c6b2cc625888bd7da9474f7": {
+		"25888bd7da9474f7e3a7e51297b4111a473c606c": {
 			"nonce": 2,
 			"balance": 19
 		},
-		"60afce7cbe55ed2bd3b34fdda853c4752b021f68": {
+		"a853c4752b021f68b11423934b1ae51e51422293": {
 			"nonce": 11,
 			"balance": 28
 		},
-		"cd0fe35a93a7949a27a24ce0af7d13292ea0a40b": {
+		"af7d13292ea0a40ba65b01a805b93ca583b71ce8": {
 			"nonce": 0,
 			"balance": 44
 		}
@@ -331,17 +331,17 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	assert.Equal(s.T(), uint64(15), processor.GetBalance(obj1.address))
 
 	want = `{
-	"root": "fdad7aa48465ee822c9f4bfa1bfb56cad218e95dbe07545861e9baffaf8b03f6",
+	"root": "ca81fb9812cb19780292e37dc0437eac7db24c0a8f912e093d9b7f7f70baa1b2",
 	"accounts": {
-		"52e303ac44e600f44c6b2cc625888bd7da9474f7": {
+		"25888bd7da9474f7e3a7e51297b4111a473c606c": {
 			"nonce": 1,
 			"balance": 15
 		},
-		"60afce7cbe55ed2bd3b34fdda853c4752b021f68": {
+		"a853c4752b021f68b11423934b1ae51e51422293": {
 			"nonce": 10,
 			"balance": 42
 		},
-		"cd0fe35a93a7949a27a24ce0af7d13292ea0a40b": {
+		"af7d13292ea0a40ba65b01a805b93ca583b71ce8": {
 			"nonce": 0,
 			"balance": 44
 		}

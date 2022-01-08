@@ -152,12 +152,8 @@ func GenerateAddress(publicKey []byte) Address {
 	sha.Write(input)
 	hash := sha.Sum(nil)
 
-	// TODO(nkryuchkov): remove
-	hash = hash[:AddressLength]
-
 	var addr Address
 	addr.SetBytes(hash)
-	// addr.SetBytes(publicKey)
 
 	return addr
 }
