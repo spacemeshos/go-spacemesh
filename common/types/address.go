@@ -132,7 +132,7 @@ func (n *nonce128) next() []byte {
 	binary.LittleEndian.PutUint64(a, n.little)
 	binary.LittleEndian.PutUint64(a, n.big)
 
-	// TODO(nkryuchkov): uncomment the implementation
+	// TODO(nkryuchkov): For now nonce is always 0. When we need to fix that, the code below needs to be uncommented.
 	//n.little++
 	//if n.little == 0 {
 	//	n.big++
