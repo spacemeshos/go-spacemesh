@@ -10,23 +10,41 @@ import (
 
 type layerPatrol interface {
 	SetHareInCharge(types.LayerID)
+	CompleteHare(types.LayerID)
 }
 
 // Rolacle is the roles oracle provider.
 type Rolacle interface {
-	Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error)
-	CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error)
-	Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error)
-	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
+	Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error)
+	CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error)
+	Proof(context.Context, types.LayerID, uint32) ([]byte, error)
+	IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error)
 }
 
 type meshProvider interface {
-	// LayerProposals returns the proposals in a layer
-	LayerProposals(types.LayerID) ([]*types.Proposal, error)
-	// GetBallot returns the ballot with the specified ID
+	AddBlockWithTXs(context.Context, *types.Block) error
 	GetBallot(types.BallotID) (*types.Ballot, error)
-	// HandleValidatedLayer receives Hare output when it succeeds
-	HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID)
-	// RecordCoinflip records the weak coinflip result for a layer
-	RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool)
+	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID) error
+	RecordCoinflip(context.Context, types.LayerID, bool)
+	SetZeroBallotLayer(types.LayerID) error
+}
+
+type proposalProvider interface {
+	LayerProposals(types.LayerID) ([]*types.Proposal, error)
+	GetProposals([]types.ProposalID) ([]*types.Proposal, error)
+}
+
+type blockGenerator interface {
+	GenerateBlock(context.Context, types.LayerID, []*types.Proposal) (*types.Block, error)
+}
+
+type identityProvider interface {
+	GetIdentity(string) (types.NodeID, error)
+}
+
+// stateQuerier provides a query to check if an Ed public key is active on the current consensus view.
+// It returns true if the identity is active and false otherwise.
+// An error is set iff the identity could not be checked for activeness.
+type stateQuerier interface {
+	IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error)
 }

@@ -121,9 +121,17 @@ func ReportRewardReceived(r Reward) {
 	}
 }
 
-// ReportNewProposal reports a new block.
-func ReportNewProposal(p *types.Proposal) {
+// ReportNewBlock reports a new block.
+func ReportNewBlock(b *types.Block) {
 	Publish(NewBlock{
+		ID:    b.ID().String(),
+		Layer: b.LayerIndex.Uint32(),
+	})
+}
+
+// ReportNewProposal reports a new proposal.
+func ReportNewProposal(p *types.Proposal) {
+	Publish(NewProposal{
 		ID:    p.ID().String(),
 		Atx:   p.AtxID.ShortString(),
 		Layer: p.LayerIndex.Uint32(),

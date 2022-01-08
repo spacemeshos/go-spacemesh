@@ -16,7 +16,7 @@ import (
 
 // Config for protocol parameters.
 type Config struct {
-	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare/input vector lookback distance
+	Hdist uint32 `mapstructure:"tortoise-hdist"` // hare output lookback distance
 	Zdist uint32 `mapstructure:"tortoise-zdist"` // hare result wait distance
 	// how long we are waiting for a switch from verifying to full. relevant during rerun.
 	WindowSize                      uint32        `mapstructure:"tortoise-window-size"`      // size of the tortoise sliding window (in layers)
@@ -176,7 +176,7 @@ func (trtl *Tortoise) LatestComplete() types.LayerID {
 }
 
 // BaseBallot chooses a base ballot and creates a differences list. needs the hare results for latest layers.
-func (trtl *Tortoise) BaseBallot(ctx context.Context) (types.BallotID, [][]types.BlockID, error) {
+func (trtl *Tortoise) BaseBallot(ctx context.Context) (*types.Votes, error) {
 	trtl.mu.Lock()
 	defer trtl.mu.Unlock()
 	return trtl.trtl.BaseBallot(ctx)
@@ -202,7 +202,7 @@ func (trtl *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.Lay
 	}
 	trtl.org.Iterate(ctx, layerID, func(lid types.LayerID) {
 		if err := trtl.trtl.HandleIncomingLayer(ctx, lid); err != nil {
-			logger.Error("tortoise errored handling incoming layer", log.Err(err))
+			logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
 		}
 	})
 

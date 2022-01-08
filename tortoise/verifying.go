@@ -122,7 +122,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 	}
 
 	// if there is any block with neutral local opinion - we can't verify the layer
-	// if it happens outside of hdist - protocol will switch to full tortoise
+	// if it happens outside hdist - protocol will switch to full tortoise
 	for _, bid := range v.blocks[lid] {
 		vote, _ := getLocalVote(v.commonState, v.Config, lid, bid)
 		if vote == abstain {
@@ -166,6 +166,10 @@ func (v *verifying) determineGoodness(logger log.Log, ballot tortoiseBallot) goo
 	}
 
 	baselid := v.ballotLayer[ballot.base]
+
+	// NOTE(dshulyak) abstain votes are ignored in this method.
+	// they suppose to be added in a followup change.
+
 	for block, vote := range ballot.votes {
 		blocklid, exists := v.blockLayer[block]
 		// if the layer of the vote is not in the memory then it is definitely before base block layer

@@ -43,44 +43,7 @@ type InnerBallot struct {
 	AtxID ATXID
 	// the proof of the smesher's eligibility to vote and propose block content in this epoch.
 	EligibilityProof VotingEligibilityProof
-
-	// a smesher creates votes in the following steps:
-	// - select a Ballot in the past as a base Ballot
-	// - calculate the opinion difference on history between the smesher and the base Ballot
-	// - encode the opinion difference in 3 list:
-	//	 - ForDiff
-	//	   contains blocks we support while the base ballot did not support (i.e. voted against)
-	//	   for blocks we support in layers later than the base ballot, we also add them to this list
-	//   - AgainstDiff
-	//     contains blocks we vote against while the base ballot explicitly supported
-	//	 - NeutralDiff
-	//	   contains blocks we vote neutral while the base ballot explicitly supported or voted against
-	//
-	// example:
-	// layer | unified content block
-	// -----------------------------------------------------------------------------------------------
-	//   N   | UCB_A (genesis)
-	// -----------------------------------------------------------------------------------------------
-	//  N+1  | UCB_B base:UCB_A, for:[UCB_A], against:[], neutral:[]
-	// -----------------------------------------------------------------------------------------------
-	//  N+2  | UCB_C base:UCB_B, for:[UCB_B], against:[], neutral:[]
-	// -----------------------------------------------------------------------------------------------
-	//  (hare hasn't terminated for N+2)
-	//  N+3  | UCB_D base:UCB_B, for:[UCB_B], against:[], neutral:[UCB_C]
-	// -----------------------------------------------------------------------------------------------
-	//  (hare succeeded for N+2 but failed for N+3)
-	//  N+4  | UCB_E base:UCB_C, for:[UCB_C], against:[], neutral:[]
-	// -----------------------------------------------------------------------------------------------
-	// NOTE on neutral votes: a base block is by default neutral on all blocks and layers that come after it, so
-	// there's no need to explicitly add neutral votes for more recent layers.
-	// TODO: optimize this data structure in two ways:
-	//   - neutral votes are only ever for an entire layer, never for a subset of blocks.
-	//   - collapse AgainstDiff and ForDiff into a single list.
-	//   see https://github.com/spacemeshos/go-spacemesh/issues/2369.
-	BaseBallot  BallotID
-	AgainstDiff []BlockID
-	ForDiff     []BlockID
-	NeutralDiff []BlockID
+	Votes            Votes
 
 	// the first Ballot the smesher cast in the epoch. this Ballot is a special Ballot that contains information
 	// that cannot be changed mid-epoch.
@@ -89,6 +52,49 @@ type InnerBallot struct {
 
 	// the layer ID in which this ballot is eligible for. this will be validated via EligibilityProof
 	LayerIndex LayerID
+}
+
+// Votes is for encoding local votes to send over the wire.
+//
+// a smesher creates votes in the following steps:
+// - select a Ballot in the past as a base Ballot
+// - calculate the opinion difference on history between the smesher and the base Ballot
+// - encode the opinion difference in 3 list:
+//	 - ForDiff
+//	   contains blocks we support while the base ballot did not support (i.e. voted against)
+//	   for blocks we support in layers later than the base ballot, we also add them to this list
+//   - AgainstDiff
+//     contains blocks we vote against while the base ballot explicitly supported
+//	 - NeutralDiff
+//	   contains layers we vote neutral while the base ballot explicitly supported or voted against
+//
+// example:
+// layer | unified content block
+// -----------------------------------------------------------------------------------------------
+//   N   | UCB_A (genesis)
+// -----------------------------------------------------------------------------------------------
+//  N+1  | UCB_B base:UCB_A, for:[UCB_A], against:[], neutral:[]
+// -----------------------------------------------------------------------------------------------
+//  N+2  | UCB_C base:UCB_B, for:[UCB_B], against:[], neutral:[]
+// -----------------------------------------------------------------------------------------------
+//  (hare hasn't terminated for N+2)
+//  N+3  | UCB_D base:UCB_B, for:[UCB_B], against:[], neutral:[N+2]
+// -----------------------------------------------------------------------------------------------
+//  (hare succeeded for N+2 but failed for N+3)
+//  N+4  | UCB_E base:UCB_C, for:[UCB_C], against:[], neutral:[]
+// -----------------------------------------------------------------------------------------------
+// NOTE on neutral votes: a base block is by default neutral on all blocks and layers that come after it, so
+// there's no need to explicitly add neutral votes for more recent layers.
+//
+// TODO: maybe collapse Support and Against into a single list.
+//   see https://github.com/spacemeshos/go-spacemesh/issues/2369.
+type Votes struct {
+	// Base ballot.
+	Base BallotID
+	// Support and Against blocks that base ballot votes differently.
+	Support, Against []BlockID
+	// Abstain on layers until they are terminated.
+	Abstain []LayerID
 }
 
 // EpochData contains information that cannot be changed mid-epoch.
@@ -161,10 +167,10 @@ func (b *Ballot) Fields() []log.LoggableField {
 		b.LayerIndex,
 		b.LayerIndex.GetEpoch(),
 		log.FieldNamed("smesher_id", b.SmesherID()),
-		log.FieldNamed("base_ballot", b.BaseBallot),
-		log.Int("supports", len(b.ForDiff)),
-		log.Int("againsts", len(b.AgainstDiff)),
-		log.Int("abstains", len(b.NeutralDiff)),
+		log.FieldNamed("base_ballot", b.Votes.Base),
+		log.Int("supports", len(b.Votes.Support)),
+		log.Int("againsts", len(b.Votes.Against)),
+		log.Int("abstains", len(b.Votes.Abstain)),
 		b.AtxID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_ballot", b.RefBallot),
@@ -185,15 +191,15 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 		beacon = b.EpochData.Beacon
 	}
 
-	encoder.AddString("id", b.ID().String())
-	encoder.AddUint32("layer", b.LayerIndex.Value)
-	encoder.AddUint32("epoch", uint32(b.LayerIndex.GetEpoch()))
+	encoder.AddString("ballot_id", b.ID().String())
+	encoder.AddUint32("layer_id", b.LayerIndex.Value)
+	encoder.AddUint32("epoch_id", uint32(b.LayerIndex.GetEpoch()))
 	encoder.AddString("smesher", b.SmesherID().String())
-	encoder.AddString("base_ballot", b.BaseBallot.String())
-	encoder.AddInt("supports", len(b.ForDiff))
-	encoder.AddInt("againsts", len(b.AgainstDiff))
-	encoder.AddInt("abstains", len(b.NeutralDiff))
-	encoder.AddString("atx", b.AtxID.String())
+	encoder.AddString("base_ballot", b.Votes.Base.String())
+	encoder.AddInt("supports", len(b.Votes.Support))
+	encoder.AddInt("againsts", len(b.Votes.Against))
+	encoder.AddInt("abstains", len(b.Votes.Abstain))
+	encoder.AddString("atx_id", b.AtxID.String())
 	encoder.AddUint32("eligibility_counter", b.EligibilityProof.J)
 	encoder.AddString("ref_ballot", b.RefBallot.String())
 	encoder.AddInt("active_set_size", activeSetSize)

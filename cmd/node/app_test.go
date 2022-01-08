@@ -546,8 +546,9 @@ func (suite *AppTestSuite) validateReloadStateRoot(app *App, oldRoot types.Hash3
 
 func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	type nodeData struct {
-		layertoblocks map[types.LayerID][]types.BlockID
-		atxPerEpoch   map[types.EpochID]uint32
+		layertoblocks  map[types.LayerID][]types.BlockID
+		layertoballots map[types.LayerID][]types.BallotID
+		atxPerEpoch    map[types.EpochID]uint32
 	}
 
 	layersPerEpoch := suite.apps[0].Config.LayersPerEpoch
@@ -563,6 +564,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		if _, ok := datamap[ap.nodeID.Key]; !ok {
 			datamap[ap.nodeID.Key] = new(nodeData)
 			datamap[ap.nodeID.Key].atxPerEpoch = make(map[types.EpochID]uint32)
+			datamap[ap.nodeID.Key].layertoballots = make(map[types.LayerID][]types.BallotID)
 			datamap[ap.nodeID.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
 		}
 
@@ -571,6 +573,14 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			suite.NoError(err, "couldn't get validated layer from db", i)
 			for _, b := range lyr.Blocks() {
 				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], b.ID())
+			}
+			for _, b := range lyr.Ballots() {
+				datamap[ap.nodeID.Key].layertoballots[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoballots[lyr.Index()], b.ID())
+			}
+			if len(lyr.BallotIDs()) == 0 {
+				// no proposal was created for this layer
+				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], types.EmptyBlockID)
+				datamap[ap.nodeID.Key].layertoballots[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoballots[lyr.Index()], types.EmptyBallotID)
 			}
 		}
 	}
@@ -603,6 +613,19 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	lastLayer := len(nodedata.layertoblocks) + 5
 	suite.log.Info("node %v", suite.apps[0].nodeID.ShortString())
 
+	totalBallots := 0
+	for id, l := range nodedata.layertoballots {
+		totalBallots += len(l)
+		suite.log.Info("node %v: layer %v, ballots %v", suite.apps[0].nodeID.ShortString(), id, len(l))
+	}
+
+	genesisBallots := 0
+	for i := uint32(0); i < layersPerEpoch*2; i++ {
+		if l, ok := nodedata.layertoblocks[types.NewLayerID(i)]; ok {
+			genesisBallots += len(l)
+		}
+	}
+
 	totalBlocks := 0
 	for id, l := range nodedata.layertoblocks {
 		totalBlocks += len(l)
@@ -618,21 +641,26 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	// assert number of blocks
 	totalEpochs := int(untilLayer.GetEpoch()) + 1
-	blocksPerEpochTarget := layerAvgSize * int(layersPerEpoch)
+	ballotPerEpochTarget := layerAvgSize * int(layersPerEpoch)
 
 	allApps := append(suite.apps, suite.killedApps...)
 	expectedEpochWeight := configuredTotalWeight(allApps)
 
 	// note: expected no. blocks per epoch should remain the same even after some nodes are killed, since the
 	// remaining nodes will be eligible for proportionally more blocks per layer
-	expectedBlocksPerEpoch := 0
+	expectedBallotsPerEpoch := 0
 	for _, app := range allApps {
-		expectedBlocksPerEpoch += max(blocksPerEpochTarget*int(app.Config.SMESHING.Opts.NumUnits)/int(expectedEpochWeight), 1)
+		expectedBallotsPerEpoch += max(ballotPerEpochTarget*int(app.Config.SMESHING.Opts.NumUnits)/int(expectedEpochWeight), 1)
 	}
+	// note: we expect the number of ballots to be a bit less than the expected number since, after some apps were
+	// killed and before healing kicked in, some ballots should be missing
+	expectedTotalBallots := (totalEpochs - 2) * expectedBallotsPerEpoch
+	actualTotalBallots := totalBallots - genesisBallots
+	suite.Equal(expectedTotalBallots, actualTotalBallots,
+		fmt.Sprintf("got unexpected ballot count! got: %v, want: %v. totalBallots: %v, genesisBallots: %v, lastLayer: %v, layersPerEpoch: %v, layerAvgSize: %v, totalEpochs: %v, datamap: %v",
+			actualTotalBallots, expectedTotalBallots, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
-	// note: we expect the number of blocks to be a bit less than the expected number since, after some apps were
-	// killed and before healing kicked in, some blocks should be missing
-	expectedTotalBlocks := (totalEpochs - 2) * expectedBlocksPerEpoch
+	expectedTotalBlocks := (totalEpochs - 2) * int(layersPerEpoch)
 	actualTotalBlocks := totalBlocks - genesisBlocks
 	suite.Equal(expectedTotalBlocks, actualTotalBlocks,
 		fmt.Sprintf("got unexpected block count! got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v, layerAvgSize: %v, totalEpochs: %v, datamap: %v",

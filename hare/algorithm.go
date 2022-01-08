@@ -69,19 +69,6 @@ func (cpo procReport) Completed() bool {
 	return cpo.completed
 }
 
-type certification struct {
-	id          types.LayerID
-	eligibility uint16
-}
-
-func (c *certification) ID() types.LayerID {
-	return c.id
-}
-
-func (c *certification) Eligibility() uint16 {
-	return c.eligibility
-}
-
 func (proc *consensusProcess) report(completed bool) {
 	proc.terminationReport <- procReport{proc.instanceID, proc.s, proc.preRoundTracker.coinflip, completed}
 }
@@ -94,13 +81,6 @@ type State struct {
 	ki          uint32       // indicates when S was first committed upon
 	s           *Set         // the set of values
 	certificate *certificate // the certificate
-}
-
-// StateQuerier provides a query to check if an Ed public key is active on the current consensus view.
-// It returns true if the identity is active and false otherwise.
-// An error is set iff the identity could not be checked for activeness.
-type StateQuerier interface {
-	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
 // Msg is the wrapper of the protocol's message.
@@ -128,7 +108,7 @@ func (m *Msg) Bytes() []byte {
 // Upon receiving a protocol message, we try to build the full message.
 // The full message consists of the original message and the extracted public key.
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
-func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier StateQuerier) (*Msg, error) {
+func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier stateQuerier) (*Msg, error) {
 	logger = logger.WithContext(ctx)
 
 	// extract pub key
@@ -210,7 +190,7 @@ type consensusProcess struct {
 }
 
 // newConsensusProcess creates a new consensus process instance.
-func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
+func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, stateQuerier stateQuerier,
 	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p pubsub.Publisher,
 	terminationReport chan TerminationOutput,
 	certificationReport chan types.LayerID,
@@ -855,7 +835,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 func (proc *consensusProcess) initDefaultBuilderCertification(s *Set, eligibility uint16) (*messageBuilder, error) {
 	builder := newMessageBuilder().SetInstanceID(proc.instanceID)
 	builder = builder.SetRoundCounter(proc.getK()).SetKi(proc.ki).SetValues(s)
-	proof, err := proc.oracle.Proof(context.TODO(), types.LayerID(proc.instanceID), proc.getK())
+	proof, err := proc.oracle.Proof(context.TODO(), proc.instanceID, proc.getK())
 	if err != nil {
 		proc.With().Error("could not initialize default builder", log.Err(err))
 		return nil, fmt.Errorf("could not initialize default builder: %v", err)

@@ -1,7 +1,9 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/spacemeshos/ed25519"
@@ -41,6 +43,11 @@ func (id TransactionID) Bytes() []byte {
 
 // Field returns a log field. Implements the LoggableField interface.
 func (id TransactionID) Field() log.Field { return log.FieldNamed("tx_id", id.Hash32()) }
+
+// Compare returns true if other (the given TransactionID) is less than this TransactionID, by lexicographic comparison.
+func (id TransactionID) Compare(other TransactionID) bool {
+	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
+}
 
 // TxIdsField returns a list of loggable fields for a given list of IDs.
 func TxIdsField(ids []TransactionID) log.Field {
@@ -130,7 +137,7 @@ func (t *Transaction) Hash32() Hash32 {
 	return t.ID().Hash32()
 }
 
-// ShortString returns a the first 5 characters of the ID, for logging purposes.
+// ShortString returns the first 5 characters of the ID, for logging purposes.
 func (t *Transaction) ShortString() string {
 	return t.ID().ShortString()
 }
@@ -142,11 +149,26 @@ func (t *Transaction) String() string {
 		t.ID().ShortString(), t.Origin().Short(), t.GetRecipient().Short(), t.Amount, t.AccountNonce, t.GasLimit, t.GetFee())
 }
 
+// ToTransactionIDs returns a slice of TransactionID corresponding to the given transactions.
+func ToTransactionIDs(txs []*Transaction) []TransactionID {
+	ids := make([]TransactionID, 0, len(txs))
+	for _, tx := range txs {
+		ids = append(ids, tx.ID())
+	}
+	return ids
+}
+
+// SortTransactionIDs sorts a list of TransactionID in their lexicographic order, in-place.
+func SortTransactionIDs(ids []TransactionID) []TransactionID {
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
+	return ids
+}
+
 // MeshTransaction is stored in the mesh and included in the block.
 type MeshTransaction struct {
 	Transaction
-	LayerID    LayerID
-	ProposalID ProposalID
+	LayerID LayerID
+	BlockID BlockID
 }
 
 // InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).

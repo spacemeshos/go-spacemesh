@@ -16,9 +16,11 @@ func TestBallot_IDSize(t *testing.T) {
 func TestBallot_Initialize(t *testing.T) {
 	b := Ballot{
 		InnerBallot: InnerBallot{
-			AtxID:      RandomATXID(),
-			BaseBallot: RandomBallotID(),
-			ForDiff:    []BlockID{RandomBlockID(), RandomBlockID()},
+			AtxID: RandomATXID(),
+			Votes: Votes{
+				Base:    RandomBallotID(),
+				Support: []BlockID{RandomBlockID(), RandomBlockID()},
+			},
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
 		},
@@ -36,9 +38,11 @@ func TestBallot_Initialize(t *testing.T) {
 func TestBallot_Initialize_BadSignature(t *testing.T) {
 	b := Ballot{
 		InnerBallot: InnerBallot{
-			AtxID:      RandomATXID(),
-			BaseBallot: RandomBallotID(),
-			ForDiff:    []BlockID{RandomBlockID(), RandomBlockID()},
+			AtxID: RandomATXID(),
+			Votes: Votes{
+				Base:    RandomBallotID(),
+				Support: []BlockID{RandomBlockID(), RandomBlockID()},
+			},
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
 		},

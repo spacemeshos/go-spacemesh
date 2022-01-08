@@ -45,16 +45,41 @@ func init() {
 
 type mockBlockProvider struct{}
 
-func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
-}
-
-func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
+func (mbp *mockBlockProvider) ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID) error {
+	return nil
 }
 
 func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
 }
 
-func (mbp *mockBlockProvider) LayerProposals(lyr types.LayerID) ([]*types.Proposal, error) {
+func (mbp *mockBlockProvider) AddBlockWithTXs(context.Context, *types.Block) error {
+	return nil
+}
+
+func (mbp *mockBlockProvider) SetZeroBallotLayer(types.LayerID) error {
+	return nil
+}
+
+func (mbp *mockBlockProvider) GetBallot(id types.BallotID) (*types.Ballot, error) {
+	return nil, nil
+}
+
+type mockProposalProvider struct {
+	allProposals map[types.ProposalID]*types.Proposal
+}
+
+func (mp *mockProposalProvider) GetProposals(pids []types.ProposalID) ([]*types.Proposal, error) {
+	proposals := make([]*types.Proposal, 0, len(pids))
+	for _, pid := range pids {
+		proposals = append(proposals, mp.allProposals[pid])
+	}
+	return proposals, nil
+}
+
+func (mp *mockProposalProvider) LayerProposals(lyr types.LayerID) ([]*types.Proposal, error) {
+	if mp.allProposals == nil {
+		mp.allProposals = make(map[types.ProposalID]*types.Proposal)
+	}
 	// the proposal IDs in each layer need to be stable across hare instances.
 	s := make([]*types.Proposal, 200)
 	for i := 0; i < 200; i++ {
@@ -67,12 +92,15 @@ func (mbp *mockBlockProvider) LayerProposals(lyr types.LayerID) ([]*types.Propos
 		p := dbp.ToProposal(&types.Ballot{})
 		p.EpochData = &types.EpochData{Beacon: types.BytesToBeacon(lyr.GetEpoch().ToBytes())}
 		s[i] = p
+		mp.allProposals[p.ID()] = p
 	}
 	return s, nil
 }
 
-func (mbp *mockBlockProvider) GetBallot(id types.BallotID) (*types.Ballot, error) {
-	return nil, nil
+type mockProposalFetcher struct{}
+
+func (mf *mockProposalFetcher) GetProposals(context.Context, []types.ProposalID) error {
+	return nil
 }
 
 type mockBeaconGetter struct{}
@@ -89,6 +117,12 @@ type HareApp struct {
 	sgn    hare.Signer
 	ha     *hare.Hare
 	clock  *timesync.TimeClock
+}
+
+type mockBlockGen struct{}
+
+func (mg *mockBlockGen) GenerateBlock(ctx context.Context, layerID types.LayerID, proposals []*types.Proposal) (*types.Block, error) {
+	return types.GenLayerBlock(layerID, nil), nil
 }
 
 type mockSyncStateProvider struct{}
@@ -190,9 +224,25 @@ func (app *HareApp) Start(cmd *cobra.Command, args []string) {
 		ch:        make(chan struct{}),
 		layerTime: gTime,
 	}
-	hareI := hare.New(app.Config.HARE, host.ID(), host, app.sgn, types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}},
-		&mockSyncStateProvider{}, &mockBlockProvider{}, &mockBeaconGetter{}, hareOracle,
-		layerpatrol.New(), uint16(app.Config.LayersPerEpoch), &mockIDProvider{}, &mockStateQuerier{}, mockClock, logger)
+	hareI := hare.New(
+		app.Config.HARE,
+		host.ID(),
+		host,
+		app.sgn,
+		types.NodeID{Key: app.sgn.PublicKey().String(), VRFPublicKey: []byte{}},
+		&mockBlockGen{},
+		&mockSyncStateProvider{},
+		&mockBlockProvider{},
+		&mockProposalProvider{},
+		&mockBeaconGetter{},
+		&mockProposalFetcher{},
+		hareOracle,
+		layerpatrol.New(),
+		uint16(app.Config.LayersPerEpoch),
+		&mockIDProvider{},
+		&mockStateQuerier{},
+		mockClock,
+		logger)
 	log.Info("starting hare service")
 	app.ha = hareI
 

@@ -12,8 +12,8 @@ type proposalOracle interface {
 	GetProposalEligibility(types.LayerID, types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibilityProof, error)
 }
 
-type meshProvider interface {
-	AddProposalWithTxs(context.Context, *types.Proposal) error
+type proposalDB interface {
+	AddProposal(context.Context, *types.Proposal) error
 }
 
 type txPool interface {
@@ -21,7 +21,7 @@ type txPool interface {
 }
 
 type baseBallotProvider interface {
-	BaseBallot(context.Context) (types.BallotID, [][]types.BlockID, error)
+	BaseBallot(context.Context) (*types.Votes, error)
 }
 
 type activationDB interface {

@@ -126,31 +126,68 @@ func (mr *MockballotHandlerMockRecorder) HandleBallotData(arg0, arg1 interface{}
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleBallotData", reflect.TypeOf((*MockballotHandler)(nil).HandleBallotData), arg0, arg1)
 }
 
-// MocktxProcessor is a mock of txProcessor interface.
-type MocktxProcessor struct {
+// MockproposalHandler is a mock of proposalHandler interface.
+type MockproposalHandler struct {
 	ctrl     *gomock.Controller
-	recorder *MocktxProcessorMockRecorder
+	recorder *MockproposalHandlerMockRecorder
 }
 
-// MocktxProcessorMockRecorder is the mock recorder for MocktxProcessor.
-type MocktxProcessorMockRecorder struct {
-	mock *MocktxProcessor
+// MockproposalHandlerMockRecorder is the mock recorder for MockproposalHandler.
+type MockproposalHandlerMockRecorder struct {
+	mock *MockproposalHandler
 }
 
-// NewMocktxProcessor creates a new mock instance.
-func NewMocktxProcessor(ctrl *gomock.Controller) *MocktxProcessor {
-	mock := &MocktxProcessor{ctrl: ctrl}
-	mock.recorder = &MocktxProcessorMockRecorder{mock}
+// NewMockproposalHandler creates a new mock instance.
+func NewMockproposalHandler(ctrl *gomock.Controller) *MockproposalHandler {
+	mock := &MockproposalHandler{ctrl: ctrl}
+	mock.recorder = &MockproposalHandlerMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocktxProcessor) EXPECT() *MocktxProcessorMockRecorder {
+func (m *MockproposalHandler) EXPECT() *MockproposalHandlerMockRecorder {
+	return m.recorder
+}
+
+// HandleProposalData mocks base method.
+func (m *MockproposalHandler) HandleProposalData(arg0 context.Context, arg1 []byte) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HandleProposalData", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// HandleProposalData indicates an expected call of HandleProposalData.
+func (mr *MockproposalHandlerMockRecorder) HandleProposalData(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleProposalData", reflect.TypeOf((*MockproposalHandler)(nil).HandleProposalData), arg0, arg1)
+}
+
+// MocktxHandler is a mock of txHandler interface.
+type MocktxHandler struct {
+	ctrl     *gomock.Controller
+	recorder *MocktxHandlerMockRecorder
+}
+
+// MocktxHandlerMockRecorder is the mock recorder for MocktxHandler.
+type MocktxHandlerMockRecorder struct {
+	mock *MocktxHandler
+}
+
+// NewMocktxHandler creates a new mock instance.
+func NewMocktxHandler(ctrl *gomock.Controller) *MocktxHandler {
+	mock := &MocktxHandler{ctrl: ctrl}
+	mock.recorder = &MocktxHandlerMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktxHandler) EXPECT() *MocktxHandlerMockRecorder {
 	return m.recorder
 }
 
 // HandleSyncTransaction mocks base method.
-func (m *MocktxProcessor) HandleSyncTransaction(data []byte) error {
+func (m *MocktxHandler) HandleSyncTransaction(data []byte) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HandleSyncTransaction", data)
 	ret0, _ := ret[0].(error)
@@ -158,9 +195,9 @@ func (m *MocktxProcessor) HandleSyncTransaction(data []byte) error {
 }
 
 // HandleSyncTransaction indicates an expected call of HandleSyncTransaction.
-func (mr *MocktxProcessorMockRecorder) HandleSyncTransaction(data interface{}) *gomock.Call {
+func (mr *MocktxHandlerMockRecorder) HandleSyncTransaction(data interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncTransaction", reflect.TypeOf((*MocktxProcessor)(nil).HandleSyncTransaction), data)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncTransaction", reflect.TypeOf((*MocktxHandler)(nil).HandleSyncTransaction), data)
 }
 
 // MocklayerDB is a mock of layerDB interface.
@@ -200,6 +237,21 @@ func (mr *MocklayerDBMockRecorder) GetAggregatedLayerHash(arg0 interface{}) *gom
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAggregatedLayerHash", reflect.TypeOf((*MocklayerDB)(nil).GetAggregatedLayerHash), arg0)
 }
 
+// GetHareConsensusOutput mocks base method.
+func (m *MocklayerDB) GetHareConsensusOutput(arg0 types.LayerID) (types.BlockID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHareConsensusOutput", arg0)
+	ret0, _ := ret[0].(types.BlockID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHareConsensusOutput indicates an expected call of GetHareConsensusOutput.
+func (mr *MocklayerDBMockRecorder) GetHareConsensusOutput(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHareConsensusOutput", reflect.TypeOf((*MocklayerDB)(nil).GetHareConsensusOutput), arg0)
+}
+
 // GetLayerHash mocks base method.
 func (m *MocklayerDB) GetLayerHash(arg0 types.LayerID) types.Hash32 {
 	m.ctrl.T.Helper()
@@ -214,19 +266,19 @@ func (mr *MocklayerDBMockRecorder) GetLayerHash(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerHash", reflect.TypeOf((*MocklayerDB)(nil).GetLayerHash), arg0)
 }
 
-// GetLayerInputVectorByID mocks base method.
-func (m *MocklayerDB) GetLayerInputVectorByID(arg0 types.LayerID) ([]types.BlockID, error) {
+// LayerBallotIDs mocks base method.
+func (m *MocklayerDB) LayerBallotIDs(arg0 types.LayerID) ([]types.BallotID, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLayerInputVectorByID", arg0)
-	ret0, _ := ret[0].([]types.BlockID)
+	ret := m.ctrl.Call(m, "LayerBallotIDs", arg0)
+	ret0, _ := ret[0].([]types.BallotID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetLayerInputVectorByID indicates an expected call of GetLayerInputVectorByID.
-func (mr *MocklayerDBMockRecorder) GetLayerInputVectorByID(arg0 interface{}) *gomock.Call {
+// LayerBallotIDs indicates an expected call of LayerBallotIDs.
+func (mr *MocklayerDBMockRecorder) LayerBallotIDs(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerInputVectorByID", reflect.TypeOf((*MocklayerDB)(nil).GetLayerInputVectorByID), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerBallotIDs", reflect.TypeOf((*MocklayerDB)(nil).LayerBallotIDs), arg0)
 }
 
 // LayerBlockIds mocks base method.
@@ -258,18 +310,32 @@ func (mr *MocklayerDBMockRecorder) ProcessedLayer() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessedLayer", reflect.TypeOf((*MocklayerDB)(nil).ProcessedLayer))
 }
 
-// SaveLayerInputVectorByID mocks base method.
-func (m *MocklayerDB) SaveLayerInputVectorByID(arg0 context.Context, arg1 types.LayerID, arg2 []types.BlockID) error {
+// SaveHareConsensusOutput mocks base method.
+func (m *MocklayerDB) SaveHareConsensusOutput(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveLayerInputVectorByID", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "SaveHareConsensusOutput", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SaveLayerInputVectorByID indicates an expected call of SaveLayerInputVectorByID.
-func (mr *MocklayerDBMockRecorder) SaveLayerInputVectorByID(arg0, arg1, arg2 interface{}) *gomock.Call {
+// SaveHareConsensusOutput indicates an expected call of SaveHareConsensusOutput.
+func (mr *MocklayerDBMockRecorder) SaveHareConsensusOutput(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveLayerInputVectorByID", reflect.TypeOf((*MocklayerDB)(nil).SaveLayerInputVectorByID), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveHareConsensusOutput", reflect.TypeOf((*MocklayerDB)(nil).SaveHareConsensusOutput), arg0, arg1, arg2)
+}
+
+// SetZeroBallotLayer mocks base method.
+func (m *MocklayerDB) SetZeroBallotLayer(arg0 types.LayerID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetZeroBallotLayer", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetZeroBallotLayer indicates an expected call of SetZeroBallotLayer.
+func (mr *MocklayerDBMockRecorder) SetZeroBallotLayer(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBallotLayer", reflect.TypeOf((*MocklayerDB)(nil).SetZeroBallotLayer), arg0)
 }
 
 // SetZeroBlockLayer mocks base method.

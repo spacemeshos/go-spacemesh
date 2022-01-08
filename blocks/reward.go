@@ -1,6 +1,8 @@
 package blocks
 
 import (
+	"math"
+
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
@@ -8,6 +10,13 @@ import (
 // RewardConfig defines the configuration options for Spacemesh rewards.
 type RewardConfig struct {
 	BaseReward uint64 `mapstructure:"base-reward"`
+}
+
+// DefaultRewardConfig returns the default RewardConfig.
+func DefaultRewardConfig() RewardConfig {
+	return RewardConfig{
+		BaseReward: 50 * uint64(math.Pow10(12)),
+	}
 }
 
 type layerRewardsInfo struct {

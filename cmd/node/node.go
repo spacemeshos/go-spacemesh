@@ -23,6 +23,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -37,6 +38,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerfetcher"
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/log/errcode"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
@@ -80,8 +82,11 @@ const (
 	SyncLogger             = "sync"
 	HareOracleLogger       = "hareOracle"
 	HareLogger             = "hare"
+	BlockGenLogger         = "blockGenerator"
+	BlockHandlerLogger     = "blockHandler"
 	ProposalBuilderLogger  = "proposalBuilder"
 	ProposalListenerLogger = "proposalListener"
+	ProposalDBLogger       = "proposalStore"
 	PoetListenerLogger     = "poetListener"
 	NipostBuilderLogger    = "nipostBuilder"
 	LayerFetcher           = "layerFetcher"
@@ -161,7 +166,6 @@ type Service interface {
 // HareService is basic definition of hare algorithm service, providing consensus results for a layer.
 type HareService interface {
 	Service
-	GetResult(types.LayerID) ([]types.ProposalID, error)
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
@@ -258,6 +262,7 @@ type App struct {
 	postSetupMgr     *activation.PostSetupManager
 	atxBuilder       *activation.Builder
 	atxDb            *activation.DB
+	proposalDB       *proposals.DB
 	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
 	tortoiseBeacon   *tortoisebeacon.TortoiseBeacon
@@ -280,6 +285,34 @@ func (app *App) introduction() {
 	log.Info("Welcome to Spacemesh. Spacemesh full node is starting...")
 }
 
+type clockErrorDetails struct {
+	Drift time.Duration
+}
+
+func (c *clockErrorDetails) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddDuration("drift", c.Drift)
+	return nil
+}
+
+type clockError struct {
+	err     error
+	details clockErrorDetails
+}
+
+func (c *clockError) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("code", errcode.ErrClockDrift)
+	encoder.AddString("errmsg", c.err.Error())
+	if err := encoder.AddObject("details", &c.details); err != nil {
+		return fmt.Errorf("add object: %w", err)
+	}
+
+	return nil
+}
+
+func (c *clockError) Error() string {
+	return c.err.Error()
+}
+
 // Initialize sets up an exit signal, logging and checks the clock, returns error if clock is not in sync.
 func (app *App) Initialize() (err error) {
 	// tortoise wait zdist layers for hare to timeout for a layer. once hare timeout, tortoise will
@@ -294,10 +327,11 @@ func (app *App) Initialize() (err error) {
 			log.Int("hare_wakeup_delta", app.Config.HARE.WakeupDelta),
 			log.Int("hare_limit_iterations", app.Config.HARE.LimitIterations),
 			log.Int("hare_round_duration", app.Config.HARE.RoundDuration))
+
 		return errors.New("incompatible tortoise hare params")
 	}
 
-	// override default config in timesync since timesync is using TimeCongigValues
+	// override default config in timesync since timesync is using TimeConfigValues
 	timeCfg.TimeConfigValues = app.Config.TIME
 
 	// ensure all data folders exist
@@ -326,7 +360,12 @@ func (app *App) Initialize() (err error) {
 
 	drift, err := timesync.CheckSystemClockDrift()
 	if err != nil {
-		return fmt.Errorf("check system clock drift: %w", err)
+		return &clockError{
+			err: err,
+			details: clockErrorDetails{
+				Drift: drift,
+			},
+		}
 	}
 
 	log.Info("System clock synchronized with ntp. drift: %s", drift)
@@ -534,14 +573,20 @@ func (app *App) initServices(ctx context.Context,
 	)
 
 	if mdb.PersistentData() {
-		msh = mesh.NewRecoveredMesh(ctx, mdb, atxDB, app.Config.REWARD, fetcherWrapped, trtl, app.txPool, state, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewRecoveredMesh(mdb, atxDB, trtl, app.txPool, state, app.addLogger(MeshLogger, lg))
 		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
-		msh = mesh.NewMesh(mdb, atxDB, app.Config.REWARD, fetcherWrapped, trtl, app.txPool, state, app.addLogger(MeshLogger, lg))
+		msh = mesh.NewMesh(mdb, atxDB, trtl, app.txPool, state, app.addLogger(MeshLogger, lg))
 		if err := state.SetupGenesis(app.Config.Genesis); err != nil {
 			return fmt.Errorf("setup genesis: %w", err)
 		}
 	}
+
+	proposalDB, err := proposals.NewProposalDB(dbStorepath, msh, app.addLogger(ProposalDBLogger, lg))
+	if err != nil {
+		return fmt.Errorf("create proposal DB: %w", err)
+	}
+	app.proposalDB = proposalDB
 
 	if app.Config.AtxsPerBlock > miner.ATXsPerBallotLimit { // validate limit
 		return fmt.Errorf("number of atxs per block required is bigger than the limit. atxs_per_block: %d. limit: %d",
@@ -556,21 +601,32 @@ func (app *App) initServices(ctx context.Context,
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(fetcherWrapped, tBeacon, atxDB, msh,
+	proposalListener := proposals.NewHandler(fetcherWrapped, tBeacon, atxDB, msh, proposalDB,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithLayerPerEpoch(layersPerEpoch),
 		proposals.WithLayerSize(layerSize),
 		proposals.WithGoldenATXID(goldenATXID),
 		proposals.WithMaxExceptions(trtlCfg.MaxExceptions))
 
+	blockHandller := blocks.NewHandler(fetcherWrapped, msh,
+		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
+
 	dbStores := fetch.LocalDataSource{
-		fetch.BallotDB: mdb.Ballots(),
-		fetch.BlockDB:  mdb.Blocks(),
-		fetch.ATXDB:    atxdbstore,
-		fetch.TXDB:     mdb.Transactions(),
-		fetch.POETDB:   poetDbStore,
+		fetch.BallotDB:   mdb.Ballots(),
+		fetch.BlockDB:    mdb.Blocks(),
+		fetch.ProposalDB: proposalDB,
+		fetch.ATXDB:      atxdbstore,
+		fetch.TXDB:       mdb.Transactions(),
+		fetch.POETDB:     poetDbStore,
 	}
-	layerFetch := layerfetcher.NewLogic(ctx, app.Config.FETCH, proposalListener, proposalListener, atxDB, poetDb, atxDB, state, app.host, dbStores, msh, app.addLogger(LayerFetcher, lg))
+	dataHanders := layerfetcher.DataHandlers{
+		ATX:      atxDB,
+		Block:    blockHandller,
+		Ballot:   proposalListener,
+		Proposal: proposalListener,
+		TX:       state,
+	}
+	layerFetch := layerfetcher.NewLogic(ctx, app.Config.FETCH, poetDb, atxDB, msh, app.host, dataHanders, dbStores, app.addLogger(LayerFetcher, lg))
 	fetcherWrapped.Fetcher = layerFetch
 
 	patrol := layerpatrol.New()
@@ -593,7 +649,8 @@ func (app *App) initServices(ctx context.Context,
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
-	rabbit := app.HareFactory(ctx, mdb, sgn, nodeID, patrol, newSyncer, msh, tBeacon, hOracle, idStore, clock, lg)
+	blockGen := blocks.NewGenerator(atxDB, msh, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
+	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, tBeacon, fetcherWrapped, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(state, msh)
 	proposalBuilder := miner.NewProposalBuilder(
@@ -603,7 +660,7 @@ func (app *App) initServices(ctx context.Context,
 		vrfSigner,
 		atxDB,
 		app.host,
-		msh,
+		proposalDB,
 		trtl,
 		tBeacon,
 		newSyncer,
@@ -712,20 +769,22 @@ func (app *App) checkTimeDrifts() {
 // HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare.
 func (app *App) HareFactory(
 	ctx context.Context,
-	mdb *mesh.DB,
 	sgn hare.Signer,
+	blockGen *blocks.Generator,
 	nodeID types.NodeID,
 	patrol *layerpatrol.LayerPatrol,
 	syncer system.SyncStateProvider,
 	msh *mesh.Mesh,
+	proposalDB *proposals.DB,
 	beacons system.BeaconGetter,
+	pFetcher system.ProposalFetcher,
 	hOracle hare.Rolacle,
 	idStore *activation.IdentityStore,
 	clock TickProvider,
 	lg log.Log,
 ) HareService {
 	if app.Config.HARE.SuperHare {
-		hr := turbohare.New(ctx, app.Config.HARE, msh, clock.Subscribe(), app.addLogger(HareLogger, lg))
+		hr := turbohare.New(ctx, app.Config.HARE, msh, proposalDB, blockGen, clock.Subscribe(), app.addLogger(HareLogger, lg))
 		return hr
 	}
 
@@ -735,9 +794,12 @@ func (app *App) HareFactory(
 		app.host,
 		sgn,
 		nodeID,
+		blockGen,
 		syncer,
 		msh,
+		proposalDB,
 		beacons,
+		pFetcher,
 		hOracle,
 		patrol,
 		uint16(app.Config.LayersPerEpoch),
@@ -895,6 +957,11 @@ func (app *App) stopServices() {
 		app.syncer.Close()
 	}
 
+	if app.proposalDB != nil {
+		app.log.Info("closing proposal db")
+		app.proposalDB.Close()
+	}
+
 	if app.mesh != nil {
 		app.log.Info("closing mesh")
 		app.mesh.Close()
@@ -1017,6 +1084,7 @@ func (app *App) Start() error {
 	if err != nil {
 		return fmt.Errorf("error reading hostname: %w", err)
 	}
+
 	logger.With().Info("starting spacemesh",
 		log.String("data-dir", app.Config.DataDir()),
 		log.String("post-dir", app.Config.SMESHING.Opts.DataDir),
