@@ -21,7 +21,7 @@ const (
 	AddressLength = 20
 )
 
-// Address represents the 20 byte address of an spacemesh account.
+// Address represents the address of an spacemesh account with AddressLength length.
 type Address [AddressLength]byte
 
 // BytesToAddress returns Address with value b.
