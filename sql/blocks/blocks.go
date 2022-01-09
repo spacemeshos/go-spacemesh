@@ -91,7 +91,7 @@ func IsVerified(db sql.Executor, id types.BlockID) (bool, error) {
 	return rst, nil
 }
 
-func FromLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
+func InLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 	var rst []types.BlockID
 	if err := db.Exec("select id from blocks where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Uint32()))
@@ -106,8 +106,8 @@ func FromLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 	return rst, nil
 }
 
-func FromLayerByStatus(db sql.Executor, lid types.LayerID) (map[types.BlockID]bool, error) {
-	var rst = map[types.BlockID]bool{}
+func ValidityInLayer(db sql.Executor, lid types.LayerID) (map[types.BlockID]bool, error) {
+	rst := map[types.BlockID]bool{}
 	if err := db.Exec("select (id, verified) from blocks where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Uint32()))
 	}, func(stmt *sql.Statement) bool {

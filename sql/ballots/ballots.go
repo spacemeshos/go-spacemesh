@@ -55,8 +55,8 @@ func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 	return rst, err
 }
 
-// ForLayerFull returns full body ballot for layer.
-func ForLayerFull(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
+// InLayer returns full body ballot for layer.
+func InLayer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
 	if err := db.Exec("select (id, signature, pubkey, ballot) from ballots where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, lid.Bytes())
 	}, func(stmt *sql.Statement) bool {

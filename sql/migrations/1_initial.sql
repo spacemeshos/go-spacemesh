@@ -19,3 +19,11 @@ CREATE TABLE ballots (
 );
 
 CREATE INDEX ballots_by_layer ON ballots(layer);
+
+CREATE TABLE layers (
+    id INT PRIMARY KEY,
+    empty BOOL,
+    status INT
+) WITHOUT ROWID;
+
+CREATE INDEX layers_by_status ON layers(status);
