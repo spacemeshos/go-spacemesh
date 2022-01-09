@@ -32,6 +32,7 @@ const (
 	Applied
 )
 
+// SetEmpty marks that layer is empty.
 func SetEmpty(db sql.Executor, lid types.LayerID) error {
 	return db.Exec(`insert into layers (id, empty) values (?1, ?2) 
 					on conflict(id) do update set empty=?2;`,
@@ -41,6 +42,7 @@ func SetEmpty(db sql.Executor, lid types.LayerID) error {
 		}, nil)
 }
 
+// IsEmpty checks if the layer is empty.
 func IsEmpty(db sql.Executor, lid types.LayerID) (rst bool, err error) {
 	err = db.Exec("select empty from layers where id = ?1;",
 		func(stmt *sql.Statement) {
@@ -50,9 +52,13 @@ func IsEmpty(db sql.Executor, lid types.LayerID) (rst bool, err error) {
 			rst = stmt.ColumnInt(0) == 1
 			return true
 		})
-	return rst, err
+	if err != nil {
+		return false, fmt.Errorf("is empty %s: %w", lid, err)
+	}
+	return rst, nil
 }
 
+// SetStatus updates status of the layer.
 func SetStatus(db sql.Executor, lid types.LayerID, status Status) error {
 	return db.Exec(`insert into layers (id, status) values (?1, ?2) 
 					on conflict(id) do update set status=?2;`,
@@ -62,8 +68,9 @@ func SetStatus(db sql.Executor, lid types.LayerID, status Status) error {
 		}, nil)
 }
 
+// GetByStatus return latest layer with the status.
 func GetByStatus(db sql.Executor, status Status) (rst types.LayerID, err error) {
-	db.Exec("select max(id) from layers where status >= ?1;",
+	err = db.Exec("select max(id) from layers where status >= ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(status))
 		},
@@ -71,5 +78,8 @@ func GetByStatus(db sql.Executor, status Status) (rst types.LayerID, err error) 
 			rst = types.NewLayerID(uint32(stmt.ColumnInt(0)))
 			return true
 		})
-	return rst, err
+	if err != nil {
+		return types.LayerID{}, fmt.Errorf("layer by status %s: %w", status, err)
+	}
+	return rst, nil
 }

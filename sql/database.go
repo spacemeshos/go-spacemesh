@@ -14,6 +14,7 @@ var (
 )
 
 type Executor interface {
+	// TODO(dshulyak) return number of consumed rows.
 	Exec(string, Encoder, Decoder) error
 }
 

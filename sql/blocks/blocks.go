@@ -23,7 +23,7 @@ func decodeBlock(reader io.Reader, id types.BlockID) (*types.Block, error) {
 func Add(db sql.Executor, block *types.Block) error {
 	bytes, err := codec.Encode(block.InnerBlock)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode %w", err)
 	}
 	return db.Exec("insert or ignore into blocks (id, layer, block) values (?1, ?2, ?3);",
 		func(stmt *sql.Statement) {
@@ -31,37 +31,6 @@ func Add(db sql.Executor, block *types.Block) error {
 			stmt.BindInt64(2, int64(block.LayerIndex.Value))
 			stmt.BindBytes(3, bytes) // this is actually should encode block
 		}, nil)
-}
-
-// AddHareOutput records hare output.
-func AddHareOutput(db sql.Executor, output types.BlockID) error {
-	if err := db.Exec("update blocks set hare_output = 1 where id = ?1;", func(stmt *sql.Statement) {
-		stmt.BindBytes(1, output.Bytes())
-	}, nil); err != nil {
-		return fmt.Errorf("update hare_output to %s: %w", output, err)
-	}
-
-	return nil
-}
-
-// UpdateVerified updates verified status for a block.
-func UpdateVerified(db sql.Executor, id types.BlockID) error {
-	if err := db.Exec("update blocks set verified = 1 where id = ?1;", func(stmt *sql.Statement) {
-		stmt.BindBytes(1, id.Bytes())
-	}, nil); err != nil {
-		return fmt.Errorf("update verified %s: %w", id, err)
-	}
-	return nil
-}
-
-// AddVerified updates verified blocks.
-func AddVerified(db sql.Executor, verified []types.BlockID) error {
-	for _, id := range verified {
-		if err := UpdateVerified(db, id); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // Get block with id from database.
@@ -75,6 +44,41 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 		return nil, fmt.Errorf("get %s: %w", id, err)
 	}
 	return rst, err
+}
+
+// SetHareOutput records hare output.
+func SetHareOutput(db sql.Executor, id types.BlockID) error {
+	if err := db.Exec("update blocks set hare_output = 1 where id = ?1;", func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+	}, nil); err != nil {
+		return fmt.Errorf("update hare_output to %s: %w", id, err)
+	}
+	return nil
+}
+
+// GetHareOutput returns id of the block from hare output.
+func GetHareOutput(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
+	var rst types.BlockID
+	if err := db.Exec("select id from blocks where layer = ?1 and hare_output = 1;", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid.Uint32()))
+	}, func(stmt *sql.Statement) bool {
+		id := types.BlockID{}
+		stmt.ColumnBytes(0, id[:])
+		return true
+	}); err != nil {
+		return types.BlockID{}, fmt.Errorf("select hare output %s: %w", lid, err)
+	}
+	return rst, nil
+}
+
+// SetVerified updates verified status for a block.
+func SetVerified(db sql.Executor, id types.BlockID) error {
+	if err := db.Exec("update blocks set verified = 1 where id = ?1;", func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+	}, nil); err != nil {
+		return fmt.Errorf("update verified %s: %w", id, err)
+	}
+	return nil
 }
 
 // IsVerified returns true if block is verified.
@@ -91,6 +95,7 @@ func IsVerified(db sql.Executor, id types.BlockID) (bool, error) {
 	return rst, nil
 }
 
+// InLayer returns list of block ids in the layer.
 func InLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 	var rst []types.BlockID
 	if err := db.Exec("select id from blocks where layer = ?1;", func(stmt *sql.Statement) {
@@ -114,37 +119,6 @@ func ValidityInLayer(db sql.Executor, lid types.LayerID) (map[types.BlockID]bool
 		id := types.BlockID{}
 		stmt.ColumnBytes(0, id[:])
 		rst[id] = stmt.ColumnInt(1) == 1
-		return true
-	}); err != nil {
-		return nil, err
-	}
-	return rst, nil
-}
-
-// GetHareOutput returns id of the block.
-func GetHareOutput(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
-	var rst types.BlockID
-	if err := db.Exec("select id from blocks where layer = ?1 and hare_output = 1;", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid.Uint32()))
-	}, func(stmt *sql.Statement) bool {
-		id := types.BlockID{}
-		stmt.ColumnBytes(0, id[:])
-		return true
-	}); err != nil {
-		return types.BlockID{}, fmt.Errorf("select hare output %s: %w", lid, err)
-	}
-	return rst, nil
-}
-
-// GetVerified returns list of verified blocks in a layer.
-func GetVerified(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
-	var rst []types.BlockID
-	if err := db.Exec("select id from blocks where layer = ?1 and verified = 1;", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid.Uint32()))
-	}, func(stmt *sql.Statement) bool {
-		id := types.BlockID{}
-		stmt.ColumnBytes(0, id[:])
-		rst = append(rst, id)
 		return true
 	}); err != nil {
 		return nil, err
