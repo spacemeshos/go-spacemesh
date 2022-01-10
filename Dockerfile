@@ -93,6 +93,7 @@ COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-p2p /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-harness /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/libgpu-setup.so /bin/
+COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/libsvm.so /bin/
 
 ENTRYPOINT ["/bin/go-harness"]
 EXPOSE 7513
