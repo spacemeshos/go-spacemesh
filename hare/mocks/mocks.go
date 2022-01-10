@@ -220,20 +220,6 @@ func (mr *MockmeshProviderMockRecorder) RecordCoinflip(arg0, arg1, arg2 interfac
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordCoinflip", reflect.TypeOf((*MockmeshProvider)(nil).RecordCoinflip), arg0, arg1, arg2)
 }
 
-// SetZeroBallotLayer mocks base method.
-func (m *MockmeshProvider) SetZeroBallotLayer(arg0 types.LayerID) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetZeroBallotLayer", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SetZeroBallotLayer indicates an expected call of SetZeroBallotLayer.
-func (mr *MockmeshProviderMockRecorder) SetZeroBallotLayer(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBallotLayer", reflect.TypeOf((*MockmeshProvider)(nil).SetZeroBallotLayer), arg0)
-}
-
 // MockproposalProvider is a mock of proposalProvider interface.
 type MockproposalProvider struct {
 	ctrl     *gomock.Controller

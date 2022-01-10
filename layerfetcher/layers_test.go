@@ -400,7 +400,6 @@ func TestPollLayerBlocks_OneZeroLayerAmongstErrors(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
-	tl.mLayerDB.EXPECT().SetZeroBallotLayer(layerID).Return(nil).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(nil).Times(1)
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
@@ -420,7 +419,6 @@ func TestPollLayerBlocks_ZeroLayer(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
-	tl.mLayerDB.EXPECT().SetZeroBallotLayer(layerID).Return(nil).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(nil).Times(1)
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
@@ -508,7 +506,6 @@ func TestPollLayerBlocks_FailureToSaveZeroBlockLayerIgnored(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
-	tl.mLayerDB.EXPECT().SetZeroBallotLayer(layerID).Return(nil).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(errors.New("whatever")).Times(1)
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)
@@ -528,7 +525,6 @@ func TestPollLayerBlocks_FailureToSaveZeroBallotLayerIgnored(t *testing.T) {
 	layerID := types.NewLayerID(10)
 	tl := createTestLogicWithMocknet(t, net)
 	tl.mLayerDB.EXPECT().SaveHareConsensusOutput(gomock.Any(), layerID, types.EmptyBlockID).Return(nil).Times(1)
-	tl.mLayerDB.EXPECT().SetZeroBallotLayer(layerID).Return(errors.New("whatever")).Times(1)
 	tl.mLayerDB.EXPECT().SetZeroBlockLayer(layerID).Return(nil).Times(1)
 
 	res := <-tl.PollLayerContent(context.TODO(), layerID)

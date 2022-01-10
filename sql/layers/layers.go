@@ -76,7 +76,8 @@ func SetStatus(db sql.Executor, lid types.LayerID, status Status) error {
 
 // GetByStatus return latest layer with the status.
 func GetByStatus(db sql.Executor, status Status) (rst types.LayerID, err error) {
-	if _, err = db.Exec("select max(id) from layers where status >= ?1;",
+	var rows int
+	if rows, err = db.Exec("select max(id) from layers where status >= ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(status))
 		},
@@ -85,6 +86,8 @@ func GetByStatus(db sql.Executor, status Status) (rst types.LayerID, err error) 
 			return true
 		}); err != nil {
 		return types.LayerID{}, fmt.Errorf("layer by status %s: %w", status, err)
+	} else if rows == 0 {
+		return types.LayerID{}, fmt.Errorf("%w layer with status %s", sql.ErrNotFound, status)
 	}
 	return rst, nil
 }

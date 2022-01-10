@@ -54,7 +54,6 @@ type layerDB interface {
 	SaveHareConsensusOutput(context.Context, types.LayerID, types.BlockID) error
 	ProcessedLayer() types.LayerID
 	SetZeroBlockLayer(types.LayerID) error
-	SetZeroBallotLayer(types.LayerID) error
 }
 
 type atxIDsDB interface {
@@ -428,12 +427,6 @@ func notifyLayerDataResult(ctx context.Context, layerID types.LayerID, layerDB l
 		if err := layerDB.SaveHareConsensusOutput(ctx, layerID, lyrResult.hareOutput); err != nil {
 			logger.With().Error("failed to save hare output from peers", log.Err(err))
 			result.Err = err
-		}
-		if len(lyrResult.ballots) == 0 {
-			if err := layerDB.SetZeroBallotLayer(layerID); err != nil {
-				// this can happen when node actually had received ballots for this layer before. ok to ignore
-				logger.With().Warning("failed to set zero-ballot for layer", layerID, log.Err(err))
-			}
 		}
 		if len(lyrResult.blocks) == 0 {
 			if err := layerDB.SetZeroBlockLayer(layerID); err != nil {

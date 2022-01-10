@@ -7,13 +7,17 @@ import (
 
 	"crawshaw.io/sqlite"
 	"crawshaw.io/sqlite/sqlitex"
+	"github.com/spacemeshos/go-spacemesh/database"
 )
 
 var (
 	// ErrNoConnection is returned if pooled connection is not available.
 	ErrNoConnection = errors.New("database: no free connection")
 	// ErrNotFound is returned if requested record is not found.
-	ErrNotFound = errors.New("database: not found")
+	// TODO(dshulyak) is an alias to datatabase.ErrNotFound until full transition is implemented
+	ErrNotFound = database.ErrNotFound
+	// ErrObjectExists is returned if database contraints didn't allow to insert an object.
+	ErrObjectExists = errors.New("database: object exists")
 )
 
 // Executor is an interface for executing raw statement.
@@ -159,6 +163,14 @@ func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, e
 	return exec(conn, query, encoder, decoder)
 }
 
+// Close closes all pooled connections.
+func (db *Database) Close() error {
+	if err := db.pool.Close(); err != nil {
+		return fmt.Errorf("close pool %w", err)
+	}
+	return nil
+}
+
 func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
 	stmt, err := conn.Prepare(query)
 	if err != nil {
@@ -173,6 +185,10 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 	for {
 		row, err := stmt.Step()
 		if err != nil {
+			code := sqlite.ErrCode(err)
+			if code == sqlite.SQLITE_CONSTRAINT_PRIMARYKEY {
+				return 0, ErrObjectExists
+			}
 			return 0, fmt.Errorf("step %d: %w", rows, err)
 		}
 		if !row {

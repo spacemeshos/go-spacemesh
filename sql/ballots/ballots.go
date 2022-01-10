@@ -3,6 +3,7 @@ package ballots
 import (
 	"bytes"
 	"fmt"
+	"io"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -12,15 +13,23 @@ import (
 func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader) (*types.Ballot, error) {
 	sigBytes := make([]byte, sig.Len())
 	if _, err := sig.Read(sigBytes); err != nil {
-		return nil, fmt.Errorf("copy sig %w", err)
+		if err != io.EOF {
+			return nil, fmt.Errorf("copy sig %w", err)
+		}
+		sigBytes = nil
 	}
 	pubkeyBytes := make([]byte, pubkey.Len())
 	if _, err := pubkey.Read(pubkeyBytes); err != nil {
-		return nil, fmt.Errorf("copy pubkey %w", err)
+		if err != io.EOF {
+			return nil, fmt.Errorf("copy pubkey %w", err)
+		}
+		pubkeyBytes = nil
 	}
 	inner := types.InnerBallot{}
 	if _, err := codec.DecodeFrom(body, &inner); err != nil {
-		return nil, fmt.Errorf("decoder body of the %s: %w", id, err)
+		if err != io.EOF {
+			return nil, fmt.Errorf("decoder body of the %s: %w", id, err)
+		}
 	}
 	ballot := types.NewExistingBallot(id, sigBytes, pubkeyBytes, inner)
 	return &ballot, nil
@@ -45,9 +54,22 @@ func Add(db sql.Executor, ballot *types.Ballot) error {
 	return nil
 }
 
+// Has a ballot in the database.
+func Has(db sql.Executor, id types.BallotID) (bool, error) {
+	rows, err := db.Exec("select 1 from ballots where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, nil,
+	)
+	if err != nil {
+		return false, fmt.Errorf("has ballot %s: %w", id, err)
+	}
+	return rows > 0, nil
+}
+
 // Get ballot with id from database.
 func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
-	if rows, err := db.Exec("select (signature, pubkey, ballot) from ballots where id = ?1;", func(stmt *sql.Statement) {
+	if rows, err := db.Exec("select signature, pubkey, ballot from ballots where id = ?1;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}, func(stmt *sql.Statement) bool {
 		rst, err = decodeBallot(id, stmt.ColumnReader(0), stmt.ColumnReader(1), stmt.ColumnReader(2))
@@ -62,17 +84,32 @@ func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 
 // Layer returns full body ballot for layer.
 func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
-	if _, err := db.Exec("select (id, signature, pubkey, ballot) from ballots where layer = ?1;", func(stmt *sql.Statement) {
-		stmt.BindBytes(1, lid.Bytes())
+	if _, err = db.Exec("select id, signature, pubkey, ballot from ballots where layer = ?1;", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid.Value))
 	}, func(stmt *sql.Statement) bool {
 		id := types.BallotID{}
-		stmt.BindBytes(0, id[:])
+		stmt.ColumnBytes(0, id[:])
 		var ballot *types.Ballot
 		ballot, err = decodeBallot(id, stmt.ColumnReader(1), stmt.ColumnReader(2), stmt.ColumnReader(3))
 		if err != nil {
 			return false
 		}
 		rst = append(rst, ballot)
+		return true
+	}); err != nil {
+		return nil, fmt.Errorf("ballots for layer %s: %w", lid, err)
+	}
+	return rst, err
+}
+
+// LayerIDs returns ballots ids in the layer.
+func LayerIDs(db sql.Executor, lid types.LayerID) (rst []types.BallotID, err error) {
+	if _, err := db.Exec("select id from ballots where layer = ?1;", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid.Uint32()))
+	}, func(stmt *sql.Statement) bool {
+		id := types.BallotID{}
+		stmt.ColumnBytes(0, id[:])
+		rst = append(rst, id)
 		return true
 	}); err != nil {
 		return nil, fmt.Errorf("ballots for layer %s: %w", lid, err)

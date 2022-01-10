@@ -25,7 +25,7 @@ func Add(db sql.Executor, block *types.Block) error {
 	if err != nil {
 		return fmt.Errorf("encode %w", err)
 	}
-	if _, err := db.Exec("insert or ignore into blocks (id, layer, block) values (?1, ?2, ?3);",
+	if _, err := db.Exec("insert into blocks (id, layer, block) values (?1, ?2, ?3);",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, block.ID().Bytes())
 			stmt.BindInt64(2, int64(block.LayerIndex.Value))
@@ -34,6 +34,19 @@ func Add(db sql.Executor, block *types.Block) error {
 		return fmt.Errorf("insert %s: %w", block.ID(), err)
 	}
 	return nil
+}
+
+// Has a block in the database.
+func Has(db sql.Executor, id types.BlockID) (bool, error) {
+	rows, err := db.Exec("select 1 from blocks where id = ?1;",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, nil,
+	)
+	if err != nil {
+		return false, fmt.Errorf("has ballot %s: %w", id, err)
+	}
+	return rows > 0, nil
 }
 
 // Get block with id from database.
@@ -53,8 +66,10 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 
 // SetHareOutput records hare output.
 func SetHareOutput(db sql.Executor, id types.BlockID) error {
-	if rows, err := db.Exec("update blocks set hare_output = 1 where id = ?1 returning id;", func(stmt *sql.Statement) {
+	if rows, err := db.Exec(`insert into blocks (id, hare_output) values (?1, ?2) 
+	on conflict(id) do update set hare_output=?2 returning id;`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
+		stmt.BindBool(2, true)
 	}, nil); err != nil {
 		return fmt.Errorf("update hare_output to %s: %w", id, err)
 	} else if rows == 0 {
@@ -69,8 +84,7 @@ func GetHareOutput(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
 	if _, err := db.Exec("select id from blocks where layer = ?1 and hare_output = 1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Uint32()))
 	}, func(stmt *sql.Statement) bool {
-		id := types.BlockID{}
-		stmt.ColumnBytes(0, id[:])
+		stmt.ColumnBytes(0, rst[:])
 		return true
 	}); err != nil {
 		return types.BlockID{}, fmt.Errorf("select hare output %s: %w", lid, err)
@@ -80,10 +94,26 @@ func GetHareOutput(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
 
 // SetVerified updates verified status for a block.
 func SetVerified(db sql.Executor, id types.BlockID) error {
-	if rows, err := db.Exec("update blocks set verified = 1 where id = ?1 returning id;", func(stmt *sql.Statement) {
+	if rows, err := db.Exec(`insert into blocks (id, verified) values (?1, ?2) 
+	on conflict(id) do update set verified=?2 returning id;`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
+		stmt.BindBool(2, true)
 	}, nil); err != nil {
 		return fmt.Errorf("update verified %s: %w", id, err)
+	} else if rows == 0 {
+		return fmt.Errorf("%w block for update %s", sql.ErrNotFound, id)
+	}
+	return nil
+}
+
+// SetInvalid updates blocks to an invalid status.
+func SetInvalid(db sql.Executor, id types.BlockID) error {
+	if rows, err := db.Exec(`insert into blocks (id, verified) values (?1, ?2) 
+	on conflict(id) do update set verified=?2 returning id;`, func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+		stmt.BindBool(2, false)
+	}, nil); err != nil {
+		return fmt.Errorf("update invalid %s: %w", id, err)
 	} else if rows == 0 {
 		return fmt.Errorf("%w block for update %s", sql.ErrNotFound, id)
 	}
@@ -123,7 +153,7 @@ func Layer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 // LayerByValidity returns a mapping of block => validity.
 func LayerByValidity(db sql.Executor, lid types.LayerID) (map[types.BlockID]bool, error) {
 	rst := map[types.BlockID]bool{}
-	if _, err := db.Exec("select (id, verified) from blocks where layer = ?1;", func(stmt *sql.Statement) {
+	if _, err := db.Exec("select id, verified from blocks where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Uint32()))
 	}, func(stmt *sql.Statement) bool {
 		id := types.BlockID{}

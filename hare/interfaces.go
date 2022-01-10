@@ -26,7 +26,6 @@ type meshProvider interface {
 	GetBallot(types.BallotID) (*types.Ballot, error)
 	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID) error
 	RecordCoinflip(context.Context, types.LayerID, bool)
-	SetZeroBallotLayer(types.LayerID) error
 }
 
 type proposalProvider interface {

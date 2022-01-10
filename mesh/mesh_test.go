@@ -105,8 +105,8 @@ func createBlock(t testing.TB, mesh *Mesh, layerID types.LayerID, nodeID types.N
 		},
 	}
 	b.Initialize()
-	require.NoError(t, mesh.SaveContextualValidity(b.ID(), layerID, true))
 	require.NoError(t, mesh.AddBlock(b))
+	require.NoError(t, mesh.SaveContextualValidity(b.ID(), layerID, true))
 	return b
 }
 
@@ -172,8 +172,8 @@ func TestMesh_LayerHash(t *testing.T) {
 		assert.Equal(t, thisLyr.Hash(), tm.GetLayerHash(i))
 		if prevLyr.Index().After(gLyr) {
 			// but for previous layer hash should already be changed to contain only valid proposals
-			prevExpHash := types.CalcBlocksHash32(types.SortBlockIDs(prevLyr.BlocksIDs()[1:]), nil)
-			assert.Equal(t, prevExpHash, tm.GetLayerHash(i.Sub(1)))
+			prevExpHash := types.CalcBlocksHash32(types.SortBlockIDs(prevLyr.BlocksIDs())[1:], nil)
+			require.Equal(t, prevExpHash, tm.GetLayerHash(i.Sub(1)), "layer %s", i.Sub(1))
 			assert.NotEqual(t, prevLyr.Hash(), tm.GetLayerHash(i.Sub(1)))
 		}
 	}
@@ -216,40 +216,10 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 		// contextual validity is still not determined for thisLyr, so aggregated hash is not calculated for this layer
 		r.Equal(types.EmptyLayerHash, tm.GetAggregatedLayerHash(i))
 		// but for previous layer hash should already be changed to contain only valid proposals
-		expHash := types.CalcBlocksHash32(types.SortBlockIDs(prevLyr.BlocksIDs()[1:]), prevAggHash.Bytes())
+		expHash := types.CalcBlocksHash32(types.SortBlockIDs(prevLyr.BlocksIDs())[1:], prevAggHash.Bytes())
 		assert.Equal(t, expHash, tm.GetAggregatedLayerHash(prevLyr.Index()))
 		prevAggHash = expHash
 	}
-}
-
-func TestMesh_SetZeroBallotLayer(t *testing.T) {
-	r := require.New(t)
-	tm := createTestMesh(t)
-	defer tm.Close()
-
-	lyrID := types.GetEffectiveGenesis().Add(1)
-	blocks := createLayerBlocks(t, tm.Mesh, lyrID)
-	lyr, err := tm.GetLayer(lyrID)
-	r.ErrorIs(err, database.ErrNotFound)
-	r.Nil(lyr)
-
-	err = tm.SetZeroBallotLayer(lyrID)
-	assert.NoError(t, err)
-	lyr, err = tm.GetLayer(lyrID)
-	require.NoError(t, err)
-	assert.Empty(t, lyr.Ballots())
-	assert.ElementsMatch(t, blocks, lyr.Blocks())
-
-	// it's ok to add to an empty layer
-	ballots := createLayerBallots(t, tm.Mesh, lyrID)
-	lyr, err = tm.GetLayer(lyrID)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, ballots, lyr.Ballots())
-	assert.ElementsMatch(t, blocks, lyr.Blocks())
-
-	// but not okay to set a non-empty layer to an empty layer
-	err = tm.SetZeroBallotLayer(lyrID)
-	assert.Equal(t, errLayerHasBallot, err)
 }
 
 func TestMesh_SetZeroBlockLayer(t *testing.T) {
@@ -296,7 +266,8 @@ func TestMesh_GetLayer(t *testing.T) {
 	ballots := createLayerBallots(t, tm.Mesh, id)
 	lyr, err = tm.GetLayer(id)
 	require.NoError(t, err)
-	assert.Equal(t, id, lyr.Index())
+	require.Equal(t, id, lyr.Index())
+	require.Len(t, lyr.Ballots(), len(ballots))
 	assert.ElementsMatch(t, ballots, lyr.Ballots())
 	assert.ElementsMatch(t, blocks, lyr.Blocks())
 }
@@ -444,7 +415,7 @@ func TestMesh_ProcessLayerPerHareOutput_emptyOutput(t *testing.T) {
 	require.NoError(t, tm.ProcessLayerPerHareOutput(context.TODO(), gPlus1, blocks1[0].ID()))
 	hareOutput, err := tm.GetHareConsensusOutput(gPlus1)
 	require.NoError(t, err)
-	assert.Equal(t, blocks1[0].ID(), hareOutput)
+	require.Equal(t, blocks1[0].ID(), hareOutput)
 	require.Equal(t, gPlus1, tm.ProcessedLayer())
 
 	gPlus2 := gLyr.Add(2)
@@ -470,7 +441,7 @@ func TestMesh_PersistProcessedLayer(t *testing.T) {
 	t.Cleanup(func() {
 		tm.Close()
 	})
-	layerID := types.NewLayerID(3)
+	layerID := types.NewLayerID(7)
 	assert.NoError(t, tm.persistProcessedLayer(layerID))
 	rLyr, err := tm.GetProcessedLayer()
 	assert.NoError(t, err)

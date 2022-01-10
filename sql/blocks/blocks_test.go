@@ -22,6 +22,22 @@ func TestAddGet(t *testing.T) {
 	require.Equal(t, &block, got)
 }
 
+func TestAlreadyExists(t *testing.T) {
+	db := sql.InMemory()
+	blocks := []types.Block{
+		types.NewExistingBlock(
+			types.BlockID{1},
+			types.InnerBlock{},
+		),
+		types.NewExistingBlock(
+			types.BlockID{1},
+			types.InnerBlock{},
+		),
+	}
+	require.NoError(t, Add(db, &blocks[0]))
+	require.ErrorIs(t, Add(db, &blocks[1]), sql.ErrObjectExists)
+}
+
 func TestVerified(t *testing.T) {
 	db := sql.InMemory()
 	blocks := []types.Block{
@@ -44,6 +60,11 @@ func TestVerified(t *testing.T) {
 	require.True(t, valid)
 
 	valid, err = IsVerified(db, blocks[1].ID())
+	require.NoError(t, err)
+	require.False(t, valid)
+
+	require.NoError(t, SetInvalid(db, blocks[0].ID()))
+	valid, err = IsVerified(db, blocks[0].ID())
 	require.NoError(t, err)
 	require.False(t, valid)
 }
