@@ -3,6 +3,7 @@ package mesh
 import (
 	"bytes"
 	"context"
+	"encoding/binary"
 	"math"
 	"os"
 	"path"
@@ -661,6 +662,20 @@ func TestMesh_FindOnce(t *testing.T) {
 			assert.Len(t, txs, 1)
 		}
 	})
+}
+
+func TestBlocksBallotsOverlap(t *testing.T) {
+	mdb := NewMemMeshDB(logtest.New(t))
+	defer mdb.Close()
+
+	lid := []byte{'L', 0, 0, 0}
+	block := types.NewExistingBlock(types.BlockID{0, 2, 3},
+		types.InnerBlock{LayerIndex: types.NewLayerID(binary.LittleEndian.Uint32(lid))})
+	require.NoError(t, mdb.AddBlock(block))
+
+	ids, err := mdb.LayerBallotIDs(types.NewLayerID(0))
+	require.NoError(t, err)
+	require.Len(t, ids, 1)
 }
 
 func BenchmarkGetBlock(b *testing.B) {
