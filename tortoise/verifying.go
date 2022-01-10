@@ -31,9 +31,9 @@ const (
 	// but it doesn't count weight for abstained layers.
 	//
 	// for voting tortoise still prioritizes good ballots, ballots that selects base ballot
-	// that abstained will not be marked as a bad ballot. this condition is necessary
+	// that abstained will be marked as a bad ballot. this condition is necessary
 	// to simplify implementation. otherwise verifying tortoise needs to copy abstained
-	// votes from base ballot if they weren't fixed.
+	// votes from base ballot if they tortoise hasn't terminated yet.
 	//
 	// Example:
 	// Block: 0x01 Layer: 9
@@ -144,7 +144,7 @@ func (v *verifying) verify(logger log.Log, lid types.LayerID) bool {
 		log.String("verifier", verifyingTortoise),
 		log.Stringer("candidate_layer", lid),
 		log.Stringer("margin", margin),
-		log.Stringer("asbtained_weight", v.abstainedWeight[lid]),
+		log.Stringer("abstained_weight", v.abstainedWeight[lid]),
 		log.Stringer("local_threshold", v.localThreshold),
 		log.Stringer("global_threshold", v.globalThreshold),
 	)
