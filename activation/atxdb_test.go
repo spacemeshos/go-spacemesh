@@ -739,7 +739,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	idStore := NewIdentityStore(database.NewMemDatabase())
 	atxdb := NewDB(database.NewMemDatabase(), nil, idStore, layersPerEpochBig, goldenATXID, &ValidatorMock{}, lg.WithName("atxDB"))
 
-	validAtx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, goldenATXID, types.LayerID{}), [types.AddressLength]byte{}, nil, 0, nil)
+	validAtx := types.NewActivationTx(newChallenge(nodeID, 0, *types.EmptyATXID, goldenATXID, types.LayerID{}), types.Address{}, nil, 0, nil)
 	err := atxdb.ContextuallyValidateAtx(validAtx.ActivationTxHeader)
 	r.NoError(err)
 
