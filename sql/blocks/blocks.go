@@ -78,10 +78,12 @@ func GetHareOutput(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
 
 // SetVerified updates verified status for a block.
 func SetVerified(db sql.Executor, id types.BlockID) error {
-	if _, err := db.Exec("update blocks set verified = 1 where id = ?1;", func(stmt *sql.Statement) {
+	if rows, err := db.Exec("update blocks set verified = 1 where id = ?1 returning *;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}, nil); err != nil {
 		return fmt.Errorf("update verified %s: %w", id, err)
+	} else if rows == 0 {
+		return fmt.Errorf("%w block for update %s", sql.ErrNotFound, id)
 	}
 	return nil
 }

@@ -21,3 +21,29 @@ func TestAddGet(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, &block, got)
 }
+
+func TestVerified(t *testing.T) {
+	db := sql.InMemory()
+	blocks := []types.Block{
+		types.NewExistingBlock(
+			types.BlockID{1, 1},
+			types.InnerBlock{},
+		),
+		types.NewExistingBlock(
+			types.BlockID{2, 2},
+			types.InnerBlock{},
+		),
+	}
+	for _, block := range blocks {
+		require.NoError(t, Add(db, &block))
+	}
+	require.NoError(t, SetVerified(db, blocks[0].ID()))
+
+	valid, err := IsVerified(db, blocks[0].ID())
+	require.NoError(t, err)
+	require.True(t, valid)
+
+	valid, err = IsVerified(db, blocks[1].ID())
+	require.NoError(t, err)
+	require.False(t, valid)
+}
