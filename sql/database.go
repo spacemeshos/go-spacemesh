@@ -77,6 +77,10 @@ func InMemory() *Database {
 }
 
 // Open database with options.
+//
+// Database is opened in WAL mode and pragma synchronous=normal.
+// https://sqlite.org/wal.html
+// https://www.sqlite.org/pragma.html#pragma_synchronous
 func Open(uri string, opts ...Opt) (*Database, error) {
 	config := defaultConf()
 	for _, opt := range opts {
@@ -101,12 +105,18 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 	return db, nil
 }
 
-// Database ...
+// Database is an instance of sqlite database.
 type Database struct {
 	pool *sqlitex.Pool
 }
 
 // Tx creates deferred sqlite transaction.
+//
+// Deferred transactions are not started until the first statement.
+// Transaction may be started in read mode and automatically upgraded to write mode
+// after one of the write statements.
+//
+// https://www.sqlite.org/lang_transaction.html
 func (db *Database) Tx(ctx context.Context) (*Tx, error) {
 	conn := db.pool.Get(ctx)
 	if conn == nil {
@@ -117,6 +127,12 @@ func (db *Database) Tx(ctx context.Context) (*Tx, error) {
 }
 
 // ConcurrentTx creates concurrent deferred sqlite transaction.
+//
+// By default sqlite will support only single writer, with concurrent it will optimistically support many,
+// but the code should expect that transaction may be aborted if another concurrent transaction
+// modified page that was read or needs to be modified.
+//
+// https://sqlite.org/src/doc/begin-concurrent/doc/begin_concurrent.md
 func (db *Database) ConcurrentTx(ctx context.Context) (*Tx, error) {
 	conn := db.pool.Get(ctx)
 	if conn == nil {
@@ -131,6 +147,9 @@ func (db *Database) ConcurrentTx(ctx context.Context) (*Tx, error) {
 // If you care about atomicity of the operation (for example writing rewards to multiple accounts)
 // Tx should be used. Otherwise sqlite will not guarantee that all side-effects of operations are
 // applied to the database if machine crashes.
+//
+// Note that Exec will block until datatabase is closed or statement has finished.
+// If application needs to control statement execution lifetime use one of the transaction.
 func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
 	conn := db.pool.Get(context.Background())
 	if conn == nil {
@@ -183,11 +202,6 @@ func (tx *Tx) begin() error {
 	return nil
 }
 
-// by default sqlite will support single writer, with concurrent it will optimistically support many
-// but the code should expect that transaction may be aborted if another concurrent transaction
-// modified same page.
-//
-// https://sqlite.org/src/doc/begin-concurrent/doc/begin_concurrent.md
 func (tx *Tx) beginConcurrent() error {
 	stmt := tx.conn.Prep("BEGIN CONCURRENT;")
 	_, err := stmt.Step()
