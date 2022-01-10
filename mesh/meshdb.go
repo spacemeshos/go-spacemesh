@@ -20,8 +20,10 @@ import (
 const (
 	layerSize = 200
 
-	layerBlocks  = "bL"
-	layerBallots = "b"
+	layerBlocks  = "k"
+	layerBallots = "a"
+	// ProposalPrefix is used in proposal module.
+	ProposalPrefix = "p"
 )
 
 // DB represents a mesh database instance.
