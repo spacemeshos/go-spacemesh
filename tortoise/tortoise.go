@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
@@ -378,7 +379,7 @@ func (t *turtle) encodeVotes(
 // in the current layer.
 func (t *turtle) getFullVote(ctx context.Context, lid types.LayerID, bid types.BlockID) (sign, voteReason, error) {
 	vote, reason := getLocalVote(&t.commonState, t.Config, lid, bid)
-	if !(vote == abstain && reason == reasonValiditiy) {
+	if !(vote == abstain && reason == reasonValidity) {
 		return vote, reason, nil
 	}
 	sum := t.full.weights[bid]
@@ -772,12 +773,19 @@ func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.La
 	if !lid.After(t.historicallyVerified) {
 		// this layer has been verified, so we should be able to read the set of contextual blocks
 		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
-		valid, err := t.bdp.LayerContextuallyValidBlocks(ctx, lid)
-		if err != nil {
-			return fmt.Errorf("failed to load contextually balid blocks for layer %s: %w", lid, err)
-		}
-		for bid := range valid {
-			t.validity[bid] = support
+		for _, bid := range t.blocks[lid] {
+			valid, err := t.bdp.ContextualValidity(bid)
+			if errors.Is(err, database.ErrNotFound) {
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("failed to load contextually validiy for block %s: %w", bid, err)
+			}
+			sign := support
+			if !valid {
+				sign = against
+			}
+			t.validity[bid] = sign
 		}
 		return nil
 	}
@@ -810,10 +818,9 @@ func getLocalVote(state *commonState, config Config, lid types.LayerID, block ty
 		}
 		return against, reasonHareOutput
 	}
-
 	vote, exists := state.validity[block]
 	if exists {
-		return vote, reasonValiditiy
+		return vote, reasonValidity
 	}
-	return abstain, reasonValiditiy
+	return abstain, reasonValidity
 }

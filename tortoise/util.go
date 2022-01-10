@@ -163,7 +163,7 @@ func (v voteReason) String() string {
 
 const (
 	reasonHareOutput     voteReason = "hare"
-	reasonValiditiy      voteReason = "validity"
+	reasonValidity       voteReason = "validity"
 	reasonLocalThreshold voteReason = "local_threshold"
 	reasonCoinflip       voteReason = "coinflip"
 )
