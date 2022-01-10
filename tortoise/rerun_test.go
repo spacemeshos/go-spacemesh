@@ -51,6 +51,36 @@ func TestRecoverState(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 }
 
+func TestRerunStaysInVerifyingMode(t *testing.T) {
+	ctx := context.Background()
+	const (
+		size   = 10
+		layers = 20
+	)
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup(sim.WithSetupUnitsRange(2, 2))
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.Hdist = 1
+	cfg.Zdist = cfg.Hdist
+
+	cfg.VerifyingModeVerificationWindow = layers
+	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	var last, verified types.LayerID
+	for i := 0; i < layers; i++ {
+		last = s.Next()
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified)
+
+	require.NoError(t, tortoise.rerun(ctx))
+	_, verified, _ = tortoise.HandleIncomingLayer(ctx, s.Next())
+	require.Equal(t, last, verified)
+
+	require.Equal(t, types.GetEffectiveGenesis(), tortoise.trtl.full.counted)
+}
+
 func TestRerunDistanceVoteCounting(t *testing.T) {
 	t.Run("FixesMisverified", func(t *testing.T) {
 		testWindowCounting(t, 3, 100, 10, true)

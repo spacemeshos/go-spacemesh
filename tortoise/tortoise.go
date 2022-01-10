@@ -782,7 +782,7 @@ func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.La
 			}
 			sign := support
 			if !valid {
-				sign = abstain
+				sign = against
 			}
 			t.validity[bid] = sign
 		}
