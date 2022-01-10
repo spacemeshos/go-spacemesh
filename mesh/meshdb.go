@@ -21,7 +21,7 @@ const (
 	layerSize = 200
 
 	layerBlocks  = "b"
-	layerBallots = "bL"
+	layerBallots = "a"
 )
 
 // DB represents a mesh database instance.
