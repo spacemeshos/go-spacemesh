@@ -35,6 +35,8 @@ else
 	endif
 endif
 
+CGO_TEST_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,$(BIN_DIR)
+
 SVM_ZIP = libsvm-$(PLATFORM)-$(SVM_VERSION).zip
 
 $(PROJ_DIR)$(SVM_ZIP):
