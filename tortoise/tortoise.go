@@ -150,7 +150,8 @@ func (t *turtle) evict(ctx context.Context) {
 		}
 		delete(t.blocks, lid)
 		delete(t.undecided, lid)
-		delete(t.verifying.layerWeights, lid)
+		delete(t.verifying.goodWeight, lid)
+		delete(t.verifying.abstainedWeight, lid)
 		if lid.GetEpoch() < oldestEpoch {
 			delete(t.refBallotBeacons, lid.GetEpoch())
 			delete(t.epochWeight, lid.GetEpoch())
