@@ -47,3 +47,31 @@ func TestVerified(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, valid)
 }
+
+func TestLayerFilter(t *testing.T) {
+	db := sql.InMemory()
+	start := types.NewLayerID(1)
+	blocks := []types.Block{
+		types.NewExistingBlock(
+			types.BlockID{1, 1},
+			types.InnerBlock{LayerIndex: start},
+		),
+		types.NewExistingBlock(
+			types.BlockID{2, 2},
+			types.InnerBlock{LayerIndex: start},
+		),
+		types.NewExistingBlock(
+			types.BlockID{3, 3},
+			types.InnerBlock{LayerIndex: start.Add(1)},
+		),
+	}
+	for _, block := range blocks {
+		require.NoError(t, Add(db, &block))
+	}
+	bids, err := Layer(db, start)
+	require.NoError(t, err)
+	require.Len(t, bids, 2)
+	for i, bid := range bids {
+		require.Equal(t, bid, blocks[i].ID())
+	}
+}

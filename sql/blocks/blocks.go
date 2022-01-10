@@ -53,10 +53,12 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 
 // SetHareOutput records hare output.
 func SetHareOutput(db sql.Executor, id types.BlockID) error {
-	if _, err := db.Exec("update blocks set hare_output = 1 where id = ?1;", func(stmt *sql.Statement) {
+	if rows, err := db.Exec("update blocks set hare_output = 1 where id = ?1 returning id;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}, nil); err != nil {
 		return fmt.Errorf("update hare_output to %s: %w", id, err)
+	} else if rows == 0 {
+		return fmt.Errorf("%w for set hare output %s", sql.ErrNotFound, id)
 	}
 	return nil
 }
@@ -78,7 +80,7 @@ func GetHareOutput(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
 
 // SetVerified updates verified status for a block.
 func SetVerified(db sql.Executor, id types.BlockID) error {
-	if rows, err := db.Exec("update blocks set verified = 1 where id = ?1 returning *;", func(stmt *sql.Statement) {
+	if rows, err := db.Exec("update blocks set verified = 1 where id = ?1 returning id;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}, nil); err != nil {
 		return fmt.Errorf("update verified %s: %w", id, err)
@@ -102,8 +104,8 @@ func IsVerified(db sql.Executor, id types.BlockID) (bool, error) {
 	return rst, nil
 }
 
-// InLayer returns list of block ids in the layer.
-func InLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
+// Layer returns list of block ids in the layer.
+func Layer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 	var rst []types.BlockID
 	if _, err := db.Exec("select id from blocks where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Uint32()))
@@ -118,8 +120,8 @@ func InLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 	return rst, nil
 }
 
-// ValidityInLayer returns a mapping of block => validity.
-func ValidityInLayer(db sql.Executor, lid types.LayerID) (map[types.BlockID]bool, error) {
+// LayerByValidity returns a mapping of block => validity.
+func LayerByValidity(db sql.Executor, lid types.LayerID) (map[types.BlockID]bool, error) {
 	rst := map[types.BlockID]bool{}
 	if _, err := db.Exec("select (id, verified) from blocks where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Uint32()))

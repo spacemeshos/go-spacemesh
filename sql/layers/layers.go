@@ -8,7 +8,7 @@ import (
 )
 
 // Status of the layer.
-type Status int
+type Status int8
 
 func (s Status) String() string {
 	switch s {
@@ -76,15 +76,14 @@ func SetStatus(db sql.Executor, lid types.LayerID, status Status) error {
 
 // GetByStatus return latest layer with the status.
 func GetByStatus(db sql.Executor, status Status) (rst types.LayerID, err error) {
-	_, err = db.Exec("select max(id) from layers where status >= ?1;",
+	if _, err = db.Exec("select max(id) from layers where status >= ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(status))
 		},
 		func(stmt *sql.Statement) bool {
 			rst = types.NewLayerID(uint32(stmt.ColumnInt(0)))
 			return true
-		})
-	if err != nil {
+		}); err != nil {
 		return types.LayerID{}, fmt.Errorf("layer by status %s: %w", status, err)
 	}
 	return rst, nil
