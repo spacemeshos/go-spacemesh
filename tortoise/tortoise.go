@@ -771,12 +771,16 @@ func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.La
 	if !lid.After(t.historicallyVerified) {
 		// this layer has been verified, so we should be able to read the set of contextual blocks
 		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
-		valid, err := t.bdp.LayerContextuallyValidBlocks(ctx, lid)
-		if err != nil {
-			return fmt.Errorf("failed to load contextually balid blocks for layer %s: %w", lid, err)
-		}
-		for bid := range valid {
-			t.validity[bid] = support
+		for _, bid := range t.blocks[lid] {
+			valid, err := t.bdp.ContextualValidity(bid)
+			if err != nil {
+				return fmt.Errorf("failed to load contextually validiy for block %s: %w", bid, err)
+			}
+			sign := support
+			if !valid {
+				sign = against
+			}
+			t.validity[bid] = sign
 		}
 		return nil
 	}
