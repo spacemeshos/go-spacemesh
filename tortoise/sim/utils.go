@@ -2,6 +2,7 @@ package sim
 
 import (
 	"math/rand"
+	"os"
 	"path/filepath"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
@@ -37,6 +38,7 @@ func newAtxDB(logger log.Log, conf config) *activation.DB {
 
 func newMeshDB(logger log.Log, conf config) *mesh.DB {
 	if len(conf.Path) > 0 {
+		os.MkdirAll(filepath.Join(conf.Path, meshpath), os.ModePerm)
 		db, err := mesh.NewPersistentMeshDB(filepath.Join(conf.Path, meshpath), 20, logger)
 		if err != nil {
 			panic(err)
