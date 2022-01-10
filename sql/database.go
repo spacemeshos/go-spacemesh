@@ -10,18 +10,31 @@ import (
 )
 
 var (
+	// ErrNoConnection is returned if pooled connection is not available.
 	ErrNoConnection = errors.New("database: no free connection")
+	// ErrNotFound is returned if requested record is not found.
+	ErrNotFound = errors.New("database: not found")
 )
 
+// Executor is an interface for executing raw statement.
 type Executor interface {
-	// TODO(dshulyak) return number of consumed rows.
-	Exec(string, Encoder, Decoder) error
+	Exec(string, Encoder, Decoder) (int, error)
 }
 
+// Statement is an sqlite statement.
 type Statement = sqlite.Stmt
 
+// Encoder for parameters.
+// Both positional parameters:
+// select block from blocks where id = ?1;
+//
+// and named parameters are supported:
+// select blocks from blocks where id = @id;
+//
+// For complete information see https://www.sqlite.org/c3ref/bind_blob.html.
 type Encoder func(*Statement)
 
+// Decoder for sqlite rows.
 type Decoder func(*Statement) bool
 
 func defaultConf() *conf {
@@ -93,6 +106,7 @@ type Database struct {
 	pool *sqlitex.Pool
 }
 
+// Tx creates deferred sqlite transaction.
 func (db *Database) Tx(ctx context.Context) (*Tx, error) {
 	conn := db.pool.Get(ctx)
 	if conn == nil {
@@ -102,6 +116,7 @@ func (db *Database) Tx(ctx context.Context) (*Tx, error) {
 	return tx, tx.begin()
 }
 
+// ConcurrentTx creates concurrent deferred sqlite transaction.
 func (db *Database) ConcurrentTx(ctx context.Context) (*Tx, error) {
 	conn := db.pool.Get(ctx)
 	if conn == nil {
@@ -111,32 +126,42 @@ func (db *Database) ConcurrentTx(ctx context.Context) (*Tx, error) {
 	return tx, tx.beginConcurrent()
 }
 
-func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) error {
+// Exec statement using one of the connection from the pool.
+//
+// If you care about atomicity of the operation (for example writing rewards to multiple accounts)
+// Tx should be used. Otherwise sqlite will not guarantee that all side-effects of operations are
+// applied to the database if machine crashes.
+func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
 	conn := db.pool.Get(context.Background())
 	if conn == nil {
-		return ErrNoConnection
+		return 0, ErrNoConnection
 	}
 	defer db.pool.Put(conn)
 	return exec(conn, query, encoder, decoder)
 }
 
-func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) error {
+func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (int, error) {
 	stmt, err := conn.Prepare(query)
 	if err != nil {
-		return err
+		return 0, fmt.Errorf("prepare %s: %w", query, err)
 	}
 	if encoder != nil {
 		encoder(stmt)
 	}
 	defer stmt.ClearBindings()
 
+	rows := 0
 	for {
 		row, err := stmt.Step()
-		if !row || err != nil {
-			return err
+		if err != nil {
+			return 0, fmt.Errorf("step %d: %w", rows, err)
 		}
+		if !row {
+			return rows, nil
+		}
+		rows++
 		if decoder != nil && !decoder(stmt) {
-			return nil
+			return rows, nil
 		}
 	}
 }
@@ -195,6 +220,6 @@ func (tx *Tx) Release() error {
 }
 
 // Exec query.
-func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) error {
+func (tx *Tx) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
 	return exec(tx.conn, query, encoder, decoder)
 }

@@ -18,8 +18,8 @@ func TestMigrations(t *testing.T) {
 	rng.Read(id)
 	dst := make([]byte, 20)
 	hex.Encode(dst, id)
-
-	require.NoError(t, db.Exec("INSERT INTO blocks (id) VALUES (?1);", func(stmt *Statement) {
+	_, err := db.Exec("INSERT INTO blocks (id) VALUES (?1);", func(stmt *Statement) {
 		stmt.BindBytes(1, dst)
-	}, nil))
+	}, nil)
+	require.NoError(t, err)
 }

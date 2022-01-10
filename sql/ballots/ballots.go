@@ -12,15 +12,15 @@ import (
 func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader) (*types.Ballot, error) {
 	sigBytes := make([]byte, sig.Len())
 	if _, err := sig.Read(sigBytes); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("copy sig %w", err)
 	}
 	pubkeyBytes := make([]byte, pubkey.Len())
 	if _, err := pubkey.Read(pubkeyBytes); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("copy pubkey %w", err)
 	}
 	inner := types.InnerBallot{}
 	if _, err := codec.DecodeFrom(body, &inner); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decoder body of the %s: %w", id, err)
 	}
 	ballot := types.NewExistingBallot(id, sigBytes, pubkeyBytes, inner)
 	return &ballot, nil
@@ -30,34 +30,39 @@ func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader) (*types.Ba
 func Add(db sql.Executor, ballot *types.Ballot) error {
 	bytes, err := codec.Encode(ballot.InnerBallot)
 	if err != nil {
-		return err
+		return fmt.Errorf("encode ballot %s: %w", ballot.ID(), err)
 	}
-	return db.Exec("insert or ignore into ballots (id, layer, signature, pubkey, ballot) values (?1, ?2, ?3, ?4, ?5);",
+	if _, err := db.Exec("insert or ignore into ballots (id, layer, signature, pubkey, ballot) values (?1, ?2, ?3, ?4, ?5);",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, ballot.ID().Bytes())
 			stmt.BindInt64(2, int64(ballot.LayerIndex.Value))
 			stmt.BindBytes(3, ballot.Signature)
 			stmt.BindBytes(4, ballot.SmesherID().Bytes())
 			stmt.BindBytes(5, bytes)
-		}, nil)
+		}, nil); err != nil {
+		return fmt.Errorf("insert ballot %s: %w", ballot.ID(), err)
+	}
+	return nil
 }
 
 // Get ballot with id from database.
 func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
-	if err := db.Exec("select (signature, pubkey, ballot) from ballots where id = ?1;", func(stmt *sql.Statement) {
+	if rows, err := db.Exec("select (signature, pubkey, ballot) from ballots where id = ?1;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}, func(stmt *sql.Statement) bool {
 		rst, err = decodeBallot(id, stmt.ColumnReader(0), stmt.ColumnReader(1), stmt.ColumnReader(2))
 		return true
 	}); err != nil {
 		return nil, fmt.Errorf("get %s: %w", id, err)
+	} else if rows == 0 {
+		return nil, fmt.Errorf("%w ballot %s", sql.ErrNotFound, id)
 	}
-	return rst, err
+	return rst, nil
 }
 
 // InLayer returns full body ballot for layer.
 func InLayer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
-	if err := db.Exec("select (id, signature, pubkey, ballot) from ballots where layer = ?1;", func(stmt *sql.Statement) {
+	if _, err := db.Exec("select (id, signature, pubkey, ballot) from ballots where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, lid.Bytes())
 	}, func(stmt *sql.Statement) bool {
 		id := types.BallotID{}

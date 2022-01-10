@@ -62,7 +62,7 @@ func embeddedMigrations(db Executor) error {
 
 	var current int
 
-	if err := db.Exec("PRAGMA user_version;", nil, func(stmt *Statement) bool {
+	if _, err := db.Exec("PRAGMA user_version;", nil, func(stmt *Statement) bool {
 		current = stmt.ColumnInt(0)
 		return true
 	}); err != nil {
@@ -74,12 +74,12 @@ func embeddedMigrations(db Executor) error {
 			continue
 		}
 		for m.content.Scan() {
-			if err := db.Exec(m.content.Text(), nil, nil); err != nil {
+			if _, err := db.Exec(m.content.Text(), nil, nil); err != nil {
 				return fmt.Errorf("exec %s: %w", m.content.Text(), err)
 			}
 		}
 		// binding values in pragma statement is not allowed
-		if err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.order), nil, nil); err != nil {
+		if _, err := db.Exec(fmt.Sprintf("PRAGMA user_version = %d;", m.order), nil, nil); err != nil {
 			return fmt.Errorf("update user_version to %d: %w", m.order, err)
 		}
 	}
