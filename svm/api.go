@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/spacemeshos/go-svm/svm"
+
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -15,6 +17,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
+
+// TODO(nkryuchkov):
+// The line below ensures that project may be built when github.com/spacemeshos/go-svm/svm is imported.
+// It needs to be removed after github.com/spacemeshos/go-svm/svm is integrated.
+var _ svm.API
 
 // IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p.
 const IncomingTxProtocol = state.IncomingTxProtocol
