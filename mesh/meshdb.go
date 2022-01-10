@@ -22,8 +22,6 @@ const (
 
 	layerBlocks  = "k"
 	layerBallots = "a"
-	// ProposalPrefix is used in proposal module.
-	ProposalPrefix = "p"
 )
 
 // DB represents a mesh database instance.

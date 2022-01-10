@@ -180,7 +180,7 @@ func (db *DB) Get(hash []byte) ([]byte, error) {
 // LayerProposalIDs retrieves all proposal IDs from the layer specified by layer ID.
 func (db *DB) LayerProposalIDs(lid types.LayerID) ([]types.ProposalID, error) {
 	var ids []types.ProposalID
-	if err := mesh.LayerIDs(db.layers, mesh.ProposalPrefix, lid, func(id []byte) error {
+	if err := mesh.LayerIDs(db.layers, "", lid, func(id []byte) error {
 		var pid types.ProposalID
 		copy(pid[:], id)
 		ids = append(ids, pid)
@@ -195,7 +195,7 @@ func (db *DB) LayerProposalIDs(lid types.LayerID) ([]types.ProposalID, error) {
 // LayerProposals retrieves all proposals from the layer specified by layer ID.
 func (db *DB) LayerProposals(lid types.LayerID) ([]*types.Proposal, error) {
 	var proposals []*types.Proposal
-	if err := mesh.LayerIDs(db.layers, mesh.ProposalPrefix, lid, func(id []byte) error {
+	if err := mesh.LayerIDs(db.layers, "", lid, func(id []byte) error {
 		var pid types.ProposalID
 		copy(pid[:], id)
 		block, err := db.GetProposal(pid)
