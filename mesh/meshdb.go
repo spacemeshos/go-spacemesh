@@ -106,7 +106,7 @@ func (m *DB) PersistentData() bool {
 		m.Info("database is empty")
 		return false
 	}
-	return false
+	return true
 }
 
 // NewMemMeshDB is a mock used for testing.
