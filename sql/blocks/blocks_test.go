@@ -16,7 +16,7 @@ func TestAddGet(t *testing.T) {
 		types.InnerBlock{LayerIndex: types.NewLayerID(1)},
 	)
 
-	require.NoError(t, Add(db, &block))
+	require.NoError(t, Add(db, block))
 	got, err := Get(db, block.ID())
 	require.NoError(t, err)
 	require.Equal(t, &block, got)
@@ -28,8 +28,8 @@ func TestAlreadyExists(t *testing.T) {
 		types.BlockID{1},
 		types.InnerBlock{},
 	)
-	require.NoError(t, Add(db, &block))
-	require.ErrorIs(t, Add(db, &block), sql.ErrObjectExists)
+	require.NoError(t, Add(db, block))
+	require.ErrorIs(t, Add(db, block), sql.ErrObjectExists)
 }
 
 func TestHas(t *testing.T) {
@@ -42,7 +42,7 @@ func TestHas(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, exists)
 
-	require.NoError(t, Add(db, &block))
+	require.NoError(t, Add(db, block))
 	exists, err = Has(db, block.ID())
 	require.NoError(t, err)
 	require.True(t, exists)
@@ -50,7 +50,7 @@ func TestHas(t *testing.T) {
 
 func TestValidity(t *testing.T) {
 	db := sql.InMemory()
-	blocks := []types.Block{
+	blocks := []*types.Block{
 		types.NewExistingBlock(
 			types.BlockID{1, 1},
 			types.InnerBlock{},
@@ -61,7 +61,7 @@ func TestValidity(t *testing.T) {
 		),
 	}
 	for _, block := range blocks {
-		require.NoError(t, Add(db, &block))
+		require.NoError(t, Add(db, block))
 	}
 	require.NoError(t, SetValid(db, blocks[0].ID()))
 
@@ -81,7 +81,7 @@ func TestValidity(t *testing.T) {
 func TestLayerFilter(t *testing.T) {
 	db := sql.InMemory()
 	start := types.NewLayerID(1)
-	blocks := []types.Block{
+	blocks := []*types.Block{
 		types.NewExistingBlock(
 			types.BlockID{1, 1},
 			types.InnerBlock{LayerIndex: start},
@@ -96,7 +96,7 @@ func TestLayerFilter(t *testing.T) {
 		),
 	}
 	for _, block := range blocks {
-		require.NoError(t, Add(db, &block))
+		require.NoError(t, Add(db, block))
 	}
 	bids, err := LayerIDs(db, start)
 	require.NoError(t, err)

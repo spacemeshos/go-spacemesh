@@ -15,8 +15,7 @@ func decodeBlock(reader io.Reader, id types.BlockID) (*types.Block, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode block %s: %w", id, err)
 	}
-	block := types.NewExistingBlock(id, inner)
-	return &block, nil
+	return types.NewExistingBlock(id, inner), nil
 }
 
 // Add block to the database.
