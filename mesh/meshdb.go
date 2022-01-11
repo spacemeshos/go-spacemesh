@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -45,6 +46,9 @@ type DB struct {
 
 // NewPersistentMeshDB creates an instance of a mesh database.
 func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, error) {
+	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("failed to create %s: %w", path, err)
+	}
 	db, err := sql.Open("file:" + filepath.Join(path, "state.sql"))
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite db %w", err)
