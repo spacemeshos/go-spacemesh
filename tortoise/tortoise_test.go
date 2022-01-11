@@ -381,7 +381,7 @@ func TestBaseBallot(t *testing.T) {
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
-	expectBaseBallotLayer(l2.Index(), 0, numValidBlock, 0)
+	expectBaseBallotLayer(l2.Index(), 0, numValidBlock, 1)
 }
 
 func mockedBeacons(tb testing.TB) system.BeaconGetter {
