@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 var (
@@ -103,11 +104,11 @@ func NewMesh(db *DB, atxDb AtxDB, trtl tortoise, txPool txMemPool, state state, 
 func NewRecoveredMesh(db *DB, atxDb AtxDB, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
 	msh := NewMesh(db, atxDb, trtl, txPool, state, logger)
 
-	latest, err := db.general.Get(constLATEST)
+	latest, err := msh.GetLatestLayer()
 	if err != nil {
 		logger.With().Panic("failed to recover latest layer", log.Err(err))
 	}
-	msh.setLatestLayer(types.BytesToLayerID(latest))
+	msh.setLatestLayer(latest)
 
 	lyr, err := msh.GetProcessedLayer()
 	if err != nil {
@@ -115,11 +116,11 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, trtl tortoise, txPool txMemPool, stat
 	}
 	msh.setProcessedLayerFromRecoveredData(lyr)
 
-	verified, err := db.general.Get(VERIFIED)
+	verified, err := msh.GetVerifiedLayer()
 	if err != nil {
 		logger.With().Panic("failed to recover latest verified layer", log.Err(err))
 	}
-	if err = msh.setLatestLayerInState(types.BytesToLayerID(verified)); err != nil {
+	if err = msh.setLatestLayerInState(verified); err != nil {
 		logger.With().Panic("failed to recover latest layer in state", log.Err(err))
 	}
 
@@ -193,7 +194,7 @@ func (msh *Mesh) setLatestLayer(idx types.LayerID) {
 		events.ReportNodeStatusUpdate()
 		msh.With().Info("set latest known layer", idx)
 		msh.latestLayer = idx
-		if err := msh.general.Put(constLATEST, idx.Bytes()); err != nil {
+		if err := layers.SetStatus(msh.db, idx, layers.Latest); err != nil {
 			msh.Error("could not persist latest layer index")
 		}
 	}
@@ -610,7 +611,7 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
 	// state depends on processedLayer param.
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
-	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
+	if err := layers.SetStatus(msh.db, lyr, layers.Applied); err != nil {
 		// can happen if database already closed
 		msh.Error("could not persist validated layer index %d: %v", lyr, err.Error())
 		return fmt.Errorf("put into DB: %w", err)

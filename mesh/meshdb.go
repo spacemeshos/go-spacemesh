@@ -323,6 +323,11 @@ func (m *DB) GetVerifiedLayer() (types.LayerID, error) {
 	return layers.GetByStatus(m.db, layers.Applied)
 }
 
+// GetLatestLayer loads latest layer from database.
+func (m *DB) GetLatestLayer() (types.LayerID, error) {
+	return layers.GetByStatus(m.db, layers.Latest)
+}
+
 func (m *DB) writeBlock(b *types.Block) error {
 	if err := blocks.Add(m.db, b); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", b.ID(), err)
