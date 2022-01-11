@@ -231,7 +231,7 @@ func (m *DB) GetBlock(bid types.BlockID) (*types.Block, error) {
 
 // LayerBlockIds retrieves all block IDs from the layer specified by layer ID.
 func (m *DB) LayerBlockIds(lid types.LayerID) ([]types.BlockID, error) {
-	return blocks.Layer(m.db, lid)
+	return blocks.LayerIDs(m.db, lid)
 }
 
 // LayerBlocks retrieves all blocks from the layer specified by layer ID.
@@ -242,7 +242,7 @@ func (m *DB) LayerBlocks(lid types.LayerID) ([]*types.Block, error) {
 	}
 	rst := make([]*types.Block, 0, len(ids))
 	for _, bid := range ids {
-		block, err := blocks.Get(m.db, bid)
+		block, err := m.GetBlock(bid)
 		if err != nil {
 			return nil, err
 		}

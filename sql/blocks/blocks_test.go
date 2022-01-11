@@ -88,7 +88,7 @@ func TestLayerFilter(t *testing.T) {
 	for _, block := range blocks {
 		require.NoError(t, Add(db, &block))
 	}
-	bids, err := Layer(db, start)
+	bids, err := LayerIDs(db, start)
 	require.NoError(t, err)
 	require.Len(t, bids, 2)
 	for i, bid := range bids {

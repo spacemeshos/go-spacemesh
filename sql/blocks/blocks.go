@@ -111,8 +111,8 @@ func IsVerified(db sql.Executor, id types.BlockID) (rst bool, err error) {
 	return rst, err
 }
 
-// Layer returns list of block ids in the layer.
-func Layer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
+// LayerIDs returns list of block ids in the layer.
+func LayerIDs(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 	var rst []types.BlockID
 	if _, err := db.Exec("select id from blocks where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Uint32()))
