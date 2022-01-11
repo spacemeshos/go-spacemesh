@@ -73,8 +73,9 @@ func WithMigrations(migrations Migrations) Opt {
 type Opt func(c *conf)
 
 // InMemory database for testing.
-func InMemory() *Database {
-	db, err := Open("file::memory:?mode=memory", WithConnections(1))
+func InMemory(opts ...Opt) *Database {
+	opts = append(opts, WithConnections(1))
+	db, err := Open("file::memory:?mode=memory", opts...)
 	if err != nil {
 		panic(err)
 	}
@@ -129,22 +130,6 @@ func (db *Database) Tx(ctx context.Context) (*Tx, error) {
 	}
 	tx := &Tx{db: db, conn: conn}
 	return tx, tx.begin()
-}
-
-// ConcurrentTx creates concurrent deferred sqlite transaction.
-//
-// By default sqlite will support only single writer, with concurrent it will optimistically support many,
-// but the code should expect that transaction may be aborted if another concurrent transaction
-// modified page that was read or needs to be modified.
-//
-// https://sqlite.org/src/doc/begin-concurrent/doc/begin_concurrent.md
-func (db *Database) ConcurrentTx(ctx context.Context) (*Tx, error) {
-	conn := db.pool.Get(ctx)
-	if conn == nil {
-		return nil, ErrNoConnection
-	}
-	tx := &Tx{db: db, conn: conn}
-	return tx, tx.beginConcurrent()
 }
 
 // Exec statement using one of the connection from the pool.
@@ -222,15 +207,6 @@ func (tx *Tx) begin() error {
 	_, err := stmt.Step()
 	if err != nil {
 		return fmt.Errorf("begin: %w", err)
-	}
-	return nil
-}
-
-func (tx *Tx) beginConcurrent() error {
-	stmt := tx.conn.Prep("BEGIN CONCURRENT;")
-	_, err := stmt.Step()
-	if err != nil {
-		return fmt.Errorf("begin concurrent: %w", err)
 	}
 	return nil
 }
