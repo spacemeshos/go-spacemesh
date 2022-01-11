@@ -24,9 +24,6 @@ import (
 
 const (
 	layerSize = 200
-
-	layerBlocks  = "bL"
-	layerBallots = "b"
 )
 
 // DB represents a mesh database instance.
@@ -42,8 +39,8 @@ type DB struct {
 
 	coinflipMu sync.RWMutex
 	coinflips  map[types.LayerID]bool // weak coinflip results from Hare
-	lhMutex    sync.Mutex
-	exit       chan struct{}
+
+	exit chan struct{}
 }
 
 // NewPersistentMeshDB creates an instance of a mesh database.
@@ -341,7 +338,20 @@ func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) 
 
 // GetHareConsensusOutput gets the input vote vector for a layer (hare results).
 func (m *DB) GetHareConsensusOutput(layerID types.LayerID) (types.BlockID, error) {
-	return blocks.GetHareOutput(m.db, layerID) //nolint
+	hareOutput, err := blocks.GetHareOutput(m.db, layerID) //nolint
+	if err != nil {
+		return types.BlockID{}, err //nolint
+	}
+	if (hareOutput == types.BlockID{}) {
+		empty, err := layers.IsEmpty(m.db, layerID)
+		if err != nil {
+			return types.BlockID{}, err //nolint
+		}
+		if !empty {
+			return types.BlockID{}, fmt.Errorf("%w hare output for %s", database.ErrNotFound, layerID)
+		}
+	}
+	return hareOutput, nil
 }
 
 // SaveHareConsensusOutput gets the input vote vector for a layer (hare results).
