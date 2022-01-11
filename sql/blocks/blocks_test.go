@@ -19,7 +19,7 @@ func TestAddGet(t *testing.T) {
 	require.NoError(t, Add(db, block))
 	got, err := Get(db, block.ID())
 	require.NoError(t, err)
-	require.Equal(t, &block, got)
+	require.Equal(t, block, got)
 }
 
 func TestAlreadyExists(t *testing.T) {

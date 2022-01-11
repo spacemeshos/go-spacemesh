@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -661,7 +660,7 @@ func TestBlocksBallotsOverlap(t *testing.T) {
 	// bL is consumed as prefix.
 	// layer is will read first by of the block id, hence 0001 in thi example
 	ids, err := mdb.LayerBallotIDs(types.NewLayerID(binary.LittleEndian.Uint32([]byte{bid[0], 0, 0, 0})))
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.NoError(t, err)
 	require.Empty(t, ids)
 }
 
