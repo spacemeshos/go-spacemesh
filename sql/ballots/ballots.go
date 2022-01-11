@@ -41,7 +41,7 @@ func Add(db sql.Executor, ballot *types.Ballot) error {
 	if err != nil {
 		return fmt.Errorf("encode ballot %s: %w", ballot.ID(), err)
 	}
-	if _, err := db.Exec("insert or ignore into ballots (id, layer, signature, pubkey, ballot) values (?1, ?2, ?3, ?4, ?5);",
+	if _, err := db.Exec("insert into ballots (id, layer, signature, pubkey, ballot) values (?1, ?2, ?3, ?4, ?5);",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, ballot.ID().Bytes())
 			stmt.BindInt64(2, int64(ballot.LayerIndex.Value))

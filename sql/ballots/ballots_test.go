@@ -31,3 +31,33 @@ func TestLayer(t *testing.T) {
 		require.Equal(t, &ballots[i], ballot)
 	}
 }
+
+func TestAdd(t *testing.T) {
+	db := sql.InMemory()
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, []byte{1},
+		types.InnerBallot{})
+	_, err := Get(db, ballot.ID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	require.NoError(t, Add(db, &ballot))
+	require.ErrorIs(t, Add(db, &ballot), sql.ErrObjectExists)
+
+	stored, err := Get(db, ballot.ID())
+	require.NoError(t, err)
+	require.Equal(t, &ballot, stored)
+}
+
+func TestHas(t *testing.T) {
+	db := sql.InMemory()
+	ballot := types.NewExistingBallot(types.BallotID{1}, nil, nil,
+		types.InnerBallot{})
+
+	exists, err := Has(db, ballot.ID())
+	require.NoError(t, err)
+	require.False(t, exists)
+
+	require.NoError(t, Add(db, &ballot))
+	exists, err = Has(db, ballot.ID())
+	require.NoError(t, err)
+	require.True(t, exists)
+}

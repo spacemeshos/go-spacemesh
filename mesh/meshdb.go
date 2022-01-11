@@ -97,11 +97,11 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 
 // PersistentData checks to see if db is empty.
 func (m *DB) PersistentData() bool {
-	if _, err := layers.GetByStatus(m.db, layers.Latest); err == nil {
-		m.Info("found data to recover on disk")
-		return true
+	lid, err := layers.GetByStatus(m.db, layers.Latest)
+	if err != nil || (lid == types.LayerID{}) {
+		m.Info("database is empty")
+		return false
 	}
-	m.Info("did not find data to recover on disk")
 	return false
 }
 
@@ -262,14 +262,14 @@ func (m *DB) AddZeroBlockLayer(lid types.LayerID) error {
 
 // ContextualValidity retrieves opinion on block from the database.
 func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
-	return blocks.IsVerified(m.db, id)
+	return blocks.IsValid(m.db, id)
 }
 
 // SaveContextualValidity persists opinion on block to the database.
 func (m *DB) SaveContextualValidity(id types.BlockID, lid types.LayerID, valid bool) error {
 	m.With().Debug("save block contextual validity", id, lid, log.Bool("validity", valid))
 	if valid {
-		return blocks.SetVerified(m.db, id)
+		return blocks.SetValid(m.db, id)
 	}
 	return blocks.SetInvalid(m.db, id)
 }

@@ -25,11 +25,18 @@ func TestHareOutput(t *testing.T) {
 	output, err := GetHareOutput(db, lid)
 	require.NoError(t, err)
 	require.Equal(t, types.BlockID{}, output)
+
+	expected := types.BlockID{1, 1, 1}
+	require.NoError(t, SetHareOutput(db, lid, expected))
+	output, err = GetHareOutput(db, lid)
+	require.NoError(t, err)
+	require.Equal(t, expected, output)
 }
 
 func TestStatus(t *testing.T) {
 	db := sql.InMemory()
 	lid := types.NewLayerID(10)
+
 	require.NoError(t, SetStatus(db, lid, Applied))
 	require.NoError(t, SetStatus(db, lid.Add(1), Processed))
 	require.NoError(t, SetStatus(db, lid.Add(2), Processed))

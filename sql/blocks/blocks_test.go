@@ -24,21 +24,31 @@ func TestAddGet(t *testing.T) {
 
 func TestAlreadyExists(t *testing.T) {
 	db := sql.InMemory()
-	blocks := []types.Block{
-		types.NewExistingBlock(
-			types.BlockID{1},
-			types.InnerBlock{},
-		),
-		types.NewExistingBlock(
-			types.BlockID{1},
-			types.InnerBlock{},
-		),
-	}
-	require.NoError(t, Add(db, &blocks[0]))
-	require.ErrorIs(t, Add(db, &blocks[1]), sql.ErrObjectExists)
+	block := types.NewExistingBlock(
+		types.BlockID{1},
+		types.InnerBlock{},
+	)
+	require.NoError(t, Add(db, &block))
+	require.ErrorIs(t, Add(db, &block), sql.ErrObjectExists)
 }
 
-func TestVerified(t *testing.T) {
+func TestHas(t *testing.T) {
+	db := sql.InMemory()
+	block := types.NewExistingBlock(
+		types.BlockID{1},
+		types.InnerBlock{},
+	)
+	exists, err := Has(db, block.ID())
+	require.NoError(t, err)
+	require.False(t, exists)
+
+	require.NoError(t, Add(db, &block))
+	exists, err = Has(db, block.ID())
+	require.NoError(t, err)
+	require.True(t, exists)
+}
+
+func TestValidity(t *testing.T) {
 	db := sql.InMemory()
 	blocks := []types.Block{
 		types.NewExistingBlock(
@@ -53,17 +63,17 @@ func TestVerified(t *testing.T) {
 	for _, block := range blocks {
 		require.NoError(t, Add(db, &block))
 	}
-	require.NoError(t, SetVerified(db, blocks[0].ID()))
+	require.NoError(t, SetValid(db, blocks[0].ID()))
 
-	valid, err := IsVerified(db, blocks[0].ID())
+	valid, err := IsValid(db, blocks[0].ID())
 	require.NoError(t, err)
 	require.True(t, valid)
 
-	_, err = IsVerified(db, blocks[1].ID())
+	_, err = IsValid(db, blocks[1].ID())
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	require.NoError(t, SetInvalid(db, blocks[0].ID()))
-	valid, err = IsVerified(db, blocks[0].ID())
+	valid, err = IsValid(db, blocks[0].ID())
 	require.NoError(t, err)
 	require.False(t, valid)
 }

@@ -64,37 +64,32 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 	return rst, err
 }
 
-// SetVerified updates verified status for a block.
-func SetVerified(db sql.Executor, id types.BlockID) error {
-	if rows, err := db.Exec(`insert into blocks (id, verified) values (?1, ?2) 
-	on conflict(id) do update set verified=?2 returning id;`, func(stmt *sql.Statement) {
-		stmt.BindBytes(1, id.Bytes())
-		stmt.BindInt64(2, 1)
-	}, nil); err != nil {
-		return fmt.Errorf("update verified %s: %w", id, err)
-	} else if rows == 0 {
-		return fmt.Errorf("%w block for update %s", sql.ErrNotFound, id)
-	}
-	return nil
+// SetValid updates verified status for a block.
+func SetValid(db sql.Executor, id types.BlockID) error {
+	return setValidity(db, id, 1)
 }
 
 // SetInvalid updates blocks to an invalid status.
 func SetInvalid(db sql.Executor, id types.BlockID) error {
-	if rows, err := db.Exec(`insert into blocks (id, verified) values (?1, ?2) 
-	on conflict(id) do update set verified=?2 returning id;`, func(stmt *sql.Statement) {
+	return setValidity(db, id, -1)
+}
+
+func setValidity(db sql.Executor, id types.BlockID, validity int8) error {
+	if rows, err := db.Exec(`insert into blocks (id, validity) values (?1, ?2) 
+	on conflict(id) do update set validity=?2 returning id;`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
-		stmt.BindInt64(2, -1)
+		stmt.BindInt64(2, int64(validity))
 	}, nil); err != nil {
-		return fmt.Errorf("update invalid %s: %w", id, err)
+		return fmt.Errorf("update validity %s: %w", id, err)
 	} else if rows == 0 {
 		return fmt.Errorf("%w block for update %s", sql.ErrNotFound, id)
 	}
 	return nil
 }
 
-// IsVerified returns true if block is verified.
-func IsVerified(db sql.Executor, id types.BlockID) (rst bool, err error) {
-	if rows, err := db.Exec("select verified from blocks where id = ?1;", func(stmt *sql.Statement) {
+// IsValid returns true if block is verified.
+func IsValid(db sql.Executor, id types.BlockID) (rst bool, err error) {
+	if rows, err := db.Exec("select validity from blocks where id = ?1;", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}, func(stmt *sql.Statement) bool {
 		if stmt.ColumnInt(0) == 0 {

@@ -1,12 +1,12 @@
 CREATE TABLE blocks ( 
 	id CHAR(20) PRIMARY KEY,
 	layer INT,
-	verified SMALL INT,
+	validity SMALL INT,
 	block    BLOB
 );
 
 CREATE INDEX blocks_by_layer ON blocks(layer);
-CREATE INDEX blocks_by_verified ON blocks(layer, verified) where verified = 1;
+CREATE INDEX blocks_by_validity ON blocks(layer, validity) where validity = 1;
 
 CREATE TABLE ballots ( 
 	id CHAR(20) PRIMARY KEY,
@@ -21,7 +21,7 @@ CREATE INDEX ballots_by_layer ON ballots(layer);
 CREATE TABLE layers (
     id INT PRIMARY KEY,
     hare_output VARCHAR,
-    status INT
+    status SMALL INT
 ) WITHOUT ROWID;
 
 CREATE INDEX layers_by_status ON layers(status);
