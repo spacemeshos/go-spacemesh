@@ -330,8 +330,7 @@ func TestAddToMesh(t *testing.T) {
 	alg.HandleIncomingLayer(context.TODO(), l3a.Index())
 	require.Equal(t, types.GetEffectiveGenesis().Add(1), alg.LatestComplete())
 
-	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
-	require.NoError(t, addLayerToMesh(mdb, l3))
+	require.NoError(t, addLayerToMesh(mdb, l3a))
 	require.NoError(t, alg.rerun(context.TODO()))
 	alg.updateFromRerun(context.TODO())
 

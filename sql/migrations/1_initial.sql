@@ -1,7 +1,7 @@
 CREATE TABLE blocks ( 
 	id CHAR(20) PRIMARY KEY,
 	layer INT,
-	verified BOOL,
+	verified SMALL INT,
 	block    BLOB
 );
 

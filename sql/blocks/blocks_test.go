@@ -59,9 +59,8 @@ func TestVerified(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, valid)
 
-	valid, err = IsVerified(db, blocks[1].ID())
-	require.NoError(t, err)
-	require.False(t, valid)
+	_, err = IsVerified(db, blocks[1].ID())
+	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	require.NoError(t, SetInvalid(db, blocks[0].ID()))
 	valid, err = IsVerified(db, blocks[0].ID())
