@@ -60,10 +60,9 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: ${{ env.go-version }}
-      - name: fmt, tidy, lint
+      - name: fmt, lint
         run: |
           make
-          make test-tidy
           make test-fmt
           make lint
 
