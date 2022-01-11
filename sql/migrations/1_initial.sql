@@ -11,8 +11,8 @@ CREATE INDEX blocks_by_verified ON blocks(layer, verified) where verified = 1;
 CREATE TABLE ballots ( 
 	id CHAR(20) PRIMARY KEY,
 	layer INT,
-    signature BLOB,
-    pubkey BLOB,
+    signature VARCHAR,
+    pubkey VARCHAR,
 	ballot BLOB
 );
 
