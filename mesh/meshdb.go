@@ -20,8 +20,8 @@ import (
 const (
 	layerSize = 200
 
-	layerBlocks  = "bL"
-	layerBallots = "b"
+	layerBlocks  = "b"
+	layerBallots = "l"
 )
 
 // DB represents a mesh database instance.
