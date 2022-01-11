@@ -11,7 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -222,45 +221,15 @@ func TestMesh_GetAggregatedLayerHash(t *testing.T) {
 	}
 }
 
-func TestMesh_SetZeroBlockLayer(t *testing.T) {
-	r := require.New(t)
-	tm := createTestMesh(t)
-	defer tm.Close()
-
-	lyrID := types.GetEffectiveGenesis().Add(1)
-	ballots := createLayerBallots(t, tm.Mesh, lyrID)
-	lyr, err := tm.GetLayer(lyrID)
-	r.ErrorIs(err, database.ErrNotFound)
-	r.Nil(lyr)
-
-	err = tm.SetZeroBlockLayer(lyrID)
-	assert.NoError(t, err)
-	lyr, err = tm.GetLayer(lyrID)
-	assert.NoError(t, err)
-	assert.Equal(t, types.EmptyLayerHash, tm.GetLayerHash(lyrID))
-	assert.ElementsMatch(t, ballots, lyr.Ballots())
-	assert.Empty(t, lyr.Blocks())
-
-	// it's ok to add to an empty layer
-	blocks := createLayerBlocks(t, tm.Mesh, lyrID)
-	lyr, err = tm.GetLayer(lyrID)
-	require.NoError(t, err)
-	assert.ElementsMatch(t, ballots, lyr.Ballots())
-	assert.ElementsMatch(t, blocks, lyr.Blocks())
-
-	// but not okay to set a non-empty layer to an empty layer
-	err = tm.SetZeroBlockLayer(lyrID)
-	assert.Equal(t, errLayerHasBlock, err)
-}
-
 func TestMesh_GetLayer(t *testing.T) {
 	tm := createTestMesh(t)
 	defer tm.Close()
 
 	id := types.GetEffectiveGenesis().Add(1)
 	lyr, err := tm.GetLayer(id)
-	assert.ErrorIs(t, err, database.ErrNotFound)
-	assert.Nil(t, lyr)
+	require.NoError(t, err)
+	assert.Empty(t, lyr.Blocks())
+	assert.Empty(t, lyr.Ballots())
 
 	blocks := createLayerBlocks(t, tm.Mesh, id)
 	ballots := createLayerBallots(t, tm.Mesh, id)
@@ -696,7 +665,6 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
 			Return(maxLayer(lid.Sub(2), genesis), lid.Sub(1), false)
 		tm.mockState.EXPECT().GetStateRoot()
-		tm.SetZeroBlockLayer(lid)
 		tm.ProcessLayer(ctx, lid)
 	}
 
@@ -707,6 +675,11 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
 		Return(last.Sub(1), last, false)
 
+	block := types.Block{}
+	block.LayerIndex = last
+	block.TxIDs = []types.TransactionID{{1, 1, 1}}
+	require.NoError(t, tm.AddBlock(&block))
+	require.NoError(t, tm.SaveContextualValidity(block.ID(), last, true))
 	// no calls to svm state, as layer will be failed earlier
 	require.Error(t, tm.ProcessLayer(ctx, last))
 	require.Equal(t, last, tm.ProcessedLayer())
@@ -715,7 +688,7 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 
 	last = last.Add(1)
 	for lid := last.Sub(1); !lid.After(last); lid = lid.Add(1) {
-		tm.SetZeroBlockLayer(lid)
+		require.NoError(t, tm.SaveContextualValidity(block.ID(), last, false))
 		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
 			Return(lid.Sub(1), last.Sub(1), false)
 	}

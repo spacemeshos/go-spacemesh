@@ -32,33 +32,38 @@ const (
 	Applied
 )
 
-// SetEmpty marks that layer is empty.
-func SetEmpty(db sql.Executor, lid types.LayerID) error {
-	if _, err := db.Exec(`insert into layers (id, empty) values (?1, ?2) 
-					on conflict(id) do update set empty=?2;`,
+// SetHareOutput for the layer to a block id.
+func SetHareOutput(db sql.Executor, lid types.LayerID, output types.BlockID) error {
+	if _, err := db.Exec(`insert into layers (id, hare_output) values (?1, ?2) 
+					on conflict(id) do update set hare_output=?2;`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))
-			stmt.BindBool(2, true)
+			stmt.BindBytes(2, output[:])
 		}, nil); err != nil {
-		return fmt.Errorf("insert %s: %w", lid, err)
+		return fmt.Errorf("set hare output %s: %w", lid, err)
 	}
 	return nil
 }
 
-// IsEmpty checks if the layer is empty.
-func IsEmpty(db sql.Executor, lid types.LayerID) (rst bool, err error) {
-	_, err = db.Exec("select empty from layers where id = ?1;",
+// GetHareOutput for layer.
+func GetHareOutput(db sql.Executor, lid types.LayerID) (rst types.BlockID, err error) {
+	if rows, err := db.Exec("select hare_output from layers where id = ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))
 		},
 		func(stmt *sql.Statement) bool {
-			rst = stmt.ColumnInt(0) == 1
+			if stmt.ColumnLen(0) == 0 {
+				err = fmt.Errorf("%w hare output for %s is null", sql.ErrNotFound, lid)
+				return false
+			}
+			stmt.ColumnBytes(0, rst[:])
 			return true
-		})
-	if err != nil {
-		return false, fmt.Errorf("is empty %s: %w", lid, err)
+		}); err != nil {
+		return rst, fmt.Errorf("is empty %s: %w", lid, err)
+	} else if rows == 0 {
+		return rst, fmt.Errorf("%w hare output is not set for %s", sql.ErrNotFound, lid)
 	}
-	return rst, nil
+	return rst, err
 }
 
 // SetStatus updates status of the layer.

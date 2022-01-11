@@ -9,18 +9,22 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func TestEmpty(t *testing.T) {
+func TestHareOutput(t *testing.T) {
 	db := sql.InMemory()
-	lid := types.NewLayerID(100)
-	require.NoError(t, SetEmpty(db, lid))
+	lid := types.NewLayerID(10)
 
-	empty, err := IsEmpty(db, lid)
-	require.NoError(t, err)
-	require.True(t, empty)
+	_, err := GetHareOutput(db, lid)
+	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	empty, err = IsEmpty(db, lid.Add(1))
+	require.NoError(t, SetStatus(db, lid, Latest))
+
+	_, err = GetHareOutput(db, lid)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	require.NoError(t, SetHareOutput(db, lid, types.BlockID{}))
+	output, err := GetHareOutput(db, lid)
 	require.NoError(t, err)
-	require.False(t, empty)
+	require.Equal(t, types.BlockID{}, output)
 }
 
 func TestStatus(t *testing.T) {

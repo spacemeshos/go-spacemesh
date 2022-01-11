@@ -185,17 +185,17 @@ func (m *DB) addBallot(b *types.Ballot) error {
 
 // GetBallot returns true if the database has Ballot specified by the BallotID and false otherwise.
 func (m *DB) GetBallot(id types.BallotID) (*types.Ballot, error) {
-	return ballots.Get(m.db, id) //nolint
+	return ballots.Get(m.db, id)
 }
 
 // LayerBallots retrieves all ballots from a layer by layer ID.
 func (m *DB) LayerBallots(lid types.LayerID) ([]*types.Ballot, error) {
-	return ballots.Layer(m.db, lid) //nolint
+	return ballots.Layer(m.db, lid)
 }
 
 // LayerBallotIDs returns list of the ballot ids in the layer.
 func (m *DB) LayerBallotIDs(lid types.LayerID) ([]types.BallotID, error) {
-	return ballots.LayerIDs(m.db, lid) //nolint
+	return ballots.LayerIDs(m.db, lid)
 }
 
 // AddBlock adds a block to the database.
@@ -231,18 +231,7 @@ func (m *DB) GetBlock(bid types.BlockID) (*types.Block, error) {
 
 // LayerBlockIds retrieves all block IDs from the layer specified by layer ID.
 func (m *DB) LayerBlockIds(lid types.LayerID) ([]types.BlockID, error) {
-	ids, err := blocks.Layer(m.db, lid)
-	if err != nil {
-		return nil, err //nolint
-	}
-	empty, err := layers.IsEmpty(m.db, lid)
-	if err != nil {
-		return nil, err //nolint
-	}
-	if empty || len(ids) > 0 {
-		return ids, nil
-	}
-	return nil, database.ErrNotFound
+	return blocks.Layer(m.db, lid)
 }
 
 // LayerBlocks retrieves all blocks from the layer specified by layer ID.
@@ -255,7 +244,7 @@ func (m *DB) LayerBlocks(lid types.LayerID) ([]*types.Block, error) {
 	for _, bid := range ids {
 		block, err := blocks.Get(m.db, bid)
 		if err != nil {
-			return nil, err //nolint
+			return nil, err
 		}
 		rst = append(rst, block)
 	}
@@ -263,57 +252,26 @@ func (m *DB) LayerBlocks(lid types.LayerID) ([]*types.Block, error) {
 }
 
 func (m *DB) getBlock(id types.BlockID) (*types.Block, error) {
-	return blocks.Get(m.db, id) //nolint
-}
-
-// LayerIDs is a utility function that finds namespaced IDs saved in a database as a key.
-func LayerIDs(db database.Database, namespace string, lid types.LayerID, f func(id []byte) error) error {
-	var (
-		zero = false
-		n    int
-		buf  = new(bytes.Buffer)
-	)
-	buf.WriteString(namespace)
-	buf.Write(lid.Bytes())
-
-	it := db.Find(buf.Bytes())
-	defer it.Release()
-	for it.Next() {
-		if len(it.Key()) == buf.Len() {
-			zero = true
-			continue
-		}
-		if err := f(it.Key()[buf.Len():]); err != nil {
-			return err
-		}
-		n++
-	}
-	if it.Error() != nil {
-		return fmt.Errorf("iterator: %w", it.Error())
-	}
-	if zero || n > 0 {
-		return nil
-	}
-	return database.ErrNotFound
+	return blocks.Get(m.db, id)
 }
 
 // AddZeroBlockLayer tags lyr as a layer without blocks.
 func (m *DB) AddZeroBlockLayer(lid types.LayerID) error {
-	return layers.SetEmpty(m.db, lid) //nolint
+	return layers.SetHareOutput(m.db, lid, types.BlockID{})
 }
 
 // ContextualValidity retrieves opinion on block from the database.
 func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
-	return blocks.IsVerified(m.db, id) //nolint
+	return blocks.IsVerified(m.db, id)
 }
 
 // SaveContextualValidity persists opinion on block to the database.
 func (m *DB) SaveContextualValidity(id types.BlockID, lid types.LayerID, valid bool) error {
 	m.With().Debug("save block contextual validity", id, lid, log.Bool("validity", valid))
 	if valid {
-		return blocks.SetVerified(m.db, id) //nolint
+		return blocks.SetVerified(m.db, id)
 	}
-	return blocks.SetInvalid(m.db, id) //nolint
+	return blocks.SetInvalid(m.db, id)
 }
 
 // RecordCoinflip saves the weak coinflip result to memory for the given layer.
@@ -338,40 +296,27 @@ func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) 
 
 // GetHareConsensusOutput gets the input vote vector for a layer (hare results).
 func (m *DB) GetHareConsensusOutput(layerID types.LayerID) (types.BlockID, error) {
-	hareOutput, err := blocks.GetHareOutput(m.db, layerID) //nolint
-	if err != nil {
-		return types.BlockID{}, err //nolint
-	}
-	if (hareOutput == types.BlockID{}) {
-		empty, err := layers.IsEmpty(m.db, layerID)
-		if err != nil {
-			return types.BlockID{}, err //nolint
-		}
-		if !empty {
-			return types.BlockID{}, fmt.Errorf("%w hare output for %s", database.ErrNotFound, layerID)
-		}
-	}
-	return hareOutput, nil
+	return layers.GetHareOutput(m.db, layerID)
 }
 
 // SaveHareConsensusOutput gets the input vote vector for a layer (hare results).
 func (m *DB) SaveHareConsensusOutput(ctx context.Context, id types.LayerID, blockID types.BlockID) error {
 	m.WithContext(ctx).With().Debug("saving hare output", id, blockID)
-	return blocks.SetHareOutput(m.db, blockID) //nolint
+	return layers.SetHareOutput(m.db, id, blockID)
 }
 
 func (m *DB) persistProcessedLayer(layerID types.LayerID) error {
-	return layers.SetStatus(m.db, layerID, layers.Processed) //nolint
+	return layers.SetStatus(m.db, layerID, layers.Processed)
 }
 
 // GetProcessedLayer loads processed layer from database.
 func (m *DB) GetProcessedLayer() (types.LayerID, error) {
-	return layers.GetByStatus(m.db, layers.Processed) //nolint
+	return layers.GetByStatus(m.db, layers.Processed)
 }
 
 // GetVerifiedLayer loads verified layer from database.
 func (m *DB) GetVerifiedLayer() (types.LayerID, error) {
-	return layers.GetByStatus(m.db, layers.Applied) //nolint
+	return layers.GetByStatus(m.db, layers.Applied)
 }
 
 func (m *DB) writeBlock(b *types.Block) error {
@@ -899,7 +844,7 @@ func (m *DB) GetTransactionsByDestination(l types.LayerID, account types.Address
 		txs = append(txs, id)
 	}
 	if err := it.Error(); err != nil {
-		return nil, err //nolint
+		return nil, err
 	}
 	return txs, nil
 }
@@ -918,7 +863,7 @@ func (m *DB) GetTransactionsByOrigin(l types.LayerID, account types.Address) ([]
 		txs = append(txs, id)
 	}
 	if err := it.Error(); err != nil {
-		return nil, err //nolint
+		return nil, err
 	}
 	return txs, nil
 }
@@ -1060,4 +1005,35 @@ func (db *BallotFetcherDB) Get(hash []byte) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+// LayerIDs is a utility function that finds namespaced IDs saved in a database as a key.
+func LayerIDs(db database.Database, namespace string, lid types.LayerID, f func(id []byte) error) error {
+	var (
+		zero = false
+		n    int
+		buf  = new(bytes.Buffer)
+	)
+	buf.WriteString(namespace)
+	buf.Write(lid.Bytes())
+
+	it := db.Find(buf.Bytes())
+	defer it.Release()
+	for it.Next() {
+		if len(it.Key()) == buf.Len() {
+			zero = true
+			continue
+		}
+		if err := f(it.Key()[buf.Len():]); err != nil {
+			return err
+		}
+		n++
+	}
+	if it.Error() != nil {
+		return fmt.Errorf("iterator: %w", it.Error())
+	}
+	if zero || n > 0 {
+		return nil
+	}
+	return database.ErrNotFound
 }

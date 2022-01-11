@@ -64,34 +64,6 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 	return rst, err
 }
 
-// SetHareOutput records hare output.
-func SetHareOutput(db sql.Executor, id types.BlockID) error {
-	if rows, err := db.Exec(`insert into blocks (id, hare_output) values (?1, ?2) 
-	on conflict(id) do update set hare_output=?2 returning id;`, func(stmt *sql.Statement) {
-		stmt.BindBytes(1, id.Bytes())
-		stmt.BindBool(2, true)
-	}, nil); err != nil {
-		return fmt.Errorf("update hare_output to %s: %w", id, err)
-	} else if rows == 0 {
-		return fmt.Errorf("%w for set hare output %s", sql.ErrNotFound, id)
-	}
-	return nil
-}
-
-// GetHareOutput returns id of the block from hare output.
-func GetHareOutput(db sql.Executor, lid types.LayerID) (types.BlockID, error) {
-	var rst types.BlockID
-	if _, err := db.Exec("select id from blocks where layer = ?1 and hare_output = 1;", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid.Uint32()))
-	}, func(stmt *sql.Statement) bool {
-		stmt.ColumnBytes(0, rst[:])
-		return true
-	}); err != nil {
-		return types.BlockID{}, fmt.Errorf("select hare output %s: %w", lid, err)
-	}
-	return rst, nil
-}
-
 // SetVerified updates verified status for a block.
 func SetVerified(db sql.Executor, id types.BlockID) error {
 	if rows, err := db.Exec(`insert into blocks (id, verified) values (?1, ?2) 

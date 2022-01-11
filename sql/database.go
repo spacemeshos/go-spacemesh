@@ -7,6 +7,7 @@ import (
 
 	"crawshaw.io/sqlite"
 	"crawshaw.io/sqlite/sqlitex"
+
 	"github.com/spacemeshos/go-spacemesh/database"
 )
 
@@ -14,7 +15,7 @@ var (
 	// ErrNoConnection is returned if pooled connection is not available.
 	ErrNoConnection = errors.New("database: no free connection")
 	// ErrNotFound is returned if requested record is not found.
-	// TODO(dshulyak) is an alias to datatabase.ErrNotFound until full transition is implemented
+	// TODO(dshulyak) is an alias to datatabase.ErrNotFound until full transition is implemented.
 	ErrNotFound = database.ErrNotFound
 	// ErrObjectExists is returned if database contraints didn't allow to insert an object.
 	ErrObjectExists = errors.New("database: object exists")
@@ -195,7 +196,14 @@ func exec(conn *sqlite.Conn, query string, encoder Encoder, decoder Decoder) (in
 			return rows, nil
 		}
 		rows++
-		if decoder != nil && !decoder(stmt) {
+		// exhaust iterator
+		if decoder == nil {
+			continue
+		}
+		if !decoder(stmt) {
+			if err := stmt.Reset(); err != nil {
+				return rows, fmt.Errorf("statement reset %w", err)
+			}
 			return rows, nil
 		}
 	}
