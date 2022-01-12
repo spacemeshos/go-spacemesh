@@ -672,6 +672,16 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	if _, exist := t.ballotLayer[ballot.ID()]; exist {
 		return nil
 	}
+
+	baselid, exist := t.ballotLayer[ballot.Votes.Base]
+	if !exist {
+		t.logger.With().Warning("base ballot is not in the state",
+			ballot.ID(),
+			log.Stringer("base", ballot.Votes.Base),
+		)
+		return nil
+	}
+
 	ballotWeight, err := computeBallotWeight(t.atxdb, t.bdp, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
 	if err != nil {
 		return err
@@ -681,8 +691,6 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 
 	// TODO(dshulyak) this should not fail without terminating tortoise
 	t.markBeaconWithBadBallot(t.logger, ballot)
-
-	baselid := t.ballotLayer[ballot.Votes.Base]
 
 	abstainVotes := map[types.LayerID]struct{}{}
 	for _, lid := range ballot.Votes.Abstain {

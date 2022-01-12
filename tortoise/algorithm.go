@@ -214,7 +214,8 @@ func (t *Tortoise) OnBlock(block *types.Block) {
 	t.trtl.onBlock(block.LayerIndex, block.ID())
 }
 
-// OnBallot should be called every time new ballot is received. ATX must be stored in the database.
+// OnBallot should be called every time new ballot is received.
+// BaseBallot and RefBallot must be always processed first. And ATX must be stored in the database.
 func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	if err := t.trtl.onBallot(ballot); err != nil {
 		t.logger.Error("failed to save state from ballot", ballot.ID(), log.Err(err))
