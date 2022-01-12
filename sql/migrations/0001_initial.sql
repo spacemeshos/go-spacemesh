@@ -6,7 +6,6 @@ CREATE TABLE blocks (
 );
 
 CREATE INDEX blocks_by_layer ON blocks(layer);
-CREATE INDEX blocks_by_validity ON blocks(layer, validity) where validity = 1;
 
 CREATE TABLE ballots ( 
 	id CHAR(20) PRIMARY KEY,

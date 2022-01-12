@@ -27,7 +27,7 @@ const (
 	// Latest layer that was added to db.
 	Latest Status = iota
 	// Processed layer is either synced from peers or updated by hare.
-	Processed = iota
+	Processed
 	// Applied layer to the state.
 	Applied
 )
