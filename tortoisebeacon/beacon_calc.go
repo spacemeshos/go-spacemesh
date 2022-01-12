@@ -21,7 +21,7 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, l
 	logger.With().Debug("calculating tortoise beacon from this hash list",
 		log.String("hashes", strings.Join(allHashHexes, ", ")))
 
-	beacon := allHashes.hash()
+	beacon := types.Beacon(allHashes.hash())
 	beaconStr := beacon.ShortString()
 
 	logger = logger.WithFields(log.String("beacon", beaconStr))

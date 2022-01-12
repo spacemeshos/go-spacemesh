@@ -5,110 +5,38 @@
 package mocks
 
 import (
+	context "context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// MockbeaconCollector is a mock of beaconCollector interface.
-type MockbeaconCollector struct {
+// MockatxProvider is a mock of atxProvider interface.
+type MockatxProvider struct {
 	ctrl     *gomock.Controller
-	recorder *MockbeaconCollectorMockRecorder
+	recorder *MockatxProviderMockRecorder
 }
 
-// MockbeaconCollectorMockRecorder is the mock recorder for MockbeaconCollector.
-type MockbeaconCollectorMockRecorder struct {
-	mock *MockbeaconCollector
+// MockatxProviderMockRecorder is the mock recorder for MockatxProvider.
+type MockatxProviderMockRecorder struct {
+	mock *MockatxProvider
 }
 
-// NewMockbeaconCollector creates a new mock instance.
-func NewMockbeaconCollector(ctrl *gomock.Controller) *MockbeaconCollector {
-	mock := &MockbeaconCollector{ctrl: ctrl}
-	mock.recorder = &MockbeaconCollectorMockRecorder{mock}
+// NewMockatxProvider creates a new mock instance.
+func NewMockatxProvider(ctrl *gomock.Controller) *MockatxProvider {
+	mock := &MockatxProvider{ctrl: ctrl}
+	mock.recorder = &MockatxProviderMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockbeaconCollector) EXPECT() *MockbeaconCollectorMockRecorder {
-	return m.recorder
-}
-
-// ReportBeaconFromBlock mocks base method.
-func (m *MockbeaconCollector) ReportBeaconFromBlock(arg0 types.EpochID, arg1 types.BlockID, arg2 []byte, arg3 uint64) {
-	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "ReportBeaconFromBlock", arg0, arg1, arg2, arg3)
-}
-
-// ReportBeaconFromBlock indicates an expected call of ReportBeaconFromBlock.
-func (mr *MockbeaconCollectorMockRecorder) ReportBeaconFromBlock(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReportBeaconFromBlock", reflect.TypeOf((*MockbeaconCollector)(nil).ReportBeaconFromBlock), arg0, arg1, arg2, arg3)
-}
-
-// MockblockDB is a mock of blockDB interface.
-type MockblockDB struct {
-	ctrl     *gomock.Controller
-	recorder *MockblockDBMockRecorder
-}
-
-// MockblockDBMockRecorder is the mock recorder for MockblockDB.
-type MockblockDBMockRecorder struct {
-	mock *MockblockDB
-}
-
-// NewMockblockDB creates a new mock instance.
-func NewMockblockDB(ctrl *gomock.Controller) *MockblockDB {
-	mock := &MockblockDB{ctrl: ctrl}
-	mock.recorder = &MockblockDBMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockblockDB) EXPECT() *MockblockDBMockRecorder {
-	return m.recorder
-}
-
-// GetBlock mocks base method.
-func (m *MockblockDB) GetBlock(arg0 types.BlockID) (*types.Block, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlock", arg0)
-	ret0, _ := ret[0].(*types.Block)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetBlock indicates an expected call of GetBlock.
-func (mr *MockblockDBMockRecorder) GetBlock(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlock", reflect.TypeOf((*MockblockDB)(nil).GetBlock), arg0)
-}
-
-// MockactivationDB is a mock of activationDB interface.
-type MockactivationDB struct {
-	ctrl     *gomock.Controller
-	recorder *MockactivationDBMockRecorder
-}
-
-// MockactivationDBMockRecorder is the mock recorder for MockactivationDB.
-type MockactivationDBMockRecorder struct {
-	mock *MockactivationDB
-}
-
-// NewMockactivationDB creates a new mock instance.
-func NewMockactivationDB(ctrl *gomock.Controller) *MockactivationDB {
-	mock := &MockactivationDB{ctrl: ctrl}
-	mock.recorder = &MockactivationDBMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockactivationDB) EXPECT() *MockactivationDBMockRecorder {
+func (m *MockatxProvider) EXPECT() *MockatxProviderMockRecorder {
 	return m.recorder
 }
 
 // GetAtxHeader mocks base method.
-func (m *MockactivationDB) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHeader, error) {
+func (m *MockatxProvider) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHeader, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetAtxHeader", arg0)
 	ret0, _ := ret[0].(*types.ActivationTxHeader)
@@ -117,7 +45,73 @@ func (m *MockactivationDB) GetAtxHeader(arg0 types.ATXID) (*types.ActivationTxHe
 }
 
 // GetAtxHeader indicates an expected call of GetAtxHeader.
-func (mr *MockactivationDBMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
+func (mr *MockatxProviderMockRecorder) GetAtxHeader(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockactivationDB)(nil).GetAtxHeader), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAtxHeader", reflect.TypeOf((*MockatxProvider)(nil).GetAtxHeader), arg0)
+}
+
+// MockmeshProvider is a mock of meshProvider interface.
+type MockmeshProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockmeshProviderMockRecorder
+}
+
+// MockmeshProviderMockRecorder is the mock recorder for MockmeshProvider.
+type MockmeshProviderMockRecorder struct {
+	mock *MockmeshProvider
+}
+
+// NewMockmeshProvider creates a new mock instance.
+func NewMockmeshProvider(ctrl *gomock.Controller) *MockmeshProvider {
+	mock := &MockmeshProvider{ctrl: ctrl}
+	mock.recorder = &MockmeshProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
+	return m.recorder
+}
+
+// AddBlockWithTXs mocks base method.
+func (m *MockmeshProvider) AddBlockWithTXs(arg0 context.Context, arg1 *types.Block) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddBlockWithTXs", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddBlockWithTXs indicates an expected call of AddBlockWithTXs.
+func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBlockWithTXs", reflect.TypeOf((*MockmeshProvider)(nil).AddBlockWithTXs), arg0, arg1)
+}
+
+// GetTransactions mocks base method.
+func (m *MockmeshProvider) GetTransactions(arg0 []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransactions", arg0)
+	ret0, _ := ret[0].([]*types.Transaction)
+	ret1, _ := ret[1].(map[types.TransactionID]struct{})
+	return ret0, ret1
+}
+
+// GetTransactions indicates an expected call of GetTransactions.
+func (mr *MockmeshProviderMockRecorder) GetTransactions(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactions", reflect.TypeOf((*MockmeshProvider)(nil).GetTransactions), arg0)
+}
+
+// HasBlock mocks base method.
+func (m *MockmeshProvider) HasBlock(arg0 types.BlockID) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasBlock", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HasBlock indicates an expected call of HasBlock.
+func (mr *MockmeshProviderMockRecorder) HasBlock(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasBlock", reflect.TypeOf((*MockmeshProvider)(nil).HasBlock), arg0)
 }

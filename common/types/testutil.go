@@ -3,6 +3,8 @@ package types
 import (
 	"math/rand"
 	"time"
+
+	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // RandomBytes generates random data in bytes for testing.
@@ -16,9 +18,16 @@ func RandomBytes(size int) []byte {
 	return b
 }
 
+// RandomHash generates random Hash32 for testing.
+func RandomHash() Hash32 {
+	var h Hash32
+	h.SetBytes(RandomBytes(Hash32Length))
+	return h
+}
+
 // RandomBeacon generates random beacon in bytes for testing.
-func RandomBeacon() []byte {
-	return RandomBytes(BeaconSize)
+func RandomBeacon() Beacon {
+	return BytesToBeacon(RandomBytes(BeaconSize))
 }
 
 // RandomActiveSet generates a random set of ATXIDs of the specified size.
@@ -26,6 +35,15 @@ func RandomActiveSet(size int) []ATXID {
 	ids := make([]ATXID, 0, size)
 	for i := 0; i < size; i++ {
 		ids = append(ids, RandomATXID())
+	}
+	return ids
+}
+
+// RandomTXSet generates a random set of TransactionID of the specified size.
+func RandomTXSet(size int) []TransactionID {
+	ids := make([]TransactionID, 0, size)
+	for i := 0; i < size; i++ {
+		ids = append(ids, RandomTransactionID())
 	}
 	return ids
 }
@@ -52,15 +70,20 @@ func RandomBallotID() BallotID {
 	return BallotID(CalcHash32(b).ToHash20())
 }
 
-// RandomBlockID generates a random BlockID for testing.
-func RandomBlockID() BlockID {
+// RandomProposalID generates a random ProposalID for testing.
+func RandomProposalID() ProposalID {
 	rand.Seed(time.Now().UnixNano())
-	b := make([]byte, BlockIDSize)
+	b := make([]byte, ProposalIDSize)
 	_, err := rand.Read(b)
 	if err != nil {
-		return BlockID{}
+		return ProposalID{}
 	}
-	return BlockID(CalcHash32(b).ToHash20())
+	return ProposalID(CalcHash32(b).ToHash20())
+}
+
+// RandomBlockID generates a random ProposalID for testing.
+func RandomBlockID() BlockID {
+	return BlockID(RandomProposalID())
 }
 
 // RandomTransactionID generates a random TransactionID for testing.
@@ -78,11 +101,59 @@ func RandomTransactionID() TransactionID {
 func RandomBallot() *Ballot {
 	return &Ballot{
 		InnerBallot: InnerBallot{
-			AtxID:      RandomATXID(),
-			BaseBallot: RandomBallotID(),
-			ForDiff:    []BlockID{RandomBlockID(), RandomBlockID()},
+			AtxID: RandomATXID(),
+			Votes: Votes{
+				Base:    RandomBallotID(),
+				Support: []BlockID{RandomBlockID(), RandomBlockID()},
+			},
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
 		},
 	}
+}
+
+// GenLayerBallot generates a Ballot with random content for testing.
+func GenLayerBallot(layerID LayerID) *Ballot {
+	b := RandomBallot()
+	b.LayerIndex = layerID
+	signer := signing.NewEdSigner()
+	b.Signature = signer.Sign(b.Bytes())
+	b.Initialize()
+	return b
+}
+
+// GenLayerBlock returns a Block in the given layer with the given data.
+func GenLayerBlock(layerID LayerID, txs []TransactionID) *Block {
+	b := &Block{
+		InnerBlock: InnerBlock{
+			LayerIndex: layerID,
+			TxIDs:      txs,
+		},
+	}
+	b.Initialize()
+	return b
+}
+
+// GenLayerProposal returns a Proposal in the given layer with the given data.
+func GenLayerProposal(layerID LayerID, txs []TransactionID) *Proposal {
+	p := &Proposal{
+		InnerProposal: InnerProposal{
+			Ballot: Ballot{
+				InnerBallot: InnerBallot{
+					AtxID:      RandomATXID(),
+					LayerIndex: layerID,
+					EpochData: &EpochData{
+						ActiveSet: RandomActiveSet(10),
+						Beacon:    RandomBeacon(),
+					},
+				},
+			},
+			TxIDs: txs,
+		},
+	}
+	signer := signing.NewEdSigner()
+	p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
+	p.Signature = signer.Sign(p.Bytes())
+	p.Initialize()
+	return p
 }

@@ -15,7 +15,6 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/grpc-ecosystem/grpc-gateway v1.16.0
 	github.com/hashicorp/golang-lru v0.5.5-0.20210104140557-80c98217689d
-	github.com/huin/goupnp v1.0.2
 	github.com/ipfs/go-log/v2 v2.3.0
 	github.com/klauspost/compress v1.13.5 // indirect
 	github.com/libp2p/go-eventbus v0.2.1
@@ -33,7 +32,6 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.30.0
 	github.com/pyroscope-io/pyroscope v0.0.30
-	github.com/seehuhn/mt19937 v0.0.0-20180715112136-cc7708819361
 	github.com/spacemeshos/api/release/go v1.3.1-0.20210726064428-9474f58a4ace
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f

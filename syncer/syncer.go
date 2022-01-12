@@ -36,7 +36,7 @@ type layerPatrol interface {
 }
 
 type layerValidator interface {
-	ValidateLayer(context.Context, *types.Layer)
+	ProcessLayer(context.Context, types.LayerID) error
 }
 
 // Configuration is the config params for syncer.
@@ -311,7 +311,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 
 	s.setStateBeforeSync(ctx)
 	var (
-		vQueue chan *types.Layer
+		vQueue chan types.LayerID
 		vDone  chan struct{}
 		// number of attempts to start a validation goroutine
 		attempt = 0
@@ -322,10 +322,13 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	)
 
 	attemptFunc := func() bool {
-		var (
-			layer *types.Layer
-			err   error
-		)
+		if missing := s.mesh.MissingLayer(); (missing != types.LayerID{}) {
+			logger.With().Debug("fetching data for missing layer", missing)
+			if err := s.syncLayer(ctx, missing); err != nil {
+				return false
+			}
+			vQueue <- missing
+		}
 		// using ProcessedLayer() instead of LatestLayer() so we can validate layers on a best-efforts basis
 		// and retry in the next sync run if validation fails.
 		// our clock starts ticking from 1, so it is safe to skip layer 0
@@ -333,15 +336,11 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 		for layerID := s.mesh.ProcessedLayer().Add(1); layerID.Before(s.ticker.GetCurrentLayer()); layerID = layerID.Add(1) {
 			if layerID.After(lastSynced) {
 				lastSynced = layerID
-				if layer, err = s.syncLayer(ctx, layerID); err != nil {
-					return false
-				}
-			} else {
-				if layer, err = s.mesh.GetLayer(layerID); err != nil {
+				if err := s.syncLayer(ctx, layerID); err != nil {
 					return false
 				}
 			}
-			vQueue <- layer
+			vQueue <- layerID
 			logger.With().Debug("finished data sync", layerID)
 		}
 		logger.With().Debug("data is synced, waiting for validation",
@@ -353,7 +352,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	}
 
 	// check if we are on target. if not, do the sync loop again
-	for success && !s.stateOnTarget() {
+	for success && (!s.stateOnTarget() || s.mesh.MissingLayer() != types.LayerID{}) {
 		attempt++
 		if attempt > maxAttemptWithinRun {
 			logger.Info("all data synced but unable to advance processed layer after max attempts")
@@ -441,49 +440,30 @@ func (s *Syncer) setStateAfterSync(ctx context.Context, success bool) {
 	}
 }
 
-func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) (*types.Layer, error) {
+func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
 	if s.isClosed() {
-		return nil, errors.New("shutdown")
+		return errors.New("shutdown")
 	}
 
-	var layer *types.Layer
-	var err error
-	if layerID.Before(types.GetEffectiveGenesis()) {
-		if err = s.mesh.SetZeroBlockLayer(layerID); err != nil {
-			s.logger.WithContext(ctx).With().Panic("failed to set zero-block for genesis layer", layerID, log.Err(err))
-		}
-	}
-	if !layerID.After(types.GetEffectiveGenesis()) {
-		if layer, err = s.mesh.GetLayer(layerID); err != nil {
-			s.logger.WithContext(ctx).With().Panic("failed to get genesis layer", layerID, log.Err(err))
-		}
-	} else {
-		s.logger.WithContext(ctx).With().Info("polling layer content", layerID)
-		if layer, err = s.getLayerFromPeers(ctx, layerID); err != nil {
-			return nil, err
-		}
+	s.logger.WithContext(ctx).With().Info("polling layer content", layerID)
+	if err := s.getLayerFromPeers(ctx, layerID); err != nil {
+		return err
 	}
 
-	if err = s.getATXs(ctx, layerID); err != nil {
-		return nil, err
+	if err := s.getATXs(ctx, layerID); err != nil {
+		return err
 	}
 
-	return layer, nil
+	return nil
 }
 
-func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) (*types.Layer, error) {
+func (s *Syncer) getLayerFromPeers(ctx context.Context, layerID types.LayerID) error {
 	bch := s.fetcher.PollLayerContent(ctx, layerID)
 	res := <-bch
 	if res.Err != nil {
-		return nil, fmt.Errorf("PollLayerContent: %w", res.Err)
+		return fmt.Errorf("PollLayerContent: %w", res.Err)
 	}
-
-	layer, err := s.mesh.GetLayer(layerID)
-	if err != nil {
-		return nil, fmt.Errorf("GetLayer: %w", err)
-	}
-
-	return layer, nil
+	return nil
 }
 
 func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
@@ -517,19 +497,21 @@ func (s *Syncer) getATXs(ctx context.Context, layerID types.LayerID) error {
 // however, hare can fail for various reasons, one of which is failure to fetch blocks for the hare output.
 // maxHareDelayLayers is used to safeguard such scenario and make sure layer data is synced and validated.
 func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
-	lag := s.mesh.LatestLayer().Sub(layerID.Uint32())
+	var (
+		latest = s.mesh.LatestLayer()
+		lag    types.LayerID
+	)
+	if latest.After(layerID) {
+		lag = latest.Sub(layerID.Uint32())
+	}
 	if s.patrol.IsHareInCharge(layerID) && lag.Value < maxHareDelayLayers {
 		s.logger.With().Info("skip validating layer: hare still working", layerID)
 		return false
 	}
 
 	epoch := layerID.GetEpoch()
-	if epoch.IsGenesis() {
-		return true
-	}
-
 	if _, err := s.beacons.GetBeacon(epoch); err != nil {
-		s.logger.With().Info("skip validating layer: beacon not available", layerID.GetEpoch())
+		s.logger.With().Info("skip validating layer: beacon not available", layerID, epoch)
 		return false
 	}
 
@@ -539,27 +521,29 @@ func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
 // start a dedicated process to validate layers one by one.
 // it is caller's responsibility to close the returned "queue" channel to signal end of workload.
 // "done" channel will be closed once all workload in "queue" is completed.
-func (s *Syncer) startValidating(ctx context.Context, run uint64, attempt int) (chan *types.Layer, chan struct{}) {
+func (s *Syncer) startValidating(ctx context.Context, run uint64, attempt int) (chan types.LayerID, chan struct{}) {
 	logger := s.logger.WithContext(ctx).WithName("validation")
 
 	// start a dedicated process for validation.
 	// do not use an unbuffered channel for queue. we don't want it to block if the receiver isn't ready.
 	// i.e. if validation for the last layer is still running
-	queue := make(chan *types.Layer, s.ticker.GetCurrentLayer().Uint32())
+	queue := make(chan types.LayerID, s.ticker.GetCurrentLayer().Uint32())
 	done := make(chan struct{})
 
 	s.eg.Go(func() error {
 		logger.Debug("validation started for run #%v attempt #%v", run, attempt)
-		for layer := range queue {
+		for layerID := range queue {
 			if s.isClosed() {
 				return nil
 			}
-			if !s.shouldValidate(layer.Index()) {
+			if !s.shouldValidate(layerID) {
 				// layers should be validated in order. once we skip one layer, there is no point
 				// continuing with later layers
 				break
 			}
-			s.validateLayer(ctx, layer)
+			if err := s.validateLayer(ctx, layerID); err != nil {
+				break
+			}
 		}
 		close(done)
 		logger.Debug("validation done for run #%v attempt #%v", run, attempt)
@@ -568,19 +552,21 @@ func (s *Syncer) startValidating(ctx context.Context, run uint64, attempt int) (
 	return queue, done
 }
 
-func (s *Syncer) validateLayer(ctx context.Context, layer *types.Layer) {
+func (s *Syncer) validateLayer(ctx context.Context, layerID types.LayerID) error {
 	if s.isClosed() {
 		s.logger.WithContext(ctx).Error("shutting down")
-		return
+		return nil
 	}
 
-	s.logger.WithContext(ctx).With().Debug("validating layer",
-		layer.Index(),
-		log.String("blocks", fmt.Sprint(types.BlockIDs(layer.Blocks()))))
+	s.logger.WithContext(ctx).With().Debug("validating layer", layerID)
 
 	// TODO: re-architect this so the syncer does not need to actually wait for tortoise to finish running.
 	//   It should be sufficient to call GetLayer (above), and maybe, to queue a request to tortoise to analyze this
 	//   layer (without waiting for this to finish -- it should be able to run async).
 	//   See https://github.com/spacemeshos/go-spacemesh/issues/2415
-	s.validator.ValidateLayer(ctx, layer)
+	if err := s.validator.ProcessLayer(ctx, layerID); err != nil {
+		s.logger.WithContext(ctx).With().Warning("mesh failed to process layer from sync", log.Err(err))
+		return fmt.Errorf("process layer: %w", err)
+	}
+	return nil
 }

@@ -16,9 +16,11 @@ func TestBallot_IDSize(t *testing.T) {
 func TestBallot_Initialize(t *testing.T) {
 	b := Ballot{
 		InnerBallot: InnerBallot{
-			AtxID:      RandomATXID(),
-			BaseBallot: RandomBallotID(),
-			ForDiff:    []BlockID{RandomBlockID(), RandomBlockID()},
+			AtxID: RandomATXID(),
+			Votes: Votes{
+				Base:    RandomBallotID(),
+				Support: []BlockID{RandomBlockID(), RandomBlockID()},
+			},
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
 		},
@@ -36,9 +38,11 @@ func TestBallot_Initialize(t *testing.T) {
 func TestBallot_Initialize_BadSignature(t *testing.T) {
 	b := Ballot{
 		InnerBallot: InnerBallot{
-			AtxID:      RandomATXID(),
-			BaseBallot: RandomBallotID(),
-			ForDiff:    []BlockID{RandomBlockID(), RandomBlockID()},
+			AtxID: RandomATXID(),
+			Votes: Votes{
+				Base:    RandomBallotID(),
+				Support: []BlockID{RandomBlockID(), RandomBlockID()},
+			},
 			RefBallot:  RandomBallotID(),
 			LayerIndex: NewLayerID(10),
 		},
@@ -46,4 +50,20 @@ func TestBallot_Initialize_BadSignature(t *testing.T) {
 	b.Signature = signing.NewEdSigner().Sign(b.Bytes())[1:]
 	err := b.Initialize()
 	assert.EqualError(t, err, "ballot extract key: ed25519: bad signature format")
+}
+
+func TestDBBallot(t *testing.T) {
+	layer := NewLayerID(100)
+	b := GenLayerBallot(layer)
+	assert.Equal(t, layer, b.LayerIndex)
+	assert.NotEqual(t, b.ID(), EmptyBallotID)
+	assert.NotNil(t, b.SmesherID())
+	dbb := &DBBallot{
+		InnerBallot: b.InnerBallot,
+		ID:          b.ID(),
+		Signature:   b.Signature,
+		SmesherID:   b.SmesherID().Bytes(),
+	}
+	got := dbb.ToBallot()
+	assert.Equal(t, b, got)
 }

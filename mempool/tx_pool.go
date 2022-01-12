@@ -102,11 +102,11 @@ func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction) {
 	t.txs[id] = tx
 	t.getOrCreate(tx.Origin()).Add(types.LayerID{}, tx)
 	t.addToAddr(tx.Origin(), id)
-	t.addToAddr(tx.Recipient, id)
+	t.addToAddr(tx.GetRecipient(), id)
 	t.mu.Unlock()
 	events.ReportNewTx(types.LayerID{}, tx)
 	events.ReportAccountUpdate(tx.Origin())
-	events.ReportAccountUpdate(tx.Recipient)
+	events.ReportAccountUpdate(tx.GetRecipient())
 }
 
 // Invalidate removes transaction from pool.
@@ -128,7 +128,7 @@ func (t *TxMempool) Invalidate(id types.TransactionID) {
 			events.ReportTxWithValidity(types.LayerID{}, tx, false)
 		}
 		t.removeFromAddr(tx.Origin(), id)
-		t.removeFromAddr(tx.Recipient, id)
+		t.removeFromAddr(tx.GetRecipient(), id)
 	}
 	t.mu.Unlock()
 }

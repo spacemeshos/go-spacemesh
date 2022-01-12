@@ -25,14 +25,14 @@ type Validator struct {
 	avgLayerSize   uint32
 	layersPerEpoch uint32
 	atxDB          atxDB
-	mesh           mesh
+	mesh           meshDB
 	beacons        system.BeaconCollector
 	logger         log.Log
 }
 
 // NewEligibilityValidator returns a new EligibilityValidator.
 func NewEligibilityValidator(
-	avgLayerSize, layersPerEpoch uint32, db atxDB, bc system.BeaconCollector, m mesh, lg log.Log) *Validator {
+	avgLayerSize, layersPerEpoch uint32, db atxDB, bc system.BeaconCollector, m meshDB, lg log.Log) *Validator {
 	return &Validator{
 		avgLayerSize:   avgLayerSize,
 		layersPerEpoch: layersPerEpoch,
@@ -62,7 +62,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	}
 
 	beacon := refBallot.EpochData.Beacon
-	if beacon == nil {
+	if beacon == types.EmptyBeacon {
 		return false, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, refBallot.ID())
 	}
 
@@ -104,7 +104,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	}
 	vrfSig := ballot.EligibilityProof.Sig
 
-	beaconStr := types.BytesToHash(beacon).ShortString()
+	beaconStr := beacon.ShortString()
 	if !signing.VRFVerify(vrfPubkey, message, vrfSig) {
 		return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
 			errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
@@ -123,7 +123,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		log.String("beacon", beaconStr),
 		log.Uint32("counter", counter))
 
-	v.beacons.ReportBeaconFromBallot(epoch, ballot.ID(), types.BytesToBeacon(beacon), weight)
+	v.beacons.ReportBeaconFromBallot(epoch, ballot.ID(), beacon, weight)
 	return true, nil
 }
 

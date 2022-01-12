@@ -5,25 +5,26 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
+const numBlocks = 5
+
 // NextOpt is for configuring layer generator.
 type NextOpt func(*nextConf)
 
 func nextConfDefaults() nextConf {
 	return nextConf{
-		VoteGen:      PerfectVoting,
-		Coinflip:     true,
-		HareFraction: Frac(1, 1),
-		LayerSize:    -1,
+		VoteGen:   PerfectVoting,
+		Coinflip:  true,
+		LayerSize: -1,
 	}
 }
 
 type nextConf struct {
-	Reorder      uint32
-	FailHare     bool
-	HareFraction Fraction
-	Coinflip     bool
-	LayerSize    int
-	VoteGen      VotesGenerator
+	Reorder   uint32
+	FailHare  bool
+	EmptyHare bool
+	Coinflip  bool
+	LayerSize int
+	VoteGen   VotesGenerator
 }
 
 // WithNextReorder configures when reordered layer should be returned.
@@ -40,28 +41,17 @@ func WithNextReorder(delay uint32) NextOpt {
 	}
 }
 
-// WithoutInputVector will prevent from saving input vector.
-func WithoutInputVector() NextOpt {
+// WithoutHareOutput will prevent from saving hare output.
+func WithoutHareOutput() NextOpt {
 	return func(c *nextConf) {
 		c.FailHare = true
 	}
 }
 
-// WithEmptyInputVector will save empty input vector.
-func WithEmptyInputVector() NextOpt {
+// WithEmptyHareOutput will save an empty vector for hare output.
+func WithEmptyHareOutput() NextOpt {
 	return func(c *nextConf) {
-		c.HareFraction.Nominator = 0
-	}
-}
-
-// WithPartialHare will set input vector only to a fraction of all known blocks.
-// Input vector will be limited to nominator*size/denominator.
-func WithPartialHare(nominator, denominator int) NextOpt {
-	if denominator == 0 {
-		panic("denominator can't be zero")
-	}
-	return func(c *nextConf) {
-		c.HareFraction = Frac(nominator, denominator)
+		c.EmptyHare = true
 	}
 }
 
@@ -86,7 +76,7 @@ func WithCoin(coin bool) NextOpt {
 	}
 }
 
-// Next generates next layer.
+// Next generates the next layer.
 func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 	cfg := nextConfDefaults()
 	for _, opt := range opts {
@@ -108,11 +98,21 @@ func (g *Generator) Next(opts ...NextOpt) types.LayerID {
 
 func (g *Generator) genBeacon() {
 	eid := g.nextLayer.Sub(1).GetEpoch()
-	beacon := make([]byte, 32)
-	g.rng.Read(beacon)
+	beacon := types.Beacon{}
+	g.rng.Read(beacon[:])
 	for _, state := range g.states {
 		state.OnBeacon(eid, beacon)
 	}
+}
+
+func (g *Generator) genTXIDs(n int) []types.TransactionID {
+	txIDs := make([]types.TransactionID, 0, n)
+	for i := 0; i < n; i++ {
+		txid := types.TransactionID{}
+		g.rng.Read(txid[:])
+		txIDs = append(txIDs, txid)
+	}
+	return txIDs
 }
 
 func (g *Generator) genLayer(cfg nextConf) types.LayerID {
@@ -142,14 +142,11 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		if err != nil {
 			g.logger.With().Panic("failed to get a beacon", log.Err(err))
 		}
-		ballot := types.Ballot{
+		ballot := &types.Ballot{
 			InnerBallot: types.InnerBallot{
 				AtxID:            atxid,
-				BaseBallot:       voting.Base,
 				EligibilityProof: proof,
-				AgainstDiff:      voting.Against,
-				ForDiff:          voting.Support,
-				NeutralDiff:      voting.Abstain,
+				Votes:            voting,
 				LayerIndex:       g.nextLayer,
 				EpochData: &types.EpochData{
 					ActiveSet: activeset,
@@ -157,19 +154,29 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 				},
 			},
 		}
-		block := &types.Block{MiniBlock: *ballot.ToMiniBlock()}
-		block.Signature = signer.Sign(block.Bytes())
-		block.Initialize()
+		ballot.Signature = signer.Sign(ballot.Bytes())
+		if err = ballot.Initialize(); err != nil {
+			g.logger.With().Panic("failed to init ballot", log.Err(err))
+		}
+		for _, state := range g.states {
+			state.OnBallot(ballot)
+		}
+		layer.AddBallot(ballot)
+	}
+	for i := 0; i < numBlocks; i++ {
+		block := types.GenLayerBlock(g.nextLayer, g.genTXIDs(3))
 		for _, state := range g.states {
 			state.OnBlock(block)
 		}
 		layer.AddBlock(block)
 	}
 	if !cfg.FailHare {
-		bids := layer.BlocksIDs()
-		frac := len(bids) * cfg.HareFraction.Nominator / cfg.HareFraction.Denominator
+		hareOutput := types.EmptyBlockID
+		if !cfg.EmptyHare {
+			hareOutput = layer.BlocksIDs()[0]
+		}
 		for _, state := range g.states {
-			state.OnInputVector(layer.Index(), bids[:frac])
+			state.OnHareOutput(layer.Index(), hareOutput)
 		}
 	}
 	for _, state := range g.states {

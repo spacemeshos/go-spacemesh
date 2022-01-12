@@ -11,5 +11,5 @@ type BeaconCollector interface {
 
 // BeaconGetter gets a beacon value.
 type BeaconGetter interface {
-	GetBeacon(types.EpochID) ([]byte, error)
+	GetBeacon(types.EpochID) (types.Beacon, error)
 }

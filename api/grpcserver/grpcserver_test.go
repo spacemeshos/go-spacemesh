@@ -44,7 +44,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
-	"github.com/spacemeshos/go-spacemesh/svm/state"
+	"github.com/spacemeshos/go-spacemesh/svm"
 )
 
 const (
@@ -96,9 +96,10 @@ var (
 	signer2    = signing.NewEdSigner()
 	globalTx   = NewTx(0, addr1, signer1)
 	globalTx2  = NewTx(1, addr2, signer2)
-	block1     = types.NewExistingBlock(types.LayerID{}, []byte("11111"), nil)
-	block2     = types.NewExistingBlock(types.LayerID{}, []byte("22222"), nil)
-	block3     = types.NewExistingBlock(types.LayerID{}, []byte("33333"), nil)
+	ballot1    = types.GenLayerBallot(types.LayerID{})
+	block1     = types.GenLayerBlock(types.LayerID{}, nil)
+	block2     = types.GenLayerBlock(types.LayerID{}, nil)
+	block3     = types.GenLayerBlock(types.LayerID{}, nil)
 	txAPI      = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
@@ -119,9 +120,9 @@ func init() {
 
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
-	block1.ATXID = globalAtx.ID()
+	ballot1.AtxID = globalAtx.ID()
+	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
 	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
-	block1.ActiveSet = &[]types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 	txAPI.returnTx[globalTx.ID()] = globalTx
 	txAPI.returnTx[globalTx2.ID()] = globalTx2
 	types.SetLayersPerEpoch(layersPerEpoch)
@@ -246,7 +247,7 @@ func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.
 		return nil, nil
 	}
 	for _, tx := range t.returnTx {
-		if tx.Recipient.String() == account.String() {
+		if tx.GetRecipient().String() == account.String() {
 			txs = append(txs, tx.ID())
 		}
 	}
@@ -272,8 +273,9 @@ func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 		return nil, errors.New("haven't received that layer yet")
 	}
 
+	ballots := []*types.Ballot{ballot1}
 	blocks := []*types.Block{block1, block2, block3}
-	return types.NewExistingLayer(tid, blocks), nil
+	return types.NewExistingLayer(tid, ballots, blocks), nil
 }
 
 func (t *TxAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
@@ -497,7 +499,7 @@ func (m MempoolMock) Get(id types.TransactionID) (*types.Transaction, error) {
 
 func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
 	m.poolByTxid[id] = tx
-	m.poolByAddress[tx.Recipient] = id
+	m.poolByAddress[tx.GetRecipient()] = id
 	m.poolByAddress[tx.Origin()] = id
 	events.ReportNewTx(types.LayerID{}, tx)
 }
@@ -2176,13 +2178,13 @@ func TestTransactionService(t *testing.T) {
 func checkTransaction(t *testing.T, tx *pb.Transaction) {
 	require.Equal(t, globalTx.ID().Bytes(), tx.Id.Id)
 	require.Equal(t, globalTx.Origin().Bytes(), tx.Sender.Address)
-	require.Equal(t, globalTx.GasLimit, tx.GasOffered.GasProvided)
+	require.Equal(t, globalTx.Fee, tx.GasOffered.GasProvided)
 	require.Equal(t, globalTx.Amount, tx.Amount.Value)
 	require.Equal(t, globalTx.AccountNonce, tx.Counter)
 	require.Equal(t, globalTx.Origin().Bytes(), tx.Signature.PublicKey)
 	switch x := tx.Datum.(type) {
 	case *pb.Transaction_CoinTransfer:
-		require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+		require.Equal(t, globalTx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
 			"inner coin transfer tx has bad recipient")
 	default:
 		require.Fail(t, "inner tx has wrong tx data type")
@@ -2229,9 +2231,6 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 
 	resBlock := l.Blocks[0]
 
-	require.NotNil(t, resBlock.ActivationId)
-	require.NotNil(t, resBlock.SmesherId)
-
 	require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
 	require.Equal(t, types.Hash20(block1.ID()).Bytes(), resBlock.Id)
 
@@ -2239,7 +2238,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	resTx := resBlock.Transactions[0]
 	require.Equal(t, globalTx.ID().Bytes(), resTx.Id.Id)
 	require.Equal(t, globalTx.Origin().Bytes(), resTx.Sender.Address)
-	require.Equal(t, globalTx.GasLimit, resTx.GasOffered.GasProvided)
+	require.Equal(t, globalTx.Fee, resTx.GasOffered.GasProvided)
 	require.Equal(t, globalTx.Amount, resTx.Amount.Value)
 	require.Equal(t, globalTx.AccountNonce, resTx.Counter)
 	require.Equal(t, globalTx.Signature[:], resTx.Signature.Signature)
@@ -2249,7 +2248,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	// The Data field is a bit trickier to read
 	switch x := resTx.Datum.(type) {
 	case *pb.Transaction_CoinTransfer:
-		require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+		require.Equal(t, globalTx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
 			"inner coin transfer tx has bad recipient")
 	default:
 		require.Fail(t, "inner tx has wrong tx data type")
@@ -2714,7 +2713,7 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 		// Need to further check tx type
 		switch y := x.MeshTransaction.Transaction.Datum.(type) {
 		case *pb.Transaction_CoinTransfer:
-			require.Equal(t, globalTx.Recipient.Bytes(), y.CoinTransfer.Receiver.Address,
+			require.Equal(t, globalTx.GetRecipient().Bytes(), y.CoinTransfer.Receiver.Address,
 				"inner coin transfer tx has bad recipient")
 		default:
 			require.Fail(t, "inner tx has wrong tx data type")
@@ -3114,16 +3113,16 @@ func TestEventsReceived(t *testing.T) {
 	pool := mempool.NewTxMemPool()
 	pool.Put(globalTx.ID(), globalTx)
 
-	lg := logtest.New(t).WithName("proc_logger")
-	processor := state.NewTransactionProcessor(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	lg := logtest.New(t).WithName("svm")
+	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
 	time.Sleep(100 * time.Millisecond)
-	processor.Process([]*types.Transaction{globalTx}, layerFirst)
 
 	rewards := map[types.Address]uint64{
 		addr1: 1,
 	}
+	svm.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
+
 	time.Sleep(100 * time.Millisecond)
-	processor.ApplyRewards(layerFirst, rewards)
 
 	wg.Wait()
 }

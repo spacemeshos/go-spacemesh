@@ -10,10 +10,12 @@ import (
 
 	"github.com/golang/mock/gomock"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/hare/mocks"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -55,8 +57,8 @@ func (his *HareWrapper) waitForTermination() {
 		count := 0
 		for _, p := range his.hare {
 			for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(his.totalCP)); i = i.Add(1) {
-				blks, _ := p.GetResult(i)
-				if len(blks) > 0 {
+				proposalIDs, _ := p.getResult(i)
+				if len(proposalIDs) > 0 {
 					count++
 				}
 			}
@@ -72,9 +74,9 @@ func (his *HareWrapper) waitForTermination() {
 	for _, p := range his.hare {
 		for i := types.GetEffectiveGenesis().Add(1); !i.After(types.GetEffectiveGenesis().Add(his.totalCP)); i = i.Add(1) {
 			s := NewEmptySet(10)
-			blks, _ := p.GetResult(i)
-			for _, b := range blks {
-				s.Add(b)
+			proposalIDs, _ := p.getResult(i)
+			for _, p := range proposalIDs {
+				s.Add(p)
 			}
 			his.outputs[i] = append(his.outputs[i], s)
 		}
@@ -132,31 +134,6 @@ func (m *p2pManipulator) Publish(ctx context.Context, protocol string, payload [
 	return nil
 }
 
-type trueOracle struct{}
-
-func (trueOracle) Register(bool, string) {
-}
-
-func (trueOracle) Unregister(bool, string) {
-}
-
-func (trueOracle) Validate(context.Context, types.LayerID, uint32, int, types.NodeID, []byte, uint16) (bool, error) {
-	return true, nil
-}
-
-func (trueOracle) CalcEligibility(context.Context, types.LayerID, uint32, int, types.NodeID, []byte) (uint16, error) {
-	return 1, nil
-}
-
-func (trueOracle) Proof(context.Context, types.LayerID, uint32) ([]byte, error) {
-	x := make([]byte, 100)
-	return x, nil
-}
-
-func (trueOracle) IsIdentityActiveOnConsensusView(context.Context, string, types.LayerID) (bool, error) {
-	return true, nil
-}
-
 // Test - runs a single CP for more than one iteration.
 func Test_consensusIterations(t *testing.T) {
 	test := newConsensusTest()
@@ -173,7 +150,7 @@ func Test_consensusIterations(t *testing.T) {
 	set1 := NewSetFromValues(value1)
 	test.fill(set1, 0, totalNodes-1)
 	test.honestSets = []*Set{set1}
-	oracle := &trueOracle{}
+	oracle := eligibility.New(logtest.New(t))
 	i := 0
 	creationFunc := func() {
 		host := mesh.Hosts()[i]
@@ -191,55 +168,54 @@ func Test_consensusIterations(t *testing.T) {
 	test.WaitForTimedTermination(t, 40*time.Second)
 }
 
-type mockIdentityP struct {
-	nid types.NodeID
+type hareWithMocks struct {
+	*Hare
+	ctrl           *gomock.Controller
+	mockRoracle    *mocks.MockRolacle
+	mockProposalDB *mocks.MockproposalProvider
+	mockMeshDB     *mocks.MockmeshProvider
+	mockBlockGen   *mocks.MockblockGenerator
+	mockFetcher    *smocks.MockProposalFetcher
 }
 
-func (m *mockIdentityP) GetIdentity(string) (types.NodeID, error) {
-	return m.nid, nil
-}
-
-type mockBlockProvider struct {
-	lyrBlocks map[types.LayerID][]*types.Block
-}
-
-func (mbp *mockBlockProvider) HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID) {
-}
-
-func (mbp *mockBlockProvider) InvalidateLayer(context.Context, types.LayerID) {
-}
-
-func (mbp *mockBlockProvider) RecordCoinflip(context.Context, types.LayerID, bool) {
-}
-
-func (mbp *mockBlockProvider) LayerBlocks(lyrID types.LayerID) ([]*types.Block, error) {
-	return mbp.lyrBlocks[lyrID], nil
-}
-
-func (mbp *mockBlockProvider) GetBlock(bID types.BlockID) (*types.Block, error) {
-	return nil, nil
-}
-
-func createMaatuf(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, rolacle Rolacle, name string, lyrBlocks map[types.LayerID][]*types.Block) *Hare {
+func createTestHare(t testing.TB, tcfg config.Config, clock *mockClock, pid p2p.Peer, p2p pubsub.PublishSubsciber, name string) *hareWithMocks {
+	t.Helper()
 	ed := signing.NewEdSigner()
 	pub := ed.PublicKey()
 	_, vrfPub, err := signing.NewVRFSigner(ed.Sign(pub.Bytes()))
-	if err != nil {
-		panic("failed to create vrf signer")
-	}
+	require.NoError(t, err)
 	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	patrol := mocks.NewMocklayerPatrol(ctrl)
 	patrol.EXPECT().SetHareInCharge(gomock.Any()).AnyTimes()
+	patrol.EXPECT().CompleteHare(gomock.Any()).AnyTimes()
 	mockBeacons := smocks.NewMockBeaconGetter(ctrl)
-	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(nil, nil).AnyTimes()
+	mockBeacons.EXPECT().GetBeacon(gomock.Any()).Return(types.EmptyBeacon, nil).AnyTimes()
+	mockIDProvider := mocks.NewMockidentityProvider(ctrl)
+	mockIDProvider.EXPECT().GetIdentity(gomock.Any()).Return(nodeID, nil).AnyTimes()
+	mockStateQ := mocks.NewMockstateQuerier(ctrl)
+	mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+	mockSyncS := smocks.NewMockSyncStateProvider(ctrl)
+	mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 
-	hare := New(tcfg, pid, p2p, ed, nodeID, mockSyncState(t), &mockBlockProvider{lyrBlocks: lyrBlocks}, mockBeacons, rolacle, patrol, 10, &mockIdentityP{nid: nodeID},
-		&MockStateQuerier{true, nil}, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
+	mockRoracle := mocks.NewMockRolacle(ctrl)
+	mockBlockGen := mocks.NewMockblockGenerator(ctrl)
+	mockMeshDB := mocks.NewMockmeshProvider(ctrl)
+	mockProposalDB := mocks.NewMockproposalProvider(ctrl)
+	mockFetcher := smocks.NewMockProposalFetcher(ctrl)
 
-	return hare
+	hare := New(tcfg, pid, p2p, ed, nodeID, mockBlockGen, mockSyncS, mockMeshDB, mockProposalDB, mockBeacons, mockFetcher, mockRoracle, patrol, 10,
+		mockIDProvider, mockStateQ, clock, logtest.New(t).WithName(name+"_"+ed.PublicKey().ShortString()))
+
+	return &hareWithMocks{
+		Hare:           hare,
+		ctrl:           ctrl,
+		mockRoracle:    mockRoracle,
+		mockProposalDB: mockProposalDB,
+		mockMeshDB:     mockMeshDB,
+		mockBlockGen:   mockBlockGen,
+		mockFetcher:    mockFetcher,
+	}
 }
 
 type mockClock struct {
@@ -429,14 +405,20 @@ func Test_multipleCPs(t *testing.T) {
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
-	oracle := &trueOracle{}
 
-	lyrBlocks := make(map[types.LayerID][]*types.Block)
+	proposals := make(map[types.LayerID][]*types.Proposal)
+	proposalsByID := make(map[types.ProposalID]*types.Proposal)
+	blocks := make(map[types.LayerID]*types.Block)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 		for i := uint64(0); i < 200; i++ {
-			blk := randomBlock(t, j, nil)
-			lyrBlocks[j] = append(lyrBlocks[j], blk)
+			p := types.GenLayerProposal(j, nil)
+			p.EpochData = &types.EpochData{
+				Beacon: types.EmptyBeacon,
+			}
+			proposals[j] = append(proposals[j], p)
+			proposalsByID[p.ID()] = p
 		}
+		blocks[j] = types.GenLayerBlock(j, types.RandomTXSet(199))
 	}
 	pubsubs := []*pubsub.PubSub{}
 	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
@@ -446,10 +428,38 @@ func Test_multipleCPs(t *testing.T) {
 		require.NoError(t, err)
 		src := NewSimRoundClock(ps, scMap)
 		pubsubs = append(pubsubs, ps)
-		// p2pm := &p2pManipulator{nd: s, err: errors.New("fake err")}
-		h := createMaatuf(t, cfg, test.clock, host.ID(), src, oracle, t.Name(), lyrBlocks)
+		h := createTestHare(t, cfg, test.clock, host.ID(), src, t.Name())
+		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
+		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
+		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+		h.mockMeshDB.EXPECT().RecordCoinflip(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		h.mockProposalDB.EXPECT().LayerProposals(gomock.Any()).DoAndReturn(
+			func(layerID types.LayerID) ([]*types.Proposal, error) {
+				return proposals[layerID], nil
+			}).AnyTimes()
+		h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		h.mockProposalDB.EXPECT().GetProposals(gomock.Any()).DoAndReturn(
+			func(pids []types.ProposalID) ([]*types.Proposal, error) {
+				props := make([]*types.Proposal, 0, len(pids))
+				for _, pid := range pids {
+					props = append(props, proposalsByID[pid])
+				}
+				return props, nil
+			}).AnyTimes()
+		h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, layerID types.LayerID, props []*types.Proposal) (*types.Block, error) {
+				assert.ElementsMatch(t, proposals[layerID], props)
+				return blocks[layerID], nil
+			}).AnyTimes()
+		h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, block *types.Block) error {
+				assert.Equal(t, blocks[block.LayerIndex], block)
+				return nil
+			}).AnyTimes()
+		h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		h.newRoundClock = src.NewRoundClock
-		test.hare = append(test.hare, h)
+		test.hare = append(test.hare, h.Hare)
 		e := h.Start(context.TODO())
 		r.NoError(e)
 	}
@@ -489,14 +499,20 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	require.NoError(t, err)
 
 	test.initialSets = make([]*Set, totalNodes)
-	oracle := &trueOracle{}
 
-	lyrBlocks := make(map[types.LayerID][]*types.Block)
+	proposals := make(map[types.LayerID][]*types.Proposal)
+	proposalsByID := make(map[types.ProposalID]*types.Proposal)
+	blocks := make(map[types.LayerID]*types.Block)
 	for j := types.GetEffectiveGenesis().Add(1); !j.After(types.GetEffectiveGenesis().Add(totalCp)); j = j.Add(1) {
 		for i := uint64(0); i < 200; i++ {
-			blk := randomBlock(t, j, nil)
-			lyrBlocks[j] = append(lyrBlocks[j], blk)
+			p := types.GenLayerProposal(j, nil)
+			p.EpochData = &types.EpochData{
+				Beacon: types.EmptyBeacon,
+			}
+			proposals[j] = append(proposals[j], p)
+			proposalsByID[p.ID()] = p
 		}
+		blocks[j] = types.GenLayerBlock(j, types.RandomTXSet(199))
 	}
 	pubsubs := []*pubsub.PubSub{}
 	scMap := NewSharedClock(totalNodes, totalCp, time.Duration(50*int(totalCp)*totalNodes)*time.Millisecond)
@@ -507,9 +523,38 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 		pubsubs = append(pubsubs, ps)
 		mp2p := &p2pManipulator{nd: ps, stalledLayer: types.NewLayerID(1), err: errors.New("fake err")}
 		src := NewSimRoundClock(mp2p, scMap)
-		h := createMaatuf(t, cfg, test.clock, host.ID(), src, oracle, t.Name(), lyrBlocks)
+		h := createTestHare(t, cfg, test.clock, host.ID(), src, t.Name())
+		h.mockRoracle.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+		h.mockRoracle.EXPECT().Proof(gomock.Any(), gomock.Any(), gomock.Any()).Return(make([]byte, 100), nil).AnyTimes()
+		h.mockRoracle.EXPECT().CalcEligibility(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(uint16(1), nil).AnyTimes()
+		h.mockRoracle.EXPECT().Validate(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
+		h.mockMeshDB.EXPECT().RecordCoinflip(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
+		h.mockProposalDB.EXPECT().LayerProposals(gomock.Any()).DoAndReturn(
+			func(layerID types.LayerID) ([]*types.Proposal, error) {
+				return proposals[layerID], nil
+			}).AnyTimes()
+		h.mockFetcher.EXPECT().GetProposals(gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+		h.mockProposalDB.EXPECT().GetProposals(gomock.Any()).DoAndReturn(
+			func(pids []types.ProposalID) ([]*types.Proposal, error) {
+				props := make([]*types.Proposal, 0, len(pids))
+				for _, pid := range pids {
+					props = append(props, proposalsByID[pid])
+				}
+				return props, nil
+			}).AnyTimes()
+		h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, layerID types.LayerID, props []*types.Proposal) (*types.Block, error) {
+				assert.ElementsMatch(t, proposals[layerID], props)
+				return blocks[layerID], nil
+			}).AnyTimes()
+		h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(_ context.Context, block *types.Block) error {
+				assert.Equal(t, blocks[block.LayerIndex], block)
+				return nil
+			}).AnyTimes()
+		h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
 		h.newRoundClock = src.NewRoundClock
-		test.hare = append(test.hare, h)
+		test.hare = append(test.hare, h.Hare)
 		e := h.Start(context.TODO())
 		r.NoError(e)
 	}

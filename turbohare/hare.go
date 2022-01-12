@@ -2,10 +2,7 @@
 package turbohare
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"sort"
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -14,15 +11,28 @@ import (
 )
 
 type meshProvider interface {
+	AddBlockWithTXs(context.Context, *types.Block) error
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
 	RecordCoinflip(context.Context, types.LayerID, bool)
 	SetZeroBlockLayer(types.LayerID) error
-	HandleValidatedLayer(context.Context, types.LayerID, []types.BlockID)
+	SetZeroBallotLayer(types.LayerID) error
+	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID) error
+}
+
+type proposalProvider interface {
+	LayerProposals(types.LayerID) ([]*types.Proposal, error)
+	LayerProposalIDs(types.LayerID) ([]types.ProposalID, error)
+}
+
+type blockGenerator interface {
+	GenerateBlock(context.Context, types.LayerID, []*types.Proposal) (*types.Block, error)
 }
 
 // SuperHare is a method to provide fast hare results without consensus based on received blocks from gossip.
 type SuperHare struct {
 	mesh         meshProvider
+	ppp          proposalProvider
+	blockGen     blockGenerator
 	conf         config.Config
 	beginLayer   chan types.LayerID
 	closeChannel chan struct{}
@@ -30,8 +40,8 @@ type SuperHare struct {
 }
 
 // New creates a new instance of SuperHare.
-func New(_ context.Context, conf config.Config, mesh meshProvider, beginLayer chan types.LayerID, logger log.Log) *SuperHare {
-	return &SuperHare{mesh, conf, beginLayer, make(chan struct{}), logger}
+func New(_ context.Context, conf config.Config, mesh meshProvider, ppp proposalProvider, blockGen blockGenerator, beginLayer chan types.LayerID, logger log.Log) *SuperHare {
+	return &SuperHare{mesh, ppp, blockGen, conf, beginLayer, make(chan struct{}), logger}
 }
 
 // Start is a stub to support service API.
@@ -68,18 +78,34 @@ func (h *SuperHare) Start(ctx context.Context) error {
 						logger.With().Info("not sending blocks to mesh for genesis layer")
 						return
 					}
-					blocks, err := h.mesh.LayerBlockIds(layerID)
+					proposals, err := h.ppp.LayerProposals(layerID)
 					if err != nil {
-						logger.With().Warning("error reading block ids for layer, using empty set",
+						logger.With().Warning("error getting proposals for layer, using empty set",
 							layerID,
 							log.Err(err))
 					}
-					if len(blocks) == 0 {
-						if err := h.mesh.SetZeroBlockLayer(layerID); err != nil {
-							logger.With().Error("failed to set layer as a zero", log.Err(err))
+					hareOutput := types.EmptyBlockID
+					if len(proposals) == 0 {
+						logger.With().Warning("hare output empty set")
+						if err := h.mesh.SetZeroBallotLayer(layerID); err != nil {
+							logger.With().Error("failed to set layer as a zero ballot", log.Err(err))
 						}
+						if err := h.mesh.SetZeroBlockLayer(layerID); err != nil {
+							logger.With().Error("failed to set layer as a zero block", log.Err(err))
+						}
+					} else if block, err := h.blockGen.GenerateBlock(ctx, layerID, proposals); err != nil {
+						logger.With().Error("failed to generate block", log.Err(err))
+						return
+					} else if err = h.mesh.AddBlockWithTXs(ctx, block); err != nil {
+						logger.With().Error("failed to save block", log.Err(err))
+						return
+					} else {
+						hareOutput = block.ID()
 					}
-					h.mesh.HandleValidatedLayer(ctx, layerID, blocks)
+
+					if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, hareOutput); err != nil {
+						logger.With().Error("mesh failed to process layer", layerID, log.Err(err))
+					}
 				}()
 			}
 		}
@@ -90,16 +116,4 @@ func (h *SuperHare) Start(ctx context.Context) error {
 // Close is a stup to support service API.
 func (h *SuperHare) Close() {
 	close(h.closeChannel)
-}
-
-// GetResult is the implementation for receiving consensus process result.
-func (h *SuperHare) GetResult(id types.LayerID) ([]types.BlockID, error) {
-	blks, err := h.mesh.LayerBlockIds(id)
-	if err != nil {
-		h.logger.With().Error("superhare failed to read block ids for layer", id, log.Err(err))
-		return nil, fmt.Errorf("read layer block IDs: %w", err)
-	}
-
-	sort.Slice(blks, func(i, j int) bool { return bytes.Compare(blks[i].Bytes(), blks[j].Bytes()) == -1 })
-	return blks, nil
 }

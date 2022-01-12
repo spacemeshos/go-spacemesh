@@ -12,11 +12,16 @@ type atxDB interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 }
 
-type mesh interface {
-	HasProposal(types.ProposalID) bool
-	AddProposal(*types.Proposal) error
+type meshDB interface {
+	AddTXsFromProposal(context.Context, types.LayerID, types.ProposalID, []types.TransactionID) error
 	HasBallot(types.BallotID) bool
+	AddBallot(*types.Ballot) error
 	GetBallot(types.BallotID) (*types.Ballot, error)
+}
+
+type proposalDB interface {
+	HasProposal(types.ProposalID) bool
+	AddProposal(context.Context, *types.Proposal) error
 }
 
 type eligibilityValidator interface {

@@ -16,10 +16,6 @@ type messageValidator interface {
 	ContextuallyValidateMessage(ctx context.Context, m *Msg, expectedK uint32) error
 }
 
-type identityProvider interface {
-	GetIdentity(edID string) (types.NodeID, error)
-}
-
 type eligibilityValidator struct {
 	oracle           Rolacle
 	layersPerEpoch   uint16
@@ -115,14 +111,14 @@ type syntaxContextValidator struct {
 	signing          Signer
 	threshold        int
 	statusValidator  func(m *Msg) bool // used to validate status Messages in SVP
-	stateQuerier     StateQuerier
+	stateQuerier     stateQuerier
 	layersPerEpoch   uint16
 	roleValidator    roleValidator
 	validMsgsTracker pubKeyGetter // used to check for public keys in the valid messages tracker
 	log.Log
 }
 
-func newSyntaxContextValidator(sgr Signer, threshold int, validator func(m *Msg) bool, stateQuerier StateQuerier, layersPerEpoch uint16, ev roleValidator, validMsgsTracker pubKeyGetter, logger log.Log) *syntaxContextValidator {
+func newSyntaxContextValidator(sgr Signer, threshold int, validator func(m *Msg) bool, stateQuerier stateQuerier, layersPerEpoch uint16, ev roleValidator, validMsgsTracker pubKeyGetter, logger log.Log) *syntaxContextValidator {
 	return &syntaxContextValidator{sgr, threshold, validator, stateQuerier, layersPerEpoch, ev, validMsgsTracker, logger}
 }
 
@@ -404,7 +400,7 @@ func (v *syntaxContextValidator) validateSVP(ctx context.Context, msg *Msg) bool
 	}
 
 	maxKi := preRound
-	var maxSet []types.BlockID
+	var maxSet []types.ProposalID
 	for _, status := range msg.InnerMsg.Svp.Messages {
 		// track max
 		if status.InnerMsg.Ki > maxKi || maxKi == preRound {

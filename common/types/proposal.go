@@ -1,12 +1,22 @@
 package types
 
 import (
+	"bytes"
 	"fmt"
+	"sort"
 
 	"github.com/spacemeshos/ed25519"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
+)
+
+const (
+	// ProposalIDSize in bytes.
+	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
+	// probably required for fetching by hash between peers.
+	ProposalIDSize = Hash32Length
 )
 
 // ProposalID is a 20-byte sha256 sum of the serialized ballot used to identify a Proposal.
@@ -14,12 +24,6 @@ type ProposalID Hash20
 
 // EmptyProposalID is a canonical empty ProposalID.
 var EmptyProposalID = ProposalID{}
-
-const (
-	// ProposalIDSize in bytes.
-	// FIXME(dshulyak) why do we cast to hash32 when returning bytes?
-	ProposalIDSize = Hash32Length
-)
 
 // Proposal contains the smesher's signed content proposal for a given layer and vote on the mesh history.
 // Proposal is ephemeral and will be discarded after the unified content block is created. the Ballot within
@@ -70,7 +74,7 @@ func (p *Proposal) Initialize() error {
 
 // Bytes returns the serialization of the InnerProposal.
 func (p *Proposal) Bytes() []byte {
-	bytes, err := InterfaceToBytes(p.InnerProposal)
+	bytes, err := codec.Encode(p.InnerProposal)
 	if err != nil {
 		log.Panic("failed to serialize proposal: %v", err)
 	}
@@ -84,14 +88,14 @@ func (p *Proposal) ID() ProposalID {
 
 // Fields returns an array of LoggableFields for logging.
 func (p *Proposal) Fields() []log.LoggableField {
-	return append(p.Ballot.Fields(), p.ID())
+	return append(p.Ballot.Fields(), p.ID(), log.Int("num_tx", len(p.TxIDs)))
 }
 
-// ToBlock transforms a Proposal to a Block during the transition period to unified content block.
-func (p *Proposal) ToBlock() *Block {
-	mb := p.Ballot.ToMiniBlock()
-	mb.TxIDs = p.TxIDs
-	return &Block{MiniBlock: *mb}
+// MarshalLogObject implements logging interface.
+func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("proposal_id", p.ID().String())
+	p.Ballot.MarshalLogObject(encoder)
+	return nil
 }
 
 // String returns a short prefix of the hex representation of the ID.
@@ -112,4 +116,62 @@ func (id ProposalID) AsHash32() Hash32 {
 // Field returns a log field. Implements the LoggableField interface.
 func (id ProposalID) Field() log.Field {
 	return log.String("proposal_id", id.String())
+}
+
+// Compare returns true if other (the given ProposalID) is less than this ProposalID, by lexicographic comparison.
+func (id ProposalID) Compare(other ProposalID) bool {
+	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
+}
+
+// ToProposalIDs returns a slice of ProposalID corresponding to the given proposals.
+func ToProposalIDs(proposals []*Proposal) []ProposalID {
+	ids := make([]ProposalID, 0, len(proposals))
+	for _, p := range proposals {
+		ids = append(ids, p.ID())
+	}
+	return ids
+}
+
+// SortProposals sorts a list of Proposal in their ID's lexicographic order, in-place.
+func SortProposals(proposals []*Proposal) []*Proposal {
+	sort.Slice(proposals, func(i, j int) bool { return proposals[i].ID().Compare(proposals[j].ID()) })
+	return proposals
+}
+
+// SortProposalIDs sorts a list of ProposalID in lexicographic order, in-place.
+func SortProposalIDs(ids []ProposalID) []ProposalID {
+	sort.Slice(ids, func(i, j int) bool { return ids[i].Compare(ids[j]) })
+	return ids
+}
+
+// ProposalIDsToHashes turns a list of ProposalID into their Hash32 representation.
+func ProposalIDsToHashes(ids []ProposalID) []Hash32 {
+	hashes := make([]Hash32, 0, len(ids))
+	for _, id := range ids {
+		hashes = append(hashes, id.AsHash32())
+	}
+	return hashes
+}
+
+// DBProposal is a Proposal structure stored in DB to skip signature verification.
+type DBProposal struct {
+	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
+	// to break if in future key for database will be changed
+	ID         ProposalID
+	BallotID   BallotID
+	LayerIndex LayerID
+	TxIDs      []TransactionID
+	Signature  []byte
+}
+
+// ToProposal creates a Proposal from data that is stored locally.
+func (b *DBProposal) ToProposal(ballot *Ballot) *Proposal {
+	return &Proposal{
+		InnerProposal: InnerProposal{
+			Ballot: *ballot,
+			TxIDs:  b.TxIDs,
+		},
+		Signature:  b.Signature,
+		proposalID: b.ID,
+	}
 }

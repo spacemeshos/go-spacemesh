@@ -1,7 +1,6 @@
 package eligibility
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -11,10 +10,10 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 	"github.com/spacemeshos/fixed"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/eligibility/config"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -148,8 +147,8 @@ func buildKey(l types.LayerID, r uint32) [2]uint64 {
 	return [2]uint64{uint64(l.Uint32()), uint64(r)}
 }
 
-func encodeBeacon(beacon []byte) uint32 {
-	return binary.LittleEndian.Uint32(beacon)
+func encodeBeacon(beacon types.Beacon) uint32 {
+	return binary.LittleEndian.Uint32(beacon.Bytes())
 }
 
 func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uint32, error) {
@@ -161,7 +160,7 @@ func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uin
 	value := encodeBeacon(beacon)
 	o.WithContext(ctx).With().Debug("hare eligibility beacon value for epoch",
 		epochID,
-		log.String("beacon", types.BytesToHash(beacon).ShortString()),
+		log.String("beacon", beacon.ShortString()),
 		log.Uint32("beacon_val", value))
 	return value, nil
 }
@@ -191,7 +190,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 
 	// marshal message
 	msg := vrfMessage{Beacon: v, Round: round, Layer: layer}
-	buf, err := types.InterfaceToBytes(&msg)
+	buf, err := codec.Encode(&msg)
 	if err != nil {
 		o.WithContext(ctx).With().Panic("failed to encode", log.Err(err))
 	}
@@ -450,10 +449,10 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 	}
 
 	var (
-		beacons       = make(map[types.EpochID][]byte)
+		beacons       = make(map[types.EpochID]types.Beacon)
 		activeBallots = make(map[types.BallotID]*types.Ballot)
 		epoch         types.EpochID
-		beacon        []byte
+		beacon        types.Beacon
 		err           error
 	)
 	for layerID := safeLayerStart; !layerID.After(safeLayerEnd); layerID = layerID.Add(1) {
@@ -464,7 +463,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 				return nil, fmt.Errorf("error getting beacon for epoch %v: %w", epoch, err)
 			}
 			logger.With().Warning("found beacon for epoch", epoch,
-				log.String("epoch_beacon", types.BytesToHash(beacon).ShortString()))
+				log.String("epoch_beacon", beacon.ShortString()))
 			beacons[epoch] = beacon
 		}
 		ballots, err := o.meshdb.LayerBallots(layerID)
@@ -491,23 +490,19 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 			continue
 		}
 		seenBallots[ballot.ID()] = struct{}{}
-		if ballot.ID() == types.BallotID(mesh.GenesisBlock().ID()) {
-			// always accept genesis ballot
-			continue
-		}
 		if ballot.EpochData == nil {
 			// not a ref ballot, no beacon value to check
 			continue
 		}
 		beacon = beacons[ballot.LayerIndex.GetEpoch()]
-		if !bytes.Equal(ballot.EpochData.Beacon, beacon) {
+		if ballot.EpochData.Beacon != beacon {
 			badBeaconATXIDs[ballot.AtxID] = struct{}{}
 			logger.With().Warning("hare actives find ballot with different beacon",
 				ballot.ID(),
 				ballot.AtxID,
 				ballot.LayerIndex.GetEpoch(),
-				log.String("ballot_beacon", types.BytesToHash(ballot.EpochData.Beacon).ShortString()),
-				log.String("epoch_beacon", types.BytesToHash(beacon).ShortString()))
+				log.String("ballot_beacon", ballot.EpochData.Beacon.ShortString()),
+				log.String("epoch_beacon", beacon.ShortString()))
 			continue
 		}
 		for _, id := range ballot.EpochData.ActiveSet {

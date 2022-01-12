@@ -14,7 +14,7 @@ func newState(logger log.Log, conf config) State {
 	return State{
 		logger:  logger,
 		MeshDB:  mdb,
-		AtxDB:   newAtxDB(logger, mdb, conf),
+		AtxDB:   newAtxDB(logger, conf),
 		Beacons: newBeaconStore(),
 	}
 }
@@ -29,7 +29,7 @@ type State struct {
 }
 
 // OnBeacon callback to store generated beacon.
-func (s *State) OnBeacon(eid types.EpochID, beacon []byte) {
+func (s *State) OnBeacon(eid types.EpochID, beacon types.Beacon) {
 	s.Beacons.StoreBeacon(eid, beacon)
 }
 
@@ -37,6 +37,17 @@ func (s *State) OnBeacon(eid types.EpochID, beacon []byte) {
 func (s *State) OnActivationTx(atx *types.ActivationTx) {
 	if err := s.AtxDB.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx); err != nil {
 		s.logger.With().Panic("failed to save atx", log.Err(err))
+	}
+}
+
+// OnBallot callback to store ballot.
+func (s *State) OnBallot(ballot *types.Ballot) {
+	exist, _ := s.MeshDB.GetBallot(ballot.ID())
+	if exist != nil {
+		return
+	}
+	if err := s.MeshDB.AddBallot(ballot); err != nil {
+		s.logger.With().Panic("failed to save ballot", log.Err(err))
 	}
 }
 
@@ -51,10 +62,10 @@ func (s *State) OnBlock(block *types.Block) {
 	}
 }
 
-// OnInputVector callback to store input vector.
-func (s *State) OnInputVector(lid types.LayerID, vector []types.BlockID) {
-	if err := s.MeshDB.SaveLayerInputVectorByID(context.TODO(), lid, vector); err != nil {
-		s.logger.With().Panic("failed to save input vector", log.Err(err))
+// OnHareOutput callback to store hare output.
+func (s *State) OnHareOutput(lid types.LayerID, bid types.BlockID) {
+	if err := s.MeshDB.SaveHareConsensusOutput(context.TODO(), lid, bid); err != nil {
+		s.logger.With().Panic("failed to save hare output", log.Err(err))
 	}
 }
 

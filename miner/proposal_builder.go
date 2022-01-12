@@ -11,13 +11,14 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
-	"github.com/spacemeshos/go-spacemesh/blocks"
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/miner/metrics"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
@@ -51,7 +52,7 @@ type ProposalBuilder struct {
 	publisher          pubsub.Publisher
 	signer             *signing.EdSigner
 	txPool             txPool
-	meshProvider       meshProvider
+	proposalDB         proposalDB
 	baseBallotProvider baseBallotProvider
 	proposalOracle     proposalOracle
 	beaconProvider     system.BeaconGetter
@@ -140,7 +141,7 @@ func NewProposalBuilder(
 	vrfSigner *signing.VRFSigner,
 	atxDB activationDB,
 	publisher pubsub.Publisher,
-	msh meshProvider,
+	pdb proposalDB,
 	bbp baseBallotProvider,
 	beaconProvider system.BeaconGetter,
 	syncer system.SyncStateProvider,
@@ -157,7 +158,7 @@ func NewProposalBuilder(
 		signer:             signer,
 		layerTimer:         layerTimer,
 		publisher:          publisher,
-		meshProvider:       msh,
+		proposalDB:         pdb,
 		baseBallotProvider: bbp,
 		beaconProvider:     beaconProvider,
 		syncer:             syncer,
@@ -206,7 +207,7 @@ func (pb *ProposalBuilder) Start(ctx context.Context) error {
 // Close stops the loop that listens to layers and build proposals.
 func (pb *ProposalBuilder) Close() {
 	pb.cancel()
-	pb.eg.Wait()
+	_ = pb.eg.Wait()
 	pb.refBallotDB.Close()
 }
 
@@ -241,33 +242,29 @@ func (pb *ProposalBuilder) stopped() bool {
 	}
 }
 
-// TODO: return a Proposal.
 func (pb *ProposalBuilder) createProposal(
 	ctx context.Context,
 	layerID types.LayerID,
 	proofs types.VotingEligibilityProof,
 	atxID types.ATXID,
 	activeSet []types.ATXID,
-	beacon []byte,
+	beacon types.Beacon,
 	txIDs []types.TransactionID,
-) (*types.Block, error) {
+) (*types.Proposal, error) {
 	logger := pb.logger.WithContext(ctx).WithFields(layerID, layerID.GetEpoch())
 
 	if !layerID.After(types.GetEffectiveGenesis()) {
 		logger.Panic("attempt to create proposal during genesis")
 	}
 
-	base, diffs, err := pb.baseBallotProvider.BaseBallot(ctx)
+	votes, err := pb.baseBallotProvider.BaseBallot(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("get base ballot: %w", err)
 	}
 	ib := &types.InnerBallot{
 		AtxID:            atxID,
 		EligibilityProof: proofs,
-		BaseBallot:       base,
-		AgainstDiff:      diffs[0],
-		ForDiff:          diffs[1],
-		NeutralDiff:      diffs[2],
+		Votes:            *votes,
 		LayerIndex:       layerID,
 	}
 
@@ -292,32 +289,27 @@ func (pb *ProposalBuilder) createProposal(
 		ib.RefBallot = refBallot
 	}
 
-	p := types.Proposal{
+	p := &types.Proposal{
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
 				InnerBallot: *ib,
-				// TODO: add signature
 			},
 			TxIDs: txIDs,
 		},
-		// TODO: add signature
+	}
+	p.Ballot.Signature = pb.signer.Sign(p.Ballot.Bytes())
+	p.Signature = pb.signer.Sign(p.Bytes())
+	if err := p.Initialize(); err != nil {
+		logger.Panic("proposal failed to initialize", log.Err(err))
 	}
 
-	bl := p.ToBlock()
-	blockBytes, err := types.InterfaceToBytes(bl.MiniBlock)
-	if err != nil {
-		logger.With().Panic("failed to serialize block", log.Err(err))
-	}
-	bl.Signature = pb.signer.Sign(blockBytes)
-	bl.Initialize()
-
-	logger.Event().Info("block created", bl.Fields()...)
-	return bl, nil
+	logger.Event().Info("proposal created", p.Fields()...)
+	return p, nil
 }
 
 func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerID) error {
 	var (
-		beacon []byte
+		beacon types.Beacon
 		err    error
 		epoch  = layerID.GetEpoch()
 		logger = pb.logger.WithContext(ctx).WithFields(layerID, epoch)
@@ -337,7 +329,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	}
 
 	logger.With().Info("miner got beacon to build proposals",
-		log.String("beacon", types.BytesToHash(beacon).ShortString()))
+		log.String("beacon", beacon.ShortString()))
 
 	started := time.Now()
 
@@ -345,15 +337,15 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
 			logger.Info("miner has no ATX in previous epoch. not eligible for proposals")
-			events.ReportDoneCreatingBlock(false, layerID.Uint32(), "not eligible to produce proposals")
+			events.ReportDoneCreatingProposal(false, layerID.Uint32(), "not eligible to produce proposals")
 			return fmt.Errorf("miner no ATX: %w", err)
 		}
-		events.ReportDoneCreatingBlock(false, layerID.Uint32(), "failed to check for proposal eligibility")
+		events.ReportDoneCreatingProposal(false, layerID.Uint32(), "failed to check for proposal eligibility")
 		logger.With().Error("failed to check for proposal eligibility", log.Err(err))
 		return fmt.Errorf("proposal eligibility: %w", err)
 	}
 	if len(proofs) == 0 {
-		events.ReportDoneCreatingBlock(false, layerID.Uint32(), "")
+		events.ReportDoneCreatingProposal(false, layerID.Uint32(), "")
 		logger.Info("not eligible for proposal in layer")
 		return nil
 	}
@@ -362,13 +354,13 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	for _, eligibilityProof := range proofs {
 		txList, _, err := pb.txPool.SelectTopNTransactions(pb.cfg.txsPerProposal, pb.projector.GetProjection)
 		if err != nil {
-			events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to get txs for proposal")
+			events.ReportDoneCreatingProposal(true, layerID.Uint32(), "failed to get txs for proposal")
 			logger.With().Error("failed to get txs for proposal", log.Err(err))
 			return fmt.Errorf("select TXs: %w", err)
 		}
-		blk, err := pb.createProposal(ctx, layerID, eligibilityProof, atxID, activeSet, beacon, txList)
+		p, err := pb.createProposal(ctx, layerID, eligibilityProof, atxID, activeSet, beacon, txList)
 		if err != nil {
-			events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to create new proposal")
+			events.ReportDoneCreatingProposal(true, layerID.Uint32(), "failed to create new proposal")
 			logger.With().Error("failed to create new proposal", log.Err(err))
 			return err
 		}
@@ -379,34 +371,33 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 			return nil
 		}
 
-		if blk.RefBlock == nil {
-			ballotID := types.BallotID(blk.ID())
+		if p.RefBallot == types.EmptyBallotID {
+			ballotID := p.Ballot.ID()
 			logger.With().Debug("storing ref ballot", epoch, ballotID)
 			if err := pb.storeRefBallot(epoch, ballotID); err != nil {
-				logger.With().Error("failed to store ref ballot", log.Err(err))
+				logger.With().Error("failed to store ref ballot", ballotID, log.Err(err))
 				return err
 			}
 		}
 
-		// TODO: save Proposal to the mesh instead
-		if err := pb.meshProvider.AddBlockWithTxs(ctx, blk); err != nil {
-			events.ReportDoneCreatingBlock(true, layerID.Uint32(), "failed to add block")
-			logger.With().Error("failed to add block", blk.ID(), log.Err(err))
-			return fmt.Errorf("builder add block: %w", err)
+		if err := pb.proposalDB.AddProposal(ctx, p); err != nil {
+			events.ReportDoneCreatingProposal(true, layerID.Uint32(), "failed to add proposal")
+			logger.With().Error("failed to add proposal", p.ID(), log.Err(err))
+			return fmt.Errorf("builder add proposal: %w", err)
 		}
 
-		bytes, err := types.InterfaceToBytes(blk)
+		data, err := codec.Encode(p)
 		if err != nil {
-			logger.With().Panic("failed to serialize block", log.Err(err))
+			logger.With().Panic("failed to serialize proposal", log.Err(err))
 		}
 
 		pb.eg.Go(func() error {
 			// generate a new requestID for the new block message
-			blockCtx := log.WithNewRequestID(ctx, layerID, blk.ID())
-			if err = pb.publisher.Publish(blockCtx, blocks.NewBlockProtocol, bytes); err != nil {
-				logger.WithContext(blockCtx).With().Error("failed to send block", log.Err(err))
+			newCtx := log.WithNewRequestID(ctx, layerID, p.ID())
+			if err = pb.publisher.Publish(newCtx, proposals.NewProposalProtocol, data); err != nil {
+				logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
 			}
-			events.ReportDoneCreatingBlock(true, layerID.Uint32(), "")
+			events.ReportDoneCreatingProposal(true, layerID.Uint32(), "")
 			return nil
 		})
 	}

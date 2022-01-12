@@ -41,9 +41,9 @@ func ReportNewTx(layerID types.LayerID, tx *types.Transaction) {
 	Publish(NewTx{
 		ID:          tx.ID().String(),
 		Origin:      tx.Origin().String(),
-		Destination: tx.Recipient.String(),
+		Destination: tx.GetRecipient().String(),
 		Amount:      tx.Amount,
-		Fee:         tx.Fee,
+		Fee:         tx.GetFee(),
 	})
 	ReportTxWithValidity(layerID, tx, true)
 }
@@ -122,19 +122,19 @@ func ReportRewardReceived(r Reward) {
 }
 
 // ReportNewBlock reports a new block.
-func ReportNewBlock(blk *types.Block) {
+func ReportNewBlock(b *types.Block) {
 	Publish(NewBlock{
-		ID:    blk.ID().String(),
-		Atx:   blk.ATXID.ShortString(),
-		Layer: blk.LayerIndex.Uint32(),
+		ID:    b.ID().String(),
+		Layer: b.LayerIndex.Uint32(),
 	})
 }
 
-// ReportValidBlock reports a block's validity.
-func ReportValidBlock(blockID types.BlockID, valid bool) {
-	Publish(ValidBlock{
-		ID:    blockID.String(),
-		Valid: valid,
+// ReportNewProposal reports a new proposal.
+func ReportNewProposal(p *types.Proposal) {
+	Publish(NewProposal{
+		ID:    p.ID().String(),
+		Atx:   p.AtxID.ShortString(),
+		Layer: p.LayerIndex.Uint32(),
 	})
 }
 
@@ -148,9 +148,9 @@ func ReportValidActivation(activation *types.ActivationTx, valid bool) {
 	Publish(ValidAtx{ID: activation.ShortString(), Valid: valid})
 }
 
-// ReportDoneCreatingBlock reports a created block.
-func ReportDoneCreatingBlock(eligible bool, layer uint32, error string) {
-	Publish(DoneCreatingBlock{
+// ReportDoneCreatingProposal reports a created block.
+func ReportDoneCreatingProposal(eligible bool, layer uint32, error string) {
+	Publish(DoneCreatingProposal{
 		Eligible: eligible,
 		Layer:    layer,
 		Error:    error,

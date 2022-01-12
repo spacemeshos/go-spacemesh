@@ -9,11 +9,11 @@ import (
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type proposalOracle interface {
-	GetProposalEligibility(types.LayerID, []byte) (types.ATXID, []types.ATXID, []types.VotingEligibilityProof, error)
+	GetProposalEligibility(types.LayerID, types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibilityProof, error)
 }
 
-type meshProvider interface {
-	AddBlockWithTxs(context.Context, *types.Block) error
+type proposalDB interface {
+	AddProposal(context.Context, *types.Proposal) error
 }
 
 type txPool interface {
@@ -21,7 +21,7 @@ type txPool interface {
 }
 
 type baseBallotProvider interface {
-	BaseBallot(context.Context) (types.BallotID, [][]types.BlockID, error)
+	BaseBallot(context.Context) (*types.Votes, error)
 }
 
 type activationDB interface {

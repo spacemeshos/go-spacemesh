@@ -9,13 +9,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/prometheus/client_golang/prometheus"
 	"github.com/spacemeshos/ed25519"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
-	"github.com/spacemeshos/go-spacemesh/hare/metrics"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -70,19 +69,6 @@ func (cpo procReport) Completed() bool {
 	return cpo.completed
 }
 
-type certification struct {
-	id          types.LayerID
-	eligibility uint16
-}
-
-func (c *certification) ID() types.LayerID {
-	return c.id
-}
-
-func (c *certification) Eligibility() uint16 {
-	return c.eligibility
-}
-
 func (proc *consensusProcess) report(completed bool) {
 	proc.terminationReport <- procReport{proc.instanceID, proc.s, proc.preRoundTracker.coinflip, completed}
 }
@@ -95,13 +81,6 @@ type State struct {
 	ki          uint32       // indicates when S was first committed upon
 	s           *Set         // the set of values
 	certificate *certificate // the certificate
-}
-
-// StateQuerier provides a query to check if an Ed public key is active on the current consensus view.
-// It returns true if the identity is active and false otherwise.
-// An error is set iff the identity could not be checked for activeness.
-type StateQuerier interface {
-	IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error)
 }
 
 // Msg is the wrapper of the protocol's message.
@@ -119,7 +98,7 @@ func (m *Msg) String() string {
 // Bytes returns the message as bytes (without the public key).
 // It panics if the message erred on unmarshal.
 func (m *Msg) Bytes() []byte {
-	buf, err := types.InterfaceToBytes(m.Message)
+	buf, err := codec.Encode(m.Message)
 	if err != nil {
 		log.Panic("could not marshal innermsg before send")
 	}
@@ -129,7 +108,7 @@ func (m *Msg) Bytes() []byte {
 // Upon receiving a protocol message, we try to build the full message.
 // The full message consists of the original message and the extracted public key.
 // An extracted public key is considered valid if it represents an active identity for a consensus view.
-func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier StateQuerier) (*Msg, error) {
+func newMsg(ctx context.Context, logger log.Log, hareMsg *Message, querier stateQuerier) (*Msg, error) {
 	logger = logger.WithContext(ctx)
 
 	// extract pub key
@@ -211,7 +190,7 @@ type consensusProcess struct {
 }
 
 // newConsensusProcess creates a new consensus process instance.
-func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, stateQuerier StateQuerier,
+func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, oracle Rolacle, stateQuerier stateQuerier,
 	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p pubsub.Publisher,
 	terminationReport chan TerminationOutput,
 	certificationReport chan types.LayerID,
@@ -496,11 +475,6 @@ func (proc *consensusProcess) processMsg(ctx context.Context, m *Msg) {
 	proc.WithContext(ctx).With().Debug("processing message",
 		log.String("msg_type", m.InnerMsg.Type.String()),
 		log.Int("num_values", len(m.InnerMsg.Values)))
-	metrics.MessageTypeCounter.With(prometheus.Labels{
-		"type_id":  m.InnerMsg.Type.String(),
-		"layer":    m.InnerMsg.InstanceID.String(),
-		"reporter": "processMsg",
-	}).Inc()
 
 	switch m.InnerMsg.Type {
 	case pre:
@@ -861,7 +835,7 @@ func (proc *consensusProcess) processNotifyMsg(ctx context.Context, msg *Msg) {
 func (proc *consensusProcess) initDefaultBuilderCertification(s *Set, eligibility uint16) (*messageBuilder, error) {
 	builder := newMessageBuilder().SetInstanceID(proc.instanceID)
 	builder = builder.SetRoundCounter(proc.getK()).SetKi(proc.ki).SetValues(s)
-	proof, err := proc.oracle.Proof(context.TODO(), types.LayerID(proc.instanceID), proc.getK())
+	proof, err := proc.oracle.Proof(context.TODO(), proc.instanceID, proc.getK())
 	if err != nil {
 		proc.With().Error("could not initialize default builder", log.Err(err))
 		return nil, fmt.Errorf("could not initialize default builder: %v", err)

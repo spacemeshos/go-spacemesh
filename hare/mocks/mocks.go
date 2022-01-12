@@ -35,6 +35,18 @@ func (m *MocklayerPatrol) EXPECT() *MocklayerPatrolMockRecorder {
 	return m.recorder
 }
 
+// CompleteHare mocks base method.
+func (m *MocklayerPatrol) CompleteHare(arg0 types.LayerID) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "CompleteHare", arg0)
+}
+
+// CompleteHare indicates an expected call of CompleteHare.
+func (mr *MocklayerPatrolMockRecorder) CompleteHare(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteHare", reflect.TypeOf((*MocklayerPatrol)(nil).CompleteHare), arg0)
+}
+
 // SetHareInCharge mocks base method.
 func (m *MocklayerPatrol) SetHareInCharge(arg0 types.LayerID) {
 	m.ctrl.T.Helper()
@@ -71,63 +83,63 @@ func (m *MockRolacle) EXPECT() *MockRolacleMockRecorder {
 }
 
 // CalcEligibility mocks base method.
-func (m *MockRolacle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte) (uint16, error) {
+func (m *MockRolacle) CalcEligibility(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 []byte) (uint16, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "CalcEligibility", ctx, layer, round, committeeSize, id, sig)
+	ret := m.ctrl.Call(m, "CalcEligibility", arg0, arg1, arg2, arg3, arg4, arg5)
 	ret0, _ := ret[0].(uint16)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // CalcEligibility indicates an expected call of CalcEligibility.
-func (mr *MockRolacleMockRecorder) CalcEligibility(ctx, layer, round, committeeSize, id, sig interface{}) *gomock.Call {
+func (mr *MockRolacleMockRecorder) CalcEligibility(arg0, arg1, arg2, arg3, arg4, arg5 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalcEligibility", reflect.TypeOf((*MockRolacle)(nil).CalcEligibility), ctx, layer, round, committeeSize, id, sig)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CalcEligibility", reflect.TypeOf((*MockRolacle)(nil).CalcEligibility), arg0, arg1, arg2, arg3, arg4, arg5)
 }
 
 // IsIdentityActiveOnConsensusView mocks base method.
-func (m *MockRolacle) IsIdentityActiveOnConsensusView(ctx context.Context, edID string, layer types.LayerID) (bool, error) {
+func (m *MockRolacle) IsIdentityActiveOnConsensusView(arg0 context.Context, arg1 string, arg2 types.LayerID) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "IsIdentityActiveOnConsensusView", ctx, edID, layer)
+	ret := m.ctrl.Call(m, "IsIdentityActiveOnConsensusView", arg0, arg1, arg2)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // IsIdentityActiveOnConsensusView indicates an expected call of IsIdentityActiveOnConsensusView.
-func (mr *MockRolacleMockRecorder) IsIdentityActiveOnConsensusView(ctx, edID, layer interface{}) *gomock.Call {
+func (mr *MockRolacleMockRecorder) IsIdentityActiveOnConsensusView(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsIdentityActiveOnConsensusView", reflect.TypeOf((*MockRolacle)(nil).IsIdentityActiveOnConsensusView), ctx, edID, layer)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsIdentityActiveOnConsensusView", reflect.TypeOf((*MockRolacle)(nil).IsIdentityActiveOnConsensusView), arg0, arg1, arg2)
 }
 
 // Proof mocks base method.
-func (m *MockRolacle) Proof(ctx context.Context, layer types.LayerID, round uint32) ([]byte, error) {
+func (m *MockRolacle) Proof(arg0 context.Context, arg1 types.LayerID, arg2 uint32) ([]byte, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Proof", ctx, layer, round)
+	ret := m.ctrl.Call(m, "Proof", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Proof indicates an expected call of Proof.
-func (mr *MockRolacleMockRecorder) Proof(ctx, layer, round interface{}) *gomock.Call {
+func (mr *MockRolacleMockRecorder) Proof(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), ctx, layer, round)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Proof", reflect.TypeOf((*MockRolacle)(nil).Proof), arg0, arg1, arg2)
 }
 
 // Validate mocks base method.
-func (m *MockRolacle) Validate(ctx context.Context, layer types.LayerID, round uint32, committeeSize int, id types.NodeID, sig []byte, eligibilityCount uint16) (bool, error) {
+func (m *MockRolacle) Validate(arg0 context.Context, arg1 types.LayerID, arg2 uint32, arg3 int, arg4 types.NodeID, arg5 []byte, arg6 uint16) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Validate", ctx, layer, round, committeeSize, id, sig, eligibilityCount)
+	ret := m.ctrl.Call(m, "Validate", arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 	ret0, _ := ret[0].(bool)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Validate indicates an expected call of Validate.
-func (mr *MockRolacleMockRecorder) Validate(ctx, layer, round, committeeSize, id, sig, eligibilityCount interface{}) *gomock.Call {
+func (mr *MockRolacleMockRecorder) Validate(arg0, arg1, arg2, arg3, arg4, arg5, arg6 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockRolacle)(nil).Validate), ctx, layer, round, committeeSize, id, sig, eligibilityCount)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Validate", reflect.TypeOf((*MockRolacle)(nil).Validate), arg0, arg1, arg2, arg3, arg4, arg5, arg6)
 }
 
 // MockmeshProvider is a mock of meshProvider interface.
@@ -153,56 +165,238 @@ func (m *MockmeshProvider) EXPECT() *MockmeshProviderMockRecorder {
 	return m.recorder
 }
 
-// GetBlock mocks base method.
-func (m *MockmeshProvider) GetBlock(arg0 types.BlockID) (*types.Block, error) {
+// AddBlockWithTXs mocks base method.
+func (m *MockmeshProvider) AddBlockWithTXs(arg0 context.Context, arg1 *types.Block) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBlock", arg0)
+	ret := m.ctrl.Call(m, "AddBlockWithTXs", arg0, arg1)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddBlockWithTXs indicates an expected call of AddBlockWithTXs.
+func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBlockWithTXs", reflect.TypeOf((*MockmeshProvider)(nil).AddBlockWithTXs), arg0, arg1)
+}
+
+// GetBallot mocks base method.
+func (m *MockmeshProvider) GetBallot(arg0 types.BallotID) (*types.Ballot, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBallot", arg0)
+	ret0, _ := ret[0].(*types.Ballot)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetBallot indicates an expected call of GetBallot.
+func (mr *MockmeshProviderMockRecorder) GetBallot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBallot", reflect.TypeOf((*MockmeshProvider)(nil).GetBallot), arg0)
+}
+
+// ProcessLayerPerHareOutput mocks base method.
+func (m *MockmeshProvider) ProcessLayerPerHareOutput(arg0 context.Context, arg1 types.LayerID, arg2 types.BlockID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ProcessLayerPerHareOutput", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// ProcessLayerPerHareOutput indicates an expected call of ProcessLayerPerHareOutput.
+func (mr *MockmeshProviderMockRecorder) ProcessLayerPerHareOutput(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ProcessLayerPerHareOutput", reflect.TypeOf((*MockmeshProvider)(nil).ProcessLayerPerHareOutput), arg0, arg1, arg2)
+}
+
+// RecordCoinflip mocks base method.
+func (m *MockmeshProvider) RecordCoinflip(arg0 context.Context, arg1 types.LayerID, arg2 bool) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "RecordCoinflip", arg0, arg1, arg2)
+}
+
+// RecordCoinflip indicates an expected call of RecordCoinflip.
+func (mr *MockmeshProviderMockRecorder) RecordCoinflip(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordCoinflip", reflect.TypeOf((*MockmeshProvider)(nil).RecordCoinflip), arg0, arg1, arg2)
+}
+
+// SetZeroBallotLayer mocks base method.
+func (m *MockmeshProvider) SetZeroBallotLayer(arg0 types.LayerID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetZeroBallotLayer", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SetZeroBallotLayer indicates an expected call of SetZeroBallotLayer.
+func (mr *MockmeshProviderMockRecorder) SetZeroBallotLayer(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBallotLayer", reflect.TypeOf((*MockmeshProvider)(nil).SetZeroBallotLayer), arg0)
+}
+
+// MockproposalProvider is a mock of proposalProvider interface.
+type MockproposalProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockproposalProviderMockRecorder
+}
+
+// MockproposalProviderMockRecorder is the mock recorder for MockproposalProvider.
+type MockproposalProviderMockRecorder struct {
+	mock *MockproposalProvider
+}
+
+// NewMockproposalProvider creates a new mock instance.
+func NewMockproposalProvider(ctrl *gomock.Controller) *MockproposalProvider {
+	mock := &MockproposalProvider{ctrl: ctrl}
+	mock.recorder = &MockproposalProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockproposalProvider) EXPECT() *MockproposalProviderMockRecorder {
+	return m.recorder
+}
+
+// GetProposals mocks base method.
+func (m *MockproposalProvider) GetProposals(arg0 []types.ProposalID) ([]*types.Proposal, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetProposals", arg0)
+	ret0, _ := ret[0].([]*types.Proposal)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetProposals indicates an expected call of GetProposals.
+func (mr *MockproposalProviderMockRecorder) GetProposals(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposals", reflect.TypeOf((*MockproposalProvider)(nil).GetProposals), arg0)
+}
+
+// LayerProposals mocks base method.
+func (m *MockproposalProvider) LayerProposals(arg0 types.LayerID) ([]*types.Proposal, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LayerProposals", arg0)
+	ret0, _ := ret[0].([]*types.Proposal)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LayerProposals indicates an expected call of LayerProposals.
+func (mr *MockproposalProviderMockRecorder) LayerProposals(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerProposals", reflect.TypeOf((*MockproposalProvider)(nil).LayerProposals), arg0)
+}
+
+// MockblockGenerator is a mock of blockGenerator interface.
+type MockblockGenerator struct {
+	ctrl     *gomock.Controller
+	recorder *MockblockGeneratorMockRecorder
+}
+
+// MockblockGeneratorMockRecorder is the mock recorder for MockblockGenerator.
+type MockblockGeneratorMockRecorder struct {
+	mock *MockblockGenerator
+}
+
+// NewMockblockGenerator creates a new mock instance.
+func NewMockblockGenerator(ctrl *gomock.Controller) *MockblockGenerator {
+	mock := &MockblockGenerator{ctrl: ctrl}
+	mock.recorder = &MockblockGeneratorMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockblockGenerator) EXPECT() *MockblockGeneratorMockRecorder {
+	return m.recorder
+}
+
+// GenerateBlock mocks base method.
+func (m *MockblockGenerator) GenerateBlock(arg0 context.Context, arg1 types.LayerID, arg2 []*types.Proposal) (*types.Block, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GenerateBlock", arg0, arg1, arg2)
 	ret0, _ := ret[0].(*types.Block)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// GetBlock indicates an expected call of GetBlock.
-func (mr *MockmeshProviderMockRecorder) GetBlock(arg0 interface{}) *gomock.Call {
+// GenerateBlock indicates an expected call of GenerateBlock.
+func (mr *MockblockGeneratorMockRecorder) GenerateBlock(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlock", reflect.TypeOf((*MockmeshProvider)(nil).GetBlock), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GenerateBlock", reflect.TypeOf((*MockblockGenerator)(nil).GenerateBlock), arg0, arg1, arg2)
 }
 
-// HandleValidatedLayer mocks base method.
-func (m *MockmeshProvider) HandleValidatedLayer(ctx context.Context, validatedLayer types.LayerID, layer []types.BlockID) {
+// MockidentityProvider is a mock of identityProvider interface.
+type MockidentityProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MockidentityProviderMockRecorder
+}
+
+// MockidentityProviderMockRecorder is the mock recorder for MockidentityProvider.
+type MockidentityProviderMockRecorder struct {
+	mock *MockidentityProvider
+}
+
+// NewMockidentityProvider creates a new mock instance.
+func NewMockidentityProvider(ctrl *gomock.Controller) *MockidentityProvider {
+	mock := &MockidentityProvider{ctrl: ctrl}
+	mock.recorder = &MockidentityProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockidentityProvider) EXPECT() *MockidentityProviderMockRecorder {
+	return m.recorder
+}
+
+// GetIdentity mocks base method.
+func (m *MockidentityProvider) GetIdentity(arg0 string) (types.NodeID, error) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "HandleValidatedLayer", ctx, validatedLayer, layer)
-}
-
-// HandleValidatedLayer indicates an expected call of HandleValidatedLayer.
-func (mr *MockmeshProviderMockRecorder) HandleValidatedLayer(ctx, validatedLayer, layer interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleValidatedLayer", reflect.TypeOf((*MockmeshProvider)(nil).HandleValidatedLayer), ctx, validatedLayer, layer)
-}
-
-// LayerBlocks mocks base method.
-func (m *MockmeshProvider) LayerBlocks(arg0 types.LayerID) ([]*types.Block, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LayerBlocks", arg0)
-	ret0, _ := ret[0].([]*types.Block)
+	ret := m.ctrl.Call(m, "GetIdentity", arg0)
+	ret0, _ := ret[0].(types.NodeID)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// LayerBlocks indicates an expected call of LayerBlocks.
-func (mr *MockmeshProviderMockRecorder) LayerBlocks(arg0 interface{}) *gomock.Call {
+// GetIdentity indicates an expected call of GetIdentity.
+func (mr *MockidentityProviderMockRecorder) GetIdentity(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerBlocks", reflect.TypeOf((*MockmeshProvider)(nil).LayerBlocks), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIdentity", reflect.TypeOf((*MockidentityProvider)(nil).GetIdentity), arg0)
 }
 
-// RecordCoinflip mocks base method.
-func (m *MockmeshProvider) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip bool) {
+// MockstateQuerier is a mock of stateQuerier interface.
+type MockstateQuerier struct {
+	ctrl     *gomock.Controller
+	recorder *MockstateQuerierMockRecorder
+}
+
+// MockstateQuerierMockRecorder is the mock recorder for MockstateQuerier.
+type MockstateQuerierMockRecorder struct {
+	mock *MockstateQuerier
+}
+
+// NewMockstateQuerier creates a new mock instance.
+func NewMockstateQuerier(ctrl *gomock.Controller) *MockstateQuerier {
+	mock := &MockstateQuerier{ctrl: ctrl}
+	mock.recorder = &MockstateQuerierMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockstateQuerier) EXPECT() *MockstateQuerierMockRecorder {
+	return m.recorder
+}
+
+// IsIdentityActiveOnConsensusView mocks base method.
+func (m *MockstateQuerier) IsIdentityActiveOnConsensusView(arg0 context.Context, arg1 string, arg2 types.LayerID) (bool, error) {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "RecordCoinflip", ctx, layerID, coinflip)
+	ret := m.ctrl.Call(m, "IsIdentityActiveOnConsensusView", arg0, arg1, arg2)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// RecordCoinflip indicates an expected call of RecordCoinflip.
-func (mr *MockmeshProviderMockRecorder) RecordCoinflip(ctx, layerID, coinflip interface{}) *gomock.Call {
+// IsIdentityActiveOnConsensusView indicates an expected call of IsIdentityActiveOnConsensusView.
+func (mr *MockstateQuerierMockRecorder) IsIdentityActiveOnConsensusView(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordCoinflip", reflect.TypeOf((*MockmeshProvider)(nil).RecordCoinflip), ctx, layerID, coinflip)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsIdentityActiveOnConsensusView", reflect.TypeOf((*MockstateQuerier)(nil).IsIdentityActiveOnConsensusView), arg0, arg1, arg2)
 }

@@ -75,7 +75,7 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 				theta:           new(big.Float).SetRat(big.NewRat(1, 1)),
 				epochInProgress: epoch,
 				logger:          logtest.New(t).WithName("TortoiseBeacon"),
-				beacons:         make(map[types.EpochID]types.Hash32),
+				beacons:         make(map[types.EpochID]types.Beacon),
 				atxDB:           mockDB,
 				db:              database.NewMemDatabase(),
 			}

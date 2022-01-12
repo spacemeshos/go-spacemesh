@@ -7,21 +7,29 @@ import (
 )
 
 // Voting contains blocks voting.
-type Voting struct {
-	Base                      types.BallotID
-	Support, Against, Abstain []types.BlockID
-}
+type Voting = types.Votes
 
 // VotesGenerator allows to replace default votes generator.
 // TODO(dshulyak) what is the best way to encapsulate all configuration that is required to generate votes?
 type VotesGenerator func(rng *rand.Rand, layers []*types.Layer, i int) Voting
 
-// PerfectVoting selects base block from previous layer and supports all blocks from previous layer.
+// PerfectVoting selects base ballot from previous layer and supports all blocks from previous layer.
 // used by default.
 func PerfectVoting(rng *rand.Rand, layers []*types.Layer, _ int) Voting {
 	baseLayer := layers[len(layers)-1]
-	support := layers[len(layers)-1].BlocksIDs()
+	support := layers[len(layers)-1].BlocksIDs()[0:1]
+	against := layers[len(layers)-1].BlocksIDs()[1:]
 	ballots := baseLayer.Ballots()
 	base := ballots[rng.Intn(len(ballots))]
-	return Voting{Base: base.ID(), Support: support}
+	return Voting{Base: base.ID(), Against: against, Support: support}
+}
+
+// VaryingVoting votes using first generator for ballots before mid, and with second generator after mid.
+func VaryingVoting(mid int, first, second VotesGenerator) VotesGenerator {
+	return func(rng *rand.Rand, layers []*types.Layer, i int) Voting {
+		if i < mid {
+			return first(rng, layers, i)
+		}
+		return second(rng, layers, i)
+	}
 }

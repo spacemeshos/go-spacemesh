@@ -131,9 +131,9 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 
-		for _, b := range layer.Blocks() {
-			if b.ActiveSet != nil {
-				atxids = append(atxids, *b.ActiveSet...)
+		for _, b := range layer.Ballots() {
+			if b.EpochData != nil && b.EpochData.ActiveSet != nil {
+				atxids = append(atxids, b.EpochData.ActiveSet...)
 			}
 		}
 	}
@@ -277,7 +277,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 		Id: &pb.TransactionId{Id: t.ID().Bytes()},
 		Datum: &pb.Transaction_CoinTransfer{
 			CoinTransfer: &pb.CoinTransferTransaction{
-				Receiver: &pb.AccountId{Address: t.Recipient.Bytes()},
+				Receiver: &pb.AccountId{Address: t.GetRecipient().Bytes()},
 			},
 		},
 		Sender: &pb.AccountId{Address: t.Origin().Bytes()},
@@ -287,7 +287,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 			// pre-STF tx, which includes a gas offer but not an amount of gas actually
 			// consumed.
 			// GasPrice:    nil,
-			GasProvided: t.GasLimit,
+			GasProvided: t.Fee,
 		},
 		Amount:  &pb.Amount{Value: t.Amount},
 		Counter: t.AccountNonce,
@@ -331,6 +331,8 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		return nil, status.Errorf(codes.Internal, "error reading layer data")
 	}
 
+	// TODO add proposal data as needed.
+
 	for _, b := range layer.Blocks() {
 		txs, missing := s.Mesh.GetTransactions(b.TxIDs)
 		// TODO: Do we ever expect txs to be missing here?
@@ -341,10 +343,6 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 		}
 
-		if b.ActiveSet != nil {
-			activations = append(activations, *b.ActiveSet...)
-		}
-
 		var pbTxs []*pb.Transaction
 		for _, t := range txs {
 			pbTxs = append(pbTxs, convertTransaction(t))
@@ -352,9 +350,13 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		blocks = append(blocks, &pb.Block{
 			Id:           types.Hash20(b.ID()).Bytes(),
 			Transactions: pbTxs,
-			SmesherId:    &pb.SmesherId{Id: b.MinerID().Bytes()},
-			ActivationId: &pb.ActivationId{Id: b.ATXID.Bytes()},
 		})
+	}
+
+	for _, b := range layer.Ballots() {
+		if b.EpochData != nil && b.EpochData.ActiveSet != nil {
+			activations = append(activations, b.EpochData.ActiveSet...)
+		}
 	}
 
 	// Extract ATX data from block data
@@ -514,7 +516,7 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 		case txEvent := <-txCh:
 			tx := txEvent.(events.Transaction)
 			// Apply address filter
-			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.Recipient == addr) {
+			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.GetRecipient() == addr) {
 				resp := &pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_MeshTransaction{

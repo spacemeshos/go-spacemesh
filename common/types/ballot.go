@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/ed25519"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -42,44 +43,7 @@ type InnerBallot struct {
 	AtxID ATXID
 	// the proof of the smesher's eligibility to vote and propose block content in this epoch.
 	EligibilityProof VotingEligibilityProof
-
-	// a smesher creates votes in the following steps:
-	// - select a Ballot in the past as a base Ballot
-	// - calculate the opinion difference on history between the smesher and the base Ballot
-	// - encode the opinion difference in 3 list:
-	//	 - ForDiff
-	//	   contains blocks we support while the base block did not support (i.e. voted against)
-	//	   for blocks we support in layers later than the base block, we also add them to this list
-	//   - AgainstDiff
-	//     contains blocks we vote against while the base block explicitly supported
-	//	 - NeutralDiff
-	//	   contains blocks we vote neutral while the base block explicitly supported or voted against
-	//
-	// example:
-	// layer | unified content block
-	// -----------------------------------------------------------------------------------------------
-	//   N   | UCB_A (genesis)
-	// -----------------------------------------------------------------------------------------------
-	//  N+1  | UCB_B base:UCB_A, for:[UCB_A], against:[], neutral:[]
-	// -----------------------------------------------------------------------------------------------
-	//  N+2  | UCB_C base:UCB_B, for:[UCB_B], against:[], neutral:[]
-	// -----------------------------------------------------------------------------------------------
-	//  (hare hasn't terminated for N+2)
-	//  N+3  | UCB_D base:UCB_B, for:[UCB_B], against:[], neutral:[UCB_C]
-	// -----------------------------------------------------------------------------------------------
-	//  (hare succeeded for N+2 but failed for N+3)
-	//  N+4  | UCB_E base:UCB_C, for:[UCB_C], against:[], neutral:[]
-	// -----------------------------------------------------------------------------------------------
-	// NOTE on neutral votes: a base block is by default neutral on all blocks and layers that come after it, so
-	// there's no need to explicitly add neutral votes for more recent layers.
-	// TODO: optimize this data structure in two ways:
-	//   - neutral votes are only ever for an entire layer, never for a subset of blocks.
-	//   - collapse AgainstDiff and ForDiff into a single list.
-	//   see https://github.com/spacemeshos/go-spacemesh/issues/2369.
-	BaseBallot  BallotID
-	AgainstDiff []BlockID
-	ForDiff     []BlockID
-	NeutralDiff []BlockID
+	Votes            Votes
 
 	// the first Ballot the smesher cast in the epoch. this Ballot is a special Ballot that contains information
 	// that cannot be changed mid-epoch.
@@ -90,13 +54,55 @@ type InnerBallot struct {
 	LayerIndex LayerID
 }
 
+// Votes is for encoding local votes to send over the wire.
+//
+// a smesher creates votes in the following steps:
+// - select a Ballot in the past as a base Ballot
+// - calculate the opinion difference on history between the smesher and the base Ballot
+// - encode the opinion difference in 3 list:
+//	 - ForDiff
+//	   contains blocks we support while the base ballot did not support (i.e. voted against)
+//	   for blocks we support in layers later than the base ballot, we also add them to this list
+//   - AgainstDiff
+//     contains blocks we vote against while the base ballot explicitly supported
+//	 - NeutralDiff
+//	   contains layers we vote neutral while the base ballot explicitly supported or voted against
+//
+// example:
+// layer | unified content block
+// -----------------------------------------------------------------------------------------------
+//   N   | UCB_A (genesis)
+// -----------------------------------------------------------------------------------------------
+//  N+1  | UCB_B base:UCB_A, for:[UCB_A], against:[], neutral:[]
+// -----------------------------------------------------------------------------------------------
+//  N+2  | UCB_C base:UCB_B, for:[UCB_B], against:[], neutral:[]
+// -----------------------------------------------------------------------------------------------
+//  (hare hasn't terminated for N+2)
+//  N+3  | UCB_D base:UCB_B, for:[UCB_B], against:[], neutral:[N+2]
+// -----------------------------------------------------------------------------------------------
+//  (hare succeeded for N+2 but failed for N+3)
+//  N+4  | UCB_E base:UCB_C, for:[UCB_C], against:[], neutral:[]
+// -----------------------------------------------------------------------------------------------
+// NOTE on neutral votes: a base block is by default neutral on all blocks and layers that come after it, so
+// there's no need to explicitly add neutral votes for more recent layers.
+//
+// TODO: maybe collapse Support and Against into a single list.
+//   see https://github.com/spacemeshos/go-spacemesh/issues/2369.
+type Votes struct {
+	// Base ballot.
+	Base BallotID
+	// Support and Against blocks that base ballot votes differently.
+	Support, Against []BlockID
+	// Abstain on layers until they are terminated.
+	Abstain []LayerID
+}
+
 // EpochData contains information that cannot be changed mid-epoch.
 type EpochData struct {
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
 	ActiveSet []ATXID
 	// the beacon value the smesher recorded for this epoch
-	// TODO relace with types.Beacon after the transition period to unified content block
-	Beacon []byte
+	Beacon Beacon
 }
 
 // VotingEligibilityProof includes the required values that, along with the smesher's VRF public key,
@@ -117,9 +123,9 @@ func (b *Ballot) Initialize() error {
 		return fmt.Errorf("ballot already initialized")
 	}
 
-	bytes := b.Bytes()
-	b.ballotID = BallotID(CalcHash32(bytes).ToHash20())
-	pubkey, err := ed25519.ExtractPublicKey(bytes, b.Signature)
+	data := b.Bytes()
+	b.ballotID = BallotID(CalcHash32(data).ToHash20())
+	pubkey, err := ed25519.ExtractPublicKey(data, b.Signature)
 	if err != nil {
 		return fmt.Errorf("ballot extract key: %w", err)
 	}
@@ -129,11 +135,11 @@ func (b *Ballot) Initialize() error {
 
 // Bytes returns the serialization of the InnerBallot.
 func (b *Ballot) Bytes() []byte {
-	bytes, err := InterfaceToBytes(b.InnerBallot)
+	data, err := codec.Encode(b.InnerBallot)
 	if err != nil {
 		log.Panic("failed to serialize ballot: %v", err)
 	}
-	return bytes
+	return data
 }
 
 // ID returns the BallotID.
@@ -150,7 +156,7 @@ func (b *Ballot) SmesherID() *signing.PublicKey {
 func (b *Ballot) Fields() []log.LoggableField {
 	var (
 		activeSetSize = 0
-		beacon        []byte
+		beacon        Beacon
 	)
 	if b.EpochData != nil {
 		activeSetSize = len(b.EpochData.ActiveSet)
@@ -161,15 +167,15 @@ func (b *Ballot) Fields() []log.LoggableField {
 		b.LayerIndex,
 		b.LayerIndex.GetEpoch(),
 		log.FieldNamed("smesher_id", b.SmesherID()),
-		log.FieldNamed("base_ballot", b.BaseBallot),
-		log.Int("supports", len(b.ForDiff)),
-		log.Int("againsts", len(b.AgainstDiff)),
-		log.Int("abstains", len(b.NeutralDiff)),
+		log.FieldNamed("base_ballot", b.Votes.Base),
+		log.Int("supports", len(b.Votes.Support)),
+		log.Int("againsts", len(b.Votes.Against)),
+		log.Int("abstains", len(b.Votes.Abstain)),
 		b.AtxID,
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_ballot", b.RefBallot),
 		log.Int("active_set_size", activeSetSize),
-		log.String("beacon", BytesToHash(beacon).ShortString()),
+		log.String("beacon", beacon.ShortString()),
 	}
 }
 
@@ -177,7 +183,7 @@ func (b *Ballot) Fields() []log.LoggableField {
 func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	var (
 		activeSetSize = 0
-		beacon        []byte
+		beacon        Beacon
 	)
 
 	if b.EpochData != nil {
@@ -185,49 +191,29 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 		beacon = b.EpochData.Beacon
 	}
 
-	encoder.AddString("id", b.ID().String())
-	encoder.AddUint32("layer", b.LayerIndex.Value)
-	encoder.AddUint32("epoch", uint32(b.LayerIndex.GetEpoch()))
+	encoder.AddString("ballot_id", b.ID().String())
+	encoder.AddUint32("layer_id", b.LayerIndex.Value)
+	encoder.AddUint32("epoch_id", uint32(b.LayerIndex.GetEpoch()))
 	encoder.AddString("smesher", b.SmesherID().String())
-	encoder.AddString("base_ballot", b.BaseBallot.String())
-	encoder.AddInt("supports", len(b.ForDiff))
-	encoder.AddInt("againsts", len(b.AgainstDiff))
-	encoder.AddInt("abstains", len(b.NeutralDiff))
-	encoder.AddString("atx", b.AtxID.String())
+	encoder.AddString("base_ballot", b.Votes.Base.String())
+	encoder.AddInt("supports", len(b.Votes.Support))
+	encoder.AddInt("againsts", len(b.Votes.Against))
+	encoder.AddInt("abstains", len(b.Votes.Abstain))
+	encoder.AddString("atx_id", b.AtxID.String())
 	encoder.AddUint32("eligibility_counter", b.EligibilityProof.J)
 	encoder.AddString("ref_ballot", b.RefBallot.String())
 	encoder.AddInt("active_set_size", activeSetSize)
-	encoder.AddString("beacon", BytesToHash(beacon).ShortString())
+	encoder.AddString("beacon", beacon.ShortString())
 	return nil
 }
 
-// ToMiniBlock transforms a Ballot to a MiniBlock during the transition period to unified content block.
-// it DOES NOT populate the TxIDs.
-func (b *Ballot) ToMiniBlock() *MiniBlock {
-	mb := &MiniBlock{
-		BlockHeader: BlockHeader{
-			LayerIndex: b.LayerIndex,
-			ATXID:      b.AtxID,
-			EligibilityProof: BlockEligibilityProof{
-				J:   b.EligibilityProof.J,
-				Sig: b.EligibilityProof.Sig,
-			},
-			Data:        nil,
-			BaseBlock:   BlockID(b.BaseBallot),
-			AgainstDiff: b.AgainstDiff,
-			ForDiff:     b.ForDiff,
-			NeutralDiff: b.NeutralDiff,
-		},
+// ToBallotIDs turns a list of Ballot into a list of BallotID.
+func ToBallotIDs(ballots []*Ballot) []BallotID {
+	ids := make([]BallotID, 0, len(ballots))
+	for _, b := range ballots {
+		ids = append(ids, b.ID())
 	}
-	if b.RefBallot != EmptyBallotID {
-		refBid := BlockID(b.RefBallot)
-		mb.RefBlock = &refBid
-	}
-	if b.EpochData != nil {
-		mb.ActiveSet = &b.EpochData.ActiveSet
-		mb.TortoiseBeacon = b.EpochData.Beacon
-	}
-	return mb
+	return ids
 }
 
 // String returns a short prefix of the hex representation of the ID.
@@ -253,4 +239,33 @@ func (id BallotID) Field() log.Field {
 // Compare returns true if other (the given BallotID) is less than this BallotID, by lexicographic comparison.
 func (id BallotID) Compare(other BallotID) bool {
 	return bytes.Compare(id.Bytes(), other.Bytes()) < 0
+}
+
+// BallotIDsToHashes turns a list of BallotID into their Hash32 representation.
+func BallotIDsToHashes(ids []BallotID) []Hash32 {
+	hashes := make([]Hash32, 0, len(ids))
+	for _, id := range ids {
+		hashes = append(hashes, id.AsHash32())
+	}
+	return hashes
+}
+
+// DBBallot is a Ballot structure as it is stored in DB.
+type DBBallot struct {
+	InnerBallot
+	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
+	// to break if in future key for database will be changed
+	ID        BallotID
+	Signature []byte
+	SmesherID []byte // derived from signature when ballot is received
+}
+
+// ToBallot creates a Ballot from data that is stored locally.
+func (b *DBBallot) ToBallot() *Ballot {
+	return &Ballot{
+		ballotID:    b.ID,
+		InnerBallot: b.InnerBallot,
+		Signature:   b.Signature,
+		smesherID:   signing.NewPublicKey(b.SmesherID),
+	}
 }

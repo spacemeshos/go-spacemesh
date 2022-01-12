@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 )
@@ -31,19 +32,19 @@ func GetNumEligibleSlots(weight, totalWeight uint64, committeeSize uint32, layer
 }
 
 type vrfMessage struct {
-	Beacon  []byte
+	Beacon  types.Beacon
 	Epoch   types.EpochID
 	Counter uint32
 }
 
 // SerializeVRFMessage serializes a message for generating/verifying a VRF signature.
-func SerializeVRFMessage(beacon []byte, epoch types.EpochID, counter uint32) ([]byte, error) {
+func SerializeVRFMessage(beacon types.Beacon, epoch types.EpochID, counter uint32) ([]byte, error) {
 	m := vrfMessage{
 		Beacon:  beacon,
 		Epoch:   epoch,
 		Counter: counter,
 	}
-	serialized, err := types.InterfaceToBytes(&m)
+	serialized, err := codec.Encode(&m)
 	if err != nil {
 		return nil, fmt.Errorf("serialize vrf message: %w", err)
 	}

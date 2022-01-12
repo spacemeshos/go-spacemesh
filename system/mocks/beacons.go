@@ -70,10 +70,10 @@ func (m *MockBeaconGetter) EXPECT() *MockBeaconGetterMockRecorder {
 }
 
 // GetBeacon mocks base method.
-func (m *MockBeaconGetter) GetBeacon(arg0 types.EpochID) ([]byte, error) {
+func (m *MockBeaconGetter) GetBeacon(arg0 types.EpochID) (types.Beacon, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetBeacon", arg0)
-	ret0, _ := ret[0].([]byte)
+	ret0, _ := ret[0].(types.Beacon)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -7,12 +7,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
 )
+
+// IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p.
+const IncomingTxProtocol = state.IncomingTxProtocol
 
 // SVM is an entry point for all SVM operations.
 type SVM struct {
@@ -21,7 +26,8 @@ type SVM struct {
 }
 
 // New creates a new `SVM` instance from the given `state` and `logger`.
-func New(state *state.TransactionProcessor, logger log.Log) *SVM {
+func New(allStates, processorDb database.Database, projector state.Projector, txPool *mempool.TxMempool, logger log.Log) *SVM {
+	state := state.NewTransactionProcessor(allStates, processorDb, projector, txPool, logger)
 	return &SVM{state, log.NewDefault("svm")}
 }
 
@@ -130,14 +136,10 @@ func (svm *SVM) ValidateNonceAndBalance(transaction *types.Transaction) error {
 	return nil
 }
 
-// ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool
-// it returns an error if the provided tx is not valid.
-//
-// TODO: Remove this and use a whole separate API for mempool management.
-func (svm *SVM) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	if err := svm.state.ValidateAndAddTxToPool(tx); err != nil {
-		return fmt.Errorf("SVM couldn't validate and/or add transaction to mempool: %w", err)
-	}
+// AddTxToPool adds the provided transaction to the transaction pool. The caller
+// is responsible for validating tx beforehand with ValidateNonceAndBalance.
+func (svm *SVM) AddTxToPool(tx *types.Transaction) error {
+	svm.state.AddTxToPool(tx)
 	return nil
 }
 
@@ -154,13 +156,13 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		return pubsub.ValidationIgnore
 	}
 
-	svm.log.With().Info("got new tx",
+	svm.log.With().Debug("got new tx",
 		tx.ID(),
 		log.Uint64("nonce", tx.AccountNonce),
 		log.Uint64("amount", tx.Amount),
-		log.Uint64("fee", tx.Fee),
+		log.Uint64("fee", tx.GetFee()),
 		log.Uint64("gas", tx.GasLimit),
-		log.String("recipient", tx.Recipient.String()),
+		log.String("recipient", string(tx.GetRecipient().String())),
 		log.String("origin", tx.Origin().String()))
 
 	if !svm.AddressExists(tx.Origin()) {
@@ -171,8 +173,11 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		return pubsub.ValidationIgnore
 	}
 
-	if err := svm.ValidateAndAddTxToPool(tx); err != nil {
-		svm.state.With().Error("SVM couldn't validate and/or add transaction to mempool", tx.ID(), log.Err(err))
+	if err := svm.ValidateNonceAndBalance(tx); err != nil {
+		svm.state.With().Error("SVM couldn't validate tx before adding it to the mempool", tx.ID(), log.Err(err))
+		return pubsub.ValidationIgnore
+	} else if err := svm.AddTxToPool(tx); err != nil {
+		svm.state.With().Error("SVM couldn't add tx to mempool", tx.ID(), log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 
