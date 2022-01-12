@@ -2178,8 +2178,12 @@ func TestLateBaseBallot(t *testing.T) {
 	cfg.Zdist = cfg.Hdist
 
 	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
-	last := s.Next()
-	_, verified, _ := tortoise.HandleIncomingLayer(ctx, last)
+	var last, verified types.LayerID
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(2, sim.WithEmptyHareOutput()),
+	) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
 
 	ballots, err := s.GetState(0).MeshDB.LayerBallots(last)
 	require.NoError(t, err)

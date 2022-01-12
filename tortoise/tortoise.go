@@ -673,14 +673,7 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		return nil
 	}
 
-	baselid, exist := t.ballotLayer[ballot.Votes.Base]
-	if !exist {
-		t.logger.With().Warning("base ballot is not in the state",
-			ballot.ID(),
-			log.Stringer("base", ballot.Votes.Base),
-		)
-		return nil
-	}
+	baselid := t.ballotLayer[ballot.Votes.Base]
 
 	ballotWeight, err := computeBallotWeight(t.atxdb, t.bdp, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
 	if err != nil {
