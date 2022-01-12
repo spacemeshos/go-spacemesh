@@ -1,4 +1,7 @@
-FROM ubuntu:18.04 AS linux
+# libsvm.a is linked with fcntl64, which was added to glibc since 2.28.
+# The earliest Ubuntu release that has glibc >=2.28 by default is 18.10, so the LTS one is 20.04.
+# If any issues occur on 20.04, it may be downgraded back to 18.04 with manual glibc upgrade.
+FROM ubuntu:20.04 AS linux
 ENV DEBIAN_FRONTEND noninteractive
 ENV SHELL /bin/bash
 ARG TZ=US/Eastern
