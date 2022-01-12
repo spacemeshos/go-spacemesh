@@ -624,6 +624,8 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 // expensive long running computation in this method.
 func (t *turtle) updateState(ctx context.Context, logger log.Log, lid types.LayerID) error {
 	// TODO(dshulyak) loading state from db is only needed for rerun.
+	// but in general it won't hurt, so maybe refactor it in future.
+
 	blocks, err := t.bdp.LayerBlockIds(lid)
 	if err != nil {
 		return fmt.Errorf("read blocks for layer %s: %w", lid, err)

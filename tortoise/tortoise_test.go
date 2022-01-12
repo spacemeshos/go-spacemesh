@@ -2149,6 +2149,13 @@ func TestAbstainVotingVerifyingMode(t *testing.T) {
 	require.Equal(t, last.Sub(1), verified)
 }
 
+func TestSupportingUnknownBlock(t *testing.T) {
+	ctx := context.Background()
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup(sim.WithSetupUnitsRange(2, 2))
+}
+
 func TestStateManagement(t *testing.T) {
 	const (
 		size   = 10
