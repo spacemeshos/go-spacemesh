@@ -325,8 +325,9 @@ func TestFullCountVotes(t *testing.T) {
 					layerBlocks = append(layerBlocks, types.BlockID(p.ID()))
 				}
 
-				consensus.processBlocks(lid, layerBlocks)
-				consensus.full.processBlocks(layerBlocks)
+				for _, block := range layerBlocks {
+					consensus.onBlock(lid, block)
+				}
 				blocks = append(blocks, layerBlocks)
 			}
 
@@ -358,10 +359,9 @@ func TestFullCountVotes(t *testing.T) {
 
 				consensus.processed = lid
 				consensus.last = lid
-				tballots, err := consensus.processBallots(lid, layerBallots)
-				consensus.full.processBallots(tballots)
-				require.NoError(t, err)
-				consensus.full.processBallots(tballots)
+				for _, ballot := range layerBallots {
+					require.NoError(t, consensus.onBallot(ballot))
+				}
 
 				consensus.full.countVotes(logger)
 			}
