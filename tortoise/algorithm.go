@@ -169,63 +169,75 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 }
 
 // LatestComplete returns the latest verified layer.
-func (trtl *Tortoise) LatestComplete() types.LayerID {
-	trtl.mu.Lock()
-	defer trtl.mu.Unlock()
-	return trtl.trtl.verified
+func (t *Tortoise) LatestComplete() types.LayerID {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.trtl.verified
 }
 
 // BaseBallot chooses a base ballot and creates a differences list. needs the hare results for latest layers.
-func (trtl *Tortoise) BaseBallot(ctx context.Context) (*types.Votes, error) {
-	trtl.mu.Lock()
-	defer trtl.mu.Unlock()
-	return trtl.trtl.BaseBallot(ctx)
+func (t *Tortoise) BaseBallot(ctx context.Context) (*types.Votes, error) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	return t.trtl.BaseBallot(ctx)
 }
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes.
-func (trtl *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
-	trtl.mu.Lock()
-	defer trtl.mu.Unlock()
+func (t *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	var (
-		old    = trtl.trtl.verified
-		logger = trtl.logger.WithContext(ctx).With()
+		old    = t.trtl.verified
+		logger = t.logger.WithContext(ctx).With()
 	)
 
-	reverted, observed := trtl.updateFromRerun(ctx)
+	reverted, observed := t.updateFromRerun(ctx)
 	if reverted {
 		// make sure state is reapplied from far enough back if there was a state reversion.
 		// this is the first changed layer. subtract one to indicate that the layer _prior_ was the old
 		// pBase, since we never reapply the state of oldPbase.
 		old = observed.Sub(1)
 	}
-	trtl.org.Iterate(ctx, layerID, func(lid types.LayerID) {
-		if err := trtl.trtl.HandleIncomingLayer(ctx, lid); err != nil {
+	t.org.Iterate(ctx, layerID, func(lid types.LayerID) {
+		if err := t.trtl.HandleIncomingLayer(ctx, lid); err != nil {
 			logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
 		}
 	})
 
-	return old, trtl.trtl.verified, reverted
+	return old, t.trtl.verified, reverted
+}
+
+// OnBlock should be called every time new block is received.
+func (t *Tortoise) OnBlock(block *types.Block) {
+	t.trtl.onBlock(block.LayerIndex, block.ID())
+}
+
+// OnBallot should be called every time new ballot is received. ATX must be stored in the database.
+func (t *Tortoise) OnBallot(ballot *types.Ballot) {
+	if err := t.trtl.onBallot(ballot); err != nil {
+		t.logger.Error("failed to save state from ballot", ballot.ID(), log.Err(err))
+	}
 }
 
 // WaitReady waits until state will be reloaded from disk.
-func (trtl *Tortoise) WaitReady(ctx context.Context) error {
+func (t *Tortoise) WaitReady(ctx context.Context) error {
 	select {
-	case err := <-trtl.ready:
-		trtl.readyErr.Lock()
-		defer trtl.readyErr.Unlock()
+	case err := <-t.ready:
+		t.readyErr.Lock()
+		defer t.readyErr.Unlock()
 		if err != nil {
-			trtl.readyErr.err = err
+			t.readyErr.err = err
 		}
-		return trtl.readyErr.err
+		return t.readyErr.err
 	case <-ctx.Done():
 		return ctx.Err() //nolint
 	}
 }
 
 // Stop background workers.
-func (trtl *Tortoise) Stop() {
-	trtl.cancel()
-	trtl.eg.Wait()
+func (t *Tortoise) Stop() {
+	t.cancel()
+	t.eg.Wait()
 }

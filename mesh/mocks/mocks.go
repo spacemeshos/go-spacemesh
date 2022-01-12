@@ -231,3 +231,27 @@ func (mr *MocktortoiseMockRecorder) HandleIncomingLayer(arg0, arg1 interface{}) 
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleIncomingLayer", reflect.TypeOf((*Mocktortoise)(nil).HandleIncomingLayer), arg0, arg1)
 }
+
+// OnBallot mocks base method.
+func (m *Mocktortoise) OnBallot(arg0 *types.Ballot) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnBallot", arg0)
+}
+
+// OnBallot indicates an expected call of OnBallot.
+func (mr *MocktortoiseMockRecorder) OnBallot(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnBallot", reflect.TypeOf((*Mocktortoise)(nil).OnBallot), arg0)
+}
+
+// OnBlock mocks base method.
+func (m *Mocktortoise) OnBlock(arg0 *types.Block) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "OnBlock", arg0)
+}
+
+// OnBlock indicates an expected call of OnBlock.
+func (mr *MocktortoiseMockRecorder) OnBlock(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "OnBlock", reflect.TypeOf((*Mocktortoise)(nil).OnBlock), arg0)
+}

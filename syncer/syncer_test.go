@@ -109,6 +109,10 @@ func (mf *mockFetcher) setATXsErrors(epoch types.EpochID, err error) {
 
 type mockValidator struct{}
 
+func (mv *mockValidator) OnBlock(*types.Block) {}
+
+func (mv *mockValidator) OnBallot(*types.Ballot) {}
+
 func (mv *mockValidator) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
 	return layerID, layerID.Sub(1), false
 }

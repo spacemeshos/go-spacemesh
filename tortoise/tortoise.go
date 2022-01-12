@@ -623,91 +623,96 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 // updateState is to update state that needs to be updated always. there should be no
 // expensive long running computation in this method.
 func (t *turtle) updateState(ctx context.Context, logger log.Log, lid types.LayerID) error {
+	// TODO(dshulyak) loading state from db is only needed for rerun.
 	blocks, err := t.bdp.LayerBlockIds(lid)
 	if err != nil {
-		return fmt.Errorf("failed to read blocks for layer %s: %w", lid, err)
+		return fmt.Errorf("read blocks for layer %s: %w", lid, err)
+	}
+	for _, block := range blocks {
+		t.onBlock(lid, block)
 	}
 
-	t.processBlocks(lid, blocks)
-
-	original, err := t.bdp.LayerBallots(lid)
+	ballots, err := t.bdp.LayerBallots(lid)
 	if err != nil {
-		return fmt.Errorf("failed to read ballots for layer %s: %w", lid, err)
+		return fmt.Errorf("read ballots for layer %s: %w", lid, err)
 	}
-	ballots, err := t.processBallots(lid, original)
-	if err != nil {
-		return err
+	for _, ballot := range ballots {
+		if err := t.onBallot(ballot); err != nil {
+			return err
+		}
 	}
-
-	t.full.processBallots(ballots)
-	t.full.processBlocks(blocks)
 
 	if err := t.updateLocalVotes(ctx, logger, lid); err != nil {
 		return err
 	}
-	t.verifying.countVotes(logger, lid, ballots)
+	// TODO(dshulyak) it should be possible to count votes from every single ballot separately
+	// but may require changes to t.processed and t.updateLocalVotes
+	t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 	return nil
 }
 
-func (t *turtle) processBlocks(lid types.LayerID, blocks []types.BlockID) {
-	for _, block := range blocks {
-		t.blockLayer[block] = lid
+func (t *turtle) onBlock(lid types.LayerID, block types.BlockID) {
+	if !lid.After(t.evicted) {
+		return
 	}
-	t.blocks[lid] = blocks
+	if _, exist := t.blockLayer[block]; exist {
+		return
+	}
+	t.blockLayer[block] = lid
+	t.blocks[lid] = append(t.blocks[lid], block)
+	t.full.onBlock(block)
 }
 
-func (t *turtle) processBallots(lid types.LayerID, original []*types.Ballot) ([]tortoiseBallot, error) {
-	var (
-		ballots    = make([]tortoiseBallot, 0, len(original))
-		ballotsIDs = make([]types.BallotID, 0, len(original))
-	)
+func (t *turtle) onBallot(ballot *types.Ballot) error {
+	if !ballot.LayerIndex.After(t.evicted) {
+		return nil
+	}
+	if _, exist := t.ballotLayer[ballot.ID()]; exist {
+		return nil
+	}
+	ballotWeight, err := computeBallotWeight(t.atxdb, t.bdp, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
+	if err != nil {
+		return err
+	}
+	t.ballotLayer[ballot.ID()] = ballot.LayerIndex
+	t.ballots[ballot.LayerIndex] = append(t.ballots[ballot.LayerIndex], ballot.ID())
 
-	for _, ballot := range original {
-		ballotWeight, err := computeBallotWeight(t.atxdb, t.bdp, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
-		if err != nil {
-			return nil, err
-		}
-		t.ballotLayer[ballot.ID()] = ballot.LayerIndex
+	// TODO(dshulyak) this should not fail without terminating tortoise
+	t.markBeaconWithBadBallot(t.logger, ballot)
 
-		// TODO(dshulyak) this should not fail without terminating tortoise
-		t.markBeaconWithBadBallot(t.logger, ballot)
+	baselid := t.ballotLayer[ballot.Votes.Base]
 
-		ballotsIDs = append(ballotsIDs, ballot.ID())
-
-		baselid := t.ballotLayer[ballot.Votes.Base]
-
-		abstainVotes := map[types.LayerID]struct{}{}
-		for _, lid := range ballot.Votes.Abstain {
-			abstainVotes[lid] = struct{}{}
-		}
-
-		votes := votes{}
-		for lid := baselid; lid.Before(t.processed); lid = lid.Add(1) {
-			if _, exist := abstainVotes[lid]; exist {
-				continue
-			}
-			for _, bid := range t.blocks[lid] {
-				votes[bid] = against
-			}
-		}
-		for _, bid := range ballot.Votes.Support {
-			votes[bid] = support
-		}
-		for _, bid := range ballot.Votes.Against {
-			votes[bid] = against
-		}
-
-		ballots = append(ballots, tortoiseBallot{
-			id:      ballot.ID(),
-			base:    ballot.Votes.Base,
-			weight:  ballotWeight,
-			votes:   votes,
-			abstain: abstainVotes,
-		})
+	abstainVotes := map[types.LayerID]struct{}{}
+	for _, lid := range ballot.Votes.Abstain {
+		abstainVotes[lid] = struct{}{}
 	}
 
-	t.ballots[lid] = ballotsIDs
-	return ballots, nil
+	votes := votes{}
+	for lid := baselid; lid.Before(t.processed); lid = lid.Add(1) {
+		if _, exist := abstainVotes[lid]; exist {
+			continue
+		}
+		for _, bid := range t.blocks[lid] {
+			votes[bid] = against
+		}
+	}
+	for _, bid := range ballot.Votes.Support {
+		votes[bid] = support
+	}
+	for _, bid := range ballot.Votes.Against {
+		votes[bid] = against
+	}
+
+	tballot := tortoiseBallot{
+		id:      ballot.ID(),
+		base:    ballot.Votes.Base,
+		weight:  ballotWeight,
+		votes:   votes,
+		abstain: abstainVotes,
+	}
+
+	t.full.onBallot(&tballot)
+	return nil
 }
 
 func (t *turtle) updateLocalVotes(ctx context.Context, logger log.Log, lid types.LayerID) (err error) {

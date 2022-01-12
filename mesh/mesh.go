@@ -725,10 +725,18 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 	return nil
 }
 
+// AddBallot to the mesh.
+func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
+	msh.trtl.OnBallot(ballot)
+	return msh.DB.AddBallot(ballot)
+}
+
 // AddBlockWithTXs adds the block and its TXs in into the database.
 func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error {
 	logger := msh.WithContext(ctx).WithFields(block.LayerIndex, block.ID(), log.Int("num_txs", len(block.TxIDs)))
 	logger.Debug("adding block txs to mesh")
+
+	msh.trtl.OnBlock(block)
 
 	msh.addTransactionsForBlock(logger, block.LayerIndex, block.ID(), block.TxIDs)
 	return msh.AddBlock(block)

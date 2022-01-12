@@ -68,6 +68,8 @@ func createTestMesh(t *testing.T) *testMesh {
 		mockState:    mocks.NewMockstate(ctrl),
 		mockTortoise: mocks.NewMocktortoise(ctrl),
 	}
+	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
+	tm.mockTortoise.EXPECT().OnBallot(gomock.Any()).AnyTimes()
 	tm.Mesh = NewMesh(mmdb, nil, tm.mockTortoise, newMockTxMemPool(), tm.mockState, lg)
 	return tm
 }
