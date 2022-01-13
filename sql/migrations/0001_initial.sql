@@ -4,7 +4,6 @@ CREATE TABLE blocks (
     validity SMALL INT,
     block    BLOB
 );
-
 CREATE INDEX blocks_by_layer ON blocks(layer);
 
 CREATE TABLE ballots ( 
@@ -14,14 +13,12 @@ CREATE TABLE ballots (
     pubkey VARCHAR,
     ballot BLOB
 );
-
 CREATE INDEX ballots_by_layer ON ballots(layer);
 
 CREATE TABLE layers (
     id INT PRIMARY KEY,
     hare_output VARCHAR
 ) WITHOUT ROWID;
-
 
 CREATE TABLE layers_status (
     status SMALL INT PRIMARY KEY,
