@@ -19,8 +19,11 @@ CREATE INDEX ballots_by_layer ON ballots(layer);
 
 CREATE TABLE layers (
     id INT PRIMARY KEY,
-    hare_output VARCHAR,
-    status SMALL INT
+    hare_output VARCHAR
 ) WITHOUT ROWID;
 
-CREATE INDEX layers_by_status ON layers(status);
+
+CREATE TABLE layers_status (
+    status SMALL INT PRIMARY KEY,
+    layer INT NOT NULL
+) WITHOUT ROWID;
