@@ -107,7 +107,7 @@ var Cmd = &cobra.Command{
 			log.With().Fatal("can't ensure that cli flags match config value types", log.Err(err))
 		}
 
-		if conf.TestMode {
+		if conf.JSONLog {
 			log.JSONLog(true)
 		}
 

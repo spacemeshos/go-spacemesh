@@ -180,7 +180,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 
 	expected := `unknown command "illegal" for "node"`
 	expected2 := "Error: " + expected + "\nRun 'node --help' for usage.\n"
-	r.Equal(false, app.Config.TestMode)
+	r.Equal(false, app.Config.JSONLog)
 
 	// Test an illegal flag
 	Cmd.Run = func(*cobra.Command, []string) {
@@ -196,11 +196,11 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 	}
-	str, err = testArgs("--test-mode")
+	str, err = testArgs("--json-log")
 
 	r.NoError(err)
 	r.Empty(str)
-	r.Equal(true, app.Config.TestMode)
+	r.Equal(true, app.Config.JSONLog)
 }
 
 // This must be called in between each test that changes flags.

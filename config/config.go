@@ -63,7 +63,7 @@ type BaseConfig struct {
 
 	ConfigFile string `mapstructure:"config"`
 
-	TestMode bool `mapstructure:"test-mode"`
+	JSONLog bool `mapstructure:"json-log"`
 
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
@@ -175,7 +175,7 @@ func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:       defaultDataDir,
 		ConfigFile:          defaultConfigFileName,
-		TestMode:            false,
+		JSONLog:             false,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		MetricsPush:         "", // "" = doesn't push

@@ -111,7 +111,7 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 }
 
 func setupLogging(config *bc.Config) {
-	if config.TestMode {
+	if config.JSONLog {
 		log.JSONLog(true)
 	}
 
