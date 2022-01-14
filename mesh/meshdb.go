@@ -102,7 +102,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 // PersistentData checks to see if db is empty.
 func (m *DB) PersistentData() bool {
 	lid, err := layers.GetByStatus(m.db, layers.Latest)
-	if err != nil || (lid == types.LayerID{}) {
+	if err != nil && errors.Is(err, sql.ErrNotFound) || (lid == types.LayerID{}) {
 		m.Info("database is empty")
 		return false
 	}
@@ -199,7 +199,7 @@ func (m *DB) LayerBallots(lid types.LayerID) ([]*types.Ballot, error) {
 
 // LayerBallotIDs returns list of the ballot ids in the layer.
 func (m *DB) LayerBallotIDs(lid types.LayerID) ([]types.BallotID, error) {
-	return ballots.LayerIDs(m.db, lid)
+	return ballots.IDsInLayer(m.db, lid)
 }
 
 // AddBlock adds a block to the database.
@@ -235,7 +235,7 @@ func (m *DB) GetBlock(bid types.BlockID) (*types.Block, error) {
 
 // LayerBlockIds retrieves all block IDs from the layer specified by layer ID.
 func (m *DB) LayerBlockIds(lid types.LayerID) ([]types.BlockID, error) {
-	return blocks.LayerIDs(m.db, lid)
+	return blocks.IDsInLayer(m.db, lid)
 }
 
 // LayerBlocks retrieves all blocks from the layer specified by layer ID.

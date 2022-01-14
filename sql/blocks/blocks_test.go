@@ -50,14 +50,15 @@ func TestHas(t *testing.T) {
 
 func TestValidity(t *testing.T) {
 	db := sql.InMemory()
+	lid := types.NewLayerID(1)
 	blocks := []*types.Block{
 		types.NewExistingBlock(
 			types.BlockID{1, 1},
-			types.InnerBlock{},
+			types.InnerBlock{LayerIndex: lid},
 		),
 		types.NewExistingBlock(
 			types.BlockID{2, 2},
-			types.InnerBlock{},
+			types.InnerBlock{LayerIndex: lid},
 		),
 	}
 	for _, block := range blocks {
@@ -98,7 +99,7 @@ func TestLayerFilter(t *testing.T) {
 	for _, block := range blocks {
 		require.NoError(t, Add(db, block))
 	}
-	bids, err := LayerIDs(db, start)
+	bids, err := IDsInLayer(db, start)
 	require.NoError(t, err)
 	require.Len(t, bids, 2)
 	for i, bid := range bids {

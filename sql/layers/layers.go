@@ -68,7 +68,7 @@ func GetHareOutput(db sql.Executor, lid types.LayerID) (rst types.BlockID, err e
 
 // SetStatus updates status of the layer.
 func SetStatus(db sql.Executor, lid types.LayerID, status Status) error {
-	if _, err := db.Exec(`insert into layers_status (layer, status) values (?1, ?2) 
+	if _, err := db.Exec(`insert into mesh_status (layer, status) values (?1, ?2) 
 					on conflict(status) do update set layer=max(?1, layer);`,
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(lid.Value))
@@ -81,7 +81,7 @@ func SetStatus(db sql.Executor, lid types.LayerID, status Status) error {
 
 // GetByStatus return latest layer with the status.
 func GetByStatus(db sql.Executor, status Status) (rst types.LayerID, err error) {
-	if _, err := db.Exec("select layer from layers_status where status = ?1;",
+	if _, err := db.Exec("select layer from mesh_status where status = ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindInt64(1, int64(status))
 		},

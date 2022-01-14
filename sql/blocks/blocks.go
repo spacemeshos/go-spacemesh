@@ -9,6 +9,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+const (
+	valid   = 1
+	invalid = -1
+)
+
 func decodeBlock(reader io.Reader, id types.BlockID) (*types.Block, error) {
 	inner := types.InnerBlock{}
 	_, err := codec.DecodeFrom(reader, &inner)
@@ -65,17 +70,16 @@ func Get(db sql.Executor, id types.BlockID) (rst *types.Block, err error) {
 
 // SetValid updates verified status for a block.
 func SetValid(db sql.Executor, id types.BlockID) error {
-	return setValidity(db, id, 1)
+	return setValidity(db, id, valid)
 }
 
 // SetInvalid updates blocks to an invalid status.
 func SetInvalid(db sql.Executor, id types.BlockID) error {
-	return setValidity(db, id, -1)
+	return setValidity(db, id, invalid)
 }
 
 func setValidity(db sql.Executor, id types.BlockID, validity int8) error {
-	if rows, err := db.Exec(`insert into blocks (id, validity) values (?1, ?2) 
-	on conflict(id) do update set validity=?2 returning id;`, func(stmt *sql.Statement) {
+	if rows, err := db.Exec(`update blocks set validity=?2 where id = ?1 returning id;`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 		stmt.BindInt64(2, int64(validity))
 	}, nil); err != nil {
@@ -105,8 +109,8 @@ func IsValid(db sql.Executor, id types.BlockID) (rst bool, err error) {
 	return rst, err
 }
 
-// LayerIDs returns list of block ids in the layer.
-func LayerIDs(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
+// IDsInLayer returns list of block ids in the layer.
+func IDsInLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 	var rst []types.BlockID
 	if _, err := db.Exec("select id from blocks where layer = ?1;", func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Uint32()))

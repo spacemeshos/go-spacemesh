@@ -13,14 +13,14 @@ func TestLayer(t *testing.T) {
 	db := sql.InMemory()
 	start := types.NewLayerID(1)
 	ballots := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, nil, nil, types.InnerBallot{LayerIndex: start}),
-		types.NewExistingBallot(types.BallotID{2}, nil, nil, types.InnerBallot{LayerIndex: start}),
+		types.NewExistingBallot(types.BallotID{1}, []byte{}, []byte{}, types.InnerBallot{LayerIndex: start}),
+		types.NewExistingBallot(types.BallotID{2}, []byte{}, []byte{}, types.InnerBallot{LayerIndex: start}),
 	}
 	for _, ballot := range ballots {
 		require.NoError(t, Add(db, &ballot))
 	}
 
-	ids, err := LayerIDs(db, start)
+	ids, err := IDsInLayer(db, start)
 	require.NoError(t, err)
 	require.Len(t, ids, len(ballots))
 
@@ -49,7 +49,7 @@ func TestAdd(t *testing.T) {
 
 func TestHas(t *testing.T) {
 	db := sql.InMemory()
-	ballot := types.NewExistingBallot(types.BallotID{1}, nil, nil,
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{}, []byte{},
 		types.InnerBallot{})
 
 	exists, err := Has(db, ballot.ID())

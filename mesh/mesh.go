@@ -577,7 +577,7 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 		Status:  events.LayerStatusTypeApproved,
 	})
 
-	logger.With().Info("saving hare output for layer")
+	logger.Info("saving hare output for layer")
 	if err := msh.SaveHareConsensusOutput(ctx, layerID, blockID); err != nil {
 		logger.Error("saving layer hare output failed")
 	}
