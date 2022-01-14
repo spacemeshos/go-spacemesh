@@ -8,14 +8,17 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/config/presets"
 )
 
 var config = cfg.DefaultConfig()
 
 // AddCommands adds cobra commands to the app.
 func AddCommands(cmd *cobra.Command) {
-	/** ======================== BaseConfig Flags ========================== **/
+	cmd.PersistentFlags().StringP("preset", "p", "",
+		fmt.Sprintf("preset overwrites default values of the config. options %+s", presets.Options()))
 
+	/** ======================== BaseConfig Flags ========================== **/
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.ConfigFile,
 		"config", "c", config.BaseConfig.ConfigFile, "Set Load configuration from file")
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDirParent, "data-folder", "d",

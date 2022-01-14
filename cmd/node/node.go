@@ -29,6 +29,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/fetch"
@@ -99,18 +100,14 @@ var Cmd = &cobra.Command{
 	Use:   "node",
 	Short: "start node",
 	Run: func(cmd *cobra.Command, args []string) {
-		conf, err := LoadConfigFromFile()
+		conf, err := loadConfig(cmd)
 		if err != nil {
-			log.With().Fatal("can't load config file", log.Err(err))
-		}
-		if err := cmdp.EnsureCLIFlags(cmd, conf); err != nil {
-			log.With().Fatal("can't ensure that cli flags match config value types", log.Err(err))
+			log.With().Fatal("failed to initialize config", log.Err(err))
 		}
 
 		if conf.TestMode {
 			log.JSONLog(true)
 		}
-
 		app := New(
 			WithConfig(conf),
 			// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
@@ -152,7 +149,6 @@ var VersionCmd = &cobra.Command{
 }
 
 func init() {
-	// TODO add commands actually adds flags
 	cmdp.AddCommands(Cmd)
 	Cmd.AddCommand(VersionCmd)
 }
@@ -180,6 +176,17 @@ type TickProvider interface {
 	AwaitLayer(types.LayerID) chan struct{}
 }
 
+func loadConfig(cmd *cobra.Command) (*config.Config, error) {
+	conf, err := LoadConfigFromFile()
+	if err != nil {
+		return nil, fmt.Errorf("loading config from file: %w", err)
+	}
+	if err := cmdp.EnsureCLIFlags(cmd, conf); err != nil {
+		return nil, fmt.Errorf("mapping cli flags to config: %w", err)
+	}
+	return conf, nil
+}
+
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified.
 func LoadConfigFromFile() (*config.Config, error) {
 	fileLocation := viper.GetString("config")
@@ -192,6 +199,13 @@ func LoadConfigFromFile() (*config.Config, error) {
 	}
 
 	conf := config.DefaultConfig()
+	if name := viper.GetString("preset"); len(name) > 0 {
+		preset, err := presets.Get(name)
+		if err != nil {
+			return nil, err
+		}
+		conf = preset
+	}
 
 	hook := mapstructure.ComposeDecodeHookFunc(
 		mapstructure.StringToTimeDurationHookFunc(),
@@ -199,12 +213,10 @@ func LoadConfigFromFile() (*config.Config, error) {
 		mapstructureutil.BigRatDecodeFunc(),
 	)
 
-	// load config if it was loaded to our viper
+	// load config if it was loaded to the viper
 	if err := vip.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
-		log.With().Error("Failed to parse config", log.Err(err))
 		return nil, fmt.Errorf("unmarshal viper: %w", err)
 	}
-
 	return &conf, nil
 }
 
