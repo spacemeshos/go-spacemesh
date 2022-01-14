@@ -464,6 +464,8 @@ func TestMesh_pushLayersToState(t *testing.T) {
 	tm := createTestMesh(t)
 	defer tm.Close()
 
+	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
+	tm.mockTortoise.EXPECT().OnBallot(gomock.Any()).AnyTimes()
 	layerID := types.GetEffectiveGenesis().Add(1)
 	createLayerBallots(t, tm.Mesh, layerID)
 	signer, origin := newSignerAndAddress(t, "origin")
@@ -615,6 +617,8 @@ func TestMesh_AddBlockWithTXs(t *testing.T) {
 	defer tm.ctrl.Finish()
 	defer tm.Close()
 
+	tm.mockTortoise.EXPECT().OnBlock(gomock.Any()).AnyTimes()
+	tm.mockTortoise.EXPECT().OnBallot(gomock.Any()).AnyTimes()
 	numTXs := 6
 	txIDs, txs := addManyTXsToPool(t, tm.Mesh, numTXs)
 	for _, id := range txIDs {
@@ -759,4 +763,30 @@ func TestMesh_ResetAppliedOnRevert(t *testing.T) {
 
 	require.Equal(t, last, tm.ProcessedLayer())
 	require.Equal(t, failed.Sub(1), tm.LatestLayerInState())
+}
+
+func TestMesh_CallOnBlock(t *testing.T) {
+	tm := createTestMesh(t)
+	defer tm.ctrl.Finish()
+	defer tm.Close()
+
+	block := types.Block{}
+	block.LayerIndex = types.NewLayerID(10)
+	block.Initialize()
+
+	tm.mockTortoise.EXPECT().OnBlock(&block)
+
+	require.NoError(t, tm.AddBlockWithTXs(context.TODO(), &block))
+}
+
+func TestMesh_CallOnBallot(t *testing.T) {
+	tm := createTestMesh(t)
+	defer tm.ctrl.Finish()
+	defer tm.Close()
+
+	ballot := types.RandomBallot()
+
+	tm.mockTortoise.EXPECT().OnBallot(ballot)
+
+	require.NoError(t, tm.AddBallot(ballot))
 }

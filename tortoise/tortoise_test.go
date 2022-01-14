@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -2147,6 +2148,106 @@ func TestAbstainVotingVerifyingMode(t *testing.T) {
 		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
 	}
 	require.Equal(t, last.Sub(1), verified)
+}
+
+func voteWithBaseBallot(base types.BallotID) sim.VotesGenerator {
+	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+		voting := sim.PerfectVoting(rng, layers, i)
+		voting.Base = base
+		return voting
+	}
+}
+
+func voteForBlock(block types.BlockID) sim.VotesGenerator {
+	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+		voting := sim.PerfectVoting(rng, layers, i)
+		voting.Support = append(voting.Support, block)
+		return voting
+	}
+}
+
+func TestLateBaseBallot(t *testing.T) {
+	ctx := context.Background()
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup(sim.WithSetupUnitsRange(2, 2))
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.Hdist = 1
+	cfg.Zdist = cfg.Hdist
+
+	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	var last, verified types.LayerID
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(2, sim.WithEmptyHareOutput()),
+	) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+
+	ballots, err := s.GetState(0).MeshDB.LayerBallots(last)
+	require.NoError(t, err)
+	require.NotEmpty(t, ballots)
+
+	buf, err := codec.Encode(ballots[0])
+	require.NoError(t, err)
+	var base types.Ballot
+	require.NoError(t, codec.Decode(buf, &base))
+	base.EligibilityProof.J++
+	base.Initialize()
+	tortoise.OnBallot(&base)
+
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(1, sim.WithVoteGenerator(voteWithBaseBallot(base.ID()))),
+		sim.WithSequence(1),
+	) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+
+	require.Equal(t, last.Sub(1), verified)
+}
+
+func TestLateBlock(t *testing.T) {
+	ctx := context.Background()
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup(sim.WithSetupUnitsRange(2, 2))
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.Hdist = 1
+	cfg.Zdist = cfg.Hdist
+
+	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	last := s.Next()
+	_, verified, _ := tortoise.HandleIncomingLayer(ctx, last)
+
+	blocks, err := s.GetState(0).MeshDB.LayerBlocks(last)
+	require.NoError(t, err)
+	require.NotEmpty(t, blocks)
+
+	buf, err := codec.Encode(blocks[0])
+	require.NoError(t, err)
+	var block types.Block
+	require.NoError(t, codec.Decode(buf, &block))
+	require.True(t, len(block.TxIDs) > 2)
+	block.TxIDs = block.TxIDs[:2]
+	block.Initialize()
+	tortoise.OnBlock(&block)
+	require.NoError(t, s.GetState(0).MeshDB.AddBlock(&block))
+
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(1, sim.WithVoteGenerator(voteForBlock(block.ID()))),
+		sim.WithSequence(1),
+	) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+
+	require.Equal(t, last.Sub(1), verified)
+
+	valid, err := s.GetState(0).MeshDB.ContextualValidity(block.ID())
+	require.NoError(t, err)
+	require.True(t, valid)
 }
 
 func TestStateManagement(t *testing.T) {
