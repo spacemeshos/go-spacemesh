@@ -13,8 +13,8 @@ func TestLayer(t *testing.T) {
 	db := sql.InMemory()
 	start := types.NewLayerID(1)
 	ballots := []types.Ballot{
-		types.NewExistingBallot(types.BallotID{1}, []byte{}, []byte{}, types.InnerBallot{LayerIndex: start}),
-		types.NewExistingBallot(types.BallotID{2}, []byte{}, []byte{}, types.InnerBallot{LayerIndex: start}),
+		types.NewExistingBallot(types.BallotID{1}, nil, nil, types.InnerBallot{LayerIndex: start}),
+		types.NewExistingBallot(types.BallotID{2}, nil, nil, types.InnerBallot{LayerIndex: start}),
 	}
 	for _, ballot := range ballots {
 		require.NoError(t, Add(db, &ballot))
