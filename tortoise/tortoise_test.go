@@ -331,8 +331,7 @@ func TestAddToMesh(t *testing.T) {
 	alg.HandleIncomingLayer(context.TODO(), l3a.Index())
 	require.Equal(t, types.GetEffectiveGenesis().Add(1), alg.LatestComplete())
 
-	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
-	require.NoError(t, addLayerToMesh(mdb, l3))
+	require.NoError(t, addLayerToMesh(mdb, l3a))
 	require.NoError(t, alg.rerun(context.TODO()))
 	alg.updateFromRerun(context.TODO())
 
@@ -382,7 +381,7 @@ func TestBaseBallot(t *testing.T) {
 	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), mdb, atxdb, alg.BaseBallot, defaultTestLayerSize)
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
-	expectBaseBallotLayer(l2.Index(), 0, numValidBlock, 0)
+	expectBaseBallotLayer(l2.Index(), 0, numValidBlock, 1)
 }
 
 func mockedBeacons(tb testing.TB) system.BeaconGetter {
@@ -1950,6 +1949,7 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	s1 := sim.New(
 		sim.WithLayerSize(size),
 		sim.WithStates(2),
+		sim.WithLogger(logtest.New(t)),
 	)
 	s1.Setup(
 		sim.WithSetupMinerRange(15, 15),

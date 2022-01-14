@@ -324,20 +324,6 @@ func (mr *MocklayerDBMockRecorder) SaveHareConsensusOutput(arg0, arg1, arg2 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveHareConsensusOutput", reflect.TypeOf((*MocklayerDB)(nil).SaveHareConsensusOutput), arg0, arg1, arg2)
 }
 
-// SetZeroBallotLayer mocks base method.
-func (m *MocklayerDB) SetZeroBallotLayer(arg0 types.LayerID) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SetZeroBallotLayer", arg0)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SetZeroBallotLayer indicates an expected call of SetZeroBallotLayer.
-func (mr *MocklayerDBMockRecorder) SetZeroBallotLayer(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetZeroBallotLayer", reflect.TypeOf((*MocklayerDB)(nil).SetZeroBallotLayer), arg0)
-}
-
 // SetZeroBlockLayer mocks base method.
 func (m *MocklayerDB) SetZeroBlockLayer(arg0 types.LayerID) error {
 	m.ctrl.T.Helper()

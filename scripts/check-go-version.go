@@ -15,7 +15,7 @@ var (
 
 func init() {
 	flag.IntVar(&minMajor, "major", 1, "required major version")
-	flag.IntVar(&minMinor, "minor", 14, "required minor version")
+	flag.IntVar(&minMinor, "minor", 16, "required minor version")
 }
 
 func main() {
