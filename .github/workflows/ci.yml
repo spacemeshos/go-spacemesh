@@ -1,7 +1,7 @@
 name: CI
 
 env:
-  go-version: '1.16.13'
+  go-version: '1.17.6'
   GCLOUD_KEY: ${{ secrets.GCLOUD_KEY }}
   PROJECT_NAME: ${{ secrets.PROJECT_NAME }}
   CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
@@ -60,9 +60,10 @@ jobs:
         uses: actions/setup-go@v2
         with:
           go-version: ${{ env.go-version }}
-      - name: fmt, lint
+      - name: fmt, tidy, lint
         run: |
           make
+          make tidy
           make test-fmt
           make lint
 
