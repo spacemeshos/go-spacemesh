@@ -441,6 +441,9 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 		syncer.Close()
 	})
 
+	// allow synchronize to finish
+	feedLayerResult(gLayer.Add(1), lyr, mf, mm)
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -448,8 +451,6 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 		wg.Done()
 	}()
 
-	// allow synchronize to finish
-	feedLayerResult(gLayer.Add(1), lyr, mf, mm)
 	wg.Wait()
 
 	assert.False(t, syncer.stateOnTarget())
@@ -493,6 +494,9 @@ func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 		syncer.Close()
 	})
 
+	// allow synchronize to finish
+	feedLayerResult(gLayer.Add(1), lyr, mf, mm)
+
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -500,8 +504,6 @@ func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 		wg.Done()
 	}()
 
-	// allow synchronize to finish
-	feedLayerResult(gLayer.Add(1), lyr, mf, mm)
 	wg.Wait()
 
 	assert.False(t, syncer.stateOnTarget())

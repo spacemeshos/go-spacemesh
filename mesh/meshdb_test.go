@@ -16,7 +16,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
@@ -64,23 +63,6 @@ func TestMeshDB_AddBallot(t *testing.T) {
 	got, err := mdb.GetBallot(ballot.ID())
 	require.NoError(t, err)
 	assert.Equal(t, ballot, got)
-
-	// copy the ballot and change it slightly
-	ballotNew := *ballot
-	ballotNew.LayerIndex = layer.Add(100)
-	// the copied ballot still has the same BallotID
-	require.Equal(t, ballot.ID(), ballotNew.ID())
-	// this ballot ID already exist, will not overwrite the previous ballot
-	require.NoError(t, mdb.AddBallot(&ballotNew))
-	assert.True(t, mdb.HasBallot(ballot.ID()))
-	gotNew, err := mdb.GetBallot(ballot.ID())
-	require.NoError(t, err)
-	assert.Equal(t, got, gotNew)
-
-	ballots, err := mdb.LayerBallots(gotNew.LayerIndex)
-	require.NoError(t, err)
-	require.Len(t, ballots, 1)
-	require.Equal(t, gotNew, ballots[0])
 }
 
 func TestMeshDB_AddBlock(t *testing.T) {
@@ -599,7 +581,7 @@ func TestMeshDB_RecordCoinFlip(t *testing.T) {
 	mdb1 := NewMemMeshDB(logtest.New(t))
 	defer mdb1.Close()
 	testCoinflip(mdb1)
-	mdb2, err := NewPersistentMeshDB(dbPath+"/mesh_db/", 5, logtest.New(t))
+	mdb2, err := NewPersistentMeshDB(t.TempDir(), 5, logtest.New(t))
 	require.NoError(t, err)
 	defer mdb2.Close()
 	defer teardown()
@@ -678,7 +660,7 @@ func TestBlocksBallotsOverlap(t *testing.T) {
 	// bL is consumed as prefix.
 	// layer is will read first by of the block id, hence 0001 in thi example
 	ids, err := mdb.LayerBallotIDs(types.NewLayerID(binary.LittleEndian.Uint32([]byte{bid[0], 0, 0, 0})))
-	require.ErrorIs(t, err, database.ErrNotFound)
+	require.NoError(t, err)
 	require.Empty(t, ids)
 }
 

@@ -13,6 +13,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 var (
@@ -86,9 +88,6 @@ func NewMesh(db *DB, atxDb AtxDB, trtl tortoise, txPool txMemPool, state state, 
 	gLyr := types.GetEffectiveGenesis()
 	for i := types.NewLayerID(1); !i.After(gLyr); i = i.Add(1) {
 		if i.Before(gLyr) {
-			if err := msh.SetZeroBallotLayer(i); err != nil {
-				msh.With().Panic("failed to set zero-ballot for genesis layer", i, log.Err(err))
-			}
 			if err := msh.SetZeroBlockLayer(i); err != nil {
 				msh.With().Panic("failed to set zero-block for genesis layer", i, log.Err(err))
 			}
@@ -105,11 +104,11 @@ func NewMesh(db *DB, atxDb AtxDB, trtl tortoise, txPool txMemPool, state state, 
 func NewRecoveredMesh(db *DB, atxDb AtxDB, trtl tortoise, txPool txMemPool, state state, logger log.Log) *Mesh {
 	msh := NewMesh(db, atxDb, trtl, txPool, state, logger)
 
-	latest, err := db.general.Get(constLATEST)
+	latest, err := msh.GetLatestLayer()
 	if err != nil {
 		logger.With().Panic("failed to recover latest layer", log.Err(err))
 	}
-	msh.setLatestLayer(types.BytesToLayerID(latest))
+	msh.setLatestLayer(latest)
 
 	lyr, err := msh.GetProcessedLayer()
 	if err != nil {
@@ -117,11 +116,11 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, trtl tortoise, txPool txMemPool, stat
 	}
 	msh.setProcessedLayerFromRecoveredData(lyr)
 
-	verified, err := db.general.Get(VERIFIED)
+	verified, err := msh.GetVerifiedLayer()
 	if err != nil {
 		logger.With().Panic("failed to recover latest verified layer", log.Err(err))
 	}
-	if err = msh.setLatestLayerInState(types.BytesToLayerID(verified)); err != nil {
+	if err = msh.setLatestLayerInState(verified); err != nil {
 		logger.With().Panic("failed to recover latest layer in state", log.Err(err))
 	}
 
@@ -195,7 +194,7 @@ func (msh *Mesh) setLatestLayer(idx types.LayerID) {
 		events.ReportNodeStatusUpdate()
 		msh.With().Info("set latest known layer", idx)
 		msh.latestLayer = idx
-		if err := msh.general.Put(constLATEST, idx.Bytes()); err != nil {
+		if err := layers.SetStatus(msh.db, idx, layers.Latest); err != nil {
 			msh.Error("could not persist latest layer index")
 		}
 	}
@@ -360,6 +359,7 @@ func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID)
 			logger.With().Error("failed to get valid block IDs", i, log.Err(err))
 			return err
 		}
+
 		hash := types.EmptyLayerHash
 		if len(validBlockIDs) > 0 {
 			hash = types.CalcBlocksHash32(validBlockIDs, nil)
@@ -611,7 +611,7 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
 	// state depends on processedLayer param.
 	msh.mutex.Lock()
 	defer msh.mutex.Unlock()
-	if err := msh.general.Put(VERIFIED, lyr.Bytes()); err != nil {
+	if err := layers.SetStatus(msh.db, lyr, layers.Applied); err != nil {
 		// can happen if database already closed
 		msh.Error("could not persist validated layer index %d: %v", lyr, err.Error())
 		return fmt.Errorf("put into DB: %w", err)
@@ -658,30 +658,6 @@ func uniqueTxIds(blocks []*types.Block, seenTxIds map[types.TransactionID]struct
 
 var errLayerHasBallot = errors.New("layer has ballot")
 
-// SetZeroBallotLayer tags lyr as a layer without ballots.
-func (msh *Mesh) SetZeroBallotLayer(lyr types.LayerID) error {
-	msh.With().Info("tagging zero ballot layer", lyr)
-	// check database for layer
-	if l, err := msh.GetLayer(lyr); err != nil {
-		// database error
-		if !errors.Is(err, database.ErrNotFound) {
-			msh.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
-			return err
-		}
-	} else if len(l.Ballots()) != 0 {
-		// layer exists
-		msh.With().Error("layer has ballots, cannot tag as zero ballot layer",
-			lyr,
-			l,
-			log.Int("num_ballots", len(l.Ballots())))
-		return errLayerHasBallot
-	}
-
-	msh.setLatestLayer(lyr)
-	// layer doesn't exist, need to insert new layer
-	return msh.AddZeroBallotLayer(lyr)
-}
-
 var errLayerHasBlock = errors.New("layer has block")
 
 // SetZeroBlockLayer tags lyr as a layer without blocks.
@@ -690,7 +666,7 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 	// check database for layer
 	if l, err := msh.GetLayer(lyr); err != nil {
 		// database error
-		if !errors.Is(err, database.ErrNotFound) {
+		if !errors.Is(err, sql.ErrNotFound) {
 			msh.With().Error("error trying to fetch layer from database", lyr, log.Err(err))
 			return err
 		}

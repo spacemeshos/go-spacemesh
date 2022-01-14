@@ -5,7 +5,9 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sync"
 
@@ -15,52 +17,43 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
 const (
 	layerSize = 200
-
-	layerBlocks  = "b"
-	layerBallots = "l"
 )
 
 // DB represents a mesh database instance.
 type DB struct {
 	log.Log
-	blockCache         blockCache
-	layers             database.Database
-	blocks             database.Database
-	ballots            database.Database
-	transactions       database.Database
-	contextualValidity database.Database
-	general            database.Database
-	unappliedTxs       database.Database
-	hareOutput         database.Database
-	blockMutex         sync.RWMutex
-	coinflipMu         sync.RWMutex
-	coinflips          map[types.LayerID]bool // weak coinflip results from Hare
-	lhMutex            sync.Mutex
-	exit               chan struct{}
+	blockCache blockCache
+
+	db *sql.Database
+
+	transactions database.Database
+	general      database.Database
+	unappliedTxs database.Database
+
+	coinflipMu sync.RWMutex
+	coinflips  map[types.LayerID]bool // weak coinflip results from Hare
+
+	exit chan struct{}
 }
 
 // NewPersistentMeshDB creates an instance of a mesh database.
 func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, error) {
-	bldb, err := database.NewLDBDatabase(filepath.Join(path, "blocks"), 0, 0, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize blocks db: %v", err)
+	if err := os.MkdirAll(path, os.ModePerm); err != nil {
+		return nil, fmt.Errorf("failed to create %s: %w", path, err)
 	}
-	bdb, err := database.NewLDBDatabase(filepath.Join(path, "ballots"), 0, 0, logger)
+	db, err := sql.Open("file:" + filepath.Join(path, "state.sql"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to initialize ballots db: %v", err)
+		return nil, fmt.Errorf("open sqlite db %w", err)
 	}
-	ldb, err := database.NewLDBDatabase(filepath.Join(path, "layers"), 0, 0, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize layers db: %v", err)
-	}
-	vdb, err := database.NewLDBDatabase(filepath.Join(path, "validity"), 0, 0, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize validity db: %v", err)
-	}
+
 	tdb, err := database.NewLDBDatabase(filepath.Join(path, "transactions"), 0, 0, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
@@ -73,24 +66,16 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
 	}
-	ho, err := database.NewLDBDatabase(filepath.Join(path, "hareoutput"), 0, 0, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
-	}
 
 	mdb := &DB{
-		Log:                logger,
-		blockCache:         newBlockCache(blockCacheSize * layerSize),
-		blocks:             bldb,
-		ballots:            bdb,
-		layers:             ldb,
-		transactions:       tdb,
-		general:            gdb,
-		contextualValidity: vdb,
-		unappliedTxs:       utx,
-		hareOutput:         ho,
-		coinflips:          make(map[types.LayerID]bool),
-		exit:               make(chan struct{}),
+		Log:          logger,
+		blockCache:   newBlockCache(blockCacheSize * layerSize),
+		db:           db,
+		transactions: tdb,
+		general:      gdb,
+		unappliedTxs: utx,
+		coinflips:    make(map[types.LayerID]bool),
+		exit:         make(chan struct{}),
 	}
 	gLayer := types.GenesisLayer()
 	for _, b := range gLayer.Ballots() {
@@ -116,29 +101,25 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 
 // PersistentData checks to see if db is empty.
 func (m *DB) PersistentData() bool {
-	if _, err := m.general.Get(constLATEST); err == nil {
-		m.Info("found data to recover on disk")
-		return true
+	lid, err := layers.GetByStatus(m.db, layers.Latest)
+	if err != nil && errors.Is(err, sql.ErrNotFound) || (lid == types.LayerID{}) {
+		m.Info("database is empty")
+		return false
 	}
-	m.Info("did not find data to recover on disk")
-	return false
+	return true
 }
 
 // NewMemMeshDB is a mock used for testing.
 func NewMemMeshDB(logger log.Log) *DB {
 	mdb := &DB{
-		Log:                logger,
-		blockCache:         newBlockCache(100 * layerSize),
-		blocks:             database.NewMemDatabase(),
-		ballots:            database.NewMemDatabase(),
-		layers:             database.NewMemDatabase(),
-		general:            database.NewMemDatabase(),
-		contextualValidity: database.NewMemDatabase(),
-		transactions:       database.NewMemDatabase(),
-		unappliedTxs:       database.NewMemDatabase(),
-		hareOutput:         database.NewMemDatabase(),
-		coinflips:          make(map[types.LayerID]bool),
-		exit:               make(chan struct{}),
+		Log:          logger,
+		blockCache:   newBlockCache(100 * layerSize),
+		db:           sql.InMemory(),
+		general:      database.NewMemDatabase(),
+		transactions: database.NewMemDatabase(),
+		unappliedTxs: database.NewMemDatabase(),
+		coinflips:    make(map[types.LayerID]bool),
+		exit:         make(chan struct{}),
 	}
 	gLayer := types.GenesisLayer()
 	for _, b := range gLayer.Ballots() {
@@ -160,14 +141,12 @@ func NewMemMeshDB(logger log.Log) *DB {
 // Close closes all resources.
 func (m *DB) Close() {
 	close(m.exit)
-	m.blocks.Close()
-	m.ballots.Close()
-	m.layers.Close()
 	m.transactions.Close()
 	m.unappliedTxs.Close()
-	m.hareOutput.Close()
 	m.general.Close()
-	m.contextualValidity.Close()
+	if err := m.db.Close(); err != nil {
+		m.Log.With().Error("error closing database", log.Err(err))
+	}
 }
 
 // todo: for now, these methods are used to export dbs to sync, think about merging the two packages
@@ -187,96 +166,66 @@ func (m *DB) Transactions() database.Getter {
 	return m.transactions
 }
 
-// HasBallot returns true if the database has Ballot specified by the BallotID and false otherwise.
-func (m *DB) HasBallot(id types.BallotID) bool {
-	has, err := m.ballots.Has(id.Bytes())
-	return err == nil && has
-}
-
 // AddBallot adds a ballot to the database.
 func (m *DB) AddBallot(b *types.Ballot) error {
-	m.blockMutex.Lock()
-	defer m.blockMutex.Unlock()
 	return m.addBallot(b)
 }
 
+// HasBallot returns true if the ballot is stored in a database.
+func (m *DB) HasBallot(ballot types.BallotID) bool {
+	exists, _ := ballots.Has(m.db, ballot)
+	return exists
+}
+
 func (m *DB) addBallot(b *types.Ballot) error {
-	if m.HasBallot(b.ID()) {
-		m.With().Warning("ballot already exists", b.ID())
-		return nil
+	if err := ballots.Add(m.db, b); err != nil {
+		if errors.Is(err, sql.ErrObjectExists) {
+			return nil
+		}
+		return fmt.Errorf("could not add ballot %v to database: %w", b.ID(), err)
 	}
-	return m.writeBallot(b)
+	return nil
 }
 
 // GetBallot returns true if the database has Ballot specified by the BallotID and false otherwise.
 func (m *DB) GetBallot(id types.BallotID) (*types.Ballot, error) {
-	data, err := m.getBallotBytes(id)
-	if err != nil {
-		return nil, err
-	}
-	dbb := &types.DBBallot{}
-	if err := codec.Decode(data, dbb); err != nil {
-		return nil, fmt.Errorf("parse ballot: %w", err)
-	}
-	return dbb.ToBallot(), nil
-}
-
-// LayerBallotIDs retrieves all BallotID from the layer specified by layer ID.
-func (m *DB) LayerBallotIDs(lid types.LayerID) ([]types.BallotID, error) {
-	var ids []types.BallotID
-	err := LayerIDs(m.layers, layerBallots, lid, func(id []byte) error {
-		var bid types.BallotID
-		copy(bid[:], id)
-		ids = append(ids, bid)
-		return nil
-	})
-	return ids, err
+	return ballots.Get(m.db, id)
 }
 
 // LayerBallots retrieves all ballots from a layer by layer ID.
 func (m *DB) LayerBallots(lid types.LayerID) ([]*types.Ballot, error) {
-	var ballots []*types.Ballot
-	err := LayerIDs(m.layers, layerBallots, lid, func(id []byte) error {
-		var bid types.BallotID
-		copy(bid[:], id)
-		ballot, err := m.GetBallot(bid)
-		if err != nil {
-			return err
-		}
-		ballots = append(ballots, ballot)
-		return nil
-	})
-	return ballots, err
+	return ballots.Layer(m.db, lid)
 }
 
-// HasBlock returns true if the database has Block specified by the BlockID and false otherwise.
-func (m *DB) HasBlock(bid types.BlockID) bool {
-	has, err := m.blocks.Has(bid.Bytes())
-	return err == nil && has
+// LayerBallotIDs returns list of the ballot ids in the layer.
+func (m *DB) LayerBallotIDs(lid types.LayerID) ([]types.BallotID, error) {
+	return ballots.IDsInLayer(m.db, lid)
 }
 
 // AddBlock adds a block to the database.
 func (m *DB) AddBlock(b *types.Block) error {
-	m.blockMutex.Lock()
-	defer m.blockMutex.Unlock()
-	if m.HasBlock(b.ID()) {
-		m.With().Warning("block already exists", b.ID())
-		return nil
-	}
 	err := m.writeBlock(b)
 	if err != nil {
+		if errors.Is(err, sql.ErrObjectExists) {
+			return nil
+		}
 		return err
 	}
 	events.ReportNewBlock(b)
 	return nil
 }
 
+// HasBlock returns true if block exists in the database.
+func (m *DB) HasBlock(bid types.BlockID) bool {
+	exists, _ := blocks.Has(m.db, bid)
+	return exists
+}
+
 // GetBlock returns the block specified by the block ID.
 func (m *DB) GetBlock(bid types.BlockID) (*types.Block, error) {
-	if blkh := m.blockCache.Get(bid); blkh != nil {
-		return blkh, nil
+	if b := m.blockCache.Get(bid); b != nil {
+		return b, nil
 	}
-
 	b, err := m.getBlock(bid)
 	if err != nil {
 		return nil, err
@@ -286,139 +235,47 @@ func (m *DB) GetBlock(bid types.BlockID) (*types.Block, error) {
 
 // LayerBlockIds retrieves all block IDs from the layer specified by layer ID.
 func (m *DB) LayerBlockIds(lid types.LayerID) ([]types.BlockID, error) {
-	var ids []types.BlockID
-	err := LayerIDs(m.layers, layerBlocks, lid, func(id []byte) error {
-		var bid types.BlockID
-		copy(bid[:], id)
-		ids = append(ids, bid)
-		return nil
-	})
-	return ids, err
+	return blocks.IDsInLayer(m.db, lid)
 }
 
 // LayerBlocks retrieves all blocks from the layer specified by layer ID.
 func (m *DB) LayerBlocks(lid types.LayerID) ([]*types.Block, error) {
-	var blocks []*types.Block
-	err := LayerIDs(m.layers, layerBlocks, lid, func(id []byte) error {
-		var bid types.BlockID
-		copy(bid[:], id)
-		block, err := m.GetBlock(bid)
-		if err != nil {
-			return err
-		}
-		blocks = append(blocks, block)
-		return nil
-	})
-	return blocks, err
-}
-
-func (m *DB) getBlock(id types.BlockID) (*types.Block, error) {
-	data, err := m.getBlockBytes(id)
+	ids, err := m.LayerBlockIds(lid)
 	if err != nil {
 		return nil, err
 	}
-	dbb := &types.DBBlock{}
-	if err := codec.Decode(data, dbb); err != nil {
-		return nil, fmt.Errorf("parse block: %w", err)
+	rst := make([]*types.Block, 0, len(ids))
+	for _, bid := range ids {
+		block, err := m.GetBlock(bid)
+		if err != nil {
+			return nil, err
+		}
+		rst = append(rst, block)
 	}
-	return dbb.ToBlock(), nil
+	return rst, nil
 }
 
-// LayerIDs is a utility function that finds namespaced IDs saved in a database as a key.
-func LayerIDs(db database.Database, namespace string, lid types.LayerID, f func(id []byte) error) error {
-	var (
-		zero = false
-		n    int
-		buf  = new(bytes.Buffer)
-	)
-	buf.WriteString(namespace)
-	buf.Write(lid.Bytes())
-
-	it := db.Find(buf.Bytes())
-	defer it.Release()
-	for it.Next() {
-		if len(it.Key()) == buf.Len() {
-			zero = true
-			continue
-		}
-		if err := f(it.Key()[buf.Len():]); err != nil {
-			return err
-		}
-		n++
-	}
-	if it.Error() != nil {
-		return fmt.Errorf("iterator: %w", it.Error())
-	}
-	if zero || n > 0 {
-		return nil
-	}
-	return database.ErrNotFound
-}
-
-// AddZeroBallotLayer tags lyr as a layer without ballots.
-func (m *DB) AddZeroBallotLayer(lid types.LayerID) error {
-	buf := new(bytes.Buffer)
-	buf.WriteString(layerBallots)
-	buf.Write(lid.Bytes())
-	if err := m.layers.Put(buf.Bytes(), nil); err != nil {
-		return fmt.Errorf("put into DB: %w", err)
-	}
-	return nil
+func (m *DB) getBlock(id types.BlockID) (*types.Block, error) {
+	return blocks.Get(m.db, id)
 }
 
 // AddZeroBlockLayer tags lyr as a layer without blocks.
 func (m *DB) AddZeroBlockLayer(lid types.LayerID) error {
-	buf := new(bytes.Buffer)
-	buf.WriteString(layerBlocks)
-	buf.Write(lid.Bytes())
-	if err := m.layers.Put(buf.Bytes(), nil); err != nil {
-		return fmt.Errorf("put into DB: %w", err)
-	}
-	return nil
-}
-
-func (m *DB) getBallotBytes(id types.BallotID) ([]byte, error) {
-	data, err := m.ballots.Get(id.Bytes())
-	if err != nil {
-		return data, fmt.Errorf("ballot get from DB: %w", err)
-	}
-
-	return data, nil
-}
-
-func (m *DB) getBlockBytes(id types.BlockID) ([]byte, error) {
-	data, err := m.blocks.Get(id.Bytes())
-	if err != nil {
-		return data, fmt.Errorf("get from DB: %w", err)
-	}
-
-	return data, nil
+	return layers.SetHareOutput(m.db, lid, types.BlockID{})
 }
 
 // ContextualValidity retrieves opinion on block from the database.
 func (m *DB) ContextualValidity(id types.BlockID) (bool, error) {
-	b, err := m.contextualValidity.Get(id.Bytes())
-	if err != nil {
-		return false, fmt.Errorf("get from DB: %w", err)
-	}
-	return b[0] == 1, nil // bytes to bool
+	return blocks.IsValid(m.db, id)
 }
 
 // SaveContextualValidity persists opinion on block to the database.
 func (m *DB) SaveContextualValidity(id types.BlockID, lid types.LayerID, valid bool) error {
-	var v []byte
-	if valid {
-		v = constTrue
-	} else {
-		v = constFalse
-	}
 	m.With().Debug("save block contextual validity", id, lid, log.Bool("validity", valid))
-
-	if err := m.contextualValidity.Put(id.Bytes(), v); err != nil {
-		return fmt.Errorf("put into DB: %w", err)
+	if valid {
+		return blocks.SetValid(m.db, id)
 	}
-
-	return nil
+	return blocks.SetInvalid(m.db, id)
 }
 
 // RecordCoinflip saves the weak coinflip result to memory for the given layer.
@@ -436,107 +293,46 @@ func (m *DB) RecordCoinflip(ctx context.Context, layerID types.LayerID, coinflip
 // GetCoinflip returns the weak coinflip result for the given layer.
 func (m *DB) GetCoinflip(_ context.Context, layerID types.LayerID) (bool, bool) {
 	m.coinflipMu.Lock()
+	defer m.coinflipMu.Unlock()
 	coin, exists := m.coinflips[layerID]
-	m.coinflipMu.Unlock()
-
 	return coin, exists
 }
 
 // GetHareConsensusOutput gets the input vote vector for a layer (hare results).
 func (m *DB) GetHareConsensusOutput(layerID types.LayerID) (types.BlockID, error) {
-	buf, err := m.hareOutput.Get(layerID.Bytes())
-	if err != nil {
-		return types.EmptyBlockID, fmt.Errorf("get from DB: %w", err)
-	}
-	var id types.BlockID
-	if err := codec.Decode(buf, &id); err != nil {
-		return types.EmptyBlockID, fmt.Errorf("decode with codec: %w", err)
-	}
-	return id, nil
+	return layers.GetHareOutput(m.db, layerID)
 }
 
 // SaveHareConsensusOutput gets the input vote vector for a layer (hare results).
 func (m *DB) SaveHareConsensusOutput(ctx context.Context, id types.LayerID, blockID types.BlockID) error {
 	m.WithContext(ctx).With().Debug("saving hare output", id, blockID)
-	// NOTE(dshulyak) there is an implicit dependency in fetcher
-	if err := m.hareOutput.Put(id.Bytes(), blockID.Bytes()); err != nil {
-		return fmt.Errorf("put into DB: %w", err)
-	}
-
-	return nil
+	return layers.SetHareOutput(m.db, id, blockID)
 }
 
 func (m *DB) persistProcessedLayer(layerID types.LayerID) error {
-	if err := m.general.Put(constPROCESSED, layerID.Bytes()); err != nil {
-		return fmt.Errorf("put into DB: %w", err)
-	}
-
-	return nil
+	return layers.SetStatus(m.db, layerID, layers.Processed)
 }
 
 // GetProcessedLayer loads processed layer from database.
 func (m *DB) GetProcessedLayer() (types.LayerID, error) {
-	data, err := m.general.Get(constPROCESSED)
-	if err != nil {
-		return types.NewLayerID(0), err
-	}
-	return types.BytesToLayerID(data), nil
+	return layers.GetByStatus(m.db, layers.Processed)
 }
 
 // GetVerifiedLayer loads verified layer from database.
 func (m *DB) GetVerifiedLayer() (types.LayerID, error) {
-	data, err := m.general.Get(VERIFIED)
-	if err != nil {
-		return types.NewLayerID(0), err
-	}
-	return types.BytesToLayerID(data), nil
+	return layers.GetByStatus(m.db, layers.Applied)
 }
 
-func (m *DB) writeBallot(b *types.Ballot) error {
-	dbb := &types.DBBallot{
-		InnerBallot: b.InnerBallot,
-		ID:          b.ID(),
-		Signature:   b.Signature,
-		SmesherID:   b.SmesherID().Bytes(),
-	}
-	if data, err := codec.Encode(dbb); err != nil {
-		return fmt.Errorf("could not encode ballot: %w", err)
-	} else if err := m.ballots.Put(b.ID().Bytes(), data); err != nil {
-		return fmt.Errorf("could not add ballot %v to database: %w", b.ID(), err)
-	} else if err := m.updateLayer(layerBallots, b.LayerIndex, b.ID().Bytes()); err != nil {
-		return fmt.Errorf("could not update layer %v with a new ballot %v: %w", b.LayerIndex, b.ID(), err)
-	}
-
-	return nil
+// GetLatestLayer loads latest layer from database.
+func (m *DB) GetLatestLayer() (types.LayerID, error) {
+	return layers.GetByStatus(m.db, layers.Latest)
 }
 
 func (m *DB) writeBlock(b *types.Block) error {
-	dbb := &types.DBBlock{
-		InnerBlock: b.InnerBlock,
-		ID:         b.ID(),
-	}
-	if data, err := codec.Encode(dbb); err != nil {
-		return fmt.Errorf("could not encode block: %w", err)
-	} else if err := m.blocks.Put(b.ID().Bytes(), data); err != nil {
+	if err := blocks.Add(m.db, b); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", b.ID(), err)
-	} else if err := m.updateLayer(layerBlocks, b.LayerIndex, b.ID().Bytes()); err != nil {
-		return fmt.Errorf("could not update layer %v with a new block %v: %w", b.LayerIndex, b.ID(), err)
 	}
-
 	m.blockCache.put(b)
-	return nil
-}
-
-func (m *DB) updateLayer(namespace string, lid types.LayerID, id []byte) error {
-	var b bytes.Buffer
-	b.WriteString(namespace)
-	b.Write(lid.Bytes())
-	b.Write(id)
-
-	if err := m.layers.Put(b.Bytes(), nil); err != nil {
-		return fmt.Errorf("put into DB: %w", err)
-	}
-
 	return nil
 }
 
@@ -554,7 +350,6 @@ func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) error {
 	if err := m.general.Put(getLayerHashKey(layerID), hash.Bytes()); err != nil {
 		return fmt.Errorf("put into DB: %w", err)
 	}
-
 	return nil
 }
 
@@ -1219,4 +1014,35 @@ func (db *BallotFetcherDB) Get(hash []byte) ([]byte, error) {
 	}
 
 	return data, nil
+}
+
+// LayerIDs is a utility function that finds namespaced IDs saved in a database as a key.
+func LayerIDs(db database.Database, namespace string, lid types.LayerID, f func(id []byte) error) error {
+	var (
+		zero = false
+		n    int
+		buf  = new(bytes.Buffer)
+	)
+	buf.WriteString(namespace)
+	buf.Write(lid.Bytes())
+
+	it := db.Find(buf.Bytes())
+	defer it.Release()
+	for it.Next() {
+		if len(it.Key()) == buf.Len() {
+			zero = true
+			continue
+		}
+		if err := f(it.Key()[buf.Len():]); err != nil {
+			return err
+		}
+		n++
+	}
+	if it.Error() != nil {
+		return fmt.Errorf("iterator: %w", it.Error())
+	}
+	if zero || n > 0 {
+		return nil
+	}
+	return database.ErrNotFound
 }

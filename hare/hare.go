@@ -373,8 +373,6 @@ func (h *Hare) getGoodProposal(lyrID types.LayerID, epochBeacon types.Beacon, lo
 	if err != nil {
 		if err != database.ErrNotFound {
 			logger.With().Error("no proposals found for hare, using empty set", log.Err(err))
-		} else if err = h.mesh.SetZeroBallotLayer(lyrID); err != nil {
-			logger.With().Warning("failed to tag zero ballot layer", log.Err(err))
 		}
 		return []types.ProposalID{}
 	}
