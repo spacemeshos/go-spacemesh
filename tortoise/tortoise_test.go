@@ -1948,6 +1948,7 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	s1 := sim.New(
 		sim.WithLayerSize(size),
 		sim.WithStates(2),
+		sim.WithLogger(logtest.New(t)),
 	)
 	s1.Setup(
 		sim.WithSetupMinerRange(15, 15),

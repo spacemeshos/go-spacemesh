@@ -16,12 +16,14 @@ func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader) (*types.Ba
 		if err != io.EOF {
 			return nil, fmt.Errorf("copy sig: %w", err)
 		}
+		sigBytes = nil
 	}
 	pubkeyBytes := make([]byte, pubkey.Len())
 	if _, err := pubkey.Read(pubkeyBytes); err != nil {
 		if err != io.EOF {
 			return nil, fmt.Errorf("copy pubkey: %w", err)
 		}
+		pubkeyBytes = nil
 	}
 	inner := types.InnerBallot{}
 	if _, err := codec.DecodeFrom(body, &inner); err != nil {

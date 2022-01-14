@@ -9,8 +9,8 @@ CREATE INDEX blocks_by_layer ON blocks(layer);
 CREATE TABLE ballots ( 
     id CHAR(20) PRIMARY KEY,
     layer INT NOT NULL,
-    signature VARCHAR NOT NULL,
-    pubkey VARCHAR NOT NULL,
+    signature VARCHAR,
+    pubkey VARCHAR,
     ballot BLOB
 );
 CREATE INDEX ballots_by_layer ON ballots(layer);
