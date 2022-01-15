@@ -26,11 +26,13 @@ CREATE TABLE mesh_status (
 ) WITHOUT ROWID;
 
 CREATE TABLE rewards (
-    coinbase char(20),
-    smesher char(20),
+    coinbase CHAR(20),
+    smesher VARCHAR NOT NULL,
     layer INT,
-    total UNSIGNED LONG INT,
-    PRIMARY KEY (coinbase, layer)
+    total_reward UNSIGNED LONG INT,
+    layer_reward UNSIGNED LONG INT,
+    PRIMARY KEY (coinbase, smesher, layer)
 );
 
-CREATE INDEX smesher_layer ON rewards(smesher, layer);
+CREATE INDEX rewards_by_coinbase ON rewards(coinbase, layer);
+CREATE INDEX rewards_by_smesher ON rewards(smesher, layer);

@@ -7,38 +7,56 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// Reward ...
-type Reward struct {
-	Address types.Address
-	Layer   types.LayerID
-	Value   uint64
-}
+const (
+	coinbaseReward = iota + 1
+	smesherReward
+)
 
 // Add reward to the database.
-func Add(db sql.Executor, reward *Reward) error {
-	if _, err := db.Exec(`insert into rewards (coinbase, layer, total) values (?1, ?2, ?3) 
-					on conflict(coinbase, layer) do update set total=add_uint64(total,?3);`,
+func Add(db sql.Executor, lid types.LayerID, reward *types.AnyReward) error {
+	if _, err := db.Exec(`insert into rewards 
+			(coinbase, smesher, layer, total_reward, layer_reward) 
+			values (?1, ?2, ?3, ?4, ?5) 
+		on conflict(coinbase, smesher, layer) 
+			do update set 
+				total_reward=add_uint64(total_reward,?4),
+		 		layer_reward=add_uint64(layer_reward,?5);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, reward.Address[:])
-			stmt.BindInt64(2, int64(reward.Layer.Uint32()))
-			stmt.BindInt64(3, int64(reward.Value))
+			stmt.BindBytes(2, reward.SmesherID.ToBytes())
+			stmt.BindInt64(3, int64(lid.Uint32()))
+			stmt.BindInt64(4, int64(reward.Amount))
+			stmt.BindInt64(5, int64(reward.LayerReward))
 		}, nil); err != nil {
-		return fmt.Errorf("insert %s %d: %w", reward.Address, reward.Value, err)
+		return fmt.Errorf("insert %s %+x: %w", lid, reward, err)
 	}
 	return nil
 }
 
-// CoinbaseTotal ...
-func CoinbaseTotal(db sql.Executor, address types.Address) (rst uint64, err error) {
-	if _, err := db.Exec("select sum(total) from rewards where coinbase = ?1",
+// FilterByCoinbase filters rewards from all layers by coinbase address.
+func FilterByCoinbase(db sql.Executor, address types.Address) (rst []*types.Reward, err error) {
+	if _, err := db.Exec("select (coinbase, smesher, layer, total_reward, layer_reward) from rewards where coinbase = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, address[:])
 		}, func(stmt *sql.Statement) bool {
-			rst = uint64(stmt.ColumnInt64(0))
 			return true
 		},
 	); err != nil {
-		return 0, err
+		return nil, err
+	}
+	return rst, nil
+}
+
+// FilterBySmesher filters rewards from all layers by smesher address.
+func FilterBySmesher(db sql.Executor, address []byte) (rst []*types.Reward, err error) {
+	if _, err := db.Exec("select (coinbase, smesher, layer, total_reward, layer_reward) from rewards where smesher = ?1",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, address[:])
+		}, func(stmt *sql.Statement) bool {
+			return true
+		},
+	); err != nil {
+		return nil, err
 	}
 	return rst, nil
 }

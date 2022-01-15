@@ -1,7 +1,6 @@
 package rewards
 
 import (
-	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,34 +11,22 @@ import (
 
 func TestAdd(t *testing.T) {
 	db := sql.InMemory()
-	var part uint64 = math.MaxUint64 / 4
 
-	rewards := []Reward{
+	rewards := []types.AnyReward{
 		{
 			Address: types.Address{1, 1},
-			Layer:   types.NewLayerID(1),
-			Value:   part,
 		},
 		{
 			Address: types.Address{1, 1},
-			Layer:   types.NewLayerID(1),
-			Value:   part,
 		},
 		{
 			Address: types.Address{1, 1},
-			Layer:   types.NewLayerID(1),
-			Value:   part,
 		},
 		{
 			Address: types.Address{1, 1},
-			Layer:   types.NewLayerID(1),
-			Value:   part,
 		},
 	}
 	for _, reward := range rewards {
-		require.NoError(t, Add(db, &reward))
+		require.NoError(t, Add(db, types.NewLayerID(1), &reward))
 	}
-	total, err := CoinbaseTotal(db, types.Address{1, 1})
-	require.NoError(t, err)
-	require.Equal(t, part*4, total)
 }
