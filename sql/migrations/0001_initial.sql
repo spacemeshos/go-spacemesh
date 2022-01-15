@@ -17,7 +17,9 @@ CREATE INDEX ballots_by_layer ON ballots(layer);
 
 CREATE TABLE layers (
     id INT PRIMARY KEY,
-    hare_output VARCHAR
+    hare_output VARCHAR,
+    hash CHAR(32),
+    aggregated_hash CHAR(32)
 ) WITHOUT ROWID;
 
 CREATE TABLE mesh_status (

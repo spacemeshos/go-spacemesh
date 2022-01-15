@@ -35,7 +35,6 @@ type DB struct {
 	db *sql.Database
 
 	transactions database.Database
-	general      database.Database
 	unappliedTxs database.Database
 
 	coinflipMu sync.RWMutex
@@ -58,10 +57,6 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize transactions db: %v", err)
 	}
-	gdb, err := database.NewLDBDatabase(filepath.Join(path, "general"), 0, 0, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize general db: %v", err)
-	}
 	utx, err := database.NewLDBDatabase(filepath.Join(path, "unappliedTxs"), 0, 0, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
@@ -72,7 +67,6 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 		blockCache:   newBlockCache(blockCacheSize * layerSize),
 		db:           db,
 		transactions: tdb,
-		general:      gdb,
 		unappliedTxs: utx,
 		coinflips:    make(map[types.LayerID]bool),
 		exit:         make(chan struct{}),
@@ -115,7 +109,6 @@ func NewMemMeshDB(logger log.Log) *DB {
 		Log:          logger,
 		blockCache:   newBlockCache(100 * layerSize),
 		db:           sql.InMemory(),
-		general:      database.NewMemDatabase(),
 		transactions: database.NewMemDatabase(),
 		unappliedTxs: database.NewMemDatabase(),
 		coinflips:    make(map[types.LayerID]bool),
@@ -143,7 +136,6 @@ func (m *DB) Close() {
 	close(m.exit)
 	m.transactions.Close()
 	m.unappliedTxs.Close()
-	m.general.Close()
 	if err := m.db.Close(); err != nil {
 		m.Log.With().Error("error closing database", log.Err(err))
 	}
@@ -337,28 +329,15 @@ func (m *DB) writeBlock(b *types.Block) error {
 }
 
 func (m *DB) recoverLayerHash(layerID types.LayerID) (types.Hash32, error) {
-	h := types.EmptyLayerHash
-	bts, err := m.general.Get(getLayerHashKey(layerID))
-	if err != nil {
-		return types.EmptyLayerHash, fmt.Errorf("get from DB: %w", err)
-	}
-	h.SetBytes(bts)
-	return h, nil
+	return layers.GetHash(m.db, layerID)
 }
 
 func (m *DB) persistLayerHash(layerID types.LayerID, hash types.Hash32) error {
-	if err := m.general.Put(getLayerHashKey(layerID), hash.Bytes()); err != nil {
-		return fmt.Errorf("put into DB: %w", err)
-	}
-	return nil
+	return layers.SetHash(m.db, layerID, hash)
 }
 
 func (m *DB) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32) error {
-	if err := m.general.Put(getAggregatedLayerHashKey(layerID), hash.Bytes()); err != nil {
-		return fmt.Errorf("put into DB: %w", err)
-	}
-
-	return nil
+	return layers.SetAggregatedHash(m.db, layerID, hash)
 }
 
 func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {

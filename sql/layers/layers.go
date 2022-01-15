@@ -93,3 +93,51 @@ func GetByStatus(db sql.Executor, status Status) (rst types.LayerID, err error) 
 	}
 	return rst, nil
 }
+
+func setHash(db sql.Executor, field string, lid types.LayerID, hash types.Hash32) error {
+	if _, err := db.Exec(fmt.Sprintf(`insert into layers (id, %[1]s) values (?1, ?2) 
+	on conflict(id) do update set %[1]s=?2;`, field),
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Uint32()))
+			stmt.BindBytes(2, hash[:])
+		}, nil); err != nil {
+		return fmt.Errorf("update %s to %s: %w", field, hash, err)
+	}
+	return nil
+}
+
+// SetHash updates hash for layer.
+func SetHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
+	return setHash(db, "hash", lid, hash)
+}
+
+// SetAggregatedHash updates aggregated hash for layer.
+func SetAggregatedHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
+	return setHash(db, "aggregated_hash", lid, hash)
+}
+
+func getHash(db sql.Executor, field string, lid types.LayerID) (rst types.Hash32, err error) {
+	if rows, err := db.Exec(fmt.Sprintf("select %s from layers where id = ?1", field),
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Uint32()))
+		},
+		func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, rst[:])
+			return true
+		}); err != nil {
+		return rst, fmt.Errorf("select %s for %s: %w", field, lid, err)
+	} else if rows == 0 {
+		return rst, fmt.Errorf("%w layer %s", sql.ErrNotFound, lid)
+	}
+	return rst, err
+}
+
+// GetHash for layer.
+func GetHash(db sql.Executor, lid types.LayerID) (types.Hash32, error) {
+	return getHash(db, "hash", lid)
+}
+
+// GetAggregatedHash for layer.
+func GetAggregatedHash(db sql.Executor, lid types.LayerID) (types.Hash32, error) {
+	return getHash(db, "aggregated_hash", lid)
+}
