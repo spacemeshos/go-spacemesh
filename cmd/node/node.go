@@ -600,12 +600,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.proposalDB = proposalDB
 
-	if app.Config.AtxsPerBlock > miner.ATXsPerBallotLimit { // validate limit
-		return fmt.Errorf("number of atxs per block required is bigger than the limit. atxs_per_block: %d. limit: %d",
-			app.Config.AtxsPerBlock, miner.ATXsPerBallotLimit,
-		)
-	}
-
 	// we can't have an epoch offset which is greater/equal than the number of layers in an epoch
 
 	if app.Config.HareEligibility.EpochOffset >= app.Config.BaseConfig.LayersPerEpoch {
