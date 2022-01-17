@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 )
 
 const (
@@ -340,46 +341,6 @@ func (m *DB) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32
 	return layers.SetAggregatedHash(m.db, layerID, hash)
 }
 
-func getRewardKey(l types.LayerID, account types.Address, smesherID types.NodeID) []byte {
-	return new(keyBuilder).
-		WithAccountRewardsPrefix().
-		WithAddress(account).
-		WithNodeID(smesherID).
-		WithLayerID(l).
-		Bytes()
-}
-
-func getRewardKeyPrefix(account types.Address) []byte {
-	return new(keyBuilder).
-		WithAccountRewardsPrefix().
-		WithAddress(account).
-		Bytes()
-}
-
-// This function gets the reward key for a particular smesherID
-// format for the index "s_<smesherid>_<accountid>_<layerid> -> r_<accountid>_<smesherid>_<layerid> -> the actual reward".
-func getSmesherRewardKey(l types.LayerID, smesherID types.NodeID, account types.Address) []byte {
-	return new(keyBuilder).
-		WithSmesherRewardsPrefix().
-		WithNodeID(smesherID).
-		WithAddress(account).
-		WithLayerID(l).
-		Bytes()
-}
-
-// use r_ for one and s_ for the other so the namespaces can't collide.
-func getSmesherRewardKeyPrefix(smesherID types.NodeID) []byte {
-	return new(keyBuilder).
-		WithSmesherRewardsPrefix().
-		WithNodeID(smesherID).Bytes()
-}
-
-func getLayerHashKey(layerID types.LayerID) []byte {
-	return new(keyBuilder).
-		WithLayerHashPrefix().
-		WithLayerID(layerID).Bytes()
-}
-
 type keyBuilder struct {
 	buf bytes.Buffer
 }
@@ -549,109 +510,28 @@ func (m *DB) writeTransactions(layerID types.LayerID, bid types.BlockID, txs ...
 	return nil
 }
 
-// We're not using the existing reward type because the layer is implicit in the key.
-type dbReward struct {
-	TotalReward         uint64
-	LayerRewardEstimate uint64
-	SmesherID           types.NodeID
-	Coinbase            types.Address
-	// Amount - LayerReward = FeesEstimate
+func (m *DB) writeTransactionRewards(l types.LayerID, applied []types.AnyReward) error {
+	tx, err := m.db.Tx(context.Background())
+	if err != nil {
+		return err
+	}
+	defer tx.Release()
+	for i := range applied {
+		if err := rewards.Add(tx, l, &applied[i]); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
-func (m *DB) writeTransactionRewards(l types.LayerID, rewards []types.AnyReward) error {
-	type pair struct {
-		total uint64
-		layer uint64
-	}
-	smesherIDs := make(map[string]types.NodeID)
-	smesherByAddresses := make(map[types.Address]map[string]pair)
-	for _, r := range rewards {
-		if _, exists := smesherByAddresses[r.Address]; !exists {
-			smesherByAddresses[r.Address] = make(map[string]pair)
-		}
-		p := smesherByAddresses[r.Address][r.SmesherID.String()]
-		p.total += r.Amount
-		p.layer += r.LayerReward
-		smesherByAddresses[r.Address][r.SmesherID.String()] = p
-		smesherIDs[r.SmesherID.String()] = r.SmesherID
-	}
-	batch := m.transactions.NewBatch()
-	for addr, smeshers := range smesherByAddresses {
-		for smesher, v := range smeshers {
-			smesherID := smesherIDs[smesher]
-			reward := dbReward{TotalReward: v.total, LayerRewardEstimate: v.layer, SmesherID: smesherID, Coinbase: addr}
-			if b, err := codec.Encode(&reward); err != nil {
-				return fmt.Errorf("could not marshal reward for %v: %v", addr.Short(), err)
-			} else if err := batch.Put(getRewardKey(l, addr, smesherID), b); err != nil {
-				return fmt.Errorf("could not write reward to %v to database: %v", addr.Short(), err)
-			} else if err := batch.Put(getSmesherRewardKey(l, smesherID, addr), getRewardKey(l, addr, smesherID)); err != nil {
-				return fmt.Errorf("could not write reward key for smesherID %v to database: %v", smesherID.ShortString(), err)
-			}
-		}
-	}
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("write batch: %w", err)
-	}
-	return nil
-}
-
-// GetRewards retrieves account's rewards by address.
-func (m *DB) GetRewards(account types.Address) (rewards []types.Reward, err error) {
-	it := m.transactions.Find(getRewardKeyPrefix(account))
-	defer it.Release()
-	for it.Next() {
-		if it.Key() == nil {
-			break
-		}
-		layer := parseLayerIDFromRewardsKey(it.Key())
-		var reward dbReward
-		err = codec.Decode(it.Value(), &reward)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
-		}
-		rewards = append(rewards, types.Reward{
-			Layer:               layer,
-			TotalReward:         reward.TotalReward,
-			LayerRewardEstimate: reward.LayerRewardEstimate,
-			SmesherID:           reward.SmesherID,
-			Coinbase:            reward.Coinbase,
-		})
-	}
-	err = it.Error()
-	return
+// GetRewards retrieves account's rewards by the coinbase address.
+func (m *DB) GetRewards(coinbase types.Address) ([]types.Reward, error) {
+	return rewards.FilterByCoinbase(m.db, coinbase)
 }
 
 // GetRewardsBySmesherID retrieves rewards by smesherID.
-func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) (rewards []types.Reward, err error) {
-	it := m.transactions.Find(getSmesherRewardKeyPrefix(smesherID))
-	defer it.Release()
-	for it.Next() {
-		if it.Key() == nil {
-			break
-		}
-		layer := parseLayerIDFromRewardsKey(it.Key())
-		if err != nil {
-			return nil, fmt.Errorf("error parsing db key %s: %v", it.Key(), err)
-		}
-		// find the key to the actual reward struct, which is in it.Value()
-		var reward dbReward
-		rewardBytes, err := m.transactions.Get(it.Value())
-		if err != nil {
-			return nil, fmt.Errorf("wrong key in db %s: %v", it.Value(), err)
-		}
-		if err = codec.Decode(rewardBytes, &reward); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal reward: %v", err)
-		}
-		rewards = append(rewards, types.Reward{
-			Layer:               layer,
-			TotalReward:         reward.TotalReward,
-			LayerRewardEstimate: reward.LayerRewardEstimate,
-			SmesherID:           reward.SmesherID,
-			Coinbase:            reward.Coinbase,
-		})
-	}
-	err = it.Error()
-	return
+func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) ([]types.Reward, error) {
+	return rewards.FilterBySmesher(m.db, smesherID.ToBytes())
 }
 
 func (m *DB) addToUnappliedTxs(txs []*types.Transaction, layer types.LayerID) error {
