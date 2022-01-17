@@ -44,7 +44,8 @@ CREATE TABLE transactions (
     layer INT NOT NULL,
     block CHAR(20),
     origin CHAR(20),
-    destination CHAR(20)
+    destination CHAR(20),
+    applied BOOL
 );
 
 CREATE INDEX transaction_by_origin ON transactions(origin, layer);
