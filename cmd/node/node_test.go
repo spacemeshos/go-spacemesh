@@ -881,7 +881,7 @@ func TestConfig_Preset(t *testing.T) {
 
 		content := fmt.Sprintf(`{"p2p": {"network-id": %d}}`, networkID)
 		path := filepath.Join(t.TempDir(), "config.json")
-		require.NoError(t, os.WriteFile(path, []byte(content), 0600))
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 		require.NoError(t, cmd.ParseFlags([]string{"--config=" + path}))
 
 		conf, err := loadConfig(cmd)
