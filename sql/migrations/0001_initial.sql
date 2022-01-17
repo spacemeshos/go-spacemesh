@@ -30,10 +30,22 @@ CREATE TABLE mesh_status (
 CREATE TABLE rewards (
     smesher CHAR(64),
     coinbase CHAR(20),
-    layer INT,
+    layer INT NOT NULL,
     total_reward UNSIGNED LONG INT,
     layer_reward UNSIGNED LONG INT,
     PRIMARY KEY (smesher, layer)
 );
 
 CREATE INDEX rewards_by_coinbase ON rewards(coinbase, layer);
+
+CREATE TABLE transactions (
+    id CHAR(32) PRIMARY KEY,
+    tx BLOB,
+    layer INT NOT NULL,
+    block CHAR(20),
+    origin CHAR(20),
+    destination CHAR(20)
+);
+
+CREATE INDEX transaction_by_origin ON transactions(origin, layer);
+CREATE INDEX transaction_by_destination ON transactions(destination, layer);
