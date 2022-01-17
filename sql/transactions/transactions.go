@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// Add unapplied transaction to the database.
+// Add transaction to the database. If transaction already exists layer and block will be updated.
 func Add(db sql.Executor, lid types.LayerID, bid types.BlockID, tx *types.Transaction) error {
 	buf, err := codec.Encode(tx)
 	if err != nil {
@@ -55,11 +55,34 @@ func Delete(db sql.Executor, id types.TransactionID) error {
 	return nil
 }
 
+// tx, layer, block, origin.
+func decodeTransaction(stmt *sql.Statement) (*types.MeshTransaction, error) {
+	var (
+		tx     types.Transaction
+		origin types.Address
+		bid    types.BlockID
+	)
+	if _, err := codec.DecodeFrom(stmt.ColumnReader(0), &tx); err != nil {
+		return nil, fmt.Errorf("decode %w", err)
+	}
+	lid := types.NewLayerID(uint32(stmt.ColumnInt64(1)))
+	stmt.ColumnBytes(2, bid[:])
+	stmt.ColumnBytes(3, origin[:])
+	tx.SetOrigin(origin)
+	return &types.MeshTransaction{
+		Transaction: tx,
+		LayerID:     lid,
+		BlockID:     bid,
+	}, nil
+}
+
 // Get transaction from database.
 func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, err error) {
-	if rows, err := db.Exec("select id, tx, layer, block, origin, destination",
+	if rows, err := db.Exec("select tx, layer, block, origin from transactions where id = ?1",
 		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
+			tx, err = decodeTransaction(stmt)
 			return true
 		}); err != nil {
 		return nil, fmt.Errorf("get %s: %w", id, err)
@@ -81,17 +104,50 @@ func Has(db sql.Executor, id types.TransactionID) (bool, error) {
 	return rows > 0, nil
 }
 
+// query MUST ensure that this order of fields tx, layer, block, origin.
+func filter(db sql.Executor, query string, encoder func(*sql.Statement)) (rst []*types.MeshTransaction, err error) {
+	if _, err := db.Exec(query, encoder, func(stmt *sql.Statement) bool {
+		var tx *types.MeshTransaction
+		tx, err = decodeTransaction(stmt)
+		if err != nil {
+			return false
+		}
+		rst = append(rst, tx)
+		return true
+	}); err != nil {
+		return nil, fmt.Errorf("query transactions: %w", err)
+	}
+	return rst, err
+}
+
+func filterByAddress(db sql.Executor, addrfield string, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
+	return filter(db, fmt.Sprintf(`select tx, layer, block, origin from transactions
+		where %s = ?1 layer >= ?2 and layer <= ?3`, addrfield), func(stmt *sql.Statement) {
+		stmt.BindBytes(1, address[:])
+		stmt.BindInt64(2, int64(from.Value))
+		stmt.BindInt64(3, int64(to.Value))
+	})
+}
+
+const (
+	originField      = "origin"
+	destinationField = "destination"
+)
+
 // FilterByOrigin filter transaction by origin [from, to] layers.
 func FilterByOrigin(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return nil, nil
+	return filterByAddress(db, originField, from, to, address)
 }
 
 // FilterByDestination filter transaction by destnation [from, to] layers.
 func FilterByDestination(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return nil, nil
+	return filterByAddress(db, destinationField, from, to, address)
 }
 
-// FilterPending filters all transactions that are not yet applied (have empty block).
+// FilterPending filters all transactions that are not yet applied.
 func FilterPending(db sql.Executor, address types.Address) ([]*types.MeshTransaction, error) {
-	return nil, nil
+	return filter(db, `select tx, layer, block, origin from transactions
+		where origin = ?1 and applied != 1`, func(stmt *sql.Statement) {
+		stmt.BindBytes(1, address[:])
+	})
 }
