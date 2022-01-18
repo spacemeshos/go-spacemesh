@@ -139,10 +139,10 @@ func getHash(db sql.Executor, field string, lid types.LayerID) (rst types.Hash32
 
 // GetHash for layer.
 func GetHash(db sql.Executor, lid types.LayerID) (types.Hash32, error) {
-	return getHash(db, "hash", lid)
+	return getHash(db, hashField, lid)
 }
 
 // GetAggregatedHash for layer.
 func GetAggregatedHash(db sql.Executor, lid types.LayerID) (types.Hash32, error) {
-	return getHash(db, "aggregated_hash", lid)
+	return getHash(db, aggregatedHashField, lid)
 }
