@@ -317,6 +317,14 @@ func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) er
 			return err
 		}
 	}
+	if !reverted && newVerified.Before(vl.latestLayerInState) {
+		logger.With().Error("tortoise reverted state without notifying mesh",
+			log.Stringer("applied_layer", vl.latestLayerInState),
+			log.Stringer("verified_layer", newVerified),
+		)
+		newVerified = vl.latestLayerInState
+	}
+
 	// mesh can't skip layer that failed to complete
 	from := minLayer(oldVerified, vl.latestLayerInState).Add(1)
 	to := newVerified
