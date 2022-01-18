@@ -102,11 +102,21 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err != nil {
 			return nil, err
 		}
-		defer tx.Release()
-		if err := config.migrations(tx); err != nil {
+		err = config.migrations(tx)
+		if err == nil {
+			tx.Commit()
+		}
+		tx.Release()
+		if err != nil {
 			return nil, err
 		}
-		tx.Commit()
+	}
+	for i := 0; i < config.connections; i++ {
+		conn := pool.Get(context.Background())
+		if err := registerFunctions(conn); err != nil {
+			return nil, err
+		}
+		defer pool.Put(conn)
 	}
 	return db, nil
 }
