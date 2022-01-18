@@ -388,6 +388,8 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		pb.eg.Go(func() error {
 			// generate a new requestID for the new block message
 			newCtx := log.WithNewRequestID(ctx, layerID, p.ID())
+			// validation handler, where proposal is persisted, is applied synchronously before
+			// proposal is sent over the network
 			if err = pb.publisher.Publish(newCtx, proposals.NewProposalProtocol, data); err != nil {
 				logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
 			}
