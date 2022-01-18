@@ -342,6 +342,13 @@ func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) er
 	return nil
 }
 
+func (msh *Mesh) getAggregatedHash(lid types.LayerID) (types.Hash32, error) {
+	if !lid.After(types.NewLayerID(1)) {
+		return types.EmptyLayerHash, nil
+	}
+	return layers.GetAggregatedHash(msh.db, lid)
+}
+
 func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID) error {
 	logger := msh.WithContext(ctx)
 	if to.Before(from) {
@@ -369,11 +376,12 @@ func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID)
 			return err
 		}
 
-		prevHash, err := msh.getAggregatedLayerHash(i.Sub(1))
+		prevHash, err := msh.getAggregatedHash(i.Sub(1))
 		if err != nil {
 			logger.With().Debug("failed to get previous aggregated hash", i, log.Err(err))
 			return err
 		}
+
 		logger.With().Debug("got previous aggregatedHash", i, log.String("prevAggHash", prevHash.ShortString()))
 		newAggHash := types.CalcBlocksHash32(validBlockIDs, prevHash.Bytes())
 		if err := msh.persistAggregatedLayerHash(i, newAggHash); err != nil {
@@ -622,24 +630,11 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
 
 // GetAggregatedLayerHash returns the aggregated layer hash up to the specified layer.
 func (msh *Mesh) GetAggregatedLayerHash(layerID types.LayerID) types.Hash32 {
-	h, err := msh.getAggregatedLayerHash(layerID)
+	h, err := layers.GetAggregatedHash(msh.db, layerID)
 	if err != nil {
 		return types.EmptyLayerHash
 	}
 	return h
-}
-
-func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, error) {
-	if layerID.Before(types.NewLayerID(1)) {
-		return types.EmptyLayerHash, nil
-	}
-	var hash types.Hash32
-	bts, err := msh.general.Get(getAggregatedLayerHashKey(layerID))
-	if err == nil {
-		hash.SetBytes(bts)
-		return hash, nil
-	}
-	return hash, fmt.Errorf("get from DB: %w", err)
 }
 
 func uniqueTxIds(blocks []*types.Block, seenTxIds map[types.TransactionID]struct{}) []types.TransactionID {
