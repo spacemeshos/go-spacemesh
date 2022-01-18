@@ -7,6 +7,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+const (
+	hashField           = "hash"
+	aggregatedHashField = "aggregated_hash"
+)
+
 // Status of the layer.
 type Status int8
 
@@ -108,12 +113,12 @@ func setHash(db sql.Executor, field string, lid types.LayerID, hash types.Hash32
 
 // SetHash updates hash for layer.
 func SetHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
-	return setHash(db, "hash", lid, hash)
+	return setHash(db, hashField, lid, hash)
 }
 
 // SetAggregatedHash updates aggregated hash for layer.
 func SetAggregatedHash(db sql.Executor, lid types.LayerID, hash types.Hash32) error {
-	return setHash(db, "aggregated_hash", lid, hash)
+	return setHash(db, aggregatedHashField, lid, hash)
 }
 
 func getHash(db sql.Executor, field string, lid types.LayerID) (rst types.Hash32, err error) {
