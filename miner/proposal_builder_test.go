@@ -140,7 +140,6 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: bb1}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
-	b.mPDB.EXPECT().AddProposal(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
@@ -163,7 +162,6 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mTxPool.EXPECT().SelectTopNTransactions(gomock.Any(), gomock.Any()).Return([]types.TransactionID{tx2.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: bb2}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(refBid.Bytes(), nil).Times(1)
-	b.mPDB.EXPECT().AddProposal(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
@@ -208,7 +206,6 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: bb}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
-	b.mPDB.EXPECT().AddProposal(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
@@ -401,7 +398,6 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
-	b.mPDB.EXPECT().AddProposal(gomock.Any(), gomock.Any()).Return(nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).Return(errors.New("unknown")).Times(1)
 
 	// publish error is ignored
