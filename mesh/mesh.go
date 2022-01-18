@@ -317,13 +317,6 @@ func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) er
 			return err
 		}
 	}
-	if !reverted && newVerified.Before(vl.latestLayerInState) {
-		logger.With().Error("tortoise reverted state without notifying mesh",
-			log.Stringer("applied_layer", vl.latestLayerInState),
-			log.Stringer("verified_layer", newVerified),
-		)
-		newVerified = vl.latestLayerInState
-	}
 
 	// mesh can't skip layer that failed to complete
 	from := minLayer(oldVerified, vl.latestLayerInState).Add(1)
@@ -440,6 +433,13 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) 
 	missing := msh.MissingLayer()
 	// we never reapply the state of oldVerified. note that state reversions must be handled separately.
 	for layerID := from; !layerID.After(to); layerID = layerID.Add(1) {
+		if !layerID.After(msh.latestLayerInState) {
+			logger.With().Warning("trying to apply layer before currently applied layer",
+				log.Stringer("applied_layer", msh.latestLayerInState),
+				layerID,
+			)
+			continue
+		}
 		if err := msh.pushLayer(ctx, layerID); err != nil {
 			msh.setMissingLayer(layerID)
 			return err
