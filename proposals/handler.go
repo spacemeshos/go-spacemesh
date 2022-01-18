@@ -131,7 +131,7 @@ func NewHandler(f system.Fetcher, bc system.BeaconCollector, db atxDB, m meshDB,
 // HandleProposal is the gossip receiver for Proposal.
 func (h *Handler) HandleProposal(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
 	newCtx := log.WithNewRequestID(ctx)
-	if err := h.HandleProposalData(newCtx, msg); errors.Is(err, errKnownProposal) {
+	if err := h.handleProposalData(newCtx, msg); errors.Is(err, errKnownProposal) {
 		return pubsub.ValidationIgnore
 	} else if err != nil {
 		h.logger.WithContext(newCtx).With().Error("failed to process proposal gossip", log.Err(err))
@@ -173,6 +173,14 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 
 // HandleProposalData handles Proposal data from sync.
 func (h *Handler) HandleProposalData(ctx context.Context, data []byte) error {
+	err := h.handleProposalData(ctx, data)
+	if errors.Is(err, errKnownProposal) {
+		return nil
+	}
+	return err
+}
+
+func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
 	logger := h.logger.WithContext(ctx)
 	logger.Info("processing proposal")
 

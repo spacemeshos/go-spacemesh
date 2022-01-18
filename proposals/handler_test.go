@@ -388,7 +388,7 @@ func TestProposal_KnownProposal(t *testing.T) {
 	p := createProposal(t)
 	data := encodeProposal(t, p)
 	th.mp.EXPECT().HasProposal(p.ID()).Return(true).Times(2)
-	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errKnownProposal)
+	assert.NoError(t, th.HandleProposalData(context.TODO(), data))
 	assert.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.TODO(), "", data))
 }
 
