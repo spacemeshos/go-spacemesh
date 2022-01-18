@@ -13,6 +13,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
@@ -386,8 +387,9 @@ func TestProposal_KnownProposal(t *testing.T) {
 	defer th.ctrl.Finish()
 	p := createProposal(t)
 	data := encodeProposal(t, p)
-	th.mp.EXPECT().HasProposal(p.ID()).Return(true).Times(1)
-	assert.NoError(t, th.HandleProposalData(context.TODO(), data))
+	th.mp.EXPECT().HasProposal(p.ID()).Return(true).Times(2)
+	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errKnownProposal)
+	assert.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.TODO(), "", data))
 }
 
 func TestProposal_DuplicateTXs(t *testing.T) {
