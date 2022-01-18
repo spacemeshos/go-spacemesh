@@ -380,12 +380,6 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 			}
 		}
 
-		if err := pb.proposalDB.AddProposal(ctx, p); err != nil {
-			events.ReportDoneCreatingProposal(true, layerID.Uint32(), "failed to add proposal")
-			logger.With().Error("failed to add proposal", p.ID(), log.Err(err))
-			return fmt.Errorf("builder add proposal: %w", err)
-		}
-
 		data, err := codec.Encode(p)
 		if err != nil {
 			logger.With().Panic("failed to serialize proposal", log.Err(err))
