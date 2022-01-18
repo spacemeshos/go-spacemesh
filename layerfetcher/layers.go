@@ -492,7 +492,7 @@ func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byt
 		log.Int("dataSize", len(data)))
 
 	if err := l.atxHandler.HandleAtxData(ctx, data); err != nil {
-		return fmt.Errorf("handle ATX data: %w", err)
+		return fmt.Errorf("handle ATX data %s len %d: %w", hash, len(data), err)
 	}
 
 	return nil

@@ -351,6 +351,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	}
 
 	logger.With().Info("eligible for one or more proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
+	var publish []*types.Proposal
 	for _, eligibilityProof := range proofs {
 		txList, _, err := pb.txPool.SelectTopNTransactions(pb.cfg.txsPerProposal, pb.projector.GetProjection)
 		if err != nil {
@@ -380,20 +381,27 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 			}
 		}
 
-		data, err := codec.Encode(p)
-		if err != nil {
-			logger.With().Panic("failed to serialize proposal", log.Err(err))
-		}
-
+		publish = append(publish, p)
+	}
+	if len(publish) > 0 {
 		pb.eg.Go(func() error {
-			// generate a new requestID for the new block message
-			newCtx := log.WithNewRequestID(ctx, layerID, p.ID())
-			// validation handler, where proposal is persisted, is applied synchronously before
-			// proposal is sent over the network
-			if err = pb.publisher.Publish(newCtx, proposals.NewProposalProtocol, data); err != nil {
-				logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
+			// all proposals publish in the same goroutine in order to ensure
+			// that proposal with ref ballot is published sooner than the proposal
+			// which references base ballot.
+			for _, p := range publish {
+				// generate a new requestID for the new block message
+				newCtx := log.WithNewRequestID(ctx, layerID, p.ID())
+				// validation handler, where proposal is persisted, is applied synchronously before
+				// proposal is sent over the network
+				data, err := codec.Encode(p)
+				if err != nil {
+					logger.With().Panic("failed to serialize proposal", log.Err(err))
+				}
+				if err = pb.publisher.Publish(newCtx, proposals.NewProposalProtocol, data); err != nil {
+					logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
+				}
+				events.ReportDoneCreatingProposal(true, layerID.Uint32(), "")
 			}
-			events.ReportDoneCreatingProposal(true, layerID.Uint32(), "")
 			return nil
 		})
 	}
