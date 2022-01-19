@@ -434,7 +434,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) 
 	// we never reapply the state of oldVerified. note that state reversions must be handled separately.
 	for layerID := from; !layerID.After(to); layerID = layerID.Add(1) {
 		if !layerID.After(msh.latestLayerInState) {
-			logger.With().Warning("trying to apply layer before currently applied layer",
+			logger.With().Error("trying to apply layer before currently applied layer",
 				log.Stringer("applied_layer", msh.latestLayerInState),
 				layerID,
 			)
