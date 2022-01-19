@@ -123,32 +123,34 @@ func Has(db sql.Executor, id types.TransactionID) (bool, error) {
 }
 
 // query MUST ensure that this order of fields tx, layer, block, origin, id.
-func filter(db sql.Executor, query string, encoder func(*sql.Statement)) (rst []*types.MeshTransaction, err error) {
-	if _, err := db.Exec(query, encoder, func(stmt *sql.Statement) bool {
-		var (
-			tx *types.MeshTransaction
-			id types.TransactionID
-		)
-		stmt.ColumnBytes(4, id[:])
-		tx, err = decodeTransaction(id, stmt)
-		if err != nil {
-			return false
-		}
-		rst = append(rst, tx)
-		return true
-	}); err != nil {
+func filter(db sql.Executor, condition string, encoder func(*sql.Statement)) (rst []*types.MeshTransaction, err error) {
+	if _, err := db.Exec("select tx, layer, block, origin, id from transactions "+condition,
+		encoder,
+		func(stmt *sql.Statement) bool {
+			var (
+				tx *types.MeshTransaction
+				id types.TransactionID
+			)
+			stmt.ColumnBytes(4, id[:])
+			tx, err = decodeTransaction(id, stmt)
+			if err != nil {
+				return false
+			}
+			rst = append(rst, tx)
+			return true
+		}); err != nil {
 		return nil, fmt.Errorf("query transactions: %w", err)
 	}
 	return rst, err
 }
 
 func filterByAddress(db sql.Executor, addrfield string, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return filter(db, fmt.Sprintf(`select tx, layer, block, origin, id from transactions
-		where %s = ?1 and layer >= ?2 and layer <= ?3`, addrfield), func(stmt *sql.Statement) {
-		stmt.BindBytes(1, address[:])
-		stmt.BindInt64(2, int64(from.Value))
-		stmt.BindInt64(3, int64(to.Value))
-	})
+	return filter(db, fmt.Sprintf(`where %s = ?1 and layer >= ?2 and layer <= ?3`, addrfield),
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, address[:])
+			stmt.BindInt64(2, int64(from.Value))
+			stmt.BindInt64(3, int64(to.Value))
+		})
 }
 
 const (
@@ -168,18 +170,18 @@ func FilterByDestination(db sql.Executor, from, to types.LayerID, address types.
 
 // FilterByAddress finds all transactions for an address.
 func FilterByAddress(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return filter(db, `select tx, layer, block, origin, id from transactions
-	where origin = ?1 or destination = ?1 and layer >= ?2 and layer <= ?3`, func(stmt *sql.Statement) {
-		stmt.BindBytes(1, address[:])
-		stmt.BindInt64(2, int64(from.Value))
-		stmt.BindInt64(3, int64(to.Value))
-	})
+	return filter(db, `where origin = ?1 or destination = ?1 and layer >= ?2 and layer <= ?3`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, address[:])
+			stmt.BindInt64(2, int64(from.Value))
+			stmt.BindInt64(3, int64(to.Value))
+		})
 }
 
 // FilterPending filters all transactions that are not yet applied.
 func FilterPending(db sql.Executor, address types.Address) ([]*types.MeshTransaction, error) {
-	return filter(db, `select tx, layer, block, origin, id from transactions
-		where origin = ?1 and applied = false`, func(stmt *sql.Statement) {
-		stmt.BindBytes(1, address[:])
-	})
+	return filter(db, `where origin = ?1 and applied = false`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, address[:])
+		})
 }
