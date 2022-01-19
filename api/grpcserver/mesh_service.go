@@ -105,18 +105,17 @@ func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactio
 
 // QUERIES
 
-func (s MeshService) getFilteredTransactions(startLayer types.LayerID, addr types.Address) ([]*types.MeshTransaction, error) {
-	meshTxIds, err := s.getTxIdsFromMesh(startLayer, addr)
+func (s MeshService) getFilteredTransactions(from types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
+	latest := s.Mesh.LatestLayer()
+	origin, err := s.Mesh.GetTransactionsByOrigin(from, latest, address)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("reading txs for origin %s: %w", address, err)
 	}
-	txs, missing := s.Mesh.GetMeshTransactions(meshTxIds)
-	// FIXME(dshulyak) this call should never return missing transactions, since we got the list of transactions
-	// couple of lines above. and index should be written atomically with transaction body
-	if len(missing) != 0 {
-		log.Error("could not find transactions %v", missing)
+	destination, err := s.Mesh.GetTransactionsByDestination(from, latest, address)
+	if err != nil {
+		return nil, fmt.Errorf("reading txs for destination %s: %w", address, err)
 	}
-	return txs, nil
+	return append(origin, destination...), nil
 }
 
 func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
@@ -243,25 +242,6 @@ func (s MeshService) AccountMeshDataQuery(ctx context.Context, in *pb.AccountMes
 	}
 	res.Data = res.Data[offset : offset+maxResults]
 	return res, nil
-}
-
-func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address) ([]types.TransactionID, error) {
-	var txIDs []types.TransactionID
-	for layerID := minLayer; layerID.Before(s.Mesh.LatestLayer()); layerID = layerID.Add(1) {
-		destTxIDs, err := s.Mesh.GetTransactionsByDestination(layerID, addr)
-		if err != nil {
-			return nil, fmt.Errorf("get txs by destination: %w", err)
-		}
-
-		txIDs = append(txIDs, destTxIDs...)
-		originTxIds, err := s.Mesh.GetTransactionsByOrigin(layerID, addr)
-		if err != nil {
-			return nil, fmt.Errorf("get txs by origin: %w", err)
-		}
-		txIDs = append(txIDs, originTxIds...)
-	}
-
-	return txIDs, nil
 }
 
 func convertLayerID(l types.LayerID) *pb.LayerNumber {

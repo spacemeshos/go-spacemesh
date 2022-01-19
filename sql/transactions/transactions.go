@@ -166,6 +166,16 @@ func FilterByDestination(db sql.Executor, from, to types.LayerID, address types.
 	return filterByAddress(db, destinationField, from, to, address)
 }
 
+// FilterByAddress finds all transactions for an address.
+func FilterByAddress(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
+	return filter(db, `select tx, layer, block, origin, id from transactions
+	where origin = ?1 or destination = ?2 and layer >= ?2 and layer <= ?3`, func(stmt *sql.Statement) {
+		stmt.BindBytes(1, address[:])
+		stmt.BindInt64(2, int64(from.Value))
+		stmt.BindInt64(3, int64(to.Value))
+	})
+}
+
 // FilterPending filters all transactions that are not yet applied.
 func FilterPending(db sql.Executor, address types.Address) ([]*types.MeshTransaction, error) {
 	return filter(db, `select tx, layer, block, origin, id from transactions

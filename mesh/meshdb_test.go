@@ -326,20 +326,21 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 		newTxWithDest(t, signer2, addr1, 1, 101),
 	))
 
-	txs, err := mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr1)
+	lid := types.NewLayerID(1)
+	txs, err := mdb.GetTransactionsByOrigin(lid, lid, addr1)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(txs))
 
-	txs, err = mdb.GetTransactionsByDestination(types.NewLayerID(1), addr1)
+	txs, err = mdb.GetTransactionsByDestination(lid, lid, addr1)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(txs))
 
 	// test negative case
-	txs, err = mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr3)
+	txs, err = mdb.GetTransactionsByOrigin(lid, lid, addr3)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(txs))
 
-	txs, err = mdb.GetTransactionsByDestination(types.NewLayerID(1), addr3)
+	txs, err = mdb.GetTransactionsByDestination(lid, lid, addr3)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(txs))
 }
@@ -622,7 +623,8 @@ func TestMesh_FindOnce(t *testing.T) {
 	}
 	t.Run("ByDestination", func(t *testing.T) {
 		for _, layer := range layers {
-			txs, err := mdb.GetTransactionsByDestination(types.NewLayerID(layer), addr1)
+			lid := types.NewLayerID(layer)
+			txs, err := mdb.GetTransactionsByDestination(lid, lid, addr1)
 			require.NoError(t, err)
 			assert.Len(t, txs, 1)
 		}
@@ -630,7 +632,8 @@ func TestMesh_FindOnce(t *testing.T) {
 
 	t.Run("ByOrigin", func(t *testing.T) {
 		for _, layer := range layers {
-			txs, err := mdb.GetTransactionsByOrigin(types.NewLayerID(layer), addr1)
+			lid := types.NewLayerID(layer)
+			txs, err := mdb.GetTransactionsByOrigin(lid, lid, addr1)
 			require.NoError(t, err)
 			assert.Len(t, txs, 1)
 		}

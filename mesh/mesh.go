@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 var (
@@ -741,7 +742,7 @@ func (msh *Mesh) storeTransactionsFromPool(layerID types.LayerID, blockID types.
 		if err != nil {
 			// if the transaction is not in the pool it could have been
 			// invalidated by another block
-			if has, err := msh.transactions.Has(txID.Bytes()); !has {
+			if has, err := transactions.Has(msh.db, txID); !has {
 				return fmt.Errorf("check if tx is in DB: %w", err)
 			}
 			continue
