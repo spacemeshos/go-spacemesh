@@ -233,14 +233,14 @@ func TestMeshDB_GetStateProjection(t *testing.T) {
 	signer, origin := newSignerAndAddress(t, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newSpawnTx(signer),
-		newCallTx(t, signer, 0, 10),
-		newCallTx(t, signer, 1, 20),
+		newCallTx(t, signer, 1, 10),
+		newCallTx(t, signer, 2, 20),
 	}, types.NewLayerID(1))
 	require.NoError(t, err)
 
 	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
 	require.NoError(t, err)
-	require.Equal(t, initialNonce+2, int(nonce))
+	require.Equal(t, initialNonce+3, int(nonce))
 	require.Equal(t, initialBalance-30, int(balance))
 }
 
@@ -268,14 +268,14 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 	signer, origin := newSignerAndAddress(t, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
 		newSpawnTx(signer),
-		newCallTx(t, signer, 0, 10),
-		newCallTx(t, signer, 1, 95),
+		newCallTx(t, signer, 1, 10),
+		newCallTx(t, signer, 2, 95),
 	}, types.NewLayerID(1))
 	require.NoError(t, err)
 
 	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
 	require.NoError(t, err)
-	require.Equal(t, 1, int(nonce))
+	require.Equal(t, 2, int(nonce))
 	require.Equal(t, initialBalance-10, int(balance))
 }
 
@@ -299,8 +299,8 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 		newCallTx(t, signer1, 420, 240),
 		newCallTx(t, signer1, 421, 241),
 		newSpawnTx(signer2),
-		newCallTx(t, signer2, 0, 100),
-		newCallTx(t, signer2, 1, 101),
+		newCallTx(t, signer2, 1, 100),
+		newCallTx(t, signer2, 2, 101),
 	}, types.NewLayerID(1))
 	require.NoError(t, err)
 
@@ -312,15 +312,17 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 	require.Equal(t, 241, int(txns1[1].TotalAmount))
 
 	txns2 := getTxns(t, mdb, origin2)
-	require.Len(t, txns2, 2)
+	require.Len(t, txns2, 3)
 	require.Equal(t, 0, int(txns2[0].Nonce))
 	require.Equal(t, 1, int(txns2[1].Nonce))
-	require.Equal(t, 100, int(txns2[0].TotalAmount))
-	require.Equal(t, 101, int(txns2[1].TotalAmount))
+	require.Equal(t, 2, int(txns2[2].Nonce))
+	require.Equal(t, 0, int(txns2[0].TotalAmount))
+	require.Equal(t, 100, int(txns2[1].TotalAmount))
+	require.Equal(t, 101, int(txns2[2].TotalAmount))
 
 	mdb.removeFromUnappliedTxs([]*types.Transaction{
 		newSpawnTx(signer2),
-		newCallTx(t, signer2, 0, 100),
+		newCallTx(t, signer2, 1, 100),
 	})
 
 	txns1 = getTxns(t, mdb, origin1)
@@ -332,7 +334,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 
 	txns2 = getTxns(t, mdb, origin2)
 	require.Len(t, txns2, 1)
-	require.Equal(t, 1, int(txns2[0].Nonce))
+	require.Equal(t, 2, int(txns2[0].Nonce))
 	require.Equal(t, 101, int(txns2[0].TotalAmount))
 }
 
@@ -347,8 +349,8 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 		newCallTx(t, signer1, 420, 240),
 		newCallTx(t, signer1, 421, 241),
 		newSpawnTxWithDest(signer2, addr1),
-		newCallTxWithDest(t, signer2, addr1, 0, 100),
-		newCallTxWithDest(t, signer2, addr1, 1, 101),
+		newCallTxWithDest(t, signer2, addr1, 1, 100),
+		newCallTxWithDest(t, signer2, addr1, 2, 101),
 	))
 
 	txs, err := mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr1)
@@ -357,7 +359,7 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 
 	txs, err = mdb.GetTransactionsByDestination(types.NewLayerID(1), addr1)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(txs))
+	require.Equal(t, 3, len(txs))
 
 	// test negative case
 	txs, err = mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr3)
