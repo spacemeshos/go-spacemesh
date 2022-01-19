@@ -2,6 +2,7 @@ package log
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"runtime/debug"
@@ -46,6 +47,11 @@ func (l Log) Panic(format string, args ...interface{}) {
 	l.logger.Sugar().Panicf(format, args...)
 }
 
+// Fatal prints formatted fatal level log message.
+func (l Log) Fatal(format string, args ...interface{}) {
+	l.logger.Sugar().Fatalf(format, args...)
+}
+
 // Wrap and export field logic
 
 // Field is a log field holding a name and value.
@@ -71,6 +77,11 @@ func FieldNamed(name string, field LoggableField) Field {
 // String returns a string Field.
 func String(name, val string) Field {
 	return Field(zap.String(name, val))
+}
+
+// Stringer returns an fmt.Sringer Field.
+func Stringer(name string, val fmt.Stringer) Field {
+	return Field(zap.Stringer(name, val))
 }
 
 // Binary will encode binary content in base64 when logged.
@@ -124,8 +135,27 @@ func Duration(name string, val time.Duration) Field {
 }
 
 // Err returns an error field.
-func Err(v error) Field {
-	return Field(zap.NamedError("errmsg", v))
+func Err(err error) Field {
+	var loggable ObjectMarshaller
+	if errors.As(err, &loggable) {
+		return Field(zap.Inline(loggable))
+	}
+	return Field(zap.NamedError("errmsg", err))
+}
+
+// Object for logging struct fields in namespace.
+func Object(namespace string, object ObjectMarshaller) Field {
+	return Field(zap.Object(namespace, object))
+}
+
+// Inline for inline logging.
+func Inline(object ObjectMarshaller) Field {
+	return Field(zap.Inline(object))
+}
+
+// Array for logging array efficiently.
+func Array(name string, array ArrayMarshaler) Field {
+	return Field(zap.Array(name, array))
 }
 
 // LoggableField as an interface to enable every type to be used as a log field.
@@ -256,4 +286,9 @@ func (fl FieldLogger) Warning(msg string, fields ...LoggableField) {
 // Panic prints message with fields.
 func (fl FieldLogger) Panic(msg string, fields ...LoggableField) {
 	fl.l.Panic(msg, unpack(append(fields, String("name", fl.name)))...)
+}
+
+// Fatal prints message with fields.
+func (fl FieldLogger) Fatal(msg string, fields ...LoggableField) {
+	fl.l.Fatal(msg, unpack(append(fields, String("name", fl.name)))...)
 }

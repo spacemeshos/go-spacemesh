@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/require"
 
@@ -149,18 +150,31 @@ func (test *ConsensusTest) Start() {
 
 func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, oracle fullRolacle, network pubsub.PublishSubsciber, initialSet *Set, layer types.LayerID, name string) (*consensusProcess, *Broker) {
 	broker := buildBroker(tb, name)
+	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.TODO())
 	network.Register(protoName, broker.HandleMessage)
-	output := make(chan TerminationOutput, 1)
+	output := make(chan TerminationOutput)
+	certs := make(chan CertificationOutput)
 	signing := signing2.NewEdSigner()
 	oracle.Register(isHonest, signing.PublicKey().String())
-	proc := newConsensusProcess(cfg, layer, initialSet, oracle, NewMockStateQuerier(), 10, signing,
-		types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, truer{},
+	proc := newConsensusProcess(cfg, layer, initialSet, oracle, broker.mockStateQ, 10, signing,
+		types.NodeID{Key: signing.PublicKey().String(), VRFPublicKey: []byte{}}, network, output, certs, truer{},
 		newRoundClockFromCfg(logtest.New(tb), cfg), logtest.New(tb).WithName(signing.PublicKey().ShortString()))
 	c, _ := broker.Register(context.TODO(), proc.ID())
 	proc.SetInbox(c)
 
-	return proc, broker
+	go func() {
+		// consume certifications output channel
+		for range certs {
+		}
+	}()
+	go func() {
+		// consume reports output channel
+		for range output {
+		}
+	}()
+	return proc, broker.Broker
 }
 
 func TestConsensusFixedOracle(t *testing.T) {

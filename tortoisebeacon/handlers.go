@@ -272,7 +272,7 @@ func (tb *TortoiseBeacon) HandleSerializedFirstVotingMessage(ctx context.Context
 	}
 
 	if err := tb.handleFirstVotingMessage(ctx, m); err != nil {
-		logger.With().Error("failed to handle first voting message", log.Err(err))
+		logger.With().Warning("failed to handle first voting message", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
@@ -399,7 +399,7 @@ func (tb *TortoiseBeacon) HandleSerializedFollowingVotingMessage(ctx context.Con
 	}
 
 	if err := tb.handleFollowingVotingMessage(ctx, m); err != nil {
-		logger.With().Error("failed to handle following voting message", log.Err(err))
+		logger.With().Warning("failed to handle following voting message", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept

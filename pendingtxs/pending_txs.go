@@ -46,7 +46,7 @@ func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction
 		}
 		existing[tx.ID()] = nanoTx{
 			Amount:                 tx.Amount,
-			Fee:                    tx.Fee,
+			Fee:                    tx.GetFee(),
 			HighestLayerIncludedIn: layer,
 		}
 	}

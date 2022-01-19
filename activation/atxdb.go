@@ -17,7 +17,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -80,6 +79,7 @@ func getAtxTimestampKey(atxID types.ATXID) []byte {
 var (
 	errInvalidSig   = errors.New("identity not found when validating signature, invalid atx")
 	errGenesisEpoch = errors.New("tried to retrieve miner weights for target epoch 0")
+	errKnownAtx     = errors.New("known atx")
 )
 
 type atxChan struct {
@@ -95,7 +95,6 @@ type DB struct {
 	idStore
 	atxs            database.Database
 	atxHeaderCache  AtxCache
-	meshDb          *mesh.DB
 	LayersPerEpoch  uint32
 	goldenATXID     types.ATXID
 	nipostValidator nipostValidator
@@ -109,12 +108,11 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity.
-func NewDB(dbStore database.Database, fetcher system.Fetcher, idStore idStore, meshDb *mesh.DB, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
+func NewDB(dbStore database.Database, fetcher system.Fetcher, idStore idStore, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:         idStore,
 		atxs:            dbStore,
 		atxHeaderCache:  NewAtxCache(600),
-		meshDb:          meshDb,
 		LayersPerEpoch:  layersPerEpoch,
 		goldenATXID:     goldenATXID,
 		nipostValidator: nipostValidator,
@@ -186,11 +184,10 @@ func (db *DB) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error {
 		log.FieldNamed("atx_node_id", atx.NodeID),
 		atx.PubLayerID)
 	if err := db.ContextuallyValidateAtx(atx.ActivationTxHeader); err != nil {
-		db.log.WithContext(ctx).With().Error("atx failed contextual validation",
+		db.log.WithContext(ctx).With().Warning("atx failed contextual validation",
 			atx.ID(),
 			log.FieldNamed("atx_node_id", atx.NodeID),
 			log.Err(err))
-		// TODO: Blacklist this miner
 	} else {
 		db.log.WithContext(ctx).With().Info("atx is valid", atx.ID())
 	}
@@ -204,62 +201,6 @@ func (db *DB) ProcessAtx(ctx context.Context, atx *types.ActivationTx) error {
 			log.Err(err))
 	}
 	return nil
-}
-
-func (db *DB) createTraversalFuncForMinerWeights(minerWeight map[string]uint64, targetEpoch types.EpochID) func(b *types.Block) (bool, error) {
-	return func(b *types.Block) (stop bool, err error) {
-		// count unique ATXs
-		if b.ActiveSet == nil {
-			return false, nil
-		}
-		for _, id := range *b.ActiveSet {
-			atx, err := db.GetAtxHeader(id)
-			if err != nil {
-				log.Panic("error fetching atx %v from database -- inconsistent state", id.ShortString()) // TODO: handle inconsistent state
-				return false, fmt.Errorf("error fetching atx %v from database -- inconsistent state", id.ShortString())
-			}
-
-			// todo: should we accept only epoch -1 atxs?
-
-			// make sure the target epoch is our epoch
-			if atx.TargetEpoch() != targetEpoch {
-				db.log.With().Debug("atx found in relevant layer, but target epoch doesn't match requested epoch",
-					atx.ID(),
-					log.FieldNamed("atx_target_epoch", atx.TargetEpoch()),
-					log.FieldNamed("requested_epoch", targetEpoch))
-				continue
-			}
-
-			minerWeight[atx.NodeID.Key] = atx.GetWeight()
-		}
-
-		return false, nil
-	}
-}
-
-// GetMinerWeightsInEpochFromView returns a map of miner IDs and each one's weight targeting targetEpoch, by traversing
-// the provided view.
-func (db *DB) GetMinerWeightsInEpochFromView(targetEpoch types.EpochID, view map[types.BlockID]struct{}) (map[string]uint64, error) {
-	if targetEpoch == 0 {
-		return nil, errGenesisEpoch
-	}
-
-	firstLayerOfPrevEpoch := (targetEpoch - 1).FirstLayer()
-
-	minerWeight := make(map[string]uint64)
-
-	traversalFunc := db.createTraversalFuncForMinerWeights(minerWeight, targetEpoch)
-
-	startTime := time.Now()
-	err := db.meshDb.ForBlockInView(view, firstLayerOfPrevEpoch, traversalFunc)
-	if err != nil {
-		return nil, fmt.Errorf("traverse blocks in view: %w", err)
-	}
-	db.log.With().Info("done calculating miner weights",
-		log.Int("numMiners", len(minerWeight)),
-		log.String("duration", time.Now().Sub(startTime).String()))
-
-	return minerWeight, nil
 }
 
 // SyntacticallyValidateAtx ensures the following conditions apply, otherwise it returns an error.
@@ -737,8 +678,9 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 
 // HandleGossipAtx handles the atx gossip data channel.
 func (db *DB) HandleGossipAtx(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
-	err := db.HandleAtxData(ctx, msg)
-	if err != nil {
+	if err := db.handleAtxData(ctx, msg); errors.Is(err, errKnownAtx) {
+		return pubsub.ValidationIgnore
+	} else if err != nil {
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
@@ -747,6 +689,14 @@ func (db *DB) HandleGossipAtx(ctx context.Context, _ peer.ID, msg []byte) pubsub
 
 // HandleAtxData handles atxs received either by gossip or sync.
 func (db *DB) HandleAtxData(ctx context.Context, data []byte) error {
+	err := db.handleAtxData(ctx, data)
+	if errors.Is(err, errKnownAtx) {
+		return nil
+	}
+	return err
+}
+
+func (db *DB) handleAtxData(ctx context.Context, data []byte) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
 		return fmt.Errorf("cannot parse incoming atx")
@@ -756,9 +706,7 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte) error {
 	existing, _ := db.GetAtxHeader(atx.ID())
 	if existing != nil {
 		logger.With().Debug("received known atx")
-		// NOTE(dshulyak) it must be noop cause we will fail in fetcher otherwise
-		// but ideally it should make us not forward the message.
-		return nil
+		return fmt.Errorf("%w atx %s", errKnownAtx, atx.ID())
 	}
 
 	logger.With().Info(fmt.Sprintf("got new atx %v", atx.ID().ShortString()), atx.Fields(len(data))...)

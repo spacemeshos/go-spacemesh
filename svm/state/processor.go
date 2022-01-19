@@ -102,9 +102,9 @@ func (tp *TransactionProcessor) ValidateNonceAndBalance(tx *types.Transaction) e
 	if tx.AccountNonce != nonce {
 		return fmt.Errorf("incorrect account nonce! Expected: %d, Actual: %d", nonce, tx.AccountNonce)
 	}
-	if (tx.Amount + tx.Fee) > balance { // TODO: Fee represents the absolute fee here, as a temporarily hack
+	if (tx.Amount + tx.GetFee()) > balance { // TODO: Fee represents the absolute fee here, as a temporarily hack
 		return fmt.Errorf("insufficient balance! Available: %d, Attempting to spend: %d[amount]+%d[fee]=%d",
-			balance, tx.Amount, tx.Fee, tx.Amount+tx.Fee)
+			balance, tx.Amount, tx.GetFee(), tx.Amount+tx.GetFee())
 	}
 	return nil
 }
@@ -186,12 +186,13 @@ func (tp *TransactionProcessor) GetLayerStateRoot(layer types.LayerID) (types.Ha
 // ApplyRewards applies reward reward to miners vector for layer.
 func (tp *TransactionProcessor) ApplyRewards(layer types.LayerID, rewards map[types.Address]uint64) {
 	for account, reward := range rewards {
-		tp.Log.With().Info("reward applied",
+		tp.Log.With().Debug("reward applied",
 			log.String("account", account.Short()),
 			log.Uint64("reward", reward),
 			layer,
 		)
 		tp.AddBalance(account, reward)
+		events.ReportAccountUpdate(account)
 	}
 
 	newHash, err := tp.Commit()
@@ -238,7 +239,9 @@ func (tp *TransactionProcessor) Process(txs []*types.Transaction, layerID types.
 			remaining = append(remaining, tx)
 		}
 		events.ReportValidTx(tx, err == nil)
-		events.ReportNewTx(tx)
+		events.ReportNewTx(layerID, tx)
+		events.ReportAccountUpdate(tx.Origin())
+		events.ReportAccountUpdate(tx.GetRecipient())
 	}
 	return
 }
@@ -263,7 +266,7 @@ func (tp *TransactionProcessor) ApplyTransaction(tx *types.Transaction, layerID 
 
 	origin := tp.GetOrNewStateObj(tx.Origin())
 
-	amountWithFee := tx.Fee + tx.Amount
+	amountWithFee := tx.GetFee() + tx.Amount
 
 	// todo: should we allow to spend all accounts balance?
 	if origin.Balance() <= amountWithFee {
@@ -274,17 +277,17 @@ func (tp *TransactionProcessor) ApplyTransaction(tx *types.Transaction, layerID 
 	}
 
 	if !tp.checkNonce(tx) {
-		tp.Log.With().Error(errNonce,
+		tp.Log.With().Warning(errNonce,
 			log.Uint64("nonce_correct", tp.GetNonce(tx.Origin())),
 			log.Uint64("nonce_actual", tx.AccountNonce))
 		return fmt.Errorf(errNonce)
 	}
 
 	tp.SetNonce(tx.Origin(), tp.GetNonce(tx.Origin())+1) // TODO: Not thread-safe
-	transfer(tp, tx.Origin(), tx.Recipient, tx.Amount)
+	transfer(tp, tx.Origin(), tx.GetRecipient(), tx.Amount)
 
 	// subtract fee from account, fee will be sent to miners in layers after
-	tp.SubBalance(tx.Origin(), tx.Fee)
+	tp.SubBalance(tx.Origin(), tx.GetFee())
 	if err := tp.processorDb.Put(tx.ID().Bytes(), layerID.Bytes()); err != nil {
 		return fmt.Errorf("failed to add to applied txs: %v", err)
 	}
@@ -302,17 +305,6 @@ func (tp *TransactionProcessor) GetStateRoot() types.Hash32 {
 func transfer(db *TransactionProcessor, sender, recipient types.Address, amount uint64) {
 	db.SubBalance(sender, amount)
 	db.AddBalance(recipient, amount)
-}
-
-// ValidateAndAddTxToPool validates the provided tx nonce and balance with projector and puts it in the transaction pool
-// it returns an error if the provided tx is not valid.
-func (tp *TransactionProcessor) ValidateAndAddTxToPool(tx *types.Transaction) error {
-	err := tp.ValidateNonceAndBalance(tx)
-	if err != nil {
-		return err
-	}
-	tp.AddTxToPool(tx)
-	return nil
 }
 
 // AddTxToPool exports mempool functionality for adding tx to the pool.

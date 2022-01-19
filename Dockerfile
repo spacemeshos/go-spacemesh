@@ -33,8 +33,8 @@ LABEL com.nvidia.volumes.needed="nvidia_driver"
 
 FROM linux as golang
 ENV GOLANG_MAJOR_VERSION 1
-ENV GOLANG_MINOR_VERSION 15
-ENV GOLANG_PATCH_VERSION 14
+ENV GOLANG_MINOR_VERSION 17
+ENV GOLANG_PATCH_VERSION 6
 ENV GOLANG_VERSION $GOLANG_MAJOR_VERSION.$GOLANG_MINOR_VERSION.$GOLANG_PATCH_VERSION
 ENV GOPATH /go
 ENV PATH $GOPATH/bin:/usr/local/go/bin:$PATH
@@ -82,7 +82,6 @@ COPY . .
 RUN make build
 RUN make hare
 RUN make p2p
-RUN make sync
 RUN make harness
 
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
@@ -92,7 +91,6 @@ FROM linux AS spacemesh
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-spacemesh /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-hare /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-p2p /bin/
-COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-sync /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-harness /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/libgpu-setup.so /bin/
 

@@ -37,7 +37,7 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.Equal(prevNonce+1, nonce)
 	r.Equal(prevBalance-50, balance)
 	r.ElementsMatch([]*types.Transaction{tx1}, pool.GetTxsByAddress(origin))
-	r.ElementsMatch([]*types.Transaction{tx1}, pool.GetTxsByAddress(tx1.Recipient))
+	r.ElementsMatch([]*types.Transaction{tx1}, pool.GetTxsByAddress(tx1.GetRecipient()))
 
 	tx2 := newTx(t, 5, 150, signer)
 	pool.Put(tx2.ID(), tx2)
@@ -45,20 +45,20 @@ func TestNewTxPoolWithAccounts(t *testing.T) {
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
 	r.ElementsMatch([]*types.Transaction{tx1, tx2}, pool.GetTxsByAddress(origin))
-	r.ElementsMatch([]*types.Transaction{tx1}, pool.GetTxsByAddress(tx1.Recipient))
-	r.ElementsMatch([]*types.Transaction{tx2}, pool.GetTxsByAddress(tx2.Recipient))
+	r.ElementsMatch([]*types.Transaction{tx1}, pool.GetTxsByAddress(tx1.GetRecipient()))
+	r.ElementsMatch([]*types.Transaction{tx2}, pool.GetTxsByAddress(tx2.GetRecipient()))
 
 	pool.Invalidate(tx1.ID())
 	nonce, balance = pool.GetProjection(origin, prevNonce+1, prevBalance-50)
 	r.Equal(prevNonce+2, nonce)
 	r.Equal(prevBalance-50-150, balance)
 	r.ElementsMatch([]*types.Transaction{tx2}, pool.GetTxsByAddress(origin))
-	r.Empty(pool.GetTxsByAddress(tx1.Recipient))
-	r.ElementsMatch([]*types.Transaction{tx2}, pool.GetTxsByAddress(tx2.Recipient))
+	r.Empty(pool.GetTxsByAddress(tx1.GetRecipient()))
+	r.ElementsMatch([]*types.Transaction{tx2}, pool.GetTxsByAddress(tx2.GetRecipient()))
 
 	seed := []byte("seedseed")
 	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
-	items, _, err := pool.GetTxsForBlock(1, getState)
+	items, _, err := pool.SelectTopNTransactions(1, getState)
 	r.NoError(err)
 	r.Len(items, 1)
 	r.Equal(tx2.ID(), items[0])
@@ -90,7 +90,7 @@ func TestTxPoolWithAccounts_GetRandomTxs(t *testing.T) {
 
 	seed := []byte("seedseed")
 	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
-	txs, _, err := pool.GetTxsForBlock(5, getState)
+	txs, _, err := pool.SelectTopNTransactions(5, getState)
 	r.NoError(err)
 	r.Len(txs, 5)
 	var txIds []types.TransactionID

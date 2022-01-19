@@ -138,6 +138,8 @@ func getTestDefaultConfig() *config.Config {
 	cfg.P2P.TargetOutbound = 0
 
 	cfg.POST = activation.DefaultPostConfig()
+	cfg.POST.MinNumUnits = 2
+	cfg.POST.MaxNumUnits = 4
 	cfg.POST.LabelsPerUnit = 32
 	cfg.POST.BitsPerLabel = 8
 	cfg.POST.K2 = 4
@@ -158,8 +160,8 @@ func getTestDefaultConfig() *config.Config {
 	cfg.LayerAvgSize = 5
 	cfg.LayersPerEpoch = 3
 	cfg.TxsPerBlock = 100
-	cfg.Hdist = 5
-	cfg.Zdist = 5
+	cfg.Tortoise.Hdist = 5
+	cfg.Tortoise.Zdist = 5
 
 	cfg.LayerDurationSec = 20
 	cfg.HareEligibility.ConfidenceParam = 4
@@ -171,8 +173,6 @@ func getTestDefaultConfig() *config.Config {
 	cfg.FETCH.MaxRetriesForPeer = 5
 	cfg.FETCH.BatchSize = 5
 	cfg.FETCH.BatchTimeout = 5
-
-	cfg.LAYERS.RequestTimeout = 10
 	cfg.GoldenATXID = "0x5678"
 
 	cfg.TortoiseBeacon = tortoisebeacon.NodeSimUnitTestConfig()
@@ -226,8 +226,6 @@ func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 
 	smApp.Config.SMESHING.CoinbaseAccount = strconv.Itoa(i + 1)
 	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
-	smApp.Config.POST.MaxNumUnits = smApp.Config.SMESHING.Opts.NumUnits << 5
-	smApp.Config.SMESHING.Opts.NumUnits = smApp.Config.SMESHING.Opts.NumUnits << (i % 5)
 
 	smApp.host = host
 	smApp.edSgn = edSgn

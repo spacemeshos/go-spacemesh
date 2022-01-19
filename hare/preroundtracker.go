@@ -79,7 +79,7 @@ func (pre *preRoundTracker) OnPreRound(ctx context.Context, msg *Msg) {
 
 // CanProveValue returns true if the given value is provable, false otherwise.
 // a value is said to be provable if it has at least threshold pre-round votes to support it.
-func (pre *preRoundTracker) CanProveValue(value types.BlockID) bool {
+func (pre *preRoundTracker) CanProveValue(value types.ProposalID) bool {
 	// at least threshold occurrences of a given value
 	countStatus := pre.tracker.CountStatus(value)
 	pre.logger.With().Debug("preround tracker count for blockid",

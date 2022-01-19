@@ -21,6 +21,7 @@ import (
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -36,6 +37,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/config/presets"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -568,7 +570,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 		// Give the error channel a buffer
 		events.CloseEventReporter()
-		require.NoError(t, events.InitializeEventReporterWithOptions("", 10, true))
+		require.NoError(t, events.InitializeEventReporterWithOptions(""))
 
 		// Speed things up a little
 		app.Config.SyncInterval = 1
@@ -643,8 +645,12 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 	// Report two errors and make sure they're both received
 	go func() {
+		// Ensure order
+		time.Sleep(10 * time.Millisecond)
 		errlog.Error("test123")
+		time.Sleep(10 * time.Millisecond)
 		errlog.Error("test456")
+		time.Sleep(10 * time.Millisecond)
 		assert.Panics(t, func() {
 			errlog.Panic("testPANIC")
 		})
@@ -789,7 +795,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 		require.Equal(t, tx.Origin().Bytes(), inTx.Signature.PublicKey)
 		switch x := inTx.Datum.(type) {
 		case *pb.Transaction_CoinTransfer:
-			require.Equal(t, tx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+			require.Equal(t, tx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
 				"inner coin transfer tx has bad recipient")
 		default:
 			require.Fail(t, "inner tx has wrong tx data type")
@@ -835,8 +841,53 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 	app = New(WithLog(logtest.New(t)), WithConfig(getTestDefaultConfig()))
 	require.NoError(t, app.Initialize())
 
-	conf.Zdist = 5
+	conf.Tortoise.Zdist = 5
 	app = New(WithLog(logtest.New(t)), WithConfig(&conf))
 	err := app.Initialize()
 	assert.EqualError(t, err, "incompatible tortoise hare params")
+}
+
+func TestConfig_Preset(t *testing.T) {
+	const name = "testnet"
+	viper.Set("preset", name)
+	preset, err := presets.Get(name)
+	require.NoError(t, err)
+
+	t.Run("PresetApplied", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		cmdp.AddCommands(cmd)
+
+		conf, err := loadConfig(cmd)
+		require.NoError(t, err)
+		require.Equal(t, preset, *conf)
+	})
+
+	t.Run("PresetOverwrittenByFlags", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		cmdp.AddCommands(cmd)
+		const networkID = 42
+		require.NoError(t, cmd.ParseFlags([]string{"--network-id=" + strconv.Itoa(networkID)}))
+
+		conf, err := loadConfig(cmd)
+		require.NoError(t, err)
+		preset.P2P.NetworkID = networkID
+		require.Equal(t, preset, *conf)
+	})
+
+	t.Run("PresetOverWrittenByConfigFile", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		cmdp.AddCommands(cmd)
+		const networkID = 42
+
+		content := fmt.Sprintf(`{"p2p": {"network-id": %d}}`, networkID)
+		path := filepath.Join(t.TempDir(), "config.json")
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+		require.NoError(t, cmd.ParseFlags([]string{"--config=" + path}))
+
+		conf, err := loadConfig(cmd)
+		require.NoError(t, err)
+		preset.P2P.NetworkID = networkID
+		preset.ConfigFile = path
+		require.Equal(t, preset, *conf)
+	})
 }

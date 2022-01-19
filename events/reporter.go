@@ -6,6 +6,8 @@ import (
 	"runtime/debug"
 	"sync"
 
+	"github.com/libp2p/go-eventbus"
+	"github.com/libp2p/go-libp2p-core/event"
 	"go.uber.org/zap/zapcore"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -35,36 +37,32 @@ func EventHook() func(entry zapcore.Entry) error {
 }
 
 // ReportNewTx dispatches incoming events to the reporter singleton.
-func ReportNewTx(tx *types.Transaction) {
+func ReportNewTx(layerID types.LayerID, tx *types.Transaction) {
 	Publish(NewTx{
 		ID:          tx.ID().String(),
 		Origin:      tx.Origin().String(),
-		Destination: tx.Recipient.String(),
+		Destination: tx.GetRecipient().String(),
 		Amount:      tx.Amount,
-		Fee:         tx.Fee,
+		Fee:         tx.GetFee(),
 	})
-	ReportTxWithValidity(tx, true)
+	ReportTxWithValidity(layerID, tx, true)
 }
 
 // ReportTxWithValidity reports a tx along with whether it was just invalidated.
-func ReportTxWithValidity(tx *types.Transaction, valid bool) {
+func ReportTxWithValidity(layerID types.LayerID, tx *types.Transaction, valid bool) {
 	mu.RLock()
 	defer mu.RUnlock()
-	txWithValidity := TransactionWithValidity{
+	txWithValidity := Transaction{
 		Transaction: tx,
+		LayerID:     layerID,
 		Valid:       valid,
 	}
 	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelTransaction <- txWithValidity
-			log.Debug("reported tx on channelTransaction: %v", txWithValidity)
+		if err := reporter.transactionEmitter.Emit(txWithValidity); err != nil {
+			// TODO(nkryuchkov): consider returning an error and log outside the function
+			log.With().Error("Failed to emit transaction", tx.ID(), layerID, log.Err(err))
 		} else {
-			select {
-			case reporter.channelTransaction <- txWithValidity:
-				log.Debug("reported tx on channelTransaction: %v", txWithValidity)
-			default:
-				log.Debug("not reporting tx as no one is listening: %v", txWithValidity)
-			}
+			log.Debug("reported tx: %v", txWithValidity)
 		}
 	}
 }
@@ -84,22 +82,20 @@ func ReportNewActivation(activation *types.ActivationTx) {
 		EpochID: uint32(activation.PubLayerID.GetEpoch()),
 	})
 
+	activationTxEvent := ActivationTx{ActivationTx: activation}
+
 	if reporter != nil {
 		innerBytes, err := activation.InnerBytes()
 		if err != nil {
 			log.Error("error attempting to report activation: unable to encode activation")
 			return
 		}
-		if reporter.blocking {
-			reporter.channelActivation <- activation
-			log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
+
+		if err := reporter.activationEmitter.Emit(activationTxEvent); err != nil {
+			// TODO(nkryuchkov): consider returning an error and log outside the function
+			log.With().Error("Failed to emit activation", activation.ID(), activation.PubLayerID, log.Err(err))
 		} else {
-			select {
-			case reporter.channelActivation <- activation:
-				log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
-			default:
-				log.With().Debug("not reporting activation as no one is listening", activation.Fields(len(innerBytes))...)
-			}
+			log.With().Debug("reported activation", activation.Fields(len(innerBytes))...)
 		}
 	}
 }
@@ -116,34 +112,29 @@ func ReportRewardReceived(r Reward) {
 	})
 
 	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelReward <- r
-			log.Debug("reported reward: %v", r)
+		if err := reporter.rewardEmitter.Emit(r); err != nil {
+			// TODO(nkryuchkov): consider returning an error and log outside the function
+			log.With().Error("Failed to emit rewards", r.Layer, log.Err(err))
 		} else {
-			select {
-			case reporter.channelReward <- r:
-				log.Debug("reported reward: %v", r)
-			default:
-				log.Debug("not reporting reward as no one is listening: %v", r)
-			}
+			log.Debug("reported reward: %v", r)
 		}
 	}
 }
 
 // ReportNewBlock reports a new block.
-func ReportNewBlock(blk *types.Block) {
+func ReportNewBlock(b *types.Block) {
 	Publish(NewBlock{
-		ID:    blk.ID().String(),
-		Atx:   blk.ATXID.ShortString(),
-		Layer: blk.LayerIndex.Uint32(),
+		ID:    b.ID().String(),
+		Layer: b.LayerIndex.Uint32(),
 	})
 }
 
-// ReportValidBlock reports a block's validity.
-func ReportValidBlock(blockID types.BlockID, valid bool) {
-	Publish(ValidBlock{
-		ID:    blockID.String(),
-		Valid: valid,
+// ReportNewProposal reports a new proposal.
+func ReportNewProposal(p *types.Proposal) {
+	Publish(NewProposal{
+		ID:    p.ID().String(),
+		Atx:   p.AtxID.ShortString(),
+		Layer: p.LayerIndex.Uint32(),
 	})
 }
 
@@ -157,9 +148,9 @@ func ReportValidActivation(activation *types.ActivationTx, valid bool) {
 	Publish(ValidAtx{ID: activation.ShortString(), Valid: valid})
 }
 
-// ReportDoneCreatingBlock reports a created block.
-func ReportDoneCreatingBlock(eligible bool, layer uint32, error string) {
-	Publish(DoneCreatingBlock{
+// ReportDoneCreatingProposal reports a created block.
+func ReportDoneCreatingProposal(eligible bool, layer uint32, error string) {
+	Publish(DoneCreatingProposal{
 		Eligible: eligible,
 		Layer:    layer,
 		Error:    error,
@@ -180,16 +171,11 @@ func ReportLayerUpdate(layer LayerUpdate) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelLayer <- layer
-			log.With().Debug("reported new or updated layer", layer)
+		if err := reporter.layerEmitter.Emit(layer); err != nil {
+			// TODO(nkryuchkov): consider returning an error and log outside the function
+			log.With().Error("Failed to emit updated layer", layer, log.Err(err))
 		} else {
-			select {
-			case reporter.channelLayer <- layer:
-				log.With().Debug("reported new or updated layer", layer)
-			default:
-				log.With().Debug("not reporting new or updated layer as no one is listening", layer)
-			}
+			log.With().Debug("reported new or updated layer", layer)
 		}
 	}
 }
@@ -200,16 +186,11 @@ func ReportError(err NodeError) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelError <- err
-			log.Debug("reported error: %v", err)
+		if err := reporter.errorEmitter.Emit(err); err != nil {
+			// TODO(nkryuchkov): consider returning an error and log outside the function
+			log.With().Error("Failed to emit error", log.Err(err))
 		} else {
-			select {
-			case reporter.channelError <- err:
-				log.Debug("reported error: %v", err)
-			default:
-				log.Debug("not reporting error as buffer is full: %v", err)
-			}
+			log.Debug("reported error: %v", err)
 		}
 	}
 }
@@ -231,16 +212,11 @@ func ReportNodeStatusUpdate() {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelStatus <- struct{}{}
-			log.Debug("reported status update")
+		if err := reporter.statusEmitter.Emit(Status{}); err != nil {
+			// TODO(nkryuchkov): consider returning an error and log outside the function
+			log.With().Error("Failed to emit status update", log.Err(err))
 		} else {
-			select {
-			case reporter.channelStatus <- struct{}{}:
-				log.Debug("reported status update")
-			default:
-				log.Debug("not reporting status update as no one is listening")
-			}
+			log.Debug("reported status update")
 		}
 	}
 }
@@ -251,16 +227,11 @@ func ReportReceipt(r TxReceipt) {
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelReceipt <- r
-			log.Debug("reported receipt: %v", r)
+		if err := reporter.receiptEmitter.Emit(r); err != nil {
+			// TODO(nkryuchkov): consider returning an error and log outside the function
+			log.With().Error("Failed to emit receipt", r.ID, log.Err(err))
 		} else {
-			select {
-			case reporter.channelReceipt <- r:
-				log.Debug("reported receipt: %v", r)
-			default:
-				log.Debug("not reporting receipt as no one is listening: %v", r)
-			}
+			log.Debug("reported receipt: %v", r)
 		}
 	}
 }
@@ -270,105 +241,142 @@ func ReportAccountUpdate(a types.Address) {
 	mu.RLock()
 	defer mu.RUnlock()
 
+	accountEvent := Account{Address: a}
+
 	if reporter != nil {
-		if reporter.blocking {
-			reporter.channelAccount <- a
-			log.With().Debug("reported account update", a)
+		if err := reporter.accountEmitter.Emit(accountEvent); err != nil {
+			// TODO(nkryuchkov): consider returning an error and log outside the function
+			log.With().Error("Failed to emit account update", log.String("account", a.Short()), log.Err(err))
 		} else {
-			select {
-			case reporter.channelAccount <- a:
-				log.With().Debug("reported account update", a)
-			default:
-				log.With().Debug("not reporting account update as no one is listening", a)
-			}
+			log.With().Debug("reported account update", a)
 		}
 	}
 }
 
-// GetNewTxChannel returns a channel of new transactions.
-func GetNewTxChannel() chan TransactionWithValidity {
+// SubscribeTxs subscribes to new transactions.
+func SubscribeTxs() event.Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelTransaction
+		sub, err := reporter.bus.Subscribe(new(Transaction))
+		if err != nil {
+			log.With().Panic("Failed to subscribe to transactions")
+		}
+
+		return sub
 	}
 	return nil
 }
 
-// GetActivationsChannel returns a channel of activations.
-func GetActivationsChannel() chan *types.ActivationTx {
+// SubscribeActivations subscribes to activations.
+func SubscribeActivations() event.Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelActivation
+		sub, err := reporter.bus.Subscribe(new(ActivationTx))
+		if err != nil {
+			log.With().Panic("Failed to subscribe to activations")
+		}
+
+		return sub
 	}
 	return nil
 }
 
-// GetLayerChannel returns a channel of all layer data.
-func GetLayerChannel() chan LayerUpdate {
+// SubscribeLayers subscribes to all layer data.
+func SubscribeLayers() event.Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelLayer
+		sub, err := reporter.bus.Subscribe(new(LayerUpdate))
+		if err != nil {
+			log.With().Panic("Failed to subscribe to layers")
+		}
+
+		return sub
 	}
 	return nil
 }
 
-// GetErrorChannel returns a channel for node errors.
-func GetErrorChannel() chan NodeError {
+// SubscribeErrors subscribes to node errors.
+func SubscribeErrors() event.Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelError
+		sub, err := reporter.bus.Subscribe(new(NodeError))
+		if err != nil {
+			log.With().Panic("Failed to subscribe to errors")
+		}
+
+		return sub
 	}
 	return nil
 }
 
-// GetStatusChannel returns a channel for node status messages.
-func GetStatusChannel() chan struct{} {
+// SubscribeStatus subscribes to node status messages.
+func SubscribeStatus() event.Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelStatus
+		sub, err := reporter.bus.Subscribe(new(Status))
+		if err != nil {
+			log.With().Panic("Failed to subscribe to status")
+		}
+
+		return sub
 	}
 	return nil
 }
 
-// GetAccountChannel returns a channel for account data updates.
-func GetAccountChannel() chan types.Address {
+// SubscribeAccount subscribes to account data updates.
+func SubscribeAccount() event.Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelAccount
+		sub, err := reporter.bus.Subscribe(new(Account))
+		if err != nil {
+			log.With().Panic("Failed to subscribe to account updates")
+		}
+
+		return sub
 	}
 	return nil
 }
 
-// GetRewardChannel returns a channel for rewards.
-func GetRewardChannel() chan Reward {
+// SubscribeRewards subscribes to rewards.
+func SubscribeRewards() event.Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelReward
+		sub, err := reporter.bus.Subscribe(new(Reward))
+		if err != nil {
+			log.With().Panic("Failed to subscribe to rewards")
+		}
+
+		return sub
 	}
 	return nil
 }
 
-// GetReceiptChannel returns a channel for tx receipts.
-func GetReceiptChannel() chan TxReceipt {
+// SubscribeReceipts subscribes to receipts.
+func SubscribeReceipts() event.Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
 	if reporter != nil {
-		return reporter.channelReceipt
+		sub, err := reporter.bus.Subscribe(new(TxReceipt))
+		if err != nil {
+			log.With().Panic("Failed to subscribe to receipts")
+		}
+
+		return sub
 	}
 	return nil
 }
@@ -376,19 +384,19 @@ func GetReceiptChannel() chan TxReceipt {
 // InitializeEventReporter initializes the event reporting interface.
 func InitializeEventReporter(url string) error {
 	// By default use zero-buffer channels and non-blocking.
-	return InitializeEventReporterWithOptions(url, 0, false)
+	return InitializeEventReporterWithOptions(url)
 }
 
 // InitializeEventReporterWithOptions initializes the event reporting interface with
 // a nonzero channel buffer. This is useful for testing, where we want reporting to
 // block.
-func InitializeEventReporterWithOptions(url string, bufsize int, blocking bool) error {
+func InitializeEventReporterWithOptions(url string) error {
 	mu.Lock()
 	defer mu.Unlock()
 	if reporter != nil {
 		return errors.New("reporter is already initialized, call CloseEventReporter before reinitializing")
 	}
-	reporter = newEventReporter(bufsize, blocking)
+	reporter = newEventReporter()
 	if url != "" {
 		return InitializeEventPubsub(url)
 	}
@@ -470,38 +478,95 @@ type Reward struct {
 	Smesher types.NodeID
 }
 
-// TransactionWithValidity wraps a tx with its validity info.
-type TransactionWithValidity struct {
+// Transaction wraps a tx with its layer ID and validity info.
+type Transaction struct {
 	Transaction *types.Transaction
+	LayerID     types.LayerID
 	Valid       bool
+}
+
+// ActivationTx wraps *types.ActivationTx.
+type ActivationTx struct {
+	*types.ActivationTx
+}
+
+// Status indicates status change event.
+type Status struct{}
+
+// Account wraps account address.
+type Account struct {
+	types.Address
 }
 
 // EventReporter is the struct that receives incoming events and dispatches them.
 type EventReporter struct {
-	channelTransaction chan TransactionWithValidity
-	channelActivation  chan *types.ActivationTx
-	channelLayer       chan LayerUpdate
-	channelError       chan NodeError
-	channelStatus      chan struct{}
-	channelAccount     chan types.Address
+	bus                event.Bus
+	transactionEmitter event.Emitter
+	activationEmitter  event.Emitter
+	layerEmitter       event.Emitter
+	errorEmitter       event.Emitter
+	statusEmitter      event.Emitter
+	accountEmitter     event.Emitter
+	rewardEmitter      event.Emitter
+	receiptEmitter     event.Emitter
 	channelReward      chan Reward
-	channelReceipt     chan TxReceipt
 	stopChan           chan struct{}
-	blocking           bool
 }
 
-func newEventReporter(bufsize int, blocking bool) *EventReporter {
+func newEventReporter() *EventReporter {
+	bus := eventbus.NewBus()
+
+	transactionEmitter, err := bus.Emitter(new(Transaction))
+	if err != nil {
+		log.With().Panic("failed to create transaction emitter", log.Err(err))
+	}
+
+	activationEmitter, err := bus.Emitter(new(ActivationTx))
+	if err != nil {
+		log.With().Panic("failed to create activation emitter", log.Err(err))
+	}
+
+	layerEmitter, err := bus.Emitter(new(LayerUpdate))
+	if err != nil {
+		log.With().Panic("failed to create layer emitter", log.Err(err))
+	}
+
+	statusEmitter, err := bus.Emitter(new(Status))
+	if err != nil {
+		log.With().Panic("failed to create status emitter", log.Err(err))
+	}
+
+	accountEmitter, err := bus.Emitter(new(Account))
+	if err != nil {
+		log.With().Panic("failed to create account emitter", log.Err(err))
+	}
+
+	rewardEmitter, err := bus.Emitter(new(Reward))
+	if err != nil {
+		log.With().Panic("failed to create reward emitter", log.Err(err))
+	}
+
+	receiptEmitter, err := bus.Emitter(new(TxReceipt))
+	if err != nil {
+		log.With().Panic("failed to create receipt emitter", log.Err(err))
+	}
+
+	errorEmitter, err := bus.Emitter(new(NodeError))
+	if err != nil {
+		log.With().Panic("failed to create error emitter", log.Err(err))
+	}
+
 	return &EventReporter{
-		channelTransaction: make(chan TransactionWithValidity, bufsize),
-		channelActivation:  make(chan *types.ActivationTx, bufsize),
-		channelLayer:       make(chan LayerUpdate, bufsize),
-		channelStatus:      make(chan struct{}, bufsize),
-		channelAccount:     make(chan types.Address, bufsize),
-		channelReward:      make(chan Reward, bufsize),
-		channelReceipt:     make(chan TxReceipt, bufsize),
-		channelError:       make(chan NodeError, bufsize),
+		bus:                bus,
+		transactionEmitter: transactionEmitter,
+		activationEmitter:  activationEmitter,
+		layerEmitter:       layerEmitter,
+		statusEmitter:      statusEmitter,
+		accountEmitter:     accountEmitter,
+		rewardEmitter:      rewardEmitter,
+		receiptEmitter:     receiptEmitter,
+		errorEmitter:       errorEmitter,
 		stopChan:           make(chan struct{}),
-		blocking:           blocking,
 	}
 }
 
@@ -510,14 +575,30 @@ func CloseEventReporter() {
 	mu.Lock()
 	defer mu.Unlock()
 	if reporter != nil {
-		close(reporter.channelTransaction)
-		close(reporter.channelActivation)
-		close(reporter.channelLayer)
-		close(reporter.channelError)
-		close(reporter.channelStatus)
-		close(reporter.channelAccount)
-		close(reporter.channelReward)
-		close(reporter.channelReceipt)
+		if err := reporter.transactionEmitter.Close(); err != nil {
+			log.With().Panic("failed to close transactionEmitter: " + err.Error())
+		}
+		if err := reporter.activationEmitter.Close(); err != nil {
+			log.With().Panic("failed to close activationEmitter: " + err.Error())
+		}
+		if err := reporter.layerEmitter.Close(); err != nil {
+			log.With().Panic("failed to close layerEmitter: " + err.Error())
+		}
+		if err := reporter.errorEmitter.Close(); err != nil {
+			log.With().Panic("failed to close errorEmitter: " + err.Error())
+		}
+		if err := reporter.statusEmitter.Close(); err != nil {
+			log.With().Panic("failed to close statusEmitter: " + err.Error())
+		}
+		if err := reporter.accountEmitter.Close(); err != nil {
+			log.With().Panic("failed to close accountEmitter: " + err.Error())
+		}
+		if err := reporter.rewardEmitter.Close(); err != nil {
+			log.With().Panic("failed to close rewardEmitter: " + err.Error())
+		}
+		if err := reporter.receiptEmitter.Close(); err != nil {
+			log.With().Panic("failed to close receiptEmitter: " + err.Error())
+		}
 		close(reporter.stopChan)
 		reporter = nil
 	}

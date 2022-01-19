@@ -193,7 +193,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 			suite.T().Fatalf("failed to start poet server: %v", err)
 		}
 
-		timeout := time.After(10 * time.Minute)
+		timeout := time.After(15 * time.Minute)
 
 		// Run setup first. We need to allow this to timeout, and monitor the failure channel too,
 		// as this can also loop forever.
@@ -231,7 +231,7 @@ func (suite *AppTestSuite) TestMultipleNodes() {
 			}
 		}
 		suite.validateBlocksAndATXs(types.NewLayerID(numberOfEpochs * suite.apps[0].Config.LayersPerEpoch).Sub(1))
-		oldRoot = suite.apps[0].state.GetStateRoot()
+		oldRoot = suite.apps[0].svm.GetStateRoot()
 		edSgn = suite.apps[0].edSgn
 	}()
 
@@ -287,10 +287,10 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 				app.nodeID,
 				log.FieldNamed("sender", addr),
 				log.FieldNamed("dest", dst),
-				log.Uint64("dest_balance", app.state.GetBalance(dst)),
-				log.Uint64("sender_nonce", app.state.GetNonce(addr)),
-				log.Uint64("sender_balance", app.state.GetBalance(addr)))
-			ok = ok && 0 == app.state.GetBalance(dst) && app.state.GetNonce(addr) == 0
+				log.Uint64("dest_balance", app.svm.GetBalance(dst)),
+				log.Uint64("sender_nonce", app.svm.GetNonce(addr)),
+				log.Uint64("sender_balance", app.svm.GetBalance(addr)))
+			ok = ok && (app.svm.GetBalance(dst) == 0) && (app.svm.GetNonce(addr) == 0)
 		}
 		if ok {
 			suite.log.Info("zero addresses ok")
@@ -347,10 +347,10 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 				app.nodeID,
 				log.FieldNamed("sender", addr),
 				log.FieldNamed("dest", dst),
-				log.Uint64("dest_balance", app.state.GetBalance(dst)),
-				log.Uint64("sender_nonce", app.state.GetNonce(addr)),
-				log.Uint64("sender_balance", app.state.GetBalance(addr)))
-			ok = ok && app.state.GetBalance(dst) >= 250 && app.state.GetNonce(addr) == uint64(txsSent)
+				log.Uint64("dest_balance", app.svm.GetBalance(dst)),
+				log.Uint64("sender_nonce", app.svm.GetNonce(addr)),
+				log.Uint64("sender_balance", app.svm.GetBalance(addr)))
+			ok = ok && (app.svm.GetBalance(dst) >= 250) && (app.svm.GetNonce(addr) == uint64(txsSent))
 		}
 		if ok {
 			suite.log.Info("addresses ok")
@@ -483,8 +483,8 @@ func sameRootTester(dependencies []int) TestScenario {
 			clientsDone := 0
 			for idx2, app2 := range suite.apps {
 				if idx != idx2 {
-					r1 := app.state.IntermediateRoot(false).String()
-					r2 := app2.state.IntermediateRoot(false).String()
+					r1 := app.svm.GetStateRoot().String()
+					r2 := app2.svm.GetStateRoot().String()
 					if r1 == r2 {
 						clientsDone++
 						if clientsDone == len(suite.apps)-1 {
@@ -538,7 +538,7 @@ func runTests(suite *AppTestSuite, finished map[int]bool) bool {
 
 func (suite *AppTestSuite) validateReloadStateRoot(app *App, oldRoot types.Hash32) {
 	// test that loaded root is equal
-	assert.Equal(suite.T(), oldRoot, app.state.GetStateRoot())
+	assert.Equal(suite.T(), oldRoot, app.svm.GetStateRoot())
 
 	// start and stop and test for no panics
 	suite.NoError(app.startServices(context.TODO()))
@@ -547,8 +547,9 @@ func (suite *AppTestSuite) validateReloadStateRoot(app *App, oldRoot types.Hash3
 
 func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	type nodeData struct {
-		layertoblocks map[types.LayerID][]types.BlockID
-		atxPerEpoch   map[types.EpochID]uint32
+		layertoblocks  map[types.LayerID][]types.BlockID
+		layertoballots map[types.LayerID][]types.BallotID
+		atxPerEpoch    map[types.EpochID]uint32
 	}
 
 	layersPerEpoch := suite.apps[0].Config.LayersPerEpoch
@@ -564,6 +565,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 		if _, ok := datamap[ap.nodeID.Key]; !ok {
 			datamap[ap.nodeID.Key] = new(nodeData)
 			datamap[ap.nodeID.Key].atxPerEpoch = make(map[types.EpochID]uint32)
+			datamap[ap.nodeID.Key].layertoballots = make(map[types.LayerID][]types.BallotID)
 			datamap[ap.nodeID.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
 		}
 
@@ -572,6 +574,14 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			suite.NoError(err, "couldn't get validated layer from db", i)
 			for _, b := range lyr.Blocks() {
 				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], b.ID())
+			}
+			for _, b := range lyr.Ballots() {
+				datamap[ap.nodeID.Key].layertoballots[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoballots[lyr.Index()], b.ID())
+			}
+			if len(lyr.BallotIDs()) == 0 {
+				// no proposal was created for this layer
+				datamap[ap.nodeID.Key].layertoblocks[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoblocks[lyr.Index()], types.EmptyBlockID)
+				datamap[ap.nodeID.Key].layertoballots[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoballots[lyr.Index()], types.EmptyBallotID)
 			}
 		}
 	}
@@ -604,6 +614,19 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	lastLayer := len(nodedata.layertoblocks) + 5
 	suite.log.Info("node %v", suite.apps[0].nodeID.ShortString())
 
+	totalBallots := 0
+	for id, l := range nodedata.layertoballots {
+		totalBallots += len(l)
+		suite.log.Info("node %v: layer %v, ballots %v", suite.apps[0].nodeID.ShortString(), id, len(l))
+	}
+
+	genesisBallots := 0
+	for i := uint32(0); i < layersPerEpoch*2; i++ {
+		if l, ok := nodedata.layertoblocks[types.NewLayerID(i)]; ok {
+			genesisBallots += len(l)
+		}
+	}
+
 	totalBlocks := 0
 	for id, l := range nodedata.layertoblocks {
 		totalBlocks += len(l)
@@ -619,21 +642,26 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	// assert number of blocks
 	totalEpochs := int(untilLayer.GetEpoch()) + 1
-	blocksPerEpochTarget := layerAvgSize * int(layersPerEpoch)
+	ballotPerEpochTarget := layerAvgSize * int(layersPerEpoch)
 
 	allApps := append(suite.apps, suite.killedApps...)
 	expectedEpochWeight := configuredTotalWeight(allApps)
 
 	// note: expected no. blocks per epoch should remain the same even after some nodes are killed, since the
 	// remaining nodes will be eligible for proportionally more blocks per layer
-	expectedBlocksPerEpoch := 0
+	expectedBallotsPerEpoch := 0
 	for _, app := range allApps {
-		expectedBlocksPerEpoch += max(blocksPerEpochTarget*int(app.Config.SMESHING.Opts.NumUnits)/int(expectedEpochWeight), 1)
+		expectedBallotsPerEpoch += max(ballotPerEpochTarget*int(app.Config.SMESHING.Opts.NumUnits)/int(expectedEpochWeight), 1)
 	}
+	// note: we expect the number of ballots to be a bit less than the expected number since, after some apps were
+	// killed and before healing kicked in, some ballots should be missing
+	expectedTotalBallots := (totalEpochs - 2) * expectedBallotsPerEpoch
+	actualTotalBallots := totalBallots - genesisBallots
+	suite.Equal(expectedTotalBallots, actualTotalBallots,
+		fmt.Sprintf("got unexpected ballot count! got: %v, want: %v. totalBallots: %v, genesisBallots: %v, lastLayer: %v, layersPerEpoch: %v, layerAvgSize: %v, totalEpochs: %v, datamap: %v",
+			actualTotalBallots, expectedTotalBallots, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
-	// note: we expect the number of blocks to be a bit less than the expected number since, after some apps were
-	// killed and before healing kicked in, some blocks should be missing
-	expectedTotalBlocks := (totalEpochs - 2) * expectedBlocksPerEpoch
+	expectedTotalBlocks := (totalEpochs - 2) * int(layersPerEpoch)
 	actualTotalBlocks := totalBlocks - genesisBlocks
 	suite.Equal(expectedTotalBlocks, actualTotalBlocks,
 		fmt.Sprintf("got unexpected block count! got: %v, want: %v. totalBlocks: %v, genesisBlocks: %v, lastLayer: %v, layersPerEpoch: %v, layerAvgSize: %v, totalEpochs: %v, datamap: %v",
@@ -745,8 +773,8 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.LayerAvgSize = 5
 	smApp.Config.LayersPerEpoch = 3
 	smApp.Config.TxsPerBlock = 100
-	smApp.Config.Hdist = 5
-	smApp.Config.Zdist = 5
+	smApp.Config.Tortoise.Hdist = 5
+	smApp.Config.Tortoise.Zdist = 5
 	smApp.Config.GenesisTime = genesisTime.Format(time.RFC3339)
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3

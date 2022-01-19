@@ -8,14 +8,17 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
+	"github.com/spacemeshos/go-spacemesh/config/presets"
 )
 
 var config = cfg.DefaultConfig()
 
 // AddCommands adds cobra commands to the app.
 func AddCommands(cmd *cobra.Command) {
-	/** ======================== BaseConfig Flags ========================== **/
+	cmd.PersistentFlags().StringP("preset", "p", "",
+		fmt.Sprintf("preset overwrites default values of the config. options %+s", presets.Options()))
 
+	/** ======================== BaseConfig Flags ========================== **/
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.ConfigFile,
 		"config", "c", config.BaseConfig.ConfigFile, "Set Load configuration from file")
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDirParent, "data-folder", "d",
@@ -42,8 +45,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.LayerDurationSec, "Duration between layers in seconds")
 	cmd.PersistentFlags().IntVar(&config.LayerAvgSize, "layer-average-size",
 		config.LayerAvgSize, "Layer Avg size")
-	cmd.PersistentFlags().Uint32Var(&config.Hdist, "hdist",
-		config.Hdist, "hdist")
+	cmd.PersistentFlags().Uint32Var(&config.Tortoise.Hdist, "tortoise-hdist",
+		config.Tortoise.Hdist, "hdist")
 	cmd.PersistentFlags().BoolVar(&config.PprofHTTPServer, "pprof-server",
 		config.PprofHTTPServer, "enable http pprof server")
 	cmd.PersistentFlags().StringVar(&config.GoldenATXID, "golden-atx",
@@ -59,8 +62,6 @@ func AddCommands(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
-	cmd.PersistentFlags().IntVar(&config.AtxsPerBlock, "atxs-per-block",
-		config.AtxsPerBlock, "the number of atxs to select per block on block creation")
 	cmd.PersistentFlags().IntVar(&config.TxsPerBlock, "txs-per-block",
 		config.TxsPerBlock, "the number of transactions to select per block on block creation")
 
@@ -180,8 +181,8 @@ func AddCommands(cmd *cobra.Command) {
 		"Ratio of votes for reaching consensus")
 	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",
 		config.TortoiseBeacon.VotesLimit, "Maximum allowed number of votes to be sent")
-	cmd.PersistentFlags().Uint32Var(&config.TortoiseBeacon.BeaconSyncNumBlocks, "tortoise-beacon-sync-num-blocks",
-		config.TortoiseBeacon.BeaconSyncNumBlocks, "Numbers of blocks to wait before determining beacon values from them.")
+	cmd.PersistentFlags().Uint32Var(&config.TortoiseBeacon.BeaconSyncNumBallots, "tortoise-beacon-sync-num-blocks",
+		config.TortoiseBeacon.BeaconSyncNumBallots, "Numbers of blocks to wait before determining beacon values from them.")
 
 	/**======================== Post Flags ========================== **/
 

@@ -1,0 +1,75 @@
+package sim
+
+import (
+	"context"
+
+	"github.com/spacemeshos/go-spacemesh/activation"
+	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/mesh"
+)
+
+func newState(logger log.Log, conf config) State {
+	mdb := newMeshDB(logger, conf)
+	return State{
+		logger:  logger,
+		MeshDB:  mdb,
+		AtxDB:   newAtxDB(logger, conf),
+		Beacons: newBeaconStore(),
+	}
+}
+
+// State of the node.
+type State struct {
+	logger log.Log
+
+	MeshDB  *mesh.DB
+	AtxDB   *activation.DB
+	Beacons *beaconStore
+}
+
+// OnBeacon callback to store generated beacon.
+func (s *State) OnBeacon(eid types.EpochID, beacon types.Beacon) {
+	s.Beacons.StoreBeacon(eid, beacon)
+}
+
+// OnActivationTx callback to store activation transaction.
+func (s *State) OnActivationTx(atx *types.ActivationTx) {
+	if err := s.AtxDB.StoreAtx(context.TODO(), atx.PubLayerID.GetEpoch(), atx); err != nil {
+		s.logger.With().Panic("failed to save atx", log.Err(err))
+	}
+}
+
+// OnBallot callback to store ballot.
+func (s *State) OnBallot(ballot *types.Ballot) {
+	exist, _ := s.MeshDB.GetBallot(ballot.ID())
+	if exist != nil {
+		return
+	}
+	if err := s.MeshDB.AddBallot(ballot); err != nil {
+		s.logger.With().Panic("failed to save ballot", log.Err(err))
+	}
+}
+
+// OnBlock callback to store block.
+func (s *State) OnBlock(block *types.Block) {
+	exist, _ := s.MeshDB.GetBlock(block.ID())
+	if exist != nil {
+		return
+	}
+	if err := s.MeshDB.AddBlock(block); err != nil {
+		s.logger.With().Panic("failed to save block", log.Err(err))
+	}
+}
+
+// OnHareOutput callback to store hare output.
+func (s *State) OnHareOutput(lid types.LayerID, bid types.BlockID) {
+	if err := s.MeshDB.SaveHareConsensusOutput(context.TODO(), lid, bid); err != nil {
+		s.logger.With().Panic("failed to save hare output", log.Err(err))
+	}
+}
+
+// OnCoinflip callback to store coinflip.
+func (s *State) OnCoinflip(lid types.LayerID, coinflip bool) {
+	s.MeshDB.RecordCoinflip(context.TODO(), lid, coinflip)
+}

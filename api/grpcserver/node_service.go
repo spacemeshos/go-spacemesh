@@ -145,12 +145,23 @@ func (s NodeService) UpdatePoetServer(ctx context.Context, req *pb.UpdatePoetSer
 // StatusStream exposes a stream of node status updates.
 func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeService_StatusStreamServer) error {
 	log.Info("GRPC NodeService.StatusStream")
-	statusStream := events.GetStatusChannel()
+
+	var (
+		statusCh      <-chan interface{}
+		statusBufFull <-chan struct{}
+	)
+
+	if statusSubscription := events.SubscribeStatus(); statusSubscription != nil {
+		statusCh, statusBufFull = consumeEvents(stream.Context(), statusSubscription)
+	}
 
 	for {
 		select {
-		case _, ok := <-statusStream:
-			// statusStream works a bit differently than the other streams. It doesn't actually
+		case <-statusBufFull:
+			log.Info("status buffer is full, shutting down")
+			return status.Error(codes.Canceled, errStatusBufferFull)
+		case _, ok := <-statusCh:
+			// statusCh works a bit differently than the other streams. It doesn't actually
 			// send us data. Instead, it just notifies us that there's new data to be read.
 			if !ok {
 				log.Info("StatusStream closed, shutting down")
@@ -183,15 +194,28 @@ func (s NodeService) StatusStream(_ *pb.StatusStreamRequest, stream pb.NodeServi
 // ErrorStream exposes a stream of node errors.
 func (s NodeService) ErrorStream(_ *pb.ErrorStreamRequest, stream pb.NodeService_ErrorStreamServer) error {
 	log.Info("GRPC NodeService.ErrorStream")
-	errorStream := events.GetErrorChannel()
+
+	var (
+		errorsCh      <-chan interface{}
+		errorsBufFull <-chan struct{}
+	)
+
+	if errorsSubscription := events.SubscribeErrors(); errorsSubscription != nil {
+		errorsCh, errorsBufFull = consumeEvents(stream.Context(), errorsSubscription)
+	}
 
 	for {
 		select {
-		case nodeError, ok := <-errorStream:
+		case <-errorsBufFull:
+			log.Info("errors buffer is full, shutting down")
+			return status.Error(codes.Canceled, errErrorsBufferFull)
+		case nodeErrorEvent, ok := <-errorsCh:
 			if !ok {
 				log.Info("ErrorStream closed, shutting down")
 				return nil
 			}
+
+			nodeError := nodeErrorEvent.(events.NodeError)
 
 			resp := &pb.ErrorStreamResponse{Error: &pb.NodeError{
 				Level:      convertErrorLevel(nodeError.Level),

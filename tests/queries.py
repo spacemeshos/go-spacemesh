@@ -12,7 +12,7 @@ from tests import convenience
 from tests.context import ES
 from tests.convenience import PRINT_SEP
 
-CREATED_BLOCK_MSG = "block created"
+CREATED_BLOCK_MSG = "proposal created"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 dt = datetime.now()
@@ -330,7 +330,7 @@ def get_atxs(deployment) -> List[Atx]:
     return atxs
 
 
-Block = collections.namedtuple("Block", ("node_id", "block_id", "layer_id", "epoch_id", "atx_id"))
+Block = collections.namedtuple("Block", ("node_id", "proposal_id", "layer_id", "epoch_id", "atx_id"))
 
 
 def get_blocks(deployment) -> List[Block]:
@@ -342,7 +342,7 @@ def get_blocks(deployment) -> List[Block]:
 
     blocks = []
     for log in block_logs:
-        blocks.append(Block(log.node_id, log.block_id, log.layer_id, log.epoch_id, log.atx_id))
+        blocks.append(Block(log.node_id, log.proposal_id, log.layer_id, log.epoch_id, log.atx_id))
     return blocks
 
 
@@ -496,8 +496,8 @@ def layer_block_max_propagation(deployment, layer):
     max_propagation = None
     msg_time = None
     for log in logs:
-        print(list(log), log.block_id)
-        block_recv_msg = {"M": "block received", "block_id": log.block_id}
+        print(list(log), log.proposal_id)
+        block_recv_msg = {"M": "block received", "proposal_id": log.proposal_id}
         # prop is the propagation delay delta between oldest and youngest message of this sort
         prop, max_time = message_propagation(deployment, block_recv_msg)
         print(prop, max_time)
@@ -566,7 +566,7 @@ def assert_equal_state_roots(indx, ns):
 
 
 # =====================================================================================
-# Assert No ATX Validation Errors
+# Assert No Failed ATX Validation Logs
 # =====================================================================================
 
 

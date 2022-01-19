@@ -1,111 +1,217 @@
 package tortoise
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
-	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-var errOverflow = errors.New("vector overflow")
-
-var (
-	// correction vectors type
-	// Opinion vectors.
-	support = vec{Support: 1, Against: 0}
-	against = vec{Support: 0, Against: 1}
-	abstain = vec{Support: 0, Against: 0}
+const (
+	verifyingTortoise = "verifying"
+	fullTortoise      = "full"
 )
 
-type vec struct {
-	Support, Against uint64
-	Flushed          bool
-}
+const (
+	support sign = 1
+	against sign = -1
+	abstain sign = 0
+)
 
-// Field returns a log field. Implements the LoggableField interface.
-func (a vec) Field() log.Field {
-	return log.String("vote_vector", fmt.Sprintf("(+%d, -%d)", a.Support, a.Against))
-}
+type sign int8
 
-func (a vec) Add(v vec) vec {
-	a.Support += v.Support
-	a.Against += v.Against
-	a.Flushed = false
-	if a.Support < v.Support || a.Against < v.Against {
-		panic(errOverflow)
-	}
-	return a
-}
-
-func (a vec) Multiply(x uint64) vec {
-	one := a.Support * x
-	two := a.Against * x
-	if x != 0 && (one/x != a.Support || two/x != a.Against) {
-		panic(errOverflow)
-	}
-	a.Flushed = false
-	a.Support = one
-	a.Against = two
-	return a
-}
-
-func simplifyVote(v vec) vec {
-	if v.Support > v.Against {
-		return support
-	}
-
-	if v.Against > v.Support {
-		return against
-	}
-	return abstain
-}
-
-func (a vec) String() string {
-	v := simplifyVote(a)
-	if v == support {
+func (a sign) String() string {
+	switch a {
+	case 1:
 		return "support"
-	}
-	if v == against {
+	case -1:
 		return "against"
+	case 0:
+		return "abstain"
+	default:
+		panic("sign should be 0/-1/1")
 	}
-	return "abstain"
 }
 
-// Some methods of *big.Rat change its internal data without mutexes, which causes data races.
-var thetaMu sync.Mutex
+type votes map[types.BlockID]sign
 
-// calculateOpinionWithThreshold computes opinion vector (support, against, abstain) based on the vote weight
-// and theta, layer size and delta.
-func calculateOpinionWithThreshold(logger log.Log, v vec, theta *big.Rat, layerSize uint32, delta uint32) vec {
-	thetaMu.Lock()
-	defer thetaMu.Unlock()
-
-	threshold := new(big.Int).Set(theta.Num())
-	threshold.
-		Mul(threshold, big.NewInt(int64(delta))).
-		Mul(threshold, big.NewInt(int64(layerSize)))
-
-	logger.With().Debug("threshold opinion",
-		v,
-		log.String("theta", theta.String()),
-		log.Uint32("layer_size", layerSize),
-		log.Uint32("delta", delta),
-		log.String("threshold", threshold.String()))
-
-	exceedsThreshold := func(val uint64) bool {
-		v := new(big.Int).SetUint64(val)
-		return v.Mul(v, theta.Denom()).Cmp(threshold) == 1
+func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
+	arr := make([]types.BlockID, 0, len(m))
+	for b := range m {
+		arr = append(arr, b)
 	}
-	if v.Support > v.Against && exceedsThreshold(v.Support-v.Against) {
+	return arr
+}
+
+func weightFromInt64(value int64) weight {
+	return weight{Rat: new(big.Rat).SetInt64(value)}
+}
+
+func weightFromUint64(value uint64) weight {
+	return weight{Rat: new(big.Rat).SetUint64(value)}
+}
+
+func weightFromFloat64(value float64) weight {
+	return weight{Rat: new(big.Rat).SetFloat64(value)}
+}
+
+// weight represents any weight in the tortoise.
+type weight struct {
+	*big.Rat
+}
+
+func (w weight) add(other weight) weight {
+	w.Rat.Add(w.Rat, other.Rat)
+	return w
+}
+
+func (w weight) sub(other weight) weight {
+	if other.Rat == nil {
+		return w
+	}
+	w.Rat.Sub(w.Rat, other.Rat)
+	return w
+}
+
+func (w weight) div(other weight) weight {
+	w.Rat.Quo(w.Rat, other.Rat)
+	return w
+}
+
+func (w weight) neg() weight {
+	w.Rat.Neg(w.Rat)
+	return w
+}
+
+func (w weight) copy() weight {
+	other := weight{Rat: new(big.Rat)}
+	other.Rat = other.Rat.Set(w.Rat)
+	return other
+}
+
+func (w weight) fraction(frac *big.Rat) weight {
+	w.Rat = w.Rat.Mul(w.Rat, frac)
+	return w
+}
+
+func (w weight) cmp(other weight) sign {
+	if w.Rat.Sign() == 1 && w.Rat.Cmp(other.Rat) == 1 {
 		return support
-	} else if v.Against > v.Support && exceedsThreshold(v.Against-v.Support) {
+	}
+	if w.Rat.Sign() == -1 && new(big.Rat).Abs(w.Rat).Cmp(other.Rat) == 1 {
 		return against
 	}
 	return abstain
 }
 
-// Opinion is opinions on other blocks.
-type Opinion map[types.BlockID]vec
+func (w weight) String() string {
+	if w.Rat.IsInt() {
+		return w.Rat.Num().String()
+	}
+	return w.Rat.FloatString(2)
+}
+
+func (w weight) isNil() bool {
+	return w.Rat == nil
+}
+
+type tortoiseBallot struct {
+	id, base types.BallotID
+	votes    votes
+	abstain  map[types.LayerID]struct{}
+	weight   weight
+}
+
+func persistContextualValidity(logger log.Log,
+	bdp blockDataProvider,
+	from, to types.LayerID,
+	blocks map[types.LayerID][]types.BlockID,
+	opinion votes,
+) error {
+	var err error
+	iterateLayers(from.Add(1), to, func(lid types.LayerID) bool {
+		for _, bid := range blocks[lid] {
+			sign := opinion[bid]
+			if sign == abstain {
+				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, bid)
+			}
+			err = bdp.SaveContextualValidity(bid, lid, sign == support)
+			if err != nil {
+				err = fmt.Errorf("saving validity for %s: %w", bid, err)
+				return false
+			}
+		}
+		return true
+	})
+	return err
+}
+
+func iterateLayers(from, to types.LayerID, callback func(types.LayerID) bool) {
+	for lid := from; !lid.After(to); lid = lid.Add(1) {
+		if !callback(lid) {
+			return
+		}
+	}
+}
+
+type voteReason string
+
+func (v voteReason) String() string {
+	return string(v)
+}
+
+const (
+	reasonHareOutput     voteReason = "hare"
+	reasonValidity       voteReason = "validity"
+	reasonLocalThreshold voteReason = "local_threshold"
+	reasonCoinflip       voteReason = "coinflip"
+)
+
+// lsb is a mode, second bit is rerun
+// examples (lsb is on the right, prefix with 6 bits is droppped)
+// 10 - rerun in verifying
+// 00 - live tortoise in verifying
+// 11 - rerun in full
+// 01 - live tortoise in full.
+type mode [2]bool
+
+func (m mode) String() string {
+	humanize := "verifying"
+	if m.isFull() {
+		humanize = "full"
+	}
+	if m.isRerun() {
+		return "rerun_" + humanize
+	}
+	return humanize
+}
+
+func (m mode) toggleRerun() mode {
+	m[1] = !m[1]
+	return m
+}
+
+func (m mode) isRerun() bool {
+	return m[1]
+}
+
+func (m mode) toggleMode() mode {
+	m[0] = !m[0]
+	return m
+}
+
+func (m mode) isVerifying() bool {
+	return !m[0]
+}
+
+func (m mode) isFull() bool {
+	return m[0]
+}
+
+func maxLayer(i, j types.LayerID) types.LayerID {
+	if i.After(j) {
+		return i
+	}
+	return j
+}

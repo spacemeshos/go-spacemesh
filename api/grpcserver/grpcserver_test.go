@@ -37,11 +37,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm"
 )
 
 const (
@@ -89,11 +92,14 @@ var (
 	challenge  = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
 	globalAtx  = newAtx(challenge, nipost, addr1)
 	globalAtx2 = newAtx(challenge, nipost, addr2)
-	globalTx   = NewTx(0, addr1, signing.NewEdSigner())
-	globalTx2  = NewTx(1, addr2, signing.NewEdSigner())
-	block1     = types.NewExistingBlock(types.LayerID{}, []byte("11111"), nil)
-	block2     = types.NewExistingBlock(types.LayerID{}, []byte("22222"), nil)
-	block3     = types.NewExistingBlock(types.LayerID{}, []byte("33333"), nil)
+	signer1    = signing.NewEdSigner()
+	signer2    = signing.NewEdSigner()
+	globalTx   = NewTx(0, addr1, signer1)
+	globalTx2  = NewTx(1, addr2, signer2)
+	ballot1    = types.GenLayerBallot(types.LayerID{})
+	block1     = types.GenLayerBlock(types.LayerID{}, nil)
+	block2     = types.GenLayerBlock(types.LayerID{}, nil)
+	block3     = types.GenLayerBlock(types.LayerID{}, nil)
 	txAPI      = &TxAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
@@ -114,9 +120,9 @@ func init() {
 
 	// These create circular dependencies so they have to be initialized
 	// after the global vars
-	block1.ATXID = globalAtx.ID()
+	ballot1.AtxID = globalAtx.ID()
+	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
 	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
-	block1.ActiveSet = &[]types.ATXID{globalAtx.ID(), globalAtx2.ID()}
 	txAPI.returnTx[globalTx.ID()] = globalTx
 	txAPI.returnTx[globalTx2.ID()] = globalTx2
 	types.SetLayersPerEpoch(layersPerEpoch)
@@ -241,7 +247,7 @@ func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.
 		return nil, nil
 	}
 	for _, tx := range t.returnTx {
-		if tx.Recipient.String() == account.String() {
+		if tx.GetRecipient().String() == account.String() {
 			txs = append(txs, tx.ID())
 		}
 	}
@@ -267,8 +273,9 @@ func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 		return nil, errors.New("haven't received that layer yet")
 	}
 
+	ballots := []*types.Ballot{ballot1}
 	blocks := []*types.Block{block1, block2, block3}
-	return types.NewExistingLayer(tid, blocks), nil
+	return types.NewExistingLayer(tid, ballots, blocks), nil
 }
 
 func (t *TxAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
@@ -492,9 +499,9 @@ func (m MempoolMock) Get(id types.TransactionID) (*types.Transaction, error) {
 
 func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
 	m.poolByTxid[id] = tx
-	m.poolByAddress[tx.Recipient] = id
+	m.poolByAddress[tx.GetRecipient()] = id
 	m.poolByAddress[tx.Origin()] = id
-	events.ReportNewTx(tx)
+	events.ReportNewTx(types.LayerID{}, tx)
 }
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
@@ -1962,12 +1969,19 @@ func TestTransactionService(t *testing.T) {
 				Id: globalTx.ID().Bytes(),
 			})
 
+			events.CloseEventReporter()
+
+			require.NoError(t, events.InitializeEventReporterWithOptions(""))
+
+			stream, err := c.TransactionsStateStream(context.Background(), req)
+			require.NoError(t, err)
+
 			wg := sync.WaitGroup{}
 			wg.Add(1)
+
 			go func() {
 				defer wg.Done()
-				stream, err := c.TransactionsStateStream(context.Background(), req)
-				require.NoError(t, err)
+
 				res, err := stream.Recv()
 				require.NoError(t, err)
 				require.Nil(t, res.Transaction)
@@ -1975,10 +1989,9 @@ func TestTransactionService(t *testing.T) {
 				require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
 			}()
 
-			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("", 1, true)
-			require.NoError(t, err)
-			events.ReportNewTx(globalTx)
+			// Wait until stream starts receiving to ensure that it catches the event.
+			time.Sleep(10 * time.Millisecond)
+			events.ReportNewTx(types.LayerID{}, globalTx)
 			wg.Wait()
 		}},
 		{"TransactionsStateStream_All", func(t *testing.T) {
@@ -2003,9 +2016,12 @@ func TestTransactionService(t *testing.T) {
 			}()
 
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("", 1, true)
+			err := events.InitializeEventReporterWithOptions("")
 			require.NoError(t, err)
-			events.ReportNewTx(globalTx)
+
+			// Wait until stream starts receiving to ensure that it catches the event.
+			time.Sleep(10 * time.Millisecond)
+			events.ReportNewTx(types.LayerID{}, globalTx)
 			wg.Wait()
 		}},
 		// Submit a tx, then receive it over the stream
@@ -2059,7 +2075,7 @@ func TestTransactionService(t *testing.T) {
 
 			// SUBMIT
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("", 1, true)
+			err := events.InitializeEventReporterWithOptions("")
 			require.NoError(t, err)
 			serializedTx, err := types.InterfaceToBytes(globalTx)
 			require.NoError(t, err, "error serializing tx")
@@ -2074,6 +2090,83 @@ func TestTransactionService(t *testing.T) {
 
 			wg.Wait()
 		}},
+		{"TransactionsStateStream_ManySubscribers", func(t *testing.T) {
+			logtest.SetupGlobal(t)
+			req := &pb.TransactionsStateStreamRequest{}
+			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
+				Id: globalTx.ID().Bytes(),
+			})
+			req.IncludeTransactions = true
+
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				const subscriberCount = 10
+				streams := make([]pb.TransactionService_TransactionsStateStreamClient, 0, subscriberCount)
+				for i := 0; i < subscriberCount; i++ {
+					stream, err := c.TransactionsStateStream(context.Background(), req)
+					require.NoError(t, err)
+					streams = append(streams, stream)
+				}
+
+				for _, stream := range streams {
+					res, err := stream.Recv()
+					require.NoError(t, err)
+					require.Equal(t, globalTx.ID().Bytes(), res.TransactionState.Id.Id)
+					require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, res.TransactionState.State)
+					checkTransaction(t, res.Transaction)
+				}
+			}()
+
+			events.CloseEventReporter()
+			err := events.InitializeEventReporterWithOptions("")
+			require.NoError(t, err)
+
+			// Wait until stream starts receiving to ensure that it catches the event.
+			time.Sleep(10 * time.Millisecond)
+			events.ReportNewTx(types.LayerID{}, globalTx)
+			wg.Wait()
+		}},
+		{"TransactionsStateStream_NoEventReceiving", func(t *testing.T) {
+			logtest.SetupGlobal(t)
+			req := &pb.TransactionsStateStreamRequest{}
+			req.TransactionId = append(req.TransactionId, &pb.TransactionId{
+				Id: globalTx.ID().Bytes(),
+			})
+			req.IncludeTransactions = true
+
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+
+				stream, err := c.TransactionsStateStream(context.Background(), req)
+				require.NoError(t, err)
+
+				for i := 0; i < subscriptionChanBufSize; i++ {
+					_, err := stream.Recv()
+					if err != nil {
+						st, ok := status.FromError(err)
+						require.True(t, ok)
+						require.Equal(t, st.Message(), errTxBufferFull)
+					}
+				}
+			}()
+
+			events.CloseEventReporter()
+			err := events.InitializeEventReporterWithOptions("")
+			require.NoError(t, err)
+
+			time.Sleep(100 * time.Millisecond)
+
+			for i := 0; i < subscriptionChanBufSize*2; i++ {
+				events.ReportNewTx(types.LayerID{}, globalTx)
+			}
+
+			wg.Wait()
+		}},
 	}
 
 	// Run subtests
@@ -2085,13 +2178,13 @@ func TestTransactionService(t *testing.T) {
 func checkTransaction(t *testing.T, tx *pb.Transaction) {
 	require.Equal(t, globalTx.ID().Bytes(), tx.Id.Id)
 	require.Equal(t, globalTx.Origin().Bytes(), tx.Sender.Address)
-	require.Equal(t, globalTx.GasLimit, tx.GasOffered.GasProvided)
+	require.Equal(t, globalTx.Fee, tx.GasOffered.GasProvided)
 	require.Equal(t, globalTx.Amount, tx.Amount.Value)
 	require.Equal(t, globalTx.AccountNonce, tx.Counter)
 	require.Equal(t, globalTx.Origin().Bytes(), tx.Signature.PublicKey)
 	switch x := tx.Datum.(type) {
 	case *pb.Transaction_CoinTransfer:
-		require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+		require.Equal(t, globalTx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
 			"inner coin transfer tx has bad recipient")
 	default:
 		require.Fail(t, "inner tx has wrong tx data type")
@@ -2138,9 +2231,6 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 
 	resBlock := l.Blocks[0]
 
-	require.NotNil(t, resBlock.ActivationId)
-	require.NotNil(t, resBlock.SmesherId)
-
 	require.Equal(t, len(block1.TxIDs), len(resBlock.Transactions))
 	require.Equal(t, types.Hash20(block1.ID()).Bytes(), resBlock.Id)
 
@@ -2148,7 +2238,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	resTx := resBlock.Transactions[0]
 	require.Equal(t, globalTx.ID().Bytes(), resTx.Id.Id)
 	require.Equal(t, globalTx.Origin().Bytes(), resTx.Sender.Address)
-	require.Equal(t, globalTx.GasLimit, resTx.GasOffered.GasProvided)
+	require.Equal(t, globalTx.Fee, resTx.GasOffered.GasProvided)
 	require.Equal(t, globalTx.Amount, resTx.Amount.Value)
 	require.Equal(t, globalTx.AccountNonce, resTx.Counter)
 	require.Equal(t, globalTx.Signature[:], resTx.Signature.Signature)
@@ -2158,7 +2248,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 	// The Data field is a bit trickier to read
 	switch x := resTx.Datum.(type) {
 	case *pb.Transaction_CoinTransfer:
-		require.Equal(t, globalTx.Recipient.Bytes(), x.CoinTransfer.Receiver.Address,
+		require.Equal(t, globalTx.GetRecipient().Bytes(), x.CoinTransfer.Receiver.Address,
 			"inner coin transfer tx has bad recipient")
 	default:
 		require.Fail(t, "inner tx has wrong tx data type")
@@ -2213,27 +2303,46 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 		require.NoError(t, err, "got error from stream")
 		checkAccountMeshDataItemActivation(t, res.Datum.Datum)
 
-		// look for EOF
 		// third and fourth events streamed should not be received! they should be
 		// filtered out
-		_, err = stream.Recv()
-		require.Equal(t, io.EOF, err, "expected EOF from stream")
+		errCh := make(chan error, 1)
+		go func() {
+			_, err = stream.Recv()
+			errCh <- err
+		}()
+
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+
+		select {
+		case <-errCh:
+			t.Errorf("should not receive")
+		case <-timer.C:
+			return
+		}
 	}()
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("", 0, true)
+	err = events.InitializeEventReporterWithOptions("")
 	require.NoError(t, err)
 
+	// Wait until stream starts receiving to ensure that it catches the event.
+	time.Sleep(10 * time.Millisecond)
 	// publish a tx
-	events.ReportNewTx(globalTx)
+	events.ReportNewTx(types.LayerID{}, globalTx)
 
+	// Wait until stream starts receiving to ensure that it catches the event.
+	time.Sleep(10 * time.Millisecond)
 	// publish an activation
 	events.ReportNewActivation(globalAtx)
-
 	// test streaming a tx and an atx that are filtered out
 	// these should not be received
-	events.ReportNewTx(globalTx2)
+	// Wait until stream starts receiving to ensure that it catches the event.
+	time.Sleep(10 * time.Millisecond)
+	events.ReportNewTx(types.LayerID{}, globalTx2)
+	// Wait until stream starts receiving to ensure that it catches the event.
+	time.Sleep(10 * time.Millisecond)
 	events.ReportNewActivation(globalAtx2)
 
 	// close the stream
@@ -2298,23 +2407,41 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		require.NoError(t, err, "got error from stream")
 		checkAccountDataItemAccount(t, res.Datum.Datum)
 
-		// look for EOF
 		// the next two events streamed should not be received! they should be
 		// filtered out
-		_, err = stream.Recv()
-		require.Equal(t, io.EOF, err, "expected EOF from stream")
+		errCh := make(chan error, 1)
+		go func() {
+			_, err = stream.Recv()
+			errCh <- err
+		}()
+
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+
+		select {
+		case <-errCh:
+			t.Errorf("should not receive")
+		case <-timer.C:
+			return
+		}
 	}()
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("", 0, true)
+	err = events.InitializeEventReporterWithOptions("")
 	require.NoError(t, err)
+
+	// Ensure receiving has started.
+	time.Sleep(10 * time.Millisecond)
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
 		Address: addr1,
 		Index:   receiptIndex,
 	})
+
+	// Wait before every event to ensure their ordering.
+	time.Sleep(10 * time.Millisecond)
 
 	// publish a reward
 	events.ReportRewardReceived(events.Reward{
@@ -2324,12 +2451,17 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		Coinbase:    addr1,
 	})
 
+	time.Sleep(10 * time.Millisecond)
+
 	// publish an account data update
 	events.ReportAccountUpdate(addr1)
 
+	time.Sleep(10 * time.Millisecond)
 	// test streaming a reward and account update that should be filtered out
 	// these should not be received
 	events.ReportAccountUpdate(addr2)
+
+	time.Sleep(10 * time.Millisecond)
 	events.ReportRewardReceived(events.Reward{Coinbase: addr2})
 
 	// close the stream
@@ -2396,14 +2528,29 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		// look for EOF
 		// the next two events streamed should not be received! they should be
 		// filtered out
-		_, err = stream.Recv()
-		require.Equal(t, io.EOF, err, "expected EOF from stream")
+		errCh := make(chan error, 1)
+		go func() {
+			_, err = stream.Recv()
+			errCh <- err
+		}()
+
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+
+		select {
+		case <-errCh:
+			t.Errorf("should not receive")
+		case <-timer.C:
+			return
+		}
 	}()
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("", 0, true)
+	err = events.InitializeEventReporterWithOptions("")
 	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
 
 	// publish a receipt
 	events.ReportReceipt(events.TxReceipt{
@@ -2411,6 +2558,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		Index:   receiptIndex,
 	})
 
+	time.Sleep(10 * time.Millisecond)
 	// publish a reward
 	events.ReportRewardReceived(events.Reward{
 		Layer:       layerFirst,
@@ -2419,12 +2567,15 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		Coinbase:    addr1,
 	})
 
+	time.Sleep(10 * time.Millisecond)
 	// publish an account data update
 	events.ReportAccountUpdate(addr1)
 
 	// publish a new layer
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: layer.Index(),
 		Status:  events.LayerStatusTypeConfirmed,
@@ -2480,15 +2631,30 @@ func TestLayerStream_comprehensive(t *testing.T) {
 		checkLayer(t, res.Layer)
 
 		// look for EOF
-		_, err = stream.Recv()
-		require.Equal(t, io.EOF, err, "expected EOF from stream")
+		errCh := make(chan error, 1)
+		go func() {
+			_, err = stream.Recv()
+			errCh <- err
+		}()
+
+		timer := time.NewTimer(100 * time.Millisecond)
+		defer timer.Stop()
+
+		select {
+		case <-errCh:
+			t.Errorf("should not receive")
+		case <-timer.C:
+			return
+		}
 	}()
 
 	// initialize the streamer
-	require.NoError(t, events.InitializeEventReporterWithOptions("", 0, true))
+	require.NoError(t, events.InitializeEventReporterWithOptions(""))
 
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
+
+	time.Sleep(10 * time.Millisecond)
 	events.ReportLayerUpdate(events.LayerUpdate{
 		LayerID: layer.Index(),
 		Status:  events.LayerStatusTypeConfirmed,
@@ -2547,7 +2713,7 @@ func checkAccountMeshDataItemTx(t *testing.T, dataItem interface{}) {
 		// Need to further check tx type
 		switch y := x.MeshTransaction.Transaction.Datum.(type) {
 		case *pb.Transaction_CoinTransfer:
-			require.Equal(t, globalTx.Recipient.Bytes(), y.CoinTransfer.Receiver.Address,
+			require.Equal(t, globalTx.GetRecipient().Bytes(), y.CoinTransfer.Receiver.Address,
 				"inner coin transfer tx has bad recipient")
 		default:
 			require.Fail(t, "inner tx has wrong tx data type")
@@ -2580,7 +2746,7 @@ func checkAccountDataItemReward(t *testing.T, dataItem interface{}) {
 		require.Equal(t, addr1.Bytes(), x.Reward.Coinbase.Address)
 
 	default:
-		require.Fail(t, "inner account data item has wrong data type")
+		require.Fail(t, fmt.Sprintf("inner account data item has wrong data type: %T", dataItem))
 	}
 }
 
@@ -2592,7 +2758,7 @@ func checkAccountDataItemReceipt(t *testing.T, dataItem interface{}) {
 		require.Equal(t, uint32(receiptIndex), x.Receipt.Index)
 
 	default:
-		require.Fail(t, "inner account data item has wrong data type")
+		require.Fail(t, "inner account data item has wrong data type: "+fmt.Sprintf("%T", dataItem))
 	}
 }
 
@@ -2824,4 +2990,139 @@ func TestGatewayService(t *testing.T) {
 	require.NotNil(t, res, "expected request to succeed")
 	require.Equal(t, int32(code.Code_OK), res.Status.Code)
 	require.NoError(t, err, "expected request to succeed")
+}
+
+type appliedTxsMock struct{}
+
+func (appliedTxsMock) Put(key []byte, value []byte) error { return nil }
+func (appliedTxsMock) Delete(key []byte) error            { panic("implement me") }
+func (appliedTxsMock) Get(key []byte) ([]byte, error)     { panic("implement me") }
+func (appliedTxsMock) Has(key []byte) (bool, error)       { panic("implement me") }
+func (appliedTxsMock) Close()                             { panic("implement me") }
+func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me") }
+func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
+
+type ProjectorMock struct {
+	nonceDiff   uint64
+	balanceDiff uint64
+}
+
+func (p *ProjectorMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
+	return prevNonce + p.nonceDiff, prevBalance - p.balanceDiff, nil
+}
+
+func TestEventsReceived(t *testing.T) {
+	logtest.SetupGlobal(t)
+
+	ctrl := gomock.NewController(t)
+	publisher := mocks.NewMockPublisher(ctrl)
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+		return nil
+	})
+
+	txService := NewTransactionService(publisher, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	gsService := NewGlobalStateService(txAPI, mempoolMock)
+	shutDown := launchServer(t, txService, gsService)
+	defer shutDown()
+
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
+
+	conn1, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn1.Close())
+	}()
+
+	conn2, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn2.Close())
+	}()
+
+	txClient := pb.NewTransactionServiceClient(conn1)
+	accountClient := pb.NewGlobalStateServiceClient(conn2)
+
+	txReq := &pb.TransactionsStateStreamRequest{}
+	txReq.TransactionId = append(txReq.TransactionId, &pb.TransactionId{
+		Id: globalTx.ID().Bytes(),
+	})
+
+	accountReq1 := &pb.AccountDataStreamRequest{
+		Filter: &pb.AccountDataFilter{
+			AccountId: &pb.AccountId{Address: addr1.Bytes()},
+			AccountDataFlags: uint32(
+				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
+					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT),
+		},
+	}
+
+	originAddr := types.Address{}
+	originAddr.SetBytes(signer1.PublicKey().Bytes())
+	accountReq2 := &pb.AccountDataStreamRequest{
+		Filter: &pb.AccountDataFilter{
+			AccountId: &pb.AccountId{Address: originAddr.Bytes()},
+			AccountDataFlags: uint32(
+				pb.AccountDataFlag_ACCOUNT_DATA_FLAG_REWARD |
+					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_ACCOUNT |
+					pb.AccountDataFlag_ACCOUNT_DATA_FLAG_TRANSACTION_RECEIPT),
+		},
+	}
+
+	events.CloseEventReporter()
+	err = events.InitializeEventReporterWithOptions("")
+	require.NoError(t, err)
+
+	txStream, err := txClient.TransactionsStateStream(context.Background(), txReq)
+	require.NoError(t, err)
+
+	accountStream1, err := accountClient.AccountDataStream(context.Background(), accountReq1)
+	require.NoError(t, err, "stream request returned unexpected error")
+
+	accountStream2, err := accountClient.AccountDataStream(context.Background(), accountReq2)
+	require.NoError(t, err, "stream request returned unexpected error")
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+
+	go func() {
+		defer wg.Done()
+
+		for i := 0; i < 2; i++ {
+			txRes, err := txStream.Recv()
+			require.NoError(t, err)
+			require.Nil(t, txRes.Transaction)
+			require.Equal(t, globalTx.ID().Bytes(), txRes.TransactionState.Id.Id)
+			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MESH, txRes.TransactionState.State)
+
+			acc1Res, err := accountStream1.Recv()
+			require.NoError(t, err)
+			require.Equal(t, addr1.Bytes(), acc1Res.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+
+			acc2Res, err := accountStream2.Recv()
+			require.NoError(t, err)
+			require.Equal(t, originAddr.Bytes(), acc2Res.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+		}
+
+		acc1res3, err := accountStream1.Recv()
+		require.NoError(t, err)
+		require.Equal(t, addr1.Bytes(), acc1res3.Datum.Datum.(*pb.AccountData_AccountWrapper).AccountWrapper.AccountId.Address)
+	}()
+
+	time.Sleep(50 * time.Millisecond)
+	pool := mempool.NewTxMemPool()
+	pool.Put(globalTx.ID(), globalTx)
+
+	lg := logtest.New(t).WithName("svm")
+	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	time.Sleep(100 * time.Millisecond)
+
+	rewards := map[types.Address]uint64{
+		addr1: 1,
+	}
+	svm.ApplyLayer(layerFirst, []*types.Transaction{globalTx}, rewards)
+
+	time.Sleep(100 * time.Millisecond)
+
+	wg.Wait()
 }

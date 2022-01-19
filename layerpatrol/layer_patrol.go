@@ -42,3 +42,10 @@ func (lp *LayerPatrol) IsHareInCharge(layerID types.LayerID) bool {
 	_, ok := lp.runByHare[layerID]
 	return ok
 }
+
+// CompleteHare is called by hare instance that completed this layer.
+func (lp *LayerPatrol) CompleteHare(layerID types.LayerID) {
+	lp.mu.Lock()
+	defer lp.mu.Unlock()
+	delete(lp.runByHare, layerID)
+}

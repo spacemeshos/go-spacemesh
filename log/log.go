@@ -148,6 +148,11 @@ func Warning(msg string, args ...interface{}) {
 	GetLogger().Warning(msg, args...)
 }
 
+// Fatal prints formatted error level log message.
+func Fatal(msg string, args ...interface{}) {
+	GetLogger().Fatal(msg, args...)
+}
+
 // With returns a FieldLogger which you can append fields to.
 func With() FieldLogger {
 	return FieldLogger{GetLogger().logger, GetLogger().name}
@@ -162,3 +167,18 @@ func Event() FieldLogger {
 func Panic(msg string, args ...interface{}) {
 	GetLogger().Panic(msg, args...)
 }
+
+type (
+	// ObjectMarshaller is an alias to zapcore.ObjectMarshaller.
+	ObjectMarshaller = zapcore.ObjectMarshaler
+	// ObjectMarshallerFunc is an alias to zapcore.ObjectMarshallerFunc.
+	ObjectMarshallerFunc = zapcore.ObjectMarshalerFunc
+	// ObjectEncoder is an alias to zapcore.ObjectEncoder.
+	ObjectEncoder = zapcore.ObjectEncoder
+	// ArrayMarshaler is an alias to zapcore.ArrayMarshaller.
+	ArrayMarshaler = zapcore.ArrayMarshaler
+	// ArrayMarshalerFunc is an alias to zapcore.ArrayMarshallerFunc.
+	ArrayMarshalerFunc = zapcore.ArrayMarshalerFunc
+	// ArrayEncoder is an alias to zapcore.ArrayEncoder.
+	ArrayEncoder = zapcore.ArrayEncoder
+)

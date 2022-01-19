@@ -131,9 +131,9 @@ func (s MeshService) getFilteredActivations(ctx context.Context, startLayer type
 			return nil, status.Errorf(codes.Internal, "error retrieving layer data")
 		}
 
-		for _, b := range layer.Blocks() {
-			if b.ActiveSet != nil {
-				atxids = append(atxids, *b.ActiveSet...)
+		for _, b := range layer.Ballots() {
+			if b.EpochData != nil && b.EpochData.ActiveSet != nil {
+				atxids = append(atxids, b.EpochData.ActiveSet...)
 			}
 		}
 	}
@@ -264,12 +264,20 @@ func (s MeshService) getTxIdsFromMesh(minLayer types.LayerID, addr types.Address
 	return txIDs, nil
 }
 
+func convertLayerID(l types.LayerID) *pb.LayerNumber {
+	if layerID := l.Uint32(); layerID != 0 {
+		return &pb.LayerNumber{Number: layerID}
+	}
+
+	return nil
+}
+
 func convertTransaction(t *types.Transaction) *pb.Transaction {
 	return &pb.Transaction{
 		Id: &pb.TransactionId{Id: t.ID().Bytes()},
 		Datum: &pb.Transaction_CoinTransfer{
 			CoinTransfer: &pb.CoinTransferTransaction{
-				Receiver: &pb.AccountId{Address: t.Recipient.Bytes()},
+				Receiver: &pb.AccountId{Address: t.GetRecipient().Bytes()},
 			},
 		},
 		Sender: &pb.AccountId{Address: t.Origin().Bytes()},
@@ -279,7 +287,7 @@ func convertTransaction(t *types.Transaction) *pb.Transaction {
 			// pre-STF tx, which includes a gas offer but not an amount of gas actually
 			// consumed.
 			// GasPrice:    nil,
-			GasProvided: t.GasLimit,
+			GasProvided: t.Fee,
 		},
 		Amount:  &pb.Amount{Value: t.Amount},
 		Counter: t.AccountNonce,
@@ -323,6 +331,8 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		return nil, status.Errorf(codes.Internal, "error reading layer data")
 	}
 
+	// TODO add proposal data as needed.
+
 	for _, b := range layer.Blocks() {
 		txs, missing := s.Mesh.GetTransactions(b.TxIDs)
 		// TODO: Do we ever expect txs to be missing here?
@@ -333,10 +343,6 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 		}
 
-		if b.ActiveSet != nil {
-			activations = append(activations, *b.ActiveSet...)
-		}
-
 		var pbTxs []*pb.Transaction
 		for _, t := range txs {
 			pbTxs = append(pbTxs, convertTransaction(t))
@@ -344,9 +350,13 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		blocks = append(blocks, &pb.Block{
 			Id:           types.Hash20(b.ID()).Bytes(),
 			Transactions: pbTxs,
-			SmesherId:    &pb.SmesherId{Id: b.MinerID().Bytes()},
-			ActivationId: &pb.ActivationId{Id: b.ATXID.Bytes()},
 		})
+	}
+
+	for _, b := range layer.Ballots() {
+		if b.EpochData != nil && b.EpochData.ActiveSet != nil {
+			activations = append(activations, b.EpochData.ActiveSet...)
+		}
 	}
 
 	// Extract ATX data from block data
@@ -459,27 +469,31 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 
 	// Subscribe to the stream of transactions and activations
 	var (
-		txStream          chan events.TransactionWithValidity
-		activationsStream chan *types.ActivationTx
+		txCh, activationsCh           <-chan interface{}
+		txBufFull, activationsBufFull <-chan struct{}
 	)
+
 	if filterTx {
-		txStream = events.GetNewTxChannel()
+		if txsSubscription := events.SubscribeTxs(); txsSubscription != nil {
+			txCh, txBufFull = consumeEvents(stream.Context(), txsSubscription)
+		}
 	}
 	if filterActivations {
-		activationsStream = events.GetActivationsChannel()
+		if activationsSubscription := events.SubscribeActivations(); activationsSubscription != nil {
+			activationsCh, activationsBufFull = consumeEvents(stream.Context(), activationsSubscription)
+		}
 	}
 
 	for {
 		select {
-		case activation, ok := <-activationsStream:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("ActivationStream closed, shutting down")
-				return nil
-			}
+		case <-txBufFull:
+			log.Info("tx buffer is full, shutting down")
+			return status.Error(codes.Canceled, errTxBufferFull)
+		case <-activationsBufFull:
+			log.Info("activations buffer is full, shutting down")
+			return status.Error(codes.Canceled, errActivationsBufferFull)
+		case activationEvent := <-activationsCh:
+			activation := activationEvent.(events.ActivationTx).ActivationTx
 			// Apply address filter
 			if activation.Coinbase == addr {
 				pbActivation, err := convertActivation(activation)
@@ -499,22 +513,17 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 					return fmt.Errorf("send to stream: %w", err)
 				}
 			}
-		case tx, ok := <-txStream:
-			if !ok {
-				// we could handle this more gracefully, by no longer listening
-				// to this stream but continuing to listen to the other stream,
-				// but in practice one should never be closed while the other is
-				// still running, so it doesn't matter
-				log.Info("NewTxStream closed, shutting down")
-				return nil
-			}
+		case txEvent := <-txCh:
+			tx := txEvent.(events.Transaction)
 			// Apply address filter
-			// TODO(dshulyak) include layerID when streamed too
-			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.Recipient == addr) {
+			if tx.Valid && (tx.Transaction.Origin() == addr || tx.Transaction.GetRecipient() == addr) {
 				resp := &pb.AccountMeshDataStreamResponse{
 					Datum: &pb.AccountMeshData{
 						Datum: &pb.AccountMeshData_MeshTransaction{
-							MeshTransaction: &pb.MeshTransaction{Transaction: convertTransaction(tx.Transaction)},
+							MeshTransaction: &pb.MeshTransaction{
+								Transaction: convertTransaction(tx.Transaction),
+								LayerId:     convertLayerID(tx.LayerID),
+							},
 						},
 					},
 				}
@@ -534,15 +543,27 @@ func (s MeshService) AccountMeshDataStream(in *pb.AccountMeshDataStreamRequest, 
 // LayerStream exposes a stream of all mesh data per layer.
 func (s MeshService) LayerStream(_ *pb.LayerStreamRequest, stream pb.MeshService_LayerStreamServer) error {
 	log.Info("GRPC MeshService.LayerStream")
-	layerStream := events.GetLayerChannel()
+
+	var (
+		layerCh       <-chan interface{}
+		layersBufFull <-chan struct{}
+	)
+
+	if layersSubscription := events.SubscribeLayers(); layersSubscription != nil {
+		layerCh, layersBufFull = consumeEvents(stream.Context(), layersSubscription)
+	}
 
 	for {
 		select {
-		case layer, ok := <-layerStream:
+		case <-layersBufFull:
+			log.Info("layer buffer is full, shutting down")
+			return status.Error(codes.Canceled, errAccountBufferFull)
+		case layerEvent, ok := <-layerCh:
 			if !ok {
 				log.Info("LayerStream closed, shutting down")
 				return nil
 			}
+			layer := layerEvent.(events.LayerUpdate)
 			pbLayer, err := s.readLayer(stream.Context(), layer.LayerID, convertLayerStatus(layer.Status))
 			if err != nil {
 				return fmt.Errorf("read layer: %w", err)

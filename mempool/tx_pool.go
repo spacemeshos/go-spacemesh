@@ -50,9 +50,9 @@ func (t *TxMempool) GetTxsByAddress(addr types.Address) []*types.Transaction {
 	return txs
 }
 
-// GetTxsForBlock gets a specific number of random txs for a block. This function also receives a state calculation function
+// SelectTopNTransactions picks a specific number of random txs for miner. This function also receives a state calculation function
 // to allow returning only transactions that will probably be valid.
-func (t *TxMempool) GetTxsForBlock(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionID, []*types.Transaction, error) {
+func (t *TxMempool) SelectTopNTransactions(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionID, []*types.Transaction, error) {
 	var txIds []types.TransactionID
 	t.mu.RLock()
 	for addr, account := range t.accounts {
@@ -102,9 +102,11 @@ func (t *TxMempool) Put(id types.TransactionID, tx *types.Transaction) {
 	t.txs[id] = tx
 	t.getOrCreate(tx.Origin()).Add(types.LayerID{}, tx)
 	t.addToAddr(tx.Origin(), id)
-	t.addToAddr(tx.Recipient, id)
+	t.addToAddr(tx.GetRecipient(), id)
 	t.mu.Unlock()
-	events.ReportNewTx(tx)
+	events.ReportNewTx(types.LayerID{}, tx)
+	events.ReportAccountUpdate(tx.Origin())
+	events.ReportAccountUpdate(tx.GetRecipient())
 }
 
 // Invalidate removes transaction from pool.
@@ -123,10 +125,10 @@ func (t *TxMempool) Invalidate(id types.TransactionID) {
 			// We only report those transactions that are being dropped from the txpool here as
 			// conflicting since they won't be reported anywhere else. There is no need to report
 			// the initial tx here since it'll be reported as part of a new block/layer anyway.
-			events.ReportTxWithValidity(tx, false)
+			events.ReportTxWithValidity(types.LayerID{}, tx, false)
 		}
 		t.removeFromAddr(tx.Origin(), id)
-		t.removeFromAddr(tx.Recipient, id)
+		t.removeFromAddr(tx.GetRecipient(), id)
 	}
 	t.mu.Unlock()
 }
