@@ -342,6 +342,13 @@ func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) er
 	return nil
 }
 
+func (msh *Mesh) getAggregatedHash(lid types.LayerID) (types.Hash32, error) {
+	if !lid.After(types.NewLayerID(1)) {
+		return types.EmptyLayerHash, nil
+	}
+	return layers.GetAggregatedHash(msh.db, lid)
+}
+
 func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID) error {
 	logger := msh.WithContext(ctx)
 	if to.Before(from) {
@@ -369,7 +376,11 @@ func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID)
 			return err
 		}
 
-		prevHash := msh.GetAggregatedLayerHash(i.Sub(1))
+		prevHash, err := msh.getAggregatedHash(i.Sub(1))
+		if err != nil {
+			logger.With().Debug("failed to get previous aggregated hash", i, log.Err(err))
+			return err
+		}
 
 		logger.With().Debug("got previous aggregatedHash", i, log.String("prevAggHash", prevHash.ShortString()))
 		newAggHash := types.CalcBlocksHash32(validBlockIDs, prevHash.Bytes())
