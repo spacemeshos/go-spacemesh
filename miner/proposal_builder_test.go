@@ -18,6 +18,7 @@ import (
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
 
@@ -74,7 +75,7 @@ func createBuilder(tb testing.TB) *testBuilder {
 
 func genTX(tb testing.TB, nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	tb.Helper()
-	tx, err := types.GenerateCallTransaction(signer, recipient, nonce, 1, defaultGasLimit, defaultFee)
+	tx, err := transaction.GenerateCallTransaction(signer, recipient, nonce, 1, defaultGasLimit, defaultFee)
 	require.NoError(tb, err)
 	return tx
 }

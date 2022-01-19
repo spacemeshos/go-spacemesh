@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 type ProcessorStateSuite struct {
@@ -59,12 +60,12 @@ func createAccount(state *TransactionProcessor, addr types.Address, balance int6
 }
 
 func createSpawnTransaction(destination types.Address, signer *signing.EdSigner) *types.Transaction {
-	tx := types.GenerateSpawnTransaction(signer, destination)
+	tx := transaction.GenerateSpawnTransaction(signer, destination)
 	return tx
 }
 
 func createCallTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
-	tx, err := types.GenerateCallTransaction(signer, destination, nonce, amount, 100, fee)
+	tx, err := transaction.GenerateCallTransaction(signer, destination, nonce, amount, 100, fee)
 	assert.NoError(t, err)
 	return tx
 }
@@ -490,7 +491,7 @@ func createSignerTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transa
 	r := require.New(t)
 	signer, err := signing.NewEdSignerFromBuffer(key)
 	r.NoError(err)
-	tx, err := types.GenerateCallTransaction(signer, toAddr([]byte{0xde}), 1111, 123, 11, 456)
+	tx, err := transaction.GenerateCallTransaction(signer, toAddr([]byte{0xde}), 1111, 123, 11, 456)
 	r.NoError(err)
 	return tx
 }

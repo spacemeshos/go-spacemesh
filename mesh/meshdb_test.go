@@ -19,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 const (
@@ -199,7 +200,7 @@ func newSpawnTx(signer *signing.EdSigner) *types.Transaction {
 }
 
 func newSpawnTxWithDest(signer *signing.EdSigner, dest types.Address) *types.Transaction {
-	return types.GenerateSpawnTransaction(signer, dest)
+	return transaction.GenerateSpawnTransaction(signer, dest)
 }
 
 func newCallTx(t *testing.T, signer *signing.EdSigner, nonce, totalAmount uint64) *types.Transaction {
@@ -210,7 +211,7 @@ func newCallTx(t *testing.T, signer *signing.EdSigner, nonce, totalAmount uint64
 func newCallTxWithDest(t *testing.T, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) *types.Transaction {
 	t.Helper()
 	feeAmount := uint64(1)
-	tx, err := types.GenerateCallTransaction(signer, dest, nonce, totalAmount-feeAmount, 3, feeAmount)
+	tx, err := transaction.GenerateCallTransaction(signer, dest, nonce, totalAmount-feeAmount, 3, feeAmount)
 	require.NoError(t, err)
 	return tx
 }

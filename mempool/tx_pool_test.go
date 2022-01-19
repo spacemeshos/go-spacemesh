@@ -12,6 +12,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 func getState(types.Address) (uint64, uint64, error) {
@@ -173,7 +174,7 @@ func createBatch(t testing.TB, signer *signing.EdSigner) ([]*types.Transaction, 
 	var txBatch []*types.Transaction
 	var txIDBatch []types.TransactionID
 	for i := uint64(0); i < 10000; i++ {
-		tx, err := types.GenerateCallTransaction(signer, types.Address{}, 5+1, 50, 100, 1)
+		tx, err := transaction.GenerateCallTransaction(signer, types.Address{}, 5+1, 50, 100, 1)
 		require.NoError(t, err)
 		// tx := newTx(t, 5+i, 50, signer)
 		txBatch = append(txBatch, tx)
@@ -189,7 +190,7 @@ func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *t
 }
 
 func createTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
-	tx, err := types.GenerateCallTransaction(signer, destination, nonce, amount, 100, fee)
+	tx, err := transaction.GenerateCallTransaction(signer, destination, nonce, amount, 100, fee)
 	assert.NoError(t, err)
 	return tx
 }

@@ -45,6 +45,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/svm"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 const (
@@ -331,10 +332,10 @@ func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
 	if nonce == 0 {
-		return types.GenerateSpawnTransaction(signer, recipient)
+		return transaction.GenerateSpawnTransaction(signer, recipient)
 	}
 
-	tx, err := types.GenerateCallTransaction(signer, recipient, nonce, 1, defaultGasLimit, defaultFee)
+	tx, err := transaction.GenerateCallTransaction(signer, recipient, nonce, 1, defaultGasLimit, defaultFee)
 	if err != nil {
 		return nil
 	}

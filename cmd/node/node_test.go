@@ -42,6 +42,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
@@ -759,10 +760,10 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	txorigin.SetBytes(signer.PublicKey().Bytes())
 	dst := types.GenerateAddress([]byte{0x02})
 
-	tx1 := types.GenerateSpawnTransaction(signer, dst)
+	tx1 := transaction.GenerateSpawnTransaction(signer, dst)
 	tx1bytes, _ := types.InterfaceToBytes(tx1)
 
-	tx2, err := types.GenerateCallTransaction(signer, dst, 0, 10, 1, 1)
+	tx2, err := transaction.GenerateCallTransaction(signer, dst, 0, 10, 1, 1)
 	require.NoError(t, err, "unable to create signed mock tx")
 	tx2bytes, _ := types.InterfaceToBytes(tx2)
 

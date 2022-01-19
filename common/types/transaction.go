@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
@@ -187,52 +186,4 @@ type Reward struct {
 	LayerRewardEstimate uint64
 	SmesherID           NodeID
 	Coinbase            Address
-}
-
-// GenerateSpawnTransaction generates a spawn transaction.
-func GenerateSpawnTransaction(signer *signing.EdSigner, target Address) *Transaction {
-	inner := InnerTransaction{
-		Recipient: target,
-	}
-
-	buf, err := InterfaceToBytes(&inner)
-	if err != nil {
-		return nil
-	}
-
-	sst := &Transaction{
-		InnerTransaction: inner,
-		Signature:        [64]byte{},
-	}
-
-	copy(sst.Signature[:], signer.Sign(buf))
-	sst.SetOrigin(GenerateAddress(signer.PublicKey().Bytes()))
-
-	return sst
-}
-
-// GenerateCallTransaction generates a call transaction.
-func GenerateCallTransaction(signer *signing.EdSigner, rec Address, nonce, amount, gas, fee uint64) (*Transaction, error) {
-	inner := InnerTransaction{
-		AccountNonce: nonce,
-		Recipient:    rec,
-		Amount:       amount,
-		GasLimit:     gas,
-		Fee:          fee,
-	}
-
-	buf, err := InterfaceToBytes(&inner)
-	if err != nil {
-		return nil, err
-	}
-
-	sst := &Transaction{
-		InnerTransaction: inner,
-		Signature:        [64]byte{},
-	}
-
-	copy(sst.Signature[:], signer.Sign(buf))
-	sst.SetOrigin(GenerateAddress(signer.PublicKey().Bytes()))
-
-	return sst, nil
 }

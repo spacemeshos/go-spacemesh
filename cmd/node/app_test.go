@@ -33,6 +33,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
@@ -267,7 +268,7 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 	txsSent := 25
 	setup := func(suite *AppTestSuite, t *testing.T) {
 		for i := 0; i < txsSent; i++ {
-			tx, err := types.GenerateCallTransaction(acc1Signer, dst, uint64(txsSent-i), 10, 1, 1)
+			tx, err := transaction.GenerateCallTransaction(acc1Signer, dst, uint64(txsSent-i), 10, 1, 1)
 			if err != nil {
 				suite.log.With().Panic("panicked creating signed tx", log.Err(err))
 			}
@@ -331,10 +332,10 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 			}
 			var tx *types.Transaction
 			if i == 0 {
-				tx = types.GenerateSpawnTransaction(acc1Signer, dst)
+				tx = transaction.GenerateSpawnTransaction(acc1Signer, dst)
 			} else {
 				var err error
-				tx, err = types.GenerateCallTransaction(acc1Signer, dst, uint64(i), 10, 1, 1)
+				tx, err = transaction.GenerateCallTransaction(acc1Signer, dst, uint64(i), 10, 1, 1)
 				suite.NoError(err, "failed to create signed tx: %s", err)
 			}
 
