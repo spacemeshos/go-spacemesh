@@ -17,7 +17,7 @@ func Add(db sql.Executor, lid types.LayerID, bid types.BlockID, tx *types.Transa
 	if _, err := db.Exec(`insert into transactions 
 	(id, tx, layer, block, origin, destination) 
 	values (?1, ?2, ?3, ?4, ?5, ?6) 
-	on conflict(id) 
+	on conflict(id) do
 	update set layer = ?3, block=?4`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, tx.ID().Bytes())
@@ -34,7 +34,7 @@ func Add(db sql.Executor, lid types.LayerID, bid types.BlockID, tx *types.Transa
 
 // Applied update transaction when it is no longer pending.
 func Applied(db sql.Executor, id types.TransactionID) error {
-	if rows, err := db.Exec("update transactions set applied = 1 where id = ?1 returning id", func(stmt *sql.Statement) {
+	if rows, err := db.Exec("update transactions set applied = true where id = ?1 returning id", func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}, nil); err != nil {
 		return fmt.Errorf("applied %s: %w", id, err)
@@ -56,7 +56,7 @@ func Delete(db sql.Executor, id types.TransactionID) error {
 }
 
 // tx, layer, block, origin.
-func decodeTransaction(stmt *sql.Statement) (*types.MeshTransaction, error) {
+func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.MeshTransaction, error) {
 	var (
 		tx     types.Transaction
 		origin types.Address
@@ -69,6 +69,7 @@ func decodeTransaction(stmt *sql.Statement) (*types.MeshTransaction, error) {
 	stmt.ColumnBytes(2, bid[:])
 	stmt.ColumnBytes(3, origin[:])
 	tx.SetOrigin(origin)
+	tx.SetID(id)
 	return &types.MeshTransaction{
 		Transaction: tx,
 		LayerID:     lid,
@@ -82,7 +83,7 @@ func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, er
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
-			tx, err = decodeTransaction(stmt)
+			tx, err = decodeTransaction(id, stmt)
 			return true
 		}); err != nil {
 		return nil, fmt.Errorf("get %s: %w", id, err)
@@ -104,11 +105,15 @@ func Has(db sql.Executor, id types.TransactionID) (bool, error) {
 	return rows > 0, nil
 }
 
-// query MUST ensure that this order of fields tx, layer, block, origin.
+// query MUST ensure that this order of fields tx, layer, block, origin, id.
 func filter(db sql.Executor, query string, encoder func(*sql.Statement)) (rst []*types.MeshTransaction, err error) {
 	if _, err := db.Exec(query, encoder, func(stmt *sql.Statement) bool {
-		var tx *types.MeshTransaction
-		tx, err = decodeTransaction(stmt)
+		var (
+			tx *types.MeshTransaction
+			id types.TransactionID
+		)
+		stmt.ColumnBytes(4, id[:])
+		tx, err = decodeTransaction(id, stmt)
 		if err != nil {
 			return false
 		}
@@ -121,8 +126,8 @@ func filter(db sql.Executor, query string, encoder func(*sql.Statement)) (rst []
 }
 
 func filterByAddress(db sql.Executor, addrfield string, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return filter(db, fmt.Sprintf(`select tx, layer, block, origin from transactions
-		where %s = ?1 layer >= ?2 and layer <= ?3`, addrfield), func(stmt *sql.Statement) {
+	return filter(db, fmt.Sprintf(`select tx, layer, block, origin, id from transactions
+		where %s = ?1 and layer >= ?2 and layer <= ?3`, addrfield), func(stmt *sql.Statement) {
 		stmt.BindBytes(1, address[:])
 		stmt.BindInt64(2, int64(from.Value))
 		stmt.BindInt64(3, int64(to.Value))
@@ -146,8 +151,8 @@ func FilterByDestination(db sql.Executor, from, to types.LayerID, address types.
 
 // FilterPending filters all transactions that are not yet applied.
 func FilterPending(db sql.Executor, address types.Address) ([]*types.MeshTransaction, error) {
-	return filter(db, `select tx, layer, block, origin from transactions
-		where origin = ?1 and applied != 1`, func(stmt *sql.Statement) {
+	return filter(db, `select tx, layer, block, origin, id from transactions
+		where origin = ?1 and applied = false`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, address[:])
 	})
 }
