@@ -329,8 +329,14 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 				time.Sleep(250 * time.Millisecond)
 				actNonce = getNonce()
 			}
-			tx, err := types.GenerateCallTransaction(acc1Signer, dst, uint64(i), 10, 1, 1)
-			suite.NoError(err, "failed to create signed tx: %s", err)
+			var tx *types.Transaction
+			if i == 0 {
+				tx = types.GenerateSpawnTransaction(acc1Signer, dst)
+			} else {
+				var err error
+				tx, err = types.GenerateCallTransaction(acc1Signer, dst, uint64(i), 10, 1, 1)
+				suite.NoError(err, "failed to create signed tx: %s", err)
+			}
 
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}

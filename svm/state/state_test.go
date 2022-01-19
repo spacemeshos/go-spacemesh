@@ -53,19 +53,19 @@ func TestDump(t *testing.T) {
 	// check that dump contains the state objects that are in trie
 	got := string(s.state.Dump())
 	want := `{
-	"root": "2e20ee7ec82fe7d40ef62da98a5446db8960611f0348348eccf1393f14ca1d9c",
+	"root": "ba94994b7d4b6590b615f0a8ab543445312fd303fdab013f0b0fba920f8f228b",
 	"accounts": {
-		"009e0aff4087543b742dd2e36bb2bfcd42a7aaf9": {
+		"0000000000000000000000000000000000000001": {
 			"nonce": 0,
 			"balance": 22
 		},
-		"9acd5d784bb58efc950cd2eeeee03551a196f75b": {
-			"nonce": 10,
-			"balance": 0
-		},
-		"af7d13292ea0a40ba65b01a805b93ca583b71ce8": {
+		"0000000000000000000000000000000000000002": {
 			"nonce": 0,
 			"balance": 44
+		},
+		"0000000000000000000000000000000000000102": {
+			"nonce": 10,
+			"balance": 0
 		}
 	}
 }`

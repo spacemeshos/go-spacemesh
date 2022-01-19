@@ -144,7 +144,7 @@ func (svm *SVM) AddTxToPool(tx *types.Transaction) error {
 }
 
 // HandleGossipTransaction handles data received on the transactions gossip channel.
-func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (svm *SVM) HandleGossipTransaction(_ context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	tx, err := types.BytesToTransaction(msg)
 	if err != nil {
 		svm.state.With().Error("SVM couldn't parse incoming transaction", log.Err(err))
@@ -162,7 +162,7 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		log.Uint64("amount", tx.Amount),
 		log.Uint64("fee", tx.GetFee()),
 		log.Uint64("gas", tx.GasLimit),
-		log.String("recipient", string(tx.GetRecipient().String())),
+		log.String("recipient", tx.GetRecipient().String()),
 		log.String("origin", tx.Origin().String()))
 
 	if !svm.AddressExists(tx.Origin()) {

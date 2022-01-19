@@ -191,7 +191,24 @@ type Reward struct {
 
 // GenerateSpawnTransaction generates a spawn transaction.
 func GenerateSpawnTransaction(signer *signing.EdSigner, target Address) *Transaction {
-	return &Transaction{}
+	inner := InnerTransaction{
+		Recipient: target,
+	}
+
+	buf, err := InterfaceToBytes(&inner)
+	if err != nil {
+		return nil
+	}
+
+	sst := &Transaction{
+		InnerTransaction: inner,
+		Signature:        [64]byte{},
+	}
+
+	copy(sst.Signature[:], signer.Sign(buf))
+	sst.SetOrigin(GenerateAddress(signer.PublicKey().Bytes()))
+
+	return sst
 }
 
 // GenerateCallTransaction generates a call transaction.

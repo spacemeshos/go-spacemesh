@@ -603,7 +603,7 @@ func TestMesh_persistLayerHash(t *testing.T) {
 
 func addTxToMempool(t *testing.T, msh *Mesh, signer *signing.EdSigner, nonce uint64) *types.Transaction {
 	t.Helper()
-	tx := newTx(t, signer, nonce, 111)
+	tx := newCallTx(t, signer, nonce, 111)
 	msh.txPool.Put(tx.ID(), tx)
 	return tx
 }

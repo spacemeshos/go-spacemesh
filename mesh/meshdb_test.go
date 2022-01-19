@@ -194,15 +194,20 @@ func address() types.Address {
 	return addr
 }
 
-func newTx(t *testing.T, signer *signing.EdSigner, nonce, totalAmount uint64) *types.Transaction {
-	t.Helper()
-	feeAmount := uint64(1)
-	tx, err := types.GenerateCallTransaction(signer, types.Address{}, nonce, totalAmount-feeAmount, 3, feeAmount)
-	require.NoError(t, err)
-	return tx
+func newSpawnTx(signer *signing.EdSigner) *types.Transaction {
+	return newSpawnTxWithDest(signer, types.Address{})
 }
 
-func newTxWithDest(t *testing.T, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) *types.Transaction {
+func newSpawnTxWithDest(signer *signing.EdSigner, dest types.Address) *types.Transaction {
+	return types.GenerateSpawnTransaction(signer, dest)
+}
+
+func newCallTx(t *testing.T, signer *signing.EdSigner, nonce, totalAmount uint64) *types.Transaction {
+	t.Helper()
+	return newCallTxWithDest(t, signer, types.Address{}, nonce, totalAmount)
+}
+
+func newCallTxWithDest(t *testing.T, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) *types.Transaction {
 	t.Helper()
 	feeAmount := uint64(1)
 	tx, err := types.GenerateCallTransaction(signer, dest, nonce, totalAmount-feeAmount, 3, feeAmount)
@@ -226,8 +231,9 @@ func TestMeshDB_GetStateProjection(t *testing.T) {
 	defer mdb.Close()
 	signer, origin := newSignerAndAddress(t, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
-		newTx(t, signer, 0, 10),
-		newTx(t, signer, 1, 20),
+		newSpawnTx(signer),
+		newCallTx(t, signer, 0, 10),
+		newCallTx(t, signer, 1, 20),
 	}, types.NewLayerID(1))
 	require.NoError(t, err)
 
@@ -243,8 +249,8 @@ func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 
 	signer, origin := newSignerAndAddress(t, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
-		newTx(t, signer, 1, 10),
-		newTx(t, signer, 2, 20),
+		newCallTx(t, signer, 1, 10),
+		newCallTx(t, signer, 2, 20),
 	}, types.NewLayerID(1))
 	require.NoError(t, err)
 
@@ -260,8 +266,9 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 
 	signer, origin := newSignerAndAddress(t, "123")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
-		newTx(t, signer, 0, 10),
-		newTx(t, signer, 1, 95),
+		newSpawnTx(signer),
+		newCallTx(t, signer, 0, 10),
+		newCallTx(t, signer, 1, 95),
 	}, types.NewLayerID(1))
 	require.NoError(t, err)
 
@@ -288,10 +295,11 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 	signer1, origin1 := newSignerAndAddress(t, "thc")
 	signer2, origin2 := newSignerAndAddress(t, "cbd")
 	err := mdb.addToUnappliedTxs([]*types.Transaction{
-		newTx(t, signer1, 420, 240),
-		newTx(t, signer1, 421, 241),
-		newTx(t, signer2, 0, 100),
-		newTx(t, signer2, 1, 101),
+		newCallTx(t, signer1, 420, 240),
+		newCallTx(t, signer1, 421, 241),
+		newSpawnTx(signer2),
+		newCallTx(t, signer2, 0, 100),
+		newCallTx(t, signer2, 1, 101),
 	}, types.NewLayerID(1))
 	require.NoError(t, err)
 
@@ -310,7 +318,8 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 	require.Equal(t, 101, int(txns2[1].TotalAmount))
 
 	mdb.removeFromUnappliedTxs([]*types.Transaction{
-		newTx(t, signer2, 0, 100),
+		newSpawnTx(signer2),
+		newCallTx(t, signer2, 0, 100),
 	})
 
 	txns1 = getTxns(t, mdb, origin1)
@@ -334,10 +343,11 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 	signer2, _ := newSignerAndAddress(t, "cbd")
 	_, addr3 := newSignerAndAddress(t, "cbe")
 	require.NoError(t, mdb.writeTransactions(types.NewLayerID(1), types.EmptyBlockID,
-		newTx(t, signer1, 420, 240),
-		newTx(t, signer1, 421, 241),
-		newTxWithDest(t, signer2, addr1, 0, 100),
-		newTxWithDest(t, signer2, addr1, 1, 101),
+		newCallTx(t, signer1, 420, 240),
+		newCallTx(t, signer1, 421, 241),
+		newSpawnTxWithDest(signer2, addr1),
+		newCallTxWithDest(t, signer2, addr1, 0, 100),
+		newCallTxWithDest(t, signer2, addr1, 1, 101),
 	))
 
 	txs, err := mdb.GetTransactionsByOrigin(types.NewLayerID(1), addr1)
@@ -363,7 +373,7 @@ func TestMeshDB_updateTransaction(t *testing.T) {
 	defer mdb.Close()
 
 	signer1, _ := newSignerAndAddress(t, "thc")
-	tx := newTx(t, signer1, 420, 240)
+	tx := newCallTx(t, signer1, 420, 240)
 	layerID := types.NewLayerID(10)
 	require.NoError(t, mdb.writeTransactions(layerID, types.EmptyBlockID, tx))
 
@@ -615,7 +625,7 @@ func TestMeshDB_GetMeshTransactions(t *testing.T) {
 	)
 	for i := 1; i <= layers; i++ {
 		nonce++
-		tx := newTx(t, signer1, nonce, 240)
+		tx := newCallTx(t, signer1, nonce, 240)
 		ids = append(ids, tx.ID())
 		require.NoError(t, mdb.writeTransactions(types.NewLayerID(uint32(i)), types.EmptyBlockID, tx))
 	}
@@ -639,8 +649,8 @@ func TestMesh_FindOnce(t *testing.T) {
 	for _, layer := range layers {
 		nonce++
 		err := mdb.writeTransactions(types.NewLayerID(layer), types.EmptyBlockID,
-			newTx(t, signer1, nonce, 100),
-			newTxWithDest(t, signer2, addr1, nonce, 100),
+			newCallTx(t, signer1, nonce, 100),
+			newCallTxWithDest(t, signer2, addr1, nonce, 100),
 		)
 		require.NoError(t, err)
 	}

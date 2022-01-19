@@ -58,7 +58,12 @@ func createAccount(state *TransactionProcessor, addr types.Address, balance int6
 	return obj1
 }
 
-func createTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
+func createSpawnTransaction(destination types.Address, signer *signing.EdSigner) *types.Transaction {
+	tx := types.GenerateSpawnTransaction(signer, destination)
+	return tx
+}
+
+func createCallTransaction(t *testing.T, nonce uint64, destination types.Address, amount, fee uint64, signer *signing.EdSigner) *types.Transaction {
 	tx, err := types.GenerateCallTransaction(signer, destination, nonce, amount, 100, fee)
 	assert.NoError(t, err)
 	return tx
@@ -83,7 +88,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	s.processor.Commit()
 
 	transactions := []*types.Transaction{
-		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
+		createSpawnTransaction(obj2.address, signer),
+		createCallTransaction(s.T(), obj1.Nonce()+1, obj2.address, 1, 5, signer),
 	}
 
 	failed, err := s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
@@ -93,22 +99,22 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction() {
 	got := string(s.processor.Dump())
 
 	assert.Equal(s.T(), uint64(15), s.processor.GetBalance(obj1.address))
-	assert.Equal(s.T(), uint64(1), s.processor.GetNonce(obj1.address))
+	assert.Equal(s.T(), uint64(2), s.processor.GetNonce(obj1.address))
 
 	want := `{
-	"root": "29249ea7f314853b029d4e7439d04a3794ee8e5b0a40efa42ccbb6f977badb02",
+	"root": "3f1b129ed8172becbff49f6365ac719d84698b55eaab48be7874aee9c8e5db68",
 	"accounts": {
-		"25888bd7da9474f7e3a7e51297b4111a473c606c": {
-			"nonce": 1,
-			"balance": 15
+		"0000000000000000000000000000000000000002": {
+			"nonce": 0,
+			"balance": 44
 		},
-		"9acd5d784bb58efc950cd2eeeee03551a196f75b": {
+		"0000000000000000000000000000000000000102": {
 			"nonce": 10,
 			"balance": 2
 		},
-		"af7d13292ea0a40ba65b01a805b93ca583b71ce8": {
-			"nonce": 0,
-			"balance": 44
+		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
+			"nonce": 2,
+			"balance": 15
 		}
 	}
 }`
@@ -131,10 +137,10 @@ func SignerToAddr(signer *signing.EdSigner) types.Address {
 	s.processor.Commit(false)
 
 	transactions := Transactions{
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
-		createTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
+		createCallTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
+		createCallTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
+		createCallTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
+		createCallTransaction(obj1.Nonce(), obj1.address, obj2.address, 1),
 	}
 
 	failed, err := s.processor.ApplyTransactions(1, transactions)
@@ -173,23 +179,24 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_Errors()
 	s.processor.Commit()
 
 	transactions := []*types.Transaction{
-		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
+		createSpawnTransaction(obj2.address, signer1),
+		createCallTransaction(s.T(), obj1.Nonce()+1, obj2.address, 1, 5, signer1),
 	}
 
 	failed, err := s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
 	assert.NoError(s.T(), err)
 	assert.Empty(s.T(), failed)
 
-	err = s.processor.ApplyTransaction(createTransaction(s.T(), 0, obj2.address, 1, 5, signer1), types.LayerID{})
+	err = s.processor.ApplyTransaction(createCallTransaction(s.T(), 0, obj2.address, 1, 5, signer1), types.LayerID{})
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), errNonce)
 
-	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signer1), types.LayerID{})
+	err = s.processor.ApplyTransaction(createCallTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signer1), types.LayerID{})
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), errFunds)
 
 	// Test origin
-	err = s.processor.ApplyTransaction(createTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signing.NewEdSigner()), types.LayerID{})
+	err = s.processor.ApplyTransaction(createCallTransaction(s.T(), obj1.Nonce(), obj2.address, 21, 5, signing.NewEdSigner()), types.LayerID{})
 	assert.Error(s.T(), err)
 	assert.Equal(s.T(), err.Error(), errOrigin)
 }
@@ -224,10 +231,11 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	assert.NoError(s.T(), err)
 
 	transactions := []*types.Transaction{
-		createTransaction(s.T(), obj1.Nonce()+3, obj3.address, 1, 5, signer),
-		createTransaction(s.T(), obj1.Nonce()+2, obj3.address, 1, 5, signer),
-		createTransaction(s.T(), obj1.Nonce()+1, obj3.address, 1, 5, signer),
-		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer),
+		createCallTransaction(s.T(), obj1.Nonce()+4, obj3.address, 1, 5, signer),
+		createCallTransaction(s.T(), obj1.Nonce()+3, obj3.address, 1, 5, signer),
+		createCallTransaction(s.T(), obj1.Nonce()+2, obj3.address, 1, 5, signer),
+		createCallTransaction(s.T(), obj1.Nonce()+1, obj2.address, 1, 5, signer),
+		createSpawnTransaction(obj2.address, signer),
 	}
 
 	s.processor.ApplyTransactions(types.NewLayerID(1), transactions)
@@ -239,19 +247,19 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_ApplyTransaction_OrderByN
 	assert.Equal(s.T(), uint64(2), s.processor.GetBalance(obj2.address))
 
 	want := `{
-	"root": "215d2effa083ef73f749c75baaed4a3c3d4bec4475fc94bad545483945e5832a",
+	"root": "3e29fe62d68ca95ef051050505ea33192e0dd7f057c1fa675540bfdc868b3f46",
 	"accounts": {
-		"25888bd7da9474f7e3a7e51297b4111a473c606c": {
-			"nonce": 4,
-			"balance": 1
+		"0000000000000000000000000000000000000002": {
+			"nonce": 0,
+			"balance": 47
 		},
-		"9acd5d784bb58efc950cd2eeeee03551a196f75b": {
+		"0000000000000000000000000000000000000102": {
 			"nonce": 10,
 			"balance": 2
 		},
-		"af7d13292ea0a40ba65b01a805b93ca583b71ce8": {
-			"nonce": 0,
-			"balance": 47
+		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
+			"nonce": 5,
+			"balance": 1
 		}
 	}
 }`
@@ -285,8 +293,9 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	processor.Commit()
 
 	transactions := []*types.Transaction{
-		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
-		// createTransaction(obj2.Nonce(),obj2.address, obj1.address, 1),
+		createSpawnTransaction(obj2.address, signer1),
+		createCallTransaction(s.T(), obj1.Nonce()+1, obj2.address, 1, 5, signer1),
+		// createCallTransaction(obj2.Nonce(),obj2.address, obj1.address, 1),
 	}
 
 	failed, err := processor.ApplyTransactions(types.NewLayerID(1), transactions)
@@ -294,8 +303,8 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	assert.Empty(s.T(), failed)
 
 	transactions = []*types.Transaction{
-		createTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
-		createTransaction(s.T(), obj2.Nonce(), obj1.address, 10, 5, signer2),
+		createCallTransaction(s.T(), obj1.Nonce(), obj2.address, 1, 5, signer1),
+		createCallTransaction(s.T(), obj2.Nonce(), obj1.address, 10, 5, signer2),
 	}
 
 	failed, err = processor.ApplyTransactions(types.NewLayerID(2), transactions)
@@ -305,19 +314,19 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	got := string(processor.Dump())
 
 	want := `{
-	"root": "cde9a4fa3f0cacac329e91e3124c2ec5dae31d3cbe76efab0ceb230646ff0e2d",
+	"root": "65d4e37884079f7df312b3932626f0dd20cc1ae562ed239611f7e0eeee0395d5",
 	"accounts": {
-		"25888bd7da9474f7e3a7e51297b4111a473c606c": {
-			"nonce": 2,
-			"balance": 19
+		"0000000000000000000000000000000000000002": {
+			"nonce": 0,
+			"balance": 44
 		},
-		"a853c4752b021f68b11423934b1ae51e51422293": {
+		"198d6e08b28e813feb01e4a400839b85e18080ce": {
 			"nonce": 11,
 			"balance": 28
 		},
-		"af7d13292ea0a40ba65b01a805b93ca583b71ce8": {
-			"nonce": 0,
-			"balance": 44
+		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
+			"nonce": 3,
+			"balance": 19
 		}
 	}
 }`
@@ -331,19 +340,19 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	assert.Equal(s.T(), uint64(15), processor.GetBalance(obj1.address))
 
 	want = `{
-	"root": "ca81fb9812cb19780292e37dc0437eac7db24c0a8f912e093d9b7f7f70baa1b2",
+	"root": "4896f8b92858e67cad9c2276dad453ba7d92d5c1bf21f701bba3ce2a2c52010b",
 	"accounts": {
-		"25888bd7da9474f7e3a7e51297b4111a473c606c": {
-			"nonce": 1,
-			"balance": 15
+		"0000000000000000000000000000000000000002": {
+			"nonce": 0,
+			"balance": 44
 		},
-		"a853c4752b021f68b11423934b1ae51e51422293": {
+		"198d6e08b28e813feb01e4a400839b85e18080ce": {
 			"nonce": 10,
 			"balance": 42
 		},
-		"af7d13292ea0a40ba65b01a805b93ca583b71ce8": {
-			"nonce": 0,
-			"balance": 44
+		"4aa02109374edfd260c0d3d03cb501c8d65457a9": {
+			"nonce": 2,
+			"balance": 15
 		}
 	}
 }`
@@ -396,7 +405,13 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			for dstAccount == srcAccount {
 				dstAccount = accounts[int(rand.Uint32()%(uint32(len(accounts)-1)))]
 			}
-			t := createTransaction(s.T(),
+
+			if processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]) == 0 {
+				trns = append(trns, createSpawnTransaction(dstAccount.address, signers[src]))
+				nonceTrack[srcAccount]++
+			}
+
+			t := createCallTransaction(s.T(),
 				processor.GetNonce(srcAccount.address)+uint64(nonceTrack[srcAccount]),
 				dstAccount.address,
 				rand.Uint64()%maxAmount,
@@ -416,7 +431,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 			err = processor.LoadState(types.NewLayerID(uint32(revertToLayer)))
 			s.Require().NoError(err)
 			got := string(processor.Dump())
-			s.Require().Equal(string(want), string(got))
+			s.Require().Equal(want, got)
 		}
 	}
 }
@@ -424,7 +439,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *types.Transaction {
 	feeAmount := uint64(1)
 	rec := types.Address{byte(rand.Int()), byte(rand.Int()), byte(rand.Int()), byte(rand.Int())}
-	return createTransaction(t, nonce, rec, totalAmount-feeAmount, feeAmount, signer)
+	return createCallTransaction(t, nonce, rec, totalAmount-feeAmount, feeAmount, signer)
 }
 
 func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance() {
@@ -537,7 +552,8 @@ func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	assert.NoError(t, err)
 
 	transactions := []*types.Transaction{
-		createTransaction(t, obj1.Nonce(), obj2.address, 1, 5, signer),
+		createSpawnTransaction(obj2.address, signer),
+		createCallTransaction(t, obj1.Nonce(), obj2.address, 1, 5, signer),
 	}
 
 	_, err = processor.ApplyTransactions(types.NewLayerID(1), transactions)
