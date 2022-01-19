@@ -763,7 +763,7 @@ func TestSpacemeshApp_TransactionService(t *testing.T) {
 	tx1 := transaction.GenerateSpawnTransaction(signer, dst)
 	tx1bytes, _ := types.InterfaceToBytes(tx1)
 
-	tx2, err := transaction.GenerateCallTransaction(signer, dst, 0, 10, 1, 1)
+	tx2, err := transaction.GenerateCallTransaction(signer, dst, 1, 10, 1, 1)
 	require.NoError(t, err, "unable to create signed mock tx")
 	tx2bytes, _ := types.InterfaceToBytes(tx2)
 
