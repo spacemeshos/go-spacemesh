@@ -1,8 +1,9 @@
 package crypto
 
 import (
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"golang.org/x/crypto/sha3"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
 // Sha256 is a SHA-3-256 (not sha-256) hasher. It returns a 32 bytes (256 bits) hash of data.
