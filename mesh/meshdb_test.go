@@ -211,10 +211,10 @@ func TestMeshDB_GetStateProjection(t *testing.T) {
 	mdb := NewMemMeshDB(logtest.New(t))
 	defer mdb.Close()
 	signer, origin := newSignerAndAddress(t, "123")
-	err := mdb.addToUnappliedTxs([]*types.Transaction{
+	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
 		newTx(t, signer, 0, 10),
 		newTx(t, signer, 1, 20),
-	}, types.NewLayerID(1))
+	)
 	require.NoError(t, err)
 
 	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
@@ -228,10 +228,10 @@ func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
 	defer mdb.Close()
 
 	signer, origin := newSignerAndAddress(t, "123")
-	err := mdb.addToUnappliedTxs([]*types.Transaction{
+	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
 		newTx(t, signer, 1, 10),
 		newTx(t, signer, 2, 20),
-	}, types.NewLayerID(1))
+	)
 	require.NoError(t, err)
 
 	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
@@ -245,10 +245,10 @@ func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
 	defer mdb.Close()
 
 	signer, origin := newSignerAndAddress(t, "123")
-	err := mdb.addToUnappliedTxs([]*types.Transaction{
+	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
 		newTx(t, signer, 0, 10),
 		newTx(t, signer, 1, 95),
-	}, types.NewLayerID(1))
+	)
 	require.NoError(t, err)
 
 	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
@@ -273,12 +273,12 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 
 	signer1, origin1 := newSignerAndAddress(t, "thc")
 	signer2, origin2 := newSignerAndAddress(t, "cbd")
-	err := mdb.addToUnappliedTxs([]*types.Transaction{
+	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
 		newTx(t, signer1, 420, 240),
 		newTx(t, signer1, 421, 241),
 		newTx(t, signer2, 0, 100),
 		newTx(t, signer2, 1, 101),
-	}, types.NewLayerID(1))
+	)
 	require.NoError(t, err)
 
 	txns1 := getTxns(t, mdb, origin1)
@@ -295,9 +295,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 	require.Equal(t, 100, int(txns2[0].TotalAmount))
 	require.Equal(t, 101, int(txns2[1].TotalAmount))
 
-	mdb.removeFromUnappliedTxs([]*types.Transaction{
-		newTx(t, signer2, 0, 100),
-	})
+	require.NoError(t, mdb.deleteTransactions(newTx(t, signer2, 0, 100)))
 
 	txns1 = getTxns(t, mdb, origin1)
 	require.Len(t, txns1, 2)

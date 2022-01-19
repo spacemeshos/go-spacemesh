@@ -34,12 +34,8 @@ type DB struct {
 
 	db *sql.Database
 
-	unappliedTxs database.Database
-
 	coinflipMu sync.RWMutex
 	coinflips  map[types.LayerID]bool // weak coinflip results from Hare
-
-	exit chan struct{}
 }
 
 // NewPersistentMeshDB creates an instance of a mesh database.
@@ -52,18 +48,11 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 		return nil, fmt.Errorf("open sqlite db %w", err)
 	}
 
-	utx, err := database.NewLDBDatabase(filepath.Join(path, "unappliedTxs"), 0, 0, logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to initialize mesh unappliedTxs db: %v", err)
-	}
-
 	mdb := &DB{
-		Log:          logger,
-		blockCache:   newBlockCache(blockCacheSize * layerSize),
-		db:           db,
-		unappliedTxs: utx,
-		coinflips:    make(map[types.LayerID]bool),
-		exit:         make(chan struct{}),
+		Log:        logger,
+		blockCache: newBlockCache(blockCacheSize * layerSize),
+		db:         db,
+		coinflips:  make(map[types.LayerID]bool),
 	}
 	gLayer := types.GenesisLayer()
 	for _, b := range gLayer.Ballots() {
@@ -100,12 +89,10 @@ func (m *DB) PersistentData() bool {
 // NewMemMeshDB is a mock used for testing.
 func NewMemMeshDB(logger log.Log) *DB {
 	mdb := &DB{
-		Log:          logger,
-		blockCache:   newBlockCache(100 * layerSize),
-		db:           sql.InMemory(),
-		unappliedTxs: database.NewMemDatabase(),
-		coinflips:    make(map[types.LayerID]bool),
-		exit:         make(chan struct{}),
+		Log:        logger,
+		blockCache: newBlockCache(100 * layerSize),
+		db:         sql.InMemory(),
+		coinflips:  make(map[types.LayerID]bool),
 	}
 	gLayer := types.GenesisLayer()
 	for _, b := range gLayer.Ballots() {
@@ -126,8 +113,6 @@ func NewMemMeshDB(logger log.Log) *DB {
 
 // Close closes all resources.
 func (m *DB) Close() {
-	close(m.exit)
-	m.unappliedTxs.Close()
 	if err := m.db.Close(); err != nil {
 		m.Log.With().Error("error closing database", log.Err(err))
 	}
@@ -376,101 +361,23 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) ([]types.Reward, erro
 	return rewards.FilterBySmesher(m.db, smesherID.ToBytes())
 }
 
-func (m *DB) addToUnappliedTxs(txs []*types.Transaction, layer types.LayerID) error {
-	groupedTxs := groupByOrigin(txs)
-	for addr, accountTxs := range groupedTxs {
-		if err := m.addUnapplied(addr, accountTxs, layer); err != nil {
-			return fmt.Errorf("add unapplied: %w", err)
-		}
-	}
-	return nil
-}
-
-func (m *DB) addUnapplied(addr types.Address, txs []*types.Transaction, layer types.LayerID) error {
-	var (
-		batch = m.unappliedTxs.NewBatch()
-		b     bytes.Buffer
-	)
+func (m *DB) deleteTransactions(txs ...*types.Transaction) error {
 	for _, tx := range txs {
-		mtx := types.MeshTransaction{Transaction: *tx, LayerID: layer}
-		buf, err := codec.Encode(mtx)
-		if err != nil {
-			m.Log.With().Panic("can't encode tx", log.Err(err))
-		}
-
-		b.Write(addr.Bytes())
-		b.Write(tx.ID().Bytes())
-		if err := batch.Put(b.Bytes(), buf); err != nil {
-			return fmt.Errorf("put into batch: %w", err)
-		}
-		b.Reset()
-	}
-
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("write batch: %w", err)
-	}
-
-	return nil
-}
-
-func (m *DB) removeFromUnappliedTxs(accepted []*types.Transaction) (map[types.Address][]*types.Transaction, map[types.Address]struct{}, error) {
-	grouped := groupByOrigin(accepted)
-	accounts := make(map[types.Address]struct{})
-	for account := range grouped {
-		accounts[account] = struct{}{}
-	}
-	for account := range accounts {
-		if err := m.removeFromAccountTxs(account, grouped); err != nil {
-			return nil, nil, err
+		if err := transactions.Delete(m.db, tx.ID()); err != nil {
+			return err
 		}
 	}
-	return grouped, accounts, nil
-}
-
-func (m *DB) removeFromAccountTxs(account types.Address, accepted map[types.Address][]*types.Transaction) error {
-	return m.removePending(account, accepted[account])
-}
-
-func (m *DB) removeRejectedFromAccountTxs(account types.Address, rejected map[types.Address][]*types.Transaction) error {
-	return m.removePending(account, rejected[account])
-}
-
-func (m *DB) removePending(addr types.Address, txs []*types.Transaction) error {
-	var (
-		batch = m.unappliedTxs.NewBatch()
-		b     bytes.Buffer
-	)
-	for _, tx := range txs {
-		b.Write(addr.Bytes())
-		b.Write(tx.ID().Bytes())
-		if err := batch.Delete(b.Bytes()); err != nil {
-			return fmt.Errorf("delete batch: %w", err)
-		}
-		b.Reset()
-	}
-
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("write batch: %w", err)
-	}
-
 	return nil
 }
 
 func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendingTxs, error) {
-	var (
-		it      = m.unappliedTxs.Find(addr[:])
-		pending = pendingtxs.NewAccountPendingTxs()
-	)
-	defer it.Release()
-	for it.Next() {
-		var mtx types.MeshTransaction
-		if err := codec.Decode(it.Value(), &mtx); err != nil {
-			return nil, fmt.Errorf("decode with codec: %w", err)
-		}
-		pending.Add(mtx.LayerID, &mtx.Transaction)
+	pending := pendingtxs.NewAccountPendingTxs()
+	txs, err := transactions.FilterPending(m.db, addr)
+	if err != nil {
+		return nil, err
 	}
-	if it.Error() != nil {
-		return nil, fmt.Errorf("iterator: %w", it.Error())
+	for _, tx := range txs {
+		pending.Add(tx.LayerID, &tx.Transaction)
 	}
 	return pending, nil
 }
@@ -603,13 +510,6 @@ func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.Layer
 func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
 	m.Info("warming up cache with layers %v to %v", from, to)
 	for i := from; i.Before(to); i = i.Add(1) {
-		select {
-		case <-m.exit:
-			m.Info("shutdown during cache warm up")
-			return nil
-		default:
-		}
-
 		layer, err := m.LayerBlockIds(i)
 		if err != nil {
 			return fmt.Errorf("could not get layer %v from database %v", layer, err)
