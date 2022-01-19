@@ -765,6 +765,36 @@ func TestMesh_ResetAppliedOnRevert(t *testing.T) {
 	require.Equal(t, failed.Sub(1), tm.LatestLayerInState())
 }
 
+func TestMesh_NoPanicOnIncorrectVerified(t *testing.T) {
+	tm := createTestMesh(t)
+	defer tm.ctrl.Finish()
+	defer tm.Close()
+
+	ctx := context.TODO()
+	genesis := types.GetEffectiveGenesis()
+	const n = 10
+	last := genesis.Add(n)
+
+	tm.mockState.EXPECT().GetStateRoot().Times(n - 1)
+	for lid := genesis.Add(1); !lid.After(last); lid = lid.Add(1) {
+		tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
+			Return(maxLayer(lid.Sub(2), genesis), lid.Sub(1), false)
+		tm.ProcessLayer(ctx, lid)
+	}
+	require.Equal(t, last.Sub(1), tm.LatestLayerInState())
+
+	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
+		Return(tm.LatestLayerInState().Sub(2), tm.LatestLayerInState().Sub(1), false)
+	tm.ProcessLayer(ctx, last.Add(1))
+	require.Equal(t, last.Sub(1), tm.LatestLayerInState())
+
+	tm.mockState.EXPECT().GetStateRoot().Times(2) // will apply two layers
+	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
+		Return(last, last.Add(1), false)
+	tm.ProcessLayer(ctx, last.Add(2))
+	require.Equal(t, last.Add(1), tm.LatestLayerInState())
+}
+
 func TestMesh_CallOnBlock(t *testing.T) {
 	tm := createTestMesh(t)
 	defer tm.ctrl.Finish()
