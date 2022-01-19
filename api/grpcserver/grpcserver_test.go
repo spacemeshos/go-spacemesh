@@ -266,6 +266,18 @@ func (t *TxAPIMock) GetTransactionsByOrigin(from, to types.LayerID, account type
 	return
 }
 
+func (t *TxAPIMock) GetTransactionsByAddress(from, to types.LayerID, account types.Address) ([]*types.MeshTransaction, error) {
+	origin, err := t.GetTransactionsByOrigin(from, to, account)
+	if err != nil {
+		return nil, err
+	}
+	dest, err := t.GetTransactionsByDestination(from, to, account)
+	if err != nil {
+		return nil, err
+	}
+	return append(origin, dest...), nil
+}
+
 func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 	if tid.After(genTime.GetCurrentLayer()) {
 		return nil, errors.New("requested layer later than current layer")

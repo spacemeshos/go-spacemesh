@@ -438,14 +438,20 @@ func (m *DB) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction,
 	return transactions.Get(m.db, id)
 }
 
-// GetTransactionsByDestination retrieves txs by destination and layer.
+// GetTransactionsByDestination retrieves txs by destination in between layers [from, to].
 func (m *DB) GetTransactionsByDestination(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	return transactions.FilterByDestination(m.db, from, to, address)
 }
 
-// GetTransactionsByOrigin retrieves txs by origin and layer.
+// GetTransactionsByOrigin retrieves txs by origin in beetween layers [from, to].
 func (m *DB) GetTransactionsByOrigin(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	return transactions.FilterByOrigin(m.db, from, to, address)
+}
+
+// GetTransactionsByAddress retrieves txs for a single address in beetween layers [from, to].
+// Guarantees that transaction will appear exactly once, even if origin and recipient is the same, and in insertion order.
+func (m *DB) GetTransactionsByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
+	return transactions.FilterByAddress(m.db, from, to, address)
 }
 
 // BlocksByValidity classifies a slice of blocks by validity.

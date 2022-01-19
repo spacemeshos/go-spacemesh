@@ -107,15 +107,11 @@ func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactio
 
 func (s MeshService) getFilteredTransactions(from types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	latest := s.Mesh.LatestLayer()
-	origin, err := s.Mesh.GetTransactionsByOrigin(from, latest, address)
+	txs, err := s.Mesh.GetTransactionsByAddress(from, latest, address)
 	if err != nil {
-		return nil, fmt.Errorf("reading txs for origin %s: %w", address, err)
+		return nil, fmt.Errorf("reading txs for address %s: %w", address, err)
 	}
-	destination, err := s.Mesh.GetTransactionsByDestination(from, latest, address)
-	if err != nil {
-		return nil, fmt.Errorf("reading txs for destination %s: %w", address, err)
-	}
-	return append(origin, destination...), nil
+	return txs, nil
 }
 
 func (s MeshService) getFilteredActivations(ctx context.Context, startLayer types.LayerID, addr types.Address) (activations []*types.ActivationTx, err error) {
