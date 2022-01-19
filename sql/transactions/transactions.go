@@ -93,6 +93,23 @@ func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, er
 	return tx, err
 }
 
+// GetBlob loads transaction as an encoded blob, ready to be sent over the wire.
+func GetBlob(db sql.Executor, id types.TransactionID) (buf []byte, err error) {
+	if rows, err := db.Exec("select tx from transactions where id = ?1",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, func(stmt *sql.Statement) bool {
+			buf = make([]byte, stmt.ColumnLen(0))
+			stmt.ColumnBytes(0, buf)
+			return true
+		}); err != nil {
+		return nil, fmt.Errorf("get %s: %w", id, err)
+	} else if rows == 0 {
+		return nil, fmt.Errorf("%w: tx %s", sql.ErrNotFound, id)
+	}
+	return buf, nil
+}
+
 // Has returns true if transaction is stored in the database.
 func Has(db sql.Executor, id types.TransactionID) (bool, error) {
 	rows, err := db.Exec("select 1 from transactions where id = ?1",
