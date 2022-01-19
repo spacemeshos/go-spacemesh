@@ -1850,19 +1850,6 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 		}},
-		{"SubmitTransaction_ZeroBalance", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			txAPI.balances[globalTx.Origin()] = big.NewInt(0)
-			serializedTx, err := types.InterfaceToBytes(globalTx)
-			require.NoError(t, err, "error serializing tx")
-			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-				Transaction: serializedTx,
-			})
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-			require.Contains(t, err.Error(), "`Transaction` incorrect counter or")
-			txAPI.balances[globalTx.Origin()] = big.NewInt(int64(accountBalance))
-		}},
 		{"SubmitTransaction_BadCounter", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			txAPI.nonces[globalTx.Origin()] = uint64(accountCounter + 1)
