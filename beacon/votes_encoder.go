@@ -1,21 +1,21 @@
-package tortoisebeacon
+package beacon
 
 import "github.com/bits-and-blooms/bitset"
 
-func (tb *TortoiseBeacon) encodeVotes(currentRound allVotes, firstRound proposals) (votesBitVector []uint64) {
+func (pd *ProtocolDriver) encodeVotes(currentRound allVotes, firstRound proposals) (votesBitVector []uint64) {
 	validVotes := firstRound.valid
 	potentiallyValidVotes := firstRound.potentiallyValid
 	length := uint(len(validVotes) + len(potentiallyValidVotes))
 
-	if uint64(len(validVotes)) > tb.config.VotesLimit {
-		validVotes = validVotes[:tb.config.VotesLimit]
+	if uint64(len(validVotes)) > pd.config.VotesLimit {
+		validVotes = validVotes[:pd.config.VotesLimit]
 		potentiallyValidVotes = potentiallyValidVotes[:0]
-		length = uint(tb.config.VotesLimit)
+		length = uint(pd.config.VotesLimit)
 	}
 
-	if length > uint(tb.config.VotesLimit) {
-		potentiallyValidVotes = potentiallyValidVotes[:tb.config.VotesLimit-uint64(len(validVotes))]
-		length = uint(tb.config.VotesLimit)
+	if length > uint(pd.config.VotesLimit) {
+		potentiallyValidVotes = potentiallyValidVotes[:pd.config.VotesLimit-uint64(len(validVotes))]
+		length = uint(pd.config.VotesLimit)
 	}
 
 	bs := bitset.New(length)

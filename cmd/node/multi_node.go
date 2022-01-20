@@ -17,6 +17,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -26,7 +27,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
 
 // ManualClock is a clock that releases ticks on demand and not according to a real world clock.
@@ -175,7 +175,7 @@ func getTestDefaultConfig() *config.Config {
 	cfg.FETCH.BatchTimeout = 5
 	cfg.GoldenATXID = "0x5678"
 
-	cfg.TortoiseBeacon = tortoisebeacon.NodeSimUnitTestConfig()
+	cfg.Beacon = beacon.NodeSimUnitTestConfig()
 
 	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
 
@@ -407,13 +407,13 @@ loop:
 					continue
 				}
 			}
-			beacons := eventDb.GetTortoiseBeacon(epoch)
-			logger.Info("all miners finished calculating %v tortoise beacons, epoch %v done in %v", len(beacons), epoch, time.Since(startLayer))
+			beacons := eventDb.GetBeacon(epoch)
+			logger.Info("all miners finished calculating %v beacons, epoch %v done in %v", len(beacons), epoch, time.Since(startLayer))
 			if len(beacons) != 0 {
 				first := beacons[0]
 				for _, beacon := range beacons {
 					if first != beacon {
-						logger.Info("tortoise beacons %v and %v differ", first, beacon)
+						logger.Info("beacons %v and %v differ", first, beacon)
 						errors++
 						continue
 					}

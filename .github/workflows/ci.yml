@@ -272,7 +272,7 @@ jobs:
         uses: actions/checkout@v2
       - name: hare system test
         run: make dockertest-hare
-  systemtest-tortoise-beacon:
+  systemtest-beacon:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
@@ -287,8 +287,8 @@ jobs:
           time: '330s'
       - name: checkout
         uses: actions/checkout@v2
-      - name: tortoise beacon system test
-        run: make dockertest-tortoise-beacon
+      - name: beacon system test
+        run: make dockertest-beacon
 
 
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
@@ -304,11 +304,11 @@ jobs:
       - systemtest-mining
       - systemtest-p2p
       - systemtest-hare
-      - systemtest-tortoise-beacon
+      - systemtest-beacon
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-tortoise-beacon.result == 'success')) && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-beacon.result == 'success')) && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1

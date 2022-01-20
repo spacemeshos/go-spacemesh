@@ -1,8 +1,8 @@
-package tortoisebeacon
+package beacon
 
 import "github.com/bits-and-blooms/bitset"
 
-func (tb *TortoiseBeacon) decodeVotes(votesBitVector []uint64, firstRound proposals) allVotes {
+func (pd *ProtocolDriver) decodeVotes(votesBitVector []uint64, firstRound proposals) allVotes {
 	result := allVotes{
 		valid:   make(proposalSet),
 		invalid: make(proposalSet),

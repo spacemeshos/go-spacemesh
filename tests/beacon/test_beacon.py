@@ -4,11 +4,11 @@ from pytest_testconfig import config as testconfig
 from tests import queries as q
 from tests.setup_utils import add_multi_clients
 from tests.setup_network import setup_network
-from tests.utils import validate_tortoise_beacons, validate_tortoise_beacon_weak_coins, get_pod_id, get_conf
+from tests.utils import validate_beacons, validate_beacon_weak_coins, get_pod_id, get_conf
 
 
-def test_tortoise_beacon(init_session, setup_network):
-    print(f"tortoise beacon system test started")
+def test_beacon(init_session, setup_network):
+    print(f"beacon system test started")
 
     curr_epoch = 0
     epochs_to_sleep = 2
@@ -41,11 +41,11 @@ def test_tortoise_beacon(init_session, setup_network):
     curr_epoch += 4
     print("\n\n-------- current epoch", curr_epoch, "--------")
 
-    print(f"-------- validating tortoise beacon --------")
-    beacon_messages = q.get_tortoise_beacon_msgs(init_session, init_session)
+    print(f"-------- validating beacon --------")
+    beacon_messages = q.get_beacon_msgs(init_session, init_session)
 
-    validate_tortoise_beacons(beacon_messages)
-    print("-------- tortoise beacon validation succeed --------")
+    validate_beacons(beacon_messages)
+    print("-------- beacon validation succeed --------")
 
     # TODO(nkryuchkov): enable after weak coin is implemented
     # print(f"-------- validating weak coin --------")

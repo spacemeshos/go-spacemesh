@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 import (
 	"context"
@@ -13,6 +13,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"golang.org/x/sync/errgroup"
 
+	"github.com/spacemeshos/go-spacemesh/beacon/metrics"
+	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -21,26 +23,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/metrics"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
 const (
-	protoName      = "TORTOISE_BEACON_PROTOCOL"
-	proposalPrefix = "TBP"
+	protoName      = "BEACON_PROTOCOL"
+	proposalPrefix = "BP"
 
 	proposalChanCapacity = 1024
 	numEpochsToKeep      = 10
 )
 
-// Tortoise Beacon errors.
 var (
-	ErrBeaconNotCalculated = errors.New("beacon is not calculated for this epoch")
-	ErrZeroEpochWeight     = errors.New("zero epoch weight provided")
-	ErrZeroEpoch           = errors.New("zero epoch provided")
+	errBeaconNotCalculated = errors.New("beacon is not calculated for this epoch")
+	errZeroEpochWeight     = errors.New("zero epoch weight provided")
+	errZeroEpoch           = errors.New("zero epoch provided")
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./tortoise_beacon.go
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./beacon.go
 
 type coin interface {
 	StartEpoch(context.Context, types.EpochID, weakcoin.UnitAllowances)
@@ -69,8 +68,8 @@ type layerClock interface {
 	LayerToTime(types.LayerID) time.Time
 }
 
-// New returns a new TortoiseBeacon.
-func New(
+// NewProtocolDriver returns a new ProtocolDriver.
+func NewProtocolDriver(
 	conf Config,
 	nodeID types.NodeID,
 	publisher pubsub.Publisher,
@@ -83,8 +82,8 @@ func New(
 	db database.Database,
 	clock layerClock,
 	logger log.Log,
-) *TortoiseBeacon {
-	tb := &TortoiseBeacon{
+) *ProtocolDriver {
+	tb := &ProtocolDriver{
 		logger:                  logger,
 		config:                  conf,
 		nodeID:                  nodeID,
@@ -110,8 +109,8 @@ func New(
 	return tb
 }
 
-// TortoiseBeacon represents Tortoise Beacon.
-type TortoiseBeacon struct {
+// ProtocolDriver is the driver for the beacon protocol.
+type ProtocolDriver struct {
 	running    uint64
 	inProtocol uint64
 	eg         errgroup.Group
@@ -140,7 +139,7 @@ type TortoiseBeacon struct {
 	epochInProgress types.EpochID
 	epochWeight     uint64
 
-	// beacons store calculated beacons as the result of the tortoise beacon protocol.
+	// beacons store calculated beacons as the result of the beacon protocol.
 	// the map key is the epoch when beacon is calculated. the beacon is used in the following epoch
 	beacons map[types.EpochID]types.Beacon
 	// beaconsFromBallots store beacons collected from ballots.
@@ -166,121 +165,121 @@ type TortoiseBeacon struct {
 }
 
 // SetSyncState updates sync state provider. Must be executed only once.
-func (tb *TortoiseBeacon) SetSyncState(sync system.SyncStateProvider) {
-	if tb.sync != nil {
-		tb.logger.Panic("sync state provider can be updated only once")
+func (pd *ProtocolDriver) SetSyncState(sync system.SyncStateProvider) {
+	if pd.sync != nil {
+		pd.logger.Panic("sync state provider can be updated only once")
 	}
-	tb.sync = sync
+	pd.sync = sync
 }
 
 // for testing.
-func (tb *TortoiseBeacon) setMetricsRegistry(registry *prometheus.Registry) {
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
-	tb.metricsRegistry = registry
+func (pd *ProtocolDriver) setMetricsRegistry(registry *prometheus.Registry) {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	pd.metricsRegistry = registry
 }
 
 // Start starts listening for layers and outputs.
-func (tb *TortoiseBeacon) Start(ctx context.Context) error {
-	if !atomic.CompareAndSwapUint64(&tb.running, 0, 1) {
-		tb.logger.WithContext(ctx).Warning("attempt to start tortoise beacon more than once")
+func (pd *ProtocolDriver) Start(ctx context.Context) error {
+	if !atomic.CompareAndSwapUint64(&pd.running, 0, 1) {
+		pd.logger.WithContext(ctx).Warning("attempt to start beacon protocol more than once")
 		return nil
 	}
-	tb.logger.Info("starting %v with the following config: %+v", protoName, tb.config)
-	if tb.sync == nil {
-		tb.logger.Panic("update sync state provider can't be nil")
+	pd.logger.Info("starting %v with the following config: %+v", protoName, pd.config)
+	if pd.sync == nil {
+		pd.logger.Panic("update sync state provider can't be nil")
 	}
 
 	ctx, cancel := context.WithCancel(ctx)
-	tb.cancel = cancel
+	pd.cancel = cancel
 
-	tb.initGenesisBeacons()
-	tb.layerTicker = tb.clock.Subscribe()
-	tb.metricsCollector.Start(nil)
+	pd.initGenesisBeacons()
+	pd.layerTicker = pd.clock.Subscribe()
+	pd.metricsCollector.Start(nil)
 
-	tb.eg.Go(func() error {
-		tb.listenLayers(ctx)
+	pd.eg.Go(func() error {
+		pd.listenLayers(ctx)
 		return fmt.Errorf("context error: %w", ctx.Err())
 	})
 
 	return nil
 }
 
-// Close closes TortoiseBeacon.
-func (tb *TortoiseBeacon) Close() {
-	if !atomic.CompareAndSwapUint64(&tb.running, 1, 0) {
+// Close closes ProtocolDriver.
+func (pd *ProtocolDriver) Close() {
+	if !atomic.CompareAndSwapUint64(&pd.running, 1, 0) {
 		return
 	}
-	tb.logger.Info("closing %v", protoName)
-	tb.cancel()
-	tb.metricsCollector.Stop()
-	tb.clock.Unsubscribe(tb.layerTicker)
-	tb.logger.Info("waiting for tortoise beacon goroutines to finish")
-	if err := tb.eg.Wait(); err != nil {
-		tb.logger.With().Info("received error waiting for goroutines to finish", log.Err(err))
+	pd.logger.Info("closing %v", protoName)
+	pd.cancel()
+	pd.metricsCollector.Stop()
+	pd.clock.Unsubscribe(pd.layerTicker)
+	pd.logger.Info("waiting for beacon goroutines to finish")
+	if err := pd.eg.Wait(); err != nil {
+		pd.logger.With().Info("received error waiting for goroutines to finish", log.Err(err))
 	}
-	tb.logger.Info("tortoise beacon goroutines finished")
+	pd.logger.Info("beacon goroutines finished")
 }
 
 // isClosed returns true if background workers are not running.
-func (tb *TortoiseBeacon) isClosed() bool {
-	return atomic.LoadUint64(&tb.running) == 0
+func (pd *ProtocolDriver) isClosed() bool {
+	return atomic.LoadUint64(&pd.running) == 0
 }
 
 // ReportBeaconFromBallot reports the beacon value in a ballot along with the smesher's weight unit.
-func (tb *TortoiseBeacon) ReportBeaconFromBallot(epoch types.EpochID, bid types.BallotID, beacon types.Beacon, weight uint64) {
-	tb.recordBeacon(epoch, bid, beacon, weight)
+func (pd *ProtocolDriver) ReportBeaconFromBallot(epoch types.EpochID, bid types.BallotID, beacon types.Beacon, weight uint64) {
+	pd.recordBeacon(epoch, bid, beacon, weight)
 
-	if _, err := tb.GetBeacon(epoch); err == nil {
-		// already has beacon. i.e. we had participated in tortoise beacon protocol during last epoch
+	if _, err := pd.GetBeacon(epoch); err == nil {
+		// already has beacon. i.e. we had participated in the beacon protocol during the last epoch
 		return
 	}
 
-	if eBeacon := tb.findMostWeightedBeaconForEpoch(epoch); eBeacon != types.EmptyBeacon {
-		tb.setBeacon(epoch-1, eBeacon)
+	if eBeacon := pd.findMostWeightedBeaconForEpoch(epoch); eBeacon != types.EmptyBeacon {
+		pd.setBeacon(epoch-1, eBeacon)
 	}
 }
 
-func (tb *TortoiseBeacon) recordBeacon(epochID types.EpochID, bid types.BallotID, beacon types.Beacon, weight uint64) {
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
+func (pd *ProtocolDriver) recordBeacon(epochID types.EpochID, bid types.BallotID, beacon types.Beacon, weight uint64) {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
 
-	if _, ok := tb.beaconsFromBallots[epochID]; !ok {
-		tb.beaconsFromBallots[epochID] = make(map[types.Beacon]*ballotWeight)
+	if _, ok := pd.beaconsFromBallots[epochID]; !ok {
+		pd.beaconsFromBallots[epochID] = make(map[types.Beacon]*ballotWeight)
 	}
-	entry, ok := tb.beaconsFromBallots[epochID][beacon]
+	entry, ok := pd.beaconsFromBallots[epochID][beacon]
 	if !ok {
-		tb.beaconsFromBallots[epochID][beacon] = &ballotWeight{
+		pd.beaconsFromBallots[epochID][beacon] = &ballotWeight{
 			weight:  weight,
 			ballots: map[types.BallotID]struct{}{bid: {}},
 		}
-		tb.logger.With().Debug("added beacon from ballot",
+		pd.logger.With().Debug("added beacon from ballot",
 			epochID,
 			bid,
-			log.String("beacon", beacon.ShortString()),
+			beacon,
 			log.Uint64("weight", weight))
 		return
 	}
 
 	// checks if we have recorded this blockID before
 	if _, ok := entry.ballots[bid]; ok {
-		tb.logger.With().Warning("ballot already reported beacon", epochID, bid)
+		pd.logger.With().Warning("ballot already reported beacon", epochID, bid)
 		return
 	}
 
 	entry.ballots[bid] = struct{}{}
 	entry.weight += weight
-	tb.logger.With().Debug("added beacon from ballot",
+	pd.logger.With().Debug("added beacon from ballot",
 		epochID,
 		bid,
-		log.String("beacon", beacon.ShortString()),
+		beacon,
 		log.Uint64("weight", weight))
 }
 
-func (tb *TortoiseBeacon) findMostWeightedBeaconForEpoch(epoch types.EpochID) types.Beacon {
-	tb.mu.RLock()
-	defer tb.mu.RUnlock()
-	epochBeacons, ok := tb.beaconsFromBallots[epoch]
+func (pd *ProtocolDriver) findMostWeightedBeaconForEpoch(epoch types.EpochID) types.Beacon {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+	epochBeacons, ok := pd.beaconsFromBallots[epoch]
 	if !ok {
 		return types.EmptyBeacon
 	}
@@ -295,82 +294,79 @@ func (tb *TortoiseBeacon) findMostWeightedBeaconForEpoch(epoch types.EpochID) ty
 		numBallots += len(v.ballots)
 	}
 
-	logger := tb.logger.WithFields(epoch, log.Int("num_ballots", numBallots))
+	logger := pd.logger.WithFields(epoch, log.Int("num_ballots", numBallots))
 
-	if uint32(numBallots) < tb.config.BeaconSyncNumBallots {
+	if uint32(numBallots) < pd.config.BeaconSyncNumBallots {
 		logger.Debug("not enough ballots to determine beacon")
 		return types.EmptyBeacon
 	}
 
 	logger.With().Info("beacon determined for epoch",
-		log.String("beacon", beacon.ShortString()),
+		beacon,
 		log.Uint64("weight", mostWeight))
 	return beacon
 }
 
-// GetBeacon returns a Tortoise Beacon value as types.Beacon for a certain epoch or an error if it doesn't exist.
-// TODO(nkryuchkov): consider not using (using DB instead).
-func (tb *TortoiseBeacon) GetBeacon(epochID types.EpochID) (types.Beacon, error) {
+// GetBeacon returns the beacon for the specified epoch or an error if it doesn't exist.
+func (pd *ProtocolDriver) GetBeacon(epochID types.EpochID) (types.Beacon, error) {
 	if epochID == 0 {
-		return types.EmptyBeacon, ErrZeroEpoch
+		return types.EmptyBeacon, errZeroEpoch
 	}
 
 	beaconEpoch := epochID - 1
-	beacon := tb.getBeacon(beaconEpoch)
+	beacon := pd.getBeacon(beaconEpoch)
 	if beacon != types.EmptyBeacon {
 		return beacon, nil
 	}
 
-	beacon, err := tb.getPersistedBeacon(beaconEpoch)
+	beacon, err := pd.getPersistedBeacon(beaconEpoch)
 	if err == nil {
 		return beacon, nil
 	}
 
 	if errors.Is(err, database.ErrNotFound) {
-		tb.logger.With().Warning("beacon not available",
+		pd.logger.With().Warning("beacon not available",
 			epochID,
 			log.Uint32("beacon_epoch", uint32(beaconEpoch)))
-		return types.EmptyBeacon, ErrBeaconNotCalculated
+		return types.EmptyBeacon, errBeaconNotCalculated
 	}
-	tb.logger.With().Error("failed to get beacon from db",
+	pd.logger.With().Error("failed to get beacon from db",
 		epochID,
 		log.Uint32("beacon_epoch", uint32(beaconEpoch)),
 		log.Err(err))
 	return types.EmptyBeacon, fmt.Errorf("get beacon from DB: %w", err)
 }
 
-func (tb *TortoiseBeacon) getBeacon(epoch types.EpochID) types.Beacon {
-	tb.mu.RLock()
-	defer tb.mu.RUnlock()
-	if beacon, ok := tb.beacons[epoch]; ok {
+func (pd *ProtocolDriver) getBeacon(epoch types.EpochID) types.Beacon {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+	if beacon, ok := pd.beacons[epoch]; ok {
 		return beacon
 	}
 	return types.EmptyBeacon
 }
 
-func (tb *TortoiseBeacon) setBeacon(epoch types.EpochID, beacon types.Beacon) error {
-	if err := tb.persistBeacon(epoch, beacon); err != nil {
+func (pd *ProtocolDriver) setBeacon(epoch types.EpochID, beacon types.Beacon) error {
+	if err := pd.persistBeacon(epoch, beacon); err != nil {
 		return err
 	}
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
-	tb.beacons[epoch] = beacon
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	pd.beacons[epoch] = beacon
 	return nil
 }
 
-func (tb *TortoiseBeacon) persistBeacon(epoch types.EpochID, beacon types.Beacon) error {
-	if err := tb.db.Put(epoch.ToBytes(), beacon.Bytes()); err != nil {
-		tb.logger.With().Error("failed to persist beacon",
-			epoch,
-			log.String("beacon", beacon.ShortString()), log.Err(err))
+func (pd *ProtocolDriver) persistBeacon(epoch types.EpochID, beacon types.Beacon) error {
+	if err := pd.db.Put(epoch.ToBytes(), beacon.Bytes()); err != nil {
+		pd.logger.With().Error("failed to persist beacon", epoch, beacon, log.Err(err))
 		return fmt.Errorf("persist beacon: %w", err)
 	}
 
 	return nil
 }
 
-func (tb *TortoiseBeacon) getPersistedBeacon(epoch types.EpochID) (types.Beacon, error) {
-	data, err := tb.db.Get(epoch.ToBytes())
+func (pd *ProtocolDriver) getPersistedBeacon(epoch types.EpochID) (types.Beacon, error) {
+	data, err := pd.db.Get(epoch.ToBytes())
 	if err != nil {
 		return types.EmptyBeacon, fmt.Errorf("get from DB: %w", err)
 	}
@@ -378,171 +374,171 @@ func (tb *TortoiseBeacon) getPersistedBeacon(epoch types.EpochID) (types.Beacon,
 	return types.BytesToBeacon(data), nil
 }
 
-func (tb *TortoiseBeacon) initGenesisBeacons() {
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
+func (pd *ProtocolDriver) initGenesisBeacons() {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
 	for epoch := types.EpochID(0); epoch.IsGenesis(); epoch++ {
 		genesis := types.HexToBeacon(types.GenesisBeacon)
-		tb.beacons[epoch] = genesis
+		pd.beacons[epoch] = genesis
 	}
 }
 
-func (tb *TortoiseBeacon) setBeginProtocol(ctx context.Context) {
-	if !atomic.CompareAndSwapUint64(&tb.inProtocol, 0, 1) {
-		tb.logger.WithContext(ctx).Error("attempt to begin tortoise beacon protocol more than once")
+func (pd *ProtocolDriver) setBeginProtocol(ctx context.Context) {
+	if !atomic.CompareAndSwapUint64(&pd.inProtocol, 0, 1) {
+		pd.logger.WithContext(ctx).Error("attempt to begin the beacon protocol more than once")
 	}
 }
 
-func (tb *TortoiseBeacon) setEndProtocol(ctx context.Context) {
-	if !atomic.CompareAndSwapUint64(&tb.inProtocol, 1, 0) {
-		tb.logger.WithContext(ctx).Error("attempt to end tortoise beacon protocol more than once")
+func (pd *ProtocolDriver) setEndProtocol(ctx context.Context) {
+	if !atomic.CompareAndSwapUint64(&pd.inProtocol, 1, 0) {
+		pd.logger.WithContext(ctx).Error("attempt to end the beacon protocol more than once")
 	}
 }
 
-func (tb *TortoiseBeacon) isInProtocol() bool {
-	return atomic.LoadUint64(&tb.inProtocol) == 1
+func (pd *ProtocolDriver) isInProtocol() bool {
+	return atomic.LoadUint64(&pd.inProtocol) == 1
 }
 
-func (tb *TortoiseBeacon) setupEpoch(epoch types.EpochID, epochWeight uint64, logger log.Log) chan *proposalMessageWithReceiptData {
-	tb.cleanupEpoch(epoch - 1) // just in case we processed any gossip messages before the protocol started
+func (pd *ProtocolDriver) setupEpoch(epoch types.EpochID, epochWeight uint64, logger log.Log) chan *proposalMessageWithReceiptData {
+	pd.cleanupEpoch(epoch - 1) // just in case we processed any gossip messages before the protocol started
 
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
 
-	tb.epochWeight = epochWeight
-	tb.proposalChecker = createProposalChecker(tb.config.Kappa, tb.config.Q, epochWeight, logger)
-	ch := tb.getOrCreateProposalChannel(epoch)
+	pd.epochWeight = epochWeight
+	pd.proposalChecker = createProposalChecker(pd.config.Kappa, pd.config.Q, epochWeight, logger)
+	ch := pd.getOrCreateProposalChannel(epoch)
 	// allow proposals for the next epoch to come in early
-	_ = tb.getOrCreateProposalChannel(epoch + 1)
+	_ = pd.getOrCreateProposalChannel(epoch + 1)
 	return ch
 }
 
-func (tb *TortoiseBeacon) cleanupEpoch(epoch types.EpochID) {
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
+func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
 
-	tb.incomingProposals = proposals{}
-	tb.firstRoundIncomingVotes = map[string]proposals{}
-	tb.votesMargin = map[string]*big.Int{}
-	tb.hasProposed = make(map[string]struct{})
-	tb.hasVoted = make([]map[string]struct{}, tb.config.RoundsNumber)
-	tb.proposalPhaseFinishedTime = time.Time{}
+	pd.incomingProposals = proposals{}
+	pd.firstRoundIncomingVotes = map[string]proposals{}
+	pd.votesMargin = map[string]*big.Int{}
+	pd.hasProposed = make(map[string]struct{})
+	pd.hasVoted = make([]map[string]struct{}, pd.config.RoundsNumber)
+	pd.proposalPhaseFinishedTime = time.Time{}
 
-	if ch, ok := tb.proposalChans[epoch]; ok {
+	if ch, ok := pd.proposalChans[epoch]; ok {
 		close(ch)
-		delete(tb.proposalChans, epoch)
+		delete(pd.proposalChans, epoch)
 	}
 
 	if epoch <= numEpochsToKeep {
 		return
 	}
 	oldest := epoch - numEpochsToKeep
-	if _, ok := tb.beacons[oldest]; ok {
-		delete(tb.beacons, oldest)
+	if _, ok := pd.beacons[oldest]; ok {
+		delete(pd.beacons, oldest)
 	}
-	if _, ok := tb.beaconsFromBallots[oldest]; ok {
-		delete(tb.beaconsFromBallots, oldest)
+	if _, ok := pd.beaconsFromBallots[oldest]; ok {
+		delete(pd.beaconsFromBallots, oldest)
 	}
 }
 
 // listens to new layers.
-func (tb *TortoiseBeacon) listenLayers(ctx context.Context) {
-	tb.logger.With().Info("starting listening layers")
+func (pd *ProtocolDriver) listenLayers(ctx context.Context) {
+	pd.logger.With().Info("starting listening layers")
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case layer := <-tb.layerTicker:
-			tb.logger.With().Debug("received tick", layer)
-			tb.eg.Go(func() error {
-				tb.handleLayer(ctx, layer)
+		case layer := <-pd.layerTicker:
+			pd.logger.With().Debug("received tick", layer)
+			pd.eg.Go(func() error {
+				pd.handleLayer(ctx, layer)
 				return nil
 			})
 		}
 	}
 }
 
-func (tb *TortoiseBeacon) setTickedEpoch(epoch types.EpochID) {
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
-	tb.lastTickedEpoch = epoch
+func (pd *ProtocolDriver) setTickedEpoch(epoch types.EpochID) {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	pd.lastTickedEpoch = epoch
 }
 
-func (tb *TortoiseBeacon) setEpochInProgress(epoch types.EpochID) {
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
-	tb.epochInProgress = epoch
+func (pd *ProtocolDriver) setEpochInProgress(epoch types.EpochID) {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	pd.epochInProgress = epoch
 }
 
 // the logic that happens when a new layer arrives.
 // this function triggers the start of new CPs.
-func (tb *TortoiseBeacon) handleLayer(ctx context.Context, layer types.LayerID) {
+func (pd *ProtocolDriver) handleLayer(ctx context.Context, layer types.LayerID) {
 	epoch := layer.GetEpoch()
-	logger := tb.logger.WithContext(ctx).WithFields(layer, epoch)
+	logger := pd.logger.WithContext(ctx).WithFields(layer, epoch)
 
-	tb.setTickedEpoch(epoch)
+	pd.setTickedEpoch(epoch)
 	if !layer.FirstInEpoch() {
 		logger.Debug("not first layer in epoch, skipping")
 		return
 	}
-	if tb.isInProtocol() {
+	if pd.isInProtocol() {
 		logger.Error("last beacon protocol is still running, skipping")
 		return
 	}
 	logger.Info("first layer in epoch, proceeding")
-	tb.handleEpoch(ctx, epoch)
+	pd.handleEpoch(ctx, epoch)
 }
 
-func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) {
+func (pd *ProtocolDriver) handleEpoch(ctx context.Context, epoch types.EpochID) {
 	ctx = log.WithNewSessionID(ctx)
-	logger := tb.logger.WithContext(ctx).WithFields(epoch)
+	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	// TODO(nkryuchkov): check when epoch started, adjust waiting time for this timestamp
 	if epoch.IsGenesis() {
-		logger.Debug("not starting tortoise beacon since we are in genesis epoch")
+		logger.Debug("not starting beacon protocol since we are in genesis epoch")
 		return
 	}
-	if !tb.sync.IsSynced(ctx) {
-		logger.Info("tortoise beacon protocol is skipped while node is not synced")
+	if !pd.sync.IsSynced(ctx) {
+		logger.Info("beacon protocol is skipped while node is not synced")
 		return
 	}
 
-	// make sure this node has ATX in the last epoch and is eligible to participate in tortoise beacon
-	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(tb.nodeID, epoch-1)
+	// make sure this node has ATX in the last epoch and is eligible to participate in the beacon protocol
+	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(pd.nodeID, epoch-1)
 	if err != nil {
-		logger.With().Info("node has no ATX in last epoch, not participating in tortoise beacon", log.Err(err))
+		logger.With().Info("node has no ATX in last epoch, not participating in beacon protocol", log.Err(err))
 		return
 	}
 
-	logger.With().Info("participating in tortoise beacon protocol with ATX", atxID)
+	logger.With().Info("participating in beacon protocol with ATX", atxID)
 
-	epochWeight, atxs, err := tb.atxDB.GetEpochWeight(epoch)
+	epochWeight, atxs, err := pd.atxDB.GetEpochWeight(epoch)
 	if err != nil {
 		logger.With().Error("failed to get weight targeting epoch", log.Err(err))
 		return
 	}
 	if epochWeight == 0 {
-		logger.With().Error("zero weight targeting epoch", log.Err(ErrZeroEpochWeight))
+		logger.With().Error("zero weight targeting epoch", log.Err(errZeroEpochWeight))
 		return
 	}
 
-	tb.setEpochInProgress(epoch)
-	tb.setBeginProtocol(ctx)
-	defer tb.setEndProtocol(ctx)
+	pd.setEpochInProgress(epoch)
+	pd.setBeginProtocol(ctx)
+	defer pd.setEndProtocol(ctx)
 
-	ch := tb.setupEpoch(epoch, epochWeight, logger)
-	defer tb.cleanupEpoch(epoch)
+	ch := pd.setupEpoch(epoch, epochWeight, logger)
+	defer pd.cleanupEpoch(epoch)
 
-	tb.eg.Go(func() error {
-		tb.readProposalMessagesLoop(ctx, ch)
+	pd.eg.Go(func() error {
+		pd.readProposalMessagesLoop(ctx, ch)
 		return nil
 	})
 
-	tb.startWeakCoinEpoch(ctx, epoch, atxs)
-	defer tb.weakCoin.FinishEpoch(ctx, epoch)
+	pd.startWeakCoinEpoch(ctx, epoch, atxs)
+	defer pd.weakCoin.FinishEpoch(ctx, epoch)
 
-	tb.runProposalPhase(ctx, epoch)
-	lastRoundOwnVotes, err := tb.runConsensusPhase(ctx, epoch)
+	pd.runProposalPhase(ctx, epoch)
+	lastRoundOwnVotes, err := pd.runConsensusPhase(ctx, epoch)
 	if err != nil {
 		logger.With().Warning("consensus execution canceled", log.Err(err))
 		return
@@ -550,35 +546,35 @@ func (tb *TortoiseBeacon) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	if err := tb.calcBeacon(ctx, epoch, lastRoundOwnVotes); err != nil {
+	if err := pd.calcBeacon(ctx, epoch, lastRoundOwnVotes); err != nil {
 		logger.With().Error("failed to calculate beacon", log.Err(err))
 	}
 
 	logger.With().Debug("finished handling epoch")
 }
 
-func (tb *TortoiseBeacon) getOrCreateProposalChannel(epoch types.EpochID) chan *proposalMessageWithReceiptData {
-	ch, ok := tb.proposalChans[epoch]
+func (pd *ProtocolDriver) getOrCreateProposalChannel(epoch types.EpochID) chan *proposalMessageWithReceiptData {
+	ch, ok := pd.proposalChans[epoch]
 	if !ok {
 		ch = make(chan *proposalMessageWithReceiptData, proposalChanCapacity)
-		tb.proposalChans[epoch] = ch
+		pd.proposalChans[epoch] = ch
 	}
 
 	return ch
 }
 
-func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.EpochID) {
-	logger := tb.logger.WithContext(ctx).WithFields(epoch)
+func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.EpochID) {
+	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	logger.Debug("starting proposal phase")
 
 	var cancel func()
-	ctx, cancel = context.WithTimeout(ctx, tb.config.ProposalDuration)
+	ctx, cancel = context.WithTimeout(ctx, pd.config.ProposalDuration)
 	defer cancel()
 
-	tb.eg.Go(func() error {
+	pd.eg.Go(func() error {
 		logger.Debug("starting proposal message sender")
 
-		if err := tb.proposalPhaseImpl(ctx, epoch); err != nil {
+		if err := pd.proposalPhaseImpl(ctx, epoch); err != nil {
 			logger.With().Error("failed to send proposal message", log.Err(err))
 		}
 
@@ -588,26 +584,26 @@ func (tb *TortoiseBeacon) runProposalPhase(ctx context.Context, epoch types.Epoc
 
 	<-ctx.Done()
 
-	tb.markProposalPhaseFinished(epoch)
+	pd.markProposalPhaseFinished(epoch)
 
 	logger.Debug("proposal phase finished")
 }
 
-func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.EpochID) error {
-	if tb.isClosed() {
+func (pd *ProtocolDriver) proposalPhaseImpl(ctx context.Context, epoch types.EpochID) error {
+	if pd.isClosed() {
 		return nil
 	}
 
-	logger := tb.logger.WithContext(ctx).WithFields(epoch)
-	proposedSignature := buildSignedProposal(ctx, tb.vrfSigner, epoch, tb.logger)
+	logger := pd.logger.WithContext(ctx).WithFields(epoch)
+	proposedSignature := buildSignedProposal(ctx, pd.vrfSigner, epoch, pd.logger)
 
-	tb.mu.RLock()
+	pd.mu.RLock()
 	logger.With().Debug("calculated proposal signature",
 		log.String("signature", string(proposedSignature)),
-		log.Uint64("total_weight", tb.epochWeight))
+		log.Uint64("total_weight", pd.epochWeight))
 
-	passes := tb.proposalChecker.IsProposalEligible(proposedSignature)
-	tb.mu.RUnlock()
+	passes := pd.proposalChecker.IsProposalEligible(proposedSignature)
+	pd.mu.RUnlock()
 
 	if !passes {
 		logger.With().Debug("proposal to be sent doesn't pass threshold",
@@ -622,13 +618,13 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	// concat them into a single proposal message
 	m := ProposalMessage{
 		EpochID:      epoch,
-		NodeID:       tb.nodeID,
+		NodeID:       pd.nodeID,
 		VRFSignature: proposedSignature,
 	}
 
 	logger.With().Debug("going to send proposal", log.String("message", m.String()))
 
-	if err := tb.sendToGossip(ctx, TBProposalProtocol, m); err != nil {
+	if err := pd.sendToGossip(ctx, ProposalProtocol, m); err != nil {
 		return fmt.Errorf("broadcast proposal message: %w", err)
 	}
 
@@ -636,28 +632,28 @@ func (tb *TortoiseBeacon) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 	return nil
 }
 
-func (tb *TortoiseBeacon) getProposalChannel(ctx context.Context, epoch types.EpochID) chan *proposalMessageWithReceiptData {
-	tb.mu.RLock()
-	defer tb.mu.RUnlock()
+func (pd *ProtocolDriver) getProposalChannel(ctx context.Context, epoch types.EpochID) chan *proposalMessageWithReceiptData {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
 
-	logger := tb.logger.WithContext(ctx).WithFields(
-		log.FieldNamed("current_epoch", tb.epochInProgress),
+	logger := pd.logger.WithContext(ctx).WithFields(
+		log.FieldNamed("current_epoch", pd.epochInProgress),
 		log.FieldNamed("proposal_epoch", epoch))
 	switch {
-	case epoch < tb.epochInProgress:
+	case epoch < pd.epochInProgress:
 		logger.With().Debug("proposal too old, do not accept")
 		return nil
-	case epoch == tb.epochInProgress:
-		ongoing := tb.proposalPhaseFinishedTime == time.Time{}
+	case epoch == pd.epochInProgress:
+		ongoing := pd.proposalPhaseFinishedTime == time.Time{}
 		if ongoing {
-			return tb.getOrCreateProposalChannel(epoch)
+			return pd.getOrCreateProposalChannel(epoch)
 		}
 		logger.With().Debug("proposal phase ended, do not accept")
 		return nil
-	case epoch == tb.epochInProgress+1:
+	case epoch == pd.epochInProgress+1:
 		// always accept proposals for the next epoch, but not too far in the future
 		logger.Debug("accepting proposal for the next epoch")
-		ch := tb.getOrCreateProposalChannel(epoch)
+		ch := pd.getOrCreateProposalChannel(epoch)
 		if len(ch) == proposalChanCapacity {
 			// the reader loop is not started for the next epoch yet. drop old messages if it's already full
 			// channel receive is not synchronous with length check, use select+default here to prevent potential blocking
@@ -675,15 +671,15 @@ func (tb *TortoiseBeacon) getProposalChannel(ctx context.Context, epoch types.Ep
 }
 
 // runConsensusPhase runs K voting rounds and returns result from last weak coin round.
-func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.EpochID) (allVotes, error) {
-	logger := tb.logger.WithContext(ctx).WithFields(epoch)
+func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.EpochID) (allVotes, error) {
+	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	logger.Debug("starting consensus phase")
 
 	// For K rounds: In each round that lasts δ, wait for votes to come in.
 	// For next rounds,
 	// wait for δ time, and construct a message that points to all messages from previous round received by δ.
 	// rounds 1 to K
-	timer := time.NewTimer(tb.config.FirstVotingRoundDuration)
+	timer := time.NewTimer(pd.config.FirstVotingRoundDuration)
 	defer timer.Stop()
 
 	var (
@@ -691,17 +687,17 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		undecided []string
 		err       error
 	)
-	for round := types.FirstRound; round <= tb.lastRound(); round++ {
+	for round := types.FirstRound; round <= pd.lastRound(); round++ {
 		round := round
 		rLogger := logger.WithFields(round)
 		votes := ownVotes
-		tb.eg.Go(func() error {
+		pd.eg.Go(func() error {
 			if round == types.FirstRound {
-				if err := tb.sendProposalVote(ctx, epoch); err != nil {
+				if err := pd.sendProposalVote(ctx, epoch); err != nil {
 					rLogger.With().Error("failed to send proposal vote", log.Err(err))
 				}
 			} else {
-				if err := tb.sendFollowingVote(ctx, epoch, round, votes); err != nil {
+				if err := pd.sendFollowingVote(ctx, epoch, round, votes); err != nil {
 					rLogger.With().Error("failed to send following vote", log.Err(err))
 				}
 			}
@@ -717,15 +713,15 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 		// note that votes after this calcVotes() call will _not_ be counted towards our votes
 		// for this round, as the late votes can be cast after the weak coin is revealed. we
 		// count them towards our votes in the next round.
-		ownVotes, undecided, err = tb.calcVotes(ctx, epoch, round)
+		ownVotes, undecided, err = pd.calcVotes(ctx, epoch, round)
 		if err != nil {
 			logger.With().Error("failed to calculate votes", log.Err(err))
 		}
 		if round != types.FirstRound {
-			timer.Reset(tb.config.WeakCoinRoundDuration)
+			timer.Reset(pd.config.WeakCoinRoundDuration)
 
-			tb.eg.Go(func() error {
-				if err := tb.weakCoin.StartRound(ctx, round); err != nil {
+			pd.eg.Go(func() error {
+				if err := pd.weakCoin.StartRound(ctx, round); err != nil {
 					rLogger.With().Error("failed to publish weak coin proposal", log.Err(err))
 				}
 				return nil
@@ -735,50 +731,50 @@ func (tb *TortoiseBeacon) runConsensusPhase(ctx context.Context, epoch types.Epo
 			case <-ctx.Done():
 				return allVotes{}, fmt.Errorf("context done: %w", ctx.Err())
 			}
-			tb.weakCoin.FinishRound(ctx)
-			tallyUndecided(&ownVotes, undecided, tb.weakCoin.Get(ctx, epoch, round))
+			pd.weakCoin.FinishRound(ctx)
+			tallyUndecided(&ownVotes, undecided, pd.weakCoin.Get(ctx, epoch, round))
 		}
-		timer.Reset(tb.config.VotingRoundDuration)
+		timer.Reset(pd.config.VotingRoundDuration)
 	}
 
 	logger.Debug("consensus phase finished")
 	return ownVotes, nil
 }
 
-func (tb *TortoiseBeacon) startWeakCoinEpoch(ctx context.Context, epoch types.EpochID, atxs []types.ATXID) {
+func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.EpochID, atxs []types.ATXID) {
 	// we need to pass a map with spacetime unit allowances before any round is started
 	ua := weakcoin.UnitAllowances{}
 	for _, id := range atxs {
-		header, err := tb.atxDB.GetAtxHeader(id)
+		header, err := pd.atxDB.GetAtxHeader(id)
 		if err != nil {
-			tb.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
+			pd.logger.WithContext(ctx).With().Panic("unable to load atx header", log.Err(err))
 		}
 		ua[string(header.NodeID.VRFPublicKey)] += uint64(header.NumUnits)
 	}
 
-	tb.weakCoin.StartEpoch(ctx, epoch, ua)
+	pd.weakCoin.StartEpoch(ctx, epoch, ua)
 }
 
-func (tb *TortoiseBeacon) markProposalPhaseFinished(epoch types.EpochID) {
+func (pd *ProtocolDriver) markProposalPhaseFinished(epoch types.EpochID) {
 	finishedAt := time.Now()
-	tb.mu.Lock()
-	tb.proposalPhaseFinishedTime = finishedAt
-	tb.mu.Unlock()
-	tb.logger.Debug("marked proposal phase for epoch %v finished at %v", epoch, finishedAt.String())
+	pd.mu.Lock()
+	pd.proposalPhaseFinishedTime = finishedAt
+	pd.mu.Unlock()
+	pd.logger.Debug("marked proposal phase for epoch %v finished at %v", epoch, finishedAt.String())
 }
 
-func (tb *TortoiseBeacon) receivedBeforeProposalPhaseFinished(epoch types.EpochID, receivedAt time.Time) bool {
-	tb.mu.RLock()
-	finishedAt := tb.proposalPhaseFinishedTime
-	tb.mu.RUnlock()
+func (pd *ProtocolDriver) receivedBeforeProposalPhaseFinished(epoch types.EpochID, receivedAt time.Time) bool {
+	pd.mu.RLock()
+	finishedAt := pd.proposalPhaseFinishedTime
+	pd.mu.RUnlock()
 	hasFinished := !finishedAt.IsZero()
 
-	tb.logger.Debug("checking if timestamp %v was received before proposal phase finished in epoch %v, is phase finished: %v, finished at: %v", receivedAt.String(), epoch, hasFinished, finishedAt.String())
+	pd.logger.Debug("checking if timestamp %v was received before proposal phase finished in epoch %v, is phase finished: %v, finished at: %v", receivedAt.String(), epoch, hasFinished, finishedAt.String())
 
 	return !hasFinished || receivedAt.Before(finishedAt)
 }
 
-func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.EpochID) error {
+func (pd *ProtocolDriver) sendProposalVote(ctx context.Context, epoch types.EpochID) error {
 	// round 1, send hashed proposal
 	// create a voting message that references all seen proposals within δ time frame and send it
 
@@ -786,42 +782,42 @@ func (tb *TortoiseBeacon) sendProposalVote(ctx context.Context, epoch types.Epoc
 	// TODO(nkryuchkov): initialize margin vector to initial votes
 	// TODO(nkryuchkov): use weight
 
-	tb.mu.RLock()
-	defer tb.mu.RUnlock()
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
 
-	return tb.sendFirstRoundVote(ctx, epoch, tb.incomingProposals)
+	return pd.sendFirstRoundVote(ctx, epoch, pd.incomingProposals)
 }
 
-func (tb *TortoiseBeacon) sendFirstRoundVote(ctx context.Context, epoch types.EpochID, proposals proposals) error {
+func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.EpochID, proposals proposals) error {
 	mb := FirstVotingMessageBody{
 		EpochID:                   epoch,
 		ValidProposals:            proposals.valid,
 		PotentiallyValidProposals: proposals.potentiallyValid,
 	}
 
-	sig := signMessage(tb.edSigner, mb, tb.logger)
+	sig := signMessage(pd.edSigner, mb, pd.logger)
 
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
 		Signature:              sig,
 	}
 
-	tb.logger.WithContext(ctx).With().Debug("sending first round vote",
+	pd.logger.WithContext(ctx).With().Debug("sending first round vote",
 		epoch,
 		types.FirstRound,
 		log.String("message", m.String()))
 
-	if err := tb.sendToGossip(ctx, TBFirstVotingProtocol, m); err != nil {
+	if err := pd.sendToGossip(ctx, FirstVoteProtocol, m); err != nil {
 		return fmt.Errorf("sendToGossip: %w", err)
 	}
 
 	return nil
 }
 
-func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
-	tb.mu.RLock()
-	bitVector := tb.encodeVotes(ownCurrentRoundVotes, tb.incomingProposals)
-	tb.mu.RUnlock()
+func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
+	pd.mu.RLock()
+	bitVector := pd.encodeVotes(ownCurrentRoundVotes, pd.incomingProposals)
+	pd.mu.RUnlock()
 
 	mb := FollowingVotingMessageBody{
 		EpochID:        epoch,
@@ -829,28 +825,28 @@ func (tb *TortoiseBeacon) sendFollowingVote(ctx context.Context, epoch types.Epo
 		VotesBitVector: bitVector,
 	}
 
-	sig := signMessage(tb.edSigner, mb, tb.logger)
+	sig := signMessage(pd.edSigner, mb, pd.logger)
 
 	m := FollowingVotingMessage{
 		FollowingVotingMessageBody: mb,
 		Signature:                  sig,
 	}
 
-	tb.logger.WithContext(ctx).With().Debug("sending following round vote",
+	pd.logger.WithContext(ctx).With().Debug("sending following round vote",
 		epoch,
 		round,
 		log.String("message", m.String()))
 
-	if err := tb.sendToGossip(ctx, TBFollowingVotingProtocol, m); err != nil {
+	if err := pd.sendToGossip(ctx, FollowingVotingProtocol, m); err != nil {
 		return fmt.Errorf("broadcast voting message: %w", err)
 	}
 
 	return nil
 }
 
-func (tb *TortoiseBeacon) votingThreshold(epochWeight uint64) *big.Int {
+func (pd *ProtocolDriver) votingThreshold(epochWeight uint64) *big.Int {
 	v, _ := new(big.Float).Mul(
-		tb.theta,
+		pd.theta,
 		new(big.Float).SetUint64(epochWeight),
 	).Int(nil)
 
@@ -963,16 +959,16 @@ func buildProposal(epoch types.EpochID, logger log.Log) []byte {
 	return b
 }
 
-func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, protocol string, data interface{}) error {
+func (pd *ProtocolDriver) sendToGossip(ctx context.Context, protocol string, data interface{}) error {
 	serialized, err := types.InterfaceToBytes(data)
 	if err != nil {
-		tb.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
+		pd.logger.With().Panic("failed to serialize message for gossip", log.Err(err))
 	}
 
 	// NOTE(dshulyak) moved to goroutine because self-broadcast is applied synchronously
-	tb.eg.Go(func() error {
-		if err := tb.publisher.Publish(ctx, protocol, serialized); err != nil {
-			tb.logger.With().Error("failed to broadcast",
+	pd.eg.Go(func() error {
+		if err := pd.publisher.Publish(ctx, protocol, serialized); err != nil {
+			pd.logger.With().Error("failed to broadcast",
 				log.String("protocol", protocol),
 				log.Err(err),
 			)
@@ -982,27 +978,27 @@ func (tb *TortoiseBeacon) sendToGossip(ctx context.Context, protocol string, dat
 	return nil
 }
 
-func (tb *TortoiseBeacon) getOwnWeight(epoch types.EpochID) uint64 {
-	atxID, err := tb.atxDB.GetNodeAtxIDForEpoch(tb.nodeID, epoch)
+func (pd *ProtocolDriver) getOwnWeight(epoch types.EpochID) uint64 {
+	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(pd.nodeID, epoch)
 	if err != nil {
-		tb.logger.With().Error("failed to look up own ATX for epoch", epoch, log.Err(err))
+		pd.logger.With().Error("failed to look up own ATX for epoch", epoch, log.Err(err))
 		return 0
 	}
-	hdr, err := tb.atxDB.GetAtxHeader(atxID)
+	hdr, err := pd.atxDB.GetAtxHeader(atxID)
 	if err != nil {
-		tb.logger.With().Error("failed to look up own weight for epoch", epoch, log.Err(err))
+		pd.logger.With().Error("failed to look up own weight for epoch", epoch, log.Err(err))
 		return 0
 	}
 	return hdr.GetWeight()
 }
 
-func (tb *TortoiseBeacon) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.BeaconStats) {
-	tb.mu.RLock()
-	defer tb.mu.RUnlock()
+func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.BeaconStats) {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
 
-	epoch := tb.lastTickedEpoch
+	epoch := pd.lastTickedEpoch
 	var observed []*metrics.BeaconStats
-	if beacons, ok := tb.beaconsFromBallots[epoch]; ok {
+	if beacons, ok := pd.beaconsFromBallots[epoch]; ok {
 		for beacon, stats := range beacons {
 			stat := &metrics.BeaconStats{
 				Epoch:  epoch,
@@ -1016,9 +1012,9 @@ func (tb *TortoiseBeacon) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 	var calculated *metrics.BeaconStats
 	ownWeight := uint64(0)
 	if !epoch.IsGenesis() {
-		ownWeight = tb.getOwnWeight(epoch - 1)
+		ownWeight = pd.getOwnWeight(epoch - 1)
 	}
-	if beacon, ok := tb.beacons[epoch]; ok {
+	if beacon, ok := pd.beacons[epoch]; ok {
 		calculated = &metrics.BeaconStats{
 			Epoch:  epoch,
 			Beacon: beacon.ShortString(),

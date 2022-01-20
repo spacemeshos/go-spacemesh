@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 type proposalSet map[string]struct{}
 

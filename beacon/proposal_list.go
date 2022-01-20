@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 import (
 	"sort"

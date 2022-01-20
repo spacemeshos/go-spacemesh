@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 import (
 	"testing"
@@ -9,7 +9,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
-func TestTortoiseBeacon_decodeVotes(t *testing.T) {
+func TestBeacon_decodeVotes(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -59,11 +59,11 @@ func TestTortoiseBeacon_decodeVotes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
+			tb := ProtocolDriver{
 				config: Config{
 					VotesLimit: 100,
 				},
-				logger: logtest.New(t).WithName("TortoiseBeacon"),
+				logger: logtest.New(t).WithName("Beacon"),
 			}
 
 			result := tb.decodeVotes(tc.bitVector, tc.firstRound)

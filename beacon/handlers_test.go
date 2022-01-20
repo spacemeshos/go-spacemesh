@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 import (
 	"context"
@@ -12,12 +12,12 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/beacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 )
 
 const peerID = "peer1"
@@ -28,13 +28,13 @@ func clockNeverNotify(t *testing.T) layerClock {
 	return timesync.NewClock(timesync.RealClock{}, time.Hour, time.Now(), logtest.New(t).WithName("clock"))
 }
 
-func createTortoiseBeacon(t *testing.T, epoch types.EpochID) (*TortoiseBeacon, *mocks.MockactivationDB) {
+func createProtocolDriver(t *testing.T, epoch types.EpochID) (*ProtocolDriver, *mocks.MockactivationDB) {
 	types.SetLayersPerEpoch(3)
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
 	edSgn := signing.NewEdSigner()
-	tb := &TortoiseBeacon{
-		logger:                  logtest.New(t).WithName("TortoiseBeacon"),
+	tb := &ProtocolDriver{
+		logger:                  logtest.New(t).WithName("Beacon"),
 		clock:                   clockNeverNotify(t),
 		config:                  UnitTestConfig(),
 		atxDB:                   mockDB,
@@ -53,8 +53,8 @@ func createTortoiseBeacon(t *testing.T, epoch types.EpochID) (*TortoiseBeacon, *
 	return tb, mockDB
 }
 
-func createTortoiseBeaconWithFirstRoundVotes(t *testing.T, epoch types.EpochID, signer signing.Signer) (*TortoiseBeacon, *mocks.MockactivationDB, []types.Hash32) {
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+func createProtocolDriverWithFirstRoundVotes(t *testing.T, epoch types.EpochID, signer signing.Signer) (*ProtocolDriver, *mocks.MockactivationDB, []types.Hash32) {
+	tb, mockDB := createProtocolDriver(t, epoch)
 	hash1 := types.HexToHash32("0x12345678")
 	hash2 := types.HexToHash32("0x23456789")
 	hash3 := types.HexToHash32("0x34567890")
@@ -99,21 +99,21 @@ func createProposal(t *testing.T, signer, vrfSigner signing.Signer, epoch types.
 	return msg
 }
 
-func checkProposalQueueSize(t *testing.T, tb *TortoiseBeacon, epoch types.EpochID, numProposals int) {
+func checkProposalQueueSize(t *testing.T, tb *ProtocolDriver, epoch types.EpochID, numProposals int) {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 	ch := tb.getOrCreateProposalChannel(epoch)
 	assert.Equal(t, numProposals, len(ch))
 }
 
-func checkProposed(t *testing.T, tb *TortoiseBeacon, signer signing.Signer, proposed bool) {
+func checkProposed(t *testing.T, tb *ProtocolDriver, signer signing.Signer, proposed bool) {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 	_, ok := tb.hasProposed[string(signer.PublicKey().Bytes())]
 	assert.Equal(t, proposed, ok)
 }
 
-func checkProposals(t *testing.T, tb *TortoiseBeacon, expected proposals) {
+func checkProposals(t *testing.T, tb *ProtocolDriver, expected proposals) {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 	assert.EqualValues(t, expected, tb.incomingProposals)
@@ -136,14 +136,14 @@ func createFirstVote(t *testing.T, signer signing.Signer, epoch types.EpochID, v
 	return msg
 }
 
-func checkVoted(t *testing.T, tb *TortoiseBeacon, signer signing.Signer, round types.RoundID, voted bool) {
+func checkVoted(t *testing.T, tb *ProtocolDriver, signer signing.Signer, round types.RoundID, voted bool) {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 	_, ok := tb.hasVoted[round][string(signer.PublicKey().Bytes())]
 	assert.Equal(t, voted, ok)
 }
 
-func checkFirstIncomingVotes(t *testing.T, tb *TortoiseBeacon, expected map[string]proposals) {
+func checkFirstIncomingVotes(t *testing.T, tb *ProtocolDriver, expected map[string]proposals) {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 	assert.EqualValues(t, expected, tb.firstRoundIncomingVotes)
@@ -166,7 +166,7 @@ func createFollowingVote(t *testing.T, signer signing.Signer, epoch types.EpochI
 	return msg
 }
 
-func checkVoteMargins(t *testing.T, tb *TortoiseBeacon, expected map[string]*big.Int) {
+func checkVoteMargins(t *testing.T, tb *ProtocolDriver, expected map[string]*big.Int) {
 	tb.mu.RLock()
 	defer tb.mu.RUnlock()
 	assert.EqualValues(t, expected, tb.votesMargin)
@@ -177,7 +177,7 @@ func TestTB_HandleSerializedProposalMessage_Success(t *testing.T) {
 
 	const epoch = types.EpochID(10)
 
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
 	require.NoError(t, err)
@@ -194,7 +194,7 @@ func TestTB_HandleSerializedProposalMessage_Shutdown(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
 	require.NoError(t, err)
@@ -212,7 +212,7 @@ func TestTB_HandleSerializedProposalMessage_NotInProtocol(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
 	require.NoError(t, err)
@@ -230,7 +230,7 @@ func TestTB_HandleSerializedProposalMessage_Corrupted(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
 	require.NoError(t, err)
@@ -247,7 +247,7 @@ func TestTB_HandleSerializedProposalMessage_EpochTooOld(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
 	require.NoError(t, err)
@@ -265,7 +265,7 @@ func TestTB_HandleSerializedProposalMessage_NextEpoch(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
 	require.NoError(t, err)
@@ -283,7 +283,7 @@ func TestTB_HandleSerializedProposalMessage_NextEpochFull(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
 	require.NoError(t, err)
@@ -312,7 +312,7 @@ func TestTB_HandleSerializedProposalMessage_EpochTooFarAhead(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
 	require.NoError(t, err)
@@ -330,7 +330,7 @@ func TestTB_handleProposalMessage_Success(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	setMockAtxDbExpectations(mockDB)
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
@@ -357,7 +357,7 @@ func TestTB_handleProposalMessage_BadSignature(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 
@@ -385,7 +385,7 @@ func TestTB_handleProposalMessage_AlreadyProposed(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	setMockAtxDbExpectations(mockDB)
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
@@ -422,7 +422,7 @@ func TestTB_handleProposalMessage_ProposalNotEligible(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 
@@ -450,7 +450,7 @@ func TestTB_handleProposalMessage_MinerMissingATX(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID{}, database.ErrNotFound).Times(1)
 
@@ -470,7 +470,7 @@ func TestTB_handleProposalMessage_ATXLookupError(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID{}, errUnknown).Times(1)
 
@@ -490,7 +490,7 @@ func TestTB_handleProposalMessage_ATXHeaderLookupError(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(nil, errUnknown).Times(1)
@@ -523,7 +523,7 @@ func TestTB_HandleSerializedFirstVotingMessage_Success(t *testing.T) {
 	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
 
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
@@ -555,7 +555,7 @@ func TestTB_HandleSerializedFirstVotingMessage_Shutdown(t *testing.T) {
 	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
 
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	atomic.StoreUint64(&tb.running, 0)
 
 	signer := signing.NewEdSigner()
@@ -575,7 +575,7 @@ func TestTB_HandleSerializedFirstVotingMessage_NotInProtocol(t *testing.T) {
 	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
 
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	atomic.StoreUint64(&tb.inProtocol, 0)
 
 	signer := signing.NewEdSigner()
@@ -595,7 +595,7 @@ func TestTB_HandleSerializedFirstVotingMessage_CorruptedGossipMsg(t *testing.T) 
 	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
 
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
 	msg := createFirstVote(t, signer, epoch, valid, pValid, true)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -613,7 +613,7 @@ func TestTB_HandleSerializedFirstVotingMessage_WrongEpoch(t *testing.T) {
 	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
 
-	tb, _ := createTortoiseBeacon(t, epoch+1)
+	tb, _ := createProtocolDriver(t, epoch+1)
 	signer := signing.NewEdSigner()
 	msg := createFirstVote(t, signer, epoch, valid, pValid, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -631,7 +631,7 @@ func TestTB_handleFirstVotingMessage_Success(t *testing.T) {
 	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
 
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
@@ -662,7 +662,7 @@ func TestTB_handleFirstVotingMessage_FailedToExtractPK(t *testing.T) {
 	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
 
-	tb, _ := createTortoiseBeacon(t, epoch)
+	tb, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
 	msg := createFirstVote(t, signer, epoch, valid, pValid, true)
 
@@ -680,7 +680,7 @@ func TestTB_handleFirstVotingMessage_AlreadyVoted(t *testing.T) {
 	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
 
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
@@ -718,7 +718,7 @@ func TestTB_handleFirstVotingMessage_MinerMissingATX(t *testing.T) {
 	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
 
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID{}, database.ErrNotFound).Times(1)
 
@@ -739,7 +739,7 @@ func TestTB_handleFirstVotingMessage_ATXLookupError(t *testing.T) {
 	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
 
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID{}, errUnknown).Times(1)
 
@@ -760,7 +760,7 @@ func TestTB_handleFirstVotingMessage_ATXHeaderLookupError(t *testing.T) {
 	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
 	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
 
-	tb, mockDB := createTortoiseBeacon(t, epoch)
+	tb, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(nil, errUnknown).Times(1)
@@ -782,7 +782,7 @@ func TestTB_HandleSerializedFollowingVotingMessage_Success(t *testing.T) {
 	const round = types.RoundID(5)
 
 	signer := signing.NewEdSigner()
-	tb, mockDB, hashes := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
+	tb, mockDB, hashes := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
@@ -818,7 +818,7 @@ func TestTB_HandleSerializedFollowingVotingMessage_Shutdown(t *testing.T) {
 	const round = types.RoundID(5)
 
 	signer := signing.NewEdSigner()
-	tb, _, _ := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
+	tb, _, _ := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	atomic.StoreUint64(&tb.running, 0)
 
 	// this msg will contain a bit vector that set bit 0 and 2
@@ -838,7 +838,7 @@ func TestTB_HandleSerializedFollowingVotingMessage_NotInProtocol(t *testing.T) {
 	const round = types.RoundID(5)
 
 	signer := signing.NewEdSigner()
-	tb, _, _ := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
+	tb, _, _ := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	atomic.StoreUint64(&tb.inProtocol, 0)
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, false)
@@ -856,7 +856,7 @@ func TestTB_HandleSerializedFollowingVotingMessage_CorruptedGossipMsg(t *testing
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tb, _, _ := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
+	tb, _, _ := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, true)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -873,7 +873,7 @@ func TestTB_HandleSerializedFollowingVotingMessage_WrongEpoch(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tb, _, _ := createTortoiseBeaconWithFirstRoundVotes(t, epoch+1, signer)
+	tb, _, _ := createProtocolDriverWithFirstRoundVotes(t, epoch+1, signer)
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
@@ -890,7 +890,7 @@ func TestTB_handleFollowingVotingMessage_Success(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tb, mockDB, hashes := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
+	tb, mockDB, hashes := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
@@ -925,7 +925,7 @@ func TestTB_handleFollowingVotingMessage_FailedToExtractPK(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tb, _, _ := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
+	tb, _, _ := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, true)
 
@@ -942,7 +942,7 @@ func TestTB_handleFollowingVotingMessage_AlreadyVoted(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tb, mockDB, hashes := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
+	tb, mockDB, hashes := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
@@ -984,7 +984,7 @@ func TestTB_handleFollowingVotingMessage_MinerMissingATX(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tb, mockDB, _ := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
+	tb, mockDB, _ := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID{}, database.ErrNotFound).Times(1)
 	// this msg will contain a bit vector that set bit 0 and 2
@@ -1003,7 +1003,7 @@ func TestTB_handleFollowingVotingMessage_ATXLookupError(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tb, mockDB, _ := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
+	tb, mockDB, _ := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID{}, errUnknown).Times(1)
 	// this msg will contain a bit vector that set bit 0 and 2
@@ -1022,7 +1022,7 @@ func TestTB_handleFollowingVotingMessage_ATXHeaderLookupError(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tb, mockDB, _ := createTortoiseBeaconWithFirstRoundVotes(t, epoch, signer)
+	tb, mockDB, _ := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(nil, errUnknown).Times(1)

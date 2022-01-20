@@ -160,7 +160,7 @@ func (o *Oracle) getBeaconValue(ctx context.Context, epochID types.EpochID) (uin
 	value := encodeBeacon(beacon)
 	o.WithContext(ctx).With().Debug("hare eligibility beacon value for epoch",
 		epochID,
-		log.String("beacon", beacon.ShortString()),
+		beacon,
 		log.Uint32("beacon_val", value))
 	return value, nil
 }
