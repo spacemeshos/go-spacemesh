@@ -3,7 +3,8 @@ all: install build
 
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
 include Makefile-gpu.Inc
-include Makefile-svm.Inc
+# TODO(nkryuchkov): uncomment when go-svm is imported
+#include Makefile-svm.Inc
 
 DOCKER_HUB ?= spacemeshos
 TEST_LOG_LEVEL ?=
