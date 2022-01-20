@@ -54,7 +54,6 @@ type layerDB interface {
 	SaveHareConsensusOutput(context.Context, types.LayerID, types.BlockID) error
 	ProcessedLayer() types.LayerID
 	SetZeroBlockLayer(types.LayerID) error
-	SetZeroBallotLayer(types.LayerID) error
 }
 
 type atxIDsDB interface {
@@ -429,12 +428,6 @@ func notifyLayerDataResult(ctx context.Context, layerID types.LayerID, layerDB l
 			logger.With().Error("failed to save hare output from peers", log.Err(err))
 			result.Err = err
 		}
-		if len(lyrResult.ballots) == 0 {
-			if err := layerDB.SetZeroBallotLayer(layerID); err != nil {
-				// this can happen when node actually had received ballots for this layer before. ok to ignore
-				logger.With().Warning("failed to set zero-ballot for layer", layerID, log.Err(err))
-			}
-		}
 		if len(lyrResult.blocks) == 0 {
 			if err := layerDB.SetZeroBlockLayer(layerID); err != nil {
 				// this can happen when node actually had received blocks for this layer before. ok to ignore
@@ -499,7 +492,7 @@ func (l *Logic) getAtxResults(ctx context.Context, hash types.Hash32, data []byt
 		log.Int("dataSize", len(data)))
 
 	if err := l.atxHandler.HandleAtxData(ctx, data); err != nil {
-		return fmt.Errorf("handle ATX data: %w", err)
+		return fmt.Errorf("handle ATX data %s len %d: %w", hash, len(data), err)
 	}
 
 	return nil
