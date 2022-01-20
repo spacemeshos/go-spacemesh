@@ -746,7 +746,7 @@ func TestActivationDb_ContextuallyValidateAtx(t *testing.T) {
 	r.NoError(err)
 
 	arbitraryAtxID := types.ATXID(types.HexToHash32("11111"))
-	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, goldenATXID, types.LayerID{}), [types.AddressLength]byte{}, nil, 0, nil)
+	malformedAtx := types.NewActivationTx(newChallenge(nodeID, 0, arbitraryAtxID, goldenATXID, types.LayerID{}), types.Address{}, nil, 0, nil)
 	err = atxdb.ContextuallyValidateAtx(malformedAtx.ActivationTxHeader)
 	r.EqualError(err,
 		fmt.Sprintf("could not fetch node last atx: find ATX in DB: atx for node %v does not exist", nodeID.ShortString()))
@@ -793,7 +793,7 @@ func BenchmarkGetAtxHeaderWithConcurrentStoreAtx(b *testing.B) {
 			pub, _, _ := ed25519.GenerateKey(nil)
 			id := types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
 			for i := 0; ; i++ {
-				atx := types.NewActivationTx(newChallenge(id, uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0)), [types.AddressLength]byte{}, nil, 0, nil)
+				atx := types.NewActivationTx(newChallenge(id, uint64(i), *types.EmptyATXID, goldenATXID, types.NewLayerID(0)), types.Address{}, nil, 0, nil)
 				if !assert.NoError(b, atxdb.StoreAtx(context.TODO(), types.EpochID(1), atx)) {
 					return
 				}
