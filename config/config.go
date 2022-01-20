@@ -96,8 +96,6 @@ type BaseConfig struct {
 
 	PublishEventsURL string `mapstructure:"events-url"`
 
-	AtxsPerBlock int `mapstructure:"atxs-per-block"`
-
 	TxsPerBlock int `mapstructure:"txs-per-block"`
 
 	BlockCacheSize int `mapstructure:"block-cache-size"`
@@ -192,7 +190,6 @@ func defaultBaseConfig() BaseConfig {
 		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
-		AtxsPerBlock:        100,
 		TxsPerBlock:         100,
 	}
 }

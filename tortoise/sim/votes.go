@@ -23,3 +23,13 @@ func PerfectVoting(rng *rand.Rand, layers []*types.Layer, _ int) Voting {
 	base := ballots[rng.Intn(len(ballots))]
 	return Voting{Base: base.ID(), Against: against, Support: support}
 }
+
+// VaryingVoting votes using first generator for ballots before mid, and with second generator after mid.
+func VaryingVoting(mid int, first, second VotesGenerator) VotesGenerator {
+	return func(rng *rand.Rand, layers []*types.Layer, i int) Voting {
+		if i < mid {
+			return first(rng, layers, i)
+		}
+		return second(rng, layers, i)
+	}
+}

@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
@@ -149,7 +150,8 @@ func (t *turtle) evict(ctx context.Context) {
 		}
 		delete(t.blocks, lid)
 		delete(t.undecided, lid)
-		delete(t.verifying.layerWeights, lid)
+		delete(t.verifying.goodWeight, lid)
+		delete(t.verifying.abstainedWeight, lid)
 		if lid.GetEpoch() < oldestEpoch {
 			delete(t.refBallotBeacons, lid.GetEpoch())
 			delete(t.epochWeight, lid.GetEpoch())
@@ -377,7 +379,7 @@ func (t *turtle) encodeVotes(
 // in the current layer.
 func (t *turtle) getFullVote(ctx context.Context, lid types.LayerID, bid types.BlockID) (sign, voteReason, error) {
 	vote, reason := getLocalVote(&t.commonState, t.Config, lid, bid)
-	if !(vote == abstain && reason == reasonValiditiy) {
+	if !(vote == abstain && reason == reasonValidity) {
 		return vote, reason, nil
 	}
 	sum := t.full.weights[bid]
@@ -621,91 +623,99 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 // updateState is to update state that needs to be updated always. there should be no
 // expensive long running computation in this method.
 func (t *turtle) updateState(ctx context.Context, logger log.Log, lid types.LayerID) error {
+	// TODO(dshulyak) loading state from db is only needed for rerun.
+	// but in general it won't hurt, so maybe refactor it in future.
+
 	blocks, err := t.bdp.LayerBlockIds(lid)
 	if err != nil {
-		return fmt.Errorf("failed to read blocks for layer %s: %w", lid, err)
+		return fmt.Errorf("read blocks for layer %s: %w", lid, err)
+	}
+	for _, block := range blocks {
+		t.onBlock(lid, block)
 	}
 
-	t.processBlocks(lid, blocks)
-
-	original, err := t.bdp.LayerBallots(lid)
+	ballots, err := t.bdp.LayerBallots(lid)
 	if err != nil {
-		return fmt.Errorf("failed to read ballots for layer %s: %w", lid, err)
+		return fmt.Errorf("read ballots for layer %s: %w", lid, err)
 	}
-	ballots, err := t.processBallots(lid, original)
-	if err != nil {
-		return err
+	for _, ballot := range ballots {
+		if err := t.onBallot(ballot); err != nil {
+			return err
+		}
 	}
-
-	t.full.processBallots(ballots)
-	t.full.processBlocks(blocks)
 
 	if err := t.updateLocalVotes(ctx, logger, lid); err != nil {
 		return err
 	}
-	t.verifying.countVotes(logger, lid, ballots)
+	// TODO(dshulyak) it should be possible to count votes from every single ballot separately
+	// but may require changes to t.processed and t.updateLocalVotes
+	t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 	return nil
 }
 
-func (t *turtle) processBlocks(lid types.LayerID, blocks []types.BlockID) {
-	for _, block := range blocks {
-		t.blockLayer[block] = lid
+func (t *turtle) onBlock(lid types.LayerID, block types.BlockID) {
+	if !lid.After(t.evicted) {
+		return
 	}
-	t.blocks[lid] = blocks
+	if _, exist := t.blockLayer[block]; exist {
+		return
+	}
+	t.blockLayer[block] = lid
+	t.blocks[lid] = append(t.blocks[lid], block)
+	t.full.onBlock(block)
 }
 
-func (t *turtle) processBallots(lid types.LayerID, original []*types.Ballot) ([]tortoiseBallot, error) {
-	var (
-		ballots    = make([]tortoiseBallot, 0, len(original))
-		ballotsIDs = make([]types.BallotID, 0, len(original))
-	)
-
-	for _, ballot := range original {
-		ballotWeight, err := computeBallotWeight(t.atxdb, t.bdp, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
-		if err != nil {
-			return nil, err
-		}
-		t.ballotLayer[ballot.ID()] = ballot.LayerIndex
-
-		// TODO(dshulyak) this should not fail without terminating tortoise
-		t.markBeaconWithBadBallot(t.logger, ballot)
-
-		ballotsIDs = append(ballotsIDs, ballot.ID())
-
-		baselid := t.ballotLayer[ballot.Votes.Base]
-
-		abstainVotes := map[types.LayerID]struct{}{}
-		for _, lid := range ballot.Votes.Abstain {
-			abstainVotes[lid] = struct{}{}
-		}
-
-		votes := votes{}
-		for lid := baselid; lid.Before(t.processed); lid = lid.Add(1) {
-			if _, exist := abstainVotes[lid]; exist {
-				continue
-			}
-			for _, bid := range t.blocks[lid] {
-				votes[bid] = against
-			}
-		}
-		for _, bid := range ballot.Votes.Support {
-			votes[bid] = support
-		}
-		for _, bid := range ballot.Votes.Against {
-			votes[bid] = against
-		}
-
-		ballots = append(ballots, tortoiseBallot{
-			id:      ballot.ID(),
-			base:    ballot.Votes.Base,
-			weight:  ballotWeight,
-			votes:   votes,
-			abstain: abstainVotes,
-		})
+func (t *turtle) onBallot(ballot *types.Ballot) error {
+	if !ballot.LayerIndex.After(t.evicted) {
+		return nil
+	}
+	if _, exist := t.ballotLayer[ballot.ID()]; exist {
+		return nil
 	}
 
-	t.ballots[lid] = ballotsIDs
-	return ballots, nil
+	baselid := t.ballotLayer[ballot.Votes.Base]
+
+	ballotWeight, err := computeBallotWeight(t.atxdb, t.bdp, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
+	if err != nil {
+		return err
+	}
+	t.ballotLayer[ballot.ID()] = ballot.LayerIndex
+	t.ballots[ballot.LayerIndex] = append(t.ballots[ballot.LayerIndex], ballot.ID())
+
+	// TODO(dshulyak) this should not fail without terminating tortoise
+	t.markBeaconWithBadBallot(t.logger, ballot)
+
+	abstainVotes := map[types.LayerID]struct{}{}
+	for _, lid := range ballot.Votes.Abstain {
+		abstainVotes[lid] = struct{}{}
+	}
+
+	votes := votes{}
+	for lid := baselid; lid.Before(t.processed); lid = lid.Add(1) {
+		if _, exist := abstainVotes[lid]; exist {
+			continue
+		}
+		for _, bid := range t.blocks[lid] {
+			votes[bid] = against
+		}
+	}
+	for _, bid := range ballot.Votes.Support {
+		votes[bid] = support
+	}
+	for _, bid := range ballot.Votes.Against {
+		votes[bid] = against
+	}
+
+	tballot := tortoiseBallot{
+		id:      ballot.ID(),
+		base:    ballot.Votes.Base,
+		weight:  ballotWeight,
+		votes:   votes,
+		abstain: abstainVotes,
+	}
+
+	t.full.onBallot(&tballot)
+	return nil
 }
 
 func (t *turtle) updateLocalVotes(ctx context.Context, logger log.Log, lid types.LayerID) (err error) {
@@ -771,12 +781,19 @@ func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.La
 	if !lid.After(t.historicallyVerified) {
 		// this layer has been verified, so we should be able to read the set of contextual blocks
 		logger.Debug("using contextually valid blocks as opinion on old, verified layer")
-		valid, err := t.bdp.LayerContextuallyValidBlocks(ctx, lid)
-		if err != nil {
-			return fmt.Errorf("failed to load contextually balid blocks for layer %s: %w", lid, err)
-		}
-		for bid := range valid {
-			t.validity[bid] = support
+		for _, bid := range t.blocks[lid] {
+			valid, err := t.bdp.ContextualValidity(bid)
+			if errors.Is(err, database.ErrNotFound) {
+				continue
+			}
+			if err != nil {
+				return fmt.Errorf("failed to load contextually validiy for block %s: %w", bid, err)
+			}
+			sign := support
+			if !valid {
+				sign = against
+			}
+			t.validity[bid] = sign
 		}
 		return nil
 	}
@@ -809,10 +826,9 @@ func getLocalVote(state *commonState, config Config, lid types.LayerID, block ty
 		}
 		return against, reasonHareOutput
 	}
-
 	vote, exists := state.validity[block]
 	if exists {
-		return vote, reasonValiditiy
+		return vote, reasonValidity
 	}
-	return abstain, reasonValiditiy
+	return abstain, reasonValidity
 }

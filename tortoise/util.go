@@ -67,6 +67,9 @@ func (w weight) add(other weight) weight {
 }
 
 func (w weight) sub(other weight) weight {
+	if other.Rat == nil {
+		return w
+	}
 	w.Rat.Sub(w.Rat, other.Rat)
 	return w
 }
@@ -160,7 +163,7 @@ func (v voteReason) String() string {
 
 const (
 	reasonHareOutput     voteReason = "hare"
-	reasonValiditiy      voteReason = "validity"
+	reasonValidity       voteReason = "validity"
 	reasonLocalThreshold voteReason = "local_threshold"
 	reasonCoinflip       voteReason = "coinflip"
 )

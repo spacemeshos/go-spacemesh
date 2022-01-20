@@ -44,8 +44,9 @@ type TxAPI interface {
 	GetRewards(types.Address) ([]types.Reward, error)
 	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
 	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
-	GetTransactionsByDestination(types.LayerID, types.Address) ([]types.TransactionID, error)
-	GetTransactionsByOrigin(types.LayerID, types.Address) ([]types.TransactionID, error)
+	GetTransactionsByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
+	GetTransactionsByDestination(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
+	GetTransactionsByOrigin(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
 	LatestLayer() types.LayerID
 	GetLayerApplied(types.TransactionID) *types.LayerID
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)

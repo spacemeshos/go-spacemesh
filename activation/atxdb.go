@@ -79,6 +79,7 @@ func getAtxTimestampKey(atxID types.ATXID) []byte {
 var (
 	errInvalidSig   = errors.New("identity not found when validating signature, invalid atx")
 	errGenesisEpoch = errors.New("tried to retrieve miner weights for target epoch 0")
+	errKnownAtx     = errors.New("known atx")
 )
 
 type atxChan struct {
@@ -677,8 +678,9 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 
 // HandleGossipAtx handles the atx gossip data channel.
 func (db *DB) HandleGossipAtx(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
-	err := db.HandleAtxData(ctx, msg)
-	if err != nil {
+	if err := db.handleAtxData(ctx, msg); errors.Is(err, errKnownAtx) {
+		return pubsub.ValidationIgnore
+	} else if err != nil {
 		db.log.WithContext(ctx).With().Error("error handling atx data", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
@@ -687,6 +689,14 @@ func (db *DB) HandleGossipAtx(ctx context.Context, _ peer.ID, msg []byte) pubsub
 
 // HandleAtxData handles atxs received either by gossip or sync.
 func (db *DB) HandleAtxData(ctx context.Context, data []byte) error {
+	err := db.handleAtxData(ctx, data)
+	if errors.Is(err, errKnownAtx) {
+		return nil
+	}
+	return err
+}
+
+func (db *DB) handleAtxData(ctx context.Context, data []byte) error {
 	atx, err := types.BytesToAtx(data)
 	if err != nil {
 		return fmt.Errorf("cannot parse incoming atx")
@@ -696,9 +706,7 @@ func (db *DB) HandleAtxData(ctx context.Context, data []byte) error {
 	existing, _ := db.GetAtxHeader(atx.ID())
 	if existing != nil {
 		logger.With().Debug("received known atx")
-		// NOTE(dshulyak) it must be noop cause we will fail in fetcher otherwise
-		// but ideally it should make us not forward the message.
-		return nil
+		return fmt.Errorf("%w atx %s", errKnownAtx, atx.ID())
 	}
 
 	logger.With().Info(fmt.Sprintf("got new atx %v", atx.ID().ShortString()), atx.Fields(len(data))...)

@@ -15,7 +15,6 @@ type meshProvider interface {
 	LayerBlockIds(types.LayerID) ([]types.BlockID, error)
 	RecordCoinflip(context.Context, types.LayerID, bool)
 	SetZeroBlockLayer(types.LayerID) error
-	SetZeroBallotLayer(types.LayerID) error
 	ProcessLayerPerHareOutput(context.Context, types.LayerID, types.BlockID) error
 }
 
@@ -87,9 +86,6 @@ func (h *SuperHare) Start(ctx context.Context) error {
 					hareOutput := types.EmptyBlockID
 					if len(proposals) == 0 {
 						logger.With().Warning("hare output empty set")
-						if err := h.mesh.SetZeroBallotLayer(layerID); err != nil {
-							logger.With().Error("failed to set layer as a zero ballot", log.Err(err))
-						}
 						if err := h.mesh.SetZeroBlockLayer(layerID); err != nil {
 							logger.With().Error("failed to set layer as a zero block", log.Err(err))
 						}

@@ -1,11 +1,11 @@
 package main
 
 import (
+	"encoding/hex"
 	"fmt"
 	"sync"
 	"testing"
 
-	"github.com/btcsuite/btcutil/base58"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -18,7 +18,7 @@ const TestServerOnline = false
 func generateID() string {
 	rnd := make([]byte, 32)
 	rand.Read(rnd)
-	return base58.Encode(rnd)
+	return hex.EncodeToString(rnd)
 }
 
 type requestCounter struct {

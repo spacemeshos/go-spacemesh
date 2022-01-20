@@ -5,8 +5,9 @@ import (
 	"fmt"
 	"math/big"
 
+	"golang.org/x/crypto/sha3"
+
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/crypto/sha3"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -46,7 +47,7 @@ func (a Address) Hash() Hash32 { return CalcHash32(a[:]) }
 // Hex returns an EIP55-compliant hex string representation of the address.
 func (a Address) Hex() string {
 	unchecksummed := hex.EncodeToString(a[:])
-	sha := sha3.NewKeccak256()
+	sha := sha3.NewLegacyKeccak256()
 	sha.Write([]byte(unchecksummed))
 	hash := sha.Sum(nil)
 
