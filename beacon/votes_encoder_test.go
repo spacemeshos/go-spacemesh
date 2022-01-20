@@ -60,17 +60,17 @@ func TestBeacon_encodeVotes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := ProtocolDriver{
+			pd := ProtocolDriver{
 				config: Config{
 					VotesLimit: 100,
 				},
 				logger: logtest.New(t).WithName("Beacon"),
 			}
 
-			result := tb.encodeVotes(tc.currentRound, tc.proposals)
+			result := pd.encodeVotes(tc.currentRound, tc.proposals)
 			r.EqualValues(tc.result, result)
 
-			original := tb.decodeVotes(result, tc.firstRound)
+			original := pd.decodeVotes(result, tc.firstRound)
 			r.EqualValues(tc.currentRound, original)
 		})
 	}

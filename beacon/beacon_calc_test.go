@@ -68,7 +68,7 @@ func TestBeacon_calcBeacon(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := ProtocolDriver{
+			pd := ProtocolDriver{
 				config: Config{
 					RoundsNumber: rounds,
 				},
@@ -80,11 +80,11 @@ func TestBeacon_calcBeacon(t *testing.T) {
 				db:              database.NewMemDatabase(),
 			}
 
-			tb.initGenesisBeacons()
+			pd.initGenesisBeacons()
 
-			err := tb.calcBeacon(context.TODO(), epoch, tc.votes)
+			err := pd.calcBeacon(context.TODO(), epoch, tc.votes)
 			r.NoError(err)
-			r.EqualValues(tc.hash.String(), tb.beacons[epoch].String())
+			r.EqualValues(tc.hash.String(), pd.beacons[epoch].String())
 		})
 	}
 }

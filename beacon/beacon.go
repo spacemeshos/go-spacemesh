@@ -68,8 +68,8 @@ type layerClock interface {
 	LayerToTime(types.LayerID) time.Time
 }
 
-// NewProtocolDriver returns a new ProtocolDriver.
-func NewProtocolDriver(
+// New returns a new ProtocolDriver.
+func New(
 	conf Config,
 	nodeID types.NodeID,
 	publisher pubsub.Publisher,
@@ -83,7 +83,7 @@ func NewProtocolDriver(
 	clock layerClock,
 	logger log.Log,
 ) *ProtocolDriver {
-	tb := &ProtocolDriver{
+	pd := &ProtocolDriver{
 		logger:                  logger,
 		config:                  conf,
 		nodeID:                  nodeID,
@@ -105,8 +105,8 @@ func NewProtocolDriver(
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 		votesMargin:             map[string]*big.Int{},
 	}
-	tb.metricsCollector = metrics.NewBeaconMetricsCollector(tb.gatherMetricsData, logger.WithName("metrics"))
-	return tb
+	pd.metricsCollector = metrics.NewBeaconMetricsCollector(pd.gatherMetricsData, logger.WithName("metrics"))
+	return pd
 }
 
 // ProtocolDriver is the driver for the beacon protocol.

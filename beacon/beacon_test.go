@@ -81,11 +81,11 @@ func setUpProtocolDriver(t *testing.T, mockEpochWeight uint64, hasATX bool) (*Pr
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 	ms := smocks.NewMockSyncStateProvider(ctrl)
 	ms.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	tb := NewProtocolDriver(conf, minerID, publisher, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
-	require.NotNil(t, tb)
-	tb.SetSyncState(ms)
-	tb.setMetricsRegistry(prometheus.NewPedanticRegistry())
-	return tb, clock
+	pd := New(conf, minerID, publisher, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
+	require.NotNil(t, pd)
+	pd.SetSyncState(ms)
+	pd.setMetricsRegistry(prometheus.NewPedanticRegistry())
+	return pd, clock
 }
 
 func newPublisher(tb testing.TB) pubsub.Publisher {
@@ -102,52 +102,52 @@ func newPublisher(tb testing.TB) pubsub.Publisher {
 }
 
 func TestBeacon(t *testing.T) {
-	tb, clock := setUpProtocolDriver(t, uint64(10), true)
+	pd, clock := setUpProtocolDriver(t, uint64(10), true)
 	epoch := types.EpochID(3)
-	require.NoError(t, tb.Start(context.TODO()))
+	require.NoError(t, pd.Start(context.TODO()))
 
 	t.Logf("Awaiting epoch %v", epoch)
 	awaitEpoch(clock, epoch)
 
-	v, err := tb.GetBeacon(epoch)
+	v, err := pd.GetBeacon(epoch)
 	require.NoError(t, err)
 
 	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	assert.Equal(t, types.HexToBeacon(expected), v)
 
-	tb.Close()
+	pd.Close()
 	clock.Close()
 }
 
 func TestBeaconZeroWeightEpoch(t *testing.T) {
-	tb, clock := setUpProtocolDriver(t, uint64(0), true)
+	pd, clock := setUpProtocolDriver(t, uint64(0), true)
 	epoch := types.EpochID(3)
-	require.NoError(t, tb.Start(context.TODO()))
+	require.NoError(t, pd.Start(context.TODO()))
 
 	t.Logf("Awaiting epoch %v", epoch)
 	awaitEpoch(clock, epoch)
 
-	v, err := tb.GetBeacon(epoch)
+	v, err := pd.GetBeacon(epoch)
 	assert.Equal(t, errBeaconNotCalculated, err)
 	assert.Equal(t, types.EmptyBeacon, v)
 
-	tb.Close()
+	pd.Close()
 	clock.Close()
 }
 
 func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
-	tb, clock := setUpProtocolDriver(t, uint64(0), false)
+	pd, clock := setUpProtocolDriver(t, uint64(0), false)
 	epoch := types.EpochID(3)
-	require.NoError(t, tb.Start(context.TODO()))
+	require.NoError(t, pd.Start(context.TODO()))
 
 	t.Logf("Awaiting epoch %v", epoch)
 	awaitEpoch(clock, epoch)
 
-	v, err := tb.GetBeacon(epoch)
+	v, err := pd.GetBeacon(epoch)
 	assert.Equal(t, errBeaconNotCalculated, err)
 	assert.Equal(t, types.EmptyBeacon, v)
 
-	tb.Close()
+	pd.Close()
 	clock.Close()
 }
 
@@ -195,19 +195,19 @@ func TestBeaconWithMetrics(t *testing.T) {
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 	ms := smocks.NewMockSyncStateProvider(ctrl)
 	ms.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	tb := NewProtocolDriver(conf, minerID, newPublisher(t), mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
-	require.NotNil(t, tb)
-	tb.SetSyncState(ms)
+	pd := New(conf, minerID, newPublisher(t), mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
+	require.NotNil(t, pd)
+	pd.SetSyncState(ms)
 
-	require.NoError(t, tb.Start(context.TODO()))
+	require.NoError(t, pd.Start(context.TODO()))
 	t.Cleanup(func() {
-		tb.Close()
+		pd.Close()
 	})
 
 	gLayer := types.GetEffectiveGenesis()
 	numCalculatedBeacon := 0
 	for layer := types.NewLayerID(1); !layer.After(gLayer); layer = layer.Add(1) {
-		tb.handleLayer(context.TODO(), layer)
+		pd.handleLayer(context.TODO(), layer)
 		thisEpoch := layer.GetEpoch()
 		ownWeight := atxHeader.GetWeight()
 		if thisEpoch.IsGenesis() {
@@ -238,15 +238,15 @@ func TestBeaconWithMetrics(t *testing.T) {
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	for layer := gLayer.Add(1); layer.Before(finalLayer); layer = layer.Add(1) {
-		tb.handleLayer(context.TODO(), layer)
+		pd.handleLayer(context.TODO(), layer)
 		thisEpoch := layer.GetEpoch()
-		tb.recordBeacon(thisEpoch, types.RandomBallotID(), beacon1, 100)
-		tb.recordBeacon(thisEpoch, types.RandomBallotID(), beacon2, 200)
+		pd.recordBeacon(thisEpoch, types.RandomBallotID(), beacon1, 100)
+		pd.recordBeacon(thisEpoch, types.RandomBallotID(), beacon2, 200)
 
 		numCalculated := 0
 		numObserved := 0
 		numObservedWeight := 0
-		tb.logger.Info("gathering data from test in epoch %v", thisEpoch)
+		pd.logger.Info("gathering data from test in epoch %v", thisEpoch)
 		allMetrics, err := prometheus.DefaultGatherer.Gather()
 		assert.NoError(t, err)
 		for _, m := range allMetrics {
@@ -258,7 +258,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 				expected := fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beaconStr, thisEpoch+1, atxHeader.GetWeight())
 				assert.Equal(t, expected, m.Metric[0].String())
 			case "spacemesh_beacons_beacon_observed_total":
-				tb.logger.Info(m.String())
+				pd.logger.Info(m.String())
 				require.Equal(t, 2, len(m.Metric))
 				numObserved = numObserved + 2
 				count := layer.OrdinalInEpoch() + 1
@@ -296,7 +296,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	t.Parallel()
 
-	tb := &ProtocolDriver{
+	pd := &ProtocolDriver{
 		logger:  logtest.New(t).WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
 		db:      database.NewMemDatabase(),
@@ -305,38 +305,38 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	beacon2 := types.RandomBeacon()
 	epoch5 := types.EpochID(5)
 	beacon4 := types.RandomBeacon()
-	err := tb.setBeacon(epoch3-1, beacon2)
+	err := pd.setBeacon(epoch3-1, beacon2)
 	require.NoError(t, err)
-	err = tb.setBeacon(epoch5-1, beacon4)
+	err = pd.setBeacon(epoch5-1, beacon4)
 	require.NoError(t, err)
 
-	got, err := tb.GetBeacon(epoch3)
+	got, err := pd.GetBeacon(epoch3)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon2, got)
 
-	got, err = tb.GetBeacon(epoch5)
+	got, err = pd.GetBeacon(epoch5)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon4, got)
 
-	got, err = tb.GetBeacon(epoch5 - 1)
+	got, err = pd.GetBeacon(epoch5 - 1)
 	assert.Equal(t, errBeaconNotCalculated, err)
 	assert.Equal(t, types.EmptyBeacon, got)
 
 	// clear out the in-memory map
 	// the database should still give us values
-	tb.mu.Lock()
-	tb.beacons = make(map[types.EpochID]types.Beacon)
-	tb.mu.Unlock()
+	pd.mu.Lock()
+	pd.beacons = make(map[types.EpochID]types.Beacon)
+	pd.mu.Unlock()
 
-	got, err = tb.GetBeacon(epoch3)
+	got, err = pd.GetBeacon(epoch3)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon2, got)
 
-	got, err = tb.GetBeacon(epoch5)
+	got, err = pd.GetBeacon(epoch5)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon4, got)
 
-	got, err = tb.GetBeacon(epoch5 - 1)
+	got, err = pd.GetBeacon(epoch5 - 1)
 	assert.Equal(t, errBeaconNotCalculated, err)
 	assert.Equal(t, types.EmptyBeacon, got)
 }
@@ -347,7 +347,7 @@ func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockDB := dbMocks.NewMockDatabase(ctrl)
-	tb := &ProtocolDriver{
+	pd := &ProtocolDriver{
 		logger:  logtest.New(t).WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
 		db:      mockDB,
@@ -355,11 +355,11 @@ func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	epoch := types.EpochID(3)
 	beacon := types.RandomBeacon()
 	mockDB.EXPECT().Put(epoch.ToBytes(), beacon.Bytes()).Return(errUnknown).Times(1)
-	err := tb.persistBeacon(epoch, beacon)
+	err := pd.persistBeacon(epoch, beacon)
 	assert.ErrorIs(t, err, errUnknown)
 
 	mockDB.EXPECT().Get(epoch.ToBytes()).Return(nil, errUnknown).Times(1)
-	got, errGet := tb.getPersistedBeacon(epoch)
+	got, errGet := pd.getPersistedBeacon(epoch)
 	assert.Equal(t, types.EmptyBeacon, got)
 	assert.ErrorIs(t, errGet, errUnknown)
 }
@@ -367,7 +367,7 @@ func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	t.Parallel()
 
-	tb := &ProtocolDriver{
+	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
 		db:                 database.NewMemDatabase(),
 		beacons:            make(map[types.EpochID]types.Beacon),
@@ -377,53 +377,53 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	epoch := types.EpochID(5)
 	for i := 0; i < numEpochsToKeep; i++ {
 		e := epoch + types.EpochID(i)
-		err := tb.setBeacon(e, types.RandomBeacon())
+		err := pd.setBeacon(e, types.RandomBeacon())
 		require.NoError(t, err)
-		tb.recordBeacon(e, types.RandomBallotID(), types.RandomBeacon(), 10)
-		tb.cleanupEpoch(e)
-		assert.Equal(t, i+1, len(tb.beacons))
-		assert.Equal(t, i+1, len(tb.beaconsFromBallots))
+		pd.recordBeacon(e, types.RandomBallotID(), types.RandomBeacon(), 10)
+		pd.cleanupEpoch(e)
+		assert.Equal(t, i+1, len(pd.beacons))
+		assert.Equal(t, i+1, len(pd.beaconsFromBallots))
 	}
-	assert.Equal(t, numEpochsToKeep, len(tb.beacons))
-	assert.Equal(t, numEpochsToKeep, len(tb.beaconsFromBallots))
+	assert.Equal(t, numEpochsToKeep, len(pd.beacons))
+	assert.Equal(t, numEpochsToKeep, len(pd.beaconsFromBallots))
 
 	epoch = epoch + numEpochsToKeep
-	err := tb.setBeacon(epoch, types.RandomBeacon())
+	err := pd.setBeacon(epoch, types.RandomBeacon())
 	require.NoError(t, err)
-	tb.recordBeacon(epoch, types.RandomBallotID(), types.RandomBeacon(), 10)
-	assert.Equal(t, numEpochsToKeep+1, len(tb.beacons))
-	assert.Equal(t, numEpochsToKeep+1, len(tb.beaconsFromBallots))
-	tb.cleanupEpoch(epoch)
-	assert.Equal(t, numEpochsToKeep, len(tb.beacons))
-	assert.Equal(t, numEpochsToKeep, len(tb.beaconsFromBallots))
+	pd.recordBeacon(epoch, types.RandomBallotID(), types.RandomBeacon(), 10)
+	assert.Equal(t, numEpochsToKeep+1, len(pd.beacons))
+	assert.Equal(t, numEpochsToKeep+1, len(pd.beaconsFromBallots))
+	pd.cleanupEpoch(epoch)
+	assert.Equal(t, numEpochsToKeep, len(pd.beacons))
+	assert.Equal(t, numEpochsToKeep, len(pd.beaconsFromBallots))
 }
 
 func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 	t.Parallel()
 
 	types.SetLayersPerEpoch(3)
-	tb := &ProtocolDriver{
+	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		db:                 database.NewMemDatabase(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
-	tb.config.BeaconSyncNumBallots = 3
+	pd.config.BeaconSyncNumBallots = 3
 
 	epoch := types.EpochID(3)
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
-	tb.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon1, 100)
-	got, err := tb.GetBeacon(epoch)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon1, 100)
+	got, err := pd.GetBeacon(epoch)
 	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
-	tb.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon2, 100)
-	got, err = tb.GetBeacon(epoch)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon2, 100)
+	got, err = pd.GetBeacon(epoch)
 	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
-	tb.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon1, 1)
-	got, err = tb.GetBeacon(epoch)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon1, 1)
+	got, err = pd.GetBeacon(epoch)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon1, got)
 }
@@ -432,29 +432,29 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	t.Parallel()
 
 	types.SetLayersPerEpoch(3)
-	tb := &ProtocolDriver{
+	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		db:                 database.NewMemDatabase(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
-	tb.config.BeaconSyncNumBallots = 2
+	pd.config.BeaconSyncNumBallots = 2
 
 	epoch := types.EpochID(3)
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	ballotID1 := types.RandomBallotID()
 	ballotID2 := types.RandomBallotID()
-	tb.ReportBeaconFromBallot(epoch, ballotID1, beacon1, 100)
-	tb.ReportBeaconFromBallot(epoch, ballotID1, beacon1, 200)
+	pd.ReportBeaconFromBallot(epoch, ballotID1, beacon1, 100)
+	pd.ReportBeaconFromBallot(epoch, ballotID1, beacon1, 200)
 	// same ballotID does not count twice
-	got, err := tb.GetBeacon(epoch)
+	got, err := pd.GetBeacon(epoch)
 	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
 
-	tb.ReportBeaconFromBallot(epoch, ballotID2, beacon2, 101)
-	got, err = tb.GetBeacon(epoch)
+	pd.ReportBeaconFromBallot(epoch, ballotID2, beacon2, 101)
+	got, err = pd.GetBeacon(epoch)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon2, got)
 }
@@ -465,7 +465,7 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 	epoch := types.EpochID(3)
 	beacon := types.RandomBeacon()
 	beaconFromBlocks := types.RandomBeacon()
-	tb := &ProtocolDriver{
+	pd := &ProtocolDriver{
 		logger: logtest.New(t).WithName("Beacon"),
 		config: UnitTestConfig(),
 		beacons: map[types.EpochID]types.Beacon{
@@ -473,17 +473,17 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 		},
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
-	tb.config.BeaconSyncNumBallots = 2
+	pd.config.BeaconSyncNumBallots = 2
 
-	got, err := tb.GetBeacon(epoch)
+	got, err := pd.GetBeacon(epoch)
 	require.NoError(t, err)
 	require.Equal(t, beacon, got)
 
-	tb.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBlocks, 100)
-	tb.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBlocks, 200)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBlocks, 100)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBlocks, 200)
 
 	// should not change the beacon value
-	got, err = tb.GetBeacon(epoch)
+	got, err = pd.GetBeacon(epoch)
 	require.NoError(t, err)
 	require.Equal(t, beacon, got)
 }
@@ -511,14 +511,14 @@ func TestBeacon_findMostWeightedBeaconForEpoch(t *testing.T) {
 		},
 	}
 	epoch := types.EpochID(3)
-	tb := &ProtocolDriver{
+	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: map[types.EpochID]map[types.Beacon]*ballotWeight{epoch: beaconsFromBlocks},
 	}
-	tb.config.BeaconSyncNumBallots = 2
-	got := tb.findMostWeightedBeaconForEpoch(epoch)
+	pd.config.BeaconSyncNumBallots = 2
+	got := pd.findMostWeightedBeaconForEpoch(epoch)
 	assert.Equal(t, beacon2, got)
 }
 
@@ -545,14 +545,14 @@ func TestBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testing.T) {
 		},
 	}
 	epoch := types.EpochID(3)
-	tb := &ProtocolDriver{
+	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: map[types.EpochID]map[types.Beacon]*ballotWeight{epoch: beaconsFromBlocks},
 	}
-	tb.config.BeaconSyncNumBallots = 5
-	got := tb.findMostWeightedBeaconForEpoch(epoch)
+	pd.config.BeaconSyncNumBallots = 5
+	got := pd.findMostWeightedBeaconForEpoch(epoch)
 	assert.Equal(t, types.EmptyBeacon, got)
 }
 
@@ -560,14 +560,14 @@ func TestBeacon_findMostWeightedBeaconForEpoch_NoBeacon(t *testing.T) {
 	t.Parallel()
 
 	types.SetLayersPerEpoch(3)
-	tb := &ProtocolDriver{
+	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
 	epoch := types.EpochID(3)
-	got := tb.findMostWeightedBeaconForEpoch(epoch)
+	got := pd.findMostWeightedBeaconForEpoch(epoch)
 	assert.Equal(t, types.EmptyBeacon, got)
 }
 
@@ -622,7 +622,7 @@ func TestBeacon_getProposalChannel(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			// don't run these tests in parallel. somehow all cases end up using the same ProtocolDriver instance
 			// t.Parallel()
-			tb := ProtocolDriver{
+			pd := ProtocolDriver{
 				logger:                    logtest.New(t).WithName(fmt.Sprintf("ProtocolDriver-%v", i)),
 				proposalChans:             make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 				epochInProgress:           currentEpoch,
@@ -630,17 +630,17 @@ func TestBeacon_getProposalChannel(t *testing.T) {
 			}
 
 			if tc.makeNextChFull {
-				tb.mu.Lock()
-				nextCh := tb.getOrCreateProposalChannel(currentEpoch + 1)
+				pd.mu.Lock()
+				nextCh := pd.getOrCreateProposalChannel(currentEpoch + 1)
 				for i := 0; i < proposalChanCapacity; i++ {
 					nextCh <- &proposalMessageWithReceiptData{
 						message: ProposalMessage{},
 					}
 				}
-				tb.mu.Unlock()
+				pd.mu.Unlock()
 			}
 
-			ch := tb.getProposalChannel(context.TODO(), tc.epoch)
+			ch := pd.getProposalChannel(context.TODO(), tc.epoch)
 			if tc.expected {
 				assert.NotNil(t, ch)
 			} else {
@@ -686,13 +686,13 @@ func TestBeacon_votingThreshold(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := ProtocolDriver{
+			pd := ProtocolDriver{
 				logger: logtest.New(t).WithName("Beacon"),
 				config: Config{},
 				theta:  new(big.Float).SetRat(tc.theta),
 			}
 
-			threshold := tb.votingThreshold(tc.weight)
+			threshold := pd.votingThreshold(tc.weight)
 			r.EqualValues(tc.threshold, threshold)
 		})
 	}

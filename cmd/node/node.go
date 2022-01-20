@@ -546,7 +546,7 @@ func (app *App) initServices(ctx context.Context,
 		weakcoin.WithMaxRound(app.Config.Beacon.RoundsNumber),
 	)
 
-	beaconProtocol := beacon.NewProtocolDriver(
+	beaconProtocol := beacon.New(
 		app.Config.Beacon,
 		nodeID,
 		app.host,
