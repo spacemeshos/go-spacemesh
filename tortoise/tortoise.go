@@ -677,12 +677,13 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 
 	ballotWeight, err := computeBallotWeight(t.atxdb, t.bdp, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
 	if err != nil {
-		return err
+		t.logger.With().Warning("failed to compute weight for ballot", ballot.ID(), log.Err(err))
+		return nil
 	}
+
 	t.ballotLayer[ballot.ID()] = ballot.LayerIndex
 	t.ballots[ballot.LayerIndex] = append(t.ballots[ballot.LayerIndex], ballot.ID())
 
-	// TODO(dshulyak) this should not fail without terminating tortoise
 	t.markBeaconWithBadBallot(t.logger, ballot)
 
 	abstainVotes := map[types.LayerID]struct{}{}

@@ -14,6 +14,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
+const layerSize = 50
+
 func newCore(rng *rand.Rand, logger log.Log) *core {
 	c := &core{
 		logger:  logger,
@@ -21,10 +23,15 @@ func newCore(rng *rand.Rand, logger log.Log) *core {
 		meshdb:  newMeshDB(logger),
 		atxdb:   newAtxDB(logger, types.GetLayersPerEpoch()),
 		beacons: newBeaconStore(),
-		units:   rng.Uint32(),
+		units:   10,
 		signer:  signing.NewEdSignerFromRand(rng),
 	}
-	c.tortoise = tortoise.New(c.meshdb, c.atxdb, c.beacons, tortoise.WithLogger(logger))
+	cfg := tortoise.DefaultConfig()
+	cfg.LayerSize = layerSize
+	c.tortoise = tortoise.New(c.meshdb, c.atxdb, c.beacons,
+		tortoise.WithLogger(logger),
+		tortoise.WithConfig(cfg),
+	)
 	return c
 }
 
@@ -43,7 +50,9 @@ type core struct {
 	signer signing.Signer
 
 	// set in the first layer of each epoch
-	refBallot *types.BallotID
+	refBallot     *types.BallotID
+	weight        uint64
+	eligibilities uint32
 
 	// set at the end of the epoch (EventLayerEnd for the last layer of the epoch)
 	atx types.ATXID
@@ -55,47 +64,63 @@ type core struct {
 func (c *core) OnEvent(event Event) []Event {
 	switch ev := event.(type) {
 	case EventLayerStart:
-		// TODO(dshulyak) procuce ballot according to eligibilities
-
-		votes, err := c.tortoise.BaseBallot(context.TODO())
-		if err != nil {
-			panic(err)
+		// TODO(dshulyak) produce ballot according to eligibilities
+		if !ev.LayerID.After(types.GetEffectiveGenesis()) {
+			return nil
 		}
-		ballot := &types.Ballot{}
-		ballot.Votes = *votes
-
-		ballot.AtxID = c.atx
-
-		if c.refBallot != nil {
-			ballot.RefBallot = *c.refBallot
-		} else {
-			_, activeset, err := c.atxdb.GetEpochWeight(ev.LayerID.GetEpoch())
-			if err != nil {
-				panic(err)
-			}
-			beacon, err := c.beacons.GetBeacon(ev.LayerID.GetEpoch())
-			if err != nil {
-				panic(err)
-			}
-			ballot.EpochData = &types.EpochData{
-				ActiveSet: activeset,
-				Beacon:    beacon,
-			}
-		}
-		ballot.Signature = c.signer.Sign(ballot.Bytes())
-		ballot.Initialize()
-
 		if c.refBallot == nil {
-			id := ballot.ID()
-			c.refBallot = &id
+			total, _, err := c.atxdb.GetEpochWeight(ev.LayerID.GetEpoch())
+			if err != nil {
+				panic(err)
+			}
+			c.eligibilities = max(uint32(c.weight*50/total), 1)
 		}
+		var events []Event
+		for i := uint32(0); i < c.eligibilities; i++ {
+			votes, err := c.tortoise.BaseBallot(context.TODO())
+			if err != nil {
+				panic(err)
+			}
+			ballot := &types.Ballot{}
+			ballot.LayerIndex = ev.LayerID
+			ballot.Votes = *votes
+			ballot.AtxID = c.atx
+			ballot.EligibilityProof.J = i
+
+			if c.refBallot != nil {
+				ballot.RefBallot = *c.refBallot
+			} else {
+				_, activeset, err := c.atxdb.GetEpochWeight(ev.LayerID.GetEpoch())
+				if err != nil {
+					panic(err)
+				}
+				beacon, err := c.beacons.GetBeacon(ev.LayerID.GetEpoch())
+				if err != nil {
+					beacon = types.Beacon{}
+					c.rng.Read(beacon[:])
+					c.beacons.StoreBeacon(ev.LayerID.GetEpoch(), beacon)
+				}
+				ballot.EpochData = &types.EpochData{
+					ActiveSet: activeset,
+					Beacon:    beacon,
+				}
+			}
+			ballot.Signature = c.signer.Sign(ballot.Bytes())
+			ballot.Initialize()
+
+			if c.refBallot == nil {
+				id := ballot.ID()
+				c.refBallot = &id
+			}
+			events = append(events, EventBallot{Ballot: ballot})
+		}
+		return events
 	case EventLayerEnd:
 		c.tortoise.HandleIncomingLayer(context.TODO(), ev.LayerID)
 
 		if ev.LayerID.GetEpoch() == ev.LayerID.Add(1).GetEpoch() {
 			return nil
 		}
-		// last layer of the epoch has ended
 
 		nipost := types.NIPostChallenge{
 			NodeID:     types.NodeID{Key: c.signer.PublicKey().String()},
@@ -103,10 +128,11 @@ func (c *core) OnEvent(event Event) []Event {
 			EndTick:    2,
 			PubLayerID: ev.LayerID,
 		}
-		atx := types.NewActivationTx(nipost, types.Address{}, nil, uint(c.units), nil)
+		atx := types.NewActivationTx(nipost, types.BytesToAddress(c.signer.PublicKey().Bytes()), nil, uint(c.units), nil)
 
 		c.refBallot = nil
 		c.atx = atx.ID()
+		c.weight = atx.GetWeight()
 
 		return []Event{
 			EventAtx{Atx: atx},
@@ -117,6 +143,8 @@ func (c *core) OnEvent(event Event) []Event {
 			c.meshdb.SaveHareConsensusOutput(context.Background(), ev.Block.LayerIndex, ev.Block.ID())
 		}
 		c.meshdb.AddBlock(ev.Block)
+	case EventBallot:
+		c.meshdb.AddBallot(ev.Ballot)
 	case EventAtx:
 		c.atxdb.StoreAtx(context.TODO(), ev.Atx.TargetEpoch(), ev.Atx)
 	case EventBeacon:
@@ -156,4 +184,11 @@ func newAtxDB(logger log.Log, layersPerEpoch uint32) *activation.DB {
 
 func newMeshDB(logger log.Log) *mesh.DB {
 	return mesh.NewMemMeshDB(logger)
+}
+
+func max(i, j uint32) uint32 {
+	if i > j {
+		return i
+	}
+	return j
 }
