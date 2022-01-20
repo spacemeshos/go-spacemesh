@@ -20,8 +20,8 @@ func AddCommands(cmd *cobra.Command) {
 		"config", "c", config.BaseConfig.ConfigFile, "Set Load configuration from file")
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDirParent, "data-folder", "d",
 		config.BaseConfig.DataDirParent, "Specify data directory for spacemesh")
-	cmd.PersistentFlags().BoolVar(&config.JSONLog, "json-log",
-		config.JSONLog, "Log as JSON instead of plain text")
+	cmd.PersistentFlags().StringVar(&config.LOGGING.Encoder, "log-encoder",
+		config.LOGGING.Encoder, "Log as JSON instead of plain text")
 	cmd.PersistentFlags().BoolVar(&config.CollectMetrics, "metrics",
 		config.CollectMetrics, "collect node metrics")
 	cmd.PersistentFlags().IntVar(&config.MetricsPort, "metrics-port",
@@ -55,7 +55,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&config.ProfilerURL, "profiler-url",
 		config.ProfilerURL, "send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
 	cmd.PersistentFlags().StringVar(&config.ProfilerName, "profiler-name",
-		config.ProfilerURL, "the name to use when sending profiles")
+		config.ProfilerName, "the name to use when sending profiles")
 
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")

@@ -63,8 +63,6 @@ type BaseConfig struct {
 
 	ConfigFile string `mapstructure:"config"`
 
-	JSONLog bool `mapstructure:"json-log"`
-
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
 
@@ -105,37 +103,6 @@ type BaseConfig struct {
 	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
 }
 
-// LoggerConfig holds the logging level for each module.
-type LoggerConfig struct {
-	AppLoggerLevel            string `mapstructure:"app"`
-	P2PLoggerLevel            string `mapstructure:"p2p"`
-	PostLoggerLevel           string `mapstructure:"post"`
-	StateDbLoggerLevel        string `mapstructure:"stateDb"`
-	StateLoggerLevel          string `mapstructure:"state"`
-	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
-	TBeaconLoggerLevel        string `mapstructure:"tBeacon"`
-	WeakCoinLoggerLevel       string `mapstructure:"weakCoin"`
-	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
-	StoreLoggerLevel          string `mapstructure:"store"`
-	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
-	MeshDBLoggerLevel         string `mapstructure:"meshDb"`
-	TrtlLoggerLevel           string `mapstructure:"trtl"`
-	AtxDbLoggerLevel          string `mapstructure:"atxDb"`
-	BlkEligibilityLoggerLevel string `mapstructure:"block-eligibility"`
-	MeshLoggerLevel           string `mapstructure:"mesh"`
-	SyncLoggerLevel           string `mapstructure:"sync"`
-	BlockOracleLevel          string `mapstructure:"block-oracle"`
-	HareOracleLoggerLevel     string `mapstructure:"hare-oracle"`
-	HareLoggerLevel           string `mapstructure:"hare"`
-	BlockBuilderLoggerLevel   string `mapstructure:"block-builder"`
-	BlockListenerLoggerLevel  string `mapstructure:"block-listener"`
-	PoetListenerLoggerLevel   string `mapstructure:"poet"`
-	NipostBuilderLoggerLevel  string `mapstructure:"nipost"`
-	AtxBuilderLoggerLevel     string `mapstructure:"atx-builder"`
-	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
-	TimeSyncLoggerLevel       string `mapstructure:"timesync"`
-}
-
 // SmeshingConfig defines configuration for the node's smeshing (mining).
 type SmeshingConfig struct {
 	Start           bool                     `mapstructure:"smeshing-start"`
@@ -158,6 +125,7 @@ func DefaultConfig() Config {
 		POST:            activation.DefaultPostConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           layerfetcher.DefaultConfig(),
+		LOGGING:         defaultLoggingConfig(),
 	}
 }
 
@@ -175,7 +143,6 @@ func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:       defaultDataDir,
 		ConfigFile:          defaultConfigFileName,
-		JSONLog:             false,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		MetricsPush:         "", // "" = doesn't push

@@ -111,7 +111,7 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 }
 
 func setupLogging(config *bc.Config) {
-	if config.JSONLog {
+	if config.LOGGING.Encoder == bc.JSONLogEncoder {
 		log.JSONLog(true)
 	}
 
