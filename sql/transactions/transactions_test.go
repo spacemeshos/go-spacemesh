@@ -112,10 +112,10 @@ func TestDelete(t *testing.T) {
 		has, err := Has(db, tx.ID())
 		require.NoError(t, err)
 		require.True(t, has)
-		require.NoError(t, Delete(db, tx.ID()))
+		require.NoError(t, MarkDeleted(db, tx.ID()))
 		has, err = Has(db, tx.ID())
 		require.NoError(t, err)
-		require.False(t, has)
+		require.True(t, has)
 	}
 }
 

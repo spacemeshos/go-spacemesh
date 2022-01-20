@@ -295,7 +295,7 @@ func TestMeshDB_UnappliedTxs(t *testing.T) {
 	require.Equal(t, 100, int(txns2[0].TotalAmount))
 	require.Equal(t, 101, int(txns2[1].TotalAmount))
 
-	require.NoError(t, mdb.deleteTransactions(newTx(t, signer2, 0, 100)))
+	require.NoError(t, mdb.markTransactionsDeleted(newTx(t, signer2, 0, 100)))
 
 	txns1 = getTxns(t, mdb, origin1)
 	require.Len(t, txns1, 2)

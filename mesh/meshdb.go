@@ -361,9 +361,9 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) ([]types.Reward, erro
 	return rewards.FilterBySmesher(m.db, smesherID.ToBytes())
 }
 
-func (m *DB) deleteTransactions(txs ...*types.Transaction) error {
+func (m *DB) markTransactionsDeleted(txs ...*types.Transaction) error {
 	for _, tx := range txs {
-		if err := transactions.Delete(m.db, tx.ID()); err != nil {
+		if err := transactions.MarkDeleted(m.db, tx.ID()); err != nil {
 			return err
 		}
 	}

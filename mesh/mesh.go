@@ -500,7 +500,7 @@ func (msh *Mesh) reInsertTxsToPool(applied *types.Block, notApplied []*types.Blo
 	if len(missing) > 0 {
 		msh.With().Error("could not reinsert transactions", log.Int("missing", len(missing)), l)
 	}
-	if err := msh.deleteTransactions(returnedTxs...); err != nil {
+	if err := msh.markTransactionsDeleted(returnedTxs...); err != nil {
 		return err
 	}
 	for _, tx := range returnedTxs {
