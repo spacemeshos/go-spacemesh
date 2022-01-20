@@ -34,6 +34,7 @@ var (
 	errDuplicateTX           = errors.New("duplicate TxID in proposal")
 	errDuplicateATX          = errors.New("duplicate ATXID in active set")
 	errKnownBallot           = errors.New("known ballot")
+	errKnownProposal         = errors.New("known proposal")
 )
 
 // Handler processes Proposal from gossip and, if deems it valid, propagates it to peers.
@@ -130,7 +131,9 @@ func NewHandler(f system.Fetcher, bc system.BeaconCollector, db atxDB, m meshDB,
 // HandleProposal is the gossip receiver for Proposal.
 func (h *Handler) HandleProposal(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
 	newCtx := log.WithNewRequestID(ctx)
-	if err := h.HandleProposalData(newCtx, msg); err != nil {
+	if err := h.handleProposalData(newCtx, msg); errors.Is(err, errKnownProposal) {
+		return pubsub.ValidationIgnore
+	} else if err != nil {
 		h.logger.WithContext(newCtx).With().Error("failed to process proposal gossip", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
@@ -170,6 +173,14 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 
 // HandleProposalData handles Proposal data from sync.
 func (h *Handler) HandleProposalData(ctx context.Context, data []byte) error {
+	err := h.handleProposalData(ctx, data)
+	if errors.Is(err, errKnownProposal) {
+		return nil
+	}
+	return err
+}
+
+func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
 	logger := h.logger.WithContext(ctx)
 	logger.Info("processing proposal")
 
@@ -189,7 +200,7 @@ func (h *Handler) HandleProposalData(ctx context.Context, data []byte) error {
 
 	if h.proposalDB.HasProposal(p.ID()) {
 		logger.Info("known proposal")
-		return nil
+		return fmt.Errorf("%w proposal %s", errKnownProposal, p.ID())
 	}
 	logger.With().Info("new proposal", log.Inline(&p))
 

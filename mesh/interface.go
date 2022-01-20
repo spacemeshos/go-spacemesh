@@ -26,5 +26,7 @@ type state interface {
 }
 
 type tortoise interface {
+	OnBallot(*types.Ballot)
+	OnBlock(*types.Block)
 	HandleIncomingLayer(context.Context, types.LayerID) (oldPbase, newPbase types.LayerID, reverted bool)
 }

@@ -250,6 +250,16 @@ func BallotIDsToHashes(ids []BallotID) []Hash32 {
 	return hashes
 }
 
+// NewExistingBallot creates ballot from stored data.
+func NewExistingBallot(id BallotID, sig []byte, pub []byte, inner InnerBallot) Ballot {
+	return Ballot{
+		ballotID:    id,
+		Signature:   sig,
+		smesherID:   signing.NewPublicKey(pub),
+		InnerBallot: inner,
+	}
+}
+
 // DBBallot is a Ballot structure as it is stored in DB.
 type DBBallot struct {
 	InnerBallot

@@ -47,10 +47,14 @@ func (f *full) processBallots(ballots []tortoiseBallot) {
 	}
 }
 
-func (f *full) processBlocks(blocks []types.BlockID) {
-	for _, block := range blocks {
-		f.weights[block] = weightFromUint64(0)
-	}
+func (f *full) onBallot(ballot *tortoiseBallot) {
+	f.base[ballot.id] = ballot.base
+	f.votes[ballot.id] = ballot.votes
+	f.abstain[ballot.id] = ballot.abstain
+}
+
+func (f *full) onBlock(block types.BlockID) {
+	f.weights[block] = weightFromUint64(0)
 }
 
 func (f *full) getVote(logger log.Log, ballot types.BallotID, blocklid types.LayerID, block types.BlockID) sign {

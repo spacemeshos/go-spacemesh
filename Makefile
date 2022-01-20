@@ -87,7 +87,7 @@ else
 endif
 
 install:
-	go run scripts/check-go-version.go --major 1 --minor 15
+	go run scripts/check-go-version.go --major 1 --minor 17
 	go mod download
 	GO111MODULE=off go get golang.org/x/lint/golint
 	curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s latest
@@ -109,6 +109,10 @@ harness: get-libs
 
 tidy:
 	go mod tidy
+	# NOTE(dshulyak) go mod tidy for some reason removes github.com/jessevdk/go-flags from indirect dependencies
+	# starting from 1.16. similar issue was fixed in 1.17 https://github.com/golang/go/issues/44129
+	# but apparently this is not exactly our case 
+	go get -d github.com/spacemeshos/poet@v0.1.1-0.20201103004828-ef8f28a744fc
 .PHONY: tidy
 
 ifeq ($(HOST_OS),$(filter $(HOST_OS),linux darwin))
