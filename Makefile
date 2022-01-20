@@ -96,7 +96,8 @@ install:
 build: go-spacemesh
 .PHONY: build
 
-get-libs: get-gpu-setup get-svm
+# TODO(nkryuchkov): uncomment when go-svm is imported
+get-libs: get-gpu-setup #get-svm
 .PHONY: get-libs
 
 hare p2p: get-libs
