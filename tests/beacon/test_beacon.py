@@ -47,9 +47,8 @@ def test_beacon(init_session, setup_network):
     validate_beacons(beacon_messages)
     print("-------- beacon validation succeed --------")
 
-    # TODO(nkryuchkov): enable after weak coin is implemented
-    # print(f"-------- validating weak coin --------")
-    # weak_coin_messages = q.get_tortoise_beacon_weak_coin_msgs(init_session, init_session)
-    #
-    # validate_tortoise_beacon_weak_coins(weak_coin_messages)
-    # print("-------- tortoise beacon weak coin validation succeed --------")
+    print(f"-------- validating weak coin --------")
+    weak_coin_messages = q.get_beacon_weak_coin_msgs(init_session, init_session)
+
+    validate_beacon_weak_coins(weak_coin_messages)
+    print("-------- beacon weak coin validation succeed --------")
