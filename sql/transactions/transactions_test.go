@@ -4,13 +4,13 @@ import (
 	"math/rand"
 	"testing"
 
-	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 func mustTx(tx *types.Transaction, err error) *types.Transaction {
