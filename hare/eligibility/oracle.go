@@ -180,7 +180,7 @@ func (o *Oracle) buildVRFMessage(ctx context.Context, layer types.LayerID, round
 	// get value from beacon
 	v, err := o.getBeaconValue(ctx, layer.GetEpoch())
 	if err != nil {
-		o.WithContext(ctx).With().Error("could not get hare beacon value for epoch",
+		o.WithContext(ctx).With().Error("could not get beacon value for epoch",
 			log.Err(err),
 			layer,
 			layer.GetEpoch(),
@@ -462,7 +462,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 				logger.With().Error("actives failed to get beacon", epoch, log.Err(err))
 				return nil, fmt.Errorf("error getting beacon for epoch %v: %w", epoch, err)
 			}
-			logger.With().Warning("found beacon for epoch", epoch,
+			logger.With().Info("found beacon for epoch", epoch,
 				log.String("epoch_beacon", beacon.ShortString()))
 			beacons[epoch] = beacon
 		}
