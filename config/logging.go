@@ -2,10 +2,13 @@ package config
 
 import "go.uber.org/zap/zapcore"
 
+// LogEncoder defines a log encoder kind.
 type LogEncoder = string
 
 const (
+	// PlainTextLogEncoder represents logging with plain text.
 	PlainTextLogEncoder LogEncoder = "plain"
+	// JSONLogEncoder represents logging with JSON.
 	JSONLogEncoder      LogEncoder = "json"
 	defaultLoggingLevel            = zapcore.InfoLevel
 )

@@ -6,7 +6,7 @@
 # Main Config
 [main]
 data-folder = "~/.spacemesh-data"
-json-log = false
+log-encoder = "plain"
 metrics = false
 metrics-port = 12020
 oracle_server = "http://localhost:3030"

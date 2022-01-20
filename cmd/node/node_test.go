@@ -196,7 +196,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 	Cmd.Run = func(cmd *cobra.Command, args []string) {
 		r.NoError(cmdp.EnsureCLIFlags(cmd, app.Config))
 	}
-	str, err = testArgs("--json-log")
+	str, err = testArgs("--log-encoder", "plain")
 
 	r.NoError(err)
 	r.Empty(str)
