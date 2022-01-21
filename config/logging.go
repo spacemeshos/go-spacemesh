@@ -6,11 +6,11 @@ import "go.uber.org/zap/zapcore"
 type LogEncoder = string
 
 const (
-	// PlainTextLogEncoder represents logging with plain text.
-	PlainTextLogEncoder LogEncoder = "plain"
+	defaultLoggingLevel = zapcore.InfoLevel
+	// ConsoleLogEncoder represents logging with plain text.
+	ConsoleLogEncoder LogEncoder = "console"
 	// JSONLogEncoder represents logging with JSON.
-	JSONLogEncoder      LogEncoder = "json"
-	defaultLoggingLevel            = zapcore.InfoLevel
+	JSONLogEncoder LogEncoder = "json"
 )
 
 // LoggerConfig holds the logging level for each module.
@@ -47,7 +47,7 @@ type LoggerConfig struct {
 
 func defaultLoggingConfig() LoggerConfig {
 	return LoggerConfig{
-		Encoder:                   PlainTextLogEncoder,
+		Encoder:                   ConsoleLogEncoder,
 		AppLoggerLevel:            defaultLoggingLevel.String(),
 		P2PLoggerLevel:            defaultLoggingLevel.String(),
 		PostLoggerLevel:           defaultLoggingLevel.String(),

@@ -180,7 +180,7 @@ func TestSpacemeshApp_Cmd(t *testing.T) {
 
 	expected := `unknown command "illegal" for "node"`
 	expected2 := "Error: " + expected + "\nRun 'node --help' for usage.\n"
-	r.Equal(config.PlainTextLogEncoder, app.Config.LOGGING.Encoder)
+	r.Equal(config.ConsoleLogEncoder, app.Config.LOGGING.Encoder)
 
 	// Test an illegal flag
 	Cmd.Run = func(*cobra.Command, []string) {
