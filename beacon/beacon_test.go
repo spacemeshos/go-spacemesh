@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 import (
 	"bytes"
@@ -13,6 +13,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/beacon/mocks"
+	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -23,8 +25,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
 func coinValueMock(tb testing.TB, value bool) coin {
@@ -49,7 +49,7 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	return coinMock
 }
 
-func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64, hasATX bool) (*TortoiseBeacon, *timesync.TimeClock) {
+func setUpProtocolDriver(t *testing.T, mockEpochWeight uint64, hasATX bool) (*ProtocolDriver, *timesync.TimeClock) {
 	conf := UnitTestConfig()
 
 	ctrl := gomock.NewController(t)
@@ -66,7 +66,7 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64, hasATX bool) (*To
 	mwc := coinValueMock(t, true)
 
 	types.SetLayersPerEpoch(3)
-	logger := logtest.New(t).WithName("TortoiseBeacon")
+	logger := logtest.New(t).WithName("Beacon")
 	genesisTime := time.Now().Add(100 * time.Millisecond)
 	ld := 100 * time.Millisecond
 	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
@@ -81,11 +81,11 @@ func setUpTortoiseBeacon(t *testing.T, mockEpochWeight uint64, hasATX bool) (*To
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 	ms := smocks.NewMockSyncStateProvider(ctrl)
 	ms.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	tb := New(conf, minerID, publisher, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
-	require.NotNil(t, tb)
-	tb.SetSyncState(ms)
-	tb.setMetricsRegistry(prometheus.NewPedanticRegistry())
-	return tb, clock
+	pd := New(conf, minerID, publisher, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
+	require.NotNil(t, pd)
+	pd.SetSyncState(ms)
+	pd.setMetricsRegistry(prometheus.NewPedanticRegistry())
+	return pd, clock
 }
 
 func newPublisher(tb testing.TB) pubsub.Publisher {
@@ -101,53 +101,53 @@ func newPublisher(tb testing.TB) pubsub.Publisher {
 	return publisher
 }
 
-func TestTortoiseBeacon(t *testing.T) {
-	tb, clock := setUpTortoiseBeacon(t, uint64(10), true)
+func TestBeacon(t *testing.T) {
+	pd, clock := setUpProtocolDriver(t, uint64(10), true)
 	epoch := types.EpochID(3)
-	require.NoError(t, tb.Start(context.TODO()))
+	require.NoError(t, pd.Start(context.TODO()))
 
 	t.Logf("Awaiting epoch %v", epoch)
 	awaitEpoch(clock, epoch)
 
-	v, err := tb.GetBeacon(epoch)
+	v, err := pd.GetBeacon(epoch)
 	require.NoError(t, err)
 
 	expected := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	assert.Equal(t, types.HexToBeacon(expected), v)
 
-	tb.Close()
+	pd.Close()
 	clock.Close()
 }
 
-func TestTortoiseBeaconZeroWeightEpoch(t *testing.T) {
-	tb, clock := setUpTortoiseBeacon(t, uint64(0), true)
+func TestBeaconZeroWeightEpoch(t *testing.T) {
+	pd, clock := setUpProtocolDriver(t, uint64(0), true)
 	epoch := types.EpochID(3)
-	require.NoError(t, tb.Start(context.TODO()))
+	require.NoError(t, pd.Start(context.TODO()))
 
 	t.Logf("Awaiting epoch %v", epoch)
 	awaitEpoch(clock, epoch)
 
-	v, err := tb.GetBeacon(epoch)
-	assert.Equal(t, ErrBeaconNotCalculated, err)
+	v, err := pd.GetBeacon(epoch)
+	assert.Equal(t, errBeaconNotCalculated, err)
 	assert.Equal(t, types.EmptyBeacon, v)
 
-	tb.Close()
+	pd.Close()
 	clock.Close()
 }
 
-func TestTortoiseBeaconNoATXInPreviousEpoch(t *testing.T) {
-	tb, clock := setUpTortoiseBeacon(t, uint64(0), false)
+func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
+	pd, clock := setUpProtocolDriver(t, uint64(0), false)
 	epoch := types.EpochID(3)
-	require.NoError(t, tb.Start(context.TODO()))
+	require.NoError(t, pd.Start(context.TODO()))
 
 	t.Logf("Awaiting epoch %v", epoch)
 	awaitEpoch(clock, epoch)
 
-	v, err := tb.GetBeacon(epoch)
-	assert.Equal(t, ErrBeaconNotCalculated, err)
+	v, err := pd.GetBeacon(epoch)
+	assert.Equal(t, errBeaconNotCalculated, err)
 	assert.Equal(t, types.EmptyBeacon, v)
 
-	tb.Close()
+	pd.Close()
 	clock.Close()
 }
 
@@ -162,7 +162,7 @@ func awaitEpoch(clock *timesync.TimeClock, epoch types.EpochID) {
 	}
 }
 
-func TestTortoiseBeaconWithMetrics(t *testing.T) {
+func TestBeaconWithMetrics(t *testing.T) {
 	layersPerEpoch := uint32(3)
 	types.SetLayersPerEpoch(layersPerEpoch)
 
@@ -184,7 +184,7 @@ func TestTortoiseBeaconWithMetrics(t *testing.T) {
 
 	mwc := coinValueMock(t, true)
 
-	logger := logtest.New(t).WithName("TortoiseBeacon")
+	logger := logtest.New(t).WithName("Beacon")
 	clock := clockNeverNotify(t)
 
 	edSgn := signing.NewEdSigner()
@@ -195,19 +195,19 @@ func TestTortoiseBeaconWithMetrics(t *testing.T) {
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 	ms := smocks.NewMockSyncStateProvider(ctrl)
 	ms.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	tb := New(conf, minerID, newPublisher(t), mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
-	require.NotNil(t, tb)
-	tb.SetSyncState(ms)
+	pd := New(conf, minerID, newPublisher(t), mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
+	require.NotNil(t, pd)
+	pd.SetSyncState(ms)
 
-	require.NoError(t, tb.Start(context.TODO()))
+	require.NoError(t, pd.Start(context.TODO()))
 	t.Cleanup(func() {
-		tb.Close()
+		pd.Close()
 	})
 
 	gLayer := types.GetEffectiveGenesis()
 	numCalculatedBeacon := 0
 	for layer := types.NewLayerID(1); !layer.After(gLayer); layer = layer.Add(1) {
-		tb.handleLayer(context.TODO(), layer)
+		pd.handleLayer(context.TODO(), layer)
 		thisEpoch := layer.GetEpoch()
 		ownWeight := atxHeader.GetWeight()
 		if thisEpoch.IsGenesis() {
@@ -238,15 +238,15 @@ func TestTortoiseBeaconWithMetrics(t *testing.T) {
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	for layer := gLayer.Add(1); layer.Before(finalLayer); layer = layer.Add(1) {
-		tb.handleLayer(context.TODO(), layer)
+		pd.handleLayer(context.TODO(), layer)
 		thisEpoch := layer.GetEpoch()
-		tb.recordBeacon(thisEpoch, types.RandomBallotID(), beacon1, 100)
-		tb.recordBeacon(thisEpoch, types.RandomBallotID(), beacon2, 200)
+		pd.recordBeacon(thisEpoch, types.RandomBallotID(), beacon1, 100)
+		pd.recordBeacon(thisEpoch, types.RandomBallotID(), beacon2, 200)
 
 		numCalculated := 0
 		numObserved := 0
 		numObservedWeight := 0
-		tb.logger.Info("gathering data from test in epoch %v", thisEpoch)
+		pd.logger.Info("gathering data from test in epoch %v", thisEpoch)
 		allMetrics, err := prometheus.DefaultGatherer.Gather()
 		assert.NoError(t, err)
 		for _, m := range allMetrics {
@@ -258,7 +258,7 @@ func TestTortoiseBeaconWithMetrics(t *testing.T) {
 				expected := fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beaconStr, thisEpoch+1, atxHeader.GetWeight())
 				assert.Equal(t, expected, m.Metric[0].String())
 			case "spacemesh_beacons_beacon_observed_total":
-				tb.logger.Info(m.String())
+				pd.logger.Info(m.String())
 				require.Equal(t, 2, len(m.Metric))
 				numObserved = numObserved + 2
 				count := layer.OrdinalInEpoch() + 1
@@ -293,11 +293,11 @@ func TestTortoiseBeaconWithMetrics(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_BeaconsWithDatabase(t *testing.T) {
+func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	t.Parallel()
 
-	tb := &TortoiseBeacon{
-		logger:  logtest.New(t).WithName("TortoiseBeacon"),
+	pd := &ProtocolDriver{
+		logger:  logtest.New(t).WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
 		db:      database.NewMemDatabase(),
 	}
@@ -305,70 +305,70 @@ func TestTortoiseBeacon_BeaconsWithDatabase(t *testing.T) {
 	beacon2 := types.RandomBeacon()
 	epoch5 := types.EpochID(5)
 	beacon4 := types.RandomBeacon()
-	err := tb.setBeacon(epoch3-1, beacon2)
+	err := pd.setBeacon(epoch3-1, beacon2)
 	require.NoError(t, err)
-	err = tb.setBeacon(epoch5-1, beacon4)
+	err = pd.setBeacon(epoch5-1, beacon4)
 	require.NoError(t, err)
 
-	got, err := tb.GetBeacon(epoch3)
+	got, err := pd.GetBeacon(epoch3)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon2, got)
 
-	got, err = tb.GetBeacon(epoch5)
+	got, err = pd.GetBeacon(epoch5)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon4, got)
 
-	got, err = tb.GetBeacon(epoch5 - 1)
-	assert.Equal(t, ErrBeaconNotCalculated, err)
+	got, err = pd.GetBeacon(epoch5 - 1)
+	assert.Equal(t, errBeaconNotCalculated, err)
 	assert.Equal(t, types.EmptyBeacon, got)
 
 	// clear out the in-memory map
 	// the database should still give us values
-	tb.mu.Lock()
-	tb.beacons = make(map[types.EpochID]types.Beacon)
-	tb.mu.Unlock()
+	pd.mu.Lock()
+	pd.beacons = make(map[types.EpochID]types.Beacon)
+	pd.mu.Unlock()
 
-	got, err = tb.GetBeacon(epoch3)
+	got, err = pd.GetBeacon(epoch3)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon2, got)
 
-	got, err = tb.GetBeacon(epoch5)
+	got, err = pd.GetBeacon(epoch5)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon4, got)
 
-	got, err = tb.GetBeacon(epoch5 - 1)
-	assert.Equal(t, ErrBeaconNotCalculated, err)
+	got, err = pd.GetBeacon(epoch5 - 1)
+	assert.Equal(t, errBeaconNotCalculated, err)
 	assert.Equal(t, types.EmptyBeacon, got)
 }
 
-func TestTortoiseBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
+func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 	mockDB := dbMocks.NewMockDatabase(ctrl)
-	tb := &TortoiseBeacon{
-		logger:  logtest.New(t).WithName("TortoiseBeacon"),
+	pd := &ProtocolDriver{
+		logger:  logtest.New(t).WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
 		db:      mockDB,
 	}
 	epoch := types.EpochID(3)
 	beacon := types.RandomBeacon()
 	mockDB.EXPECT().Put(epoch.ToBytes(), beacon.Bytes()).Return(errUnknown).Times(1)
-	err := tb.persistBeacon(epoch, beacon)
+	err := pd.persistBeacon(epoch, beacon)
 	assert.ErrorIs(t, err, errUnknown)
 
 	mockDB.EXPECT().Get(epoch.ToBytes()).Return(nil, errUnknown).Times(1)
-	got, errGet := tb.getPersistedBeacon(epoch)
+	got, errGet := pd.getPersistedBeacon(epoch)
 	assert.Equal(t, types.EmptyBeacon, got)
 	assert.ErrorIs(t, errGet, errUnknown)
 }
 
-func TestTortoiseBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
+func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	t.Parallel()
 
-	tb := &TortoiseBeacon{
-		logger:             logtest.New(t).WithName("TortoiseBeacon"),
+	pd := &ProtocolDriver{
+		logger:             logtest.New(t).WithName("Beacon"),
 		db:                 database.NewMemDatabase(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
@@ -377,118 +377,118 @@ func TestTortoiseBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 	epoch := types.EpochID(5)
 	for i := 0; i < numEpochsToKeep; i++ {
 		e := epoch + types.EpochID(i)
-		err := tb.setBeacon(e, types.RandomBeacon())
+		err := pd.setBeacon(e, types.RandomBeacon())
 		require.NoError(t, err)
-		tb.recordBeacon(e, types.RandomBallotID(), types.RandomBeacon(), 10)
-		tb.cleanupEpoch(e)
-		assert.Equal(t, i+1, len(tb.beacons))
-		assert.Equal(t, i+1, len(tb.beaconsFromBallots))
+		pd.recordBeacon(e, types.RandomBallotID(), types.RandomBeacon(), 10)
+		pd.cleanupEpoch(e)
+		assert.Equal(t, i+1, len(pd.beacons))
+		assert.Equal(t, i+1, len(pd.beaconsFromBallots))
 	}
-	assert.Equal(t, numEpochsToKeep, len(tb.beacons))
-	assert.Equal(t, numEpochsToKeep, len(tb.beaconsFromBallots))
+	assert.Equal(t, numEpochsToKeep, len(pd.beacons))
+	assert.Equal(t, numEpochsToKeep, len(pd.beaconsFromBallots))
 
 	epoch = epoch + numEpochsToKeep
-	err := tb.setBeacon(epoch, types.RandomBeacon())
+	err := pd.setBeacon(epoch, types.RandomBeacon())
 	require.NoError(t, err)
-	tb.recordBeacon(epoch, types.RandomBallotID(), types.RandomBeacon(), 10)
-	assert.Equal(t, numEpochsToKeep+1, len(tb.beacons))
-	assert.Equal(t, numEpochsToKeep+1, len(tb.beaconsFromBallots))
-	tb.cleanupEpoch(epoch)
-	assert.Equal(t, numEpochsToKeep, len(tb.beacons))
-	assert.Equal(t, numEpochsToKeep, len(tb.beaconsFromBallots))
+	pd.recordBeacon(epoch, types.RandomBallotID(), types.RandomBeacon(), 10)
+	assert.Equal(t, numEpochsToKeep+1, len(pd.beacons))
+	assert.Equal(t, numEpochsToKeep+1, len(pd.beaconsFromBallots))
+	pd.cleanupEpoch(epoch)
+	assert.Equal(t, numEpochsToKeep, len(pd.beacons))
+	assert.Equal(t, numEpochsToKeep, len(pd.beaconsFromBallots))
 }
 
-func TestTortoiseBeacon_ReportBeaconFromBallot(t *testing.T) {
+func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 	t.Parallel()
 
 	types.SetLayersPerEpoch(3)
-	tb := &TortoiseBeacon{
-		logger:             logtest.New(t).WithName("TortoiseBeacon"),
+	pd := &ProtocolDriver{
+		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		db:                 database.NewMemDatabase(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
-	tb.config.BeaconSyncNumBallots = 3
+	pd.config.BeaconSyncNumBallots = 3
 
 	epoch := types.EpochID(3)
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
-	tb.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon1, 100)
-	got, err := tb.GetBeacon(epoch)
-	require.Equal(t, ErrBeaconNotCalculated, err)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon1, 100)
+	got, err := pd.GetBeacon(epoch)
+	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
-	tb.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon2, 100)
-	got, err = tb.GetBeacon(epoch)
-	require.Equal(t, ErrBeaconNotCalculated, err)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon2, 100)
+	got, err = pd.GetBeacon(epoch)
+	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
-	tb.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon1, 1)
-	got, err = tb.GetBeacon(epoch)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beacon1, 1)
+	got, err = pd.GetBeacon(epoch)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon1, got)
 }
 
-func TestTortoiseBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
+func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	t.Parallel()
 
 	types.SetLayersPerEpoch(3)
-	tb := &TortoiseBeacon{
-		logger:             logtest.New(t).WithName("TortoiseBeacon"),
+	pd := &ProtocolDriver{
+		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		db:                 database.NewMemDatabase(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
-	tb.config.BeaconSyncNumBallots = 2
+	pd.config.BeaconSyncNumBallots = 2
 
 	epoch := types.EpochID(3)
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	ballotID1 := types.RandomBallotID()
 	ballotID2 := types.RandomBallotID()
-	tb.ReportBeaconFromBallot(epoch, ballotID1, beacon1, 100)
-	tb.ReportBeaconFromBallot(epoch, ballotID1, beacon1, 200)
+	pd.ReportBeaconFromBallot(epoch, ballotID1, beacon1, 100)
+	pd.ReportBeaconFromBallot(epoch, ballotID1, beacon1, 200)
 	// same ballotID does not count twice
-	got, err := tb.GetBeacon(epoch)
-	require.Equal(t, ErrBeaconNotCalculated, err)
+	got, err := pd.GetBeacon(epoch)
+	require.Equal(t, errBeaconNotCalculated, err)
 	require.Equal(t, types.EmptyBeacon, got)
 
-	tb.ReportBeaconFromBallot(epoch, ballotID2, beacon2, 101)
-	got, err = tb.GetBeacon(epoch)
+	pd.ReportBeaconFromBallot(epoch, ballotID2, beacon2, 101)
+	got, err = pd.GetBeacon(epoch)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon2, got)
 }
 
-func TestTortoiseBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
+func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 	t.Parallel()
 
 	epoch := types.EpochID(3)
 	beacon := types.RandomBeacon()
 	beaconFromBlocks := types.RandomBeacon()
-	tb := &TortoiseBeacon{
-		logger: logtest.New(t).WithName("TortoiseBeacon"),
+	pd := &ProtocolDriver{
+		logger: logtest.New(t).WithName("Beacon"),
 		config: UnitTestConfig(),
 		beacons: map[types.EpochID]types.Beacon{
 			epoch - 1: beacon,
 		},
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
-	tb.config.BeaconSyncNumBallots = 2
+	pd.config.BeaconSyncNumBallots = 2
 
-	got, err := tb.GetBeacon(epoch)
+	got, err := pd.GetBeacon(epoch)
 	require.NoError(t, err)
 	require.Equal(t, beacon, got)
 
-	tb.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBlocks, 100)
-	tb.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBlocks, 200)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBlocks, 100)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBlocks, 200)
 
 	// should not change the beacon value
-	got, err = tb.GetBeacon(epoch)
+	got, err = pd.GetBeacon(epoch)
 	require.NoError(t, err)
 	require.Equal(t, beacon, got)
 }
 
-func TestTortoiseBeacon_findMostWeightedBeaconForEpoch(t *testing.T) {
+func TestBeacon_findMostWeightedBeaconForEpoch(t *testing.T) {
 	t.Parallel()
 
 	types.SetLayersPerEpoch(3)
@@ -511,18 +511,18 @@ func TestTortoiseBeacon_findMostWeightedBeaconForEpoch(t *testing.T) {
 		},
 	}
 	epoch := types.EpochID(3)
-	tb := &TortoiseBeacon{
-		logger:             logtest.New(t).WithName("TortoiseBeacon"),
+	pd := &ProtocolDriver{
+		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: map[types.EpochID]map[types.Beacon]*ballotWeight{epoch: beaconsFromBlocks},
 	}
-	tb.config.BeaconSyncNumBallots = 2
-	got := tb.findMostWeightedBeaconForEpoch(epoch)
+	pd.config.BeaconSyncNumBallots = 2
+	got := pd.findMostWeightedBeaconForEpoch(epoch)
 	assert.Equal(t, beacon2, got)
 }
 
-func TestTortoiseBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testing.T) {
+func TestBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testing.T) {
 	t.Parallel()
 
 	types.SetLayersPerEpoch(3)
@@ -545,33 +545,33 @@ func TestTortoiseBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testin
 		},
 	}
 	epoch := types.EpochID(3)
-	tb := &TortoiseBeacon{
-		logger:             logtest.New(t).WithName("TortoiseBeacon"),
+	pd := &ProtocolDriver{
+		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: map[types.EpochID]map[types.Beacon]*ballotWeight{epoch: beaconsFromBlocks},
 	}
-	tb.config.BeaconSyncNumBallots = 5
-	got := tb.findMostWeightedBeaconForEpoch(epoch)
+	pd.config.BeaconSyncNumBallots = 5
+	got := pd.findMostWeightedBeaconForEpoch(epoch)
 	assert.Equal(t, types.EmptyBeacon, got)
 }
 
-func TestTortoiseBeacon_findMostWeightedBeaconForEpoch_NoBeacon(t *testing.T) {
+func TestBeacon_findMostWeightedBeaconForEpoch_NoBeacon(t *testing.T) {
 	t.Parallel()
 
 	types.SetLayersPerEpoch(3)
-	tb := &TortoiseBeacon{
-		logger:             logtest.New(t).WithName("TortoiseBeacon"),
+	pd := &ProtocolDriver{
+		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
 	epoch := types.EpochID(3)
-	got := tb.findMostWeightedBeaconForEpoch(epoch)
+	got := pd.findMostWeightedBeaconForEpoch(epoch)
 	assert.Equal(t, types.EmptyBeacon, got)
 }
 
-func TestTortoiseBeacon_getProposalChannel(t *testing.T) {
+func TestBeacon_getProposalChannel(t *testing.T) {
 	t.Parallel()
 
 	currentEpoch := types.EpochID(10)
@@ -620,27 +620,27 @@ func TestTortoiseBeacon_getProposalChannel(t *testing.T) {
 	for i, tc := range tt {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
-			// don't run these tests in parallel. somehow all cases end up using the same TortoiseBeacon instance
+			// don't run these tests in parallel. somehow all cases end up using the same ProtocolDriver instance
 			// t.Parallel()
-			tb := TortoiseBeacon{
-				logger:                    logtest.New(t).WithName(fmt.Sprintf("TortoiseBeacon-%v", i)),
+			pd := ProtocolDriver{
+				logger:                    logtest.New(t).WithName(fmt.Sprintf("ProtocolDriver-%v", i)),
 				proposalChans:             make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 				epochInProgress:           currentEpoch,
 				proposalPhaseFinishedTime: tc.proposalEndTime,
 			}
 
 			if tc.makeNextChFull {
-				tb.mu.Lock()
-				nextCh := tb.getOrCreateProposalChannel(currentEpoch + 1)
+				pd.mu.Lock()
+				nextCh := pd.getOrCreateProposalChannel(currentEpoch + 1)
 				for i := 0; i < proposalChanCapacity; i++ {
 					nextCh <- &proposalMessageWithReceiptData{
 						message: ProposalMessage{},
 					}
 				}
-				tb.mu.Unlock()
+				pd.mu.Unlock()
 			}
 
-			ch := tb.getProposalChannel(context.TODO(), tc.epoch)
+			ch := pd.getProposalChannel(context.TODO(), tc.epoch)
 			if tc.expected {
 				assert.NotNil(t, ch)
 			} else {
@@ -650,7 +650,7 @@ func TestTortoiseBeacon_getProposalChannel(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_votingThreshold(t *testing.T) {
+func TestBeacon_votingThreshold(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -686,19 +686,19 @@ func TestTortoiseBeacon_votingThreshold(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
-				logger: logtest.New(t).WithName("TortoiseBeacon"),
+			pd := ProtocolDriver{
+				logger: logtest.New(t).WithName("Beacon"),
 				config: Config{},
 				theta:  new(big.Float).SetRat(tc.theta),
 			}
 
-			threshold := tb.votingThreshold(tc.weight)
+			threshold := pd.votingThreshold(tc.weight)
 			r.EqualValues(tc.threshold, threshold)
 		})
 	}
 }
 
-func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
+func TestBeacon_atxThresholdFraction(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -743,7 +743,7 @@ func TestTortoiseBeacon_atxThresholdFraction(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_atxThreshold(t *testing.T) {
+func TestBeacon_atxThreshold(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -788,7 +788,7 @@ func TestTortoiseBeacon_atxThreshold(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
+func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -822,7 +822,7 @@ func TestTortoiseBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_buildProposal(t *testing.T) {
+func TestBeacon_buildProposal(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -835,7 +835,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  0x12345678,
-			result: string(util.Hex2Bytes("000000035442500012345678")),
+			result: string(util.Hex2Bytes("000000024250000012345678")),
 		},
 	}
 
@@ -850,7 +850,7 @@ func TestTortoiseBeacon_buildProposal(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_signMessage(t *testing.T) {
+func TestBeacon_signMessage(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -885,7 +885,7 @@ func TestTortoiseBeacon_signMessage(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
+func TestBeacon_getSignedProposal(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -904,12 +904,12 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 		{
 			name:   "Case 1",
 			epoch:  1,
-			result: vrfSigner.Sign(util.Hex2Bytes("000000035442500000000001")),
+			result: vrfSigner.Sign(util.Hex2Bytes("000000024250000000000001")),
 		},
 		{
 			name:   "Case 2",
 			epoch:  2,
-			result: vrfSigner.Sign(util.Hex2Bytes("000000035442500000000002")),
+			result: vrfSigner.Sign(util.Hex2Bytes("000000024250000000000002")),
 		},
 	}
 
@@ -924,7 +924,7 @@ func TestTortoiseBeacon_getSignedProposal(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_signAndExtractED(t *testing.T) {
+func TestBeacon_signAndExtractED(t *testing.T) {
 	r := require.New(t)
 
 	signer := signing.NewEdSigner()
@@ -942,7 +942,7 @@ func TestTortoiseBeacon_signAndExtractED(t *testing.T) {
 	r.True(ok)
 }
 
-func TestTortoiseBeacon_signAndVerifyVRF(t *testing.T) {
+func TestBeacon_signAndVerifyVRF(t *testing.T) {
 	r := require.New(t)
 
 	signer, _, err := signing.NewVRFSigner(bytes.Repeat([]byte{0x01}, 32))

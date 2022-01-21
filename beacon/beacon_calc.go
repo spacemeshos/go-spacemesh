@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 import (
 	"context"
@@ -9,8 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, lastRoundVotes allVotes) error {
-	logger := tb.logger.WithContext(ctx).WithFields(epoch)
+func (pd *ProtocolDriver) calcBeacon(ctx context.Context, epoch types.EpochID, lastRoundVotes allVotes) error {
+	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	logger.Info("calculating beacon")
 
 	allHashes := lastRoundVotes.valid.sort()
@@ -18,18 +18,18 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, l
 	for i, h := range allHashes {
 		allHashHexes[i] = types.BytesToHash([]byte(h)).ShortString()
 	}
-	logger.With().Debug("calculating tortoise beacon from this hash list",
+	logger.With().Debug("calculating beacon from this hash list",
 		log.String("hashes", strings.Join(allHashHexes, ", ")))
 
 	beacon := types.Beacon(allHashes.hash())
 	beaconStr := beacon.ShortString()
 
-	logger = logger.WithFields(log.String("beacon", beaconStr))
+	logger = logger.WithFields(beacon)
 	logger.With().Info("calculated beacon", log.Int("num_hashes", len(allHashes)))
 
-	events.ReportCalculatedTortoiseBeacon(epoch, beaconStr)
+	events.ReportCalculatedBeacon(epoch, beaconStr)
 
-	if err := tb.setBeacon(epoch, beacon); err != nil {
+	if err := pd.setBeacon(epoch, beacon); err != nil {
 		return err
 	}
 
@@ -37,6 +37,6 @@ func (tb *TortoiseBeacon) calcBeacon(ctx context.Context, epoch types.EpochID, l
 	return nil
 }
 
-func (tb *TortoiseBeacon) lastRound() types.RoundID {
-	return tb.config.RoundsNumber - 1
+func (pd *ProtocolDriver) lastRound() types.RoundID {
+	return pd.config.RoundsNumber - 1
 }

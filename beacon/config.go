@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 import (
 	"math/big"
@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
 
-// Config is the configuration of the Tortoise Beacon.
+// Config is the configuration of the beacon.
 type Config struct {
 	Kappa                    uint64        `mapstructure:"tortoise-beacon-kappa"`                       // Security parameter (for calculating ATX threshold)
 	Q                        *big.Rat      `mapstructure:"tortoise-beacon-q"`                           // Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.
@@ -22,7 +22,7 @@ type Config struct {
 	BeaconSyncNumBallots     uint32        `mapstructure:"tortoise-beacon-sync-num-blocks"`             // Numbers of layers to wait before determining beacon values from ballots when the node didn't participate in previous epoch.
 }
 
-// DefaultConfig returns the default configuration for the tortoise beacon.
+// DefaultConfig returns the default configuration for the beacon.
 func DefaultConfig() Config {
 	return Config{
 		Kappa:                    40,
@@ -39,7 +39,7 @@ func DefaultConfig() Config {
 	}
 }
 
-// UnitTestConfig returns the unit test configuration for the tortoise beacon.
+// UnitTestConfig returns the unit test configuration for the beacon.
 func UnitTestConfig() Config {
 	return Config{
 		Kappa:                    400000,
@@ -56,7 +56,7 @@ func UnitTestConfig() Config {
 	}
 }
 
-// NodeSimUnitTestConfig returns configuration for the tortoise beacon the unit tests with node simulation .
+// NodeSimUnitTestConfig returns configuration for the beacon the unit tests with node simulation .
 func NodeSimUnitTestConfig() Config {
 	return Config{
 		Kappa:                    400000,

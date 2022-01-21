@@ -328,8 +328,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		return errNoBeacon
 	}
 
-	logger.With().Info("miner got beacon to build proposals",
-		log.String("beacon", beacon.ShortString()))
+	logger.With().Info("miner got beacon to build proposals", beacon)
 
 	started := time.Now()
 

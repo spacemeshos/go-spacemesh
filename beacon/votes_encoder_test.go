@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 import (
 	"testing"
@@ -9,17 +9,17 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
-func TestTortoiseBeacon_decodeVotes(t *testing.T) {
+func TestBeacon_encodeVotes(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
 
 	tt := []struct {
-		name       string
-		proposals  proposals
-		firstRound proposals
-		bitVector  []uint64
-		result     allVotes
+		name         string
+		proposals    proposals
+		firstRound   proposals
+		currentRound allVotes
+		result       []uint64
 	}{
 		{
 			name: "Case 1",
@@ -41,8 +41,7 @@ func TestTortoiseBeacon_decodeVotes(t *testing.T) {
 					util.Hex2Bytes("33"),
 				},
 			},
-			bitVector: []uint64{0b101},
-			result: allVotes{
+			currentRound: allVotes{
 				valid: proposalSet{
 					string(util.Hex2Bytes("11")): {},
 					string(util.Hex2Bytes("33")): {},
@@ -51,6 +50,8 @@ func TestTortoiseBeacon_decodeVotes(t *testing.T) {
 					string(util.Hex2Bytes("22")): {},
 				},
 			},
+
+			result: []uint64{0b101},
 		},
 	}
 
@@ -59,18 +60,18 @@ func TestTortoiseBeacon_decodeVotes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
+			pd := ProtocolDriver{
 				config: Config{
 					VotesLimit: 100,
 				},
-				logger: logtest.New(t).WithName("TortoiseBeacon"),
+				logger: logtest.New(t).WithName("Beacon"),
 			}
 
-			result := tb.decodeVotes(tc.bitVector, tc.firstRound)
+			result := pd.encodeVotes(tc.currentRound, tc.proposals)
 			r.EqualValues(tc.result, result)
 
-			original := tb.encodeVotes(result, tc.proposals)
-			r.EqualValues(tc.bitVector, original)
+			original := pd.decodeVotes(result, tc.firstRound)
+			r.EqualValues(tc.currentRound, original)
 		})
 	}
 }

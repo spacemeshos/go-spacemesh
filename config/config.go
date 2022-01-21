@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
@@ -19,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
 
 const (
@@ -42,7 +42,7 @@ type Config struct {
 	API             apiConfig.Config         `mapstructure:"api"`
 	HARE            hareConfig.Config        `mapstructure:"hare"`
 	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
-	TortoiseBeacon  tortoisebeacon.Config    `mapstructure:"tortoise-beacon"`
+	Beacon          beacon.Config            `mapstructure:"tortoise-beacon"`
 	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
 	REWARD          blocks.RewardConfig      `mapstructure:"reward"`
 	POST            activation.PostConfig    `mapstructure:"post"`
@@ -111,7 +111,7 @@ type LoggerConfig struct {
 	StateDbLoggerLevel        string `mapstructure:"stateDb"`
 	StateLoggerLevel          string `mapstructure:"state"`
 	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
-	TBeaconLoggerLevel        string `mapstructure:"tBeacon"`
+	BeaconLoggerLevel         string `mapstructure:"beacon"`
 	WeakCoinLoggerLevel       string `mapstructure:"weakCoin"`
 	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
 	StoreLoggerLevel          string `mapstructure:"store"`
@@ -150,7 +150,7 @@ func DefaultConfig() Config {
 		API:             apiConfig.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
-		TortoiseBeacon:  tortoisebeacon.DefaultConfig(),
+		Beacon:          beacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          blocks.DefaultRewardConfig(),
 		POST:            activation.DefaultPostConfig(),

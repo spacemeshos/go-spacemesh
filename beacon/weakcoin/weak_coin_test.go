@@ -10,13 +10,13 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	smocks "github.com/spacemeshos/go-spacemesh/signing/mocks"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 )
 
 func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublisher {

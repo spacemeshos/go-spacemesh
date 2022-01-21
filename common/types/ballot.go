@@ -175,7 +175,7 @@ func (b *Ballot) Fields() []log.LoggableField {
 		log.Uint32("eligibility_counter", b.EligibilityProof.J),
 		log.FieldNamed("ref_ballot", b.RefBallot),
 		log.Int("active_set_size", activeSetSize),
-		log.String("beacon", beacon.ShortString()),
+		beacon,
 	}
 }
 

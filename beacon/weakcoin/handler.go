@@ -11,7 +11,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
-// HandleProposal defines method to handle Tortoise Beacon Weak Coin Messages from gossip.
+// HandleProposal defines method to handle Beacon Weak Coin Messages from gossip.
 func (wc *WeakCoin) HandleProposal(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
 	logger := wc.logger.WithContext(ctx)
 	logger.With().Debug("received weak coin message",

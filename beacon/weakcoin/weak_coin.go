@@ -164,7 +164,7 @@ func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 	wc.allowances = nil
 	wc.coins = map[types.RoundID]bool{}
 	wc.round = 0
-	logger.Info("tb weak coin finished epoch")
+	logger.Info("weak coin finished epoch")
 }
 
 // StartRound process any buffered messages for this round and broadcast our proposal.
@@ -288,9 +288,9 @@ func (wc *WeakCoin) FinishRound(ctx context.Context) {
 	coinflip := wc.smallestProposal[lsbIndex]&1 == 1
 
 	wc.coins[wc.round] = coinflip
-	logger.With().Info("completed round",
+	logger.With().Info("completed round with beacon weak coin",
 		log.String("proposal", types.BytesToHash(wc.smallestProposal).ShortString()),
-		log.Bool("tb_weakcoin", coinflip))
+		log.Bool("beacon_weak_coin", coinflip))
 	wc.smallestProposal = nil
 }
 

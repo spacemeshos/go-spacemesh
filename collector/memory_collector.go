@@ -17,7 +17,7 @@ type MemoryCollector struct {
 	gotBlockEvent             map[uint32][]*events.NewBlock
 	gotAtxEvent               map[uint32][]*events.NewAtx
 	Atxs                      map[string]uint32
-	tortoiseBeacons           map[types.EpochID][]string
+	beacons                   map[types.EpochID][]string
 
 	lck sync.RWMutex
 }
@@ -33,7 +33,7 @@ func NewMemoryCollector() *MemoryCollector {
 		gotAtxEvent:               make(map[uint32][]*events.NewAtx),
 		Atxs:                      make(map[string]uint32),
 		createdAtxs:               make(map[uint32][]string),
-		tortoiseBeacons:           make(map[types.EpochID][]string),
+		beacons:                   make(map[types.EpochID][]string),
 	}
 }
 
@@ -131,12 +131,12 @@ func (c *MemoryCollector) StoreAtxCreated(event *events.AtxCreated) error {
 	return nil
 }
 
-// StoreTortoiseBeaconCalculated stores tortoise beacon calculated events received by epoch.
-func (c *MemoryCollector) StoreTortoiseBeaconCalculated(event *events.TortoiseBeaconCalculated) error {
+// StoreBeaconCalculated stores beacon calculated events received by epoch.
+func (c *MemoryCollector) StoreBeaconCalculated(event *events.BeaconCalculated) error {
 	c.lck.Lock()
 
 	c.events[event.GetChannel()] = append(c.events[event.GetChannel()], event)
-	c.tortoiseBeacons[event.Epoch] = append(c.tortoiseBeacons[event.Epoch], event.Beacon)
+	c.beacons[event.Epoch] = append(c.beacons[event.Epoch], event.Beacon)
 
 	c.lck.Unlock()
 
@@ -206,10 +206,10 @@ func (c *MemoryCollector) AtxIDExists(atxID string) bool {
 	return found
 }
 
-// GetTortoiseBeacon returns a list of tortoise beacons for a given epoch.
-func (c *MemoryCollector) GetTortoiseBeacon(epoch types.EpochID) []string {
+// GetBeacon returns a list of beacons for a given epoch.
+func (c *MemoryCollector) GetBeacon(epoch types.EpochID) []string {
 	c.lck.RLock()
 	defer c.lck.RUnlock()
 
-	return c.tortoiseBeacons[epoch]
+	return c.beacons[epoch]
 }

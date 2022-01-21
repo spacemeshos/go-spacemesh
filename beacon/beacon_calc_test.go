@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 import (
 	"context"
@@ -8,13 +8,13 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/beacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 )
 
-func TestTortoiseBeacon_calcBeacon(t *testing.T) {
+func TestBeacon_calcBeacon(t *testing.T) {
 	t.Parallel()
 
 	r := require.New(t)
@@ -68,23 +68,23 @@ func TestTortoiseBeacon_calcBeacon(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
+			pd := ProtocolDriver{
 				config: Config{
 					RoundsNumber: rounds,
 				},
 				theta:           new(big.Float).SetRat(big.NewRat(1, 1)),
 				epochInProgress: epoch,
-				logger:          logtest.New(t).WithName("TortoiseBeacon"),
+				logger:          logtest.New(t).WithName("Beacon"),
 				beacons:         make(map[types.EpochID]types.Beacon),
 				atxDB:           mockDB,
 				db:              database.NewMemDatabase(),
 			}
 
-			tb.initGenesisBeacons()
+			pd.initGenesisBeacons()
 
-			err := tb.calcBeacon(context.TODO(), epoch, tc.votes)
+			err := pd.calcBeacon(context.TODO(), epoch, tc.votes)
 			r.NoError(err)
-			r.EqualValues(tc.hash.String(), tb.beacons[epoch].String())
+			r.EqualValues(tc.hash.String(), pd.beacons[epoch].String())
 		})
 	}
 }

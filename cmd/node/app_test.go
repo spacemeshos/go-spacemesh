@@ -25,6 +25,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apicfg "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -34,7 +35,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
 
 type AppTestSuite struct {
@@ -779,7 +779,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
-	smApp.Config.TortoiseBeacon = tortoisebeacon.NodeSimUnitTestConfig()
+	smApp.Config.Beacon = beacon.NodeSimUnitTestConfig()
 
 	smApp.Config.FETCH.RequestTimeout = 1
 	smApp.Config.FETCH.BatchTimeout = 1

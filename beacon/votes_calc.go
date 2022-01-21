@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 import (
 	"context"
@@ -9,14 +9,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
-func (tb *TortoiseBeacon) calcVotes(ctx context.Context, epoch types.EpochID, round types.RoundID) (allVotes, []string, error) {
-	logger := tb.logger.WithContext(ctx).WithFields(epoch, round)
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
+func (pd *ProtocolDriver) calcVotes(ctx context.Context, epoch types.EpochID, round types.RoundID) (allVotes, []string, error) {
+	logger := pd.logger.WithContext(ctx).WithFields(epoch, round)
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
 
-	logger.With().Debug("calculating votes", log.String("vote_margins", fmt.Sprint(tb.votesMargin)))
+	logger.With().Debug("calculating votes", log.String("vote_margins", fmt.Sprint(pd.votesMargin)))
 
-	ownCurrentRoundVotes, undecided, err := tb.calcOwnCurrentRoundVotes()
+	ownCurrentRoundVotes, undecided, err := pd.calcOwnCurrentRoundVotes()
 	if err != nil {
 		return allVotes{}, nil, fmt.Errorf("calc own current round votes: %w", err)
 	}
@@ -28,17 +28,17 @@ func (tb *TortoiseBeacon) calcVotes(ctx context.Context, epoch types.EpochID, ro
 	return ownCurrentRoundVotes, undecided, nil
 }
 
-func (tb *TortoiseBeacon) calcOwnCurrentRoundVotes() (allVotes, []string, error) {
+func (pd *ProtocolDriver) calcOwnCurrentRoundVotes() (allVotes, []string, error) {
 	ownCurrentRoundVotes := allVotes{
 		valid:   make(proposalSet),
 		invalid: make(proposalSet),
 	}
 
-	positiveVotingThreshold := tb.votingThreshold(tb.epochWeight)
+	positiveVotingThreshold := pd.votingThreshold(pd.epochWeight)
 	negativeThreshold := new(big.Int).Neg(positiveVotingThreshold)
 
 	var undecided []string
-	for vote, weightCount := range tb.votesMargin {
+	for vote, weightCount := range pd.votesMargin {
 		switch {
 		case weightCount.Cmp(positiveVotingThreshold) >= 0:
 			ownCurrentRoundVotes.valid[vote] = struct{}{}

@@ -23,6 +23,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/beacon"
+	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
@@ -56,8 +58,6 @@ import (
 	timeCfg "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
 )
 
@@ -70,8 +70,8 @@ const (
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
 	AtxDbStoreLogger       = "atxDbStore"
-	TBeaconDbStoreLogger   = "tbDbStore"
-	TBeaconLogger          = "tBeacon"
+	BeaconDbStoreLogger    = "beaconDbStore"
+	BeaconLogger           = "beacon"
 	WeakCoinLogger         = "weakCoin"
 	PoetDbStoreLogger      = "poetDbStore"
 	StoreLogger            = "store"
@@ -277,7 +277,7 @@ type App struct {
 	proposalDB       *proposals.DB
 	poetListener     *activation.PoetListener
 	edSgn            *signing.EdSigner
-	tortoiseBeacon   *tortoisebeacon.TortoiseBeacon
+	beaconProtocol   *beacon.ProtocolDriver
 	closers          []interface{ Close() }
 	log              log.Log
 	txPool           *mempool.TxMempool
@@ -487,11 +487,11 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, atxdbstore)
 
-	tBeaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "tbeacon"), 0, 0, app.addLogger(TBeaconDbStoreLogger, lg))
+	beaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "beacons"), 0, 0, app.addLogger(BeaconDbStoreLogger, lg))
 	if err != nil {
-		return fmt.Errorf("create tortoise beacon DB: %w", err)
+		return fmt.Errorf("create beacon DB: %w", err)
 	}
-	app.closers = append(app.closers, tBeaconDBStore)
+	app.closers = append(app.closers, beaconDBStore)
 
 	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
@@ -543,11 +543,11 @@ func (app *App) initServices(ctx context.Context,
 	wc := weakcoin.New(app.host,
 		vrfSigner, vrfVerifier,
 		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
-		weakcoin.WithMaxRound(app.Config.TortoiseBeacon.RoundsNumber),
+		weakcoin.WithMaxRound(app.Config.Beacon.RoundsNumber),
 	)
 
-	tBeacon := tortoisebeacon.New(
-		app.Config.TortoiseBeacon,
+	beaconProtocol := beacon.New(
+		app.Config.Beacon,
 		nodeID,
 		app.host,
 		atxDB,
@@ -556,9 +556,9 @@ func (app *App) initServices(ctx context.Context,
 		vrfSigner,
 		vrfVerifier,
 		wc,
-		tBeaconDBStore,
+		beaconDBStore,
 		clock,
-		app.addLogger(TBeaconLogger, lg))
+		app.addLogger(BeaconLogger, lg))
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.Tortoise
@@ -578,7 +578,7 @@ func (app *App) initServices(ctx context.Context,
 	trtlCfg.MeshProcessed = processed
 	trtlCfg.MeshVerified = verified
 
-	trtl = tortoise.New(mdb, atxDB, tBeacon,
+	trtl = tortoise.New(mdb, atxDB, beaconProtocol,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
@@ -607,7 +607,7 @@ func (app *App) initServices(ctx context.Context,
 			app.Config.HareEligibility.EpochOffset, app.Config.BaseConfig.LayersPerEpoch)
 	}
 
-	proposalListener := proposals.NewHandler(fetcherWrapped, tBeacon, atxDB, msh, proposalDB,
+	proposalListener := proposals.NewHandler(fetcherWrapped, beaconProtocol, atxDB, msh, proposalDB,
 		proposals.WithLogger(app.addLogger(ProposalListenerLogger, lg)),
 		proposals.WithLayerPerEpoch(layersPerEpoch),
 		proposals.WithLayerSize(layerSize),
@@ -640,9 +640,9 @@ func (app *App) initServices(ctx context.Context,
 		SyncInterval: time.Duration(app.Config.SyncInterval) * time.Second,
 		AlwaysListen: app.Config.AlwaysListen,
 	}
-	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, tBeacon, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
+	newSyncer := syncer.NewSyncer(ctx, syncerConf, clock, beaconProtocol, msh, layerFetch, patrol, app.addLogger(SyncLogger, lg))
 	// TODO(dshulyak) this needs to be improved, but dependency graph is a bit complicated
-	tBeacon.SetSyncState(newSyncer)
+	beaconProtocol.SetSyncState(newSyncer)
 
 	// TODO: we should probably decouple the apptest and the node (and duplicate as necessary) (#1926)
 	var hOracle hare.Rolacle
@@ -651,12 +651,12 @@ func (app *App) initServices(ctx context.Context,
 		hOracle = rolacle
 	} else {
 		// regular oracle, build and use it
-		hOracle = eligibility.New(tBeacon, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
+		hOracle = eligibility.New(beaconProtocol, atxDB, mdb, signing.VRFVerify, vrfSigner, app.Config.LayersPerEpoch, app.Config.HareEligibility, app.addLogger(HareOracleLogger, lg))
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
 	blockGen := blocks.NewGenerator(atxDB, msh, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
-	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, tBeacon, fetcherWrapped, hOracle, idStore, clock, lg)
+	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, beaconProtocol, fetcherWrapped, hOracle, idStore, clock, lg)
 
 	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(state, msh)
 	proposalBuilder := miner.NewProposalBuilder(
@@ -668,7 +668,7 @@ func (app *App) initServices(ctx context.Context,
 		app.host,
 		proposalDB,
 		trtl,
-		tBeacon,
+		beaconProtocol,
 		newSyncer,
 		stateAndMeshProjector,
 		app.txPool,
@@ -712,12 +712,12 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, wc.HandleProposal))
-	app.host.Register(tortoisebeacon.TBProposalProtocol,
-		pubsub.ChainGossipHandler(syncHandler, tBeacon.HandleSerializedProposalMessage))
-	app.host.Register(tortoisebeacon.TBFirstVotingProtocol,
-		pubsub.ChainGossipHandler(syncHandler, tBeacon.HandleSerializedFirstVotingMessage))
-	app.host.Register(tortoisebeacon.TBFollowingVotingProtocol,
-		pubsub.ChainGossipHandler(syncHandler, tBeacon.HandleSerializedFollowingVotingMessage))
+	app.host.Register(beacon.ProposalProtocol,
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedProposalMessage))
+	app.host.Register(beacon.FirstVoteProtocol,
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedFirstVotingMessage))
+	app.host.Register(beacon.FollowingVotingProtocol,
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedFollowingVotingMessage))
 	app.host.Register(proposals.NewProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
 	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxDB.HandleGossipAtx))
 	app.host.Register(svm.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, state.HandleGossipTransaction))
@@ -735,7 +735,7 @@ func (app *App) initServices(ctx context.Context,
 	app.postSetupMgr = postSetupMgr
 	app.atxDb = atxDB
 	app.layerFetch = layerFetch
-	app.tortoiseBeacon = tBeacon
+	app.beaconProtocol = beaconProtocol
 	app.tortoise = trtl
 	if !app.Config.TIME.Peersync.Disable {
 		app.ptimesync = peersync.New(
@@ -820,8 +820,8 @@ func (app *App) startServices(ctx context.Context) error {
 	app.layerFetch.Start()
 	go app.startSyncer(ctx)
 
-	if err := app.tortoiseBeacon.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start tortoise beacon: %w", err)
+	if err := app.beaconProtocol.Start(ctx); err != nil {
+		return fmt.Errorf("cannot start beacon: %w", err)
 	}
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
@@ -938,9 +938,9 @@ func (app *App) stopServices() {
 		app.clock.Close()
 	}
 
-	if app.tortoiseBeacon != nil {
-		app.log.Info("stopping tortoise beacon")
-		app.tortoiseBeacon.Close()
+	if app.beaconProtocol != nil {
+		app.log.Info("stopping beacon")
+		app.beaconProtocol.Close()
 	}
 
 	if app.atxBuilder != nil {

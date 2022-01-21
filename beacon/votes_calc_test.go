@@ -1,4 +1,4 @@
-package tortoisebeacon
+package beacon
 
 import (
 	"context"
@@ -9,12 +9,12 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/beacon/mocks"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon/mocks"
 )
 
-func TestTortoiseBeacon_calcVotes(t *testing.T) {
+func TestBeacon_calcVotes(t *testing.T) {
 	t.Parallel()
 
 	ctrl := gomock.NewController(t)
@@ -69,15 +69,15 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
+			pd := ProtocolDriver{
 				theta:       new(big.Float).SetRat(big.NewRat(1, 1)),
-				logger:      logtest.New(t).WithName("TortoiseBeacon"),
+				logger:      logtest.New(t).WithName("Beacon"),
 				atxDB:       mockDB,
 				votesMargin: tc.votesMargin,
 				epochWeight: uint64(1),
 			}
 
-			result, undecided, err := tb.calcVotes(context.TODO(), tc.epoch, tc.round)
+			result, undecided, err := pd.calcVotes(context.TODO(), tc.epoch, tc.round)
 			require.NoError(t, err)
 			sort.Strings(undecided)
 			require.Equal(t, tc.undecided, undecided)
@@ -86,7 +86,7 @@ func TestTortoiseBeacon_calcVotes(t *testing.T) {
 	}
 }
 
-func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
+func TestBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 	t.Parallel()
 
 	const threshold = 3
@@ -164,15 +164,15 @@ func TestTortoiseBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			tb := TortoiseBeacon{
+			pd := ProtocolDriver{
 				theta:       new(big.Float).SetRat(big.NewRat(1, 1)),
-				logger:      logtest.New(t).WithName("TortoiseBeacon"),
+				logger:      logtest.New(t).WithName("Beacon"),
 				atxDB:       mockDB,
 				votesMargin: tc.votesCount,
 				epochWeight: uint64(threshold),
 			}
 
-			result, undecided, err := tb.calcOwnCurrentRoundVotes()
+			result, undecided, err := pd.calcOwnCurrentRoundVotes()
 			require.NoError(t, err)
 			sort.Strings(undecided)
 			require.Equal(t, tc.undecided, undecided)
