@@ -22,7 +22,7 @@ type LoggerConfig struct {
 	StateDbLoggerLevel        string     `mapstructure:"stateDb"`
 	StateLoggerLevel          string     `mapstructure:"state"`
 	AtxDbStoreLoggerLevel     string     `mapstructure:"atxDbStore"`
-	TBeaconLoggerLevel        string     `mapstructure:"tBeacon"`
+	BeaconLoggerLevel         string     `mapstructure:"beacon"`
 	WeakCoinLoggerLevel       string     `mapstructure:"weakCoin"`
 	PoetDbStoreLoggerLevel    string     `mapstructure:"poetDbStore"`
 	StoreLoggerLevel          string     `mapstructure:"store"`
@@ -54,7 +54,7 @@ func defaultLoggingConfig() LoggerConfig {
 		StateDbLoggerLevel:        defaultLoggingLevel.String(),
 		StateLoggerLevel:          defaultLoggingLevel.String(),
 		AtxDbStoreLoggerLevel:     defaultLoggingLevel.String(),
-		TBeaconLoggerLevel:        defaultLoggingLevel.String(),
+		BeaconLoggerLevel:         defaultLoggingLevel.String(),
 		WeakCoinLoggerLevel:       defaultLoggingLevel.String(),
 		PoetDbStoreLoggerLevel:    defaultLoggingLevel.String(),
 		StoreLoggerLevel:          defaultLoggingLevel.String(),
