@@ -158,7 +158,7 @@ def validate_blocks_per_nodes(block_map, from_layer, to_layer, layers_per_epoch,
     print("\nvalidation succeeded!\n")
 
 
-def validate_tortoise_beacons(log_messages):
+def validate_beacons(log_messages):
     epoch_messages = defaultdict(dict)
 
     assert len(log_messages) > 0, f"no log messages"
@@ -185,7 +185,7 @@ def validate_tortoise_beacons(log_messages):
     print(f"successfully validated beacons")
 
 
-def validate_tortoise_beacon_weak_coins(log_messages):
+def validate_beacon_weak_coins(log_messages):
     epoch_messages = defaultdict(dict)
 
     assert len(log_messages) > 0, f"no log messages"
@@ -196,16 +196,16 @@ def validate_tortoise_beacon_weak_coins(log_messages):
         if epoch_round_pair  not in epoch_messages:
             epoch_messages[epoch_round_pair] = dict()
 
-        if log.weak_coin not in epoch_messages[epoch_round_pair]:
-            epoch_messages[epoch_round_pair][log.weak_coin] = 0
+        if log.beacon_weak_coin not in epoch_messages[epoch_round_pair]:
+            epoch_messages[epoch_round_pair][log.beacon_weak_coin] = 0
 
-        epoch_messages[epoch_round_pair][log.weak_coin] += 1
+        epoch_messages[epoch_round_pair][log.beacon_weak_coin] += 1
 
     for epoch_round, weak_coins in epoch_messages.items():
-        assert len(weak_coins) == 1, f"all weak coins in epoch/round {epoch_round} were not same, saw: {weak_coins}"
-        print(f"all beacons in epoch {epoch_round} were same, saw: {weak_coins}")
+        assert len(weak_coins) == 1, f"all beacon weak coins in epoch/round {epoch_round} were not same, saw: {weak_coins}"
+        print(f"all beacon weak coins in epoch {epoch_round} were same, saw: {weak_coins}")
 
-    print(f"successfully validated beacons")
+    print(f"successfully validated beacon weak coin")
 
 
 def get_pod_id(ns, pod_name):

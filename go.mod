@@ -4,8 +4,6 @@ require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20201218142103-4a33235224ec
 	github.com/bits-and-blooms/bitset v1.2.0
-	github.com/btcsuite/btcd v0.22.0-beta
-	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
@@ -53,6 +51,8 @@ require (
 	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
+	github.com/btcsuite/btcd v0.22.0-beta // indirect
+	github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce // indirect
 	github.com/cespare/xxhash/v2 v2.1.1 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect

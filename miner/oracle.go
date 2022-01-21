@@ -128,8 +128,7 @@ func (o *Oracle) getOwnEpochATX(targetEpoch types.EpochID) (*types.ActivationTxH
 // calcEligibilityProofs calculates the eligibility proofs of proposals for the miner in the given epoch
 // and returns the proofs along with the epoch's active set.
 func (o *Oracle) calcEligibilityProofs(weight uint64, epoch types.EpochID, beacon types.Beacon) (map[types.LayerID][]types.VotingEligibilityProof, []types.ATXID, error) {
-	beaconDbgStr := beacon.ShortString()
-	logger := o.log.WithFields(epoch, log.String("beacon", beaconDbgStr), log.Uint64("weight", weight))
+	logger := o.log.WithFields(epoch, beacon, log.Uint64("weight", weight))
 
 	// get the previous epoch's total weight
 	totalWeight, activeSet, err := o.atxDB.GetEpochWeight(epoch)

@@ -120,7 +120,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		ballot.ID(),
 		ballot.LayerIndex,
 		epoch,
-		log.String("beacon", beaconStr),
+		beacon,
 		log.Uint32("counter", counter))
 
 	v.beacons.ReportBeaconFromBallot(epoch, ballot.ID(), beacon, weight)

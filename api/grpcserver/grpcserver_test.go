@@ -242,28 +242,40 @@ func (t *TxAPIMock) GetRewardsBySmesherID(types.NodeID) (rewards []types.Reward,
 	}, nil
 }
 
-func (t *TxAPIMock) GetTransactionsByDestination(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
-	if l != txReturnLayer {
+func (t *TxAPIMock) GetTransactionsByDestination(from, to types.LayerID, account types.Address) (txs []*types.MeshTransaction, err error) {
+	if from.After(txReturnLayer) {
 		return nil, nil
 	}
 	for _, tx := range t.returnTx {
 		if tx.GetRecipient().String() == account.String() {
-			txs = append(txs, tx.ID())
+			txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 		}
 	}
 	return
 }
 
-func (t *TxAPIMock) GetTransactionsByOrigin(l types.LayerID, account types.Address) (txs []types.TransactionID, err error) {
-	if l != txReturnLayer {
+func (t *TxAPIMock) GetTransactionsByOrigin(from, to types.LayerID, account types.Address) (txs []*types.MeshTransaction, err error) {
+	if from.After(txReturnLayer) {
 		return nil, nil
 	}
 	for _, tx := range t.returnTx {
 		if tx.Origin().String() == account.String() {
-			txs = append(txs, tx.ID())
+			txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 		}
 	}
 	return
+}
+
+func (t *TxAPIMock) GetTransactionsByAddress(from, to types.LayerID, account types.Address) ([]*types.MeshTransaction, error) {
+	origin, err := t.GetTransactionsByOrigin(from, to, account)
+	if err != nil {
+		return nil, err
+	}
+	dest, err := t.GetTransactionsByDestination(from, to, account)
+	if err != nil {
+		return nil, err
+	}
+	return append(origin, dest...), nil
 }
 
 func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {

@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 var (
@@ -317,6 +318,7 @@ func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) er
 			return err
 		}
 	}
+
 	// mesh can't skip layer that failed to complete
 	from := minLayer(oldVerified, vl.latestLayerInState).Add(1)
 	to := newVerified
@@ -340,6 +342,13 @@ func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) er
 
 	logger.Info("done processing layer")
 	return nil
+}
+
+func (msh *Mesh) getAggregatedHash(lid types.LayerID) (types.Hash32, error) {
+	if !lid.After(types.NewLayerID(1)) {
+		return types.EmptyLayerHash, nil
+	}
+	return layers.GetAggregatedHash(msh.db, lid)
 }
 
 func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID) error {
@@ -369,11 +378,12 @@ func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID)
 			return err
 		}
 
-		prevHash, err := msh.getAggregatedLayerHash(i.Sub(1))
+		prevHash, err := msh.getAggregatedHash(i.Sub(1))
 		if err != nil {
 			logger.With().Debug("failed to get previous aggregated hash", i, log.Err(err))
 			return err
 		}
+
 		logger.With().Debug("got previous aggregatedHash", i, log.String("prevAggHash", prevHash.ShortString()))
 		newAggHash := types.CalcBlocksHash32(validBlockIDs, prevHash.Bytes())
 		if err := msh.persistAggregatedLayerHash(i, newAggHash); err != nil {
@@ -424,6 +434,13 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) 
 	missing := msh.MissingLayer()
 	// we never reapply the state of oldVerified. note that state reversions must be handled separately.
 	for layerID := from; !layerID.After(to); layerID = layerID.Add(1) {
+		if !layerID.After(msh.latestLayerInState) {
+			logger.With().Error("trying to apply layer before currently applied layer",
+				log.Stringer("applied_layer", msh.latestLayerInState),
+				layerID,
+			)
+			continue
+		}
 		if err := msh.pushLayer(ctx, layerID); err != nil {
 			msh.setMissingLayer(layerID)
 			return err
@@ -491,21 +508,14 @@ func (msh *Mesh) reInsertTxsToPool(applied *types.Block, notApplied []*types.Blo
 	if len(missing) > 0 {
 		msh.With().Error("could not reinsert transactions", log.Int("missing", len(missing)), l)
 	}
-
-	grouped, accounts, err := msh.removeFromUnappliedTxs(returnedTxs)
-	if err != nil {
+	if err := msh.markTransactionsDeleted(returnedTxs...); err != nil {
 		return err
 	}
-	for account := range accounts {
-		if err = msh.removeRejectedFromAccountTxs(account, grouped); err != nil {
-			return err
-		}
-	}
 	for _, tx := range returnedTxs {
-		if err = msh.ValidateNonceAndBalance(tx); err != nil {
+		if err := msh.ValidateNonceAndBalance(tx); err != nil {
 			return err
 		}
-		if err = msh.AddTxToPool(tx); err == nil {
+		if err := msh.AddTxToPool(tx); err == nil {
 			// We ignore errors here, since they mean that the tx is no longer
 			// valid and we shouldn't re-add it.
 			msh.With().Info("transaction from contextually invalid block re-added to mempool", tx.ID())
@@ -546,9 +556,10 @@ func (msh *Mesh) applyState(block *types.Block) error {
 		msh.With().Error("failed to update tx block ID in db", log.Err(err))
 		return err
 	}
-	if _, _, err := msh.removeFromUnappliedTxs(txs); err != nil {
-		msh.With().Error("failed to remove unapplied TXs", log.Err(err))
-		return err
+	for _, tx := range txs {
+		if err := transactions.Applied(msh.db, tx.ID()); err != nil {
+			return err
+		}
 	}
 	msh.With().Info("applied transactions",
 		block.LayerIndex,
@@ -622,24 +633,11 @@ func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
 
 // GetAggregatedLayerHash returns the aggregated layer hash up to the specified layer.
 func (msh *Mesh) GetAggregatedLayerHash(layerID types.LayerID) types.Hash32 {
-	h, err := msh.getAggregatedLayerHash(layerID)
+	h, err := layers.GetAggregatedHash(msh.db, layerID)
 	if err != nil {
 		return types.EmptyLayerHash
 	}
 	return h
-}
-
-func (msh *Mesh) getAggregatedLayerHash(layerID types.LayerID) (types.Hash32, error) {
-	if layerID.Before(types.NewLayerID(1)) {
-		return types.EmptyLayerHash, nil
-	}
-	var hash types.Hash32
-	bts, err := msh.general.Get(getAggregatedLayerHashKey(layerID))
-	if err == nil {
-		hash.SetBytes(bts)
-		return hash, nil
-	}
-	return hash, fmt.Errorf("get from DB: %w", err)
 }
 
 func uniqueTxIds(blocks []*types.Block, seenTxIds map[types.TransactionID]struct{}) []types.TransactionID {
@@ -746,7 +744,7 @@ func (msh *Mesh) storeTransactionsFromPool(layerID types.LayerID, blockID types.
 		if err != nil {
 			// if the transaction is not in the pool it could have been
 			// invalidated by another block
-			if has, err := msh.transactions.Has(txID.Bytes()); !has {
+			if has, err := transactions.Has(msh.db, txID); !has {
 				return fmt.Errorf("check if tx is in DB: %w", err)
 			}
 			continue
@@ -755,10 +753,6 @@ func (msh *Mesh) storeTransactionsFromPool(layerID types.LayerID, blockID types.
 	}
 	if err := msh.writeTransactions(layerID, blockID, txs...); err != nil {
 		return fmt.Errorf("write tx: %w", err)
-	}
-
-	if err := msh.addToUnappliedTxs(txs, layerID); err != nil {
-		return fmt.Errorf("failed to add to unappliedTxs: %v", err)
 	}
 
 	// remove txs from pool

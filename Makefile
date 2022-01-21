@@ -2,7 +2,9 @@ all: install build
 .PHONY: all
 
 LDFLAGS = -ldflags "-X main.version=${VERSION} -X main.commit=${COMMIT} -X main.branch=${BRANCH}"
-include Makefile.Inc
+include Makefile-gpu.Inc
+# TODO(nkryuchkov): uncomment when go-svm is imported
+#include Makefile-svm.Inc
 
 DOCKER_HUB ?= spacemeshos
 TEST_LOG_LEVEL ?=
@@ -95,11 +97,15 @@ install:
 build: go-spacemesh
 .PHONY: build
 
-hare p2p: get-gpu-setup
+# TODO(nkryuchkov): uncomment when go-svm is imported
+get-libs: get-gpu-setup #get-svm
+.PHONY: get-libs
+
+hare p2p: get-libs
 	cd cmd/$@ ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
-go-spacemesh: get-gpu-setup
+go-spacemesh: get-libs
 	go build -o $(BIN_DIR)$@$(EXE) $(LDFLAGS) $(GOTAGS) .
-harness: get-gpu-setup
+harness: get-libs
 	cd cmd/integration ; go build -o $(BIN_DIR)go-$@$(EXE) $(GOTAGS) .
 .PHONY: hare p2p harness go-spacemesh
 
@@ -135,15 +141,15 @@ docker-local-build: go-spacemesh hare p2p harness
 .PHONY: docker-local-build
 endif
 
-test test-all: get-gpu-setup
+test test-all: get-libs
 	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 ./...
 .PHONY: test
 
-test-no-app-test: get-gpu-setup
+test-no-app-test: get-libs
 	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -timeout 0 -p 1 -tags exclude_app_test ./...
 .PHONY: test-no-app-test
 
-test-only-app-test: get-gpu-setup
+test-only-app-test: get-libs
 	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
 .PHONY: test-only-app-test
 
@@ -302,15 +308,15 @@ endif
 dockertest-blocks-remove-node: dockerbuild-test dockerrun-blocks-remove-node
 .PHONY: dockertest-blocks-remove-node
 
-dockerrun-tortoise-beacon:
+dockerrun-beacon:
 ifndef ES_PASS
 	$(error ES_PASS is not set)
 endif
-	$(DOCKERRUN) pytest -s -v tortoise_beacon/test_tortoise_beacon.py --tc-file=tortoise_beacon/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
-.PHONY: dockerrun-tortoise-beacon
+	$(DOCKERRUN) pytest -s -v beacon/test_beacon.py --tc-file=beacon/config.yaml --tc-format=yaml $(EXTRA_PARAMS)
+.PHONY: dockerrun-beacon
 
-dockertest-tortoise-beacon: dockerbuild-test dockerrun-tortoise-beacon
-.PHONY: dockertest-tortoise-beacon
+dockertest-beacon: dockerbuild-test dockerrun-beacon
+.PHONY: dockertest-beacon
 
 dockerrun-blocks-stress:
 ifndef ES_PASS
@@ -353,7 +359,7 @@ dockertest-tx-stress: dockerbuild-test dockerrun-tx-stress
 .PHONY: dockertest-tx-stress
 
 # The following is used to run tests one after the other locally
-dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-blocks-add-node dockerrun-blocks-remove-node dockerrun-tortoise-beacon
+dockerrun-test: dockerbuild-test dockerrun-p2p dockerrun-mining dockerrun-hare dockerrun-sync dockerrun-late-nodes dockerrun-blocks-add-node dockerrun-blocks-remove-node dockerrun-beacon
 .PHONY: dockerrun-test
 
 dockerrun-all: dockerpush dockerrun-test

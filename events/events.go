@@ -19,7 +19,7 @@ const (
 	EventRewardReceived
 	EventCreatedBlock
 	EventCreatedAtx
-	EventCalculatedTortoiseBeacon
+	EventCalculatedBeacon
 	EventNewProposal
 )
 
@@ -212,13 +212,13 @@ func (AtxCreated) GetChannel() ChannelID {
 	return EventCreatedAtx
 }
 
-// TortoiseBeaconCalculated signals this miner has calculated a tortoise beacon.
-type TortoiseBeaconCalculated struct {
+// BeaconCalculated signals this miner has calculated a beacon.
+type BeaconCalculated struct {
 	Epoch  types.EpochID
 	Beacon string
 }
 
 // GetChannel gets the message type which means on which this message should be sent.
-func (TortoiseBeaconCalculated) GetChannel() ChannelID {
-	return EventCalculatedTortoiseBeacon
+func (BeaconCalculated) GetChannel() ChannelID {
+	return EventCalculatedBeacon
 }

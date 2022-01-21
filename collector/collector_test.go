@@ -74,7 +74,7 @@ func (m *MockDb) StoreAtxValid(event *events.ValidAtx) error {
 	return nil
 }
 
-func (m *MockDb) StoreTortoiseBeaconCalculated(event *events.TortoiseBeaconCalculated) error {
+func (m *MockDb) StoreBeaconCalculated(event *events.BeaconCalculated) error {
 	m.msgs[10]++
 	m.total++
 	return nil
