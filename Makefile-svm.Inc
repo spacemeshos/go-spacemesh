@@ -5,7 +5,7 @@ export GOARCH
 export GOARM
 export BIN_DIR
 
-SVM_VERSION := 0.0.31
+SVM_VERSION := 0.0.35
 
 export CGO_CFLAGS := $(CGO_CFLAGS) -I${BIN_DIR}
 
@@ -19,6 +19,10 @@ ifeq ($(GOOS),)
 	GOOS := $(HOST_OS)
 endif
 
+ifeq ($(GOARCH),)
+	GOARCH := $(shell go env GOARCH)
+endif
+
 ifeq ($(GOOS),windows)
 	PLATFORM := windows
 	SVM_CLI := svm-cli.exe
@@ -27,7 +31,11 @@ ifeq ($(GOOS),windows)
 else
 	SVM_CLI := svm-cli
 	ifeq ($(GOOS),darwin)
-    	PLATFORM := macos
+		ifeq ($(GOARCH),arm64)
+			PLATFORM := macos-m1
+		else
+			PLATFORM := macos
+		endif
     	export CGO_LDFLAGS := $(CGO_LDFLAGS) $(BIN_DIR)/libsvm.a -lm -ldl -framework Security -framework Foundation
 	else
     	PLATFORM := linux
