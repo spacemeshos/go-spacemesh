@@ -42,7 +42,7 @@ type Config struct {
 	API             apiConfig.Config         `mapstructure:"api"`
 	HARE            hareConfig.Config        `mapstructure:"hare"`
 	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
-	Beacon          beacon.Config            `mapstructure:"tortoise-beacon"`
+	Beacon          beacon.Config            `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
 	REWARD          blocks.RewardConfig      `mapstructure:"reward"`
 	POST            activation.PostConfig    `mapstructure:"post"`
