@@ -39,20 +39,6 @@ var (
 	errZeroEpoch           = errors.New("zero epoch provided")
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./beacon.go
-
-type coin interface {
-	StartEpoch(context.Context, types.EpochID, weakcoin.UnitAllowances)
-	StartRound(context.Context, types.RoundID) error
-	FinishRound(context.Context)
-	Get(context.Context, types.EpochID, types.RoundID) bool
-	FinishEpoch(context.Context, types.EpochID)
-}
-
-type eligibilityChecker interface {
-	IsProposalEligible(proposal []byte) bool
-}
-
 type (
 	proposals    = struct{ valid, potentiallyValid [][]byte }
 	allVotes     = struct{ valid, invalid proposalSet }
