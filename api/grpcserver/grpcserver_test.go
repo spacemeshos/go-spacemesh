@@ -2927,7 +2927,7 @@ func TestJsonApi(t *testing.T) {
 
 func TestDebugService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewDebugService(txAPI)
+	svc := NewDebugService(txAPI, nil)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 

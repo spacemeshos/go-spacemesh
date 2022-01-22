@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -60,6 +61,11 @@ type TxAPI interface {
 	GetAllAccounts() (*types.MultipleAccountsState, error)
 	GetRewardsBySmesherID(types.NodeID) ([]types.Reward, error)
 	// TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
+}
+
+// NetworkIdentity interface.
+type NetworkIdentity interface {
+	ID() p2p.Peer
 }
 
 // PeerCounter is an api to get amount of connected peers.

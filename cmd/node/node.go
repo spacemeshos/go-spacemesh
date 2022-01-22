@@ -871,7 +871,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 
 	// Register the requested services one by one
 	if apiConf.StartDebugService {
-		registerService(grpcserver.NewDebugService(app.mesh))
+		registerService(grpcserver.NewDebugService(app.mesh, app.host))
 	}
 	if apiConf.StartGatewayService {
 		registerService(grpcserver.NewGatewayService(app.host))
