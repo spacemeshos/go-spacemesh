@@ -84,7 +84,7 @@ func TestBeacon_calcBeacon(t *testing.T) {
 
 			err := pd.calcBeacon(context.TODO(), epoch, tc.votes)
 			r.NoError(err)
-			r.EqualValues(tc.hash.String(), pd.beacons[epoch].String())
+			r.EqualValues(tc.hash.String(), pd.beacons[epoch+1].String())
 		})
 	}
 }

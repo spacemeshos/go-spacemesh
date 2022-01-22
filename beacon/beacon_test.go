@@ -220,7 +220,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 			case "spacemesh_beacons_beacon_calculated_weight":
 				require.Equal(t, 1, len(m.Metric))
 				numCalculatedBeacon++
-				beaconStr := types.HexToHash32(types.GenesisBeacon).ShortString()
+				beaconStr := types.HexToHash32(types.BootstrapBeacon).ShortString()
 				expected := fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beaconStr, thisEpoch+1, ownWeight)
 				assert.Equal(t, expected, m.Metric[0].String())
 			case "spacemesh_beacons_beacon_observed_total":
@@ -230,7 +230,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 			}
 		}
 	}
-	assert.Equal(t, int(gLayer.Uint32()), numCalculatedBeacon)
+	assert.EqualValues(t, gLayer.Uint32(), numCalculatedBeacon)
 
 	epoch3Beacon := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	epoch := types.EpochID(3)
@@ -305,9 +305,9 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	beacon2 := types.RandomBeacon()
 	epoch5 := types.EpochID(5)
 	beacon4 := types.RandomBeacon()
-	err := pd.setBeacon(epoch3-1, beacon2)
+	err := pd.setBeacon(epoch3, beacon2)
 	require.NoError(t, err)
-	err = pd.setBeacon(epoch5-1, beacon4)
+	err = pd.setBeacon(epoch5, beacon4)
 	require.NoError(t, err)
 
 	got, err := pd.GetBeacon(epoch3)
@@ -464,12 +464,12 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 
 	epoch := types.EpochID(3)
 	beacon := types.RandomBeacon()
-	beaconFromBlocks := types.RandomBeacon()
+	beaconFromBallots := types.RandomBeacon()
 	pd := &ProtocolDriver{
 		logger: logtest.New(t).WithName("Beacon"),
 		config: UnitTestConfig(),
 		beacons: map[types.EpochID]types.Beacon{
-			epoch - 1: beacon,
+			epoch: beacon,
 		},
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
@@ -479,8 +479,8 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, beacon, got)
 
-	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBlocks, 100)
-	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBlocks, 200)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBallots, 100)
+	pd.ReportBeaconFromBallot(epoch, types.RandomBallotID(), beaconFromBallots, 200)
 
 	// should not change the beacon value
 	got, err = pd.GetBeacon(epoch)

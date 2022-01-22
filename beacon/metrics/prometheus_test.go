@@ -26,7 +26,7 @@ func TestBeaconMetrics(t *testing.T) {
 		},
 	}
 	calculated := &BeaconStats{
-		Epoch:  epoch,
+		Epoch:  epoch + 1,
 		Beacon: "speck",
 		Count:  uint64(1),
 		Weight: uint64(45678),

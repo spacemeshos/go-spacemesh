@@ -36,7 +36,6 @@ const (
 var (
 	errBeaconNotCalculated = errors.New("beacon is not calculated for this epoch")
 	errZeroEpochWeight     = errors.New("zero epoch weight provided")
-	errZeroEpoch           = errors.New("zero epoch provided")
 )
 
 type (
@@ -126,11 +125,12 @@ type ProtocolDriver struct {
 	epochWeight     uint64
 
 	// beacons store calculated beacons as the result of the beacon protocol.
-	// the map key is the epoch when beacon is calculated. the beacon is used in the following epoch
+	// the map key is the target epoch when beacon is used. if a beacon is calculated in epoch N, it will be used
+	// in epoch N+1.
 	beacons map[types.EpochID]types.Beacon
 	// beaconsFromBallots store beacons collected from ballots.
-	// the map key is the epoch when the block is published. the beacon value is calculated in the
-	// previous epoch and used in the current epoch
+	// the map key is the epoch when the ballot is published. the beacon value is calculated in the
+	// previous epoch and used in the current epoch.
 	beaconsFromBallots map[types.EpochID]map[types.Beacon]*ballotWeight
 
 	// TODO(nkryuchkov): have a mixed list of all sorted proposals
@@ -222,7 +222,7 @@ func (pd *ProtocolDriver) ReportBeaconFromBallot(epoch types.EpochID, bid types.
 	}
 
 	if eBeacon := pd.findMostWeightedBeaconForEpoch(epoch); eBeacon != types.EmptyBeacon {
-		pd.setBeacon(epoch-1, eBeacon)
+		pd.setBeacon(epoch, eBeacon)
 	}
 }
 
@@ -294,32 +294,26 @@ func (pd *ProtocolDriver) findMostWeightedBeaconForEpoch(epoch types.EpochID) ty
 }
 
 // GetBeacon returns the beacon for the specified epoch or an error if it doesn't exist.
-func (pd *ProtocolDriver) GetBeacon(epochID types.EpochID) (types.Beacon, error) {
-	if epochID == 0 {
-		return types.EmptyBeacon, errZeroEpoch
+func (pd *ProtocolDriver) GetBeacon(targetEpoch types.EpochID) (types.Beacon, error) {
+	if targetEpoch.IsGenesis() {
+		return types.EmptyBeacon, errBeaconNotCalculated
 	}
 
-	beaconEpoch := epochID - 1
-	beacon := pd.getBeacon(beaconEpoch)
+	beacon := pd.getBeacon(targetEpoch)
 	if beacon != types.EmptyBeacon {
 		return beacon, nil
 	}
 
-	beacon, err := pd.getPersistedBeacon(beaconEpoch)
+	beacon, err := pd.getPersistedBeacon(targetEpoch)
 	if err == nil {
 		return beacon, nil
 	}
 
 	if errors.Is(err, database.ErrNotFound) {
-		pd.logger.With().Warning("beacon not available",
-			epochID,
-			log.Uint32("beacon_epoch", uint32(beaconEpoch)))
+		pd.logger.With().Warning("beacon not available", targetEpoch)
 		return types.EmptyBeacon, errBeaconNotCalculated
 	}
-	pd.logger.With().Error("failed to get beacon from db",
-		epochID,
-		log.Uint32("beacon_epoch", uint32(beaconEpoch)),
-		log.Err(err))
+	pd.logger.With().Error("failed to get beacon from db", targetEpoch, log.Err(err))
 	return types.EmptyBeacon, fmt.Errorf("get beacon from DB: %w", err)
 }
 
@@ -332,13 +326,13 @@ func (pd *ProtocolDriver) getBeacon(epoch types.EpochID) types.Beacon {
 	return types.EmptyBeacon
 }
 
-func (pd *ProtocolDriver) setBeacon(epoch types.EpochID, beacon types.Beacon) error {
-	if err := pd.persistBeacon(epoch, beacon); err != nil {
+func (pd *ProtocolDriver) setBeacon(targetEpoch types.EpochID, beacon types.Beacon) error {
+	if err := pd.persistBeacon(targetEpoch, beacon); err != nil {
 		return err
 	}
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.beacons[epoch] = beacon
+	pd.beacons[targetEpoch] = beacon
 	return nil
 }
 
@@ -363,9 +357,9 @@ func (pd *ProtocolDriver) getPersistedBeacon(epoch types.EpochID) (types.Beacon,
 func (pd *ProtocolDriver) initGenesisBeacons() {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
+	gBeacon := types.HexToBeacon(types.BootstrapBeacon)
 	for epoch := types.EpochID(0); epoch.IsGenesis(); epoch++ {
-		genesis := types.HexToBeacon(types.GenesisBeacon)
-		pd.beacons[epoch] = genesis
+		pd.beacons[epoch+1] = gBeacon
 	}
 }
 
@@ -1000,9 +994,10 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 	if !epoch.IsGenesis() {
 		ownWeight = pd.getOwnWeight(epoch - 1)
 	}
-	if beacon, ok := pd.beacons[epoch]; ok {
+	// whether the beacon for the next epoch is calculated
+	if beacon, ok := pd.beacons[epoch+1]; ok {
 		calculated = &metrics.BeaconStats{
-			Epoch:  epoch,
+			Epoch:  epoch + 1,
 			Beacon: beacon.ShortString(),
 			Count:  1,
 			Weight: ownWeight,
