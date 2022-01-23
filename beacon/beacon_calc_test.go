@@ -80,7 +80,7 @@ func TestBeacon_calcBeacon(t *testing.T) {
 				db:              database.NewMemDatabase(),
 			}
 
-			pd.initGenesisBeacons()
+			pd.bootstrapBeacon()
 
 			err := pd.calcBeacon(context.TODO(), epoch, tc.votes)
 			r.NoError(err)

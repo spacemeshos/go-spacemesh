@@ -101,6 +101,32 @@ func newPublisher(tb testing.TB) pubsub.Publisher {
 	return publisher
 }
 
+func TestBootstrapBeacon(t *testing.T) {
+	pd, clock := setUpProtocolDriver(t, uint64(10), true)
+	require.NoError(t, pd.Start(context.TODO()))
+	defer pd.Close()
+	defer clock.Close()
+
+	epoch2 := types.EpochID(2)
+	for i := types.EpochID(0); i < epoch2; i++ {
+		b, err := pd.GetBeacon(types.EpochID(0))
+		assert.ErrorIs(t, err, errBeaconNotCalculated)
+		assert.Equal(t, b, types.EmptyBeacon)
+	}
+
+	got, err := pd.GetBeacon(epoch2)
+	require.NoError(t, err)
+	assert.Equal(t, types.HexToBeacon(types.BootstrapBeacon), got)
+
+	pd.mu.RLock()
+	delete(pd.beacons, epoch2)
+	pd.mu.RUnlock()
+
+	got, err = pd.GetBeacon(epoch2)
+	require.NoError(t, err)
+	assert.Equal(t, types.HexToBeacon(types.BootstrapBeacon), got)
+}
+
 func TestBeacon(t *testing.T) {
 	pd, clock := setUpProtocolDriver(t, uint64(10), true)
 	epoch := types.EpochID(3)
@@ -230,7 +256,8 @@ func TestBeaconWithMetrics(t *testing.T) {
 			}
 		}
 	}
-	assert.EqualValues(t, gLayer.Uint32(), numCalculatedBeacon)
+	// the boostrap beacon in epoch 2 will be considered calculated
+	assert.EqualValues(t, layersPerEpoch, numCalculatedBeacon)
 
 	epoch3Beacon := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	epoch := types.EpochID(3)

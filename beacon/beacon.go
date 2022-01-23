@@ -179,7 +179,7 @@ func (pd *ProtocolDriver) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	pd.cancel = cancel
 
-	pd.initGenesisBeacons()
+	pd.bootstrapBeacon()
 	pd.layerTicker = pd.clock.Subscribe()
 	pd.metricsCollector.Start(nil)
 
@@ -354,13 +354,12 @@ func (pd *ProtocolDriver) getPersistedBeacon(epoch types.EpochID) (types.Beacon,
 	return types.BytesToBeacon(data), nil
 }
 
-func (pd *ProtocolDriver) initGenesisBeacons() {
-	pd.mu.Lock()
-	defer pd.mu.Unlock()
-	gBeacon := types.HexToBeacon(types.BootstrapBeacon)
-	for epoch := types.EpochID(0); epoch.IsGenesis(); epoch++ {
-		pd.beacons[epoch+1] = gBeacon
-	}
+// epoch 0 - no ATXs
+// epoch 1 - ATXs, no beacon protocol
+// epoch 2 - ATXs, proposals/blocks, beacon protocol (but targeting for epoch 3)
+// only epoch 2 needs to bootstrap beacon for proposals in epoch 2.
+func (pd *ProtocolDriver) bootstrapBeacon() {
+	pd.setBeacon(types.EpochID(2), types.HexToBeacon(types.BootstrapBeacon))
 }
 
 func (pd *ProtocolDriver) setBeginProtocol(ctx context.Context) {
