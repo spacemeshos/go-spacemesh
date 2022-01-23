@@ -105,7 +105,7 @@ var Cmd = &cobra.Command{
 			log.With().Fatal("failed to initialize config", log.Err(err))
 		}
 
-		if conf.TestMode {
+		if conf.LOGGING.Encoder == config.JSONLogEncoder {
 			log.JSONLog(true)
 		}
 		app := New(

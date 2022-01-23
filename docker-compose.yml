@@ -9,7 +9,7 @@ services:
           "--golden-atx", "${SMESH_GOLDEN_ATX:-0x5678}",
           "--poet-server", "${SMESH_POET_SERVER:?SMESH_POET_SERVER Must be specified}",
           "--post-space", "${SMESH_POST_SPACE:-1024}",
-          "--test-mode",
+          "--log-encoder", "${SMESH_LOG_ENCODER:?json}",
           "--start-mining",
           "--randcon",  "${SMESH_RANDCON:-8}",
           "--layer-duration-sec", "${SMESH_LAYER_DURATION:-180}",
