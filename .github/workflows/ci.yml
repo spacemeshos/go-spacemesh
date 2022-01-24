@@ -107,7 +107,7 @@ jobs:
     runs-on: windows-latest
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    timeout-minutes: 20
+    timeout-minutes: 40
     steps:
       - name: checkout
         uses: actions/checkout@v2
