@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
-	"path/filepath"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -38,10 +38,10 @@ func embeddedMigrations(db Executor) error {
 		if err != nil {
 			return fmt.Errorf("invalid migration %s: %w", file.Name(), err)
 		}
-		path := filepath.Join("migrations", file.Name())
-		content, err := embedded.ReadFile(path)
+		fpath := path.Join("migrations", file.Name())
+		content, err := embedded.ReadFile(fpath)
 		if err != nil {
-			return fmt.Errorf("readfile %s: %w", path, err)
+			return fmt.Errorf("readfile %s: %w", fpath, err)
 		}
 		scanner := bufio.NewScanner(bytes.NewBuffer(content))
 		scanner.Split(func(data []byte, atEOF bool) (advance int, token []byte, err error) {
