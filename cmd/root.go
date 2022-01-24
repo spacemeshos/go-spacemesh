@@ -66,7 +66,7 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().IntVar(&config.TxsPerBlock, "txs-per-block",
 		config.TxsPerBlock, "the number of transactions to select per block on block creation")
 
-	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(&config.Genesis.Accounts), "accounts", "a",
+	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(config.Genesis.Accounts), "accounts", "a",
 		"List of prefunded accounts")
 
 	/** ======================== P2P Flags ========================== **/

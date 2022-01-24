@@ -897,11 +897,18 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 		cmd := &cobra.Command{}
 		cmdp.AddCommands(cmd)
 
-		const key = "0x03"
-		require.NoError(t, cmd.ParseFlags([]string{"-a 0x03=100"}))
+		const value = 100
+		keys := []string{"0x03", "0x04"}
+		args := []string{}
+		for _, key := range keys {
+			args = append(args, fmt.Sprintf("-a %s=%d", key, value))
+		}
+		require.NoError(t, cmd.ParseFlags(args))
 
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
-		require.EqualValues(t, conf.Genesis.Accounts[key], 100)
+		for _, key := range keys {
+			require.EqualValues(t, conf.Genesis.Accounts[key], value)
+		}
 	})
 }
