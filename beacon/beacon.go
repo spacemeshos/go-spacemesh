@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -466,7 +468,8 @@ func (pd *ProtocolDriver) handleLayer(ctx context.Context, layer types.LayerID) 
 
 func (pd *ProtocolDriver) handleEpoch(ctx context.Context, epoch types.EpochID) {
 	ctx = log.WithNewSessionID(ctx)
-	logger := pd.logger.WithContext(ctx).WithFields(epoch)
+	targetEpoch := epoch + 1
+	logger := pd.logger.WithContext(ctx).WithFields(epoch, log.Uint32("target_epoch", uint32(targetEpoch)))
 	// TODO(nkryuchkov): check when epoch started, adjust waiting time for this timestamp
 	if epoch.IsGenesis() {
 		logger.Debug("not starting beacon protocol since we are in genesis epoch")
@@ -520,11 +523,32 @@ func (pd *ProtocolDriver) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	if err := pd.calcBeacon(ctx, epoch, lastRoundOwnVotes); err != nil {
-		logger.With().Error("failed to calculate beacon", log.Err(err))
+	beacon := calcBeacon(logger, lastRoundOwnVotes)
+	events.ReportCalculatedBeacon(targetEpoch, beacon.ShortString())
+
+	if err := pd.setBeacon(targetEpoch, beacon); err != nil {
+		logger.With().Error("failed to set beacon", log.Err(err))
+		return
 	}
 
-	logger.With().Debug("finished handling epoch")
+	logger.With().Info("beacon set for epoch", beacon)
+}
+
+func calcBeacon(logger log.Log, lastRoundVotes allVotes) types.Beacon {
+	logger.Info("calculating beacon")
+
+	allHashes := lastRoundVotes.valid.sort()
+	allHashHexes := make([]string, len(allHashes))
+	for i, h := range allHashes {
+		allHashHexes[i] = types.BytesToHash([]byte(h)).ShortString()
+	}
+	logger.With().Debug("calculating beacon from this hash list",
+		log.String("hashes", strings.Join(allHashHexes, ", ")))
+
+	beacon := types.Beacon(allHashes.hash())
+	logger.With().Info("calculated beacon", beacon, log.Int("num_hashes", len(allHashes)))
+
+	return beacon
 }
 
 func (pd *ProtocolDriver) getOrCreateProposalChannel(epoch types.EpochID) chan *proposalMessageWithReceiptData {
@@ -661,7 +685,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 		undecided []string
 		err       error
 	)
-	for round := types.FirstRound; round <= pd.lastRound(); round++ {
+	for round := types.FirstRound; round < pd.config.RoundsNumber; round++ {
 		round := round
 		rLogger := logger.WithFields(round)
 		votes := ownVotes

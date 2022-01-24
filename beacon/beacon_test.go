@@ -929,3 +929,21 @@ func TestBeacon_signAndVerifyVRF(t *testing.T) {
 	ok := verifier.Verify(signer.PublicKey(), message, signature)
 	r.True(ok)
 }
+
+func TestBeacon_calcBeacon(t *testing.T) {
+	hash := types.HexToHash32("0x6d148de54cc5ac334cdf4537018209b0e9f5ea94c049417103065eac777ddb5c")
+	votes := allVotes{
+		valid: proposalSet{
+			"0x1": {},
+			"0x2": {},
+			"0x4": {},
+			"0x5": {},
+		},
+		invalid: proposalSet{
+			"0x3": {},
+			"0x6": {},
+		},
+	}
+	beacon := calcBeacon(logtest.New(t), votes)
+	assert.EqualValues(t, hash.String(), beacon.String())
+}
