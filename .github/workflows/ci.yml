@@ -89,7 +89,24 @@ jobs:
     runs-on: ubuntu-latest
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    # should take around 15-18 mins
+    timeout-minutes: 20
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: set up go
+        uses: actions/setup-go@v2
+        with:
+          go-version: ${{ env.go-version }}
+      - name: setup env
+        run: make
+      - name: unit tests (except app test)
+        run: make test-no-app-test
+        env: 
+          TEST_LOG_LEVEL: debug
+  unittests-windows:
+    runs-on: windows-latest
+    needs: filter-changes
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     timeout-minutes: 20
     steps:
       - name: checkout
@@ -108,7 +125,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
-    # should take around 7-9 mins
     timeout-minutes: 15
     steps:
       - name: checkout
