@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"embed"
 	"fmt"
-	"path"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -38,7 +38,7 @@ func embeddedMigrations(db Executor) error {
 		if err != nil {
 			return fmt.Errorf("invalid migration %s: %w", file.Name(), err)
 		}
-		fpath := path.Join("migrations", file.Name())
+		fpath := filepath.Join("migrations", file.Name())
 		content, err := embedded.ReadFile(fpath)
 		if err != nil {
 			return fmt.Errorf("readfile %s: %w", fpath, err)

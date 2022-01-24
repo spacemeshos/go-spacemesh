@@ -1,7 +1,6 @@
 package sql
 
 import (
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -10,6 +9,7 @@ import (
 func TestMigrationsAppliedOnce(t *testing.T) {
 	db, err := Open(testURI(t))
 	require.NoError(t, err)
+	defer db.Close()
 
 	var version int
 	_, err = db.Exec("PRAGMA user_version;", nil, func(stmt *Statement) bool {
@@ -21,7 +21,8 @@ func TestMigrationsAppliedOnce(t *testing.T) {
 
 	require.NoError(t, db.Close())
 
-	db, err = Open("file:" + filepath.Join(t.TempDir(), "state.sql"))
+	db, err = Open(testURI(t))
 	require.NoError(t, err)
+	defer db.Close()
 	require.NotNil(t, db)
 }
