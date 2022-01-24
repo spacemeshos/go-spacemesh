@@ -891,3 +891,24 @@ func TestConfig_Preset(t *testing.T) {
 		require.Equal(t, preset, *conf)
 	})
 }
+
+func TestConfig_GenesisAccounts(t *testing.T) {
+	t.Run("OverwriteDefaults", func(t *testing.T) {
+		cmd := &cobra.Command{}
+		cmdp.AddCommands(cmd)
+
+		const value = 100
+		keys := []string{"0x03", "0x04"}
+		args := []string{}
+		for _, key := range keys {
+			args = append(args, fmt.Sprintf("-a %s=%d", key, value))
+		}
+		require.NoError(t, cmd.ParseFlags(args))
+
+		conf, err := loadConfig(cmd)
+		require.NoError(t, err)
+		for _, key := range keys {
+			require.EqualValues(t, conf.Genesis.Accounts[key], value)
+		}
+	})
+}

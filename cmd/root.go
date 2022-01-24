@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/spacemeshos/go-spacemesh/cmd/flags"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
@@ -64,6 +65,9 @@ func AddCommands(cmd *cobra.Command) {
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
 	cmd.PersistentFlags().IntVar(&config.TxsPerBlock, "txs-per-block",
 		config.TxsPerBlock, "the number of transactions to select per block on block creation")
+
+	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(config.Genesis.Accounts), "accounts", "a",
+		"List of prefunded accounts")
 
 	/** ======================== P2P Flags ========================== **/
 

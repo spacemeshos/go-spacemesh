@@ -112,6 +112,7 @@ type SmeshingConfig struct {
 func DefaultConfig() Config {
 	return Config{
 		BaseConfig:      defaultBaseConfig(),
+		Genesis:         apiConfig.DefaultGenesisConfig(),
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
 		API:             apiConfig.DefaultConfig(),
