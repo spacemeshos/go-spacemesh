@@ -25,7 +25,7 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.30.0
 	github.com/pyroscope-io/pyroscope v0.0.30
-	github.com/spacemeshos/api/release/go v1.3.1-0.20210726064428-9474f58a4ace
+	github.com/spacemeshos/api/release/go v1.4.1-0.20220115045820-3b2eee8875ba
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82

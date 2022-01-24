@@ -10,7 +10,8 @@ import (
 )
 
 func (pd *ProtocolDriver) calcBeacon(ctx context.Context, epoch types.EpochID, lastRoundVotes allVotes) error {
-	logger := pd.logger.WithContext(ctx).WithFields(epoch)
+	targetEpoch := epoch + 1
+	logger := pd.logger.WithContext(ctx).WithFields(epoch, log.Uint32("target_epoch", uint32(targetEpoch)))
 	logger.Info("calculating beacon")
 
 	allHashes := lastRoundVotes.valid.sort()
@@ -27,9 +28,9 @@ func (pd *ProtocolDriver) calcBeacon(ctx context.Context, epoch types.EpochID, l
 	logger = logger.WithFields(beacon)
 	logger.With().Info("calculated beacon", log.Int("num_hashes", len(allHashes)))
 
-	events.ReportCalculatedBeacon(epoch, beaconStr)
+	events.ReportCalculatedBeacon(targetEpoch, beaconStr)
 
-	if err := pd.setBeacon(epoch, beacon); err != nil {
+	if err := pd.setBeacon(targetEpoch, beacon); err != nil {
 		return err
 	}
 

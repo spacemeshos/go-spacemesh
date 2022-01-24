@@ -100,6 +100,5 @@ func (bmc *BeaconMetricsCollector) Collect(ch chan<- prometheus.Metric) {
 		return
 	}
 	// export the calculated beacon for the target epoch for ease of monitoring along with the observed beacons
-	targetEpoch := (calculated.Epoch + 1).String()
-	ch <- prometheus.MustNewConstMetric(bmc.calculatedBeaconWeight, prometheus.CounterValue, float64(calculated.Weight), targetEpoch, calculated.Beacon)
+	ch <- prometheus.MustNewConstMetric(bmc.calculatedBeaconWeight, prometheus.CounterValue, float64(calculated.Weight), calculated.Epoch.String(), calculated.Beacon)
 }
