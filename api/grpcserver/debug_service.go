@@ -15,7 +15,8 @@ import (
 
 // DebugService exposes global state data, output from the STF.
 type DebugService struct {
-	Mesh api.TxAPI
+	mesh     api.TxAPI
+	identity api.NetworkIdentity
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -24,9 +25,10 @@ func (d DebugService) RegisterService(server *Server) {
 }
 
 // NewDebugService creates a new grpc service using config data.
-func NewDebugService(tx api.TxAPI) *DebugService {
+func NewDebugService(tx api.TxAPI, host api.NetworkIdentity) *DebugService {
 	return &DebugService{
-		Mesh: tx,
+		mesh:     tx,
+		identity: host,
 	}
 }
 
@@ -34,7 +36,7 @@ func NewDebugService(tx api.TxAPI) *DebugService {
 func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.AccountsResponse, error) {
 	log.Info("GRPC DebugServices.Accounts")
 
-	accounts, err := d.Mesh.GetAllAccounts()
+	accounts, err := d.mesh.GetAllAccounts()
 	if err != nil {
 		log.Error("Failed to get all accounts from state: %s", err)
 		return nil, status.Errorf(codes.Internal, "error fetching accounts state")
@@ -57,4 +59,9 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 	}
 
 	return res, nil
+}
+
+// NetworkInfo query provides NetworkInfoResponse.
+func (d DebugService) NetworkInfo(ctx context.Context, _ *empty.Empty) (*pb.NetworkInfoResponse, error) {
+	return &pb.NetworkInfoResponse{Id: d.identity.ID().String()}, nil
 }

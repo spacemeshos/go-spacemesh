@@ -34,6 +34,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/mocks"
 	"github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -41,7 +42,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mempool"
-	"github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/svm"
@@ -1768,7 +1770,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	req := require.New(t)
 	syncer := &SyncerMock{}
 	ctrl := gomock.NewController(t)
-	publisher := mocks.NewMockPublisher(ctrl)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
 	grpcService := NewTransactionService(publisher, txAPI, mempoolMock, syncer)
@@ -1814,7 +1816,7 @@ func TestTransactionService(t *testing.T) {
 	logtest.SetupGlobal(t)
 
 	ctrl := gomock.NewController(t)
-	publisher := mocks.NewMockPublisher(ctrl)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	var receivedMu sync.Mutex
 	received := []byte{}
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
@@ -2927,7 +2929,9 @@ func TestJsonApi(t *testing.T) {
 
 func TestDebugService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewDebugService(txAPI)
+	ctrl := gomock.NewController(t)
+	identity := mocks.NewMockNetworkIdentity(ctrl)
+	svc := NewDebugService(txAPI, identity)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2940,37 +2944,35 @@ func TestDebugService(t *testing.T) {
 	defer func() { require.NoError(t, conn.Close()) }()
 	c := pb.NewDebugServiceClient(conn)
 
-	// Construct an array of test cases to test each endpoint in turn
-	testCases := []struct {
-		name string
-		run  func(*testing.T)
-	}{
-		{"Accounts", func(t *testing.T) {
-			res, err := c.Accounts(context.Background(), &empty.Empty{})
-			require.NoError(t, err)
-			require.Equal(t, 2, len(res.AccountWrapper))
+	t.Run("Accounts", func(t *testing.T) {
+		res, err := c.Accounts(context.Background(), &empty.Empty{})
+		require.NoError(t, err)
+		require.Equal(t, 2, len(res.AccountWrapper))
 
-			// Get the list of addresses and compare them regardless of order
-			var addresses [][]byte
-			for _, a := range res.AccountWrapper {
-				addresses = append(addresses, a.AccountId.Address)
-			}
-			require.Contains(t, addresses, globalTx.Origin().Bytes())
-			require.Contains(t, addresses, addr1.Bytes())
-		}},
-	}
+		// Get the list of addresses and compare them regardless of order
+		var addresses [][]byte
+		for _, a := range res.AccountWrapper {
+			addresses = append(addresses, a.AccountId.Address)
+		}
+		require.Contains(t, addresses, globalTx.Origin().Bytes())
+		require.Contains(t, addresses, addr1.Bytes())
+	})
+	t.Run("NetworkID", func(t *testing.T) {
+		id := p2p.Peer("test")
+		identity.EXPECT().ID().Return(id)
 
-	// Run subtests
-	for _, tc := range testCases {
-		t.Run(tc.name, tc.run)
-	}
+		response, err := c.NetworkInfo(context.TODO(), &empty.Empty{})
+		require.NoError(t, err)
+		require.NotNil(t, response)
+		require.Equal(t, id.String(), response.Id)
+	})
 }
 
 func TestGatewayService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
-	publisher := mocks.NewMockPublisher(ctrl)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
 
 	svc := NewGatewayService(publisher)
 	shutDown := launchServer(t, svc)
@@ -3027,7 +3029,7 @@ func TestEventsReceived(t *testing.T) {
 	logtest.SetupGlobal(t)
 
 	ctrl := gomock.NewController(t)
-	publisher := mocks.NewMockPublisher(ctrl)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
 		return nil
 	})
