@@ -101,32 +101,6 @@ func newPublisher(tb testing.TB) pubsub.Publisher {
 	return publisher
 }
 
-func TestBootstrapBeacon(t *testing.T) {
-	pd, clock := setUpProtocolDriver(t, uint64(10), true)
-	require.NoError(t, pd.Start(context.TODO()))
-	defer pd.Close()
-	defer clock.Close()
-
-	epoch2 := types.EpochID(2)
-	for i := types.EpochID(0); i < epoch2; i++ {
-		b, err := pd.GetBeacon(types.EpochID(0))
-		assert.ErrorIs(t, err, errBeaconNotCalculated)
-		assert.Equal(t, b, types.EmptyBeacon)
-	}
-
-	got, err := pd.GetBeacon(epoch2)
-	require.NoError(t, err)
-	assert.Equal(t, types.HexToBeacon(types.BootstrapBeacon), got)
-
-	pd.mu.RLock()
-	delete(pd.beacons, epoch2)
-	pd.mu.RUnlock()
-
-	got, err = pd.GetBeacon(epoch2)
-	require.NoError(t, err)
-	assert.Equal(t, types.HexToBeacon(types.BootstrapBeacon), got)
-}
-
 func TestBeacon(t *testing.T) {
 	pd, clock := setUpProtocolDriver(t, uint64(10), true)
 	epoch := types.EpochID(3)
@@ -231,34 +205,6 @@ func TestBeaconWithMetrics(t *testing.T) {
 	})
 
 	gLayer := types.GetEffectiveGenesis()
-	numCalculatedBeacon := 0
-	for layer := types.NewLayerID(1); !layer.After(gLayer); layer = layer.Add(1) {
-		pd.handleLayer(context.TODO(), layer)
-		thisEpoch := layer.GetEpoch()
-		ownWeight := atxHeader.GetWeight()
-		if thisEpoch.IsGenesis() {
-			ownWeight = 0
-		}
-		allMetrics, err := prometheus.DefaultGatherer.Gather()
-		assert.NoError(t, err)
-		for _, m := range allMetrics {
-			switch *m.Name {
-			case "spacemesh_beacons_beacon_calculated_weight":
-				require.Equal(t, 1, len(m.Metric))
-				numCalculatedBeacon++
-				beaconStr := types.HexToHash32(types.BootstrapBeacon).ShortString()
-				expected := fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beaconStr, thisEpoch+1, ownWeight)
-				assert.Equal(t, expected, m.Metric[0].String())
-			case "spacemesh_beacons_beacon_observed_total":
-				t.Errorf("genesis ballots do not have ballots")
-			case "spacemesh_beacons_beacon_observed_weight":
-				t.Errorf("genesis ballots do not have ballots")
-			}
-		}
-	}
-	// the boostrap beacon in epoch 2 will be considered calculated
-	assert.EqualValues(t, layersPerEpoch, numCalculatedBeacon)
-
 	epoch3Beacon := "0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 	epoch := types.EpochID(3)
 	finalLayer := types.NewLayerID(layersPerEpoch * uint32(epoch))

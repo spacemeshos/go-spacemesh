@@ -179,7 +179,6 @@ func (pd *ProtocolDriver) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	pd.cancel = cancel
 
-	pd.bootstrapBeacon()
 	pd.layerTicker = pd.clock.Subscribe()
 	pd.metricsCollector.Start(nil)
 
@@ -295,8 +294,12 @@ func (pd *ProtocolDriver) findMostWeightedBeaconForEpoch(epoch types.EpochID) ty
 
 // GetBeacon returns the beacon for the specified epoch or an error if it doesn't exist.
 func (pd *ProtocolDriver) GetBeacon(targetEpoch types.EpochID) (types.Beacon, error) {
-	if targetEpoch.IsGenesis() {
-		return types.EmptyBeacon, errBeaconNotCalculated
+	// Returns empty beacon up to epoch 2:
+	// epoch 0 - no ATXs
+	// epoch 1 - ATXs, no beacon protocol, only genesis ballot needs to set the beacon value
+	// epoch 2 - ATXs, proposals/blocks, beacon protocol (but targeting for epoch 3)
+	if targetEpoch <= types.EpochID(2) {
+		return types.HexToBeacon(types.BootstrapBeacon), nil
 	}
 
 	beacon := pd.getBeacon(targetEpoch)
@@ -352,14 +355,6 @@ func (pd *ProtocolDriver) getPersistedBeacon(epoch types.EpochID) (types.Beacon,
 	}
 
 	return types.BytesToBeacon(data), nil
-}
-
-// epoch 0 - no ATXs
-// epoch 1 - ATXs, no beacon protocol
-// epoch 2 - ATXs, proposals/blocks, beacon protocol (but targeting for epoch 3)
-// only epoch 2 needs to bootstrap beacon for proposals in epoch 2.
-func (pd *ProtocolDriver) bootstrapBeacon() {
-	pd.setBeacon(types.EpochID(2), types.HexToBeacon(types.BootstrapBeacon))
 }
 
 func (pd *ProtocolDriver) setBeginProtocol(ctx context.Context) {

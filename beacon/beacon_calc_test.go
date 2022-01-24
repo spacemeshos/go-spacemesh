@@ -80,8 +80,6 @@ func TestBeacon_calcBeacon(t *testing.T) {
 				db:              database.NewMemDatabase(),
 			}
 
-			pd.bootstrapBeacon()
-
 			err := pd.calcBeacon(context.TODO(), epoch, tc.votes)
 			r.NoError(err)
 			r.EqualValues(tc.hash.String(), pd.beacons[epoch+1].String())
