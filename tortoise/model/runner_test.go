@@ -34,7 +34,7 @@ func TestFailure(t *testing.T) {
 	c.addHare().addBeacon()
 
 	r := newFailingRunner(c, rng, [2]int{7, 100}).
-		failable(EventBallot{}).failable(EventBlock{})
+		failable(EventBallot{}, EventBlock{}, EventAtx{})
 	for i := 0; i < 9; i++ {
 		r.next()
 	}

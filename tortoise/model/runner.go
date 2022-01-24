@@ -98,11 +98,13 @@ func (r *failingRunner) next() {
 	r.drainEvents(EventLayerEnd{LayerID: r.lid})
 }
 
-func (r *failingRunner) failable(ev Event) *failingRunner {
+func (r *failingRunner) failable(events ...Event) *failingRunner {
 	if r.failables == nil {
 		r.failables = map[reflect.Type]struct{}{}
 	}
-	r.failables[reflect.TypeOf(ev)] = struct{}{}
+	for _, ev := range events {
+		r.failables[reflect.TypeOf(ev)] = struct{}{}
+	}
 	return r
 }
 
