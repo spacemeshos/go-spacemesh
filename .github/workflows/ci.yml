@@ -118,7 +118,7 @@ jobs:
       - name: setup env
         run: make
       - name: unit tests (except app test)
-        run: make test-no-app-test
+        run: make test-no-app-test-sql
         env: 
           TEST_LOG_LEVEL: debug
   apptests:
