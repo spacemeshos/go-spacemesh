@@ -473,7 +473,7 @@ func (pd *ProtocolDriver) storeFollowingVotes(message FollowingVotingMessage, mi
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	thisRoundVotes := pd.decodeVotes(message.VotesBitVector, pd.firstRoundIncomingVotes[string(minerPK.Bytes())])
+	thisRoundVotes := decodeVotes(message.VotesBitVector, pd.firstRoundIncomingVotes[string(minerPK.Bytes())])
 
 	for vote := range thisRoundVotes.valid {
 		if _, ok := pd.votesMargin[vote]; !ok {

@@ -814,7 +814,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 
 func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
 	pd.mu.RLock()
-	bitVector := pd.encodeVotes(ownCurrentRoundVotes, pd.incomingProposals)
+	bitVector := encodeVotes(ownCurrentRoundVotes, pd.incomingProposals, pd.config.VotesLimit)
 	pd.mu.RUnlock()
 
 	mb := FollowingVotingMessageBody{
