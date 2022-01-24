@@ -63,6 +63,9 @@ type TxAPI interface {
 	// TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
 }
 
+// NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go github.com/spacemeshos/go-spacemesh/api NetworkIdentity
+
 // NetworkIdentity interface.
 type NetworkIdentity interface {
 	ID() p2p.Peer
