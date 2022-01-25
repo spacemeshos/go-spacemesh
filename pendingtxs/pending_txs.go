@@ -136,8 +136,10 @@ func validTxWithHighestFee(txs map[types.TransactionID]nanoTx, balance uint64) t
 	bestID := types.EmptyTransactionID
 	var maxFee uint64
 	for id, tx := range txs {
-		if (tx.Fee > maxFee || (tx.Fee == maxFee && bytes.Compare(id[:], bestID[:]) < 0)) &&
-			balance >= (tx.Amount+tx.Fee) {
+		if balance >= (tx.Amount+tx.Fee) &&
+			(bestID == types.EmptyTransactionID || // first tx with enough balance
+				tx.Fee > maxFee ||
+				(tx.Fee == maxFee && bytes.Compare(id[:], bestID[:]) < 0)) {
 			maxFee = tx.Fee
 			bestID = id
 		}
