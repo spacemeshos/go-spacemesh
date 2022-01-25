@@ -659,7 +659,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	// note: we expect the number of ballots to be a bit less than the expected number since, after some apps were
 	// killed and before healing kicked in, some ballots should be missing
 	expectedTotalBallots := (totalEpochs - 2) * expectedBallotsPerEpoch
-	actualTotalBallots := totalBallots - genesisBallots
+	actualTotalBallots := totalBallots
 	suite.Equal(expectedTotalBallots, actualTotalBallots,
 		fmt.Sprintf("got unexpected ballot count! got: %v, want: %v. totalBallots: %v, genesisBallots: %v, lastLayer: %v, layersPerEpoch: %v, layerAvgSize: %v, totalEpochs: %v, datamap: %v",
 			actualTotalBallots, expectedTotalBallots, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
