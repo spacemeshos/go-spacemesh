@@ -78,6 +78,11 @@ func (t *Transaction) Origin() Address {
 	return *t.origin
 }
 
+// SetID updates transaction ID.
+func (t *Transaction) SetID(id TransactionID) {
+	t.id = &id
+}
+
 // SetOrigin sets the cache of the transaction's origin address.
 func (t *Transaction) SetOrigin(origin Address) {
 	if t.origin != nil && *t.origin == origin {
@@ -120,7 +125,7 @@ func (t *Transaction) ID() TransactionID {
 	}
 
 	id := TransactionID(CalcHash32(txBytes))
-	t.id = &id
+	t.SetID(id)
 
 	return id
 }

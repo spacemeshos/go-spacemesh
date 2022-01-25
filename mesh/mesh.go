@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
+	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 var (
@@ -507,21 +508,14 @@ func (msh *Mesh) reInsertTxsToPool(applied *types.Block, notApplied []*types.Blo
 	if len(missing) > 0 {
 		msh.With().Error("could not reinsert transactions", log.Int("missing", len(missing)), l)
 	}
-
-	grouped, accounts, err := msh.removeFromUnappliedTxs(returnedTxs)
-	if err != nil {
+	if err := msh.markTransactionsDeleted(returnedTxs...); err != nil {
 		return err
 	}
-	for account := range accounts {
-		if err = msh.removeRejectedFromAccountTxs(account, grouped); err != nil {
-			return err
-		}
-	}
 	for _, tx := range returnedTxs {
-		if err = msh.ValidateNonceAndBalance(tx); err != nil {
+		if err := msh.ValidateNonceAndBalance(tx); err != nil {
 			return err
 		}
-		if err = msh.AddTxToPool(tx); err == nil {
+		if err := msh.AddTxToPool(tx); err == nil {
 			// We ignore errors here, since they mean that the tx is no longer
 			// valid and we shouldn't re-add it.
 			msh.With().Info("transaction from contextually invalid block re-added to mempool", tx.ID())
@@ -562,9 +556,10 @@ func (msh *Mesh) applyState(block *types.Block) error {
 		msh.With().Error("failed to update tx block ID in db", log.Err(err))
 		return err
 	}
-	if _, _, err := msh.removeFromUnappliedTxs(txs); err != nil {
-		msh.With().Error("failed to remove unapplied TXs", log.Err(err))
-		return err
+	for _, tx := range txs {
+		if err := transactions.Applied(msh.db, tx.ID()); err != nil {
+			return err
+		}
 	}
 	msh.With().Info("applied transactions",
 		block.LayerIndex,
@@ -749,7 +744,7 @@ func (msh *Mesh) storeTransactionsFromPool(layerID types.LayerID, blockID types.
 		if err != nil {
 			// if the transaction is not in the pool it could have been
 			// invalidated by another block
-			if has, err := msh.transactions.Has(txID.Bytes()); !has {
+			if has, err := transactions.Has(msh.db, txID); !has {
 				return fmt.Errorf("check if tx is in DB: %w", err)
 			}
 			continue
@@ -758,10 +753,6 @@ func (msh *Mesh) storeTransactionsFromPool(layerID types.LayerID, blockID types.
 	}
 	if err := msh.writeTransactions(layerID, blockID, txs...); err != nil {
 		return fmt.Errorf("write tx: %w", err)
-	}
-
-	if err := msh.addToUnappliedTxs(txs, layerID); err != nil {
-		return fmt.Errorf("failed to add to unappliedTxs: %v", err)
 	}
 
 	// remove txs from pool

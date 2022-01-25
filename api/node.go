@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -44,8 +45,9 @@ type TxAPI interface {
 	GetRewards(types.Address) ([]types.Reward, error)
 	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
 	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
-	GetTransactionsByDestination(types.LayerID, types.Address) ([]types.TransactionID, error)
-	GetTransactionsByOrigin(types.LayerID, types.Address) ([]types.TransactionID, error)
+	GetTransactionsByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
+	GetTransactionsByDestination(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
+	GetTransactionsByOrigin(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
 	LatestLayer() types.LayerID
 	GetLayerApplied(types.TransactionID) *types.LayerID
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
@@ -59,6 +61,14 @@ type TxAPI interface {
 	GetAllAccounts() (*types.MultipleAccountsState, error)
 	GetRewardsBySmesherID(types.NodeID) ([]types.Reward, error)
 	// TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
+}
+
+// NOTE that mockgen doesn't use source-mode to avoid generating mocks for all interfaces in this file.
+//go:generate mockgen -package=mocks -destination=./mocks/mocks.go github.com/spacemeshos/go-spacemesh/api NetworkIdentity
+
+// NetworkIdentity interface.
+type NetworkIdentity interface {
+	ID() p2p.Peer
 }
 
 // PeerCounter is an api to get amount of connected peers.

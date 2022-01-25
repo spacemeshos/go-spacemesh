@@ -14,8 +14,8 @@ const (
 	// LayerIDSize in bytes.
 	LayerIDSize = 4
 
-	// GenesisBeacon is the hex value of the beacon used during genesis.
-	GenesisBeacon = "0xaeebad4a796fcc2e15dc4c6061b45ed9b373f26adfc798ca7d2d8cc58182718e" // sha256("genesis")
+	// BootstrapBeacon is the hex value of the beacon used during genesis.
+	BootstrapBeacon = "0x333c04dd151a2a6831c039cb9a651df29198be8a04e16ce861d4b6a34a11c954" // sha256("bootstrap")
 
 	// genesisBallotIDHex is the genesis ballot ID in hex.
 	genesisBallotIDHex = "0x7a68f37b1a1903c9b9d428c3bdb0a8188c6b7d888ce63166dc97a9826105f417"
@@ -65,7 +65,7 @@ func InitGenesisData() {
 		InnerBallot: InnerBallot{
 			LayerIndex: GetEffectiveGenesis(),
 			EpochData: &EpochData{
-				Beacon: HexToBeacon(GenesisBeacon),
+				Beacon: HexToBeacon(BootstrapBeacon),
 			},
 		},
 		ballotID: GenesisBallotID,
