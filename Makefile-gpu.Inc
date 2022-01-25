@@ -15,6 +15,10 @@ ifeq ($(GOOS),)
   GOOS := $(HOST_OS)
 endif
 
+ifeq ($(GOARCH),)
+  GOARCH := $(shell go env GOARCH)
+endif
+
 GOTAGS = # -tags ...
 export CGO_LDFLAGS := -L$(BIN_DIR)
 
@@ -27,7 +31,11 @@ ifeq ($(GOOS),windows)
 else
   TEMP := /tmp
   ifeq ($(GOOS),darwin)
-    platform := macos
+    ifeq ($(GOARCH),arm64)
+    	platform := macos-m1
+    else
+    	platform := macos
+    endif
     CGO_LDFLAGS := $(CGO_LDFLAGS) -Wl,-rpath,@loader_path
     ULIMIT := ulimit -n 9999;
   else
@@ -37,16 +45,16 @@ else
 endif
 
 ifneq ($(VERBOSE),)
-  $(info "OS: $(OS), HOST_OS: $(HOST_OS), GOOS: $(GOOS), GOARCH: $(GOARH), BIN_DIR: $(BIN_DIR), platform: $(platform)")
+  $(info "OS: $(OS), HOST_OS: $(HOST_OS), GOOS: $(GOOS), GOARCH: $(GOARCH), BIN_DIR: $(BIN_DIR), platform: $(platform)")
 endif
 
-GPU_SETUP_REV = 0.1.21
+GPU_SETUP_REV = 0.1.24
 GPU_SETUP_ZIP = libgpu-setup-$(platform)-$(GPU_SETUP_REV).zip
-GPU_SETUP_URL_ZIP = https://github.com/spacemeshos/gpu-post/releases/download/v$(GPU_SETUP_REV)/$(platform).zip
+GPU_SETUP_URL_ZIP = https://github.com/spacemeshos/gpu-post/releases/download/v$(GPU_SETUP_REV)/$(GPU_SETUP_ZIP)
 ifeq ($(platform), windows)
   GPU_SETUP_LIBS = gpu-setup.dll
 else
-  ifeq ($(platform), macos)
+  ifneq (,$(findstring macos,$(platform)))
   	GPU_SETUP_LIBS = libgpu-setup.dylib libMoltenVK.dylib libvulkan.1.dylib MoltenVK_icd.json
   else
   	GPU_SETUP_LIBS = libgpu-setup.so
