@@ -16,10 +16,10 @@ type hare struct {
 	rng *rand.Rand
 }
 
-// OnEvent produces blocks.
-func (h *hare) OnEvent(event Event) []Event {
+// OnMessage produces blocks.
+func (h *hare) OnMessage(m Messenger, event Message) {
 	switch ev := event.(type) {
-	case EventLayerStart:
+	case MessageLayerStart:
 		id := types.BlockID{}
 		h.rng.Read(id[:])
 		block := types.NewExistingBlock(
@@ -29,10 +29,9 @@ func (h *hare) OnEvent(event Event) []Event {
 			},
 		)
 		// head and tails are at equal probability.
-		return []Event{
-			EventCoinflip{LayerID: ev.LayerID, Coinflip: h.rng.Int()%2 == 0},
-			EventBlock{Block: block},
-		}
+		m.Send(
+			MessageCoinflip{LayerID: ev.LayerID, Coinflip: h.rng.Int()%2 == 0},
+			MessageBlock{Block: block},
+		)
 	}
-	return nil
 }

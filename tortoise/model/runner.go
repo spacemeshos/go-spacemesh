@@ -10,7 +10,7 @@ import (
 )
 
 type model interface {
-	OnEvent(Event) []Event
+	OnMessage(Messenger, Message)
 }
 
 func newCluster(logger log.Log, rng *rand.Rand) *cluster {
@@ -33,7 +33,8 @@ func (r *cluster) add(m model) *cluster {
 }
 
 func (r *cluster) addCore() *cluster {
-	return r.add(newCore(r.rng, r.logger.Named("core-"+r.nextid())))
+	id := r.nextid()
+	return r.add(newCore(r.rng, id, r.logger.Named("core-"+id)))
 }
 
 func (r *cluster) addHare() *cluster {
@@ -50,35 +51,16 @@ func (r *cluster) iterate(f func(m model)) {
 	}
 }
 
-// sanityRunner processes events sequentially without any unexpected behavior.
-type sanityRunner struct {
-	cluster *cluster
-	lid     types.LayerID
-}
-
-func (r *sanityRunner) next() {
-	r.lid = r.lid.Add(1)
-	r.drainEvents(EventLayerStart{LayerID: r.lid})
-	r.drainEvents(EventLayerEnd{LayerID: r.lid})
-}
-
-func (r *sanityRunner) drainEvents(events ...Event) {
-	for len(events) > 0 {
-		var next []Event
-		r.cluster.iterate(func(m model) {
-			for _, ev := range events {
-				for _, output := range m.OnEvent(ev) {
-					next = append(next, output)
-				}
-			}
-		})
-		events = next
-	}
-}
-
-func newFailingRunner(c *cluster, rng *rand.Rand, probability [2]int) *failingRunner {
+func newFailingRunner(c *cluster,
+	messenger Messenger,
+	monitors []Monitor,
+	rng *rand.Rand,
+	probability [2]int,
+) *failingRunner {
 	return &failingRunner{
 		cluster:     c,
+		messenger:   messenger,
+		monitors:    monitors,
 		rng:         rng,
 		probability: probability,
 	}
@@ -86,6 +68,8 @@ func newFailingRunner(c *cluster, rng *rand.Rand, probability [2]int) *failingRu
 
 type failingRunner struct {
 	cluster     *cluster
+	messenger   Messenger
+	monitors    []Monitor
 	probability [2]int
 	rng         *rand.Rand
 	lid         types.LayerID
@@ -94,11 +78,13 @@ type failingRunner struct {
 
 func (r *failingRunner) next() {
 	r.lid = r.lid.Add(1)
-	r.drainEvents(EventLayerStart{LayerID: r.lid})
-	r.drainEvents(EventLayerEnd{LayerID: r.lid})
+	r.messenger.Send(MessageLayerStart{LayerID: r.lid})
+	r.consume()
+	r.messenger.Send(MessageLayerEnd{LayerID: r.lid})
+	r.consume()
 }
 
-func (r *failingRunner) failable(events ...Event) *failingRunner {
+func (r *failingRunner) failable(events ...Message) *failingRunner {
 	if r.failables == nil {
 		r.failables = map[reflect.Type]struct{}{}
 	}
@@ -108,7 +94,7 @@ func (r *failingRunner) failable(events ...Event) *failingRunner {
 	return r
 }
 
-func (r *failingRunner) isFailable(ev Event) bool {
+func (r *failingRunner) isFailable(ev Message) bool {
 	if r.failables == nil {
 		return true
 	}
@@ -116,19 +102,18 @@ func (r *failingRunner) isFailable(ev Event) bool {
 	return exist
 }
 
-func (r *failingRunner) drainEvents(events ...Event) {
-	for len(events) > 0 {
-		var next []Event
+func (r *failingRunner) consume() {
+	for msg := r.messenger.PopMessage(); msg != nil; msg = r.messenger.PopMessage() {
+		if r.isFailable(msg) && r.probability[0] > rand.Intn(r.probability[1]) {
+			continue
+		}
 		r.cluster.iterate(func(m model) {
-			for _, ev := range events {
-				if r.isFailable(ev) && r.probability[0] > rand.Intn(r.probability[1]) {
-					continue
-				}
-				for _, output := range m.OnEvent(ev) {
-					next = append(next, output)
-				}
-			}
+			m.OnMessage(r.messenger, msg)
 		})
-		events = next
+	}
+	for ev := r.messenger.PopEvent(); ev != nil; ev = r.messenger.PopEvent() {
+		for _, monitor := range r.monitors {
+			monitor.OnEvent(ev)
+		}
 	}
 }
