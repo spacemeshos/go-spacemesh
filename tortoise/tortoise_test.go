@@ -258,10 +258,10 @@ func generateBallots(t *testing.T, l types.LayerID, natxs, nballots int, bbp bas
 	for i := 0; i < nballots; i++ {
 		b := &types.Ballot{
 			InnerBallot: types.InnerBallot{
-				AtxID:            atxs[i%len(atxs)],
-				Votes:            *votes,
-				EligibilityProof: types.VotingEligibilityProof{J: uint32(i)},
-				LayerIndex:       l,
+				AtxID:             atxs[i%len(atxs)],
+				Votes:             *votes,
+				EligibilityProofs: []types.VotingEligibilityProof{{J: uint32(i)}},
+				LayerIndex:        l,
 				EpochData: &types.EpochData{
 					ActiveSet: atxs,
 				},
@@ -1921,8 +1921,8 @@ func TestComputeBallotWeight(t *testing.T) {
 			for i, b := range tc.ballots {
 				ballot := &types.Ballot{
 					InnerBallot: types.InnerBallot{
-						EligibilityProof: types.VotingEligibilityProof{J: uint32(i)},
-						AtxID:            atxs[b.ATX].ID(),
+						EligibilityProofs: []types.VotingEligibilityProof{{J: uint32(i)}},
+						AtxID:             atxs[b.ATX].ID(),
 					},
 				}
 				if b.ActiveSet != nil {
@@ -2193,7 +2193,7 @@ func TestLateBaseBallot(t *testing.T) {
 	require.NoError(t, err)
 	var base types.Ballot
 	require.NoError(t, codec.Decode(buf, &base))
-	base.EligibilityProof.J++
+	base.EligibilityProofs[0].J++
 	base.Initialize()
 	tortoise.OnBallot(&base)
 

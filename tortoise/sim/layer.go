@@ -144,10 +144,10 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		}
 		ballot := &types.Ballot{
 			InnerBallot: types.InnerBallot{
-				AtxID:            atxid,
-				EligibilityProof: proof,
-				Votes:            voting,
-				LayerIndex:       g.nextLayer,
+				AtxID:             atxid,
+				EligibilityProofs: []types.VotingEligibilityProof{proof},
+				Votes:             voting,
+				LayerIndex:        g.nextLayer,
 				EpochData: &types.EpochData{
 					ActiveSet: activeset,
 					Beacon:    beacon,

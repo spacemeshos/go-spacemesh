@@ -15,6 +15,7 @@ var (
 	errTargetEpochMismatch = errors.New("ATX target epoch and ballot publish epoch mismatch")
 	errPublicKeyMismatch   = errors.New("ballot smesher key and ATX node key mismatch")
 	errIncorrectCounter    = errors.New("proof counter larger than number of slots available")
+	errInvalidProofsOrder  = errors.New("proofs are out of order")
 	errIncorrectVRFSig     = errors.New("proof contains incorrect VRF signature")
 	errIncorrectLayerIndex = errors.New("ballot has incorrect layer index")
 )
@@ -92,28 +93,40 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		return false, err
 	}
 
-	counter := ballot.EligibilityProof.J
-	if counter >= numEligibleBallots {
-		return false, fmt.Errorf("%w: proof counter (%d) numEligibleBallots (%d), totalWeight (%v)",
-			errIncorrectCounter, counter, numEligibleBallots, totalWeight)
-	}
+	var (
+		last    uint32
+		isFirst = true
+	)
+	for _, proof := range ballot.EligibilityProofs {
+		counter := proof.J
+		if counter >= numEligibleBallots {
+			return false, fmt.Errorf("%w: proof counter (%d) numEligibleBallots (%d), totalWeight (%v)",
+				errIncorrectCounter, counter, numEligibleBallots, totalWeight)
+		}
+		if isFirst {
+			isFirst = false
+		} else if counter <= last {
+			return false, fmt.Errorf("%w: %d <= %d", errInvalidProofsOrder, counter, last)
+		}
+		last = counter
 
-	message, err := SerializeVRFMessage(beacon, epoch, counter)
-	if err != nil {
-		return false, err
-	}
-	vrfSig := ballot.EligibilityProof.Sig
+		message, err := SerializeVRFMessage(beacon, epoch, counter)
+		if err != nil {
+			return false, err
+		}
+		vrfSig := proof.Sig
 
-	beaconStr := beacon.ShortString()
-	if !signing.VRFVerify(vrfPubkey, message, vrfSig) {
-		return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
-			errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
-	}
+		beaconStr := beacon.ShortString()
+		if !signing.VRFVerify(vrfPubkey, message, vrfSig) {
+			return false, fmt.Errorf("%w: beacon: %v, epoch: %v, counter: %v, vrfSig: %v",
+				errIncorrectVRFSig, beaconStr, epoch, counter, types.BytesToHash(vrfSig).ShortString())
+		}
 
-	eligibleLayer := CalcEligibleLayer(epoch, v.layersPerEpoch, vrfSig)
-	if ballot.LayerIndex != eligibleLayer {
-		return false, fmt.Errorf("%w: ballot layer (%v), eligible layer (%v)",
-			errIncorrectLayerIndex, ballot.LayerIndex, eligibleLayer)
+		eligibleLayer := CalcEligibleLayer(epoch, v.layersPerEpoch, vrfSig)
+		if ballot.LayerIndex != eligibleLayer {
+			return false, fmt.Errorf("%w: ballot layer (%v), eligible layer (%v)",
+				errIncorrectLayerIndex, ballot.LayerIndex, eligibleLayer)
+		}
 	}
 
 	v.logger.WithContext(ctx).With().Info("ballot eligibility verified",
@@ -121,7 +134,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		ballot.LayerIndex,
 		epoch,
 		beacon,
-		log.Uint32("counter", counter))
+	)
 
 	v.beacons.ReportBeaconFromBallot(epoch, ballot.ID(), beacon, weight)
 	return true, nil

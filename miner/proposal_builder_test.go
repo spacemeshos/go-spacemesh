@@ -152,24 +152,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 			assert.Equal(t, activeSet, p.EpochData.ActiveSet)
 			assert.Equal(t, beacon, p.EpochData.Beacon)
 			assert.Equal(t, []types.TransactionID{tx1.ID()}, p.TxIDs)
-			return nil
-		}).Times(1)
-
-	// for the 2nd proposal
-	refBid := types.RandomBallotID()
-	tx2 := genTX(t, 1, types.BytesToAddress([]byte{0x02}), signing.NewEdSigner())
-	b.mTxPool.EXPECT().SelectTopNTransactions(gomock.Any(), gomock.Any()).Return([]types.TransactionID{tx2.ID()}, nil, nil).Times(1)
-	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(refBid.Bytes(), nil).Times(1)
-	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
-		func(_ context.Context, _ string, data []byte) error {
-			var p types.Proposal
-			require.NoError(t, codec.Decode(data, &p))
-			require.NoError(t, p.Initialize())
-			assert.Equal(t, base, p.Votes.Base)
-			assert.Equal(t, refBid, p.RefBallot)
-			assert.Equal(t, atxID, p.AtxID)
-			require.Nil(t, p.EpochData)
-			assert.Equal(t, []types.TransactionID{tx2.ID()}, p.TxIDs)
+			assert.Equal(t, proofs, p.EligibilityProofs)
 			return nil
 		}).Times(1)
 
@@ -414,10 +397,10 @@ func TestBuilder_UniqueBlockID(t *testing.T) {
 	activeSet := genActiveSet(t)
 	beacon := types.RandomBeacon()
 	builder1.mRefDB.EXPECT().Get(getEpochKey(layerID.GetEpoch())).Return(types.RandomBallotID().Bytes(), nil).Times(1)
-	b1, err := builder1.createProposal(context.TODO(), layerID, types.VotingEligibilityProof{}, atxID1, activeSet, beacon, nil, types.Votes{})
+	b1, err := builder1.createProposal(context.TODO(), layerID, nil, atxID1, activeSet, beacon, nil, types.Votes{})
 	require.NoError(t, err)
 	builder2.mRefDB.EXPECT().Get(getEpochKey(layerID.GetEpoch())).Return(types.RandomBallotID().Bytes(), nil).Times(1)
-	b2, err := builder2.createProposal(context.TODO(), layerID, types.VotingEligibilityProof{}, atxID2, activeSet, beacon, nil, types.Votes{})
+	b2, err := builder2.createProposal(context.TODO(), layerID, nil, atxID2, activeSet, beacon, nil, types.Votes{})
 	require.NoError(t, err)
 
 	assert.NotEqual(t, b1.ID(), b2.ID())
