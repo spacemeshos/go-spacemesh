@@ -297,13 +297,15 @@ func (b *Builder) loop(ctx context.Context) {
 		b.log.Info("challenge not loaded: %s", err)
 	}
 
-	// Once initialized, run the execution phase with zero-challenge,
-	// to create the initial proof (the commitment).
-	// TODO(moshababo): don't generate the commitment every time smeshing is starting, but once only.
-	b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
-	if err != nil {
-		b.log.Error("post execution failed: %v", err)
-		return
+	// don't generate the commitment every time smeshing is starting, but once only.
+	if _, err := b.GetPrevAtx(b.nodeID); err != nil {
+		// Once initialized, run the execution phase with zero-challenge,
+		// to create the initial proof (the commitment).
+		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
+		if err != nil {
+			b.log.Error("post execution failed: %v", err)
+			return
+		}
 	}
 
 	// ensure layer 1 has arrived
