@@ -135,6 +135,7 @@ func (t *turtle) evict(ctx context.Context) {
 		for _, ballot := range t.ballots[lid] {
 			delete(t.ballotLayer, ballot)
 			delete(t.ballotWeight, ballot)
+			delete(t.referenceWeight, ballot)
 			delete(t.badBeaconBallots, ballot)
 			delete(t.verifying.goodBallots, ballot)
 			delete(t.full.votes, ballot)
@@ -675,7 +676,10 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 
 	baselid := t.ballotLayer[ballot.Votes.Base]
 
-	ballotWeight, err := computeBallotWeight(t.atxdb, t.bdp, t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch())
+	ballotWeight, err := computeBallotWeight(
+		t.atxdb, t.bdp, t.referenceWeight,
+		t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch(),
+	)
 	if err != nil {
 		return err
 	}

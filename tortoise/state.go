@@ -13,6 +13,7 @@ func newCommonState() commonState {
 		refBallotBeacons: map[types.EpochID]map[types.BallotID]types.Beacon{},
 		badBeaconBallots: map[types.BallotID]struct{}{},
 		epochWeight:      map[types.EpochID]weight{},
+		referenceWeight:  map[types.BallotID]weight{},
 		ballotWeight:     map[types.BallotID]weight{},
 		undecided:        map[types.LayerID]struct{}{},
 		hareOutput:       votes{},
@@ -57,6 +58,11 @@ type commonState struct {
 	// epochWeight average weight per layer of atx's that target keyed epoch
 	epochWeight map[types.EpochID]weight
 
+	// referenceWeight stores atx weight divided by the total number of eligibilities.
+	// it is computed together with refBallot weight. it is not equal to refBallot
+	// only if refBallot has more than 1 eligibility proof.
+	referenceWeight map[types.BallotID]weight
+	// ballotWeight is referenceWeight multiplied by the number of eligibilities
 	ballotWeight map[types.BallotID]weight
 
 	undecided  map[types.LayerID]struct{}
