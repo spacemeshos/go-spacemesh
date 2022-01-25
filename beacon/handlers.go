@@ -296,7 +296,7 @@ func (pd *ProtocolDriver) handleFirstVotingMessage(ctx context.Context, message 
 
 	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
 
-	logger.With().Debug("received first voting message, storing its votes")
+	logger.Debug("received first voting message, storing its votes")
 	pd.storeFirstVotes(message, minerPK, voteWeight)
 
 	return nil
@@ -364,11 +364,12 @@ func (pd *ProtocolDriver) storeFirstVotes(message FirstVotingMessage, minerPK *s
 	}
 
 	// this is used for bit vector calculation
-	// TODO(nkryuchkov): store sorted mixed valid+potentiallyValid
-	pd.firstRoundIncomingVotes[string(minerPK.Bytes())] = proposals{
-		valid:            message.ValidProposals,
-		potentiallyValid: message.PotentiallyValidProposals,
+	voteList := append(message.ValidProposals, message.PotentiallyValidProposals...)
+	if uint32(len(voteList)) > pd.config.VotesLimit {
+		voteList = voteList[:pd.config.VotesLimit]
 	}
+
+	pd.firstRoundIncomingVotes[string(minerPK.Bytes())] = voteList
 }
 
 // HandleSerializedFollowingVotingMessage defines method to handle following voting Messages from gossip.

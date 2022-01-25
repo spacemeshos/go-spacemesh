@@ -18,7 +18,7 @@ type Config struct {
 	VotingRoundDuration      time.Duration `mapstructure:"beacon-voting-round-duration"`       // Voting round duration
 	WeakCoinRoundDuration    time.Duration `mapstructure:"beacon-weak-coin-round-duration"`    // Weak coin round duration
 	Theta                    *big.Rat      `mapstructure:"beacon-theta"`                       // Ratio of votes for reaching consensus
-	VotesLimit               uint64        `mapstructure:"beacon-votes-limit"`                 // Maximum allowed number of votes to be sent
+	VotesLimit               uint32        `mapstructure:"beacon-votes-limit"`                 // Maximum allowed number of votes to be sent
 	BeaconSyncNumBallots     uint32        `mapstructure:"beacon-sync-num-blocks"`             // Numbers of layers to wait before determining beacon values from ballots when the node didn't participate in previous epoch.
 }
 

@@ -88,7 +88,7 @@ func New(
 		beaconsFromBallots:      make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, conf.RoundsNumber),
-		firstRoundIncomingVotes: make(map[string]proposals),
+		firstRoundIncomingVotes: make(map[string][][]byte),
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 		votesMargin:             map[string]*big.Int{},
 	}
@@ -135,10 +135,11 @@ type ProtocolDriver struct {
 	// previous epoch and used in the current epoch.
 	beaconsFromBallots map[types.EpochID]map[types.Beacon]*ballotWeight
 
-	// TODO(nkryuchkov): have a mixed list of all sorted proposals
-	// have one bit vector: valid proposals
-	incomingProposals       proposals
-	firstRoundIncomingVotes map[string]proposals // sorted votes for bit vector decoding
+	// the original proposals as received, bucketed by validity.
+	incomingProposals proposals
+	// minerPublicKey -> list of proposal.
+	// this list is used in encoding/decoding votes for each miner in all subsequent voting rounds.
+	firstRoundIncomingVotes map[string][][]byte
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin               map[string]*big.Int
 	hasProposed               map[string]struct{}
@@ -394,7 +395,7 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 	defer pd.mu.Unlock()
 
 	pd.incomingProposals = proposals{}
-	pd.firstRoundIncomingVotes = map[string]proposals{}
+	pd.firstRoundIncomingVotes = map[string][][]byte{}
 	pd.votesMargin = map[string]*big.Int{}
 	pd.hasProposed = make(map[string]struct{})
 	pd.hasVoted = make([]map[string]struct{}, pd.config.RoundsNumber)
@@ -814,7 +815,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 
 func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
 	pd.mu.RLock()
-	bitVector := encodeVotes(ownCurrentRoundVotes, pd.incomingProposals, pd.config.VotesLimit)
+	bitVector := encodeVotes(ownCurrentRoundVotes, pd.firstRoundIncomingVotes[string(pd.edSigner.PublicKey().Bytes())])
 	pd.mu.RUnlock()
 
 	mb := FollowingVotingMessageBody{

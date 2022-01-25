@@ -42,7 +42,7 @@ func createProtocolDriver(t *testing.T, epoch types.EpochID) (*ProtocolDriver, *
 		edVerifier:              signing.NewEDVerifier(),
 		vrfVerifier:             signing.VRFVerifier{},
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
-		firstRoundIncomingVotes: map[string]proposals{},
+		firstRoundIncomingVotes: map[string][][]byte{},
 		votesMargin:             map[string]*big.Int{},
 		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, 10),
@@ -60,11 +60,8 @@ func createProtocolDriverWithFirstRoundVotes(t *testing.T, epoch types.EpochID, 
 	hash3 := types.HexToHash32("0x34567890")
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.firstRoundIncomingVotes = map[string]proposals{
-		string(signer.PublicKey().Bytes()): {
-			valid:            [][]byte{hash1.Bytes(), hash2.Bytes()},
-			potentiallyValid: [][]byte{hash3.Bytes()},
-		},
+	pd.firstRoundIncomingVotes = map[string][][]byte{
+		string(signer.PublicKey().Bytes()): {hash1.Bytes(), hash2.Bytes(), hash3.Bytes()},
 	}
 	return pd, mockDB, []types.Hash32{hash1, hash2, hash3}
 }
@@ -143,13 +140,13 @@ func checkVoted(t *testing.T, pd *ProtocolDriver, signer signing.Signer, round t
 	assert.Equal(t, voted, ok)
 }
 
-func checkFirstIncomingVotes(t *testing.T, pd *ProtocolDriver, expected map[string]proposals) {
+func checkFirstIncomingVotes(t *testing.T, pd *ProtocolDriver, expected map[string][][]byte) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 	assert.EqualValues(t, expected, pd.firstRoundIncomingVotes)
 }
 
-func createFollowingVote(t *testing.T, signer signing.Signer, epoch types.EpochID, round types.RoundID, bitVector []uint64, corruptSignature bool) *FollowingVotingMessage {
+func createFollowingVote(t *testing.T, signer signing.Signer, epoch types.EpochID, round types.RoundID, bitVector []byte, corruptSignature bool) *FollowingVotingMessage {
 	msg := &FollowingVotingMessage{
 		FollowingVotingMessageBody: FollowingVotingMessageBody{
 			EpochID:        epoch,
@@ -542,8 +539,8 @@ func Test_HandleSerializedFirstVotingMessage_Success(t *testing.T) {
 
 	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	expected := map[string]proposals{
-		string(signer.PublicKey().Bytes()): {valid: valid, potentiallyValid: pValid},
+	expected := map[string][][]byte{
+		string(signer.PublicKey().Bytes()): append(valid, pValid...),
 	}
 	checkFirstIncomingVotes(t, pd, expected)
 }
@@ -565,7 +562,7 @@ func Test_HandleSerializedFirstVotingMessage_Shutdown(t *testing.T) {
 
 	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, types.FirstRound, false)
-	checkFirstIncomingVotes(t, pd, map[string]proposals{})
+	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
 }
 
 func Test_HandleSerializedFirstVotingMessage_NotInProtocol(t *testing.T) {
@@ -585,7 +582,7 @@ func Test_HandleSerializedFirstVotingMessage_NotInProtocol(t *testing.T) {
 
 	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, types.FirstRound, false)
-	checkFirstIncomingVotes(t, pd, map[string]proposals{})
+	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
 }
 
 func Test_HandleSerializedFirstVotingMessage_CorruptedGossipMsg(t *testing.T) {
@@ -603,7 +600,7 @@ func Test_HandleSerializedFirstVotingMessage_CorruptedGossipMsg(t *testing.T) {
 
 	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, types.FirstRound, false)
-	checkFirstIncomingVotes(t, pd, map[string]proposals{})
+	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
 }
 
 func Test_HandleSerializedFirstVotingMessage_WrongEpoch(t *testing.T) {
@@ -621,7 +618,7 @@ func Test_HandleSerializedFirstVotingMessage_WrongEpoch(t *testing.T) {
 
 	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, types.FirstRound, false)
-	checkFirstIncomingVotes(t, pd, map[string]proposals{})
+	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
 }
 
 func Test_handleFirstVotingMessage_Success(t *testing.T) {
@@ -649,8 +646,8 @@ func Test_handleFirstVotingMessage_Success(t *testing.T) {
 	assert.NoError(t, err)
 
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	expected := map[string]proposals{
-		string(signer.PublicKey().Bytes()): {valid: valid, potentiallyValid: pValid},
+	expected := map[string][][]byte{
+		string(signer.PublicKey().Bytes()): append(valid, pValid...),
 	}
 	checkFirstIncomingVotes(t, pd, expected)
 }
@@ -670,7 +667,7 @@ func Test_handleFirstVotingMessage_FailedToExtractPK(t *testing.T) {
 	assert.Contains(t, err.Error(), "bad signature format")
 
 	checkVoted(t, pd, signer, types.FirstRound, false)
-	checkFirstIncomingVotes(t, pd, map[string]proposals{})
+	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
 }
 
 func Test_handleFirstVotingMessage_AlreadyVoted(t *testing.T) {
@@ -698,8 +695,8 @@ func Test_handleFirstVotingMessage_AlreadyVoted(t *testing.T) {
 	assert.NoError(t, err)
 
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	expected := map[string]proposals{
-		string(signer.PublicKey().Bytes()): {valid: valid, potentiallyValid: pValid},
+	expected := map[string][][]byte{
+		string(signer.PublicKey().Bytes()): append(valid, pValid...),
 	}
 	checkFirstIncomingVotes(t, pd, expected)
 
@@ -729,7 +726,7 @@ func Test_handleFirstVotingMessage_MinerMissingATX(t *testing.T) {
 	assert.ErrorIs(t, err, errMinerATXNotFound)
 
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	checkFirstIncomingVotes(t, pd, map[string]proposals{})
+	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
 }
 
 func Test_handleFirstVotingMessage_ATXLookupError(t *testing.T) {
@@ -750,7 +747,7 @@ func Test_handleFirstVotingMessage_ATXLookupError(t *testing.T) {
 	assert.ErrorIs(t, err, errUnknown)
 
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	checkFirstIncomingVotes(t, pd, map[string]proposals{})
+	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
 }
 
 func Test_handleFirstVotingMessage_ATXHeaderLookupError(t *testing.T) {
@@ -772,7 +769,7 @@ func Test_handleFirstVotingMessage_ATXHeaderLookupError(t *testing.T) {
 	assert.ErrorIs(t, err, errUnknown)
 
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	checkFirstIncomingVotes(t, pd, map[string]proposals{})
+	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
 }
 
 func Test_HandleSerializedFollowingVotingMessage_Success(t *testing.T) {
@@ -794,7 +791,7 @@ func Test_HandleSerializedFollowingVotingMessage_Success(t *testing.T) {
 	}, nil).Times(1)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, false)
+	msg := createFollowingVote(t, signer, epoch, round, []byte{5}, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
@@ -822,7 +819,7 @@ func Test_HandleSerializedFollowingVotingMessage_Shutdown(t *testing.T) {
 	atomic.StoreUint64(&pd.running, 0)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, false)
+	msg := createFollowingVote(t, signer, epoch, round, []byte{5}, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
@@ -841,7 +838,7 @@ func Test_HandleSerializedFollowingVotingMessage_NotInProtocol(t *testing.T) {
 	pd, _, _ := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	atomic.StoreUint64(&pd.inProtocol, 0)
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, false)
+	msg := createFollowingVote(t, signer, epoch, round, []byte{5}, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
@@ -858,7 +855,7 @@ func Test_HandleSerializedFollowingVotingMessage_CorruptedGossipMsg(t *testing.T
 	signer := signing.NewEdSigner()
 	pd, _, _ := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, true)
+	msg := createFollowingVote(t, signer, epoch, round, []byte{5}, true)
 	msgBytes, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
@@ -875,7 +872,7 @@ func Test_HandleSerializedFollowingVotingMessage_WrongEpoch(t *testing.T) {
 	signer := signing.NewEdSigner()
 	pd, _, _ := createProtocolDriverWithFirstRoundVotes(t, epoch+1, signer)
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, false)
+	msg := createFollowingVote(t, signer, epoch, round, []byte{5}, false)
 	msgBytes, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
@@ -902,7 +899,7 @@ func Test_handleFollowingVotingMessage_Success(t *testing.T) {
 	}, nil).Times(1)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, false)
+	msg := createFollowingVote(t, signer, epoch, round, []byte{5}, false)
 
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.NoError(t, err)
@@ -927,7 +924,7 @@ func Test_handleFollowingVotingMessage_FailedToExtractPK(t *testing.T) {
 	signer := signing.NewEdSigner()
 	pd, _, _ := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, true)
+	msg := createFollowingVote(t, signer, epoch, round, []byte{5}, true)
 
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.Contains(t, err.Error(), "bad signature format")
@@ -954,7 +951,7 @@ func Test_handleFollowingVotingMessage_AlreadyVoted(t *testing.T) {
 	}, nil).Times(1)
 
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, false)
+	msg := createFollowingVote(t, signer, epoch, round, []byte{5}, false)
 
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.NoError(t, err)
@@ -988,7 +985,7 @@ func Test_handleFollowingVotingMessage_MinerMissingATX(t *testing.T) {
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID{}, database.ErrNotFound).Times(1)
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, false)
+	msg := createFollowingVote(t, signer, epoch, round, []byte{5}, false)
 
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.ErrorIs(t, err, errMinerATXNotFound)
@@ -1007,7 +1004,7 @@ func Test_handleFollowingVotingMessage_ATXLookupError(t *testing.T) {
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
 		Return(types.ATXID{}, errUnknown).Times(1)
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, false)
+	msg := createFollowingVote(t, signer, epoch, round, []byte{5}, false)
 
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.ErrorIs(t, err, errUnknown)
@@ -1027,7 +1024,7 @@ func Test_handleFollowingVotingMessage_ATXHeaderLookupError(t *testing.T) {
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(nil, errUnknown).Times(1)
 	// this msg will contain a bit vector that set bit 0 and 2
-	msg := createFollowingVote(t, signer, epoch, round, []uint64{0b101}, false)
+	msg := createFollowingVote(t, signer, epoch, round, []byte{5}, false)
 
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.ErrorIs(t, err, errUnknown)
@@ -1038,7 +1035,7 @@ func Test_handleFollowingVotingMessage_ATXHeaderLookupError(t *testing.T) {
 
 func Test_uniqueFollowingVotingMessages(t *testing.T) {
 	round := types.RoundID(3)
-	votesBitVector := []uint64{0b101}
+	votesBitVector := []byte{5}
 	edSgn := signing.NewEdSigner()
 	msg1 := FollowingVotingMessage{
 		FollowingVotingMessageBody: FollowingVotingMessageBody{
