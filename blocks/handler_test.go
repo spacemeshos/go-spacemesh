@@ -52,7 +52,7 @@ func createBlockData(t *testing.T, layerID types.LayerID, txIDs []types.Transact
 func Test_HandleBlockData_MalformedData(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	_, txIDs, _ := createTransactions(t, rand.Intn(100))
+	_, txIDs, _ := createTransactions(t, max(10, rand.Intn(100)))
 
 	_, data := createBlockData(t, layerID, txIDs)
 	assert.ErrorIs(t, th.HandleBlockData(context.TODO(), data[1:]), errMalformedData)
@@ -61,7 +61,7 @@ func Test_HandleBlockData_MalformedData(t *testing.T) {
 func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	_, txIDs, _ := createTransactions(t, rand.Intn(100))
+	_, txIDs, _ := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(true).Times(1)
@@ -71,7 +71,7 @@ func Test_HandleBlockData_AlreadyHasBlock(t *testing.T) {
 func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	_, txIDs, _ := createTransactions(t, rand.Intn(100))
+	_, txIDs, _ := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(false).Times(1)
@@ -83,7 +83,7 @@ func Test_HandleBlockData_FailedToFetchTXs(t *testing.T) {
 func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	_, txIDs, _ := createTransactions(t, rand.Intn(100))
+	_, txIDs, _ := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(false).Times(1)
@@ -96,11 +96,18 @@ func Test_HandleBlockData_FailedToAddBlock(t *testing.T) {
 func Test_HandleBlockData(t *testing.T) {
 	th := createTestHandler(t)
 	layerID := types.NewLayerID(99)
-	_, txIDs, _ := createTransactions(t, rand.Intn(100))
+	_, txIDs, _ := createTransactions(t, max(10, rand.Intn(100)))
 
 	block, data := createBlockData(t, layerID, txIDs)
 	th.mockMesh.EXPECT().HasBlock(block.ID()).Return(false).Times(1)
 	th.mockFetcher.EXPECT().GetTxs(gomock.Any(), txIDs).Return(nil).Times(1)
 	th.mockMesh.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
 	assert.NoError(t, th.HandleBlockData(context.TODO(), data))
+}
+
+func max(i, j int) int {
+	if i > j {
+		return i
+	}
+	return j
 }
