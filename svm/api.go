@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mempool"
-	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
@@ -144,7 +143,7 @@ func (svm *SVM) AddTxToPool(tx *types.Transaction) error {
 }
 
 // HandleGossipTransaction handles data received on the transactions gossip channel.
-func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
+func (svm *SVM) HandleGossipTransaction(_ context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	tx, err := types.BytesToTransaction(msg)
 	if err != nil {
 		svm.state.With().Error("SVM couldn't parse incoming transaction", log.Err(err))
@@ -162,7 +161,7 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 		log.Uint64("amount", tx.Amount),
 		log.Uint64("fee", tx.GetFee()),
 		log.Uint64("gas", tx.GasLimit),
-		log.String("recipient", string(tx.GetRecipient().String())),
+		log.String("recipient", tx.GetRecipient().String()),
 		log.String("origin", tx.Origin().String()))
 
 	if !svm.AddressExists(tx.Origin()) {
@@ -190,7 +189,7 @@ func (svm *SVM) HandleGossipTransaction(ctx context.Context, _ p2p.Peer, msg []b
 // transactions received via sync are necessarily referenced somewhere meaning that we must have them stored, even if
 // they're invalid, for the data availability of the referencing block.
 func (svm *SVM) HandleSyncTransaction(data []byte) error {
-	var tx mesh.DbTransaction
+	var tx types.Transaction
 	err := types.BytesToInterface(data, &tx)
 	if err != nil {
 		svm.state.With().Error("SVM couldn't parse incoming transaction", log.Err(err))
@@ -199,6 +198,6 @@ func (svm *SVM) HandleSyncTransaction(data []byte) error {
 	if err = tx.CalcAndSetOrigin(); err != nil {
 		return fmt.Errorf("calculate and set origin: %w", err)
 	}
-	svm.state.AddTxToPool(tx.Transaction)
+	svm.state.AddTxToPool(&tx)
 	return nil
 }

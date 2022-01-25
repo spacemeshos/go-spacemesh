@@ -25,6 +25,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apicfg "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/config"
@@ -33,8 +34,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 	"github.com/spacemeshos/go-spacemesh/timesync"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
 
 type AppTestSuite struct {
@@ -262,13 +263,12 @@ func txWithUnorderedNonceGenerator(dependencies []int) TestScenario {
 	if err != nil {
 		log.With().Panic("could not build ed signer", log.Err(err))
 	}
-	addr := types.Address{}
-	addr.SetBytes(acc1Signer.PublicKey().Bytes())
+	addr := types.GenerateAddress(acc1Signer.PublicKey().Bytes())
 	dst := types.BytesToAddress([]byte{0x09})
 	txsSent := 25
 	setup := func(suite *AppTestSuite, t *testing.T) {
 		for i := 0; i < txsSent; i++ {
-			tx, err := types.NewSignedTx(uint64(txsSent-i), dst, 10, 1, 1, acc1Signer)
+			tx, err := transaction.GenerateCallTransaction(acc1Signer, dst, uint64(txsSent-i), 10, 1, 1)
 			if err != nil {
 				suite.log.With().Panic("panicked creating signed tx", log.Err(err))
 			}
@@ -307,9 +307,8 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 		log.With().Panic("could not build ed signer", log.Err(err))
 	}
 
-	addr := types.Address{}
-	addr.SetBytes(acc1Signer.PublicKey().Bytes())
-	dst := types.BytesToAddress([]byte{0x02})
+	addr := types.GenerateAddress(acc1Signer.PublicKey().Bytes())
+	dst := types.GenerateAddress([]byte{0x02})
 	txsSent := 25
 	setup := func(suite *AppTestSuite, t *testing.T) {
 		accountRequest := &pb.AccountRequest{AccountId: &pb.AccountId{Address: addr.Bytes()}}
@@ -331,8 +330,15 @@ func txWithRunningNonceGenerator(dependencies []int) TestScenario {
 				time.Sleep(250 * time.Millisecond)
 				actNonce = getNonce()
 			}
-			tx, err := types.NewSignedTx(uint64(i), dst, 10, 1, 1, acc1Signer)
-			suite.NoError(err, "failed to create signed tx: %s", err)
+			var tx *types.Transaction
+			if i == 0 {
+				tx = transaction.GenerateSpawnTransaction(acc1Signer, dst)
+			} else {
+				var err error
+				tx, err = transaction.GenerateCallTransaction(acc1Signer, dst, uint64(i), 10, 1, 1)
+				suite.NoError(err, "failed to create signed tx: %s", err)
+			}
+
 			txbytes, _ := types.InterfaceToBytes(tx)
 			pbMsg := &pb.SubmitTransactionRequest{Transaction: txbytes}
 			_, err = suite.apps[0].txService.SubmitTransaction(context.TODO(), pbMsg)
@@ -779,7 +785,7 @@ func TestShutdown(t *testing.T) {
 	smApp.Config.LayerDurationSec = 20
 	smApp.Config.HareEligibility.ConfidenceParam = 3
 	smApp.Config.HareEligibility.EpochOffset = 0
-	smApp.Config.TortoiseBeacon = tortoisebeacon.NodeSimUnitTestConfig()
+	smApp.Config.Beacon = beacon.NodeSimUnitTestConfig()
 
 	smApp.Config.FETCH.RequestTimeout = 1
 	smApp.Config.FETCH.BatchTimeout = 1

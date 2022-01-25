@@ -61,14 +61,14 @@ func testnet() config.Config {
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 
-	conf.TortoiseBeacon.FirstVotingRoundDuration = 3 * time.Minute
-	conf.TortoiseBeacon.GracePeriodDuration = 10 * time.Second
-	conf.TortoiseBeacon.ProposalDuration = 30 * time.Second
-	conf.TortoiseBeacon.RoundsNumber = 6
-	conf.TortoiseBeacon.BeaconSyncNumBallots = 30
-	conf.TortoiseBeacon.VotesLimit = 100
-	conf.TortoiseBeacon.VotingRoundDuration = 50 * time.Second
-	conf.TortoiseBeacon.WeakCoinRoundDuration = 10 * time.Second
+	conf.Beacon.FirstVotingRoundDuration = 3 * time.Minute
+	conf.Beacon.GracePeriodDuration = 10 * time.Second
+	conf.Beacon.ProposalDuration = 30 * time.Second
+	conf.Beacon.RoundsNumber = 6
+	conf.Beacon.BeaconSyncNumBallots = 30
+	conf.Beacon.VotesLimit = 100
+	conf.Beacon.VotingRoundDuration = 50 * time.Second
+	conf.Beacon.WeakCoinRoundDuration = 10 * time.Second
 
 	return conf
 }

@@ -36,9 +36,7 @@ func newTx(t *testing.T, nonce, totalAmount, fee uint64) *types.Transaction {
 	signer, err := signing.NewEdSignerFromBuffer(signerBuf)
 	require.NoError(t, err)
 	copy(tx.Signature[:], signer.Sign(buf))
-	addr := types.Address{}
-	addr.SetBytes(signer.PublicKey().Bytes())
-	tx.SetOrigin(addr)
+	tx.SetOrigin(types.GenerateAddress(signer.PublicKey().Bytes()))
 
 	return tx
 }

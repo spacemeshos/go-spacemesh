@@ -10,6 +10,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/beacon"
 	"github.com/spacemeshos/go-spacemesh/blocks"
 	"github.com/spacemeshos/go-spacemesh/filesystem"
 	hareConfig "github.com/spacemeshos/go-spacemesh/hare/config"
@@ -19,7 +20,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	timeConfig "github.com/spacemeshos/go-spacemesh/timesync/config"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
-	"github.com/spacemeshos/go-spacemesh/tortoisebeacon"
 )
 
 const (
@@ -42,7 +42,7 @@ type Config struct {
 	API             apiConfig.Config         `mapstructure:"api"`
 	HARE            hareConfig.Config        `mapstructure:"hare"`
 	HareEligibility eligConfig.Config        `mapstructure:"hare-eligibility"`
-	TortoiseBeacon  tortoisebeacon.Config    `mapstructure:"tortoise-beacon"`
+	Beacon          beacon.Config            `mapstructure:"beacon"`
 	TIME            timeConfig.TimeConfig    `mapstructure:"time"`
 	REWARD          blocks.RewardConfig      `mapstructure:"reward"`
 	POST            activation.PostConfig    `mapstructure:"post"`
@@ -62,8 +62,6 @@ type BaseConfig struct {
 	DataDirParent string `mapstructure:"data-folder"`
 
 	ConfigFile string `mapstructure:"config"`
-
-	TestMode bool `mapstructure:"test-mode"`
 
 	CollectMetrics bool `mapstructure:"metrics"`
 	MetricsPort    int  `mapstructure:"metrics-port"`
@@ -103,37 +101,6 @@ type BaseConfig struct {
 	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
 }
 
-// LoggerConfig holds the logging level for each module.
-type LoggerConfig struct {
-	AppLoggerLevel            string `mapstructure:"app"`
-	P2PLoggerLevel            string `mapstructure:"p2p"`
-	PostLoggerLevel           string `mapstructure:"post"`
-	StateDbLoggerLevel        string `mapstructure:"stateDb"`
-	StateLoggerLevel          string `mapstructure:"state"`
-	AtxDbStoreLoggerLevel     string `mapstructure:"atxDbStore"`
-	TBeaconLoggerLevel        string `mapstructure:"tBeacon"`
-	WeakCoinLoggerLevel       string `mapstructure:"weakCoin"`
-	PoetDbStoreLoggerLevel    string `mapstructure:"poetDbStore"`
-	StoreLoggerLevel          string `mapstructure:"store"`
-	PoetDbLoggerLevel         string `mapstructure:"poetDb"`
-	MeshDBLoggerLevel         string `mapstructure:"meshDb"`
-	TrtlLoggerLevel           string `mapstructure:"trtl"`
-	AtxDbLoggerLevel          string `mapstructure:"atxDb"`
-	BlkEligibilityLoggerLevel string `mapstructure:"block-eligibility"`
-	MeshLoggerLevel           string `mapstructure:"mesh"`
-	SyncLoggerLevel           string `mapstructure:"sync"`
-	BlockOracleLevel          string `mapstructure:"block-oracle"`
-	HareOracleLoggerLevel     string `mapstructure:"hare-oracle"`
-	HareLoggerLevel           string `mapstructure:"hare"`
-	BlockBuilderLoggerLevel   string `mapstructure:"block-builder"`
-	BlockListenerLoggerLevel  string `mapstructure:"block-listener"`
-	PoetListenerLoggerLevel   string `mapstructure:"poet"`
-	NipostBuilderLoggerLevel  string `mapstructure:"nipost"`
-	AtxBuilderLoggerLevel     string `mapstructure:"atx-builder"`
-	HareBeaconLoggerLevel     string `mapstructure:"hare-beacon"`
-	TimeSyncLoggerLevel       string `mapstructure:"timesync"`
-}
-
 // SmeshingConfig defines configuration for the node's smeshing (mining).
 type SmeshingConfig struct {
 	Start           bool                     `mapstructure:"smeshing-start"`
@@ -145,17 +112,19 @@ type SmeshingConfig struct {
 func DefaultConfig() Config {
 	return Config{
 		BaseConfig:      defaultBaseConfig(),
+		Genesis:         apiConfig.DefaultGenesisConfig(),
 		Tortoise:        tortoise.DefaultConfig(),
 		P2P:             p2p.DefaultConfig(),
 		API:             apiConfig.DefaultConfig(),
 		HARE:            hareConfig.DefaultConfig(),
 		HareEligibility: eligConfig.DefaultConfig(),
-		TortoiseBeacon:  tortoisebeacon.DefaultConfig(),
+		Beacon:          beacon.DefaultConfig(),
 		TIME:            timeConfig.DefaultConfig(),
 		REWARD:          blocks.DefaultRewardConfig(),
 		POST:            activation.DefaultPostConfig(),
 		SMESHING:        DefaultSmeshingConfig(),
 		FETCH:           layerfetcher.DefaultConfig(),
+		LOGGING:         defaultLoggingConfig(),
 	}
 }
 
@@ -173,7 +142,6 @@ func defaultBaseConfig() BaseConfig {
 	return BaseConfig{
 		DataDirParent:       defaultDataDir,
 		ConfigFile:          defaultConfigFileName,
-		TestMode:            false,
 		CollectMetrics:      false,
 		MetricsPort:         1010,
 		MetricsPush:         "", // "" = doesn't push

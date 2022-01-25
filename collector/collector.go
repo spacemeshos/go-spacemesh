@@ -33,7 +33,7 @@ type DB interface {
 	StoreReward(event *events.RewardReceived) error
 	StoreBlockCreated(event *events.DoneCreatingProposal) error
 	StoreAtxCreated(event *events.AtxCreated) error
-	StoreTortoiseBeaconCalculated(event *events.TortoiseBeaconCalculated) error
+	StoreBeaconCalculated(event *events.BeaconCalculated) error
 }
 
 // Start starts collecting events.
@@ -108,9 +108,9 @@ func (c *EventsCollector) collectEvents(url string) {
 		log.Error("cannot start subscriber %v", events.EventCreatedAtx)
 		return
 	}
-	tortoiseBeacons, err := sub.Subscribe(events.EventCalculatedTortoiseBeacon)
+	beacons, err := sub.Subscribe(events.EventCalculatedBeacon)
 	if err != nil {
-		log.Error("cannot start subscriber %v", events.EventCalculatedTortoiseBeacon)
+		log.Error("cannot start subscriber %v", events.EventCalculatedBeacon)
 		return
 	}
 	sub.StartListening()
@@ -230,14 +230,14 @@ loop:
 			if err != nil {
 				log.Error("cannot write message %v", err)
 			}
-		case data := <-tortoiseBeacons:
-			var e events.TortoiseBeaconCalculated
+		case data := <-beacons:
+			var e events.BeaconCalculated
 			err := types.BytesToInterface(data[size:], &e)
 			if err != nil {
 				log.Error("cannot parse received message %v", err)
 			}
-			log.Debug("got new tortoise beacon calculated %v", e)
-			err = c.db.StoreTortoiseBeaconCalculated(&e)
+			log.Debug("got new beacon calculated %v", e)
+			err = c.db.StoreBeaconCalculated(&e)
 			if err != nil {
 				log.Error("cannot write message %v", err)
 			}

@@ -157,9 +157,9 @@ func ReportDoneCreatingProposal(eligible bool, layer uint32, error string) {
 	})
 }
 
-// ReportCalculatedTortoiseBeacon reports calculated tortoise beacon.
-func ReportCalculatedTortoiseBeacon(epoch types.EpochID, beacon string) {
-	Publish(TortoiseBeaconCalculated{
+// ReportCalculatedBeacon reports calculated beacon.
+func ReportCalculatedBeacon(epoch types.EpochID, beacon string) {
+	Publish(BeaconCalculated{
 		Epoch:  epoch,
 		Beacon: beacon,
 	})

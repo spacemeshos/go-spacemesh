@@ -1,4 +1,7 @@
-FROM ubuntu:18.04 AS linux
+# libsvm.a is linked with fcntl64, which was added to glibc since 2.28.
+# The earliest Ubuntu release that has glibc >=2.28 by default is 18.10, so the LTS one is 20.04.
+# If any issues occur on 20.04, it may be downgraded back to 18.04 with manual glibc upgrade.
+FROM ubuntu:20.04 AS linux
 ENV DEBIAN_FRONTEND noninteractive
 ENV SHELL /bin/bash
 ARG TZ=US/Eastern
@@ -93,6 +96,8 @@ COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-p2p /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/go-harness /bin/
 COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/libgpu-setup.so /bin/
+# TODO(nkryuchkov): uncomment when go-svm is imported
+#COPY --from=server_builder /go/src/github.com/spacemeshos/go-spacemesh/build/libsvm.so /bin/
 
 ENTRYPOINT ["/bin/go-harness"]
 EXPOSE 7513

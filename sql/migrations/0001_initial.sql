@@ -37,3 +37,16 @@ CREATE TABLE rewards (
 );
 
 CREATE INDEX rewards_by_coinbase ON rewards(coinbase, layer);
+
+CREATE TABLE transactions (
+    id CHAR(32) PRIMARY KEY,
+    tx BLOB,
+    layer INT NOT NULL,
+    block CHAR(20),
+    origin CHAR(20),
+    destination CHAR(20),
+    status INT
+);
+
+CREATE INDEX transaction_by_origin ON transactions(origin, layer);
+CREATE INDEX transaction_by_destination ON transactions(destination, layer);
