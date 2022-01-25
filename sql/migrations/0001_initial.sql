@@ -13,7 +13,12 @@ CREATE TABLE ballots (
     pubkey VARCHAR,
     ballot BLOB
 );
-CREATE INDEX ballots_by_layer ON ballots(layer);
+CREATE INDEX ballots_by_layer_pubkey ON ballots(layer,pubkey);
+
+CREATE TABLE identities (
+    pubkey VARCHAR PRIMARY KEY,
+    malicious BOOL
+) WITHOUT ROWID;
 
 CREATE TABLE layers (
     id INT PRIMARY KEY,

@@ -61,3 +61,14 @@ func TestHas(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, exists)
 }
+
+func TestHasInLayer(t *testing.T) {
+	db := sql.InMemory()
+	pubkey := []byte{1, 2, 3, 4}
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{}, pubkey,
+		types.InnerBallot{LayerIndex: types.NewLayerID(10)})
+	require.NoError(t, Add(db, &ballot))
+	exists, err := HasInLayer(db, ballot.LayerIndex, pubkey)
+	require.NoError(t, err)
+	require.True(t, exists)
+}

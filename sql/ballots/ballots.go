@@ -2,6 +2,7 @@ package ballots
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 
@@ -9,6 +10,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
+
+// ErrInvalidBallot is raised if ballot is not valid.
+var ErrInvalidBallot = errors.New("ballot: ballot is invalid")
 
 func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader) (*types.Ballot, error) {
 	sigBytes := make([]byte, sig.Len())
@@ -52,6 +56,20 @@ func Add(db sql.Executor, ballot *types.Ballot) error {
 		return fmt.Errorf("insert ballot %s: %w", ballot.ID(), err)
 	}
 	return nil
+}
+
+// HasInLayer returns true if ballot from smesher already exists in the layer.
+func HasInLayer(db sql.Executor, lid types.LayerID, pubkey []byte) (bool, error) {
+	rows, err := db.Exec("select 1 from ballots where layer = ?1 and pubkey = ?2;",
+		func(stmt *sql.Statement) {
+			stmt.BindInt64(1, int64(lid.Value))
+			stmt.BindBytes(2, pubkey)
+		}, nil,
+	)
+	if err != nil {
+		return false, fmt.Errorf("has in layer %s for 0x%x: %w", lid, pubkey, err)
+	}
+	return rows > 0, nil
 }
 
 // Has a ballot in the database.
