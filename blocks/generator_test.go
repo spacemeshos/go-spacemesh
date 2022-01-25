@@ -109,8 +109,9 @@ func createProposalATXWithCoinbase(t *testing.T, layerID types.LayerID, txIDs []
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
 				InnerBallot: types.InnerBallot{
-					AtxID:      atx.ID(),
-					LayerIndex: layerID,
+					AtxID:             atx.ID(),
+					LayerIndex:        layerID,
+					EligibilityProofs: []types.VotingEligibilityProof{{}},
 				},
 			},
 			TxIDs: txIDs,

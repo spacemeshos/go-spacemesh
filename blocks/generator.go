@@ -123,8 +123,8 @@ func (g *Generator) calculateSmesherRewards(logger log.Log, layerID types.LayerI
 		rewards = append(rewards, types.AnyReward{
 			Address:     atx.Coinbase,
 			SmesherID:   atx.NodeID,
-			Amount:      rInfo.totalRewardPer,
-			LayerReward: rInfo.layerRewardPer,
+			Amount:      rInfo.totalRewardPer * uint64(len(p.EligibilityProofs)),
+			LayerReward: rInfo.layerRewardPer * uint64(len(p.EligibilityProofs)),
 		})
 	}
 	return rewards, nil
