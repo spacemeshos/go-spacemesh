@@ -503,7 +503,9 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 func (b *Broker) Close() {
 	b.Closer.Close()
 	<-b.CloseChannel()
+	b.queueMessageWgMu.Lock()
 	b.queueMessageWg.Wait()
+	b.queueMessageWgMu.Unlock()
 	b.eventLoopWg.Wait()
 	close(b.queueChannel)
 }
