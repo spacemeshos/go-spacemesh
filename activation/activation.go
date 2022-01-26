@@ -291,6 +291,20 @@ func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
 }
 
 func (b *Builder) run(ctx context.Context) {
+	if err := b.generateProof(); err != nil {
+		b.log.Error("Failed to generate proof: %v", err)
+		return
+	}
+
+	// ensure layer 1 has arrived
+	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(types.NewLayerID(1))); err != nil {
+		return
+	}
+
+	b.loop(ctx)
+}
+
+func (b *Builder) generateProof() error {
 	err := b.loadChallenge()
 	if err != nil {
 		b.log.Info("challenge not loaded: %s", err)
@@ -302,16 +316,11 @@ func (b *Builder) run(ctx context.Context) {
 		// to create the initial proof (the commitment).
 		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
 		if err != nil {
-			b.log.Error("post execution failed: %v", err)
-			return
+			return fmt.Errorf("post execution: %w", err)
 		}
 	}
 
-	// ensure layer 1 has arrived
-	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(types.NewLayerID(1))); err != nil {
-		return
-	}
-	b.loop(ctx)
+	return nil
 }
 
 // loop is the main loop that tries to create an atx per tick received from the global clock.
