@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/spacemeshos/ed25519"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -67,13 +65,6 @@ func NewTransactionProcessor(allStates, processorDb database.Database, projector
 		mu:          sync.Mutex{}, // sync between reset and apply mesh.Transactions
 		rootMu:      sync.RWMutex{},
 	}
-}
-
-// PublicKeyToAccountAddress converts ed25519 public key to account address.
-func PublicKeyToAccountAddress(pub ed25519.PublicKey) types.Address {
-	var addr types.Address
-	addr.SetBytes(pub)
-	return addr
 }
 
 // AddressExists checks if an account address exists in this node's global state.

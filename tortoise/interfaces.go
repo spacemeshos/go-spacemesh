@@ -14,7 +14,6 @@ type blockDataProvider interface {
 	GetBallot(id types.BallotID) (*types.Ballot, error)
 	LayerBallots(types.LayerID) ([]*types.Ballot, error)
 	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
-
 	GetCoinflip(context.Context, types.LayerID) (bool, bool)
 	GetHareConsensusOutput(types.LayerID) (types.BlockID, error)
 	SaveContextualValidity(types.BlockID, types.LayerID, bool) error

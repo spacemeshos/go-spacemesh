@@ -156,11 +156,9 @@ func (pd *ProtocolDriver) classifyProposalMessage(ctx context.Context, m Proposa
 	case pd.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		logger.Debug("received valid proposal message")
 		pd.addValidProposal(m.VRFSignature)
-
 	case pd.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
 		logger.Debug("received potentially valid proposal message")
 		pd.addPotentiallyValidProposal(m.VRFSignature)
-
 	default:
 		logger.Warning("received invalid proposal message")
 	}
@@ -298,7 +296,7 @@ func (pd *ProtocolDriver) handleFirstVotingMessage(ctx context.Context, message 
 
 	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
 
-	logger.With().Debug("received first voting message, storing its votes")
+	logger.Debug("received first voting message, storing its votes")
 	pd.storeFirstVotes(message, minerPK, voteWeight)
 
 	return nil
@@ -366,11 +364,12 @@ func (pd *ProtocolDriver) storeFirstVotes(message FirstVotingMessage, minerPK *s
 	}
 
 	// this is used for bit vector calculation
-	// TODO(nkryuchkov): store sorted mixed valid+potentiallyValid
-	pd.firstRoundIncomingVotes[string(minerPK.Bytes())] = proposals{
-		valid:            message.ValidProposals,
-		potentiallyValid: message.PotentiallyValidProposals,
+	voteList := append(message.ValidProposals, message.PotentiallyValidProposals...)
+	if uint32(len(voteList)) > pd.config.VotesLimit {
+		voteList = voteList[:pd.config.VotesLimit]
 	}
+
+	pd.firstRoundIncomingVotes[string(minerPK.Bytes())] = voteList
 }
 
 // HandleSerializedFollowingVotingMessage defines method to handle following voting Messages from gossip.
@@ -475,7 +474,7 @@ func (pd *ProtocolDriver) storeFollowingVotes(message FollowingVotingMessage, mi
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	thisRoundVotes := pd.decodeVotes(message.VotesBitVector, pd.firstRoundIncomingVotes[string(minerPK.Bytes())])
+	thisRoundVotes := decodeVotes(message.VotesBitVector, pd.firstRoundIncomingVotes[string(minerPK.Bytes())])
 
 	for vote := range thisRoundVotes.valid {
 		if _, ok := pd.votesMargin[vote]; !ok {
@@ -485,8 +484,8 @@ func (pd *ProtocolDriver) storeFollowingVotes(message FollowingVotingMessage, mi
 		}
 	}
 
-	// TODO(kimmy): keep later rounds votes in a separate buffer so we don't count them prematurely
-	// tho i am not sure whether counting votes for later rounds early is a security concern.
+	// TODO: don't accept votes in future round
+	// https://github.com/spacemeshos/go-spacemesh/issues/2794
 	for vote := range thisRoundVotes.invalid {
 		if _, ok := pd.votesMargin[vote]; !ok {
 			pd.votesMargin[vote] = new(big.Int).Neg(voteWeight)

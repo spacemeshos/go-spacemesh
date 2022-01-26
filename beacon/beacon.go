@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -86,7 +88,7 @@ func New(
 		beaconsFromBallots:      make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, conf.RoundsNumber),
-		firstRoundIncomingVotes: make(map[string]proposals),
+		firstRoundIncomingVotes: make(map[string][][]byte),
 		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
 		votesMargin:             map[string]*big.Int{},
 	}
@@ -133,10 +135,11 @@ type ProtocolDriver struct {
 	// previous epoch and used in the current epoch.
 	beaconsFromBallots map[types.EpochID]map[types.Beacon]*ballotWeight
 
-	// TODO(nkryuchkov): have a mixed list of all sorted proposals
-	// have one bit vector: valid proposals
-	incomingProposals       proposals
-	firstRoundIncomingVotes map[string]proposals // sorted votes for bit vector decoding
+	// the original proposals as received, bucketed by validity.
+	incomingProposals proposals
+	// minerPublicKey -> list of proposal.
+	// this list is used in encoding/decoding votes for each miner in all subsequent voting rounds.
+	firstRoundIncomingVotes map[string][][]byte
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin               map[string]*big.Int
 	hasProposed               map[string]struct{}
@@ -392,7 +395,7 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 	defer pd.mu.Unlock()
 
 	pd.incomingProposals = proposals{}
-	pd.firstRoundIncomingVotes = map[string]proposals{}
+	pd.firstRoundIncomingVotes = map[string][][]byte{}
 	pd.votesMargin = map[string]*big.Int{}
 	pd.hasProposed = make(map[string]struct{})
 	pd.hasVoted = make([]map[string]struct{}, pd.config.RoundsNumber)
@@ -466,7 +469,8 @@ func (pd *ProtocolDriver) handleLayer(ctx context.Context, layer types.LayerID) 
 
 func (pd *ProtocolDriver) handleEpoch(ctx context.Context, epoch types.EpochID) {
 	ctx = log.WithNewSessionID(ctx)
-	logger := pd.logger.WithContext(ctx).WithFields(epoch)
+	targetEpoch := epoch + 1
+	logger := pd.logger.WithContext(ctx).WithFields(epoch, log.Uint32("target_epoch", uint32(targetEpoch)))
 	// TODO(nkryuchkov): check when epoch started, adjust waiting time for this timestamp
 	if epoch.IsGenesis() {
 		logger.Debug("not starting beacon protocol since we are in genesis epoch")
@@ -520,11 +524,32 @@ func (pd *ProtocolDriver) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	if err := pd.calcBeacon(ctx, epoch, lastRoundOwnVotes); err != nil {
-		logger.With().Error("failed to calculate beacon", log.Err(err))
+	beacon := calcBeacon(logger, lastRoundOwnVotes)
+	events.ReportCalculatedBeacon(targetEpoch, beacon.ShortString())
+
+	if err := pd.setBeacon(targetEpoch, beacon); err != nil {
+		logger.With().Error("failed to set beacon", log.Err(err))
+		return
 	}
 
-	logger.With().Debug("finished handling epoch")
+	logger.With().Info("beacon set for epoch", beacon)
+}
+
+func calcBeacon(logger log.Log, lastRoundVotes allVotes) types.Beacon {
+	logger.Info("calculating beacon")
+
+	allHashes := lastRoundVotes.valid.sort()
+	allHashHexes := make([]string, len(allHashes))
+	for i, h := range allHashes {
+		allHashHexes[i] = types.BytesToHash([]byte(h)).ShortString()
+	}
+	logger.With().Debug("calculating beacon from this hash list",
+		log.String("hashes", strings.Join(allHashHexes, ", ")))
+
+	beacon := types.Beacon(allHashes.hash())
+	logger.With().Info("calculated beacon", beacon, log.Int("num_hashes", len(allHashes)))
+
+	return beacon
 }
 
 func (pd *ProtocolDriver) getOrCreateProposalChannel(epoch types.EpochID) chan *proposalMessageWithReceiptData {
@@ -661,7 +686,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 		undecided []string
 		err       error
 	)
-	for round := types.FirstRound; round <= pd.lastRound(); round++ {
+	for round := types.FirstRound; round < pd.config.RoundsNumber; round++ {
 		round := round
 		rLogger := logger.WithFields(round)
 		votes := ownVotes
@@ -790,7 +815,7 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 
 func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
 	pd.mu.RLock()
-	bitVector := pd.encodeVotes(ownCurrentRoundVotes, pd.incomingProposals)
+	bitVector := encodeVotes(ownCurrentRoundVotes, pd.firstRoundIncomingVotes[string(pd.edSigner.PublicKey().Bytes())])
 	pd.mu.RUnlock()
 
 	mb := FollowingVotingMessageBody{

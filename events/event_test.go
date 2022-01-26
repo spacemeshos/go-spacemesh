@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 func TestNewBlockEvent(t *testing.T) {
@@ -65,7 +66,7 @@ var (
 )
 
 func MakeTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
-	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
+	tx, err := transaction.GenerateCallTransaction(signer, recipient, nonce, 1, defaultGasLimit, defaultFee)
 	if err != nil {
 		return nil
 	}

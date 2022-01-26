@@ -47,6 +47,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/svm"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 const (
@@ -344,10 +345,15 @@ func (t *TxAPIMock) ProcessedLayer() types.LayerID {
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
-	tx, err := types.NewSignedTx(nonce, recipient, 1, defaultGasLimit, defaultFee, signer)
+	if nonce == 0 {
+		return transaction.GenerateSpawnTransaction(signer, recipient)
+	}
+
+	tx, err := transaction.GenerateCallTransaction(signer, recipient, nonce, 1, defaultGasLimit, defaultFee)
 	if err != nil {
 		return nil
 	}
+
 	return tx
 }
 
@@ -1303,7 +1309,7 @@ func TestMeshService(t *testing.T) {
 				{
 					// all inputs default to zero, no filter
 					// query is valid but MaxResults is 0 so expect no results
-					name: "no inputs",
+					name: "no_inputs",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{})
@@ -1314,7 +1320,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
-					name: "MinLayer too high",
+					name: "MinLayer_too_high",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1328,7 +1334,7 @@ func TestMeshService(t *testing.T) {
 				},
 				{
 					// This does not produce an error but we expect no results
-					name: "Offset too high",
+					name: "Offset_too_high",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1344,7 +1350,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
-					name: "no filter",
+					name: "no_filter",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1357,7 +1363,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
-					name: "empty filter",
+					name: "empty_filter",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1371,7 +1377,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
-					name: "filter with empty AccountId",
+					name: "filter_with_empty_AccountId",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1387,7 +1393,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
-					name: "filter with valid AccountId",
+					name: "filter_with_valid_AccountId",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1403,7 +1409,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
-					name: "filter with valid AccountId and AccountMeshDataFlags zero",
+					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_zero",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						_, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1420,7 +1426,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
-					name: "filter with valid AccountId and AccountMeshDataFlags tx only",
+					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_tx_only",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1437,7 +1443,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
-					name: "filter with valid AccountId and AccountMeshDataFlags activations only",
+					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_activations_only",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1454,7 +1460,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
-					name: "filter with valid AccountId and AccountMeshDataFlags all",
+					name: "filter_with_valid_AccountId_and_AccountMeshDataFlags_all",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1475,7 +1481,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
-					name: "max results",
+					name: "max_results",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1494,7 +1500,7 @@ func TestMeshService(t *testing.T) {
 					},
 				},
 				{
-					name: "max results page 2",
+					name: "max_results_page_2",
 					run: func(t *testing.T) {
 						logtest.SetupGlobal(t)
 						res, err := c.AccountMeshDataQuery(context.Background(), &pb.AccountMeshDataQueryRequest{
@@ -1558,17 +1564,17 @@ func TestMeshService(t *testing.T) {
 				// ERROR INPUTS
 				// We expect these to produce errors
 				{
-					name: "missing filter",
+					name: "missing_filter",
 					run:  generateRunFnError("`Filter` must be provided", &pb.AccountMeshDataStreamRequest{}),
 				},
 				{
-					name: "empty filter",
+					name: "empty_filter",
 					run: generateRunFnError("`Filter.AccountId` must be provided", &pb.AccountMeshDataStreamRequest{
 						Filter: &pb.AccountMeshDataFilter{},
 					}),
 				},
 				{
-					name: "missing address",
+					name: "missing_address",
 					run: generateRunFnError("`Filter.AccountId` must be provided", &pb.AccountMeshDataStreamRequest{
 						Filter: &pb.AccountMeshDataFilter{
 							AccountMeshDataFlags: uint32(
@@ -1578,7 +1584,7 @@ func TestMeshService(t *testing.T) {
 					}),
 				},
 				{
-					name: "filter with zero flags",
+					name: "filter_with_zero_flags",
 					run: generateRunFnError("`Filter.AccountMeshDataFlags` must set at least one bitfield", &pb.AccountMeshDataStreamRequest{
 						Filter: &pb.AccountMeshDataFilter{
 							AccountId:            &pb.AccountId{Address: addr1.Bytes()},
@@ -1589,7 +1595,7 @@ func TestMeshService(t *testing.T) {
 
 				// SUCCESS
 				{
-					name: "empty address",
+					name: "empty_address",
 					run: generateRunFn(&pb.AccountMeshDataStreamRequest{
 						Filter: &pb.AccountMeshDataFilter{
 							AccountId: &pb.AccountId{},
@@ -1600,7 +1606,7 @@ func TestMeshService(t *testing.T) {
 					}),
 				},
 				{
-					name: "invalid address",
+					name: "invalid_address",
 					run: generateRunFn(&pb.AccountMeshDataStreamRequest{
 						Filter: &pb.AccountMeshDataFilter{
 							AccountId: &pb.AccountId{Address: []byte{'A'}},
@@ -1644,7 +1650,7 @@ func TestMeshService(t *testing.T) {
 
 				// end layer after current layer
 				{
-					name: "end layer after current layer",
+					name: "end_layer_after_current_layer",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: layerCurrent.Uint32()},
 						EndLayer:   &pb.LayerNumber{Number: layerCurrent.Add(2).Uint32()},
@@ -1653,7 +1659,7 @@ func TestMeshService(t *testing.T) {
 
 				// start layer after current layer
 				{
-					name: "start layer after current layer",
+					name: "start_layer_after_current_layer",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: layerCurrent.Add(2).Uint32()},
 						EndLayer:   &pb.LayerNumber{Number: layerCurrent.Add(3).Uint32()},
@@ -1662,7 +1668,7 @@ func TestMeshService(t *testing.T) {
 
 				// layer after last received
 				{
-					name: "layer after last received",
+					name: "layer_after_last_received",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: layerLatest.Add(1).Uint32()},
 						EndLayer:   &pb.LayerNumber{Number: layerLatest.Add(2).Uint32()},
@@ -1671,7 +1677,7 @@ func TestMeshService(t *testing.T) {
 
 				// very very large range
 				{
-					name: "very very large range",
+					name: "very_very_large_range",
 					run: generateRunFnError("error retrieving layer data", &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: 0},
 						EndLayer:   &pb.LayerNumber{Number: uint32(math.MaxUint32)},
@@ -1684,13 +1690,13 @@ func TestMeshService(t *testing.T) {
 				// not an error since these default to zero, see
 				// https://github.com/spacemeshos/api/issues/87
 				{
-					name: "nil inputs",
+					name: "nil_inputs",
 					run:  generateRunFn(1, &pb.LayersQueryRequest{}),
 				},
 
 				// start layer after end layer: expect no error, zero results
 				{
-					name: "start layer after end layer",
+					name: "start_layer_after_end_layer",
 					run: generateRunFn(0, &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: layerCurrent.Add(1).Uint32()},
 						EndLayer:   &pb.LayerNumber{Number: layerCurrent.Uint32()},
@@ -1699,7 +1705,7 @@ func TestMeshService(t *testing.T) {
 
 				// same start/end layer: expect no error, one result
 				{
-					name: "same start end layer",
+					name: "same_start_end_layer",
 					run: generateRunFn(1, &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: layerVerified.Uint32()},
 						EndLayer:   &pb.LayerNumber{Number: layerVerified.Uint32()},
@@ -1708,7 +1714,7 @@ func TestMeshService(t *testing.T) {
 
 				// start layer after last approved/confirmed layer (but before current layer)
 				{
-					name: "start layer after last approved confirmed layer",
+					name: "start_layer_after_last_approved_confirmed_layer",
 					run: generateRunFn(2, &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: layerVerified.Add(1).Uint32()},
 						EndLayer:   &pb.LayerNumber{Number: layerVerified.Add(2).Uint32()},
@@ -1717,7 +1723,7 @@ func TestMeshService(t *testing.T) {
 
 				// end layer after last approved/confirmed layer (but before current layer)
 				{
-					name: "end layer after last approved confirmed layer",
+					name: "end_layer_after_last_approved_confirmed_layer",
 					// expect difference + 1 return layers
 					run: generateRunFn(int(layerVerified.Add(2).Sub(layerFirst.Uint32()).Add(1).Uint32()), &pb.LayersQueryRequest{
 						StartLayer: &pb.LayerNumber{Number: layerFirst.Uint32()},
@@ -1846,7 +1852,7 @@ func TestTransactionService(t *testing.T) {
 		name string
 		run  func(*testing.T)
 	}{
-		{"SubmitTransaction", func(t *testing.T) {
+		{"SubmitSpawnTransaction", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			serializedTx, err := types.InterfaceToBytes(globalTx)
 			require.NoError(t, err, "error serializing tx")
@@ -1857,19 +1863,6 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, int32(code.Code_OK), res.Status.Code)
 			require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
-		}},
-		{"SubmitTransaction_ZeroBalance", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			txAPI.balances[globalTx.Origin()] = big.NewInt(0)
-			serializedTx, err := types.InterfaceToBytes(globalTx)
-			require.NoError(t, err, "error serializing tx")
-			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-				Transaction: serializedTx,
-			})
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-			require.Contains(t, err.Error(), "`Transaction` incorrect counter or")
-			txAPI.balances[globalTx.Origin()] = big.NewInt(int64(accountBalance))
 		}},
 		{"SubmitTransaction_BadCounter", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -2329,8 +2322,8 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 		defer timer.Stop()
 
 		select {
-		case <-errCh:
-			t.Errorf("should not receive")
+		case err := <-errCh:
+			t.Errorf("should not receive err %v", err)
 		case <-timer.C:
 			return
 		}
@@ -2433,8 +2426,8 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		defer timer.Stop()
 
 		select {
-		case <-errCh:
-			t.Errorf("should not receive")
+		case err := <-errCh:
+			t.Errorf("should not receive err %v", err)
 		case <-timer.C:
 			return
 		}
@@ -2552,8 +2545,8 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 		defer timer.Stop()
 
 		select {
-		case <-errCh:
-			t.Errorf("should not receive")
+		case err := <-errCh:
+			t.Errorf("should not receive err %v", err)
 		case <-timer.C:
 			return
 		}
@@ -2655,8 +2648,8 @@ func TestLayerStream_comprehensive(t *testing.T) {
 		defer timer.Stop()
 
 		select {
-		case <-errCh:
-			t.Errorf("should not receive")
+		case err := <-errCh:
+			t.Errorf("should not receive err %v", err)
 		case <-timer.C:
 			return
 		}
@@ -3071,8 +3064,7 @@ func TestEventsReceived(t *testing.T) {
 		},
 	}
 
-	originAddr := types.Address{}
-	originAddr.SetBytes(signer1.PublicKey().Bytes())
+	originAddr := types.GenerateAddress(signer1.PublicKey().Bytes())
 	accountReq2 := &pb.AccountDataStreamRequest{
 		Filter: &pb.AccountDataFilter{
 			AccountId: &pb.AccountId{Address: originAddr.Bytes()},
