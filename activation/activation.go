@@ -245,7 +245,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
 			return
 		}
-		b.loop(ctx)
+		b.run(ctx)
 	}()
 
 	return nil
@@ -290,8 +290,7 @@ func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
 	}
 }
 
-// loop is the main loop that tries to create an atx per tick received from the global clock.
-func (b *Builder) loop(ctx context.Context) {
+func (b *Builder) run(ctx context.Context) {
 	err := b.loadChallenge()
 	if err != nil {
 		b.log.Info("challenge not loaded: %s", err)
@@ -312,10 +311,11 @@ func (b *Builder) loop(ctx context.Context) {
 	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(types.NewLayerID(1))); err != nil {
 		return
 	}
-	b.run(ctx)
+	b.loop(ctx)
 }
 
-func (b *Builder) run(ctx context.Context) {
+// loop is the main loop that tries to create an atx per tick received from the global clock.
+func (b *Builder) loop(ctx context.Context) {
 	var poetRetryTimer *time.Timer
 	defer func() {
 		if poetRetryTimer != nil {

@@ -760,7 +760,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	runnerExit := make(chan struct{})
 	go func() {
-		b.run(ctx)
+		b.loop(ctx)
 		close(runnerExit)
 	}()
 	t.Cleanup(func() {
@@ -818,7 +818,7 @@ func TestBuilder_UpdatePoETProver(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	closed := make(chan struct{})
 	go func() {
-		b.run(ctx)
+		b.loop(ctx)
 		close(closed)
 	}()
 	t.Cleanup(func() {
