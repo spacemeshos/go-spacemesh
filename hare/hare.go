@@ -511,9 +511,7 @@ func (h *Hare) Start(ctx context.Context) error {
 }
 
 // Close sends a termination signal to hare goroutines and waits for their termination.
-func (h *Hare) Close() error {
+func (h *Hare) Close() {
 	h.Closer.Close()
 	h.wg.Wait()
-
-	return nil
 }
