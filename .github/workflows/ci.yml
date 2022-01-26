@@ -90,7 +90,7 @@ jobs:
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     # should take around 15-18 mins
-    timeout-minutes: 30
+    timeout-minutes: 20
     steps:
       - name: checkout
         uses: actions/checkout@v2
@@ -109,7 +109,7 @@ jobs:
     needs: filter-changes
     if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' }}
     # should take around 7-9 mins
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - name: checkout
         uses: actions/checkout@v2
