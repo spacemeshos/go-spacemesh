@@ -209,8 +209,8 @@ func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*m
 // listens to incoming messages and incoming tasks.
 func (b *Broker) eventLoop(ctx context.Context) {
 	defer func() {
-		b.eventLoopWg.Done()
 		close(b.eventLoopQuit)
+		b.eventLoopWg.Done()
 	}()
 
 	for {
