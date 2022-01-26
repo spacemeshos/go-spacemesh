@@ -27,6 +27,15 @@ const (
 	layerSize = 200
 )
 
+var (
+	// ErrMalicious is a common error type.
+	ErrMalicious = errors.New("mesh: malicious")
+	// ErrMaliciousBallot is raised if ballot is malicious.
+	ErrMaliciousBallot = fmt.Errorf("%w: ballot", ErrMalicious)
+	// ErrMaliciousSmesher is raised if smesher produced more than 2 ballots in the same layer.
+	ErrMaliciousSmesher = fmt.Errorf("%w: smesher", ErrMalicious)
+)
+
 // DB represents a mesh database instance.
 type DB struct {
 	log.Log
@@ -137,9 +146,36 @@ func (m *DB) Transactions() database.Getter {
 
 // AddBallot adds a ballot to the database.
 func (m *DB) AddBallot(b *types.Ballot) error {
-	if err := ballots.Add(m.db, b); errors.Is(err, sql.ErrObjectExists) {
+	tx, err := m.db.Tx(context.TODO())
+	if err != nil {
+		return err
+	}
+	defer tx.Release()
+	existing, err := ballots.BySmesherInLayer(tx, b.LayerIndex, b.SmesherID().Bytes())
+	if err != nil {
+		return err
+	}
+	if _, exist := existing[b.ID()]; exist {
 		return nil
-	} else if err != nil {
+	}
+	if len(existing) == 2 {
+		return fmt.Errorf("%w: %s", ErrMaliciousSmesher, b.ID())
+	}
+	if err := ballots.Add(tx, b); err != nil {
+		return err
+	}
+	if len(existing) == 1 {
+		existing[b.ID()] = false
+		for ballot, malicious := range existing {
+			if malicious {
+				continue
+			}
+			if err := ballots.UpdateMalicious(tx, ballot); err != nil {
+				return err
+			}
+		}
+	}
+	if err := tx.Commit(); err != nil {
 		return err
 	}
 	return nil

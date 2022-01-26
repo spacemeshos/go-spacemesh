@@ -2,7 +2,6 @@ package ballots
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 
@@ -10,9 +9,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
-
-// ErrConflict is raised if ballot is not valid.
-var ErrConflict = errors.New("ballots: conflict")
 
 func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader) (*types.Ballot, error) {
 	sigBytes := make([]byte, sig.Len())
@@ -121,4 +117,33 @@ func IDsInLayer(db sql.Executor, lid types.LayerID) (rst []types.BallotID, err e
 		return nil, fmt.Errorf("ballots for layer %s: %w", lid, err)
 	}
 	return rst, err
+}
+
+// BySmesherInLayer counts number of ballots from the same smesher in the layer.
+func BySmesherInLayer(db sql.Executor, lid types.LayerID, pubkey []byte) (rst map[types.BallotID]bool, err error) {
+	if _, err := db.Exec("select id from ballots where layer = ?1 and pubkey = ?2;", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid.Uint32()))
+		stmt.BindBytes(2, pubkey)
+	}, func(stmt *sql.Statement) bool {
+		id := types.BallotID{}
+		stmt.ColumnBytes(0, id[:])
+		if rst == nil {
+			rst = map[types.BallotID]bool{}
+		}
+		rst[id] = stmt.ColumnInt(1) > 0
+		return true
+	}); err != nil {
+		return nil, fmt.Errorf("ballots for smesher 0x%x layer %s: %w", pubkey, lid, err)
+	}
+	return rst, err
+}
+
+// UpdateMalicious update ballot as malicious.
+func UpdateMalicious(db sql.Executor, id types.BallotID) error {
+	if _, err := db.Exec("update ballots set malicious = 1 where id = ?1;", func(stmt *sql.Statement) {
+		stmt.BindBytes(1, id.Bytes())
+	}, nil); err != nil {
+		return fmt.Errorf("update %s: %w", id, err)
+	}
+	return nil
 }
