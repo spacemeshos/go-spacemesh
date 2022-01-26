@@ -116,6 +116,9 @@ func Open(uri string, opts ...Opt) (*Database, error) {
 		if err := registerFunctions(conn); err != nil {
 			return nil, err
 		}
+		if _, err := exec(conn, "PRAGMA foreign_keys=on", nil, nil); err != nil {
+			return db, err
+		}
 		defer pool.Put(conn)
 	}
 	return db, nil

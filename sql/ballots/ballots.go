@@ -71,12 +71,15 @@ func Has(db sql.Executor, id types.BallotID) (bool, error) {
 
 // Get ballot with id from database.
 func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
-	if rows, err := db.Exec("select signature, pubkey, ballot from ballots where id = ?1;", func(stmt *sql.Statement) {
-		stmt.BindBytes(1, id.Bytes())
-	}, func(stmt *sql.Statement) bool {
-		rst, err = decodeBallot(id, stmt.ColumnReader(0), stmt.ColumnReader(1), stmt.ColumnReader(2))
-		return true
-	}); err != nil {
+	if rows, err := db.Exec(`select signature, pubkey, ballot, identities.malicious 
+	from ballots left join identities using(pubkey)
+	where id = ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, func(stmt *sql.Statement) bool {
+			rst, err = decodeBallot(id, stmt.ColumnReader(0), stmt.ColumnReader(1), stmt.ColumnReader(2))
+			return true
+		}); err != nil {
 		return nil, fmt.Errorf("get %s: %w", id, err)
 	} else if rows == 0 {
 		return nil, fmt.Errorf("%w ballot %s", sql.ErrNotFound, id)
@@ -119,31 +122,14 @@ func IDsInLayer(db sql.Executor, lid types.LayerID) (rst []types.BallotID, err e
 	return rst, err
 }
 
-// BySmesherInLayer counts number of ballots from the same smesher in the layer.
-func BySmesherInLayer(db sql.Executor, lid types.LayerID, pubkey []byte) (rst map[types.BallotID]bool, err error) {
-	if _, err := db.Exec("select id from ballots where layer = ?1 and pubkey = ?2;", func(stmt *sql.Statement) {
-		stmt.BindInt64(1, int64(lid.Uint32()))
+// CountByPubkeyLayer counts number of ballots in the layer for the pubkey.
+func CountByPubkeyLayer(db sql.Executor, lid types.LayerID, pubkey []byte) (int, error) {
+	rows, err := db.Exec("select 1 from ballots where layer = ?1 and pubkey = ?2;", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid.Value))
 		stmt.BindBytes(2, pubkey)
-	}, func(stmt *sql.Statement) bool {
-		id := types.BallotID{}
-		stmt.ColumnBytes(0, id[:])
-		if rst == nil {
-			rst = map[types.BallotID]bool{}
-		}
-		rst[id] = stmt.ColumnInt(1) > 0
-		return true
-	}); err != nil {
-		return nil, fmt.Errorf("ballots for smesher 0x%x layer %s: %w", pubkey, lid, err)
+	}, nil)
+	if err != nil {
+		return 0, fmt.Errorf("counting layer %s: %w", lid, err)
 	}
-	return rst, err
-}
-
-// UpdateMalicious update ballot as malicious.
-func UpdateMalicious(db sql.Executor, id types.BallotID) error {
-	if _, err := db.Exec("update ballots set malicious = 1 where id = ?1;", func(stmt *sql.Statement) {
-		stmt.BindBytes(1, id.Bytes())
-	}, nil); err != nil {
-		return fmt.Errorf("update %s: %w", id, err)
-	}
-	return nil
+	return rows, nil
 }

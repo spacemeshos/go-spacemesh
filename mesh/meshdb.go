@@ -146,36 +146,7 @@ func (m *DB) Transactions() database.Getter {
 
 // AddBallot adds a ballot to the database.
 func (m *DB) AddBallot(b *types.Ballot) error {
-	tx, err := m.db.Tx(context.TODO())
-	if err != nil {
-		return err
-	}
-	defer tx.Release()
-	existing, err := ballots.BySmesherInLayer(tx, b.LayerIndex, b.SmesherID().Bytes())
-	if err != nil {
-		return err
-	}
-	if _, exist := existing[b.ID()]; exist {
-		return nil
-	}
-	if len(existing) == 2 {
-		return fmt.Errorf("%w: %s", ErrMaliciousSmesher, b.ID())
-	}
-	if err := ballots.Add(tx, b); err != nil {
-		return err
-	}
-	if len(existing) == 1 {
-		existing[b.ID()] = false
-		for ballot, malicious := range existing {
-			if malicious {
-				continue
-			}
-			if err := ballots.UpdateMalicious(tx, ballot); err != nil {
-				return err
-			}
-		}
-	}
-	if err := tx.Commit(); err != nil {
+	if err := ballots.Add(m.db, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		return err
 	}
 	return nil

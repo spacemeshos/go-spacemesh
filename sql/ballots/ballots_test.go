@@ -40,7 +40,7 @@ func TestAdd(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	require.NoError(t, Add(db, &ballot))
-	require.NoError(t, Add(db, &ballot))
+	require.ErrorIs(t, Add(db, &ballot), sql.ErrObjectExists)
 
 	stored, err := Get(db, ballot.ID())
 	require.NoError(t, err)

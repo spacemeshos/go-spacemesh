@@ -11,10 +11,15 @@ CREATE TABLE ballots (
     layer INT NOT NULL,
     signature VARCHAR,
     pubkey VARCHAR,
-    ballot BLOB,
-    malicious BOOL
+    ballot BLOB
+    -- FOREIGN KEY(pubkey) REFERENCES identities(pubkey)
 );
-CREATE INDEX ballots_by_layer_pubkey ON ballots(layer,pubkey);
+CREATE INDEX ballots_by_layer_by_pubkey ON ballots(layer, pubkey);
+
+CREATE TABLE identities (
+    pubkey VARCHAR PRIMARY KEY,
+    malicious bool
+);
 
 CREATE TABLE layers (
     id INT PRIMARY KEY,
