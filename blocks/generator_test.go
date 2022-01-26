@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 const (
@@ -52,7 +53,7 @@ func createTransactions(t testing.TB, numOfTxs int) (uint64, []types.Transaction
 	txIDs := make([]types.TransactionID, 0, numOfTxs)
 	for i := 0; i < numOfTxs; i++ {
 		fee := uint64(rand.Intn(maxFee))
-		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, fee, signing.NewEdSigner())
+		tx, err := transaction.GenerateCallTransaction(signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100, fee)
 		require.NoError(t, err)
 		totalFee += fee
 		txs = append(txs, tx)
@@ -304,4 +305,43 @@ func Test_GenerateBlock_TXNotFound(t *testing.T) {
 	block, err := tg.GenerateBlock(context.TODO(), layerID, proposals)
 	assert.ErrorIs(t, err, errTXNotFound)
 	assert.Nil(t, block)
+}
+
+func Test_GenerateBlock_MultipleEligibilities(t *testing.T) {
+	tg := createTestGenerator(t)
+	fee, ids, txs := createTransactions(t, 1000)
+	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).Return(txs, nil).Times(1)
+	header := &types.ActivationTxHeader{}
+	header.SetID(&types.ATXID{1, 1, 1})
+
+	genProposal := func(proofs int) *types.Proposal {
+		return &types.Proposal{
+			InnerProposal: types.InnerProposal{
+				Ballot: types.Ballot{
+					InnerBallot: types.InnerBallot{
+						EligibilityProofs: make([]types.VotingEligibilityProof, proofs),
+						AtxID:             header.ID(),
+					},
+				},
+				TxIDs: ids,
+			},
+		}
+	}
+	proposals := []*types.Proposal{
+		genProposal(2), genProposal(1), genProposal(5),
+	}
+	tg.mockATXDB.EXPECT().GetAtxHeader(gomock.Any()).Return(header, nil).Times(len(proposals))
+	total := uint64(0)
+	for _, p := range proposals {
+		total += uint64(len(p.EligibilityProofs))
+	}
+
+	block, err := tg.GenerateBlock(context.TODO(), types.NewLayerID(10), proposals)
+	require.NoError(t, err)
+	require.Len(t, block.Rewards, len(proposals))
+
+	expected := (fee + tg.cfg.BaseReward) / total
+	for i, p := range proposals {
+		require.Equal(t, int(expected)*len(p.EligibilityProofs), int(block.Rewards[i].Amount))
+	}
 }

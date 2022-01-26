@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 func mustTx(tx *types.Transaction, err error) *types.Transaction {
@@ -28,9 +29,9 @@ func TestGetHas(t *testing.T) {
 	lid := types.NewLayerID(10)
 	bid := types.BlockID{1, 1}
 	txs := []*types.Transaction{
-		mustTx(types.NewSignedTx(1, types.Address{1}, 191, 1, 1, signer1)),
-		mustTx(types.NewSignedTx(1, types.Address{2}, 191, 1, 1, signer2)),
-		mustTx(types.NewSignedTx(1, types.Address{3}, 191, 1, 1, signer1)),
+		mustTx(transaction.GenerateCallTransaction(signer1, types.Address{1}, 1, 191, 1, 1)),
+		mustTx(transaction.GenerateCallTransaction(signer2, types.Address{2}, 1, 191, 1, 1)),
+		mustTx(transaction.GenerateCallTransaction(signer1, types.Address{3}, 1, 191, 1, 1)),
 	}
 
 	for _, tx := range txs {
@@ -57,7 +58,7 @@ func TestGetBlob(t *testing.T) {
 	signer := signing.NewEdSignerFromRand(rng)
 	lid := types.NewLayerID(10)
 	bid := types.BlockID{1, 1}
-	tx := mustTx(types.NewSignedTx(1, types.Address{1}, 191, 1, 1, signer))
+	tx := mustTx(transaction.GenerateCallTransaction(signer, types.Address{1}, 1, 191, 1, 1))
 
 	require.NoError(t, Add(db, lid, bid, tx))
 	buf, err := GetBlob(db, tx.ID())
@@ -75,8 +76,8 @@ func TestPending(t *testing.T) {
 	lid := types.NewLayerID(10)
 	bid := types.BlockID{1, 1}
 	txs := []*types.Transaction{
-		mustTx(types.NewSignedTx(1, types.Address{1}, 191, 1, 1, signer)),
-		mustTx(types.NewSignedTx(1, types.Address{2}, 191, 1, 1, signer)),
+		mustTx(transaction.GenerateCallTransaction(signer, types.Address{1}, 1, 191, 1, 1)),
+		mustTx(transaction.GenerateCallTransaction(signer, types.Address{2}, 1, 191, 1, 1)),
 	}
 
 	for _, tx := range txs {
@@ -103,8 +104,8 @@ func TestDelete(t *testing.T) {
 	lid := types.NewLayerID(10)
 	bid := types.BlockID{1, 1}
 	txs := []*types.Transaction{
-		mustTx(types.NewSignedTx(1, types.Address{1}, 191, 1, 1, signer)),
-		mustTx(types.NewSignedTx(1, types.Address{2}, 191, 1, 1, signer)),
+		mustTx(transaction.GenerateCallTransaction(signer, types.Address{1}, 1, 191, 1, 1)),
+		mustTx(transaction.GenerateCallTransaction(signer, types.Address{2}, 1, 191, 1, 1)),
 	}
 
 	for _, tx := range txs {
@@ -128,9 +129,9 @@ func TestFilter(t *testing.T) {
 	lid := types.NewLayerID(10)
 	bid := types.BlockID{1, 1}
 	txs := []*types.Transaction{
-		mustTx(types.NewSignedTx(1, types.Address{1}, 191, 1, 1, signer1)),
-		mustTx(types.NewSignedTx(1, types.Address{2}, 191, 1, 1, signer2)),
-		mustTx(types.NewSignedTx(1, types.Address{2}, 191, 1, 1, signer1)),
+		mustTx(transaction.GenerateCallTransaction(signer1, types.Address{1}, 1, 191, 1, 1)),
+		mustTx(transaction.GenerateCallTransaction(signer2, types.Address{2}, 1, 191, 1, 1)),
+		mustTx(transaction.GenerateCallTransaction(signer1, types.Address{2}, 1, 191, 1, 1)),
 	}
 
 	for _, tx := range txs {
@@ -156,7 +157,7 @@ func TestFilterLayers(t *testing.T) {
 
 	for i := 1; i <= n; i++ {
 		require.NoError(t, Add(db, start.Add(uint32(i)), types.BlockID{},
-			mustTx(types.NewSignedTx(uint64(i), types.Address{1}, 191, 1, 1, signer))))
+			mustTx(transaction.GenerateCallTransaction(signer, types.Address{1}, uint64(i), 191, 1, 1))))
 	}
 	for i := 1; i <= n; i++ {
 		filtered, err := FilterByOrigin(db,
@@ -178,9 +179,9 @@ func TestFilterByAddress(t *testing.T) {
 	lid := types.NewLayerID(10)
 	bid := types.BlockID{1, 1}
 	txs := []*types.Transaction{
-		mustTx(types.NewSignedTx(1, types.Address{1}, 191, 1, 1, signer1)),
-		mustTx(types.NewSignedTx(1, types.Address{2}, 191, 1, 1, signer2)),
-		mustTx(types.NewSignedTx(1, signer2Address, 191, 1, 1, signer1)),
+		mustTx(transaction.GenerateCallTransaction(signer1, types.Address{1}, 1, 191, 1, 1)),
+		mustTx(transaction.GenerateCallTransaction(signer2, types.Address{2}, 1, 191, 1, 1)),
+		mustTx(transaction.GenerateCallTransaction(signer1, signer2Address, 1, 191, 1, 1)),
 	}
 	for _, tx := range txs {
 		require.NoError(t, Add(db, lid, bid, tx))

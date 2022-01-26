@@ -56,7 +56,7 @@ func (v FirstVotingMessage) String() string {
 type FollowingVotingMessageBody struct {
 	EpochID        types.EpochID
 	RoundID        types.RoundID
-	VotesBitVector []uint64
+	VotesBitVector []byte
 }
 
 // FollowingVotingMessage is a message type which is used when sending following voting messages.
