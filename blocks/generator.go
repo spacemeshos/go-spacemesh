@@ -110,7 +110,7 @@ func (g *Generator) calculateSmesherRewards(logger log.Log, layerID types.LayerI
 	for _, proposal := range proposals {
 		eligibilities += len(proposal.EligibilityProofs)
 	}
-	rInfo := calculateRewardPerProposal(layerID, g.cfg, txs, eligibilities)
+	rInfo := calculateRewardPerEligibility(layerID, g.cfg, txs, eligibilities)
 	logger.With().Info("reward calculated", log.Inline(rInfo))
 	rewards := make([]types.AnyReward, 0, len(proposals))
 	for _, p := range proposals {

@@ -88,7 +88,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	weight = atx.GetWeight()
 	vrfPubkey := atx.NodeID.VRFPublicKey
 
-	numEligibleBallots, err := GetNumEligibleSlots(weight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
+	numEligibleSlots, err := GetNumEligibleSlots(weight, totalWeight, v.avgLayerSize, v.layersPerEpoch)
 	if err != nil {
 		return false, err
 	}
@@ -99,9 +99,9 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	)
 	for _, proof := range ballot.EligibilityProofs {
 		counter := proof.J
-		if counter >= numEligibleBallots {
+		if counter >= numEligibleSlots {
 			return false, fmt.Errorf("%w: proof counter (%d) numEligibleBallots (%d), totalWeight (%v)",
-				errIncorrectCounter, counter, numEligibleBallots, totalWeight)
+				errIncorrectCounter, counter, numEligibleSlots, totalWeight)
 		}
 		if isFirst {
 			isFirst = false
