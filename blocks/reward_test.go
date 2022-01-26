@@ -23,7 +23,7 @@ func Test_calculateRewardPerProposal(t *testing.T) {
 		numProposals = uint64(13)
 	)
 	totalFee, _, txs := createTransactions(t, numTXs)
-	rewardInfo := calculateRewardPerProposal(types.NewLayerID(210), RewardConfig{BaseReward: base}, txs, int(numProposals))
+	rewardInfo := calculateRewardPerEligibility(types.NewLayerID(210), RewardConfig{BaseReward: base}, txs, int(numProposals))
 	expectedTotalRewardsPer := (totalFee + base) / numProposals
 	expectedLayerRewardPer := base / numProposals
 	assert.Equal(t, numProposals, rewardInfo.numProposals)
