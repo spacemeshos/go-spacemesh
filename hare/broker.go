@@ -55,8 +55,8 @@ type Broker struct {
 	limit            int // max number of simultaneous consensus processes
 	stop             context.CancelFunc
 	eventLoopQuit    chan struct{}
-	eventLoopWg      *sync.WaitGroup
-	queueMessageWg   *sync.WaitGroup
+	eventLoopWg      sync.WaitGroup
+	queueMessageWg   sync.WaitGroup
 	queueMessageWgMu sync.Mutex
 }
 
@@ -77,7 +77,6 @@ func newBroker(pid peer.ID, eValidator validator, stateQuerier stateQuerier, syn
 		limit:          limit,
 		queue:          priorityq.New(),
 		queueChannel:   make(chan struct{}, inboxCapacity),
-		queueMessageWg: &sync.WaitGroup{},
 	}
 }
 
