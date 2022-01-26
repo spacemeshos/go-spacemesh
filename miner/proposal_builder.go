@@ -299,10 +299,9 @@ func (pb *ProposalBuilder) createProposal(
 	if err := p.Initialize(); err != nil {
 		logger.Panic("proposal failed to initialize", log.Err(err))
 	}
-	// NOTE(dshulyak) python tests read this log. alternative is to read number of eligibilities
-	// in the python tests, which seems like a bad idea.
+	logger.Event().Info("proposal created", log.Inline(p))
 	for range p.EligibilityProofs {
-		logger.Event().Info("proposal created", log.Inline(p))
+		logger.Event().Info("eligibility claimed by proposal", log.Inline(p))
 	}
 	return p, nil
 }
