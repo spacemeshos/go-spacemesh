@@ -55,6 +55,7 @@ type Broker struct {
 	limit            int // max number of simultaneous consensus processes
 	stop             context.CancelFunc
 	eventLoopQuit    chan struct{}
+	eventLoopWg      *sync.WaitGroup
 	queueMessageWg   *sync.WaitGroup
 	queueMessageWgMu sync.Mutex
 }
@@ -92,6 +93,7 @@ func (b *Broker) Start(ctx context.Context) error {
 	b.stop = cancel
 	b.eventLoopQuit = make(chan struct{})
 
+	b.eventLoopWg.Add(1)
 	go b.eventLoop(log.WithNewSessionID(ctx))
 
 	return nil
@@ -208,6 +210,7 @@ func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*m
 // listens to incoming messages and incoming tasks.
 func (b *Broker) eventLoop(ctx context.Context) {
 	defer func() {
+		b.eventLoopWg.Done()
 		close(b.eventLoopQuit)
 	}()
 
@@ -501,9 +504,8 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 func (b *Broker) Close() {
 	b.Closer.Close()
 	<-b.CloseChannel()
-	b.queueMessageWgMu.Lock()
 	b.queueMessageWg.Wait()
-	b.queueMessageWgMu.Unlock()
+	b.eventLoopWg.Wait()
 	close(b.queueChannel)
 }
 
