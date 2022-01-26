@@ -36,26 +36,27 @@ type msgRPC struct {
 type Broker struct {
 	util.Closer
 	log.Log
-	mu             sync.RWMutex
-	pid            peer.ID
-	eValidator     validator                // provides eligibility validation
-	stateQuerier   stateQuerier             // provides activeness check
-	nodeSyncState  system.SyncStateProvider // provider function to check if the node is currently synced
-	layersPerEpoch uint16
-	queue          priorityq.PriorityQueue
-	queueChannel   chan struct{} // used to synchronize the message queues
-	syncState      map[uint32]bool
-	outbox         map[uint32]chan *Msg
-	pending        map[uint32][]*Msg // the buffer of pending early messages for the next layer
-	tasks          chan func()       // a channel to synchronize tasks (register/unregister) with incoming messages handling
-	latestLayerMu  sync.RWMutex
-	latestLayer    types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
-	isStarted      bool
-	minDeleted     types.LayerID
-	limit          int // max number of simultaneous consensus processes
-	stop           context.CancelFunc
-	eventLoopQuit  chan struct{}
-	queueMessageWg *sync.WaitGroup
+	mu               sync.RWMutex
+	pid              peer.ID
+	eValidator       validator                // provides eligibility validation
+	stateQuerier     stateQuerier             // provides activeness check
+	nodeSyncState    system.SyncStateProvider // provider function to check if the node is currently synced
+	layersPerEpoch   uint16
+	queue            priorityq.PriorityQueue
+	queueChannel     chan struct{} // used to synchronize the message queues
+	syncState        map[uint32]bool
+	outbox           map[uint32]chan *Msg
+	pending          map[uint32][]*Msg // the buffer of pending early messages for the next layer
+	tasks            chan func()       // a channel to synchronize tasks (register/unregister) with incoming messages handling
+	latestLayerMu    sync.RWMutex
+	latestLayer      types.LayerID // the latest layer to attempt register (successfully or unsuccessfully)
+	isStarted        bool
+	minDeleted       types.LayerID
+	limit            int // max number of simultaneous consensus processes
+	stop             context.CancelFunc
+	eventLoopQuit    chan struct{}
+	queueMessageWg   *sync.WaitGroup
+	queueMessageWgMu sync.Mutex
 }
 
 func newBroker(pid peer.ID, eValidator validator, stateQuerier stateQuerier, syncState system.SyncStateProvider, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
@@ -168,8 +169,14 @@ func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pub
 }
 
 func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*msgRPC, error) {
+	b.queueMessageWgMu.Lock()
 	b.queueMessageWg.Add(1)
-	defer b.queueMessageWg.Done()
+	b.queueMessageWgMu.Unlock()
+	defer func() {
+		b.queueMessageWgMu.Lock()
+		b.queueMessageWg.Done()
+		b.queueMessageWgMu.Unlock()
+	}()
 
 	logger := b.WithContext(ctx).WithFields(log.FieldNamed("latest_layer", b.getLatestLayer()))
 	logger.Debug("hare broker received inbound gossip message")
@@ -494,7 +501,9 @@ func (b *Broker) Synced(ctx context.Context, id types.LayerID) bool {
 func (b *Broker) Close() {
 	b.Closer.Close()
 	<-b.CloseChannel()
+	b.queueMessageWgMu.Lock()
 	b.queueMessageWg.Wait()
+	b.queueMessageWgMu.Unlock()
 	close(b.queueChannel)
 }
 
