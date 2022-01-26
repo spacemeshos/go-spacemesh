@@ -62,43 +62,32 @@ type LayerClock interface {
 type Hare struct {
 	util.Closer
 	log.Log
-	config config.Config
-
-	publisher  pubsub.Publisher
-	layerClock LayerClock
-
+	config        config.Config
+	publisher     pubsub.Publisher
+	layerClock    LayerClock
+	broker        *Broker
+	sign          Signer
+	blockGen      blockGenerator
+	mesh          meshProvider
+	pdb           proposalProvider
+	beacons       system.BeaconGetter
+	fetcher       system.ProposalFetcher
+	rolacle       Rolacle
+	patrol        layerPatrol
+	factory       consensusFactory
 	newRoundClock func(LayerID types.LayerID) RoundClock
-
-	broker *Broker
-
-	sign     Signer
-	blockGen blockGenerator
-
-	mesh    meshProvider
-	pdb     proposalProvider
-	beacons system.BeaconGetter
-	fetcher system.ProposalFetcher
-	rolacle Rolacle
-	patrol  layerPatrol
-
-	networkDelta time.Duration
-
-	layerLock sync.RWMutex
-	lastLayer types.LayerID
-
-	bufferSize uint32
-
-	outputChan chan TerminationOutput
-	mu         sync.RWMutex
-	outputs    map[types.LayerID][]types.ProposalID
-	certChan   chan types.LayerID
-	certified  map[types.LayerID]struct{}
-
-	factory consensusFactory
-
-	nid types.NodeID
-
-	totalCPs int32
+	networkDelta  time.Duration
+	nid           types.NodeID
+	totalCPs      int32
+	bufferSize    uint32
+	outputChan    chan TerminationOutput
+	mu            sync.RWMutex
+	outputs       map[types.LayerID][]types.ProposalID
+	certChan      chan types.LayerID
+	certified     map[types.LayerID]struct{}
+	layerLock     sync.RWMutex
+	lastLayer     types.LayerID
+	wg            sync.WaitGroup
 }
 
 // New returns a new Hare struct.
@@ -430,6 +419,8 @@ func (h *Hare) getResult(lid types.LayerID) ([]types.ProposalID, error) {
 
 // listens to outputs arriving from consensus processes.
 func (h *Hare) outputCollectionLoop(ctx context.Context) {
+	defer h.wg.Done()
+
 	h.WithContext(ctx).With().Info("starting collection loop")
 	for {
 		select {
@@ -458,6 +449,8 @@ func (h *Hare) outputCollectionLoop(ctx context.Context) {
 
 // listens to outputs arriving from consensus processes.
 func (h *Hare) certificationLoop(ctx context.Context) {
+	defer h.wg.Done()
+
 	h.WithContext(ctx).With().Info("starting certification collection loop")
 	for {
 		select {
@@ -472,6 +465,8 @@ func (h *Hare) certificationLoop(ctx context.Context) {
 
 // listens to new layers.
 func (h *Hare) tickLoop(ctx context.Context) {
+	defer h.wg.Done()
+
 	for layer := h.layerClock.GetCurrentLayer(); ; layer = layer.Add(1) {
 		select {
 		case <-h.layerClock.AwaitLayer(layer):
@@ -507,9 +502,18 @@ func (h *Hare) Start(ctx context.Context) error {
 		return fmt.Errorf("start broker: %w", err)
 	}
 
+	h.wg.Add(3)
 	go h.tickLoop(ctxTickLoop)
 	go h.outputCollectionLoop(ctxOutputLoop)
 	go h.certificationLoop(ctxCertLoop)
+
+	return nil
+}
+
+// Close sends a termination signal to hare goroutines and waits for their termination.
+func (h *Hare) Close() error {
+	h.Closer.Close()
+	h.wg.Wait()
 
 	return nil
 }
