@@ -61,14 +61,3 @@ func TestHas(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, exists)
 }
-
-func TestLayerPubkeyConflict(t *testing.T) {
-	db := sql.InMemory()
-	pubkey := []byte{1, 2, 3, 4}
-	ballot1 := types.NewExistingBallot(types.BallotID{1}, []byte{}, pubkey,
-		types.InnerBallot{LayerIndex: types.NewLayerID(10)})
-	require.NoError(t, Add(db, &ballot1))
-	ballot2 := types.NewExistingBallot(types.BallotID{2}, []byte{}, pubkey,
-		types.InnerBallot{LayerIndex: types.NewLayerID(10)})
-	require.ErrorIs(t, Add(db, &ballot2), ErrConflict)
-}

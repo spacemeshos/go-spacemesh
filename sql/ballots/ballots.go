@@ -45,25 +45,17 @@ func Add(db sql.Executor, ballot *types.Ballot) error {
 	if err != nil {
 		return fmt.Errorf("encode ballot %s: %w", ballot.ID(), err)
 	}
-	var stored types.BallotID
 	if _, err := db.Exec(`insert into ballots 
 		(id, layer, signature, pubkey, ballot) 
-		values (?1, ?2, ?3, ?4, ?5)
-		on conflict(pubkey,layer) do update set invalid = 1 returning id;`,
+		values (?1, ?2, ?3, ?4, ?5);`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, ballot.ID().Bytes())
 			stmt.BindInt64(2, int64(ballot.LayerIndex.Value))
 			stmt.BindBytes(3, ballot.Signature)
 			stmt.BindBytes(4, ballot.SmesherID().Bytes())
 			stmt.BindBytes(5, bytes)
-		}, func(stmt *sql.Statement) bool {
-			stmt.ColumnBytes(0, stored[:])
-			return true
-		}); err != nil {
+		}, nil); err != nil {
 		return fmt.Errorf("insert ballot %s: %w", ballot.ID(), err)
-	}
-	if ballot.ID() != stored {
-		return fmt.Errorf("%w: %s with %s", ErrConflict, ballot.ID(), stored)
 	}
 	return nil
 }

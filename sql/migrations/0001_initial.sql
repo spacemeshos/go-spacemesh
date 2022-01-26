@@ -11,9 +11,7 @@ CREATE TABLE ballots (
     layer INT NOT NULL,
     signature VARCHAR,
     pubkey VARCHAR,
-    ballot BLOB,
-    conflicts BOOL,
-    UNIQUE(layer,pubkey)
+    ballot BLOB
 );
 CREATE INDEX ballots_by_layer_pubkey ON ballots(layer,pubkey);
 
