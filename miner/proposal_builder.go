@@ -385,7 +385,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	}
 
 	pb.eg.Go(func() error {
-		// generate a new requestID for the new block message
+		// generate a new requestID for the new proposal message
 		newCtx := log.WithNewRequestID(ctx, layerID, p.ID())
 		// validation handler, where proposal is persisted, is applied synchronously before
 		// proposal is sent over the network

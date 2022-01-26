@@ -43,6 +43,7 @@ type InnerBallot struct {
 	// the smesher's ATX in the epoch this ballot is cast.
 	AtxID ATXID
 	// the proof of the smesher's eligibility to vote and propose block content in this epoch.
+	// Eligibilities must be produced in the ascending order.
 	EligibilityProofs []VotingEligibilityProof
 	Votes             Votes
 
