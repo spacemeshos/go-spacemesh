@@ -137,23 +137,13 @@ func (m *DB) Transactions() database.Getter {
 
 // AddBallot adds a ballot to the database.
 func (m *DB) AddBallot(b *types.Ballot) error {
-	return m.addBallot(b)
+	return ballots.Add(m.db, b)
 }
 
 // HasBallot returns true if the ballot is stored in a database.
 func (m *DB) HasBallot(ballot types.BallotID) bool {
 	exists, _ := ballots.Has(m.db, ballot)
 	return exists
-}
-
-func (m *DB) addBallot(b *types.Ballot) error {
-	if err := ballots.Add(m.db, b); err != nil {
-		if errors.Is(err, sql.ErrObjectExists) {
-			return nil
-		}
-		return fmt.Errorf("could not add ballot %v to database: %w", b.ID(), err)
-	}
-	return nil
 }
 
 // GetBallot returns true if the database has Ballot specified by the BallotID and false otherwise.

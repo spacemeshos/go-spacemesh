@@ -11,14 +11,11 @@ CREATE TABLE ballots (
     layer INT NOT NULL,
     signature VARCHAR,
     pubkey VARCHAR,
-    ballot BLOB
+    ballot BLOB,
+    conflicts BOOL,
+    UNIQUE(layer,pubkey)
 );
 CREATE INDEX ballots_by_layer_pubkey ON ballots(layer,pubkey);
-
-CREATE TABLE identities (
-    pubkey VARCHAR PRIMARY KEY,
-    malicious BOOL
-) WITHOUT ROWID;
 
 CREATE TABLE layers (
     id INT PRIMARY KEY,

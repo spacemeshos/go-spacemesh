@@ -40,7 +40,7 @@ func TestAdd(t *testing.T) {
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	require.NoError(t, Add(db, &ballot))
-	require.ErrorIs(t, Add(db, &ballot), sql.ErrObjectExists)
+	require.NoError(t, Add(db, &ballot))
 
 	stored, err := Get(db, ballot.ID())
 	require.NoError(t, err)
@@ -62,13 +62,13 @@ func TestHas(t *testing.T) {
 	require.True(t, exists)
 }
 
-func TestHasInLayer(t *testing.T) {
+func TestLayerPubkeyConflict(t *testing.T) {
 	db := sql.InMemory()
 	pubkey := []byte{1, 2, 3, 4}
-	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{}, pubkey,
+	ballot1 := types.NewExistingBallot(types.BallotID{1}, []byte{}, pubkey,
 		types.InnerBallot{LayerIndex: types.NewLayerID(10)})
-	require.NoError(t, Add(db, &ballot))
-	exists, err := HasInLayer(db, ballot.LayerIndex, pubkey)
-	require.NoError(t, err)
-	require.True(t, exists)
+	require.NoError(t, Add(db, &ballot1))
+	ballot2 := types.NewExistingBallot(types.BallotID{2}, []byte{}, pubkey,
+		types.InnerBallot{LayerIndex: types.NewLayerID(10)})
+	require.ErrorIs(t, Add(db, &ballot2), ErrConflict)
 }

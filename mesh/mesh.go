@@ -701,8 +701,11 @@ func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, 
 
 // AddBallot to the mesh.
 func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
+	if err := msh.DB.AddBallot(ballot); err != nil {
+		return err
+	}
 	msh.trtl.OnBallot(ballot)
-	return msh.DB.AddBallot(ballot)
+	return nil
 }
 
 // AddBlockWithTXs adds the block and its TXs in into the database.

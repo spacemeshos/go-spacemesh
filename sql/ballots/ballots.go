@@ -11,8 +11,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// ErrInvalidBallot is raised if ballot is not valid.
-var ErrInvalidBallot = errors.New("ballot: ballot is invalid")
+// ErrConflict is raised if ballot is not valid.
+var ErrConflict = errors.New("ballots: conflict")
 
 func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader) (*types.Ballot, error) {
 	sigBytes := make([]byte, sig.Len())
@@ -45,31 +45,27 @@ func Add(db sql.Executor, ballot *types.Ballot) error {
 	if err != nil {
 		return fmt.Errorf("encode ballot %s: %w", ballot.ID(), err)
 	}
-	if _, err := db.Exec("insert into ballots (id, layer, signature, pubkey, ballot) values (?1, ?2, ?3, ?4, ?5);",
+	var stored types.BallotID
+	if _, err := db.Exec(`insert into ballots 
+		(id, layer, signature, pubkey, ballot) 
+		values (?1, ?2, ?3, ?4, ?5)
+		on conflict(pubkey,layer) do update set invalid = 1 returning id;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, ballot.ID().Bytes())
 			stmt.BindInt64(2, int64(ballot.LayerIndex.Value))
 			stmt.BindBytes(3, ballot.Signature)
 			stmt.BindBytes(4, ballot.SmesherID().Bytes())
 			stmt.BindBytes(5, bytes)
-		}, nil); err != nil {
+		}, func(stmt *sql.Statement) bool {
+			stmt.ColumnBytes(0, stored[:])
+			return true
+		}); err != nil {
 		return fmt.Errorf("insert ballot %s: %w", ballot.ID(), err)
 	}
-	return nil
-}
-
-// HasInLayer returns true if ballot from smesher already exists in the layer.
-func HasInLayer(db sql.Executor, lid types.LayerID, pubkey []byte) (bool, error) {
-	rows, err := db.Exec("select 1 from ballots where layer = ?1 and pubkey = ?2;",
-		func(stmt *sql.Statement) {
-			stmt.BindInt64(1, int64(lid.Value))
-			stmt.BindBytes(2, pubkey)
-		}, nil,
-	)
-	if err != nil {
-		return false, fmt.Errorf("has in layer %s for 0x%x: %w", lid, pubkey, err)
+	if ballot.ID() != stored {
+		return fmt.Errorf("%w: %s with %s", ErrConflict, ballot.ID(), stored)
 	}
-	return rows > 0, nil
+	return nil
 }
 
 // Has a ballot in the database.
