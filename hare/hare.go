@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/peer"
+	atomicbool "go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -88,6 +89,7 @@ type Hare struct {
 	layerLock     sync.RWMutex
 	lastLayer     types.LayerID
 	wg            sync.WaitGroup
+	started       atomicbool.Bool
 }
 
 // New returns a new Hare struct.
@@ -506,6 +508,7 @@ func (h *Hare) Start(ctx context.Context) error {
 	go h.tickLoop(ctxTickLoop)
 	go h.outputCollectionLoop(ctxOutputLoop)
 	go h.certificationLoop(ctxCertLoop)
+	h.started.Store(true)
 
 	return nil
 }
@@ -513,5 +516,8 @@ func (h *Hare) Start(ctx context.Context) error {
 // Close sends a termination signal to hare goroutines and waits for their termination.
 func (h *Hare) Close() {
 	h.Closer.Close()
-	h.wg.Wait()
+	if h.started.Load() {
+		h.wg.Wait()
+		h.started.Store(false)
+	}
 }
