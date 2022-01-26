@@ -124,6 +124,7 @@ type ProtocolDriver struct {
 	mu              sync.RWMutex
 	lastTickedEpoch types.EpochID
 	epochInProgress types.EpochID
+	roundInProgress types.RoundID
 	epochWeight     uint64
 
 	// beacons store calculated beacons as the result of the beacon protocol.
@@ -394,6 +395,7 @@ func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
+	pd.roundInProgress = types.FirstRound
 	pd.incomingProposals = proposals{}
 	pd.firstRoundIncomingVotes = map[string][][]byte{}
 	pd.votesMargin = map[string]*big.Int{}
@@ -446,6 +448,12 @@ func (pd *ProtocolDriver) setEpochInProgress(epoch types.EpochID) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	pd.epochInProgress = epoch
+}
+
+func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	pd.roundInProgress = round
 }
 
 // the logic that happens when a new layer arrives.
@@ -688,6 +696,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 	)
 	for round := types.FirstRound; round < pd.config.RoundsNumber; round++ {
 		round := round
+		pd.setRoundInProgress(round)
 		rLogger := logger.WithFields(round)
 		votes := ownVotes
 		pd.eg.Go(func() error {

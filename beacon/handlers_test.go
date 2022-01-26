@@ -585,6 +585,25 @@ func Test_HandleSerializedFirstVotingMessage_NotInProtocol(t *testing.T) {
 	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
 }
 
+func Test_HandleSerializedFirstVotingMessage_TooLate(t *testing.T) {
+	t.Parallel()
+
+	const epoch = types.EpochID(10)
+	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+
+	pd, _ := createProtocolDriver(t, epoch)
+	signer := signing.NewEdSigner()
+	msg := createFirstVote(t, signer, epoch, valid, pValid, false)
+	msgBytes, err := types.InterfaceToBytes(msg)
+	require.NoError(t, err)
+
+	pd.setRoundInProgress(types.RoundID(1))
+	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
+	checkVoted(t, pd, signer, types.FirstRound, false)
+	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
+}
+
 func Test_HandleSerializedFirstVotingMessage_CorruptedGossipMsg(t *testing.T) {
 	t.Parallel()
 
@@ -795,6 +814,7 @@ func Test_HandleSerializedFollowingVotingMessage_Success(t *testing.T) {
 	msgBytes, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
+	pd.setRoundInProgress(round)
 	pd.HandleSerializedFollowingVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, round, true)
 	expected := make(map[string]*big.Int, len(hashes))
@@ -823,6 +843,7 @@ func Test_HandleSerializedFollowingVotingMessage_Shutdown(t *testing.T) {
 	msgBytes, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
+	pd.setRoundInProgress(round)
 	pd.HandleSerializedFollowingVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, round, false)
 	checkVoteMargins(t, pd, map[string]*big.Int{})
@@ -842,6 +863,25 @@ func Test_HandleSerializedFollowingVotingMessage_NotInProtocol(t *testing.T) {
 	msgBytes, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
+	pd.setRoundInProgress(round)
+	pd.HandleSerializedFollowingVotingMessage(context.TODO(), peerID, msgBytes)
+	checkVoted(t, pd, signer, round, false)
+	checkVoteMargins(t, pd, map[string]*big.Int{})
+}
+
+func Test_HandleSerializedFollowingVotingMessage_TooEarly(t *testing.T) {
+	t.Parallel()
+
+	const epoch = types.EpochID(10)
+	const round = types.RoundID(5)
+	signer := signing.NewEdSigner()
+	pd, _, _ := createProtocolDriverWithFirstRoundVotes(t, epoch, signer)
+	// this msg will contain a bit vector that set bit 0 and 2
+	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
+	msgBytes, err := types.InterfaceToBytes(msg)
+	require.NoError(t, err)
+
+	pd.setRoundInProgress(round - 1)
 	pd.HandleSerializedFollowingVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, round, false)
 	checkVoteMargins(t, pd, map[string]*big.Int{})
@@ -859,6 +899,7 @@ func Test_HandleSerializedFollowingVotingMessage_CorruptedGossipMsg(t *testing.T
 	msgBytes, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
+	pd.setRoundInProgress(round)
 	pd.HandleSerializedFollowingVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, round, false)
 	checkVoteMargins(t, pd, map[string]*big.Int{})
@@ -876,6 +917,7 @@ func Test_HandleSerializedFollowingVotingMessage_WrongEpoch(t *testing.T) {
 	msgBytes, err := types.InterfaceToBytes(msg)
 	require.NoError(t, err)
 
+	pd.setRoundInProgress(round)
 	pd.HandleSerializedFollowingVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, round, false)
 	checkVoteMargins(t, pd, map[string]*big.Int{})
@@ -901,6 +943,7 @@ func Test_handleFollowingVotingMessage_Success(t *testing.T) {
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
 
+	pd.setRoundInProgress(round)
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.NoError(t, err)
 
@@ -926,6 +969,7 @@ func Test_handleFollowingVotingMessage_FailedToExtractPK(t *testing.T) {
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, true)
 
+	pd.setRoundInProgress(round)
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.Contains(t, err.Error(), "bad signature format")
 
@@ -953,6 +997,7 @@ func Test_handleFollowingVotingMessage_AlreadyVoted(t *testing.T) {
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
 
+	pd.setRoundInProgress(round)
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.NoError(t, err)
 
@@ -987,6 +1032,7 @@ func Test_handleFollowingVotingMessage_MinerMissingATX(t *testing.T) {
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
 
+	pd.setRoundInProgress(round)
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.ErrorIs(t, err, errMinerATXNotFound)
 
@@ -1006,6 +1052,7 @@ func Test_handleFollowingVotingMessage_ATXLookupError(t *testing.T) {
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
 
+	pd.setRoundInProgress(round)
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.ErrorIs(t, err, errUnknown)
 
@@ -1026,6 +1073,7 @@ func Test_handleFollowingVotingMessage_ATXHeaderLookupError(t *testing.T) {
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
 
+	pd.setRoundInProgress(round)
 	err := pd.handleFollowingVotingMessage(context.TODO(), *msg)
 	assert.ErrorIs(t, err, errUnknown)
 

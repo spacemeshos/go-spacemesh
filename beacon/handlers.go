@@ -303,6 +303,12 @@ func (pd *ProtocolDriver) handleFirstVotingMessage(ctx context.Context, message 
 }
 
 func (pd *ProtocolDriver) verifyFirstVotingMessage(ctx context.Context, message FirstVotingMessage, currentEpoch types.EpochID) (*signing.PublicKey, types.ATXID, error) {
+	// don't accept more first vote after the round ends
+	currentRound := pd.currentRound()
+	if currentRound > types.FirstRound {
+		return nil, types.ATXID{}, fmt.Errorf("[round %v] message too late. protocol has advanced to round %v", types.FirstRound, currentRound)
+	}
+
 	logger := pd.logger.WithContext(ctx).WithFields(currentEpoch, types.FirstRound)
 	messageBytes, err := types.InterfaceToBytes(message.FirstVotingMessageBody)
 	if err != nil {
@@ -433,6 +439,13 @@ func (pd *ProtocolDriver) handleFollowingVotingMessage(ctx context.Context, mess
 
 func (pd *ProtocolDriver) verifyFollowingVotingMessage(ctx context.Context, message FollowingVotingMessage, currentEpoch types.EpochID) (*signing.PublicKey, types.ATXID, error) {
 	round := message.RoundID
+
+	// don't accept votes from future rounds
+	currentRound := pd.currentRound()
+	if round > currentRound {
+		return nil, types.ATXID{}, fmt.Errorf("[round %v] message too early. protocol is at round %v", round, currentRound)
+	}
+
 	messageBytes, err := types.InterfaceToBytes(message.FollowingVotingMessageBody)
 	if err != nil {
 		pd.logger.With().Panic("failed to serialize voting message", log.Err(err))
@@ -499,6 +512,12 @@ func (pd *ProtocolDriver) currentEpoch() types.EpochID {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 	return pd.epochInProgress
+}
+
+func (pd *ProtocolDriver) currentRound() types.RoundID {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+	return pd.roundInProgress
 }
 
 func (pd *ProtocolDriver) registerProposed(minerPK *signing.PublicKey, logger log.Log) error {
