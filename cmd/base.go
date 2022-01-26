@@ -15,6 +15,7 @@ import (
 	"github.com/spf13/pflag"
 	"github.com/spf13/viper"
 
+	"github.com/spacemeshos/go-spacemesh/cmd/flags"
 	"github.com/spacemeshos/go-spacemesh/cmd/mapstructureutil"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	bc "github.com/spacemeshos/go-spacemesh/config"
@@ -111,7 +112,7 @@ func (app *BaseApp) Initialize(cmd *cobra.Command) {
 }
 
 func setupLogging(config *bc.Config) {
-	if config.TestMode {
+	if config.LOGGING.Encoder == bc.JSONLogEncoder {
 		log.JSONLog(true)
 	}
 
@@ -187,6 +188,8 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 					val = viper.GetStringSlice(name)
 				case "time.Duration":
 					val = viper.GetDuration(name)
+				case "map[string]uint64":
+					val = flags.CastStringToMapStringUint64(viper.GetString(name))
 				case "*big.Rat":
 					v, ok := new(big.Rat).SetString(viper.GetString(name))
 					if !ok {
@@ -218,6 +221,10 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 			elem = reflect.ValueOf(&appCFG).Elem()
 			assignFields(ff, elem, name)
 
+			ff = reflect.TypeOf(*appCFG.Genesis)
+			elem = reflect.ValueOf(appCFG.Genesis).Elem()
+			assignFields(ff, elem, name)
+
 			ff = reflect.TypeOf(appCFG.API)
 			elem = reflect.ValueOf(&appCFG.API).Elem()
 			assignFields(ff, elem, name)
@@ -238,8 +245,8 @@ func EnsureCLIFlags(cmd *cobra.Command, appCFG *bc.Config) error {
 			elem = reflect.ValueOf(&appCFG.HareEligibility).Elem()
 			assignFields(ff, elem, name)
 
-			ff = reflect.TypeOf(appCFG.TortoiseBeacon)
-			elem = reflect.ValueOf(&appCFG.TortoiseBeacon).Elem()
+			ff = reflect.TypeOf(appCFG.Beacon)
+			elem = reflect.ValueOf(&appCFG.Beacon).Elem()
 			assignFields(ff, elem, name)
 
 			ff = reflect.TypeOf(appCFG.POST)

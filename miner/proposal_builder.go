@@ -250,6 +250,7 @@ func (pb *ProposalBuilder) createProposal(
 	activeSet []types.ATXID,
 	beacon types.Beacon,
 	txIDs []types.TransactionID,
+	votes types.Votes,
 ) (*types.Proposal, error) {
 	logger := pb.logger.WithContext(ctx).WithFields(layerID, layerID.GetEpoch())
 
@@ -257,14 +258,10 @@ func (pb *ProposalBuilder) createProposal(
 		logger.Panic("attempt to create proposal during genesis")
 	}
 
-	votes, err := pb.baseBallotProvider.BaseBallot(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("get base ballot: %w", err)
-	}
 	ib := &types.InnerBallot{
 		AtxID:            atxID,
 		EligibilityProof: proofs,
-		Votes:            *votes,
+		Votes:            votes,
 		LayerIndex:       layerID,
 	}
 
@@ -328,8 +325,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		return errNoBeacon
 	}
 
-	logger.With().Info("miner got beacon to build proposals",
-		log.String("beacon", beacon.ShortString()))
+	logger.With().Info("miner got beacon to build proposals", beacon)
 
 	started := time.Now()
 
@@ -350,6 +346,11 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		return nil
 	}
 
+	votes, err := pb.baseBallotProvider.BaseBallot(ctx)
+	if err != nil {
+		return fmt.Errorf("get base ballot: %w", err)
+	}
+
 	logger.With().Info("eligible for one or more proposals in layer", atxID, log.Int("num_proposals", len(proofs)))
 	var publish []*types.Proposal
 	for _, eligibilityProof := range proofs {
@@ -359,7 +360,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 			logger.With().Error("failed to get txs for proposal", log.Err(err))
 			return fmt.Errorf("select TXs: %w", err)
 		}
-		p, err := pb.createProposal(ctx, layerID, eligibilityProof, atxID, activeSet, beacon, txList)
+		p, err := pb.createProposal(ctx, layerID, eligibilityProof, atxID, activeSet, beacon, txList, *votes)
 		if err != nil {
 			events.ReportDoneCreatingProposal(true, layerID.Uint32(), "failed to create new proposal")
 			logger.With().Error("failed to create new proposal", log.Err(err))

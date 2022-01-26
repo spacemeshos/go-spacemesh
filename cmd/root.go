@@ -6,6 +6,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 
+	"github.com/spacemeshos/go-spacemesh/cmd/flags"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	cfg "github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/config/presets"
@@ -23,8 +24,8 @@ func AddCommands(cmd *cobra.Command) {
 		"config", "c", config.BaseConfig.ConfigFile, "Set Load configuration from file")
 	cmd.PersistentFlags().StringVarP(&config.BaseConfig.DataDirParent, "data-folder", "d",
 		config.BaseConfig.DataDirParent, "Specify data directory for spacemesh")
-	cmd.PersistentFlags().BoolVar(&config.TestMode, "test-mode",
-		config.TestMode, "Initialize testing features")
+	cmd.PersistentFlags().StringVar(&config.LOGGING.Encoder, "log-encoder",
+		config.LOGGING.Encoder, "Log as JSON instead of plain text")
 	cmd.PersistentFlags().BoolVar(&config.CollectMetrics, "metrics",
 		config.CollectMetrics, "collect node metrics")
 	cmd.PersistentFlags().IntVar(&config.MetricsPort, "metrics-port",
@@ -58,12 +59,15 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringVar(&config.ProfilerURL, "profiler-url",
 		config.ProfilerURL, "send profiler data to certain url, if no url no profiling will be sent, format: http://<IP>:<PORT>")
 	cmd.PersistentFlags().StringVar(&config.ProfilerName, "profiler-name",
-		config.ProfilerURL, "the name to use when sending profiles")
+		config.ProfilerName, "the name to use when sending profiles")
 
 	cmd.PersistentFlags().IntVar(&config.SyncRequestTimeout, "sync-request-timeout",
 		config.SyncRequestTimeout, "the timeout in ms for direct requests in the sync")
 	cmd.PersistentFlags().IntVar(&config.TxsPerBlock, "txs-per-block",
 		config.TxsPerBlock, "the number of transactions to select per block on block creation")
+
+	cmd.PersistentFlags().VarP(flags.NewStringToUint64Value(config.Genesis.Accounts), "accounts", "a",
+		"List of prefunded accounts")
 
 	/** ======================== P2P Flags ========================== **/
 
@@ -159,30 +163,30 @@ func AddCommands(cmd *cobra.Command) {
 	cmd.PersistentFlags().Uint32Var(&config.HareEligibility.EpochOffset, "eligibility-epoch-offset",
 		config.HareEligibility.EpochOffset, "The constant layer (within an epoch) for which we traverse its view for the purpose of counting consensus active set")
 
-	/**======================== Tortoise Beacon Flags ========================== **/
+	/**======================== Beacon Flags ========================== **/
 
-	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.Kappa, "tortoise-beacon-kappa",
-		config.TortoiseBeacon.Kappa, "Security parameter (for calculating ATX threshold)")
-	cmd.PersistentFlags().Var((*types.RatVar)(config.TortoiseBeacon.Q), "tortoise-beacon-q",
+	cmd.PersistentFlags().Uint64Var(&config.Beacon.Kappa, "beacon-kappa",
+		config.Beacon.Kappa, "Security parameter (for calculating ATX threshold)")
+	cmd.PersistentFlags().Var((*types.RatVar)(config.Beacon.Q), "beacon-q",
 		"Ratio of dishonest spacetime (for calculating ATX threshold). It should be a string representing a rational number.")
-	cmd.PersistentFlags().Uint32Var((*uint32)(&config.TortoiseBeacon.RoundsNumber), "tortoise-beacon-rounds-number",
-		uint32(config.TortoiseBeacon.RoundsNumber), "Amount of rounds in every epoch")
-	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.GracePeriodDuration, "tortoise-beacon-grace-period-duration",
-		config.TortoiseBeacon.GracePeriodDuration, "Grace period duration in milliseconds")
-	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.ProposalDuration, "tortoise-beacon-proposal-duration",
-		config.TortoiseBeacon.ProposalDuration, "Proposal duration in milliseconds")
-	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.FirstVotingRoundDuration, "tortoise-beacon-first-voting-round-duration",
-		config.TortoiseBeacon.FirstVotingRoundDuration, "First voting round duration in milliseconds")
-	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.VotingRoundDuration, "tortoise-beacon-voting-round-duration",
-		config.TortoiseBeacon.VotingRoundDuration, "Voting round duration in milliseconds")
-	cmd.PersistentFlags().DurationVar(&config.TortoiseBeacon.WeakCoinRoundDuration, "tortoise-beacon-weak-coin-round-duration",
-		config.TortoiseBeacon.WeakCoinRoundDuration, "Weak coin round duration in milliseconds")
-	cmd.PersistentFlags().Var((*types.RatVar)(config.TortoiseBeacon.Theta), "tortoise-beacon-theta",
+	cmd.PersistentFlags().Uint32Var((*uint32)(&config.Beacon.RoundsNumber), "beacon-rounds-number",
+		uint32(config.Beacon.RoundsNumber), "Amount of rounds in every epoch")
+	cmd.PersistentFlags().DurationVar(&config.Beacon.GracePeriodDuration, "beacon-grace-period-duration",
+		config.Beacon.GracePeriodDuration, "Grace period duration in milliseconds")
+	cmd.PersistentFlags().DurationVar(&config.Beacon.ProposalDuration, "beacon-proposal-duration",
+		config.Beacon.ProposalDuration, "Proposal duration in milliseconds")
+	cmd.PersistentFlags().DurationVar(&config.Beacon.FirstVotingRoundDuration, "beacon-first-voting-round-duration",
+		config.Beacon.FirstVotingRoundDuration, "First voting round duration in milliseconds")
+	cmd.PersistentFlags().DurationVar(&config.Beacon.VotingRoundDuration, "beacon-voting-round-duration",
+		config.Beacon.VotingRoundDuration, "Voting round duration in milliseconds")
+	cmd.PersistentFlags().DurationVar(&config.Beacon.WeakCoinRoundDuration, "beacon-weak-coin-round-duration",
+		config.Beacon.WeakCoinRoundDuration, "Weak coin round duration in milliseconds")
+	cmd.PersistentFlags().Var((*types.RatVar)(config.Beacon.Theta), "beacon-theta",
 		"Ratio of votes for reaching consensus")
-	cmd.PersistentFlags().Uint64Var(&config.TortoiseBeacon.VotesLimit, "tortoise-beacon-votes-limit",
-		config.TortoiseBeacon.VotesLimit, "Maximum allowed number of votes to be sent")
-	cmd.PersistentFlags().Uint32Var(&config.TortoiseBeacon.BeaconSyncNumBallots, "tortoise-beacon-sync-num-blocks",
-		config.TortoiseBeacon.BeaconSyncNumBallots, "Numbers of blocks to wait before determining beacon values from them.")
+	cmd.PersistentFlags().Uint32Var(&config.Beacon.VotesLimit, "beacon-votes-limit",
+		config.Beacon.VotesLimit, "Maximum allowed number of votes to be sent")
+	cmd.PersistentFlags().Uint32Var(&config.Beacon.BeaconSyncNumBallots, "beacon-sync-num-blocks",
+		config.Beacon.BeaconSyncNumBallots, "Numbers of blocks to wait before determining beacon values from them.")
 
 	/**======================== Post Flags ========================== **/
 

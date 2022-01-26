@@ -88,7 +88,7 @@ In the above example there are two ballots (0xaa and 0xbb). They vote for 4 bloc
 
 Because a smesher can select arbitrary beacon, there is an attack that will allow malicious smeshers to concentrate weight in a specific layer. If tortoise counts malicious weight immediately it will make erroneous decisions (decide that a block is valid when in fact it is not). In order to prevent such attack tortoise will delay counting ballots with a wrong beacon until enough weight from honest smeshers was counted. 
 
-Note that we can't discard ballots with wrong beacon completely as recovery from partition requires counting ballots from both sides. And they will likely have different beacons if it was a long partition, or occured at the time when tortoise beacon was computed.
+Note that we can't discard ballots with wrong beacon completely as recovery from partition requires counting ballots from both sides. And they will likely have different beacons if it was a long partition, or occurred at the time when beacon was computed.
 
 #### Scaling issues
 

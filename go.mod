@@ -3,7 +3,6 @@ module github.com/spacemeshos/go-spacemesh
 require (
 	crawshaw.io/sqlite v0.3.3-0.20211227050848-2cdb5c1a86a1
 	github.com/ALTree/bigfloat v0.0.0-20201218142103-4a33235224ec
-	github.com/bits-and-blooms/bitset v1.2.0
 	github.com/golang/mock v1.6.0
 	github.com/golang/protobuf v1.5.2
 	github.com/google/uuid v1.3.0
@@ -25,7 +24,7 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.30.0
 	github.com/pyroscope-io/pyroscope v0.0.30
-	github.com/spacemeshos/api/release/go v1.3.1-0.20210726064428-9474f58a4ace
+	github.com/spacemeshos/api/release/go v1.4.1-0.20220115045820-3b2eee8875ba
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82

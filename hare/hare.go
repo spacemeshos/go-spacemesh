@@ -29,7 +29,6 @@ type Consensus interface {
 	ID() types.LayerID
 	Close()
 	CloseChannel() chan struct{}
-
 	Start(ctx context.Context) error
 	SetInbox(chan *Msg)
 }

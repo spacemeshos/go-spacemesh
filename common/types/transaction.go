@@ -9,7 +9,6 @@ import (
 	"github.com/spacemeshos/ed25519"
 
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
 // TransactionID is a 32-byte sha256 sum of the transaction, used as an identifier.
@@ -78,6 +77,11 @@ func (t *Transaction) Origin() Address {
 	return *t.origin
 }
 
+// SetID updates transaction ID.
+func (t *Transaction) SetID(id TransactionID) {
+	t.id = &id
+}
+
 // SetOrigin sets the cache of the transaction's origin address.
 func (t *Transaction) SetOrigin(origin Address) {
 	if t.origin != nil && *t.origin == origin {
@@ -100,10 +104,7 @@ func (t *Transaction) CalcAndSetOrigin() error {
 		return fmt.Errorf("failed to extract transaction pubkey: %v", err)
 	}
 
-	addr := Address{}
-	addr.SetBytes(pubKey)
-
-	t.SetOrigin(addr)
+	t.SetOrigin(GenerateAddress(pubKey))
 
 	return nil
 }
@@ -120,7 +121,7 @@ func (t *Transaction) ID() TransactionID {
 	}
 
 	id := TransactionID(CalcHash32(txBytes))
-	t.id = &id
+	t.SetID(id)
 
 	return id
 }
@@ -190,32 +191,4 @@ type Reward struct {
 	LayerRewardEstimate uint64
 	SmesherID           NodeID
 	Coinbase            Address
-}
-
-// NewSignedTx is used in TESTS ONLY to generate signed txs.
-func NewSignedTx(nonce uint64, rec Address, amount, gas, fee uint64, signer *signing.EdSigner) (*Transaction, error) {
-	inner := InnerTransaction{
-		AccountNonce: nonce,
-		Recipient:    rec,
-		Amount:       amount,
-		GasLimit:     gas,
-		Fee:          fee,
-	}
-
-	buf, err := InterfaceToBytes(&inner)
-	if err != nil {
-		return nil, err
-	}
-
-	sst := &Transaction{
-		InnerTransaction: inner,
-		Signature:        [64]byte{},
-	}
-
-	copy(sst.Signature[:], signer.Sign(buf))
-	addr := Address{}
-	addr.SetBytes(signer.PublicKey().Bytes())
-	sst.SetOrigin(addr)
-
-	return sst, nil
 }

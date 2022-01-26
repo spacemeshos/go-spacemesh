@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 const (
@@ -76,7 +77,7 @@ func addTransactions(t testing.TB, mesh *DB, layerID types.LayerID) []types.Tran
 	txs := make([]*types.Transaction, 0, numTXs)
 	txIDs := make([]types.TransactionID, 0, numTXs)
 	for i := 0; i < numTXs; i++ {
-		tx, err := types.NewSignedTx(1, types.HexToAddress("1"), 10, 100, rand.Uint64(), signing.NewEdSigner())
+		tx, err := transaction.GenerateCallTransaction(signing.NewEdSigner(), types.HexToAddress("1"), 1, 10, 100, rand.Uint64())
 		require.NoError(t, err)
 		txs = append(txs, tx)
 		txIDs = append(txIDs, tx.ID())
@@ -545,7 +546,7 @@ func TestMesh_persistLayerHash(t *testing.T) {
 
 func addTxToMempool(t *testing.T, msh *Mesh, signer *signing.EdSigner, nonce uint64) *types.Transaction {
 	t.Helper()
-	tx := newTx(t, signer, nonce, 111)
+	tx := newCallTx(t, signer, nonce, 111)
 	msh.txPool.Put(tx.ID(), tx)
 	return tx
 }
