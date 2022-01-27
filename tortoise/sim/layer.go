@@ -131,7 +131,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 
 	miners := make(map[int]uint32, size)
 	for i := 0; i < size; i++ {
-		miner := g.rng.Intn(len(g.activations))
+		miner := i % len(g.activations)
 		miners[miner]++
 	}
 	i := 0
