@@ -420,6 +420,8 @@ func (t *turtle) markBeaconWithBadBallot(logger log.Log, ballot *types.Ballot) b
 	good := beacon == epochBeacon
 	if !good {
 		logger.With().Warning("ballot has different beacon",
+			ballot.LayerIndex,
+			ballot.ID(),
 			log.String("ballot_beacon", beacon.ShortString()),
 			log.String("epoch_beacon", epochBeacon.ShortString()))
 		t.badBeaconBallots[ballot.ID()] = struct{}{}
@@ -675,13 +677,18 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	}
 
 	baselid := t.ballotLayer[ballot.Votes.Base]
-
-	ballotWeight, err := computeBallotWeight(
-		t.atxdb, t.bdp, t.referenceWeight,
-		t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch(),
-	)
-	if err != nil {
-		return err
+	var ballotWeight weight
+	if !ballot.IsMalicious() {
+		var err error
+		ballotWeight, err = computeBallotWeight(
+			t.atxdb, t.bdp, t.referenceWeight,
+			t.ballotWeight, ballot, t.LayerSize, types.GetLayersPerEpoch(),
+		)
+		if err != nil {
+			return err
+		}
+	} else {
+		t.logger.With().Warning("observed malicious ballot", ballot.ID(), ballot.LayerIndex)
 	}
 	t.ballotLayer[ballot.ID()] = ballot.LayerIndex
 	t.ballots[ballot.LayerIndex] = append(t.ballots[ballot.LayerIndex], ballot.ID())

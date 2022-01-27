@@ -1990,7 +1990,6 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	)
 	s1.Setup(
 		sim.WithSetupMinerRange(15, 15),
-		sim.WithSetupUnitsRange(1, 1),
 	)
 
 	ctx := context.Background()
@@ -2056,7 +2055,7 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	for lid := partitionStart.Add(1); !lid.After(partitionEnd); lid = lid.Add(1) {
 		validBlocks, err := s1.GetState(0).MeshDB.LayerContextuallyValidBlocks(context.TODO(), lid)
 		require.NoError(t, err)
-		assert.Len(t, validBlocks, numValidBlock*2)
+		assert.Len(t, validBlocks, numValidBlock*2, "layer=%s", lid)
 		assert.NotContains(t, validBlocks, types.EmptyBlockID)
 	}
 }
@@ -2163,7 +2162,7 @@ func TestAbstainVotingVerifyingMode(t *testing.T) {
 	ctx := context.Background()
 	const size = 10
 	s := sim.New(sim.WithLayerSize(size))
-	s.Setup(sim.WithSetupUnitsRange(2, 2))
+	s.Setup()
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size

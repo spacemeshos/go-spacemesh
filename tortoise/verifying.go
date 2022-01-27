@@ -113,7 +113,7 @@ func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tort
 
 	logger.With().Info("counted weight from good ballots",
 		log.Stringer("good_weight", goodWeight),
-		log.Stringer("total", v.totalGoodWeight),
+		log.Stringer("total_good_weight", v.totalGoodWeight),
 		log.Stringer("expected", v.epochWeight[lid.GetEpoch()]),
 		log.Int("ballots_count", len(ballots)),
 		log.Int("good_ballots_count", goodBallotsCount),
@@ -180,6 +180,9 @@ func (v *verifying) countGoodBallots(logger log.Log, ballots []tortoiseBallot) (
 	sum := weightFromUint64(0)
 	n := 0
 	for _, ballot := range ballots {
+		if ballot.weight.isNil() {
+			continue
+		}
 		rst := v.determineGoodness(logger, ballot)
 		if rst == bad {
 			continue
