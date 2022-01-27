@@ -27,7 +27,7 @@ func RandomHash() Hash32 {
 
 // RandomBeacon generates random beacon in bytes for testing.
 func RandomBeacon() Beacon {
-	return RandomBytes(1 + rand.Intn(7))
+	return RandomBytes(4 + rand.Intn(7))
 }
 
 // RandomActiveSet generates a random set of ATXIDs of the specified size.
