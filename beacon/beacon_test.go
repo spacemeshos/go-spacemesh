@@ -596,15 +596,19 @@ func TestBeacon_getProposalChannel(t *testing.T) {
 			// don't run these tests in parallel. somehow all cases end up using the same ProtocolDriver instance
 			// t.Parallel()
 			pd := ProtocolDriver{
-				logger:                    logtest.New(t).WithName(fmt.Sprintf("ProtocolDriver-%v", i)),
-				proposalChans:             make(map[types.EpochID]chan *proposalMessageWithReceiptData),
-				epochInProgress:           currentEpoch,
-				proposalPhaseFinishedTime: tc.proposalEndTime,
+				logger:          logtest.New(t).WithName(fmt.Sprintf("ProtocolDriver-%v", i)),
+				epochInProgress: currentEpoch,
+				current: &state{
+					proposalChan:              make(chan *proposalMessageWithReceiptData, proposalChanCapacity),
+					proposalPhaseFinishedTime: tc.proposalEndTime,
+				},
+				next: &state{
+					proposalChan: make(chan *proposalMessageWithReceiptData, proposalChanCapacity),
+				},
 			}
-
 			if tc.makeNextChFull {
 				pd.mu.Lock()
-				nextCh := pd.getOrCreateProposalChannel(currentEpoch + 1)
+				nextCh := pd.next.proposalChan
 				for i := 0; i < proposalChanCapacity; i++ {
 					nextCh <- &proposalMessageWithReceiptData{
 						message: ProposalMessage{},
@@ -619,54 +623,6 @@ func TestBeacon_getProposalChannel(t *testing.T) {
 			} else {
 				assert.Nil(t, ch)
 			}
-		})
-	}
-}
-
-func TestBeacon_votingThreshold(t *testing.T) {
-	t.Parallel()
-
-	r := require.New(t)
-
-	tt := []struct {
-		name      string
-		theta     *big.Rat
-		weight    uint64
-		threshold *big.Int
-	}{
-		{
-			name:      "Case 1",
-			theta:     big.NewRat(1, 2),
-			weight:    10,
-			threshold: big.NewInt(5),
-		},
-		{
-			name:      "Case 2",
-			theta:     big.NewRat(3, 10),
-			weight:    10,
-			threshold: big.NewInt(3),
-		},
-		{
-			name:      "Case 3",
-			theta:     big.NewRat(1, 25000),
-			weight:    31744,
-			threshold: big.NewInt(1),
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			pd := ProtocolDriver{
-				logger: logtest.New(t).WithName("Beacon"),
-				config: Config{},
-				theta:  new(big.Float).SetRat(tc.theta),
-			}
-
-			threshold := pd.votingThreshold(tc.weight)
-			r.EqualValues(tc.threshold, threshold)
 		})
 	}
 }
@@ -788,7 +744,8 @@ func TestBeacon_proposalPassesEligibilityThreshold(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			checker := createProposalChecker(tc.kappa, tc.q, tc.w, logtest.New(t).WithName("proposal checker"))
+			logger := logtest.New(t).WithName("proposal checker")
+			checker := createProposalChecker(logger, tc.kappa, tc.q, tc.w)
 			passes := checker.IsProposalEligible(tc.proposal)
 			r.EqualValues(tc.passes, passes)
 		})
@@ -933,13 +890,13 @@ func TestBeacon_signAndVerifyVRF(t *testing.T) {
 func TestBeacon_calcBeacon(t *testing.T) {
 	hash := types.HexToHash32("0x6d148de54cc5ac334cdf4537018209b0e9f5ea94c049417103065eac777ddb5c")
 	votes := allVotes{
-		valid: proposalSet{
+		support: proposalSet{
 			"0x1": {},
 			"0x2": {},
 			"0x4": {},
 			"0x5": {},
 		},
-		invalid: proposalSet{
+		against: proposalSet{
 			"0x3": {},
 			"0x6": {},
 		},

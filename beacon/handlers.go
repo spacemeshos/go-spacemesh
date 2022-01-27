@@ -174,7 +174,7 @@ func (pd *ProtocolDriver) addValidProposal(proposal []byte) {
 
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.incomingProposals.valid = append(pd.incomingProposals.valid, proposal)
+	pd.current.incomingProposals.valid = append(pd.current.incomingProposals.valid, proposal)
 }
 
 func (pd *ProtocolDriver) addPotentiallyValidProposal(proposal []byte) {
@@ -185,7 +185,7 @@ func (pd *ProtocolDriver) addPotentiallyValidProposal(proposal []byte) {
 
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.incomingProposals.potentiallyValid = append(pd.incomingProposals.potentiallyValid, proposal)
+	pd.current.incomingProposals.potentiallyValid = append(pd.current.incomingProposals.potentiallyValid, proposal)
 }
 
 func (pd *ProtocolDriver) verifyProposalMessage(ctx context.Context, m ProposalMessage, currentEpoch types.EpochID) (types.ATXID, error) {
@@ -211,20 +211,11 @@ func (pd *ProtocolDriver) verifyProposalMessage(ctx context.Context, m ProposalM
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to verify VRF signature (miner ID %v): %w", minerID, errVRFNotVerified)
 	}
 
-	if err := pd.registerProposed(vrfPK, logger); err != nil {
+	if err := pd.registerProposed(logger, vrfPK); err != nil {
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to register proposal (miner ID %v): %w", minerID, err)
 	}
 
-	pd.mu.RLock()
-	passes := pd.proposalChecker.IsProposalEligible(m.VRFSignature)
-	pd.mu.RUnlock()
-	if !passes {
-		// the peer may have different total weight from us so that it passes threshold for the peer
-		// but does not pass here
-		proposalShortString := types.BytesToHash(m.VRFSignature).ShortString()
-		logger.With().Warning("rejected proposal that doesn't pass threshold",
-			log.String("proposal", proposalShortString),
-			log.Uint64("total_weight", pd.epochWeight))
+	if !pd.checkProposalEligibility(logger, m.VRFSignature) {
 		return types.ATXID{}, fmt.Errorf("[proposal] not eligible (miner ID %v): %w", minerID, errProposalDoesntPassThreshold)
 	}
 
@@ -324,7 +315,7 @@ func (pd *ProtocolDriver) verifyFirstVotingMessage(ctx context.Context, message 
 	minerID := nodeID.ShortString()
 	logger = logger.WithFields(log.String("miner_id", minerID))
 
-	if err := pd.registerVoted(minerPK, types.FirstRound, logger); err != nil {
+	if err := pd.registerVoted(logger, minerPK, types.FirstRound); err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] failed to register proposal (miner ID %v): %w", types.FirstRound, minerID, err)
 	}
 
@@ -352,21 +343,11 @@ func (pd *ProtocolDriver) storeFirstVotes(message FirstVotingMessage, minerPK *s
 	defer pd.mu.Unlock()
 
 	for _, proposal := range message.ValidProposals {
-		p := string(proposal)
-		if _, ok := pd.votesMargin[p]; !ok {
-			pd.votesMargin[p] = new(big.Int).Set(voteWeight)
-		} else {
-			pd.votesMargin[p].Add(pd.votesMargin[p], voteWeight)
-		}
+		pd.current.addVote(string(proposal), up, voteWeight)
 	}
 
 	for _, proposal := range message.PotentiallyValidProposals {
-		p := string(proposal)
-		if _, ok := pd.votesMargin[p]; !ok {
-			pd.votesMargin[p] = new(big.Int).Neg(voteWeight)
-		} else {
-			pd.votesMargin[p].Sub(pd.votesMargin[p], voteWeight)
-		}
+		pd.current.addVote(string(proposal), down, voteWeight)
 	}
 
 	// this is used for bit vector calculation
@@ -375,7 +356,7 @@ func (pd *ProtocolDriver) storeFirstVotes(message FirstVotingMessage, minerPK *s
 		voteList = voteList[:pd.config.VotesLimit]
 	}
 
-	pd.firstRoundIncomingVotes[string(minerPK.Bytes())] = voteList
+	pd.current.setMinerFirstRoundVote(minerPK, voteList)
 }
 
 // HandleSerializedFollowingVotingMessage defines method to handle following voting Messages from gossip.
@@ -432,7 +413,10 @@ func (pd *ProtocolDriver) handleFollowingVotingMessage(ctx context.Context, mess
 	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
 
 	logger.Debug("received following voting message, counting its votes")
-	pd.storeFollowingVotes(message, minerPK, voteWeight)
+	if err = pd.storeFollowingVotes(message, minerPK, voteWeight); err != nil {
+		logger.With().Warning("failed to store following votes", log.Err(err))
+		return err
+	}
 
 	return nil
 }
@@ -460,7 +444,7 @@ func (pd *ProtocolDriver) verifyFollowingVotingMessage(ctx context.Context, mess
 	minerID := nodeID.ShortString()
 	logger := pd.logger.WithContext(ctx).WithFields(currentEpoch, round, log.String("miner_id", minerID))
 
-	if err := pd.registerVoted(minerPK, message.RoundID, logger); err != nil {
+	if err := pd.registerVoted(logger, minerPK, message.RoundID); err != nil {
 		return nil, types.ATXID{}, err
 	}
 
@@ -478,33 +462,32 @@ func (pd *ProtocolDriver) verifyFollowingVotingMessage(ctx context.Context, mess
 	return minerPK, atxID, nil
 }
 
-func (pd *ProtocolDriver) storeFollowingVotes(message FollowingVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) {
+func (pd *ProtocolDriver) storeFollowingVotes(message FollowingVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not storing following votes")
-		return
+		return nil
 	}
 
+	firstRoundVotes, err := pd.getFirstRoundVote(minerPK)
+	if err != nil {
+		return fmt.Errorf("failed to get miner first round votes %v: %w", minerPK.String(), err)
+	}
+
+	thisRoundVotes := decodeVotes(message.VotesBitVector, firstRoundVotes)
+	pd.addToVoteMargin(thisRoundVotes, voteWeight)
+	return nil
+}
+
+func (pd *ProtocolDriver) addToVoteMargin(thisRoundVotes allVotes, voteWeight *big.Int) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	thisRoundVotes := decodeVotes(message.VotesBitVector, pd.firstRoundIncomingVotes[string(minerPK.Bytes())])
-
-	for vote := range thisRoundVotes.valid {
-		if _, ok := pd.votesMargin[vote]; !ok {
-			pd.votesMargin[vote] = new(big.Int).Set(voteWeight)
-		} else {
-			pd.votesMargin[vote].Add(pd.votesMargin[vote], voteWeight)
-		}
+	for proposal := range thisRoundVotes.support {
+		pd.current.addVote(proposal, up, voteWeight)
 	}
 
-	// TODO: don't accept votes in future round
-	// https://github.com/spacemeshos/go-spacemesh/issues/2794
-	for vote := range thisRoundVotes.invalid {
-		if _, ok := pd.votesMargin[vote]; !ok {
-			pd.votesMargin[vote] = new(big.Int).Neg(voteWeight)
-		} else {
-			pd.votesMargin[vote].Sub(pd.votesMargin[vote], voteWeight)
-		}
+	for proposal := range thisRoundVotes.against {
+		pd.current.addVote(proposal, down, voteWeight)
 	}
 }
 
@@ -520,7 +503,22 @@ func (pd *ProtocolDriver) currentRound() types.RoundID {
 	return pd.roundInProgress
 }
 
-func (pd *ProtocolDriver) registerProposed(minerPK *signing.PublicKey, logger log.Log) error {
+func (pd *ProtocolDriver) checkProposalEligibility(logger log.Log, vrfSig []byte) bool {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+	eligible := pd.current.proposalChecker.IsProposalEligible(vrfSig)
+	if !eligible {
+		// the peer may have different total weight from us so that it passes threshold for the peer
+		// but does not pass here
+		proposalShortString := types.BytesToHash(vrfSig).ShortString()
+		logger.With().Warning("rejected proposal that doesn't pass threshold",
+			log.String("proposal", proposalShortString),
+			log.Uint64("total_weight", pd.current.epochWeight))
+	}
+	return eligible
+}
+
+func (pd *ProtocolDriver) registerProposed(logger log.Log, minerPK *signing.PublicKey) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not registering proposal")
 		return errProtocolNotRunning
@@ -528,19 +526,10 @@ func (pd *ProtocolDriver) registerProposed(minerPK *signing.PublicKey, logger lo
 
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-
-	minerID := string(minerPK.Bytes())
-	if _, ok := pd.hasProposed[minerID]; ok {
-		// see TODOs for registerVoted()
-		logger.Warning("already received proposal from miner")
-		return fmt.Errorf("already made proposal (miner ID %v): %w", minerPK.ShortString(), errAlreadyProposed)
-	}
-
-	pd.hasProposed[minerID] = struct{}{}
-	return nil
+	return pd.current.registerProposed(logger, minerPK)
 }
 
-func (pd *ProtocolDriver) registerVoted(minerPK *signing.PublicKey, round types.RoundID, logger log.Log) error {
+func (pd *ProtocolDriver) registerVoted(logger log.Log, minerPK *signing.PublicKey, round types.RoundID) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not registering votes")
 		return errProtocolNotRunning
@@ -548,26 +537,5 @@ func (pd *ProtocolDriver) registerVoted(minerPK *signing.PublicKey, round types.
 
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-
-	if pd.hasVoted[round] == nil {
-		pd.hasVoted[round] = make(map[string]struct{})
-	}
-
-	minerID := string(minerPK.Bytes())
-	// TODO(nkryuchkov): consider having a separate table for an epoch with one bit in it if atx/miner is voted already
-	if _, ok := pd.hasVoted[round][minerID]; ok {
-		logger.Warning("already received vote from miner for this round")
-
-		// TODO(nkryuchkov): report this miner through gossip
-		// TODO(nkryuchkov): store evidence, generate malfeasance proof: union of two whole voting messages
-		// TODO(nkryuchkov): handle malfeasance proof: we have a blacklist, on receiving, add to blacklist
-		// TODO(nkryuchkov): blacklist format: key is epoch when blacklisting started, value is link to proof (union of messages)
-		// TODO(nkryuchkov): ban id forever globally across packages since this epoch
-		// TODO(nkryuchkov): (not specific to beacon) do the same for ATXs
-
-		return fmt.Errorf("[round %v] already voted (miner ID %v): %w", round, minerPK.ShortString(), errAlreadyVoted)
-	}
-
-	pd.hasVoted[round][minerID] = struct{}{}
-	return nil
+	return pd.current.registerVoted(logger, minerPK, round)
 }

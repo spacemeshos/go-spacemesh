@@ -33,22 +33,20 @@ func createProtocolDriver(t *testing.T, epoch types.EpochID) (*ProtocolDriver, *
 	ctrl := gomock.NewController(t)
 	mockDB := mocks.NewMockactivationDB(ctrl)
 	edSgn := signing.NewEdSigner()
+	cfg := UnitTestConfig()
 	pd := &ProtocolDriver{
-		logger:                  logtest.New(t).WithName("Beacon"),
-		clock:                   clockNeverNotify(t),
-		config:                  UnitTestConfig(),
-		atxDB:                   mockDB,
-		edSigner:                edSgn,
-		edVerifier:              signing.NewEDVerifier(),
-		vrfVerifier:             signing.VRFVerifier{},
-		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
-		firstRoundIncomingVotes: map[string][][]byte{},
-		votesMargin:             map[string]*big.Int{},
-		hasProposed:             make(map[string]struct{}),
-		hasVoted:                make([]map[string]struct{}, 10),
-		epochInProgress:         epoch,
-		running:                 1,
-		inProtocol:              1,
+		logger:          logtest.New(t).WithName("Beacon"),
+		clock:           clockNeverNotify(t),
+		config:          cfg,
+		atxDB:           mockDB,
+		edSigner:        edSgn,
+		edVerifier:      signing.NewEDVerifier(),
+		vrfVerifier:     signing.VRFVerifier{},
+		current:         newState(cfg),
+		next:            newState(cfg),
+		epochInProgress: epoch,
+		running:         1,
+		inProtocol:      1,
 	}
 	return pd, mockDB
 }
@@ -60,9 +58,7 @@ func createProtocolDriverWithFirstRoundVotes(t *testing.T, epoch types.EpochID, 
 	hash3 := types.HexToHash32("0x34567890")
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.firstRoundIncomingVotes = map[string][][]byte{
-		string(signer.PublicKey().Bytes()): {hash1.Bytes(), hash2.Bytes(), hash3.Bytes()},
-	}
+	pd.current.setMinerFirstRoundVote(signer.PublicKey(), [][]byte{hash1.Bytes(), hash2.Bytes(), hash3.Bytes()})
 	return pd, mockDB, []types.Hash32{hash1, hash2, hash3}
 }
 
@@ -96,24 +92,29 @@ func createProposal(t *testing.T, signer, vrfSigner signing.Signer, epoch types.
 	return msg
 }
 
-func checkProposalQueueSize(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, numProposals int) {
+func checkProposalQueueSize(t *testing.T, pd *ProtocolDriver, numProposals int) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	ch := pd.getOrCreateProposalChannel(epoch)
-	assert.Equal(t, numProposals, len(ch))
+	assert.Equal(t, numProposals, len(pd.current.proposalChan))
+}
+
+func checkFutureProposalQueueSize(t *testing.T, pd *ProtocolDriver, numProposals int) {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+	assert.Equal(t, numProposals, len(pd.next.proposalChan))
 }
 
 func checkProposed(t *testing.T, pd *ProtocolDriver, signer signing.Signer, proposed bool) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	_, ok := pd.hasProposed[string(signer.PublicKey().Bytes())]
+	_, ok := pd.current.hasProposed[string(signer.PublicKey().Bytes())]
 	assert.Equal(t, proposed, ok)
 }
 
 func checkProposals(t *testing.T, pd *ProtocolDriver, expected proposals) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	assert.EqualValues(t, expected, pd.incomingProposals)
+	assert.EqualValues(t, expected, pd.current.incomingProposals)
 }
 
 func createFirstVote(t *testing.T, signer signing.Signer, epoch types.EpochID, valid, pValid [][]byte, corruptSignature bool) *FirstVotingMessage {
@@ -136,14 +137,14 @@ func createFirstVote(t *testing.T, signer signing.Signer, epoch types.EpochID, v
 func checkVoted(t *testing.T, pd *ProtocolDriver, signer signing.Signer, round types.RoundID, voted bool) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	_, ok := pd.hasVoted[round][string(signer.PublicKey().Bytes())]
+	_, ok := pd.current.hasVoted[round][string(signer.PublicKey().Bytes())]
 	assert.Equal(t, voted, ok)
 }
 
 func checkFirstIncomingVotes(t *testing.T, pd *ProtocolDriver, expected map[string][][]byte) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	assert.EqualValues(t, expected, pd.firstRoundIncomingVotes)
+	assert.EqualValues(t, expected, pd.current.firstRoundIncomingVotes)
 }
 
 func createFollowingVote(t *testing.T, signer signing.Signer, epoch types.EpochID, round types.RoundID, bitVector []byte, corruptSignature bool) *FollowingVotingMessage {
@@ -166,7 +167,7 @@ func createFollowingVote(t *testing.T, signer signing.Signer, epoch types.EpochI
 func checkVoteMargins(t *testing.T, pd *ProtocolDriver, expected map[string]*big.Int) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	assert.EqualValues(t, expected, pd.votesMargin)
+	assert.EqualValues(t, expected, pd.current.votesMargin)
 }
 
 func Test_HandleSerializedProposalMessage_Success(t *testing.T) {
@@ -184,7 +185,7 @@ func Test_HandleSerializedProposalMessage_Success(t *testing.T) {
 	require.NoError(t, err)
 
 	pd.HandleSerializedProposalMessage(context.TODO(), peerID, msgBytes)
-	checkProposalQueueSize(t, pd, epoch, 1)
+	checkProposalQueueSize(t, pd, 1)
 }
 
 func Test_HandleSerializedProposalMessage_Shutdown(t *testing.T) {
@@ -202,7 +203,7 @@ func Test_HandleSerializedProposalMessage_Shutdown(t *testing.T) {
 	require.NoError(t, err)
 
 	pd.HandleSerializedProposalMessage(context.TODO(), peerID, msgBytes)
-	checkProposalQueueSize(t, pd, epoch, 0)
+	checkProposalQueueSize(t, pd, 0)
 }
 
 func Test_HandleSerializedProposalMessage_NotInProtocol(t *testing.T) {
@@ -220,7 +221,7 @@ func Test_HandleSerializedProposalMessage_NotInProtocol(t *testing.T) {
 	require.NoError(t, err)
 
 	pd.HandleSerializedProposalMessage(context.TODO(), peerID, msgBytes)
-	checkProposalQueueSize(t, pd, epoch, 0)
+	checkProposalQueueSize(t, pd, 0)
 }
 
 func Test_HandleSerializedProposalMessage_Corrupted(t *testing.T) {
@@ -237,7 +238,7 @@ func Test_HandleSerializedProposalMessage_Corrupted(t *testing.T) {
 	require.NoError(t, err)
 
 	pd.HandleSerializedProposalMessage(context.TODO(), peerID, msgBytes[1:])
-	checkProposalQueueSize(t, pd, epoch, 0)
+	checkProposalQueueSize(t, pd, 0)
 }
 
 func Test_HandleSerializedProposalMessage_EpochTooOld(t *testing.T) {
@@ -254,8 +255,8 @@ func Test_HandleSerializedProposalMessage_EpochTooOld(t *testing.T) {
 	require.NoError(t, err)
 
 	pd.HandleSerializedProposalMessage(context.TODO(), peerID, msgBytes)
-	checkProposalQueueSize(t, pd, epoch-1, 0)
-	checkProposalQueueSize(t, pd, epoch, 0)
+	checkProposalQueueSize(t, pd, 0)
+	checkFutureProposalQueueSize(t, pd, 0)
 }
 
 func Test_HandleSerializedProposalMessage_NextEpoch(t *testing.T) {
@@ -272,8 +273,8 @@ func Test_HandleSerializedProposalMessage_NextEpoch(t *testing.T) {
 	require.NoError(t, err)
 
 	pd.HandleSerializedProposalMessage(context.TODO(), peerID, msgBytes)
-	checkProposalQueueSize(t, pd, epoch, 0)
-	checkProposalQueueSize(t, pd, epoch+1, 1)
+	checkProposalQueueSize(t, pd, 0)
+	checkFutureProposalQueueSize(t, pd, 1)
 }
 
 func Test_HandleSerializedProposalMessage_NextEpochFull(t *testing.T) {
@@ -292,8 +293,8 @@ func Test_HandleSerializedProposalMessage_NextEpochFull(t *testing.T) {
 
 		pd.HandleSerializedProposalMessage(context.TODO(), peerID, msgBytes)
 	}
-	checkProposalQueueSize(t, pd, epoch, 0)
-	checkProposalQueueSize(t, pd, epoch+1, proposalChanCapacity)
+	checkProposalQueueSize(t, pd, 0)
+	checkFutureProposalQueueSize(t, pd, proposalChanCapacity)
 
 	// now try to overflow channel for the next epoch
 	msg := createProposal(t, signer, vrfSigner, epoch+1, false)
@@ -301,8 +302,8 @@ func Test_HandleSerializedProposalMessage_NextEpochFull(t *testing.T) {
 	require.NoError(t, err)
 
 	pd.HandleSerializedProposalMessage(context.TODO(), peerID, msgBytes)
-	checkProposalQueueSize(t, pd, epoch, 0)
-	checkProposalQueueSize(t, pd, epoch+1, proposalChanCapacity)
+	checkProposalQueueSize(t, pd, 0)
+	checkFutureProposalQueueSize(t, pd, proposalChanCapacity)
 }
 
 func Test_HandleSerializedProposalMessage_EpochTooFarAhead(t *testing.T) {
@@ -319,8 +320,18 @@ func Test_HandleSerializedProposalMessage_EpochTooFarAhead(t *testing.T) {
 	require.NoError(t, err)
 
 	pd.HandleSerializedProposalMessage(context.TODO(), peerID, msgBytes)
-	checkProposalQueueSize(t, pd, epoch, 0)
-	checkProposalQueueSize(t, pd, epoch+2, 0)
+	checkProposalQueueSize(t, pd, 0)
+	checkFutureProposalQueueSize(t, pd, 0)
+}
+
+func mockProposalChecker(t *testing.T, pd *ProtocolDriver, success bool, calls int) {
+	t.Helper()
+	ctrl := gomock.NewController(t)
+	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
+	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(success).Times(calls)
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	pd.current.proposalChecker = mockChecker
 }
 
 func Test_handleProposalMessage_Success(t *testing.T) {
@@ -334,12 +345,7 @@ func Test_handleProposalMessage_Success(t *testing.T) {
 	require.NoError(t, err)
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 
-	ctrl := gomock.NewController(t)
-	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
-	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(true).Times(1)
-	pd.mu.Lock()
-	pd.proposalChecker = mockChecker
-	pd.mu.Unlock()
+	mockProposalChecker(t, pd, true, 1)
 
 	err = pd.handleProposalMessage(context.TODO(), *msg, time.Now())
 	assert.NoError(t, err)
@@ -363,14 +369,6 @@ func Test_handleProposalMessage_BadSignature(t *testing.T) {
 	require.NoError(t, err)
 	msg := createProposal(t, signer, vrfSigner, epoch, true)
 
-	ctrl := gomock.NewController(t)
-	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
-	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(true).Times(0)
-
-	pd.mu.Lock()
-	pd.proposalChecker = mockChecker
-	pd.mu.Unlock()
-
 	err = pd.handleProposalMessage(context.TODO(), *msg, time.Now())
 	assert.ErrorIs(t, err, errVRFNotVerified)
 
@@ -389,13 +387,7 @@ func Test_handleProposalMessage_AlreadyProposed(t *testing.T) {
 	require.NoError(t, err)
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 
-	ctrl := gomock.NewController(t)
-	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
-	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(true).Times(1)
-
-	pd.mu.Lock()
-	pd.proposalChecker = mockChecker
-	pd.mu.Unlock()
+	mockProposalChecker(t, pd, true, 1)
 
 	err = pd.handleProposalMessage(context.TODO(), *msg, time.Now())
 	assert.NoError(t, err)
@@ -428,13 +420,7 @@ func Test_handleProposalMessage_ProposalNotEligible(t *testing.T) {
 	require.NoError(t, err)
 	msg := createProposal(t, signer, vrfSigner, epoch, false)
 
-	ctrl := gomock.NewController(t)
-	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
-	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(false).Times(1)
-
-	pd.mu.Lock()
-	pd.proposalChecker = mockChecker
-	pd.mu.Unlock()
+	mockProposalChecker(t, pd, false, 1)
 
 	err = pd.handleProposalMessage(context.TODO(), *msg, time.Now())
 	assert.ErrorIs(t, err, errProposalDoesntPassThreshold)
@@ -492,13 +478,7 @@ func Test_handleProposalMessage_ATXHeaderLookupError(t *testing.T) {
 		Return(types.ATXID(types.HexToHash32("0x22345678")), nil).Times(1)
 	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(nil, errUnknown).Times(1)
 
-	ctrl := gomock.NewController(t)
-	mockChecker := mocks.NewMockeligibilityChecker(ctrl)
-	mockChecker.EXPECT().IsProposalEligible(gomock.Any()).Return(true).Times(1)
-
-	pd.mu.Lock()
-	pd.proposalChecker = mockChecker
-	pd.mu.Unlock()
+	mockProposalChecker(t, pd, true, 1)
 
 	signer := signing.NewEdSigner()
 	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
