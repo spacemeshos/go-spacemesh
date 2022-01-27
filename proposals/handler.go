@@ -278,7 +278,7 @@ func (h *Handler) checkBallotDataIntegrity(b *types.Ballot) error {
 		if b.EpochData == nil {
 			return errMissingEpochData
 		}
-		if b.EpochData.Beacon == types.EmptyBeacon {
+		if b.EpochData.Beacon.Equal(types.EmptyBeacon) {
 			return errMissingBeacon
 		}
 		if len(b.EpochData.ActiveSet) == 0 {

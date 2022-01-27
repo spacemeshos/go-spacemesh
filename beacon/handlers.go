@@ -166,10 +166,10 @@ func (pd *ProtocolDriver) classifyProposalMessage(ctx context.Context, m Proposa
 	return nil
 }
 
-func cropProposal(numBytes int, proposal []byte) []byte {
-	shortened := proposal
-	if numBytes > 0 && numBytes < len(proposal) {
-		shortened = proposal[:numBytes]
+func cropData(numBytes int, data []byte) []byte {
+	shortened := data
+	if numBytes > 0 && numBytes < len(data) {
+		shortened = data[:numBytes]
 	}
 	return shortened
 }
@@ -185,7 +185,7 @@ func (pd *ProtocolDriver) addValidProposal(proposal []byte) {
 	if pd.current.incomingProposals.valid == nil {
 		pd.current.incomingProposals.valid = make(map[string]struct{})
 	}
-	p := cropProposal(pd.config.ProposalNumBytes, proposal)
+	p := cropData(pd.config.ProposalNumBytes, proposal)
 	pd.current.incomingProposals.valid[string(p)] = struct{}{}
 }
 
@@ -200,7 +200,7 @@ func (pd *ProtocolDriver) addPotentiallyValidProposal(proposal []byte) {
 	if pd.current.incomingProposals.valid == nil {
 		pd.current.incomingProposals.potentiallyValid = make(map[string]struct{})
 	}
-	p := cropProposal(pd.config.ProposalNumBytes, proposal)
+	p := cropData(pd.config.ProposalNumBytes, proposal)
 	pd.current.incomingProposals.potentiallyValid[string(p)] = struct{}{}
 }
 

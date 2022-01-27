@@ -85,7 +85,7 @@ func New(
 		db:                 db,
 		clock:              clock,
 		beacons:            make(map[types.EpochID]types.Beacon),
-		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
+		beaconsFromBallots: make(map[types.EpochID]map[string]*ballotWeight),
 		current:            newState(conf),
 		next:               newState(conf),
 	}
@@ -130,7 +130,7 @@ type ProtocolDriver struct {
 	// beaconsFromBallots store beacons collected from ballots.
 	// the map key is the epoch when the ballot is published. the beacon value is calculated in the
 	// previous epoch and used in the current epoch.
-	beaconsFromBallots map[types.EpochID]map[types.Beacon]*ballotWeight
+	beaconsFromBallots map[types.EpochID]map[string]*ballotWeight
 
 	// states for the current epoch and the next epoch. we accept early proposals for the next epoch.
 	current, next *state
@@ -210,7 +210,7 @@ func (pd *ProtocolDriver) ReportBeaconFromBallot(epoch types.EpochID, bid types.
 		return
 	}
 
-	if eBeacon := pd.findMostWeightedBeaconForEpoch(epoch); eBeacon != types.EmptyBeacon {
+	if eBeacon := pd.findMostWeightedBeaconForEpoch(epoch); !eBeacon.Equal(types.EmptyBeacon) {
 		pd.setBeacon(epoch, eBeacon)
 	}
 }
@@ -220,11 +220,11 @@ func (pd *ProtocolDriver) recordBeacon(epochID types.EpochID, bid types.BallotID
 	defer pd.mu.Unlock()
 
 	if _, ok := pd.beaconsFromBallots[epochID]; !ok {
-		pd.beaconsFromBallots[epochID] = make(map[types.Beacon]*ballotWeight)
+		pd.beaconsFromBallots[epochID] = make(map[string]*ballotWeight)
 	}
-	entry, ok := pd.beaconsFromBallots[epochID][beacon]
+	entry, ok := pd.beaconsFromBallots[epochID][string(beacon)]
 	if !ok {
-		pd.beaconsFromBallots[epochID][beacon] = &ballotWeight{
+		pd.beaconsFromBallots[epochID][string(beacon)] = &ballotWeight{
 			weight:  weight,
 			ballots: map[types.BallotID]struct{}{bid: {}},
 		}
@@ -263,7 +263,7 @@ func (pd *ProtocolDriver) findMostWeightedBeaconForEpoch(epoch types.EpochID) ty
 	numBallots := 0
 	for k, v := range epochBeacons {
 		if v.weight > mostWeight {
-			beacon = k
+			beacon = types.Beacon(k)
 			mostWeight = v.weight
 		}
 		numBallots += len(v.ballots)
@@ -293,7 +293,7 @@ func (pd *ProtocolDriver) GetBeacon(targetEpoch types.EpochID) (types.Beacon, er
 	}
 
 	beacon := pd.getBeacon(targetEpoch)
-	if beacon != types.EmptyBeacon {
+	if !beacon.Equal(types.EmptyBeacon) {
 		return beacon, nil
 	}
 
@@ -344,7 +344,7 @@ func (pd *ProtocolDriver) getPersistedBeacon(epoch types.EpochID) (types.Beacon,
 		return types.EmptyBeacon, fmt.Errorf("get from DB: %w", err)
 	}
 
-	return types.BytesToBeacon(data), nil
+	return data, nil
 }
 
 func (pd *ProtocolDriver) setBeginProtocol(ctx context.Context) {
@@ -505,7 +505,7 @@ func (pd *ProtocolDriver) handleEpoch(ctx context.Context, epoch types.EpochID) 
 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
-	beacon := calcBeacon(logger, lastRoundOwnVotes)
+	beacon := calcBeacon(logger, lastRoundOwnVotes, pd.config.ProposalNumBytes)
 	events.ReportCalculatedBeacon(targetEpoch, beacon.ShortString())
 
 	if err := pd.setBeacon(targetEpoch, beacon); err != nil {
@@ -516,7 +516,7 @@ func (pd *ProtocolDriver) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	logger.With().Info("beacon set for epoch", beacon)
 }
 
-func calcBeacon(logger log.Log, lastRoundVotes allVotes) types.Beacon {
+func calcBeacon(logger log.Log, lastRoundVotes allVotes, numBytes int) types.Beacon {
 	logger.Info("calculating beacon")
 
 	allHashes := lastRoundVotes.support.sort()
@@ -527,7 +527,9 @@ func calcBeacon(logger log.Log, lastRoundVotes allVotes) types.Beacon {
 	logger.With().Debug("calculating beacon from this hash list",
 		log.String("hashes", strings.Join(allHashHexes, ", ")))
 
-	beacon := types.Beacon(allHashes.hash())
+	// Beacon should appear to have the same entropy as the initial proposals, hence cropping it
+	// to the same size as the proposal
+	beacon := types.Beacon(cropData(numBytes, allHashes.hash().Bytes()))
 	logger.With().Info("calculated beacon", beacon, log.Int("num_hashes", len(allHashes)))
 
 	return beacon
@@ -955,7 +957,7 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 		for beacon, stats := range beacons {
 			stat := &metrics.BeaconStats{
 				Epoch:  epoch,
-				Beacon: beacon.ShortString(),
+				Beacon: types.Beacon(beacon).ShortString(),
 				Count:  uint64(len(stats.ballots)),
 				Weight: stats.weight,
 			}

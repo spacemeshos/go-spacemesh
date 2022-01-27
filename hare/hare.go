@@ -396,7 +396,7 @@ func (h *Hare) getGoodProposal(lyrID types.LayerID, epochBeacon types.Beacon, lo
 			beacon = refBallot.EpochData.Beacon
 		}
 
-		if beacon == epochBeacon {
+		if beacon.Equal(epochBeacon) {
 			goodProposals = append(goodProposals, p.ID())
 		} else {
 			logger.With().Warning("proposal has different beacon value",

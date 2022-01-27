@@ -62,7 +62,7 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 	}
 
 	beacon := refBallot.EpochData.Beacon
-	if beacon == types.EmptyBeacon {
+	if beacon.Equal(types.EmptyBeacon) {
 		return false, fmt.Errorf("%w: ref ballot %v", errMissingBeacon, refBallot.ID())
 	}
 

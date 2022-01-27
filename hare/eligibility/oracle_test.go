@@ -82,7 +82,7 @@ func mockLayerBallots(tb testing.TB, to *testOracle, layer types.LayerID, beacon
 }
 
 func beaconWithValOne() types.Beacon {
-	return types.Beacon{1}
+	return types.Beacon{1, 0, 0, 0}
 }
 
 func createMapWithSize(n int) map[string]uint64 {
@@ -183,7 +183,7 @@ func TestCalcEligibility_EligibleFromHareActiveSet(t *testing.T) {
 	defer o.ctrl.Finish()
 
 	layer := types.NewLayerID(50)
-	beacon := types.BytesToBeacon([]byte{1, 0, 0, 0})
+	beacon := beaconWithValOne()
 	mockLayerBallots(t, o, layer, beacon, 5)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)
@@ -257,7 +257,7 @@ func TestCalcEligibility_WithSpaceUnits(t *testing.T) {
 	defer o.ctrl.Finish()
 
 	layer := types.NewLayerID(50)
-	beacon := types.BytesToBeacon([]byte{1, 0, 0, 0})
+	beacon := beaconWithValOne()
 	mockLayerBallots(t, o, layer, beacon, numOfMiners)
 	o.mBeacon.EXPECT().GetBeacon(layer.GetEpoch()).Return(beacon, nil).Times(1)
 	start, _ := safeLayerRange(layer, confidenceParam, defLayersPerEpoch, epochOffset)

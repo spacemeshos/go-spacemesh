@@ -90,7 +90,7 @@ func (mp *mockProposalProvider) LayerProposals(lyr types.LayerID) ([]*types.Prop
 			LayerIndex: lyr,
 		}
 		p := dbp.ToProposal(&types.Ballot{})
-		p.EpochData = &types.EpochData{Beacon: types.BytesToBeacon(lyr.GetEpoch().ToBytes())}
+		p.EpochData = &types.EpochData{Beacon: lyr.GetEpoch().ToBytes()}
 		s[i] = p
 		mp.allProposals[p.ID()] = p
 	}
@@ -106,7 +106,7 @@ func (mf *mockProposalFetcher) GetProposals(context.Context, []types.ProposalID)
 type mockBeaconGetter struct{}
 
 func (mbg *mockBeaconGetter) GetBeacon(id types.EpochID) (types.Beacon, error) {
-	return types.BytesToBeacon(id.ToBytes()), nil
+	return id.ToBytes(), nil
 }
 
 // HareApp represents an Hare application.
