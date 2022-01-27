@@ -67,7 +67,6 @@ type Mesh struct {
 	maxProcessedLayer   types.LayerID
 	mutex               sync.RWMutex
 	done                chan struct{}
-	txMutex             sync.Mutex
 }
 
 // NewMesh creates a new instant of a mesh.
@@ -178,8 +177,6 @@ func (msh *Mesh) MissingLayer() types.LayerID {
 }
 
 func (msh *Mesh) setMissingLayer(lid types.LayerID) {
-	msh.mutex.Lock()
-	defer msh.mutex.Unlock()
 	msh.missingLayer = lid
 }
 
@@ -189,8 +186,8 @@ func (msh *Mesh) setLatestLayer(idx types.LayerID) {
 		LayerID: idx,
 		Status:  events.LayerStatusTypeUnknown,
 	})
-	defer msh.mutex.Unlock()
 	msh.mutex.Lock()
+	defer msh.mutex.Unlock()
 	if idx.After(msh.latestLayer) {
 		events.ReportNodeStatusUpdate()
 		msh.With().Info("set latest known layer", idx)
@@ -238,15 +235,11 @@ func (msh *Mesh) ProcessedLayer() types.LayerID {
 }
 
 func (msh *Mesh) setProcessedLayerFromRecoveredData(pLayer types.LayerID) {
-	msh.mutex.Lock()
-	defer msh.mutex.Unlock()
 	msh.processedLayer = pLayer
 	msh.Event().Info("processed layer set from recovered data", pLayer)
 }
 
 func (msh *Mesh) setProcessedLayer(layerID types.LayerID) {
-	msh.mutex.Lock()
-	defer msh.mutex.Unlock()
 	if !layerID.After(msh.processedLayer) {
 		msh.With().Info("trying to set processed layer to an older layer",
 			log.FieldNamed("processed", msh.processedLayer),
@@ -295,6 +288,9 @@ type validator struct {
 // all of its blocks), then to attempt to validate all unvalidated layers up to this layer. It also applies state for
 // newly-validated layers.
 func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) error {
+	vl.mutex.Lock()
+	defer vl.mutex.Unlock()
+
 	logger := vl.WithContext(ctx).WithFields(layerID)
 	logger.Info("processing layer")
 
@@ -431,7 +427,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) 
 		return nil
 	}
 
-	missing := msh.MissingLayer()
+	missing := msh.missingLayer
 	// we never reapply the state of oldVerified. note that state reversions must be handled separately.
 	for layerID := from; !layerID.After(to); layerID = layerID.Add(1) {
 		if !layerID.After(msh.latestLayerInState) {
@@ -442,11 +438,11 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) 
 			continue
 		}
 		if err := msh.pushLayer(ctx, layerID); err != nil {
-			msh.setMissingLayer(layerID)
+			msh.missingLayer = layerID
 			return err
 		}
 		if layerID == missing {
-			msh.setMissingLayer(types.LayerID{})
+			msh.missingLayer = types.LayerID{}
 		}
 	}
 	return nil
@@ -597,9 +593,7 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 
 // apply the state for a single layer.
 func (msh *Mesh) updateStateWithLayer(ctx context.Context, layerID types.LayerID, block *types.Block) error {
-	msh.txMutex.Lock()
-	defer msh.txMutex.Unlock()
-	latest := msh.LatestLayerInState()
+	latest := msh.latestLayerInState
 	if layerID != latest.Add(1) {
 		msh.WithContext(ctx).With().Panic("update state out-of-order",
 			log.FieldNamed("verified", layerID),
@@ -620,8 +614,6 @@ func (msh *Mesh) updateStateWithLayer(ctx context.Context, layerID types.LayerID
 func (msh *Mesh) setLatestLayerInState(lyr types.LayerID) error {
 	// Update validated layer only after applying transactions since loading of
 	// state depends on processedLayer param.
-	msh.mutex.Lock()
-	defer msh.mutex.Unlock()
 	if err := layers.SetStatus(msh.db, lyr, layers.Applied); err != nil {
 		// can happen if database already closed
 		msh.Error("could not persist validated layer index %d: %v", lyr, err.Error())
