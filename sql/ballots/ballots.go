@@ -10,7 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader) (*types.Ballot, error) {
+func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader, malicious bool) (*types.Ballot, error) {
 	sigBytes := make([]byte, sig.Len())
 	if _, err := sig.Read(sigBytes); err != nil {
 		if err != io.EOF {
@@ -32,6 +32,9 @@ func decodeBallot(id types.BallotID, sig, pubkey, body *bytes.Reader) (*types.Ba
 		}
 	}
 	ballot := types.NewExistingBallot(id, sigBytes, pubkeyBytes, inner)
+	if malicious {
+		ballot.SetMalicious()
+	}
 	return &ballot, nil
 }
 
@@ -77,7 +80,12 @@ func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
-			rst, err = decodeBallot(id, stmt.ColumnReader(0), stmt.ColumnReader(1), stmt.ColumnReader(2))
+			rst, err = decodeBallot(id,
+				stmt.ColumnReader(0),
+				stmt.ColumnReader(1),
+				stmt.ColumnReader(2),
+				stmt.ColumnInt(3) > 0,
+			)
 			return true
 		}); err != nil {
 		return nil, fmt.Errorf("get %s: %w", id, err)
@@ -89,13 +97,20 @@ func Get(db sql.Executor, id types.BallotID) (rst *types.Ballot, err error) {
 
 // Layer returns full body ballot for layer.
 func Layer(db sql.Executor, lid types.LayerID) (rst []*types.Ballot, err error) {
-	if _, err = db.Exec("select id, signature, pubkey, ballot from ballots where layer = ?1;", func(stmt *sql.Statement) {
+	if _, err = db.Exec(`select id, signature, pubkey, ballot, identities.malicious
+		from ballots left join identities using(pubkey)
+		where layer = ?1;`, func(stmt *sql.Statement) {
 		stmt.BindInt64(1, int64(lid.Value))
 	}, func(stmt *sql.Statement) bool {
 		id := types.BallotID{}
 		stmt.ColumnBytes(0, id[:])
 		var ballot *types.Ballot
-		ballot, err = decodeBallot(id, stmt.ColumnReader(1), stmt.ColumnReader(2), stmt.ColumnReader(3))
+		ballot, err = decodeBallot(id,
+			stmt.ColumnReader(1),
+			stmt.ColumnReader(2),
+			stmt.ColumnReader(3),
+			stmt.ColumnInt(4) > 0,
+		)
 		if err != nil {
 			return false
 		}

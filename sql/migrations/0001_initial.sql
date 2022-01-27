@@ -12,7 +12,6 @@ CREATE TABLE ballots (
     signature VARCHAR,
     pubkey VARCHAR,
     ballot BLOB
-    -- FOREIGN KEY(pubkey) REFERENCES identities(pubkey)
 );
 CREATE INDEX ballots_by_layer_by_pubkey ON ballots(layer, pubkey);
 
