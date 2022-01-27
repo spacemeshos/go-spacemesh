@@ -80,6 +80,8 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	}
 	for _, ballot := range genesisLayer.Ballots() {
 		t.ballotLayer[ballot.ID()] = genesis
+		// needs to be not nil
+		t.ballotWeight[ballot.ID()] = weightFromFloat64(0)
 		t.ballots[genesis] = []types.BallotID{ballot.ID()}
 		t.verifying.goodBallots[ballot.ID()] = good
 	}
@@ -198,6 +200,10 @@ func (t *turtle) BaseBallot(ctx context.Context) (*types.Votes, error) {
 		logger.With().Info("failed to select good base ballot. reverting to the least bad choices", log.Err(err))
 		for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 			for _, ballotID := range t.ballots[lid] {
+				weight := t.ballotWeight[ballotID]
+				if weight.isNil() {
+					continue
+				}
 				dis, err := t.firstDisagreement(ctx, lid, ballotID, disagreements)
 				if err != nil {
 					logger.With().Error("failed to compute first disagreement", ballotID, log.Err(err))
@@ -246,6 +252,9 @@ func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
 
 	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
 		for _, ballotID := range t.ballots[lid] {
+			if t.ballotWeight[ballotID].isNil() {
+				continue
+			}
 			if rst := t.verifying.goodBallots[ballotID]; rst == good {
 				choices = append(choices, ballotID)
 			}

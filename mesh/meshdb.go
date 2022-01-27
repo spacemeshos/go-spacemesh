@@ -15,6 +15,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
@@ -180,6 +181,11 @@ func (m *DB) AddBallot(b *types.Ballot) error {
 		}
 	}
 	return tx.Commit()
+}
+
+// SetMalicious updates smesher as malicious.
+func (m *DB) SetMalicious(smesher *signing.PublicKey) error {
+	return identities.SetMalicious(m.db, smesher.Bytes())
 }
 
 // HasBallot returns true if the ballot is stored in a database.
