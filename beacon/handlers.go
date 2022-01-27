@@ -185,7 +185,7 @@ func (pd *ProtocolDriver) addValidProposal(proposal []byte) {
 	if pd.current.incomingProposals.valid == nil {
 		pd.current.incomingProposals.valid = make(map[string]struct{})
 	}
-	p := cropData(pd.config.ProposalNumBytes, proposal)
+	p := cropData(types.BeaconSize, proposal)
 	pd.current.incomingProposals.valid[string(p)] = struct{}{}
 }
 
@@ -200,7 +200,7 @@ func (pd *ProtocolDriver) addPotentiallyValidProposal(proposal []byte) {
 	if pd.current.incomingProposals.valid == nil {
 		pd.current.incomingProposals.potentiallyValid = make(map[string]struct{})
 	}
-	p := cropData(pd.config.ProposalNumBytes, proposal)
+	p := cropData(types.BeaconSize, proposal)
 	pd.current.incomingProposals.potentiallyValid[string(p)] = struct{}{}
 }
 

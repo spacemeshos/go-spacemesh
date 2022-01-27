@@ -1,16 +1,19 @@
 package types
 
 import (
-	"bytes"
-
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
+)
+
+const (
+	// BeaconSize in bytes.
+	BeaconSize = 4
 )
 
 // Beacon defines the beacon value. A beacon is generated once per epoch and is used to
 // - verify smesher's VRF signature for proposal/ballot eligibility
 // - determine good ballots in verifying tortoise.
-type Beacon []byte
+type Beacon [BeaconSize]byte
 
 // EmptyBeacon is a canonical empty Beacon.
 var EmptyBeacon = Beacon{}
@@ -34,17 +37,23 @@ func (b Beacon) Bytes() []byte {
 	return b[:]
 }
 
-// Equal returns true if the other beacon is equal to this one.
-func (b Beacon) Equal(other Beacon) bool {
-	return bytes.Equal(b, other)
-}
-
 // Field returns a log field. Implements the LoggableField interface.
 func (b Beacon) Field() log.Field {
 	return log.String("beacon", b.ShortString())
 }
 
+// BytesToBeacon sets the first BeaconSize bytes of b to the Beacon's data.
+func BytesToBeacon(b []byte) Beacon {
+	l := BeaconSize
+	if len(b) < BeaconSize {
+		l = len(b)
+	}
+	var beacon Beacon
+	copy(beacon[:], b[:l])
+	return beacon
+}
+
 // HexToBeacon sets byte representation of s to a Beacon.
 func HexToBeacon(s string) Beacon {
-	return util.FromHex(s)
+	return BytesToBeacon(util.FromHex(s))
 }

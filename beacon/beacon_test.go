@@ -112,7 +112,7 @@ func TestBeacon(t *testing.T) {
 	v, err := pd.GetBeacon(epoch)
 	require.NoError(t, err)
 
-	expected := cropData(pd.config.ProposalNumBytes, types.HexToBeacon("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"))
+	expected := types.HexToBeacon("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 	assert.EqualValues(t, expected, v)
 
 	pd.Close()
@@ -206,7 +206,6 @@ func TestBeaconWithMetrics(t *testing.T) {
 
 	gLayer := types.GetEffectiveGenesis()
 	epoch3Beacon := types.HexToBeacon("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-	epoch3Beacon = cropData(pd.config.ProposalNumBytes, epoch3Beacon)
 	epoch := types.EpochID(3)
 	finalLayer := types.NewLayerID(layersPerEpoch * uint32(epoch))
 	beacon1 := types.RandomBeacon()
@@ -345,7 +344,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 		logger:             logtest.New(t).WithName("Beacon"),
 		db:                 database.NewMemDatabase(),
 		beacons:            make(map[types.EpochID]types.Beacon),
-		beaconsFromBallots: make(map[types.EpochID]map[string]*ballotWeight),
+		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
 
 	epoch := types.EpochID(5)
@@ -381,7 +380,7 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 		config:             UnitTestConfig(),
 		db:                 database.NewMemDatabase(),
 		beacons:            make(map[types.EpochID]types.Beacon),
-		beaconsFromBallots: make(map[types.EpochID]map[string]*ballotWeight),
+		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
 	pd.config.BeaconSyncNumBallots = 3
 
@@ -411,7 +410,7 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 		config:             UnitTestConfig(),
 		db:                 database.NewMemDatabase(),
 		beacons:            make(map[types.EpochID]types.Beacon),
-		beaconsFromBallots: make(map[types.EpochID]map[string]*ballotWeight),
+		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
 	pd.config.BeaconSyncNumBallots = 2
 
@@ -445,7 +444,7 @@ func TestBeacon_ensureEpochHasBeacon_BeaconAlreadyCalculated(t *testing.T) {
 		beacons: map[types.EpochID]types.Beacon{
 			epoch: beacon,
 		},
-		beaconsFromBallots: make(map[types.EpochID]map[string]*ballotWeight),
+		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
 	pd.config.BeaconSyncNumBallots = 2
 
@@ -470,16 +469,16 @@ func TestBeacon_findMostWeightedBeaconForEpoch(t *testing.T) {
 	beacon2 := types.RandomBeacon()
 	beacon3 := types.RandomBeacon()
 
-	beaconsFromBlocks := map[string]*ballotWeight{
-		string(beacon1): {
+	beaconsFromBlocks := map[types.Beacon]*ballotWeight{
+		beacon1: {
 			ballots: map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
 			weight:  200,
 		},
-		string(beacon2): {
+		beacon2: {
 			ballots: map[types.BallotID]struct{}{types.RandomBallotID(): {}},
 			weight:  201,
 		},
-		string(beacon3): {
+		beacon3: {
 			ballots: map[types.BallotID]struct{}{types.RandomBallotID(): {}},
 			weight:  200,
 		},
@@ -489,7 +488,7 @@ func TestBeacon_findMostWeightedBeaconForEpoch(t *testing.T) {
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		beacons:            make(map[types.EpochID]types.Beacon),
-		beaconsFromBallots: map[types.EpochID]map[string]*ballotWeight{epoch: beaconsFromBlocks},
+		beaconsFromBallots: map[types.EpochID]map[types.Beacon]*ballotWeight{epoch: beaconsFromBlocks},
 	}
 	pd.config.BeaconSyncNumBallots = 2
 	got := pd.findMostWeightedBeaconForEpoch(epoch)
@@ -504,16 +503,16 @@ func TestBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testing.T) {
 	beacon2 := types.RandomBeacon()
 	beacon3 := types.RandomBeacon()
 
-	beaconsFromBlocks := map[string]*ballotWeight{
-		string(beacon1): {
+	beaconsFromBlocks := map[types.Beacon]*ballotWeight{
+		beacon1: {
 			ballots: map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
 			weight:  200,
 		},
-		string(beacon2): {
+		beacon2: {
 			ballots: map[types.BallotID]struct{}{types.RandomBallotID(): {}},
 			weight:  201,
 		},
-		string(beacon3): {
+		beacon3: {
 			ballots: map[types.BallotID]struct{}{types.RandomBallotID(): {}},
 			weight:  200,
 		},
@@ -523,7 +522,7 @@ func TestBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testing.T) {
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		beacons:            make(map[types.EpochID]types.Beacon),
-		beaconsFromBallots: map[types.EpochID]map[string]*ballotWeight{epoch: beaconsFromBlocks},
+		beaconsFromBallots: map[types.EpochID]map[types.Beacon]*ballotWeight{epoch: beaconsFromBlocks},
 	}
 	pd.config.BeaconSyncNumBallots = 5
 	got := pd.findMostWeightedBeaconForEpoch(epoch)
@@ -538,7 +537,7 @@ func TestBeacon_findMostWeightedBeaconForEpoch_NoBeacon(t *testing.T) {
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
 		beacons:            make(map[types.EpochID]types.Beacon),
-		beaconsFromBallots: make(map[types.EpochID]map[string]*ballotWeight),
+		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
 	epoch := types.EpochID(3)
 	got := pd.findMostWeightedBeaconForEpoch(epoch)
@@ -889,7 +888,6 @@ func TestBeacon_signAndVerifyVRF(t *testing.T) {
 }
 
 func TestBeacon_calcBeacon(t *testing.T) {
-	hash := types.HexToHash32("0x6d148de54cc5ac334cdf4537018209b0e9f5ea94c049417103065eac777ddb5c")
 	votes := allVotes{
 		support: proposalSet{
 			"0x1": {},
@@ -902,8 +900,7 @@ func TestBeacon_calcBeacon(t *testing.T) {
 			"0x6": {},
 		},
 	}
-	numBytes := 10
-	beacon := calcBeacon(logtest.New(t), votes, numBytes)
-	expected := hash.Bytes()[:numBytes]
+	beacon := calcBeacon(logtest.New(t), votes)
+	expected := types.HexToBeacon("0x6d148de54cc5ac334cdf4537018209b0e9f5ea94c049417103065eac777ddb5c")
 	assert.EqualValues(t, expected, beacon)
 }

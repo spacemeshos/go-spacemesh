@@ -351,7 +351,7 @@ func Test_handleProposalMessage_Success(t *testing.T) {
 	assert.NoError(t, err)
 
 	checkProposed(t, pd, vrfSigner, true)
-	p := msg.VRFSignature[:pd.config.ProposalNumBytes]
+	p := msg.VRFSignature[:types.BeaconSize]
 	expectedProposals := proposals{
 		valid: proposalSet{string(p): struct{}{}},
 	}
@@ -395,7 +395,7 @@ func Test_handleProposalMessage_AlreadyProposed(t *testing.T) {
 	assert.NoError(t, err)
 
 	checkProposed(t, pd, vrfSigner, true)
-	p := msg.VRFSignature[:pd.config.ProposalNumBytes]
+	p := msg.VRFSignature[:types.BeaconSize]
 	expectedProposals := proposals{
 		valid: proposalSet{string(p): struct{}{}},
 	}

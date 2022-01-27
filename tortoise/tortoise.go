@@ -416,7 +416,7 @@ func (t *turtle) markBeaconWithBadBallot(logger log.Log, ballot *types.Ballot) b
 	if err != nil {
 		return false
 	}
-	good := beacon.Equal(epochBeacon)
+	good := beacon == epochBeacon
 	if !good {
 		logger.With().Warning("ballot has different beacon",
 			log.String("ballot_beacon", beacon.ShortString()),

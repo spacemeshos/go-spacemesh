@@ -495,7 +495,7 @@ func (o *Oracle) actives(ctx context.Context, targetLayer types.LayerID) (map[st
 			continue
 		}
 		beacon = beacons[ballot.LayerIndex.GetEpoch()]
-		if !ballot.EpochData.Beacon.Equal(beacon) {
+		if ballot.EpochData.Beacon != beacon {
 			badBeaconATXIDs[ballot.AtxID] = struct{}{}
 			logger.With().Warning("hare actives find ballot with different beacon",
 				ballot.ID(),

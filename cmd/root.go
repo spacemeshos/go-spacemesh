@@ -183,8 +183,6 @@ func AddCommands(cmd *cobra.Command) {
 		config.Beacon.WeakCoinRoundDuration, "Weak coin round duration in milliseconds")
 	cmd.PersistentFlags().Var((*types.RatVar)(config.Beacon.Theta), "beacon-theta",
 		"Ratio of votes for reaching consensus")
-	cmd.PersistentFlags().IntVar(&config.Beacon.ProposalNumBytes, "beacon-proposal-num-bytes",
-		config.Beacon.ProposalNumBytes, "Proposal size in bytes")
 	cmd.PersistentFlags().Uint32Var(&config.Beacon.VotesLimit, "beacon-votes-limit",
 		config.Beacon.VotesLimit, "Maximum allowed number of votes to be sent")
 	cmd.PersistentFlags().Uint32Var(&config.Beacon.BeaconSyncNumBallots, "beacon-sync-num-blocks",
