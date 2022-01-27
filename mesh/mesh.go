@@ -3,7 +3,6 @@
 package mesh
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -52,9 +51,11 @@ type Mesh struct {
 	*DB
 	AtxDB
 	state
-	Validator
+
 	trtl   tortoise
 	txPool txMemPool
+
+	mu sync.RWMutex
 	// latestLayer is the latest layer this node had seen from blocks
 	latestLayer types.LayerID
 	// latestLayerInState is the latest layer whose contents have been applied to the state
@@ -65,8 +66,6 @@ type Mesh struct {
 	missingLayer        types.LayerID
 	nextProcessedLayers map[types.LayerID]struct{}
 	maxProcessedLayer   types.LayerID
-	mutex               sync.RWMutex
-	done                chan struct{}
 }
 
 // NewMesh creates a new instant of a mesh.
@@ -76,7 +75,6 @@ func NewMesh(db *DB, atxDb AtxDB, trtl tortoise, txPool txMemPool, state state, 
 		trtl:                trtl,
 		txPool:              txPool,
 		state:               state,
-		done:                make(chan struct{}),
 		DB:                  db,
 		AtxDB:               atxDb,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
@@ -84,7 +82,6 @@ func NewMesh(db *DB, atxDb AtxDB, trtl tortoise, txPool txMemPool, state state, 
 		latestLayerInState:  types.GetEffectiveGenesis(),
 	}
 
-	msh.Validator = &validator{Mesh: msh}
 	gLyr := types.GetEffectiveGenesis()
 	for i := types.NewLayerID(1); !i.After(gLyr); i = i.Add(1) {
 		if i.Before(gLyr) {
@@ -153,15 +150,15 @@ func (msh *Mesh) CacheWarmUp(layerSize int) {
 
 // LatestLayerInState returns the latest layer we applied to state.
 func (msh *Mesh) LatestLayerInState() types.LayerID {
-	msh.mutex.RLock()
-	defer msh.mutex.RUnlock()
+	msh.mu.RLock()
+	defer msh.mu.RUnlock()
 	return msh.latestLayerInState
 }
 
 // LatestLayer - returns the latest layer we saw from the network.
 func (msh *Mesh) LatestLayer() types.LayerID {
-	msh.mutex.RLock()
-	defer msh.mutex.RUnlock()
+	msh.mu.RLock()
+	defer msh.mu.RUnlock()
 	return msh.latestLayer
 }
 
@@ -171,13 +168,9 @@ func (msh *Mesh) LatestLayer() types.LayerID {
 //
 // First valid layer starts with 1. 0 is empty layer and can be ignored.
 func (msh *Mesh) MissingLayer() types.LayerID {
-	msh.mutex.RLock()
-	defer msh.mutex.RUnlock()
+	msh.mu.RLock()
+	defer msh.mu.RUnlock()
 	return msh.missingLayer
-}
-
-func (msh *Mesh) setMissingLayer(lid types.LayerID) {
-	msh.missingLayer = lid
 }
 
 // setLatestLayer sets the latest layer we saw from the network.
@@ -186,8 +179,8 @@ func (msh *Mesh) setLatestLayer(idx types.LayerID) {
 		LayerID: idx,
 		Status:  events.LayerStatusTypeUnknown,
 	})
-	msh.mutex.Lock()
-	defer msh.mutex.Unlock()
+	msh.mu.Lock()
+	defer msh.mu.Unlock()
 	if idx.After(msh.latestLayer) {
 		events.ReportNodeStatusUpdate()
 		msh.With().Info("set latest known layer", idx)
@@ -229,8 +222,8 @@ func (msh *Mesh) GetLayerHash(layerID types.LayerID) types.Hash32 {
 
 // ProcessedLayer returns the last processed layer ID.
 func (msh *Mesh) ProcessedLayer() types.LayerID {
-	msh.mutex.RLock()
-	defer msh.mutex.RUnlock()
+	msh.mu.RLock()
+	defer msh.mu.RUnlock()
 	return msh.processedLayer
 }
 
@@ -280,22 +273,18 @@ func (msh *Mesh) setProcessedLayer(layerID types.LayerID) {
 	}
 }
 
-type validator struct {
-	*Mesh
-}
-
 // ProcessLayer performs fairly heavy lifting: it triggers tortoise to process the full contents of the layer (i.e.,
 // all of its blocks), then to attempt to validate all unvalidated layers up to this layer. It also applies state for
 // newly-validated layers.
-func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) error {
-	vl.mutex.Lock()
-	defer vl.mutex.Unlock()
+func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error {
+	msh.mu.Lock()
+	defer msh.mu.Unlock()
 
-	logger := vl.WithContext(ctx).WithFields(layerID)
+	logger := msh.WithContext(ctx).WithFields(layerID)
 	logger.Info("processing layer")
 
 	// pass the layer to tortoise for processing
-	oldVerified, newVerified, reverted := vl.trtl.HandleIncomingLayer(ctx, layerID)
+	oldVerified, newVerified, reverted := msh.trtl.HandleIncomingLayer(ctx, layerID)
 	logger.With().Info("tortoise results",
 		log.Bool("reverted", reverted),
 		log.FieldNamed("old_verified", oldVerified),
@@ -303,28 +292,28 @@ func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) er
 
 	// set processed layer even if later code will fail, as that failure is not related
 	// to the layer that is being processed
-	vl.setProcessedLayer(layerID)
+	msh.setProcessedLayer(layerID)
 
 	// check for a state reversion: if tortoise reran and detected changes to historical data, it will request that
 	// state be reverted and reapplied. pushLayersToState, below, will handle the reapplication.
 	if reverted {
-		vl.setLatestLayerInState(oldVerified)
-		if err := vl.revertState(ctx, oldVerified); err != nil {
+		msh.setLatestLayerInState(oldVerified)
+		if err := msh.revertState(ctx, oldVerified); err != nil {
 			logger.With().Error("failed to revert state, unable to process layer", log.Err(err))
 			return err
 		}
 	}
 
 	// mesh can't skip layer that failed to complete
-	from := minLayer(oldVerified, vl.latestLayerInState).Add(1)
+	from := minLayer(oldVerified, msh.latestLayerInState).Add(1)
 	to := newVerified
 
 	if !to.Before(from) {
-		if err := vl.pushLayersToState(ctx, from, to); err != nil {
+		if err := msh.pushLayersToState(ctx, from, to); err != nil {
 			logger.With().Error("failed to push layers to state", log.Err(err))
 			return err
 		}
-		if err := vl.persistLayerHashes(ctx, from, to); err != nil {
+		if err := msh.persistLayerHashes(ctx, from, to); err != nil {
 			logger.With().Error("failed to persist layer hashes", log.Err(err))
 			return err
 		}
@@ -593,13 +582,11 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 
 // apply the state for a single layer.
 func (msh *Mesh) updateStateWithLayer(ctx context.Context, layerID types.LayerID, block *types.Block) error {
-	latest := msh.latestLayerInState
-	if layerID != latest.Add(1) {
+	if latest := msh.latestLayerInState; layerID != latest.Add(1) {
 		msh.WithContext(ctx).With().Panic("update state out-of-order",
 			log.FieldNamed("verified", layerID),
 			log.FieldNamed("latest", latest))
 	}
-
 	if block != nil {
 		if err := msh.applyState(block); err != nil {
 			return err
@@ -784,13 +771,6 @@ func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.A
 		}
 	}
 	return atxs, mIds
-}
-
-func getAggregatedLayerHashKey(layerID types.LayerID) []byte {
-	var b bytes.Buffer
-	b.WriteString("ag")
-	b.Write(layerID.Bytes())
-	return b.Bytes()
 }
 
 func minLayer(i, j types.LayerID) types.LayerID {
