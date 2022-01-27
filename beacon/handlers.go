@@ -166,6 +166,14 @@ func (pd *ProtocolDriver) classifyProposalMessage(ctx context.Context, m Proposa
 	return nil
 }
 
+func cropProposal(numBytes int, proposal []byte) []byte {
+	shortened := proposal
+	if numBytes > 0 && numBytes < len(proposal) {
+		shortened = proposal[:numBytes]
+	}
+	return shortened
+}
+
 func (pd *ProtocolDriver) addValidProposal(proposal []byte) {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not adding valid proposals")
@@ -174,7 +182,11 @@ func (pd *ProtocolDriver) addValidProposal(proposal []byte) {
 
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.current.incomingProposals.valid = append(pd.current.incomingProposals.valid, proposal)
+	if pd.current.incomingProposals.valid == nil {
+		pd.current.incomingProposals.valid = make(map[string]struct{})
+	}
+	p := cropProposal(pd.config.ProposalNumBytes, proposal)
+	pd.current.incomingProposals.valid[string(p)] = struct{}{}
 }
 
 func (pd *ProtocolDriver) addPotentiallyValidProposal(proposal []byte) {
@@ -185,7 +197,11 @@ func (pd *ProtocolDriver) addPotentiallyValidProposal(proposal []byte) {
 
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.current.incomingProposals.potentiallyValid = append(pd.current.incomingProposals.potentiallyValid, proposal)
+	if pd.current.incomingProposals.valid == nil {
+		pd.current.incomingProposals.potentiallyValid = make(map[string]struct{})
+	}
+	p := cropProposal(pd.config.ProposalNumBytes, proposal)
+	pd.current.incomingProposals.potentiallyValid[string(p)] = struct{}{}
 }
 
 func (pd *ProtocolDriver) verifyProposalMessage(ctx context.Context, m ProposalMessage, currentEpoch types.EpochID) (types.ATXID, error) {

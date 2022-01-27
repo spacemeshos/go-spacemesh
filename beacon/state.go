@@ -21,7 +21,7 @@ type state struct {
 	incomingProposals proposals
 	// minerPublicKey -> list of proposal.
 	// this list is used in encoding/decoding votes for each miner in all subsequent voting rounds.
-	firstRoundIncomingVotes map[string][][]byte
+	firstRoundIncomingVotes map[string]proposalList
 	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
 	votesMargin               map[string]*big.Int
 	hasProposed               map[string]struct{}
@@ -33,8 +33,7 @@ type state struct {
 
 func newState(cfg Config) *state {
 	return &state{
-		incomingProposals:       proposals{},
-		firstRoundIncomingVotes: make(map[string][][]byte),
+		firstRoundIncomingVotes: make(map[string]proposalList),
 		votesMargin:             map[string]*big.Int{},
 		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, cfg.RoundsNumber),

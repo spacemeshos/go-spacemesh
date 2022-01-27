@@ -41,7 +41,7 @@ var (
 )
 
 type (
-	proposals    = struct{ valid, potentiallyValid [][]byte }
+	proposals    = struct{ valid, potentiallyValid proposalSet }
 	allVotes     = struct{ support, against proposalSet }
 	ballotWeight = struct {
 		weight  uint64
@@ -522,7 +522,7 @@ func calcBeacon(logger log.Log, lastRoundVotes allVotes) types.Beacon {
 	allHashes := lastRoundVotes.support.sort()
 	allHashHexes := make([]string, len(allHashes))
 	for i, h := range allHashes {
-		allHashHexes[i] = types.BytesToHash([]byte(h)).ShortString()
+		allHashHexes[i] = types.BytesToHash(h).ShortString()
 	}
 	logger.With().Debug("calculating beacon from this hash list",
 		log.String("hashes", strings.Join(allHashHexes, ", ")))
@@ -743,8 +743,8 @@ func (pd *ProtocolDriver) genFirstRoundMsgBody(epoch types.EpochID) FirstVotingM
 
 	return FirstVotingMessageBody{
 		EpochID:                   epoch,
-		ValidProposals:            pd.current.incomingProposals.valid,
-		PotentiallyValidProposals: pd.current.incomingProposals.potentiallyValid,
+		ValidProposals:            pd.current.incomingProposals.valid.sort(),
+		PotentiallyValidProposals: pd.current.incomingProposals.potentiallyValid.sort(),
 	}
 }
 

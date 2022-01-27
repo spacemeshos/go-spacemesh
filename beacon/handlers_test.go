@@ -141,7 +141,7 @@ func checkVoted(t *testing.T, pd *ProtocolDriver, signer signing.Signer, round t
 	assert.Equal(t, voted, ok)
 }
 
-func checkFirstIncomingVotes(t *testing.T, pd *ProtocolDriver, expected map[string][][]byte) {
+func checkFirstIncomingVotes(t *testing.T, pd *ProtocolDriver, expected map[string]proposalList) {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 	assert.EqualValues(t, expected, pd.current.firstRoundIncomingVotes)
@@ -351,8 +351,10 @@ func Test_handleProposalMessage_Success(t *testing.T) {
 	assert.NoError(t, err)
 
 	checkProposed(t, pd, vrfSigner, true)
-	var expectedProposals proposals
-	expectedProposals.valid = [][]byte{msg.VRFSignature}
+	p := msg.VRFSignature[:pd.config.ProposalNumBytes]
+	expectedProposals := proposals{
+		valid: proposalSet{string(p): struct{}{}},
+	}
 	checkProposals(t, pd, expectedProposals)
 }
 
@@ -393,8 +395,10 @@ func Test_handleProposalMessage_AlreadyProposed(t *testing.T) {
 	assert.NoError(t, err)
 
 	checkProposed(t, pd, vrfSigner, true)
-	var expectedProposals proposals
-	expectedProposals.valid = [][]byte{msg.VRFSignature}
+	p := msg.VRFSignature[:pd.config.ProposalNumBytes]
+	expectedProposals := proposals{
+		valid: proposalSet{string(p): struct{}{}},
+	}
 	checkProposals(t, pd, expectedProposals)
 
 	// now make the same proposal again
@@ -519,7 +523,7 @@ func Test_HandleSerializedFirstVotingMessage_Success(t *testing.T) {
 
 	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	expected := map[string][][]byte{
+	expected := map[string]proposalList{
 		string(signer.PublicKey().Bytes()): append(valid, pValid...),
 	}
 	checkFirstIncomingVotes(t, pd, expected)
@@ -542,15 +546,15 @@ func Test_HandleSerializedFirstVotingMessage_Shutdown(t *testing.T) {
 
 	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, types.FirstRound, false)
-	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
+	checkFirstIncomingVotes(t, pd, map[string]proposalList{})
 }
 
 func Test_HandleSerializedFirstVotingMessage_NotInProtocol(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
-	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+	valid := proposalList{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := proposalList{types.HexToHash32("0x23456789").Bytes()}
 
 	pd, _ := createProtocolDriver(t, epoch)
 	atomic.StoreUint64(&pd.inProtocol, 0)
@@ -562,15 +566,15 @@ func Test_HandleSerializedFirstVotingMessage_NotInProtocol(t *testing.T) {
 
 	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, types.FirstRound, false)
-	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
+	checkFirstIncomingVotes(t, pd, map[string]proposalList{})
 }
 
 func Test_HandleSerializedFirstVotingMessage_TooLate(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
-	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+	valid := proposalList{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := proposalList{types.HexToHash32("0x23456789").Bytes()}
 
 	pd, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
@@ -581,15 +585,15 @@ func Test_HandleSerializedFirstVotingMessage_TooLate(t *testing.T) {
 	pd.setRoundInProgress(types.RoundID(1))
 	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, types.FirstRound, false)
-	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
+	checkFirstIncomingVotes(t, pd, map[string]proposalList{})
 }
 
 func Test_HandleSerializedFirstVotingMessage_CorruptedGossipMsg(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
-	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+	valid := proposalList{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := proposalList{types.HexToHash32("0x23456789").Bytes()}
 
 	pd, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
@@ -599,15 +603,15 @@ func Test_HandleSerializedFirstVotingMessage_CorruptedGossipMsg(t *testing.T) {
 
 	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, types.FirstRound, false)
-	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
+	checkFirstIncomingVotes(t, pd, map[string]proposalList{})
 }
 
 func Test_HandleSerializedFirstVotingMessage_WrongEpoch(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
-	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+	valid := proposalList{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := proposalList{types.HexToHash32("0x23456789").Bytes()}
 
 	pd, _ := createProtocolDriver(t, epoch+1)
 	signer := signing.NewEdSigner()
@@ -617,15 +621,15 @@ func Test_HandleSerializedFirstVotingMessage_WrongEpoch(t *testing.T) {
 
 	pd.HandleSerializedFirstVotingMessage(context.TODO(), peerID, msgBytes)
 	checkVoted(t, pd, signer, types.FirstRound, false)
-	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
+	checkFirstIncomingVotes(t, pd, map[string]proposalList{})
 }
 
 func Test_handleFirstVotingMessage_Success(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
-	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+	valid := proposalList{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := proposalList{types.HexToHash32("0x23456789").Bytes()}
 
 	pd, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
@@ -645,7 +649,7 @@ func Test_handleFirstVotingMessage_Success(t *testing.T) {
 	assert.NoError(t, err)
 
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	expected := map[string][][]byte{
+	expected := map[string]proposalList{
 		string(signer.PublicKey().Bytes()): append(valid, pValid...),
 	}
 	checkFirstIncomingVotes(t, pd, expected)
@@ -655,8 +659,8 @@ func Test_handleFirstVotingMessage_FailedToExtractPK(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
-	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+	valid := proposalList{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := proposalList{types.HexToHash32("0x23456789").Bytes()}
 
 	pd, _ := createProtocolDriver(t, epoch)
 	signer := signing.NewEdSigner()
@@ -666,15 +670,15 @@ func Test_handleFirstVotingMessage_FailedToExtractPK(t *testing.T) {
 	assert.Contains(t, err.Error(), "bad signature format")
 
 	checkVoted(t, pd, signer, types.FirstRound, false)
-	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
+	checkFirstIncomingVotes(t, pd, map[string]proposalList{})
 }
 
 func Test_handleFirstVotingMessage_AlreadyVoted(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
-	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+	valid := proposalList{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := proposalList{types.HexToHash32("0x23456789").Bytes()}
 
 	pd, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
@@ -694,7 +698,7 @@ func Test_handleFirstVotingMessage_AlreadyVoted(t *testing.T) {
 	assert.NoError(t, err)
 
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	expected := map[string][][]byte{
+	expected := map[string]proposalList{
 		string(signer.PublicKey().Bytes()): append(valid, pValid...),
 	}
 	checkFirstIncomingVotes(t, pd, expected)
@@ -711,8 +715,8 @@ func Test_handleFirstVotingMessage_MinerMissingATX(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
-	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+	valid := proposalList{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := proposalList{types.HexToHash32("0x23456789").Bytes()}
 
 	pd, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
@@ -725,15 +729,15 @@ func Test_handleFirstVotingMessage_MinerMissingATX(t *testing.T) {
 	assert.ErrorIs(t, err, errMinerATXNotFound)
 
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
+	checkFirstIncomingVotes(t, pd, map[string]proposalList{})
 }
 
 func Test_handleFirstVotingMessage_ATXLookupError(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
-	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+	valid := proposalList{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := proposalList{types.HexToHash32("0x23456789").Bytes()}
 
 	pd, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
@@ -746,15 +750,15 @@ func Test_handleFirstVotingMessage_ATXLookupError(t *testing.T) {
 	assert.ErrorIs(t, err, errUnknown)
 
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
+	checkFirstIncomingVotes(t, pd, map[string]proposalList{})
 }
 
 func Test_handleFirstVotingMessage_ATXHeaderLookupError(t *testing.T) {
 	t.Parallel()
 
 	const epoch = types.EpochID(10)
-	valid := [][]byte{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
-	pValid := [][]byte{types.HexToHash32("0x23456789").Bytes()}
+	valid := proposalList{types.HexToHash32("0x12345678").Bytes(), types.HexToHash32("0x87654321").Bytes()}
+	pValid := proposalList{types.HexToHash32("0x23456789").Bytes()}
 
 	pd, mockDB := createProtocolDriver(t, epoch)
 	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).
@@ -768,7 +772,7 @@ func Test_handleFirstVotingMessage_ATXHeaderLookupError(t *testing.T) {
 	assert.ErrorIs(t, err, errUnknown)
 
 	checkVoted(t, pd, signer, types.FirstRound, true)
-	checkFirstIncomingVotes(t, pd, map[string][][]byte{})
+	checkFirstIncomingVotes(t, pd, map[string]proposalList{})
 }
 
 func Test_HandleSerializedFollowingVotingMessage_Success(t *testing.T) {
