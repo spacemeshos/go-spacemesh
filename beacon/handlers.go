@@ -197,7 +197,7 @@ func (pd *ProtocolDriver) addPotentiallyValidProposal(proposal []byte) {
 
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	if pd.current.incomingProposals.valid == nil {
+	if pd.current.incomingProposals.potentiallyValid == nil {
 		pd.current.incomingProposals.potentiallyValid = make(map[string]struct{})
 	}
 	p := cropData(types.BeaconSize, proposal)
@@ -527,7 +527,7 @@ func (pd *ProtocolDriver) checkProposalEligibility(logger log.Log, vrfSig []byte
 		// the peer may have different total weight from us so that it passes threshold for the peer
 		// but does not pass here
 		proposalShortString := types.BytesToHash(vrfSig).ShortString()
-		logger.With().Warning("rejected proposal that doesn't pass threshold",
+		logger.With().Warning("proposal doesn't pass threshold",
 			log.String("proposal", proposalShortString),
 			log.Uint64("total_weight", pd.current.epochWeight))
 	}

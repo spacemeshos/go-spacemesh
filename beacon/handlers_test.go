@@ -340,20 +340,33 @@ func Test_handleProposalMessage_Success(t *testing.T) {
 	const epoch = types.EpochID(10)
 	pd, mockDB := createProtocolDriver(t, epoch)
 	setMockAtxDbExpectations(mockDB)
-	signer := signing.NewEdSigner()
-	vrfSigner, _, err := signing.NewVRFSigner(signer.Sign(signer.PublicKey().Bytes()))
+	signer1 := signing.NewEdSigner()
+	vrfSigner1, _, err := signing.NewVRFSigner(signer1.Sign(signer1.PublicKey().Bytes()))
 	require.NoError(t, err)
-	msg := createProposal(t, signer, vrfSigner, epoch, false)
-
+	msg1 := createProposal(t, signer1, vrfSigner1, epoch, false)
 	mockProposalChecker(t, pd, true, 1)
-
-	err = pd.handleProposalMessage(context.TODO(), *msg, time.Now())
+	err = pd.handleProposalMessage(context.TODO(), *msg1, time.Now())
 	assert.NoError(t, err)
+	checkProposed(t, pd, vrfSigner1, true)
 
-	checkProposed(t, pd, vrfSigner, true)
-	p := msg.VRFSignature[:types.BeaconSize]
+	// make the next proposal late
+	pd.markProposalPhaseFinished(epoch)
+
+	setMockAtxDbExpectations(mockDB)
+	signer2 := signing.NewEdSigner()
+	vrfSigner2, _, err := signing.NewVRFSigner(signer2.Sign(signer2.PublicKey().Bytes()))
+	require.NoError(t, err)
+	msg2 := createProposal(t, signer2, vrfSigner2, epoch, false)
+	mockProposalChecker(t, pd, true, 1)
+	err = pd.handleProposalMessage(context.TODO(), *msg2, time.Now())
+	assert.NoError(t, err)
+	checkProposed(t, pd, vrfSigner2, true)
+
+	p1 := msg1.VRFSignature[:types.BeaconSize]
+	p2 := msg2.VRFSignature[:types.BeaconSize]
 	expectedProposals := proposals{
-		valid: proposalSet{string(p): struct{}{}},
+		valid:            proposalSet{string(p1): struct{}{}},
+		potentiallyValid: proposalSet{string(p2): struct{}{}},
 	}
 	checkProposals(t, pd, expectedProposals)
 }

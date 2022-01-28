@@ -779,7 +779,7 @@ func (pd *ProtocolDriver) getFirstRoundVote(minerPK *signing.PublicKey) ([][]byt
 func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
 	firstRoundVotes, err := pd.getFirstRoundVote(pd.edSigner.PublicKey())
 	if err != nil {
-		return fmt.Errorf("failed to get own first round votes %v: %w", pd.edSigner.PublicKey().String(), err)
+		return fmt.Errorf("get own first round votes %v: %w", pd.edSigner.PublicKey().String(), err)
 	}
 
 	bitVector := encodeVotes(ownCurrentRoundVotes, firstRoundVotes)

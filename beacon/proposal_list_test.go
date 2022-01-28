@@ -20,13 +20,13 @@ func Test_proposalList_sort(t *testing.T) {
 	}{
 		{
 			name:     "Sorted order remains not changed",
-			hashes:   proposalList{[]byte("0x1"), []byte("0x2"), []byte("0x3")},
-			expected: proposalList{[]byte("0x1"), []byte("0x2"), []byte("0x3")},
+			hashes:   proposalList{[]byte("1"), []byte("2"), []byte("3")},
+			expected: proposalList{[]byte("1"), []byte("2"), []byte("3")},
 		},
 		{
 			name:     "Unsorted order gets sorted",
-			hashes:   proposalList{[]byte("0x2"), []byte("0x5"), []byte("0x3"), []byte("0x1"), []byte("0x4")},
-			expected: proposalList{[]byte("0x1"), []byte("0x2"), []byte("0x3"), []byte("0x4"), []byte("0x5")},
+			hashes:   proposalList{[]byte("2"), []byte("5"), []byte("3"), []byte("1"), []byte("4")},
+			expected: proposalList{[]byte("1"), []byte("2"), []byte("3"), []byte("4"), []byte("5")},
 		},
 	}
 
