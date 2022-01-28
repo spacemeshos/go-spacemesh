@@ -41,8 +41,8 @@ var (
 )
 
 type (
-	proposals    = struct{ valid, potentiallyValid [][]byte }
-	allVotes     = struct{ valid, invalid proposalSet }
+	proposals    = struct{ valid, potentiallyValid proposalSet }
+	allVotes     = struct{ support, against proposalSet }
 	ballotWeight = struct {
 		weight  uint64
 		ballots map[types.BallotID]struct{}
@@ -71,26 +71,23 @@ func New(
 	logger log.Log,
 ) *ProtocolDriver {
 	pd := &ProtocolDriver{
-		logger:                  logger,
-		config:                  conf,
-		nodeID:                  nodeID,
-		theta:                   new(big.Float).SetRat(conf.Theta),
-		publisher:               publisher,
-		atxDB:                   atxDB,
-		edSigner:                edSigner,
-		edVerifier:              edVerifier,
-		vrfSigner:               vrfSigner,
-		vrfVerifier:             vrfVerifier,
-		weakCoin:                weakCoin,
-		db:                      db,
-		clock:                   clock,
-		beacons:                 make(map[types.EpochID]types.Beacon),
-		beaconsFromBallots:      make(map[types.EpochID]map[types.Beacon]*ballotWeight),
-		hasProposed:             make(map[string]struct{}),
-		hasVoted:                make([]map[string]struct{}, conf.RoundsNumber),
-		firstRoundIncomingVotes: make(map[string][][]byte),
-		proposalChans:           make(map[types.EpochID]chan *proposalMessageWithReceiptData),
-		votesMargin:             map[string]*big.Int{},
+		logger:             logger,
+		config:             conf,
+		nodeID:             nodeID,
+		theta:              new(big.Float).SetRat(conf.Theta),
+		publisher:          publisher,
+		atxDB:              atxDB,
+		edSigner:           edSigner,
+		edVerifier:         edVerifier,
+		vrfSigner:          vrfSigner,
+		vrfVerifier:        vrfVerifier,
+		weakCoin:           weakCoin,
+		db:                 db,
+		clock:              clock,
+		beacons:            make(map[types.EpochID]types.Beacon),
+		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
+		current:            newState(conf),
+		next:               newState(conf),
 	}
 	pd.metricsCollector = metrics.NewBeaconMetricsCollector(pd.gatherMetricsData, logger.WithName("metrics"))
 	return pd
@@ -124,7 +121,7 @@ type ProtocolDriver struct {
 	mu              sync.RWMutex
 	lastTickedEpoch types.EpochID
 	epochInProgress types.EpochID
-	epochWeight     uint64
+	roundInProgress types.RoundID
 
 	// beacons store calculated beacons as the result of the beacon protocol.
 	// the map key is the target epoch when beacon is used. if a beacon is calculated in epoch N, it will be used
@@ -135,18 +132,8 @@ type ProtocolDriver struct {
 	// previous epoch and used in the current epoch.
 	beaconsFromBallots map[types.EpochID]map[types.Beacon]*ballotWeight
 
-	// the original proposals as received, bucketed by validity.
-	incomingProposals proposals
-	// minerPublicKey -> list of proposal.
-	// this list is used in encoding/decoding votes for each miner in all subsequent voting rounds.
-	firstRoundIncomingVotes map[string][][]byte
-	// TODO(nkryuchkov): For every round excluding first round consider having a vector of opinions.
-	votesMargin               map[string]*big.Int
-	hasProposed               map[string]struct{}
-	hasVoted                  []map[string]struct{}
-	proposalPhaseFinishedTime time.Time
-	proposalChans             map[types.EpochID]chan *proposalMessageWithReceiptData
-	proposalChecker           eligibilityChecker
+	// states for the current epoch and the next epoch. we accept early proposals for the next epoch.
+	current, next *state
 
 	// metrics
 	metricsCollector *metrics.BeaconMetricsCollector
@@ -276,7 +263,7 @@ func (pd *ProtocolDriver) findMostWeightedBeaconForEpoch(epoch types.EpochID) ty
 	numBallots := 0
 	for k, v := range epochBeacons {
 		if v.weight > mostWeight {
-			beacon = k
+			beacon = types.Beacon(k)
 			mostWeight = v.weight
 		}
 		numBallots += len(v.ballots)
@@ -376,35 +363,21 @@ func (pd *ProtocolDriver) isInProtocol() bool {
 	return atomic.LoadUint64(&pd.inProtocol) == 1
 }
 
-func (pd *ProtocolDriver) setupEpoch(epoch types.EpochID, epochWeight uint64, logger log.Log) chan *proposalMessageWithReceiptData {
-	pd.cleanupEpoch(epoch - 1) // just in case we processed any gossip messages before the protocol started
-
+func (pd *ProtocolDriver) setupEpoch(logger log.Log, epochWeight uint64) chan *proposalMessageWithReceiptData {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	pd.epochWeight = epochWeight
-	pd.proposalChecker = createProposalChecker(pd.config.Kappa, pd.config.Q, epochWeight, logger)
-	ch := pd.getOrCreateProposalChannel(epoch)
-	// allow proposals for the next epoch to come in early
-	_ = pd.getOrCreateProposalChannel(epoch + 1)
-	return ch
+	pd.current.init(epochWeight, createProposalChecker(logger, pd.config.Kappa, pd.config.Q, epochWeight))
+	return pd.current.proposalChan
 }
 
 func (pd *ProtocolDriver) cleanupEpoch(epoch types.EpochID) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	pd.incomingProposals = proposals{}
-	pd.firstRoundIncomingVotes = map[string][][]byte{}
-	pd.votesMargin = map[string]*big.Int{}
-	pd.hasProposed = make(map[string]struct{})
-	pd.hasVoted = make([]map[string]struct{}, pd.config.RoundsNumber)
-	pd.proposalPhaseFinishedTime = time.Time{}
-
-	if ch, ok := pd.proposalChans[epoch]; ok {
-		close(ch)
-		delete(pd.proposalChans, epoch)
-	}
+	pd.roundInProgress = types.FirstRound
+	pd.current = pd.next
+	pd.next = newState(pd.config)
 
 	if epoch <= numEpochsToKeep {
 		return
@@ -446,6 +419,12 @@ func (pd *ProtocolDriver) setEpochInProgress(epoch types.EpochID) {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	pd.epochInProgress = epoch
+}
+
+func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	pd.roundInProgress = round
 }
 
 // the logic that happens when a new layer arrives.
@@ -504,7 +483,7 @@ func (pd *ProtocolDriver) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	pd.setBeginProtocol(ctx)
 	defer pd.setEndProtocol(ctx)
 
-	ch := pd.setupEpoch(epoch, epochWeight, logger)
+	ch := pd.setupEpoch(logger, epochWeight)
 	defer pd.cleanupEpoch(epoch)
 
 	pd.eg.Go(func() error {
@@ -516,6 +495,8 @@ func (pd *ProtocolDriver) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	defer pd.weakCoin.FinishEpoch(ctx, epoch)
 
 	pd.runProposalPhase(ctx, epoch)
+	// close the proposal channel
+	close(ch)
 	lastRoundOwnVotes, err := pd.runConsensusPhase(ctx, epoch)
 	if err != nil {
 		logger.With().Warning("consensus execution canceled", log.Err(err))
@@ -538,28 +519,20 @@ func (pd *ProtocolDriver) handleEpoch(ctx context.Context, epoch types.EpochID) 
 func calcBeacon(logger log.Log, lastRoundVotes allVotes) types.Beacon {
 	logger.Info("calculating beacon")
 
-	allHashes := lastRoundVotes.valid.sort()
+	allHashes := lastRoundVotes.support.sort()
 	allHashHexes := make([]string, len(allHashes))
 	for i, h := range allHashes {
-		allHashHexes[i] = types.BytesToHash([]byte(h)).ShortString()
+		allHashHexes[i] = types.BytesToHash(h).ShortString()
 	}
 	logger.With().Debug("calculating beacon from this hash list",
 		log.String("hashes", strings.Join(allHashHexes, ", ")))
 
-	beacon := types.Beacon(allHashes.hash())
+	// Beacon should appear to have the same entropy as the initial proposals, hence cropping it
+	// to the same size as the proposal
+	beacon := types.BytesToBeacon(allHashes.hash().Bytes())
 	logger.With().Info("calculated beacon", beacon, log.Int("num_hashes", len(allHashes)))
 
 	return beacon
-}
-
-func (pd *ProtocolDriver) getOrCreateProposalChannel(epoch types.EpochID) chan *proposalMessageWithReceiptData {
-	ch, ok := pd.proposalChans[epoch]
-	if !ok {
-		ch = make(chan *proposalMessageWithReceiptData, proposalChanCapacity)
-		pd.proposalChans[epoch] = ch
-	}
-
-	return ch
 }
 
 func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.EpochID) {
@@ -595,23 +568,14 @@ func (pd *ProtocolDriver) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 
 	logger := pd.logger.WithContext(ctx).WithFields(epoch)
 	proposedSignature := buildSignedProposal(ctx, pd.vrfSigner, epoch, pd.logger)
-
-	pd.mu.RLock()
-	logger.With().Debug("calculated proposal signature",
-		log.String("signature", string(proposedSignature)),
-		log.Uint64("total_weight", pd.epochWeight))
-
-	passes := pd.proposalChecker.IsProposalEligible(proposedSignature)
-	pd.mu.RUnlock()
-
-	if !passes {
-		logger.With().Debug("proposal to be sent doesn't pass threshold",
+	if !pd.checkProposalEligibility(logger, proposedSignature) {
+		logger.With().Debug("own proposal doesn't pass threshold",
 			log.String("proposal", string(proposedSignature)))
 		// proposal is not sent
 		return nil
 	}
 
-	logger.With().Debug("Proposal to be sent passes threshold",
+	logger.With().Debug("own proposal passes threshold",
 		log.String("proposal", string(proposedSignature)))
 
 	// concat them into a single proposal message
@@ -621,8 +585,7 @@ func (pd *ProtocolDriver) proposalPhaseImpl(ctx context.Context, epoch types.Epo
 		VRFSignature: proposedSignature,
 	}
 
-	logger.With().Debug("going to send proposal", log.String("message", m.String()))
-
+	logger.With().Debug("sending proposal", log.String("message", m.String()))
 	if err := pd.sendToGossip(ctx, ProposalProtocol, m); err != nil {
 		return fmt.Errorf("broadcast proposal message: %w", err)
 	}
@@ -643,16 +606,16 @@ func (pd *ProtocolDriver) getProposalChannel(ctx context.Context, epoch types.Ep
 		logger.With().Debug("proposal too old, do not accept")
 		return nil
 	case epoch == pd.epochInProgress:
-		ongoing := pd.proposalPhaseFinishedTime == time.Time{}
+		ongoing := pd.current.proposalPhaseFinishedTime == time.Time{}
 		if ongoing {
-			return pd.getOrCreateProposalChannel(epoch)
+			return pd.current.proposalChan
 		}
 		logger.With().Debug("proposal phase ended, do not accept")
 		return nil
 	case epoch == pd.epochInProgress+1:
 		// always accept proposals for the next epoch, but not too far in the future
 		logger.Debug("accepting proposal for the next epoch")
-		ch := pd.getOrCreateProposalChannel(epoch)
+		ch := pd.next.proposalChan
 		if len(ch) == proposalChanCapacity {
 			// the reader loop is not started for the next epoch yet. drop old messages if it's already full
 			// channel receive is not synchronous with length check, use select+default here to prevent potential blocking
@@ -684,15 +647,15 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 	var (
 		ownVotes  allVotes
 		undecided []string
-		err       error
 	)
 	for round := types.FirstRound; round < pd.config.RoundsNumber; round++ {
 		round := round
+		pd.setRoundInProgress(round)
 		rLogger := logger.WithFields(round)
 		votes := ownVotes
 		pd.eg.Go(func() error {
 			if round == types.FirstRound {
-				if err := pd.sendProposalVote(ctx, epoch); err != nil {
+				if err := pd.sendFirstRoundVote(ctx, epoch); err != nil {
 					rLogger.With().Error("failed to send proposal vote", log.Err(err))
 				}
 			} else {
@@ -712,10 +675,7 @@ func (pd *ProtocolDriver) runConsensusPhase(ctx context.Context, epoch types.Epo
 		// note that votes after this calcVotes() call will _not_ be counted towards our votes
 		// for this round, as the late votes can be cast after the weak coin is revealed. we
 		// count them towards our votes in the next round.
-		ownVotes, undecided, err = pd.calcVotes(ctx, epoch, round)
-		if err != nil {
-			logger.With().Error("failed to calculate votes", log.Err(err))
-		}
+		ownVotes, undecided = pd.calcVotesBeforeWeakCoin(rLogger)
 		if round != types.FirstRound {
 			timer.Reset(pd.config.WeakCoinRoundDuration)
 
@@ -757,14 +717,14 @@ func (pd *ProtocolDriver) startWeakCoinEpoch(ctx context.Context, epoch types.Ep
 func (pd *ProtocolDriver) markProposalPhaseFinished(epoch types.EpochID) {
 	finishedAt := time.Now()
 	pd.mu.Lock()
-	pd.proposalPhaseFinishedTime = finishedAt
+	pd.current.proposalPhaseFinishedTime = finishedAt
 	pd.mu.Unlock()
 	pd.logger.Debug("marked proposal phase for epoch %v finished at %v", epoch, finishedAt.String())
 }
 
 func (pd *ProtocolDriver) receivedBeforeProposalPhaseFinished(epoch types.EpochID, receivedAt time.Time) bool {
 	pd.mu.RLock()
-	finishedAt := pd.proposalPhaseFinishedTime
+	finishedAt := pd.current.proposalPhaseFinishedTime
 	pd.mu.RUnlock()
 	hasFinished := !finishedAt.IsZero()
 
@@ -773,29 +733,26 @@ func (pd *ProtocolDriver) receivedBeforeProposalPhaseFinished(epoch types.EpochI
 	return !hasFinished || receivedAt.Before(finishedAt)
 }
 
-func (pd *ProtocolDriver) sendProposalVote(ctx context.Context, epoch types.EpochID) error {
-	// round 1, send hashed proposal
-	// create a voting message that references all seen proposals within δ time frame and send it
+func (pd *ProtocolDriver) calcVotesBeforeWeakCoin(logger log.Log) (allVotes, []string) {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+	return calcVotes(logger, pd.theta, pd.current)
+}
 
-	// TODO(nkryuchkov): also send a bit vector
-	// TODO(nkryuchkov): initialize margin vector to initial votes
-	// TODO(nkryuchkov): use weight
-
+func (pd *ProtocolDriver) genFirstRoundMsgBody(epoch types.EpochID) FirstVotingMessageBody {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
-	return pd.sendFirstRoundVote(ctx, epoch, pd.incomingProposals)
+	return FirstVotingMessageBody{
+		EpochID:                   epoch,
+		ValidProposals:            pd.current.incomingProposals.valid.sort(),
+		PotentiallyValidProposals: pd.current.incomingProposals.potentiallyValid.sort(),
+	}
 }
 
-func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.EpochID, proposals proposals) error {
-	mb := FirstVotingMessageBody{
-		EpochID:                   epoch,
-		ValidProposals:            proposals.valid,
-		PotentiallyValidProposals: proposals.potentiallyValid,
-	}
-
+func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.EpochID) error {
+	mb := pd.genFirstRoundMsgBody(epoch)
 	sig := signMessage(pd.edSigner, mb, pd.logger)
-
 	m := FirstVotingMessage{
 		FirstVotingMessageBody: mb,
 		Signature:              sig,
@@ -813,11 +770,19 @@ func (pd *ProtocolDriver) sendFirstRoundVote(ctx context.Context, epoch types.Ep
 	return nil
 }
 
-func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
+func (pd *ProtocolDriver) getFirstRoundVote(minerPK *signing.PublicKey) ([][]byte, error) {
 	pd.mu.RLock()
-	bitVector := encodeVotes(ownCurrentRoundVotes, pd.firstRoundIncomingVotes[string(pd.edSigner.PublicKey().Bytes())])
-	pd.mu.RUnlock()
+	defer pd.mu.RUnlock()
+	return pd.current.getMinerFirstRoundVote(minerPK)
+}
 
+func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.EpochID, round types.RoundID, ownCurrentRoundVotes allVotes) error {
+	firstRoundVotes, err := pd.getFirstRoundVote(pd.edSigner.PublicKey())
+	if err != nil {
+		return fmt.Errorf("get own first round votes %v: %w", pd.edSigner.PublicKey().String(), err)
+	}
+
+	bitVector := encodeVotes(ownCurrentRoundVotes, firstRoundVotes)
 	mb := FollowingVotingMessageBody{
 		EpochID:        epoch,
 		RoundID:        round,
@@ -843,20 +808,11 @@ func (pd *ProtocolDriver) sendFollowingVote(ctx context.Context, epoch types.Epo
 	return nil
 }
 
-func (pd *ProtocolDriver) votingThreshold(epochWeight uint64) *big.Int {
-	v, _ := new(big.Float).Mul(
-		pd.theta,
-		new(big.Float).SetUint64(epochWeight),
-	).Int(nil)
-
-	return v
-}
-
 type proposalChecker struct {
 	threshold *big.Int
 }
 
-func createProposalChecker(kappa uint64, q *big.Rat, epochWeight uint64, logger log.Log) *proposalChecker {
+func createProposalChecker(logger log.Log, kappa uint64, q *big.Rat, epochWeight uint64) *proposalChecker {
 	if epochWeight == 0 {
 		logger.Panic("creating proposal checker with zero weight")
 	}
@@ -1001,7 +957,7 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 		for beacon, stats := range beacons {
 			stat := &metrics.BeaconStats{
 				Epoch:  epoch,
-				Beacon: beacon.ShortString(),
+				Beacon: types.Beacon(beacon).ShortString(),
 				Count:  uint64(len(stats.ballots)),
 				Weight: stats.weight,
 			}

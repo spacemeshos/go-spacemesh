@@ -23,14 +23,14 @@ func Test_codec(t *testing.T) {
 	}
 
 	currentRound := allVotes{
-		valid: proposalSet{
+		support: proposalSet{
 			string(util.Hex2Bytes("11")): {},
 			string(util.Hex2Bytes("33")): {},
 			string(util.Hex2Bytes("55")): {},
 			string(util.Hex2Bytes("77")): {},
 			string(util.Hex2Bytes("99")): {},
 		},
-		invalid: proposalSet{
+		against: proposalSet{
 			string(util.Hex2Bytes("22")): {},
 			string(util.Hex2Bytes("44")): {},
 			string(util.Hex2Bytes("66")): {},
@@ -63,7 +63,7 @@ func Test_codec_lessThanActualSize(t *testing.T) {
 	}
 
 	currentRound := allVotes{
-		valid: proposalSet{
+		support: proposalSet{
 			string(util.Hex2Bytes("11")): {},
 			string(util.Hex2Bytes("22")): {},
 			string(util.Hex2Bytes("33")): {},
@@ -73,7 +73,7 @@ func Test_codec_lessThanActualSize(t *testing.T) {
 			string(util.Hex2Bytes("77")): {},
 			string(util.Hex2Bytes("88")): {},
 		},
-		invalid: proposalSet{
+		against: proposalSet{
 			string(util.Hex2Bytes("99")): {},
 			string(util.Hex2Bytes("00")): {},
 		},

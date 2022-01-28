@@ -44,7 +44,7 @@ func UnitTestConfig() Config {
 	return Config{
 		Kappa:                    400000,
 		Q:                        big.NewRat(1, 3),
-		RoundsNumber:             2,
+		RoundsNumber:             10,
 		GracePeriodDuration:      20 * time.Millisecond,
 		ProposalDuration:         20 * time.Millisecond,
 		FirstVotingRoundDuration: 40 * time.Millisecond,

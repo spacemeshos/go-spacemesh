@@ -1,157 +1,65 @@
 package beacon
 
 import (
-	"context"
 	"math/big"
 	"sort"
 	"testing"
 
-	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
-	"github.com/spacemeshos/go-spacemesh/beacon/mocks"
-	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 )
 
 func TestBeacon_calcVotes(t *testing.T) {
 	t.Parallel()
 
-	ctrl := gomock.NewController(t)
-	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
-		NIPostChallenge: types.NIPostChallenge{
-			StartTick: 0,
-			EndTick:   1,
-		},
-		NumUnits: 1,
-	}, nil).AnyTimes()
-
-	const epoch = 5
-	const round = 3
-
-	tt := []struct {
-		name          string
-		epoch         types.EpochID
-		round         types.RoundID
-		votesMargin   map[string]*big.Int
-		incomingVotes []map[string]allVotes
-		expected      allVotes
-		undecided     []string
-	}{
-		{
-			name:  "Case 1",
-			epoch: epoch,
-			round: round,
-			votesMargin: map[string]*big.Int{
-				"0x1": big.NewInt(2),
-				"0x2": big.NewInt(0),
-				"0x3": big.NewInt(0),
-				"0x4": big.NewInt(1),
-				"0x5": big.NewInt(0),
-				"0x6": big.NewInt(-2),
-			},
-			expected: allVotes{
-				valid: proposalSet{
-					"0x1": {},
-					"0x4": {},
-				},
-				invalid: proposalSet{
-					"0x6": {},
-				},
-			},
-			undecided: []string{"0x2", "0x3", "0x5"},
-		},
-	}
-
-	for _, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			pd := ProtocolDriver{
-				theta:       new(big.Float).SetRat(big.NewRat(1, 1)),
-				logger:      logtest.New(t).WithName("Beacon"),
-				atxDB:       mockDB,
-				votesMargin: tc.votesMargin,
-				epochWeight: uint64(1),
-			}
-
-			result, undecided, err := pd.calcVotes(context.TODO(), tc.epoch, tc.round)
-			require.NoError(t, err)
-			sort.Strings(undecided)
-			require.Equal(t, tc.undecided, undecided)
-			require.EqualValues(t, tc.expected, result)
-		})
-	}
-}
-
-func TestBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
-	t.Parallel()
-
 	const threshold = 3
-
-	ctrl := gomock.NewController(t)
-	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(&types.ActivationTxHeader{
-		NIPostChallenge: types.NIPostChallenge{
-			StartTick: 0,
-			EndTick:   1,
-		},
-		NumUnits: 1,
-	}, nil).AnyTimes()
 
 	tt := []struct {
 		name               string
-		epoch              types.EpochID
-		round              types.RoundID
 		ownFirstRoundVotes allVotes
-		votesCount         map[string]*big.Int
+		votesMargin        map[string]*big.Int
 		result             allVotes
 		undecided          []string
 	}{
 		{
-			name:  "Case 1",
-			epoch: 5,
-			round: 5,
+			name: "Case 1",
 			ownFirstRoundVotes: allVotes{
-				valid: proposalSet{
+				support: proposalSet{
 					"0x1": {},
 					"0x2": {},
 				},
-				invalid: proposalSet{
+				against: proposalSet{
 					"0x3": {},
 				},
 			},
-			votesCount: map[string]*big.Int{
+			votesMargin: map[string]*big.Int{
 				"0x1": big.NewInt(threshold * 2),
 				"0x2": big.NewInt(-threshold * 3),
 				"0x3": big.NewInt(threshold / 2),
 			},
 			result: allVotes{
-				valid: proposalSet{
+				support: proposalSet{
 					"0x1": {},
 				},
-				invalid: proposalSet{
+				against: proposalSet{
 					"0x2": {},
 				},
 			},
 			undecided: []string{"0x3"},
 		},
 		{
-			name:  "Case 2",
-			epoch: 5,
-			round: 5,
-			votesCount: map[string]*big.Int{
+			name: "Case 2",
+			votesMargin: map[string]*big.Int{
 				"0x1": big.NewInt(threshold * 2),
 				"0x2": big.NewInt(-threshold * 3),
 				"0x3": big.NewInt(threshold / 2),
 			},
 			result: allVotes{
-				valid: proposalSet{
+				support: proposalSet{
 					"0x1": {},
 				},
-				invalid: proposalSet{
+				against: proposalSet{
 					"0x2": {},
 				},
 			},
@@ -164,16 +72,14 @@ func TestBeacon_calcOwnCurrentRoundVotes(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			pd := ProtocolDriver{
-				theta:       new(big.Float).SetRat(big.NewRat(1, 1)),
-				logger:      logtest.New(t).WithName("Beacon"),
-				atxDB:       mockDB,
-				votesMargin: tc.votesCount,
+			eh := &state{
 				epochWeight: uint64(threshold),
+				votesMargin: tc.votesMargin,
 			}
+			theta := new(big.Float).SetRat(big.NewRat(1, 1))
+			logger := logtest.New(t).WithName(tc.name)
 
-			result, undecided, err := pd.calcOwnCurrentRoundVotes()
-			require.NoError(t, err)
+			result, undecided := calcVotes(logger, theta, eh)
 			sort.Strings(undecided)
 			require.Equal(t, tc.undecided, undecided)
 			require.EqualValues(t, tc.result, result)
@@ -192,11 +98,11 @@ func TestTallyUndecided(t *testing.T) {
 		{
 			desc: "Valid",
 			expected: allVotes{
-				valid: proposalSet{
+				support: proposalSet{
 					"1": struct{}{},
 					"2": struct{}{},
 				},
-				invalid: proposalSet{},
+				against: proposalSet{},
 			},
 			undecided: []string{"1", "2"},
 			coinFlip:  true,
@@ -204,11 +110,11 @@ func TestTallyUndecided(t *testing.T) {
 		{
 			desc: "Invalid",
 			expected: allVotes{
-				invalid: proposalSet{
+				against: proposalSet{
 					"1": struct{}{},
 					"2": struct{}{},
 				},
-				valid: proposalSet{},
+				support: proposalSet{},
 			},
 			undecided: []string{"1", "2"},
 			coinFlip:  false,
@@ -218,9 +124,57 @@ func TestTallyUndecided(t *testing.T) {
 		t.Run(tc.desc, func(t *testing.T) {
 			t.Parallel()
 
-			votes := allVotes{valid: proposalSet{}, invalid: proposalSet{}}
+			votes := allVotes{support: proposalSet{}, against: proposalSet{}}
 			tallyUndecided(&votes, tc.undecided, tc.coinFlip)
 			require.Equal(t, tc.expected, votes)
+		})
+	}
+}
+
+func TestBeacon_votingThreshold(t *testing.T) {
+	t.Parallel()
+
+	r := require.New(t)
+
+	tt := []struct {
+		name      string
+		theta     *big.Rat
+		weight    uint64
+		threshold *big.Int
+	}{
+		{
+			name:      "Case 1",
+			theta:     big.NewRat(1, 2),
+			weight:    10,
+			threshold: big.NewInt(5),
+		},
+		{
+			name:      "Case 2",
+			theta:     big.NewRat(3, 10),
+			weight:    10,
+			threshold: big.NewInt(3),
+		},
+		{
+			name:      "Case 3",
+			theta:     big.NewRat(1, 25000),
+			weight:    31744,
+			threshold: big.NewInt(1),
+		},
+	}
+
+	for _, tc := range tt {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			pd := ProtocolDriver{
+				logger: logtest.New(t).WithName("Beacon"),
+				config: Config{},
+				theta:  new(big.Float).SetRat(tc.theta),
+			}
+
+			threshold := votingThreshold(pd.theta, tc.weight)
+			r.EqualValues(tc.threshold, threshold)
 		})
 	}
 }
