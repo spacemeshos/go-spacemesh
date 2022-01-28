@@ -360,8 +360,9 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	signer := genSigner()
 	vrfSigner, vrfPubkey, err := signing.NewVRFSigner(signer.PublicKey().Bytes())
 	require.NoError(t, err)
-	ballots := createBallots(t, signer, vrfSigner, genActiveSet(), types.Beacon{1, 1, 1})
+	ballots := createBallots(t, signer, vrfSigner, genActiveSet(), types.Beacon{7, 7, 7})
 	rb := ballots[0]
+	require.Len(t, rb.EligibilityProofs, 2)
 	for _, id := range rb.EpochData.ActiveSet {
 		h := &types.ActivationTxHeader{
 			NIPostChallenge: types.NIPostChallenge{
@@ -389,7 +390,6 @@ func TestCheckEligibility_InvalidOrder(t *testing.T) {
 	h.SetID(&rb.AtxID)
 	tv.mdb.EXPECT().GetAtxHeader(rb.AtxID).Return(h, nil).Times(2)
 
-	require.Len(t, rb.EligibilityProofs, 2)
 	rb.EligibilityProofs[0], rb.EligibilityProofs[1] = rb.EligibilityProofs[1], rb.EligibilityProofs[0]
 	eligible, err := tv.CheckEligibility(context.TODO(), rb)
 	assert.ErrorIs(t, err, errInvalidProofsOrder)
