@@ -12,7 +12,7 @@ from tests import convenience
 from tests.context import ES
 from tests.convenience import PRINT_SEP
 
-CREATED_BLOCK_MSG = "proposal created"
+CREATED_BLOCK_MSG = "eligibility claimed by proposal"
 TS_FORMAT = "%Y-%m-%dT%H:%M:%S.%fZ"
 
 dt = datetime.now()

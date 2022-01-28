@@ -258,10 +258,10 @@ func generateBallots(t *testing.T, l types.LayerID, natxs, nballots int, bbp bas
 	for i := 0; i < nballots; i++ {
 		b := &types.Ballot{
 			InnerBallot: types.InnerBallot{
-				AtxID:            atxs[i%len(atxs)],
-				Votes:            *votes,
-				EligibilityProof: types.VotingEligibilityProof{J: uint32(i)},
-				LayerIndex:       l,
+				AtxID:             atxs[i%len(atxs)],
+				Votes:             *votes,
+				EligibilityProofs: []types.VotingEligibilityProof{{J: uint32(i)}},
+				LayerIndex:        l,
 				EpochData: &types.EpochData{
 					ActiveSet: atxs,
 				},
@@ -1842,6 +1842,7 @@ func TestComputeBallotWeight(t *testing.T) {
 		RefBallot      int   // optional index to the ballot, use it in test if active set is nil
 		ATX            int   // non optional index to this ballot atx
 		ExpectedWeight *big.Float
+		Eligibilities  int
 	}
 	createActiveSet := func(pos []int, atxs []*types.ActivationTxHeader) []types.ATXID {
 		var rst []types.ATXID
@@ -1863,8 +1864,8 @@ func TestComputeBallotWeight(t *testing.T) {
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10)},
-				{ActiveSet: []int{0, 1, 2}, ATX: 1, ExpectedWeight: big.NewFloat(10)},
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
+				{ActiveSet: []int{0, 1, 2}, ATX: 1, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
 			},
 		},
 		{
@@ -1873,8 +1874,38 @@ func TestComputeBallotWeight(t *testing.T) {
 			layerSize:      5,
 			layersPerEpoch: 3,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10)},
-				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(10)},
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
+				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
+			},
+		},
+		{
+			desc:           "FromRefBallotMultipleEligibilities",
+			atxs:           []uint{50, 50, 50},
+			layerSize:      5,
+			layersPerEpoch: 3,
+			ballots: []testBallot{
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
+				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(20), Eligibilities: 2},
+			},
+		},
+		{
+			desc:           "FromRefBallotMultipleEligibilities",
+			atxs:           []uint{50, 50, 50},
+			layerSize:      5,
+			layersPerEpoch: 3,
+			ballots: []testBallot{
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(20), Eligibilities: 2},
+				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
+			},
+		},
+		{
+			desc:           "FromRefBallotMultipleEligibilities",
+			atxs:           []uint{50, 50, 50},
+			layerSize:      5,
+			layersPerEpoch: 3,
+			ballots: []testBallot{
+				{ActiveSet: []int{0, 1, 2}, ATX: 0, ExpectedWeight: big.NewFloat(20), Eligibilities: 2},
+				{RefBallot: 0, ATX: 0, ExpectedWeight: big.NewFloat(30), Eligibilities: 3},
 			},
 		},
 		{
@@ -1883,8 +1914,8 @@ func TestComputeBallotWeight(t *testing.T) {
 			layerSize:      5,
 			layersPerEpoch: 2,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 1}, ATX: 0, ExpectedWeight: big.NewFloat(10)},
-				{ActiveSet: []int{2, 3}, ATX: 2, ExpectedWeight: big.NewFloat(20)},
+				{ActiveSet: []int{0, 1}, ATX: 0, ExpectedWeight: big.NewFloat(10), Eligibilities: 1},
+				{ActiveSet: []int{2, 3}, ATX: 2, ExpectedWeight: big.NewFloat(20), Eligibilities: 1},
 			},
 		},
 		{
@@ -1893,7 +1924,7 @@ func TestComputeBallotWeight(t *testing.T) {
 			layerSize:      5,
 			layersPerEpoch: 2,
 			ballots: []testBallot{
-				{ActiveSet: []int{0, 2}, ATX: 1, ExpectedWeight: big.NewFloat(0)},
+				{ActiveSet: []int{0, 2}, ATX: 1, ExpectedWeight: big.NewFloat(0), Eligibilities: 1},
 			},
 		},
 	} {
@@ -1903,7 +1934,8 @@ func TestComputeBallotWeight(t *testing.T) {
 				ballots []*types.Ballot
 				atxs    []*types.ActivationTxHeader
 
-				weights = map[types.BallotID]weight{}
+				refWeights = map[types.BallotID]weight{}
+				weights    = map[types.BallotID]weight{}
 
 				ctrl  = gomock.NewController(t)
 				mdb   = mocks.NewMockblockDataProvider(ctrl)
@@ -1918,12 +1950,17 @@ func TestComputeBallotWeight(t *testing.T) {
 				atxs = append(atxs, header)
 			}
 
-			for i, b := range tc.ballots {
+			var currentJ int
+			for _, b := range tc.ballots {
 				ballot := &types.Ballot{
 					InnerBallot: types.InnerBallot{
-						EligibilityProof: types.VotingEligibilityProof{J: uint32(i)},
-						AtxID:            atxs[b.ATX].ID(),
+						AtxID: atxs[b.ATX].ID(),
 					},
+				}
+				for j := 0; j < b.Eligibilities; j++ {
+					ballot.EligibilityProofs = append(ballot.EligibilityProofs,
+						types.VotingEligibilityProof{J: uint32(currentJ)})
+					currentJ++
 				}
 				if b.ActiveSet != nil {
 					ballot.EpochData = &types.EpochData{
@@ -1936,7 +1973,7 @@ func TestComputeBallotWeight(t *testing.T) {
 				ballot.Initialize()
 				ballots = append(ballots, ballot)
 
-				weight, err := computeBallotWeight(atxdb, mdb, weights, ballot, tc.layerSize, tc.layersPerEpoch)
+				weight, err := computeBallotWeight(atxdb, mdb, refWeights, weights, ballot, tc.layerSize, tc.layersPerEpoch)
 				require.NoError(t, err)
 				require.Equal(t, b.ExpectedWeight.String(), weight.String())
 			}
@@ -2193,7 +2230,7 @@ func TestLateBaseBallot(t *testing.T) {
 	require.NoError(t, err)
 	var base types.Ballot
 	require.NoError(t, codec.Decode(buf, &base))
-	base.EligibilityProof.J++
+	base.EligibilityProofs[0].J++
 	base.Initialize()
 	tortoise.OnBallot(&base)
 

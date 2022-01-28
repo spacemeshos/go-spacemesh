@@ -12,11 +12,12 @@ import (
 func computeBallotWeight(
 	atxdb atxDataProvider,
 	bdp blockDataProvider,
-	weights map[types.BallotID]weight,
+	referenceWeights, weights map[types.BallotID]weight,
 	ballot *types.Ballot,
 	layerSize,
 	layersPerEpoch uint32,
 ) (weight, error) {
+	var reference weight
 	if ballot.EpochData != nil {
 		var total, targetWeight uint64
 
@@ -31,32 +32,35 @@ func computeBallotWeight(
 				targetWeight = atxweight
 			}
 		}
-
 		expected, err := proposals.GetNumEligibleSlots(targetWeight, total, layerSize, layersPerEpoch)
 		if err != nil {
 			return weight{}, fmt.Errorf("unable to compute number of eligibile ballots for atx %s", ballot.AtxID)
 		}
-		rst := weightFromUint64(targetWeight)
-		rst = rst.div(weightFromUint64(uint64(expected)))
-		weights[ballot.ID()] = rst
-		return rst, nil
-	}
-	if ballot.RefBallot == types.EmptyBallotID {
-		return weight{}, fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
-	}
-	rst, exist := weights[ballot.RefBallot]
-	if !exist {
-		refballot, err := bdp.GetBallot(ballot.RefBallot)
-		if err != nil {
-			return weight{}, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
+		reference = weightFromUint64(targetWeight)
+		reference = reference.div(weightFromUint64(uint64(expected)))
+		referenceWeights[ballot.ID()] = reference
+	} else {
+		if ballot.RefBallot == types.EmptyBallotID {
+			return weight{}, fmt.Errorf("empty ref ballot and no epoch data on ballot %s", ballot.ID())
 		}
-		rst, err = computeBallotWeight(atxdb, bdp, weights, refballot, layerSize, layersPerEpoch)
-		if err != nil {
-			return weight{}, err
+		var exist bool
+		reference, exist = referenceWeights[ballot.RefBallot]
+		if !exist {
+			refballot, err := bdp.GetBallot(ballot.RefBallot)
+			if err != nil {
+				return weight{}, fmt.Errorf("ref ballot %s for %s is unknown", ballot.ID(), ballot.RefBallot)
+			}
+			_, err = computeBallotWeight(atxdb, bdp, referenceWeights, weights, refballot, layerSize, layersPerEpoch)
+			if err != nil {
+				return weight{}, err
+			}
+			reference = referenceWeights[ballot.RefBallot]
 		}
 	}
-	weights[ballot.ID()] = rst
-	return rst, nil
+	real := reference.copy().
+		mul(weightFromInt64(int64(len(ballot.EligibilityProofs))))
+	weights[ballot.ID()] = real
+	return real, nil
 }
 
 func computeEpochWeight(atxdb atxDataProvider, epochWeights map[types.EpochID]weight, eid types.EpochID) (weight, error) {

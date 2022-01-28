@@ -86,11 +86,6 @@ func (p *Proposal) ID() ProposalID {
 	return p.proposalID
 }
 
-// Fields returns an array of LoggableFields for logging.
-func (p *Proposal) Fields() []log.LoggableField {
-	return append(p.Ballot.Fields(), p.ID(), log.Int("num_tx", len(p.TxIDs)))
-}
-
 // MarshalLogObject implements logging interface.
 func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("proposal_id", p.ID().String())

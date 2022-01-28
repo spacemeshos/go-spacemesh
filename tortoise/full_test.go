@@ -317,7 +317,7 @@ func TestFullCountVotes(t *testing.T) {
 				lid := genesis.Add(uint32(i) + 1)
 				for j := range layer {
 					p := &types.Proposal{}
-					p.EligibilityProof = types.VotingEligibilityProof{J: uint32(j)}
+					p.EligibilityProofs = []types.VotingEligibilityProof{{J: uint32(j)}}
 					p.LayerIndex = lid
 					p.Ballot.Signature = signer.Sign(p.Ballot.Bytes())
 					p.Signature = signer.Sign(p.Bytes())
@@ -337,7 +337,7 @@ func TestFullCountVotes(t *testing.T) {
 				lid := genesis.Add(uint32(i) + 1)
 				for j, b := range layer {
 					ballot := &types.Ballot{}
-					ballot.EligibilityProof = types.VotingEligibilityProof{J: uint32(j)}
+					ballot.EligibilityProofs = []types.VotingEligibilityProof{{J: uint32(j)}}
 					ballot.AtxID = activeset[b.ATX]
 					ballot.EpochData = &types.EpochData{ActiveSet: activeset}
 					ballot.LayerIndex = lid

@@ -110,8 +110,9 @@ func createProposalATXWithCoinbase(t *testing.T, layerID types.LayerID, txIDs []
 		InnerProposal: types.InnerProposal{
 			Ballot: types.Ballot{
 				InnerBallot: types.InnerBallot{
-					AtxID:      atx.ID(),
-					LayerIndex: layerID,
+					AtxID:             atx.ID(),
+					LayerIndex:        layerID,
+					EligibilityProofs: []types.VotingEligibilityProof{{}},
 				},
 			},
 			TxIDs: txIDs,
@@ -304,4 +305,43 @@ func Test_GenerateBlock_TXNotFound(t *testing.T) {
 	block, err := tg.GenerateBlock(context.TODO(), layerID, proposals)
 	assert.ErrorIs(t, err, errTXNotFound)
 	assert.Nil(t, block)
+}
+
+func Test_GenerateBlock_MultipleEligibilities(t *testing.T) {
+	tg := createTestGenerator(t)
+	fee, ids, txs := createTransactions(t, 1000)
+	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).Return(txs, nil).Times(1)
+	header := &types.ActivationTxHeader{}
+	header.SetID(&types.ATXID{1, 1, 1})
+
+	genProposal := func(proofs int) *types.Proposal {
+		return &types.Proposal{
+			InnerProposal: types.InnerProposal{
+				Ballot: types.Ballot{
+					InnerBallot: types.InnerBallot{
+						EligibilityProofs: make([]types.VotingEligibilityProof, proofs),
+						AtxID:             header.ID(),
+					},
+				},
+				TxIDs: ids,
+			},
+		}
+	}
+	proposals := []*types.Proposal{
+		genProposal(2), genProposal(1), genProposal(5),
+	}
+	tg.mockATXDB.EXPECT().GetAtxHeader(gomock.Any()).Return(header, nil).Times(len(proposals))
+	total := uint64(0)
+	for _, p := range proposals {
+		total += uint64(len(p.EligibilityProofs))
+	}
+
+	block, err := tg.GenerateBlock(context.TODO(), types.NewLayerID(10), proposals)
+	require.NoError(t, err)
+	require.Len(t, block.Rewards, len(proposals))
+
+	expected := (fee + tg.cfg.BaseReward) / total
+	for i, p := range proposals {
+		require.Equal(t, int(expected)*len(p.EligibilityProofs), int(block.Rewards[i].Amount))
+	}
 }

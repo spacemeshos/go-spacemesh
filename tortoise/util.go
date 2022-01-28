@@ -79,6 +79,11 @@ func (w weight) div(other weight) weight {
 	return w
 }
 
+func (w weight) mul(other weight) weight {
+	w.Rat.Mul(w.Rat, other.Rat)
+	return w
+}
+
 func (w weight) neg() weight {
 	w.Rat.Neg(w.Rat)
 	return w

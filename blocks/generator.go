@@ -106,7 +106,11 @@ func (g *Generator) extractOrderedUniqueTXs(layerID types.LayerID, proposals []*
 }
 
 func (g *Generator) calculateSmesherRewards(logger log.Log, layerID types.LayerID, proposals []*types.Proposal, txs []*types.Transaction) ([]types.AnyReward, error) {
-	rInfo := calculateRewardPerProposal(layerID, g.cfg, txs, len(proposals))
+	eligibilities := 0
+	for _, proposal := range proposals {
+		eligibilities += len(proposal.EligibilityProofs)
+	}
+	rInfo := calculateRewardPerEligibility(layerID, g.cfg, txs, eligibilities)
 	logger.With().Info("reward calculated", log.Inline(rInfo))
 	rewards := make([]types.AnyReward, 0, len(proposals))
 	for _, p := range proposals {
@@ -123,8 +127,8 @@ func (g *Generator) calculateSmesherRewards(logger log.Log, layerID types.LayerI
 		rewards = append(rewards, types.AnyReward{
 			Address:     atx.Coinbase,
 			SmesherID:   atx.NodeID,
-			Amount:      rInfo.totalRewardPer,
-			LayerReward: rInfo.layerRewardPer,
+			Amount:      rInfo.totalRewardPer * uint64(len(p.EligibilityProofs)),
+			LayerReward: rInfo.layerRewardPer * uint64(len(p.EligibilityProofs)),
 		})
 	}
 	return rewards, nil
