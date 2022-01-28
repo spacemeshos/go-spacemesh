@@ -760,7 +760,7 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	runnerExit := make(chan struct{})
 	go func() {
-		b.run(ctx)
+		b.loop(ctx)
 		close(runnerExit)
 	}()
 	t.Cleanup(func() {
@@ -773,6 +773,37 @@ func TestBuilder_RetryPublishActivationTx(t *testing.T) {
 	case <-time.After(time.Second):
 		require.FailNow(t, "failed waiting for required number of tries to occur")
 	}
+}
+
+func TestBuilder_InitialProofGeneratedOnce(t *testing.T) {
+	r := require.New(t)
+
+	activationDb := newActivationDb(t)
+
+	net.atxDb = activationDb
+	cfg := Config{
+		CoinbaseAccount: coinbase,
+		GoldenATXID:     goldenATXID,
+		LayersPerEpoch:  layersPerEpoch,
+	}
+	postSetupProvider := &postSetupProviderMock{}
+	b := NewBuilder(cfg, nodeID, &MockSigning{}, activationDb, net, nipostBuilderMock, postSetupProvider,
+		layerClockMock, &mockSyncer{}, NewMockDB(), logtest.New(t).WithName("atxBuilder"))
+
+	require.NoError(t, b.generateProof())
+	require.Equal(t, 1, postSetupProvider.called)
+
+	challenge := newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	prevAtx := newAtx(challenge, nipost)
+	storeAtx(r, activationDb, prevAtx, logtest.New(t).WithName("storeAtx"))
+
+	published, _, err := publishAtx(b, postGenesisEpoch, layersPerEpoch)
+	r.NoError(err)
+	r.True(published)
+	assertLastAtx(r, prevAtx.ActivationTxHeader, prevAtx.ActivationTxHeader, layersPerEpoch)
+
+	require.NoError(t, b.generateProof())
+	require.Equal(t, 1, postSetupProvider.called)
 }
 
 /*
@@ -818,7 +849,7 @@ func TestBuilder_UpdatePoETProver(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	closed := make(chan struct{})
 	go func() {
-		b.run(ctx)
+		b.loop(ctx)
 		close(closed)
 	}()
 	t.Cleanup(func() {

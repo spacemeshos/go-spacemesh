@@ -1480,7 +1480,7 @@ func ensureBaseAndExceptionsFromLayer(tb testing.TB, lid types.LayerID, votes *t
 }
 
 func TestBaseBallotEvictedBlock(t *testing.T) {
-	const size = 10
+	const size = 12
 	s := sim.New(
 		sim.WithLayerSize(size),
 	)
