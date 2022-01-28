@@ -319,8 +319,11 @@ func (vl *validator) ProcessLayer(ctx context.Context, layerID types.LayerID) er
 		}
 	}
 
+	vl.mutex.RLock()
+	latestLayerInState := vl.latestLayerInState
+	vl.mutex.RUnlock()
 	// mesh can't skip layer that failed to complete
-	from := minLayer(oldVerified, vl.latestLayerInState).Add(1)
+	from := minLayer(oldVerified, latestLayerInState).Add(1)
 	to := newVerified
 
 	if !to.Before(from) {
@@ -434,9 +437,12 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) 
 	missing := msh.MissingLayer()
 	// we never reapply the state of oldVerified. note that state reversions must be handled separately.
 	for layerID := from; !layerID.After(to); layerID = layerID.Add(1) {
-		if !layerID.After(msh.latestLayerInState) {
+		msh.mutex.RLock()
+		latestLayerInState := msh.latestLayerInState
+		msh.mutex.RUnlock()
+		if !layerID.After(latestLayerInState) {
 			logger.With().Error("trying to apply layer before currently applied layer",
-				log.Stringer("applied_layer", msh.latestLayerInState),
+				log.Stringer("applied_layer", latestLayerInState),
 				layerID,
 			)
 			continue
