@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"sync"
 
-	"golang.org/x/sync/errgroup"
-
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -573,25 +571,22 @@ func (l *Logic) GetAtxs(ctx context.Context, IDs []types.ATXID) error {
 	}
 	// TODO: atx Id is currently only the header bytes - should we change it?
 	results := l.fetcher.GetHashes(hashes, fetch.ATXDB, false)
-	var eg errgroup.Group
 	for hash, resC := range results {
-		hash := hash
-		resC := resC
-		eg.Go(func() error {
-			res := <-resC
-			if res.Err != nil {
-				l.log.WithContext(ctx).With().Error("cannot fetch atx",
-					log.String("hash", hash.ShortString()),
-					log.Err(res.Err))
-				return res.Err
+		res := <-resC
+		if res.Err != nil {
+			l.log.WithContext(ctx).With().Error("cannot fetch atx",
+				log.String("hash", hash.ShortString()),
+				log.Err(res.Err))
+			return res.Err
+		}
+		if !res.IsLocal {
+			err := l.getAtxResults(ctx, res.Hash, res.Data)
+			if err != nil {
+				return err
 			}
-			if !res.IsLocal {
-				return l.getAtxResults(ctx, res.Hash, res.Data)
-			}
-			return nil
-		})
+		}
 	}
-	return eg.Wait()
+	return nil
 }
 
 type dataReceiver func(context.Context, []byte) error
