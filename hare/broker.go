@@ -480,9 +480,14 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
-	b.tasks <- func() {
+	f := func() {
 		b.cleanState(id)
-		b.WithContext(ctx).With().Info("hare broker unregistered layer", types.LayerID(id))
+		b.WithContext(ctx).With().Info("hare broker unregistered layer", id)
+		wg.Done()
+	}
+	select {
+	case b.tasks <- f:
+	case <-b.CloseChannel():
 		wg.Done()
 	}
 
