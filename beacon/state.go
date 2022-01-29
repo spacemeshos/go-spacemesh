@@ -13,6 +13,7 @@ import (
 // state does the data management for epoch specific data for the protocol.
 // not thread-safe. it relies on ProtocolDriver's thread-safety mechanism.
 type state struct {
+	logger      log.Log
 	epochWeight uint64
 	atxs        []types.ATXID
 	// the original proposals as received, bucketed by validity.
@@ -30,6 +31,7 @@ type state struct {
 
 func newState(logger log.Log, cfg Config, epochWeight uint64, atxs []types.ATXID) *state {
 	return &state{
+		logger:                  logger,
 		epochWeight:             epochWeight,
 		atxs:                    atxs,
 		firstRoundIncomingVotes: make(map[string]proposalList),
@@ -40,21 +42,25 @@ func newState(logger log.Log, cfg Config, epochWeight uint64, atxs []types.ATXID
 	}
 }
 
-func (s *state) addValidProposal(p []byte) {
+func (s *state) addValidProposal(proposal []byte) {
 	if s.incomingProposals.valid == nil {
 		s.incomingProposals.valid = make(map[string]struct{})
 	}
-	s.incomingProposals.valid[string(p)] = struct{}{}
+	p := string(proposal)
+	s.incomingProposals.valid[p] = struct{}{}
+	s.votesMargin[p] = new(big.Int)
 }
 
-func (s *state) addPotentiallyValidProposal(p []byte) {
+func (s *state) addPotentiallyValidProposal(proposal []byte) {
 	if s.incomingProposals.potentiallyValid == nil {
 		s.incomingProposals.potentiallyValid = make(map[string]struct{})
 	}
-	s.incomingProposals.potentiallyValid[string(p)] = struct{}{}
+	p := string(proposal)
+	s.incomingProposals.potentiallyValid[p] = struct{}{}
+	s.votesMargin[p] = new(big.Int)
 }
 
-func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList proposalList) {
+func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList [][]byte) {
 	s.firstRoundIncomingVotes[string(minerPK.Bytes())] = voteList
 }
 
@@ -68,7 +74,10 @@ func (s *state) getMinerFirstRoundVote(minerPK *signing.PublicKey) (proposalList
 
 func (s *state) addVote(proposal string, vote uint, voteWeight *big.Int) {
 	if _, ok := s.votesMargin[proposal]; !ok {
-		s.votesMargin[proposal] = new(big.Int)
+		// voteMargin is updated during the proposal phase.
+		// ignore votes on proposals not in the original proposals.
+		s.logger.Warning("ignoring vote for unknown proposal", log.Binary("proposal", []byte(proposal)))
+		return
 	}
 	if vote == up {
 		s.votesMargin[proposal].Add(s.votesMargin[proposal], voteWeight)

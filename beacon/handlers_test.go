@@ -34,7 +34,7 @@ func createProtocolDriver(t *testing.T, epoch types.EpochID) *testProtocolDriver
 func createProtocolDriverWithFirstRoundVotes(t *testing.T, signer signing.Signer, epoch types.EpochID, round types.RoundID) (*testProtocolDriver, proposalList) {
 	tpd := createProtocolDriver(t, epoch)
 	plist := proposalList{types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize)}
-	setFirstRoundVotes(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), plist)
+	setMinerFirstRoundVotes(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), plist)
 	tpd.setRoundInProgress(round)
 	return tpd, plist
 }
@@ -46,11 +46,20 @@ func createEpochState(t *testing.T, pd *ProtocolDriver, epoch types.EpochID) {
 	pd.states[epoch] = newState(pd.logger, pd.config, epochWeight, nil)
 }
 
-func setFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, minerPK *signing.PublicKey, plist proposalList) {
+func setOwnFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, ownFirstRound proposalList) {
 	t.Helper()
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	pd.states[epoch].setMinerFirstRoundVote(minerPK, plist)
+	for _, p := range ownFirstRound {
+		pd.states[epoch].addValidProposal(p)
+	}
+}
+
+func setMinerFirstRoundVotes(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, minerPK *signing.PublicKey, minerFirstRound proposalList) {
+	t.Helper()
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	pd.states[epoch].setMinerFirstRoundVote(minerPK, minerFirstRound)
 }
 
 func setMockAtxDbForProposals(mockDB *mocks.MockactivationDB, epoch types.EpochID) {
@@ -1121,6 +1130,43 @@ func Test_handleFollowingVotes_ATXHeaderLookupError(t *testing.T) {
 	assert.ErrorIs(t, got, errUnknown)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
 	checkVoteMargins(t, tpd.ProtocolDriver, epoch, map[string]*big.Int{})
+}
+
+func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
+	t.Parallel()
+
+	const epoch = types.EpochID(10)
+	const round = types.RoundID(5)
+	tpd := createProtocolDriver(t, epoch)
+	signer := signing.NewEdSigner()
+	known := proposalList{types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize)}
+	unknown := proposalList{types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize)}
+	plist := append(known, unknown...)
+	setOwnFirstRoundVotes(t, tpd.ProtocolDriver, epoch, known)
+	setMinerFirstRoundVotes(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), plist)
+	tpd.setRoundInProgress(round)
+
+	// this msg will contain a bit vector that set bit 0 and 2-4. the miner voted for two proposals
+	// we don't know about locally
+	msg := createFollowingVote(t, signer, epoch, round, []byte{0b11101}, false)
+	msgBytes, err := types.InterfaceToBytes(msg)
+	require.NoError(t, err)
+
+	tpd.mClock.EXPECT().GetCurrentLayer().Return(epoch.FirstLayer()).Times(1)
+	setMockAtxDbForVotes(tpd.mAtxDB, epoch)
+	got := tpd.handleFollowingVotes(context.TODO(), "peerID", msgBytes, time.Now())
+	assert.NoError(t, got)
+	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
+	// unknown proposals' votes are ignored
+	expected := make(map[string]*big.Int, len(known))
+	for i, p := range known {
+		if i == 0 || i == 2 {
+			expected[string(p)] = big.NewInt(10)
+		} else {
+			expected[string(p)] = big.NewInt(-10)
+		}
+	}
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch, expected)
 }
 
 func Test_UniqueFollowingVotingMessages(t *testing.T) {
