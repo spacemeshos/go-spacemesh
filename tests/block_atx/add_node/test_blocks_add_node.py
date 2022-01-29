@@ -111,14 +111,14 @@ def test_add_node_validate_atx(init_session, setup_network):
 
     print("-------- validation succeed --------")
 
-    last_layer = layers_per_epoch * (curr_epoch + 2)
-    print(f"wait 2 epochs for layer {last_layer}")
+    last_layer = layers_per_epoch * (curr_epoch + 3)
+    print(f"wait 3 epochs for layer {last_layer}")
     _ = q.wait_for_latest_layer(init_session, last_layer, layers_per_epoch, num_miners+1)
 
-    new_pod_published_atx_epoch_4 = q.node_published_atx(init_session, new_pod_id, curr_epoch)
+    new_pod_published_atx_epoch_5 = q.node_published_atx(init_session, new_pod_id, curr_epoch+1)
 
-    # ========================== epoch i+6 ==========================
-    curr_epoch += 2
+    # ========================== epoch i+9 ==========================
+    curr_epoch += 3
     print("\n\n-------- current epoch", curr_epoch, "--------")
 
     # assert each node has created layer_avg/number_of_nodes
@@ -126,9 +126,9 @@ def test_add_node_validate_atx(init_session, setup_network):
     block_map, _ = q.get_blocks_per_node_and_layer(init_session)
     prev_layer = last_layer - layers_per_epoch
 
-    atx_epoch_4 = q.query_atx_per_epoch(init_session, curr_epoch - 2)
-    print(f"found {len(atx_epoch_4)} ATXs in epoch {curr_epoch-2}")
+    atx_epoch_5 = q.query_atx_per_epoch(init_session, curr_epoch - 2)
+    print(f"found {len(atx_epoch_5)} ATXs in epoch {curr_epoch-2}")
 
-    num_miners_epoch_6 = num_miners + 1 if new_pod_published_atx_epoch_4 else num_miners
-    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners_epoch_6)
+    num_miners_epoch_7 = num_miners + 1 if new_pod_published_atx_epoch_5 else num_miners
+    validate_blocks_per_nodes(block_map, prev_layer, last_layer, layers_per_epoch, layer_avg_size, num_miners_epoch_7)
 

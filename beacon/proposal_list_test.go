@@ -20,13 +20,13 @@ func Test_proposalList_sort(t *testing.T) {
 	}{
 		{
 			name:     "Sorted order remains not changed",
-			hashes:   proposalList{"0x1", "0x2", "0x3"},
-			expected: proposalList{"0x1", "0x2", "0x3"},
+			hashes:   proposalList{[]byte("1"), []byte("2"), []byte("3")},
+			expected: proposalList{[]byte("1"), []byte("2"), []byte("3")},
 		},
 		{
 			name:     "Unsorted order gets sorted",
-			hashes:   proposalList{"0x2", "0x5", "0x3", "0x1", "0x4"},
-			expected: proposalList{"0x1", "0x2", "0x3", "0x4", "0x5"},
+			hashes:   proposalList{[]byte("2"), []byte("5"), []byte("3"), []byte("1"), []byte("4")},
+			expected: proposalList{[]byte("1"), []byte("2"), []byte("3"), []byte("4"), []byte("5")},
 		},
 	}
 
@@ -53,16 +53,16 @@ func Test_proposalList_hash(t *testing.T) {
 	}{
 		{
 			name:     "Case 1",
-			hashes:   proposalList{"0x1", "0x2", "0x3"},
+			hashes:   proposalList{[]byte("0x1"), []byte("0x2"), []byte("0x3")},
 			expected: types.HexToHash32("0x4483077453c48a69fa6c4d9ca8e75b5fd01375f6aa8e6c7b2ccded97b8d81ae3"),
 		},
 		{
 			name: "Case 2",
 			hashes: proposalList{
-				"0x1",
-				"0x2",
-				"0x4",
-				"0x5",
+				[]byte("0x1"),
+				[]byte("0x2"),
+				[]byte("0x4"),
+				[]byte("0x5"),
 			},
 			expected: types.HexToHash32("0x6d148de54cc5ac334cdf4537018209b0e9f5ea94c049417103065eac777ddb5c"),
 		},
