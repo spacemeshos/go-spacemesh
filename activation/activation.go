@@ -245,7 +245,7 @@ func (b *Builder) StartSmeshing(coinbase types.Address, opts PostSetupOpts) erro
 			b.log.WithContext(ctx).With().Error("failed to complete post setup", log.Err(b.postSetupProvider.LastError()))
 			return
 		}
-		b.loop(ctx)
+		b.run(ctx)
 	}()
 
 	return nil
@@ -290,19 +290,9 @@ func (b *Builder) waitOrStop(ctx context.Context, ch chan struct{}) error {
 	}
 }
 
-// loop is the main loop that tries to create an atx per tick received from the global clock.
-func (b *Builder) loop(ctx context.Context) {
-	err := b.loadChallenge()
-	if err != nil {
-		b.log.Info("challenge not loaded: %s", err)
-	}
-
-	// Once initialized, run the execution phase with zero-challenge,
-	// to create the initial proof (the commitment).
-	// TODO(moshababo): don't generate the commitment every time smeshing is starting, but once only.
-	b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
-	if err != nil {
-		b.log.Error("post execution failed: %v", err)
+func (b *Builder) run(ctx context.Context) {
+	if err := b.generateProof(); err != nil {
+		b.log.Error("Failed to generate proof: %v", err)
 		return
 	}
 
@@ -310,10 +300,31 @@ func (b *Builder) loop(ctx context.Context) {
 	if err := b.waitOrStop(ctx, b.layerClock.AwaitLayer(types.NewLayerID(1))); err != nil {
 		return
 	}
-	b.run(ctx)
+
+	b.loop(ctx)
 }
 
-func (b *Builder) run(ctx context.Context) {
+func (b *Builder) generateProof() error {
+	err := b.loadChallenge()
+	if err != nil {
+		b.log.Info("challenge not loaded: %s", err)
+	}
+
+	// don't generate the commitment every time smeshing is starting, but once only.
+	if _, err := b.GetPrevAtx(b.nodeID); err != nil {
+		// Once initialized, run the execution phase with zero-challenge,
+		// to create the initial proof (the commitment).
+		b.initialPost, _, err = b.postSetupProvider.GenerateProof(shared.ZeroChallenge)
+		if err != nil {
+			return fmt.Errorf("post execution: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// loop is the main loop that tries to create an atx per tick received from the global clock.
+func (b *Builder) loop(ctx context.Context) {
 	var poetRetryTimer *time.Timer
 	defer func() {
 		if poetRetryTimer != nil {
