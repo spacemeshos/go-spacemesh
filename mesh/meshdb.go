@@ -148,19 +148,21 @@ func (m *DB) Transactions() database.Getter {
 
 // AddBallot adds a ballot to the database.
 func (m *DB) AddBallot(b *types.Ballot) error {
+	mal, err := identities.IsMalicious(m.db, b.SmesherID().Bytes())
+	if err != nil {
+		return err
+	}
+	if mal {
+		b.SetMalicious()
+	}
+
+	// it is important to run add ballot and set identity to malicious atomically
 	tx, err := m.db.Tx(context.Background())
 	if err != nil {
 		return err
 	}
 	defer tx.Release()
-	mal, err := identities.IsMalicious(tx, b.SmesherID().Bytes())
-	if err != nil {
-		return err
-	}
-	// it is important to run add ballot and set identity to malicious atomically
-	if mal {
-		b.SetMalicious()
-	}
+
 	if err := ballots.Add(tx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
 		return err
 	}
