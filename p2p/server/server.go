@@ -111,7 +111,7 @@ func (s *Server) streamHandler(stream network.Stream) {
 	}
 	start := time.Now()
 	buf, err = s.handler(log.WithNewRequestID(s.ctx), buf)
-	s.logger.With().Info("protocol handler execution time",
+	s.logger.With().Debug("protocol handler execution time",
 		log.String("protocol", s.protocol),
 		log.Duration("duration", time.Since(start)),
 	)
@@ -141,7 +141,7 @@ func (s *Server) Request(ctx context.Context, pid peer.ID, req []byte, resp func
 	go func() {
 		start := time.Now()
 		defer func() {
-			s.logger.WithContext(ctx).With().Info("request execution time",
+			s.logger.WithContext(ctx).With().Debug("request execution time",
 				log.String("protocol", s.protocol),
 				log.Duration("duration", time.Since(start)),
 			)
