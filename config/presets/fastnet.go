@@ -27,8 +27,8 @@ func fastnet() config.Config {
 	conf.HARE.LimitConcurrent = 5
 	conf.HARE.F = 399
 	conf.HARE.LimitIterations = 4
-	conf.HARE.RoundDuration = 4
-	conf.HARE.WakeupDelta = 4
+	conf.HARE.RoundDuration = 2
+	conf.HARE.WakeupDelta = 2
 
 	conf.P2P.TargetOutbound = 10
 
@@ -36,7 +36,7 @@ func fastnet() config.Config {
 
 	conf.LayerAvgSize = 50
 	conf.SyncRequestTimeout = 1_000
-	conf.LayerDurationSec = 30
+	conf.LayerDurationSec = 15
 	conf.LayersPerEpoch = 4
 
 	conf.POST.BitsPerLabel = 8
@@ -53,11 +53,11 @@ func fastnet() config.Config {
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 
-	conf.Beacon.FirstVotingRoundDuration = 8 * time.Second
-	conf.Beacon.GracePeriodDuration = 4 * time.Second
-	conf.Beacon.ProposalDuration = 4 * time.Second
-	conf.Beacon.VotingRoundDuration = 4 * time.Second
-	conf.Beacon.WeakCoinRoundDuration = 4 * time.Second
+	conf.Beacon.FirstVotingRoundDuration = 4 * time.Second
+	conf.Beacon.GracePeriodDuration = 2 * time.Second
+	conf.Beacon.ProposalDuration = 2 * time.Second
+	conf.Beacon.VotingRoundDuration = 2 * time.Second
+	conf.Beacon.WeakCoinRoundDuration = 2 * time.Second
 	conf.Beacon.RoundsNumber = 4
 	conf.Beacon.BeaconSyncNumBallots = 30
 	conf.Beacon.VotesLimit = 100
