@@ -79,9 +79,9 @@ func genBallotWithEligibility(tb testing.TB, signer *signing.EdSigner, lid types
 	tb.Helper()
 	ballot := &types.Ballot{
 		InnerBallot: types.InnerBallot{
-			AtxID:            atxID,
-			EligibilityProof: proof,
-			LayerIndex:       lid,
+			AtxID:             atxID,
+			EligibilityProofs: []types.VotingEligibilityProof{proof},
+			LayerIndex:        lid,
 			EpochData: &types.EpochData{
 				ActiveSet: activeSet,
 				Beacon:    beacon,

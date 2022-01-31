@@ -555,6 +555,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	type nodeData struct {
 		layertoblocks  map[types.LayerID][]types.BlockID
 		layertoballots map[types.LayerID][]types.BallotID
+		eligibilities  map[types.LayerID]int
 		atxPerEpoch    map[types.EpochID]uint32
 	}
 
@@ -573,6 +574,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			datamap[ap.nodeID.Key].atxPerEpoch = make(map[types.EpochID]uint32)
 			datamap[ap.nodeID.Key].layertoballots = make(map[types.LayerID][]types.BallotID)
 			datamap[ap.nodeID.Key].layertoblocks = make(map[types.LayerID][]types.BlockID)
+			datamap[ap.nodeID.Key].eligibilities = make(map[types.LayerID]int)
 		}
 
 		for i := types.NewLayerID(5); !i.After(untilLayer); i = i.Add(1) {
@@ -583,6 +585,7 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 			}
 			for _, b := range lyr.Ballots() {
 				datamap[ap.nodeID.Key].layertoballots[lyr.Index()] = append(datamap[ap.nodeID.Key].layertoballots[lyr.Index()], b.ID())
+				datamap[ap.nodeID.Key].eligibilities[lyr.Index()] += len(b.EligibilityProofs)
 			}
 			if len(lyr.BallotIDs()) == 0 {
 				// no proposal was created for this layer
@@ -620,10 +623,10 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 	lastLayer := len(nodedata.layertoblocks) + 5
 	suite.log.Info("node %v", suite.apps[0].nodeID.ShortString())
 
-	totalBallots := 0
-	for id, l := range nodedata.layertoballots {
-		totalBallots += len(l)
-		suite.log.Info("node %v: layer %v, ballots %v", suite.apps[0].nodeID.ShortString(), id, len(l))
+	totalEligibilities := 0
+	for id, l := range nodedata.eligibilities {
+		totalEligibilities += l
+		suite.log.Info("node %v: layer %v, ballots %v", suite.apps[0].nodeID.ShortString(), id, l)
 	}
 
 	genesisBallots := 0
@@ -655,17 +658,16 @@ func (suite *AppTestSuite) validateBlocksAndATXs(untilLayer types.LayerID) {
 
 	// note: expected no. blocks per epoch should remain the same even after some nodes are killed, since the
 	// remaining nodes will be eligible for proportionally more blocks per layer
-	expectedBallotsPerEpoch := 0
+	expectedEligibilitiesPerEpoch := 0
 	for _, app := range allApps {
-		expectedBallotsPerEpoch += max(ballotPerEpochTarget*int(app.Config.SMESHING.Opts.NumUnits)/int(expectedEpochWeight), 1)
+		expectedEligibilitiesPerEpoch += max(ballotPerEpochTarget*int(app.Config.SMESHING.Opts.NumUnits)/int(expectedEpochWeight), 1)
 	}
 	// note: we expect the number of ballots to be a bit less than the expected number since, after some apps were
 	// killed and before healing kicked in, some ballots should be missing
-	expectedTotalBallots := (totalEpochs - 2) * expectedBallotsPerEpoch
-	actualTotalBallots := totalBallots - genesisBallots
-	suite.Equal(expectedTotalBallots, actualTotalBallots,
-		fmt.Sprintf("got unexpected ballot count! got: %v, want: %v. totalBallots: %v, genesisBallots: %v, lastLayer: %v, layersPerEpoch: %v, layerAvgSize: %v, totalEpochs: %v, datamap: %v",
-			actualTotalBallots, expectedTotalBallots, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
+	expectedTotalEligibilities := (totalEpochs - 2) * expectedEligibilitiesPerEpoch
+	suite.Equal(expectedTotalEligibilities, totalEligibilities,
+		fmt.Sprintf("got unexpected eligibilities count! got: %v, want: %v. totalBallots: %v, genesisBallots: %v, lastLayer: %v, layersPerEpoch: %v, layerAvgSize: %v, totalEpochs: %v, datamap: %v",
+			totalEligibilities, expectedTotalEligibilities, totalBlocks, genesisBlocks, lastLayer, layersPerEpoch, layerAvgSize, totalEpochs, datamap))
 
 	expectedTotalBlocks := (totalEpochs - 2) * int(layersPerEpoch)
 	actualTotalBlocks := totalBlocks - genesisBlocks
