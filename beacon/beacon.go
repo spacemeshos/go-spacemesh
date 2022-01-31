@@ -66,7 +66,7 @@ func New(
 	vrfSigner signing.Signer,
 	vrfVerifier signing.Verifier,
 	weakCoin coin,
-	db database.Database,
+	db database.Store,
 	clock layerClock,
 	logger log.Log,
 ) *ProtocolDriver {
@@ -116,7 +116,7 @@ type ProtocolDriver struct {
 
 	clock       layerClock
 	layerTicker chan types.LayerID
-	db          database.Database
+	db          database.Store
 
 	mu              sync.RWMutex
 	lastTickedEpoch types.EpochID

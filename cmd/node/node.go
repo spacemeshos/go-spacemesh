@@ -70,7 +70,6 @@ const (
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
 	AtxDbStoreLogger       = "atxDbStore"
-	BeaconDbStoreLogger    = "beaconDbStore"
 	BeaconLogger           = "beacon"
 	WeakCoinLogger         = "weakCoin"
 	PoetDbStoreLogger      = "poetDbStore"
@@ -487,12 +486,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, atxdbstore)
 
-	beaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "beacons"), 0, 0, app.addLogger(BeaconDbStoreLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create beacon DB: %w", err)
-	}
-	app.closers = append(app.closers, beaconDBStore)
-
 	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create PoET DB: %w", err)
@@ -556,7 +549,7 @@ func (app *App) initServices(ctx context.Context,
 		vrfSigner,
 		vrfVerifier,
 		wc,
-		beaconDBStore,
+		mdb.Beacons(),
 		clock,
 		app.addLogger(BeaconLogger, lg))
 

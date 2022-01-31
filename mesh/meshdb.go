@@ -11,12 +11,14 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
+	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
@@ -133,6 +135,11 @@ func (m *DB) Blocks() database.Getter {
 // Transactions exports the transactions DB.
 func (m *DB) Transactions() database.Getter {
 	return &txFetcher{mdb: m}
+}
+
+// Beacons exports the beacon database.
+func (m *DB) Beacons() database.Store {
+	return &beaconDB{mdb: m}
 }
 
 // AddBallot adds a ballot to the database.
@@ -626,4 +633,23 @@ func LayerIDs(db database.Database, namespace string, lid types.LayerID, f func(
 		return nil
 	}
 	return database.ErrNotFound
+}
+
+type beaconDB struct {
+	mdb *DB
+}
+
+// Get gets beacon by epoch ID.
+func (db *beaconDB) Get(epoch []byte) ([]byte, error) {
+	beacon, err := beacons.Get(db.mdb.db, types.EpochID(util.BytesToUint32(epoch)))
+	if err != nil {
+		return nil, err
+	}
+
+	return beacon.Bytes(), err
+}
+
+// Put puts beacon by epoch ID.
+func (db *beaconDB) Put(epoch []byte, beacon []byte) error {
+	return beacons.Add(db.mdb.db, types.EpochID(util.BytesToUint32(epoch)), types.BytesToBeacon(beacon))
 }
