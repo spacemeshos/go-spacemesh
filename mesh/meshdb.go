@@ -29,15 +29,6 @@ const (
 	layerSize = 200
 )
 
-var (
-	// ErrMalicious is a common error type.
-	ErrMalicious = errors.New("mesh: malicious")
-	// ErrMaliciousBallot is raised if ballot is malicious.
-	ErrMaliciousBallot = fmt.Errorf("%w: ballot", ErrMalicious)
-	// ErrMaliciousSmesher is raised if smesher produced more than 2 ballots in the same layer.
-	ErrMaliciousSmesher = fmt.Errorf("%w: smesher", ErrMalicious)
-)
-
 // DB represents a mesh database instance.
 type DB struct {
 	log.Log
