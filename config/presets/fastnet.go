@@ -41,8 +41,8 @@ func fastnet() config.Config {
 
 	conf.POST.BitsPerLabel = 8
 	conf.POST.K1 = 2000
-	conf.POST.K2 = 1800
-	conf.POST.LabelsPerUnit = 1024
+	conf.POST.K2 = 4
+	conf.POST.LabelsPerUnit = 32
 	conf.POST.MaxNumUnits = 4
 	conf.POST.MinNumUnits = 2
 
