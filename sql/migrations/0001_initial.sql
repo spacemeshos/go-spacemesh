@@ -17,8 +17,9 @@ CREATE TABLE ballots
 );
 CREATE INDEX ballots_by_layer_by_pubkey ON ballots (layer, pubkey);
 
-CREATE TABLE identities (
-    pubkey VARCHAR PRIMARY KEY,
+CREATE TABLE identities
+(
+    pubkey    VARCHAR PRIMARY KEY,
     malicious bool
 );
 
