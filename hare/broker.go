@@ -54,8 +54,8 @@ type Broker struct {
 	minDeleted     types.LayerID
 	limit          int // max number of simultaneous consensus processes
 	stop           context.CancelFunc
-	eventLoopQuit  chan struct{}
-	queueMessageWg *sync.WaitGroup
+	eventLoopWg    sync.WaitGroup
+	queueMessageWg sync.WaitGroup
 }
 
 func newBroker(pid peer.ID, eValidator validator, stateQuerier stateQuerier, syncState system.SyncStateProvider, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
@@ -75,7 +75,6 @@ func newBroker(pid peer.ID, eValidator validator, stateQuerier stateQuerier, syn
 		limit:          limit,
 		queue:          priorityq.New(),
 		queueChannel:   make(chan struct{}, inboxCapacity),
-		queueMessageWg: &sync.WaitGroup{},
 	}
 }
 
@@ -89,8 +88,8 @@ func (b *Broker) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 
 	b.stop = cancel
-	b.eventLoopQuit = make(chan struct{})
 
+	b.eventLoopWg.Add(1)
 	go b.eventLoop(log.WithNewSessionID(ctx))
 
 	return nil
@@ -200,9 +199,7 @@ func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*m
 
 // listens to incoming messages and incoming tasks.
 func (b *Broker) eventLoop(ctx context.Context) {
-	defer func() {
-		close(b.eventLoopQuit)
-	}()
+	defer b.eventLoopWg.Done()
 
 	for {
 		b.WithContext(ctx).With().Debug("broker queue sizes",
@@ -471,9 +468,14 @@ func (b *Broker) Unregister(ctx context.Context, id types.LayerID) {
 	wg := sync.WaitGroup{}
 
 	wg.Add(1)
-	b.tasks <- func() {
+	f := func() {
 		b.cleanState(id)
-		b.WithContext(ctx).With().Info("hare broker unregistered layer", types.LayerID(id))
+		b.WithContext(ctx).With().Info("hare broker unregistered layer", id)
+		wg.Done()
+	}
+	select {
+	case b.tasks <- f:
+	case <-b.CloseChannel():
 		wg.Done()
 	}
 
@@ -495,6 +497,7 @@ func (b *Broker) Close() {
 	b.Closer.Close()
 	<-b.CloseChannel()
 	b.queueMessageWg.Wait()
+	b.eventLoopWg.Wait()
 	close(b.queueChannel)
 }
 
@@ -504,9 +507,7 @@ func (b *Broker) CloseChannel() chan struct{} {
 
 	go func() {
 		<-b.Closer.CloseChannel()
-		if b.eventLoopQuit != nil {
-			<-b.eventLoopQuit
-		}
+		b.eventLoopWg.Wait()
 		close(ch)
 	}()
 
