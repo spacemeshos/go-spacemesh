@@ -846,9 +846,8 @@ func getLocalVote(state *commonState, config Config, lid types.LayerID, block ty
 		}
 		return against, reasonHareOutput
 	}
-	vote, exists := state.validity[block]
-	if exists {
-		return vote, reasonValidity
+	if lid.After(state.historicallyVerified) {
+		return abstain, reasonValidity
 	}
-	return abstain, reasonValidity
+	return state.validity[block], reasonValidity
 }

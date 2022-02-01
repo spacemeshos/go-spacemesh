@@ -81,6 +81,36 @@ func TestRerunStaysInVerifyingMode(t *testing.T) {
 	require.Equal(t, types.GetEffectiveGenesis(), tortoise.trtl.full.counted)
 }
 
+func TestRerunRevertNonverifiedLayers(t *testing.T) {
+	ctx := context.Background()
+	const (
+		size = 10
+		good = 10
+	)
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup(sim.WithSetupUnitsRange(2, 2))
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+
+	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	var last, verified types.LayerID
+	for _, last = range sim.GenLayers(s,
+		sim.WithSequence(good),
+		sim.WithSequence(5, sim.WithVoteGenerator(splitVoting(size))),
+	) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	expected := types.GetEffectiveGenesis().Add(good - 1)
+	require.Equal(t, expected, verified)
+
+	require.NoError(t, tortoise.rerun(ctx))
+	old, verified, reverted := tortoise.HandleIncomingLayer(ctx, s.Next())
+	require.True(t, reverted)
+	require.True(t, verified.Before(expected))
+	require.Equal(t, old, verified)
+}
+
 func TestRerunDistanceVoteCounting(t *testing.T) {
 	t.Run("FixesMisverified", func(t *testing.T) {
 		testWindowCounting(t, 3, 100, 10, true)

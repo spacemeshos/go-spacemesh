@@ -688,7 +688,7 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 	// no calls to svm state, as layer will be failed earlier
 	require.Error(t, tm.ProcessLayer(ctx, last))
 	require.Equal(t, last, tm.ProcessedLayer())
-	require.Equal(t, last, tm.missingLayer)
+	require.Equal(t, last, tm.MissingLayer())
 	require.Equal(t, last.Sub(1), tm.LatestLayerInState())
 
 	last = last.Add(1)
