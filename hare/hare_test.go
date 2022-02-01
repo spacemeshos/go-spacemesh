@@ -125,9 +125,7 @@ func TestHare_Start(t *testing.T) {
 
 	h := createTestHare(t, config.DefaultConfig(), newMockClock(), "test", noopPubSub(t), t.Name())
 	assert.NoError(t, h.Start(context.TODO()))
-	t.Cleanup(func() {
-		h.Close()
-	})
+	h.Close()
 }
 
 func TestHare_collectOutputAndGetResult(t *testing.T) {
