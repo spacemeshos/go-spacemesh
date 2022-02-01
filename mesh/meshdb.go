@@ -15,9 +15,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
+	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/sql/blocks"
+	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
@@ -137,23 +139,52 @@ func (m *DB) Transactions() database.Getter {
 
 // AddBallot adds a ballot to the database.
 func (m *DB) AddBallot(b *types.Ballot) error {
-	return m.addBallot(b)
+	mal, err := identities.IsMalicious(m.db, b.SmesherID().Bytes())
+	if err != nil {
+		return err
+	}
+	if mal {
+		b.SetMalicious()
+	}
+
+	// it is important to run add ballot and set identity to malicious atomically
+	tx, err := m.db.Tx(context.Background())
+	if err != nil {
+		return err
+	}
+	defer tx.Release()
+
+	if err := ballots.Add(tx, b); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+		return err
+	}
+	if !mal {
+		count, err := ballots.CountByPubkeyLayer(tx, b.LayerIndex, b.SmesherID().Bytes())
+		if err != nil {
+			return err
+		}
+		if count > 1 {
+			if err := identities.SetMalicious(tx, b.SmesherID().Bytes()); err != nil {
+				return err
+			}
+			b.SetMalicious()
+			m.Log.With().Warning("smesher produced more than one ballot in the same layer",
+				log.Stringer("smesher", b.SmesherID()),
+				log.Inline(b),
+			)
+		}
+	}
+	return tx.Commit()
+}
+
+// SetMalicious updates smesher as malicious.
+func (m *DB) SetMalicious(smesher *signing.PublicKey) error {
+	return identities.SetMalicious(m.db, smesher.Bytes())
 }
 
 // HasBallot returns true if the ballot is stored in a database.
 func (m *DB) HasBallot(ballot types.BallotID) bool {
 	exists, _ := ballots.Has(m.db, ballot)
 	return exists
-}
-
-func (m *DB) addBallot(b *types.Ballot) error {
-	if err := ballots.Add(m.db, b); err != nil {
-		if errors.Is(err, sql.ErrObjectExists) {
-			return nil
-		}
-		return fmt.Errorf("could not add ballot %v to database: %w", b.ID(), err)
-	}
-	return nil
 }
 
 // GetBallot returns true if the database has Ballot specified by the BallotID and false otherwise.
