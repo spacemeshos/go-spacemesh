@@ -131,13 +131,19 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 
 	miners := make(map[int]uint32, size)
 	for i := 0; i < size; i++ {
-		miner := g.rng.Intn(len(g.activations))
+		miner := i % len(g.activations)
+		miners[miner]++
+	}
+	i := 0
+	for miner, maxj := range miners {
+		voting := cfg.VoteGen(g.rng, g.layers, i)
+		i++
 		atxid := g.activations[miner]
 		signer := g.keys[miner]
-		proof := types.VotingEligibilityProof{J: miners[miner]}
-		miners[miner]++
-
-		voting := cfg.VoteGen(g.rng, g.layers, i)
+		proofs := []types.VotingEligibilityProof{}
+		for j := uint32(0); j < maxj; j++ {
+			proofs = append(proofs, types.VotingEligibilityProof{J: j})
+		}
 		beacon, err := g.states[0].Beacons.GetBeacon(g.nextLayer.GetEpoch())
 		if err != nil {
 			g.logger.With().Panic("failed to get a beacon", log.Err(err))
@@ -145,7 +151,7 @@ func (g *Generator) genLayer(cfg nextConf) types.LayerID {
 		ballot := &types.Ballot{
 			InnerBallot: types.InnerBallot{
 				AtxID:             atxid,
-				EligibilityProofs: []types.VotingEligibilityProof{proof},
+				EligibilityProofs: proofs,
 				Votes:             voting,
 				LayerIndex:        g.nextLayer,
 				EpochData: &types.EpochData{

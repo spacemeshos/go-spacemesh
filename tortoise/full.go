@@ -82,6 +82,9 @@ func (f *full) countVotesFromBallots(logger log.Log, ballotlid types.LayerID, ba
 			continue
 		}
 		ballotWeight := f.ballotWeight[ballot]
+		if ballotWeight.isNil() {
+			continue
+		}
 		for lid := f.verified.Add(1); lid.Before(ballotlid); lid = lid.Add(1) {
 			for _, block := range f.blocks[lid] {
 				vote := f.getVote(logger, ballot, lid, block)

@@ -666,6 +666,26 @@ func TestBlocksBallotsOverlap(t *testing.T) {
 	require.Empty(t, ids)
 }
 
+func TestMaliciousBallots(t *testing.T) {
+	mdb := NewMemMeshDB(logtest.New(t))
+	defer mdb.Close()
+
+	lid := types.NewLayerID(1)
+	pub := []byte{1, 1, 1}
+
+	ballots := []types.Ballot{
+		types.NewExistingBallot(types.BallotID{1}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+		types.NewExistingBallot(types.BallotID{2}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+		types.NewExistingBallot(types.BallotID{3}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+	}
+	require.NoError(t, mdb.AddBallot(&ballots[0]))
+	require.False(t, ballots[0].IsMalicious())
+	for _, ballot := range ballots[1:] {
+		require.NoError(t, mdb.AddBallot(&ballot))
+		require.True(t, ballot.IsMalicious())
+	}
+}
+
 func BenchmarkGetBlock(b *testing.B) {
 	// cache is set to be twice as large as cache to avoid hitting the cache
 	blocks := make([]*types.Block, layerSize*2)

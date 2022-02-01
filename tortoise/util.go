@@ -111,6 +111,9 @@ func (w weight) cmp(other weight) sign {
 }
 
 func (w weight) String() string {
+	if w.isNil() {
+		return "0"
+	}
 	if w.Rat.IsInt() {
 		return w.Rat.Num().String()
 	}

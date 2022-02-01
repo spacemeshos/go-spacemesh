@@ -1990,7 +1990,6 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	)
 	s1.Setup(
 		sim.WithSetupMinerRange(15, 15),
-		sim.WithSetupUnitsRange(1, 1),
 	)
 
 	ctx := context.Background()
@@ -2056,7 +2055,7 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 	for lid := partitionStart.Add(1); !lid.After(partitionEnd); lid = lid.Add(1) {
 		validBlocks, err := s1.GetState(0).MeshDB.LayerContextuallyValidBlocks(context.TODO(), lid)
 		require.NoError(t, err)
-		assert.Len(t, validBlocks, numValidBlock*2)
+		assert.Len(t, validBlocks, numValidBlock*2, "layer=%s", lid)
 		assert.NotContains(t, validBlocks, types.EmptyBlockID)
 	}
 }
@@ -2163,7 +2162,7 @@ func TestAbstainVotingVerifyingMode(t *testing.T) {
 	ctx := context.Background()
 	const size = 10
 	s := sim.New(sim.WithLayerSize(size))
-	s.Setup(sim.WithSetupUnitsRange(2, 2))
+	s.Setup()
 
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
@@ -2285,6 +2284,37 @@ func TestLateBlock(t *testing.T) {
 	valid, err := s.GetState(0).MeshDB.ContextualValidity(block.ID())
 	require.NoError(t, err)
 	require.True(t, valid)
+}
+
+func TestMaliciousBallotsAreIgnored(t *testing.T) {
+	ctx := context.Background()
+	const size = 10
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+
+	tortoise := tortoiseFromSimState(s.GetState(0), WithLogger(logtest.New(t)), WithConfig(cfg))
+	var last, verified types.LayerID
+	for _, last = range sim.GenLayers(s, sim.WithSequence(int(types.GetLayersPerEpoch()))) {
+		_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	}
+	require.Equal(t, last.Sub(1), verified)
+
+	ballots, err := s.GetState(0).MeshDB.LayerBallots(last)
+	require.NoError(t, err)
+	for _, ballot := range ballots {
+		require.NoError(t, s.GetState(0).MeshDB.SetMalicious(ballot.SmesherID()))
+	}
+
+	require.NoError(t, tortoise.rerun(ctx))
+	_, verified, _ = tortoise.HandleIncomingLayer(ctx, s.Next())
+	require.Equal(t, verified, types.GetEffectiveGenesis())
+
+	votes, err := tortoise.BaseBallot(ctx)
+	require.NoError(t, err)
+	require.Equal(t, types.GenesisBallotID, votes.Base)
 }
 
 func TestStateManagement(t *testing.T) {

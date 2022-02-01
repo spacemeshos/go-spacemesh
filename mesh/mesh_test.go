@@ -132,7 +132,7 @@ func createLayerBallots(t *testing.T, mesh *Mesh, lyrID types.LayerID) []*types.
 	for i := 0; i < numBallots; i++ {
 		ballot := types.GenLayerBallot(lyrID)
 		ballots = append(ballots, ballot)
-		require.NoError(t, mesh.addBallot(ballot))
+		require.NoError(t, mesh.DB.AddBallot(ballot))
 	}
 	return ballots
 }
