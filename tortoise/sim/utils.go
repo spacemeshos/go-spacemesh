@@ -10,6 +10,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -39,7 +40,7 @@ func newAtxDB(logger log.Log, conf config) *activation.DB {
 func newMeshDB(logger log.Log, conf config) *mesh.DB {
 	if len(conf.Path) > 0 {
 		os.MkdirAll(filepath.Join(conf.Path, meshpath), os.ModePerm)
-		db, err := mesh.NewPersistentMeshDB(filepath.Join(conf.Path, meshpath), 20, logger)
+		db, err := mesh.NewPersistentMeshDB(sql.InMemory(), 20, logger)
 		if err != nil {
 			panic(err)
 		}
