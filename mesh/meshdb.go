@@ -71,7 +71,7 @@ func NewPersistentMeshDB(db *sql.Database, blockCacheSize int, logger log.Log) (
 	return mdb, err
 }
 
-// PersistentData chcks to see if db is empty.
+// PersistentData checks to see if db is empty.
 func (m *DB) PersistentData() bool {
 	lid, err := layers.GetByStatus(m.db, layers.Latest)
 	if err != nil && errors.Is(err, sql.ErrNotFound) || (lid == types.LayerID{}) {
