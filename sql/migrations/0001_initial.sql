@@ -68,5 +68,3 @@ CREATE TABLE beacons
     epoch  INT NOT NULL PRIMARY KEY,
     beacon CHAR(4)
 );
-
-CREATE INDEX beacons_by_epoch ON beacons (epoch);
