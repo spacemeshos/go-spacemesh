@@ -541,28 +541,10 @@ func (app *App) initServices(ctx context.Context,
 	fetcherWrapped := &layerFetcher{}
 	atxDB := activation.NewDB(atxDBStore, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 
-	edVerifier := signing.NewEDVerifier()
-	vrfVerifier := signing.VRFVerifier{}
-
-	wc := weakcoin.New(app.host,
-		vrfSigner, vrfVerifier,
-		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
-		weakcoin.WithMaxRound(app.Config.Beacon.RoundsNumber),
-	)
-
-	beaconProtocol := beacon.New(
-		app.Config.Beacon,
-		nodeID,
-		app.host,
-		atxDB,
-		sgn,
-		edVerifier,
-		vrfSigner,
-		vrfVerifier,
-		wc,
-		sqlDB,
-		clock,
-		app.addLogger(BeaconLogger, lg))
+	beaconProtocol := beacon.New(nodeID, app.host, atxDB, sgn, vrfSigner, sqlDB, clock,
+		beacon.WithContext(ctx),
+		beacon.WithConfig(app.Config.Beacon),
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.Tortoise
@@ -715,7 +697,7 @@ func (app *App) initServices(ctx context.Context,
 		return pubsub.ValidationIgnore
 	}
 
-	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, wc.HandleProposal))
+	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
 	app.host.Register(beacon.ProposalProtocol,
 		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedProposalMessage))
 	app.host.Register(beacon.FirstVoteProtocol,
@@ -823,10 +805,8 @@ func (app *App) HareFactory(
 func (app *App) startServices(ctx context.Context) error {
 	app.layerFetch.Start()
 	go app.startSyncer(ctx)
+	app.beaconProtocol.Start(ctx)
 
-	if err := app.beaconProtocol.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start beacon: %w", err)
-	}
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}

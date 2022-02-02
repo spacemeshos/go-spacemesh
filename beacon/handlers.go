@@ -47,6 +47,10 @@ var (
 	errProtocolNotRunning = errors.New("beacon protocol not running")
 )
 
+func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+	return pd.weakCoin.HandleProposal(ctx, pid, msg)
+}
+
 // HandleSerializedProposalMessage defines method to handle proposal Messages from gossip.
 func (pd *ProtocolDriver) HandleSerializedProposalMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
 	if pd.isClosed() || !pd.isInProtocol() {
@@ -152,17 +156,25 @@ func (pd *ProtocolDriver) classifyProposalMessage(ctx context.Context, m Proposa
 	// so if a proposal is timely for any honest user,
 	// it cannot be late for any honest user (and vice versa).
 
-	switch {
-	case pd.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
-		logger.Debug("received valid proposal message")
-		pd.addValidProposal(m.VRFSignature)
-	case pd.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
-		logger.Debug("received potentially valid proposal message")
-		pd.addPotentiallyValidProposal(m.VRFSignature)
-	default:
-		logger.Warning("received invalid proposal message")
+	var (
+		atxDelay      = atxTimestamp.Sub(nextEpochStart)
+		endTime       = pd.getProposalPhaseFinishedTime()
+		proposalDelay time.Duration
+	)
+	if endTime != (time.Time{}) {
+		proposalDelay = receivedTime.Sub(endTime)
 	}
 
+	switch {
+	case atxDelay <= 0 && proposalDelay <= 0:
+		logger.Debug("received valid proposal: ATX delay %v, proposal delay %v", atxDelay, proposalDelay)
+		pd.addValidProposal(m.VRFSignature)
+	case atxDelay <= pd.config.GracePeriodDuration && proposalDelay <= pd.config.GracePeriodDuration:
+		logger.Debug("received potentially proposal: ATX delay %v, proposal delay %v", atxDelay, proposalDelay)
+		pd.addPotentiallyValidProposal(m.VRFSignature)
+	default:
+		logger.Warning("received invalid proposal: ATX delay %v, proposal delay %v", atxDelay, proposalDelay)
+	}
 	return nil
 }
 
@@ -236,20 +248,6 @@ func (pd *ProtocolDriver) verifyProposalMessage(ctx context.Context, m ProposalM
 	}
 
 	return atxID, nil
-}
-
-func (pd *ProtocolDriver) isPotentiallyValidProposalMessage(currentEpoch types.EpochID, atxTimestamp, nextEpochStart, receivedTimestamp time.Time) bool {
-	delayedATX := atxTimestamp.Before(nextEpochStart.Add(pd.config.GracePeriodDuration))
-	delayedProposal := pd.receivedBeforeProposalPhaseFinished(currentEpoch, receivedTimestamp.Add(-pd.config.GracePeriodDuration))
-
-	return delayedATX && delayedProposal
-}
-
-func (pd *ProtocolDriver) isValidProposalMessage(currentEpoch types.EpochID, atxTimestamp, nextEpochStart, receivedTimestamp time.Time) bool {
-	timelyATX := atxTimestamp.Before(nextEpochStart)
-	timelyProposal := pd.receivedBeforeProposalPhaseFinished(currentEpoch, receivedTimestamp)
-
-	return timelyATX && timelyProposal
 }
 
 // HandleSerializedFirstVotingMessage defines method to handle first voting messages from gossip.
@@ -492,6 +490,12 @@ func (pd *ProtocolDriver) storeFollowingVotes(message FollowingVotingMessage, mi
 	thisRoundVotes := decodeVotes(message.VotesBitVector, firstRoundVotes)
 	pd.addToVoteMargin(thisRoundVotes, voteWeight)
 	return nil
+}
+
+func (pd *ProtocolDriver) getProposalPhaseFinishedTime() time.Time {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+	return pd.current.proposalPhaseFinishedTime
 }
 
 func (pd *ProtocolDriver) addToVoteMargin(thisRoundVotes allVotes, voteWeight *big.Int) {

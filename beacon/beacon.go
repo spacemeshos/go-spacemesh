@@ -30,7 +30,6 @@ import (
 )
 
 const (
-	protoName      = "BEACON_PROTOCOL"
 	proposalPrefix = "BP"
 
 	proposalChanCapacity = 1024
@@ -57,62 +56,97 @@ type layerClock interface {
 	LayerToTime(types.LayerID) time.Time
 }
 
+// Opt for configuring beacon protocol.
+type Opt func(*ProtocolDriver)
+
+// WithLogger defines logger for beacon.
+func WithLogger(logger log.Log) Opt {
+	return func(pd *ProtocolDriver) {
+		pd.logger = logger
+	}
+}
+
+// WithContext defines context for beacon.
+func WithContext(ctx context.Context) Opt {
+	return func(pd *ProtocolDriver) {
+		pd.ctx = ctx
+	}
+}
+
+// WithConfig defines protocol parameters.
+func WithConfig(cfg Config) Opt {
+	return func(pd *ProtocolDriver) {
+		pd.config = cfg
+	}
+}
+
+func withWeakCoin(wc coin) Opt {
+	return func(pd *ProtocolDriver) {
+		pd.weakCoin = wc
+	}
+}
+
 // New returns a new ProtocolDriver.
 func New(
-	conf Config,
 	nodeID types.NodeID,
 	publisher pubsub.Publisher,
 	atxDB activationDB,
-	edSigner signing.Signer,
-	edVerifier signing.VerifyExtractor,
-	vrfSigner signing.Signer,
-	vrfVerifier signing.Verifier,
-	weakCoin coin,
+	edSigner *signing.EdSigner,
+	vrfSigner *signing.VRFSigner,
 	db *sql.Database,
 	clock layerClock,
-	logger log.Log,
+	opts ...Opt,
 ) *ProtocolDriver {
 	pd := &ProtocolDriver{
-		logger:             logger,
-		config:             conf,
+		ctx:                context.Background(),
+		logger:             log.NewNop(),
+		config:             DefaultConfig(),
 		nodeID:             nodeID,
-		theta:              new(big.Float).SetRat(conf.Theta),
 		publisher:          publisher,
 		atxDB:              atxDB,
 		edSigner:           edSigner,
-		edVerifier:         edVerifier,
 		vrfSigner:          vrfSigner,
-		vrfVerifier:        vrfVerifier,
-		weakCoin:           weakCoin,
 		db:                 db,
 		clock:              clock,
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
-		current:            newState(conf),
-		next:               newState(conf),
 	}
-	pd.metricsCollector = metrics.NewBeaconMetricsCollector(pd.gatherMetricsData, logger.WithName("metrics"))
+	for _, opt := range opts {
+		opt(pd)
+	}
+
+	pd.ctx, pd.cancel = context.WithCancel(pd.ctx)
+	pd.theta = new(big.Float).SetRat(pd.config.Theta)
+	if pd.weakCoin == nil {
+		pd.weakCoin = weakcoin.New(publisher, vrfSigner,
+			weakcoin.WithLog(pd.logger.WithName("weakCoin")),
+			weakcoin.WithMaxRound(pd.config.RoundsNumber),
+		)
+	}
+	pd.current = newState(pd.config)
+	pd.next = newState(pd.config)
+	pd.metricsCollector = metrics.NewBeaconMetricsCollector(pd.gatherMetricsData, pd.logger.WithName("metrics"))
 	return pd
 }
 
 // ProtocolDriver is the driver for the beacon protocol.
 type ProtocolDriver struct {
-	running    uint64
 	inProtocol uint64
+	logger     log.Log
 	eg         errgroup.Group
+	ctx        context.Context
 	cancel     context.CancelFunc
-
-	logger log.Log
+	startOnce  sync.Once
 
 	config      Config
 	nodeID      types.NodeID
 	sync        system.SyncStateProvider
 	publisher   pubsub.Publisher
 	atxDB       activationDB
-	edSigner    signing.Signer
-	edVerifier  signing.VerifyExtractor
-	vrfSigner   signing.Signer
-	vrfVerifier signing.Verifier
+	edSigner    *signing.EdSigner
+	vrfSigner   *signing.VRFSigner
+	edVerifier  signing.EDVerifier
+	vrfVerifier signing.VRFVerifier
 	weakCoin    coin
 	theta       *big.Float
 
@@ -158,39 +192,29 @@ func (pd *ProtocolDriver) setMetricsRegistry(registry *prometheus.Registry) {
 }
 
 // Start starts listening for layers and outputs.
-func (pd *ProtocolDriver) Start(ctx context.Context) error {
-	if !atomic.CompareAndSwapUint64(&pd.running, 0, 1) {
-		pd.logger.WithContext(ctx).Warning("attempt to start beacon protocol more than once")
-		return nil
-	}
-	pd.logger.Info("starting %v with the following config: %+v", protoName, pd.config)
-	if pd.sync == nil {
-		pd.logger.Panic("update sync state provider can't be nil")
-	}
+func (pd *ProtocolDriver) Start(ctx context.Context) {
+	pd.startOnce.Do(func() {
+		pd.logger.With().Info("starting beacon protocol", log.String("config", fmt.Sprintf("%+v", pd.config)))
+		if pd.sync == nil {
+			pd.logger.Panic("update sync state provider can't be nil")
+		}
 
-	ctx, cancel := context.WithCancel(ctx)
-	pd.cancel = cancel
+		pd.layerTicker = pd.clock.Subscribe()
+		pd.metricsCollector.Start(nil)
 
-	pd.layerTicker = pd.clock.Subscribe()
-	pd.metricsCollector.Start(nil)
-
-	pd.eg.Go(func() error {
-		pd.listenLayers(ctx)
-		return fmt.Errorf("context error: %w", ctx.Err())
+		pd.eg.Go(func() error {
+			pd.listenLayers(ctx)
+			return nil
+		})
 	})
-
-	return nil
 }
 
 // Close closes ProtocolDriver.
 func (pd *ProtocolDriver) Close() {
-	if !atomic.CompareAndSwapUint64(&pd.running, 1, 0) {
-		return
-	}
-	pd.logger.Info("closing %v", protoName)
-	pd.cancel()
-	pd.metricsCollector.Stop()
+	pd.logger.Info("closing beacon protocol")
 	pd.clock.Unsubscribe(pd.layerTicker)
+	pd.metricsCollector.Stop()
+	pd.cancel()
 	pd.logger.Info("waiting for beacon goroutines to finish")
 	if err := pd.eg.Wait(); err != nil {
 		pd.logger.With().Info("received error waiting for goroutines to finish", log.Err(err))
@@ -198,9 +222,14 @@ func (pd *ProtocolDriver) Close() {
 	pd.logger.Info("beacon goroutines finished")
 }
 
-// isClosed returns true if background workers are not running.
+// isClosed returns true if the beacon protocol is shutting down.
 func (pd *ProtocolDriver) isClosed() bool {
-	return atomic.LoadUint64(&pd.running) == 0
+	select {
+	case <-pd.ctx.Done():
+		return true
+	default:
+		return false
+	}
 }
 
 // ReportBeaconFromBallot reports the beacon value in a ballot along with the smesher's weight unit.
@@ -265,7 +294,7 @@ func (pd *ProtocolDriver) findMostWeightedBeaconForEpoch(epoch types.EpochID) ty
 	numBallots := 0
 	for k, v := range epochBeacons {
 		if v.weight > mostWeight {
-			beacon = types.Beacon(k)
+			beacon = k
 			mostWeight = v.weight
 		}
 		numBallots += len(v.ballots)
@@ -399,7 +428,7 @@ func (pd *ProtocolDriver) listenLayers(ctx context.Context) {
 
 	for {
 		select {
-		case <-ctx.Done():
+		case <-pd.ctx.Done():
 			return
 		case layer := <-pd.layerTicker:
 			pd.logger.With().Debug("received tick", layer)
@@ -556,7 +585,11 @@ func (pd *ProtocolDriver) runProposalPhase(ctx context.Context, epoch types.Epoc
 		return nil
 	})
 
-	<-ctx.Done()
+	select {
+	case <-ctx.Done():
+	case <-pd.ctx.Done():
+		return
+	}
 
 	pd.markProposalPhaseFinished(epoch)
 
@@ -959,7 +992,7 @@ func (pd *ProtocolDriver) gatherMetricsData() ([]*metrics.BeaconStats, *metrics.
 		for beacon, stats := range beacons {
 			stat := &metrics.BeaconStats{
 				Epoch:  epoch,
-				Beacon: types.Beacon(beacon).ShortString(),
+				Beacon: beacon.ShortString(),
 				Count:  uint64(len(stats.ballots)),
 				Weight: stats.weight,
 			}
