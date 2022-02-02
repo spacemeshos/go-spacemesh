@@ -40,7 +40,6 @@ type DB struct {
 
 // NewPersistentMeshDB creates an instance of a mesh database.
 func NewPersistentMeshDB(db *sql.Database, blockCacheSize int, logger log.Log) (*DB, error) {
-	var err error
 	mdb := &DB{
 		Log:        logger,
 		blockCache: newBlockCache(blockCacheSize * layerSize),
@@ -50,23 +49,23 @@ func NewPersistentMeshDB(db *sql.Database, blockCacheSize int, logger log.Log) (
 	gLayer := types.GenesisLayer()
 	for _, b := range gLayer.Ballots() {
 		mdb.Log.With().Info("adding genesis ballot", b.ID(), b.LayerIndex)
-		if err = mdb.AddBallot(b); err != nil {
+		if err := mdb.AddBallot(b); err != nil {
 			mdb.Log.With().Error("error inserting genesis ballot to db", b.ID(), b.LayerIndex, log.Err(err))
 		}
 	}
 	for _, b := range gLayer.Blocks() {
 		mdb.Log.With().Info("adding genesis block", b.ID(), b.LayerIndex)
-		if err = mdb.AddBlock(b); err != nil {
+		if err := mdb.AddBlock(b); err != nil {
 			mdb.Log.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
 		}
-		if err = mdb.SaveContextualValidity(b.ID(), b.LayerIndex, true); err != nil {
+		if err := mdb.SaveContextualValidity(b.ID(), b.LayerIndex, true); err != nil {
 			mdb.Log.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
 		}
 	}
-	if err = mdb.SaveHareConsensusOutput(context.Background(), gLayer.Index(), types.GenesisBlockID); err != nil {
+	if err := mdb.SaveHareConsensusOutput(context.Background(), gLayer.Index(), types.GenesisBlockID); err != nil {
 		log.With().Error("error inserting genesis block as hare output to db", gLayer.Index(), log.Err(err))
 	}
-	return mdb, err
+	return mdb, nil
 }
 
 // PersistentData checks to see if db is empty.
