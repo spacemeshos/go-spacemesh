@@ -67,4 +67,4 @@ CREATE TABLE beacons
 (
     epoch  INT NOT NULL PRIMARY KEY,
     beacon CHAR(4)
-);
+) WITHOUT ROWID;
