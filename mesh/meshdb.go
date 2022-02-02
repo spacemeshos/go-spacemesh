@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -43,15 +41,8 @@ type DB struct {
 }
 
 // NewPersistentMeshDB creates an instance of a mesh database.
-func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, error) {
-	if err := os.MkdirAll(path, os.ModePerm); err != nil {
-		return nil, fmt.Errorf("failed to create %s: %w", path, err)
-	}
-	db, err := sql.Open("file:" + filepath.Join(path, "state.sql"))
-	if err != nil {
-		return nil, fmt.Errorf("open sqlite db %w", err)
-	}
-
+func NewPersistentMeshDB(db *sql.Database, blockCacheSize int, logger log.Log) (*DB, error) {
+	var err error
 	mdb := &DB{
 		Log:        logger,
 		blockCache: newBlockCache(blockCacheSize * layerSize),
@@ -80,7 +71,7 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 	return mdb, err
 }
 
-// PersistentData checks to see if db is empty.
+// PersistentData chcks to see if db is empty.
 func (m *DB) PersistentData() bool {
 	lid, err := layers.GetByStatus(m.db, layers.Latest)
 	if err != nil && errors.Is(err, sql.ErrNotFound) || (lid == types.LayerID{}) {
