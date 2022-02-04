@@ -132,11 +132,6 @@ func (m *DB) Blocks() database.Getter {
 	return newBlockFetcherDB(m)
 }
 
-// Transactions exports the transactions DB.
-func (m *DB) Transactions() database.Getter {
-	return &txFetcher{mdb: m}
-}
-
 // AddBallot adds a ballot to the database.
 func (m *DB) AddBallot(b *types.Ballot) error {
 	mal, err := identities.IsMalicious(m.db, b.SmesherID().Bytes())
@@ -618,14 +613,17 @@ func (db *BallotFetcherDB) Get(hash []byte) ([]byte, error) {
 }
 
 type txFetcher struct {
-	mdb *DB
+	m *Mesh
 }
 
 // Get transaction blob, by transaction id.
 func (db *txFetcher) Get(hash []byte) ([]byte, error) {
 	id := types.TransactionID{}
 	copy(id[:], hash)
-	return transactions.GetBlob(db.mdb.db, id)
+	if tx, err := db.m.txPool.Get(id); err == nil && tx != nil {
+		return codec.Encode(tx)
+	}
+	return transactions.GetBlob(db.m.db, id)
 }
 
 // LayerIDs is a utility function that finds namespaced IDs saved in a database as a key.

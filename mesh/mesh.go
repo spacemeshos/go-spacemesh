@@ -759,6 +759,11 @@ func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.A
 	return atxs, mIds
 }
 
+// Transactions exports the transactions DB.
+func (msh *Mesh) Transactions() database.Getter {
+	return &txFetcher{m: msh}
+}
+
 func minLayer(i, j types.LayerID) types.LayerID {
 	if i.Before(j) {
 		return i

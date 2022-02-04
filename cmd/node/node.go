@@ -618,11 +618,11 @@ func (app *App) initServices(ctx context.Context,
 		blocks.WithLogger(app.addLogger(BlockHandlerLogger, lg)))
 
 	dbStores := fetch.LocalDataSource{
-		fetch.BallotDB:   mdb.Ballots(),
-		fetch.BlockDB:    mdb.Blocks(),
+		fetch.BallotDB:   msh.Ballots(),
+		fetch.BlockDB:    msh.Blocks(),
 		fetch.ProposalDB: proposalDB,
 		fetch.ATXDB:      atxdbstore,
-		fetch.TXDB:       mdb.Transactions(),
+		fetch.TXDB:       msh.Transactions(),
 		fetch.POETDB:     poetDbStore,
 	}
 	dataHanders := layerfetcher.DataHandlers{
