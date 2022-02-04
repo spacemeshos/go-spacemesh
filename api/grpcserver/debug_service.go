@@ -2,14 +2,17 @@ package grpcserver
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/spacemeshos/go-spacemesh/api"
 	"github.com/spacemeshos/go-spacemesh/common/util"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -64,4 +67,55 @@ func (d DebugService) Accounts(_ context.Context, in *empty.Empty) (*pb.Accounts
 // NetworkInfo query provides NetworkInfoResponse.
 func (d DebugService) NetworkInfo(ctx context.Context, _ *empty.Empty) (*pb.NetworkInfoResponse, error) {
 	return &pb.NetworkInfoResponse{Id: d.identity.ID().String()}, nil
+}
+
+// ProposalsStream streams all proposals confirmed by hare.
+func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_ProposalsStreamServer) error {
+	var (
+		eventch <-chan interface{}
+		fullch  <-chan struct{}
+	)
+	if sub := events.SubcribeProposals(); sub != nil {
+		eventch, fullch = consumeEvents(stream.Context(), sub)
+	}
+	if eventch == nil || fullch == nil {
+		return status.Errorf(codes.FailedPrecondition, "event reporting is not enabled")
+	}
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case <-fullch:
+			return status.Errorf(codes.Canceled, "buffer is full")
+		case ev := <-eventch:
+			pev := ev.(events.EventProposal)
+			if err := stream.Send(castEventProposal(&pev)); err != nil {
+				return fmt.Errorf("send to stream: %w", err)
+			}
+		}
+	}
+}
+
+func castEventProposal(ev *events.EventProposal) *pb.Proposal {
+	proposal := &pb.Proposal{
+		Layer:   convertLayerID(ev.Proposal.LayerIndex),
+		Smesher: &pb.SmesherId{Id: ev.Proposal.SmesherID().Bytes()},
+		Ballot:  ev.Proposal.Ballot.ID().Bytes(),
+	}
+	if ev.Proposal.EpochData != nil {
+		proposal.EpochData = &pb.Proposal_Data{Data: &pb.EpochData{
+			Beacon: ev.Proposal.EpochData.Beacon.Bytes(),
+		}}
+	} else {
+		proposal.EpochData = &pb.Proposal_Reference{Reference: ev.Proposal.RefBallot.Bytes()}
+	}
+	proposal.Status = pb.Proposal_Status(ev.Status)
+	proposal.Eligibilities = make([]*pb.Eligibility, 0, len(ev.Proposal.EligibilityProofs))
+	for _, el := range ev.Proposal.Ballot.EligibilityProofs {
+		proposal.Eligibilities = append(proposal.Eligibilities, &pb.Eligibility{
+			J:         el.J,
+			Signature: el.Sig,
+		})
+	}
+	return proposal
 }

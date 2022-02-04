@@ -19,7 +19,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -506,7 +505,6 @@ func (pd *ProtocolDriver) handleEpoch(ctx context.Context, epoch types.EpochID) 
 	// K rounds passed
 	// After K rounds had passed, tally up votes for proposals using simple tortoise vote counting
 	beacon := calcBeacon(logger, lastRoundOwnVotes)
-	events.ReportCalculatedBeacon(targetEpoch, beacon.ShortString())
 
 	if err := pd.setBeacon(targetEpoch, beacon); err != nil {
 		logger.With().Error("failed to set beacon", log.Err(err))

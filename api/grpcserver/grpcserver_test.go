@@ -1978,7 +1978,7 @@ func TestTransactionService(t *testing.T) {
 
 			events.CloseEventReporter()
 
-			require.NoError(t, events.InitializeEventReporterWithOptions(""))
+			events.InitializeReporter()
 
 			stream, err := c.TransactionsStateStream(context.Background(), req)
 			require.NoError(t, err)
@@ -2023,7 +2023,7 @@ func TestTransactionService(t *testing.T) {
 			}()
 
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("")
+			events.InitializeReporter()
 			require.NoError(t, err)
 
 			// Wait until stream starts receiving to ensure that it catches the event.
@@ -2082,8 +2082,7 @@ func TestTransactionService(t *testing.T) {
 
 			// SUBMIT
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("")
-			require.NoError(t, err)
+			events.InitializeReporter()
 			serializedTx, err := types.InterfaceToBytes(globalTx)
 			require.NoError(t, err, "error serializing tx")
 			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
@@ -2128,7 +2127,7 @@ func TestTransactionService(t *testing.T) {
 			}()
 
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("")
+			events.InitializeReporter()
 			require.NoError(t, err)
 
 			// Wait until stream starts receiving to ensure that it catches the event.
@@ -2163,7 +2162,7 @@ func TestTransactionService(t *testing.T) {
 			}()
 
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("")
+			events.InitializeReporter()
 			require.NoError(t, err)
 
 			time.Sleep(100 * time.Millisecond)
@@ -2331,8 +2330,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("")
-	require.NoError(t, err)
+	events.InitializeReporter()
 
 	// Wait until stream starts receiving to ensure that it catches the event.
 	time.Sleep(10 * time.Millisecond)
@@ -2435,8 +2433,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("")
-	require.NoError(t, err)
+	events.InitializeReporter()
 
 	// Ensure receiving has started.
 	time.Sleep(10 * time.Millisecond)
@@ -2554,8 +2551,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("")
-	require.NoError(t, err)
+	events.InitializeReporter()
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -2656,7 +2652,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	}()
 
 	// initialize the streamer
-	require.NoError(t, events.InitializeEventReporterWithOptions(""))
+	events.InitializeReporter()
 
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
@@ -3076,8 +3072,7 @@ func TestEventsReceived(t *testing.T) {
 	}
 
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("")
-	require.NoError(t, err)
+	events.InitializeReporter()
 
 	txStream, err := txClient.TransactionsStateStream(context.Background(), txReq)
 	require.NoError(t, err)

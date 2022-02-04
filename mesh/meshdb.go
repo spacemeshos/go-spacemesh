@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -206,7 +205,6 @@ func (m *DB) AddBlock(b *types.Block) error {
 		}
 		return err
 	}
-	events.ReportNewBlock(b)
 	return nil
 }
 

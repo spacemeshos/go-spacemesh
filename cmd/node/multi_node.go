@@ -1,29 +1,22 @@
 package node
 
 import (
-	"bufio"
 	"context"
-	"errors"
 	"fmt"
-	"io"
 	"io/ioutil"
-	"os"
 	"strconv"
 	"sync"
 	"time"
 
-	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/spacemeshos/post/initialization"
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
 	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
 	"github.com/spacemeshos/go-spacemesh/beacon"
-	"github.com/spacemeshos/go-spacemesh/collector"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/config"
 	"github.com/spacemeshos/go-spacemesh/eligibility"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -253,188 +246,4 @@ func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	}
 
 	return smApp, err
-}
-
-// StartMultiNode Starts the run of a number of nodes, running in process consensus between them.
-// this also runs a single transaction between the nodes.
-func StartMultiNode(logger log.Log, numOfInstances, layerAvgSize int, runTillLayer uint32, dbPath string) {
-	cfg := getTestDefaultConfig()
-	cfg.LayerAvgSize = layerAvgSize
-	mesh, err := mocknet.FullMeshLinked(context.Background(), numOfInstances)
-	if err != nil {
-		logger.With().Panic("failed to initialize mocknet", log.Err(err))
-	}
-	path := dbPath + time.Now().Format(time.RFC3339)
-
-	genesisTime := time.Now().Add(20 * time.Second).Format(time.RFC3339)
-
-	poetHarness, err := activation.NewHTTPPoetHarness(false)
-	if err != nil {
-		logger.With().Panic("failed creating poet client harness", log.Err(err))
-	}
-	defer func() {
-		err := poetHarness.Teardown(true)
-		if err != nil {
-			logger.With().Error("failed to tear down poet harness", log.Err(err))
-		}
-	}()
-
-	rolacle := eligibility.New(logger)
-	gTime, err := time.Parse(time.RFC3339, genesisTime)
-	if err != nil {
-		logger.With().Error("cannot parse genesis time", log.Err(err))
-	}
-	events.CloseEventPubSub()
-	pubsubAddr := "tcp://localhost:55666"
-	if err := events.InitializeEventReporter(pubsubAddr); err != nil {
-		logger.With().Error("error initializing event reporter", log.Err(err))
-	}
-	clock := NewManualClock(gTime)
-
-	apps := make([]*App, 0, numOfInstances)
-	name := 'a'
-	for i := 0; i < numOfInstances; i++ {
-		dbStorepath := path + string(name)
-		edSgn := signing.NewEdSigner()
-		host, err := p2p.Upgrade(mesh.Hosts()[i], p2p.WithLog(logger), p2p.WithConfig(cfg.P2P))
-		if err != nil {
-			logger.With().Error("failed to initialize host", log.Err(err))
-			return
-		}
-		smApp, err := InitSingleInstance(logger, *cfg, i, genesisTime, dbStorepath, rolacle, poetHarness.HTTPPoetClient, clock, host, edSgn)
-		if err != nil {
-			logger.With().Error("cannot run multi node", log.Err(err))
-			return
-		}
-		apps = append(apps, smApp)
-		name++
-	}
-	mesh.ConnectAllButSelf()
-
-	eventDb := collector.NewMemoryCollector()
-	collect := collector.NewCollector(eventDb, pubsubAddr)
-	for _, a := range apps {
-		a.startServices(context.TODO())
-	}
-	collect.Start(false)
-	ActivateGrpcServer(apps[0])
-
-	go func() {
-		r := bufio.NewReader(poetHarness.Stdout)
-		for {
-			line, _, err := r.ReadLine()
-			if errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed) {
-				return
-			}
-			if err != nil {
-				logger.Error("failed to read poet stdout: %v", err)
-				return
-			}
-
-			logger.Info("[poet stdout] %v\n", string(line))
-		}
-	}()
-	go func() {
-		r := bufio.NewReader(poetHarness.Stderr)
-		for {
-			line, _, err := r.ReadLine()
-			if errors.Is(err, io.EOF) || errors.Is(err, os.ErrClosed) {
-				return
-			}
-			if err != nil {
-				logger.Error("failed to read poet stderr: %v", err)
-				return
-			}
-
-			logger.Info("[poet stderr] %v", string(line))
-		}
-	}()
-
-	if err := poetHarness.Start(context.TODO(), []string{"127.0.0.1:9094"}); err != nil {
-		logger.Panic("failed to start poet server: %v", err)
-	}
-
-	defer GracefulShutdown(apps)
-
-	timeout := time.After(time.Duration(runTillLayer*60) * time.Second)
-
-	startLayer := time.Now()
-	clock.Tick()
-	errors := 0
-loop:
-	for {
-		select {
-		// Got a timeout! fail with a timeout error
-		case <-timeout:
-			logger.Panic("run timed out", err)
-			return
-		default:
-			if errors > 100 {
-				logger.Panic("too many errors and retries")
-				break loop
-			}
-			layer := clock.GetCurrentLayer()
-
-			if layer.GetEpoch().IsGenesis() {
-				time.Sleep(20 * time.Second)
-				clock.Tick()
-				continue
-			}
-
-			if eventDb.GetBlockCreationDone(layer) < numOfInstances {
-				logger.Warning("blocks done in layer %v: %v", layer, eventDb.GetBlockCreationDone(layer))
-				time.Sleep(500 * time.Millisecond)
-				errors++
-				continue
-			}
-			log.Info("all miners tried to create block in %v", layer)
-			if eventDb.GetNumOfCreatedBlocks(layer)*numOfInstances != eventDb.GetReceivedBlocks(layer) {
-				logger.Warning("finished: %v, block received %v layer %v", eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer), layer)
-				time.Sleep(500 * time.Millisecond)
-				errors++
-				continue
-			}
-			logger.Info("all miners got blocks for layer: %v created: %v received: %v", layer, eventDb.GetNumOfCreatedBlocks(layer), eventDb.GetReceivedBlocks(layer))
-			epoch := layer.GetEpoch()
-			if !(eventDb.GetAtxCreationDone(epoch) >= numOfInstances && eventDb.GetAtxCreationDone(epoch)%numOfInstances == 0) {
-				logger.Warning("atx not created %v in epoch %v, created only %v atxs", numOfInstances-eventDb.GetAtxCreationDone(epoch), epoch, eventDb.GetAtxCreationDone(epoch))
-				time.Sleep(500 * time.Millisecond)
-				errors++
-				continue
-			}
-			logger.Info("all miners finished reading %v atxs, layer %v done in %v", eventDb.GetAtxCreationDone(epoch), layer, time.Since(startLayer))
-			for _, atxID := range eventDb.GetCreatedAtx(epoch) {
-				if !eventDb.AtxIDExists(atxID) {
-					logger.Warning("atx %v not propagated", atxID)
-					errors++
-					continue
-				}
-			}
-			beacons := eventDb.GetBeacon(epoch)
-			logger.Info("all miners finished calculating %v beacons, epoch %v done in %v", len(beacons), epoch, time.Since(startLayer))
-			if len(beacons) != 0 {
-				first := beacons[0]
-				for _, beacon := range beacons {
-					if first != beacon {
-						logger.Info("beacons %v and %v differ", first, beacon)
-						errors++
-						continue
-					}
-				}
-			}
-
-			errors = 0
-
-			startLayer = time.Now()
-			clock.Tick()
-
-			if !apps[0].mesh.LatestLayer().Before(types.NewLayerID(runTillLayer)) {
-				break loop
-			}
-			time.Sleep(200 * time.Millisecond)
-		}
-	}
-	events.CloseEventReporter()
-	events.CloseEventPubSub()
-	collect.Stop()
 }

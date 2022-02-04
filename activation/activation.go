@@ -15,7 +15,6 @@ import (
 	"go.uber.org/atomic"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
@@ -348,7 +347,6 @@ func (b *Builder) loop(ctx context.Context) {
 				b.layerClock.GetCurrentLayer(),
 				b.currentEpoch(),
 				log.Err(err))
-			events.ReportAtxCreated(false, uint32(b.currentEpoch()), "")
 
 			switch {
 			case errors.Is(err, ErrATXChallengeExpired):
@@ -514,7 +512,6 @@ func (b *Builder) PublishActivationTx(ctx context.Context) error {
 	}
 
 	b.log.Event().Info(fmt.Sprintf("atx published %v", atx.ID().ShortString()), atx.Fields(size)...)
-	events.ReportAtxCreated(true, uint32(b.currentEpoch()), atx.ShortString())
 
 	select {
 	case <-atxReceived:
