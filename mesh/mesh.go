@@ -653,14 +653,9 @@ func (msh *Mesh) SetZeroBlockLayer(lyr types.LayerID) error {
 func (msh *Mesh) AddTXsFromProposal(ctx context.Context, layerID types.LayerID, proposalID types.ProposalID, txIDs []types.TransactionID) error {
 	logger := msh.WithContext(ctx).WithFields(layerID, proposalID, log.Int("num_txs", len(txIDs)))
 	logger.Debug("adding proposal txs to mesh")
-
-	msh.addTransactionsForBlock(logger, layerID, types.EmptyBlockID, txIDs)
-
-	if err := msh.storeTransactionsFromPool(layerID, types.EmptyBlockID, txIDs); err != nil {
-		logger.With().Error("not all txs were processed", log.Err(err))
+	if err := msh.addTransactionsForBlock(logger, layerID, types.EmptyBlockID, txIDs); err != nil {
+		return err
 	}
-
-	msh.setLatestLayer(layerID)
 	logger.Info("added proposal's txs to database")
 	return nil
 }
@@ -678,20 +673,24 @@ func (msh *Mesh) AddBallot(ballot *types.Ballot) error {
 func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error {
 	logger := msh.WithContext(ctx).WithFields(block.LayerIndex, block.ID(), log.Int("num_txs", len(block.TxIDs)))
 	logger.Debug("adding block txs to mesh")
-
+	if err := msh.addTransactionsForBlock(logger, block.LayerIndex, block.ID(), block.TxIDs); err != nil {
+		return err
+	}
+	if err := msh.AddBlock(block); err != nil {
+		return err
+	}
 	msh.trtl.OnBlock(block)
-
-	msh.addTransactionsForBlock(logger, block.LayerIndex, block.ID(), block.TxIDs)
-	return msh.AddBlock(block)
+	return nil
 }
 
-func (msh *Mesh) addTransactionsForBlock(logger log.Log, layerID types.LayerID, blockID types.BlockID, txIDs []types.TransactionID) {
+func (msh *Mesh) addTransactionsForBlock(logger log.Log, layerID types.LayerID, blockID types.BlockID, txIDs []types.TransactionID) error {
 	if err := msh.storeTransactionsFromPool(layerID, blockID, txIDs); err != nil {
 		logger.With().Error("not all txs were processed", log.Err(err))
+		return err
 	}
-
 	msh.setLatestLayer(layerID)
 	logger.Info("added txs to database")
+	return nil
 }
 
 func (msh *Mesh) invalidateFromPools(txIDs []types.TransactionID) {
