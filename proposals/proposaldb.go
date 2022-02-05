@@ -113,7 +113,7 @@ func (db *DB) AddProposal(ctx context.Context, p *types.Proposal) error {
 		return err
 	}
 	events.ReportNewProposal(p)
-	db.logger.Info("added proposal to database", log.Inline(p))
+	db.logger.With().Info("added proposal to database", log.Inline(p))
 	return nil
 }
 

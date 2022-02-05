@@ -2,7 +2,6 @@ package beacon
 
 import (
 	"encoding/json"
-	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 )
@@ -22,11 +21,6 @@ func (p ProposalMessage) String() string {
 	}
 
 	return string(bytes)
-}
-
-type proposalMessageWithReceiptData struct {
-	message      ProposalMessage
-	receivedTime time.Time
 }
 
 // FirstVotingMessageBody is FirstVotingMessage without a signature.

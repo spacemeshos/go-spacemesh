@@ -179,7 +179,7 @@ func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	wc.mu.Lock()
 	logger := wc.logger.WithContext(ctx).WithFields(wc.epoch, round)
-	logger.Info("started round")
+	logger.Info("started beacon weak coin round")
 	wc.roundStarted = true
 	wc.round = round
 	wc.smallestProposal = nil

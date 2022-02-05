@@ -1,7 +1,6 @@
 package beacon
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"time"
@@ -11,12 +10,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
 
-var errFirstRoundVoteMissing = errors.New("no first round votes for miner")
-
 // state does the data management for epoch specific data for the protocol.
 // not thread-safe. it relies on ProtocolDriver's thread-safety mechanism.
 type state struct {
 	epochWeight uint64
+	atxs        []types.ATXID
 	// the original proposals as received, bucketed by validity.
 	incomingProposals proposals
 	// minerPublicKey -> list of proposal.
@@ -27,30 +25,40 @@ type state struct {
 	hasProposed               map[string]struct{}
 	hasVoted                  []map[string]struct{}
 	proposalPhaseFinishedTime time.Time
-	proposalChan              chan *proposalMessageWithReceiptData
 	proposalChecker           eligibilityChecker
 }
 
-func newState(cfg Config) *state {
+func newState(logger log.Log, cfg Config, epochWeight uint64, atxs []types.ATXID) *state {
 	return &state{
+		epochWeight:             epochWeight,
+		atxs:                    atxs,
 		firstRoundIncomingVotes: make(map[string]proposalList),
 		votesMargin:             map[string]*big.Int{},
 		hasProposed:             make(map[string]struct{}),
 		hasVoted:                make([]map[string]struct{}, cfg.RoundsNumber),
-		proposalChan:            make(chan *proposalMessageWithReceiptData, proposalChanCapacity),
+		proposalChecker:         createProposalChecker(logger, cfg.Kappa, cfg.Q, epochWeight),
 	}
 }
 
-func (s *state) init(epochWeight uint64, checker eligibilityChecker) {
-	s.epochWeight = epochWeight
-	s.proposalChecker = checker
+func (s *state) addValidProposal(p []byte) {
+	if s.incomingProposals.valid == nil {
+		s.incomingProposals.valid = make(map[string]struct{})
+	}
+	s.incomingProposals.valid[string(p)] = struct{}{}
 }
 
-func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList [][]byte) {
+func (s *state) addPotentiallyValidProposal(p []byte) {
+	if s.incomingProposals.potentiallyValid == nil {
+		s.incomingProposals.potentiallyValid = make(map[string]struct{})
+	}
+	s.incomingProposals.potentiallyValid[string(p)] = struct{}{}
+}
+
+func (s *state) setMinerFirstRoundVote(minerPK *signing.PublicKey, voteList proposalList) {
 	s.firstRoundIncomingVotes[string(minerPK.Bytes())] = voteList
 }
 
-func (s *state) getMinerFirstRoundVote(minerPK *signing.PublicKey) ([][]byte, error) {
+func (s *state) getMinerFirstRoundVote(minerPK *signing.PublicKey) (proposalList, error) {
 	p, ok := s.firstRoundIncomingVotes[string(minerPK.Bytes())]
 	if !ok {
 		return nil, fmt.Errorf("no first round votes for miner %v", minerPK.String())

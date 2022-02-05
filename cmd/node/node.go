@@ -72,7 +72,6 @@ const (
 	StateDbLogger          = "stateDbStore"
 	AtxDbStoreLogger       = "atxDbStore"
 	BeaconLogger           = "beacon"
-	WeakCoinLogger         = "weakCoin"
 	PoetDbStoreLogger      = "poetDbStore"
 	StoreLogger            = "store"
 	PoetDbLogger           = "poetDb"
@@ -699,11 +698,11 @@ func (app *App) initServices(ctx context.Context,
 
 	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
 	app.host.Register(beacon.ProposalProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedProposalMessage))
-	app.host.Register(beacon.FirstVoteProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedFirstVotingMessage))
-	app.host.Register(beacon.FollowingVotingProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedFollowingVotingMessage))
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
+	app.host.Register(beacon.FirstVotesProtocol,
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
+	app.host.Register(beacon.FollowingVotesProtocol,
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(proposals.NewProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
 	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxDB.HandleGossipAtx))
 	app.host.Register(svm.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, state.HandleGossipTransaction))
