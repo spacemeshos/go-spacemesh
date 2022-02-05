@@ -36,6 +36,7 @@ const (
 var (
 	errBeaconNotCalculated = errors.New("beacon is not calculated for this epoch")
 	errZeroEpochWeight     = errors.New("zero epoch weight provided")
+	errDifferentBeacon     = errors.New("different beacons detected")
 )
 
 type (
@@ -364,9 +365,19 @@ func (pd *ProtocolDriver) setBeacon(targetEpoch types.EpochID, beacon types.Beac
 }
 
 func (pd *ProtocolDriver) persistBeacon(epoch types.EpochID, beacon types.Beacon) error {
-	if err := beacons.Add(pd.db, epoch, beacon); err != nil && err != sql.ErrObjectExists {
-		pd.logger.With().Error("failed to persist beacon", epoch, beacon, log.Err(err))
-		return fmt.Errorf("persist beacon: %w", err)
+	if err := beacons.Add(pd.db, epoch, beacon); err != nil {
+		if !errors.Is(err, sql.ErrObjectExists) {
+			pd.logger.With().Error("failed to persist beacon", epoch, beacon, log.Err(err))
+			return fmt.Errorf("persist beacon: %w", err)
+		}
+		// when syncing, multiple ballots come in concurrently and may cause beacon to be determined
+		// and persisted at the same time.
+		savedBeacon := pd.getBeacon(epoch)
+		if savedBeacon != beacon {
+			pd.logger.With().Error("trying to persist different beacon", epoch, beacon, log.String("saved_beacon", savedBeacon.ShortString()))
+			return errDifferentBeacon
+		}
+		pd.logger.With().Warning("beacon already exists for epoch", epoch, beacon)
 	}
 	return nil
 }
@@ -421,7 +432,7 @@ func (pd *ProtocolDriver) setProposalTimeForNextEpoch() {
 	epoch := pd.currentEpoch()
 	nextEpochStart := pd.clock.LayerToTime((epoch + 1).FirstLayer())
 	t := nextEpochStart.Add(-1 * pd.config.GracePeriodDuration)
-	pd.logger.With().Info("earliest proposal time for epoch",
+	pd.logger.With().Debug("earliest proposal time for epoch",
 		epoch+1,
 		log.Time("earliest_time", t))
 
@@ -499,7 +510,7 @@ func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
 		nextRoundStartTime = now.Add(pd.config.VotingRoundDuration + pd.config.WeakCoinRoundDuration)
 	}
 	earliestVoteTime := nextRoundStartTime.Add(-1 * pd.config.GracePeriodDuration)
-	pd.logger.With().Info("earliest vote time for next round",
+	pd.logger.With().Debug("earliest vote time for next round",
 		round,
 		log.Uint32("next_round", uint32(round+1)),
 		log.Time("earliest_time", earliestVoteTime))

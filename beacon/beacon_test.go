@@ -554,6 +554,18 @@ func TestBeacon_findMostWeightedBeaconForEpoch_NoBeacon(t *testing.T) {
 	assert.Equal(t, types.EmptyBeacon, got)
 }
 
+func TestBeacon_persistBeacon(t *testing.T) {
+	tpd := setUpProtocolDriver(t)
+	epoch := types.EpochID(5)
+	beacon := types.RandomBeacon()
+	require.NoError(t, tpd.setBeacon(epoch, beacon))
+
+	// saving it again won't cause error
+	assert.NoError(t, tpd.persistBeacon(epoch, beacon))
+	// but saving a different one will
+	assert.ErrorIs(t, tpd.persistBeacon(epoch, types.RandomBeacon()), errDifferentBeacon)
+}
+
 func TestBeacon_atxThresholdFraction(t *testing.T) {
 	t.Parallel()
 
