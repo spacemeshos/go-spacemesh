@@ -147,7 +147,10 @@ type ProtocolDriver struct {
 
 	mu sync.RWMutex
 
-	roundInProgress types.RoundID
+	// these fields are separate from state because we don't want to pre-maturely create a state
+	// for proposals in epoch currentEpoch+1, because we may not have all ATXs for currentEpoch yet.
+	roundInProgress                        types.RoundID
+	earliestProposalTime, earliestVoteTime time.Time
 	// states for the current epoch and the next epoch. we accept early proposals for the next epoch.
 	// state for an epoch is created on demand:
 	// - when the first proposal of the epoch comes in
@@ -197,6 +200,7 @@ func (pd *ProtocolDriver) Start(ctx context.Context) {
 		pd.layerTicker = pd.clock.Subscribe()
 		pd.metricsCollector.Start(nil)
 
+		pd.setProposalTimeForNextEpoch()
 		pd.eg.Go(func() error {
 			pd.listenLayers(ctx)
 			return nil
@@ -413,6 +417,19 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 	return pd.states[epoch], nil
 }
 
+func (pd *ProtocolDriver) setProposalTimeForNextEpoch() {
+	epoch := pd.currentEpoch()
+	nextEpochStart := pd.clock.LayerToTime((epoch + 1).FirstLayer())
+	t := nextEpochStart.Add(-1 * pd.config.GracePeriodDuration)
+	pd.logger.With().Info("earliest proposal time for epoch",
+		epoch+1,
+		log.Time("earliest_time", t))
+
+	pd.mu.Lock()
+	defer pd.mu.Unlock()
+	pd.earliestProposalTime = t
+}
+
 func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) ([]types.ATXID, uint64, error) {
 	s, err := pd.initEpochStateIfNotPresent(logger, epoch)
 	if err != nil {
@@ -422,6 +439,7 @@ func (pd *ProtocolDriver) setupEpoch(logger log.Log, epoch types.EpochID) ([]typ
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	pd.roundInProgress = types.FirstRound
+	pd.earliestVoteTime = time.Time{}
 
 	return s.atxs, s.epochWeight, nil
 }
@@ -461,6 +479,7 @@ func (pd *ProtocolDriver) listenLayers(ctx context.Context) {
 			pd.logger.With().Debug("received tick", layer)
 			if layer.FirstInEpoch() {
 				epoch := layer.GetEpoch()
+				pd.setProposalTimeForNextEpoch()
 				pd.logger.With().Info("first layer in epoch", layer, epoch)
 				pd.eg.Go(func() error {
 					pd.onNewEpoch(ctx, epoch)
@@ -472,9 +491,23 @@ func (pd *ProtocolDriver) listenLayers(ctx context.Context) {
 }
 
 func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
+	now := time.Now()
+	var nextRoundStartTime time.Time
+	if round == types.FirstRound {
+		nextRoundStartTime = now.Add(pd.config.FirstVotingRoundDuration)
+	} else {
+		nextRoundStartTime = now.Add(pd.config.VotingRoundDuration + pd.config.WeakCoinRoundDuration)
+	}
+	earliestVoteTime := nextRoundStartTime.Add(-1 * pd.config.GracePeriodDuration)
+	pd.logger.With().Info("earliest vote time for next round",
+		round,
+		log.Uint32("next_round", uint32(round+1)),
+		log.Time("earliest_time", earliestVoteTime))
+
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 	pd.roundInProgress = round
+	pd.earliestVoteTime = earliestVoteTime
 }
 
 func (pd *ProtocolDriver) onNewEpoch(ctx context.Context, epoch types.EpochID) {

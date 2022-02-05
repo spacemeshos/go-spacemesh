@@ -52,7 +52,7 @@ func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, pid peer.I
 
 // HandleProposal handles beacon proposal from gossip.
 func (pd *ProtocolDriver) HandleProposal(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
-	if pd.isClosed() || !pd.isInProtocol() {
+	if pd.isClosed() {
 		pd.logger.WithContext(ctx).Debug("beacon protocol shutting down, dropping msg")
 		return pubsub.ValidationIgnore
 	}
@@ -74,7 +74,7 @@ func (pd *ProtocolDriver) handleProposal(ctx context.Context, pid peer.ID, msg [
 		return errMalformedMessage
 	}
 
-	if !pd.isProposalTimely(&m) {
+	if !pd.isProposalTimely(&m, receivedTime) {
 		logger.With().Warning("proposal too early", m.EpochID, log.Time("received_at", receivedTime))
 		return errUntimelyMessage
 	}
@@ -371,7 +371,7 @@ func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, pid peer.ID,
 	}
 
 	// don't accept votes from future rounds
-	if !pd.isVoteTimely(&m) {
+	if !pd.isVoteTimely(&m, receivedTime) {
 		logger.With().Warning("following votes too early", m.RoundID, log.Time("received_at", receivedTime))
 		return errUntimelyMessage
 	}
@@ -491,7 +491,7 @@ func (pd *ProtocolDriver) currentRound() types.RoundID {
 	return pd.roundInProgress
 }
 
-func (pd *ProtocolDriver) isProposalTimely(p *ProposalMessage) bool {
+func (pd *ProtocolDriver) isProposalTimely(p *ProposalMessage, receivedTime time.Time) bool {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
 
@@ -500,15 +500,21 @@ func (pd *ProtocolDriver) isProposalTimely(p *ProposalMessage) bool {
 	case currentEpoch:
 		return true
 	case currentEpoch + 1:
-		return true
+		return receivedTime.After(pd.earliestProposalTime)
 	}
 	return false
 }
 
-func (pd *ProtocolDriver) isVoteTimely(m *FollowingVotingMessage) bool {
+func (pd *ProtocolDriver) isVoteTimely(m *FollowingVotingMessage, receivedTime time.Time) bool {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	return m.RoundID == pd.roundInProgress
+	switch m.RoundID {
+	case pd.roundInProgress:
+		return true
+	case pd.roundInProgress + 1:
+		return receivedTime.After(pd.earliestVoteTime)
+	}
+	return false
 }
 
 func (pd *ProtocolDriver) checkProposalEligibility(logger log.Log, epoch types.EpochID, vrfSig []byte) bool {
