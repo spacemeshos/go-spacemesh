@@ -17,7 +17,7 @@ var (
 	// ErrNotFound is returned if requested record is not found.
 	// TODO(dshulyak) is an alias to datatabase.ErrNotFound until full transition is implemented.
 	ErrNotFound = database.ErrNotFound
-	// ErrObjectExists is returned if database contraints didn't allow to insert an object.
+	// ErrObjectExists is returned if database constraints didn't allow to insert an object.
 	ErrObjectExists = errors.New("database: object exists")
 )
 

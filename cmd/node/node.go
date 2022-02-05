@@ -52,6 +52,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/svm"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -70,7 +71,6 @@ const (
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
-	AtxDbStoreLogger       = "atxDbStore"
 	BeaconLogger           = "beacon"
 	WeakCoinLogger         = "weakCoin"
 	PoetDbStoreLogger      = "poetDbStore"
@@ -481,12 +481,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, stateDBStore)
 
-	atxDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create ATX DB: %w", err)
-	}
-	app.closers = append(app.closers, atxDBStore)
-
 	poetDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create PoET DB: %w", err)
@@ -539,7 +533,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxDB := activation.NewDB(atxDBStore, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	atxDB := activation.NewDB(sqlDB, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 
 	edVerifier := signing.NewEDVerifier()
 	vrfVerifier := signing.VRFVerifier{}
@@ -625,7 +619,7 @@ func (app *App) initServices(ctx context.Context,
 		fetch.BallotDB:   mdb.Ballots(),
 		fetch.BlockDB:    mdb.Blocks(),
 		fetch.ProposalDB: proposalDB,
-		fetch.ATXDB:      atxDBStore,
+		fetch.ATXDB:      atxs.FetchAdapter{DB: sqlDB},
 		fetch.TXDB:       mdb.Transactions(),
 		fetch.POETDB:     poetDBStore,
 	}

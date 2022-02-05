@@ -21,6 +21,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	mmocks "github.com/spacemeshos/go-spacemesh/mesh/mocks"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/syncer/mocks"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -129,7 +130,7 @@ func feedLayerResult(from, to types.LayerID, mf *mockFetcher, msh *mesh.Mesh) {
 
 func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 	memdb := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxStore := database.NewMemDatabase()
+	atxStore := sql.InMemory()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
 	atxdb := activation.NewDB(atxStore, nil,
 		activation.NewIdentityStore(database.NewMemDatabase()),
@@ -1138,7 +1139,7 @@ func TestSyncMissingLayer(t *testing.T) {
 	failed := last.Sub(1)
 
 	memdb := mesh.NewMemMeshDB(lg.WithName("meshDB"))
-	atxStore := database.NewMemDatabase()
+	atxStore := sql.InMemory()
 	goldenATXID := types.ATXID(types.HexToHash32("77777"))
 	atxdb := activation.NewDB(atxStore, nil,
 		activation.NewIdentityStore(database.NewMemDatabase()),

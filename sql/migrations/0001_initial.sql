@@ -68,3 +68,16 @@ CREATE TABLE beacons
     epoch  INT NOT NULL PRIMARY KEY,
     beacon CHAR(4)
 ) WITHOUT ROWID;
+
+CREATE TABLE atxs
+(
+    id        CHAR(32) PRIMARY KEY,
+    layer     INT NOT NULL,
+    epoch     INT NOT NULL,
+    smesher   CHAR(64),
+    atx       BLOB,
+    timestamp INT NOT NULL
+);
+
+
+-- TODO(nkryuchkov): create indices for atxs
