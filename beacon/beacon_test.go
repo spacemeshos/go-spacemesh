@@ -18,11 +18,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
-	dbMocks "github.com/spacemeshos/go-spacemesh/database/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -81,7 +81,7 @@ func setUpProtocolDriver(t *testing.T, mockEpochWeight uint64, hasATX bool) (*Pr
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 	ms := smocks.NewMockSyncStateProvider(ctrl)
 	ms.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	pd := New(conf, minerID, publisher, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
+	pd := New(conf, minerID, publisher, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, sql.InMemory(), clock, logger)
 	require.NotNil(t, pd)
 	pd.SetSyncState(ms)
 	pd.setMetricsRegistry(prometheus.NewPedanticRegistry())
@@ -195,7 +195,7 @@ func TestBeaconWithMetrics(t *testing.T) {
 	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
 	ms := smocks.NewMockSyncStateProvider(ctrl)
 	ms.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	pd := New(conf, minerID, newPublisher(t), mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, database.NewMemDatabase(), clock, logger)
+	pd := New(conf, minerID, newPublisher(t), mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, sql.InMemory(), clock, logger)
 	require.NotNil(t, pd)
 	pd.SetSyncState(ms)
 
@@ -272,7 +272,7 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 	pd := &ProtocolDriver{
 		logger:  logtest.New(t).WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
-		db:      database.NewMemDatabase(),
+		db:      sql.InMemory(),
 	}
 	epoch3 := types.EpochID(3)
 	beacon2 := types.RandomBeacon()
@@ -317,24 +317,16 @@ func TestBeacon_BeaconsWithDatabase(t *testing.T) {
 func TestBeacon_BeaconsWithDatabaseFailure(t *testing.T) {
 	t.Parallel()
 
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockDB := dbMocks.NewMockDatabase(ctrl)
 	pd := &ProtocolDriver{
 		logger:  logtest.New(t).WithName("Beacon"),
 		beacons: make(map[types.EpochID]types.Beacon),
-		db:      mockDB,
+		db:      sql.InMemory(),
 	}
 	epoch := types.EpochID(3)
-	beacon := types.RandomBeacon()
-	mockDB.EXPECT().Put(epoch.ToBytes(), beacon.Bytes()).Return(errUnknown).Times(1)
-	err := pd.persistBeacon(epoch, beacon)
-	assert.ErrorIs(t, err, errUnknown)
 
-	mockDB.EXPECT().Get(epoch.ToBytes()).Return(nil, errUnknown).Times(1)
 	got, errGet := pd.getPersistedBeacon(epoch)
 	assert.Equal(t, types.EmptyBeacon, got)
-	assert.ErrorIs(t, errGet, errUnknown)
+	assert.ErrorIs(t, errGet, sql.ErrNotFound)
 }
 
 func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
@@ -342,7 +334,7 @@ func TestBeacon_BeaconsCleanupOldEpoch(t *testing.T) {
 
 	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
-		db:                 database.NewMemDatabase(),
+		db:                 sql.InMemory(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
@@ -378,7 +370,7 @@ func TestBeacon_ReportBeaconFromBallot(t *testing.T) {
 	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
-		db:                 database.NewMemDatabase(),
+		db:                 sql.InMemory(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
@@ -408,7 +400,7 @@ func TestBeacon_ReportBeaconFromBallot_SameBallot(t *testing.T) {
 	pd := &ProtocolDriver{
 		logger:             logtest.New(t).WithName("Beacon"),
 		config:             UnitTestConfig(),
-		db:                 database.NewMemDatabase(),
+		db:                 sql.InMemory(),
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}

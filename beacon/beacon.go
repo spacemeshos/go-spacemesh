@@ -23,6 +23,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/beacons"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -66,7 +68,7 @@ func New(
 	vrfSigner signing.Signer,
 	vrfVerifier signing.Verifier,
 	weakCoin coin,
-	db database.Database,
+	db *sql.Database,
 	clock layerClock,
 	logger log.Log,
 ) *ProtocolDriver {
@@ -116,7 +118,7 @@ type ProtocolDriver struct {
 
 	clock       layerClock
 	layerTicker chan types.LayerID
-	db          database.Database
+	db          *sql.Database
 
 	mu              sync.RWMutex
 	lastTickedEpoch types.EpochID
@@ -330,7 +332,7 @@ func (pd *ProtocolDriver) setBeacon(targetEpoch types.EpochID, beacon types.Beac
 }
 
 func (pd *ProtocolDriver) persistBeacon(epoch types.EpochID, beacon types.Beacon) error {
-	if err := pd.db.Put(epoch.ToBytes(), beacon.Bytes()); err != nil {
+	if err := beacons.Add(pd.db, epoch, beacon); err != nil {
 		pd.logger.With().Error("failed to persist beacon", epoch, beacon, log.Err(err))
 		return fmt.Errorf("persist beacon: %w", err)
 	}
@@ -339,12 +341,12 @@ func (pd *ProtocolDriver) persistBeacon(epoch types.EpochID, beacon types.Beacon
 }
 
 func (pd *ProtocolDriver) getPersistedBeacon(epoch types.EpochID) (types.Beacon, error) {
-	data, err := pd.db.Get(epoch.ToBytes())
+	data, err := beacons.Get(pd.db, epoch)
 	if err != nil {
 		return types.EmptyBeacon, fmt.Errorf("get from DB: %w", err)
 	}
 
-	return types.BytesToBeacon(data), nil
+	return data, nil
 }
 
 func (pd *ProtocolDriver) setBeginProtocol(ctx context.Context) {

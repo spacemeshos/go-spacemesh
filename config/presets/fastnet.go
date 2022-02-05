@@ -53,7 +53,7 @@ func fastnet() config.Config {
 	conf.SMESHING.Opts.NumUnits = 2
 	conf.SMESHING.Opts.Throttle = true
 
-	conf.Beacon.FirstVotingRoundDuration = 4 * time.Second
+	conf.Beacon.FirstVotingRoundDuration = 10 * time.Second
 	conf.Beacon.GracePeriodDuration = 2 * time.Second
 	conf.Beacon.ProposalDuration = 2 * time.Second
 	conf.Beacon.VotingRoundDuration = 2 * time.Second
