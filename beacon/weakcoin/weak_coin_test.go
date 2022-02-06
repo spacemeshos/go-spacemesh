@@ -1,4 +1,4 @@
-package weakcoin
+package weakcoin_test
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
@@ -19,12 +20,13 @@ import (
 )
 
 func noopBroadcaster(tb testing.TB, ctrl *gomock.Controller) *mocks.MockPublisher {
+	tb.Helper()
 	bc := mocks.NewMockPublisher(ctrl)
 	bc.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().Return(nil)
 	return bc
 }
 
-func broadcastedMessage(tb testing.TB, msg Message) []byte {
+func broadcastedMessage(tb testing.TB, msg weakcoin.Message) []byte {
 	tb.Helper()
 	buf, err := types.InterfaceToBytes(&msg)
 	require.NoError(tb, err)
@@ -65,19 +67,19 @@ func TestWeakCoin(t *testing.T) {
 	tcs := []struct {
 		desc         string
 		local        []byte
-		allowances   UnitAllowances
+		allowances   weakcoin.UnitAllowances
 		startedEpoch types.EpochID
 		startedRound types.RoundID
-		messages     []Message
+		messages     []weakcoin.Message
 		coinflip     bool
 	}{
 		{
 			desc:         "ValidProposalFromNetwork",
 			local:        zeroLSB,
-			allowances:   UnitAllowances{string(oneLSB): 1, string(zeroLSB): 1},
+			allowances:   weakcoin.UnitAllowances{string(oneLSB): 1, string(zeroLSB): 1},
 			startedEpoch: epoch,
 			startedRound: round,
-			messages: []Message{{
+			messages: []weakcoin.Message{{
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      1,
@@ -89,17 +91,17 @@ func TestWeakCoin(t *testing.T) {
 		{
 			desc:         "LocalProposer",
 			local:        zeroLSB,
-			allowances:   UnitAllowances{string(oneLSB): 1, string(zeroLSB): 1},
+			allowances:   weakcoin.UnitAllowances{string(oneLSB): 1, string(zeroLSB): 1},
 			startedEpoch: epoch,
 			startedRound: round,
 		},
 		{
 			desc:         "ProposalFromNetworkNotAllowed",
 			local:        zeroLSB,
-			allowances:   UnitAllowances{string(oneLSB): 1, string(zeroLSB): 1},
+			allowances:   weakcoin.UnitAllowances{string(oneLSB): 1, string(zeroLSB): 1},
 			startedEpoch: epoch,
 			startedRound: round,
-			messages: []Message{{
+			messages: []weakcoin.Message{{
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      2,
@@ -110,10 +112,10 @@ func TestWeakCoin(t *testing.T) {
 		{
 			desc:         "ProposalFromNetworkHigherThreshold",
 			local:        zeroLSB,
-			allowances:   UnitAllowances{string(higherThreshold): 1, string(zeroLSB): 1},
+			allowances:   weakcoin.UnitAllowances{string(higherThreshold): 1, string(zeroLSB): 1},
 			startedEpoch: epoch,
 			startedRound: round,
-			messages: []Message{{
+			messages: []weakcoin.Message{{
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      1,
@@ -124,10 +126,10 @@ func TestWeakCoin(t *testing.T) {
 		{
 			desc:         "LocalProposalHigherThreshold",
 			local:        higherThreshold,
-			allowances:   UnitAllowances{string(higherThreshold): 1, string(zeroLSB): 1},
+			allowances:   weakcoin.UnitAllowances{string(higherThreshold): 1, string(zeroLSB): 1},
 			startedEpoch: epoch,
 			startedRound: round,
-			messages: []Message{{
+			messages: []weakcoin.Message{{
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      1,
@@ -138,10 +140,10 @@ func TestWeakCoin(t *testing.T) {
 		{
 			desc:         "LocalProposalNotAllowed",
 			local:        oneLSB,
-			allowances:   UnitAllowances{string(zeroLSB): 1},
+			allowances:   weakcoin.UnitAllowances{string(zeroLSB): 1},
 			startedEpoch: epoch,
 			startedRound: round,
-			messages: []Message{{
+			messages: []weakcoin.Message{{
 				Epoch:     epoch,
 				Round:     round,
 				Unit:      1,
@@ -152,10 +154,10 @@ func TestWeakCoin(t *testing.T) {
 		{
 			desc:         "PreviousEpoch",
 			local:        zeroLSB,
-			allowances:   UnitAllowances{string(zeroLSB): 1, string(oneLSB): 1},
+			allowances:   weakcoin.UnitAllowances{string(zeroLSB): 1, string(oneLSB): 1},
 			startedEpoch: epoch,
 			startedRound: round,
-			messages: []Message{{
+			messages: []weakcoin.Message{{
 				Epoch:     epoch - 1,
 				Round:     round,
 				Unit:      1,
@@ -166,10 +168,10 @@ func TestWeakCoin(t *testing.T) {
 		{
 			desc:         "PreviousRound",
 			local:        zeroLSB,
-			allowances:   UnitAllowances{string(zeroLSB): 1, string(oneLSB): 1},
+			allowances:   weakcoin.UnitAllowances{string(zeroLSB): 1, string(oneLSB): 1},
 			startedEpoch: epoch,
 			startedRound: round,
-			messages: []Message{{
+			messages: []weakcoin.Message{{
 				Epoch:     epoch,
 				Round:     round - 1,
 				Unit:      1,
@@ -181,11 +183,11 @@ func TestWeakCoin(t *testing.T) {
 	for _, tc := range tcs {
 		tc := tc
 		t.Run(tc.desc, func(t *testing.T) {
-			wc := New(
+			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				WithThreshold([]byte{0xfe}),
-				withVerifier(verifier),
+				weakcoin.WithThreshold([]byte{0xfe}),
+				weakcoin.WithVerifier(verifier),
 			)
 
 			wc.StartEpoch(context.TODO(), tc.startedEpoch, tc.allowances)
@@ -203,11 +205,11 @@ func TestWeakCoin(t *testing.T) {
 	for _, tc := range tcs {
 		tc := tc
 		t.Run("BufferingStartEpoch/"+tc.desc, func(t *testing.T) {
-			wc := New(
+			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				WithThreshold([]byte{0xfe}),
-				withVerifier(verifier),
+				weakcoin.WithThreshold([]byte{0xfe}),
+				weakcoin.WithVerifier(verifier),
 			)
 
 			wc.StartEpoch(context.TODO(), tc.startedEpoch, tc.allowances)
@@ -225,11 +227,11 @@ func TestWeakCoin(t *testing.T) {
 	for _, tc := range tcs {
 		tc := tc
 		t.Run("BufferingNextRound/"+tc.desc, func(t *testing.T) {
-			wc := New(
+			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				WithThreshold([]byte{0xfe}),
-				withVerifier(verifier),
+				weakcoin.WithThreshold([]byte{0xfe}),
+				weakcoin.WithVerifier(verifier),
 			)
 
 			wc.StartEpoch(context.TODO(), tc.startedEpoch, tc.allowances)
@@ -250,11 +252,11 @@ func TestWeakCoin(t *testing.T) {
 	for _, tc := range tcs {
 		tc := tc
 		t.Run("BufferingNextEpochAfterCompletion/"+tc.desc, func(t *testing.T) {
-			wc := New(
+			wc := weakcoin.New(
 				noopBroadcaster(t, ctrl),
 				staticSigner(t, ctrl, tc.local),
-				WithThreshold([]byte{0xfe}),
-				withVerifier(verifier),
+				weakcoin.WithThreshold([]byte{0xfe}),
+				weakcoin.WithVerifier(verifier),
 			)
 
 			wc.StartEpoch(context.TODO(), tc.startedEpoch, tc.allowances)
@@ -278,10 +280,10 @@ func TestWeakCoin(t *testing.T) {
 func TestWeakCoinGetPanic(t *testing.T) {
 	var (
 		ctrl = gomock.NewController(t)
-		wc   = New(
+		wc   = weakcoin.New(
 			noopBroadcaster(t, ctrl),
 			staticSigner(t, ctrl, []byte{1}),
-			withVerifier(sigVerifier(t, ctrl)))
+			weakcoin.WithVerifier(sigVerifier(t, ctrl)))
 		epoch types.EpochID = 10
 		round types.RoundID = 2
 	)
@@ -309,17 +311,17 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 	)
 	defer ctrl.Finish()
 
-	wc := New(
+	wc := weakcoin.New(
 		noopBroadcaster(t, ctrl),
 		staticSigner(t, ctrl, oneLSB),
-		WithNextRoundBufferSize(bufSize),
-		withVerifier(sigVerifier(t, ctrl)),
+		weakcoin.WithNextRoundBufferSize(bufSize),
+		weakcoin.WithVerifier(sigVerifier(t, ctrl)),
 	)
 
-	wc.StartEpoch(context.TODO(), epoch, UnitAllowances{string(oneLSB): 1, string(zeroLSB): 1})
+	wc.StartEpoch(context.TODO(), epoch, weakcoin.UnitAllowances{string(oneLSB): 1, string(zeroLSB): 1})
 	require.NoError(t, wc.StartRound(context.TODO(), round))
 	for i := 0; i < bufSize; i++ {
-		wc.HandleProposal(context.TODO(), "", broadcastedMessage(t, Message{
+		wc.HandleProposal(context.TODO(), "", broadcastedMessage(t, weakcoin.Message{
 			Epoch:     epoch,
 			Round:     nextRound,
 			Unit:      1,
@@ -327,7 +329,7 @@ func TestWeakCoinNextRoundBufferOverflow(t *testing.T) {
 			Signature: oneLSB,
 		}))
 	}
-	wc.HandleProposal(context.TODO(), "", broadcastedMessage(t, Message{
+	wc.HandleProposal(context.TODO(), "", broadcastedMessage(t, weakcoin.Message{
 		Epoch:     epoch,
 		Round:     nextRound,
 		Unit:      1,
@@ -350,7 +352,7 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	)
 	broadcaster := mocks.NewMockPublisher(ctrl)
 	broadcaster.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, data []byte) error {
-		msg := Message{}
+		msg := weakcoin.Message{}
 		require.NoError(t, types.BytesToInterface(data, &msg))
 		sig = msg.Signature
 		return nil
@@ -361,8 +363,8 @@ func TestWeakCoinEncodingRegression(t *testing.T) {
 	signer, _, err := signing.NewVRFSigner(seed)
 	require.NoError(t, err)
 
-	allowances := UnitAllowances{string(signer.PublicKey().Bytes()): 1}
-	instance := New(broadcaster, signer, WithThreshold([]byte{0xff}))
+	allowances := weakcoin.UnitAllowances{string(signer.PublicKey().Bytes()): 1}
+	instance := weakcoin.New(broadcaster, signer, weakcoin.WithThreshold([]byte{0xff}))
 	instance.StartEpoch(context.TODO(), epoch, allowances)
 	require.NoError(t, instance.StartRound(context.TODO(), round))
 
@@ -376,11 +378,11 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 	defer ctrl.Finish()
 
 	var (
-		instances                          = make([]*WeakCoin, 10)
+		instances                          = make([]*weakcoin.WeakCoin, 10)
 		verifier                           = signing.VRFVerifier{}
 		epochStart, epochEnd types.EpochID = 2, 6
 		start, end           types.RoundID = 0, 9
-		allowances                         = UnitAllowances{}
+		allowances                         = weakcoin.UnitAllowances{}
 		r                                  = rand.New(rand.NewSource(999))
 	)
 
@@ -403,9 +405,9 @@ func TestWeakCoinExchangeProposals(t *testing.T) {
 		signer, _, err := signing.NewVRFSigner(seed)
 		require.NoError(t, err)
 		allowances[string(signer.PublicKey().Bytes())] = 1
-		instances[i] = New(broadcaster, signer,
-			WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
-			withVerifier(verifier))
+		instances[i] = weakcoin.New(broadcaster, signer,
+			weakcoin.WithLog(logtest.New(t).Named(fmt.Sprintf("coin=%d", i))),
+			weakcoin.WithVerifier(verifier))
 	}
 
 	for epoch := epochStart; epoch <= epochEnd; epoch++ {

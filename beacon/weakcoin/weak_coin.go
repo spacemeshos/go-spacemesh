@@ -83,7 +83,8 @@ func WithNextRoundBufferSize(size int) Option {
 	}
 }
 
-func withVerifier(v signing.Verifier) Option {
+// WithVerifier changes the verifier of the weakcoin messages.
+func WithVerifier(v signing.Verifier) Option {
 	return func(wc *WeakCoin) {
 		wc.verifier = v
 	}
