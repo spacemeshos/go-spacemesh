@@ -431,7 +431,7 @@ func (pd *ProtocolDriver) initEpochStateIfNotPresent(logger log.Log, epoch types
 func (pd *ProtocolDriver) setProposalTimeForNextEpoch() {
 	epoch := pd.currentEpoch()
 	nextEpochStart := pd.clock.LayerToTime((epoch + 1).FirstLayer())
-	t := nextEpochStart.Add(-1 * pd.config.GracePeriodDuration)
+	t := nextEpochStart.Add(-pd.config.GracePeriodDuration)
 	pd.logger.With().Debug("earliest proposal time for epoch",
 		epoch+1,
 		log.Time("earliest_time", t))
@@ -509,7 +509,7 @@ func (pd *ProtocolDriver) setRoundInProgress(round types.RoundID) {
 	} else {
 		nextRoundStartTime = now.Add(pd.config.VotingRoundDuration + pd.config.WeakCoinRoundDuration)
 	}
-	earliestVoteTime := nextRoundStartTime.Add(-1 * pd.config.GracePeriodDuration)
+	earliestVoteTime := nextRoundStartTime.Add(-pd.config.GracePeriodDuration)
 	pd.logger.With().Debug("earliest vote time for next round",
 		round,
 		log.Uint32("next_round", uint32(round+1)),

@@ -7,11 +7,10 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
@@ -46,31 +45,31 @@ var (
 )
 
 // HandleWeakCoinProposal handles weakcoin proposal from gossip.
-func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
-	return pd.weakCoin.HandleProposal(ctx, pid, msg)
+func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+	return pd.weakCoin.HandleProposal(ctx, peer, msg)
 }
 
 // HandleProposal handles beacon proposal from gossip.
-func (pd *ProtocolDriver) HandleProposal(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
 	if pd.isClosed() {
 		pd.logger.WithContext(ctx).Debug("beacon protocol shutting down, dropping msg")
 		return pubsub.ValidationIgnore
 	}
 
 	receivedTime := time.Now()
-	if err := pd.handleProposal(ctx, pid, msg, receivedTime); err != nil {
+	if err := pd.handleProposal(ctx, peer, msg, receivedTime); err != nil {
 		pd.logger.WithContext(ctx).With().Error("failed to handle beacon proposal", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
 }
 
-func (pd *ProtocolDriver) handleProposal(ctx context.Context, pid peer.ID, msg []byte, receivedTime time.Time) error {
+func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg []byte, receivedTime time.Time) error {
 	logger := pd.logger.WithContext(ctx)
 
 	var m ProposalMessage
 	if err := types.BytesToInterface(msg, &m); err != nil {
-		logger.With().Warning("received malformed beacon proposal", log.String("sender", pid.String()), log.Err(err))
+		logger.With().Warning("received malformed beacon proposal", log.String("sender", peer.String()), log.Err(err))
 		return errMalformedMessage
 	}
 
@@ -210,23 +209,23 @@ func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessag
 }
 
 // HandleFirstVotes handles beacon first votes from gossip.
-func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
 	if pd.isClosed() || !pd.isInProtocol() {
 		pd.logger.WithContext(ctx).Debug("beacon protocol shutting down or not running, dropping msg")
 		return pubsub.ValidationIgnore
 	}
 
-	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", pid.String()), log.Binary("message", msg))
+	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", peer.String()), log.Binary("message", msg))
 	logger.Debug("new first votes")
-	if err := pd.handleFirstVotes(ctx, pid, msg); err != nil {
+	if err := pd.handleFirstVotes(ctx, peer, msg); err != nil {
 		logger.With().Warning("failed to handle first voting message", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
 }
 
-func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, pid peer.ID, msg []byte) error {
-	logger := pd.logger.WithContext(ctx).WithFields(types.FirstRound, log.String("sender", pid.String()))
+func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	logger := pd.logger.WithContext(ctx).WithFields(types.FirstRound, log.String("sender", peer.String()))
 
 	var m FirstVotingMessage
 	if err := types.BytesToInterface(msg, &m); err != nil {
@@ -336,7 +335,7 @@ func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerPK *signing
 }
 
 // HandleFollowingVotes handles beacon following votes from gossip.
-func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
 	receivedTime := time.Now()
 
 	if pd.isClosed() || !pd.isInProtocol() {
@@ -344,17 +343,17 @@ func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, pid peer.ID,
 		return pubsub.ValidationIgnore
 	}
 
-	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", pid.String()), log.Binary("message", msg))
+	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", peer.String()), log.Binary("message", msg))
 	logger.Debug("new following votes")
-	if err := pd.handleFollowingVotes(ctx, pid, msg, receivedTime); err != nil {
+	if err := pd.handleFollowingVotes(ctx, peer, msg, receivedTime); err != nil {
 		logger.With().Warning("failed to handle following voting message", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
 }
 
-func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, pid peer.ID, msg []byte, receivedTime time.Time) error {
-	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", pid.String()))
+func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Peer, msg []byte, receivedTime time.Time) error {
+	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", peer.String()))
 
 	var m FollowingVotingMessage
 	if err := types.BytesToInterface(msg, &m); err != nil {

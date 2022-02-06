@@ -10,9 +10,9 @@ import (
 	time "time"
 
 	gomock "github.com/golang/mock/gomock"
-	peer "github.com/libp2p/go-libp2p-core/peer"
 	weakcoin "github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	p2p "github.com/spacemeshos/go-spacemesh/p2p"
 	pubsub "github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	timesync "github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -163,7 +163,7 @@ func (mr *MockcoinMockRecorder) Get(arg0, arg1, arg2 interface{}) *gomock.Call {
 }
 
 // HandleProposal mocks base method.
-func (m *Mockcoin) HandleProposal(arg0 context.Context, arg1 peer.ID, arg2 []byte) pubsub.ValidationResult {
+func (m *Mockcoin) HandleProposal(arg0 context.Context, arg1 p2p.Peer, arg2 []byte) pubsub.ValidationResult {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HandleProposal", arg0, arg1, arg2)
 	ret0, _ := ret[0].(pubsub.ValidationResult)

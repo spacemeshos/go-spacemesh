@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -37,7 +35,7 @@ type Broker struct {
 	util.Closer
 	log.Log
 	mu             sync.RWMutex
-	pid            peer.ID
+	peer           p2p.Peer
 	eValidator     validator                // provides eligibility validation
 	stateQuerier   stateQuerier             // provides activeness check
 	nodeSyncState  system.SyncStateProvider // provider function to check if the node is currently synced
@@ -58,11 +56,11 @@ type Broker struct {
 	queueMessageWg sync.WaitGroup
 }
 
-func newBroker(pid peer.ID, eValidator validator, stateQuerier stateQuerier, syncState system.SyncStateProvider, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
+func newBroker(peer p2p.Peer, eValidator validator, stateQuerier stateQuerier, syncState system.SyncStateProvider, layersPerEpoch uint16, limit int, closer util.Closer, log log.Log) *Broker {
 	return &Broker{
 		Closer:         closer,
 		Log:            log,
-		pid:            pid,
+		peer:           peer,
 		eValidator:     eValidator,
 		stateQuerier:   stateQuerier,
 		nodeSyncState:  syncState,
@@ -145,12 +143,12 @@ func (b *Broker) validate(ctx context.Context, m *Message) error {
 }
 
 // HandleMessage separate listener routine that receives gossip messages and adds them to the priority queue.
-func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+func (b *Broker) HandleMessage(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
 	if b.IsClosed() {
 		return pubsub.ValidationIgnore
 	}
 
-	m, err := b.queueMessage(ctx, pid, msg)
+	m, err := b.queueMessage(ctx, peer, msg)
 	if err != nil {
 		return pubsub.ValidationIgnore
 	}
@@ -166,7 +164,7 @@ func (b *Broker) HandleMessage(ctx context.Context, pid peer.ID, msg []byte) pub
 	return pubsub.ValidationAccept
 }
 
-func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*msgRPC, error) {
+func (b *Broker) queueMessage(ctx context.Context, peer p2p.Peer, msg []byte) (*msgRPC, error) {
 	b.queueMessageWg.Add(1)
 	defer b.queueMessageWg.Done()
 
@@ -175,7 +173,7 @@ func (b *Broker) queueMessage(ctx context.Context, pid p2p.Peer, msg []byte) (*m
 
 	// prioritize based on signature: outbound messages (self-generated) get priority
 	priority := priorityq.Mid
-	if pid == b.pid {
+	if peer == b.peer {
 		priority = priorityq.High
 	}
 	logger.With().Debug("assigned message priority, writing to priority queue",

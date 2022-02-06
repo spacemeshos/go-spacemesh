@@ -8,13 +8,12 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
@@ -93,7 +92,7 @@ type Hare struct {
 // New returns a new Hare struct.
 func New(
 	conf config.Config,
-	pid peer.ID,
+	peer p2p.Peer,
 	publisher pubsub.PublishSubsciber,
 	sign Signer,
 	nid types.NodeID,
@@ -131,7 +130,7 @@ func New(
 	}
 
 	ev := newEligibilityValidator(rolacle, layersPerEpoch, idProvider, conf.N, conf.ExpectedLeaders, logger)
-	h.broker = newBroker(pid, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
+	h.broker = newBroker(peer, ev, stateQ, syncState, layersPerEpoch, conf.LimitConcurrent, h.Closer, logger)
 	publisher.Register(protoName, h.broker.HandleMessage)
 	h.sign = sign
 	h.blockGen = blockGen
