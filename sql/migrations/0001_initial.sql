@@ -79,5 +79,5 @@ CREATE TABLE atxs
     timestamp INT NOT NULL
 );
 
-CREATE INDEX atxs_by_epoch ON atxs (epoch);
+CREATE INDEX atxs_by_smesher ON atxs (smesher);
 CREATE INDEX atxs_by_epoch_by_pubkey ON atxs (epoch, smesher);

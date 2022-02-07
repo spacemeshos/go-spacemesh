@@ -390,7 +390,7 @@ func (db *DB) GetPosAtxID() (types.ATXID, error) {
 
 // GetAtxTimestamp returns ATX timestamp.
 func (db *DB) GetAtxTimestamp(id types.ATXID) (time.Time, error) {
-	ts, err := atxs.GetTimestampByID(db.sqlDB, id)
+	ts, err := atxs.GetTimestamp(db.sqlDB, id)
 	if err != nil {
 		return time.Time{}, err
 	}

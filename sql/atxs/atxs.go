@@ -48,8 +48,8 @@ func Has(db sql.Executor, id types.ATXID) (bool, error) {
 	return rows > 0, nil
 }
 
-// GetTimestampByID gets an ATX timestamp by a given ATX ID.
-func GetTimestampByID(db sql.Executor, id types.ATXID) (timestamp time.Time, err error) {
+// GetTimestamp gets an ATX timestamp by a given ATX ID.
+func GetTimestamp(db sql.Executor, id types.ATXID) (timestamp time.Time, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}

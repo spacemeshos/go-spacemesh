@@ -79,11 +79,11 @@ func TestGetTimestampByID(t *testing.T) {
 	ts := time.Now()
 	require.NoError(t, Add(db, atx, ts))
 
-	timestamp, err := GetTimestampByID(db, atx.ID())
+	timestamp, err := GetTimestamp(db, atx.ID())
 	require.NoError(t, err)
 	require.EqualValues(t, ts.UnixNano(), timestamp.UnixNano())
 
-	_, err = GetTimestampByID(db, types.ATXID(types.CalcHash32([]byte("0"))))
+	_, err = GetTimestamp(db, types.ATXID(types.CalcHash32([]byte("0"))))
 	require.ErrorIs(t, err, database.ErrNotFound)
 }
 
