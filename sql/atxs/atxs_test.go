@@ -7,6 +7,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -31,12 +32,12 @@ func TestGetATXByID(t *testing.T) {
 	}
 
 	for _, want := range atxs {
-		got, err := GetATXByID(db, want.ID())
+		got, err := Get(db, want.ID())
 		require.NoError(t, err)
 		require.Equal(t, want, got)
 	}
 
-	_, err := GetATXByID(db, types.ATXID(types.CalcHash32([]byte("0"))))
+	_, err := Get(db, types.ATXID(types.CalcHash32([]byte("0"))))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
@@ -57,12 +58,12 @@ func TestHasID(t *testing.T) {
 	}
 
 	for _, atx := range atxs {
-		has, err := HasID(db, atx.ID())
+		has, err := Has(db, atx.ID())
 		require.NoError(t, err)
 		require.True(t, has)
 	}
 
-	has, err := HasID(db, types.ATXID(types.CalcHash32([]byte("0"))))
+	has, err := Has(db, types.ATXID(types.CalcHash32([]byte("0"))))
 	require.NoError(t, err)
 	require.False(t, has)
 }
@@ -94,9 +95,9 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	nodeID0 := types.NodeID{Key: "0", VRFPublicKey: []byte("0")}
 	nodeID1 := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
 	nodeID2 := types.NodeID{Key: "1", VRFPublicKey: []byte("2")}
-	atx1 := newAtx(nodeID1, types.NewLayerID(uint32(1)))
-	atx2 := newAtx(nodeID1, types.NewLayerID(uint32(2)))
-	atx3 := newAtx(nodeID2, types.NewLayerID(uint32(3)))
+	atx1 := newAtx(nodeID1, types.NewLayerID(uint32(1*layersPerEpoch)))
+	atx2 := newAtx(nodeID1, types.NewLayerID(uint32(2*layersPerEpoch)))
+	atx3 := newAtx(nodeID2, types.NewLayerID(uint32(3*layersPerEpoch)))
 
 	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
 		require.NoError(t, Add(db, atx.ID(), atx, time.Now()))
@@ -216,13 +217,28 @@ func TestGetTop(t *testing.T) {
 	require.EqualValues(t, atx2.ID(), top)
 }
 
+func TestGetBlob(t *testing.T) {
+	db := sql.InMemory()
+
+	nodeID := types.NodeID{Key: "1", VRFPublicKey: []byte("1")}
+
+	atx := newAtx(nodeID, types.NewLayerID(uint32(1)))
+
+	require.NoError(t, Add(db, atx.ID(), atx, time.Now()))
+	buf, err := GetBlob(db, atx.ID())
+	require.NoError(t, err)
+	encoded, err := codec.Encode(atx)
+	require.NoError(t, err)
+	require.Equal(t, encoded, buf)
+}
+
 func TestAdd(t *testing.T) {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
 	db := sql.InMemory()
 
 	nonExistingATXID := types.ATXID(types.CalcHash32([]byte("0")))
-	_, err := GetATXByID(db, nonExistingATXID)
+	_, err := Get(db, nonExistingATXID)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	strIdx := strconv.Itoa(1)
@@ -232,7 +248,7 @@ func TestAdd(t *testing.T) {
 	require.NoError(t, Add(db, atx.ID(), atx, time.Now()))
 	require.ErrorIs(t, Add(db, atx.ID(), atx, time.Now()), sql.ErrObjectExists)
 
-	got, err := GetATXByID(db, atx.ID())
+	got, err := Get(db, atx.ID())
 	require.NoError(t, err)
 	require.Equal(t, atx, got)
 }

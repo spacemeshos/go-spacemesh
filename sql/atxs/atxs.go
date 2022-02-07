@@ -9,8 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// GetATXByID gets an ATX by a given ATX ID.
-func GetATXByID(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
+// Get gets an ATX by a given ATX ID.
+func Get(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, id.Bytes())
 	}
@@ -35,8 +35,8 @@ func GetATXByID(db sql.Executor, id types.ATXID) (atx *types.ActivationTx, err e
 	return atx, err
 }
 
-// HasID checks if an ATX exists by a given ATX ID.
-func HasID(db sql.Executor, id types.ATXID) (bool, error) {
+// Has checks if an ATX exists by a given ATX ID.
+func Has(db sql.Executor, id types.ATXID) (bool, error) {
 	rows, err := db.Exec("select 1 from atxs where id = ?1;",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
@@ -80,11 +80,11 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 	if rows, err := db.Exec(`
 		select id from atxs 
 		where smesher = ?1
-		order by timestamp desc 
+		order by epoch desc 
 		limit 1;`, enc, dec); err != nil {
-		return *types.EmptyATXID, fmt.Errorf("exec id %v: %w", id, err)
+		return types.ATXID{}, fmt.Errorf("exec id %v: %w", id, err)
 	} else if rows == 0 {
-		return *types.EmptyATXID, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
+		return types.ATXID{}, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -104,11 +104,10 @@ func GetIDByEpochAndNodeID(db sql.Executor, epoch types.EpochID, nodeID types.No
 	if rows, err := db.Exec(`
 		select id from atxs 
 		where epoch = ?1 and smesher = ?2 
-		order by timestamp desc 
 		limit 1;`, enc, dec); err != nil {
-		return *types.EmptyATXID, fmt.Errorf("exec id %v: %w", id, err)
+		return types.ATXID{}, fmt.Errorf("exec id %v: %w", id, err)
 	} else if rows == 0 {
-		return *types.EmptyATXID, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
+		return types.ATXID{}, fmt.Errorf("exec id %s: %w", id, sql.ErrNotFound)
 	}
 
 	return id, err
@@ -126,10 +125,7 @@ func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err
 		return true
 	}
 
-	if rows, err := db.Exec(`
-		select id from atxs 
-		where epoch = ?1 
-		order by id asc;`, enc, dec); err != nil {
+	if rows, err := db.Exec("select id from atxs where epoch = ?1;", enc, dec); err != nil {
 		return nil, fmt.Errorf("exec epoch %v: %w", epoch, err)
 	} else if rows == 0 {
 		return []types.ATXID{}, nil
@@ -147,12 +143,29 @@ func GetTop(db sql.Executor) (id types.ATXID, err error) {
 	}
 
 	if rows, err := db.Exec("select id from atxs order by layer desc, timestamp asc limit 1;", nil, dec); err != nil {
-		return *types.EmptyATXID, fmt.Errorf("exec: %w", err)
+		return types.ATXID{}, fmt.Errorf("exec: %w", err)
 	} else if rows == 0 {
-		return *types.EmptyATXID, fmt.Errorf("exec: %w", sql.ErrNotFound)
+		return types.ATXID{}, fmt.Errorf("exec: %w", sql.ErrNotFound)
 	}
 
 	return id, err
+}
+
+// GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
+func GetBlob(db sql.Executor, id types.ATXID) (buf []byte, err error) {
+	if rows, err := db.Exec("select atx from atxs where id = ?1",
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, func(stmt *sql.Statement) bool {
+			buf = make([]byte, stmt.ColumnLen(0))
+			stmt.ColumnBytes(0, buf)
+			return true
+		}); err != nil {
+		return nil, fmt.Errorf("get %s: %w", id, err)
+	} else if rows == 0 {
+		return nil, fmt.Errorf("%w: atx %s", sql.ErrNotFound, id)
+	}
+	return buf, nil
 }
 
 // Add adds an ATX for a given ATX ID.
@@ -204,7 +217,7 @@ type FetchAdapter struct {
 func (f FetchAdapter) Get(key []byte) ([]byte, error) {
 	atxID := types.ATXID(types.BytesToHash(key))
 
-	atx, err := GetATXByID(f.DB, atxID)
+	atx, err := Get(f.DB, atxID)
 	if err != nil {
 		return nil, err
 	}

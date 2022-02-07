@@ -77,7 +77,7 @@ func init() {
 
 // AwaitAtx returns a channel that will receive notification when the specified atx with id id is received via gossip.
 func (db *DB) AwaitAtx(id types.ATXID) chan struct{} {
-	if has, err := atxs.HasID(db.sqlDB, id); err == nil && has {
+	if has, err := atxs.Has(db.sqlDB, id); err == nil && has {
 		return closedChan
 	}
 
@@ -441,7 +441,7 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
 
-	atx, err := atxs.GetATXByID(db.sqlDB, id)
+	atx, err := atxs.Get(db.sqlDB, id)
 	if err != nil {
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
