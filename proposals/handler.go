@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals/metrics"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -129,7 +129,7 @@ func NewHandler(f system.Fetcher, bc system.BeaconCollector, db atxDB, m meshDB,
 }
 
 // HandleProposal is the gossip receiver for Proposal.
-func (h *Handler) HandleProposal(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
+func (h *Handler) HandleProposal(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	newCtx := log.WithNewRequestID(ctx)
 	if err := h.handleProposalData(newCtx, msg); errors.Is(err, errKnownProposal) {
 		return pubsub.ValidationIgnore
