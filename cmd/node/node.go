@@ -190,9 +190,9 @@ func loadConfig(cmd *cobra.Command) (*config.Config, error) {
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified.
 func LoadConfigFromFile() (*config.Config, error) {
 	fileLocation := viper.GetString("config")
-	vip := viper.New()
+
 	// read in default config if passed as param using viper
-	if err := config.LoadConfig(fileLocation, vip); err != nil {
+	if err := config.LoadConfig(fileLocation, viper.GetViper()); err != nil {
 		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
 			fileLocation, err))
 		// return err
@@ -214,7 +214,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 	)
 
 	// load config if it was loaded to the viper
-	if err := vip.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
+	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
 		return nil, fmt.Errorf("unmarshal viper: %w", err)
 	}
 	return &conf, nil
