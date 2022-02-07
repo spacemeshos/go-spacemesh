@@ -155,7 +155,7 @@ func (svm *SVM) HandleGossipTransaction(_ context.Context, _ p2p.Peer, msg []byt
 		return pubsub.ValidationIgnore
 	}
 
-	svm.log.With().Debug("got new tx",
+	svm.log.With().Info("got new tx",
 		tx.ID(),
 		log.Uint64("nonce", tx.AccountNonce),
 		log.Uint64("amount", tx.Amount),
