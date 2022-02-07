@@ -52,7 +52,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/svm"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -619,7 +618,7 @@ func (app *App) initServices(ctx context.Context,
 		fetch.BallotDB:   mdb.Ballots(),
 		fetch.BlockDB:    mdb.Blocks(),
 		fetch.ProposalDB: proposalDB,
-		fetch.ATXDB:      atxs.FetchAdapter{DB: sqlDB},
+		fetch.ATXDB:      atxDB.ATXs(),
 		fetch.TXDB:       mdb.Transactions(),
 		fetch.POETDB:     poetDBStore,
 	}

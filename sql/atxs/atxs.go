@@ -206,21 +206,3 @@ func DeleteATXsByNodeID(db sql.Executor, nodeID types.NodeID) error {
 
 	return nil
 }
-
-// FetchAdapter is an adapter of SQLite implementation to legacy LevelDB interfaces.
-// TODO(nkryuchkov): Remove when transition to SQLite is finished.
-type FetchAdapter struct {
-	DB *sql.Database
-}
-
-// Get gets an ATX as bytes by an ATX ID as bytes.
-func (f FetchAdapter) Get(key []byte) ([]byte, error) {
-	atxID := types.ATXID(types.BytesToHash(key))
-
-	atx, err := Get(f.DB, atxID)
-	if err != nil {
-		return nil, err
-	}
-
-	return types.InterfaceToBytes(atx)
-}

@@ -553,3 +553,31 @@ func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) e
 
 	return nil
 }
+
+// ATXs exports the ATXs database.
+func (db *DB) ATXs() database.Getter {
+	return newATXFetcherDB(db)
+}
+
+// newATXFetcherDB returns reference to a BlockFetcherDB instance.
+func newATXFetcherDB(db *DB) *ATXFetcher {
+	return &ATXFetcher{DB: db}
+}
+
+// ATXFetcher is an adapter of SQLite implementation to legacy LevelDB interfaces.
+// TODO(nkryuchkov): Remove when transition to SQLite is finished.
+type ATXFetcher struct {
+	DB *DB
+}
+
+// Get gets an ATX as bytes by an ATX ID as bytes.
+func (f *ATXFetcher) Get(key []byte) ([]byte, error) {
+	atxID := types.ATXID(types.BytesToHash(key))
+
+	atx, err := atxs.Get(f.DB.sqlDB, atxID)
+	if err != nil {
+		return nil, err
+	}
+
+	return types.InterfaceToBytes(atx)
+}
