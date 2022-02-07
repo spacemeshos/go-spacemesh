@@ -28,7 +28,7 @@ func TestGetATXByID(t *testing.T) {
 	}
 
 	for _, atx := range atxs {
-		require.NoError(t, Add(db, atx.ID(), atx, time.Now()))
+		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
 	for _, want := range atxs {
@@ -54,7 +54,7 @@ func TestHasID(t *testing.T) {
 	}
 
 	for _, atx := range atxs {
-		require.NoError(t, Add(db, atx.ID(), atx, time.Now()))
+		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
 	for _, atx := range atxs {
@@ -77,7 +77,7 @@ func TestGetTimestampByID(t *testing.T) {
 	atx := newAtx(nodeID, types.NewLayerID(uint32(0)))
 
 	ts := time.Now()
-	require.NoError(t, Add(db, atx.ID(), atx, ts))
+	require.NoError(t, Add(db, atx, ts))
 
 	timestamp, err := GetTimestampByID(db, atx.ID())
 	require.NoError(t, err)
@@ -100,7 +100,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx3 := newAtx(nodeID2, types.NewLayerID(uint32(3*layersPerEpoch)))
 
 	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
-		require.NoError(t, Add(db, atx.ID(), atx, time.Now()))
+		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
 	id1, err := GetLastIDByNodeID(db, nodeID1)
@@ -133,7 +133,7 @@ func TestGetIDByEpochAndNodeID(t *testing.T) {
 	atx4 := newAtx(nodeID2, l3)
 
 	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, Add(db, atx.ID(), atx, time.Now()))
+		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
 	l1n1, err := GetIDByEpochAndNodeID(db, l1.GetEpoch(), nodeID1)
@@ -177,7 +177,7 @@ func TestGetIDsByEpoch(t *testing.T) {
 	atx4 := newAtx(nodeID2, l3)
 
 	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
-		require.NoError(t, Add(db, atx.ID(), atx, time.Now()))
+		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
 	ids1, err := GetIDsByEpoch(db, l1.GetEpoch())
@@ -209,7 +209,7 @@ func TestGetTop(t *testing.T) {
 	atx3 := newAtx(nodeID2, l2)
 
 	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
-		require.NoError(t, Add(db, atx.ID(), atx, time.Now()))
+		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
 	top, err := GetTop(db)
@@ -224,7 +224,7 @@ func TestGetBlob(t *testing.T) {
 
 	atx := newAtx(nodeID, types.NewLayerID(uint32(1)))
 
-	require.NoError(t, Add(db, atx.ID(), atx, time.Now()))
+	require.NoError(t, Add(db, atx, time.Now()))
 	buf, err := GetBlob(db, atx.ID())
 	require.NoError(t, err)
 	encoded, err := codec.Encode(atx)
@@ -245,8 +245,8 @@ func TestAdd(t *testing.T) {
 	nodeID := types.NodeID{Key: strIdx, VRFPublicKey: []byte(strIdx)}
 	atx := newAtx(nodeID, types.NewLayerID(uint32(1)))
 
-	require.NoError(t, Add(db, atx.ID(), atx, time.Now()))
-	require.ErrorIs(t, Add(db, atx.ID(), atx, time.Now()), sql.ErrObjectExists)
+	require.NoError(t, Add(db, atx, time.Now()))
+	require.ErrorIs(t, Add(db, atx, time.Now()), sql.ErrObjectExists)
 
 	got, err := Get(db, atx.ID())
 	require.NoError(t, err)

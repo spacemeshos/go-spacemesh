@@ -305,7 +305,7 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 // correct and that all associated atx exist in the db. Will return error if writing to db failed.
 func (db *DB) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.ActivationTx) error {
 	// todo: maybe cleanup DB if failed by using defer (#1921)
-	if err := atxs.Add(db.sqlDB, atx.ID(), atx, time.Now()); err != nil {
+	if err := atxs.Add(db.sqlDB, atx, time.Now()); err != nil {
 		if errors.Is(err, sql.ErrObjectExists) {
 			// exists - how should we handle this?
 			return nil

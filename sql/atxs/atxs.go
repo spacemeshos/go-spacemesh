@@ -169,14 +169,14 @@ func GetBlob(db sql.Executor, id types.ATXID) (buf []byte, err error) {
 }
 
 // Add adds an ATX for a given ATX ID.
-func Add(db sql.Executor, id types.ATXID, atx *types.ActivationTx, timestamp time.Time) error {
+func Add(db sql.Executor, atx *types.ActivationTx, timestamp time.Time) error {
 	buf, err := codec.Encode(atx)
 	if err != nil {
 		return fmt.Errorf("encode: %w", err)
 	}
 
 	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, id.Bytes())
+		stmt.BindBytes(1, atx.ID().Bytes())
 		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
 		stmt.BindInt64(3, int64(atx.PubLayerID.GetEpoch()))
 		stmt.BindBytes(4, atx.NodeID.ToBytes())
@@ -188,7 +188,7 @@ func Add(db sql.Executor, id types.ATXID, atx *types.ActivationTx, timestamp tim
 		insert into atxs (id, layer, epoch, smesher, atx, timestamp) 
 		values (?1, ?2, ?3, ?4, ?5, ?6);`, enc, nil)
 	if err != nil {
-		return fmt.Errorf("insert ATX ID %v: %w", id, err)
+		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
 	}
 
 	return nil
