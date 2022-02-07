@@ -27,8 +27,8 @@ func testnet() config.Config {
 	conf.HARE.LimitConcurrent = 5
 	conf.HARE.LimitIterations = 10
 	conf.HARE.F = 399
-	conf.HARE.RoundDuration = 30
-	conf.HARE.WakeupDelta = 30
+	conf.HARE.RoundDuration = 10
+	conf.HARE.WakeupDelta = 10
 
 	conf.P2P.TargetOutbound = 10
 
@@ -43,8 +43,8 @@ func testnet() config.Config {
 	}
 
 	conf.LayerAvgSize = 50
-	conf.LayerDurationSec = 200
-	conf.LayersPerEpoch = 6
+	conf.LayerDurationSec = 120
+	conf.LayersPerEpoch = 60
 	conf.SyncRequestTimeout = 60_000
 
 	conf.POST.BitsPerLabel = 8

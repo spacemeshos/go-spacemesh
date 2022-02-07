@@ -83,23 +83,32 @@ func WithNextRoundBufferSize(size int) Option {
 	}
 }
 
+// WithVerifier changes the verifier of the weakcoin messages.
+func WithVerifier(v signing.Verifier) Option {
+	return func(wc *WeakCoin) {
+		wc.verifier = v
+	}
+}
+
 // New creates an instance of weak coin protocol.
 func New(
 	publisher pubsub.Publisher,
 	signer signing.Signer,
-	verifier signing.Verifier,
 	opts ...Option,
 ) *WeakCoin {
 	wc := &WeakCoin{
 		logger:    log.NewNop(),
 		config:    defaultConfig(),
 		signer:    signer,
-		verifier:  verifier,
 		publisher: publisher,
 		coins:     make(map[types.RoundID]bool),
 	}
 	for _, opt := range opts {
 		opt(wc)
+	}
+
+	if wc.verifier == nil {
+		wc.verifier = signing.VRFVerifier{}
 	}
 	wc.nextRoundBuffer = make([]Message, 0, wc.config.NextRoundBufferSize)
 	return wc
@@ -128,7 +137,7 @@ type WeakCoin struct {
 // and only after CompleteRound was called.
 func (wc *WeakCoin) Get(ctx context.Context, epoch types.EpochID, round types.RoundID) bool {
 	if epoch.IsGenesis() {
-		wc.logger.WithContext(ctx).With().Panic("tb weak coin not used during genesis")
+		wc.logger.WithContext(ctx).With().Panic("beacon weak coin not used during genesis")
 	}
 
 	wc.mu.RLock()
@@ -149,7 +158,7 @@ func (wc *WeakCoin) StartEpoch(ctx context.Context, epoch types.EpochID, allowan
 	wc.epochStarted = true
 	wc.epoch = epoch
 	wc.allowances = allowances
-	wc.logger.WithContext(ctx).With().Info("tb weak coin started epoch", epoch)
+	wc.logger.WithContext(ctx).With().Info("beacon weak coin started epoch", epoch)
 }
 
 // FinishEpoch completes epoch. After it is called Get for this epoch will panic.
@@ -158,7 +167,7 @@ func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 	wc.mu.Lock()
 	defer wc.mu.Unlock()
 	if epoch != wc.epoch {
-		logger.Panic("attempted to finish tb weak coin for the wrong epoch")
+		logger.Panic("attempted to finish beacon weak coin for the wrong epoch")
 	}
 	wc.epochStarted = false
 	wc.allowances = nil
@@ -171,7 +180,7 @@ func (wc *WeakCoin) FinishEpoch(ctx context.Context, epoch types.EpochID) {
 func (wc *WeakCoin) StartRound(ctx context.Context, round types.RoundID) error {
 	wc.mu.Lock()
 	logger := wc.logger.WithContext(ctx).WithFields(wc.epoch, round)
-	logger.Info("started round")
+	logger.Info("started beacon weak coin round")
 	wc.roundStarted = true
 	wc.round = round
 	wc.smallestProposal = nil

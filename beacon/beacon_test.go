@@ -17,14 +17,12 @@ import (
 	"github.com/spacemeshos/go-spacemesh/beacon/weakcoin"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
-	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 func coinValueMock(tb testing.TB, value bool) coin {
@@ -49,45 +47,6 @@ func coinValueMock(tb testing.TB, value bool) coin {
 	return coinMock
 }
 
-func setUpProtocolDriver(t *testing.T, mockEpochWeight uint64, hasATX bool) (*ProtocolDriver, *timesync.TimeClock) {
-	conf := UnitTestConfig()
-
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockDB := mocks.NewMockactivationDB(ctrl)
-	if hasATX {
-		mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).MaxTimes(3)
-	} else {
-		mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, database.ErrNotFound).MaxTimes(3)
-	}
-	// epoch 2, 3, and 4 (since we waited til epoch 3 in each test)
-	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(mockEpochWeight, nil, nil).MaxTimes(3)
-	mwc := coinValueMock(t, true)
-
-	types.SetLayersPerEpoch(3)
-	logger := logtest.New(t).WithName("Beacon")
-	genesisTime := time.Now().Add(100 * time.Millisecond)
-	ld := 100 * time.Millisecond
-	clock := timesync.NewClock(timesync.RealClock{}, ld, genesisTime, logtest.New(t).WithName("clock"))
-	clock.StartNotifying()
-
-	edSgn := signing.NewEdSigner()
-	edPubkey := edSgn.PublicKey()
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
-	require.NoError(t, err)
-
-	publisher := newPublisher(t)
-	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
-	ms := smocks.NewMockSyncStateProvider(ctrl)
-	ms.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	pd := New(conf, minerID, publisher, mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, sql.InMemory(), clock, logger)
-	require.NotNil(t, pd)
-	pd.SetSyncState(ms)
-	pd.setMetricsRegistry(prometheus.NewPedanticRegistry())
-	return pd, clock
-}
-
 func newPublisher(tb testing.TB) pubsub.Publisher {
 	tb.Helper()
 	ctrl := gomock.NewController(tb)
@@ -101,77 +60,149 @@ func newPublisher(tb testing.TB) pubsub.Publisher {
 	return publisher
 }
 
-func TestBeacon(t *testing.T) {
-	pd, clock := setUpProtocolDriver(t, uint64(10), true)
-	epoch := types.EpochID(3)
-	require.NoError(t, pd.Start(context.TODO()))
+type testProtocolDriver struct {
+	*ProtocolDriver
+	ctrl   *gomock.Controller
+	mAtxDB *mocks.MockactivationDB
+	mClock *mocks.MocklayerClock
+	mSync  *smocks.MockSyncStateProvider
+}
 
-	t.Logf("Awaiting epoch %v", epoch)
-	awaitEpoch(clock, epoch)
-
-	v, err := pd.GetBeacon(epoch)
+func setUpProtocolDriver(t *testing.T) *testProtocolDriver {
+	types.SetLayersPerEpoch(3)
+	ctrl := gomock.NewController(t)
+	tpd := &testProtocolDriver{
+		ctrl:   ctrl,
+		mAtxDB: mocks.NewMockactivationDB(ctrl),
+		mClock: mocks.NewMocklayerClock(ctrl),
+		mSync:  smocks.NewMockSyncStateProvider(ctrl),
+	}
+	edSgn := signing.NewEdSigner()
+	edPubkey := edSgn.PublicKey()
+	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
 	require.NoError(t, err)
+	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
+	tpd.ProtocolDriver = New(minerID, newPublisher(t), tpd.mAtxDB, edSgn, vrfSigner, sql.InMemory(), tpd.mClock,
+		WithConfig(UnitTestConfig()),
+		WithLogger(logtest.New(t).WithName("Beacon")),
+		withWeakCoin(coinValueMock(t, true)))
+	tpd.ProtocolDriver.SetSyncState(tpd.mSync)
+	tpd.ProtocolDriver.setMetricsRegistry(prometheus.NewPedanticRegistry())
+	return tpd
+}
 
+func TestBeacon(t *testing.T) {
+	tpd := setUpProtocolDriver(t)
+	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
+
+	tpd.mClock.EXPECT().Subscribe().Times(1)
+	tpd.mClock.EXPECT().GetCurrentLayer().Return(types.NewLayerID(1)).Times(1)
+	tpd.mClock.EXPECT().LayerToTime(types.EpochID(1).FirstLayer()).Return(time.Now()).Times(1)
+	tpd.Start(context.TODO())
+
+	tpd.onNewEpoch(context.TODO(), types.EpochID(0))
+	tpd.onNewEpoch(context.TODO(), types.EpochID(1))
+	tpd.mAtxDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).Times(1)
+	tpd.mAtxDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(10), nil, nil).Times(1)
+	tpd.onNewEpoch(context.TODO(), types.EpochID(2))
+
+	got, err := tpd.GetBeacon(types.EpochID(2))
+	require.NoError(t, err)
+	assert.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+
+	got, err = tpd.GetBeacon(types.EpochID(3))
+	require.NoError(t, err)
 	expected := types.HexToBeacon("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
-	assert.EqualValues(t, expected, v)
+	assert.EqualValues(t, expected, got)
 
-	pd.Close()
-	clock.Close()
+	tpd.mClock.EXPECT().Unsubscribe(gomock.Any()).Times(1)
+	tpd.Close()
 }
 
 func TestBeaconZeroWeightEpoch(t *testing.T) {
-	pd, clock := setUpProtocolDriver(t, uint64(0), true)
-	epoch := types.EpochID(3)
-	require.NoError(t, pd.Start(context.TODO()))
+	tpd := setUpProtocolDriver(t)
+	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 
-	t.Logf("Awaiting epoch %v", epoch)
-	awaitEpoch(clock, epoch)
+	tpd.mClock.EXPECT().Subscribe().Times(1)
+	tpd.mClock.EXPECT().GetCurrentLayer().Return(types.NewLayerID(1)).Times(1)
+	tpd.mClock.EXPECT().LayerToTime(types.EpochID(1).FirstLayer()).Return(time.Now()).Times(1)
+	tpd.Start(context.TODO())
 
-	v, err := pd.GetBeacon(epoch)
+	tpd.onNewEpoch(context.TODO(), types.EpochID(0))
+	tpd.onNewEpoch(context.TODO(), types.EpochID(1))
+	tpd.mAtxDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).Times(1)
+	tpd.mAtxDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(0), nil, nil).Times(1)
+	tpd.onNewEpoch(context.TODO(), types.EpochID(2))
+
+	got, err := tpd.GetBeacon(types.EpochID(2))
+	require.NoError(t, err)
+	assert.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+
+	got, err = tpd.GetBeacon(types.EpochID(3))
 	assert.Equal(t, errBeaconNotCalculated, err)
-	assert.Equal(t, types.EmptyBeacon, v)
+	assert.Equal(t, types.EmptyBeacon, got)
 
-	pd.Close()
-	clock.Close()
+	tpd.mClock.EXPECT().Unsubscribe(gomock.Any()).Times(1)
+	tpd.Close()
+}
+
+func TestBeaconNotSynced(t *testing.T) {
+	tpd := setUpProtocolDriver(t)
+	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).AnyTimes()
+
+	tpd.mClock.EXPECT().Subscribe().Times(1)
+	tpd.mClock.EXPECT().GetCurrentLayer().Return(types.NewLayerID(1)).Times(1)
+	tpd.mClock.EXPECT().LayerToTime(types.EpochID(1).FirstLayer()).Return(time.Now()).Times(1)
+	tpd.Start(context.TODO())
+
+	tpd.onNewEpoch(context.TODO(), types.EpochID(0))
+	tpd.onNewEpoch(context.TODO(), types.EpochID(1))
+	tpd.onNewEpoch(context.TODO(), types.EpochID(2))
+
+	got, err := tpd.GetBeacon(types.EpochID(2))
+	require.NoError(t, err)
+	assert.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+
+	got, err = tpd.GetBeacon(types.EpochID(3))
+	assert.Equal(t, errBeaconNotCalculated, err)
+	assert.Equal(t, types.EmptyBeacon, got)
+
+	tpd.mClock.EXPECT().Unsubscribe(gomock.Any()).Times(1)
+	tpd.Close()
 }
 
 func TestBeaconNoATXInPreviousEpoch(t *testing.T) {
-	pd, clock := setUpProtocolDriver(t, uint64(0), false)
-	epoch := types.EpochID(3)
-	require.NoError(t, pd.Start(context.TODO()))
+	tpd := setUpProtocolDriver(t)
+	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 
-	t.Logf("Awaiting epoch %v", epoch)
-	awaitEpoch(clock, epoch)
+	tpd.mClock.EXPECT().Subscribe().Times(1)
+	tpd.mClock.EXPECT().GetCurrentLayer().Return(types.NewLayerID(1)).Times(1)
+	tpd.mClock.EXPECT().LayerToTime(types.EpochID(1).FirstLayer()).Return(time.Now()).Times(1)
+	tpd.Start(context.TODO())
 
-	v, err := pd.GetBeacon(epoch)
+	tpd.onNewEpoch(context.TODO(), types.EpochID(0))
+	tpd.onNewEpoch(context.TODO(), types.EpochID(1))
+	tpd.mAtxDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, sql.ErrNotFound).Times(1)
+	tpd.onNewEpoch(context.TODO(), types.EpochID(2))
+
+	got, err := tpd.GetBeacon(types.EpochID(2))
+	require.NoError(t, err)
+	assert.EqualValues(t, got, types.HexToBeacon(types.BootstrapBeacon))
+
+	got, err = tpd.GetBeacon(types.EpochID(3))
 	assert.Equal(t, errBeaconNotCalculated, err)
-	assert.Equal(t, types.EmptyBeacon, v)
+	assert.Equal(t, types.EmptyBeacon, got)
 
-	pd.Close()
-	clock.Close()
-}
-
-func awaitEpoch(clock *timesync.TimeClock, epoch types.EpochID) {
-	layerTicker := clock.Subscribe()
-
-	for layer := range layerTicker {
-		// Wait until required epoch passes.
-		if layer.GetEpoch() > epoch {
-			return
-		}
-	}
+	tpd.mClock.EXPECT().Unsubscribe(gomock.Any()).Times(1)
+	tpd.Close()
 }
 
 func TestBeaconWithMetrics(t *testing.T) {
-	layersPerEpoch := uint32(3)
-	types.SetLayersPerEpoch(layersPerEpoch)
+	tpd := setUpProtocolDriver(t)
+	tpd.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 
-	conf := UnitTestConfig()
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-	mockDB := mocks.NewMockactivationDB(ctrl)
-	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).AnyTimes()
-	mockDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(10000), nil, nil).AnyTimes()
+	tpd.mAtxDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).AnyTimes()
+	tpd.mAtxDB.EXPECT().GetEpochWeight(gomock.Any()).Return(uint64(10000), nil, nil).AnyTimes()
 	atxHeader := &types.ActivationTxHeader{
 		NIPostChallenge: types.NIPostChallenge{
 			StartTick: 0,
@@ -179,47 +210,32 @@ func TestBeaconWithMetrics(t *testing.T) {
 		},
 		NumUnits: 199,
 	}
-	mockDB.EXPECT().GetAtxHeader(gomock.Any()).Return(atxHeader, nil).AnyTimes()
-	mockDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).AnyTimes()
-
-	mwc := coinValueMock(t, true)
-
-	logger := logtest.New(t).WithName("Beacon")
-	clock := clockNeverNotify(t)
-
-	edSgn := signing.NewEdSigner()
-	edPubkey := edSgn.PublicKey()
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(edSgn.Sign(edPubkey.Bytes()))
-	require.NoError(t, err)
-
-	minerID := types.NodeID{Key: edPubkey.String(), VRFPublicKey: vrfPub}
-	ms := smocks.NewMockSyncStateProvider(ctrl)
-	ms.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
-	pd := New(conf, minerID, newPublisher(t), mockDB, edSgn, signing.NewEDVerifier(), vrfSigner, signing.VRFVerifier{}, mwc, sql.InMemory(), clock, logger)
-	require.NotNil(t, pd)
-	pd.SetSyncState(ms)
-
-	require.NoError(t, pd.Start(context.TODO()))
-	t.Cleanup(func() {
-		pd.Close()
-	})
+	tpd.mAtxDB.EXPECT().GetAtxHeader(gomock.Any()).Return(atxHeader, nil).AnyTimes()
+	tpd.mAtxDB.EXPECT().GetNodeAtxIDForEpoch(gomock.Any(), gomock.Any()).Return(types.ATXID{}, nil).AnyTimes()
 
 	gLayer := types.GetEffectiveGenesis()
+	tpd.mClock.EXPECT().Subscribe().Times(1)
+	tpd.mClock.EXPECT().GetCurrentLayer().Return(gLayer).Times(1)
+	tpd.mClock.EXPECT().LayerToTime((gLayer.GetEpoch() + 1).FirstLayer()).Return(time.Now()).Times(1)
+	tpd.Start(context.TODO())
+
 	epoch3Beacon := types.HexToBeacon("0xe3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 	epoch := types.EpochID(3)
-	finalLayer := types.NewLayerID(layersPerEpoch * uint32(epoch))
+	finalLayer := types.NewLayerID(types.GetLayersPerEpoch() * uint32(epoch))
 	beacon1 := types.RandomBeacon()
 	beacon2 := types.RandomBeacon()
 	for layer := gLayer.Add(1); layer.Before(finalLayer); layer = layer.Add(1) {
-		pd.handleLayer(context.TODO(), layer)
+		tpd.mClock.EXPECT().GetCurrentLayer().Return(layer).AnyTimes()
+		if layer.FirstInEpoch() {
+			tpd.onNewEpoch(context.TODO(), layer.GetEpoch())
+		}
 		thisEpoch := layer.GetEpoch()
-		pd.recordBeacon(thisEpoch, types.RandomBallotID(), beacon1, 100)
-		pd.recordBeacon(thisEpoch, types.RandomBallotID(), beacon2, 200)
+		tpd.recordBeacon(thisEpoch, types.RandomBallotID(), beacon1, 100)
+		tpd.recordBeacon(thisEpoch, types.RandomBallotID(), beacon2, 200)
 
 		numCalculated := 0
 		numObserved := 0
 		numObservedWeight := 0
-		pd.logger.Info("gathering data from test in epoch %v", thisEpoch)
 		allMetrics, err := prometheus.DefaultGatherer.Gather()
 		assert.NoError(t, err)
 		for _, m := range allMetrics {
@@ -231,7 +247,6 @@ func TestBeaconWithMetrics(t *testing.T) {
 				expected := fmt.Sprintf("label:<name:\"beacon\" value:\"%s\" > label:<name:\"epoch\" value:\"%d\" > counter:<value:%d > ", beaconStr, thisEpoch+1, atxHeader.GetWeight())
 				assert.Equal(t, expected, m.Metric[0].String())
 			case "spacemesh_beacons_beacon_observed_total":
-				pd.logger.Info(m.String())
 				require.Equal(t, 2, len(m.Metric))
 				numObserved = numObserved + 2
 				count := layer.OrdinalInEpoch() + 1
@@ -264,6 +279,9 @@ func TestBeaconWithMetrics(t *testing.T) {
 		assert.Equal(t, 2, numObserved, layer)
 		assert.Equal(t, 2, numObservedWeight, layer)
 	}
+
+	tpd.mClock.EXPECT().Unsubscribe(gomock.Any()).Times(1)
+	tpd.Close()
 }
 
 func TestBeacon_BeaconsWithDatabase(t *testing.T) {
@@ -536,87 +554,16 @@ func TestBeacon_findMostWeightedBeaconForEpoch_NoBeacon(t *testing.T) {
 	assert.Equal(t, types.EmptyBeacon, got)
 }
 
-func TestBeacon_getProposalChannel(t *testing.T) {
-	t.Parallel()
+func TestBeacon_persistBeacon(t *testing.T) {
+	tpd := setUpProtocolDriver(t)
+	epoch := types.EpochID(5)
+	beacon := types.RandomBeacon()
+	require.NoError(t, tpd.setBeacon(epoch, beacon))
 
-	currentEpoch := types.EpochID(10)
-
-	tt := []struct {
-		name            string
-		epoch           types.EpochID
-		proposalEndTime time.Time
-		makeNextChFull  bool
-		expected        bool
-	}{
-		{
-			name:     "old epoch",
-			epoch:    currentEpoch - 1,
-			expected: false,
-		},
-		{
-			name:     "on time",
-			epoch:    currentEpoch,
-			expected: true,
-		},
-		{
-			name:            "proposal phase ended",
-			epoch:           currentEpoch,
-			proposalEndTime: time.Now(),
-			expected:        false,
-		},
-		{
-			name:     "accept next epoch",
-			epoch:    currentEpoch + 1,
-			expected: true,
-		},
-		{
-			name:           "next epoch full",
-			epoch:          currentEpoch + 1,
-			makeNextChFull: true,
-			expected:       true,
-		},
-		{
-			name:     "no future epoch beyond next",
-			epoch:    currentEpoch + 2,
-			expected: false,
-		},
-	}
-
-	for i, tc := range tt {
-		tc := tc
-		t.Run(tc.name, func(t *testing.T) {
-			// don't run these tests in parallel. somehow all cases end up using the same ProtocolDriver instance
-			// t.Parallel()
-			pd := ProtocolDriver{
-				logger:          logtest.New(t).WithName(fmt.Sprintf("ProtocolDriver-%v", i)),
-				epochInProgress: currentEpoch,
-				current: &state{
-					proposalChan:              make(chan *proposalMessageWithReceiptData, proposalChanCapacity),
-					proposalPhaseFinishedTime: tc.proposalEndTime,
-				},
-				next: &state{
-					proposalChan: make(chan *proposalMessageWithReceiptData, proposalChanCapacity),
-				},
-			}
-			if tc.makeNextChFull {
-				pd.mu.Lock()
-				nextCh := pd.next.proposalChan
-				for i := 0; i < proposalChanCapacity; i++ {
-					nextCh <- &proposalMessageWithReceiptData{
-						message: ProposalMessage{},
-					}
-				}
-				pd.mu.Unlock()
-			}
-
-			ch := pd.getProposalChannel(context.TODO(), tc.epoch)
-			if tc.expected {
-				assert.NotNil(t, ch)
-			} else {
-				assert.Nil(t, ch)
-			}
-		})
-	}
+	// saving it again won't cause error
+	assert.NoError(t, tpd.persistBeacon(epoch, beacon))
+	// but saving a different one will
+	assert.ErrorIs(t, tpd.persistBeacon(epoch, types.RandomBeacon()), errDifferentBeacon)
 }
 
 func TestBeacon_atxThresholdFraction(t *testing.T) {

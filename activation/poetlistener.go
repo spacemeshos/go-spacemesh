@@ -3,10 +3,9 @@ package activation
 import (
 	"context"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
@@ -25,7 +24,7 @@ type PoetListener struct {
 }
 
 // HandlePoetProofMessage is a receiver for broadcast messages.
-func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
+func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(msg, &proofMessage); err != nil {
 		l.Log.Error("failed to unmarshal poet membership proof: %v", err)

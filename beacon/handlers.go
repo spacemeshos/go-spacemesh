@@ -7,131 +7,108 @@ import (
 	"math/big"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 )
+
+type category uint8
 
 const (
 	// ProposalProtocol is the protocol for sending proposal messages through Gossip.
 	ProposalProtocol = "BeaconProposal"
 
-	// FirstVoteProtocol is the protocol for sending first vote messages through Gossip.
-	FirstVoteProtocol = "BeaconFirstVote"
+	// FirstVotesProtocol is the protocol for sending first vote messages through Gossip.
+	FirstVotesProtocol = "BeaconFirstVotes"
 
-	// FollowingVotingProtocol is the protocol for sending following vote messages through Gossip.
-	FollowingVotingProtocol = "BeaconFollowingVotes"
+	// FollowingVotesProtocol is the protocol for sending following vote messages through Gossip.
+	FollowingVotesProtocol = "BeaconFollowingVotes"
+
+	valid            category = 1
+	potentiallyValid category = 2
+	invalid          category = 3
 )
 
 var (
-	// errVRFNotVerified is returned if proposal message fails VRF verification.
-	errVRFNotVerified = errors.New("proposal failed vrf verification")
-
-	// errProposalDoesntPassThreshold is returned if proposal message doesn't pass threshold.
+	errVRFNotVerified              = errors.New("proposal failed vrf verification")
 	errProposalDoesntPassThreshold = errors.New("proposal doesn't pass threshold")
-
-	// errAlreadyProposed is returned when miner doubly proposed for the same epoch.
-	errAlreadyProposed = errors.New("already proposed")
-
-	// errAlreadyVoted is returned when miner doubly voted for the same epoch/round.
-	errAlreadyVoted = errors.New("already voted")
-
-	// errMinerATXNotFound is returned when miner has no ATXs in the previous epoch.
-	errMinerATXNotFound = errors.New("miner ATX not found in previous epoch")
-
-	// errProtocolNotRunning is returned when we are not in the middle of the beacon protocol.
-	errProtocolNotRunning = errors.New("beacon protocol not running")
+	errAlreadyProposed             = errors.New("already proposed")
+	errAlreadyVoted                = errors.New("already voted")
+	errMinerATXNotFound            = errors.New("miner ATX not found in previous epoch")
+	errProtocolNotRunning          = errors.New("beacon protocol not running")
+	errEpochNotActive              = errors.New("epoch not active")
+	errMalformedMessage            = errors.New("malformed msg")
+	errUntimelyMessage             = errors.New("untimely msg")
 )
 
-// HandleSerializedProposalMessage defines method to handle proposal Messages from gossip.
-func (pd *ProtocolDriver) HandleSerializedProposalMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
-	if pd.isClosed() || !pd.isInProtocol() {
-		pd.logger.WithContext(ctx).Debug("beacon protocol shutting down or not running, dropping msg")
+// HandleWeakCoinProposal handles weakcoin proposal from gossip.
+func (pd *ProtocolDriver) HandleWeakCoinProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+	return pd.weakCoin.HandleProposal(ctx, peer, msg)
+}
+
+// HandleProposal handles beacon proposal from gossip.
+func (pd *ProtocolDriver) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+	if pd.isClosed() {
+		pd.logger.WithContext(ctx).Debug("beacon protocol shutting down, dropping msg")
 		return pubsub.ValidationIgnore
 	}
+
 	receivedTime := time.Now()
-	logger := pd.logger.WithContext(ctx)
-
-	logger.With().Debug("new proposal message", log.String("sender", pid.String()))
-
-	var message ProposalMessage
-	if err := types.BytesToInterface(msg, &message); err != nil {
-		logger.With().Warning("received malformed proposal message", log.Err(err))
+	if err := pd.handleProposal(ctx, peer, msg, receivedTime); err != nil {
+		pd.logger.WithContext(ctx).With().Error("failed to handle beacon proposal", log.Err(err))
 		return pubsub.ValidationIgnore
-	}
-
-	ch := pd.getProposalChannel(ctx, message.EpochID)
-	if ch == nil {
-		return pubsub.ValidationIgnore
-	}
-	proposalWithReceipt := &proposalMessageWithReceiptData{
-		message:      message,
-		receivedTime: receivedTime,
-	}
-	// FIXME(dshulyak) buffer messages without channel.
-	// if message.EpochID == currentEpoch + 1 : buffer message in the slice. when epoch starts, check that slice
-	// if message.EpochID == currentEpoch     : validate without passing to the channel
-	select {
-	case <-ctx.Done():
-	case ch <- proposalWithReceipt:
 	}
 	return pubsub.ValidationAccept
 }
 
-func (pd *ProtocolDriver) readProposalMessagesLoop(ctx context.Context, ch chan *proposalMessageWithReceiptData) {
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case em := <-ch:
-			if em == nil || pd.isClosed() || !pd.isInProtocol() {
-				return
-			}
+func (pd *ProtocolDriver) handleProposal(ctx context.Context, peer p2p.Peer, msg []byte, receivedTime time.Time) error {
+	logger := pd.logger.WithContext(ctx)
 
-			if err := pd.handleProposalMessage(ctx, em.message, em.receivedTime); err != nil {
-				pd.logger.WithContext(ctx).With().Error("failed to handle proposal message",
-					log.String("message", em.message.String()),
-					log.Err(err))
-
-				return
-			}
-		}
+	var m ProposalMessage
+	if err := types.BytesToInterface(msg, &m); err != nil {
+		logger.With().Warning("received malformed beacon proposal", log.String("sender", peer.String()), log.Err(err))
+		return errMalformedMessage
 	}
-}
 
-func (pd *ProtocolDriver) handleProposalMessage(ctx context.Context, m ProposalMessage, receivedTime time.Time) error {
-	currentEpoch := pd.currentEpoch()
+	if !pd.isProposalTimely(&m, receivedTime) {
+		logger.With().Warning("proposal too early", m.EpochID, log.Time("received_at", receivedTime))
+		return errUntimelyMessage
+	}
 
-	atxID, err := pd.verifyProposalMessage(ctx, m, currentEpoch)
+	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, log.String("miner_id", m.NodeID.ShortString()))
+	logger.Debug("new beacon proposal")
+
+	if _, err := pd.initEpochStateIfNotPresent(logger, m.EpochID); err != nil {
+		return err
+	}
+
+	atxID, err := pd.verifyProposalMessage(logger, m)
 	if err != nil {
 		return err
 	}
 
-	if err = pd.classifyProposalMessage(ctx, m, atxID, currentEpoch, receivedTime); err != nil {
+	cat, err := pd.classifyProposal(logger, m, atxID, receivedTime)
+	if err != nil {
 		return err
 	}
-
-	return nil
+	return pd.addProposal(m, cat)
 }
 
-func (pd *ProtocolDriver) classifyProposalMessage(ctx context.Context, m ProposalMessage, atxID types.ATXID, currentEpoch types.EpochID, receivedTime time.Time) error {
+func (pd *ProtocolDriver) classifyProposal(logger log.Log, m ProposalMessage, atxID types.ATXID, receivedTime time.Time) (category, error) {
 	minerID := m.NodeID.ShortString()
-	logger := pd.logger.WithContext(ctx).WithFields(currentEpoch, log.String("miner_id", minerID))
-
 	atxHeader, err := pd.atxDB.GetAtxHeader(atxID)
 	if err != nil {
 		logger.Error("[proposal] failed to get ATX header", atxID, log.Err(err))
-		return fmt.Errorf("[proposal] failed to get ATX header (miner ID %v, ATX ID %v): %w", minerID, atxID, err)
+		return invalid, fmt.Errorf("[proposal] failed to get ATX header (miner ID %v, ATX ID %v): %w", minerID, atxID, err)
 	}
 
 	atxTimestamp, err := pd.atxDB.GetAtxTimestamp(atxID)
 	if err != nil {
 		logger.Error("[proposal] failed to get ATX timestamp", atxID, log.Err(err))
-		return fmt.Errorf("[proposal] failed to get ATX timestamp (miner ID %v, ATX ID %v): %w", minerID, atxID, err)
+		return invalid, fmt.Errorf("[proposal] failed to get ATX timestamp (miner ID %v, ATX ID %v): %w", minerID, atxID, err)
 	}
 
 	atxEpoch := atxHeader.PubLayerID.GetEpoch()
@@ -152,18 +129,26 @@ func (pd *ProtocolDriver) classifyProposalMessage(ctx context.Context, m Proposa
 	// so if a proposal is timely for any honest user,
 	// it cannot be late for any honest user (and vice versa).
 
-	switch {
-	case pd.isValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
-		logger.Debug("received valid proposal message")
-		pd.addValidProposal(m.VRFSignature)
-	case pd.isPotentiallyValidProposalMessage(currentEpoch, atxTimestamp, nextEpochStart, receivedTime):
-		logger.Debug("received potentially valid proposal message")
-		pd.addPotentiallyValidProposal(m.VRFSignature)
-	default:
-		logger.Warning("received invalid proposal message")
+	var (
+		atxDelay      = atxTimestamp.Sub(nextEpochStart)
+		endTime       = pd.getProposalPhaseFinishedTime(m.EpochID)
+		proposalDelay time.Duration
+	)
+	if endTime != (time.Time{}) {
+		proposalDelay = receivedTime.Sub(endTime)
 	}
 
-	return nil
+	switch {
+	case atxDelay <= 0 && proposalDelay <= 0:
+		logger.Debug("received valid proposal: ATX delay %v, proposal delay %v", atxDelay, proposalDelay)
+		return valid, nil
+	case atxDelay <= pd.config.GracePeriodDuration && proposalDelay <= pd.config.GracePeriodDuration:
+		logger.Debug("received potentially proposal: ATX delay %v, proposal delay %v", atxDelay, proposalDelay)
+		return potentiallyValid, nil
+	default:
+		logger.Warning("received invalid proposal: ATX delay %v, proposal delay %v", atxDelay, proposalDelay)
+	}
+	return invalid, nil
 }
 
 func cropData(numBytes int, data []byte) []byte {
@@ -174,41 +159,26 @@ func cropData(numBytes int, data []byte) []byte {
 	return shortened
 }
 
-func (pd *ProtocolDriver) addValidProposal(proposal []byte) {
-	if !pd.isInProtocol() {
-		pd.logger.Debug("beacon not in protocol, not adding valid proposals")
-		return
-	}
-
+func (pd *ProtocolDriver) addProposal(m ProposalMessage, cat category) error {
+	p := cropData(types.BeaconSize, m.VRFSignature)
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	if pd.current.incomingProposals.valid == nil {
-		pd.current.incomingProposals.valid = make(map[string]struct{})
+	if _, ok := pd.states[m.EpochID]; !ok {
+		return errEpochNotActive
 	}
-	p := cropData(types.BeaconSize, proposal)
-	pd.current.incomingProposals.valid[string(p)] = struct{}{}
+	switch cat {
+	case valid:
+		pd.states[m.EpochID].addValidProposal(p)
+	case potentiallyValid:
+		pd.states[m.EpochID].addPotentiallyValidProposal(p)
+	}
+	return nil
 }
 
-func (pd *ProtocolDriver) addPotentiallyValidProposal(proposal []byte) {
-	if !pd.isInProtocol() {
-		pd.logger.Debug("beacon not in protocol, not adding potentially valid proposals")
-		return
-	}
-
-	pd.mu.Lock()
-	defer pd.mu.Unlock()
-	if pd.current.incomingProposals.potentiallyValid == nil {
-		pd.current.incomingProposals.potentiallyValid = make(map[string]struct{})
-	}
-	p := cropData(types.BeaconSize, proposal)
-	pd.current.incomingProposals.potentiallyValid[string(p)] = struct{}{}
-}
-
-func (pd *ProtocolDriver) verifyProposalMessage(ctx context.Context, m ProposalMessage, currentEpoch types.EpochID) (types.ATXID, error) {
+func (pd *ProtocolDriver) verifyProposalMessage(logger log.Log, m ProposalMessage) (types.ATXID, error) {
 	minerID := m.NodeID.ShortString()
-	logger := pd.logger.WithContext(ctx).WithFields(currentEpoch, log.String("miner_id", minerID))
 
-	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(m.NodeID, currentEpoch-1)
+	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(m.NodeID, m.EpochID-1)
 	if errors.Is(err, database.ErrNotFound) {
 		logger.Warning("[proposal] miner has no ATX in previous epoch")
 		return types.ATXID{}, fmt.Errorf("[proposal] miner has no ATX in previous epoch (miner ID %v): %w", minerID, errMinerATXNotFound)
@@ -220,81 +190,73 @@ func (pd *ProtocolDriver) verifyProposalMessage(ctx context.Context, m ProposalM
 	}
 
 	vrfPK := signing.NewPublicKey(m.NodeID.VRFPublicKey)
-	currentEpochProposal := buildProposal(currentEpoch, logger)
+	currentEpochProposal := buildProposal(m.EpochID, logger)
 	if !pd.vrfVerifier.Verify(vrfPK, currentEpochProposal, m.VRFSignature) {
 		// TODO(nkryuchkov): attach telemetry
 		logger.Warning("[proposal] failed to verify VRF signature")
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to verify VRF signature (miner ID %v): %w", minerID, errVRFNotVerified)
 	}
 
-	if err := pd.registerProposed(logger, vrfPK); err != nil {
+	if err := pd.registerProposed(logger, m.EpochID, vrfPK); err != nil {
 		return types.ATXID{}, fmt.Errorf("[proposal] failed to register proposal (miner ID %v): %w", minerID, err)
 	}
 
-	if !pd.checkProposalEligibility(logger, m.VRFSignature) {
+	if !pd.checkProposalEligibility(logger, m.EpochID, m.VRFSignature) {
 		return types.ATXID{}, fmt.Errorf("[proposal] not eligible (miner ID %v): %w", minerID, errProposalDoesntPassThreshold)
 	}
 
 	return atxID, nil
 }
 
-func (pd *ProtocolDriver) isPotentiallyValidProposalMessage(currentEpoch types.EpochID, atxTimestamp, nextEpochStart, receivedTimestamp time.Time) bool {
-	delayedATX := atxTimestamp.Before(nextEpochStart.Add(pd.config.GracePeriodDuration))
-	delayedProposal := pd.receivedBeforeProposalPhaseFinished(currentEpoch, receivedTimestamp.Add(-pd.config.GracePeriodDuration))
-
-	return delayedATX && delayedProposal
-}
-
-func (pd *ProtocolDriver) isValidProposalMessage(currentEpoch types.EpochID, atxTimestamp, nextEpochStart, receivedTimestamp time.Time) bool {
-	timelyATX := atxTimestamp.Before(nextEpochStart)
-	timelyProposal := pd.receivedBeforeProposalPhaseFinished(currentEpoch, receivedTimestamp)
-
-	return timelyATX && timelyProposal
-}
-
-// HandleSerializedFirstVotingMessage defines method to handle first voting messages from gossip.
-func (pd *ProtocolDriver) HandleSerializedFirstVotingMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+// HandleFirstVotes handles beacon first votes from gossip.
+func (pd *ProtocolDriver) HandleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
 	if pd.isClosed() || !pd.isInProtocol() {
 		pd.logger.WithContext(ctx).Debug("beacon protocol shutting down or not running, dropping msg")
 		return pubsub.ValidationIgnore
 	}
 
-	logger := pd.logger.WithContext(ctx).WithFields(
-		log.String("sender", pid.String()),
-		log.Binary("message", msg))
-	logger.Debug("new first voting message")
-
-	var m FirstVotingMessage
-	if err := types.BytesToInterface(msg, &m); err != nil {
-		logger.With().Warning("received invalid voting message", log.Err(err))
-		return pubsub.ValidationIgnore
-	}
-
-	currentEpoch := pd.currentEpoch()
-	if m.EpochID != currentEpoch {
-		logger.With().Debug("first voting message from different epoch",
-			log.Uint32("current_epoch", uint32(currentEpoch)),
-			log.Uint32("message_epoch", uint32(m.EpochID)))
-		return pubsub.ValidationIgnore
-	}
-
-	if err := pd.handleFirstVotingMessage(ctx, m); err != nil {
+	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", peer.String()), log.Binary("message", msg))
+	logger.Debug("new first votes")
+	if err := pd.handleFirstVotes(ctx, peer, msg); err != nil {
 		logger.With().Warning("failed to handle first voting message", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
 }
 
-func (pd *ProtocolDriver) handleFirstVotingMessage(ctx context.Context, message FirstVotingMessage) error {
-	currentEpoch := pd.currentEpoch()
+func (pd *ProtocolDriver) handleFirstVotes(ctx context.Context, peer p2p.Peer, msg []byte) error {
+	logger := pd.logger.WithContext(ctx).WithFields(types.FirstRound, log.String("sender", peer.String()))
 
-	minerPK, atxID, err := pd.verifyFirstVotingMessage(ctx, message, currentEpoch)
+	var m FirstVotingMessage
+	if err := types.BytesToInterface(msg, &m); err != nil {
+		logger.With().Warning("received invalid first votes", log.Binary("message", msg), log.Err(err))
+		return errMalformedMessage
+	}
+
+	currentEpoch := pd.currentEpoch()
+	if m.EpochID != currentEpoch {
+		logger.With().Debug("first votes from different epoch",
+			log.Uint32("current_epoch", uint32(currentEpoch)),
+			log.Uint32("message_epoch", uint32(m.EpochID)))
+		return errEpochNotActive
+	}
+
+	// don't accept more first vote after the round ends
+	currentRound := pd.currentRound()
+	if currentRound > types.FirstRound {
+		logger.With().Warning("first votes too late",
+			log.Uint32("current_round", uint32(currentRound)),
+			log.Uint32("message_round", uint32(types.FirstRound)))
+		return errUntimelyMessage
+	}
+
+	minerPK, atxID, err := pd.verifyFirstVotes(ctx, m)
 	if err != nil {
 		return err
 	}
 
 	minerID := types.NodeID{Key: minerPK.String()}.ShortString()
-	logger := pd.logger.WithContext(ctx).WithFields(currentEpoch, types.FirstRound, log.String("miner_id", minerID))
+	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound, log.String("miner_id", minerID))
 	atx, err := pd.atxDB.GetAtxHeader(atxID)
 	if err != nil {
 		logger.With().Error("failed to get ATX header", atxID, log.Err(err))
@@ -304,38 +266,30 @@ func (pd *ProtocolDriver) handleFirstVotingMessage(ctx context.Context, message 
 	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
 
 	logger.Debug("received first voting message, storing its votes")
-	pd.storeFirstVotes(message, minerPK, voteWeight)
-
-	return nil
+	return pd.storeFirstVotes(m, minerPK, voteWeight)
 }
 
-func (pd *ProtocolDriver) verifyFirstVotingMessage(ctx context.Context, message FirstVotingMessage, currentEpoch types.EpochID) (*signing.PublicKey, types.ATXID, error) {
-	// don't accept more first vote after the round ends
-	currentRound := pd.currentRound()
-	if currentRound > types.FirstRound {
-		return nil, types.ATXID{}, fmt.Errorf("[round %v] message too late. protocol has advanced to round %v", types.FirstRound, currentRound)
-	}
-
-	logger := pd.logger.WithContext(ctx).WithFields(currentEpoch, types.FirstRound)
-	messageBytes, err := types.InterfaceToBytes(message.FirstVotingMessageBody)
+func (pd *ProtocolDriver) verifyFirstVotes(ctx context.Context, m FirstVotingMessage) (*signing.PublicKey, types.ATXID, error) {
+	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, types.FirstRound)
+	messageBytes, err := types.InterfaceToBytes(m.FirstVotingMessageBody)
 	if err != nil {
 		logger.With().Panic("failed to serialize first voting message", log.Err(err))
 	}
 
-	minerPK, err := pd.edVerifier.Extract(messageBytes, message.Signature)
+	minerPK, err := pd.edVerifier.Extract(messageBytes, m.Signature)
 	if err != nil {
-		return nil, types.ATXID{}, fmt.Errorf("[round %v] unable to recover ID from signature %x: %w", types.FirstRound, message.Signature, err)
+		return nil, types.ATXID{}, fmt.Errorf("[round %v] unable to recover ID from signature %x: %w", types.FirstRound, m.Signature, err)
 	}
 
 	nodeID := types.NodeID{Key: minerPK.String()}
 	minerID := nodeID.ShortString()
 	logger = logger.WithFields(log.String("miner_id", minerID))
 
-	if err := pd.registerVoted(logger, minerPK, types.FirstRound); err != nil {
+	if err := pd.registerVoted(logger, m.EpochID, minerPK, types.FirstRound); err != nil {
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] failed to register proposal (miner ID %v): %w", types.FirstRound, minerID, err)
 	}
 
-	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(nodeID, currentEpoch-1)
+	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(nodeID, m.EpochID-1)
 	if errors.Is(err, database.ErrNotFound) {
 		logger.Warning("miner has no ATX in the previous epoch")
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] miner has no ATX in previous epoch (miner ID %v): %w", types.FirstRound, minerID, errMinerATXNotFound)
@@ -349,87 +303,96 @@ func (pd *ProtocolDriver) verifyFirstVotingMessage(ctx context.Context, message 
 	return minerPK, atxID, nil
 }
 
-func (pd *ProtocolDriver) storeFirstVotes(message FirstVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) {
+func (pd *ProtocolDriver) storeFirstVotes(m FirstVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not storing first votes")
-		return
+		return errProtocolNotRunning
 	}
 
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
-	for _, proposal := range message.ValidProposals {
-		pd.current.addVote(string(proposal), up, voteWeight)
+	if _, ok := pd.states[m.EpochID]; !ok {
+		return errEpochNotActive
 	}
 
-	for _, proposal := range message.PotentiallyValidProposals {
-		pd.current.addVote(string(proposal), down, voteWeight)
+	for _, proposal := range m.ValidProposals {
+		pd.states[m.EpochID].addVote(string(proposal), up, voteWeight)
+	}
+
+	for _, proposal := range m.PotentiallyValidProposals {
+		pd.states[m.EpochID].addVote(string(proposal), down, voteWeight)
 	}
 
 	// this is used for bit vector calculation
-	voteList := append(message.ValidProposals, message.PotentiallyValidProposals...)
+	voteList := append(m.ValidProposals, m.PotentiallyValidProposals...)
 	if uint32(len(voteList)) > pd.config.VotesLimit {
 		voteList = voteList[:pd.config.VotesLimit]
 	}
 
-	pd.current.setMinerFirstRoundVote(minerPK, voteList)
+	pd.states[m.EpochID].setMinerFirstRoundVote(minerPK, voteList)
+	return nil
 }
 
-// HandleSerializedFollowingVotingMessage defines method to handle following voting Messages from gossip.
-func (pd *ProtocolDriver) HandleSerializedFollowingVotingMessage(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+// HandleFollowingVotes handles beacon following votes from gossip.
+func (pd *ProtocolDriver) HandleFollowingVotes(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
+	receivedTime := time.Now()
+
 	if pd.isClosed() || !pd.isInProtocol() {
 		pd.logger.WithContext(ctx).Debug("beacon protocol shutting down or not running, dropping msg")
 		return pubsub.ValidationIgnore
 	}
 
-	logger := pd.logger.WithContext(ctx).WithFields(
-		log.String("sender", pid.String()),
-		log.Binary("message", msg))
-
-	logger.Debug("new voting message")
-
-	var m FollowingVotingMessage
-	if err := types.BytesToInterface(msg, &m); err != nil {
-		logger.With().Warning("received invalid voting message", log.Err(err))
-		return pubsub.ValidationIgnore
-	}
-
-	currentEpoch := pd.currentEpoch()
-	if m.EpochID != currentEpoch {
-		logger.With().Debug("following voting message from different epoch",
-			log.Uint32("current_epoch", uint32(currentEpoch)),
-			log.Uint32("message_epoch", uint32(m.EpochID)))
-		return pubsub.ValidationIgnore
-	}
-
-	if err := pd.handleFollowingVotingMessage(ctx, m); err != nil {
+	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", peer.String()), log.Binary("message", msg))
+	logger.Debug("new following votes")
+	if err := pd.handleFollowingVotes(ctx, peer, msg, receivedTime); err != nil {
 		logger.With().Warning("failed to handle following voting message", log.Err(err))
 		return pubsub.ValidationIgnore
 	}
 	return pubsub.ValidationAccept
 }
 
-func (pd *ProtocolDriver) handleFollowingVotingMessage(ctx context.Context, message FollowingVotingMessage) error {
-	currentEpoch := pd.currentEpoch()
+func (pd *ProtocolDriver) handleFollowingVotes(ctx context.Context, peer p2p.Peer, msg []byte, receivedTime time.Time) error {
+	logger := pd.logger.WithContext(ctx).WithFields(log.String("sender", peer.String()))
 
-	minerPK, atxID, err := pd.verifyFollowingVotingMessage(ctx, message, currentEpoch)
+	var m FollowingVotingMessage
+	if err := types.BytesToInterface(msg, &m); err != nil {
+		logger.With().Warning("received malformed following votes", log.Binary("message", msg), log.Err(err))
+		return errMalformedMessage
+	}
+
+	currentEpoch := pd.currentEpoch()
+	if m.EpochID != currentEpoch {
+		logger.With().Debug("following votes from different epoch",
+			log.Uint32("current_epoch", uint32(currentEpoch)),
+			log.Uint32("message_epoch", uint32(m.EpochID)))
+		return errEpochNotActive
+	}
+
+	// don't accept votes from future rounds
+	if !pd.isVoteTimely(&m, receivedTime) {
+		logger.With().Warning("following votes too early", m.RoundID, log.Time("received_at", receivedTime))
+		return errUntimelyMessage
+	}
+
+	minerPK, atxID, err := pd.verifyFollowingVotes(ctx, m)
 	if err != nil {
 		return err
 	}
 
 	minerID := types.NodeID{Key: minerPK.String()}.ShortString()
-	logger := pd.logger.WithContext(ctx).WithFields(currentEpoch, message.RoundID, log.String("miner_id", minerID))
+	logger = pd.logger.WithContext(ctx).WithFields(m.EpochID, m.RoundID, log.String("miner_id", minerID))
 
 	atx, err := pd.atxDB.GetAtxHeader(atxID)
 	if err != nil {
 		logger.With().Error("failed to get ATX header", atxID, log.Err(err))
-		return fmt.Errorf("[round %v] failed to get ATX header (miner ID %v, ATX ID %v): %w", message.RoundID, minerID, atxID, err)
+		return fmt.Errorf("[round %v] failed to get ATX header (miner ID %v, ATX ID %v): %w", m.RoundID, minerID, atxID, err)
 	}
 
 	voteWeight := new(big.Int).SetUint64(atx.GetWeight())
 
 	logger.Debug("received following voting message, counting its votes")
-	if err = pd.storeFollowingVotes(message, minerPK, voteWeight); err != nil {
+	if err = pd.storeFollowingVotes(m, minerPK, voteWeight); err != nil {
 		logger.With().Warning("failed to store following votes", log.Err(err))
 		return err
 	}
@@ -437,34 +400,27 @@ func (pd *ProtocolDriver) handleFollowingVotingMessage(ctx context.Context, mess
 	return nil
 }
 
-func (pd *ProtocolDriver) verifyFollowingVotingMessage(ctx context.Context, message FollowingVotingMessage, currentEpoch types.EpochID) (*signing.PublicKey, types.ATXID, error) {
-	round := message.RoundID
-
-	// don't accept votes from future rounds
-	currentRound := pd.currentRound()
-	if round > currentRound {
-		return nil, types.ATXID{}, fmt.Errorf("[round %v] message too early. protocol is at round %v", round, currentRound)
-	}
-
-	messageBytes, err := types.InterfaceToBytes(message.FollowingVotingMessageBody)
+func (pd *ProtocolDriver) verifyFollowingVotes(ctx context.Context, m FollowingVotingMessage) (*signing.PublicKey, types.ATXID, error) {
+	round := m.RoundID
+	messageBytes, err := types.InterfaceToBytes(m.FollowingVotingMessageBody)
 	if err != nil {
 		pd.logger.With().Panic("failed to serialize voting message", log.Err(err))
 	}
 
-	minerPK, err := pd.edVerifier.Extract(messageBytes, message.Signature)
+	minerPK, err := pd.edVerifier.Extract(messageBytes, m.Signature)
 	if err != nil {
-		return nil, types.ATXID{}, fmt.Errorf("[round %v] unable to recover ID from signature %x: %w", round, message.Signature, err)
+		return nil, types.ATXID{}, fmt.Errorf("[round %v] unable to recover ID from signature %x: %w", round, m.Signature, err)
 	}
 
 	nodeID := types.NodeID{Key: minerPK.String()}
 	minerID := nodeID.ShortString()
-	logger := pd.logger.WithContext(ctx).WithFields(currentEpoch, round, log.String("miner_id", minerID))
+	logger := pd.logger.WithContext(ctx).WithFields(m.EpochID, round, log.String("miner_id", minerID))
 
-	if err := pd.registerVoted(logger, minerPK, message.RoundID); err != nil {
+	if err := pd.registerVoted(logger, m.EpochID, minerPK, m.RoundID); err != nil {
 		return nil, types.ATXID{}, err
 	}
 
-	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(nodeID, currentEpoch-1)
+	atxID, err := pd.atxDB.GetNodeAtxIDForEpoch(nodeID, m.EpochID-1)
 	if errors.Is(err, database.ErrNotFound) {
 		logger.Warning("miner has no ATX in the previous epoch")
 		return nil, types.ATXID{}, fmt.Errorf("[round %v] miner has no ATX in previous epoch (miner ID %v): %w", round, minerID, errMinerATXNotFound)
@@ -478,39 +434,54 @@ func (pd *ProtocolDriver) verifyFollowingVotingMessage(ctx context.Context, mess
 	return minerPK, atxID, nil
 }
 
-func (pd *ProtocolDriver) storeFollowingVotes(message FollowingVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) error {
+func (pd *ProtocolDriver) storeFollowingVotes(m FollowingVotingMessage, minerPK *signing.PublicKey, voteWeight *big.Int) error {
 	if !pd.isInProtocol() {
 		pd.logger.Debug("beacon not in protocol, not storing following votes")
-		return nil
+		return errProtocolNotRunning
 	}
 
-	firstRoundVotes, err := pd.getFirstRoundVote(minerPK)
+	firstRoundVotes, err := pd.getFirstRoundVote(m.EpochID, minerPK)
 	if err != nil {
 		return fmt.Errorf("failed to get miner first round votes %v: %w", minerPK.String(), err)
 	}
 
-	thisRoundVotes := decodeVotes(message.VotesBitVector, firstRoundVotes)
-	pd.addToVoteMargin(thisRoundVotes, voteWeight)
-	return nil
+	thisRoundVotes := decodeVotes(m.VotesBitVector, firstRoundVotes)
+	return pd.addToVoteMargin(m.EpochID, thisRoundVotes, voteWeight)
 }
 
-func (pd *ProtocolDriver) addToVoteMargin(thisRoundVotes allVotes, voteWeight *big.Int) {
+func (pd *ProtocolDriver) getProposalPhaseFinishedTime(epoch types.EpochID) time.Time {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+	if s, ok := pd.states[epoch]; ok {
+		return s.proposalPhaseFinishedTime
+	}
+	// if this epoch doesn't exist, it is finished. returns something
+	// always in the past but different from time.Time{}
+	return time.Time{}.Add(time.Second)
+}
+
+func (pd *ProtocolDriver) addToVoteMargin(epoch types.EpochID, thisRoundVotes allVotes, voteWeight *big.Int) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
 
+	if _, ok := pd.states[epoch]; !ok {
+		return errEpochNotActive
+	}
 	for proposal := range thisRoundVotes.support {
-		pd.current.addVote(proposal, up, voteWeight)
+		pd.states[epoch].addVote(proposal, up, voteWeight)
 	}
 
 	for proposal := range thisRoundVotes.against {
-		pd.current.addVote(proposal, down, voteWeight)
+		pd.states[epoch].addVote(proposal, down, voteWeight)
 	}
+
+	return nil
 }
 
 func (pd *ProtocolDriver) currentEpoch() types.EpochID {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	return pd.epochInProgress
+	return pd.clock.GetCurrentLayer().GetEpoch()
 }
 
 func (pd *ProtocolDriver) currentRound() types.RoundID {
@@ -519,39 +490,65 @@ func (pd *ProtocolDriver) currentRound() types.RoundID {
 	return pd.roundInProgress
 }
 
-func (pd *ProtocolDriver) checkProposalEligibility(logger log.Log, vrfSig []byte) bool {
+func (pd *ProtocolDriver) isProposalTimely(p *ProposalMessage, receivedTime time.Time) bool {
 	pd.mu.RLock()
 	defer pd.mu.RUnlock()
-	eligible := pd.current.proposalChecker.IsProposalEligible(vrfSig)
+
+	currentEpoch := pd.clock.GetCurrentLayer().GetEpoch()
+	switch p.EpochID {
+	case currentEpoch:
+		return true
+	case currentEpoch + 1:
+		return receivedTime.After(pd.earliestProposalTime)
+	}
+	return false
+}
+
+func (pd *ProtocolDriver) isVoteTimely(m *FollowingVotingMessage, receivedTime time.Time) bool {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+	switch m.RoundID {
+	case pd.roundInProgress:
+		return true
+	case pd.roundInProgress + 1:
+		return receivedTime.After(pd.earliestVoteTime)
+	}
+	return false
+}
+
+func (pd *ProtocolDriver) checkProposalEligibility(logger log.Log, epoch types.EpochID, vrfSig []byte) bool {
+	pd.mu.RLock()
+	defer pd.mu.RUnlock()
+	if _, ok := pd.states[epoch]; !ok {
+		return false
+	}
+
+	eligible := pd.states[epoch].proposalChecker.IsProposalEligible(vrfSig)
 	if !eligible {
 		// the peer may have different total weight from us so that it passes threshold for the peer
 		// but does not pass here
 		proposalShortString := types.BytesToHash(vrfSig).ShortString()
 		logger.With().Warning("proposal doesn't pass threshold",
 			log.String("proposal", proposalShortString),
-			log.Uint64("total_weight", pd.current.epochWeight))
+			log.Uint64("total_weight", pd.states[epoch].epochWeight))
 	}
 	return eligible
 }
 
-func (pd *ProtocolDriver) registerProposed(logger log.Log, minerPK *signing.PublicKey) error {
-	if !pd.isInProtocol() {
-		pd.logger.Debug("beacon not in protocol, not registering proposal")
-		return errProtocolNotRunning
-	}
-
+func (pd *ProtocolDriver) registerProposed(logger log.Log, epoch types.EpochID, minerPK *signing.PublicKey) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	return pd.current.registerProposed(logger, minerPK)
+	if _, ok := pd.states[epoch]; !ok {
+		return errEpochNotActive
+	}
+	return pd.states[epoch].registerProposed(logger, minerPK)
 }
 
-func (pd *ProtocolDriver) registerVoted(logger log.Log, minerPK *signing.PublicKey, round types.RoundID) error {
-	if !pd.isInProtocol() {
-		pd.logger.Debug("beacon not in protocol, not registering votes")
-		return errProtocolNotRunning
-	}
-
+func (pd *ProtocolDriver) registerVoted(logger log.Log, epoch types.EpochID, minerPK *signing.PublicKey, round types.RoundID) error {
 	pd.mu.Lock()
 	defer pd.mu.Unlock()
-	return pd.current.registerVoted(logger, minerPK, round)
+	if _, ok := pd.states[epoch]; !ok {
+		return errEpochNotActive
+	}
+	return pd.states[epoch].registerVoted(logger, minerPK, round)
 }

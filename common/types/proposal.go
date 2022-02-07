@@ -89,6 +89,12 @@ func (p *Proposal) ID() ProposalID {
 // MarshalLogObject implements logging interface.
 func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("proposal_id", p.ID().String())
+	encoder.AddArray("transactions", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, id := range p.TxIDs {
+			encoder.AppendString(id.String())
+		}
+		return nil
+	}))
 	p.Ballot.MarshalLogObject(encoder)
 	return nil
 }
