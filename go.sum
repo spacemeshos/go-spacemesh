@@ -98,6 +98,7 @@ github.com/btcsuite/btcd v0.22.0-beta/go.mod h1:9n5ntfhhHQBIhUvlhDvD3Qg6fRUj4jkN
 github.com/btcsuite/btclog v0.0.0-20170628155309-84c8d2346e9f/go.mod h1:TdznJufoqS23FtqVCzL0ZqgP5MqXbb4fg/WgDys70nA=
 github.com/btcsuite/btcutil v0.0.0-20190207003914-4c204d697803/go.mod h1:+5NJ2+qvTyV9exUAL/rxXi3DcLg2Ts+ymUAY5y4NvMg=
 github.com/btcsuite/btcutil v0.0.0-20190425235716-9e5f4b9a998d/go.mod h1:+5NJ2+qvTyV9exUAL/rxXi3DcLg2Ts+ymUAY5y4NvMg=
+github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce h1:YtWJF7RHm2pYCvA5t0RPmAaLUhREsKuKd+SLhxFbFeQ=
 github.com/btcsuite/btcutil v1.0.3-0.20201208143702-a53e38424cce/go.mod h1:0DVlHczLPewLcPGEIeUEzfOJhqGPQ0mJJRDBtD307+o=
 github.com/btcsuite/go-socks v0.0.0-20170105172521-4720035b7bfd/go.mod h1:HHNXQzUsZCxOoE+CPiyCTO6x34Zs86zZUiwtpXoGdtg=
 github.com/btcsuite/goleveldb v0.0.0-20160330041536-7834afc9e8cd/go.mod h1:F+uVaaLLH7j4eDXPRvw78tMflu7Ie2bzYOH4Y8rRKBY=
@@ -424,6 +425,7 @@ github.com/jbenet/goprocess v0.1.4 h1:DRGOFReOMqqDNXwW70QkacFW0YN9QnwLV0Vqk+3oU0
 github.com/jbenet/goprocess v0.1.4/go.mod h1:5yspPrukOVuOLORacaBi858NqyClJPQxYZlqdZVfqY4=
 github.com/jellevandenhooff/dkim v0.0.0-20150330215556-f50fe3d243e1/go.mod h1:E0B/fFc00Y+Rasa88328GlI/XbtyysCtTHZS8h7IrBU=
 github.com/jessevdk/go-flags v0.0.0-20141203071132-1679536dcc89/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
+github.com/jessevdk/go-flags v1.4.0 h1:4IU2WS7AumrZ/40jfhf4QVDMsQwqA7VEHozFRrGARJA=
 github.com/jessevdk/go-flags v1.4.0/go.mod h1:4FA24M0QyGHXBuZZK/XkWh8h0e1EYbRYJSGM75WSRxI=
 github.com/jmespath/go-jmespath v0.0.0-20180206201540-c2b33e8439af/go.mod h1:Nht3zPeWKUH0NzdCt2Blrr5ys8VGpn0CEB0cQHVjt7k=
 github.com/joho/godotenv v1.3.0/go.mod h1:7hK45KPybAkOC6peb+G5yklZfMxEjkZhHbwpqxOKXbg=
@@ -975,8 +977,8 @@ github.com/sony/gobreaker v0.4.1/go.mod h1:ZKptC7FHNvhBz7dN2LGjPVBz2sZJmc0/PkyDJ
 github.com/sourcegraph/annotate v0.0.0-20160123013949-f4cad6c6324d/go.mod h1:UdhH50NIW0fCiwBSr0co2m7BnFLdv4fQTgdqdJTHFeE=
 github.com/sourcegraph/syntaxhighlight v0.0.0-20170531221838-bd320f5d308e/go.mod h1:HuIsMU8RRBOtsCgI77wP899iHVBQpCmg4ErYMZB+2IA=
 github.com/spacemeshos/api/release/go v0.0.0-20201103002846-7d0dfed55cc1/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
-github.com/spacemeshos/api/release/go v1.4.1-0.20220204052603-ce71130fec57 h1:8fUwi9aHE7WbmFLytqQTHkfUXbeOF3SORds+uEFvlIY=
-github.com/spacemeshos/api/release/go v1.4.1-0.20220204052603-ce71130fec57/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
+github.com/spacemeshos/api/release/go v1.4.1-0.20220208040137-6626e050c88b h1:aS4HqhHM9cyojYhVynNqghPbCQotW/dd0zRfL+Dtly4=
+github.com/spacemeshos/api/release/go v1.4.1-0.20220208040137-6626e050c88b/go.mod h1:kNY4cuAimIxpUbMLPZSgU8jl7Zbv5ohQrLn87ybl0QI=
 github.com/spacemeshos/bitstream v0.0.0-20210407173523-8168e84f83b0 h1:f5AVMlh6x7rVJ+SoYvqkOl284OpdPw7tH5aBliIt0gc=
 github.com/spacemeshos/bitstream v0.0.0-20210407173523-8168e84f83b0/go.mod h1:wnp+444ieV6+UUjPYJ8id/kuQbk4jZ6NWp5Nw6O091E=
 github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1 h1:INBIhbR/39yXEN8WVNfiGZehiKvkML+yrJfFuIwrmbU=
