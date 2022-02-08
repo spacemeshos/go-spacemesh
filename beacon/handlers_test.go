@@ -34,6 +34,7 @@ func createProtocolDriver(t *testing.T, epoch types.EpochID) *testProtocolDriver
 func createProtocolDriverWithFirstRoundVotes(t *testing.T, signer signing.Signer, epoch types.EpochID, round types.RoundID) (*testProtocolDriver, proposalList) {
 	tpd := createProtocolDriver(t, epoch)
 	plist := proposalList{types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize), types.RandomBytes(types.BeaconSize)}
+	setOwnFirstRoundVotes(t, tpd.ProtocolDriver, epoch, plist)
 	setMinerFirstRoundVotes(t, tpd.ProtocolDriver, epoch, signer.PublicKey(), plist)
 	tpd.setRoundInProgress(round)
 	return tpd, plist
@@ -200,6 +201,14 @@ func checkVoteMargins(t *testing.T, pd *ProtocolDriver, epoch types.EpochID, exp
 	defer pd.mu.RUnlock()
 	require.NotNil(t, pd.states[epoch])
 	assert.EqualValues(t, expected, pd.states[epoch].votesMargin)
+}
+
+func emptyVoteMargins(plist proposalList) map[string]*big.Int {
+	vm := make(map[string]*big.Int, len(plist))
+	for _, p := range plist {
+		vm[string(p)] = new(big.Int)
+	}
+	return vm
 }
 
 func Test_HandleProposal_Success(t *testing.T) {
@@ -892,7 +901,7 @@ func Test_HandleFollowingVotes_Shutdown(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tpd, _ := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 	tpd.mClock.EXPECT().Unsubscribe(gomock.Any())
 	tpd.Close()
 
@@ -904,7 +913,7 @@ func Test_HandleFollowingVotes_Shutdown(t *testing.T) {
 	res := tpd.HandleFollowingVotes(context.TODO(), "peerID", msgBytes)
 	assert.Equal(t, pubsub.ValidationIgnore, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
 
 func Test_HandleFollowingVotes_NotInProtocol(t *testing.T) {
@@ -913,7 +922,7 @@ func Test_HandleFollowingVotes_NotInProtocol(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tpd, _ := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
@@ -924,7 +933,7 @@ func Test_HandleFollowingVotes_NotInProtocol(t *testing.T) {
 	res := tpd.HandleFollowingVotes(context.TODO(), "peerID", msgBytes)
 	assert.Equal(t, pubsub.ValidationIgnore, res)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
 
 func Test_handleFollowingVotes_CorruptMsg(t *testing.T) {
@@ -933,7 +942,7 @@ func Test_handleFollowingVotes_CorruptMsg(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tpd, _ := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
@@ -943,7 +952,7 @@ func Test_handleFollowingVotes_CorruptMsg(t *testing.T) {
 	got := tpd.handleFollowingVotes(context.TODO(), "peerID", msgBytes[1:], time.Now())
 	assert.ErrorIs(t, got, errMalformedMessage)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
 
 func Test_handleFollowingVotes_WrongEpoch(t *testing.T) {
@@ -952,7 +961,7 @@ func Test_handleFollowingVotes_WrongEpoch(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tpd, _ := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 	createEpochState(t, tpd.ProtocolDriver, epoch+1)
 	createEpochState(t, tpd.ProtocolDriver, epoch-1)
 
@@ -965,9 +974,9 @@ func Test_handleFollowingVotes_WrongEpoch(t *testing.T) {
 	got := tpd.handleFollowingVotes(context.TODO(), "peerID", msgBytes, time.Now())
 	assert.ErrorIs(t, got, errEpochNotActive)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 	checkVoted(t, tpd.ProtocolDriver, epoch+1, signer, round, false)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch+1, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch+1, emptyVoteMargins(proposalList{}))
 
 	msg = createFollowingVote(t, signer, epoch-1, round, []byte{0b101}, false)
 	msgBytes, err = types.InterfaceToBytes(msg)
@@ -977,9 +986,9 @@ func Test_handleFollowingVotes_WrongEpoch(t *testing.T) {
 	got = tpd.handleFollowingVotes(context.TODO(), "peerID", msgBytes, time.Now())
 	assert.ErrorIs(t, got, errEpochNotActive)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 	checkVoted(t, tpd.ProtocolDriver, epoch-1, signer, round, false)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch-1, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch-1, emptyVoteMargins(proposalList{}))
 }
 
 func Test_handleFollowingVotes_TooEarly(t *testing.T) {
@@ -988,7 +997,7 @@ func Test_handleFollowingVotes_TooEarly(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tpd, _ := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
@@ -1000,7 +1009,7 @@ func Test_handleFollowingVotes_TooEarly(t *testing.T) {
 	got := tpd.handleFollowingVotes(context.TODO(), "peerID", msgBytes, time.Now())
 	assert.ErrorIs(t, got, errUntimelyMessage)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
 
 func Test_handleFollowingVotes_FailedToExtractPK(t *testing.T) {
@@ -1009,7 +1018,7 @@ func Test_handleFollowingVotes_FailedToExtractPK(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tpd, _ := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, true)
@@ -1020,7 +1029,7 @@ func Test_handleFollowingVotes_FailedToExtractPK(t *testing.T) {
 	got := tpd.handleFollowingVotes(context.TODO(), "peerID", msgBytes, time.Now())
 	assert.Contains(t, got.Error(), "bad signature format")
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, false)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
 
 func Test_handleFollowingVotes_AlreadyVoted(t *testing.T) {
@@ -1069,7 +1078,7 @@ func Test_handleFollowingVotes_MinerMissingATX(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tpd, _ := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
@@ -1082,7 +1091,7 @@ func Test_handleFollowingVotes_MinerMissingATX(t *testing.T) {
 	got := tpd.handleFollowingVotes(context.TODO(), "peerID", msgBytes, time.Now())
 	assert.ErrorIs(t, got, errMinerATXNotFound)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
 
 func Test_handleFollowingVotes_ATXLookupError(t *testing.T) {
@@ -1091,7 +1100,7 @@ func Test_handleFollowingVotes_ATXLookupError(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tpd, _ := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
@@ -1105,7 +1114,7 @@ func Test_handleFollowingVotes_ATXLookupError(t *testing.T) {
 	got := tpd.handleFollowingVotes(context.TODO(), "peerID", msgBytes, time.Now())
 	assert.ErrorIs(t, got, errUnknown)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
 
 func Test_handleFollowingVotes_ATXHeaderLookupError(t *testing.T) {
@@ -1114,7 +1123,7 @@ func Test_handleFollowingVotes_ATXHeaderLookupError(t *testing.T) {
 	const epoch = types.EpochID(10)
 	const round = types.RoundID(5)
 	signer := signing.NewEdSigner()
-	tpd, _ := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
+	tpd, plist := createProtocolDriverWithFirstRoundVotes(t, signer, epoch, round)
 
 	// this msg will contain a bit vector that set bit 0 and 2
 	msg := createFollowingVote(t, signer, epoch, round, []byte{0b101}, false)
@@ -1129,7 +1138,7 @@ func Test_handleFollowingVotes_ATXHeaderLookupError(t *testing.T) {
 	got := tpd.handleFollowingVotes(context.TODO(), "peerID", msgBytes, time.Now())
 	assert.ErrorIs(t, got, errUnknown)
 	checkVoted(t, tpd.ProtocolDriver, epoch, signer, round, true)
-	checkVoteMargins(t, tpd.ProtocolDriver, epoch, map[string]*big.Int{})
+	checkVoteMargins(t, tpd.ProtocolDriver, epoch, emptyVoteMargins(plist))
 }
 
 func Test_handleFollowingVotes_IgnoreUnknownProposal(t *testing.T) {
