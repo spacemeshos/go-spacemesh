@@ -305,12 +305,8 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 // correct and that all associated atx exist in the db. Will return error if writing to db failed.
 func (db *DB) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.ActivationTx) error {
 	// todo: maybe cleanup DB if failed by using defer (#1921)
-	if err := atxs.Add(db.sqlDB, atx, time.Now()); err != nil {
-		if errors.Is(err, sql.ErrObjectExists) {
-			// exists - how should we handle this?
-			return nil
-		}
-		return fmt.Errorf("put ATX in DB: %w", err)
+	if err := db.storeATXInDB(atx); err != nil {
+		return fmt.Errorf("store ATX in DB: %w", err)
 	}
 
 	db.Lock()
@@ -324,6 +320,28 @@ func (db *DB) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.Activa
 
 	db.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), ech)
 	return nil
+}
+
+func (db *DB) storeATXInDB(atx *types.ActivationTx) error {
+	dbTx, err := db.sqlDB.Tx(context.Background())
+	if err != nil {
+		return err
+	}
+	defer dbTx.Release()
+
+	if err := atxs.Add(dbTx, atx, time.Now()); err != nil {
+		if errors.Is(err, sql.ErrObjectExists) {
+			// exists - how should we handle this?
+			return nil
+		}
+		return fmt.Errorf("add ATX to DB: %w", err)
+	}
+
+	if err := atxs.UpdateTopIfNeeded(dbTx, atx); err != nil {
+		return fmt.Errorf("update top: %w", err)
+	}
+
+	return dbTx.Commit()
 }
 
 func (db *DB) getTopAtx() (types.ATXID, error) {

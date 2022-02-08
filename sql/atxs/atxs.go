@@ -134,23 +134,6 @@ func GetIDsByEpoch(db sql.Executor, epoch types.EpochID) (ids []types.ATXID, err
 	return ids, nil
 }
 
-// GetTop gets a top ATX (positioning ATX candidate) for a given ATX ID.
-// The top ATX is the one with the highest layer ID.
-func GetTop(db sql.Executor) (id types.ATXID, err error) {
-	dec := func(stmt *sql.Statement) bool {
-		stmt.ColumnBytes(0, id[:])
-		return true
-	}
-
-	if rows, err := db.Exec("select id from atxs order by layer desc, timestamp asc limit 1;", nil, dec); err != nil {
-		return types.ATXID{}, fmt.Errorf("exec: %w", err)
-	} else if rows == 0 {
-		return types.ATXID{}, fmt.Errorf("exec: %w", sql.ErrNotFound)
-	}
-
-	return id, err
-}
-
 // GetBlob loads ATX as an encoded blob, ready to be sent over the wire.
 func GetBlob(db sql.Executor, id types.ATXID) (buf []byte, err error) {
 	if rows, err := db.Exec("select atx from atxs where id = ?1",
@@ -189,6 +172,52 @@ func Add(db sql.Executor, atx *types.ActivationTx, timestamp time.Time) error {
 		values (?1, ?2, ?3, ?4, ?5, ?6);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert ATX ID %v: %w", atx.ID(), err)
+	}
+
+	return nil
+}
+
+// GetTop gets a top ATX (positioning ATX candidate) for a given ATX ID.
+// The top ATX is the one with the highest layer ID.
+func GetTop(db sql.Executor) (id types.ATXID, err error) {
+	dec := func(stmt *sql.Statement) bool {
+		stmt.ColumnBytes(0, id[:])
+		return true
+	}
+
+	if rows, err := db.Exec("select atx_id from atx_top;", nil, dec); err != nil {
+		return types.ATXID{}, fmt.Errorf("exec: %w", err)
+	} else if rows == 0 {
+		return types.ATXID{}, fmt.Errorf("exec: %w", sql.ErrNotFound)
+	}
+
+	return id, err
+}
+
+// UpdateTopIfNeeded updates top ATX if needed
+func UpdateTopIfNeeded(db sql.Executor, atx *types.ActivationTx) error {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, atx.ID().Bytes())
+		stmt.BindInt64(2, int64(atx.PubLayerID.Uint32()))
+	}
+
+	_, err := db.Exec(`
+		insert into atx_top (id, atx_id, layer) 
+		values (1, ?1, ?2)
+		on conflict (id) do
+		update set 
+			layer = case
+				when excluded.layer > layer
+				then excluded.layer
+				else layer
+			end,
+			atx_id = case
+				when excluded.layer > layer
+				then excluded.atx_id
+				else atx_id
+			end;`, enc, nil)
+	if err != nil {
+		return fmt.Errorf("update top ATX ID %v: %w", atx.ID(), err)
 	}
 
 	return nil

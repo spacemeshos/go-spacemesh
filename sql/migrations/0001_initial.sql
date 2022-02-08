@@ -81,3 +81,10 @@ CREATE TABLE atxs
 
 CREATE INDEX atxs_by_smesher_by_epoch_desc ON atxs (smesher, epoch desc);
 CREATE INDEX atxs_by_epoch_by_pubkey ON atxs (epoch, smesher);
+
+CREATE TABLE atx_top
+(
+    id     INT PRIMARY KEY CHECK (id = 1),
+    atx_id CHAR(32),
+    layer  INT NOT NULL
+);

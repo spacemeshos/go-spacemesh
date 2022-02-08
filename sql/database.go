@@ -148,7 +148,7 @@ func (db *Database) Tx(ctx context.Context) (*Tx, error) {
 // Tx should be used. Otherwise sqlite will not guarantee that all side-effects of operations are
 // applied to the database if machine crashes.
 //
-// Note that Exec will block until datatabase is closed or statement has finished.
+// Note that Exec will block until database is closed or statement has finished.
 // If application needs to control statement execution lifetime use one of the transaction.
 func (db *Database) Exec(query string, encoder Encoder, decoder Decoder) (int, error) {
 	conn := db.pool.Get(context.Background())

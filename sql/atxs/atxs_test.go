@@ -209,7 +209,7 @@ func TestGetTop(t *testing.T) {
 	atx3 := newAtx(nodeID2, l2)
 
 	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
-		require.NoError(t, Add(db, atx, time.Now()))
+		require.NoError(t, UpdateTopIfNeeded(db, atx))
 	}
 
 	top, err := GetTop(db)
