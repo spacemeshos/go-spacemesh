@@ -726,7 +726,6 @@ func (db *DB) handleAtxData(ctx context.Context, data []byte) error {
 	}
 
 	err = db.SyntacticallyValidateAtx(ctx, atx)
-	events.ReportValidActivation(atx, err == nil)
 	if err != nil {
 		return fmt.Errorf("received syntactically invalid atx %v: %v", atx.ShortString(), err)
 	}

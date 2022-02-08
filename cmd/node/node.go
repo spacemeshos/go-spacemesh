@@ -386,15 +386,7 @@ func (app *App) Initialize() (err error) {
 // setupLogging configured the app logging system.
 func (app *App) setupLogging() {
 	log.Info("%s", app.getAppInfo())
-
-	msg := "initializing event reporter"
-	if app.Config.PublishEventsURL != "" {
-		msg += fmt.Sprintf(" with pubsub URL: %s", app.Config.PublishEventsURL)
-	}
-	log.Info(msg)
-	if err := events.InitializeEventReporter(app.Config.PublishEventsURL); err != nil {
-		log.With().Error("unable to initialize event reporter", log.Err(err))
-	}
+	events.InitializeReporter()
 }
 
 func (app *App) getAppInfo() string {
@@ -972,7 +964,6 @@ func (app *App) stopServices() {
 	}
 
 	events.CloseEventReporter()
-	events.CloseEventPubSub()
 
 	// Close all databases.
 	for _, closer := range app.closers {

@@ -335,15 +335,12 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 	if err != nil {
 		if errors.Is(err, errMinerHasNoATXInPreviousEpoch) {
 			logger.Info("miner has no ATX in previous epoch. not eligible for proposals")
-			events.ReportDoneCreatingProposal(false, layerID.Uint32(), "not eligible to produce proposals")
 			return fmt.Errorf("miner no ATX: %w", err)
 		}
-		events.ReportDoneCreatingProposal(false, layerID.Uint32(), "failed to check for proposal eligibility")
 		logger.With().Error("failed to check for proposal eligibility", log.Err(err))
 		return fmt.Errorf("proposal eligibility: %w", err)
 	}
 	if len(proofs) == 0 {
-		events.ReportDoneCreatingProposal(false, layerID.Uint32(), "")
 		logger.Info("not eligible for proposal in layer")
 		return nil
 	}
@@ -357,13 +354,11 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	txList, _, err := pb.txPool.SelectTopNTransactions(pb.cfg.txsPerProposal*len(proofs), pb.projector.GetProjection)
 	if err != nil {
-		events.ReportDoneCreatingProposal(true, layerID.Uint32(), "failed to get txs for proposal")
 		logger.With().Error("failed to get txs for proposal", log.Err(err))
 		return fmt.Errorf("select TXs: %w", err)
 	}
 	p, err := pb.createProposal(ctx, layerID, proofs, atxID, activeSet, beacon, txList, *votes)
 	if err != nil {
-		events.ReportDoneCreatingProposal(true, layerID.Uint32(), "failed to create new proposal")
 		logger.With().Error("failed to create new proposal", log.Err(err))
 		return err
 	}
@@ -395,7 +390,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		if err = pb.publisher.Publish(newCtx, proposals.NewProposalProtocol, data); err != nil {
 			logger.WithContext(newCtx).With().Error("failed to send proposal", log.Err(err))
 		}
-		events.ReportDoneCreatingProposal(true, layerID.Uint32(), "")
+		events.ReportProposal(events.ProposalCreated, p)
 		return nil
 	})
 	return nil

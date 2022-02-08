@@ -571,7 +571,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 		// Give the error channel a buffer
 		events.CloseEventReporter()
-		require.NoError(t, events.InitializeEventReporterWithOptions(""))
+		events.InitializeReporter()
 
 		// Speed things up a little
 		app.Config.SyncInterval = 1

@@ -679,12 +679,14 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 	return nil
 }
 
-func (msh *Mesh) addTransactionsForBlock(logger log.Log, layerID types.LayerID, blockID types.BlockID, txIDs []types.TransactionID) {
+func (msh *Mesh) addTransactionsForBlock(logger log.Log, layerID types.LayerID, blockID types.BlockID, txIDs []types.TransactionID) error {
 	if err := msh.storeTransactionsFromPool(layerID, blockID, txIDs); err != nil {
 		logger.With().Error("not all txs were processed", log.Err(err))
+		return err
 	}
 	msh.setLatestLayer(layerID)
 	logger.Info("added txs to database")
+	return nil
 }
 
 func (msh *Mesh) invalidateFromPools(txIDs []types.TransactionID) {
