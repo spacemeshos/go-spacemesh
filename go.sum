@@ -989,8 +989,8 @@ github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82 h1:FmAao0S
 github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82/go.mod h1:mPxjt4RONPxSUhxOq4bhSJyKVGQJ0VMSyRiE51dDLgE=
 github.com/spacemeshos/poet v0.1.1-0.20201103004828-ef8f28a744fc h1:Gg/X0ybT0E9tTK3AfuTYM6kdTrW9+KrL+lWVGf9FpvQ=
 github.com/spacemeshos/poet v0.1.1-0.20201103004828-ef8f28a744fc/go.mod h1:vPh8wIzojvkOIDtQD/fXkQ+AMQUZIiFZeG7DeCpMH5o=
-github.com/spacemeshos/post v0.0.0-20211014030409-e1a8091bb648 h1:oU1Q5FdCjmxim0qfAAAipLOcko2o6G22CowsDCMmHUI=
-github.com/spacemeshos/post v0.0.0-20211014030409-e1a8091bb648/go.mod h1:yL5XcvEgquVOAn/pkJTlzc5UsYs2M8z/rpwb3eD/Jkk=
+github.com/spacemeshos/post v0.0.0-20220201083355-b26a46f4cd68 h1:g9KCNBmlBPh2Y6gkxiC1GVgLEJ2rfMc3RJ8gZNPT6ks=
+github.com/spacemeshos/post v0.0.0-20220201083355-b26a46f4cd68/go.mod h1:yL5XcvEgquVOAn/pkJTlzc5UsYs2M8z/rpwb3eD/Jkk=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9 h1:Cc+np6ORem5wrvO+YHQ1sdu71ItiQVRiYB4ugazpgxM=
 github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9/go.mod h1:Pz5LyRghtiEuSixOVGO0da5AxKBZa6+Yq8ZJfjTAPI0=
 github.com/spacemeshos/smutil v0.0.0-20190604133034-b5189449f5c5 h1:a+uIX0wjwWdK2JpsQnNhSdp3KDkqGg6P7Jp3nMZP8BM=

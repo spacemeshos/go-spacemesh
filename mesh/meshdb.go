@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -40,15 +38,7 @@ type DB struct {
 }
 
 // NewPersistentMeshDB creates an instance of a mesh database.
-func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, error) {
-	if err := os.MkdirAll(path, os.ModePerm); err != nil {
-		return nil, fmt.Errorf("failed to create %s: %w", path, err)
-	}
-	db, err := sql.Open("file:" + filepath.Join(path, "state.sql"))
-	if err != nil {
-		return nil, fmt.Errorf("open sqlite db %w", err)
-	}
-
+func NewPersistentMeshDB(db *sql.Database, blockCacheSize int, logger log.Log) (*DB, error) {
 	mdb := &DB{
 		Log:        logger,
 		blockCache: newBlockCache(blockCacheSize * layerSize),
@@ -58,23 +48,23 @@ func NewPersistentMeshDB(path string, blockCacheSize int, logger log.Log) (*DB, 
 	gLayer := types.GenesisLayer()
 	for _, b := range gLayer.Ballots() {
 		mdb.Log.With().Info("adding genesis ballot", b.ID(), b.LayerIndex)
-		if err = mdb.AddBallot(b); err != nil {
+		if err := mdb.AddBallot(b); err != nil {
 			mdb.Log.With().Error("error inserting genesis ballot to db", b.ID(), b.LayerIndex, log.Err(err))
 		}
 	}
 	for _, b := range gLayer.Blocks() {
 		mdb.Log.With().Info("adding genesis block", b.ID(), b.LayerIndex)
-		if err = mdb.AddBlock(b); err != nil {
+		if err := mdb.AddBlock(b); err != nil {
 			mdb.Log.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
 		}
-		if err = mdb.SaveContextualValidity(b.ID(), b.LayerIndex, true); err != nil {
+		if err := mdb.SaveContextualValidity(b.ID(), b.LayerIndex, true); err != nil {
 			mdb.Log.With().Error("error inserting genesis block to db", b.ID(), b.LayerIndex, log.Err(err))
 		}
 	}
-	if err = mdb.SaveHareConsensusOutput(context.Background(), gLayer.Index(), types.GenesisBlockID); err != nil {
+	if err := mdb.SaveHareConsensusOutput(context.Background(), gLayer.Index(), types.GenesisBlockID); err != nil {
 		log.With().Error("error inserting genesis block as hare output to db", gLayer.Index(), log.Err(err))
 	}
-	return mdb, err
+	return mdb, nil
 }
 
 // PersistentData checks to see if db is empty.

@@ -9,7 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/spacemeshos/post/shared"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
@@ -17,6 +16,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -677,7 +677,7 @@ func (db *DB) ValidateSignedAtx(pubKey signing.PublicKey, signedAtx *types.Activ
 }
 
 // HandleGossipAtx handles the atx gossip data channel.
-func (db *DB) HandleGossipAtx(ctx context.Context, _ peer.ID, msg []byte) pubsub.ValidationResult {
+func (db *DB) HandleGossipAtx(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	if err := db.handleAtxData(ctx, msg); errors.Is(err, errKnownAtx) {
 		return pubsub.ValidationIgnore
 	} else if err != nil {

@@ -1818,6 +1818,46 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	//  Received unexpected error: "rpc error: code = Unimplemented desc = unknown service spacemesh.v1.TransactionService"
 }
 
+func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
+	logtest.SetupGlobal(t)
+
+	ctrl := gomock.NewController(t)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
+
+	expected := 20
+	n := 0
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+		n++
+		return nil
+	})
+	grpcService := NewTransactionService(publisher, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewTransactionServiceClient(conn)
+	for i := 0; i < expected; i++ {
+		serializedTx, err := types.InterfaceToBytes(globalTx)
+		require.NoError(t, err, "error serializing tx")
+		res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+			Transaction: serializedTx,
+		})
+		require.NoError(t, err)
+		require.Equal(t, int32(code.Code_OK), res.Status.Code)
+		require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
+	}
+	require.Equal(t, expected, n)
+}
+
 func TestTransactionService(t *testing.T) {
 	logtest.SetupGlobal(t)
 

@@ -4,18 +4,17 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/libp2p/go-libp2p-core/peer"
-
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 // HandleProposal defines method to handle Beacon Weak Coin Messages from gossip.
-func (wc *WeakCoin) HandleProposal(ctx context.Context, pid peer.ID, msg []byte) pubsub.ValidationResult {
+func (wc *WeakCoin) HandleProposal(ctx context.Context, peer p2p.Peer, msg []byte) pubsub.ValidationResult {
 	logger := wc.logger.WithContext(ctx)
 	logger.With().Debug("received weak coin message",
-		log.String("from", pid.String()),
+		log.String("from", peer.String()),
 		log.Binary("data", msg),
 	)
 

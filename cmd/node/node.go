@@ -51,6 +51,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/svm"
 	"github.com/spacemeshos/go-spacemesh/syncer"
 	"github.com/spacemeshos/go-spacemesh/system"
@@ -70,9 +71,7 @@ const (
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
 	AtxDbStoreLogger       = "atxDbStore"
-	BeaconDbStoreLogger    = "beaconDbStore"
 	BeaconLogger           = "beacon"
-	WeakCoinLogger         = "weakCoin"
 	PoetDbStoreLogger      = "poetDbStore"
 	StoreLogger            = "store"
 	PoetDbLogger           = "poetDb"
@@ -190,9 +189,9 @@ func loadConfig(cmd *cobra.Command) (*config.Config, error) {
 // LoadConfigFromFile tries to load configuration file if the config parameter was specified.
 func LoadConfigFromFile() (*config.Config, error) {
 	fileLocation := viper.GetString("config")
-	vip := viper.New()
+
 	// read in default config if passed as param using viper
-	if err := config.LoadConfig(fileLocation, vip); err != nil {
+	if err := config.LoadConfig(fileLocation, viper.GetViper()); err != nil {
 		log.Error(fmt.Sprintf("couldn't load config file at location: %s switching to defaults \n error: %v.",
 			fileLocation, err))
 		// return err
@@ -214,7 +213,7 @@ func LoadConfigFromFile() (*config.Config, error) {
 	)
 
 	// load config if it was loaded to the viper
-	if err := vip.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
+	if err := viper.Unmarshal(&conf, viper.DecodeHook(hook)); err != nil {
 		return nil, fmt.Errorf("unmarshal viper: %w", err)
 	}
 	return &conf, nil
@@ -467,35 +466,29 @@ func (app *App) initServices(ctx context.Context,
 
 	app.log = app.addLogger(AppLogger, lg)
 
-	db, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
+	stateDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "state"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create state DB: %w", err)
 	}
-	app.closers = append(app.closers, db)
+	app.closers = append(app.closers, stateDBStore)
 
-	atxdbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
+	atxDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create ATX DB: %w", err)
 	}
-	app.closers = append(app.closers, atxdbstore)
+	app.closers = append(app.closers, atxDBStore)
 
-	beaconDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "beacons"), 0, 0, app.addLogger(BeaconDbStoreLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create beacon DB: %w", err)
-	}
-	app.closers = append(app.closers, beaconDBStore)
-
-	poetDbStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
+	poetDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create PoET DB: %w", err)
 	}
-	app.closers = append(app.closers, poetDbStore)
+	app.closers = append(app.closers, poetDBStore)
 
-	iddbstore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
+	idDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create IDs DB: %w", err)
 	}
-	app.closers = append(app.closers, iddbstore)
+	app.closers = append(app.closers, idDBStore)
 
 	store, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "store"), 0, 0, app.addLogger(StoreLogger, lg))
 	if err != nil {
@@ -503,10 +496,20 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, store)
 
-	idStore := activation.NewIdentityStore(iddbstore)
-	poetDb := activation.NewPoetDb(poetDbStore, app.addLogger(PoetDbLogger, lg))
+	idStore := activation.NewIdentityStore(idDBStore)
+	poetDb := activation.NewPoetDb(poetDBStore, app.addLogger(PoetDbLogger, lg))
 	validator := activation.NewValidator(poetDb, app.Config.POST)
-	mdb, err := mesh.NewPersistentMeshDB(filepath.Join(dbStorepath, "mesh"), app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
+
+	if err := os.MkdirAll(dbStorepath, os.ModePerm); err != nil {
+		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
+	}
+
+	sqlDB, err := sql.Open("file:" + filepath.Join(dbStorepath, "state.sql"))
+	if err != nil {
+		return fmt.Errorf("open sqlite db %w", err)
+	}
+
+	mdb, err := mesh.NewPersistentMeshDB(sqlDB, app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create mesh DB: %w", err)
 	}
@@ -519,7 +522,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("create applied txs DB: %w", err)
 	}
 	app.closers = append(app.closers, appliedTxs)
-	state := svm.New(db, appliedTxs, meshAndPoolProjector, app.txPool, app.addLogger(SVMLogger, lg))
+	state := svm.New(stateDBStore, appliedTxs, meshAndPoolProjector, app.txPool, app.addLogger(SVMLogger, lg))
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
 	if goldenATXID == *types.EmptyATXID {
@@ -527,30 +530,12 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxDB := activation.NewDB(atxdbstore, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	atxDB := activation.NewDB(atxDBStore, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 
-	edVerifier := signing.NewEDVerifier()
-	vrfVerifier := signing.VRFVerifier{}
-
-	wc := weakcoin.New(app.host,
-		vrfSigner, vrfVerifier,
-		weakcoin.WithLog(app.addLogger(WeakCoinLogger, lg)),
-		weakcoin.WithMaxRound(app.Config.Beacon.RoundsNumber),
-	)
-
-	beaconProtocol := beacon.New(
-		app.Config.Beacon,
-		nodeID,
-		app.host,
-		atxDB,
-		sgn,
-		edVerifier,
-		vrfSigner,
-		vrfVerifier,
-		wc,
-		beaconDBStore,
-		clock,
-		app.addLogger(BeaconLogger, lg))
+	beaconProtocol := beacon.New(nodeID, app.host, atxDB, sgn, vrfSigner, sqlDB, clock,
+		beacon.WithContext(ctx),
+		beacon.WithConfig(app.Config.Beacon),
+		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
 	var msh *mesh.Mesh
 	var trtl *tortoise.Tortoise
@@ -613,9 +598,9 @@ func (app *App) initServices(ctx context.Context,
 		fetch.BallotDB:   msh.Ballots(),
 		fetch.BlockDB:    msh.Blocks(),
 		fetch.ProposalDB: proposalDB,
-		fetch.ATXDB:      atxdbstore,
+		fetch.ATXDB:      atxDBStore,
 		fetch.TXDB:       msh.Transactions(),
-		fetch.POETDB:     poetDbStore,
+		fetch.POETDB:     poetDBStore,
 	}
 	dataHanders := layerfetcher.DataHandlers{
 		ATX:      atxDB,
@@ -703,13 +688,13 @@ func (app *App) initServices(ctx context.Context,
 		return pubsub.ValidationIgnore
 	}
 
-	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, wc.HandleProposal))
+	app.host.Register(weakcoin.GossipProtocol, pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleWeakCoinProposal))
 	app.host.Register(beacon.ProposalProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedProposalMessage))
-	app.host.Register(beacon.FirstVoteProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedFirstVotingMessage))
-	app.host.Register(beacon.FollowingVotingProtocol,
-		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleSerializedFollowingVotingMessage))
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleProposal))
+	app.host.Register(beacon.FirstVotesProtocol,
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFirstVotes))
+	app.host.Register(beacon.FollowingVotesProtocol,
+		pubsub.ChainGossipHandler(syncHandler, beaconProtocol.HandleFollowingVotes))
 	app.host.Register(proposals.NewProposalProtocol, pubsub.ChainGossipHandler(syncHandler, proposalListener.HandleProposal))
 	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxDB.HandleGossipAtx))
 	app.host.Register(svm.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, state.HandleGossipTransaction))
@@ -811,10 +796,8 @@ func (app *App) HareFactory(
 func (app *App) startServices(ctx context.Context) error {
 	app.layerFetch.Start()
 	go app.startSyncer(ctx)
+	app.beaconProtocol.Start(ctx)
 
-	if err := app.beaconProtocol.Start(ctx); err != nil {
-		return fmt.Errorf("cannot start beacon: %w", err)
-	}
 	if err := app.hare.Start(ctx); err != nil {
 		return fmt.Errorf("cannot start hare: %w", err)
 	}
