@@ -7,6 +7,7 @@ import (
 	"github.com/golang/protobuf/ptypes/empty"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
@@ -80,6 +81,11 @@ func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_P
 	}
 	if eventch == nil || fullch == nil {
 		return status.Errorf(codes.FailedPrecondition, "event reporting is not enabled")
+	}
+	// send empty header after subscribing to the channel.
+	// this is optional but allows subscriber to wait until stream is fully initialized.
+	if err := stream.SendHeader(metadata.MD{}); err != nil {
+		return status.Errorf(codes.Unavailable, "can't send header")
 	}
 	for {
 		select {

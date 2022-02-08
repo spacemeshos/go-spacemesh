@@ -2064,7 +2064,6 @@ func TestTransactionService(t *testing.T) {
 
 			events.CloseEventReporter()
 			events.InitializeReporter()
-			require.NoError(t, err)
 
 			// Wait until stream starts receiving to ensure that it catches the event.
 			time.Sleep(10 * time.Millisecond)
@@ -2168,7 +2167,6 @@ func TestTransactionService(t *testing.T) {
 
 			events.CloseEventReporter()
 			events.InitializeReporter()
-			require.NoError(t, err)
 
 			// Wait until stream starts receiving to ensure that it catches the event.
 			time.Sleep(10 * time.Millisecond)
@@ -2203,7 +2201,6 @@ func TestTransactionService(t *testing.T) {
 
 			events.CloseEventReporter()
 			events.InitializeReporter()
-			require.NoError(t, err)
 
 			time.Sleep(100 * time.Millisecond)
 
@@ -2994,6 +2991,28 @@ func TestDebugService(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
+	})
+	t.Run("ProposalsStream", func(t *testing.T) {
+		events.InitializeReporter()
+		t.Cleanup(events.CloseEventReporter)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		stream, err := c.ProposalsStream(ctx, &empty.Empty{})
+		require.NoError(t, err)
+
+		_, err = stream.Header()
+		require.NoError(t, err)
+		events.ReportProposal(events.ProposalCreated, &types.Proposal{})
+		events.ReportProposal(events.ProposalIncluded, &types.Proposal{})
+
+		msg, err := stream.Recv()
+		require.NoError(t, err)
+		require.Equal(t, pb.Proposal_Created, msg.Status)
+
+		msg, err = stream.Recv()
+		require.NoError(t, err)
+		require.Equal(t, pb.Proposal_Included, msg.Status)
 	})
 }
 
