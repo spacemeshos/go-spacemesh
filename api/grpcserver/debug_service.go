@@ -72,16 +72,11 @@ func (d DebugService) NetworkInfo(ctx context.Context, _ *empty.Empty) (*pb.Netw
 
 // ProposalsStream streams all proposals confirmed by hare.
 func (d DebugService) ProposalsStream(_ *emptypb.Empty, stream pb.DebugService_ProposalsStreamServer) error {
-	var (
-		eventch <-chan interface{}
-		fullch  <-chan struct{}
-	)
-	if sub := events.SubcribeProposals(); sub != nil {
-		eventch, fullch = consumeEvents(stream.Context(), sub)
-	}
-	if eventch == nil || fullch == nil {
+	sub := events.SubcribeProposals()
+	if sub == nil {
 		return status.Errorf(codes.FailedPrecondition, "event reporting is not enabled")
 	}
+	eventch, fullch := consumeEvents(stream.Context(), sub)
 	// send empty header after subscribing to the channel.
 	// this is optional but allows subscriber to wait until stream is fully initialized.
 	if err := stream.SendHeader(metadata.MD{}); err != nil {
