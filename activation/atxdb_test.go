@@ -341,6 +341,8 @@ func TestActivationDB_ValidateAtxErrors(t *testing.T) {
 }
 
 func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
+	types.SetLayersPerEpoch(layersPerEpoch)
+
 	atxdb := getAtxDb(t, "t8")
 	signer := signing.NewEdSigner()
 	idx1 := types.NodeID{Key: signer.PublicKey().String(), VRFPublicKey: []byte("12345")}
