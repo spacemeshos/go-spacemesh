@@ -69,26 +69,6 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 			"`Transaction` must contain a valid, serialized transaction")
 	}
 
-	if err := tx.CalcAndSetOrigin(); err != nil {
-		log.Error("failed to calculate tx origin: %v", err)
-		return nil, status.Error(codes.InvalidArgument,
-			"`Transaction` must contain a valid, serialized transaction")
-	}
-
-	if !s.Mesh.AddressExists(tx.Origin()) {
-		log.With().Error("tx origin address not found in global state",
-			tx.ID(), log.String("origin", tx.Origin().Short()))
-		return nil, status.Error(codes.InvalidArgument, "`Transaction` origin account not found")
-	}
-
-	if err := s.Mesh.ValidateNonceAndBalance(tx); err != nil {
-		log.Error("tx failed nonce and balance check: %v", err)
-		return nil, status.Error(codes.InvalidArgument, "`Transaction` incorrect counter or insufficient balance")
-	}
-
-	log.Info("GRPC TransactionService.SubmitTransaction BROADCAST tx address: %x (len: %v), amount: %v, gas limit: %v, fee: %v, id: %v, nonce: %v",
-		tx.GetRecipient(), len(tx.GetRecipient()), tx.Amount, tx.GasLimit, tx.GetFee(), tx.ID().ShortString(), tx.AccountNonce)
-
 	if err := s.publisher.Publish(ctx, svm.IncomingTxProtocol, in.Transaction); err != nil {
 		log.Error("error broadcasting incoming tx: %v", err)
 		return nil, status.Error(codes.Internal, "Failed to publish transaction")

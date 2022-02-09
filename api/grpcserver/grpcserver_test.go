@@ -1904,19 +1904,6 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 		}},
-		{"SubmitTransaction_BadCounter", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			txAPI.nonces[globalTx.Origin()] = uint64(accountCounter + 1)
-			serializedTx, err := types.InterfaceToBytes(globalTx)
-			require.NoError(t, err, "error serializing tx")
-			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-				Transaction: serializedTx,
-			})
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-			require.Contains(t, err.Error(), "`Transaction` incorrect counter or")
-			txAPI.nonces[globalTx.Origin()] = uint64(accountCounter)
-		}},
 		{"SubmitTransaction_InvalidTx", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			// Try sending invalid tx data
@@ -1928,18 +1915,6 @@ func TestTransactionService(t *testing.T) {
 			statusCode := status.Code(err)
 			require.Equal(t, codes.InvalidArgument, statusCode)
 			require.Contains(t, err.Error(), "`Transaction` must contain")
-		}},
-		{"SubmitTransaction_InvalidAddr", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			// this tx origin does not exist in state
-			serializedTx, err := types.InterfaceToBytes(globalTx2)
-			require.NoError(t, err, "error serializing tx")
-			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-				Transaction: serializedTx,
-			})
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-			require.Contains(t, err.Error(), "`Transaction` origin account not found")
 		}},
 		{"TransactionsState_MissingTransactionId", func(t *testing.T) {
 			logtest.SetupGlobal(t)
