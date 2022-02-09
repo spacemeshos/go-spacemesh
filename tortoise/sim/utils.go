@@ -23,13 +23,13 @@ const (
 
 func newAtxDB(logger log.Log, conf config) *activation.DB {
 	var (
-		db  database.Database
+		db  *sql.Database
 		err error
 	)
 	if len(conf.Path) == 0 {
-		db = database.NewMemDatabase()
+		db = sql.InMemory()
 	} else {
-		db, err = database.NewLDBDatabase(filepath.Join(conf.Path, atxpath), 0, 0, logger)
+		db, err = sql.Open(filepath.Join(conf.Path, atxpath))
 		if err != nil {
 			panic(err)
 		}

@@ -3,7 +3,6 @@ package activation
 import (
 	"bytes"
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"sync"
@@ -19,67 +18,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/atxs"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
-const (
-	namespaceAtx       = "a"
-	namespaceEpoch     = "e"
-	namespaceTop       = "p"
-	namespaceHeader    = "h"
-	namespaceTimestamp = "t"
-)
-
-func getNodeAtxKey(nodeID types.NodeID, targetEpoch types.EpochID) []byte {
-	b := getNodeAtxPrefix(nodeID)
-	b.Write(util.Uint64ToBytesBigEndian(uint64(targetEpoch)))
-	return b.Bytes()
-}
-
-func getNodeAtxPrefix(nodeID types.NodeID) *bytes.Buffer {
-	var b bytes.Buffer
-	b.WriteString(namespaceAtx)
-	b.WriteString(nodeID.Key)
-	return &b
-}
-
-func getNodeAtxEpochKey(epoch types.EpochID, nodeID types.NodeID) []byte {
-	b := getEpochPrefix(epoch)
-	b.WriteString(nodeID.Key)
-	b.Write(nodeID.VRFPublicKey)
-	return b.Bytes()
-}
-
-func getEpochPrefix(epoch types.EpochID) *bytes.Buffer {
-	var b bytes.Buffer
-	b.WriteString(namespaceEpoch)
-	b.Write(epoch.ToBytes())
-	return &b
-}
-
-func getAtxHeaderKey(atxID types.ATXID) []byte {
-	var b bytes.Buffer
-	b.WriteString(namespaceHeader)
-	b.Write(atxID.Bytes())
-	return b.Bytes()
-}
-
-func getAtxBodyKey(atxID types.ATXID) []byte {
-	// FIXME(dshulyak) this must be prefixed too. otherwise collisions are possible
-	return atxID.Bytes()
-}
-
-func getAtxTimestampKey(atxID types.ATXID) []byte {
-	var b bytes.Buffer
-	b.WriteString(namespaceTimestamp)
-	b.Write(atxID.Bytes())
-	return b.Bytes()
-}
-
 var (
-	errInvalidSig   = errors.New("identity not found when validating signature, invalid atx")
-	errGenesisEpoch = errors.New("tried to retrieve miner weights for target epoch 0")
-	errKnownAtx     = errors.New("known atx")
+	errInvalidSig = errors.New("identity not found when validating signature, invalid atx")
+	errKnownAtx   = errors.New("known atx")
 )
 
 type atxChan struct {
@@ -93,7 +39,7 @@ type DB struct {
 	sync.RWMutex
 	// todo: think about whether we need one db or several(#1922)
 	idStore
-	atxs            database.Database
+	sqlDB           *sql.Database
 	atxHeaderCache  AtxCache
 	LayersPerEpoch  uint32
 	goldenATXID     types.ATXID
@@ -108,10 +54,10 @@ type DB struct {
 
 // NewDB creates a new struct of type DB, this struct will hold the atxs received from all nodes and
 // their validity.
-func NewDB(dbStore database.Database, fetcher system.Fetcher, idStore idStore, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
+func NewDB(sqlDB *sql.Database, fetcher system.Fetcher, idStore idStore, layersPerEpoch uint32, goldenATXID types.ATXID, nipostValidator nipostValidator, log log.Log) *DB {
 	db := &DB{
 		idStore:         idStore,
-		atxs:            dbStore,
+		sqlDB:           sqlDB,
 		atxHeaderCache:  NewAtxCache(600),
 		LayersPerEpoch:  layersPerEpoch,
 		goldenATXID:     goldenATXID,
@@ -134,7 +80,7 @@ func (db *DB) AwaitAtx(id types.ATXID) chan struct{} {
 	db.Lock()
 	defer db.Unlock()
 
-	if _, err := db.atxs.Get(getAtxHeaderKey(id)); err == nil {
+	if has, err := atxs.Has(db.sqlDB, id); err == nil && has {
 		return closedChan
 	}
 
@@ -362,60 +308,8 @@ func (db *DB) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.Activa
 	defer db.Unlock()
 
 	// todo: maybe cleanup DB if failed by using defer (#1921)
-	if _, err := db.atxs.Get(getAtxHeaderKey(atx.ID())); err == nil {
-		// exists - how should we handle this?
-		return nil
-	}
-
-	err := db.storeAtxUnlocked(atx)
-	if err != nil {
-		return err
-	}
-
-	err = db.updateTopAtxIfNeeded(atx)
-	if err != nil {
-		return err
-	}
-
-	err = db.addAtxToNodeID(atx.NodeID, atx)
-	if err != nil {
-		return err
-	}
-
-	err = db.addNodeAtxToEpoch(ctx, atx.PubLayerID.GetEpoch(), atx.NodeID, atx)
-	if err != nil {
-		return err
-	}
-
-	err = db.addAtxTimestamp(ctx, time.Now(), atx)
-	if err != nil {
-		return err
-	}
-
-	db.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), ech)
-	return nil
-}
-
-func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
-	atxHeaderBytes, err := types.InterfaceToBytes(atx.ActivationTxHeader)
-	if err != nil {
-		return fmt.Errorf("serialize ATX: %w", err)
-	}
-
-	err = db.atxs.Put(getAtxHeaderKey(atx.ID()), atxHeaderBytes)
-	if err != nil {
-		return fmt.Errorf("put ATX in DB: %w", err)
-	}
-
-	// todo: this changed so that a full atx will be written - inherently there will be double data with atx header
-	atxBytes, err := types.InterfaceToBytes(atx)
-	if err != nil {
-		return fmt.Errorf("parse ATX: %w", err)
-	}
-
-	err = db.atxs.Put(getAtxBodyKey(atx.ID()), atxBytes)
-	if err != nil {
-		return fmt.Errorf("put ATX in DB: %w", err)
+	if err := db.storeATXInDB(atx); err != nil {
+		return fmt.Errorf("store ATX in DB: %w", err)
 	}
 
 	// notify subscribers
@@ -424,98 +318,30 @@ func (db *DB) storeAtxUnlocked(atx *types.ActivationTx) error {
 		delete(db.atxChannels, atx.ID())
 	}
 
+	db.log.WithContext(ctx).With().Info("finished storing atx in epoch", atx.ID(), ech)
 	return nil
 }
 
-type atxIDAndLayer struct {
-	AtxID   types.ATXID
-	LayerID types.LayerID
-}
-
-// updateTopAtxIfNeeded replaces the top ATX (positioning ATX candidate) if the latest ATX has a higher layer ID.
-// This function is not thread safe and needs to be called under a global lock.
-func (db *DB) updateTopAtxIfNeeded(atx *types.ActivationTx) error {
-	currentTopAtx, err := db.getTopAtx()
-	if err != nil && !errors.Is(err, database.ErrNotFound) {
-		return fmt.Errorf("failed to get current atx: %v", err)
-	}
-	if err == nil && !currentTopAtx.LayerID.Before(atx.PubLayerID) {
-		return nil
-	}
-
-	newTopAtx := atxIDAndLayer{
-		AtxID:   atx.ID(),
-		LayerID: atx.PubLayerID,
-	}
-	topAtxBytes, err := types.InterfaceToBytes(&newTopAtx)
+func (db *DB) storeATXInDB(atx *types.ActivationTx) error {
+	dbTx, err := db.sqlDB.Tx(context.Background())
 	if err != nil {
-		return fmt.Errorf("failed to marshal top atx: %v", err)
+		return err
 	}
+	defer dbTx.Release()
 
-	err = db.atxs.Put([]byte(namespaceTop), topAtxBytes)
-	if err != nil {
-		return fmt.Errorf("failed to store top atx: %v", err)
-	}
-	return nil
-}
-
-func (db *DB) getTopAtx() (atxIDAndLayer, error) {
-	topAtxBytes, err := db.atxs.Get([]byte(namespaceTop))
-	if err != nil {
-		if errors.Is(err, database.ErrNotFound) {
-			return atxIDAndLayer{
-				AtxID: db.goldenATXID,
-			}, nil
+	if err := atxs.Add(dbTx, atx, time.Now()); err != nil {
+		if errors.Is(err, sql.ErrObjectExists) {
+			// exists - how should we handle this?
+			return nil
 		}
-		return atxIDAndLayer{}, fmt.Errorf("failed to get top atx: %v", err)
-	}
-	var topAtx atxIDAndLayer
-	err = types.BytesToInterface(topAtxBytes, &topAtx)
-	if err != nil {
-		return atxIDAndLayer{}, fmt.Errorf("failed to unmarshal top atx: %v", err)
-	}
-	return topAtx, nil
-}
-
-func (db *DB) getAtxTimestamp(id types.ATXID) (time.Time, error) {
-	b, err := db.atxs.Get(getAtxTimestampKey(id))
-	if err != nil {
-		return time.Time{}, fmt.Errorf("get ATXs from DB: %w", err)
+		return fmt.Errorf("add ATX to DB: %w", err)
 	}
 
-	ts := time.Unix(0, int64(binary.LittleEndian.Uint64(b)))
-	return ts, nil
-}
-
-// addAtxToNodeID inserts activation atx id by node.
-func (db *DB) addAtxToNodeID(nodeID types.NodeID, atx *types.ActivationTx) error {
-	err := db.atxs.Put(getNodeAtxKey(nodeID, atx.PubLayerID.GetEpoch()), atx.ID().Bytes())
-	if err != nil {
-		return fmt.Errorf("failed to store atx ID for node: %v", err)
+	if err := atxs.UpdateTopIfNeeded(dbTx, atx); err != nil {
+		return fmt.Errorf("update top: %w", err)
 	}
-	return nil
-}
 
-func (db *DB) addNodeAtxToEpoch(ctx context.Context, epoch types.EpochID, nodeID types.NodeID, atx *types.ActivationTx) error {
-	db.log.WithContext(ctx).Info("added atx %v to epoch %v", atx.ID().ShortString(), epoch)
-	err := db.atxs.Put(getNodeAtxEpochKey(atx.PubLayerID.GetEpoch(), nodeID), atx.ID().Bytes())
-	if err != nil {
-		return fmt.Errorf("failed to store atx ID for node: %v", err)
-	}
-	return nil
-}
-
-func (db *DB) addAtxTimestamp(ctx context.Context, timestamp time.Time, atx *types.ActivationTx) error {
-	db.log.WithContext(ctx).Info("added atx %v timestamp %v", atx.ID().ShortString(), timestamp)
-
-	b := make([]byte, 8)
-	binary.LittleEndian.PutUint64(b, uint64(timestamp.UnixNano()))
-
-	err := db.atxs.Put(getAtxTimestampKey(atx.ID()), b)
-	if err != nil {
-		return fmt.Errorf("failed to store atx timestamp for node: %v", err)
-	}
-	return nil
+	return dbTx.Commit()
 }
 
 // ErrAtxNotFound is a specific error returned when no atx was found in DB.
@@ -523,67 +349,54 @@ type ErrAtxNotFound error
 
 // GetNodeLastAtxID returns the last atx id that was received for node nodeID.
 func (db *DB) GetNodeLastAtxID(nodeID types.NodeID) (types.ATXID, error) {
-	it := db.atxs.Find(getNodeAtxPrefix(nodeID).Bytes())
-	defer it.Release()
-	// ATX syntactic validation ensures that each ATX is at least one epoch after a referenced previous ATX.
-	// Contextual validation ensures that the previous ATX referenced matches what this method returns, so the next ATX
-	// added will always be the next ATX returned by this method.
-	// leveldb_iterator.Last() returns the last entry in lexicographical order of the keys:
-	//   https://github.com/google/leveldb/blob/master/doc/index.md#comparators
-	// For the lexicographical order to match the epoch order we must encode the epoch id using big endian encoding when
-	// composing the key.
-	if exists := it.Last(); !exists {
-		err := ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
-		return *types.EmptyATXID, fmt.Errorf("find ATX in DB: %w", err)
+	id, err := atxs.GetLastIDByNodeID(db.sqlDB, nodeID)
+	if err != nil {
+		if errors.Is(err, database.ErrNotFound) {
+			err := ErrAtxNotFound(fmt.Errorf("atx for node %v does not exist", nodeID.ShortString()))
+			return *types.EmptyATXID, fmt.Errorf("find ATX in DB: %w", err)
+		}
+		return types.ATXID{}, fmt.Errorf("failed to get top atx: %v", err)
 	}
-	if it.Error() != nil {
-		return *types.EmptyATXID, fmt.Errorf("iterator error: %w", it.Error())
-	}
-	return types.ATXID(types.BytesToHash(it.Value())), nil
+
+	return id, nil
 }
 
 // GetEpochAtxs returns all valid ATXs received in the epoch epochID.
-func (db *DB) GetEpochAtxs(epochID types.EpochID) (atxs []types.ATXID, err error) {
-	it := db.atxs.Find(getEpochPrefix(epochID).Bytes())
-	defer it.Release()
-	for it.Next() {
-		if it.Key() == nil {
-			break
-		}
-		var a types.ATXID
-		copy(a[:], it.Value())
-		atxs = append(atxs, a)
-	}
+func (db *DB) GetEpochAtxs(epochID types.EpochID) (ids []types.ATXID, err error) {
+	ids, err = atxs.GetIDsByEpoch(db.sqlDB, epochID)
 	db.log.With().Debug("returned epoch atxs", epochID,
-		log.Int("count", len(atxs)),
-		log.String("atxs", fmt.Sprint(atxs)))
-	err = it.Error()
+		log.Int("count", len(ids)),
+		log.String("atxs", fmt.Sprint(ids)))
 	return
 }
 
 // GetNodeAtxIDForEpoch returns an atx published by the provided nodeID for the specified publication epoch. meaning the atx
 // that the requested nodeID has published. it returns an error if no atx was found for provided nodeID.
 func (db *DB) GetNodeAtxIDForEpoch(nodeID types.NodeID, publicationEpoch types.EpochID) (types.ATXID, error) {
-	id, err := db.atxs.Get(getNodeAtxKey(nodeID, publicationEpoch))
+	id, err := atxs.GetIDByEpochAndNodeID(db.sqlDB, publicationEpoch, nodeID)
 	if err != nil {
 		return *types.EmptyATXID, fmt.Errorf("atx for node %v with publication epoch %v: %v",
 			nodeID.ShortString(), publicationEpoch, err)
 	}
-	return types.ATXID(types.BytesToHash(id)), nil
+	return id, nil
 }
 
 // GetPosAtxID returns the best (highest layer id), currently known to this node, pos atx id.
 func (db *DB) GetPosAtxID() (types.ATXID, error) {
-	idAndLayer, err := db.getTopAtx()
+	id, err := atxs.GetTop(db.sqlDB)
 	if err != nil {
-		return *types.EmptyATXID, err
+		if errors.Is(err, database.ErrNotFound) {
+			return db.goldenATXID, nil
+		}
+		return *types.EmptyATXID, fmt.Errorf("failed to get top atx: %v", err)
 	}
-	return idAndLayer.AtxID, nil
+
+	return id, nil
 }
 
 // GetAtxTimestamp returns ATX timestamp.
-func (db *DB) GetAtxTimestamp(atxid types.ATXID) (time.Time, error) {
-	ts, err := db.getAtxTimestamp(atxid)
+func (db *DB) GetAtxTimestamp(id types.ATXID) (time.Time, error) {
+	ts, err := atxs.GetTimestamp(db.sqlDB, id)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -618,20 +431,13 @@ func (db *DB) GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error) {
 	if atxHeader, gotIt := db.atxHeaderCache.Get(id); gotIt {
 		return atxHeader, nil
 	}
-	atxHeaderBytes, err := db.atxs.Get(getAtxHeaderKey(id))
+	atxHeader, err := db.GetFullAtx(id)
 	if err != nil {
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
-	var atxHeader types.ActivationTxHeader
-	err = types.BytesToInterface(atxHeaderBytes, &atxHeader)
-	if err != nil {
-		return nil, fmt.Errorf("parse ATX header: %w", err)
-	}
-
-	atxHeader.SetID(&id)
-	db.atxHeaderCache.Add(id, &atxHeader)
-	return &atxHeader, nil
+	db.atxHeaderCache.Add(id, atxHeader.ActivationTxHeader)
+	return atxHeader.ActivationTxHeader, nil
 }
 
 // GetFullAtx returns the full atx struct of the given atxId id, it returns an error if the full atx cannot be found
@@ -641,19 +447,11 @@ func (db *DB) GetFullAtx(id types.ATXID) (*types.ActivationTx, error) {
 		return nil, errors.New("trying to fetch empty atx id")
 	}
 
-	db.RLock()
-	atxBytes, err := db.atxs.Get(getAtxBodyKey(id))
-	db.RUnlock()
+	atx, err := atxs.Get(db.sqlDB, id)
 	if err != nil {
 		return nil, fmt.Errorf("get ATXs from DB: %w", err)
 	}
 
-	atx, err := types.BytesToAtx(atxBytes)
-	if err != nil {
-		return nil, fmt.Errorf("parse ATX: %w", err)
-	}
-
-	atx.ActivationTxHeader.SetID(&id)
 	db.atxHeaderCache.Add(id, atx.ActivationTxHeader)
 
 	return atx, nil
@@ -759,4 +557,25 @@ func (db *DB) FetchAtxReferences(ctx context.Context, atx *types.ActivationTx) e
 	logger.With().Debug("done fetching references for atx", atx.ID())
 
 	return nil
+}
+
+// ATXs exports the ATXs database.
+func (db *DB) ATXs() database.Getter {
+	return newATXFetcherDB(db)
+}
+
+// newATXFetcherDB returns reference to a BlockFetcherDB instance.
+func newATXFetcherDB(db *DB) *ATXFetcher {
+	return &ATXFetcher{DB: db}
+}
+
+// ATXFetcher is an adapter of SQLite implementation to legacy LevelDB interfaces.
+// TODO(nkryuchkov): Remove when transition to SQLite is finished.
+type ATXFetcher struct {
+	DB *DB
+}
+
+// Get gets an ATX as bytes by an ATX ID as bytes.
+func (f *ATXFetcher) Get(key []byte) ([]byte, error) {
+	return atxs.GetBlob(f.DB.sqlDB, types.ATXID(types.BytesToHash(key)))
 }

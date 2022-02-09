@@ -68,3 +68,23 @@ CREATE TABLE beacons
     epoch  INT NOT NULL PRIMARY KEY,
     beacon CHAR(4)
 ) WITHOUT ROWID;
+
+CREATE TABLE atxs
+(
+    id        CHAR(32) PRIMARY KEY,
+    layer     INT NOT NULL,
+    epoch     INT NOT NULL,
+    smesher   CHAR(64),
+    atx       BLOB,
+    timestamp INT NOT NULL
+);
+
+CREATE INDEX atxs_by_smesher_by_epoch_desc ON atxs (smesher, epoch desc);
+CREATE INDEX atxs_by_epoch_by_pubkey ON atxs (epoch, smesher);
+
+CREATE TABLE atx_top
+(
+    id     INT PRIMARY KEY CHECK (id = 1),
+    atx_id CHAR(32),
+    layer  INT NOT NULL
+);

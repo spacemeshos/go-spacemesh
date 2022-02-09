@@ -70,7 +70,6 @@ const (
 	P2PLogger              = "p2p"
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
-	AtxDbStoreLogger       = "atxDbStore"
 	BeaconLogger           = "beacon"
 	PoetDbStoreLogger      = "poetDbStore"
 	StoreLogger            = "store"
@@ -472,12 +471,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, stateDBStore)
 
-	atxDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "atx"), 0, 0, app.addLogger(AtxDbStoreLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create ATX DB: %w", err)
-	}
-	app.closers = append(app.closers, atxDBStore)
-
 	poetDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create PoET DB: %w", err)
@@ -530,7 +523,7 @@ func (app *App) initServices(ctx context.Context,
 	}
 
 	fetcherWrapped := &layerFetcher{}
-	atxDB := activation.NewDB(atxDBStore, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
+	atxDB := activation.NewDB(sqlDB, fetcherWrapped, idStore, layersPerEpoch, goldenATXID, validator, app.addLogger(AtxDbLogger, lg))
 
 	beaconProtocol := beacon.New(nodeID, app.host, atxDB, sgn, vrfSigner, sqlDB, clock,
 		beacon.WithContext(ctx),
@@ -598,7 +591,7 @@ func (app *App) initServices(ctx context.Context,
 		fetch.BallotDB:   msh.Ballots(),
 		fetch.BlockDB:    msh.Blocks(),
 		fetch.ProposalDB: proposalDB,
-		fetch.ATXDB:      atxDBStore,
+		fetch.ATXDB:      atxDB.ATXs(),
 		fetch.TXDB:       msh.Transactions(),
 		fetch.POETDB:     poetDBStore,
 	}
