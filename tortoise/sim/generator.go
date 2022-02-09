@@ -143,7 +143,7 @@ type setupConf struct {
 func defaultSetupConf() setupConf {
 	return setupConf{
 		Miners: [2]int{30, 30},
-		Units:  [2]int{1, 10},
+		Units:  [2]int{10, 10},
 	}
 }
 

@@ -24,12 +24,12 @@ require (
 	github.com/prometheus/client_golang v1.11.0
 	github.com/prometheus/common v0.30.0
 	github.com/pyroscope-io/pyroscope v0.0.30
-	github.com/spacemeshos/api/release/go v1.4.1-0.20220115045820-3b2eee8875ba
+	github.com/spacemeshos/api/release/go v1.4.1-0.20220208052242-dd7698a0ca84
 	github.com/spacemeshos/ed25519 v0.0.0-20190530014421-e235766d15a1
 	github.com/spacemeshos/fixed v0.0.0-20210321020345-0ef1406dc23f
 	github.com/spacemeshos/merkle-tree v0.0.0-20191028110812-1908c3126c82
 	github.com/spacemeshos/poet v0.1.1-0.20201103004828-ef8f28a744fc
-	github.com/spacemeshos/post v0.0.0-20211014030409-e1a8091bb648
+	github.com/spacemeshos/post v0.0.0-20220201083355-b26a46f4cd68
 	github.com/spacemeshos/sha256-simd v0.0.0-20190111104731-8575aafc88c9
 	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
@@ -43,11 +43,10 @@ require (
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/genproto v0.0.0-20200825200019-8632dd797987
 	google.golang.org/grpc v1.40.0
-	nanomsg.org/go-mangos v1.4.0
+	google.golang.org/protobuf v1.27.1
 )
 
 require (
-	github.com/Microsoft/go-winio v0.4.14 // indirect
 	github.com/benbjohnson/clock v1.1.0 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/btcsuite/btcd v0.22.0-beta // indirect
@@ -143,7 +142,6 @@ require (
 	golang.org/x/sys v0.0.0-20210831042530-f4d43177bf5e // indirect
 	golang.org/x/text v0.3.7 // indirect
 	golang.org/x/tools v0.1.5 // indirect
-	google.golang.org/protobuf v1.27.1 // indirect
 	gopkg.in/natefinch/lumberjack.v2 v2.0.0 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b // indirect

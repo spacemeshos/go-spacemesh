@@ -7,6 +7,7 @@ import (
 	"math"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 )
 
@@ -130,6 +131,7 @@ func (g *Generator) calculateSmesherRewards(logger log.Log, layerID types.LayerI
 			Amount:      rInfo.totalRewardPer * uint64(len(p.EligibilityProofs)),
 			LayerReward: rInfo.layerRewardPer * uint64(len(p.EligibilityProofs)),
 		})
+		events.ReportProposal(events.ProposalIncluded, p)
 	}
 	return rewards, nil
 }

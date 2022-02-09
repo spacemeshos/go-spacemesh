@@ -1,7 +1,6 @@
 package events
 
 import (
-	"errors"
 	"fmt"
 	"runtime/debug"
 	"sync"
@@ -15,11 +14,27 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
-// reporter is the event reporter singleton.
-var reporter *EventReporter
+// Subscription is a subscription to events.
+// Consumer must be aware that publish will block if subsription is not read fast enough.
+type Subscription = event.Subscription
 
-// we use a mutex to ensure thread safety.
-var mu sync.RWMutex
+var (
+	mu sync.RWMutex
+	// reporter is the event reporter singleton.
+	reporter *EventReporter
+)
+
+// InitializeReporter initializes the event reporting interface with
+// a nonzero channel buffer. This is useful for testing, where we want reporting to
+// block.
+func InitializeReporter() {
+	mu.Lock()
+	defer mu.Unlock()
+	if reporter != nil {
+		return
+	}
+	reporter = newEventReporter()
+}
 
 // EventHook returns hook for logger.
 func EventHook() func(entry zapcore.Entry) error {
@@ -38,13 +53,6 @@ func EventHook() func(entry zapcore.Entry) error {
 
 // ReportNewTx dispatches incoming events to the reporter singleton.
 func ReportNewTx(layerID types.LayerID, tx *types.Transaction) {
-	Publish(NewTx{
-		ID:          tx.ID().String(),
-		Origin:      tx.Origin().String(),
-		Destination: tx.GetRecipient().String(),
-		Amount:      tx.Amount,
-		Fee:         tx.GetFee(),
-	})
 	ReportTxWithValidity(layerID, tx, true)
 }
 
@@ -67,20 +75,10 @@ func ReportTxWithValidity(layerID types.LayerID, tx *types.Transaction, valid bo
 	}
 }
 
-// ReportValidTx reports a valid transaction.
-func ReportValidTx(tx *types.Transaction, valid bool) {
-	Publish(ValidTx{ID: tx.ID().String(), Valid: valid})
-}
-
 // ReportNewActivation reports a new activation.
 func ReportNewActivation(activation *types.ActivationTx) {
 	mu.RLock()
 	defer mu.RUnlock()
-
-	Publish(NewAtx{
-		ID:      activation.ShortString(),
-		EpochID: uint32(activation.PubLayerID.GetEpoch()),
-	})
 
 	activationTxEvent := ActivationTx{ActivationTx: activation}
 
@@ -105,12 +103,6 @@ func ReportRewardReceived(r Reward) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	Publish(RewardReceived{
-		Coinbase:  r.Coinbase.String(),
-		Amount:    r.Total,
-		SmesherID: r.Smesher.ToBytes(),
-	})
-
 	if reporter != nil {
 		if err := reporter.rewardEmitter.Emit(r); err != nil {
 			// TODO(nkryuchkov): consider returning an error and log outside the function
@@ -119,50 +111,6 @@ func ReportRewardReceived(r Reward) {
 			log.Debug("reported reward: %v", r)
 		}
 	}
-}
-
-// ReportNewBlock reports a new block.
-func ReportNewBlock(b *types.Block) {
-	Publish(NewBlock{
-		ID:    b.ID().String(),
-		Layer: b.LayerIndex.Uint32(),
-	})
-}
-
-// ReportNewProposal reports a new proposal.
-func ReportNewProposal(p *types.Proposal) {
-	Publish(NewProposal{
-		ID:    p.ID().String(),
-		Atx:   p.AtxID.ShortString(),
-		Layer: p.LayerIndex.Uint32(),
-	})
-}
-
-// ReportAtxCreated reports a created activation.
-func ReportAtxCreated(created bool, epoch uint32, id string) {
-	Publish(AtxCreated{Created: created, Epoch: epoch, ID: id})
-}
-
-// ReportValidActivation reports a valid activation.
-func ReportValidActivation(activation *types.ActivationTx, valid bool) {
-	Publish(ValidAtx{ID: activation.ShortString(), Valid: valid})
-}
-
-// ReportDoneCreatingProposal reports a created block.
-func ReportDoneCreatingProposal(eligible bool, layer uint32, error string) {
-	Publish(DoneCreatingProposal{
-		Eligible: eligible,
-		Layer:    layer,
-		Error:    error,
-	})
-}
-
-// ReportCalculatedBeacon reports calculated beacon.
-func ReportCalculatedBeacon(epoch types.EpochID, beacon string) {
-	Publish(BeaconCalculated{
-		Epoch:  epoch,
-		Beacon: beacon,
-	})
 }
 
 // ReportLayerUpdate reports a new layer, or an update to an existing layer.
@@ -254,7 +202,7 @@ func ReportAccountUpdate(a types.Address) {
 }
 
 // SubscribeTxs subscribes to new transactions.
-func SubscribeTxs() event.Subscription {
+func SubscribeTxs() Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -270,7 +218,7 @@ func SubscribeTxs() event.Subscription {
 }
 
 // SubscribeActivations subscribes to activations.
-func SubscribeActivations() event.Subscription {
+func SubscribeActivations() Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -286,7 +234,7 @@ func SubscribeActivations() event.Subscription {
 }
 
 // SubscribeLayers subscribes to all layer data.
-func SubscribeLayers() event.Subscription {
+func SubscribeLayers() Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -302,7 +250,7 @@ func SubscribeLayers() event.Subscription {
 }
 
 // SubscribeErrors subscribes to node errors.
-func SubscribeErrors() event.Subscription {
+func SubscribeErrors() Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -318,7 +266,7 @@ func SubscribeErrors() event.Subscription {
 }
 
 // SubscribeStatus subscribes to node status messages.
-func SubscribeStatus() event.Subscription {
+func SubscribeStatus() Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -334,7 +282,7 @@ func SubscribeStatus() event.Subscription {
 }
 
 // SubscribeAccount subscribes to account data updates.
-func SubscribeAccount() event.Subscription {
+func SubscribeAccount() Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -350,7 +298,7 @@ func SubscribeAccount() event.Subscription {
 }
 
 // SubscribeRewards subscribes to rewards.
-func SubscribeRewards() event.Subscription {
+func SubscribeRewards() Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -366,7 +314,7 @@ func SubscribeRewards() event.Subscription {
 }
 
 // SubscribeReceipts subscribes to receipts.
-func SubscribeReceipts() event.Subscription {
+func SubscribeReceipts() Subscription {
 	mu.RLock()
 	defer mu.RUnlock()
 
@@ -377,28 +325,6 @@ func SubscribeReceipts() event.Subscription {
 		}
 
 		return sub
-	}
-	return nil
-}
-
-// InitializeEventReporter initializes the event reporting interface.
-func InitializeEventReporter(url string) error {
-	// By default use zero-buffer channels and non-blocking.
-	return InitializeEventReporterWithOptions(url)
-}
-
-// InitializeEventReporterWithOptions initializes the event reporting interface with
-// a nonzero channel buffer. This is useful for testing, where we want reporting to
-// block.
-func InitializeEventReporterWithOptions(url string) error {
-	mu.Lock()
-	defer mu.Unlock()
-	if reporter != nil {
-		return errors.New("reporter is already initialized, call CloseEventReporter before reinitializing")
-	}
-	reporter = newEventReporter()
-	if url != "" {
-		return InitializeEventPubsub(url)
 	}
 	return nil
 }
@@ -509,7 +435,7 @@ type EventReporter struct {
 	accountEmitter     event.Emitter
 	rewardEmitter      event.Emitter
 	receiptEmitter     event.Emitter
-	channelReward      chan Reward
+	proposalsEmitter   event.Emitter
 	stopChan           chan struct{}
 }
 
@@ -556,6 +482,11 @@ func newEventReporter() *EventReporter {
 		log.With().Panic("failed to create error emitter", log.Err(err))
 	}
 
+	proposalsEmitter, err := bus.Emitter(new(EventProposal))
+	if err != nil {
+		log.With().Panic("failed to to create proposal emitter", log.Err(err))
+	}
+
 	return &EventReporter{
 		bus:                bus,
 		transactionEmitter: transactionEmitter,
@@ -566,6 +497,7 @@ func newEventReporter() *EventReporter {
 		rewardEmitter:      rewardEmitter,
 		receiptEmitter:     receiptEmitter,
 		errorEmitter:       errorEmitter,
+		proposalsEmitter:   proposalsEmitter,
 		stopChan:           make(chan struct{}),
 	}
 }
@@ -576,29 +508,33 @@ func CloseEventReporter() {
 	defer mu.Unlock()
 	if reporter != nil {
 		if err := reporter.transactionEmitter.Close(); err != nil {
-			log.With().Panic("failed to close transactionEmitter: " + err.Error())
+			log.With().Panic("failed to close transactionEmitter", log.Err(err))
 		}
 		if err := reporter.activationEmitter.Close(); err != nil {
-			log.With().Panic("failed to close activationEmitter: " + err.Error())
+			log.With().Panic("failed to close activationEmitter", log.Err(err))
 		}
 		if err := reporter.layerEmitter.Close(); err != nil {
-			log.With().Panic("failed to close layerEmitter: " + err.Error())
+			log.With().Panic("failed to close layerEmitter", log.Err(err))
 		}
 		if err := reporter.errorEmitter.Close(); err != nil {
-			log.With().Panic("failed to close errorEmitter: " + err.Error())
+			log.With().Panic("failed to close errorEmitter", log.Err(err))
 		}
 		if err := reporter.statusEmitter.Close(); err != nil {
-			log.With().Panic("failed to close statusEmitter: " + err.Error())
+			log.With().Panic("failed to close statusEmitter", log.Err(err))
 		}
 		if err := reporter.accountEmitter.Close(); err != nil {
-			log.With().Panic("failed to close accountEmitter: " + err.Error())
+			log.With().Panic("failed to close accountEmitter", log.Err(err))
 		}
 		if err := reporter.rewardEmitter.Close(); err != nil {
-			log.With().Panic("failed to close rewardEmitter: " + err.Error())
+			log.With().Panic("failed to close rewardEmitter", log.Err(err))
 		}
 		if err := reporter.receiptEmitter.Close(); err != nil {
-			log.With().Panic("failed to close receiptEmitter: " + err.Error())
+			log.With().Panic("failed to close receiptEmitter", log.Err(err))
 		}
+		if err := reporter.proposalsEmitter.Close(); err != nil {
+			log.With().Panic("failed to close propoposalsEmitter", log.Err(err))
+		}
+
 		close(reporter.stopChan)
 		reporter = nil
 	}

@@ -35,6 +35,8 @@ type Ballot struct {
 	ballotID BallotID
 	// the public key of the smesher used
 	smesherID *signing.PublicKey
+	// malicious is set to true if smesher that produced this ballot is known to be malicious.
+	malicious bool
 }
 
 // InnerBallot contains all info about a smesher's votes on the mesh history. this structure is
@@ -159,6 +161,16 @@ func (b *Ballot) ID() BallotID {
 // SmesherID returns the smesher's Edwards public key.
 func (b *Ballot) SmesherID() *signing.PublicKey {
 	return b.smesherID
+}
+
+// SetMalicious sets ballot as malicious.
+func (b *Ballot) SetMalicious() {
+	b.malicious = true
+}
+
+// IsMalicious returns true if ballot is malicious.
+func (b *Ballot) IsMalicious() bool {
+	return b.malicious
 }
 
 // MarshalLogObject implements logging encoder for Ballot.

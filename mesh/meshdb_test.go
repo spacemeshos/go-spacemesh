@@ -5,8 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"math"
-	"os"
-	"path"
 	"sort"
 	"testing"
 	"time"
@@ -20,18 +18,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 const (
-	dbPath          = "../tmp/mdb"
 	unitReward      = 10000
 	unitLayerReward = 3000
 )
-
-func teardown() {
-	_ = os.RemoveAll(dbPath)
-}
 
 func getMeshDB(tb testing.TB) *DB {
 	tb.Helper()
@@ -51,7 +45,7 @@ func TestMeshDB_New(t *testing.T) {
 }
 
 func TestMeshDB_AddBallot(t *testing.T) {
-	mdb, err := NewPersistentMeshDB(t.TempDir(), 1, logtest.New(t))
+	mdb, err := NewPersistentMeshDB(sql.InMemory(), 1, logtest.New(t))
 	require.NoError(t, err)
 	defer mdb.Close()
 
@@ -131,10 +125,9 @@ func createLayerWithRandVoting(layerID types.LayerID, prev []*types.Layer, ballo
 func BenchmarkNewPersistentMeshDB(b *testing.B) {
 	const batchSize = 50
 
-	mdb, err := NewPersistentMeshDB(path.Join(dbPath, "mesh_db"), 5, logtest.New(b))
+	mdb, err := NewPersistentMeshDB(sql.InMemory(), 5, logtest.New(b))
 	require.NoError(b, err)
 	defer mdb.Close()
-	defer teardown()
 
 	l := types.GenesisLayer()
 	gen := l.Blocks()[0]
@@ -581,10 +574,9 @@ func TestMeshDB_RecordCoinFlip(t *testing.T) {
 	mdb1 := NewMemMeshDB(logtest.New(t))
 	defer mdb1.Close()
 	testCoinflip(mdb1)
-	mdb2, err := NewPersistentMeshDB(t.TempDir(), 5, logtest.New(t))
+	mdb2, err := NewPersistentMeshDB(sql.InMemory(), 5, logtest.New(t))
 	require.NoError(t, err)
 	defer mdb2.Close()
-	defer teardown()
 	testCoinflip(mdb2)
 }
 
@@ -666,10 +658,30 @@ func TestBlocksBallotsOverlap(t *testing.T) {
 	require.Empty(t, ids)
 }
 
+func TestMaliciousBallots(t *testing.T) {
+	mdb := NewMemMeshDB(logtest.New(t))
+	defer mdb.Close()
+
+	lid := types.NewLayerID(1)
+	pub := []byte{1, 1, 1}
+
+	ballots := []types.Ballot{
+		types.NewExistingBallot(types.BallotID{1}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+		types.NewExistingBallot(types.BallotID{2}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+		types.NewExistingBallot(types.BallotID{3}, nil, pub, types.InnerBallot{LayerIndex: lid}),
+	}
+	require.NoError(t, mdb.AddBallot(&ballots[0]))
+	require.False(t, ballots[0].IsMalicious())
+	for _, ballot := range ballots[1:] {
+		require.NoError(t, mdb.AddBallot(&ballot))
+		require.True(t, ballot.IsMalicious())
+	}
+}
+
 func BenchmarkGetBlock(b *testing.B) {
 	// cache is set to be twice as large as cache to avoid hitting the cache
 	blocks := make([]*types.Block, layerSize*2)
-	db, err := NewPersistentMeshDB(b.TempDir(),
+	db, err := NewPersistentMeshDB(sql.InMemory(),
 		1, /*size of the cache is multiplied by a constant (layerSize). for the benchmark it needs to be no more than layerSize*/
 		logtest.New(b))
 	require.NoError(b, err)

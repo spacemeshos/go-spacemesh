@@ -10,7 +10,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
-	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 )
@@ -112,8 +111,7 @@ func (db *DB) AddProposal(ctx context.Context, p *types.Proposal) error {
 	} else if err := db.updateLayer(p); err != nil {
 		return err
 	}
-	events.ReportNewProposal(p)
-	db.logger.Info("added proposal to database", log.Inline(p))
+	db.logger.With().Info("added proposal to database", log.Inline(p))
 	return nil
 }
 

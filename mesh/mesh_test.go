@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
@@ -132,7 +133,7 @@ func createLayerBallots(t *testing.T, mesh *Mesh, lyrID types.LayerID) []*types.
 	for i := 0; i < numBallots; i++ {
 		ballot := types.GenLayerBallot(lyrID)
 		ballots = append(ballots, ballot)
-		require.NoError(t, mesh.addBallot(ballot))
+		require.NoError(t, mesh.DB.AddBallot(ballot))
 	}
 	return ballots
 }
@@ -688,7 +689,7 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 	// no calls to svm state, as layer will be failed earlier
 	require.Error(t, tm.ProcessLayer(ctx, last))
 	require.Equal(t, last, tm.ProcessedLayer())
-	require.Equal(t, last, tm.missingLayer)
+	require.Equal(t, last, tm.MissingLayer())
 	require.Equal(t, last.Sub(1), tm.LatestLayerInState())
 
 	last = last.Add(1)
@@ -820,4 +821,22 @@ func TestMesh_CallOnBallot(t *testing.T) {
 	tm.mockTortoise.EXPECT().OnBallot(ballot)
 
 	require.NoError(t, tm.AddBallot(ballot))
+}
+
+func TestMeshTransactionsFetcherIncludesPool(t *testing.T) {
+	tm := createTestMesh(t)
+	defer tm.ctrl.Finish()
+	defer tm.Close()
+
+	signer, _ := newSignerAndAddress(t, "1101")
+	expected := newSpawnTx(signer)
+	tm.txPool.Put(expected.ID(), expected)
+
+	buf, err := tm.Transactions().Get(expected.ID().Bytes())
+	require.NoError(t, err)
+	var rst types.Transaction
+	require.NoError(t, codec.Decode(buf, &rst))
+	require.NoError(t, rst.CalcAndSetOrigin())
+	rst.ID() // side effects
+	require.Equal(t, expected, &rst)
 }

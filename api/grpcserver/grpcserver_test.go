@@ -1818,6 +1818,46 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	//  Received unexpected error: "rpc error: code = Unimplemented desc = unknown service spacemesh.v1.TransactionService"
 }
 
+func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
+	logtest.SetupGlobal(t)
+
+	ctrl := gomock.NewController(t)
+	publisher := pubsubmocks.NewMockPublisher(ctrl)
+
+	expected := 20
+	n := 0
+	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes().DoAndReturn(func(_ context.Context, _ string, msg []byte) error {
+		n++
+		return nil
+	})
+	grpcService := NewTransactionService(publisher, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	shutDown := launchServer(t, grpcService)
+	defer shutDown()
+
+	// start a client
+	addr := "localhost:" + strconv.Itoa(cfg.GrpcServerPort)
+
+	// Set up a connection to the server.
+	conn, err := grpc.Dial(addr, grpc.WithInsecure())
+	require.NoError(t, err)
+	defer func() {
+		require.NoError(t, conn.Close())
+	}()
+	c := pb.NewTransactionServiceClient(conn)
+	for i := 0; i < expected; i++ {
+		serializedTx, err := types.InterfaceToBytes(globalTx)
+		require.NoError(t, err, "error serializing tx")
+		res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
+			Transaction: serializedTx,
+		})
+		require.NoError(t, err)
+		require.Equal(t, int32(code.Code_OK), res.Status.Code)
+		require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
+		require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
+	}
+	require.Equal(t, expected, n)
+}
+
 func TestTransactionService(t *testing.T) {
 	logtest.SetupGlobal(t)
 
@@ -1864,19 +1904,6 @@ func TestTransactionService(t *testing.T) {
 			require.Equal(t, globalTx.ID().Bytes(), res.Txstate.Id.Id)
 			require.Equal(t, pb.TransactionState_TRANSACTION_STATE_MEMPOOL, res.Txstate.State)
 		}},
-		{"SubmitTransaction_BadCounter", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			txAPI.nonces[globalTx.Origin()] = uint64(accountCounter + 1)
-			serializedTx, err := types.InterfaceToBytes(globalTx)
-			require.NoError(t, err, "error serializing tx")
-			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-				Transaction: serializedTx,
-			})
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-			require.Contains(t, err.Error(), "`Transaction` incorrect counter or")
-			txAPI.nonces[globalTx.Origin()] = uint64(accountCounter)
-		}},
 		{"SubmitTransaction_InvalidTx", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			// Try sending invalid tx data
@@ -1888,18 +1915,6 @@ func TestTransactionService(t *testing.T) {
 			statusCode := status.Code(err)
 			require.Equal(t, codes.InvalidArgument, statusCode)
 			require.Contains(t, err.Error(), "`Transaction` must contain")
-		}},
-		{"SubmitTransaction_InvalidAddr", func(t *testing.T) {
-			logtest.SetupGlobal(t)
-			// this tx origin does not exist in state
-			serializedTx, err := types.InterfaceToBytes(globalTx2)
-			require.NoError(t, err, "error serializing tx")
-			_, err = c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
-				Transaction: serializedTx,
-			})
-			statusCode := status.Code(err)
-			require.Equal(t, codes.InvalidArgument, statusCode)
-			require.Contains(t, err.Error(), "`Transaction` origin account not found")
 		}},
 		{"TransactionsState_MissingTransactionId", func(t *testing.T) {
 			logtest.SetupGlobal(t)
@@ -1978,7 +1993,7 @@ func TestTransactionService(t *testing.T) {
 
 			events.CloseEventReporter()
 
-			require.NoError(t, events.InitializeEventReporterWithOptions(""))
+			events.InitializeReporter()
 
 			stream, err := c.TransactionsStateStream(context.Background(), req)
 			require.NoError(t, err)
@@ -2023,8 +2038,7 @@ func TestTransactionService(t *testing.T) {
 			}()
 
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("")
-			require.NoError(t, err)
+			events.InitializeReporter()
 
 			// Wait until stream starts receiving to ensure that it catches the event.
 			time.Sleep(10 * time.Millisecond)
@@ -2082,8 +2096,7 @@ func TestTransactionService(t *testing.T) {
 
 			// SUBMIT
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("")
-			require.NoError(t, err)
+			events.InitializeReporter()
 			serializedTx, err := types.InterfaceToBytes(globalTx)
 			require.NoError(t, err, "error serializing tx")
 			res, err := c.SubmitTransaction(context.Background(), &pb.SubmitTransactionRequest{
@@ -2128,8 +2141,7 @@ func TestTransactionService(t *testing.T) {
 			}()
 
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("")
-			require.NoError(t, err)
+			events.InitializeReporter()
 
 			// Wait until stream starts receiving to ensure that it catches the event.
 			time.Sleep(10 * time.Millisecond)
@@ -2163,8 +2175,7 @@ func TestTransactionService(t *testing.T) {
 			}()
 
 			events.CloseEventReporter()
-			err := events.InitializeEventReporterWithOptions("")
-			require.NoError(t, err)
+			events.InitializeReporter()
 
 			time.Sleep(100 * time.Millisecond)
 
@@ -2331,8 +2342,7 @@ func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("")
-	require.NoError(t, err)
+	events.InitializeReporter()
 
 	// Wait until stream starts receiving to ensure that it catches the event.
 	time.Sleep(10 * time.Millisecond)
@@ -2435,8 +2445,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("")
-	require.NoError(t, err)
+	events.InitializeReporter()
 
 	// Ensure receiving has started.
 	time.Sleep(10 * time.Millisecond)
@@ -2554,8 +2563,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 
 	// initialize the streamer
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("")
-	require.NoError(t, err)
+	events.InitializeReporter()
 
 	time.Sleep(10 * time.Millisecond)
 
@@ -2656,7 +2664,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	}()
 
 	// initialize the streamer
-	require.NoError(t, events.InitializeEventReporterWithOptions(""))
+	events.InitializeReporter()
 
 	layer, err := txAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
@@ -2959,6 +2967,28 @@ func TestDebugService(t *testing.T) {
 		require.NotNil(t, response)
 		require.Equal(t, id.String(), response.Id)
 	})
+	t.Run("ProposalsStream", func(t *testing.T) {
+		events.InitializeReporter()
+		t.Cleanup(events.CloseEventReporter)
+
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		stream, err := c.ProposalsStream(ctx, &empty.Empty{})
+		require.NoError(t, err)
+
+		_, err = stream.Header()
+		require.NoError(t, err)
+		events.ReportProposal(events.ProposalCreated, &types.Proposal{})
+		events.ReportProposal(events.ProposalIncluded, &types.Proposal{})
+
+		msg, err := stream.Recv()
+		require.NoError(t, err)
+		require.Equal(t, pb.Proposal_Created, msg.Status)
+
+		msg, err = stream.Recv()
+		require.NoError(t, err)
+		require.Equal(t, pb.Proposal_Included, msg.Status)
+	})
 }
 
 func TestGatewayService(t *testing.T) {
@@ -3076,8 +3106,7 @@ func TestEventsReceived(t *testing.T) {
 	}
 
 	events.CloseEventReporter()
-	err = events.InitializeEventReporterWithOptions("")
-	require.NoError(t, err)
+	events.InitializeReporter()
 
 	txStream, err := txClient.TransactionsStateStream(context.Background(), txReq)
 	require.NoError(t, err)

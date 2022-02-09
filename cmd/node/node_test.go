@@ -571,7 +571,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 
 		// Give the error channel a buffer
 		events.CloseEventReporter()
-		require.NoError(t, events.InitializeEventReporterWithOptions(""))
+		events.InitializeReporter()
 
 		// Speed things up a little
 		app.Config.SyncInterval = 1
@@ -865,25 +865,32 @@ func TestInitialize_BadTortoiseParams(t *testing.T) {
 
 func TestConfig_Preset(t *testing.T) {
 	const name = "testnet"
-	viper.Set("preset", name)
-	preset, err := presets.Get(name)
-	require.NoError(t, err)
 
 	t.Run("PresetApplied", func(t *testing.T) {
+		preset, err := presets.Get(name)
+		require.NoError(t, err)
+
 		cmd := &cobra.Command{}
 		cmdp.AddCommands(cmd)
 
+		viper.Set("preset", name)
+		t.Cleanup(viper.Reset)
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
 		require.Equal(t, preset, *conf)
 	})
 
 	t.Run("PresetOverwrittenByFlags", func(t *testing.T) {
+		preset, err := presets.Get(name)
+		require.NoError(t, err)
+
 		cmd := &cobra.Command{}
 		cmdp.AddCommands(cmd)
 		const networkID = 42
 		require.NoError(t, cmd.ParseFlags([]string{"--network-id=" + strconv.Itoa(networkID)}))
 
+		viper.Set("preset", name)
+		t.Cleanup(viper.Reset)
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
 		preset.P2P.NetworkID = networkID
@@ -891,6 +898,9 @@ func TestConfig_Preset(t *testing.T) {
 	})
 
 	t.Run("PresetOverWrittenByConfigFile", func(t *testing.T) {
+		preset, err := presets.Get(name)
+		require.NoError(t, err)
+
 		cmd := &cobra.Command{}
 		cmdp.AddCommands(cmd)
 		const networkID = 42
@@ -900,9 +910,30 @@ func TestConfig_Preset(t *testing.T) {
 		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
 		require.NoError(t, cmd.ParseFlags([]string{"--config=" + path}))
 
+		viper.Set("preset", name)
+		t.Cleanup(viper.Reset)
 		conf, err := loadConfig(cmd)
 		require.NoError(t, err)
 		preset.P2P.NetworkID = networkID
+		preset.ConfigFile = path
+		require.Equal(t, preset, *conf)
+	})
+	t.Run("LoadedFromConfigFile", func(t *testing.T) {
+		preset, err := presets.Get(name)
+		require.NoError(t, err)
+
+		cmd := &cobra.Command{}
+		cmdp.AddCommands(cmd)
+
+		content := fmt.Sprintf(`{"preset": "%s"}`, name)
+		path := filepath.Join(t.TempDir(), "config.json")
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o600))
+		require.NoError(t, cmd.ParseFlags([]string{"--config=" + path}))
+
+		t.Cleanup(viper.Reset)
+
+		conf, err := loadConfig(cmd)
+		require.NoError(t, err)
 		preset.ConfigFile = path
 		require.Equal(t, preset, *conf)
 	})
