@@ -354,7 +354,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	err := atxdb.StoreAtx(context.TODO(), 1, prevAtx)
 	assert.NoError(t, err)
 
-	// wrong sequnce
+	// wrong sequence
 	atx := newActivationTx(idx1, 1, prevAtx.ID(), prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
 	err = atxdb.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
@@ -381,7 +381,7 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	err = atxdb.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
 
-	atx = newActivationTx(idx1, 3, atx2id, prevAtx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
+	atx = newActivationTx(idx1, 3, atx2id, prevAtx.ID(), types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
@@ -409,11 +409,11 @@ func TestActivationDB_ValidateAndInsertSorted(t *testing.T) {
 	assert.NoError(t, err)
 	atxID := atx.ID()
 
-	atx = newActivationTx(idx2, 2, atxID, atx.ID(), types.NewLayerID(1012), 0, 100, coinbase, 100, &types.NIPost{})
+	atx = newActivationTx(idx2, 2, atxID, atx.ID(), types.NewLayerID(1012+layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
 	err = atxdb.StoreAtx(context.TODO(), 1, atx)
 	assert.NoError(t, err)
 
-	atx = newActivationTx(idx2, 2, atxID, atx.ID(), types.NewLayerID(1013), 0, 100, coinbase, 100, &types.NIPost{})
+	atx = newActivationTx(idx2, 2, atxID, atx.ID(), types.NewLayerID(1012+2*layersPerEpoch), 0, 100, coinbase, 100, &types.NIPost{})
 	err = atxdb.ContextuallyValidateAtx(atx.ActivationTxHeader)
 	assert.EqualError(t, err, "last atx is not the one referenced")
 
