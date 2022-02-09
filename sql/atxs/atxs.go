@@ -194,7 +194,7 @@ func GetTop(db sql.Executor) (id types.ATXID, err error) {
 	return id, err
 }
 
-// UpdateTopIfNeeded updates top ATX if needed
+// UpdateTopIfNeeded updates top ATX if needed.
 func UpdateTopIfNeeded(db sql.Executor, atx *types.ActivationTx) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, atx.ID().Bytes())
