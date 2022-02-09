@@ -77,12 +77,12 @@ func init() {
 
 // AwaitAtx returns a channel that will receive notification when the specified atx with id id is received via gossip.
 func (db *DB) AwaitAtx(id types.ATXID) chan struct{} {
+	db.Lock()
+	defer db.Unlock()
+
 	if has, err := atxs.Has(db.sqlDB, id); err == nil && has {
 		return closedChan
 	}
-
-	db.Lock()
-	defer db.Unlock()
 
 	ch, found := db.atxChannels[id]
 	if !found {
@@ -304,13 +304,13 @@ func (db *DB) ContextuallyValidateAtx(atx *types.ActivationTxHeader) error {
 // created it in a sorted manner by the sequence id. This function does not validate the atx and assumes all data is
 // correct and that all associated atx exist in the db. Will return error if writing to db failed.
 func (db *DB) StoreAtx(ctx context.Context, ech types.EpochID, atx *types.ActivationTx) error {
+	db.Lock()
+	defer db.Unlock()
+
 	// todo: maybe cleanup DB if failed by using defer (#1921)
 	if err := db.storeATXInDB(atx); err != nil {
 		return fmt.Errorf("store ATX in DB: %w", err)
 	}
-
-	db.Lock()
-	defer db.Unlock()
 
 	// notify subscribers
 	if ch, found := db.atxChannels[atx.ID()]; found {
@@ -342,18 +342,6 @@ func (db *DB) storeATXInDB(atx *types.ActivationTx) error {
 	}
 
 	return dbTx.Commit()
-}
-
-func (db *DB) getTopAtx() (types.ATXID, error) {
-	id, err := atxs.GetTop(db.sqlDB)
-	if err != nil {
-		if errors.Is(err, database.ErrNotFound) {
-			return db.goldenATXID, nil
-		}
-		return types.ATXID{}, fmt.Errorf("failed to get top atx: %v", err)
-	}
-
-	return id, nil
 }
 
 // ErrAtxNotFound is a specific error returned when no atx was found in DB.
@@ -590,12 +578,5 @@ type ATXFetcher struct {
 
 // Get gets an ATX as bytes by an ATX ID as bytes.
 func (f *ATXFetcher) Get(key []byte) ([]byte, error) {
-	atxID := types.ATXID(types.BytesToHash(key))
-
-	atx, err := atxs.Get(f.DB.sqlDB, atxID)
-	if err != nil {
-		return nil, err
-	}
-
-	return types.InterfaceToBytes(atx)
+	return atxs.GetBlob(f.DB.sqlDB, types.ATXID(types.BytesToHash(key)))
 }

@@ -559,7 +559,7 @@ func TestActivationDb_TopAtx(t *testing.T) {
 	atx, err := createAndStoreAtx(atxdb, types.LayerID{}.Add(1))
 	r.NoError(err)
 
-	id, err := atxdb.getTopAtx()
+	id, err := atxdb.GetPosAtxID()
 	r.NoError(err)
 	r.Equal(atx.ID(), id)
 
@@ -567,7 +567,7 @@ func TestActivationDb_TopAtx(t *testing.T) {
 	atx, err = createAndStoreAtx(atxdb, types.LayerID{}.Add(3))
 	r.NoError(err)
 
-	id, err = atxdb.getTopAtx()
+	id, err = atxdb.GetPosAtxID()
 	r.NoError(err)
 	r.Equal(atx.ID(), id)
 
@@ -575,7 +575,7 @@ func TestActivationDb_TopAtx(t *testing.T) {
 	atx, err = createAndStoreAtx(atxdb, types.LayerID{}.Add(1))
 	r.NoError(err)
 
-	id, err = atxdb.getTopAtx()
+	id, err = atxdb.GetPosAtxID()
 	r.NoError(err)
 	r.NotEqual(atx.ID(), id)
 }
