@@ -396,14 +396,6 @@ func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendin
 	return pending, nil
 }
 
-func groupByOrigin(txs []*types.Transaction) map[types.Address][]*types.Transaction {
-	grouped := make(map[types.Address][]*types.Transaction)
-	for _, tx := range txs {
-		grouped[tx.Origin()] = append(grouped[tx.Origin()], tx)
-	}
-	return grouped
-}
-
 // GetProjection returns projection of address.
 func (m *DB) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (uint64, uint64, error) {
 	pending, err := m.getAccountPendingTxs(addr)

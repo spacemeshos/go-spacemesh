@@ -59,9 +59,6 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 			"Cannot submit transaction, node is not in sync yet, try again later")
 	}
 
-	// Note: The TransactionProcessor performs these same checks, so there is some duplicated logic here.
-	// See https://github.com/spacemeshos/go-spacemesh/issues/2162
-
 	tx, err := types.BytesToTransaction(in.Transaction)
 	if err != nil {
 		log.Error("failed to deserialize tx, error: %v", err)

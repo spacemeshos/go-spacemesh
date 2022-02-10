@@ -79,7 +79,6 @@ type PeerCounter interface {
 // MempoolAPI is an API for reading mempool data that's useful for API services.
 type MempoolAPI interface {
 	Get(types.TransactionID) (*types.Transaction, error)
-	GetTxsByAddress(types.Address) []*types.Transaction
 	GetProjection(types.Address, uint64, uint64) (uint64, uint64)
 }
 
