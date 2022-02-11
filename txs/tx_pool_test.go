@@ -1,4 +1,4 @@
-package mempool
+package txs
 
 import (
 	"encoding/binary"

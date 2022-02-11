@@ -42,13 +42,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/layerpatrol"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/log/errcode"
-	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/mesh"
 	"github.com/spacemeshos/go-spacemesh/metrics"
 	"github.com/spacemeshos/go-spacemesh/miner"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
-	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -60,6 +58,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/timesync/peersync"
 	"github.com/spacemeshos/go-spacemesh/tortoise"
 	"github.com/spacemeshos/go-spacemesh/turbohare"
+	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 const edKeyFileName = "key.bin"
@@ -278,7 +277,7 @@ type App struct {
 	beaconProtocol   *beacon.ProtocolDriver
 	closers          []interface{ Close() }
 	log              log.Log
-	txPool           *mempool.TxMempool
+	txPool           *txs.TxMempool
 	svm              *svm.SVM
 	layerFetch       *layerfetcher.Logic
 	ptimesync        *peersync.Sync
@@ -507,8 +506,8 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("create mesh DB: %w", err)
 	}
 
-	app.txPool = mempool.NewTxMemPool()
-	meshAndPoolProjector := pendingtxs.NewMeshAndPoolProjector(mdb, app.txPool)
+	app.txPool = txs.NewTxMemPool()
+	meshAndPoolProjector := txs.NewMeshAndPoolProjector(mdb, app.txPool)
 
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
 	if err != nil {
@@ -628,7 +627,7 @@ func (app *App) initServices(ctx context.Context,
 	blockGen := blocks.NewGenerator(atxDB, msh, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
 	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, beaconProtocol, fetcherWrapped, hOracle, idStore, clock, lg)
 
-	stateAndMeshProjector := pendingtxs.NewStateAndMeshProjector(state, msh)
+	stateAndMeshProjector := txs.NewStateAndMeshProjector(state, msh)
 	proposalBuilder := miner.NewProposalBuilder(
 		ctx,
 		clock.Subscribe(),

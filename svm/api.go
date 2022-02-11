@@ -9,10 +9,10 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/util"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/svm/state"
+	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 // IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p.
@@ -25,7 +25,7 @@ type SVM struct {
 }
 
 // New creates a new `SVM` instance from the given `state` and `logger`.
-func New(allStates, processorDb database.Database, projector state.Projector, txPool *mempool.TxMempool, logger log.Log) *SVM {
+func New(allStates, processorDb database.Database, projector state.Projector, txPool *txs.TxMempool, logger log.Log) *SVM {
 	state := state.NewTransactionProcessor(allStates, processorDb, projector, txPool, logger)
 	return &SVM{state, log.NewDefault("svm")}
 }

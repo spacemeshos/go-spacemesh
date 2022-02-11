@@ -1,4 +1,4 @@
-package mempool
+package txs
 
 import (
 	"errors"
@@ -7,7 +7,6 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
-	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/rand"
 )
 
@@ -15,14 +14,14 @@ import (
 type TxMempool struct {
 	mu       sync.RWMutex
 	txs      map[types.TransactionID]*types.Transaction
-	accounts map[types.Address]*pendingtxs.AccountPendingTxs
+	accounts map[types.Address]*AccountPendingTxs
 }
 
 // NewTxMemPool returns a new TxMempool struct.
 func NewTxMemPool() *TxMempool {
 	return &TxMempool{
 		txs:      make(map[types.TransactionID]*types.Transaction),
-		accounts: make(map[types.Address]*pendingtxs.AccountPendingTxs),
+		accounts: make(map[types.Address]*AccountPendingTxs),
 	}
 }
 
@@ -142,10 +141,10 @@ func (t *TxMempool) GetProjection(addr types.Address, prevNonce, prevBalance uin
 }
 
 // ⚠️ must be called under write-lock.
-func (t *TxMempool) getOrCreate(addr types.Address) *pendingtxs.AccountPendingTxs {
+func (t *TxMempool) getOrCreate(addr types.Address) *AccountPendingTxs {
 	account, found := t.accounts[addr]
 	if !found {
-		account = pendingtxs.NewAccountPendingTxs()
+		account = NewAccountPendingTxs()
 		t.accounts[addr] = account
 	}
 	return account

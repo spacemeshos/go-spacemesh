@@ -1,4 +1,4 @@
-package pendingtxs
+package txs
 
 import (
 	"fmt"

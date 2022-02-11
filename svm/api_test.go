@@ -11,11 +11,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/svm/transaction"
+	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 type ProjectorMock struct {
@@ -54,7 +54,7 @@ func TestHandleGossipTransaction_ValidationAccepted(t *testing.T) {
 
 	db := database.NewMemDatabase()
 	lg := logtest.New(t).WithName("svm_logger")
-	svm := New(db, appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	svm := New(db, appliedTxsMock{}, &ProjectorMock{}, txs.NewTxMemPool(), lg)
 
 	signer := signing.NewEdSigner()
 	origin := types.GenerateAddress(signer.PublicKey().Bytes())
@@ -74,7 +74,7 @@ func TestHandleGossipTransaction_ValidationIgnored_WrongNonce(t *testing.T) {
 
 	db := database.NewMemDatabase()
 	lg := logtest.New(t).WithName("svm_logger")
-	svm := New(db, appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	svm := New(db, appliedTxsMock{}, &ProjectorMock{}, txs.NewTxMemPool(), lg)
 
 	signer := signing.NewEdSigner()
 	origin := types.BytesToAddress(signer.PublicKey().Bytes())
@@ -94,7 +94,7 @@ func TestHandleGossipTransaction_ValidationIgnored_InsufficientBalance(t *testin
 
 	db := database.NewMemDatabase()
 	lg := logtest.New(t).WithName("svm_logger")
-	svm := New(db, appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	svm := New(db, appliedTxsMock{}, &ProjectorMock{}, txs.NewTxMemPool(), lg)
 
 	signer := signing.NewEdSigner()
 	origin := types.BytesToAddress(signer.PublicKey().Bytes())
@@ -114,7 +114,7 @@ func TestHandleGossipTransaction_ValidationIgnored_NoTxOrigin(t *testing.T) {
 
 	db := database.NewMemDatabase()
 	lg := logtest.New(t).WithName("svm_logger")
-	svm := New(db, appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	svm := New(db, appliedTxsMock{}, &ProjectorMock{}, txs.NewTxMemPool(), lg)
 
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, signer)

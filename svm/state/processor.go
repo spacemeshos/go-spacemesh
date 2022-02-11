@@ -9,8 +9,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/trie"
+	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 // IncomingTxProtocol is the protocol identifier for tx received by gossip that is used by the p2p.
@@ -32,7 +32,7 @@ type Projector interface {
 type TransactionProcessor struct {
 	log.Log
 	*DB
-	pool         *mempool.TxMempool
+	pool         *txs.TxMempool
 	processorDb  database.Database
 	currentLayer types.LayerID
 	rootHash     types.Hash32
@@ -46,7 +46,7 @@ type TransactionProcessor struct {
 const newRootKey = "root"
 
 // NewTransactionProcessor returns a new state processor.
-func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, txPool *mempool.TxMempool, logger log.Log) *TransactionProcessor {
+func NewTransactionProcessor(allStates, processorDb database.Database, projector Projector, txPool *txs.TxMempool, logger log.Log) *TransactionProcessor {
 	stateDb, err := New(types.Hash32{}, NewDatabase(allStates))
 	if err != nil {
 		log.With().Panic("cannot load state db", log.Err(err))

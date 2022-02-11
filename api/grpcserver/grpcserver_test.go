@@ -41,13 +41,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/svm"
 	"github.com/spacemeshos/go-spacemesh/svm/transaction"
+	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 const (
@@ -509,7 +509,7 @@ func (a *ActivationAPIMock) UpdatePoETServer(context.Context, string) error {
 }
 
 type MempoolMock struct {
-	// In the real mempool.TxMempool struct, there are multiple data structures and they're more complex,
+	// In the real txs.TxMempool struct, there are multiple data structures and they're more complex,
 	// but we just mock a very simple use case here and only store some of these data
 	poolByAddress map[types.Address]types.TransactionID
 	poolByTxid    map[types.TransactionID]*types.Transaction
@@ -3147,11 +3147,11 @@ func TestEventsReceived(t *testing.T) {
 	}()
 
 	time.Sleep(50 * time.Millisecond)
-	pool := mempool.NewTxMemPool()
+	pool := txs.NewTxMemPool()
 	pool.Put(globalTx.ID(), globalTx)
 
 	lg := logtest.New(t).WithName("svm")
-	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, txs.NewTxMemPool(), lg)
 	time.Sleep(100 * time.Millisecond)
 
 	rewards := map[types.Address]uint64{

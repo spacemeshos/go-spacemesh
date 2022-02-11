@@ -11,7 +11,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/pendingtxs"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
@@ -20,6 +19,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
+	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 const (
@@ -384,8 +384,8 @@ func (m *DB) markTransactionsDeleted(txs ...*types.Transaction) error {
 	return nil
 }
 
-func (m *DB) getAccountPendingTxs(addr types.Address) (*pendingtxs.AccountPendingTxs, error) {
-	pending := pendingtxs.NewAccountPendingTxs()
+func (m *DB) getAccountPendingTxs(addr types.Address) (*txs.AccountPendingTxs, error) {
+	pending := txs.NewAccountPendingTxs()
 	txs, err := transactions.FilterPending(m.db, addr)
 	if err != nil {
 		return nil, err
