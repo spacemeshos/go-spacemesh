@@ -18,7 +18,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 		sendFor     = 8
 		stopSending = genesis + sendFor + 1
 		stopWaiting = stopSending + 2
-		batch       = 5
+		batch       = 1
 		amount      = 100
 	)
 	receiver := [20]byte{11, 1, 1}
