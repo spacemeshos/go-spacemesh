@@ -4,14 +4,15 @@ on:
   push:
     branches:
       - '*'
-
 jobs:
   test-gcp:
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@master
     - id: 'auth'
       uses: 'google-github-actions/auth@v0'
       with:
+        # GCP_CREDENTIALS is minified JSON of service account
         credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
     - name: 'Set up Cloud SDK'
@@ -19,3 +20,14 @@ jobs:
 
     - name: 'Use gcloud CLI'
       run: 'gcloud container clusters list'
+
+    - name: kubectl - Google Cloud GKE cluster.
+      uses: ameydev/gke-kubectl-action@master
+      env:
+        PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+        #Run command: base64 ~/<account_id>.json
+        APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
+        CLUSTER_NAME:   ${{ secrets.CI_CLUSTER_NAME }}
+        ZONE_NAME: ${{ secrets.CI_ZONE_NAME }}
+      with:
+        args: get pods
