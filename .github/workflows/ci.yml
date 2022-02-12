@@ -18,4 +18,4 @@ jobs:
       uses: 'google-github-actions/setup-gcloud@v0'
 
     - name: 'Use gcloud CLI'
-      run: 'gcloud info'
+      run: 'gcloud container clusters list'
