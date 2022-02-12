@@ -6,7 +6,8 @@ on:
       - '*'
 
 jobs:
-  test_node_pool:
+  test-gcp:
+    runs-on: ubuntu-latest
     steps:
     - id: 'auth'
       uses: 'google-github-actions/auth@v0'
