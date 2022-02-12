@@ -17,8 +17,8 @@ import (
 
 // GlobalStateService exposes global state data, output from the STF.
 type GlobalStateService struct {
-	Mesh    api.TxAPI
-	Mempool api.MempoolAPI
+	Mesh     api.TxAPI
+	conState api.ConservativeState
 }
 
 // RegisterService registers this service with a grpc server instance.
@@ -27,10 +27,10 @@ func (s GlobalStateService) RegisterService(server *Server) {
 }
 
 // NewGlobalStateService creates a new grpc service using config data.
-func NewGlobalStateService(tx api.TxAPI, mempool api.MempoolAPI) *GlobalStateService {
+func NewGlobalStateService(tx api.TxAPI, conState api.ConservativeState) *GlobalStateService {
 	return &GlobalStateService{
-		Mesh:    tx,
-		Mempool: mempool,
+		Mesh:     tx,
+		conState: conState,
 	}
 }
 
@@ -43,19 +43,10 @@ func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHash
 	}}, nil
 }
 
-func (s GlobalStateService) getProjection(curCounter, curBalance uint64, addr types.Address) (counter, balance uint64, err error) {
-	counter, balance, err = s.Mesh.GetProjection(addr, curCounter, curBalance)
-	if err != nil {
-		return 0, 0, fmt.Errorf("get mesh projection: %w", err)
-	}
-	counter, balance = s.Mempool.GetProjection(addr, counter, balance)
-	return counter, balance, nil
-}
-
 func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, err error) {
 	balanceActual := s.Mesh.GetBalance(addr)
 	counterActual := s.Mesh.GetNonce(addr)
-	counterProjected, balanceProjected, err := s.getProjection(counterActual, balanceActual, addr)
+	counterProjected, balanceProjected, err := s.conState.GetProjection(addr)
 	if err != nil {
 		return nil, err
 	}

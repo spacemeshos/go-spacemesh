@@ -135,9 +135,9 @@ func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 	atxdb := activation.NewDB(atxStore, nil,
 		activation.NewIdentityStore(database.NewMemDatabase()),
 		layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
-	svmstate := mmocks.NewMockstate(gomock.NewController(t))
-	svmstate.EXPECT().GetStateRoot().AnyTimes()
-	return mesh.NewMesh(memdb, atxdb, &mockValidator{}, nil, svmstate, lg.WithName("mesh"))
+	conState := mmocks.NewMockconservativeState(gomock.NewController(t))
+	conState.EXPECT().GetStateRoot().AnyTimes()
+	return mesh.NewMesh(memdb, atxdb, &mockValidator{}, conState, lg.WithName("mesh"))
 }
 
 var conf = Configuration{
@@ -1144,12 +1144,11 @@ func TestSyncMissingLayer(t *testing.T) {
 	atxdb := activation.NewDB(atxStore, nil,
 		activation.NewIdentityStore(database.NewMemDatabase()),
 		layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
-	svmstate := mmocks.NewMockstate(gomock.NewController(t))
-	svmstate.EXPECT().GetStateRoot().AnyTimes()
 
+	conState := mmocks.NewMockconservativeState(gomock.NewController(t))
+	conState.EXPECT().GetStateRoot().AnyTimes()
 	tortoise := mmocks.NewMocktortoise(ctrl)
-
-	m := mesh.NewMesh(memdb, atxdb, tortoise, nil, svmstate, lg.WithName("mesh"))
+	m := mesh.NewMesh(memdb, atxdb, tortoise, conState, lg.WithName("mesh"))
 
 	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, m, fetcher, lg.WithName("syncer"))
 

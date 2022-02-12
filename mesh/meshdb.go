@@ -600,7 +600,7 @@ type txFetcher struct {
 func (db *txFetcher) Get(hash []byte) ([]byte, error) {
 	id := types.TransactionID{}
 	copy(id[:], hash)
-	if tx, err := db.m.txPool.Get(id); err == nil && tx != nil {
+	if tx, err := db.m.conservativeState.Get(id); err == nil && tx != nil {
 		return codec.Encode(tx)
 	}
 	return transactions.GetBlob(db.m.db, id)

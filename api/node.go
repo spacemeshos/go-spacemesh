@@ -39,7 +39,6 @@ type Syncer interface {
 // TxAPI is an api for getting transaction status.
 type TxAPI interface {
 	AddressExists(types.Address) bool
-	ValidateNonceAndBalance(*types.Transaction) error
 	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]types.Reward, error)
@@ -51,7 +50,6 @@ type TxAPI interface {
 	LatestLayer() types.LayerID
 	GetLayerApplied(types.TransactionID) *types.LayerID
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
-	GetProjection(types.Address, uint64, uint64) (uint64, uint64, error)
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
 	GetStateRoot() types.Hash32
@@ -76,10 +74,10 @@ type PeerCounter interface {
 	PeerCount() uint64
 }
 
-// MempoolAPI is an API for reading mempool data that's useful for API services.
-type MempoolAPI interface {
+// ConservativeState is an API for reading mempool data that's useful for API services.
+type ConservativeState interface {
 	Get(types.TransactionID) (*types.Transaction, error)
-	GetProjection(types.Address, uint64, uint64) (uint64, uint64)
+	GetProjection(types.Address) (uint64, uint64, error)
 }
 
 // ActivationAPI is an API for activation module.

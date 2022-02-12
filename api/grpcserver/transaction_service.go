@@ -15,14 +15,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
-	"github.com/spacemeshos/go-spacemesh/svm"
+	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 // TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
 	publisher api.Publisher // P2P Swarm
 	Mesh      api.TxAPI     // Mesh
-	Mempool   api.MempoolAPI
+	conState  api.ConservativeState
 	syncer    api.Syncer
 }
 
@@ -35,13 +35,13 @@ func (s TransactionService) RegisterService(server *Server) {
 func NewTransactionService(
 	publisher api.Publisher,
 	tx api.TxAPI,
-	mempool api.MempoolAPI,
+	conState api.ConservativeState,
 	syncer api.Syncer,
 ) *TransactionService {
 	return &TransactionService{
 		publisher: publisher,
 		Mesh:      tx,
-		Mempool:   mempool,
+		conState:  conState,
 		syncer:    syncer,
 	}
 }
@@ -66,7 +66,7 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 			"`Transaction` must contain a valid, serialized transaction")
 	}
 
-	if err := s.publisher.Publish(ctx, svm.IncomingTxProtocol, in.Transaction); err != nil {
+	if err := s.publisher.Publish(ctx, txs.IncomingTxProtocol, in.Transaction); err != nil {
 		log.Error("error broadcasting incoming tx: %v", err)
 		return nil, status.Error(codes.Internal, "Failed to publish transaction")
 	}
@@ -85,8 +85,8 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (retTx *types.Transaction, state pb.TransactionState_TransactionState) {
 	tx, err := s.Mesh.GetMeshTransaction(txID) // have we seen this transaction in a block?
 	if err != nil {
-		retTx, err = s.Mempool.Get(txID) // do we have it in the mempool?
-		if err != nil {                  // we don't know this transaction
+		retTx, err = s.conState.Get(txID) // do we have it in the mempool?
+		if err != nil {                   // we don't know this transaction
 			return
 		}
 		state = pb.TransactionState_TRANSACTION_STATE_MEMPOOL

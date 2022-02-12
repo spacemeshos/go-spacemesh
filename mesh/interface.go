@@ -8,11 +8,13 @@ import (
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
-type state interface {
+type conservativeState interface {
 	ApplyLayer(layer types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error)
 	GetStateRoot() types.Hash32
 	Rewind(layer types.LayerID) (types.Hash32, error)
-	AddTxToPool(tx *types.Transaction) error
+	AddTxToMempool(tx *types.Transaction, checkValidity bool) error
+	Invalidate(id types.TransactionID)
+	Get(id types.TransactionID) (*types.Transaction, error)
 
 	// below APIs exist to satisfy TxAPI interface
 
@@ -22,7 +24,6 @@ type state interface {
 	GetLayerApplied(types.TransactionID) *types.LayerID
 	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
 	GetNonce(types.Address) uint64
-	ValidateNonceAndBalance(*types.Transaction) error
 }
 
 type tortoise interface {

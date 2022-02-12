@@ -45,6 +45,7 @@ import (
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/svm"
 	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 	"github.com/spacemeshos/go-spacemesh/txs"
@@ -181,17 +182,6 @@ func (t *TxAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err erro
 
 func (t *TxAPIMock) GetStateRoot() types.Hash32 {
 	return stateRoot
-}
-
-func (t *TxAPIMock) ValidateNonceAndBalance(tx *types.Transaction) error {
-	if !t.AddressExists(tx.Origin()) || t.GetBalance(tx.Origin()) < tx.GasLimit || t.GetNonce(tx.Origin()) != tx.AccountNonce {
-		return errors.New("not gonna happen")
-	}
-	return nil
-}
-
-func (t *TxAPIMock) GetProjection(_ types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
-	return prevNonce, prevBalance, nil
 }
 
 // latest layer received.
@@ -528,17 +518,8 @@ func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
 // unconfirmed or in the mempool that will update state.
-func (m MempoolMock) GetProjection(types.Address, uint64, uint64) (nonce, balance uint64) {
-	nonce = accountCounter + 1
-	balance = accountBalance + 1
-	return
-}
-
-func (m MempoolMock) GetTxsByAddress(addr types.Address) (txs []*types.Transaction) {
-	if id, exist := m.poolByAddress[addr]; exist {
-		txs = append(txs, m.poolByTxid[id])
-	}
-	return
+func (m MempoolMock) GetProjection(types.Address) (uint64, uint64, error) {
+	return accountCounter + 1, accountBalance + 1, nil
 }
 
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
@@ -3041,15 +3022,6 @@ func (appliedTxsMock) Close()                             { panic("implement me"
 func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me") }
 func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
 
-type ProjectorMock struct {
-	nonceDiff   uint64
-	balanceDiff uint64
-}
-
-func (p *ProjectorMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
-	return prevNonce + p.nonceDiff, prevBalance - p.balanceDiff, nil
-}
-
 func TestEventsReceived(t *testing.T) {
 	logtest.SetupGlobal(t)
 
@@ -3147,11 +3119,11 @@ func TestEventsReceived(t *testing.T) {
 	}()
 
 	time.Sleep(50 * time.Millisecond)
-	pool := txs.NewTxMemPool()
+	pool := txs.NewTxPool(sql.InMemory())
 	pool.Put(globalTx.ID(), globalTx)
 
 	lg := logtest.New(t).WithName("svm")
-	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, txs.NewTxMemPool(), lg)
+	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, lg)
 	time.Sleep(100 * time.Millisecond)
 
 	rewards := map[types.Address]uint64{
