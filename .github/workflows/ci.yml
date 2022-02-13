@@ -21,7 +21,7 @@ jobs:
       uses: 'google-github-actions/setup-gcloud@v0'
 
     - name: 'Create Node Pool'
-      run: 'gcloud container node-pools create ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --num-nodes=1 --zone=${{ secrets.CI_ZONE_NAME }} --machine-type=n2d-standard-224'
+      run: 'gcloud container node-pools create ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --num-nodes=1 --zone=${{ secrets.CI_ZONE_NAME }} --machine-type=n1-standard-16'
 
     - name: kubectl - Google Cloud GKE cluster.
       uses: ameydev/gke-kubectl-action@master
