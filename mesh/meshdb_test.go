@@ -318,7 +318,7 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 	defer mdb.Close()
 
 	signer1, addr1 := newSignerAndAddress(t, "thc")
-	signer2, _ := newSignerAndAddress(t, "cbd")
+	signer2, addr2 := newSignerAndAddress(t, "cbd")
 	_, addr3 := newSignerAndAddress(t, "cbe")
 	require.NoError(t, mdb.writeTransactions(types.NewLayerID(1), types.EmptyBlockID,
 		newCallTx(t, signer1, 420, 240),
@@ -329,20 +329,16 @@ func TestMeshDB_testGetTransactions(t *testing.T) {
 	))
 
 	lid := types.NewLayerID(1)
-	txs, err := mdb.GetTransactionsByOrigin(lid, lid, addr1)
+	txs, err := mdb.GetTransactionsByAddress(lid, lid, addr1)
 	require.NoError(t, err)
-	require.Equal(t, 2, len(txs))
+	require.Equal(t, 5, len(txs))
 
-	txs, err = mdb.GetTransactionsByDestination(lid, lid, addr1)
+	txs, err = mdb.GetTransactionsByAddress(lid, lid, addr2)
 	require.NoError(t, err)
 	require.Equal(t, 3, len(txs))
 
 	// test negative case
-	txs, err = mdb.GetTransactionsByOrigin(lid, lid, addr3)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(txs))
-
-	txs, err = mdb.GetTransactionsByDestination(lid, lid, addr3)
+	txs, err = mdb.GetTransactionsByAddress(lid, lid, addr3)
 	require.NoError(t, err)
 	require.Equal(t, 0, len(txs))
 }
@@ -578,67 +574,6 @@ func TestMeshDB_RecordCoinFlip(t *testing.T) {
 	require.NoError(t, err)
 	defer mdb2.Close()
 	testCoinflip(mdb2)
-}
-
-func TestMeshDB_GetMeshTransactions(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer1, _ := newSignerAndAddress(t, "thc")
-
-	var (
-		nonce  uint64
-		ids    []types.TransactionID
-		layers = 10
-	)
-	for i := 1; i <= layers; i++ {
-		nonce++
-		tx := newCallTx(t, signer1, nonce, 240)
-		ids = append(ids, tx.ID())
-		require.NoError(t, mdb.writeTransactions(types.NewLayerID(uint32(i)), types.EmptyBlockID, tx))
-	}
-	txs, missing := mdb.GetMeshTransactions(ids)
-	require.Len(t, missing, 0)
-	for i := 1; i < layers; i++ {
-		require.Equal(t, ids[i-1], txs[i-1].ID())
-		require.EqualValues(t, types.NewLayerID(uint32(i)), txs[i-1].LayerID)
-	}
-}
-
-func TestMesh_FindOnce(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer1, addr1 := newSignerAndAddress(t, "thc")
-	signer2, _ := newSignerAndAddress(t, "cbd")
-
-	layers := []uint32{1, 10, 100}
-	nonce := uint64(0)
-	for _, layer := range layers {
-		nonce++
-		err := mdb.writeTransactions(types.NewLayerID(layer), types.EmptyBlockID,
-			newCallTx(t, signer1, nonce, 100),
-			newCallTxWithDest(t, signer2, addr1, nonce, 100),
-		)
-		require.NoError(t, err)
-	}
-	t.Run("ByDestination", func(t *testing.T) {
-		for _, layer := range layers {
-			lid := types.NewLayerID(layer)
-			txs, err := mdb.GetTransactionsByDestination(lid, lid, addr1)
-			require.NoError(t, err)
-			assert.Len(t, txs, 1)
-		}
-	})
-
-	t.Run("ByOrigin", func(t *testing.T) {
-		for _, layer := range layers {
-			lid := types.NewLayerID(layer)
-			txs, err := mdb.GetTransactionsByOrigin(lid, lid, addr1)
-			require.NoError(t, err)
-			assert.Len(t, txs, 1)
-		}
-	})
 }
 
 func TestBlocksBallotsOverlap(t *testing.T) {

@@ -38,15 +38,11 @@ type Syncer interface {
 
 // TxAPI is an api for getting transaction status.
 type TxAPI interface {
-	AddressExists(types.Address) bool
 	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]types.Reward, error)
 	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
-	GetMeshTransactions([]types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{})
 	GetTransactionsByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
-	GetTransactionsByDestination(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
-	GetTransactionsByOrigin(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
 	LatestLayer() types.LayerID
 	GetLayerApplied(types.TransactionID) *types.LayerID
 	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)

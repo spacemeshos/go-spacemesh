@@ -17,7 +17,7 @@ import (
 
 // GlobalStateService exposes global state data, output from the STF.
 type GlobalStateService struct {
-	Mesh     api.TxAPI
+	mesh     api.TxAPI
 	conState api.ConservativeState
 }
 
@@ -29,7 +29,7 @@ func (s GlobalStateService) RegisterService(server *Server) {
 // NewGlobalStateService creates a new grpc service using config data.
 func NewGlobalStateService(tx api.TxAPI, conState api.ConservativeState) *GlobalStateService {
 	return &GlobalStateService{
-		Mesh:     tx,
+		mesh:     tx,
 		conState: conState,
 	}
 }
@@ -38,14 +38,14 @@ func NewGlobalStateService(tx api.TxAPI, conState api.ConservativeState) *Global
 func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
-		RootHash: s.Mesh.GetStateRoot().Bytes(),
-		Layer:    &pb.LayerNumber{Number: s.Mesh.LatestLayerInState().Uint32()},
+		RootHash: s.mesh.GetStateRoot().Bytes(),
+		Layer:    &pb.LayerNumber{Number: s.mesh.LatestLayerInState().Uint32()},
 	}}, nil
 }
 
 func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, err error) {
-	balanceActual := s.Mesh.GetBalance(addr)
-	counterActual := s.Mesh.GetNonce(addr)
+	balanceActual := s.mesh.GetBalance(addr)
+	counterActual := s.mesh.GetNonce(addr)
 	counterProjected, balanceProjected, err := s.conState.GetProjection(addr)
 	if err != nil {
 		return nil, err
@@ -117,7 +117,7 @@ func (s GlobalStateService) AccountDataQuery(_ context.Context, in *pb.AccountDa
 	// if filterTxReceipt {}
 
 	if filterReward {
-		dbRewards, err := s.Mesh.GetRewards(addr)
+		dbRewards, err := s.mesh.GetRewards(addr)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "error getting rewards data")
 		}
@@ -195,7 +195,7 @@ func (s GlobalStateService) SmesherDataQuery(_ context.Context, in *pb.SmesherDa
 		return nil, status.Errorf(codes.Internal, "error deserializing NodeID")
 	}
 
-	dbRewards, err := s.Mesh.GetRewardsBySmesherID(*smesherID)
+	dbRewards, err := s.mesh.GetRewardsBySmesherID(*smesherID)
 	if err != nil {
 		log.With().Error("unable to fetch projected reward state for smesher",
 			log.FieldNamed("smesher_id", smesherID),
@@ -552,7 +552,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		case layerEvent := <-layersCh:
 			layer := layerEvent.(events.LayerUpdate)
 
-			root, err := s.Mesh.GetLayerStateRoot(layer.LayerID)
+			root, err := s.mesh.GetLayerStateRoot(layer.LayerID)
 			if err != nil {
 				log.Error("error retrieving layer data: %s", err)
 				return status.Errorf(codes.Internal, "error retrieving layer data")

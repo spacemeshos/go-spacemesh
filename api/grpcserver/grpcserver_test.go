@@ -304,17 +304,6 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 	return
 }
 
-func (t *TxAPIMock) GetMeshTransactions(txids []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
-	for _, txid := range txids {
-		for _, tx := range t.returnTx {
-			if tx.ID() == txid {
-				txs = append(txs, &types.MeshTransaction{Transaction: *tx})
-			}
-		}
-	}
-	return
-}
-
 func (t *TxAPIMock) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 	return stateRoot, nil
 }
@@ -325,11 +314,6 @@ func (t *TxAPIMock) GetBalance(addr types.Address) uint64 {
 
 func (t *TxAPIMock) GetNonce(addr types.Address) uint64 {
 	return t.nonces[addr]
-}
-
-func (t *TxAPIMock) AddressExists(addr types.Address) bool {
-	_, ok := t.nonces[addr]
-	return ok
 }
 
 func (t *TxAPIMock) ProcessedLayer() types.LayerID {
@@ -588,7 +572,7 @@ func TestNewServersConfig(t *testing.T) {
 	grpcService := NewServerWithInterface(port1, "localhost")
 	jsonService := NewJSONHTTPServer(port2)
 
-	require.Equal(t, port2, jsonService.Port, "Expected same port")
+	require.Equal(t, port2, jsonService.port, "Expected same port")
 	require.Equal(t, port1, grpcService.Port, "Expected same port")
 }
 
@@ -2941,7 +2925,7 @@ func TestDebugService(t *testing.T) {
 		require.Contains(t, addresses, globalTx.Origin().Bytes())
 		require.Contains(t, addresses, addr1.Bytes())
 	})
-	t.Run("NetworkID", func(t *testing.T) {
+	t.Run("networkID", func(t *testing.T) {
 		id := p2p.Peer("test")
 		identity.EXPECT().ID().Return(id)
 

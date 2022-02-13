@@ -421,37 +421,9 @@ func (m *DB) GetTransactions(transactions []types.TransactionID) ([]*types.Trans
 	return txs, missing
 }
 
-// GetMeshTransactions retrieves list of txs with information in what blocks and layers they are included.
-func (m *DB) GetMeshTransactions(transactions []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
-	var (
-		missing = map[types.TransactionID]struct{}{}
-		txs     = make([]*types.MeshTransaction, 0, len(transactions))
-	)
-	for _, id := range transactions {
-		tx, err := m.GetMeshTransaction(id)
-		if err != nil {
-			m.With().Warning("could not fetch tx", id, log.Err(err))
-			missing[id] = struct{}{}
-		} else {
-			txs = append(txs, tx)
-		}
-	}
-	return txs, missing
-}
-
 // GetMeshTransaction retrieves a tx by its id.
 func (m *DB) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	return transactions.Get(m.db, id)
-}
-
-// GetTransactionsByDestination retrieves txs by destination in between layers [from, to].
-func (m *DB) GetTransactionsByDestination(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return transactions.FilterByDestination(m.db, from, to, address)
-}
-
-// GetTransactionsByOrigin retrieves txs by origin in beetween layers [from, to].
-func (m *DB) GetTransactionsByOrigin(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return transactions.FilterByOrigin(m.db, from, to, address)
 }
 
 // GetTransactionsByAddress retrieves txs for a single address in beetween layers [from, to].
