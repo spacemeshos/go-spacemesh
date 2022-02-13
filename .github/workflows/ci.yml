@@ -9,6 +9,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
+    - name: generate RANDOM unique variable based on timestamp
+      run: echo RANDOM=test--$(date +%s) >> $GITHUB_ENV
     - id: 'auth'
       uses: 'google-github-actions/auth@v0'
       with:
@@ -19,7 +21,7 @@ jobs:
       uses: 'google-github-actions/setup-gcloud@v0'
 
     - name: 'Create Node Pool'
-      run: 'gcloud container node-pools create ${{ github.event.pull_request.head.sha }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --num-nodes=1 --machine-type=n2d-standard-224 --zone=${{ secrets.CI_ZONE_NAME }}'
+      run: 'gcloud container node-pools create ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --num-nodes=1 --zone=${{ secrets.CI_ZONE_NAME }}'
 
     - name: kubectl - Google Cloud GKE cluster.
       uses: ameydev/gke-kubectl-action@master
