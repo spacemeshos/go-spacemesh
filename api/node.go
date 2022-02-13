@@ -36,23 +36,28 @@ type Syncer interface {
 	Start(context.Context)
 }
 
-// TxAPI is an api for getting transaction status.
-type TxAPI interface {
+// ConservativeState is an API for reading state and transaction/mempool data.
+type ConservativeState interface {
+	GetStateRoot() types.Hash32
+	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
+	GetLayerApplied(types.TransactionID) *types.LayerID
+	GetAllAccounts() (*types.MultipleAccountsState, error)
+	GetBalance(types.Address) uint64
+	GetNonce(types.Address) uint64
+	GetProjection(types.Address) (uint64, uint64, error)
+	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
+	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
+	GetTransactionsByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
+}
+
+// MeshAPI is an api for getting mesh status about layers/blocks/rewards.
+type MeshAPI interface {
 	GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID)
 	GetLayer(types.LayerID) (*types.Layer, error)
 	GetRewards(types.Address) ([]types.Reward, error)
-	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
-	GetTransactionsByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
 	LatestLayer() types.LayerID
-	GetLayerApplied(types.TransactionID) *types.LayerID
-	GetMeshTransaction(types.TransactionID) (*types.MeshTransaction, error)
 	LatestLayerInState() types.LayerID
 	ProcessedLayer() types.LayerID
-	GetStateRoot() types.Hash32
-	GetLayerStateRoot(types.LayerID) (types.Hash32, error)
-	GetBalance(types.Address) uint64
-	GetNonce(types.Address) uint64
-	GetAllAccounts() (*types.MultipleAccountsState, error)
 	GetRewardsBySmesherID(types.NodeID) ([]types.Reward, error)
 	// TODO: fix the discrepancy between SmesherID and NodeID (see https://github.com/spacemeshos/go-spacemesh/issues/2269)
 }
@@ -68,12 +73,6 @@ type NetworkIdentity interface {
 // PeerCounter is an api to get amount of connected peers.
 type PeerCounter interface {
 	PeerCount() uint64
-}
-
-// ConservativeState is an API for reading mempool data that's useful for API services.
-type ConservativeState interface {
-	Get(types.TransactionID) (*types.Transaction, error)
-	GetProjection(types.Address) (uint64, uint64, error)
 }
 
 // ActivationAPI is an API for activation module.

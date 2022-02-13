@@ -21,7 +21,7 @@ import (
 // TransactionService exposes transaction data, and a submit tx endpoint.
 type TransactionService struct {
 	publisher api.Publisher // P2P Swarm
-	mesh      api.TxAPI     // Mesh
+	mesh      api.MeshAPI   // Mesh
 	conState  api.ConservativeState
 	syncer    api.Syncer
 }
@@ -34,13 +34,13 @@ func (s TransactionService) RegisterService(server *Server) {
 // NewTransactionService creates a new grpc service using config data.
 func NewTransactionService(
 	publisher api.Publisher,
-	tx api.TxAPI,
+	msh api.MeshAPI,
 	conState api.ConservativeState,
 	syncer api.Syncer,
 ) *TransactionService {
 	return &TransactionService{
 		publisher: publisher,
-		mesh:      tx,
+		mesh:      msh,
 		conState:  conState,
 		syncer:    syncer,
 	}
@@ -82,30 +82,28 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 
 // Get transaction and status for a given txid. It's not an error if we cannot find the tx,
 // we just return all nils.
-func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (retTx *types.Transaction, state pb.TransactionState_TransactionState) {
-	tx, err := s.mesh.GetMeshTransaction(txID) // have we seen this transaction in a block?
-	if err != nil {
-		retTx, err = s.conState.Get(txID) // do we have it in the mempool?
-		if err != nil {                   // we don't know this transaction
-			return
-		}
-		state = pb.TransactionState_TRANSACTION_STATE_MEMPOOL
-		return
+func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (*types.Transaction, pb.TransactionState_TransactionState) {
+	var state pb.TransactionState_TransactionState
+	tx, err := s.conState.GetMeshTransaction(txID) // have we seen this transaction in a block?
+	if err != nil {                                // we don't know this transaction
+		return nil, state
 	}
-	retTx = &tx.Transaction
-
-	layer := s.mesh.GetLayerApplied(txID)
-	if layer != nil {
+	switch tx.State {
+	case types.MEMPOOL:
+		state = pb.TransactionState_TRANSACTION_STATE_MEMPOOL
+	case types.PENDING:
+		state = pb.TransactionState_TRANSACTION_STATE_MESH
+	case types.APPLIED:
 		state = pb.TransactionState_TRANSACTION_STATE_PROCESSED
-	} else {
-		nonce := s.mesh.GetNonce(tx.Origin())
+	default:
+		nonce := s.conState.GetNonce(tx.Origin())
 		if nonce > tx.AccountNonce {
 			state = pb.TransactionState_TRANSACTION_STATE_REJECTED
 		} else {
-			state = pb.TransactionState_TRANSACTION_STATE_MESH
+			state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
 		}
 	}
-	return
+	return &tx.Transaction, state
 }
 
 // TransactionsState returns current tx data for one or more txs.
@@ -260,7 +258,7 @@ func (s TransactionService) TransactionsStateStream(in *pb.TransactionsStateStre
 							},
 						}
 						if in.IncludeTransactions {
-							tx, err := s.mesh.GetMeshTransaction(txid)
+							tx, err := s.conState.GetMeshTransaction(txid)
 							if err != nil {
 								log.Error("could not find transaction %v from layer %v: %v", txid, layer, err)
 								return status.Error(codes.Internal, "error retrieving tx data")

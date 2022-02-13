@@ -17,7 +17,7 @@ import (
 
 // GlobalStateService exposes global state data, output from the STF.
 type GlobalStateService struct {
-	mesh     api.TxAPI
+	mesh     api.MeshAPI
 	conState api.ConservativeState
 }
 
@@ -27,9 +27,9 @@ func (s GlobalStateService) RegisterService(server *Server) {
 }
 
 // NewGlobalStateService creates a new grpc service using config data.
-func NewGlobalStateService(tx api.TxAPI, conState api.ConservativeState) *GlobalStateService {
+func NewGlobalStateService(msh api.MeshAPI, conState api.ConservativeState) *GlobalStateService {
 	return &GlobalStateService{
-		mesh:     tx,
+		mesh:     msh,
 		conState: conState,
 	}
 }
@@ -38,14 +38,14 @@ func NewGlobalStateService(tx api.TxAPI, conState api.ConservativeState) *Global
 func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHashRequest) (*pb.GlobalStateHashResponse, error) {
 	log.Info("GRPC GlobalStateService.GlobalStateHash")
 	return &pb.GlobalStateHashResponse{Response: &pb.GlobalStateHash{
-		RootHash: s.mesh.GetStateRoot().Bytes(),
+		RootHash: s.conState.GetStateRoot().Bytes(),
 		Layer:    &pb.LayerNumber{Number: s.mesh.LatestLayerInState().Uint32()},
 	}}, nil
 }
 
 func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, err error) {
-	balanceActual := s.mesh.GetBalance(addr)
-	counterActual := s.mesh.GetNonce(addr)
+	balanceActual := s.conState.GetBalance(addr)
+	counterActual := s.conState.GetNonce(addr)
 	counterProjected, balanceProjected, err := s.conState.GetProjection(addr)
 	if err != nil {
 		return nil, err
@@ -552,7 +552,7 @@ func (s GlobalStateService) GlobalStateStream(in *pb.GlobalStateStreamRequest, s
 		case layerEvent := <-layersCh:
 			layer := layerEvent.(events.LayerUpdate)
 
-			root, err := s.mesh.GetLayerStateRoot(layer.LayerID)
+			root, err := s.conState.GetLayerStateRoot(layer.LayerID)
 			if err != nil {
 				log.Error("error retrieving layer data: %s", err)
 				return status.Errorf(codes.Internal, "error retrieving layer data")

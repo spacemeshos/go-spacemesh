@@ -16,7 +16,8 @@ import (
 
 // MeshService exposes mesh data such as accounts, blocks, and transactions.
 type MeshService struct {
-	mesh             api.TxAPI // Mesh
+	mesh             api.MeshAPI // Mesh
+	conState         api.ConservativeState
 	genTime          api.GenesisTimeAPI
 	layersPerEpoch   uint32
 	networkID        uint32
@@ -32,11 +33,12 @@ func (s MeshService) RegisterService(server *Server) {
 
 // NewMeshService creates a new service using config data.
 func NewMeshService(
-	tx api.TxAPI, genTime api.GenesisTimeAPI,
+	msh api.MeshAPI, cstate api.ConservativeState, genTime api.GenesisTimeAPI,
 	layersPerEpoch uint32, networkID uint32, layerDurationSec int,
 	layerAvgSize int, txsPerBlock int) *MeshService {
 	return &MeshService{
-		mesh:             tx,
+		mesh:             msh,
+		conState:         cstate,
 		genTime:          genTime,
 		layersPerEpoch:   layersPerEpoch,
 		networkID:        networkID,
@@ -107,7 +109,7 @@ func (s MeshService) MaxTransactionsPerSecond(context.Context, *pb.MaxTransactio
 
 func (s MeshService) getFilteredTransactions(from types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	latest := s.mesh.LatestLayer()
-	txs, err := s.mesh.GetTransactionsByAddress(from, latest, address)
+	txs, err := s.conState.GetTransactionsByAddress(from, latest, address)
 	if err != nil {
 		return nil, fmt.Errorf("reading txs for address %s: %w", address, err)
 	}
@@ -310,7 +312,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 	// TODO add proposal data as needed.
 
 	for _, b := range layer.Blocks() {
-		txs, missing := s.mesh.GetTransactions(b.TxIDs)
+		txs, missing := s.conState.GetTransactions(b.TxIDs)
 		// TODO: Do we ever expect txs to be missing here?
 		// E.g., if this node has not synced/received them yet.
 		if len(missing) != 0 {
@@ -354,7 +356,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 		pbActivations = append(pbActivations, pbatx)
 	}
 
-	stateRoot, err := s.mesh.GetLayerStateRoot(layer.Index())
+	stateRoot, err := s.conState.GetLayerStateRoot(layer.Index())
 	if err != nil {
 		// This is expected. We can only retrieve state root for a layer that was applied to state,
 		// which only happens after it's approved/confirmed.
