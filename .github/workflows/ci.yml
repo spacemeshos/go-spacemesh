@@ -9,9 +9,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
-    - name: Get Hash
-      id: hash
-      run: echo "git_hash=$(git rev-parse --short "$GITHUB_SHA")" >> $GITHUB_HASH
     - id: 'auth'
       uses: 'google-github-actions/auth@v0'
       with:
@@ -22,7 +19,7 @@ jobs:
       uses: 'google-github-actions/setup-gcloud@v0'
 
     - name: 'Create Node Pool'
-      run: 'gcloud container node-pools create ${{ env.hash }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --num-nodes=1 --machine-type=n2d-standard-224 --zone=${{ secrets.CI_ZONE_NAME }}'
+      run: 'gcloud container node-pools create ${{ github.event.pull_request.head.sha }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --num-nodes=1 --machine-type=n2d-standard-224 --zone=${{ secrets.CI_ZONE_NAME }}'
 
     - name: kubectl - Google Cloud GKE cluster.
       uses: ameydev/gke-kubectl-action@master
