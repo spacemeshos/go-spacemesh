@@ -35,4 +35,4 @@ jobs:
         args: get pods
     
     - name: 'Delete Node Pool'
-      run: 'gcloud container node-pools delete ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --zone=${{ secrets.CI_ZONE_NAME }}'
+      run: 'yes | gcloud container node-pools delete ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --zone=${{ secrets.CI_ZONE_NAME }}'
