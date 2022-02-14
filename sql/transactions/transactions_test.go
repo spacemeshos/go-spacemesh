@@ -186,7 +186,12 @@ func TestFilterByAddress(t *testing.T) {
 	for _, tx := range txs {
 		require.NoError(t, Add(db, lid, bid, tx))
 	}
-	filtered, err := FilterByAddress(db, lid, lid, signer2Address)
+	// should be nothing before lid
+	filtered, err := FilterByAddress(db, types.NewLayerID(1), lid.Sub(1), signer2Address)
+	require.NoError(t, err)
+	require.Empty(t, filtered)
+
+	filtered, err = FilterByAddress(db, lid, lid, signer2Address)
 	require.NoError(t, err)
 	require.Len(t, filtered, 2)
 }
