@@ -1,6 +1,7 @@
 package activation
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
@@ -13,21 +14,23 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/poets"
 )
 
 type poetProofKey [sha256.Size]byte
 
 // PoetDb is a database for PoET proofs.
 type PoetDb struct {
-	store                     database.Database
+	sqlDB                     *sql.Database
 	poetProofRefSubscriptions map[poetProofKey][]chan []byte
 	log                       log.Log
 	mu                        sync.Mutex
 }
 
 // NewPoetDb returns a new PoET DB.
-func NewPoetDb(store database.Database, log log.Log) *PoetDb {
-	return &PoetDb{store: store, poetProofRefSubscriptions: make(map[poetProofKey][]chan []byte), log: log}
+func NewPoetDb(db *sql.Database, log log.Log) *PoetDb {
+	return &PoetDb{sqlDB: db, poetProofRefSubscriptions: make(map[poetProofKey][]chan []byte), log: log}
 }
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
@@ -83,31 +86,49 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 		return fmt.Errorf("failed to get poet proof message reference: %v", err)
 	}
 
-	messageBytes, err := types.InterfaceToBytes(proofMessage)
-	if err != nil {
-		return fmt.Errorf("could not marshal proof message: %v", err)
+	if err := db.storeProofInSQLDB(proofMessage, ref); err != nil {
+		return err
 	}
 
-	batch := db.store.NewBatch()
-	if err := batch.Put(ref, messageBytes); err != nil {
-		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %v",
-			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
-	}
-	key := makeKey(proofMessage.PoetServiceID, proofMessage.RoundID)
-	if err := batch.Put(key[:], ref); err != nil {
-		return fmt.Errorf("failed to store poet proof index entry for poetId %x round %s: %v",
-			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
-	}
-	if err := batch.Write(); err != nil {
-		return fmt.Errorf("failed to store poet proof and index for poetId %x round %s: %v",
-			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
-	}
 	db.log.With().Info("stored poet proof",
 		log.String("poet_proof_id", fmt.Sprintf("%x", ref[:5])),
 		log.String("round_id", proofMessage.RoundID),
 		log.String("poet_service_id", fmt.Sprintf("%x", proofMessage.PoetServiceID[:5])),
 	)
+
+	key := makeKey(proofMessage.PoetServiceID, proofMessage.RoundID)
 	db.publishProofRef(key, ref)
+
+	return nil
+}
+
+func (db *PoetDb) storeProofInSQLDB(proofMessage *types.PoetProofMessage, ref []byte) error {
+	messageBytes, err := types.InterfaceToBytes(proofMessage)
+	if err != nil {
+		return fmt.Errorf("could not marshal proof message: %v", err)
+	}
+
+	dbtx, err := db.sqlDB.Tx(context.Background())
+	if err != nil {
+		return err
+	}
+
+	defer dbtx.Release()
+
+	if err := poets.AddPoET(dbtx, ref, messageBytes); err != nil {
+		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %v",
+			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
+	}
+	if err := poets.AddRef(dbtx, proofMessage.PoetServiceID, proofMessage.RoundID, ref); err != nil {
+		return fmt.Errorf("failed to store poet proof index entry for poetId %x round %s: %v",
+			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
+	}
+
+	if err := dbtx.Commit(); err != nil {
+		return fmt.Errorf("commit DB TX for poetId %x round %s: %w",
+			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
+	}
+
 	return nil
 }
 
@@ -118,7 +139,7 @@ func (db *PoetDb) SubscribeToProofRef(poetID []byte, roundID string) chan []byte
 	ch := make(chan []byte, 1)
 	db.addSubscription(key, ch)
 
-	if poetProofRef, err := db.getProofRef(key); err == nil {
+	if poetProofRef, err := db.getProofRef(poetID, roundID); err == nil {
 		db.publishProofRef(key, poetProofRef)
 	}
 
@@ -136,13 +157,17 @@ func (db *PoetDb) addSubscription(key poetProofKey, ch chan []byte) {
 func (db *PoetDb) UnsubscribeFromProofRef(poetID []byte, roundID string) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	delete(db.poetProofRefSubscriptions, makeKey(poetID, roundID))
+	if err := poets.DeleteRef(db.sqlDB, poetID, roundID); err != nil {
+		db.log.With().Error("Failed to unsubscribe from proof ref",
+			log.Binary("poet_id", poetID),
+			log.String("round_id", roundID))
+	}
 }
 
-func (db *PoetDb) getProofRef(key poetProofKey) ([]byte, error) {
-	proofRef, err := db.store.Get(key[:])
+func (db *PoetDb) getProofRef(poetID []byte, roundID string) ([]byte, error) {
+	proofRef, err := poets.GetRef(db.sqlDB, poetID, roundID)
 	if err != nil {
-		return nil, fmt.Errorf("could not fetch poet proof for key %x: %v", key[:5], err)
+		return nil, fmt.Errorf("could not fetch poet proof for poet ID %x in round %v: %v", poetID[:5], roundID, err)
 	}
 	return proofRef, nil
 }
@@ -159,7 +184,7 @@ func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef []byte) {
 
 // GetProofMessage returns the originally received PoET proof message.
 func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
-	proof, err := db.store.Get(proofRef)
+	proof, err := poets.GetPoET(db.sqlDB, proofRef)
 	if err != nil {
 		return proof, fmt.Errorf("get proof from store: %w", err)
 	}
@@ -215,4 +240,24 @@ func validatePoet(membershipRoot []byte, merkleProof shared.MerkleProof, leafCou
 	}
 
 	return nil
+}
+
+// PoETs exports the PoETs database.
+func (db *PoetDb) PoETs() database.Getter {
+	return newPoETFetcherDB(db)
+}
+
+func newPoETFetcherDB(db *PoetDb) *PoETFetcher {
+	return &PoETFetcher{DB: db}
+}
+
+// PoETFetcher is an adapter of SQLite implementation to legacy LevelDB interfaces.
+// TODO(nkryuchkov): Remove when transition to SQLite is finished.
+type PoETFetcher struct {
+	DB *PoetDb
+}
+
+// Get gets an PoET as bytes by an PoET ID as bytes.
+func (f *PoETFetcher) Get(key []byte) ([]byte, error) {
+	return poets.GetBlob(f.DB.sqlDB, key)
 }

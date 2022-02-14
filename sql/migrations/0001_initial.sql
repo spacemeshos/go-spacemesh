@@ -88,3 +88,18 @@ CREATE TABLE atx_top
     atx_id CHAR(32),
     layer  INT NOT NULL
 );
+
+CREATE TABLE poets
+(
+    ref  VARCHAR PRIMARY KEY,
+    poet BLOB
+) WITHOUT ROWID;
+
+CREATE TABLE poet_subscriptions
+(
+    service_id VARCHAR,
+    round_id   VARCHAR,
+    ref        VARCHAR,
+    PRIMARY KEY (service_id, round_id)
+);
+

@@ -471,12 +471,6 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, stateDBStore)
 
-	poetDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "poet"), 0, 0, app.addLogger(PoetDbStoreLogger, lg))
-	if err != nil {
-		return fmt.Errorf("create PoET DB: %w", err)
-	}
-	app.closers = append(app.closers, poetDBStore)
-
 	idDBStore, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "ids"), 0, 0, app.addLogger(StateDbLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create IDs DB: %w", err)
@@ -489,17 +483,17 @@ func (app *App) initServices(ctx context.Context,
 	}
 	app.closers = append(app.closers, store)
 
+	sqlDB, err := sql.Open("file:" + filepath.Join(dbStorepath, "state.sql"))
+	if err != nil {
+		return fmt.Errorf("open sqlite db %w", err)
+	}
+
 	idStore := activation.NewIdentityStore(idDBStore)
-	poetDb := activation.NewPoetDb(poetDBStore, app.addLogger(PoetDbLogger, lg))
+	poetDb := activation.NewPoetDb(sqlDB, app.addLogger(PoetDbLogger, lg))
 	validator := activation.NewValidator(poetDb, app.Config.POST)
 
 	if err := os.MkdirAll(dbStorepath, os.ModePerm); err != nil {
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
-	}
-
-	sqlDB, err := sql.Open("file:" + filepath.Join(dbStorepath, "state.sql"))
-	if err != nil {
-		return fmt.Errorf("open sqlite db %w", err)
 	}
 
 	mdb, err := mesh.NewPersistentMeshDB(sqlDB, app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
@@ -593,7 +587,7 @@ func (app *App) initServices(ctx context.Context,
 		fetch.ProposalDB: proposalDB,
 		fetch.ATXDB:      atxDB.ATXs(),
 		fetch.TXDB:       msh.Transactions(),
-		fetch.POETDB:     poetDBStore,
+		fetch.POETDB:     poetDb.PoETs(),
 	}
 	dataHanders := layerfetcher.DataHandlers{
 		ATX:      atxDB,

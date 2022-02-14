@@ -564,7 +564,6 @@ func (db *DB) ATXs() database.Getter {
 	return newATXFetcherDB(db)
 }
 
-// newATXFetcherDB returns reference to a BlockFetcherDB instance.
 func newATXFetcherDB(db *DB) *ATXFetcher {
 	return &ATXFetcher{DB: db}
 }
