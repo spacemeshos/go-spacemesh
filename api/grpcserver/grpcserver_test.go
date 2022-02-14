@@ -290,7 +290,9 @@ func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
 
 	ballots := []*types.Ballot{ballot1}
 	blocks := []*types.Block{block1, block2, block3}
-	return types.NewExistingLayer(tid, ballots, blocks), nil
+	return types.NewExistingLayer(tid,
+		types.CalcBlocksHash32(types.ToBlockIDs(blocks), nil),
+		ballots, blocks), nil
 }
 
 func (t *TxAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
