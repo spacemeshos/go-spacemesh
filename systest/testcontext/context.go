@@ -42,7 +42,7 @@ var (
 )
 
 func init() {
-	tokens = make(chan struct{}, *clusterSize)
+	tokens = make(chan struct{}, *clusters)
 	flag.Var(nodeSelector, "node-selector", "select where test pods will be scheduled")
 	flag.Var(labels, "labels", "test will be executed only if it matches all labels")
 }

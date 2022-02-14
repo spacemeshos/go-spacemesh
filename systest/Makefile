@@ -1,7 +1,7 @@
 test_name ?= TestSmeshing
 version_info ?= $(shell git rev-parse --short HEAD)
-image_name ?= spacemeshos/systest:$(version_info)
-smesher_image ?= spacemeshos/go-spacemesh-dev:develop
+image_name ?= yashulyak/systest:$(version_info)
+smesher_image ?= spacemeshos/go-spacemesh-dev:store-ordered
 test_pod_name ?= systest-$(version_info)
 clusters ?= 1
 size ?= 10
@@ -22,7 +22,7 @@ launch:
 	@kubectl run --image $(image_name) $(test_pod_name) \
 	--restart=Never \
 	--image-pull-policy=IfNotPresent -- \
-	tests -test.v -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) -size=$(size) -image=$(smesher_image) -level=debug
+	tests -test.v -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) -size=$(size) -image=$(smesher_image) -level=debug -node-selector=cloud.google.com/gke-nodepool=dmitry-ci-preemtible-1 -bootstrap=10m
 
 .PHONY: watch
 watch:
