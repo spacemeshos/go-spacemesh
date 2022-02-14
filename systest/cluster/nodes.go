@@ -237,11 +237,18 @@ func waitSmesher(tctx *testcontext.Context, name string) (*NodeClient, error) {
 		}, nil
 	}
 	const attempts = 10
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
 	for i := 1; i <= attempts; i++ {
 		if nc, err := attempt(); err != nil && i == attempts {
 			return nil, err
 		} else if err == nil {
 			return nc, nil
+		}
+		select {
+		case <-tctx.Done():
+			return nil, tctx.Err()
+		case <-ticker.C:
 		}
 	}
 	panic("unreachable")
