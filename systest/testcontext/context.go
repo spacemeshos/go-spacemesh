@@ -173,7 +173,7 @@ func New(t *testing.T, opts ...Opt) *Context {
 				cctx.Log.Errorf("cleanup failed", "error", err)
 				return
 			}
-			cctx.Log.Debug("cleanup completed")
+			cctx.Log.Infow("namespace was deleted", "namespace", cctx.Namespace)
 		})
 	}
 	require.NoError(t, deployNamespace(cctx))
