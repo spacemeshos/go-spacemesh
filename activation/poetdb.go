@@ -157,11 +157,8 @@ func (db *PoetDb) addSubscription(key poetProofKey, ch chan []byte) {
 func (db *PoetDb) UnsubscribeFromProofRef(poetID []byte, roundID string) {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	if err := poets.DeleteRef(db.sqlDB, poetID, roundID); err != nil {
-		db.log.With().Error("Failed to unsubscribe from proof ref",
-			log.Binary("poet_id", poetID),
-			log.String("round_id", roundID))
-	}
+
+	delete(db.poetProofRefSubscriptions, makeKey(poetID, roundID))
 }
 
 func (db *PoetDb) getProofRef(poetID []byte, roundID string) ([]byte, error) {

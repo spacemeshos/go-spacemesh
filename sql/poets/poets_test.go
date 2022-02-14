@@ -106,23 +106,3 @@ func TestAddRef(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, ref, got)
 }
-
-func TestDeleteRef(t *testing.T) {
-	db := sql.InMemory()
-
-	sid := []byte("sid0")
-	rid := "rid0"
-	ref := []byte("ref0")
-
-	require.NoError(t, AddRef(db, sid, rid, ref))
-
-	got, err := GetRef(db, sid, rid)
-	require.NoError(t, err)
-	require.Equal(t, ref, got)
-
-	err = DeleteRef(db, sid, rid)
-	require.NoError(t, err)
-
-	_, err = GetRef(db, sid, rid)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-}

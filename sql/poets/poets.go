@@ -84,20 +84,6 @@ func AddRef(db sql.Executor, serviceID []byte, roundID string, ref []byte) error
 	return nil
 }
 
-// DeleteRef removes PoET ref for given service ID and round ID.
-func DeleteRef(db sql.Executor, serviceID []byte, roundID string) error {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, serviceID)
-		stmt.BindBytes(2, []byte(roundID))
-	}
-	_, err := db.Exec("delete from poet_subscriptions where service_id = ?1 and round_id = ?2;", enc, nil)
-	if err != nil {
-		return fmt.Errorf("delete: %w", err)
-	}
-
-	return nil
-}
-
 // GetBlob loads PoET as an encoded blob, ready to be sent over the wire.
 func GetBlob(db sql.Executor, ref []byte) (poet []byte, err error) {
 	return GetPoET(db, ref)
