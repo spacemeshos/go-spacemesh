@@ -36,7 +36,7 @@ func TestPartition(t *testing.T) {
 	}
 	eg, ctx := errgroup.WithContext(tctx)
 
-	scheduleChaos(ctx, eg, cl.Client(0), partition, restore, func(ctx context.Context) (error, chaos.Teardown) {
+	scheduleChaos(ctx, eg, cl.Client(0), partition, restore, func(ctx context.Context) (chaos.Teardown, error) {
 		return chaos.Partition2(tctx, "partition5from2",
 			extractNames(cl.Client(0), cl.Client(2), cl.Client(3), cl.Client(4), cl.Client(5)),
 			extractNames(cl.Client(1), cl.Client(6)),

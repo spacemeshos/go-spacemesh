@@ -13,7 +13,7 @@ import (
 type Teardown func(context.Context) error
 
 // Fail the list of pods and prevents them from respawning until teardown is called.
-func Fail(cctx *testcontext.Context, name string, pods ...string) (error, Teardown) {
+func Fail(cctx *testcontext.Context, name string, pods ...string) (Teardown, error) {
 	fail := chaosv1alpha1.PodChaos{}
 	fail.Name = name
 	fail.Namespace = cctx.Namespace
@@ -26,9 +26,9 @@ func Fail(cctx *testcontext.Context, name string, pods ...string) (error, Teardo
 		},
 	}
 	if err := cctx.Generic.Create(cctx, &fail); err != nil {
-		return err, nil
+		return nil, err
 	}
-	return nil, func(ctx context.Context) error {
+	return func(ctx context.Context) error {
 		return cctx.Generic.Delete(ctx, &fail)
-	}
+	}, nil
 }

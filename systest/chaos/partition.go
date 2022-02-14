@@ -4,14 +4,14 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
-
 	chaosv1alpha1 "github.com/chaos-mesh/chaos-mesh/api/v1alpha1"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+
+	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
 // Partition2 partitions pods in array a from pods in array b.
-func Partition2(ctx *testcontext.Context, name string, a, b []string) (error, Teardown) {
+func Partition2(ctx *testcontext.Context, name string, a, b []string) (Teardown, error) {
 	partition := chaosv1alpha1.NetworkChaos{}
 	partition.Name = name
 	partition.Namespace = ctx.Namespace
@@ -35,10 +35,10 @@ func Partition2(ctx *testcontext.Context, name string, a, b []string) (error, Te
 		return nil
 	})
 	if err != nil {
-		return fmt.Errorf("creating partition for %v | %v: %w", a, b, err), nil
+		return nil, fmt.Errorf("creating partition for %v | %v: %w", a, b, err)
 	}
 
-	return err, func(rctx context.Context) error {
+	return func(rctx context.Context) error {
 		return ctx.Generic.Delete(rctx, &partition)
-	}
+	}, nil
 }

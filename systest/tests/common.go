@@ -122,12 +122,12 @@ func prettyHex(buf []byte) string {
 	return fmt.Sprintf("0x%x", buf)
 }
 
-func scheduleChaos(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient, from, to uint32, action func(context.Context) (error, chaos.Teardown)) {
+func scheduleChaos(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient, from, to uint32, action func(context.Context) (chaos.Teardown, error)) {
 	var teardown chaos.Teardown
 	collectLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 		if layer.Layer.Number.Number == from && teardown == nil {
 			var err error
-			err, teardown = action(ctx)
+			teardown, err = action(ctx)
 			if err != nil {
 				return false, err
 			}
