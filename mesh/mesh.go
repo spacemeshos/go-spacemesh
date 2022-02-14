@@ -181,16 +181,20 @@ func (msh *Mesh) setLatestLayer(lid types.LayerID) {
 }
 
 // GetLayer returns Layer i from the database.
-func (msh *Mesh) GetLayer(i types.LayerID) (*types.Layer, error) {
-	ballots, err := msh.LayerBallots(i)
+func (msh *Mesh) GetLayer(lid types.LayerID) (*types.Layer, error) {
+	ballots, err := msh.LayerBallots(lid)
 	if err != nil {
 		return nil, fmt.Errorf("layer ballots: %w", err)
 	}
-	blocks, err := msh.LayerBlocks(i)
+	blocks, err := msh.LayerBlocks(lid)
 	if err != nil {
 		return nil, fmt.Errorf("layer blocks: %w", err)
 	}
-	return types.NewExistingLayer(i, ballots, blocks), nil
+	hash, err := layers.GetHash(msh.db, lid)
+	if err != nil {
+		hash = types.CalcBlockHash32Presorted(types.ToBlockIDs(blocks), nil)
+	}
+	return types.NewExistingLayer(lid, hash, ballots, blocks), nil
 }
 
 // GetLayerHash returns layer hash.
