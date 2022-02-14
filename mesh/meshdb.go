@@ -18,8 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
-	"github.com/spacemeshos/go-spacemesh/sql/transactions"
-	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 const (
@@ -331,26 +329,6 @@ func (m *DB) persistAggregatedLayerHash(layerID types.LayerID, hash types.Hash32
 	return layers.SetAggregatedHash(m.db, layerID, hash)
 }
 
-func (m *DB) updateDBTXWithBlockID(b *types.Block, txs ...*types.Transaction) error {
-	return m.writeTransactions(b.LayerIndex, b.ID(), txs...)
-}
-
-// writeTransactions writes all transactions associated with a block atomically.
-func (m *DB) writeTransactions(layerID types.LayerID, bid types.BlockID, txs ...*types.Transaction) error {
-	dbtx, err := m.db.Tx(context.Background())
-	if err != nil {
-		return err
-	}
-	defer dbtx.Release()
-	for _, tx := range txs {
-		if err := transactions.Add(dbtx, layerID, bid, tx); err != nil {
-			return err
-		}
-		m.Debug("wrote tx %v to db", tx.ID().ShortString())
-	}
-	return dbtx.Commit()
-}
-
 func (m *DB) writeTransactionRewards(l types.LayerID, applied []types.AnyReward) error {
 	tx, err := m.db.Tx(context.Background())
 	if err != nil {
@@ -373,63 +351,6 @@ func (m *DB) GetRewards(coinbase types.Address) ([]types.Reward, error) {
 // GetRewardsBySmesherID retrieves rewards by smesherID.
 func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) ([]types.Reward, error) {
 	return rewards.FilterBySmesher(m.db, smesherID.ToBytes())
-}
-
-func (m *DB) markTransactionsDeleted(txs ...*types.Transaction) error {
-	for _, tx := range txs {
-		if err := transactions.MarkDeleted(m.db, tx.ID()); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (m *DB) getAccountPendingTxs(addr types.Address) (*txs.AccountPendingTxs, error) {
-	pending := txs.NewAccountPendingTxs()
-	txs, err := transactions.FilterPending(m.db, addr)
-	if err != nil {
-		return nil, err
-	}
-	for _, tx := range txs {
-		pending.Add(tx.LayerID, &tx.Transaction)
-	}
-	return pending, nil
-}
-
-// GetProjection returns projection of address.
-func (m *DB) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (uint64, uint64, error) {
-	pending, err := m.getAccountPendingTxs(addr)
-	if err != nil {
-		return 0, 0, err
-	}
-	nonce, balance := pending.GetProjection(prevNonce, prevBalance)
-	return nonce, balance, nil
-}
-
-// GetTransactions retrieves a list of txs by their id's.
-func (m *DB) GetTransactions(transactions []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
-	missing := make(map[types.TransactionID]struct{})
-	txs := make([]*types.Transaction, 0, len(transactions))
-	for _, id := range transactions {
-		if tx, err := m.GetMeshTransaction(id); err != nil {
-			m.With().Warning("could not fetch tx", id, log.Err(err))
-			missing[id] = struct{}{}
-		} else {
-			txs = append(txs, &tx.Transaction)
-		}
-	}
-	return txs, missing
-}
-
-// GetMeshTransaction retrieves a tx by its id.
-func (m *DB) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
-	return transactions.Get(m.db, id)
-}
-
-// GetTransactionsByAddress retrieves txs for a single address in beetween layers [from, to].
-// Guarantees that transaction will appear exactly once, even if origin and recipient is the same, and in insertion order.
-func (m *DB) GetTransactionsByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return transactions.FilterByAddress(m.db, from, to, address)
 }
 
 // BlocksByValidity classifies a slice of blocks by validity.
@@ -562,20 +483,6 @@ func (db *BallotFetcherDB) Get(hash []byte) ([]byte, error) {
 	}
 
 	return data, nil
-}
-
-type txFetcher struct {
-	m *Mesh
-}
-
-// Get transaction blob, by transaction id.
-func (db *txFetcher) Get(hash []byte) ([]byte, error) {
-	id := types.TransactionID{}
-	copy(id[:], hash)
-	if tx, err := db.m.conservativeState.Get(id); err == nil && tx != nil {
-		return codec.Encode(tx)
-	}
-	return transactions.GetBlob(db.m.db, id)
 }
 
 // LayerIDs is a utility function that finds namespaced IDs saved in a database as a key.

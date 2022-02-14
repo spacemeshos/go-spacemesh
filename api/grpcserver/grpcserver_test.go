@@ -3084,7 +3084,7 @@ func TestEventsReceived(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	lg := logtest.New(t).WithName("svm")
 	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, lg)
-	conState := txs.NewConservativeState(svm, txs.NewTxPool(sql.InMemory()), logtest.New(t).WithName("conState"))
+	conState := txs.NewConservativeState(svm, sql.InMemory(), logtest.New(t).WithName("conState"))
 	conState.AddTxToMempool(globalTx, true)
 	time.Sleep(100 * time.Millisecond)
 

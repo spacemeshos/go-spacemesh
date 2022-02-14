@@ -1,5 +1,5 @@
-// Package mesh defines the main store point for all the block-mesh objects
-// such as ballots, blocks, transactions and global state
+// Package mesh defines the main store point for all the persisted mesh objects
+// such as ATXs, ballots and blocks.
 package mesh
 
 import (
@@ -16,7 +16,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
-	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 // AtxDB holds logic for working with atxs.
@@ -31,9 +30,9 @@ type Mesh struct {
 	log.Log
 	*DB
 	AtxDB
-	conservativeState
 
-	trtl tortoise
+	conState conservativeState
+	trtl     tortoise
 
 	mu sync.Mutex
 	// latestLayer is the latest layer this node had seen from blocks
@@ -53,7 +52,7 @@ func NewMesh(db *DB, atxDb AtxDB, trtl tortoise, state conservativeState, logger
 	msh := &Mesh{
 		Log:                 logger,
 		trtl:                trtl,
-		conservativeState:   state,
+		conState:            state,
 		DB:                  db,
 		AtxDB:               atxDb,
 		nextProcessedLayers: make(map[types.LayerID]struct{}),
@@ -448,10 +447,10 @@ func (msh *Mesh) pushLayer(ctx context.Context, layerID types.LayerID) error {
 
 	msh.Event().Info("end of layer state root",
 		layerID,
-		log.Stringer("state_root", msh.conservativeState.GetStateRoot()),
+		log.Stringer("state_root", msh.conState.GetStateRoot()),
 	)
 
-	if err = msh.reInsertTxsToPool(applied, notApplied, layerID); err != nil {
+	if err = msh.reInsertTxsToPool(applied, notApplied); err != nil {
 		return fmt.Errorf("failed to reinsert TXs to pool %s: %w", layerID, err)
 	}
 	return nil
@@ -461,74 +460,50 @@ func (msh *Mesh) pushLayer(ctx context.Context, layerID types.LayerID) error {
 func (msh *Mesh) revertState(ctx context.Context, layerID types.LayerID) error {
 	logger := msh.WithContext(ctx).WithFields(layerID)
 	logger.Info("attempting to roll back state to previous layer")
-	if _, err := msh.conservativeState.Rewind(layerID); err != nil {
+	if _, err := msh.conState.Rewind(layerID); err != nil {
 		return fmt.Errorf("failed to revert state to layer %v: %w", layerID, err)
 	}
 	return nil
 }
 
-func (msh *Mesh) reInsertTxsToPool(applied *types.Block, notApplied []*types.Block, l types.LayerID) error {
+func (msh *Mesh) reInsertTxsToPool(applied *types.Block, notApplied []*types.Block) error {
 	seenTxIds := make(map[types.TransactionID]struct{})
 	if applied != nil {
 		uniqueTxIds([]*types.Block{applied}, seenTxIds) // run for the side effect, updating seenTxIds
 	}
-	returnedTxs, missing := msh.GetTransactions(uniqueTxIds(notApplied, seenTxIds))
-	if len(missing) > 0 {
-		msh.With().Error("could not reinsert transactions", log.Int("missing", len(missing)), l)
-	}
-	if err := msh.markTransactionsDeleted(returnedTxs...); err != nil {
-		return err
-	}
-	for _, tx := range returnedTxs {
-		if err := msh.AddTxToMempool(tx, false); err == nil {
-			// We ignore errors here, since they mean that the tx is no longer
-			// valid and we shouldn't re-add it.
-			msh.With().Info("transaction from contextually invalid block re-added to mempool", tx.ID())
-		}
+
+	reinsert := uniqueTxIds(notApplied, seenTxIds)
+	if len(reinsert) > 0 {
+		// We ignore errors here, since they mean that the tx is no longer
+		// valid and we shouldn't re-add it.
+		_ = msh.conState.ReinsertTxsToMemPool(reinsert)
 	}
 	return nil
 }
 
 func (msh *Mesh) applyState(block *types.Block) error {
-	var failedTxs []*types.Transaction
-	var svmErr error
 	rewardByMiner := map[types.Address]uint64{}
 	for _, r := range block.Rewards {
 		rewardByMiner[r.Address] += r.Amount
 	}
-	txs, missing := msh.GetTransactions(block.TxIDs)
-	if len(missing) > 0 {
-		return fmt.Errorf("could not find transactions %v from layer %v", missing, block.LayerIndex)
-	}
-	// TODO: should miner IDs be sorted in a deterministic order prior to applying rewards?
-	failedTxs, svmErr = msh.conservativeState.ApplyLayer(block.LayerIndex, txs, rewardByMiner)
-	if svmErr != nil {
+	failedTxs, err := msh.conState.ApplyLayer(block.LayerIndex, block.ID(), block.TxIDs, rewardByMiner)
+	if err != nil {
 		msh.With().Error("failed to apply transactions",
-			block.LayerIndex, log.Int("num_failed_txs", len(failedTxs)), log.Err(svmErr))
+			block.LayerIndex, log.Int("num_failed_txs", len(failedTxs)), log.Err(err))
 		// TODO: We want to panic here once we have a way to "remember" that we didn't apply these txs
 		//  e.g. persist the last layer transactions were applied from and use that instead of `oldVerified`
-		return fmt.Errorf("apply layer: %w", svmErr)
+		return fmt.Errorf("apply layer: %w", err)
 	}
 
 	if err := msh.DB.writeTransactionRewards(block.LayerIndex, block.Rewards); err != nil {
 		msh.With().Error("cannot write reward to db", log.Err(err))
 		return err
 	}
-
 	reportRewards(block)
 
-	if err := msh.updateDBTXWithBlockID(block, txs...); err != nil {
-		msh.With().Error("failed to update tx block ID in db", log.Err(err))
-		return err
-	}
-	for _, tx := range txs {
-		if err := transactions.Applied(msh.db, tx.ID()); err != nil {
-			return err
-		}
-	}
 	msh.With().Info("applied transactions",
 		block.LayerIndex,
-		log.Int("valid_block_txs", len(txs)),
+		log.Int("valid_block_txs", len(block.TxIDs)),
 		log.Int("num_failed_txs", len(failedTxs)),
 	)
 	return nil
@@ -671,47 +646,12 @@ func (msh *Mesh) AddBlockWithTXs(ctx context.Context, block *types.Block) error 
 }
 
 func (msh *Mesh) addTransactionsForBlock(logger log.Log, layerID types.LayerID, blockID types.BlockID, txIDs []types.TransactionID) error {
-	if err := msh.storeTransactionsFromPool(layerID, blockID, txIDs); err != nil {
+	if err := msh.conState.StoreTransactionsFromMemPool(layerID, blockID, txIDs); err != nil {
 		logger.With().Error("not all txs were processed", log.Err(err))
 		return err
 	}
 	msh.setLatestLayer(layerID)
 	logger.Info("added txs to database")
-	return nil
-}
-
-func (msh *Mesh) invalidateFromPools(txIDs []types.TransactionID) {
-	for _, id := range txIDs {
-		msh.conservativeState.Invalidate(id)
-	}
-}
-
-// storeTransactionsFromPool takes declared txs from provided proposal and writes them to DB. it then invalidates
-// the transactions from txpool.
-func (msh *Mesh) storeTransactionsFromPool(layerID types.LayerID, blockID types.BlockID, txIDs []types.TransactionID) error {
-	// Store transactions (doesn't have to be rolled back if other writes fail)
-	if len(txIDs) == 0 {
-		return nil
-	}
-	txs := make([]*types.Transaction, 0, len(txIDs))
-	for _, txID := range txIDs {
-		tx, err := msh.conservativeState.Get(txID)
-		if err != nil {
-			// if the transaction is not in the pool it could have been
-			// invalidated by another block
-			if has, err := transactions.Has(msh.db, txID); !has {
-				return fmt.Errorf("check if tx is in DB: %w", err)
-			}
-			continue
-		}
-		txs = append(txs, tx)
-	}
-	if err := msh.writeTransactions(layerID, blockID, txs...); err != nil {
-		return fmt.Errorf("write tx: %w", err)
-	}
-
-	// remove txs from pool
-	msh.invalidateFromPools(txIDs)
 	return nil
 }
 
@@ -744,11 +684,6 @@ func (msh *Mesh) GetATXs(ctx context.Context, atxIds []types.ATXID) (map[types.A
 		}
 	}
 	return atxs, mIds
-}
-
-// Transactions exports the transactions DB.
-func (msh *Mesh) Transactions() database.Getter {
-	return &txFetcher{m: msh}
 }
 
 func minLayer(i, j types.LayerID) types.LayerID {

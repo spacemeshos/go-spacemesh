@@ -35,134 +35,19 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
-// AddTxToMempool mocks base method.
-func (m *MockconservativeState) AddTxToMempool(tx *types.Transaction, checkValidity bool) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddTxToMempool", tx, checkValidity)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddTxToMempool indicates an expected call of AddTxToMempool.
-func (mr *MockconservativeStateMockRecorder) AddTxToMempool(tx, checkValidity interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTxToMempool", reflect.TypeOf((*MockconservativeState)(nil).AddTxToMempool), tx, checkValidity)
-}
-
-// AddressExists mocks base method.
-func (m *MockconservativeState) AddressExists(arg0 types.Address) bool {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddressExists", arg0)
-	ret0, _ := ret[0].(bool)
-	return ret0
-}
-
-// AddressExists indicates an expected call of AddressExists.
-func (mr *MockconservativeStateMockRecorder) AddressExists(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddressExists", reflect.TypeOf((*MockconservativeState)(nil).AddressExists), arg0)
-}
-
 // ApplyLayer mocks base method.
-func (m *MockconservativeState) ApplyLayer(layer types.LayerID, txs []*types.Transaction, rewards map[types.Address]uint64) ([]*types.Transaction, error) {
+func (m *MockconservativeState) ApplyLayer(arg0 types.LayerID, arg1 types.BlockID, arg2 []types.TransactionID, arg3 map[types.Address]uint64) ([]*types.Transaction, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ApplyLayer", layer, txs, rewards)
+	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].([]*types.Transaction)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // ApplyLayer indicates an expected call of ApplyLayer.
-func (mr *MockconservativeStateMockRecorder) ApplyLayer(layer, txs, rewards interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) ApplyLayer(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLayer", reflect.TypeOf((*MockconservativeState)(nil).ApplyLayer), layer, txs, rewards)
-}
-
-// Get mocks base method.
-func (m *MockconservativeState) Get(id types.TransactionID) (*types.Transaction, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Get", id)
-	ret0, _ := ret[0].(*types.Transaction)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// Get indicates an expected call of Get.
-func (mr *MockconservativeStateMockRecorder) Get(id interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MockconservativeState)(nil).Get), id)
-}
-
-// GetAllAccounts mocks base method.
-func (m *MockconservativeState) GetAllAccounts() (*types.MultipleAccountsState, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAllAccounts")
-	ret0, _ := ret[0].(*types.MultipleAccountsState)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAllAccounts indicates an expected call of GetAllAccounts.
-func (mr *MockconservativeStateMockRecorder) GetAllAccounts() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllAccounts", reflect.TypeOf((*MockconservativeState)(nil).GetAllAccounts))
-}
-
-// GetBalance mocks base method.
-func (m *MockconservativeState) GetBalance(arg0 types.Address) uint64 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetBalance", arg0)
-	ret0, _ := ret[0].(uint64)
-	return ret0
-}
-
-// GetBalance indicates an expected call of GetBalance.
-func (mr *MockconservativeStateMockRecorder) GetBalance(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBalance", reflect.TypeOf((*MockconservativeState)(nil).GetBalance), arg0)
-}
-
-// GetLayerApplied mocks base method.
-func (m *MockconservativeState) GetLayerApplied(arg0 types.TransactionID) *types.LayerID {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLayerApplied", arg0)
-	ret0, _ := ret[0].(*types.LayerID)
-	return ret0
-}
-
-// GetLayerApplied indicates an expected call of GetLayerApplied.
-func (mr *MockconservativeStateMockRecorder) GetLayerApplied(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerApplied", reflect.TypeOf((*MockconservativeState)(nil).GetLayerApplied), arg0)
-}
-
-// GetLayerStateRoot mocks base method.
-func (m *MockconservativeState) GetLayerStateRoot(arg0 types.LayerID) (types.Hash32, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetLayerStateRoot", arg0)
-	ret0, _ := ret[0].(types.Hash32)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetLayerStateRoot indicates an expected call of GetLayerStateRoot.
-func (mr *MockconservativeStateMockRecorder) GetLayerStateRoot(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLayerStateRoot", reflect.TypeOf((*MockconservativeState)(nil).GetLayerStateRoot), arg0)
-}
-
-// GetNonce mocks base method.
-func (m *MockconservativeState) GetNonce(arg0 types.Address) uint64 {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetNonce", arg0)
-	ret0, _ := ret[0].(uint64)
-	return ret0
-}
-
-// GetNonce indicates an expected call of GetNonce.
-func (mr *MockconservativeStateMockRecorder) GetNonce(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNonce", reflect.TypeOf((*MockconservativeState)(nil).GetNonce), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLayer", reflect.TypeOf((*MockconservativeState)(nil).ApplyLayer), arg0, arg1, arg2, arg3)
 }
 
 // GetStateRoot mocks base method.
@@ -179,31 +64,47 @@ func (mr *MockconservativeStateMockRecorder) GetStateRoot() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetStateRoot", reflect.TypeOf((*MockconservativeState)(nil).GetStateRoot))
 }
 
-// Invalidate mocks base method.
-func (m *MockconservativeState) Invalidate(id types.TransactionID) {
+// ReinsertTxsToMemPool mocks base method.
+func (m *MockconservativeState) ReinsertTxsToMemPool(arg0 []types.TransactionID) error {
 	m.ctrl.T.Helper()
-	m.ctrl.Call(m, "Invalidate", id)
+	ret := m.ctrl.Call(m, "ReinsertTxsToMemPool", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
-// Invalidate indicates an expected call of Invalidate.
-func (mr *MockconservativeStateMockRecorder) Invalidate(id interface{}) *gomock.Call {
+// ReinsertTxsToMemPool indicates an expected call of ReinsertTxsToMemPool.
+func (mr *MockconservativeStateMockRecorder) ReinsertTxsToMemPool(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Invalidate", reflect.TypeOf((*MockconservativeState)(nil).Invalidate), id)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ReinsertTxsToMemPool", reflect.TypeOf((*MockconservativeState)(nil).ReinsertTxsToMemPool), arg0)
 }
 
 // Rewind mocks base method.
-func (m *MockconservativeState) Rewind(layer types.LayerID) (types.Hash32, error) {
+func (m *MockconservativeState) Rewind(arg0 types.LayerID) (types.Hash32, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Rewind", layer)
+	ret := m.ctrl.Call(m, "Rewind", arg0)
 	ret0, _ := ret[0].(types.Hash32)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // Rewind indicates an expected call of Rewind.
-func (mr *MockconservativeStateMockRecorder) Rewind(layer interface{}) *gomock.Call {
+func (mr *MockconservativeStateMockRecorder) Rewind(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rewind", reflect.TypeOf((*MockconservativeState)(nil).Rewind), layer)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Rewind", reflect.TypeOf((*MockconservativeState)(nil).Rewind), arg0)
+}
+
+// StoreTransactionsFromMemPool mocks base method.
+func (m *MockconservativeState) StoreTransactionsFromMemPool(arg0 types.LayerID, arg1 types.BlockID, arg2 []types.TransactionID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "StoreTransactionsFromMemPool", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// StoreTransactionsFromMemPool indicates an expected call of StoreTransactionsFromMemPool.
+func (mr *MockconservativeStateMockRecorder) StoreTransactionsFromMemPool(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "StoreTransactionsFromMemPool", reflect.TypeOf((*MockconservativeState)(nil).StoreTransactionsFromMemPool), arg0, arg1, arg2)
 }
 
 // Mocktortoise is a mock of tortoise interface.

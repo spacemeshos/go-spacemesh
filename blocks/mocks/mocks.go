@@ -87,21 +87,6 @@ func (mr *MockmeshProviderMockRecorder) AddBlockWithTXs(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddBlockWithTXs", reflect.TypeOf((*MockmeshProvider)(nil).AddBlockWithTXs), arg0, arg1)
 }
 
-// GetTransactions mocks base method.
-func (m *MockmeshProvider) GetTransactions(arg0 []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTransactions", arg0)
-	ret0, _ := ret[0].([]*types.Transaction)
-	ret1, _ := ret[1].(map[types.TransactionID]struct{})
-	return ret0, ret1
-}
-
-// GetTransactions indicates an expected call of GetTransactions.
-func (mr *MockmeshProviderMockRecorder) GetTransactions(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactions", reflect.TypeOf((*MockmeshProvider)(nil).GetTransactions), arg0)
-}
-
 // HasBlock mocks base method.
 func (m *MockmeshProvider) HasBlock(arg0 types.BlockID) bool {
 	m.ctrl.T.Helper()
@@ -114,4 +99,42 @@ func (m *MockmeshProvider) HasBlock(arg0 types.BlockID) bool {
 func (mr *MockmeshProviderMockRecorder) HasBlock(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasBlock", reflect.TypeOf((*MockmeshProvider)(nil).HasBlock), arg0)
+}
+
+// MocktxProvider is a mock of txProvider interface.
+type MocktxProvider struct {
+	ctrl     *gomock.Controller
+	recorder *MocktxProviderMockRecorder
+}
+
+// MocktxProviderMockRecorder is the mock recorder for MocktxProvider.
+type MocktxProviderMockRecorder struct {
+	mock *MocktxProvider
+}
+
+// NewMocktxProvider creates a new mock instance.
+func NewMocktxProvider(ctrl *gomock.Controller) *MocktxProvider {
+	mock := &MocktxProvider{ctrl: ctrl}
+	mock.recorder = &MocktxProviderMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MocktxProvider) EXPECT() *MocktxProviderMockRecorder {
+	return m.recorder
+}
+
+// GetTransactions mocks base method.
+func (m *MocktxProvider) GetTransactions(arg0 []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTransactions", arg0)
+	ret0, _ := ret[0].([]*types.Transaction)
+	ret1, _ := ret[1].(map[types.TransactionID]struct{})
+	return ret0, ret1
+}
+
+// GetTransactions indicates an expected call of GetTransactions.
+func (mr *MocktxProviderMockRecorder) GetTransactions(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactions", reflect.TypeOf((*MocktxProvider)(nil).GetTransactions), arg0)
 }

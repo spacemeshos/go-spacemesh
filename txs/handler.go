@@ -21,13 +21,6 @@ var (
 	errRejectedByMempool = errors.New("rejected by mempool")
 )
 
-//go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./handler.go
-
-type conservativeState interface {
-	AddressExists(addr types.Address) bool
-	AddTxToMempool(tx *types.Transaction, checkValidity bool) error
-}
-
 // TxHandler handles the transactions received via gossip or sync.
 type TxHandler struct {
 	logger log.Log

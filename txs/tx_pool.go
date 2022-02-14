@@ -1,10 +1,12 @@
 package txs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"sync"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -18,51 +20,65 @@ const (
 	meshAndMempool
 )
 
-// TxPool is a struct that holds txs received via gossip network.
-type TxPool struct {
+// txPool is a struct that holds txs received via gossip network.
+type txPool struct {
 	db       *sql.Database
 	mu       sync.RWMutex
 	txs      map[types.TransactionID]*types.Transaction
 	accounts map[types.Address]*AccountPendingTxs
 }
 
-// NewTxPool returns a new TxMempool struct.
-func NewTxPool(db *sql.Database) *TxPool {
-	return &TxPool{
+// newTxPool returns a new txPool struct.
+func newTxPool(db *sql.Database) *txPool {
+	return &txPool{
 		db:       db,
 		txs:      make(map[types.TransactionID]*types.Transaction),
 		accounts: make(map[types.Address]*AccountPendingTxs),
 	}
 }
 
-// Get returns transaction by provided id, it returns an error if transaction is not found.
-func (tp *TxPool) Get(id types.TransactionID) (*types.Transaction, error) {
+type txFetcher struct {
+	t *txPool
+}
+
+// Get transaction blob, by transaction id.
+func (f *txFetcher) Get(hash []byte) ([]byte, error) {
+	id := types.TransactionID{}
+	copy(id[:], hash)
+	if tx, err := f.t.getFromMemPool(id); err == nil && tx != nil {
+		return codec.Encode(tx)
+	}
+	return transactions.GetBlob(f.t.db, id)
+}
+
+func (tp *txPool) getFromMemPool(id types.TransactionID) (*types.MeshTransaction, error) {
 	tp.mu.RLock()
 	defer tp.mu.RUnlock()
 
 	if tx, found := tp.txs[id]; found {
-		return tx, nil
+		return &types.MeshTransaction{
+			Transaction: *tx,
+			State:       types.MEMPOOL,
+		}, nil
 	}
-	return nil, errors.New("transaction not found in mempool")
+
+	return nil, errors.New("tx not in mempool")
 }
 
-// Put inserts a transaction into the mem pool. It indexes it by source and dest addresses as well.
-func (tp *TxPool) Put(id types.TransactionID, tx *types.Transaction) {
-	tp.put(id, tx)
-	events.ReportNewTx(types.LayerID{}, tx)
-	events.ReportAccountUpdate(tx.Origin())
-	events.ReportAccountUpdate(tx.GetRecipient())
-}
-
-func (tp *TxPool) put(id types.TransactionID, tx *types.Transaction) {
+func (tp *txPool) addToMemPool(id types.TransactionID, tx *types.Transaction) {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
+
 	tp.txs[id] = tx
-	tp.getOrCreate(tx.Origin()).Add(types.LayerID{}, tx)
+	account, found := tp.accounts[tx.Origin()]
+	if !found {
+		account = NewAccountPendingTxs()
+		tp.accounts[tx.Origin()] = account
+	}
+	account.Add(types.LayerID{}, tx)
 }
 
-// Invalidate removes transaction from pool.
-func (tp *TxPool) Invalidate(id types.TransactionID) {
+func (tp *txPool) removeFromMemPool(id types.TransactionID) {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
 	if tx, found := tp.txs[id]; found {
@@ -83,10 +99,14 @@ func (tp *TxPool) Invalidate(id types.TransactionID) {
 	}
 }
 
-func (tp *TxPool) getDBProjection(addr types.Address, prevNonce, prevBalance uint64) (uint64, uint64, error) {
+func (tp *txPool) getDBProjection(addr types.Address, prevNonce, prevBalance uint64) (uint64, uint64, error) {
 	txs, err := transactions.FilterPending(tp.db, addr)
 	if err != nil {
 		return 0, 0, fmt.Errorf("db get pending txs: %w", err)
+	}
+
+	if len(txs) == 0 {
+		return prevNonce, prevBalance, nil
 	}
 
 	pending := NewAccountPendingTxs()
@@ -97,7 +117,7 @@ func (tp *TxPool) getDBProjection(addr types.Address, prevNonce, prevBalance uin
 	return nonce, balance, nil
 }
 
-func (tp *TxPool) getMemPoolProjection(addr types.Address, prevNonce, prevBalance uint64) (uint64, uint64) {
+func (tp *txPool) getMemPoolProjection(addr types.Address, prevNonce, prevBalance uint64) (uint64, uint64) {
 	tp.mu.RLock()
 	account, found := tp.accounts[addr]
 	tp.mu.RUnlock()
@@ -108,9 +128,8 @@ func (tp *TxPool) getMemPoolProjection(addr types.Address, prevNonce, prevBalanc
 	return account.GetProjection(prevNonce, prevBalance)
 }
 
-// GetProjection returns the estimated nonce and balance for the provided address addr and previous nonce and balance
-// projecting state is done by applying transactions from the pool.
-func (tp *TxPool) GetProjection(addr types.Address, prevNonce, prevBalance uint64, mode projectionMode) (uint64, uint64, error) {
+func (tp *txPool) getProjection(addr types.Address, getState func(types.Address) (uint64, uint64), mode projectionMode) (uint64, uint64, error) {
+	prevNonce, prevBalance := getState(addr)
 	nonce, balance, err := tp.getDBProjection(addr, prevNonce, prevBalance)
 	if err != nil {
 		return 0, 0, fmt.Errorf("failed to get db projection: %w", err)
@@ -122,24 +141,13 @@ func (tp *TxPool) GetProjection(addr types.Address, prevNonce, prevBalance uint6
 	return nonce, balance, nil
 }
 
-// ⚠️ must be called under write-lock.
-func (tp *TxPool) getOrCreate(addr types.Address) *AccountPendingTxs {
-	account, found := tp.accounts[addr]
-	if !found {
-		account = NewAccountPendingTxs()
-		tp.accounts[addr] = account
-	}
-	return account
-}
-
-func (tp *TxPool) getMempoolCandidateTXs(numTXs int, getState func(types.Address) (uint64, uint64)) ([]types.TransactionID, []*types.Transaction, error) {
+func (tp *txPool) getMemPoolCandidates(numTXs int, getState func(types.Address) (uint64, uint64)) ([]types.TransactionID, []*types.Transaction, error) {
 	txIDs := make([]types.TransactionID, 0, numTXs)
 
 	tp.mu.RLock()
 	defer tp.mu.RUnlock()
 	for addr, account := range tp.accounts {
-		nonce, balance := getState(addr)
-		nonce, balance, err := tp.GetProjection(addr, nonce, balance, mesh)
+		nonce, balance, err := tp.getProjection(addr, getState, mesh)
 		if err != nil {
 			return nil, nil, fmt.Errorf("get projection for addr %s: %v", addr.Short(), err)
 		}
@@ -152,4 +160,42 @@ func (tp *TxPool) getMempoolCandidateTXs(numTXs int, getState func(types.Address
 		txs = append(txs, tp.txs[tx])
 	}
 	return txIDs, txs, nil
+}
+
+func (tp *txPool) getFromDB(id types.TransactionID) (*types.MeshTransaction, error) {
+	mtx, err := transactions.Get(tp.db, id)
+	if err != nil {
+		return nil, errors.New("tx not in db")
+	}
+	return mtx, nil
+}
+
+func (tp *txPool) getFromDBByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
+	return transactions.FilterByAddress(tp.db, from, to, address)
+}
+
+func (tp *txPool) markApplied(tid types.TransactionID) error {
+	return transactions.Applied(tp.db, tid)
+}
+
+func (tp *txPool) markDeleted(tid types.TransactionID) error {
+	if err := transactions.MarkDeleted(tp.db, tid); err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return err
+	}
+	return nil
+}
+
+// writeForBlock writes all transactions associated with a block atomically.
+func (tp *txPool) writeForBlock(layerID types.LayerID, bid types.BlockID, txs ...*types.Transaction) error {
+	dbtx, err := tp.db.Tx(context.Background())
+	if err != nil {
+		return err
+	}
+	defer dbtx.Release()
+	for _, tx := range txs {
+		if err := transactions.Add(dbtx, layerID, bid, tx); err != nil {
+			return err
+		}
+	}
+	return dbtx.Commit()
 }

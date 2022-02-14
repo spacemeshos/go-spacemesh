@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/binary"
 	"math"
-	"sort"
 	"testing"
 	"time"
 
@@ -19,7 +18,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
 
 const (
@@ -161,38 +159,6 @@ func BenchmarkNewPersistentMeshDB(b *testing.B) {
 	b.Logf("\n>>> Total time: %v\n\n", time.Since(start))
 }
 
-const (
-	initialNonce   = 0
-	initialBalance = 100
-)
-
-func address() types.Address {
-	var addr [types.AddressLength]byte
-	copy(addr[:], "12345678901234567890")
-	return addr
-}
-
-func newSpawnTx(signer *signing.EdSigner) *types.Transaction {
-	return newSpawnTxWithDest(signer, types.Address{})
-}
-
-func newSpawnTxWithDest(signer *signing.EdSigner, dest types.Address) *types.Transaction {
-	return transaction.GenerateSpawnTransaction(signer, dest)
-}
-
-func newCallTx(t *testing.T, signer *signing.EdSigner, nonce, totalAmount uint64) *types.Transaction {
-	t.Helper()
-	return newCallTxWithDest(t, signer, types.Address{}, nonce, totalAmount)
-}
-
-func newCallTxWithDest(t *testing.T, signer *signing.EdSigner, dest types.Address, nonce, totalAmount uint64) *types.Transaction {
-	t.Helper()
-	feeAmount := uint64(1)
-	tx, err := transaction.GenerateCallTransaction(signer, dest, nonce, totalAmount-feeAmount, 3, feeAmount)
-	require.NoError(t, err)
-	return tx
-}
-
 func newSignerAndAddress(t *testing.T, seedStr string) (*signing.EdSigner, types.Address) {
 	t.Helper()
 	seed := make([]byte, 32)
@@ -202,193 +168,6 @@ func newSignerAndAddress(t *testing.T, seedStr string) (*signing.EdSigner, types
 	signer, err := signing.NewEdSignerFromBuffer(privKey)
 	require.NoError(t, err)
 	return signer, types.GenerateAddress(signer.PublicKey().Bytes())
-}
-
-func TestMeshDB_GetStateProjection(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-	signer, origin := newSignerAndAddress(t, "123")
-	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
-		newSpawnTx(signer),
-		newCallTx(t, signer, 1, 10),
-		newCallTx(t, signer, 2, 20),
-	)
-	require.NoError(t, err)
-
-	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
-	require.NoError(t, err)
-	require.Equal(t, initialNonce+3, int(nonce))
-	require.Equal(t, initialBalance-30, int(balance))
-}
-
-func TestMeshDB_GetStateProjection_WrongNonce(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer, origin := newSignerAndAddress(t, "123")
-	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
-		newCallTx(t, signer, 1, 10),
-		newCallTx(t, signer, 2, 20),
-	)
-	require.NoError(t, err)
-
-	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
-	require.NoError(t, err)
-	require.Equal(t, initialNonce, int(nonce))
-	require.Equal(t, initialBalance, int(balance))
-}
-
-func TestMeshDB_GetStateProjection_DetectNegativeBalance(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer, origin := newSignerAndAddress(t, "123")
-	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
-		newSpawnTx(signer),
-		newCallTx(t, signer, 1, 10),
-		newCallTx(t, signer, 2, 95),
-	)
-	require.NoError(t, err)
-
-	nonce, balance, err := mdb.GetProjection(origin, initialNonce, initialBalance)
-	require.NoError(t, err)
-	require.Equal(t, 2, int(nonce))
-	require.Equal(t, initialBalance-10, int(balance))
-}
-
-func TestMeshDB_GetStateProjection_NothingToApply(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	nonce, balance, err := mdb.GetProjection(address(), initialNonce, initialBalance)
-	require.NoError(t, err)
-	require.Equal(t, uint64(initialNonce), nonce)
-	require.Equal(t, uint64(initialBalance), balance)
-}
-
-func TestMeshDB_UnappliedTxs(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer1, origin1 := newSignerAndAddress(t, "thc")
-	signer2, origin2 := newSignerAndAddress(t, "cbd")
-	err := mdb.writeTransactions(types.NewLayerID(1), types.BlockID{1},
-		newCallTx(t, signer1, 420, 240),
-		newCallTx(t, signer1, 421, 241),
-		newSpawnTx(signer2),
-		newCallTx(t, signer2, 1, 100),
-		newCallTx(t, signer2, 2, 101),
-	)
-	require.NoError(t, err)
-
-	txns1 := getTxns(t, mdb, origin1)
-	require.Len(t, txns1, 2)
-	require.Equal(t, 420, int(txns1[0].Nonce))
-	require.Equal(t, 421, int(txns1[1].Nonce))
-	require.Equal(t, 240, int(txns1[0].TotalAmount))
-	require.Equal(t, 241, int(txns1[1].TotalAmount))
-
-	txns2 := getTxns(t, mdb, origin2)
-	require.Len(t, txns2, 3)
-	require.Equal(t, 0, int(txns2[0].Nonce))
-	require.Equal(t, 1, int(txns2[1].Nonce))
-	require.Equal(t, 2, int(txns2[2].Nonce))
-	require.Equal(t, 0, int(txns2[0].TotalAmount))
-	require.Equal(t, 100, int(txns2[1].TotalAmount))
-	require.Equal(t, 101, int(txns2[2].TotalAmount))
-
-	require.NoError(t, mdb.markTransactionsDeleted(newSpawnTx(signer2)))
-	require.NoError(t, mdb.markTransactionsDeleted(newCallTx(t, signer2, 1, 100)))
-
-	txns1 = getTxns(t, mdb, origin1)
-	require.Len(t, txns1, 2)
-	require.Equal(t, 420, int(txns1[0].Nonce))
-	require.Equal(t, 421, int(txns1[1].Nonce))
-	require.Equal(t, 240, int(txns1[0].TotalAmount))
-	require.Equal(t, 241, int(txns1[1].TotalAmount))
-
-	txns2 = getTxns(t, mdb, origin2)
-	require.Len(t, txns2, 1)
-	require.Equal(t, 2, int(txns2[0].Nonce))
-	require.Equal(t, 101, int(txns2[0].TotalAmount))
-}
-
-func TestMeshDB_testGetTransactions(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer1, addr1 := newSignerAndAddress(t, "thc")
-	signer2, addr2 := newSignerAndAddress(t, "cbd")
-	_, addr3 := newSignerAndAddress(t, "cbe")
-	require.NoError(t, mdb.writeTransactions(types.NewLayerID(1), types.EmptyBlockID,
-		newCallTx(t, signer1, 420, 240),
-		newCallTx(t, signer1, 421, 241),
-		newSpawnTxWithDest(signer2, addr1),
-		newCallTxWithDest(t, signer2, addr1, 1, 100),
-		newCallTxWithDest(t, signer2, addr1, 2, 101),
-	))
-
-	lid := types.NewLayerID(1)
-	txs, err := mdb.GetTransactionsByAddress(lid, lid, addr1)
-	require.NoError(t, err)
-	require.Equal(t, 5, len(txs))
-
-	txs, err = mdb.GetTransactionsByAddress(lid, lid, addr2)
-	require.NoError(t, err)
-	require.Equal(t, 3, len(txs))
-
-	// test negative case
-	txs, err = mdb.GetTransactionsByAddress(lid, lid, addr3)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(txs))
-}
-
-func TestMeshDB_updateTransaction(t *testing.T) {
-	mdb := NewMemMeshDB(logtest.New(t))
-	defer mdb.Close()
-
-	signer1, _ := newSignerAndAddress(t, "thc")
-	tx := newCallTx(t, signer1, 420, 240)
-	layerID := types.NewLayerID(10)
-	require.NoError(t, mdb.writeTransactions(layerID, types.EmptyBlockID, tx))
-
-	got, err := mdb.GetMeshTransaction(tx.ID())
-	require.NoError(t, err)
-	assert.Equal(t, layerID, got.LayerID)
-	assert.Equal(t, types.EmptyBlockID, got.BlockID)
-	assert.Equal(t, tx.ID(), got.Transaction.ID()) // this cause got.Transaction() to populate id
-	assert.Equal(t, *tx, got.Transaction)
-
-	block := types.GenLayerBlock(layerID, nil)
-	require.NoError(t, mdb.updateDBTXWithBlockID(block, tx))
-	got, err = mdb.GetMeshTransaction(tx.ID())
-	require.NoError(t, err)
-	assert.Equal(t, layerID, got.LayerID)
-	assert.Equal(t, block.ID(), got.BlockID)
-	assert.Equal(t, tx.ID(), got.Transaction.ID()) // this cause got.Transaction() to populate id
-	assert.Equal(t, *tx, got.Transaction)
-}
-
-type tinyTX struct {
-	ID          types.TransactionID
-	Nonce       uint64
-	TotalAmount uint64
-}
-
-func getTxns(t *testing.T, mdb *DB, origin types.Address) []tinyTX {
-	t.Helper()
-	txns, err := mdb.getAccountPendingTxs(origin)
-	require.NoError(t, err)
-	var ret []tinyTX
-	for nonce, nonceTxs := range txns.PendingTxs {
-		for id, tx := range nonceTxs {
-			ret = append(ret, tinyTX{ID: id, Nonce: nonce, TotalAmount: tx.Amount + tx.Fee})
-		}
-	}
-	sort.Slice(ret, func(i, j int) bool {
-		return ret[i].Nonce < ret[j].Nonce
-	})
-	return ret
 }
 
 func writeRewards(t *testing.T, mdb *DB) ([]types.Address, []types.NodeID) {

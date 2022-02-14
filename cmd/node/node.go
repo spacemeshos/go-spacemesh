@@ -279,7 +279,6 @@ type App struct {
 	beaconProtocol   *beacon.ProtocolDriver
 	closers          []interface{ Close() }
 	log              log.Log
-	txPool           *txs.TxPool
 	svm              *svm.SVM
 	conState         *txs.ConservativeState
 	layerFetch       *layerfetcher.Logic
@@ -509,8 +508,6 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("create mesh DB: %w", err)
 	}
 
-	app.txPool = txs.NewTxPool(sqlDB)
-
 	appliedTxs, err := database.NewLDBDatabase(filepath.Join(dbStorepath, "appliedTxs"), 0, 0, lg.WithName("appliedTxs"))
 	if err != nil {
 		return fmt.Errorf("create applied txs DB: %w", err)
@@ -518,7 +515,7 @@ func (app *App) initServices(ctx context.Context,
 	app.closers = append(app.closers, appliedTxs)
 	state := svm.New(stateDBStore, appliedTxs, app.addLogger(SVMLogger, lg))
 
-	app.conState = txs.NewConservativeState(state, app.txPool, app.addLogger(ConStateLogger, lg))
+	app.conState = txs.NewConservativeState(state, sqlDB, app.addLogger(ConStateLogger, lg))
 
 	goldenATXID := types.ATXID(types.HexToHash32(app.Config.GoldenATXID))
 	if goldenATXID == *types.EmptyATXID {
@@ -597,7 +594,7 @@ func (app *App) initServices(ctx context.Context,
 		fetch.BlockDB:    msh.Blocks(),
 		fetch.ProposalDB: proposalDB,
 		fetch.ATXDB:      atxDB.ATXs(),
-		fetch.TXDB:       msh.Transactions(),
+		fetch.TXDB:       app.conState.Transactions(),
 		fetch.POETDB:     poetDBStore,
 	}
 	dataHanders := layerfetcher.DataHandlers{
@@ -630,7 +627,7 @@ func (app *App) initServices(ctx context.Context,
 		// TODO: genesisMinerWeight is set to app.Config.SpaceToCommit, because PoET ticks are currently hardcoded to 1
 	}
 
-	blockGen := blocks.NewGenerator(atxDB, msh, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
+	blockGen := blocks.NewGenerator(atxDB, msh, app.conState, blocks.WithConfig(app.Config.REWARD), blocks.WithGeneratorLogger(app.addLogger(BlockGenLogger, lg)))
 	rabbit := app.HareFactory(ctx, sgn, blockGen, nodeID, patrol, newSyncer, msh, proposalDB, beaconProtocol, fetcherWrapped, hOracle, idStore, clock, lg)
 
 	proposalBuilder := miner.NewProposalBuilder(
@@ -842,7 +839,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 
 	// Register the requested services one by one
 	if apiConf.StartDebugService {
-		registerService(grpcserver.NewDebugService(app.mesh, app.host))
+		registerService(grpcserver.NewDebugService(app.conState, app.host))
 	}
 	if apiConf.StartGatewayService {
 		registerService(grpcserver.NewGatewayService(app.host))
@@ -852,7 +849,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
 	}
 	if apiConf.StartMeshService {
-		registerService(grpcserver.NewMeshService(app.mesh, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
+		registerService(grpcserver.NewMeshService(app.mesh, app.conState, app.clock, app.Config.LayersPerEpoch, app.Config.P2P.NetworkID, layerDuration, app.Config.LayerAvgSize, app.Config.TxsPerBlock))
 	}
 	if apiConf.StartNodeService {
 		nodeService := grpcserver.NewNodeService(app.host, app.mesh, app.clock, app.syncer, app.atxBuilder)

@@ -23,7 +23,7 @@ func Test_HandleGossipTransaction_Success(t *testing.T) {
 	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, signer)
+	tx := newTx(t, 3, 10, 1, signer)
 	origin := types.GenerateAddress(signer.PublicKey().Bytes())
 	cstate.EXPECT().AddressExists(origin).Return(true).Times(1)
 	cstate.EXPECT().AddTxToMempool(gomock.Any(), true).DoAndReturn(
@@ -46,7 +46,7 @@ func Test_HandleGossipTransaction_MalformedMsg(t *testing.T) {
 	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer := signing.NewEdSigner()
-	msg, err := codec.Encode(newTx(t, 3, 10, signer))
+	msg, err := codec.Encode(newTx(t, 3, 10, 1, signer))
 	require.NoError(t, err)
 
 	got := th.HandleGossipTransaction(context.TODO(), "peer", msg[1:])
@@ -58,7 +58,7 @@ func Test_handleTransaction_MalformedMsg(t *testing.T) {
 	th := NewTxHandler(mocks.NewMockconservativeState(ctrl), logtest.New(t))
 
 	signer := signing.NewEdSigner()
-	msg, err := codec.Encode(newTx(t, 3, 10, signer))
+	msg, err := codec.Encode(newTx(t, 3, 10, 1, signer))
 	require.NoError(t, err)
 
 	got := th.handleTransaction(context.TODO(), msg[1:])
@@ -70,7 +70,7 @@ func Test_handleTransaction_BadSignature(t *testing.T) {
 	th := NewTxHandler(mocks.NewMockconservativeState(ctrl), logtest.New(t))
 
 	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, signer)
+	tx := newTx(t, 3, 10, 1, signer)
 	copy(tx.Signature[:], types.RandomBytes(64))
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ func Test_handleTransaction_AddressNotFound(t *testing.T) {
 	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, signer)
+	tx := newTx(t, 3, 10, 1, signer)
 	origin := types.GenerateAddress(signer.PublicKey().Bytes())
 	cstate.EXPECT().AddressExists(origin).Return(false).Times(1)
 	msg, err := codec.Encode(tx)
@@ -101,7 +101,7 @@ func Test_handleTransaction_FailedMempool(t *testing.T) {
 	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, signer)
+	tx := newTx(t, 3, 10, 1, signer)
 	origin := types.GenerateAddress(signer.PublicKey().Bytes())
 	cstate.EXPECT().AddressExists(origin).Return(true).Times(1)
 	errUnknown := errors.New("unknown")
@@ -125,7 +125,7 @@ func Test_HandleSyncTransaction_Success(t *testing.T) {
 	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, signer)
+	tx := newTx(t, 3, 10, 1, signer)
 	cstate.EXPECT().AddTxToMempool(gomock.Any(), false).DoAndReturn(
 		func(got *types.Transaction, check bool) error {
 			assert.Equal(t, tx.ID(), got.ID()) // causing ID to be calculated
@@ -145,7 +145,7 @@ func Test_HandleSyncTransaction_BadSignature(t *testing.T) {
 	th := NewTxHandler(mocks.NewMockconservativeState(ctrl), logtest.New(t))
 
 	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, signer)
+	tx := newTx(t, 3, 10, 1, signer)
 	copy(tx.Signature[:], types.RandomBytes(64))
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
@@ -160,7 +160,7 @@ func Test_HandleSyncTransaction_FailedMempool(t *testing.T) {
 	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer := signing.NewEdSigner()
-	tx := newTx(t, 3, 10, signer)
+	tx := newTx(t, 3, 10, 1, signer)
 	errUnknown := errors.New("unknown")
 	cstate.EXPECT().AddTxToMempool(gomock.Any(), false).DoAndReturn(
 		func(got *types.Transaction, check bool) error {
