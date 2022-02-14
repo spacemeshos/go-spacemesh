@@ -137,6 +137,8 @@ func newMemMesh(t *testing.T, lg log.Log) *mesh.Mesh {
 		layersPerEpoch, goldenATXID, nil, lg.WithName("atxDB"))
 	conState := mmocks.NewMockconservativeState(gomock.NewController(t))
 	conState.EXPECT().GetStateRoot().AnyTimes()
+	conState.EXPECT().StoreTransactionsFromMemPool(gomock.Any(), gomock.Any(), gomock.Any()).Return(nil).AnyTimes()
+	conState.EXPECT().ApplyLayer(gomock.Any(), gomock.Any(), gomock.Any(), gomock.Any()).Return(nil, nil).AnyTimes()
 	return mesh.NewMesh(memdb, atxdb, &mockValidator{}, conState, lg.WithName("mesh"))
 }
 
@@ -1163,12 +1165,13 @@ func TestSyncMissingLayer(t *testing.T) {
 
 	rst := make(chan layerfetcher.LayerPromiseResult)
 	close(rst)
+	errMissingTXs := errors.New("missing TXs")
 	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
 		fetcher.EXPECT().PollLayerContent(gomock.Any(), lid).Return(rst)
 		m.SetZeroBlockLayer(lid)
-
 		tortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
 			Return(lid.Sub(1), lid, false)
+		conState.EXPECT().ApplyLayer(block.LayerIndex, block.ID(), block.TxIDs, gomock.Any()).Return(nil, errMissingTXs)
 	}
 
 	tortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
