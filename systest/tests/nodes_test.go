@@ -19,8 +19,8 @@ func TestAddNodes(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 
 	const (
-		epochBeforeJoin = 5
-		lastEpoch       = 7
+		epochBeforeJoin = 6
+		lastEpoch       = 8
 
 		beforeAdding = 11
 		// 4 epochs to fully join:
@@ -28,7 +28,7 @@ func TestAddNodes(t *testing.T) {
 		// atx published layer 20, in the next epoch node will participate in beacon
 		// after beacon computed - node will build proposals
 		fullyJoined = beforeAdding + 16
-		lastLayer   = fullyJoined + 8
+		lastLayer   = fullyJoined + 10
 	)
 
 	cl := cluster.New(tctx)
