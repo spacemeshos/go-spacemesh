@@ -104,12 +104,12 @@ func collectProposals(ctx context.Context, eg *errgroup.Group, client *cluster.N
 		dbg := spacemeshv1.NewDebugServiceClient(client)
 		proposals, err := dbg.ProposalsStream(ctx, &empty.Empty{})
 		if err != nil {
-			return err
+			return fmt.Errorf("proposal stream for %s: %w", client.Name, err)
 		}
 		for {
 			proposal, err := proposals.Recv()
 			if err != nil {
-				return err
+				return fmt.Errorf("proposal event for %s: %w", client.Name, err)
 			}
 			if cont, err := collector(proposal); !cont {
 				return err
