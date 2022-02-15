@@ -185,7 +185,9 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 								v1.ResourceMemory: resource.MustParse("1Gi"),
 							},
 						)).
-						WithEnv(corev1.EnvVar().WithName("GOMAXPROCS").WithValue("2")).
+						WithEnv(
+							corev1.EnvVar().WithName("GOMAXPROCS").WithValue("2"),
+						).
 						WithCommand(cmd...),
 					)),
 			),
