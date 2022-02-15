@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -39,10 +40,10 @@ var (
 	nodeSelector = stringToString{}
 	labels       = stringSet{}
 	tokens       chan struct{}
+	initTokens   sync.Once
 )
 
 func init() {
-	tokens = make(chan struct{}, *clusters)
 	flag.Var(nodeSelector, "node-selector", "select where test pods will be scheduled")
 	flag.Var(labels, "labels", "test will be executed only if it matches all labels")
 }
@@ -124,6 +125,9 @@ type cfg struct {
 // New creates context for the test.
 func New(t *testing.T, opts ...Opt) *Context {
 	t.Parallel()
+	initTokens.Do(func() {
+		tokens = make(chan struct{}, *clusters)
+	})
 
 	c := newCfg()
 	for _, opt := range opts {
