@@ -1,4 +1,7 @@
 name: CI
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
 on:  
   push:
@@ -20,8 +23,8 @@ jobs:
     - name: 'Set up Cloud SDK'
       uses: 'google-github-actions/setup-gcloud@v0'
 
-    - name: 'Create Node Pool'
-      run: 'gcloud container node-pools create ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --num-nodes=1 --zone=${{ secrets.CI_ZONE_NAME }} --machine-type=n1-standard-16'
+    # - name: 'Create Node Pool'
+    #   run: 'gcloud container node-pools create ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --num-nodes=1 --zone=${{ secrets.CI_ZONE_NAME }} --machine-type=n1-standard-16'
 
     - name: kubectl - Google Cloud GKE cluster.
       uses: ameydev/gke-kubectl-action@master
@@ -34,5 +37,11 @@ jobs:
       with:
         args: get pods
     
-    - name: 'Delete Node Pool'
-      run: 'yes | gcloud container node-pools delete ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --zone=${{ secrets.CI_ZONE_NAME }}'
+    - name: Build docker
+      run: make docker
+
+    - name: Build docker
+      run: make push
+    
+    # - name: 'Delete Node Pool'
+    #   run: 'yes | gcloud container node-pools delete ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --zone=${{ secrets.CI_ZONE_NAME }}'
