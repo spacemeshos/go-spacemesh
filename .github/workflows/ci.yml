@@ -46,11 +46,6 @@ jobs:
       run: |
         echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
         echo "::set-output name=branch_name::$(git rev-parse --abbrev-ref HEAD)"
-
-    - name: Get commit hash
-      id: vars
-      shell: bash
-      run: |
         echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
         echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
 
