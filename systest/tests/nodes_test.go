@@ -22,13 +22,12 @@ func TestAddNodes(t *testing.T) {
 		epochBeforeJoin = 6
 		lastEpoch       = 8
 
-		beforeAdding = 11
+		beforeAdding = 12
 		// 4 epochs to fully join:
 		// sync finishes at layer 16
 		// atx published layer 20, in the next epoch node will participate in beacon
 		// after beacon computed - node will build proposals
-		fullyJoined = beforeAdding + 16
-		lastLayer   = fullyJoined + 10
+		lastLayer = beforeAdding + 24
 
 		addedLater = 2
 	)

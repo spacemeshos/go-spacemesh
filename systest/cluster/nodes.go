@@ -221,7 +221,10 @@ func waitSmesher(tctx *testcontext.Context, name string) (*NodeClient, error) {
 		}
 		rctx, cancel := context.WithTimeout(tctx, 5*time.Second)
 		defer cancel()
-		conn, err := grpc.DialContext(rctx, node.GRPCEndpoint(), grpc.WithInsecure(), grpc.WithBlock())
+		conn, err := grpc.DialContext(rctx, node.GRPCEndpoint(),
+			grpc.WithInsecure(),
+			grpc.WithBlock(),
+		)
 		if err != nil {
 			return nil, err
 		}
