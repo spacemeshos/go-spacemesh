@@ -152,6 +152,7 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 
 	sset := appsv1.StatefulSet(name, ctx.Namespace).
 		WithSpec(appsv1.StatefulSetSpec().
+			WithUpdateStrategy(appsv1.StatefulSetUpdateStrategy().WithType(apiappsv1.OnDeleteStatefulSetStrategyType)).
 			WithPodManagementPolicy(apiappsv1.ParallelPodManagement).
 			WithReplicas(int32(replicas)).
 			WithServiceName(*svc.Name).
