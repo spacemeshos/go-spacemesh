@@ -48,6 +48,16 @@ jobs:
 
     - name: Run tests
       run: cd tests && make run test_name=TestSmeshing
+
+    - name: Get commit hash
+      id: vars
+      shell: bash
+      run: |
+        echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+    
+    - name: Delete pod
+      run: kubectl delete pod systest-${{ steps.vars.outputs.sha_short }}
     
     # - name: 'Delete Node Pool'
     #   run: 'yes | gcloud container node-pools delete ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --zone=${{ secrets.CI_ZONE_NAME }}'
