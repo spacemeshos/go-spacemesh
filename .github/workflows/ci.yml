@@ -48,7 +48,7 @@ jobs:
       run: cd tests && make push
 
     - name: Run tests
-      run: make run test_name=TestSmeshing
+      run: cd tests && make run test_name=TestSmeshing
     
     # - name: 'Delete Node Pool'
     #   run: 'yes | gcloud container node-pools delete ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --zone=${{ secrets.CI_ZONE_NAME }}'
