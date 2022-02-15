@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"context"
 	"fmt"
 	"sync"
 
@@ -108,20 +107,8 @@ func (db *PoetDb) storeProofInSQLDB(proofMessage *types.PoetProofMessage, ref []
 		return fmt.Errorf("could not marshal proof message: %v", err)
 	}
 
-	dbtx, err := db.sqlDB.Tx(context.Background())
-	if err != nil {
-		return err
-	}
-
-	defer dbtx.Release()
-
-	if err := poets.Add(dbtx, ref, messageBytes, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
+	if err := poets.Add(db.sqlDB, ref, messageBytes, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
 		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %v",
-			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
-	}
-
-	if err := dbtx.Commit(); err != nil {
-		return fmt.Errorf("commit DB TX for poetId %x round %s: %w",
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
 
