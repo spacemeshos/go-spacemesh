@@ -9,6 +9,7 @@ import (
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	"google.golang.org/protobuf/types/known/emptypb"
 	apiappsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
@@ -224,6 +225,11 @@ func waitSmesher(tctx *testcontext.Context, name string) (*NodeClient, error) {
 		conn, err := grpc.DialContext(rctx, node.GRPCEndpoint(),
 			grpc.WithInsecure(),
 			grpc.WithBlock(),
+			grpc.WithKeepaliveParams(keepalive.ClientParameters{
+				Time:                10 * time.Second,
+				Timeout:             10 * time.Second,
+				PermitWithoutStream: true,
+			}),
 		)
 		if err != nil {
 			return nil, err
