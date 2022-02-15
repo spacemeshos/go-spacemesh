@@ -41,13 +41,14 @@ import (
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/svm"
 	"github.com/spacemeshos/go-spacemesh/svm/transaction"
+	"github.com/spacemeshos/go-spacemesh/txs"
 )
 
 const (
@@ -79,31 +80,28 @@ var (
 	postGenesisEpochLayer = types.NewLayerID(22)
 
 	networkMock = NetworkMock{}
-	mempoolMock = MempoolMock{
-		poolByAddress: make(map[types.Address]types.TransactionID),
-		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
-	}
-	genTime    = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
-	addr1      = types.HexToAddress("33333")
-	addr2      = types.HexToAddress("44444")
-	pub, _, _  = ed25519.GenerateKey(nil)
-	nodeID     = types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
-	prevAtxID  = types.ATXID(types.HexToHash32("44444"))
-	chlng      = types.HexToHash32("55555")
-	poetRef    = []byte("66666")
-	nipost     = NewNIPostWithChallenge(&chlng, poetRef)
-	challenge  = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
-	globalAtx  = newAtx(challenge, nipost, addr1)
-	globalAtx2 = newAtx(challenge, nipost, addr2)
-	signer1    = signing.NewEdSigner()
-	signer2    = signing.NewEdSigner()
-	globalTx   = NewTx(0, addr1, signer1)
-	globalTx2  = NewTx(1, addr2, signer2)
-	ballot1    = types.GenLayerBallot(types.LayerID{})
-	block1     = types.GenLayerBlock(types.LayerID{}, nil)
-	block2     = types.GenLayerBlock(types.LayerID{}, nil)
-	block3     = types.GenLayerBlock(types.LayerID{}, nil)
-	txAPI      = &TxAPIMock{
+	genTime     = GenesisTimeMock{time.Unix(genTimeUnix, 0)}
+	addr1       = types.HexToAddress("33333")
+	addr2       = types.HexToAddress("44444")
+	pub, _, _   = ed25519.GenerateKey(nil)
+	nodeID      = types.NodeID{Key: util.Bytes2Hex(pub), VRFPublicKey: []byte("22222")}
+	prevAtxID   = types.ATXID(types.HexToHash32("44444"))
+	chlng       = types.HexToHash32("55555")
+	poetRef     = []byte("66666")
+	nipost      = NewNIPostWithChallenge(&chlng, poetRef)
+	challenge   = newChallenge(nodeID, 1, prevAtxID, prevAtxID, postGenesisEpochLayer)
+	globalAtx   = newAtx(challenge, nipost, addr1)
+	globalAtx2  = newAtx(challenge, nipost, addr2)
+	signer1     = signing.NewEdSigner()
+	signer2     = signing.NewEdSigner()
+	globalTx    = NewTx(0, addr1, signer1)
+	globalTx2   = NewTx(1, addr2, signer2)
+	ballot1     = types.GenLayerBallot(types.LayerID{})
+	block1      = types.GenLayerBlock(types.LayerID{}, nil)
+	block2      = types.GenLayerBlock(types.LayerID{}, nil)
+	block3      = types.GenLayerBlock(types.LayerID{}, nil)
+	meshAPI     = &MeshAPIMock{}
+	conStateAPI = &ConStateAPIMock{
 		returnTx:     make(map[types.TransactionID]*types.Transaction),
 		layerApplied: make(map[types.TransactionID]*types.LayerID),
 		balances: map[types.Address]*big.Int{
@@ -113,6 +111,8 @@ var (
 		nonces: map[types.Address]uint64{
 			globalTx.Origin(): uint64(accountCounter),
 		},
+		poolByAddress: make(map[types.Address]types.TransactionID),
+		poolByTxid:    make(map[types.TransactionID]*types.Transaction),
 	}
 	stateRoot = types.HexToHash32("11111")
 )
@@ -126,8 +126,8 @@ func init() {
 	ballot1.AtxID = globalAtx.ID()
 	ballot1.EpochData = &types.EpochData{ActiveSet: []types.ATXID{globalAtx.ID(), globalAtx2.ID()}}
 	block1.TxIDs = []types.TransactionID{globalTx.ID(), globalTx2.ID()}
-	txAPI.returnTx[globalTx.ID()] = globalTx
-	txAPI.returnTx[globalTx2.ID()] = globalTx2
+	conStateAPI.returnTx[globalTx.ID()] = globalTx
+	conStateAPI.returnTx[globalTx2.ID()] = globalTx2
 	types.SetLayersPerEpoch(layersPerEpoch)
 }
 
@@ -156,15 +156,100 @@ func (s *NetworkMock) PeerCount() uint64 {
 	return 0
 }
 
-type TxAPIMock struct {
+type MeshAPIMock struct{}
+
+// latest layer received.
+func (m *MeshAPIMock) LatestLayer() types.LayerID {
+	return layerLatest
+}
+
+// latest layer approved/confirmed/applied to state
+// The real logic here is a bit more complicated, as it depends whether the node
+// is syncing or not. If it's not syncing, layers are applied to state as they're
+// verified by Hare. If it's syncing, Hare is not run, and they are applied to
+// state as they're confirmed by Tortoise and it advances pbase. This is all in
+// flux right now so keep this simple for the purposes of testing.
+func (m *MeshAPIMock) LatestLayerInState() types.LayerID {
+	return layerVerified
+}
+
+func (m *MeshAPIMock) ProcessedLayer() types.LayerID {
+	return layerVerified
+}
+
+func (m *MeshAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error) {
+	return []types.Reward{
+		{
+			Layer:               layerFirst,
+			TotalReward:         rewardAmount,
+			LayerRewardEstimate: rewardAmount,
+			SmesherID:           nodeID,
+			Coinbase:            addr1,
+		},
+	}, nil
+}
+
+func (m *MeshAPIMock) GetRewardsBySmesherID(types.NodeID) (rewards []types.Reward, err error) {
+	return []types.Reward{
+		{
+			Layer:               layerFirst,
+			TotalReward:         rewardAmount,
+			LayerRewardEstimate: rewardAmount,
+			SmesherID:           nodeID,
+			Coinbase:            addr1,
+		},
+	}, nil
+}
+
+func (m *MeshAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
+	if tid.After(genTime.GetCurrentLayer()) {
+		return nil, errors.New("requested layer later than current layer")
+	} else if tid.After(m.LatestLayer()) {
+		return nil, errors.New("haven't received that layer yet")
+	}
+
+	ballots := []*types.Ballot{ballot1}
+	blocks := []*types.Block{block1, block2, block3}
+	return types.NewExistingLayer(tid,
+		types.CalcBlocksHash32(types.ToBlockIDs(blocks), nil),
+		ballots, blocks), nil
+}
+
+func (m *MeshAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
+	atxs := map[types.ATXID]*types.ActivationTx{
+		globalAtx.ID():  globalAtx,
+		globalAtx2.ID(): globalAtx2,
+	}
+	return atxs, nil
+}
+
+type ConStateAPIMock struct {
 	returnTx     map[types.TransactionID]*types.Transaction
 	layerApplied map[types.TransactionID]*types.LayerID
 	balances     map[types.Address]*big.Int
 	nonces       map[types.Address]uint64
 	err          error
+
+	// In the real txs.txPool struct, there are multiple data structures and they're more complex,
+	// but we just mock a very simple use case here and only store some of these data
+	poolByAddress map[types.Address]types.TransactionID
+	poolByTxid    map[types.TransactionID]*types.Transaction
 }
 
-func (t *TxAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err error) {
+func (t *ConStateAPIMock) Put(id types.TransactionID, tx *types.Transaction) {
+	t.poolByTxid[id] = tx
+	t.poolByAddress[tx.GetRecipient()] = id
+	t.poolByAddress[tx.Origin()] = id
+	events.ReportNewTx(types.LayerID{}, tx)
+}
+
+// Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
+// unconfirmed or in the mempool that will update state.
+func (t *ConStateAPIMock) GetProjection(types.Address) (uint64, uint64, error) {
+	return accountCounter + 1, accountBalance + 1, nil
+}
+
+func (t *ConStateAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err error) {
 	accounts := make(map[string]types.AccountState)
 	for address, balance := range t.balances {
 		accounts[address.String()] = types.AccountState{
@@ -179,131 +264,43 @@ func (t *TxAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err erro
 	return
 }
 
-func (t *TxAPIMock) GetStateRoot() types.Hash32 {
+func (t *ConStateAPIMock) GetStateRoot() types.Hash32 {
 	return stateRoot
 }
 
-func (t *TxAPIMock) ValidateNonceAndBalance(tx *types.Transaction) error {
-	if !t.AddressExists(tx.Origin()) || t.GetBalance(tx.Origin()) < tx.GasLimit || t.GetNonce(tx.Origin()) != tx.AccountNonce {
-		return errors.New("not gonna happen")
-	}
-	return nil
-}
-
-func (t *TxAPIMock) GetProjection(_ types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
-	return prevNonce, prevBalance, nil
-}
-
-// latest layer received.
-func (t *TxAPIMock) LatestLayer() types.LayerID {
-	return layerLatest
-}
-
-// latest layer approved/confirmed/applied to state
-// The real logic here is a bit more complicated, as it depends whether the node
-// is syncing or not. If it's not syncing, layers are applied to state as they're
-// verified by Hare. If it's syncing, Hare is not run, and they are applied to
-// state as they're confirmed by Tortoise and it advances pbase. This is all in
-// flux right now so keep this simple for the purposes of testing.
-func (t *TxAPIMock) LatestLayerInState() types.LayerID {
-	return layerVerified
-}
-
-func (t *TxAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
+func (t *ConStateAPIMock) GetLayerApplied(txID types.TransactionID) *types.LayerID {
 	return t.layerApplied[txID]
 }
 
-func (t *TxAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
+func (t *ConStateAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tx, ok := t.returnTx[id]
-	if !ok {
-		return nil, errors.New("it ain't there")
+	if ok {
+		return &types.MeshTransaction{Transaction: *tx, State: types.PENDING}, nil
 	}
-	return &types.MeshTransaction{Transaction: *tx}, nil
+	tx, ok = t.poolByTxid[id]
+	if ok {
+		return &types.MeshTransaction{Transaction: *tx, State: types.MEMPOOL}, nil
+	}
+	return nil, errors.New("it ain't there")
 }
 
-func (t *TxAPIMock) GetRewards(types.Address) (rewards []types.Reward, err error) {
-	return []types.Reward{
-		{
-			Layer:               layerFirst,
-			TotalReward:         rewardAmount,
-			LayerRewardEstimate: rewardAmount,
-			SmesherID:           nodeID,
-			Coinbase:            addr1,
-		},
-	}, nil
-}
-
-func (t *TxAPIMock) GetRewardsBySmesherID(types.NodeID) (rewards []types.Reward, err error) {
-	return []types.Reward{
-		{
-			Layer:               layerFirst,
-			TotalReward:         rewardAmount,
-			LayerRewardEstimate: rewardAmount,
-			SmesherID:           nodeID,
-			Coinbase:            addr1,
-		},
-	}, nil
-}
-
-func (t *TxAPIMock) GetTransactionsByDestination(from, to types.LayerID, account types.Address) (txs []*types.MeshTransaction, err error) {
+func (t *ConStateAPIMock) GetTransactionsByAddress(from, to types.LayerID, account types.Address) ([]*types.MeshTransaction, error) {
 	if from.After(txReturnLayer) {
 		return nil, nil
 	}
-	for _, tx := range t.returnTx {
-		if tx.GetRecipient().String() == account.String() {
-			txs = append(txs, &types.MeshTransaction{Transaction: *tx})
-		}
-	}
-	return
-}
-
-func (t *TxAPIMock) GetTransactionsByOrigin(from, to types.LayerID, account types.Address) (txs []*types.MeshTransaction, err error) {
-	if from.After(txReturnLayer) {
-		return nil, nil
-	}
+	var txs []*types.MeshTransaction
 	for _, tx := range t.returnTx {
 		if tx.Origin().String() == account.String() {
 			txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 		}
+		if tx.GetRecipient().String() == account.String() {
+			txs = append(txs, &types.MeshTransaction{Transaction: *tx})
+		}
 	}
-	return
+	return txs, nil
 }
 
-func (t *TxAPIMock) GetTransactionsByAddress(from, to types.LayerID, account types.Address) ([]*types.MeshTransaction, error) {
-	origin, err := t.GetTransactionsByOrigin(from, to, account)
-	if err != nil {
-		return nil, err
-	}
-	dest, err := t.GetTransactionsByDestination(from, to, account)
-	if err != nil {
-		return nil, err
-	}
-	return append(origin, dest...), nil
-}
-
-func (t *TxAPIMock) GetLayer(tid types.LayerID) (*types.Layer, error) {
-	if tid.After(genTime.GetCurrentLayer()) {
-		return nil, errors.New("requested layer later than current layer")
-	} else if tid.After(t.LatestLayer()) {
-		return nil, errors.New("haven't received that layer yet")
-	}
-
-	ballots := []*types.Ballot{ballot1}
-	blocks := []*types.Block{block1, block2, block3}
-	return types.NewExistingLayer(tid,
-		types.CalcBlocksHash32(types.ToBlockIDs(blocks), nil),
-		ballots, blocks), nil
-}
-
-func (t *TxAPIMock) GetATXs(context.Context, []types.ATXID) (map[types.ATXID]*types.ActivationTx, []types.ATXID) {
-	atxs := map[types.ATXID]*types.ActivationTx{
-		globalAtx.ID():  globalAtx,
-		globalAtx2.ID(): globalAtx2,
-	}
-	return atxs, nil
-}
-
-func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.Transaction, missing map[types.TransactionID]struct{}) {
+func (t *ConStateAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.Transaction, missing map[types.TransactionID]struct{}) {
 	for _, txid := range txids {
 		for _, tx := range t.returnTx {
 			if tx.ID() == txid {
@@ -314,36 +311,16 @@ func (t *TxAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.T
 	return
 }
 
-func (t *TxAPIMock) GetMeshTransactions(txids []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
-	for _, txid := range txids {
-		for _, tx := range t.returnTx {
-			if tx.ID() == txid {
-				txs = append(txs, &types.MeshTransaction{Transaction: *tx})
-			}
-		}
-	}
-	return
-}
-
-func (t *TxAPIMock) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
+func (t *ConStateAPIMock) GetLayerStateRoot(types.LayerID) (types.Hash32, error) {
 	return stateRoot, nil
 }
 
-func (t *TxAPIMock) GetBalance(addr types.Address) uint64 {
+func (t *ConStateAPIMock) GetBalance(addr types.Address) uint64 {
 	return t.balances[addr].Uint64()
 }
 
-func (t *TxAPIMock) GetNonce(addr types.Address) uint64 {
+func (t *ConStateAPIMock) GetNonce(addr types.Address) uint64 {
 	return t.nonces[addr]
-}
-
-func (t *TxAPIMock) AddressExists(addr types.Address) bool {
-	_, ok := t.nonces[addr]
-	return ok
-}
-
-func (t *TxAPIMock) ProcessedLayer() types.LayerID {
-	return layerVerified
 }
 
 func NewTx(nonce uint64, recipient types.Address, signer *signing.EdSigner) *types.Transaction {
@@ -508,39 +485,6 @@ func (a *ActivationAPIMock) UpdatePoETServer(context.Context, string) error {
 	return a.UpdatePoETErr
 }
 
-type MempoolMock struct {
-	// In the real mempool.TxMempool struct, there are multiple data structures and they're more complex,
-	// but we just mock a very simple use case here and only store some of these data
-	poolByAddress map[types.Address]types.TransactionID
-	poolByTxid    map[types.TransactionID]*types.Transaction
-}
-
-func (m MempoolMock) Get(id types.TransactionID) (*types.Transaction, error) {
-	return m.poolByTxid[id], nil
-}
-
-func (m *MempoolMock) Put(id types.TransactionID, tx *types.Transaction) {
-	m.poolByTxid[id] = tx
-	m.poolByAddress[tx.GetRecipient()] = id
-	m.poolByAddress[tx.Origin()] = id
-	events.ReportNewTx(types.LayerID{}, tx)
-}
-
-// Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
-// unconfirmed or in the mempool that will update state.
-func (m MempoolMock) GetProjection(types.Address, uint64, uint64) (nonce, balance uint64) {
-	nonce = accountCounter + 1
-	balance = accountBalance + 1
-	return
-}
-
-func (m MempoolMock) GetTxsByAddress(addr types.Address) (txs []*types.Transaction) {
-	if id, exist := m.poolByAddress[addr]; exist {
-		txs = append(txs, m.poolByTxid[id])
-	}
-	return
-}
-
 func launchServer(t *testing.T, services ...ServiceAPI) func() {
 	grpcService := NewServerWithInterface(cfg.GrpcServerPort, "localhost")
 	jsonService := NewJSONHTTPServer(cfg.JSONServerPort)
@@ -607,7 +551,7 @@ func TestNewServersConfig(t *testing.T) {
 	grpcService := NewServerWithInterface(port1, "localhost")
 	jsonService := NewJSONHTTPServer(port2)
 
-	require.Equal(t, port2, jsonService.Port, "Expected same port")
+	require.Equal(t, port2, jsonService.port, "Expected same port")
 	require.Equal(t, port1, grpcService.Port, "Expected same port")
 }
 
@@ -615,7 +559,7 @@ func TestNodeService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	syncer := SyncerMock{}
 	atxapi := &ActivationAPIMock{}
-	grpcService := NewNodeService(&networkMock, txAPI, &genTime, &syncer, atxapi)
+	grpcService := NewNodeService(&networkMock, meshAPI, &genTime, &syncer, atxapi)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -745,7 +689,7 @@ func TestNodeService(t *testing.T) {
 
 func TestGlobalStateService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewGlobalStateService(txAPI, mempoolMock)
+	svc := NewGlobalStateService(meshAPI, conStateAPI)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -1246,7 +1190,7 @@ func TestSmesherService(t *testing.T) {
 
 func TestMeshService(t *testing.T) {
 	logtest.SetupGlobal(t)
-	grpcService := NewMeshService(txAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1781,7 +1725,7 @@ func TestTransactionServiceSubmitUnsync(t *testing.T) {
 	publisher := pubsubmocks.NewMockPublisher(ctrl)
 	publisher.EXPECT().Publish(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
 
-	grpcService := NewTransactionService(publisher, txAPI, mempoolMock, syncer)
+	grpcService := NewTransactionService(publisher, meshAPI, conStateAPI, syncer)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1832,7 +1776,7 @@ func TestTransactionService_SubmitNoConcurrency(t *testing.T) {
 		n++
 		return nil
 	})
-	grpcService := NewTransactionService(publisher, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	grpcService := NewTransactionService(publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -1874,7 +1818,7 @@ func TestTransactionService(t *testing.T) {
 		received = msg
 		return nil
 	})
-	grpcService := NewTransactionService(publisher, txAPI, mempoolMock, &SyncerMock{isSynced: true})
+	grpcService := NewTransactionService(publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2051,8 +1995,8 @@ func TestTransactionService(t *testing.T) {
 		{"TransactionsState_SubmitThenStream", func(t *testing.T) {
 			logtest.SetupGlobal(t)
 			// Remove the tx from the mesh so it only appears in the mempool
-			delete(txAPI.returnTx, globalTx.ID())
-			defer func() { txAPI.returnTx[globalTx.ID()] = globalTx }()
+			delete(conStateAPI.returnTx, globalTx.ID())
+			defer func() { conStateAPI.returnTx[globalTx.ID()] = globalTx }()
 
 			// STREAM
 			// Open the stream first and listen for new transactions
@@ -2079,7 +2023,7 @@ func TestTransactionService(t *testing.T) {
 				require.NoError(t, err, "error deserializing broadcast tx")
 
 				// We assume the data is valid here, and put it directly into the txpool
-				mempoolMock.Put(tx.ID(), tx)
+				conStateAPI.Put(tx.ID(), tx)
 			}()
 
 			wg := sync.WaitGroup{}
@@ -2277,7 +2221,7 @@ func checkLayer(t *testing.T, l *pb.Layer) {
 
 func TestAccountMeshDataStream_comprehensive(t *testing.T) {
 	logtest.SetupGlobal(t)
-	grpcService := NewMeshService(txAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2376,7 +2320,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 		t.Skip()
 	}
 	logtest.SetupGlobal(t)
-	svc := NewGlobalStateService(txAPI, mempoolMock)
+	svc := NewGlobalStateService(meshAPI, conStateAPI)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2491,7 +2435,7 @@ func TestAccountDataStream_comprehensive(t *testing.T) {
 
 func TestGlobalStateStream_comprehensive(t *testing.T) {
 	logtest.SetupGlobal(t)
-	svc := NewGlobalStateService(txAPI, mempoolMock)
+	svc := NewGlobalStateService(meshAPI, conStateAPI)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2589,7 +2533,7 @@ func TestGlobalStateStream_comprehensive(t *testing.T) {
 	events.ReportAccountUpdate(addr1)
 
 	// publish a new layer
-	layer, err := txAPI.GetLayer(layerFirst)
+	layer, err := meshAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
 
 	time.Sleep(10 * time.Millisecond)
@@ -2611,7 +2555,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	}
 	logtest.SetupGlobal(t)
 
-	grpcService := NewMeshService(txAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	grpcService := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, grpcService)
 	defer shutDown()
 
@@ -2668,7 +2612,7 @@ func TestLayerStream_comprehensive(t *testing.T) {
 	// initialize the streamer
 	events.InitializeReporter()
 
-	layer, err := txAPI.GetLayer(layerFirst)
+	layer, err := meshAPI.GetLayer(layerFirst)
 	require.NoError(t, err)
 
 	time.Sleep(10 * time.Millisecond)
@@ -2844,8 +2788,8 @@ func checkGlobalStateDataGlobalState(t *testing.T, dataItem interface{}) {
 func TestMultiService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	cfg.GrpcServerPort = 9192
-	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(txAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc1 := NewNodeService(&networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
+	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	shutDown := launchServer(t, svc1, svc2)
 	defer shutDown()
 
@@ -2906,8 +2850,8 @@ func TestJsonApi(t *testing.T) {
 	shutDown()
 
 	// enable services and try again
-	svc1 := NewNodeService(&networkMock, txAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
-	svc2 := NewMeshService(txAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
+	svc1 := NewNodeService(&networkMock, meshAPI, &genTime, &SyncerMock{}, &ActivationAPIMock{})
+	svc2 := NewMeshService(meshAPI, conStateAPI, &genTime, layersPerEpoch, networkID, layerDurationSec, layerAvgSize, txsPerBlock)
 	cfg.StartNodeService = true
 	cfg.StartMeshService = true
 	shutDown = launchServer(t, svc1, svc2)
@@ -2934,7 +2878,7 @@ func TestDebugService(t *testing.T) {
 	logtest.SetupGlobal(t)
 	ctrl := gomock.NewController(t)
 	identity := mocks.NewMockNetworkIdentity(ctrl)
-	svc := NewDebugService(txAPI, identity)
+	svc := NewDebugService(conStateAPI, identity)
 	shutDown := launchServer(t, svc)
 	defer shutDown()
 
@@ -2960,7 +2904,7 @@ func TestDebugService(t *testing.T) {
 		require.Contains(t, addresses, globalTx.Origin().Bytes())
 		require.Contains(t, addresses, addr1.Bytes())
 	})
-	t.Run("NetworkID", func(t *testing.T) {
+	t.Run("networkID", func(t *testing.T) {
 		id := p2p.Peer("test")
 		identity.EXPECT().ID().Return(id)
 
@@ -3041,15 +2985,6 @@ func (appliedTxsMock) Close()                             { panic("implement me"
 func (appliedTxsMock) NewBatch() database.Batch           { panic("implement me") }
 func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me") }
 
-type ProjectorMock struct {
-	nonceDiff   uint64
-	balanceDiff uint64
-}
-
-func (p *ProjectorMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
-	return prevNonce + p.nonceDiff, prevBalance - p.balanceDiff, nil
-}
-
 func TestEventsReceived(t *testing.T) {
 	logtest.SetupGlobal(t)
 
@@ -3059,8 +2994,8 @@ func TestEventsReceived(t *testing.T) {
 		return nil
 	})
 
-	txService := NewTransactionService(publisher, txAPI, mempoolMock, &SyncerMock{isSynced: true})
-	gsService := NewGlobalStateService(txAPI, mempoolMock)
+	txService := NewTransactionService(publisher, meshAPI, conStateAPI, &SyncerMock{isSynced: true})
+	gsService := NewGlobalStateService(meshAPI, conStateAPI)
 	shutDown := launchServer(t, txService, gsService)
 	defer shutDown()
 
@@ -3147,11 +3082,10 @@ func TestEventsReceived(t *testing.T) {
 	}()
 
 	time.Sleep(50 * time.Millisecond)
-	pool := mempool.NewTxMemPool()
-	pool.Put(globalTx.ID(), globalTx)
-
 	lg := logtest.New(t).WithName("svm")
-	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, lg)
+	conState := txs.NewConservativeState(svm, sql.InMemory(), logtest.New(t).WithName("conState"))
+	conState.AddTxToMemPool(globalTx, true)
 	time.Sleep(100 * time.Millisecond)
 
 	rewards := map[types.Address]uint64{
