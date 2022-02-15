@@ -38,7 +38,7 @@ jobs:
         args: get pods
     
     - name: Build docker
-      run: make docker
+      run: cd tests && make docker
 
     - name: Build docker
       run: make push
