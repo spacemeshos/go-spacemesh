@@ -14,6 +14,9 @@ import (
 	"strconv"
 	"time"
 
+	grpcmiddleware "github.com/grpc-ecosystem/go-grpc-middleware"
+	grpczap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
+	grpcctxtags "github.com/grpc-ecosystem/go-grpc-middleware/tags"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pyroscope-io/pyroscope/pkg/agent/profiler"
 	"github.com/spf13/cobra"
@@ -90,7 +93,8 @@ const (
 	NipostBuilderLogger    = "nipostBuilder"
 	LayerFetcher           = "layerFetcher"
 	TimeSyncLogger         = "timesync"
-	SVMLogger              = "SVM"
+	SVMLogger              = "svm"
+	GRPCLogger             = "grpc"
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it.
@@ -831,7 +835,16 @@ func (app *App) startAPIServices(ctx context.Context) {
 	services := []grpcserver.ServiceAPI{}
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
-			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface)
+			logger := app.addLogger(GRPCLogger, app.log).Zap()
+			grpczap.ReplaceGrpcLoggerV2WithVerbosity(logger, 99)
+			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
+				grpcmiddleware.WithStreamServerChain(
+					grpcctxtags.StreamServerInterceptor(),
+					grpczap.StreamServerInterceptor(logger)),
+				grpcmiddleware.WithUnaryServerChain(
+					grpcctxtags.UnaryServerInterceptor(),
+					grpczap.UnaryServerInterceptor(logger)),
+			)
 		}
 		services = append(services, svc)
 		svc.RegisterService(app.grpcAPIService)
