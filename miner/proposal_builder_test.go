@@ -37,7 +37,7 @@ type testBuilder struct {
 	mAtxDB  *mocks.MockactivationDB
 	mPDB    *mocks.MockproposalDB
 	mBaseBP *mocks.MockbaseBallotProvider
-	mTxPool *mocks.MocktxPool
+	mCState *mocks.MockconservativeState
 	mPubSub *pubsubmocks.MockPublisher
 	mBeacon *smocks.MockBeaconGetter
 	mSync   *smocks.MockSyncStateProvider
@@ -54,7 +54,7 @@ func createBuilder(tb testing.TB) *testBuilder {
 		mAtxDB:  mocks.NewMockactivationDB(ctrl),
 		mPDB:    mocks.NewMockproposalDB(ctrl),
 		mBaseBP: mocks.NewMockbaseBallotProvider(ctrl),
-		mTxPool: mocks.NewMocktxPool(ctrl),
+		mCState: mocks.NewMockconservativeState(ctrl),
 		mPubSub: pubsubmocks.NewMockPublisher(ctrl),
 		mBeacon: smocks.NewMockBeaconGetter(ctrl),
 		mSync:   smocks.NewMockSyncStateProvider(ctrl),
@@ -62,7 +62,7 @@ func createBuilder(tb testing.TB) *testBuilder {
 	mProjector := mocks.NewMockprojector(ctrl)
 	mProjector.EXPECT().GetProjection(gomock.Any()).Return(uint64(1), uint64(1000), nil).AnyTimes()
 	pb.ProposalBuilder = NewProposalBuilder(context.TODO(), make(chan types.LayerID), edSigner, vrfSigner,
-		pb.mAtxDB, pb.mPubSub, pb.mPDB, pb.mBaseBP, pb.mBeacon, pb.mSync, mProjector, pb.mTxPool,
+		pb.mAtxDB, pb.mPubSub, pb.mPDB, pb.mBaseBP, pb.mBeacon, pb.mSync, pb.mCState,
 		WithLogger(logtest.New(tb)),
 		WithLayerSize(20),
 		WithLayerPerEpoch(3),
@@ -137,7 +137,7 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(atxID, activeSet, proofs, nil).Times(1)
 
 	// for 1st proposal, containing the ref ballot of this epoch
-	b.mTxPool.EXPECT().SelectTopNTransactions(gomock.Any(), gomock.Any()).Return([]types.TransactionID{tx1.ID()}, nil, nil).Times(1)
+	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx1.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: base}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
@@ -184,7 +184,7 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(atxID, activeSet, proofs, nil).Times(1)
 
 	// for 1st proposal, containing the ref ballot of this epoch
-	b.mTxPool.EXPECT().SelectTopNTransactions(gomock.Any(), gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
+	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: bb}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
@@ -276,7 +276,7 @@ func TestBuilder_HandleLayer_SelectTXError(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{}, nil).Times(1)
 	errUnknown := errors.New("unknown")
-	b.mTxPool.EXPECT().SelectTopNTransactions(gomock.Any(), gomock.Any()).Return(nil, nil, errUnknown).Times(1)
+	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return(nil, nil, errUnknown).Times(1)
 
 	assert.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errUnknown)
 }
@@ -309,7 +309,7 @@ func TestBuilder_HandleLayer_GetRefBallotError(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
-	b.mTxPool.EXPECT().SelectTopNTransactions(gomock.Any(), gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
+	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	errUnknown := errors.New("unknown")
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, errUnknown).Times(1)
@@ -329,7 +329,7 @@ func TestBuilder_HandleLayer_SaveRefBallotError(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
-	b.mTxPool.EXPECT().SelectTopNTransactions(gomock.Any(), gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
+	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	errUnknown := errors.New("unknown")
@@ -352,7 +352,7 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
-	b.mTxPool.EXPECT().SelectTopNTransactions(gomock.Any(), gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
+	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Close().Times(1)
@@ -375,7 +375,7 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
 	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
-	b.mTxPool.EXPECT().SelectTopNTransactions(gomock.Any(), gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
+	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
 	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
 	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)

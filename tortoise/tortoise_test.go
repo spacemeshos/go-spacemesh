@@ -281,7 +281,7 @@ func createTurtleLayer(t *testing.T, l types.LayerID, msh *mesh.DB, atxdb atxDat
 		types.GenLayerBlock(l, types.RandomTXSet(rand.Intn(100))),
 		types.GenLayerBlock(l, types.RandomTXSet(rand.Intn(100))),
 	}
-	return types.NewExistingLayer(l, ballots, blocks)
+	return types.NewExistingLayer(l, types.Hash32{}, ballots, blocks)
 }
 
 func TestLayerCutoff(t *testing.T) {

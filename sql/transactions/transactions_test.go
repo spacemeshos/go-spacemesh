@@ -44,6 +44,7 @@ func TestGetHas(t *testing.T) {
 			Transaction: *tx,
 			LayerID:     lid,
 			BlockID:     bid,
+			State:       types.PENDING,
 		}, received)
 		has, err := Has(db, tx.ID())
 		require.NoError(t, err)
@@ -96,6 +97,39 @@ func TestPending(t *testing.T) {
 	require.Empty(t, filtered)
 }
 
+func TestApplied(t *testing.T) {
+	db := sql.InMemory()
+
+	rng := rand.New(rand.NewSource(1001))
+	signer := signing.NewEdSignerFromRand(rng)
+	lid := types.NewLayerID(10)
+	bid := types.BlockID{1, 1}
+	txs := []*types.Transaction{
+		mustTx(transaction.GenerateCallTransaction(signer, types.Address{1}, 1, 191, 1, 1)),
+		mustTx(transaction.GenerateCallTransaction(signer, types.Address{2}, 1, 191, 1, 1)),
+	}
+
+	for _, tx := range txs {
+		require.NoError(t, Add(db, lid, bid, tx))
+		has, err := Has(db, tx.ID())
+		require.NoError(t, err)
+		require.True(t, has)
+		require.NoError(t, Applied(db, tx.ID()))
+		has, err = Has(db, tx.ID())
+		require.NoError(t, err)
+		require.True(t, has)
+
+		got, err := Get(db, tx.ID())
+		require.NoError(t, err)
+		require.Equal(t, &types.MeshTransaction{
+			Transaction: *tx,
+			LayerID:     lid,
+			BlockID:     bid,
+			State:       types.APPLIED,
+		}, got)
+	}
+}
+
 func TestDelete(t *testing.T) {
 	db := sql.InMemory()
 
@@ -117,6 +151,15 @@ func TestDelete(t *testing.T) {
 		has, err = Has(db, tx.ID())
 		require.NoError(t, err)
 		require.True(t, has)
+
+		got, err := Get(db, tx.ID())
+		require.NoError(t, err)
+		require.Equal(t, &types.MeshTransaction{
+			Transaction: *tx,
+			LayerID:     lid,
+			BlockID:     bid,
+			State:       types.DELETED,
+		}, got)
 	}
 }
 
@@ -186,7 +229,12 @@ func TestFilterByAddress(t *testing.T) {
 	for _, tx := range txs {
 		require.NoError(t, Add(db, lid, bid, tx))
 	}
-	filtered, err := FilterByAddress(db, lid, lid, signer2Address)
+	// should be nothing before lid
+	filtered, err := FilterByAddress(db, types.NewLayerID(1), lid.Sub(1), signer2Address)
+	require.NoError(t, err)
+	require.Empty(t, filtered)
+
+	filtered, err = FilterByAddress(db, lid, lid, signer2Address)
 	require.NoError(t, err)
 	require.Len(t, filtered, 2)
 }

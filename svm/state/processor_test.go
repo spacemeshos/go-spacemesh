@@ -13,7 +13,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/mempool"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 )
@@ -22,16 +21,6 @@ type ProcessorStateSuite struct {
 	suite.Suite
 	db        *database.LDBDatabase
 	processor *TransactionProcessor
-	projector *ProjectorMock
-}
-
-type ProjectorMock struct {
-	nonceDiff   uint64
-	balanceDiff uint64
-}
-
-func (p *ProjectorMock) GetProjection(addr types.Address, prevNonce, prevBalance uint64) (nonce, balance uint64, err error) {
-	return prevNonce + p.nonceDiff, prevBalance - p.balanceDiff, nil
 }
 
 type appliedTxsMock struct{}
@@ -47,8 +36,7 @@ func (appliedTxsMock) Find(key []byte) database.Iterator  { panic("implement me"
 func (s *ProcessorStateSuite) SetupTest() {
 	lg := logtest.New(s.T()).WithName("proc_logger")
 	s.db = database.NewMemDatabase()
-	s.projector = &ProjectorMock{}
-	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, s.projector, mempool.NewTxMemPool(), lg)
+	s.processor = NewTransactionProcessor(s.db, appliedTxsMock{}, lg)
 }
 
 func createAccount(state *TransactionProcessor, addr types.Address, balance int64, nonce uint64) *Object {
@@ -271,7 +259,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Reset() {
 	lg := logtest.New(s.T()).WithName("proc_logger")
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
-	processor := NewTransactionProcessor(db, txDb, s.projector, mempool.NewTxMemPool(), lg)
+	processor := NewTransactionProcessor(db, txDb, lg)
 
 	signer1Buf := []byte("22222222222222222222222222222222")
 	signer1Buf = append(signer1Buf, []byte{
@@ -370,7 +358,7 @@ func (s *ProcessorStateSuite) TestTransactionProcessor_Multilayer() {
 	lg := logtest.New(s.T())
 	txDb := database.NewMemDatabase()
 	db := database.NewMemDatabase()
-	processor := NewTransactionProcessor(db, txDb, s.projector, mempool.NewTxMemPool(), lg)
+	processor := NewTransactionProcessor(db, txDb, lg)
 
 	revertToLayer := rand.Intn(testCycles)
 	revertAfterLayer := rand.Intn(testCycles - revertToLayer) // rand.Intn(min(testCycles - revertToLayer,maxPas.processors))
@@ -443,45 +431,6 @@ func newTx(t *testing.T, nonce, totalAmount uint64, signer *signing.EdSigner) *t
 	return createCallTransaction(t, nonce, rec, totalAmount-feeAmount, feeAmount, signer)
 }
 
-func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance() {
-	r := require.New(s.T())
-	signer := signing.NewEdSigner()
-	origin := types.GenerateAddress(signer.PublicKey().Bytes())
-	s.processor.SetBalance(origin, 100)
-	s.processor.SetNonce(origin, 5)
-	s.projector.balanceDiff = 10
-	s.projector.nonceDiff = 2
-
-	err := s.processor.ValidateNonceAndBalance(newTx(s.T(), 7, 10, signer))
-	r.NoError(err)
-}
-
-func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_WrongNonce() {
-	r := require.New(s.T())
-	signer := signing.NewEdSigner()
-	origin := types.GenerateAddress(signer.PublicKey().Bytes())
-	s.processor.SetBalance(origin, 100)
-	s.processor.SetNonce(origin, 5)
-	s.projector.balanceDiff = 10
-	s.projector.nonceDiff = 2
-
-	err := s.processor.ValidateNonceAndBalance(newTx(s.T(), 8, 10, signer))
-	r.EqualError(err, "incorrect account nonce! Expected: 7, Actual: 8")
-}
-
-func (s *ProcessorStateSuite) TestTransactionProcessor_ValidateNonceAndBalance_InsufficientBalance() {
-	r := require.New(s.T())
-	signer := signing.NewEdSigner()
-	origin := types.GenerateAddress(signer.PublicKey().Bytes())
-	s.processor.SetBalance(origin, 100)
-	s.processor.SetNonce(origin, 5)
-	s.projector.balanceDiff = 10
-	s.projector.nonceDiff = 2
-
-	err := s.processor.ValidateNonceAndBalance(newTx(s.T(), 7, 95, signer))
-	r.EqualError(err, "insufficient balance! Available: 90, Attempting to spend: 94[amount]+1[fee]=95")
-}
-
 func TestTransactionProcessor_ApplyTransactionTestSuite(t *testing.T) {
 	suite.Run(t, new(ProcessorStateSuite))
 }
@@ -499,7 +448,7 @@ func createSignerTransaction(t *testing.T, key ed25519.PrivateKey) *types.Transa
 func TestValidateTxSignature(t *testing.T) {
 	db := database.NewMemDatabase()
 	lg := logtest.New(t).WithName("proc_logger")
-	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	proc := NewTransactionProcessor(db, appliedTxsMock{}, lg)
 
 	// positive flow
 	pub, pri, _ := ed25519.GenerateKey(crand.Reader)
@@ -522,7 +471,7 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 
 	db := database.NewMemDatabase()
 	lg := logtest.New(t).WithName("proc_logger")
-	proc := NewTransactionProcessor(db, appliedTxsMock{}, &ProjectorMock{}, mempool.NewTxMemPool(), lg)
+	proc := NewTransactionProcessor(db, appliedTxsMock{}, lg)
 
 	r.NotEqual(types.Hash32{}, proc.rootHash)
 
@@ -536,8 +485,7 @@ func TestTransactionProcessor_GetStateRoot(t *testing.T) {
 func TestTransactionProcessor_ApplyTransactions(t *testing.T) {
 	lg := logtest.New(t).WithName("proc_logger")
 	db := database.NewMemDatabase()
-	projector := &ProjectorMock{}
-	processor := NewTransactionProcessor(db, db, projector, mempool.NewTxMemPool(), lg)
+	processor := NewTransactionProcessor(db, db, lg)
 
 	signerBuf := []byte("22222222222222222222222222222222")
 	signerBuf = append(signerBuf, []byte{

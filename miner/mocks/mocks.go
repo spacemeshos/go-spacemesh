@@ -89,43 +89,43 @@ func (mr *MockproposalDBMockRecorder) AddProposal(arg0, arg1 interface{}) *gomoc
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProposal", reflect.TypeOf((*MockproposalDB)(nil).AddProposal), arg0, arg1)
 }
 
-// MocktxPool is a mock of txPool interface.
-type MocktxPool struct {
+// MockconservativeState is a mock of conservativeState interface.
+type MockconservativeState struct {
 	ctrl     *gomock.Controller
-	recorder *MocktxPoolMockRecorder
+	recorder *MockconservativeStateMockRecorder
 }
 
-// MocktxPoolMockRecorder is the mock recorder for MocktxPool.
-type MocktxPoolMockRecorder struct {
-	mock *MocktxPool
+// MockconservativeStateMockRecorder is the mock recorder for MockconservativeState.
+type MockconservativeStateMockRecorder struct {
+	mock *MockconservativeState
 }
 
-// NewMocktxPool creates a new mock instance.
-func NewMocktxPool(ctrl *gomock.Controller) *MocktxPool {
-	mock := &MocktxPool{ctrl: ctrl}
-	mock.recorder = &MocktxPoolMockRecorder{mock}
+// NewMockconservativeState creates a new mock instance.
+func NewMockconservativeState(ctrl *gomock.Controller) *MockconservativeState {
+	mock := &MockconservativeState{ctrl: ctrl}
+	mock.recorder = &MockconservativeStateMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MocktxPool) EXPECT() *MocktxPoolMockRecorder {
+func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
-// SelectTopNTransactions mocks base method.
-func (m *MocktxPool) SelectTopNTransactions(numOfTxs int, getState func(types.Address) (uint64, uint64, error)) ([]types.TransactionID, []*types.Transaction, error) {
+// SelectTXsForProposal mocks base method.
+func (m *MockconservativeState) SelectTXsForProposal(arg0 int) ([]types.TransactionID, []*types.Transaction, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SelectTopNTransactions", numOfTxs, getState)
+	ret := m.ctrl.Call(m, "SelectTXsForProposal", arg0)
 	ret0, _ := ret[0].([]types.TransactionID)
 	ret1, _ := ret[1].([]*types.Transaction)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
 
-// SelectTopNTransactions indicates an expected call of SelectTopNTransactions.
-func (mr *MocktxPoolMockRecorder) SelectTopNTransactions(numOfTxs, getState interface{}) *gomock.Call {
+// SelectTXsForProposal indicates an expected call of SelectTXsForProposal.
+func (mr *MockconservativeStateMockRecorder) SelectTXsForProposal(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectTopNTransactions", reflect.TypeOf((*MocktxPool)(nil).SelectTopNTransactions), numOfTxs, getState)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectTXsForProposal", reflect.TypeOf((*MockconservativeState)(nil).SelectTXsForProposal), arg0)
 }
 
 // MockbaseBallotProvider is a mock of baseBallotProvider interface.
