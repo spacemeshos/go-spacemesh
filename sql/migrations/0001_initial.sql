@@ -91,15 +91,10 @@ CREATE TABLE atx_top
 
 CREATE TABLE poets
 (
-    ref  VARCHAR PRIMARY KEY,
-    poet BLOB
+    ref        VARCHAR PRIMARY KEY,
+    poet       BLOB,
+    service_id VARCHAR,
+    round_id   VARCHAR
 ) WITHOUT ROWID;
 
-CREATE TABLE poet_subscriptions
-(
-    service_id VARCHAR,
-    round_id   VARCHAR,
-    ref        VARCHAR,
-    PRIMARY KEY (service_id, round_id)
-);
-
+CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);

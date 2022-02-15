@@ -28,13 +28,17 @@ func GetPoET(db sql.Executor, ref []byte) (poet []byte, err error) {
 	return poet, nil
 }
 
-// AddPoET adds a poet for a given ref.
-func AddPoET(db sql.Executor, ref, poet []byte) error {
+// Add adds a poet for a given ref.
+func Add(db sql.Executor, ref, poet, serviceID []byte, roundID string) error {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, ref)
 		stmt.BindBytes(2, poet)
+		stmt.BindBytes(3, serviceID)
+		stmt.BindBytes(4, []byte(roundID))
 	}
-	_, err := db.Exec("insert into poets (ref, poet) values (?1, ?2);", enc, nil)
+	_, err := db.Exec(`
+		insert into poets (ref, poet, service_id_ round_id) 
+		values (?1, ?2, ?3, ?4);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("exec: %w", err)
 	}
@@ -55,7 +59,7 @@ func GetRef(db sql.Executor, poetID []byte, roundID string) (ref []byte, err err
 	}
 
 	rows, err := db.Exec(`
-		select ref from poet_subscriptions 
+		select ref from poets 
 		where service_id = ?1 and round_id = ?2;`, enc, dec)
 	if err != nil {
 		return nil, fmt.Errorf("get value: %w", err)
@@ -65,23 +69,6 @@ func GetRef(db sql.Executor, poetID []byte, roundID string) (ref []byte, err err
 	}
 
 	return ref, nil
-}
-
-// AddRef adds a poet ref for service ID and round ID.
-func AddRef(db sql.Executor, serviceID []byte, roundID string, ref []byte) error {
-	enc := func(stmt *sql.Statement) {
-		stmt.BindBytes(1, serviceID)
-		stmt.BindBytes(2, []byte(roundID))
-		stmt.BindBytes(3, ref)
-	}
-	_, err := db.Exec(`
-		insert into poet_subscriptions (service_id, round_id, ref) 
-		values (?1, ?2, ?3);`, enc, nil)
-	if err != nil {
-		return fmt.Errorf("exec: %w", err)
-	}
-
-	return nil
 }
 
 // GetBlob loads PoET as an encoded blob, ready to be sent over the wire.

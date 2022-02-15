@@ -115,12 +115,8 @@ func (db *PoetDb) storeProofInSQLDB(proofMessage *types.PoetProofMessage, ref []
 
 	defer dbtx.Release()
 
-	if err := poets.AddPoET(dbtx, ref, messageBytes); err != nil {
+	if err := poets.Add(dbtx, ref, messageBytes, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
 		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %v",
-			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
-	}
-	if err := poets.AddRef(dbtx, proofMessage.PoetServiceID, proofMessage.RoundID, ref); err != nil {
-		return fmt.Errorf("failed to store poet proof index entry for poetId %x round %s: %v",
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
 

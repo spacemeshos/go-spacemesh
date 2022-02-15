@@ -23,8 +23,20 @@ func TestGetPoET(t *testing.T) {
 		[]byte("proof3"),
 	}
 
+	sids := [][]byte{
+		[]byte("sid1"),
+		[]byte("sid2"),
+		[]byte("sid3"),
+	}
+
+	rids := []string{
+		"rid1",
+		"rid2",
+		"rid3",
+	}
+
 	for i, proof := range proofs {
-		require.NoError(t, AddPoET(db, refs[i], proof))
+		require.NoError(t, Add(db, refs[i], proof, sids[i], rids[i]))
 	}
 
 	for i := range proofs {
@@ -42,12 +54,14 @@ func TestAddPoET(t *testing.T) {
 
 	ref := []byte("ref0")
 	poet := []byte("proof0")
+	sid := []byte("sid0")
+	rid := "rid0"
 
 	_, err := GetPoET(db, ref)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
-	require.NoError(t, AddPoET(db, ref, poet))
-	require.ErrorIs(t, AddPoET(db, ref, poet), sql.ErrObjectExists)
+	require.NoError(t, Add(db, ref, poet, sid, rid))
+	require.ErrorIs(t, Add(db, ref, poet, sid, rid), sql.ErrObjectExists)
 
 	got, err := GetPoET(db, ref)
 	require.NoError(t, err)
@@ -75,8 +89,14 @@ func TestGetRef(t *testing.T) {
 		[]byte("ref3"),
 	}
 
+	proofs := [][]byte{
+		[]byte("proof1"),
+		[]byte("proof2"),
+		[]byte("proof3"),
+	}
+
 	for i, ref := range refs {
-		require.NoError(t, AddRef(db, sids[i], rids[i], ref))
+		require.NoError(t, Add(db, ref, proofs[i], sids[i], rids[i]))
 	}
 
 	for i := range refs {
@@ -87,22 +107,4 @@ func TestGetRef(t *testing.T) {
 
 	_, err := GetRef(db, []byte("sid0"), "rid0")
 	require.ErrorIs(t, err, sql.ErrNotFound)
-}
-
-func TestAddRef(t *testing.T) {
-	db := sql.InMemory()
-
-	sid := []byte("sid0")
-	rid := "rid0"
-	ref := []byte("ref0")
-
-	_, err := GetRef(db, sid, rid)
-	require.ErrorIs(t, err, sql.ErrNotFound)
-
-	require.NoError(t, AddRef(db, sid, rid, ref))
-	require.ErrorIs(t, AddRef(db, sid, rid, ref), sql.ErrObjectExists)
-
-	got, err := GetRef(db, sid, rid)
-	require.NoError(t, err)
-	require.Equal(t, ref, got)
 }
