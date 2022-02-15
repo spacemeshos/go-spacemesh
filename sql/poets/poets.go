@@ -37,7 +37,7 @@ func Add(db sql.Executor, ref, poet, serviceID []byte, roundID string) error {
 		stmt.BindBytes(4, []byte(roundID))
 	}
 	_, err := db.Exec(`
-		insert into poets (ref, poet, service_id_ round_id) 
+		insert into poets (ref, poet, service_id, round_id) 
 		values (?1, ?2, ?3, ?4);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("exec: %w", err)
