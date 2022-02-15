@@ -1,7 +1,4 @@
-// Package pendingtxs exposes the AccountPendingTxs type, which keeps track of transactions that haven't been applied to
-// global state yet. If also provides projectors that predict an account's nonce and balance after those transactions
-// would be applied.
-package pendingtxs
+package txs
 
 import (
 	"bytes"
@@ -16,23 +13,23 @@ type nanoTx struct {
 	HighestLayerIncludedIn types.LayerID
 }
 
-// AccountPendingTxs indexes the pending transactions (those that are in the mesh, but haven't been applied yet) of a
+// accountPendingTxs indexes the pending transactions (those that are in the mesh, but haven't been applied yet) of a
 // specific account.
-type AccountPendingTxs struct {
+type accountPendingTxs struct {
 	PendingTxs map[uint64]map[types.TransactionID]nanoTx // nonce -> TxID -> nanoTx
 	mu         sync.RWMutex
 }
 
-// NewAccountPendingTxs returns a new, initialized AccountPendingTxs structure.
-func NewAccountPendingTxs() *AccountPendingTxs {
-	return &AccountPendingTxs{
+// newAccountPendingTxs returns a new, initialized accountPendingTxs structure.
+func newAccountPendingTxs() *accountPendingTxs {
+	return &accountPendingTxs{
 		PendingTxs: make(map[uint64]map[types.TransactionID]nanoTx),
 	}
 }
 
 // Add adds transactions to a specific layer. It also updates the highest layer each transaction is included in, if this
 // transaction is already indexed.
-func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction) {
+func (apt *accountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction) {
 	apt.mu.Lock()
 	defer apt.mu.Unlock()
 	for _, tx := range txs {
@@ -52,9 +49,9 @@ func (apt *AccountPendingTxs) Add(layer types.LayerID, txs ...*types.Transaction
 	}
 }
 
-// RemoveAccepted removes a list of accepted transactions from the AccountPendingTxs. Since the given transactions were
+// RemoveAccepted removes a list of accepted transactions from the accountPendingTxs. Since the given transactions were
 // accepted, any other version of the transaction with the same nonce is also discarded.
-func (apt *AccountPendingTxs) RemoveAccepted(accepted []*types.Transaction) {
+func (apt *accountPendingTxs) RemoveAccepted(accepted []*types.Transaction) {
 	apt.mu.Lock()
 	defer apt.mu.Unlock()
 	for _, tx := range accepted {
@@ -62,10 +59,10 @@ func (apt *AccountPendingTxs) RemoveAccepted(accepted []*types.Transaction) {
 	}
 }
 
-// RemoveRejected removes a list of rejected transactions from the AccountPendingTxs, assuming they were rejected in the
+// RemoveRejected removes a list of rejected transactions from the accountPendingTxs, assuming they were rejected in the
 // given layer. If any of the listed transactions also appears in a higher layer than the one given, it will not be
 // removed.
-func (apt *AccountPendingTxs) RemoveRejected(rejected []*types.Transaction, layer types.LayerID) {
+func (apt *accountPendingTxs) RemoveRejected(rejected []*types.Transaction, layer types.LayerID) {
 	apt.mu.Lock()
 	defer apt.mu.Unlock()
 	for _, tx := range rejected {
@@ -82,9 +79,9 @@ func (apt *AccountPendingTxs) RemoveRejected(rejected []*types.Transaction, laye
 	}
 }
 
-// RemoveNonce removes any transaction with the given nonce from AccountPendingTxs. For each transaction removed it also
+// RemoveNonce removes any transaction with the given nonce from accountPendingTxs. For each transaction removed it also
 // calls the given deleteTx function with the corresponding transaction ID.
-func (apt *AccountPendingTxs) RemoveNonce(nonce uint64, deleteTx func(id types.TransactionID)) {
+func (apt *accountPendingTxs) RemoveNonce(nonce uint64, deleteTx func(id types.TransactionID)) {
 	apt.mu.Lock()
 	defer apt.mu.Unlock()
 	for id := range apt.PendingTxs[nonce] {
@@ -93,18 +90,18 @@ func (apt *AccountPendingTxs) RemoveNonce(nonce uint64, deleteTx func(id types.T
 	delete(apt.PendingTxs, nonce)
 }
 
-// GetProjection provides projected nonce and balance after valid transactions in the AccountPendingTxs would be
+// GetProjection provides projected nonce and balance after valid transactions in the accountPendingTxs would be
 // applied. Since determining which transactions are valid depends on the previous nonce and balance, those must be
 // provided.
-func (apt *AccountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonce, balance uint64) {
+func (apt *accountPendingTxs) GetProjection(prevNonce, prevBalance uint64) (nonce, balance uint64) {
 	_, nonce, balance = apt.ValidTxs(prevNonce, prevBalance)
 	return nonce, balance
 }
 
-// ValidTxs provides a list of valid transaction IDs that can be applied from the AccountPendingTxs and a final nonce
+// ValidTxs provides a list of valid transaction IDs that can be applied from the accountPendingTxs and a final nonce
 // and balance if they would be applied. The validity of transactions depends on the previous nonce and balance, so
 // those must be provided.
-func (apt *AccountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []types.TransactionID, nonce, balance uint64) {
+func (apt *accountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []types.TransactionID, nonce, balance uint64) {
 	nonce, balance = prevNonce, prevBalance
 	apt.mu.RLock()
 	defer apt.mu.RUnlock()
@@ -126,7 +123,7 @@ func (apt *AccountPendingTxs) ValidTxs(prevNonce, prevBalance uint64) (txIds []t
 }
 
 // IsEmpty is true if there are no transactions in this object.
-func (apt *AccountPendingTxs) IsEmpty() bool {
+func (apt *accountPendingTxs) IsEmpty() bool {
 	apt.mu.RLock()
 	defer apt.mu.RUnlock()
 	return len(apt.PendingTxs) == 0

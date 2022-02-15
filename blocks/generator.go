@@ -22,6 +22,7 @@ type Generator struct {
 	cfg    RewardConfig
 	atxDB  atxProvider
 	meshDB meshProvider
+	txs    txProvider
 }
 
 func defaultConfig() RewardConfig {
@@ -48,12 +49,13 @@ func WithGeneratorLogger(logger log.Log) GeneratorOpt {
 }
 
 // NewGenerator creates new block generator.
-func NewGenerator(atxDB atxProvider, meshDB meshProvider, opts ...GeneratorOpt) *Generator {
+func NewGenerator(atxDB atxProvider, meshDB meshProvider, txs txProvider, opts ...GeneratorOpt) *Generator {
 	g := &Generator{
 		logger: log.NewNop(),
 		cfg:    defaultConfig(),
 		atxDB:  atxDB,
 		meshDB: meshDB,
+		txs:    txs,
 	}
 	for _, opt := range opts {
 		opt(g)
@@ -98,7 +100,7 @@ func (g *Generator) extractOrderedUniqueTXs(layerID types.LayerID, proposals []*
 		}
 	}
 	types.SortTransactionIDs(txIDs)
-	txs, missing := g.meshDB.GetTransactions(txIDs)
+	txs, missing := g.txs.GetTransactions(txIDs)
 	if len(missing) > 0 {
 		g.logger.Error("could not find transactions %v from layer %v", missing, layerID)
 		return nil, nil, errTXNotFound
