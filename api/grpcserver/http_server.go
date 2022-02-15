@@ -16,15 +16,14 @@ import (
 // JSONHTTPServer is a JSON http server providing the Spacemesh API.
 // It is implemented using a grpc-gateway. See https://github.com/grpc-ecosystem/grpc-gateway .
 type JSONHTTPServer struct {
-	mu       sync.RWMutex
-	Port     int
-	GrpcPort int
-	server   *http.Server
+	mu     sync.RWMutex
+	port   int
+	server *http.Server
 }
 
 // NewJSONHTTPServer creates a new json http server.
 func NewJSONHTTPServer(port int) *JSONHTTPServer {
-	return &JSONHTTPServer{Port: port}
+	return &JSONHTTPServer{port: port}
 }
 
 // Close stops the server.
@@ -103,9 +102,9 @@ func (s *JSONHTTPServer) startInternal(
 		return
 	}
 
-	log.Info("starting grpc gateway server on port %d", s.Port)
+	log.Info("starting grpc gateway server on port %d", s.port)
 	s.setServer(&http.Server{
-		Addr:    fmt.Sprintf(":%d", s.Port),
+		Addr:    fmt.Sprintf(":%d", s.port),
 		Handler: mux,
 	})
 

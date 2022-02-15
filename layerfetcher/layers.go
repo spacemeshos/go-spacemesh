@@ -41,7 +41,7 @@ type proposalHandler interface {
 
 // txHandler is an interface for handling TX data received in sync.
 type txHandler interface {
-	HandleSyncTransaction(data []byte) error
+	HandleSyncTransaction(context.Context, []byte) error
 }
 
 // layerDB is an interface that returns layer data and blocks.
@@ -503,7 +503,7 @@ func (l *Logic) getTxResult(ctx context.Context, hash types.Hash32, data []byte)
 		log.String("hash", hash.ShortString()),
 		log.Int("dataSize", len(data)))
 
-	if err := l.txHandler.HandleSyncTransaction(data); err != nil {
+	if err := l.txHandler.HandleSyncTransaction(ctx, data); err != nil {
 		return fmt.Errorf("handle tx sync data: %w", err)
 	}
 

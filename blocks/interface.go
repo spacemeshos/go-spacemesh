@@ -15,5 +15,8 @@ type atxProvider interface {
 type meshProvider interface {
 	HasBlock(types.BlockID) bool
 	AddBlockWithTXs(context.Context, *types.Block) error
+}
+
+type txProvider interface {
 	GetTransactions([]types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{})
 }
