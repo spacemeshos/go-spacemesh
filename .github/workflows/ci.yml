@@ -39,6 +39,23 @@ jobs:
 
     - name: Push go-spacemesh build to dockerhub
       run: make dockerpush
+
+    - name: Get branch
+      id: vars
+      shell: bash
+      run: |
+        echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        echo "::set-output name=branch_name::$(git rev-parse --abbrev-ref HEAD)"
+
+    - name: Get commit hash
+      id: vars
+      shell: bash
+      run: |
+        echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
+        echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+
+    - name: Push go-spacemesh build to dockerhub
+      run: docker tag go-spacemesh-dev:${{ steps.vars.outputs.branch_name }} spacemeshos/go-spacemesh-dev:${{ steps.vars.outputs.sha_short }} && docker push spacemeshos/go-spacemesh-dev:${{ steps.vars.outputs.sha_short }}
   
     - name: Build tests docker image
       run: cd tests && make docker
@@ -49,12 +66,7 @@ jobs:
     - name: Run tests
       run: cd tests && make run test_name=TestSmeshing
 
-    - name: Get commit hash
-      id: vars
-      shell: bash
-      run: |
-        echo "##[set-output name=branch;]$(echo ${GITHUB_REF#refs/heads/})"
-        echo "::set-output name=sha_short::$(git rev-parse --short HEAD)"
+   
 
     - name: Systemtest result
       run: kubectl get logs systest-${{ steps.vars.outputs.sha_short }}
