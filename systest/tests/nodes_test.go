@@ -41,7 +41,7 @@ func TestAddNodes(t *testing.T) {
 
 	var eg errgroup.Group
 	{
-		collectLayers(tctx, &eg, cl.Client(0), func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+		watchLayers(tctx, &eg, cl.Client(0), func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number >= beforeAdding {
 				tctx.Log.Debugw("adding new smeshers",
 					"n", addedLater,
@@ -58,7 +58,7 @@ func TestAddNodes(t *testing.T) {
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		collectProposals(tctx, &eg, cl.Client(i), func(proposal *spacemeshv1.Proposal) (bool, error) {
+		watchProposals(tctx, &eg, cl.Client(i), func(proposal *spacemeshv1.Proposal) (bool, error) {
 			if proposal.Layer.Number > lastLayer {
 				return false, nil
 			}
@@ -124,7 +124,7 @@ func TestFailedNodes(t *testing.T) {
 	for i := 0; i < cl.Total()-failed; i++ {
 		i := i
 		client := cl.Client(i)
-		collectLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Status == spacemeshv1.Layer_LAYER_STATUS_CONFIRMED {
 				tctx.Log.Debugw("confirmed layer",
 					"client", client.Name,

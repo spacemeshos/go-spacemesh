@@ -45,7 +45,7 @@ func TestPartition(t *testing.T) {
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		collectLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Status == spacemeshv1.Layer_LAYER_STATUS_CONFIRMED {
 				tctx.Log.Debugw("confirmed layer",
 					"client", client.Name,

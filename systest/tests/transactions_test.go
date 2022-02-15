@@ -27,7 +27,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 	for i := 0; i < keys; i++ {
 		client := cl.Client(i % cl.Total())
 		submitter := newTransactionSubmitter(cl.Private(i), receiver, amount, client)
-		collectLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number == stopSending {
 				return false, nil
 			}
@@ -51,7 +51,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		collectLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+		watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 			if layer.Layer.Number.Number == stopWaiting {
 				return false, nil
 			}

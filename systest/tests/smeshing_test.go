@@ -41,7 +41,7 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 	for i := 0; i < cl.Total(); i++ {
 		i := i
 		client := cl.Client(i)
-		collectProposals(ctx, eg, cl.Client(i), func(proposal *spacemeshv1.Proposal) (bool, error) {
+		watchProposals(ctx, eg, cl.Client(i), func(proposal *spacemeshv1.Proposal) (bool, error) {
 			tctx.Log.Debugw("received proposal event",
 				"client", client.Name,
 				"layer", proposal.Layer.Number,
@@ -76,27 +76,31 @@ func testSmeshing(t *testing.T, tctx *testcontext.Context, cl *cluster.Cluster) 
 		}
 	}
 	requireEqualEligibilities(t, created)
-	for layer := range created {
-		sort.Slice(created[layer], func(i, j int) bool {
-			return bytes.Compare(created[layer][i].Smesher.Id, created[layer][j].Smesher.Id) == -1
+	requireEqualProposals(t, created, includedAll)
+	for epoch := range beacons {
+		require.Len(t, beacons[epoch], 1, "epoch=%d", epoch)
+	}
+}
+
+func requireEqualProposals(tb testing.TB, reference map[uint32][]*spacemeshv1.Proposal, received []map[uint32][]*spacemeshv1.Proposal) {
+	tb.Helper()
+	for layer := range reference {
+		sort.Slice(reference[layer], func(i, j int) bool {
+			return bytes.Compare(reference[layer][i].Smesher.Id, reference[layer][j].Smesher.Id) == -1
 		})
 	}
-	for _, included := range includedAll {
+	for _, included := range received {
 		for layer := range included {
 			sort.Slice(included[layer], func(i, j int) bool {
 				return bytes.Compare(included[layer][i].Smesher.Id, included[layer][j].Smesher.Id) == -1
 			})
 		}
-		for layer, proposals := range created {
-			require.Len(t, included[layer], len(proposals))
+		for layer, proposals := range reference {
+			require.Len(tb, included[layer], len(proposals))
 			for i := range proposals {
-				require.Equal(t, proposals[i].Id, included[layer][i].Id,
-					"layer=%d client=%s", layer, cl.Client(i).Name)
+				require.Equal(tb, proposals[i].Id, included[layer][i].Id, "layer=%d", layer)
 			}
 		}
-	}
-	for epoch := range beacons {
-		require.Len(t, beacons[epoch], 1, "epoch=%d", epoch)
 	}
 }
 

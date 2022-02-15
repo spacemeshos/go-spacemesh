@@ -79,7 +79,7 @@ func extractNames(nodes ...*cluster.NodeClient) []string {
 	return rst
 }
 
-func collectLayers(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient,
+func watchLayers(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient,
 	collector func(*spacemeshv1.LayerStreamResponse) (bool, error)) {
 	eg.Go(func() error {
 		meshapi := spacemeshv1.NewMeshServiceClient(client)
@@ -99,7 +99,7 @@ func collectLayers(ctx context.Context, eg *errgroup.Group, client *cluster.Node
 	})
 }
 
-func collectProposals(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient, collector func(*spacemeshv1.Proposal) (bool, error)) {
+func watchProposals(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient, collector func(*spacemeshv1.Proposal) (bool, error)) {
 	eg.Go(func() error {
 		dbg := spacemeshv1.NewDebugServiceClient(client)
 		proposals, err := dbg.ProposalsStream(ctx, &empty.Empty{})
@@ -124,7 +124,7 @@ func prettyHex(buf []byte) string {
 
 func scheduleChaos(ctx context.Context, eg *errgroup.Group, client *cluster.NodeClient, from, to uint32, action func(context.Context) (chaos.Teardown, error)) {
 	var teardown chaos.Teardown
-	collectLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+	watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 		if layer.Layer.Number.Number == from && teardown == nil {
 			var err error
 			teardown, err = action(ctx)
