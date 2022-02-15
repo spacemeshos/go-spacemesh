@@ -8,7 +8,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-func TestGetPoET(t *testing.T) {
+func TestGet(t *testing.T) {
 	db := sql.InMemory()
 
 	refs := [][]byte{
@@ -40,16 +40,16 @@ func TestGetPoET(t *testing.T) {
 	}
 
 	for i := range proofs {
-		proof, err := GetPoET(db, refs[i])
+		proof, err := Get(db, refs[i])
 		require.NoError(t, err)
 		require.Equal(t, proofs[i], proof)
 	}
 
-	_, err := GetPoET(db, []byte("ref0"))
+	_, err := Get(db, []byte("ref0"))
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
-func TestAddPoET(t *testing.T) {
+func TestAdd(t *testing.T) {
 	db := sql.InMemory()
 
 	ref := []byte("ref0")
@@ -57,13 +57,13 @@ func TestAddPoET(t *testing.T) {
 	sid := []byte("sid0")
 	rid := "rid0"
 
-	_, err := GetPoET(db, ref)
+	_, err := Get(db, ref)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 
 	require.NoError(t, Add(db, ref, poet, sid, rid))
 	require.ErrorIs(t, Add(db, ref, poet, sid, rid), sql.ErrObjectExists)
 
-	got, err := GetPoET(db, ref)
+	got, err := Get(db, ref)
 	require.NoError(t, err)
 	require.Equal(t, poet, got)
 }

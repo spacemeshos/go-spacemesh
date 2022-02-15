@@ -6,8 +6,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
-// GetPoET gets a PoET for a given ref.
-func GetPoET(db sql.Executor, ref []byte) (poet []byte, err error) {
+// Get gets a PoET for a given ref.
+func Get(db sql.Executor, ref []byte) (poet []byte, err error) {
 	enc := func(stmt *sql.Statement) {
 		stmt.BindBytes(1, ref)
 	}
@@ -69,9 +69,4 @@ func GetRef(db sql.Executor, poetID []byte, roundID string) (ref []byte, err err
 	}
 
 	return ref, nil
-}
-
-// GetBlob loads PoET as an encoded blob, ready to be sent over the wire.
-func GetBlob(db sql.Executor, ref []byte) (poet []byte, err error) {
-	return GetPoET(db, ref)
 }

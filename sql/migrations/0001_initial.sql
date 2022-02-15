@@ -95,6 +95,6 @@ CREATE TABLE poets
     poet       BLOB,
     service_id VARCHAR,
     round_id   VARCHAR
-) WITHOUT ROWID;
+);
 
 CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);

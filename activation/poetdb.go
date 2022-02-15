@@ -156,7 +156,7 @@ func (db *PoetDb) publishProofRef(key poetProofKey, poetProofRef []byte) {
 
 // GetProofMessage returns the originally received PoET proof message.
 func (db *PoetDb) GetProofMessage(proofRef []byte) ([]byte, error) {
-	proof, err := poets.GetPoET(db.sqlDB, proofRef)
+	proof, err := poets.Get(db.sqlDB, proofRef)
 	if err != nil {
 		return proof, fmt.Errorf("get proof from store: %w", err)
 	}
@@ -224,12 +224,11 @@ func newPoETFetcherDB(db *PoetDb) *PoETFetcher {
 }
 
 // PoETFetcher is an adapter of SQLite implementation to legacy LevelDB interfaces.
-// TODO(nkryuchkov): Remove when transition to SQLite is finished.
 type PoETFetcher struct {
 	DB *PoetDb
 }
 
 // Get gets an PoET as bytes by an PoET ID as bytes.
 func (f *PoETFetcher) Get(key []byte) ([]byte, error) {
-	return poets.GetBlob(f.DB.sqlDB, key)
+	return poets.Get(f.DB.sqlDB, key)
 }

@@ -569,7 +569,6 @@ func newATXFetcherDB(db *DB) *ATXFetcher {
 }
 
 // ATXFetcher is an adapter of SQLite implementation to legacy LevelDB interfaces.
-// TODO(nkryuchkov): Remove when transition to SQLite is finished.
 type ATXFetcher struct {
 	DB *DB
 }
