@@ -160,3 +160,10 @@ func waitAll(tctx *testcontext.Context, cl *cluster.Cluster) error {
 	}
 	return eg.Wait()
 }
+
+func min(i, j int) int {
+	if i < j {
+		return i
+	}
+	return j
+}

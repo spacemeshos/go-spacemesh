@@ -29,14 +29,16 @@ func TestAddNodes(t *testing.T) {
 		// after beacon computed - node will build proposals
 		fullyJoined = beforeAdding + 16
 		lastLayer   = fullyJoined + 10
+
+		addedLater = 2
 	)
 
 	cl := cluster.New(tctx)
+	total := min(tctx.ClusterSize, 30)
 
 	require.NoError(t, cl.AddBootnodes(tctx, 2))
 	require.NoError(t, cl.AddPoet(tctx))
-	addedLater := int(0.2 * float64(tctx.ClusterSize))
-	require.NoError(t, cl.AddSmeshers(tctx, tctx.ClusterSize-2-addedLater))
+	require.NoError(t, cl.AddSmeshers(tctx, total-2-addedLater))
 
 	var eg errgroup.Group
 	{
