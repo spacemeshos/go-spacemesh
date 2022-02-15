@@ -41,7 +41,7 @@ jobs:
       run: cd tests && make docker
 
     - name: Build docker
-      run: make push
+      run: cd tests && make push
     
     # - name: 'Delete Node Pool'
     #   run: 'yes | gcloud container node-pools delete ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --zone=${{ secrets.CI_ZONE_NAME }}'
