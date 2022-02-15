@@ -34,7 +34,7 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 	return m.recorder
 }
 
-// AddTxToMempool mocks base method.
+// AddTxToMemPool mocks base method.
 func (m *MockconservativeState) AddTxToMemPool(tx *types.Transaction, checkValidity bool) error {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "AddTxToMemPool", tx, checkValidity)
@@ -42,8 +42,8 @@ func (m *MockconservativeState) AddTxToMemPool(tx *types.Transaction, checkValid
 	return ret0
 }
 
-// AddTxToMempool indicates an expected call of AddTxToMempool.
-func (mr *MockconservativeStateMockRecorder) AddTxToMempool(tx, checkValidity interface{}) *gomock.Call {
+// AddTxToMemPool indicates an expected call of AddTxToMemPool.
+func (mr *MockconservativeStateMockRecorder) AddTxToMemPool(tx, checkValidity interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTxToMemPool", reflect.TypeOf((*MockconservativeState)(nil).AddTxToMemPool), tx, checkValidity)
 }

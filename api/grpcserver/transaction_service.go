@@ -84,8 +84,8 @@ func (s TransactionService) SubmitTransaction(ctx context.Context, in *pb.Submit
 // we just return all nils.
 func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (*types.Transaction, pb.TransactionState_TransactionState) {
 	var state pb.TransactionState_TransactionState
-	tx, err := s.conState.GetMeshTransaction(txID) // have we seen this transaction in a block?
-	if err != nil {                                // we don't know this transaction
+	tx, err := s.conState.GetMeshTransaction(txID)
+	if err != nil {
 		return nil, state
 	}
 	switch tx.State {

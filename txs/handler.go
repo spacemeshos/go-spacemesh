@@ -18,7 +18,7 @@ var (
 	errMalformedMsg      = errors.New("malformed tx")
 	errAddrNotExtracted  = errors.New("address not extracted")
 	errAddrNotFound      = errors.New("address not found")
-	errRejectedByMempool = errors.New("rejected by mempool")
+	errRejectedByMemPool = errors.New("rejected by mempool")
 )
 
 // TxHandler handles the transactions received via gossip or sync.
@@ -74,7 +74,7 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 
 	if err := th.state.AddTxToMemPool(tx, true); err != nil {
 		th.logger.WithContext(ctx).Warning("failed to add tx to mempool", tx.ID(), log.Err(err))
-		return errRejectedByMempool
+		return errRejectedByMemPool
 	}
 
 	return nil

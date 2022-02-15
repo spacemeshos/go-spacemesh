@@ -845,7 +845,6 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewGatewayService(app.host))
 	}
 	if apiConf.StartGlobalStateService {
-		// registerService(grpcserver.NewGlobalStateService(app.mesh, app.txPool))
 		registerService(grpcserver.NewGlobalStateService(app.mesh, app.conState))
 	}
 	if apiConf.StartMeshService {
@@ -860,7 +859,6 @@ func (app *App) startAPIServices(ctx context.Context) {
 		registerService(grpcserver.NewSmesherService(app.postSetupMgr, app.atxBuilder))
 	}
 	if apiConf.StartTransactionService {
-		// registerService(grpcserver.NewTransactionService(app.host, app.mesh, app.txPool, app.syncer))
 		registerService(grpcserver.NewTransactionService(app.host, app.mesh, app.conState, app.syncer))
 	}
 

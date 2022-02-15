@@ -26,7 +26,7 @@ func Test_HandleGossipTransaction_Success(t *testing.T) {
 	tx := newTx(t, 3, 10, 1, signer)
 	origin := types.GenerateAddress(signer.PublicKey().Bytes())
 	cstate.EXPECT().AddressExists(origin).Return(true).Times(1)
-	cstate.EXPECT().AddTxToMempool(gomock.Any(), true).DoAndReturn(
+	cstate.EXPECT().AddTxToMemPool(gomock.Any(), true).DoAndReturn(
 		func(got *types.Transaction, check bool) error {
 			assert.Equal(t, tx.ID(), got.ID()) // causing ID to be calculated
 			assert.Equal(t, tx, got)
@@ -95,7 +95,7 @@ func Test_handleTransaction_AddressNotFound(t *testing.T) {
 	assert.ErrorIs(t, got, errAddrNotFound)
 }
 
-func Test_handleTransaction_FailedMempool(t *testing.T) {
+func Test_handleTransaction_FailedMemPool(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cstate := mocks.NewMockconservativeState(ctrl)
 	th := NewTxHandler(cstate, logtest.New(t))
@@ -105,7 +105,7 @@ func Test_handleTransaction_FailedMempool(t *testing.T) {
 	origin := types.GenerateAddress(signer.PublicKey().Bytes())
 	cstate.EXPECT().AddressExists(origin).Return(true).Times(1)
 	errUnknown := errors.New("unknown")
-	cstate.EXPECT().AddTxToMempool(gomock.Any(), true).DoAndReturn(
+	cstate.EXPECT().AddTxToMemPool(gomock.Any(), true).DoAndReturn(
 		func(got *types.Transaction, check bool) error {
 			assert.Equal(t, tx.ID(), got.ID()) // causing ID to be calculated
 			assert.Equal(t, tx, got)
@@ -116,7 +116,7 @@ func Test_handleTransaction_FailedMempool(t *testing.T) {
 	require.NoError(t, err)
 
 	got := th.handleTransaction(context.TODO(), msg)
-	assert.ErrorIs(t, got, errRejectedByMempool)
+	assert.ErrorIs(t, got, errRejectedByMemPool)
 }
 
 func Test_HandleSyncTransaction_Success(t *testing.T) {
@@ -126,7 +126,7 @@ func Test_HandleSyncTransaction_Success(t *testing.T) {
 
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, 1, signer)
-	cstate.EXPECT().AddTxToMempool(gomock.Any(), false).DoAndReturn(
+	cstate.EXPECT().AddTxToMemPool(gomock.Any(), false).DoAndReturn(
 		func(got *types.Transaction, check bool) error {
 			assert.Equal(t, tx.ID(), got.ID()) // causing ID to be calculated
 			assert.Equal(t, tx, got)
@@ -154,7 +154,7 @@ func Test_HandleSyncTransaction_BadSignature(t *testing.T) {
 	assert.ErrorIs(t, got, errAddrNotExtracted)
 }
 
-func Test_HandleSyncTransaction_FailedMempool(t *testing.T) {
+func Test_HandleSyncTransaction_FailedMemPool(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	cstate := mocks.NewMockconservativeState(ctrl)
 	th := NewTxHandler(cstate, logtest.New(t))
@@ -162,7 +162,7 @@ func Test_HandleSyncTransaction_FailedMempool(t *testing.T) {
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, 1, signer)
 	errUnknown := errors.New("unknown")
-	cstate.EXPECT().AddTxToMempool(gomock.Any(), false).DoAndReturn(
+	cstate.EXPECT().AddTxToMemPool(gomock.Any(), false).DoAndReturn(
 		func(got *types.Transaction, check bool) error {
 			assert.Equal(t, tx.ID(), got.ID()) // causing ID to be calculated
 			assert.Equal(t, tx, got)
