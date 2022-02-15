@@ -82,12 +82,13 @@ func decodeTransaction(id types.TransactionID, stmt *sql.Statement) (*types.Mesh
 		Transaction: tx,
 		LayerID:     lid,
 		BlockID:     bid,
+		State:       types.TXState(stmt.ColumnInt(4)),
 	}, nil
 }
 
 // Get transaction from database.
 func Get(db sql.Executor, id types.TransactionID) (tx *types.MeshTransaction, err error) {
-	if rows, err := db.Exec("select tx, layer, block, origin from transactions where id = ?1",
+	if rows, err := db.Exec("select tx, layer, block, origin, status from transactions where id = ?1",
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id.Bytes())
 		}, func(stmt *sql.Statement) bool {
@@ -178,7 +179,7 @@ func FilterByDestination(db sql.Executor, from, to types.LayerID, address types.
 // FilterByAddress finds all transactions for an address.
 func FilterByAddress(db sql.Executor, from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	return filter(db, `select tx, layer, block, origin, id from transactions
-	where origin = ?1 or destination = ?1 and layer >= ?2 and layer <= ?3 and status != ?4`, func(stmt *sql.Statement) {
+	where (origin = ?1 or destination = ?1) and layer >= ?2 and layer <= ?3 and status != ?4`, func(stmt *sql.Statement) {
 		stmt.BindBytes(1, address[:])
 		stmt.BindInt64(2, int64(from.Value))
 		stmt.BindInt64(3, int64(to.Value))

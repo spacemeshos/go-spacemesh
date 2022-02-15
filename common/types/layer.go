@@ -76,7 +76,7 @@ func InitGenesisData() {
 		},
 		blockID: GenesisBlockID,
 	}
-	genesisLayer = NewExistingLayer(GetEffectiveGenesis(), []*Ballot{ballot}, []*Block{block})
+	genesisLayer = NewExistingLayer(GetEffectiveGenesis(), Hash32{}, []*Ballot{ballot}, []*Block{block})
 }
 
 // GetEffectiveGenesis returns when actual proposals would be created.
@@ -247,6 +247,7 @@ func (id NodeID) Field() log.Field { return log.String("node_id", id.Key) }
 // Layer contains a list of proposals and their corresponding LayerID.
 type Layer struct {
 	index   LayerID
+	hash    Hash32
 	ballots []*Ballot
 	blocks  []*Block
 }
@@ -284,10 +285,7 @@ func (l *Layer) BallotIDs() []BallotID {
 
 // Hash returns the 32-byte sha256 sum of the block IDs in this layer, sorted in lexicographic order.
 func (l Layer) Hash() Hash32 {
-	if len(l.blocks) == 0 {
-		return EmptyLayerHash
-	}
-	return CalcBlocksHash32(SortBlockIDs(l.BlocksIDs()), nil)
+	return l.hash
 }
 
 // AddBallot adds a ballot to this layer. Panics if the ballot's index doesn't match the layer.
@@ -317,9 +315,10 @@ func (l *Layer) SetBlocks(blocks []*Block) {
 }
 
 // NewExistingLayer returns a new layer with the given list of blocks without validation.
-func NewExistingLayer(idx LayerID, ballots []*Ballot, blocks []*Block) *Layer {
+func NewExistingLayer(idx LayerID, hash Hash32, ballots []*Ballot, blocks []*Block) *Layer {
 	return &Layer{
 		index:   idx,
+		hash:    hash,
 		ballots: ballots,
 		blocks:  blocks,
 	}

@@ -5,7 +5,7 @@ CREATE TABLE blocks
     validity SMALL INT,
     block    BLOB
 );
-CREATE INDEX blocks_by_layer ON blocks (layer);
+CREATE INDEX blocks_by_layer ON blocks (layer,id asc);
 
 CREATE TABLE ballots
 (

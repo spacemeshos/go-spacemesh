@@ -33,6 +33,7 @@ type testGenerator struct {
 	ctrl      *gomock.Controller
 	mockMesh  *mocks.MockmeshProvider
 	mockATXDB *mocks.MockatxProvider
+	mockTXs   *mocks.MocktxProvider
 }
 
 func createTestGenerator(t *testing.T) *testGenerator {
@@ -41,8 +42,9 @@ func createTestGenerator(t *testing.T) *testGenerator {
 		ctrl:      ctrl,
 		mockMesh:  mocks.NewMockmeshProvider(ctrl),
 		mockATXDB: mocks.NewMockatxProvider(ctrl),
+		mockTXs:   mocks.NewMocktxProvider(ctrl),
 	}
-	tg.Generator = NewGenerator(tg.mockATXDB, tg.mockMesh, WithGeneratorLogger(logtest.New(t)), WithConfig(testConfig()))
+	tg.Generator = NewGenerator(tg.mockATXDB, tg.mockMesh, tg.mockTXs, WithGeneratorLogger(logtest.New(t)), WithConfig(testConfig()))
 	return tg
 }
 
@@ -60,11 +62,6 @@ func createTransactions(t testing.TB, numOfTxs int) (uint64, []types.Transaction
 		txIDs = append(txIDs, tx.ID())
 	}
 	return totalFee, txIDs, txs
-}
-
-type smesher struct {
-	addr   types.Address
-	nodeID types.NodeID
 }
 
 func createProposalsWithOverlappingTXs(t *testing.T, layerID types.LayerID, numProposals int, txIDs []types.TransactionID) (
@@ -132,7 +129,7 @@ func Test_GenerateBlock(t *testing.T) {
 	numProposals := 10
 	totalFees, txIDs, txs := createTransactions(t, numTXs)
 	atxs, proposals := createProposalsWithOverlappingTXs(t, layerID, numProposals, txIDs)
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
+	tg.mockTXs.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
 		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs, nil
@@ -173,7 +170,7 @@ func Test_GenerateBlockStableBlockID(t *testing.T) {
 	numProposals := 10
 	_, txIDs, txs := createTransactions(t, numTXs)
 	atxs, proposals := createProposalsWithOverlappingTXs(t, layerID, numProposals, txIDs)
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
+	tg.mockTXs.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
 		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs, nil
@@ -208,7 +205,7 @@ func Test_GenerateBlock_SameCoinbase(t *testing.T) {
 	atx2, proposal2 := createProposalATXWithCoinbase(t, layerID, txIDs[400:], signer)
 	require.Equal(t, atx1, atx2)
 
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
+	tg.mockTXs.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
 		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs, nil
@@ -249,7 +246,7 @@ func Test_GenerateBlock_EmptyATXID(t *testing.T) {
 	types.SortProposals(proposals)
 	proposals[numProposals-1].AtxID = *types.EmptyATXID
 
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
+	tg.mockTXs.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
 		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs, nil
@@ -271,7 +268,7 @@ func Test_GenerateBlock_ATXNotFound(t *testing.T) {
 	numProposals := 10
 	_, txIDs, txs := createTransactions(t, numTXs)
 	atxs, proposals := createProposalsWithOverlappingTXs(t, layerID, numProposals, txIDs)
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
+	tg.mockTXs.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
 		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs, nil
@@ -297,7 +294,7 @@ func Test_GenerateBlock_TXNotFound(t *testing.T) {
 	numProposals := 10
 	_, txIDs, txs := createTransactions(t, numTXs)
 	_, proposals := createProposalsWithOverlappingTXs(t, layerID, numProposals, txIDs)
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
+	tg.mockTXs.EXPECT().GetTransactions(gomock.Any()).DoAndReturn(
 		func(got []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
 			assert.ElementsMatch(t, got, txIDs)
 			return txs[1:], map[types.TransactionID]struct{}{txs[0].ID(): {}}
@@ -310,7 +307,7 @@ func Test_GenerateBlock_TXNotFound(t *testing.T) {
 func Test_GenerateBlock_MultipleEligibilities(t *testing.T) {
 	tg := createTestGenerator(t)
 	fee, ids, txs := createTransactions(t, 1000)
-	tg.mockMesh.EXPECT().GetTransactions(gomock.Any()).Return(txs, nil).Times(1)
+	tg.mockTXs.EXPECT().GetTransactions(gomock.Any()).Return(txs, nil).Times(1)
 	header := &types.ActivationTxHeader{}
 	header.SetID(&types.ATXID{1, 1, 1})
 

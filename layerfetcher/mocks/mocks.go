@@ -187,17 +187,17 @@ func (m *MocktxHandler) EXPECT() *MocktxHandlerMockRecorder {
 }
 
 // HandleSyncTransaction mocks base method.
-func (m *MocktxHandler) HandleSyncTransaction(data []byte) error {
+func (m *MocktxHandler) HandleSyncTransaction(arg0 context.Context, arg1 []byte) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "HandleSyncTransaction", data)
+	ret := m.ctrl.Call(m, "HandleSyncTransaction", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
 // HandleSyncTransaction indicates an expected call of HandleSyncTransaction.
-func (mr *MocktxHandlerMockRecorder) HandleSyncTransaction(data interface{}) *gomock.Call {
+func (mr *MocktxHandlerMockRecorder) HandleSyncTransaction(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncTransaction", reflect.TypeOf((*MocktxHandler)(nil).HandleSyncTransaction), data)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HandleSyncTransaction", reflect.TypeOf((*MocktxHandler)(nil).HandleSyncTransaction), arg0, arg1)
 }
 
 // MocklayerDB is a mock of layerDB interface.

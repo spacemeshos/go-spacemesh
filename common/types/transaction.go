@@ -168,11 +168,32 @@ func SortTransactionIDs(ids []TransactionID) []TransactionID {
 	return ids
 }
 
+// TXState describes the state of a transaction.
+type TXState int
+
+const (
+	// PENDING represents the state when a transaction is in a proposal or a not-applied block.
+	PENDING TXState = iota
+	// APPLIED represents the state when a transaction is applied to the state.
+	APPLIED
+	// DELETED represents the state when a transaction is re-inserted into mempool
+	// NOTE(dshulyak) transaction is marked as deleted, instead of deleting it
+	// to avoid problems with data availability until we handle it properly.
+	DELETED
+
+	// only PENDING/APPLIED/DELETED are represented in the DB currently.
+	// TODO: change to the states described in https://github.com/spacemeshos/go-spacemesh/issues/3094
+
+	// MEMPOOL represents the state when a transaction is in mempool.
+	MEMPOOL
+)
+
 // MeshTransaction is stored in the mesh and included in the block.
 type MeshTransaction struct {
 	Transaction
 	LayerID LayerID
 	BlockID BlockID
+	State   TXState
 }
 
 // InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).
