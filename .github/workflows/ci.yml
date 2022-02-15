@@ -11,19 +11,20 @@ jobs:
     - uses: actions/checkout@master
     - name: generate RANDOM unique variable based on timestamp
       run: echo RANDOM=test-$(date +%s) >> $GITHUB_ENV
+    
     - id: 'auth'
       uses: 'google-github-actions/auth@v0'
       with:
         # GCP_CREDENTIALS is minified JSON of service account
         credentials_json: '${{ secrets.GCP_CREDENTIALS }}'
 
-    - name: 'Set up Cloud SDK'
+    - name: Configure gcloud
       uses: 'google-github-actions/setup-gcloud@v0'
 
     # - name: 'Create Node Pool'
     #   run: 'gcloud container node-pools create ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --num-nodes=1 --zone=${{ secrets.CI_ZONE_NAME }} --machine-type=n1-standard-16'
 
-    - name: kubectl - Google Cloud GKE cluster.
+    - name: Configure kubectl
       uses: ameydev/gke-kubectl-action@master
       env:
         PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
@@ -45,6 +46,9 @@ jobs:
 
     - name: Push docker
       run: cd tests && make push
+
+    - name: Run tests
+      run: make run test_name=TestSmeshing
     
     # - name: 'Delete Node Pool'
     #   run: 'yes | gcloud container node-pools delete ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --zone=${{ secrets.CI_ZONE_NAME }}'
