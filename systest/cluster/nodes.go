@@ -226,8 +226,8 @@ func waitSmesher(tctx *testcontext.Context, name string) (*NodeClient, error) {
 			grpc.WithInsecure(),
 			grpc.WithBlock(),
 			grpc.WithKeepaliveParams(keepalive.ClientParameters{
-				Time:                10 * time.Second,
-				Timeout:             10 * time.Second,
+				Time:                time.Minute,
+				Timeout:             3 * time.Minute,
 				PermitWithoutStream: true,
 			}),
 		)
