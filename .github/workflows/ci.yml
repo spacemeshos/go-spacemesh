@@ -1,5 +1,9 @@
 name: CI
 
+env:
+  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+  DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
+
 on:  
   push:
     branches:
@@ -25,17 +29,6 @@ jobs:
     #   run: 'gcloud container node-pools create ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --num-nodes=1 --zone=${{ secrets.CI_ZONE_NAME }} --machine-type=n1-standard-16'
 
     - name: Configure kubectl
-      uses: ameydev/gke-kubectl-action@master
-      env:
-        PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-        #Run command: base64 ~/<account_id>.json
-        APPLICATION_CREDENTIALS: ${{ secrets.GOOGLE_APPLICATION_CREDENTIALS }}
-        CLUSTER_NAME: ${{ secrets.CI_CLUSTER_NAME }}
-        ZONE_NAME: ${{ secrets.CI_ZONE_NAME }}
-      with:
-        args: get pods
-
-    - name: Configure kubectl
       run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --zone ${{ secrets.CI_ZONE_NAME }} --project ${{ secrets.GCP_PROJECT_ID }}
 
     - name: Login to Docker Hub
@@ -43,11 +36,14 @@ jobs:
       with:
         username: ${{ secrets.DOCKER_USERNAME }}
         password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Push go-spacemesh build to dockerhub
+      run: make dockerpush
   
-    - name: Build docker
+    - name: Build tests docker image
       run: cd tests && make docker
 
-    - name: Push docker
+    - name: Push tests docker images
       run: cd tests && make push
 
     - name: Run tests
