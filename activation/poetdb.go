@@ -85,8 +85,14 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 		return fmt.Errorf("failed to get poet proof message reference: %v", err)
 	}
 
-	if err := db.storeProofInSQLDB(proofMessage, ref); err != nil {
-		return err
+	messageBytes, err := types.InterfaceToBytes(proofMessage)
+	if err != nil {
+		return fmt.Errorf("could not marshal proof message: %v", err)
+	}
+
+	if err := poets.Add(db.sqlDB, ref, messageBytes, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
+		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %v",
+			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
 
 	db.log.With().Info("stored poet proof",
@@ -97,20 +103,6 @@ func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
 
 	key := makeKey(proofMessage.PoetServiceID, proofMessage.RoundID)
 	db.publishProofRef(key, ref)
-
-	return nil
-}
-
-func (db *PoetDb) storeProofInSQLDB(proofMessage *types.PoetProofMessage, ref []byte) error {
-	messageBytes, err := types.InterfaceToBytes(proofMessage)
-	if err != nil {
-		return fmt.Errorf("could not marshal proof message: %v", err)
-	}
-
-	if err := poets.Add(db.sqlDB, ref, messageBytes, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
-		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %v",
-			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
-	}
 
 	return nil
 }
