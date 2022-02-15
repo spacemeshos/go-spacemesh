@@ -6,7 +6,7 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 
 type conservativeState interface {
 	AddressExists(addr types.Address) bool
-	AddTxToMempool(tx *types.Transaction, checkValidity bool) error
+	AddTxToMemPool(tx *types.Transaction, checkValidity bool) error
 }
 
 type svmState interface {

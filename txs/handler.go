@@ -72,7 +72,7 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 		return errAddrNotFound
 	}
 
-	if err := th.state.AddTxToMempool(tx, true); err != nil {
+	if err := th.state.AddTxToMemPool(tx, true); err != nil {
 		th.logger.WithContext(ctx).Warning("failed to add tx to mempool", tx.ID(), log.Err(err))
 		return errRejectedByMempool
 	}
@@ -96,7 +96,7 @@ func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) err
 		th.logger.WithContext(ctx).Error("failed to calculate sync tx origin", tx.ID(), log.Err(err))
 		return errAddrNotExtracted
 	}
-	if err := th.state.AddTxToMempool(&tx, false); err != nil {
+	if err := th.state.AddTxToMemPool(&tx, false); err != nil {
 		th.logger.WithContext(ctx).Error("failed to add sync tx to mempool", tx.ID(), log.Err(err))
 		return fmt.Errorf("add sync tx to mempool: %w", err)
 	}

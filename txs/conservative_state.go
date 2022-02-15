@@ -3,7 +3,6 @@ package txs
 import (
 	"errors"
 	"fmt"
-	"math/rand"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
@@ -39,38 +38,9 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 	return cs.svmState.GetNonce(addr), cs.svmState.GetBalance(addr)
 }
 
-func getRandIdxs(numOfTxs, spaceSize int) map[uint64]struct{} {
-	idxs := make(map[uint64]struct{})
-	for len(idxs) < numOfTxs {
-		rndInt := rand.Uint64()
-		idx := rndInt % uint64(spaceSize)
-		idxs[idx] = struct{}{}
-	}
-	return idxs
-}
-
 // SelectTXsForProposal picks a specific number of random txs for miner to pack in a proposal.
 func (cs *ConservativeState) SelectTXsForProposal(numOfTxs int) ([]types.TransactionID, []*types.Transaction, error) {
-	txIds, txs, err := cs.pool.getMemPoolCandidates(numOfTxs, cs.getState)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if len(txIds) <= numOfTxs {
-		return txIds, txs, nil
-	}
-
-	var (
-		ret    []types.TransactionID
-		retTXs []*types.Transaction
-	)
-	for idx := range getRandIdxs(numOfTxs, len(txIds)) {
-		// noinspection GoNilness
-		ret = append(ret, txIds[idx])
-		retTXs = append(retTXs, txs[idx])
-	}
-
-	return ret, retTXs, nil
+	return cs.pool.getMemPoolCandidates(numOfTxs, cs.getState)
 }
 
 // GetProjection returns the projected nonce and balance for the address with pending transactions
@@ -95,8 +65,8 @@ func (cs *ConservativeState) validateNonceAndBalance(tx *types.Transaction) erro
 	return nil
 }
 
-// AddTxToMempool adds the provided transaction to the mempool after checking nonce and balance.
-func (cs *ConservativeState) AddTxToMempool(tx *types.Transaction, checkValidity bool) error {
+// AddTxToMemPool adds the provided transaction to the mempool after checking nonce and balance.
+func (cs *ConservativeState) AddTxToMemPool(tx *types.Transaction, checkValidity bool) error {
 	if checkValidity {
 		// brand new TX
 		if err := cs.validateNonceAndBalance(tx); err != nil {
@@ -143,7 +113,7 @@ func (cs *ConservativeState) ReinsertTxsToMemPool(ids []types.TransactionID) err
 		if tx, err := cs.GetMeshTransaction(id); err != nil {
 			cs.logger.With().Error("failed to find tx", id)
 		} else if tx.State != types.MEMPOOL {
-			if err = cs.AddTxToMempool(&tx.Transaction, false); err == nil {
+			if err = cs.AddTxToMemPool(&tx.Transaction, false); err == nil {
 				// We ignore errors here, since they mean that the tx is no longer
 				// valid and we shouldn't re-add it.
 				cs.logger.With().Debug("tx reinserted to mempool", tx.ID())

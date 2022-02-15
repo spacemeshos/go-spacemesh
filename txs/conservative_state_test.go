@@ -1,7 +1,6 @@
 package txs
 
 import (
-	"encoding/binary"
 	"errors"
 	"math/rand"
 	"testing"
@@ -69,6 +68,39 @@ func writeToDB(t *testing.T, db *sql.Database, lid types.LayerID, bid types.Bloc
 	require.NoError(t, transactions.Add(db, lid, bid, tx))
 }
 
+func writeToMemPool(t *testing.T, cs *ConservativeState, tx *types.Transaction) {
+	t.Helper()
+	require.NoError(t, cs.AddTxToMemPool(tx, false))
+}
+
+func addBatchToMemPool(t *testing.T, cs *ConservativeState, numTXs int) ([]types.TransactionID, []*types.Transaction) {
+	t.Helper()
+	ids := make([]types.TransactionID, 0, numTXs)
+	txs := make([]*types.Transaction, 0, numTXs)
+	for i := 0; i < numTXs; i++ {
+		signer := signing.NewEdSigner()
+		tx := newTx(t, 1, amount, fee, signer)
+		writeToMemPool(t, cs, tx)
+		ids = append(ids, tx.ID())
+		txs = append(txs, tx)
+	}
+	return ids, txs
+}
+
+func addBatchToDB(t *testing.T, db *sql.Database, lid types.LayerID, bid types.BlockID, numTXs int) ([]types.TransactionID, []*types.Transaction) {
+	t.Helper()
+	ids := make([]types.TransactionID, 0, numTXs)
+	txs := make([]*types.Transaction, 0, numTXs)
+	for i := 0; i < numTXs; i++ {
+		signer := signing.NewEdSigner()
+		tx := newTx(t, 1, amount, fee, signer)
+		writeToDB(t, db, lid, bid, tx)
+		ids = append(ids, tx.ID())
+		txs = append(txs, tx)
+	}
+	return ids, txs
+}
+
 func TestSelectTXsForProposal(t *testing.T) {
 	tcs := createConservativeState(t)
 	numTXs := 2 * numTXsInProposal
@@ -81,7 +113,7 @@ func TestSelectTXsForProposal(t *testing.T) {
 		// all the TXs with nonce 0 are pending in database
 		writeToDB(t, tcs.db, types.NewLayerID(10), types.BlockID{100}, tx1)
 		tx2 := newTx(t, 1, amount, fee, signer)
-		require.NoError(t, tcs.AddTxToMempool(tx2, false))
+		writeToMemPool(t, tcs.ConservativeState, tx2)
 	}
 	ids, txs, err := tcs.SelectTXsForProposal(numTXsInProposal)
 	require.NoError(t, err)
@@ -104,7 +136,7 @@ func TestSelectTXsForProposal_ExhaustMemPool(t *testing.T) {
 		// all the TXs with nonce 0 are pending in database
 		writeToDB(t, tcs.db, types.NewLayerID(10), types.BlockID{100}, tx1)
 		tx2 := newTx(t, 1, amount, fee, signer)
-		require.NoError(t, tcs.AddTxToMempool(tx2, false))
+		writeToMemPool(t, tcs.ConservativeState, tx2)
 	}
 	ids, txs, err := tcs.SelectTXsForProposal(numTXsInProposal)
 	require.NoError(t, err)
@@ -130,7 +162,7 @@ func TestSelectTXsForProposal_SamePrincipal(t *testing.T) {
 	expected := make([]types.TransactionID, 0, numTXsInProposal)
 	for i := 0; i < numTXs; i++ {
 		tx := newTx(t, uint64(numInDBs+i), amount, fee, signer)
-		require.NoError(t, tcs.AddTxToMempool(tx, false))
+		writeToMemPool(t, tcs.ConservativeState, tx)
 		if i < numTXsInProposal {
 			expected = append(expected, tx.ID())
 		}
@@ -138,30 +170,54 @@ func TestSelectTXsForProposal_SamePrincipal(t *testing.T) {
 	ids, txs, err := tcs.SelectTXsForProposal(numTXsInProposal)
 	require.NoError(t, err)
 	checkIDsAndTXsMatch(t, ids, txs, numTXsInProposal)
-	assert.Equal(t, len(expected), len(ids))
-	// FIXME: the randomizing of the mempool TX selection doesn't consider same account nonce order
-	// assert.EqualValues(t, types.SortTransactionIDs(expected), types.SortTransactionIDs(ids))
+	assert.EqualValues(t, types.SortTransactionIDs(expected), types.SortTransactionIDs(ids))
 }
 
-func TestGetRandIdxs(t *testing.T) {
-	seed := []byte("seedseed")
-	rand.Seed(int64(binary.LittleEndian.Uint64(seed)))
-
-	idxs := getRandIdxs(5, 10)
-
-	var idsList []uint64
-	for id := range idxs {
-		idsList = append(idsList, id)
+func TestSelectTXsForProposal_TwoPrincipals(t *testing.T) {
+	const (
+		numInProposal = 100
+		numTXs        = numInProposal * 2
+		numInDBs      = numInProposal
+	)
+	tcs := createConservativeState(t)
+	signer1 := signing.NewEdSigner()
+	addr1 := types.GenerateAddress(signer1.PublicKey().Bytes())
+	signer2 := signing.NewEdSigner()
+	addr2 := types.GenerateAddress(signer2.PublicKey().Bytes())
+	tcs.mSVM.EXPECT().GetBalance(addr1).Return(prevBalance * 100).Times(1)
+	tcs.mSVM.EXPECT().GetNonce(addr1).Return(uint64(0)).Times(1)
+	tcs.mSVM.EXPECT().GetBalance(addr2).Return(prevBalance * 100).Times(1)
+	tcs.mSVM.EXPECT().GetNonce(addr2).Return(uint64(0)).Times(1)
+	for i := 0; i < numInDBs; i++ {
+		tx := newTx(t, uint64(i), amount, fee, signer1)
+		writeToDB(t, tcs.db, types.NewLayerID(10), types.BlockID{100}, tx)
+		tx = newTx(t, uint64(i), amount, fee, signer2)
+		writeToDB(t, tcs.db, types.NewLayerID(10), types.BlockID{100}, tx)
 	}
-	require.ElementsMatch(t, []uint64{0, 1, 4, 6, 7}, idsList)
-
-	idxs = getRandIdxs(5, 10)
-
-	idsList = []uint64{}
-	for id := range idxs {
-		idsList = append(idsList, id)
+	for i := 0; i < numTXs; i++ {
+		tx := newTx(t, uint64(numInDBs+i), amount, fee, signer1)
+		writeToMemPool(t, tcs.ConservativeState, tx)
+		tx = newTx(t, uint64(numInDBs+i), amount, fee, signer2)
+		writeToMemPool(t, tcs.ConservativeState, tx)
 	}
-	require.ElementsMatch(t, []uint64{2, 5, 6, 7, 9}, idsList) // new call -> different indices
+	ids, txs, err := tcs.SelectTXsForProposal(numInProposal)
+	require.NoError(t, err)
+	checkIDsAndTXsMatch(t, ids, txs, numInProposal)
+	// the odds of picking just one principal is 2^100
+	chosen := make(map[types.Address][]*types.Transaction)
+	for _, tx := range txs {
+		chosen[tx.Origin()] = append(chosen[tx.Origin()], tx)
+	}
+	assert.Len(t, chosen, 2)
+	require.Contains(t, chosen, addr1)
+	require.Contains(t, chosen, addr2)
+	// making sure nonce values are in order
+	for i, tx := range chosen[addr1] {
+		require.Equal(t, uint64(i+numInDBs), tx.AccountNonce)
+	}
+	for i, tx := range chosen[addr2] {
+		require.Equal(t, uint64(i+numInDBs), tx.AccountNonce)
+	}
 }
 
 func TestGetProjection(t *testing.T) {
@@ -171,7 +227,7 @@ func TestGetProjection(t *testing.T) {
 	tx1 := newTx(t, nextNonce, amount, fee, signer)
 	writeToDB(t, tcs.db, types.NewLayerID(10), types.BlockID{100}, tx1)
 	tx2 := newTx(t, nextNonce+1, amount, fee, signer)
-	require.NoError(t, tcs.AddTxToMempool(tx2, false))
+	writeToMemPool(t, tcs.ConservativeState, tx2)
 
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	tcs.mSVM.EXPECT().GetBalance(addr).Return(prevBalance).Times(1)
@@ -186,7 +242,7 @@ func TestAddTxToMempool(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
 	tx := newTx(t, uint64(0), amount, fee, signer)
-	assert.NoError(t, tcs.AddTxToMempool(tx, false))
+	assert.NoError(t, tcs.AddTxToMemPool(tx, false))
 	got, err := tcs.GetMeshTransaction(tx.ID())
 	require.NoError(t, err)
 	assert.Equal(t, *tx, got.Transaction)
@@ -200,7 +256,7 @@ func TestAddTxToMempool_CheckValidity(t *testing.T) {
 	tcs.mSVM.EXPECT().GetBalance(addr).Return(prevBalance).Times(1)
 	tcs.mSVM.EXPECT().GetNonce(addr).Return(uint64(0)).Times(1)
 	tx := newTx(t, uint64(0), amount, fee, signer)
-	assert.NoError(t, tcs.AddTxToMempool(tx, true))
+	assert.NoError(t, tcs.AddTxToMemPool(tx, true))
 	got, err := tcs.GetMeshTransaction(tx.ID())
 	require.NoError(t, err)
 	assert.Equal(t, *tx, got.Transaction)
@@ -214,36 +270,8 @@ func TestAddTxToMempool_InsufficientBalance(t *testing.T) {
 	tcs.mSVM.EXPECT().GetBalance(addr).Return(amount).Times(1)
 	tcs.mSVM.EXPECT().GetNonce(addr).Return(uint64(0)).Times(1)
 	tx := newTx(t, uint64(0), amount, fee, signer)
-	err := tcs.AddTxToMempool(tx, true)
+	err := tcs.AddTxToMemPool(tx, true)
 	assert.ErrorIs(t, err, errInsufficientBalance)
-}
-
-func addBatchToMemPool(t *testing.T, cs *ConservativeState, numTXs int) ([]types.TransactionID, []*types.Transaction) {
-	t.Helper()
-	ids := make([]types.TransactionID, 0, numTXs)
-	txs := make([]*types.Transaction, 0, numTXs)
-	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSigner()
-		tx := newTx(t, 1, amount, fee, signer)
-		require.NoError(t, cs.AddTxToMempool(tx, false))
-		ids = append(ids, tx.ID())
-		txs = append(txs, tx)
-	}
-	return ids, txs
-}
-
-func addBatchToDB(t *testing.T, db *sql.Database, lid types.LayerID, bid types.BlockID, numTXs int) ([]types.TransactionID, []*types.Transaction) {
-	t.Helper()
-	ids := make([]types.TransactionID, 0, numTXs)
-	txs := make([]*types.Transaction, 0, numTXs)
-	for i := 0; i < numTXs; i++ {
-		signer := signing.NewEdSigner()
-		tx := newTx(t, 1, amount, fee, signer)
-		writeToDB(t, db, lid, bid, tx)
-		ids = append(ids, tx.ID())
-		txs = append(txs, tx)
-	}
-	return ids, txs
 }
 
 func TestStoreTransactionsFromMemPool(t *testing.T) {
@@ -290,7 +318,7 @@ func TestGetMeshTransaction(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
 	tx := newTx(t, uint64(0), amount, fee, signer)
-	require.NoError(t, tcs.AddTxToMempool(tx, false))
+	writeToMemPool(t, tcs.ConservativeState, tx)
 	mtx, err := tcs.GetMeshTransaction(tx.ID())
 	require.NoError(t, err)
 	assert.Equal(t, types.MEMPOOL, mtx.State)
@@ -303,12 +331,12 @@ func TestGetMeshTransaction(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, types.PENDING, mtx.State)
 
-	tcs.pool.markApplied(tx.ID())
+	require.NoError(t, tcs.pool.markApplied(tx.ID()))
 	mtx, err = tcs.GetMeshTransaction(tx.ID())
 	require.NoError(t, err)
 	assert.Equal(t, types.APPLIED, mtx.State)
 
-	tcs.pool.markDeleted(tx.ID())
+	require.NoError(t, tcs.pool.markDeleted(tx.ID()))
 	mtx, err = tcs.GetMeshTransaction(tx.ID())
 	require.NoError(t, err)
 	assert.Equal(t, types.DELETED, mtx.State)
@@ -354,19 +382,19 @@ func TestGetTransactionsByAddress(t *testing.T) {
 	require.Empty(t, mtxs)
 
 	memtx1 := newTxWthRecipient(t, addr2, uint64(0), amount, fee, signer1)
-	require.NoError(t, tcs.AddTxToMempool(memtx1, false))
+	writeToMemPool(t, tcs.ConservativeState, memtx1)
 	dbtx1 := newTxWthRecipient(t, addr3, uint64(1), amount, fee, signer1)
 	writeToDB(t, tcs.db, types.NewLayerID(5), types.BlockID{11}, dbtx1)
 
 	memtx2 := newTxWthRecipient(t, addr3, uint64(0), amount, fee, signer2)
-	require.NoError(t, tcs.AddTxToMempool(memtx2, false))
+	writeToMemPool(t, tcs.ConservativeState, memtx2)
 	dbtx2 := newTxWthRecipient(t, addr3, uint64(1), amount, fee, signer2)
 	writeToDB(t, tcs.db, types.NewLayerID(6), types.BlockID{12}, dbtx2)
 
-	_, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(4), addr1)
+	// nothing in the range of 1-4
+	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(4), addr1)
 	require.NoError(t, err)
-	// FIXME: this should not fail
-	// require.Empty(t, mtxs)
+	require.Empty(t, mtxs)
 
 	mtxs, err = tcs.GetTransactionsByAddress(types.NewLayerID(1), types.NewLayerID(5), addr1)
 	require.NoError(t, err)

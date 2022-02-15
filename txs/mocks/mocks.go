@@ -35,9 +35,9 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 }
 
 // AddTxToMempool mocks base method.
-func (m *MockconservativeState) AddTxToMempool(tx *types.Transaction, checkValidity bool) error {
+func (m *MockconservativeState) AddTxToMemPool(tx *types.Transaction, checkValidity bool) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddTxToMempool", tx, checkValidity)
+	ret := m.ctrl.Call(m, "AddTxToMemPool", tx, checkValidity)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
@@ -45,7 +45,7 @@ func (m *MockconservativeState) AddTxToMempool(tx *types.Transaction, checkValid
 // AddTxToMempool indicates an expected call of AddTxToMempool.
 func (mr *MockconservativeStateMockRecorder) AddTxToMempool(tx, checkValidity interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTxToMempool", reflect.TypeOf((*MockconservativeState)(nil).AddTxToMempool), tx, checkValidity)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddTxToMemPool", reflect.TypeOf((*MockconservativeState)(nil).AddTxToMemPool), tx, checkValidity)
 }
 
 // AddressExists mocks base method.

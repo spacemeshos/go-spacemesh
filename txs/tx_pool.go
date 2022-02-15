@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math/rand"
 	"sync"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -25,7 +26,7 @@ type txPool struct {
 	db       *sql.Database
 	mu       sync.RWMutex
 	txs      map[types.TransactionID]*types.Transaction
-	accounts map[types.Address]*AccountPendingTxs
+	accounts map[types.Address]*accountPendingTxs
 }
 
 // newTxPool returns a new txPool struct.
@@ -33,7 +34,7 @@ func newTxPool(db *sql.Database) *txPool {
 	return &txPool{
 		db:       db,
 		txs:      make(map[types.TransactionID]*types.Transaction),
-		accounts: make(map[types.Address]*AccountPendingTxs),
+		accounts: make(map[types.Address]*accountPendingTxs),
 	}
 }
 
@@ -72,7 +73,7 @@ func (tp *txPool) addToMemPool(id types.TransactionID, tx *types.Transaction) {
 	tp.txs[id] = tx
 	account, found := tp.accounts[tx.Origin()]
 	if !found {
-		account = NewAccountPendingTxs()
+		account = newAccountPendingTxs()
 		tp.accounts[tx.Origin()] = account
 	}
 	account.Add(types.LayerID{}, tx)
@@ -109,7 +110,7 @@ func (tp *txPool) getDBProjection(addr types.Address, prevNonce, prevBalance uin
 		return prevNonce, prevBalance, nil
 	}
 
-	pending := NewAccountPendingTxs()
+	pending := newAccountPendingTxs()
 	for _, tx := range txs {
 		pending.Add(tx.LayerID, &tx.Transaction)
 	}
@@ -143,6 +144,7 @@ func (tp *txPool) getProjection(addr types.Address, getState func(types.Address)
 
 func (tp *txPool) getMemPoolCandidates(numTXs int, getState func(types.Address) (uint64, uint64)) ([]types.TransactionID, []*types.Transaction, error) {
 	txIDs := make([]types.TransactionID, 0, numTXs)
+	txByPrincipal := make(map[types.Address][]types.TransactionID)
 
 	tp.mu.RLock()
 	defer tp.mu.RUnlock()
@@ -153,13 +155,49 @@ func (tp *txPool) getMemPoolCandidates(numTXs int, getState func(types.Address) 
 		}
 		accountTxIds, _, _ := account.ValidTxs(nonce, balance)
 		txIDs = append(txIDs, accountTxIds...)
+		txByPrincipal[addr] = accountTxIds
 	}
 
 	txs := make([]*types.Transaction, 0, len(txIDs))
 	for _, tx := range txIDs {
 		txs = append(txs, tp.txs[tx])
 	}
-	return txIDs, txs, nil
+
+	if len(txIDs) <= numTXs {
+		return txIDs, txs, nil
+	}
+
+	// randomly select an address and fill the TX in nonce order
+	uniqueAddrs := make([]types.Address, 0, len(txByPrincipal))
+	for addr := range txByPrincipal {
+		uniqueAddrs = append(uniqueAddrs, addr)
+	}
+	var (
+		ret      []types.TransactionID
+		retTXs   []*types.Transaction
+		numAddrs = len(uniqueAddrs)
+	)
+	for len(ret) < numTXs {
+		idx := rand.Uint64() % uint64(numAddrs)
+		addr := uniqueAddrs[idx]
+		if _, ok := txByPrincipal[addr]; !ok {
+			// TXs for this addr is exhausted
+			continue
+		}
+		// take the first tx (the lowest nonce) for this account
+		id := txByPrincipal[addr][0]
+		ret = append(ret, id)
+		retTXs = append(retTXs, tp.txs[id])
+		txByPrincipal[addr] = txByPrincipal[addr][1:]
+		if len(txByPrincipal[addr]) == 0 {
+			delete(txByPrincipal, addr)
+		}
+		if len(txByPrincipal) == 0 {
+			// all addresses are exhausted
+			break
+		}
+	}
+	return ret, retTXs, nil
 }
 
 func (tp *txPool) getFromDB(id types.TransactionID) (*types.MeshTransaction, error) {

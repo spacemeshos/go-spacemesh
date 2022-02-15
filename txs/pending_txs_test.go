@@ -44,7 +44,7 @@ func newSameSignerTx(t *testing.T, nonce, totalAmount, fee uint64) *types.Transa
 func TestNewAccountPendingTxs(t *testing.T) {
 	r := require.New(t)
 
-	pendingTxs := NewAccountPendingTxs()
+	pendingTxs := newAccountPendingTxs()
 	prevNonce := uint64(5)
 	prevBalance := uint64(1000)
 
