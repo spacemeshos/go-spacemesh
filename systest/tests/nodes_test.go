@@ -19,15 +19,15 @@ func TestAddNodes(t *testing.T) {
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 
 	const (
-		epochBeforeJoin = 6
-		lastEpoch       = 8
+		epochBeforeJoin = 5
+		lastEpoch       = 7
 
 		beforeAdding = 12
 		// 4 epochs to fully join:
 		// sync finishes at layer 16
 		// atx published layer 20, in the next epoch node will participate in beacon
 		// after beacon computed - node will build proposals
-		lastLayer = beforeAdding + 24
+		lastLayer = beforeAdding + 20
 
 		addedLater = 2
 	)
