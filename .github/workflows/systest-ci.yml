@@ -1,4 +1,4 @@
-name: Systest
+name: New CI
 
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
