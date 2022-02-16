@@ -1,0 +1,1 @@
+elastic_stateful.yaml, service_headless.yaml, service.yaml, poddisruptionbudget.yaml

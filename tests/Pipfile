@@ -1,0 +1,28 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+decorator = "==4.3.2"
+elasticsearch = ">=6.3.1"
+elasticsearch-dsl = "==6.3.1"
+google-cloud-tasks = "==2.2.0"
+httplib2 = "==0.19.0"
+kubernetes = "==9.0.1"
+oauthlib = "==3.0.1"
+pytest = "==5.2.0"
+pytest-testconfig = "==0.1.1"
+python-dateutil = "==2.7.5"
+pytz = "==2018.9"
+urllib3 = ">=1.26.5"
+requests = ">=2.21.0"
+requests-oauthlib = "==1.2.0"
+toml = "==0.10.0"
+pure25519 = "==0.0.1"
+pyyaml = "==5.4.1"
+
+[requires]
+python_version = "3.8"

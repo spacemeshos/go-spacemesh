@@ -1,0 +1,1 @@
+fluentbit_daemonset.yaml, cluster-rolebinding.yaml, cluster-role.yaml, config.yaml, serviceaccount.yaml

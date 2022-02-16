@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sm-oracle
+  labels:
+    name: oracle
+spec:
+  selector:
+    matchLabels:
+      name: oracle
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        name: oracle
+      annotations:
+        cluster-autoscaler.kubernetes.io/safe-to-evict: 'false'
+    spec:
+      containers:
+      - name: oracle
+        image: spacemeshos/oracle:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 3030
+      nodeSelector:
+        namespace: NAMESPACE
+      tolerations:
+        - key: "namespace"
+          operator: "Equal"
+          value: NAMESPACE
+          effect: "NoSchedule"
