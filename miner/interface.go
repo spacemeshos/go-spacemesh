@@ -16,8 +16,8 @@ type proposalDB interface {
 	AddProposal(context.Context, *types.Proposal) error
 }
 
-type txPool interface {
-	SelectTopNTransactions(numOfTxs int, getState func(addr types.Address) (nonce, balance uint64, err error)) ([]types.TransactionID, []*types.Transaction, error)
+type conservativeState interface {
+	SelectTXsForProposal(int) ([]types.TransactionID, []*types.Transaction, error)
 }
 
 type baseBallotProvider interface {
