@@ -8,6 +8,7 @@ import (
 	"time"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 	apiappsv1 "k8s.io/api/apps/v1"
@@ -101,12 +102,9 @@ func deployPoet(ctx *testcontext.Context, gateways ...string) (string, error) {
 }
 
 func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
 	for {
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
 		pod, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Get(ctx, name, apimetav1.GetOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("read pod %s: %w", name, err)
@@ -116,6 +114,11 @@ func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
 			return nil, fmt.Errorf("pod failed %s", name)
 		case v1.PodRunning:
 			return pod, nil
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
 		}
 	}
 }
@@ -199,13 +202,21 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 	if err != nil {
 		return nil, fmt.Errorf("apply statefulset: %w", err)
 	}
-	var result []*NodeClient
+	result := make([]*NodeClient, replicas)
+	var eg errgroup.Group
 	for i := 0; i < replicas; i++ {
-		nc, err := waitSmesher(ctx, fmt.Sprintf("%s-%d", *sset.Name, i))
-		if err != nil {
-			return nil, err
-		}
-		result = append(result, nc)
+		i := i
+		eg.Go(func() error {
+			nc, err := waitSmesher(ctx, fmt.Sprintf("%s-%d", *sset.Name, i))
+			if err != nil {
+				return err
+			}
+			result[i] = nc
+			return nil
+		})
+	}
+	if eg.Wait(); err != nil {
+		return nil, err
 	}
 	return result, nil
 }
