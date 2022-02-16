@@ -836,7 +836,7 @@ func (app *App) startAPIServices(ctx context.Context) {
 	registerService := func(svc grpcserver.ServiceAPI) {
 		if app.grpcAPIService == nil {
 			logger := app.addLogger(GRPCLogger, app.log).Zap()
-			grpczap.ReplaceGrpcLoggerV2WithVerbosity(logger, 99)
+			grpczap.ReplaceGrpcLoggerV2(logger)
 			app.grpcAPIService = grpcserver.NewServerWithInterface(apiConf.GrpcServerPort, apiConf.GrpcServerInterface,
 				grpcmiddleware.WithStreamServerChain(
 					grpcctxtags.StreamServerInterceptor(),
