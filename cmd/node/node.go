@@ -90,13 +90,8 @@ const (
 	NipostBuilderLogger    = "nipostBuilder"
 	LayerFetcher           = "layerFetcher"
 	TimeSyncLogger         = "timesync"
-<<<<<<< HEAD
-	SVMLogger              = "svm"
-	GRPCLogger             = "grpc"
-=======
 	SVMLogger              = "SVM"
 	ConStateLogger         = "conState"
->>>>>>> develop
 )
 
 // Cmd is the cobra wrapper for the node, that allows adding parameters to it.
