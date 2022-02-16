@@ -34,7 +34,7 @@ var (
 	bootstrapDuration = flag.Duration("bootstrap", 30*time.Second,
 		"bootstrap time is added to the genesis time. it may take longer on cloud environmens due to the additional resource management")
 	clusterSize  = flag.Int("size", 10, "size of the cluster. all test must use at most this number of smeshers")
-	testTimeout  = flag.Duration("test-timeout", 30*time.Minute, "timeout for a single test")
+	testTimeout  = flag.Duration("test-timeout", 60*time.Minute, "timeout for a single test")
 	keep         = flag.Bool("keep", false, "if true cluster will not be removed after test is finished")
 	clusters     = flag.Int("clusters", 1, "controls how many clusters are deployed on k8s")
 	nodeSelector = stringToString{}
