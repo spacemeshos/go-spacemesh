@@ -53,13 +53,13 @@ jobs:
       run: docker tag go-spacemesh-dev:${{ steps.vars.outputs.branch_name }} spacemeshos/go-spacemesh-dev:${{ steps.vars.outputs.sha_short }} && docker push spacemeshos/go-spacemesh-dev:${{ steps.vars.outputs.sha_short }}
   
     - name: Build tests docker image
-      run: cd tests && make docker
+      run: cd systests && make docker
 
     - name: Push tests docker images
-      run: cd tests && make push
+      run: cd systests && make push
 
     - name: Run tests
-      run: cd tests && make run test_name=TestSmeshing
+      run: cd systests && make run test_name=TestSmeshing
 
     - name: Systemtest result
       run: kubectl logs systest-${{ steps.vars.outputs.sha_short }}
