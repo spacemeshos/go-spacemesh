@@ -102,23 +102,26 @@ func deployPoet(ctx *testcontext.Context, gateways ...string) (string, error) {
 }
 
 func waitPod(ctx *testcontext.Context, name string) (*v1.Pod, error) {
-	ticker := time.NewTicker(2 * time.Second)
-	defer ticker.Stop()
+	watcher, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Watch(ctx, apimetav1.ListOptions{
+		FieldSelector: fmt.Sprintf("metadata.name=%s", name),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer watcher.Stop()
 	for {
-		pod, err := ctx.Client.CoreV1().Pods(ctx.Namespace).Get(ctx, name, apimetav1.GetOptions{})
-		if err != nil {
-			return nil, fmt.Errorf("read pod %s: %w", name, err)
+		var pod *v1.Pod
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case ev := <-watcher.ResultChan():
+			pod = ev.Object.(*v1.Pod)
 		}
 		switch pod.Status.Phase {
 		case v1.PodFailed:
 			return nil, fmt.Errorf("pod failed %s", name)
 		case v1.PodRunning:
 			return pod, nil
-		}
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case <-ticker.C:
 		}
 	}
 }
