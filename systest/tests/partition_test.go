@@ -25,10 +25,13 @@ func TestPartition(t *testing.T) {
 		wait      = 50
 	)
 
-	cl, err := cluster.Default(tctx,
+	cl := cluster.New(tctx,
 		cluster.WithSmesherFlag(cluster.RerunInterval(2*time.Minute)),
+		cluster.WithSmesherFlag(cluster.TargetOutbound(3)),
 	)
-	require.NoError(t, err)
+	require.NoError(t, cl.AddBootnodes(tctx, 2))
+	require.NoError(t, cl.AddPoet(tctx))
+	require.NoError(t, cl.AddSmeshers(tctx, smeshers-2))
 
 	hashes := make([]map[uint32]string, cl.Total())
 	for i := 0; i < cl.Total(); i++ {
