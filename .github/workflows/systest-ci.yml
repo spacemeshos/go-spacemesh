@@ -1,4 +1,4 @@
-name: CI
+name: Systest
 
 env:
   DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
@@ -9,7 +9,7 @@ on:
     branches:
       - '*'
 jobs:
-  test-gcp:
+  systest:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@master
