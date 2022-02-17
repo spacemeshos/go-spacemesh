@@ -86,7 +86,7 @@ func TestAddNodes(t *testing.T) {
 			unique[proposal.Epoch.Value][prettyHex(proposal.Smesher.Id)] = struct{}{}
 		}
 	}
-	for epoch := uint64(2) + 1; epoch <= epochBeforeJoin; epoch++ {
+	for epoch := uint64(4); epoch <= epochBeforeJoin; epoch++ {
 		require.Len(t, unique[epoch], cl.Total()-addedLater, "epoch=%d", epoch)
 	}
 	for epoch := uint64(epochBeforeJoin) + 1; epoch <= lastEpoch; epoch++ {
