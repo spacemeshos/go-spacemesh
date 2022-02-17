@@ -71,7 +71,7 @@ func Test_handleTransaction_BadSignature(t *testing.T) {
 
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, 1, signer)
-	copy(tx.Signature[:], types.RandomBytes(64))
+	tx.Signature[63] = 224
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
@@ -146,7 +146,7 @@ func Test_HandleSyncTransaction_BadSignature(t *testing.T) {
 
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, 1, signer)
-	copy(tx.Signature[:], types.RandomBytes(64))
+	tx.Signature[63] = 224
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
