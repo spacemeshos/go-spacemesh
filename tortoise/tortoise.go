@@ -408,23 +408,22 @@ func (t *turtle) getFullVote(ctx context.Context, lid types.LayerID, bid types.B
 	return against, reasonCoinflip, nil
 }
 
-func (t *turtle) markBeaconWithBadBallot(logger log.Log, ballot *types.Ballot) bool {
+func (t *turtle) markBeaconWithBadBallot(logger log.Log, ballot *types.Ballot) error {
 	layerID := ballot.LayerIndex
 
 	// first check if we have it in the cache
 	if _, bad := t.badBeaconBallots[ballot.ID()]; bad {
-		return false
+		return nil
 	}
 
 	epochBeacon, err := t.beacons.GetBeacon(layerID.GetEpoch())
 	if err != nil {
-		logger.With().Error("failed to get beacon for epoch", layerID.GetEpoch(), log.Err(err))
-		return false
+		return err
 	}
 
 	beacon, err := t.getBallotBeacon(ballot, logger)
 	if err != nil {
-		return false
+		return err
 	}
 	good := beacon == epochBeacon
 	if !good {
@@ -435,7 +434,7 @@ func (t *turtle) markBeaconWithBadBallot(logger log.Log, ballot *types.Ballot) b
 			log.String("epoch_beacon", epochBeacon.ShortString()))
 		t.badBeaconBallots[ballot.ID()] = struct{}{}
 	}
-	return good
+	return nil
 }
 
 func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Beacon, error) {
@@ -462,8 +461,6 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Be
 	} else {
 		refBallot, err := t.bdp.GetBallot(refBallotID)
 		if err != nil {
-			logger.With().Error("failed to find ref ballot",
-				log.String("ref_ballot_id", refBallotID.String()))
 			return types.EmptyBeacon, fmt.Errorf("get ref ballot: %w", err)
 		}
 		if refBallot.EpochData == nil {
@@ -642,23 +639,24 @@ func (t *turtle) updateState(ctx context.Context, logger log.Log, lid types.Laye
 	if err != nil {
 		return fmt.Errorf("read blocks for layer %s: %w", lid, err)
 	}
-	for _, block := range blocks {
-		t.onBlock(lid, block)
-	}
-
 	ballots, err := t.bdp.LayerBallots(lid)
 	if err != nil {
 		return fmt.Errorf("read ballots for layer %s: %w", lid, err)
 	}
-	for _, ballot := range ballots {
-		if err := t.onBallot(ballot); err != nil {
-			return err
-		}
-	}
-
 	if err := t.updateLocalVotes(ctx, logger, lid); err != nil {
 		return err
 	}
+
+	for _, block := range blocks {
+		t.onBlock(lid, block)
+	}
+
+	for _, ballot := range ballots {
+		if err := t.onBallot(ballot); err != nil {
+			t.logger.With().Warning("failed to add ballot to the state", log.Err(err), log.Inline(ballot))
+		}
+	}
+
 	// TODO(dshulyak) it should be possible to count votes from every single ballot separately
 	// but may require changes to t.processed and t.updateLocalVotes
 	t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
@@ -685,7 +683,15 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 		return nil
 	}
 
-	baselid := t.ballotLayer[ballot.Votes.Base]
+	if err := t.markBeaconWithBadBallot(t.logger, ballot); err != nil {
+		return err
+	}
+
+	baselid, exist := t.ballotLayer[ballot.Votes.Base]
+	if !exist {
+		return fmt.Errorf("cant decode votes without base ballot %d", ballot.Votes.Base)
+	}
+
 	var ballotWeight weight
 	if !ballot.IsMalicious() {
 		var err error
@@ -699,11 +705,11 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	} else {
 		t.logger.With().Warning("observed malicious ballot", ballot.ID(), ballot.LayerIndex)
 	}
+
+	// all potential errors must be handled before modifying state
+
 	t.ballotLayer[ballot.ID()] = ballot.LayerIndex
 	t.ballots[ballot.LayerIndex] = append(t.ballots[ballot.LayerIndex], ballot.ID())
-
-	// TODO(dshulyak) this should not fail without terminating tortoise
-	t.markBeaconWithBadBallot(t.logger, ballot)
 
 	abstainVotes := map[types.LayerID]struct{}{}
 	for _, lid := range ballot.Votes.Abstain {
@@ -807,7 +813,7 @@ func (t *turtle) addLocalVotes(ctx context.Context, logger log.Log, lid types.La
 				continue
 			}
 			if err != nil {
-				return fmt.Errorf("failed to load contextually validiy for block %s: %w", bid, err)
+				return fmt.Errorf("failed to load contextually validity for block %s: %w", bid, err)
 			}
 			sign := support
 			if !valid {

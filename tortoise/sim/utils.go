@@ -80,6 +80,10 @@ func (b *beaconStore) StoreBeacon(eid types.EpochID, beacon types.Beacon) {
 	b.beacons[eid] = beacon
 }
 
+func (b *beaconStore) Delete(eid types.EpochID) {
+	delete(b.beacons, eid)
+}
+
 func (b *beaconStore) Copy(other *beaconStore) {
 	for eid, beacon := range other.beacons {
 		_, exist := b.beacons[eid]
