@@ -558,7 +558,7 @@ func (app *App) initServices(ctx context.Context,
 		}
 	}
 
-	proposalDB, err := proposals.NewProposalDB(dbStorepath, msh, app.addLogger(ProposalDBLogger, lg))
+	proposalDB, err := proposals.NewProposalDB(sqlDB, msh, app.addLogger(ProposalDBLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create proposal DB: %w", err)
 	}

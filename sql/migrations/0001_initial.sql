@@ -89,6 +89,17 @@ CREATE TABLE atx_top
     layer  INT NOT NULL
 );
 
+CREATE TABLE proposals
+(
+    id        CHAR(20) PRIMARY KEY,
+    ballot_id CHAR(20),
+    layer     INT NOT NULL,
+    tx_ids    BLOB,
+    signature VARCHAR
+);
+
+CREATE INDEX proposals_by_layer ON proposals (layer);
+
 CREATE TABLE poets
 (
     ref        VARCHAR PRIMARY KEY,

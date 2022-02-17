@@ -86,6 +86,11 @@ func (p *Proposal) ID() ProposalID {
 	return p.proposalID
 }
 
+// SetID set the ProposalID.
+func (p *Proposal) SetID(pid ProposalID) {
+	p.proposalID = pid
+}
+
 // MarshalLogObject implements logging interface.
 func (p *Proposal) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("proposal_id", p.ID().String())
