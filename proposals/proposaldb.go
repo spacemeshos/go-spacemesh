@@ -54,10 +54,6 @@ func NewProposalDB(sqlDB *sql.Database, msh meshDB, logger log.Log) (*DB, error)
 	return newDB(withSQLDB(sqlDB), withMeshDB(msh), withLogger(logger)), nil
 }
 
-// Close closes all resources.
-func (db *DB) Close() {
-}
-
 // HasProposal returns true if the database has the Proposal specified by the ProposalID and false otherwise.
 func (db *DB) HasProposal(id types.ProposalID) bool {
 	has, _ := proposals.Has(db.sqlDB, id)

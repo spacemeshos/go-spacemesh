@@ -85,11 +85,9 @@ func (mp *mockProposalProvider) LayerProposals(lyr types.LayerID) ([]*types.Prop
 	for i := 0; i < 200; i++ {
 		id := types.ProposalID{}
 		copy(id[0:], fmt.Sprintf("%d-%d", i, lyr))
-		dbp := types.DBProposal{
-			ID:         id,
-			LayerIndex: lyr,
-		}
-		p := dbp.ToProposal(&types.Ballot{})
+
+		p := &types.Proposal{}
+		p.SetID(id)
 		p.EpochData = &types.EpochData{Beacon: types.BytesToBeacon(lyr.GetEpoch().ToBytes())}
 		s[i] = p
 		mp.allProposals[p.ID()] = p

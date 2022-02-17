@@ -158,26 +158,3 @@ func ProposalIDsToHashes(ids []ProposalID) []Hash32 {
 	}
 	return hashes
 }
-
-// DBProposal is a Proposal structure stored in DB to skip signature verification.
-type DBProposal struct {
-	// NOTE(dshulyak) this is a bit redundant to store ID here as well but less likely
-	// to break if in future key for database will be changed
-	ID         ProposalID
-	BallotID   BallotID
-	LayerIndex LayerID
-	TxIDs      []TransactionID
-	Signature  []byte
-}
-
-// ToProposal creates a Proposal from data that is stored locally.
-func (b *DBProposal) ToProposal(ballot *Ballot) *Proposal {
-	return &Proposal{
-		InnerProposal: InnerProposal{
-			Ballot: *ballot,
-			TxIDs:  b.TxIDs,
-		},
-		Signature:  b.Signature,
-		proposalID: b.ID,
-	}
-}
