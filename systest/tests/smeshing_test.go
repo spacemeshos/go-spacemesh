@@ -89,16 +89,16 @@ func requireEqualProposals(tb testing.TB, reference map[uint32][]*spacemeshv1.Pr
 			return bytes.Compare(reference[layer][i].Smesher.Id, reference[layer][j].Smesher.Id) == -1
 		})
 	}
-	for _, included := range received {
+	for i, included := range received {
 		for layer := range included {
 			sort.Slice(included[layer], func(i, j int) bool {
 				return bytes.Compare(included[layer][i].Smesher.Id, included[layer][j].Smesher.Id) == -1
 			})
 		}
 		for layer, proposals := range reference {
-			require.Len(tb, included[layer], len(proposals))
+			require.Len(tb, included[layer], len(proposals), "client=%d layer=%d", i, layer)
 			for i := range proposals {
-				require.Equal(tb, proposals[i].Id, included[layer][i].Id, "layer=%d", layer)
+				require.Equal(tb, proposals[i].Id, included[layer][i].Id, "client=%d layer=%d", i, layer)
 			}
 		}
 	}
