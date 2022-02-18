@@ -643,9 +643,6 @@ func (t *turtle) updateState(ctx context.Context, logger log.Log, lid types.Laye
 	if err != nil {
 		return fmt.Errorf("read ballots for layer %s: %w", lid, err)
 	}
-	if err := t.updateLocalVotes(ctx, logger, lid); err != nil {
-		return err
-	}
 
 	for _, block := range blocks {
 		t.onBlock(lid, block)
@@ -655,6 +652,10 @@ func (t *turtle) updateState(ctx context.Context, logger log.Log, lid types.Laye
 		if err := t.onBallot(ballot); err != nil {
 			t.logger.With().Warning("failed to add ballot to the state", log.Err(err), log.Inline(ballot))
 		}
+	}
+
+	if err := t.updateLocalVotes(ctx, logger, lid); err != nil {
+		return err
 	}
 
 	// TODO(dshulyak) it should be possible to count votes from every single ballot separately
@@ -686,10 +687,16 @@ func (t *turtle) onBallot(ballot *types.Ballot) error {
 	if err := t.markBeaconWithBadBallot(t.logger, ballot); err != nil {
 		return err
 	}
-
-	baselid, exist := t.ballotLayer[ballot.Votes.Base]
-	if !exist {
-		return fmt.Errorf("cant decode votes without base ballot %d", ballot.Votes.Base)
+	var baselid types.LayerID
+	// NOTE this condition is useful only in tests, but will be used once we remove "genesis" ballot
+	if ballot.Votes.Base == types.EmptyBallotID {
+		baselid = types.GetEffectiveGenesis()
+	} else {
+		var exist bool
+		baselid, exist = t.ballotLayer[ballot.Votes.Base]
+		if !exist {
+			return fmt.Errorf("cant decode votes without base ballot %d", ballot.Votes.Base)
+		}
 	}
 
 	var ballotWeight weight
