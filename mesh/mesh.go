@@ -18,6 +18,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/layers"
 )
 
+var errMissingHareOutput = errors.New("missing hare output")
+
 // AtxDB holds logic for working with atxs.
 type AtxDB interface {
 	GetAtxHeader(id types.ATXID) (*types.ActivationTxHeader, error)
@@ -68,7 +70,7 @@ func NewMesh(db *DB, atxDb AtxDB, trtl tortoise, state conservativeState, logger
 				msh.With().Panic("failed to set zero-block for genesis layer", i, log.Err(err))
 			}
 		}
-		if err := msh.persistLayerHashes(context.Background(), i, i); err != nil {
+		if err := msh.persistLayerHashes(context.Background(), i, types.EmptyBlockID); err != nil {
 			msh.With().Panic("failed to persist hashes for layer", i, log.Err(err))
 		}
 		msh.setProcessedLayer(i)
@@ -258,6 +260,13 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 		log.FieldNamed("old_verified", oldVerified),
 		log.FieldNamed("new_verified", newVerified))
 
+	for lid := oldVerified.Add(1); !lid.After(newVerified); lid = lid.Add(1) {
+		events.ReportLayerUpdate(events.LayerUpdate{
+			LayerID: lid,
+			Status:  events.LayerStatusTypeConfirmed,
+		})
+	}
+
 	// set processed layer even if later code will fail, as that failure is not related
 	// to the layer that is being processed
 	msh.setProcessedLayer(layerID)
@@ -273,23 +282,17 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	}
 
 	// mesh can't skip layer that failed to complete
-	from := minLayer(oldVerified, msh.LatestLayerInState()).Add(1)
-	to := newVerified
+	from := msh.LatestLayerInState().Add(1)
+	to := layerID
+	missing := msh.MissingLayer()
+	if from == missing {
+		to = msh.maxProcessedLayer
+	}
 
 	if !to.Before(from) {
-		if err := msh.pushLayersToState(ctx, from, to); err != nil {
+		if err := msh.pushLayersToState(ctx, from, to, newVerified); err != nil {
 			logger.With().Error("failed to push layers to state", log.Err(err))
 			return err
-		}
-		if err := msh.persistLayerHashes(ctx, from, to); err != nil {
-			logger.With().Error("failed to persist layer hashes", log.Err(err))
-			return err
-		}
-		for lid := from; !lid.After(to); lid = lid.Add(1) {
-			events.ReportLayerUpdate(events.LayerUpdate{
-				LayerID: lid,
-				Status:  events.LayerStatusTypeConfirmed,
-			})
 		}
 	}
 
@@ -304,84 +307,43 @@ func (msh *Mesh) getAggregatedHash(lid types.LayerID) (types.Hash32, error) {
 	return layers.GetAggregatedHash(msh.db, lid)
 }
 
-func (msh *Mesh) persistLayerHashes(ctx context.Context, from, to types.LayerID) error {
+func (msh *Mesh) persistLayerHashes(ctx context.Context, lid types.LayerID, applied types.BlockID) error {
 	logger := msh.WithContext(ctx)
-	if to.Before(from) {
-		logger.With().Panic("verified layer went backward",
-			log.FieldNamed("fromLayer", from),
-			log.FieldNamed("toLayer", to))
+	logger.With().Debug("persisting layer hash", lid)
+	bids := []types.BlockID{applied}
+	hash := types.CalcBlocksHash32(bids, nil)
+	if err := msh.persistLayerHash(lid, hash); err != nil {
+		logger.With().Error("failed to persist layer hash", lid, log.Err(err))
+		return err
 	}
 
-	logger.With().Debug("persisting layer hashes",
-		log.FieldNamed("from_layer", from),
-		log.FieldNamed("to_layer", to))
-	for i := from; !i.After(to); i = i.Add(1) {
-		validBlockIDs, err := msh.getValidBlockIDs(ctx, i)
-		if err != nil {
-			logger.With().Error("failed to get valid block IDs", i, log.Err(err))
-			return err
-		}
-
-		hash := types.EmptyLayerHash
-		if len(validBlockIDs) > 0 {
-			hash = types.CalcBlocksHash32(validBlockIDs, nil)
-		}
-		if err := msh.persistLayerHash(i, hash); err != nil {
-			logger.With().Error("failed to persist layer hash", i, log.Err(err))
-			return err
-		}
-
-		prevHash, err := msh.getAggregatedHash(i.Sub(1))
-		if err != nil {
-			logger.With().Debug("failed to get previous aggregated hash", i, log.Err(err))
-			return err
-		}
-
-		logger.With().Debug("got previous aggregatedHash", i, log.String("prevAggHash", prevHash.ShortString()))
-		newAggHash := types.CalcBlocksHash32(validBlockIDs, prevHash.Bytes())
-		if err := msh.persistAggregatedLayerHash(i, newAggHash); err != nil {
-			logger.With().Error("failed to persist aggregated layer hash", i, log.Err(err))
-			return err
-		}
-		logger.With().Info("aggregated hash updated for layer",
-			i,
-			log.String("hash", hash.ShortString()),
-			log.String("aggHash", newAggHash.ShortString()))
+	prevHash, err := msh.getAggregatedHash(lid.Sub(1))
+	if err != nil {
+		logger.With().Debug("failed to get previous aggregated hash", lid, log.Err(err))
+		return err
 	}
+
+	logger.With().Debug("got previous aggregatedHash", lid, log.String("prevAggHash", prevHash.ShortString()))
+	newAggHash := types.CalcBlocksHash32(bids, prevHash.Bytes())
+	if err = msh.persistAggregatedLayerHash(lid, newAggHash); err != nil {
+		logger.With().Error("failed to persist aggregated layer hash", lid, log.Err(err))
+		return err
+	}
+	logger.With().Info("aggregated hash updated for layer",
+		lid,
+		log.String("hash", hash.ShortString()),
+		log.String("agg_hash", newAggHash.ShortString()))
 	return nil
 }
 
-func (msh *Mesh) getValidBlockIDs(ctx context.Context, layerID types.LayerID) ([]types.BlockID, error) {
-	logger := msh.WithContext(ctx)
-	blocks, err := msh.LayerBlockIds(layerID)
-	if err != nil {
-		return nil, err
-	}
-	var validBlockIDs []types.BlockID
-	for _, bID := range blocks {
-		valid, err := msh.ContextualValidity(bID)
-		if err != nil {
-			// block contextual validity is determined by layer. if one block in the layer is not determined,
-			// the whole layer is not yet verified.
-			logger.With().Warning("block contextual validity not yet determined", layerID, bID, log.Err(err))
-			return nil, err
-		}
-		if valid {
-			validBlockIDs = append(validBlockIDs, bID)
-		}
-	}
-	return validBlockIDs, nil
-}
-
 // apply the state of a range of layers, including re-adding transactions from invalid blocks to the mempool.
-func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) error {
+func (msh *Mesh) pushLayersToState(ctx context.Context, from, to, latestVerified types.LayerID) error {
 	logger := msh.WithContext(ctx).WithFields(
 		log.Stringer("from_layer", from),
 		log.Stringer("to_layer", to))
 	logger.Info("pushing layers to state")
 	if from.Before(types.GetEffectiveGenesis()) || to.Before(types.GetEffectiveGenesis()) {
 		logger.Panic("tried to push genesis layers")
-		return nil
 	}
 
 	missing := msh.MissingLayer()
@@ -394,7 +356,7 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) 
 			)
 			continue
 		}
-		if err := msh.pushLayer(ctx, layerID); err != nil {
+		if err := msh.pushLayer(ctx, layerID, latestVerified); err != nil {
 			msh.missingLayer.Store(layerID)
 			return err
 		}
@@ -402,32 +364,61 @@ func (msh *Mesh) pushLayersToState(ctx context.Context, from, to types.LayerID) 
 			msh.missingLayer.Store(types.LayerID{})
 		}
 	}
+
 	return nil
 }
 
-func (msh *Mesh) pushLayer(ctx context.Context, layerID types.LayerID) error {
+func (msh *Mesh) getBlockToApply(ctx context.Context, layerID, latestVerified types.LayerID) (*types.Block, []*types.Block, error) {
 	layerBlocks, err := msh.LayerBlocks(layerID)
 	if err != nil {
-		return fmt.Errorf("failed to get layer %s: %w", layerID, err)
+		msh.WithContext(ctx).With().Error("failed to get layer blocks", layerID, log.Err(err))
+		return nil, nil, fmt.Errorf("failed to get layer blocks %s: %w", layerID, err)
 	}
 
-	validBlocks, invalidBlocks := msh.BlocksByValidity(layerBlocks)
 	var (
-		applied    *types.Block
-		notApplied = invalidBlocks
-		blocks     = types.SortBlocks(validBlocks)
+		toApply *types.Block
+		others  []*types.Block
 	)
 
-	if len(blocks) > 0 {
+	if layerID.After(latestVerified) {
+		// tortoise has not verified this layer yet, simply apply the block that hare certified
+		bid, err := msh.DB.GetHareConsensusOutput(layerID)
+		if err != nil {
+			msh.WithContext(ctx).With().Error("failed to get hare output", layerID, log.Err(err))
+			return nil, nil, fmt.Errorf("%w: get hare output %v", errMissingHareOutput, err.Error())
+		}
+		for _, blk := range layerBlocks {
+			if blk.ID() == bid {
+				toApply = blk
+			} else {
+				others = append(others, blk)
+			}
+		}
+	} else {
 		// when tortoise verify multiple blocks in the same layer, we only apply one with the lowest
 		// lexicographical sort order
-		applied = blocks[0]
-		if len(blocks) > 1 {
-			notApplied = append(notApplied, blocks[1:]...)
+		valids, invalids := msh.BlocksByValidity(layerBlocks)
+		others = invalids
+		if len(valids) > 0 {
+			blocks := types.SortBlocks(valids)
+			toApply = blocks[0]
+			if len(blocks) > 1 {
+				others = append(others, blocks[1:]...)
+			}
+		} else {
+			others = layerBlocks
 		}
 	}
 
-	if err = msh.updateStateWithLayer(ctx, layerID, applied); err != nil {
+	return toApply, others, nil
+}
+
+func (msh *Mesh) pushLayer(ctx context.Context, layerID, latestVerified types.LayerID) error {
+	toApply, others, err := msh.getBlockToApply(ctx, layerID, latestVerified)
+	if err != nil {
+		return err
+	}
+	if err = msh.updateStateWithLayer(ctx, layerID, toApply); err != nil {
 		return fmt.Errorf("failed to update state %s: %w", layerID, err)
 	}
 
@@ -436,7 +427,16 @@ func (msh *Mesh) pushLayer(ctx context.Context, layerID types.LayerID) error {
 		log.Stringer("state_root", msh.conState.GetStateRoot()),
 	)
 
-	if err = msh.reInsertTxsToPool(applied, notApplied); err != nil {
+	bid := types.EmptyBlockID
+	if toApply != nil {
+		bid = toApply.ID()
+	}
+	if err = msh.persistLayerHashes(ctx, layerID, bid); err != nil {
+		msh.With().Error("failed to persist layer hashes", layerID, log.Err(err))
+		return err
+	}
+
+	if err = msh.reInsertTxsToPool(toApply, others); err != nil {
 		return fmt.Errorf("failed to reinsert TXs to pool %s: %w", layerID, err)
 	}
 	return nil
@@ -516,7 +516,7 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 
 	logger.Info("saving hare output for layer")
 	if err := msh.SaveHareConsensusOutput(ctx, layerID, blockID); err != nil {
-		logger.Error("saving layer hare output failed")
+		logger.With().Error("saving layer hare output failed", log.Err(err))
 	}
 	return msh.ProcessLayer(ctx, layerID)
 }
