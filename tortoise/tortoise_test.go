@@ -1351,16 +1351,19 @@ func TestBallotHasGoodBeacon(t *testing.T) {
 	logger := logtest.New(t)
 	// good beacon
 	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(epochBeacon, nil).Times(1)
-	assert.True(t, trtl.markBeaconWithBadBallot(logger, ballot))
+	assert.NoError(t, trtl.markBeaconWithBadBallot(logger, ballot))
+	assert.NotContains(t, trtl.badBeaconBallots, ballot.ID())
 
 	// bad beacon
 	beacon := types.RandomBeacon()
 	require.NotEqual(t, epochBeacon, beacon)
 	mockBeacons.EXPECT().GetBeacon(layerID.GetEpoch()).Return(beacon, nil).Times(1)
-	assert.False(t, trtl.markBeaconWithBadBallot(logger, ballot))
+	assert.NoError(t, trtl.markBeaconWithBadBallot(logger, ballot))
+	assert.Contains(t, trtl.badBeaconBallots, ballot.ID())
 
 	// ask a bad beacon again won't cause a lookup since it's cached
-	assert.False(t, trtl.markBeaconWithBadBallot(logger, ballot))
+	assert.NoError(t, trtl.markBeaconWithBadBallot(logger, ballot))
+	assert.Contains(t, trtl.badBeaconBallots, ballot.ID())
 }
 
 func TestGetBallotBeacon(t *testing.T) {
@@ -1387,6 +1390,72 @@ func TestGetBallotBeacon(t *testing.T) {
 	got, err = trtl.getBallotBeacon(ballot, logger)
 	assert.NoError(t, err)
 	assert.Equal(t, beacon, got)
+}
+
+func TestBallotsNotProcessedWithoutBeacon(t *testing.T) {
+	ctx := context.Background()
+
+	s := sim.New()
+	s.Setup()
+	cfg := defaultTestConfig()
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+	last := s.Next()
+
+	beacon, err := s.GetState(0).Beacons.GetBeacon(last.GetEpoch())
+	require.NoError(t, err)
+	s.GetState(0).Beacons.Delete(last.GetEpoch() - 1)
+
+	ballots, err := s.GetState(0).MeshDB.LayerBallots(last)
+	require.NoError(t, err)
+	for _, ballot := range ballots {
+		tortoise.OnBallot(ballot)
+	}
+	s.GetState(0).Beacons.StoreBeacon(last.GetEpoch()-1, beacon)
+
+	_, verified, _ := tortoise.HandleIncomingLayer(ctx, last)
+	last = s.Next()
+	_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+	require.Equal(t, last.Sub(1), verified)
+}
+
+func TestVotesDecodingWithoutBaseBallot(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("AllNotDecoded", func(t *testing.T) {
+		s := sim.New()
+		s.Setup()
+		cfg := defaultTestConfig()
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+
+		var verified types.LayerID
+		for _, last := range sim.GenLayers(s, sim.WithSequence(2,
+			sim.WithVoteGenerator(voteWithBaseBallot(types.BallotID{1, 1, 1})))) {
+			_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+		}
+		require.Equal(t, types.GetEffectiveGenesis(), verified)
+	})
+	t.Run("PartiallyNotDecodedHaveNoImpact", func(t *testing.T) {
+		const (
+			size       = 20
+			breakpoint = 18
+		)
+		s := sim.New(sim.WithLayerSize(size))
+		s.Setup()
+		cfg := defaultTestConfig()
+		cfg.LayerSize = size
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+
+		var last, verified types.LayerID
+		for _, last = range sim.GenLayers(s, sim.WithSequence(2, sim.WithVoteGenerator(func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
+			if i >= breakpoint {
+				return voteWithBaseBallot(types.BallotID{1, 1, 1})(rng, layers, i)
+			}
+			return sim.PerfectVoting(rng, layers, i)
+		}))) {
+			_, verified, _ = tortoise.HandleIncomingLayer(ctx, last)
+		}
+		require.Equal(t, last.Sub(1), verified)
+	})
 }
 
 // gapVote will skip one layer in voting.
