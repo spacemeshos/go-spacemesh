@@ -155,20 +155,6 @@ func (mr *MockblockDataProviderMockRecorder) LayerContextuallyValidBlocks(arg0, 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerContextuallyValidBlocks", reflect.TypeOf((*MockblockDataProvider)(nil).LayerContextuallyValidBlocks), arg0, arg1)
 }
 
-// SaveContextualValidity mocks base method.
-func (m *MockblockDataProvider) SaveContextualValidity(arg0 types.BlockID, arg1 types.LayerID, arg2 bool) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "SaveContextualValidity", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// SaveContextualValidity indicates an expected call of SaveContextualValidity.
-func (mr *MockblockDataProviderMockRecorder) SaveContextualValidity(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveContextualValidity", reflect.TypeOf((*MockblockDataProvider)(nil).SaveContextualValidity), arg0, arg1, arg2)
-}
-
 // MockatxDataProvider is a mock of atxDataProvider interface.
 type MockatxDataProvider struct {
 	ctrl     *gomock.Controller

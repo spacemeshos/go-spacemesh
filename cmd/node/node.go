@@ -524,7 +524,6 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
-	var msh *mesh.Mesh
 	var trtl *tortoise.Tortoise
 
 	processed, err := mdb.GetProcessedLayer()
@@ -542,12 +541,14 @@ func (app *App) initServices(ctx context.Context,
 	trtlCfg.MeshProcessed = processed
 	trtlCfg.MeshVerified = verified
 
-	trtl = tortoise.New(mdb, atxDB, beaconProtocol,
+	var updater blockValidityUpdater
+	trtl = tortoise.New(mdb, atxDB, beaconProtocol, &updater,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
 
+	var msh *mesh.Mesh
 	if mdb.PersistentData() {
 		msh = mesh.NewRecoveredMesh(mdb, atxDB, trtl, app.conState, app.addLogger(MeshLogger, lg))
 	} else {
@@ -556,6 +557,7 @@ func (app *App) initServices(ctx context.Context,
 			return fmt.Errorf("setup genesis: %w", err)
 		}
 	}
+	updater.Mesh = msh
 
 	proposalDB, err := proposals.NewProposalDB(sqlDB, msh, app.addLogger(ProposalDBLogger, lg))
 	if err != nil {
@@ -1194,6 +1196,10 @@ func (app *App) Start() error {
 
 type layerFetcher struct {
 	system.Fetcher
+}
+
+type blockValidityUpdater struct {
+	*mesh.Mesh
 }
 
 func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {
