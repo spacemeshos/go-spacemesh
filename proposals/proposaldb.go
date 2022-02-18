@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
@@ -100,18 +99,7 @@ func (db *DB) GetProposals(pids []types.ProposalID) ([]*types.Proposal, error) {
 
 // Get Proposal encoded in byte using ProposalID hash.
 func (db *DB) Get(hash []byte) ([]byte, error) {
-	id := types.ProposalID(types.BytesToHash(hash).ToHash20())
-	p, err := db.GetProposal(id)
-	if err != nil {
-		return nil, fmt.Errorf("get proposal: %w", err)
-	}
-
-	data, err := codec.Encode(p)
-	if err != nil {
-		return data, fmt.Errorf("serialize proposal: %w", err)
-	}
-
-	return data, nil
+	return proposals.GetBlob(db.sqlDB, hash)
 }
 
 // LayerProposalIDs retrieves all proposal IDs from the layer specified by layer ID.

@@ -5,7 +5,7 @@ CREATE TABLE blocks
     validity SMALL INT,
     block    BLOB
 );
-CREATE INDEX blocks_by_layer ON blocks (layer,id asc);
+CREATE INDEX blocks_by_layer ON blocks (layer, id asc);
 
 CREATE TABLE ballots
 (
@@ -95,7 +95,8 @@ CREATE TABLE proposals
     ballot_id CHAR(20),
     layer     INT NOT NULL,
     tx_ids    BLOB,
-    signature VARCHAR
+    signature VARCHAR,
+    encoded   BLOB
 );
 
 CREATE INDEX proposals_by_layer ON proposals (layer);
