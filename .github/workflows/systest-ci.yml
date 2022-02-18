@@ -59,7 +59,7 @@ jobs:
       run: cd systest && make push
 
     - name: Run tests
-      run: cd systest &&  make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=default-pool
+      run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha
 
     - name: Systemtest result
       run: kubectl logs systest-${{ steps.vars.outputs.sha_short }}
