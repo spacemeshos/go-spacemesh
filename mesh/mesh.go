@@ -113,20 +113,6 @@ func NewRecoveredMesh(db *DB, atxDb AtxDB, trtl tortoise, state conservativeStat
 	return msh
 }
 
-// CacheWarmUp warms up cache with latest blocks.
-func (msh *Mesh) CacheWarmUp(layerSize int) {
-	start := types.NewLayerID(0)
-	if msh.ProcessedLayer().Uint32() > uint32(msh.blockCache.Cap()/layerSize) {
-		start = msh.ProcessedLayer().Sub(uint32(msh.blockCache.Cap() / layerSize))
-	}
-
-	if err := msh.cacheWarmUpFromTo(start, msh.ProcessedLayer()); err != nil {
-		msh.With().Error("cache warm up failed during recovery", log.Err(err))
-	}
-
-	msh.Info("cache warm up done")
-}
-
 // LatestLayerInState returns the latest layer we applied to state.
 func (msh *Mesh) LatestLayerInState() types.LayerID {
 	return msh.latestLayerInState.Load().(types.LayerID)
