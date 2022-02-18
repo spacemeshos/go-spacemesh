@@ -927,7 +927,6 @@ func (app *App) stopServices() {
 
 	if app.proposalDB != nil {
 		app.log.Info("closing proposal db")
-		app.proposalDB.Close()
 	}
 
 	if app.mesh != nil {

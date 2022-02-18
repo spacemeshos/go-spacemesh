@@ -5,61 +5,47 @@ import (
 	"testing"
 
 	"github.com/golang/mock/gomock"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
-	"github.com/spacemeshos/go-spacemesh/mesh"
-	"github.com/spacemeshos/go-spacemesh/mesh/mocks"
+	"github.com/spacemeshos/go-spacemesh/proposals/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 type testDB struct {
 	*DB
-	mesh *mesh.Mesh
+	mockMesh *mocks.MockmeshDB
 }
 
 func createTestDB(t *testing.T) *testDB {
 	types.SetLayersPerEpoch(layersPerEpoch)
 
-	db := sql.InMemory()
-	mdb, err := mesh.NewPersistentMeshDB(db, 1, logtest.New(t))
-	require.NoError(t, err)
-
 	ctrl := gomock.NewController(t)
-	mockTortoise := mocks.NewMocktortoise(ctrl)
-	mockTortoise.EXPECT().OnBallot(gomock.Any()).AnyTimes()
-
-	mockState := mocks.NewMockconservativeState(ctrl)
-	mockState.EXPECT().StoreTransactionsFromMemPool(gomock.Any(), gomock.Any(), gomock.Any()).AnyTimes()
-
-	m := mesh.NewMesh(mdb, nil, mockTortoise, mockState, logtest.New(t))
-
 	td := &testDB{
-		mesh: m,
+		mockMesh: mocks.NewMockmeshDB(ctrl),
 	}
 	td.DB = newDB(
-		withSQLDB(db),
-		withMeshDB(td.mesh),
+		withSQLDB(sql.InMemory()),
+		withMeshDB(td.mockMesh),
 		withLogger(logtest.New(t)))
 	return td
 }
 
 func TestDB_AddProposal(t *testing.T) {
 	td := createTestDB(t)
-	defer td.mesh.DB.Close()
-
 	layerID := types.GetEffectiveGenesis().Add(10)
 	p := types.GenLayerProposal(layerID, types.RandomTXSet(100))
+	td.mockMesh.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
+	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
 	require.NoError(t, td.AddProposal(context.TODO(), p))
 }
 
 func TestDB_HasProposal(t *testing.T) {
 	td := createTestDB(t)
-	defer td.mesh.DB.Close()
-
 	layerID := types.GetEffectiveGenesis().Add(10)
 	p1 := types.GenLayerProposal(layerID, types.RandomTXSet(100))
 	p2 := types.GenLayerProposal(layerID, types.RandomTXSet(101))
@@ -67,6 +53,8 @@ func TestDB_HasProposal(t *testing.T) {
 	require.False(t, td.HasProposal(p1.ID()))
 	require.False(t, td.HasProposal(p2.ID()))
 
+	td.mockMesh.EXPECT().AddBallot(&p1.Ballot).Return(nil).Times(1)
+	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p1.LayerIndex, p1.ID(), p1.TxIDs).Return(nil).Times(1)
 	require.NoError(t, td.AddProposal(context.TODO(), p1))
 
 	require.True(t, td.HasProposal(p1.ID()))
@@ -75,8 +63,6 @@ func TestDB_HasProposal(t *testing.T) {
 
 func TestDB_GetProposal(t *testing.T) {
 	td := createTestDB(t)
-	defer td.mesh.DB.Close()
-
 	layerID := types.GetEffectiveGenesis().Add(10)
 	p1 := types.GenLayerProposal(layerID, types.RandomTXSet(100))
 	p2 := types.GenLayerProposal(layerID, types.RandomTXSet(101))
@@ -89,10 +75,16 @@ func TestDB_GetProposal(t *testing.T) {
 	require.ErrorIs(t, err, database.ErrNotFound)
 	require.Nil(t, got2)
 
+	td.mockMesh.EXPECT().AddBallot(&p1.Ballot).DoAndReturn(func(b *types.Ballot) error {
+		return ballots.Add(td.sqlDB, b)
+	}).Times(1)
+
+	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p1.LayerIndex, p1.ID(), p1.TxIDs).Return(nil).Times(1)
 	require.NoError(t, td.AddProposal(context.TODO(), p1))
 
 	got1, err = td.GetProposal(p1.ID())
 	require.NoError(t, err)
+	got1.Ballot = p1.Ballot
 	require.Equal(t, p1, got1)
 
 	got2, err = td.GetProposal(p2.ID())
@@ -102,14 +94,16 @@ func TestDB_GetProposal(t *testing.T) {
 
 func createAndAddProposals(t *testing.T, td *testDB, layerID types.LayerID) *types.Proposal {
 	p := types.GenLayerProposal(layerID, types.RandomTXSet(100))
+	td.mockMesh.EXPECT().AddBallot(&p.Ballot).DoAndReturn(func(b *types.Ballot) error {
+		return ballots.Add(td.sqlDB, b)
+	}).Times(1)
+	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
 	require.NoError(t, td.AddProposal(context.TODO(), p))
 	return p
 }
 
 func TestDB_Get(t *testing.T) {
 	td := createTestDB(t)
-	defer td.mesh.DB.Close()
-
 	layerID := types.GetEffectiveGenesis().Add(10)
 	numProposals := 100
 	proposals := make([]*types.Proposal, 0, numProposals)
@@ -124,15 +118,14 @@ func TestDB_Get(t *testing.T) {
 		require.NoError(t, err)
 		var got types.Proposal
 		require.NoError(t, codec.Decode(data, &got))
-		require.NoError(t, got.Initialize())
+		got.Ballot = (*proposals[i]).Ballot
+		got.SetID((*proposals[i]).ID())
 		require.Equal(t, *proposals[i], got)
 	}
 }
 
 func TestDB_GetProposals(t *testing.T) {
 	td := createTestDB(t)
-	defer td.mesh.DB.Close()
-
 	layerID := types.GetEffectiveGenesis().Add(10)
 	numProposals := 100
 	proposals := make([]*types.Proposal, 0, numProposals)
@@ -144,13 +137,11 @@ func TestDB_GetProposals(t *testing.T) {
 	pids := types.ToProposalIDs(proposals)
 	got, err := td.GetProposals(pids)
 	require.NoError(t, err)
-	require.Equal(t, proposals, got)
+	require.EqualValues(t, proposals, got)
 }
 
 func TestDB_LayerProposalIDs(t *testing.T) {
 	td := createTestDB(t)
-	defer td.mesh.DB.Close()
-
 	layerID := types.GetEffectiveGenesis().Add(10)
 	numLayers := uint32(5)
 	numProposals := 100
@@ -178,8 +169,6 @@ func TestDB_LayerProposalIDs(t *testing.T) {
 
 func TestDB_LayerProposals(t *testing.T) {
 	td := createTestDB(t)
-	defer td.mesh.DB.Close()
-
 	layerID := types.GetEffectiveGenesis().Add(10)
 	numLayers := uint32(5)
 	numProposals := 100
