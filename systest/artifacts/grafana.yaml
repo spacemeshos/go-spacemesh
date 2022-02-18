@@ -1,0 +1,5 @@
+service:
+  enabled: true
+  type: LoadBalancer
+persistence:
+  enabled: true
