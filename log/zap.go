@@ -247,16 +247,16 @@ func (l Log) Event() FieldLogger {
 	return FieldLogger{l: l.logger.With(zap.Field(Bool(eventKey, true))), name: l.name}
 }
 
-// Nop is an option that disables this logger.
-var Nop = zap.WrapCore(func(zapcore.Core) zapcore.Core {
-	return zapcore.NewNopCore()
-})
-
 // WithOptions clones the current Logger, applies the supplied Options, and
 // returns the resulting Logger. It's safe to use concurrently.
 func (l Log) WithOptions(opts ...zap.Option) Log {
 	lgr := l.logger.WithOptions(opts...)
 	return Log{logger: lgr, name: l.name}
+}
+
+// Zap returns internal zap logger.
+func (l Log) Zap() *zap.Logger {
+	return l.logger
 }
 
 // note: we construct the fieldset on the fly, below, rather than simply adding `name' as a field since it may change
