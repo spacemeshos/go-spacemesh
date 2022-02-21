@@ -93,7 +93,7 @@ const (
 	NipostBuilderLogger    = "nipostBuilder"
 	LayerFetcher           = "layerFetcher"
 	TimeSyncLogger         = "timesync"
-	SVMLogger              = "svm"
+	SVMLogger              = "SVM"
 	GRPCLogger             = "grpc"
 	ConStateLogger         = "conState"
 )
