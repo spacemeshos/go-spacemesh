@@ -564,13 +564,11 @@ func (db *DB) ATXs() database.Getter {
 	return newATXFetcherDB(db)
 }
 
-// newATXFetcherDB returns reference to a BlockFetcherDB instance.
 func newATXFetcherDB(db *DB) *ATXFetcher {
 	return &ATXFetcher{DB: db}
 }
 
 // ATXFetcher is an adapter of SQLite implementation to legacy LevelDB interfaces.
-// TODO(nkryuchkov): Remove when transition to SQLite is finished.
 type ATXFetcher struct {
 	DB *DB
 }

@@ -88,3 +88,13 @@ CREATE TABLE atx_top
     atx_id CHAR(32),
     layer  INT NOT NULL
 );
+
+CREATE TABLE poets
+(
+    ref        VARCHAR PRIMARY KEY,
+    poet       BLOB,
+    service_id VARCHAR,
+    round_id   VARCHAR
+);
+
+CREATE INDEX poets_by_service_id_by_round_id ON poets (service_id, round_id);

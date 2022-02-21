@@ -12,14 +12,14 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func TestPoetDbHappyFlow(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
 	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
@@ -43,7 +43,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 	})
 	r.NoError(err)
 
-	ref, err := poetDb.getProofRef(makeKey(poetID, roundID))
+	ref, err := poetDb.getProofRef(poetID, roundID)
 	r.NoError(err)
 
 	proofBytes, err := types.InterfaceToBytes(poetProof)
@@ -60,7 +60,7 @@ func TestPoetDbHappyFlow(t *testing.T) {
 func TestPoetDbInvalidPoetProof(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
 	file, err := os.Open(filepath.Join("test_resources", "poet.proof"))
 	r.NoError(err)
@@ -82,13 +82,12 @@ func TestPoetDbInvalidPoetProof(t *testing.T) {
 func TestPoetDbNonExistingKeys(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
 	poetID := []byte("poet_id_123456")
 
-	key := makeKey(poetID, "0")
-	_, err := poetDb.getProofRef(key)
-	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for key %x: get value: leveldb: not found", key[:5]))
+	_, err := poetDb.getProofRef(poetID, "0")
+	r.EqualError(err, fmt.Sprintf("could not fetch poet proof for poet ID %x in round %v: get value: leveldb: not found", poetID[:5], "0"))
 
 	ref := []byte("abcde")
 	_, err = poetDb.GetMembershipMap(ref)
@@ -98,7 +97,7 @@ func TestPoetDbNonExistingKeys(t *testing.T) {
 func TestPoetDb_SubscribeToPoetProofRef(t *testing.T) {
 	r := require.New(t)
 
-	poetDb := NewPoetDb(database.NewMemDatabase(), logtest.New(t))
+	poetDb := NewPoetDb(sql.InMemory(), logtest.New(t))
 
 	poetID := []byte("poet_id_123456")
 
