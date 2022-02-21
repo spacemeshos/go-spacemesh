@@ -70,7 +70,6 @@ const (
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
 	BeaconLogger           = "beacon"
-	PoetDbStoreLogger      = "poetDbStore"
 	StoreLogger            = "store"
 	PoetDbLogger           = "poetDb"
 	MeshDBLogger           = "meshDb"

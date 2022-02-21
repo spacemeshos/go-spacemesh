@@ -447,7 +447,7 @@ func healingTester(dependencies []int) TestScenario {
 		success := true
 		for i, app := range suite.apps {
 			lyrProcessed := app.mesh.ProcessedLayer()
-			lyrVerified := app.mesh.LatestLayerInState()
+			lyrVerified := app.tortoise.LatestComplete()
 			suite.log.With().Info("node latest layers",
 				log.FieldNamed("old_verified", lastVerifiedLayer),
 				log.Uint32("confidence_interval", confidenceInterval),
