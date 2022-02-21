@@ -11,13 +11,12 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
-	"github.com/spacemeshos/go-spacemesh/database"
-	dbmocks "github.com/spacemeshos/go-spacemesh/database/mocks"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/miner/mocks"
 	pubsubmocks "github.com/spacemeshos/go-spacemesh/p2p/pubsub/mocks"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -32,10 +31,8 @@ const (
 type testBuilder struct {
 	*ProposalBuilder
 	ctrl    *gomock.Controller
-	mRefDB  *dbmocks.MockDatabase
 	mOracle *mocks.MockproposalOracle
 	mAtxDB  *mocks.MockactivationDB
-	mPDB    *mocks.MockproposalDB
 	mBaseBP *mocks.MockbaseBallotProvider
 	mCState *mocks.MockconservativeState
 	mPubSub *pubsubmocks.MockPublisher
@@ -49,10 +46,8 @@ func createBuilder(tb testing.TB) *testBuilder {
 	ctrl := gomock.NewController(tb)
 	pb := &testBuilder{
 		ctrl:    ctrl,
-		mRefDB:  dbmocks.NewMockDatabase(ctrl),
 		mOracle: mocks.NewMockproposalOracle(ctrl),
 		mAtxDB:  mocks.NewMockactivationDB(ctrl),
-		mPDB:    mocks.NewMockproposalDB(ctrl),
 		mBaseBP: mocks.NewMockbaseBallotProvider(ctrl),
 		mCState: mocks.NewMockconservativeState(ctrl),
 		mPubSub: pubsubmocks.NewMockPublisher(ctrl),
@@ -62,13 +57,12 @@ func createBuilder(tb testing.TB) *testBuilder {
 	mProjector := mocks.NewMockprojector(ctrl)
 	mProjector.EXPECT().GetProjection(gomock.Any()).Return(uint64(1), uint64(1000), nil).AnyTimes()
 	pb.ProposalBuilder = NewProposalBuilder(context.TODO(), make(chan types.LayerID), edSigner, vrfSigner,
-		pb.mAtxDB, pb.mPubSub, pb.mPDB, pb.mBaseBP, pb.mBeacon, pb.mSync, pb.mCState,
+		sql.InMemory(), pb.mAtxDB, pb.mPubSub, pb.mBaseBP, pb.mBeacon, pb.mSync, pb.mCState,
 		WithLogger(logtest.New(tb)),
 		WithLayerSize(20),
 		WithLayerPerEpoch(3),
 		WithTxsPerProposal(txCount),
 		WithMinerID(nodeID),
-		withRefDatabase(pb.mRefDB),
 		withOracle(pb.mOracle))
 	return pb
 }
@@ -103,7 +97,6 @@ func TestBuilder_StartAndClose(t *testing.T) {
 	defer b.ctrl.Finish()
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
-	b.mRefDB.EXPECT().Close().Times(1)
 
 	require.NoError(t, b.Start(context.TODO()))
 	// calling Start the second time should have no effect
@@ -122,7 +115,6 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	require.NoError(t, b.Start(context.TODO()))
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
-	epoch := layerID.GetEpoch()
 	beacon := types.RandomBeacon()
 	atxID := types.RandomATXID()
 	activeSet := genActiveSet(t)
@@ -139,8 +131,6 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	// for 1st proposal, containing the ref ballot of this epoch
 	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx1.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: base}, nil).Times(1)
-	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
-	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
@@ -159,7 +149,6 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 
 	assert.NoError(t, b.handleLayer(context.TODO(), layerID))
 
-	b.mRefDB.EXPECT().Close().Times(1)
 	b.Close()
 }
 
@@ -170,7 +159,6 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	require.NoError(t, b.Start(context.TODO()))
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
-	epoch := layerID.GetEpoch()
 	beacon := types.RandomBeacon()
 	atxID := types.RandomATXID()
 	activeSet := genActiveSet(t)
@@ -186,8 +174,6 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	// for 1st proposal, containing the ref ballot of this epoch
 	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: bb}, nil).Times(1)
-	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
-	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
 		func(_ context.Context, _ string, data []byte) error {
 			var p types.Proposal
@@ -205,7 +191,6 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 
 	assert.NoError(t, b.handleLayer(context.TODO(), layerID))
 
-	b.mRefDB.EXPECT().Close().Times(1)
 	b.Close()
 }
 
@@ -297,47 +282,6 @@ func TestBuilder_HandleLayer_BaseBlockError(t *testing.T) {
 	assert.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errUnknown)
 }
 
-func TestBuilder_HandleLayer_GetRefBallotError(t *testing.T) {
-	b := createBuilder(t)
-	defer b.ctrl.Finish()
-
-	layerID := types.NewLayerID(layersPerEpoch * 3)
-	epoch := layerID.GetEpoch()
-	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
-
-	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
-	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
-	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
-	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
-	errUnknown := errors.New("unknown")
-	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, errUnknown).Times(1)
-
-	assert.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errUnknown)
-}
-
-func TestBuilder_HandleLayer_SaveRefBallotError(t *testing.T) {
-	b := createBuilder(t)
-	defer b.ctrl.Finish()
-
-	layerID := types.NewLayerID(layersPerEpoch * 3)
-	epoch := layerID.GetEpoch()
-	beacon := types.RandomBeacon()
-	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
-
-	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
-	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
-	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
-	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
-	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
-	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
-	errUnknown := errors.New("unknown")
-	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(errUnknown).Times(1)
-
-	assert.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errUnknown)
-}
-
 func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b := createBuilder(t)
 	defer b.ctrl.Finish()
@@ -345,7 +289,6 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	require.NoError(t, b.Start(context.TODO()))
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
-	epoch := layerID.GetEpoch()
 	beacon := types.RandomBeacon()
 	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
 
@@ -354,8 +297,6 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
 	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
-	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
-	b.mRefDB.EXPECT().Close().Times(1)
 
 	b.Close()
 	assert.NoError(t, b.handleLayer(context.TODO(), layerID))
@@ -368,7 +309,6 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	require.NoError(t, b.Start(context.TODO()))
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
-	epoch := layerID.GetEpoch()
 	beacon := types.RandomBeacon()
 	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
 
@@ -377,14 +317,11 @@ func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
 	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
 	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
-	b.mRefDB.EXPECT().Get(getEpochKey(epoch)).Return(nil, database.ErrNotFound).Times(1)
-	b.mRefDB.EXPECT().Put(getEpochKey(epoch), gomock.Any()).Return(nil).Times(1)
 	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).Return(errors.New("unknown")).Times(1)
 
 	// publish error is ignored
 	assert.NoError(t, b.handleLayer(context.TODO(), layerID))
 
-	b.mRefDB.EXPECT().Close().Times(1)
 	b.Close()
 }
 
@@ -397,10 +334,8 @@ func TestBuilder_UniqueBlockID(t *testing.T) {
 	atxID2 := types.RandomATXID()
 	activeSet := genActiveSet(t)
 	beacon := types.RandomBeacon()
-	builder1.mRefDB.EXPECT().Get(getEpochKey(layerID.GetEpoch())).Return(types.RandomBallotID().Bytes(), nil).Times(1)
 	b1, err := builder1.createProposal(context.TODO(), layerID, nil, atxID1, activeSet, beacon, nil, types.Votes{})
 	require.NoError(t, err)
-	builder2.mRefDB.EXPECT().Get(getEpochKey(layerID.GetEpoch())).Return(types.RandomBallotID().Bytes(), nil).Times(1)
 	b2, err := builder2.createProposal(context.TODO(), layerID, nil, atxID2, activeSet, beacon, nil, types.Votes{})
 	require.NoError(t, err)
 

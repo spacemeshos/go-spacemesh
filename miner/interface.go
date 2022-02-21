@@ -12,10 +12,6 @@ type proposalOracle interface {
 	GetProposalEligibility(types.LayerID, types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibilityProof, error)
 }
 
-type proposalDB interface {
-	AddProposal(context.Context, *types.Proposal) error
-}
-
 type conservativeState interface {
 	SelectTXsForProposal(int) ([]types.TransactionID, []*types.Transaction, error)
 }
