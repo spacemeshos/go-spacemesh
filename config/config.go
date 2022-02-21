@@ -96,8 +96,6 @@ type BaseConfig struct {
 
 	TxsPerBlock int `mapstructure:"txs-per-block"`
 
-	BlockCacheSize int `mapstructure:"block-cache-size"`
-
 	AlwaysListen bool `mapstructure:"always-listen"` // force gossip to always be on (for testing)
 }
 
@@ -155,7 +153,6 @@ func defaultBaseConfig() BaseConfig {
 		LayersPerEpoch:      3,
 		PoETServer:          "127.0.0.1",
 		GoldenATXID:         "0x5678", // TODO: Change the value
-		BlockCacheSize:      20,
 		SyncRequestTimeout:  2000,
 		SyncInterval:        10,
 		TxsPerBlock:         100,

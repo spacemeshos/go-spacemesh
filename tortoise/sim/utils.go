@@ -40,7 +40,7 @@ func newAtxDB(logger log.Log, conf config) *activation.DB {
 func newMeshDB(logger log.Log, conf config) *mesh.DB {
 	if len(conf.Path) > 0 {
 		os.MkdirAll(filepath.Join(conf.Path, meshpath), os.ModePerm)
-		db, err := mesh.NewPersistentMeshDB(sql.InMemory(), 20, logger)
+		db, err := mesh.NewPersistentMeshDB(sql.InMemory(), logger)
 		if err != nil {
 			panic(err)
 		}
@@ -78,6 +78,10 @@ func (b *beaconStore) GetBeacon(eid types.EpochID) (types.Beacon, error) {
 
 func (b *beaconStore) StoreBeacon(eid types.EpochID, beacon types.Beacon) {
 	b.beacons[eid] = beacon
+}
+
+func (b *beaconStore) Delete(eid types.EpochID) {
+	delete(b.beacons, eid)
 }
 
 func (b *beaconStore) Copy(other *beaconStore) {
