@@ -557,7 +557,7 @@ func (app *App) initServices(ctx context.Context,
 		}
 	}
 
-	proposalDB, err := proposals.NewProposalDB(dbStorepath, msh, app.addLogger(ProposalDBLogger, lg))
+	proposalDB, err := proposals.NewProposalDB(sqlDB, msh, app.addLogger(ProposalDBLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create proposal DB: %w", err)
 	}
@@ -926,7 +926,6 @@ func (app *App) stopServices() {
 
 	if app.proposalDB != nil {
 		app.log.Info("closing proposal db")
-		app.proposalDB.Close()
 	}
 
 	if app.mesh != nil {
