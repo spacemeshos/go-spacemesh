@@ -2,10 +2,10 @@ package proposals
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/golang/mock/gomock"
-	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/codec"
@@ -14,6 +14,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/proposals/mocks"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 )
 
 type testDB struct {
@@ -33,6 +34,25 @@ func createTestDB(t *testing.T) *testDB {
 		withMeshDB(td.mockMesh),
 		withLogger(logtest.New(t)))
 	return td
+}
+
+func TestDB_AddProposal_FailToAddBallot(t *testing.T) {
+	td := createTestDB(t)
+	layerID := types.GetEffectiveGenesis().Add(10)
+	p := types.GenLayerProposal(layerID, types.RandomTXSet(100))
+	errUnknown := errors.New("unknown")
+	td.mockMesh.EXPECT().AddBallot(&p.Ballot).Return(errUnknown).Times(1)
+	require.ErrorIs(t, td.AddProposal(context.TODO(), p), errUnknown)
+}
+
+func TestDB_AddProposal_FailToAddTXFromProposal(t *testing.T) {
+	td := createTestDB(t)
+	layerID := types.GetEffectiveGenesis().Add(10)
+	p := types.GenLayerProposal(layerID, types.RandomTXSet(100))
+	td.mockMesh.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
+	errUnknown := errors.New("unknown")
+	td.mockMesh.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(errUnknown).Times(1)
+	require.ErrorIs(t, td.AddProposal(context.TODO(), p), errUnknown)
 }
 
 func TestDB_AddProposal(t *testing.T) {
