@@ -2,6 +2,7 @@ package activation
 
 import (
 	"context"
+	"errors"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
@@ -38,7 +39,7 @@ func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ p2p.Peer, m
 	}
 
 	if err := l.poetDb.StoreProof(&proofMessage); err != nil {
-		if err == sql.ErrObjectExists {
+		if errors.Is(err, sql.ErrObjectExists) {
 			// don't spam the network
 			return pubsub.ValidationIgnore
 		}

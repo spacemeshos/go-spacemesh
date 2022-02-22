@@ -45,15 +45,13 @@ func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 		return err
 	}
 
-	err := db.StoreProof(proofMessage)
-	return err
+	return db.StoreProof(proofMessage)
 }
 
 // ValidateAndStoreMsg validates and stores a new PoET proof.
 func (db *PoetDb) ValidateAndStoreMsg(data []byte) error {
 	var proofMessage types.PoetProofMessage
-	err := types.BytesToInterface(data, &proofMessage)
-	if err != nil {
+	if err := types.BytesToInterface(data, &proofMessage); err != nil {
 		return fmt.Errorf("parse message: %w", err)
 	}
 	return db.ValidateAndStore(&proofMessage)
