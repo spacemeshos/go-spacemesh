@@ -45,7 +45,7 @@ func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
 		return err
 	}
 
-	err := db.storeProof(proofMessage)
+	err := db.StoreProof(proofMessage)
 	return err
 }
 
@@ -79,7 +79,8 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 	return nil
 }
 
-func (db *PoetDb) storeProof(proofMessage *types.PoetProofMessage) error {
+// StoreProof saves the poet proof in local db.
+func (db *PoetDb) StoreProof(proofMessage *types.PoetProofMessage) error {
 	ref, err := proofMessage.Ref()
 	if err != nil {
 		return fmt.Errorf("failed to get poet proof message reference: %v", err)
