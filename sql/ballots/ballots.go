@@ -152,7 +152,7 @@ func CountByPubkeyLayer(db sql.Executor, lid types.LayerID, pubkey []byte) (int,
 // GetRefBallot gets a ref ballot for a layer and a pubkey.
 func GetRefBallot(db sql.Executor, epochID types.EpochID, pubkey []byte) (ballotID types.BallotID, err error) {
 	firstLayer := epochID.FirstLayer()
-	lastLayer := firstLayer.Add(types.GetLayersPerEpoch())
+	lastLayer := firstLayer.Add(types.GetLayersPerEpoch()).Sub(1)
 	rows, err := db.Exec(`
 		select * from ballots 
 		where layer between ?1 and ?2 and pubkey = ?3
