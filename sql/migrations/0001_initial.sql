@@ -15,7 +15,7 @@ CREATE TABLE ballots
     pubkey    VARCHAR,
     ballot    BLOB
 ) WITHOUT ROWID;
-CREATE INDEX ballots_by_layer_by_pubkey ON ballots (layer, pubkey);
+CREATE INDEX ballots_by_layer_by_pubkey ON ballots (layer asc, pubkey);
 
 CREATE TABLE identities
 (
