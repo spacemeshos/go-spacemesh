@@ -20,7 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
-	"github.com/spacemeshos/go-spacemesh/sql/refballots"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
@@ -177,16 +177,8 @@ func (pb *ProposalBuilder) Close() {
 	_ = pb.eg.Wait()
 }
 
-func (pb *ProposalBuilder) storeRefBallot(epoch types.EpochID, ballotID types.BallotID) error {
-	if err := refballots.Add(pb.sqlDB, epoch, ballotID); err != nil {
-		return fmt.Errorf("put in refDB: %w", err)
-	}
-
-	return nil
-}
-
 func (pb *ProposalBuilder) getRefBallot(epoch types.EpochID) (types.BallotID, error) {
-	ballotID, err := refballots.Get(pb.sqlDB, epoch)
+	ballotID, err := ballots.GetRefBallot(pb.sqlDB, epoch, pb.signer.PublicKey().Bytes())
 	if err != nil {
 		return types.EmptyBallotID, fmt.Errorf("get from refDB: %w", err)
 	}
@@ -329,15 +321,6 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	if pb.stopped() {
 		return nil
-	}
-
-	if p.RefBallot == types.EmptyBallotID {
-		ballotID := p.Ballot.ID()
-		logger.With().Debug("storing ref ballot", epoch, ballotID)
-		if err := pb.storeRefBallot(epoch, ballotID); err != nil {
-			logger.With().Error("failed to store ref ballot", ballotID, log.Err(err))
-			return err
-		}
 	}
 
 	pb.eg.Go(func() error {

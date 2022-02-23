@@ -17,12 +17,6 @@ CREATE TABLE ballots
 ) WITHOUT ROWID;
 CREATE INDEX ballots_by_layer_by_pubkey ON ballots (layer, pubkey);
 
-CREATE TABLE ref_ballots
-(
-    epoch     INT NOT NULL PRIMARY KEY,
-    ballot_id CHAR(20)
-) WITHOUT ROWID;
-
 CREATE TABLE identities
 (
     pubkey    VARCHAR PRIMARY KEY,
