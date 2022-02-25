@@ -16,7 +16,7 @@ const PoetProofProtocol = "PoetProof"
 
 // PoetListener handles PoET gossip messages.
 type PoetListener struct {
-	Log    log.Log
+	log    log.Log
 	poetDb poetValidatorPersistor
 }
 
@@ -24,26 +24,36 @@ type PoetListener struct {
 func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ p2p.Peer, msg []byte) pubsub.ValidationResult {
 	var proofMessage types.PoetProofMessage
 	if err := types.BytesToInterface(msg, &proofMessage); err != nil {
-		l.Log.Error("failed to unmarshal poet membership proof: %v", err)
+		l.log.WithContext(ctx).With().Error("failed to unmarshal poet membership proof", log.Err(err))
+		return pubsub.ValidationIgnore
+	}
+
+	ref, err := proofMessage.Ref()
+	if err != nil {
+		l.log.WithContext(ctx).With().Error("failed to get poet proof", log.Err(err))
+		return pubsub.ValidationIgnore
+	}
+
+	if l.poetDb.HasProof(ref) {
 		return pubsub.ValidationIgnore
 	}
 
 	if err := l.poetDb.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
 		proofMessage.RoundID, proofMessage.Signature); err != nil {
 		if types.IsProcessingError(err) {
-			l.Log.Error("failed to validate poet proof: %v", err)
+			l.log.WithContext(ctx).With().Error("failed to validate poet proof", log.Err(err))
 		} else {
-			l.Log.Warning("poet proof not valid: %v", err)
+			l.log.WithContext(ctx).With().Warning("poet proof not valid", log.Err(err))
 		}
 		return pubsub.ValidationIgnore
 	}
 
-	if err := l.poetDb.StoreProof(&proofMessage); err != nil {
+	if err := l.poetDb.StoreProof(ref, &proofMessage); err != nil {
 		if errors.Is(err, sql.ErrObjectExists) {
 			// don't spam the network
 			return pubsub.ValidationIgnore
 		}
-		l.Log.Error("failed to store poet proof: %v", err)
+		l.log.WithContext(ctx).With().Error("failed to store poet proof", log.Err(err))
 	}
 	return pubsub.ValidationAccept
 }
@@ -51,7 +61,7 @@ func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ p2p.Peer, m
 // NewPoetListener returns a new PoetListener.
 func NewPoetListener(poetDb poetValidatorPersistor, logger log.Log) *PoetListener {
 	return &PoetListener{
-		Log:    logger,
+		log:    logger,
 		poetDb: poetDb,
 	}
 }

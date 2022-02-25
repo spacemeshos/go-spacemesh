@@ -34,18 +34,27 @@ func NewPoetDb(db *sql.Database, log log.Log) *PoetDb {
 
 // HasProof returns true if the database contains a proof with the given reference, or false otherwise.
 func (db *PoetDb) HasProof(proofRef []byte) bool {
-	_, err := db.GetProofMessage(proofRef)
-	return err == nil
+	has, err := poets.Has(db.sqlDB, proofRef)
+	return err == nil && has
 }
 
 // ValidateAndStore validates and stores a new PoET proof.
 func (db *PoetDb) ValidateAndStore(proofMessage *types.PoetProofMessage) error {
+	ref, err := proofMessage.Ref()
+	if err != nil {
+		return err
+	}
+
+	if db.HasProof(ref) {
+		return nil
+	}
+
 	if err := db.Validate(proofMessage.PoetProof, proofMessage.PoetServiceID,
 		proofMessage.RoundID, proofMessage.Signature); err != nil {
 		return err
 	}
 
-	return db.StoreProof(proofMessage)
+	return db.StoreProof(ref, proofMessage)
 }
 
 // ValidateAndStoreMsg validates and stores a new PoET proof.
@@ -78,12 +87,7 @@ func (db *PoetDb) Validate(proof types.PoetProof, poetID []byte, roundID string,
 }
 
 // StoreProof saves the poet proof in local db.
-func (db *PoetDb) StoreProof(proofMessage *types.PoetProofMessage) error {
-	ref, err := proofMessage.Ref()
-	if err != nil {
-		return fmt.Errorf("failed to get poet proof message reference: %v", err)
-	}
-
+func (db *PoetDb) StoreProof(ref []byte, proofMessage *types.PoetProofMessage) error {
 	messageBytes, err := types.InterfaceToBytes(proofMessage)
 	if err != nil {
 		return fmt.Errorf("could not marshal proof message: %v", err)
