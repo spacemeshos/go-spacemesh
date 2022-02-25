@@ -3,10 +3,51 @@ package poets
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
+
+func TestHas(t *testing.T) {
+	db := sql.InMemory()
+
+	refs := [][]byte{
+		[]byte("ref1"),
+		[]byte("ref2"),
+	}
+
+	proofs := [][]byte{
+		[]byte("proof1"),
+		[]byte("proof2"),
+	}
+
+	sids := [][]byte{
+		[]byte("sid1"),
+		[]byte("sid2"),
+	}
+
+	rids := []string{
+		"rid1",
+		"rid2",
+	}
+
+	for _, ref := range refs {
+		exists, err := Has(db, ref)
+		require.NoError(t, err)
+		require.False(t, exists)
+	}
+
+	require.NoError(t, Add(db, refs[0], proofs[0], sids[0], rids[0]))
+
+	exists, err := Has(db, refs[0])
+	require.NoError(t, err)
+	assert.True(t, exists)
+
+	exists, err = Has(db, refs[1])
+	require.NoError(t, err)
+	assert.False(t, exists)
+}
 
 func TestGet(t *testing.T) {
 	db := sql.InMemory()

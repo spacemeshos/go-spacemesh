@@ -6,6 +6,18 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
+// Has checks if a PoET exists by the given ref.
+func Has(db sql.Executor, ref []byte) (bool, error) {
+	enc := func(stmt *sql.Statement) {
+		stmt.BindBytes(1, ref)
+	}
+	rows, err := db.Exec("select 1 from poets where ref = ?1;", enc, nil)
+	if err != nil {
+		return false, fmt.Errorf("has: %w", err)
+	}
+	return rows > 0, nil
+}
+
 // Get gets a PoET for a given ref.
 func Get(db sql.Executor, ref []byte) (poet []byte, err error) {
 	enc := func(stmt *sql.Statement) {
