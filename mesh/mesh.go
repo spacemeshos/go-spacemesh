@@ -152,6 +152,7 @@ func (msh *Mesh) UpdateBlockValidity(bid types.BlockID, lid types.LayerID, newVa
 			}
 			if msh.minUpdatedLayer.CompareAndSwap(minUpdated, lid) {
 				msh.With().Debug("min updated layer set for block", lid, bid)
+				break
 			}
 		}
 	}
@@ -588,7 +589,8 @@ func (msh *Mesh) ProcessLayerPerHareOutput(ctx context.Context, layerID types.La
 
 	logger.Info("saving hare output for layer")
 	if err := msh.SaveHareConsensusOutput(ctx, layerID, blockID); err != nil {
-		logger.With().Error("saving layer hare output failed", log.Err(err))
+		logger.With().Error("failed to save hare output", log.Err(err))
+		return err
 	}
 	return msh.ProcessLayer(ctx, layerID)
 }

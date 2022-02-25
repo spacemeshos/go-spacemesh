@@ -1,7 +1,6 @@
 package activation
 
 import (
-	"errors"
 	"fmt"
 	"sync"
 
@@ -90,7 +89,7 @@ func (db *PoetDb) StoreProof(proofMessage *types.PoetProofMessage) error {
 		return fmt.Errorf("could not marshal proof message: %v", err)
 	}
 
-	if err := poets.Add(db.sqlDB, ref, messageBytes, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil && !errors.Is(err, sql.ErrObjectExists) {
+	if err := poets.Add(db.sqlDB, ref, messageBytes, proofMessage.PoetServiceID, proofMessage.RoundID); err != nil {
 		return fmt.Errorf("failed to store poet proof for poetId %x round %s: %v",
 			proofMessage.PoetServiceID[:5], proofMessage.RoundID, err)
 	}
