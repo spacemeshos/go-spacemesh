@@ -43,7 +43,7 @@ func TestMeshDB_New(t *testing.T) {
 }
 
 func TestMeshDB_AddBallot(t *testing.T) {
-	mdb, err := NewPersistentMeshDB(sql.InMemory(), 1, logtest.New(t))
+	mdb, err := NewPersistentMeshDB(sql.InMemory(), logtest.New(t))
 	require.NoError(t, err)
 	defer mdb.Close()
 
@@ -60,7 +60,6 @@ func TestMeshDB_AddBallot(t *testing.T) {
 
 func TestMeshDB_AddBlock(t *testing.T) {
 	mdb := NewMemMeshDB(logtest.New(t))
-	mdb.blockCache = newBlockCache(1)
 	defer mdb.Close()
 
 	block := types.GenLayerBlock(types.NewLayerID(10), types.RandomTXSet(100))
@@ -123,7 +122,7 @@ func createLayerWithRandVoting(layerID types.LayerID, prev []*types.Layer, ballo
 func BenchmarkNewPersistentMeshDB(b *testing.B) {
 	const batchSize = 50
 
-	mdb, err := NewPersistentMeshDB(sql.InMemory(), 5, logtest.New(b))
+	mdb, err := NewPersistentMeshDB(sql.InMemory(), logtest.New(b))
 	require.NoError(b, err)
 	defer mdb.Close()
 
@@ -349,7 +348,7 @@ func TestMeshDB_RecordCoinFlip(t *testing.T) {
 	mdb1 := NewMemMeshDB(logtest.New(t))
 	defer mdb1.Close()
 	testCoinflip(mdb1)
-	mdb2, err := NewPersistentMeshDB(sql.InMemory(), 5, logtest.New(t))
+	mdb2, err := NewPersistentMeshDB(sql.InMemory(), logtest.New(t))
 	require.NoError(t, err)
 	defer mdb2.Close()
 	testCoinflip(mdb2)
@@ -394,9 +393,8 @@ func TestMaliciousBallots(t *testing.T) {
 
 func BenchmarkGetBlock(b *testing.B) {
 	// cache is set to be twice as large as cache to avoid hitting the cache
-	blocks := make([]*types.Block, layerSize*2)
+	blocks := make([]*types.Block, 200*2)
 	db, err := NewPersistentMeshDB(sql.InMemory(),
-		1, /*size of the cache is multiplied by a constant (layerSize). for the benchmark it needs to be no more than layerSize*/
 		logtest.New(b))
 	require.NoError(b, err)
 	defer db.Close()
