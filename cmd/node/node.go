@@ -497,7 +497,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
 	}
 
-	mdb, err := mesh.NewPersistentMeshDB(sqlDB, app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
+	mdb, err := mesh.NewPersistentMeshDB(sqlDB, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create mesh DB: %w", err)
 	}
@@ -550,7 +550,6 @@ func (app *App) initServices(ctx context.Context,
 
 	if mdb.PersistentData() {
 		msh = mesh.NewRecoveredMesh(mdb, atxDB, trtl, app.conState, app.addLogger(MeshLogger, lg))
-		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		msh = mesh.NewMesh(mdb, atxDB, trtl, app.conState, app.addLogger(MeshLogger, lg))
 		if err := state.SetupGenesis(app.Config.Genesis); err != nil {
@@ -558,7 +557,7 @@ func (app *App) initServices(ctx context.Context,
 		}
 	}
 
-	proposalDB, err := proposals.NewProposalDB(dbStorepath, msh, app.addLogger(ProposalDBLogger, lg))
+	proposalDB, err := proposals.NewProposalDB(sqlDB, msh, app.addLogger(ProposalDBLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create proposal DB: %w", err)
 	}
@@ -927,7 +926,6 @@ func (app *App) stopServices() {
 
 	if app.proposalDB != nil {
 		app.log.Info("closing proposal db")
-		app.proposalDB.Close()
 	}
 
 	if app.mesh != nil {
