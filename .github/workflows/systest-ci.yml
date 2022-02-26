@@ -5,17 +5,17 @@ env:
   DOCKER_PASSWORD: ${{ secrets.DOCKER_PASSWORD }}
 
 on:  
-  push:
+ push:
     branches:
-      - '*'
+      - staging
+      - trying
 jobs:
   systest:
     runs-on: ubuntu-latest
+    if: github.event_name == 'push'
     steps:
     - uses: actions/checkout@master
-    # - name: generate RANDOM unique variable based on timestamp
-    #   run: echo RANDOM=test-$(date +%s) >> $GITHUB_ENV
-    
+
     - id: 'auth'
       uses: 'google-github-actions/auth@v0'
       with:
@@ -24,9 +24,6 @@ jobs:
 
     - name: Configure gcloud
       uses: 'google-github-actions/setup-gcloud@v0'
-
-    # - name: 'Create Node Pool'
-    #   run: 'gcloud container node-pools create ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --num-nodes=1 --zone=${{ secrets.CI_ZONE_NAME }} --machine-type=n1-standard-16'
 
     - name: Configure kubectl
       run: gcloud container clusters get-credentials ${{ secrets.CI_CLUSTER_NAME }} --zone ${{ secrets.CI_ZONE_NAME }} --project ${{ secrets.GCP_PROJECT_ID }}
@@ -66,6 +63,3 @@ jobs:
     
     - name: Delete pod
       run: kubectl delete pod systest-${{ steps.vars.outputs.sha_short }}
-    
-    # - name: 'Delete Node Pool'
-    #   run: 'yes | gcloud container node-pools delete ${{ env.RANDOM }} --cluster=${{ secrets.CI_CLUSTER_NAME }} --zone=${{ secrets.CI_ZONE_NAME }}'
