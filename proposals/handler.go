@@ -207,7 +207,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
 		return err
 	}
 
-	h.logger.WithContext(ctx).With().Debug("proposal is syntactically valid")
+	logger.With().Debug("proposal is syntactically valid")
 
 	if err := h.proposalDB.AddProposal(ctx, &p); err != nil {
 		logger.With().Error("failed to save proposal", log.Err(err))

@@ -5,6 +5,7 @@ import "github.com/spacemeshos/go-spacemesh/common/types"
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type conservativeState interface {
+	HasTx(types.TransactionID) bool
 	AddressExists(addr types.Address) bool
 	AddTxToMemPool(tx *types.Transaction, checkValidity bool) error
 }

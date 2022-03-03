@@ -93,6 +93,15 @@ func (cs *ConservativeState) validateNonceAndBalance(tx *types.Transaction) erro
 	return nil
 }
 
+// HasTx returns true if we already have this transaction in db.
+func (cs ConservativeState) HasTx(txID types.TransactionID) bool {
+	if cs.pool.has(txID) {
+		return true
+	}
+	has, err := transactions.Has(cs.db, txID)
+	return err == nil && has
+}
+
 // AddTxToMemPool adds the provided transaction to the mempool after checking nonce and balance.
 func (cs *ConservativeState) AddTxToMemPool(tx *types.Transaction, checkValidity bool) error {
 	if checkValidity {
