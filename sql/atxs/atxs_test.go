@@ -98,8 +98,11 @@ func TestGetLastIDByNodeID(t *testing.T) {
 	atx1 := newAtx(nodeID1, types.NewLayerID(uint32(1*layersPerEpoch)))
 	atx2 := newAtx(nodeID1, types.NewLayerID(uint32(2*layersPerEpoch)))
 	atx3 := newAtx(nodeID2, types.NewLayerID(uint32(3*layersPerEpoch)))
+	atx4 := newAtx(nodeID2, types.NewLayerID(uint32(3*layersPerEpoch)))
+	atx4.Sequence = atx3.Sequence + 1
+	atx4.CalcAndSetID()
 
-	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3} {
+	for _, atx := range []*types.ActivationTx{atx1, atx2, atx3, atx4} {
 		require.NoError(t, Add(db, atx, time.Now()))
 	}
 
@@ -109,7 +112,7 @@ func TestGetLastIDByNodeID(t *testing.T) {
 
 	id2, err := GetLastIDByNodeID(db, nodeID2)
 	require.NoError(t, err)
-	require.EqualValues(t, atx3.ID(), id2)
+	require.EqualValues(t, atx4.ID(), id2)
 
 	_, err = GetLastIDByNodeID(db, nodeID0)
 	require.ErrorIs(t, err, database.ErrNotFound)

@@ -25,6 +25,7 @@ type turtle struct {
 	atxdb   atxDataProvider
 	bdp     blockDataProvider
 	beacons system.BeaconGetter
+	updater blockValidityUpdater
 
 	mode mode
 
@@ -39,6 +40,7 @@ func newTurtle(
 	bdp blockDataProvider,
 	atxdb atxDataProvider,
 	beacons system.BeaconGetter,
+	updater blockValidityUpdater,
 	config Config,
 ) *turtle {
 	t := &turtle{
@@ -48,6 +50,7 @@ func newTurtle(
 		bdp:         bdp,
 		atxdb:       atxdb,
 		beacons:     beacons,
+		updater:     updater,
 	}
 	t.verifying = newVerifying(config, &t.commonState)
 	t.full = newFullTortoise(config, &t.commonState)
@@ -61,6 +64,7 @@ func (t *turtle) cloneTurtleParams() *turtle {
 		t.bdp,
 		t.atxdb,
 		t.beacons,
+		t.updater,
 		t.Config,
 	)
 }
@@ -533,7 +537,7 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 		}
 	}
 	if err := persistContextualValidity(logger,
-		t.bdp,
+		t.updater,
 		previous, t.verified,
 		t.blocks,
 		t.validity,

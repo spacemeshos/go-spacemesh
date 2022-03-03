@@ -112,7 +112,7 @@ func GetByLayer(db sql.Executor, layerID types.LayerID) (proposals []*types.Prop
 
 // GetBlob loads proposal as an encoded blob, ready to be sent over the wire.
 func GetBlob(db sql.Executor, id []byte) (proposal []byte, err error) {
-	if rows, err := db.Exec(`select encoded from proposals where id = ?1;`,
+	if rows, err := db.Exec(`select proposal from proposals where id = ?1;`,
 		func(stmt *sql.Statement) {
 			stmt.BindBytes(1, id)
 		}, func(stmt *sql.Statement) bool {
@@ -150,7 +150,7 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 	}
 
 	_, err = db.Exec(`
-		insert into proposals (id, ballot_id, layer, tx_ids, signature, encoded) 
+		insert into proposals (id, ballot_id, layer, tx_ids, signature, proposal) 
 		values (?1, ?2, ?3, ?4, ?5, ?6);`, enc, nil)
 	if err != nil {
 		return fmt.Errorf("insert proposal ID %v: %w", proposal.ID(), err)
