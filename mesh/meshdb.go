@@ -342,23 +342,6 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) ([]types.Reward, erro
 	return rewards.FilterBySmesher(m.db, smesherID.ToBytes())
 }
 
-// BlocksByValidity classifies a slice of blocks by validity.
-func (m *DB) BlocksByValidity(blocks []*types.Block) ([]*types.Block, []*types.Block) {
-	var validBlocks, invalidBlocks []*types.Block
-	for _, b := range blocks {
-		valid, err := m.ContextualValidity(b.ID())
-		if err != nil {
-			m.With().Warning("could not get contextual validity for block in list", b.ID(), log.Err(err))
-		}
-		if valid {
-			validBlocks = append(validBlocks, b)
-		} else {
-			invalidBlocks = append(invalidBlocks, b)
-		}
-	}
-	return validBlocks, invalidBlocks
-}
-
 // LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer.
 func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	logger := m.WithContext(ctx)

@@ -340,8 +340,11 @@ func TestMesh_Revert(t *testing.T) {
 	oldHash := tm.GetAggregatedLayerHash(gPlus2)
 	require.NotEqual(t, types.EmptyLayerHash, oldHash)
 
-	// for layer gPlus2, the valid block turned out to be a different from the one applied
-	layerBlocks[gPlus2] = blocks2[1]
+	// for layer gPlus2, every other block turns out to be valid
+	layerBlocks[gPlus2] = types.SortBlocks(blocks2[1:])[0]
+	for _, blk := range blocks2[1:] {
+		require.NoError(t, tm.UpdateBlockValidity(blk.ID(), gPlus2, true))
+	}
 	for lyr, blk := range layerBlocks {
 		require.NoError(t, tm.UpdateBlockValidity(blk.ID(), lyr, true))
 	}
@@ -360,6 +363,9 @@ func TestMesh_Revert(t *testing.T) {
 	newHash := tm.GetAggregatedLayerHash(gPlus2)
 	require.NotEqual(t, types.EmptyLayerHash, newHash)
 	require.NotEqual(t, oldHash, newHash)
+
+	// gPlus2 hash should contain all valid blocks
+	require.Equal(t, types.CalcBlocksHash32(types.ToBlockIDs(types.SortBlocks(blocks2[1:])), nil), tm.GetLayerHash(gPlus2))
 
 	// another new layer won't cause a revert
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gPlus5).Return(gPlus4).Times(1)
@@ -589,10 +595,9 @@ func TestMesh_ReverifyFailed(t *testing.T) {
 	last = last.Add(1)
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), last).Return(last.Sub(1))
 
-	block := types.Block{}
-	block.LayerIndex = last
-	block.TxIDs = []types.TransactionID{{1, 1, 1}}
-	require.NoError(t, tm.AddBlock(&block))
+	block := types.NewExistingBlock(types.BlockID{1},
+		types.InnerBlock{LayerIndex: last, TxIDs: []types.TransactionID{{1, 1, 1}}})
+	require.NoError(t, tm.AddBlock(block))
 	require.NoError(t, tm.SaveHareConsensusOutput(ctx, last, block.ID()))
 	errTXMissing := errors.New("tx missing")
 	tm.mockState.EXPECT().ApplyLayer(block.LayerIndex, block.ID(), block.TxIDs, gomock.Any()).Return(nil, errTXMissing)
@@ -624,10 +629,9 @@ func TestMesh_MissingTransactionsFailure(t *testing.T) {
 	genesis := types.GetEffectiveGenesis()
 	last := genesis.Add(1)
 
-	block := types.Block{}
-	block.LayerIndex = last
-	block.TxIDs = []types.TransactionID{{1, 1, 1}}
-	require.NoError(t, tm.AddBlock(&block))
+	block := types.NewExistingBlock(types.BlockID{1},
+		types.InnerBlock{LayerIndex: last, TxIDs: []types.TransactionID{{1, 1, 1}}})
+	require.NoError(t, tm.AddBlock(block))
 	require.NoError(t, tm.SaveHareConsensusOutput(ctx, last, block.ID()))
 
 	tm.mockTortoise.EXPECT().HandleIncomingLayer(gomock.Any(), last).Return(last.Sub(1))
