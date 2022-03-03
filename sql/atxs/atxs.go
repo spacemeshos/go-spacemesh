@@ -80,7 +80,7 @@ func GetLastIDByNodeID(db sql.Executor, nodeID types.NodeID) (id types.ATXID, er
 	if rows, err := db.Exec(`
 		select id from atxs 
 		where smesher = ?1
-		order by epoch desc 
+		order by epoch desc, timestamp desc
 		limit 1;`, enc, dec); err != nil {
 		return types.ATXID{}, fmt.Errorf("exec id %v: %w", id, err)
 	} else if rows == 0 {
