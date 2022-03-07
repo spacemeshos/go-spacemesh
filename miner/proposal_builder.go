@@ -26,9 +26,6 @@ import (
 )
 
 const (
-	// ATXsPerBallotLimit indicates the maximum number of ATXs a Ballot can reference.
-	ATXsPerBallotLimit = 100
-
 	buildDurationErrorThreshold = 10 * time.Second
 )
 

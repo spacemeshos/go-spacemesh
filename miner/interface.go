@@ -25,7 +25,3 @@ type activationDB interface {
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error)
 }
-
-type projector interface {
-	GetProjection(types.Address) (nonce, balance uint64, err error)
-}

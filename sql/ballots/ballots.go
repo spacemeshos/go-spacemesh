@@ -154,7 +154,7 @@ func GetRefBallot(db sql.Executor, epochID types.EpochID, pubkey []byte) (ballot
 	firstLayer := epochID.FirstLayer()
 	lastLayer := firstLayer.Add(types.GetLayersPerEpoch()).Sub(1)
 	rows, err := db.Exec(`
-		select * from ballots 
+		select id from ballots 
 		where layer between ?1 and ?2 and pubkey = ?3
 		order by layer
 		limit 1;`,
@@ -169,7 +169,7 @@ func GetRefBallot(db sql.Executor, epochID types.EpochID, pubkey []byte) (ballot
 	if err != nil {
 		return types.BallotID{}, fmt.Errorf("ref ballot epoch %v: %w", epochID, err)
 	} else if rows == 0 {
-		return types.BallotID{}, fmt.Errorf("%w ballot epoch %s", sql.ErrNotFound, epochID)
+		return types.BallotID{}, fmt.Errorf("%w ref ballot epoch %s", sql.ErrNotFound, epochID)
 	}
 	return ballotID, nil
 }

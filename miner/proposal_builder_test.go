@@ -17,6 +17,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/svm/transaction"
 	smocks "github.com/spacemeshos/go-spacemesh/system/mocks"
 )
@@ -30,6 +31,7 @@ const (
 
 type testBuilder struct {
 	*ProposalBuilder
+	db      *sql.Database
 	ctrl    *gomock.Controller
 	mOracle *mocks.MockproposalOracle
 	mAtxDB  *mocks.MockactivationDB
@@ -45,6 +47,7 @@ func createBuilder(tb testing.TB) *testBuilder {
 	nodeID, edSigner, vrfSigner := generateNodeIDAndSigner(tb)
 	ctrl := gomock.NewController(tb)
 	pb := &testBuilder{
+		db:      sql.InMemory(),
 		ctrl:    ctrl,
 		mOracle: mocks.NewMockproposalOracle(ctrl),
 		mAtxDB:  mocks.NewMockactivationDB(ctrl),
@@ -54,10 +57,8 @@ func createBuilder(tb testing.TB) *testBuilder {
 		mBeacon: smocks.NewMockBeaconGetter(ctrl),
 		mSync:   smocks.NewMockSyncStateProvider(ctrl),
 	}
-	mProjector := mocks.NewMockprojector(ctrl)
-	mProjector.EXPECT().GetProjection(gomock.Any()).Return(uint64(1), uint64(1000), nil).AnyTimes()
 	pb.ProposalBuilder = NewProposalBuilder(context.TODO(), make(chan types.LayerID), edSigner, vrfSigner,
-		sql.InMemory(), pb.mAtxDB, pb.mPubSub, pb.mBaseBP, pb.mBeacon, pb.mSync, pb.mCState,
+		pb.db, pb.mAtxDB, pb.mPubSub, pb.mBaseBP, pb.mBeacon, pb.mSync, pb.mCState,
 		WithLogger(logtest.New(tb)),
 		WithLayerSize(20),
 		WithLayerPerEpoch(3),
@@ -94,7 +95,6 @@ func genProofs(tb testing.TB, size int) []types.VotingEligibilityProof {
 
 func TestBuilder_StartAndClose(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
 
@@ -110,7 +110,6 @@ func TestBuilder_StartAndClose(t *testing.T) {
 
 func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	require.NoError(t, b.Start(context.TODO()))
 
@@ -154,7 +153,6 @@ func TestBuilder_HandleLayer_MultipleProposals(t *testing.T) {
 
 func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	require.NoError(t, b.Start(context.TODO()))
 
@@ -196,7 +194,6 @@ func TestBuilder_HandleLayer_OneProposal(t *testing.T) {
 
 func TestBuilder_HandleLayer_Genesis(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	layerID := types.NewLayerID(layersPerEpoch)
 	assert.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errGenesis)
@@ -204,7 +201,6 @@ func TestBuilder_HandleLayer_Genesis(t *testing.T) {
 
 func TestBuilder_HandleLayer_NotSynced(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(false).Times(1)
@@ -214,7 +210,6 @@ func TestBuilder_HandleLayer_NotSynced(t *testing.T) {
 
 func TestBuilder_HandleLayer_NoBeacon(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
@@ -225,7 +220,6 @@ func TestBuilder_HandleLayer_NoBeacon(t *testing.T) {
 
 func TestBuilder_HandleLayer_EligibilityError(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
@@ -239,7 +233,6 @@ func TestBuilder_HandleLayer_EligibilityError(t *testing.T) {
 
 func TestBuilder_HandleLayer_NotEligible(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
@@ -252,7 +245,6 @@ func TestBuilder_HandleLayer_NotEligible(t *testing.T) {
 
 func TestBuilder_HandleLayer_SelectTXError(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
@@ -268,7 +260,6 @@ func TestBuilder_HandleLayer_SelectTXError(t *testing.T) {
 
 func TestBuilder_HandleLayer_BaseBlockError(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	layerID := types.NewLayerID(layersPerEpoch * 3)
 	beacon := types.RandomBeacon()
@@ -282,9 +273,62 @@ func TestBuilder_HandleLayer_BaseBlockError(t *testing.T) {
 	assert.ErrorIs(t, b.handleLayer(context.TODO(), layerID), errUnknown)
 }
 
+func TestBuilder_HandleLayer_NoRefBallot(t *testing.T) {
+	b := createBuilder(t)
+
+	layerID := types.NewLayerID(layersPerEpoch * 3)
+	beacon := types.RandomBeacon()
+	activeSet := genActiveSet(t)
+	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
+
+	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
+	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), activeSet, genProofs(t, 1), nil).Times(1)
+	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
+	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
+	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, data []byte) error {
+			var got types.Proposal
+			require.NoError(t, codec.Decode(data, &got))
+			assert.Equal(t, types.EmptyBallotID, got.RefBallot)
+			assert.Equal(t, types.EpochData{ActiveSet: activeSet, Beacon: beacon}, *got.EpochData)
+			return nil
+		}).Times(1)
+
+	b.handleLayer(context.TODO(), layerID)
+	b.Close()
+}
+
+func TestBuilder_HandleLayer_RefBallot(t *testing.T) {
+	b := createBuilder(t)
+
+	layerID := types.NewLayerID(layersPerEpoch * 3).Add(1)
+	refBallot := types.NewExistingBallot(
+		types.BallotID{1}, nil, b.ProposalBuilder.signer.PublicKey().Bytes(), types.InnerBallot{LayerIndex: layerID.Sub(1)})
+	require.NoError(t, ballots.Add(b.db, &refBallot))
+	beacon := types.RandomBeacon()
+	tx := genTX(t, 1, types.BytesToAddress([]byte{0x01}), signing.NewEdSigner())
+
+	b.mSync.EXPECT().IsSynced(gomock.Any()).Return(true).Times(1)
+	b.mBeacon.EXPECT().GetBeacon(gomock.Any()).Return(beacon, nil).Times(1)
+	b.mOracle.EXPECT().GetProposalEligibility(layerID, beacon).Return(types.RandomATXID(), genActiveSet(t), genProofs(t, 1), nil).Times(1)
+	b.mCState.EXPECT().SelectTXsForProposal(gomock.Any()).Return([]types.TransactionID{tx.ID()}, nil, nil).Times(1)
+	b.mBaseBP.EXPECT().BaseBallot(gomock.Any()).Return(&types.Votes{Base: types.RandomBallotID()}, nil).Times(1)
+	b.mPubSub.EXPECT().Publish(gomock.Any(), proposals.NewProposalProtocol, gomock.Any()).DoAndReturn(
+		func(_ context.Context, _ string, data []byte) error {
+			var got types.Proposal
+			require.NoError(t, codec.Decode(data, &got))
+			assert.Equal(t, refBallot.ID(), got.RefBallot)
+			assert.Nil(t, got.EpochData)
+			return nil
+		}).Times(1)
+
+	b.handleLayer(context.TODO(), layerID)
+	b.Close()
+}
+
 func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	require.NoError(t, b.Start(context.TODO()))
 
@@ -304,7 +348,6 @@ func TestBuilder_HandleLayer_CanceledDuringBuilding(t *testing.T) {
 
 func TestBuilder_HandleLayer_PublishError(t *testing.T) {
 	b := createBuilder(t)
-	defer b.ctrl.Finish()
 
 	require.NoError(t, b.Start(context.TODO()))
 
