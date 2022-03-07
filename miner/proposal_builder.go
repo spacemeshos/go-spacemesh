@@ -5,7 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -20,14 +19,13 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 	"github.com/spacemeshos/go-spacemesh/proposals"
 	"github.com/spacemeshos/go-spacemesh/signing"
+	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
 )
 
 const (
-	// ATXsPerBallotLimit indicates the maximum number of ATXs a Ballot can reference.
-	ATXsPerBallotLimit = 100
-
 	buildDurationErrorThreshold = 10 * time.Second
 )
 
@@ -39,9 +37,9 @@ var (
 
 // ProposalBuilder builds Proposals for a miner.
 type ProposalBuilder struct {
-	logger      log.Log
-	cfg         config
-	refBallotDB database.Database
+	logger log.Log
+	cfg    config
+	sqlDB  *sql.Database
 
 	startOnce  sync.Once
 	ctx        context.Context
@@ -52,7 +50,6 @@ type ProposalBuilder struct {
 	publisher          pubsub.Publisher
 	signer             *signing.EdSigner
 	conState           conservativeState
-	proposalDB         proposalDB
 	baseBallotProvider baseBallotProvider
 	proposalOracle     proposalOracle
 	beaconProvider     system.BeaconGetter
@@ -63,7 +60,6 @@ type ProposalBuilder struct {
 type config struct {
 	layerSize      uint32
 	layersPerEpoch uint32
-	dbPath         string
 	minerID        types.NodeID
 	txsPerProposal int
 }
@@ -92,13 +88,6 @@ func WithLayerPerEpoch(layers uint32) Opt {
 	}
 }
 
-// WithDBPath defines the path to create miner's database.
-func WithDBPath(path string) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.cfg.dbPath = path
-	}
-}
-
 // WithMinerID defines the miner's NodeID.
 func WithMinerID(id types.NodeID) Opt {
 	return func(pb *ProposalBuilder) {
@@ -120,12 +109,6 @@ func WithLogger(logger log.Log) Opt {
 	}
 }
 
-func withRefDatabase(db database.Database) Opt {
-	return func(pb *ProposalBuilder) {
-		pb.refBallotDB = db
-	}
-}
-
 func withOracle(o proposalOracle) Opt {
 	return func(pb *ProposalBuilder) {
 		pb.proposalOracle = o
@@ -138,9 +121,9 @@ func NewProposalBuilder(
 	layerTimer timesync.LayerTimer,
 	signer *signing.EdSigner,
 	vrfSigner *signing.VRFSigner,
+	sqlDB *sql.Database,
 	atxDB activationDB,
 	publisher pubsub.Publisher,
-	pdb proposalDB,
 	bbp baseBallotProvider,
 	beaconProvider system.BeaconGetter,
 	syncer system.SyncStateProvider,
@@ -156,7 +139,7 @@ func NewProposalBuilder(
 		signer:             signer,
 		layerTimer:         layerTimer,
 		publisher:          publisher,
-		proposalDB:         pdb,
+		sqlDB:              sqlDB,
 		baseBallotProvider: bbp,
 		beaconProvider:     beaconProvider,
 		syncer:             syncer,
@@ -169,18 +152,6 @@ func NewProposalBuilder(
 
 	if pb.proposalOracle == nil {
 		pb.proposalOracle = newMinerOracle(pb.cfg.layerSize, pb.cfg.layersPerEpoch, atxDB, vrfSigner, pb.cfg.minerID, pb.logger)
-	}
-
-	if pb.refBallotDB == nil {
-		if len(pb.cfg.dbPath) == 0 {
-			pb.refBallotDB = database.NewMemDatabase()
-		} else {
-			var err error
-			pb.refBallotDB, err = database.NewLDBDatabase(filepath.Join(pb.cfg.dbPath, "miner"), 16, 16, pb.logger)
-			if err != nil {
-				pb.logger.With().Panic("cannot create miner database", log.Err(err))
-			}
-		}
 	}
 
 	return pb
@@ -201,27 +172,14 @@ func (pb *ProposalBuilder) Start(ctx context.Context) error {
 func (pb *ProposalBuilder) Close() {
 	pb.cancel()
 	_ = pb.eg.Wait()
-	pb.refBallotDB.Close()
-}
-
-func getEpochKey(ID types.EpochID) []byte {
-	return []byte(fmt.Sprintf("e_%v", ID))
-}
-
-func (pb *ProposalBuilder) storeRefBallot(epoch types.EpochID, ballotID types.BallotID) error {
-	if err := pb.refBallotDB.Put(getEpochKey(epoch), ballotID.Bytes()); err != nil {
-		return fmt.Errorf("put in refDB: %w", err)
-	}
-	return nil
 }
 
 func (pb *ProposalBuilder) getRefBallot(epoch types.EpochID) (types.BallotID, error) {
-	var ballotID types.BallotID
-	bts, err := pb.refBallotDB.Get(getEpochKey(epoch))
+	ballotID, err := ballots.GetRefBallot(pb.sqlDB, epoch, pb.signer.PublicKey().Bytes())
 	if err != nil {
 		return types.EmptyBallotID, fmt.Errorf("get from refDB: %w", err)
 	}
-	copy(ballotID[:], bts)
+
 	return ballotID, nil
 }
 
@@ -360,15 +318,6 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 
 	if pb.stopped() {
 		return nil
-	}
-
-	if p.RefBallot == types.EmptyBallotID {
-		ballotID := p.Ballot.ID()
-		logger.With().Debug("storing ref ballot", epoch, ballotID)
-		if err := pb.storeRefBallot(epoch, ballotID); err != nil {
-			logger.With().Error("failed to store ref ballot", ballotID, log.Err(err))
-			return err
-		}
 	}
 
 	pb.eg.Go(func() error {
