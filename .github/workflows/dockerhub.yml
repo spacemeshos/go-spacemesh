@@ -25,7 +25,7 @@ jobs:
       uses: actions/github-script@v4
       with:
         script: |
-          console.log("${{ steps.tests_logs.outputs }}")
+          console.log(JSON.stringfy(${{ steps.tests_logs.outputs }}))
   # dockerpush:
   #   runs-on: ubuntu-latest
   #   steps:
