@@ -9,7 +9,7 @@ env:
 on:
   push:
     branches:
-      - develop
+      - '*'
     tags:
       - '*'
 
@@ -17,7 +17,17 @@ jobs:
   dockerpush:
     runs-on: ubuntu-latest
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
-    - name: push to dockerhub
-      run: make dockerpush
+    - name: Systemtest result
+      run: |
+        echo "Hello World \n Testing"
+      id: tests_logs
+    - name: Tests Passed or Failed
+      run: |
+        echo '${{ steps.tests_logs.outputs.result }}''
+  # dockerpush:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #   - name: checkout
+  #     uses: actions/checkout@v2
+  #   - name: push to dockerhub
+  #     run: make dockerpush

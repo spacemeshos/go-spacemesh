@@ -216,7 +216,7 @@ jobs:
     - name: Tests Passed or Failed
       run: |
         LOGS='${{ steps.tests_logs.outputs.logs }}'
-        ERROR='ERROR'
+        ERROR='FAIL'
         if [[ "$LOGS" == *"$ERROR"* ]]; then
           exit 1
         fi
