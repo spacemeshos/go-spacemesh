@@ -206,7 +206,8 @@ jobs:
       run: cd systest && make run test_name=. size=50 bootstrap=10m level=info clusters=2 node_selector=cloud.google.com/gke-nodepool=gha
 
     - name: Systemtest result
-      run: kubectl logs systest-${{ steps.vars.outputs.sha_short }}
+      run: |
+        echo "::set-output name=logs::$(kubectl logs systest-${{ steps.vars.outputs.sha_short }})"
       id: tests_logs
     
     - name: Delete pod
@@ -214,7 +215,7 @@ jobs:
 
     - name: Tests Passed or Failed
       run: |
-        LOGS='${{ steps.tests_logs.outputs.stdout }}'
+        LOGS='${{ steps.tests_logs.outputs.logs }}'
         ERROR='ERROR'
         if [[ "$LOGS" == *"$ERROR"* ]]; then
           exit 1
