@@ -19,11 +19,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Systemtest result
-      run: echo "Hello World"
+      run: |
+        echo "::set-output name=mix-test::hello worlld\n"
       id: tests_logs
     - name: Tests Passed or Failed
       run: |
-        LOGS='${{ steps.tests_logs.outputs.stdout }}'
+        LOGS='${{ steps.tests_logs.mix-test }}'
         ERROR='ERROR'
         if [[ "$LOGS" == *"$ERROR"* ]]; then
           exit 1
