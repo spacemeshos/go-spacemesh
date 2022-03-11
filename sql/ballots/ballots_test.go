@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/sql/identities"
 )
@@ -99,4 +100,44 @@ func TestCountByPubkeyLayer(t *testing.T) {
 	count, err = CountByPubkeyLayer(db, lid, pub2)
 	require.NoError(t, err)
 	require.Equal(t, 2, count)
+}
+
+func TestGetRefBallot(t *testing.T) {
+	types.SetLayersPerEpoch(3)
+	db := sql.InMemory()
+	lid2 := types.NewLayerID(2)
+	lid3 := types.NewLayerID(3)
+	lid4 := types.NewLayerID(4)
+	lid5 := types.NewLayerID(5)
+	lid6 := types.NewLayerID(6)
+	pub1 := []byte{1, 1, 1}
+	pub2 := []byte{2, 2, 2}
+	pub3 := []byte{3, 3, 3}
+	pub4 := []byte{4, 4, 4}
+	ballots := []types.Ballot{
+		types.NewExistingBallot(types.BallotID{1}, nil, pub1, types.InnerBallot{LayerIndex: lid2}),
+		types.NewExistingBallot(types.BallotID{2}, nil, pub1, types.InnerBallot{LayerIndex: lid3}),
+		types.NewExistingBallot(types.BallotID{3}, nil, pub2, types.InnerBallot{LayerIndex: lid3}),
+		types.NewExistingBallot(types.BallotID{4}, nil, pub2, types.InnerBallot{LayerIndex: lid4}),
+		types.NewExistingBallot(types.BallotID{5}, nil, pub3, types.InnerBallot{LayerIndex: lid5}),
+		types.NewExistingBallot(types.BallotID{6}, nil, pub4, types.InnerBallot{LayerIndex: lid6}),
+	}
+	for _, ballot := range ballots {
+		require.NoError(t, Add(db, &ballot))
+	}
+
+	count, err := GetRefBallot(db, 1, pub1)
+	require.NoError(t, err)
+	require.Equal(t, types.BallotID{2}, count)
+
+	count, err = GetRefBallot(db, 1, pub2)
+	require.NoError(t, err)
+	require.Equal(t, types.BallotID{3}, count)
+
+	count, err = GetRefBallot(db, 1, pub3)
+	require.NoError(t, err)
+	require.Equal(t, types.BallotID{5}, count)
+
+	count, err = GetRefBallot(db, 1, pub4)
+	require.ErrorIs(t, err, database.ErrNotFound)
 }

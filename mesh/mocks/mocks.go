@@ -131,13 +131,11 @@ func (m *Mocktortoise) EXPECT() *MocktortoiseMockRecorder {
 }
 
 // HandleIncomingLayer mocks base method.
-func (m *Mocktortoise) HandleIncomingLayer(arg0 context.Context, arg1 types.LayerID) (types.LayerID, types.LayerID, bool) {
+func (m *Mocktortoise) HandleIncomingLayer(arg0 context.Context, arg1 types.LayerID) types.LayerID {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "HandleIncomingLayer", arg0, arg1)
 	ret0, _ := ret[0].(types.LayerID)
-	ret1, _ := ret[1].(types.LayerID)
-	ret2, _ := ret[2].(bool)
-	return ret0, ret1, ret2
+	return ret0
 }
 
 // HandleIncomingLayer indicates an expected call of HandleIncomingLayer.
