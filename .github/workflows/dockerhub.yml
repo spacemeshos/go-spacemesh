@@ -19,11 +19,11 @@ jobs:
     steps:
     - name: Systemtest result
       run: |
-        echo "::set-output name=logs::$(echo "Hello \n World \n : \n sadasdasdsad")"
+        echo "Hello"
       id: tests_logs
     - name: Tests Passed or Failed
       run: |
-        echo '${{ steps.tests_logs.outputs.logs }}'
+        echo '${{ steps.tests_logs.outputs.var }}'
   # dockerpush:
   #   runs-on: ubuntu-latest
   #   steps:
