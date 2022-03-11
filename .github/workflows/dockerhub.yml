@@ -20,7 +20,7 @@ jobs:
     steps:
     - name: Systemtest result
       run: |
-        echo "::set-output name=mix-test::hello worlld\n"
+        echo "::set-output name=mix-test::ERROR\n"
       id: tests_logs
     - name: Tests Passed or Failed
       run: |
