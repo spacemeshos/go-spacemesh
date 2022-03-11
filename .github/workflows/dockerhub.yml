@@ -22,6 +22,7 @@ jobs:
         echo "Hello World \n Testing"
       id: tests_logs
     - name: Tests Passed or Failed
+      uses: actions/github-script@v4
       with:
         script: |
           console.log("${{ steps.tests_logs.outputs }}")
