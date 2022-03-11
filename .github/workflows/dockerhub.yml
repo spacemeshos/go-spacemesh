@@ -22,9 +22,8 @@ jobs:
         echo "Hello World \n Testing"
       id: tests_logs
     - name: Tests Passed or Failed
-      with:
-        script: |
-          echo '${{ steps.tests_logs.outputs.stdout }}'
+      run: |
+        echo '${{ steps.tests_logs.outputs.stdout }}'
   # dockerpush:
   #   runs-on: ubuntu-latest
   #   steps:
