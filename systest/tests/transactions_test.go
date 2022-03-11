@@ -17,7 +17,7 @@ func testTransactions(t *testing.T, tctx *testcontext.Context, cl *cluster.Clust
 		genesis     = 7
 		sendFor     = 8
 		stopSending = genesis + sendFor + 1
-		stopWaiting = stopSending + 4
+		stopWaiting = stopSending + 2
 		batch       = 1
 		amount      = 100
 	)

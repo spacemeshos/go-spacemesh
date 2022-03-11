@@ -207,9 +207,18 @@ jobs:
 
     - name: Systemtest result
       run: kubectl logs systest-${{ steps.vars.outputs.sha_short }}
+      id: tests_logs
     
     - name: Delete pod
       run: kubectl delete pod systest-${{ steps.vars.outputs.sha_short }}
+
+    - name: Tests Passed or Failed
+      run: |
+        LOGS='${{ steps.tests_logs.outputs.stdout }}'
+        ERROR='ERROR'
+        if [[ "$STR" == *"$SUB"* ]]; then
+          exit 1
+        fi
 
   dockerpush:
     # only run on push, not on pull_request
