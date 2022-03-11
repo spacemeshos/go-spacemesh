@@ -216,7 +216,7 @@ jobs:
       run: |
         LOGS='${{ steps.tests_logs.outputs.stdout }}'
         ERROR='ERROR'
-        if [[ "$STR" == *"$SUB"* ]]; then
+        if [[ "$LOGS" == *"$ERROR"* ]]; then
           exit 1
         fi
 

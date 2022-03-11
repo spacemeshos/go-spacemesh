@@ -9,15 +9,26 @@ env:
 on:
   push:
     branches:
-      - develop
+      - '*'
     tags:
       - '*'
 
 jobs:
+
   dockerpush:
     runs-on: ubuntu-latest
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
-    - name: push to dockerhub
-      run: make dockerpush
+    - name: Systemtest result
+      run: echo "Hello World"
+      id: tests_logs
+    - name: Tests Passed or Failed
+      run: |
+        LOGS='${{ steps.tests_logs.outputs.stdout }}'
+        ERROR='ERROR'
+        if [[ "$LOGS" == *"$ERROR"* ]]; then
+          exit 1
+        fi
+    # - name: checkout
+    #   uses: actions/checkout@v2
+    # - name: push to dockerhub
+    #   run: make dockerpush
