@@ -24,7 +24,7 @@ jobs:
       id: tests_logs
     - name: Tests Passed or Failed
       run: |
-        LOGS='${{ steps.tests_logs.mix-test }}'
+        LOGS='${{ steps.tests_logs.outputs.mix-test }}'
         ERROR='ERROR'
         if [[ "$LOGS" == *"$ERROR"* ]]; then
           exit 1
