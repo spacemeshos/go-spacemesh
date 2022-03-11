@@ -23,7 +23,7 @@ jobs:
       id: tests_logs
     - name: Tests Passed or Failed
       run: |
-        echo '${{ steps.tests_logs.outputs.result }}''
+        echo '${{ steps.tests_logs.outputs }}'
   # dockerpush:
   #   runs-on: ubuntu-latest
   #   steps:
