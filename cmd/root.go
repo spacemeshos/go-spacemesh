@@ -26,6 +26,8 @@ func AddCommands(cmd *cobra.Command) {
 		config.BaseConfig.DataDirParent, "Specify data directory for spacemesh")
 	cmd.PersistentFlags().StringVar(&config.LOGGING.Encoder, "log-encoder",
 		config.LOGGING.Encoder, "Log as JSON instead of plain text")
+	cmd.PersistentFlags().StringVar(&config.LOGGING.Filepath, "log-filepath",
+		config.LOGGING.Filepath, "Log into a file")
 	cmd.PersistentFlags().BoolVar(&config.CollectMetrics, "metrics",
 		config.CollectMetrics, "collect node metrics")
 	cmd.PersistentFlags().IntVar(&config.MetricsPort, "metrics-port",

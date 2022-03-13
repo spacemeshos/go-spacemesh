@@ -10,6 +10,7 @@ import (
 
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
 )
 
 // mainLoggerName is a name of the global logger.
@@ -91,6 +92,22 @@ func initLogging() {
 // JSONLog turns JSON format on or off.
 func JSONLog(b bool) {
 	jsonLog = b
+
+	// Need to reinitialize
+	initLogging()
+}
+
+// FileLog turns on logging to file
+func FileLog(filepath string) {
+	if filepath == "" {
+		logwriter = os.Stdout
+	} else {
+		fileWriter := &lumberjack.Logger{
+			Filename: filepath,
+		}
+
+		logwriter = io.MultiWriter(fileWriter, os.Stdout)
+	}
 
 	// Need to reinitialize
 	initLogging()

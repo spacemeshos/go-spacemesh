@@ -16,6 +16,7 @@ const (
 // LoggerConfig holds the logging level for each module.
 type LoggerConfig struct {
 	Encoder                   LogEncoder `mapstructure:"log-encoder"`
+	Filepath                  string     `mapstructure:"log-filepath"`
 	AppLoggerLevel            string     `mapstructure:"app"`
 	P2PLoggerLevel            string     `mapstructure:"p2p"`
 	PostLoggerLevel           string     `mapstructure:"post"`

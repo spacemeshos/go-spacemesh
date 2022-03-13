@@ -10,6 +10,7 @@ services:
           "--poet-server", "${SMESH_POET_SERVER:?SMESH_POET_SERVER Must be specified}",
           "--post-space", "${SMESH_POST_SPACE:-1024}",
           "--log-encoder", "${SMESH_LOG_ENCODER:?json}",
+          "--log-filepath", "${SMESH_LOG_FILEPATH}",
           "--start-mining",
           "--randcon",  "${SMESH_RANDCON:-8}",
           "--layer-duration-sec", "${SMESH_LAYER_DURATION:-180}",

@@ -116,6 +116,10 @@ func setupLogging(config *bc.Config) {
 		log.JSONLog(true)
 	}
 
+	if config.LOGGING.Filepath != "" {
+		log.FileLog(config.LOGGING.Filepath)
+	}
+
 	// setup logging early
 	err := filesystem.ExistOrCreate(config.DataDir())
 	if err != nil {

@@ -107,6 +107,11 @@ var Cmd = &cobra.Command{
 		if conf.LOGGING.Encoder == config.JSONLogEncoder {
 			log.JSONLog(true)
 		}
+
+		if conf.LOGGING.Filepath != "" {
+			log.FileLog(conf.LOGGING.Filepath)
+		}
+
 		app := New(
 			WithConfig(conf),
 			// NOTE(dshulyak) this needs to be max level so that child logger can can be current level or below.
