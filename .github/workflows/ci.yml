@@ -208,7 +208,7 @@ jobs:
     - name: Systemtest result
       run: |
         SUCCESS=$(kubectl get pod systest-${{ steps.vars.outputs.sha_short }} --output="jsonpath={.status.containerStatuses[*].ready}" | cut -d' ' -f2)
-        echo "::set-output name=content::$LOGS"
+        echo "::set-output name=content::$SUCCESS"
       id: tests_logs
     
     - name: Delete pod
@@ -218,7 +218,7 @@ jobs:
       run: |
         SUCCESS='${{ steps.tests_logs.outputs.content }}'
         ISTRUE='true'
-        if [[ "$LOGS" == *"$ISTRUE"* ]]; then
+        if [[ "$SUCCESS" == *"$ISTRUE"* ]]; then
           exit 0
         else
           exit 1
