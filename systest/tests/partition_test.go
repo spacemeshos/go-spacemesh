@@ -6,7 +6,6 @@ import (
 	"time"
 
 	spacemeshv1 "github.com/spacemeshos/api/release/go/spacemesh/v1"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/sync/errgroup"
 
