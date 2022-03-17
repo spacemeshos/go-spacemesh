@@ -159,10 +159,30 @@ jobs:
 
   ## stage 2: next run docker push, as system tests rely on this
 
+  dockerpush:
+    # only run on push, not on pull_request
+    # note that this does NOT run on pushes to branch develop, see separate workflow file for that
+    if: github.event_name == 'push'
+    # should take 2-3 mins
+    timeout-minutes: 7
+    needs:
+      - ci-stage1
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: push to dockerhub
+        run: make dockerpush
+
+  ## stage 3: finally run system tests in parallel if everything else passes
   ## Run new system tests
   systest:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
+    timeout-minutes: 50
     steps:
     - uses: actions/checkout@master
 
@@ -223,23 +243,6 @@ jobs:
         else
           exit 1
         fi
-
-  dockerpush:
-    # only run on push, not on pull_request
-    # note that this does NOT run on pushes to branch develop, see separate workflow file for that
-    if: github.event_name == 'push'
-    # should take 2-3 mins
-    timeout-minutes: 7
-    needs:
-      - ci-stage1
-    runs-on: ubuntu-latest
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: push to dockerhub
-        run: make dockerpush
-
-  ## stage 3: finally run system tests in parallel if everything else passes
   systemtest-latenodes:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
