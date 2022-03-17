@@ -159,10 +159,30 @@ jobs:
 
   ## stage 2: next run docker push, as system tests rely on this
 
+  dockerpush:
+    # only run on push, not on pull_request
+    # note that this does NOT run on pushes to branch develop, see separate workflow file for that
+    if: github.event_name == 'push'
+    # should take 2-3 mins
+    timeout-minutes: 7
+    needs:
+      - ci-stage1
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: push to dockerhub
+        run: make dockerpush
+
+  ## stage 3: finally run system tests in parallel if everything else passes
   ## Run new system tests
   systest:
     runs-on: ubuntu-latest
-    if: github.event_name == 'push'
+    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
+    needs:
+      - filter-changes
+      - dockerpush
+    timeout-minutes: 50
     steps:
     - uses: actions/checkout@master
 
@@ -207,7 +227,10 @@ jobs:
 
     - name: Systemtest result
       run: |
-        SUCCESS=$(kubectl get pod systest-${{ steps.vars.outputs.sha_short }} --output="jsonpath={.status.containerStatuses[*].ready}" | cut -d' ' -f2)
+        SUCCESS=$(kubectl get pod systest-${{ steps.vars.outputs.sha_short }}  -ojson | jq .status.containerStatuses[].state.terminated.exitCode)
+        SUCCESS="${SUCCESS//'%'/'%25'}"
+        SUCCESS="${SUCCESS//$'\n'/'%0A'}"
+        SUCCESS="${SUCCESS//$'\r'/'%0D'}"
         echo "::set-output name=content::$SUCCESS"
       id: tests_logs
     
@@ -217,29 +240,12 @@ jobs:
     - name: Tests Passed or Failed
       run: |
         SUCCESS='${{ steps.tests_logs.outputs.content }}'
-        ISTRUE='true'
-        if [[ "$SUCCESS" == *"$ISTRUE"* ]]; then
+        ISTRUE='0'
+        if [[ "$SUCCESS" == "$ISTRUE" ]]; then
           exit 0
         else
           exit 1
         fi
-
-  dockerpush:
-    # only run on push, not on pull_request
-    # note that this does NOT run on pushes to branch develop, see separate workflow file for that
-    if: github.event_name == 'push'
-    # should take 2-3 mins
-    timeout-minutes: 7
-    needs:
-      - ci-stage1
-    runs-on: ubuntu-latest
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: push to dockerhub
-        run: make dockerpush
-
-  ## stage 3: finally run system tests in parallel if everything else passes
   systemtest-latenodes:
     runs-on: ubuntu-latest
     # only run on push, not on pull_request
@@ -371,10 +377,11 @@ jobs:
       - systemtest-p2p
       - systemtest-hare
       - systemtest-beacon
+      - systest
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-beacon.result == 'success')) && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.systest.result == 'success' && needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-beacon.result == 'success')) && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1
