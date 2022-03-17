@@ -228,6 +228,9 @@ jobs:
     - name: Systemtest result
       run: |
         SUCCESS=$(kubectl get pod systest-${{ steps.vars.outputs.sha_short }}  -ojson | jq .status.containerStatuses[].state.terminated.exitCode)
+        SUCCESS="${SUCCESS//'%'/'%25'}"
+        SUCCESS="${SUCCESS//$'\n'/'%0A'}"
+        SUCCESS="${SUCCESS//$'\r'/'%0D'}"
         echo "::set-output name=content::$SUCCESS"
       id: tests_logs
     
@@ -238,7 +241,7 @@ jobs:
       run: |
         SUCCESS='${{ steps.tests_logs.outputs.content }}'
         ISTRUE='0'
-        if [[ "$SUCCESS" == *"$ISTRUE"* ]]; then
+        if [[ "$SUCCESS" == "$ISTRUE" ]]; then
           exit 0
         else
           exit 1
