@@ -232,8 +232,8 @@ jobs:
         echo "::set-output name=content::$SUCCESS"
       id: tests_logs
     
-    # - name: Delete pod
-    #   run: kubectl delete pod systest-${{ steps.vars.outputs.sha_short }}
+    - name: Delete pod
+      run: kubectl delete pod systest-${{ steps.vars.outputs.sha_short }}
 
     - name: Tests Passed or Failed
       run: |
