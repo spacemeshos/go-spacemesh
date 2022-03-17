@@ -207,7 +207,7 @@ jobs:
 
     - name: Systemtest result
       run: |
-        SUCCESS=$(kubectl get pod systest-${{ steps.vars.outputs.sha_short }} --output="jsonpath={.status.containerStatuses[*].ready}" | cut -d' ' -f2)
+        SUCCESS=$(kubectl get pod systest-${{ steps.vars.outputs.sha_short }} --output="jsonpath={.status.containerStatuses[].lastState.terminated.exitCode}")
         echo "::set-output name=content::$SUCCESS"
       id: tests_logs
     
@@ -217,7 +217,7 @@ jobs:
     - name: Tests Passed or Failed
       run: |
         SUCCESS='${{ steps.tests_logs.outputs.content }}'
-        ISTRUE='true'
+        ISTRUE='0'
         if [[ "$SUCCESS" == *"$ISTRUE"* ]]; then
           exit 0
         else
@@ -371,10 +371,11 @@ jobs:
       - systemtest-p2p
       - systemtest-hare
       - systemtest-beacon
+      - systest
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-beacon.result == 'success')) && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.systest.result == 'success' && needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-beacon.result == 'success')) && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1
