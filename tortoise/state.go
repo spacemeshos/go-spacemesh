@@ -15,7 +15,7 @@ func newCommonState() commonState {
 		epochWeight:      map[types.EpochID]weight{},
 		referenceWeight:  map[types.BallotID]weight{},
 		ballotWeight:     map[types.BallotID]weight{},
-		undecided:        map[types.LayerID]struct{}{},
+		decided:          map[types.LayerID]struct{}{},
 		hareOutput:       votes{},
 		validity:         votes{},
 	}
@@ -65,7 +65,7 @@ type commonState struct {
 	// ballotWeight is referenceWeight multiplied by the number of eligibilities
 	ballotWeight map[types.BallotID]weight
 
-	undecided  map[types.LayerID]struct{}
+	decided    map[types.LayerID]struct{}
 	hareOutput votes
 	validity   votes
 }

@@ -66,6 +66,8 @@ type verifying struct {
 	Config
 	*commonState
 
+	counted types.LayerID
+
 	goodBallots map[types.BallotID]goodness
 	// weight of good ballots in the layer N
 	goodWeight map[types.LayerID]weight
@@ -104,6 +106,9 @@ func (v *verifying) markGoodCut(logger log.Log, lid types.LayerID, ballots []tor
 }
 
 func (v *verifying) countVotes(logger log.Log, lid types.LayerID, ballots []tortoiseBallot) {
+	if lid.After(v.counted) {
+		v.counted = lid
+	}
 	logger = logger.WithFields(log.Stringer("ballots_layer", lid))
 
 	goodWeight, goodBallotsCount := v.countGoodBallots(logger, ballots)

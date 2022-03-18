@@ -12,7 +12,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
-	"github.com/spacemeshos/go-spacemesh/tortoise/organizer"
 )
 
 // Config for protocol parameters.
@@ -66,8 +65,7 @@ type Tortoise struct {
 		err error
 	}
 
-	mu  sync.Mutex
-	org *organizer.Organizer
+	mu sync.Mutex
 
 	// update will be set to non-nil after rerun completes, and must be set to nil once
 	// used to replace trtl.
@@ -153,11 +151,6 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 		close(t.ready)
 	}
 
-	t.org = organizer.New(
-		organizer.WithLogger(t.logger),
-		organizer.WithLastLayer(t.trtl.processed),
-	)
-
 	// TODO(dshulyak) with low rerun interval it is possible to start a rerun
 	// when initial sync is in progress, or right after sync
 	if t.cfg.RerunInterval != 0 {
@@ -186,7 +179,7 @@ func (t *Tortoise) BaseBallot(ctx context.Context) (*types.Votes, error) {
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes.
-func (t *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) types.LayerID {
+func (t *Tortoise) HandleIncomingLayer(ctx context.Context, lid types.LayerID) types.LayerID {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -196,11 +189,10 @@ func (t *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerI
 	)
 
 	t.updateFromRerun(ctx)
-	t.org.Iterate(ctx, layerID, func(lid types.LayerID) {
-		if err := t.trtl.HandleIncomingLayer(ctx, lid); err != nil {
-			logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
-		}
-	})
+	if err := t.trtl.OnLayerTerminated(ctx, lid); err != nil {
+		logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
+		return t.trtl.verified
+	}
 
 	for lid := old; !lid.After(t.trtl.verified); lid = lid.Add(1) {
 		events.ReportLayerUpdate(events.LayerUpdate{
@@ -225,8 +217,15 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if err := t.trtl.onBallot(ballot); err != nil {
-		t.logger.Warning("failed to save state from ballot", ballot.ID(), log.Err(err))
+		t.logger.With().Warning("failed to save state from ballot", ballot.ID(), log.Err(err))
 	}
+}
+
+// OnHareOutput should be called when new hare output is learned.
+func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.trtl.onHareOutput(lid, bid)
 }
 
 // WaitReady waits until state will be reloaded from disk.
