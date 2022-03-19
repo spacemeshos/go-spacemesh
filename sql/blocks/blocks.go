@@ -124,3 +124,20 @@ func IDsInLayer(db sql.Executor, lid types.LayerID) ([]types.BlockID, error) {
 	}
 	return rst, nil
 }
+
+// ContextualValidity returns tuples with block id and contextual validity for all blocks in the layer.
+func ContextualValidity(db sql.Executor, lid types.LayerID) ([]types.BlockContextualValidity, error) {
+	var rst []types.BlockContextualValidity
+	if _, err := db.Exec("select id, validity from blocks where layer = ?1;", func(stmt *sql.Statement) {
+		stmt.BindInt64(1, int64(lid.Uint32()))
+	}, func(stmt *sql.Statement) bool {
+		validity := types.BlockContextualValidity{}
+		stmt.ColumnBytes(0, validity.ID[:])
+		validity.Validity = stmt.ColumnInt(0) == 1
+		rst = append(rst, validity)
+		return true
+	}); err != nil {
+		return nil, fmt.Errorf("contextual validity in layer %s: %w", lid, err)
+	}
+	return rst, nil
+}

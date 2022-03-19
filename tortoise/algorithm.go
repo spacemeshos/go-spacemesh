@@ -170,11 +170,29 @@ func (t *Tortoise) LatestComplete() types.LayerID {
 	return t.trtl.verified
 }
 
+type encodeConf struct {
+	last *types.LayerID
+}
+
+// EncodeVotesOpts is for configuring EncodeVotes options
+type EncodeVotesOpts func(*encodeConf)
+
+// EncodeVotesWithLast changes last known layer that will be used for encoding votes.
+func EncodeVotesWithLast(last types.LayerID) EncodeVotesOpts {
+	return func(conf *encodeConf) {
+		conf.last = &last
+	}
+}
+
 // BaseBallot chooses a base ballot and creates a differences list. needs the hare results for latest layers.
-func (t *Tortoise) BaseBallot(ctx context.Context) (*types.Votes, error) {
+func (t *Tortoise) BaseBallot(ctx context.Context, opts ...EncodeVotesOpts) (*types.Votes, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	return t.trtl.BaseBallot(ctx)
+	conf := &encodeConf{}
+	for _, opt := range opts {
+		opt(conf)
+	}
+	return t.trtl.EncodeVotes(ctx, conf)
 }
 
 // HandleIncomingLayer processes all layer block votes
@@ -189,7 +207,7 @@ func (t *Tortoise) HandleIncomingLayer(ctx context.Context, lid types.LayerID) t
 	)
 
 	t.updateFromRerun(ctx)
-	if err := t.trtl.OnLayerTerminated(ctx, lid); err != nil {
+	if err := t.trtl.onLayerTerminated(ctx, lid); err != nil {
 		logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
 		return t.trtl.verified
 	}

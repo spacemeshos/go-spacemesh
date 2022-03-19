@@ -16,6 +16,7 @@ type blockDataProvider interface {
 	LayerBlockIds(layerID types.LayerID) ([]types.BlockID, error)
 	GetCoinflip(context.Context, types.LayerID) (bool, bool)
 	GetHareConsensusOutput(types.LayerID) (types.BlockID, error)
+	LayerContextualValidity(types.LayerID) ([]types.BlockContextualValidity, error)
 	ContextualValidity(types.BlockID) (bool, error)
 }
 

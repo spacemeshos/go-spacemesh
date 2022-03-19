@@ -342,6 +342,11 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) ([]types.Reward, erro
 	return rewards.FilterBySmesher(m.db, smesherID.ToBytes())
 }
 
+// LayerContextualValidity returns tuples with block id and contextual validity for all blocks in the layer.
+func (m *DB) LayerContextualValidity(lid types.LayerID) ([]types.BlockContextualValidity, error) {
+	return blocks.ContextualValidity(m.db, lid)
+}
+
 // LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer.
 func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.LayerID) (map[types.BlockID]struct{}, error) {
 	logger := m.WithContext(ctx)

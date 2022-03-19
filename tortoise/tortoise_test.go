@@ -237,7 +237,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 }
 
 type (
-	baseBallotProvider func(context.Context) (*types.Votes, error)
+	baseBallotProvider func(context.Context, ...EncodeVotesOpts) (*types.Votes, error)
 )
 
 func generateBallots(t *testing.T, l types.LayerID, natxs, nballots int, bbp baseBallotProvider, atxdb atxDataWriter, weight uint) []*types.Ballot {
@@ -1891,7 +1891,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 				tortoise.HandleIncomingLayer(ctx, lid)
 			}
 
-			err := tortoise.trtl.addLocalVotes(ctx, logtest.New(t), tc.lid)
+			err := tortoise.trtl.loadConsensusData(tc.lid)
 			require.NoError(t, err)
 
 			blocks, err := s.GetState(0).MeshDB.LayerBlockIds(tc.lid)
