@@ -140,6 +140,21 @@ func (mr *MockblockDataProviderMockRecorder) LayerBlockIds(layerID interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerBlockIds", reflect.TypeOf((*MockblockDataProvider)(nil).LayerBlockIds), layerID)
 }
 
+// LayerContextualValidity mocks base method.
+func (m *MockblockDataProvider) LayerContextualValidity(arg0 types.LayerID) ([]types.BlockContextualValidity, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LayerContextualValidity", arg0)
+	ret0, _ := ret[0].([]types.BlockContextualValidity)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LayerContextualValidity indicates an expected call of LayerContextualValidity.
+func (mr *MockblockDataProviderMockRecorder) LayerContextualValidity(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerContextualValidity", reflect.TypeOf((*MockblockDataProvider)(nil).LayerContextualValidity), arg0)
+}
+
 // LayerContextuallyValidBlocks mocks base method.
 func (m *MockblockDataProvider) LayerContextuallyValidBlocks(arg0 context.Context, arg1 types.LayerID) (map[types.BlockID]struct{}, error) {
 	m.ctrl.T.Helper()
@@ -153,6 +168,43 @@ func (m *MockblockDataProvider) LayerContextuallyValidBlocks(arg0 context.Contex
 func (mr *MockblockDataProviderMockRecorder) LayerContextuallyValidBlocks(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerContextuallyValidBlocks", reflect.TypeOf((*MockblockDataProvider)(nil).LayerContextuallyValidBlocks), arg0, arg1)
+}
+
+// MockblockValidityUpdater is a mock of blockValidityUpdater interface.
+type MockblockValidityUpdater struct {
+	ctrl     *gomock.Controller
+	recorder *MockblockValidityUpdaterMockRecorder
+}
+
+// MockblockValidityUpdaterMockRecorder is the mock recorder for MockblockValidityUpdater.
+type MockblockValidityUpdaterMockRecorder struct {
+	mock *MockblockValidityUpdater
+}
+
+// NewMockblockValidityUpdater creates a new mock instance.
+func NewMockblockValidityUpdater(ctrl *gomock.Controller) *MockblockValidityUpdater {
+	mock := &MockblockValidityUpdater{ctrl: ctrl}
+	mock.recorder = &MockblockValidityUpdaterMockRecorder{mock}
+	return mock
+}
+
+// EXPECT returns an object that allows the caller to indicate expected use.
+func (m *MockblockValidityUpdater) EXPECT() *MockblockValidityUpdaterMockRecorder {
+	return m.recorder
+}
+
+// UpdateBlockValidity mocks base method.
+func (m *MockblockValidityUpdater) UpdateBlockValidity(arg0 types.BlockID, arg1 types.LayerID, arg2 bool) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateBlockValidity", arg0, arg1, arg2)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// UpdateBlockValidity indicates an expected call of UpdateBlockValidity.
+func (mr *MockblockValidityUpdaterMockRecorder) UpdateBlockValidity(arg0, arg1, arg2 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBlockValidity", reflect.TypeOf((*MockblockValidityUpdater)(nil).UpdateBlockValidity), arg0, arg1, arg2)
 }
 
 // MockatxDataProvider is a mock of atxDataProvider interface.
