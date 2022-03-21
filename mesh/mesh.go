@@ -373,7 +373,6 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	to := layerID
 	if from == msh.MissingLayer() {
 		to = msh.maxProcessedLayer
-
 	}
 
 	if !to.Before(from) {
