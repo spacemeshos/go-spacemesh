@@ -35,21 +35,6 @@ func (m *MockblockDataProvider) EXPECT() *MockblockDataProviderMockRecorder {
 	return m.recorder
 }
 
-// ContextualValidity mocks base method.
-func (m *MockblockDataProvider) ContextualValidity(arg0 types.BlockID) (bool, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "ContextualValidity", arg0)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// ContextualValidity indicates an expected call of ContextualValidity.
-func (mr *MockblockDataProviderMockRecorder) ContextualValidity(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ContextualValidity", reflect.TypeOf((*MockblockDataProvider)(nil).ContextualValidity), arg0)
-}
-
 // GetBallot mocks base method.
 func (m *MockblockDataProvider) GetBallot(id types.BallotID) (*types.Ballot, error) {
 	m.ctrl.T.Helper()
@@ -153,21 +138,6 @@ func (m *MockblockDataProvider) LayerContextualValidity(arg0 types.LayerID) ([]t
 func (mr *MockblockDataProviderMockRecorder) LayerContextualValidity(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerContextualValidity", reflect.TypeOf((*MockblockDataProvider)(nil).LayerContextualValidity), arg0)
-}
-
-// LayerContextuallyValidBlocks mocks base method.
-func (m *MockblockDataProvider) LayerContextuallyValidBlocks(arg0 context.Context, arg1 types.LayerID) (map[types.BlockID]struct{}, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "LayerContextuallyValidBlocks", arg0, arg1)
-	ret0, _ := ret[0].(map[types.BlockID]struct{})
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// LayerContextuallyValidBlocks indicates an expected call of LayerContextuallyValidBlocks.
-func (mr *MockblockDataProviderMockRecorder) LayerContextuallyValidBlocks(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LayerContextuallyValidBlocks", reflect.TypeOf((*MockblockDataProvider)(nil).LayerContextuallyValidBlocks), arg0, arg1)
 }
 
 // MockblockValidityUpdater is a mock of blockValidityUpdater interface.

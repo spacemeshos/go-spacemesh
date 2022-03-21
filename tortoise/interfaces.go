@@ -9,7 +9,6 @@ import (
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interfaces.go
 
 type blockDataProvider interface {
-	LayerContextuallyValidBlocks(context.Context, types.LayerID) (map[types.BlockID]struct{}, error)
 	GetBlock(types.BlockID) (*types.Block, error)
 	GetBallot(id types.BallotID) (*types.Ballot, error)
 	LayerBallots(types.LayerID) ([]*types.Ballot, error)
@@ -17,7 +16,6 @@ type blockDataProvider interface {
 	GetCoinflip(context.Context, types.LayerID) (bool, bool)
 	GetHareConsensusOutput(types.LayerID) (types.BlockID, error)
 	LayerContextualValidity(types.LayerID) ([]types.BlockContextualValidity, error)
-	ContextualValidity(types.BlockID) (bool, error)
 }
 
 type blockValidityUpdater interface {

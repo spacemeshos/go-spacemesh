@@ -168,11 +168,6 @@ func (t *turtle) evict(ctx context.Context) {
 }
 
 // EncodeVotes by choosing base ballot and explicit votes.
-//
-// NOTE(dshulyak) why last as a parameter?
-// we compute threshold from last non-verified till the last known layer,
-// since we dont download atxs before starting tortoise we won't be able to compute threshold
-// based on the last clock layer
 func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Votes, error) {
 	var (
 		logger        = t.logger.WithContext(ctx)
@@ -585,6 +580,7 @@ func (t *turtle) loadConsensusData(lid types.LayerID) error {
 		return fmt.Errorf("get hare output %s: %w", lid, err)
 	}
 	t.onHareOutput(lid, output)
+
 	layer, err := t.bdp.LayerContextualValidity(lid)
 	if err != nil {
 		return fmt.Errorf("contextual validity %s: %w", lid, err)

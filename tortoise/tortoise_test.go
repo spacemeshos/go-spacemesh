@@ -2132,10 +2132,15 @@ func TestNetworkRecoversFromFullPartition(t *testing.T) {
 
 	// each partition has one valid block
 	for lid := partitionStart.Add(1); !lid.After(partitionEnd); lid = lid.Add(1) {
-		validBlocks, err := s1.GetState(0).MeshDB.LayerContextuallyValidBlocks(context.TODO(), lid)
+		validities, err := s1.GetState(0).MeshDB.LayerContextualValidity(lid)
+		var valid []types.BlockID
+		for _, validity := range validities {
+			if validity.Validity {
+				valid = append(valid, validity.ID)
+			}
+		}
 		require.NoError(t, err)
-		assert.Len(t, validBlocks, numValidBlock*2, "layer=%s", lid)
-		assert.NotContains(t, validBlocks, types.EmptyBlockID)
+		assert.Len(t, valid, numValidBlock*2, "layer=%s", lid)
 	}
 }
 

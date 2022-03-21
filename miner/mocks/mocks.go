@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	tortoise "github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 // MockproposalOracle is a mock of proposalOracle interface.
@@ -115,18 +116,23 @@ func (m *MockbaseBallotProvider) EXPECT() *MockbaseBallotProviderMockRecorder {
 }
 
 // BaseBallot mocks base method.
-func (m *MockbaseBallotProvider) BaseBallot(arg0 context.Context) (*types.Votes, error) {
+func (m *MockbaseBallotProvider) BaseBallot(arg0 context.Context, arg1 ...tortoise.EncodeVotesOpts) (*types.Votes, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "BaseBallot", arg0)
+	varargs := []interface{}{arg0}
+	for _, a := range arg1 {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "BaseBallot", varargs...)
 	ret0, _ := ret[0].(*types.Votes)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // BaseBallot indicates an expected call of BaseBallot.
-func (mr *MockbaseBallotProviderMockRecorder) BaseBallot(arg0 interface{}) *gomock.Call {
+func (mr *MockbaseBallotProviderMockRecorder) BaseBallot(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BaseBallot", reflect.TypeOf((*MockbaseBallotProvider)(nil).BaseBallot), arg0)
+	varargs := append([]interface{}{arg0}, arg1...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BaseBallot", reflect.TypeOf((*MockbaseBallotProvider)(nil).BaseBallot), varargs...)
 }
 
 // MockactivationDB is a mock of activationDB interface.

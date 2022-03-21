@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
@@ -17,7 +18,7 @@ type conservativeState interface {
 }
 
 type baseBallotProvider interface {
-	BaseBallot(context.Context) (*types.Votes, error)
+	BaseBallot(context.Context, ...tortoise.EncodeVotesOpts) (*types.Votes, error)
 }
 
 type activationDB interface {

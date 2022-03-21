@@ -178,6 +178,11 @@ type encodeConf struct {
 type EncodeVotesOpts func(*encodeConf)
 
 // EncodeVotesWithLast changes last known layer that will be used for encoding votes.
+//
+// NOTE(dshulyak) why do we need this?
+// tortoise computes threshold from last non-verified till the last known layer,
+// since we dont download atxs before starting tortoise we won't be able to compute threshold
+// based on the last clock layer (see https://github.com/spacemeshos/go-spacemesh/issues/3003)
 func EncodeVotesWithLast(last types.LayerID) EncodeVotesOpts {
 	return func(conf *encodeConf) {
 		conf.last = &last
