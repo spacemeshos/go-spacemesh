@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
@@ -257,16 +258,20 @@ func (cs *ConservativeState) writeForBlock(layerID types.LayerID, bid types.Bloc
 
 // Transactions exports the transactions DB.
 func (cs *ConservativeState) Transactions() database.Getter {
-	return &txFetcher{db: cs.db}
+	return &txFetcher{pool: cs.pool, db: cs.db}
 }
 
 type txFetcher struct {
-	db *sql.Database
+	pool *txPool
+	db   *sql.Database
 }
 
 // Get transaction blob, by transaction id.
 func (f *txFetcher) Get(hash []byte) ([]byte, error) {
 	id := types.TransactionID{}
 	copy(id[:], hash)
+	if tx, err := f.pool.get(id); err == nil && tx != nil {
+		return codec.Encode(tx)
+	}
 	return transactions.GetBlob(f.db, id)
 }
