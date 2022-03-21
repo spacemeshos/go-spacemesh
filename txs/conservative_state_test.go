@@ -467,12 +467,14 @@ func TestApplyLayer_Failed(t *testing.T) {
 	}
 }
 
-func TestTXFetcher(t *testing.T) {
+func TestTXetcherIncludesMemPool(t *testing.T) {
 	tcs := createConservativeState(t)
 	const numTX = 10
 
-	ids, txs := addBatchToDB(t, tcs.db, types.NewLayerID(10), types.EmptyBlockID, numTX)
-
+	dbids, dbTXs := addBatchToDB(t, tcs.db, types.NewLayerID(10), types.EmptyBlockID, numTX)
+	memids, memTXs := addBatchToMemPool(t, tcs.ConservativeState, numTX)
+	ids := append(dbids, memids...)
+	txs := append(dbTXs, memTXs...)
 	for i, id := range ids {
 		buf, err := tcs.Transactions().Get(id.Bytes())
 		require.NoError(t, err)
