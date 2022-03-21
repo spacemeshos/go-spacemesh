@@ -73,7 +73,8 @@ func Test_PoETHarnessSanity(t *testing.T) {
 }
 
 func (suite *AppTestSuite) initMultipleInstances(ctx context.Context, cfg *config.Config, rolacle *eligibility.FixedRolacle, numOfInstances int, genesisTime string,
-	poetClient *activation.HTTPPoetClient, clock TickProvider, mesh mocknet.Mocknet) (firstDir string) {
+	poetClient *activation.HTTPPoetClient, clock TickProvider, mesh mocknet.Mocknet,
+) (firstDir string) {
 	name := 'a'
 	for i, h := range mesh.Hosts() {
 		dbStorepath := suite.T().TempDir()
@@ -696,7 +697,8 @@ func calcTotalWeight(
 	suite *AppTestSuite,
 	atxDb *activation.DB,
 	apps []*App,
-	untilEpoch types.EpochID) (totalWeightAllEpochs uint64) {
+	untilEpoch types.EpochID,
+) (totalWeightAllEpochs uint64) {
 	r := require.New(suite.T())
 	for _, app := range apps {
 		atxID, err := atxDb.GetNodeLastAtxID(app.nodeID)
