@@ -215,7 +215,8 @@ func GracefulShutdown(apps []*App) {
 // InitSingleInstance initializes a node instance with given
 // configuration and parameters, it does not stop the instance.
 func InitSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
-	poetClient *activation.HTTPPoetClient, clock TickProvider, host *p2p.Host, edSgn *signing.EdSigner) (*App, error) {
+	poetClient *activation.HTTPPoetClient, clock TickProvider, host *p2p.Host, edSgn *signing.EdSigner,
+) (*App, error) {
 	smApp := New(WithLog(lg))
 	smApp.Config = &cfg
 	smApp.Config.GenesisTime = genesisTime

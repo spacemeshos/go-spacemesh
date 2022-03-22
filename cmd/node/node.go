@@ -457,7 +457,8 @@ func (app *App) initServices(ctx context.Context,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
-	layersPerEpoch uint32, clock TickProvider) error {
+	layersPerEpoch uint32, clock TickProvider,
+) error {
 	app.nodeID = nodeID
 
 	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
