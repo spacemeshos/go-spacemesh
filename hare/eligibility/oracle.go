@@ -112,7 +112,8 @@ func New(
 	vrfSigner *signing.VRFSigner,
 	layersPerEpoch uint32,
 	cfg config.Config,
-	logger log.Log) *Oracle {
+	logger log.Log,
+) *Oracle {
 	vmc, err := lru.New(vrfMsgCacheSize)
 	if err != nil {
 		logger.With().Panic("could not create lru cache", log.Err(err))
@@ -236,7 +237,8 @@ func calcVrfFrac(vrfSig []byte) fixed.Fixed {
 }
 
 func (o *Oracle) prepareEligibilityCheck(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
-	id types.NodeID, vrfSig []byte) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
+	id types.NodeID, vrfSig []byte,
+) (n int, p, vrfFrac fixed.Fixed, done bool, err error) {
 	logger := o.WithContext(ctx).WithFields(
 		layer,
 		id,
@@ -351,7 +353,8 @@ func (o *Oracle) Validate(ctx context.Context, layer types.LayerID, round uint32
 // CalcEligibility calculates the number of eligibilities of ID on the given Layer where msg is the VRF message, sig is
 // the role proof and assuming commSize as the expected committee size.
 func (o *Oracle) CalcEligibility(ctx context.Context, layer types.LayerID, round uint32, committeeSize int,
-	id types.NodeID, vrfSig []byte) (uint16, error) {
+	id types.NodeID, vrfSig []byte,
+) (uint16, error) {
 	n, p, vrfFrac, done, err := o.prepareEligibilityCheck(ctx, layer, round, committeeSize, id, vrfSig)
 	if done {
 		return 0, err
