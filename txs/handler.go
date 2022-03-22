@@ -16,6 +16,7 @@ const IncomingTxProtocol = "TxGossip"
 
 var (
 	errMalformedMsg      = errors.New("malformed tx")
+	errDuplicateTX       = errors.New("tx already exists")
 	errAddrNotExtracted  = errors.New("address not extracted")
 	errAddrNotFound      = errors.New("address not found")
 	errRejectedByMemPool = errors.New("rejected by mempool")
@@ -48,6 +49,10 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	if err != nil {
 		th.logger.WithContext(ctx).With().Error("failed to parse tx", log.Err(err))
 		return errMalformedMsg
+	}
+
+	if th.state.HasTx(tx.ID()) {
+		return errDuplicateTX
 	}
 
 	if err = tx.CalcAndSetOrigin(); err != nil {

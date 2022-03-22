@@ -39,6 +39,12 @@ func (tp *txPool) get(id types.TransactionID) (*types.MeshTransaction, error) {
 	return nil, errors.New("tx not in mempool")
 }
 
+func (tp *txPool) has(txID types.TransactionID) bool {
+	tp.mu.RLock()
+	defer tp.mu.RUnlock()
+	return tp.txs[txID] != nil
+}
+
 func (tp *txPool) add(id types.TransactionID, tx *types.Transaction) {
 	tp.mu.Lock()
 	defer tp.mu.Unlock()
