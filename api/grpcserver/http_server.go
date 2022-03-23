@@ -60,7 +60,8 @@ func (s *JSONHTTPServer) StartService(
 func (s *JSONHTTPServer) startInternal(
 	ctx context.Context,
 	started chan<- struct{},
-	services ...ServiceAPI) {
+	services ...ServiceAPI,
+) {
 	ctx, cancel := context.WithCancel(ctx)
 
 	// This will close all downstream connections when the server closes

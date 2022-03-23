@@ -194,7 +194,8 @@ func newConsensusProcess(cfg config.Config, instanceID types.LayerID, s *Set, or
 	layersPerEpoch uint16, signing Signer, nid types.NodeID, p2p pubsub.Publisher,
 	terminationReport chan TerminationOutput,
 	certificationReport chan types.LayerID,
-	ev roleValidator, clock RoundClock, logger log.Log) *consensusProcess {
+	ev roleValidator, clock RoundClock, logger log.Log,
+) *consensusProcess {
 	msgsTracker := newMsgsTracker()
 	proc := &consensusProcess{
 		State:               State{preRound, preRound, s.Clone(), nil},

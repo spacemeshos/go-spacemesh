@@ -38,7 +38,8 @@ func (s NodeService) RegisterService(server *Server) {
 
 // NewNodeService creates a new grpc service using config data.
 func NewNodeService(
-	peers api.PeerCounter, msh api.MeshAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI) *NodeService {
+	peers api.PeerCounter, msh api.MeshAPI, genTime api.GenesisTimeAPI, syncer api.Syncer, atxapi api.ActivationAPI,
+) *NodeService {
 	return &NodeService{
 		mesh:        msh,
 		genTime:     genTime,

@@ -65,7 +65,8 @@ func createTransactions(t testing.TB, numOfTxs int) (uint64, []types.Transaction
 }
 
 func createProposalsWithOverlappingTXs(t *testing.T, layerID types.LayerID, numProposals int, txIDs []types.TransactionID) (
-	map[types.ATXID]*types.ActivationTx, []*types.Proposal) {
+	map[types.ATXID]*types.ActivationTx, []*types.Proposal,
+) {
 	t.Helper()
 	require.Zero(t, len(txIDs)%numProposals)
 	pieSize := len(txIDs) / numProposals
