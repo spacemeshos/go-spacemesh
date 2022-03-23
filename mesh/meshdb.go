@@ -1,7 +1,6 @@
 package mesh
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -397,35 +396,4 @@ func (db *BallotFetcherDB) Get(hash []byte) ([]byte, error) {
 	}
 
 	return data, nil
-}
-
-// LayerIDs is a utility function that finds namespaced IDs saved in a database as a key.
-func LayerIDs(db database.Database, namespace string, lid types.LayerID, f func(id []byte) error) error {
-	var (
-		zero = false
-		n    int
-		buf  = new(bytes.Buffer)
-	)
-	buf.WriteString(namespace)
-	buf.Write(lid.Bytes())
-
-	it := db.Find(buf.Bytes())
-	defer it.Release()
-	for it.Next() {
-		if len(it.Key()) == buf.Len() {
-			zero = true
-			continue
-		}
-		if err := f(it.Key()[buf.Len():]); err != nil {
-			return err
-		}
-		n++
-	}
-	if it.Error() != nil {
-		return fmt.Errorf("iterator: %w", it.Error())
-	}
-	if zero || n > 0 {
-		return nil
-	}
-	return database.ErrNotFound
 }

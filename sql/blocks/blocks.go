@@ -133,7 +133,7 @@ func ContextualValidity(db sql.Executor, lid types.LayerID) ([]types.BlockContex
 	}, func(stmt *sql.Statement) bool {
 		validity := types.BlockContextualValidity{}
 		stmt.ColumnBytes(0, validity.ID[:])
-		validity.Validity = stmt.ColumnInt(0) == 1
+		validity.Validity = stmt.ColumnInt(1) == 1
 		rst = append(rst, validity)
 		return true
 	}); err != nil {
