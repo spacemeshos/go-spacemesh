@@ -468,7 +468,7 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 	}
 
 	for count := t.verifying.counted.Add(1); count.Before(t.processed); count = count.Add(1) {
-		if _, exist := t.decided[count]; !exist {
+		if _, exist := t.decided[count]; !exist && count.After(types.GetEffectiveGenesis()) {
 			logger.With().Info("gap in the layers received by tortoise", log.Stringer("undecided", count))
 			return nil
 		}
@@ -647,6 +647,10 @@ func (t *turtle) updateState(ctx context.Context, logger log.Log, lid types.Laye
 		if err := t.onBallot(ballot); err != nil {
 			t.logger.With().Warning("failed to add ballot to the state", log.Err(err), log.Inline(ballot))
 		}
+	}
+
+	if err := t.loadConsensusData(lid); err != nil {
+		return err
 	}
 	return nil
 }

@@ -84,10 +84,6 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 	)
 
 	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(last); lid = lid.Add(1) {
-		// FIXME(dshulyak) load validity and hare output
-		if err := consensus.loadConsensusData(lid); err != nil {
-			return err
-		}
 		if err := consensus.onLayerTerminated(ctx, lid); err != nil {
 			return err
 		}

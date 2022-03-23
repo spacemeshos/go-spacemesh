@@ -244,13 +244,6 @@ func (t *Tortoise) OnBallot(ballot *types.Ballot) {
 	}
 }
 
-// OnHareOutput should be called when new hare output is learned.
-func (t *Tortoise) OnHareOutput(lid types.LayerID, bid types.BlockID) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.trtl.onHareOutput(lid, bid)
-}
-
 // WaitReady waits until state will be reloaded from disk.
 func (t *Tortoise) WaitReady(ctx context.Context) error {
 	select {
