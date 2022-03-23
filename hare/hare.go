@@ -10,11 +10,11 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
-	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
 )
 
@@ -358,8 +358,10 @@ func (h *Hare) onTick(ctx context.Context, id types.LayerID) (bool, error) {
 func (h *Hare) getGoodProposal(lyrID types.LayerID, epochBeacon types.Beacon, logger log.Log) []types.ProposalID {
 	proposals, err := h.pdb.LayerProposals(lyrID)
 	if err != nil {
-		if err != database.ErrNotFound {
-			logger.With().Error("no proposals found for hare, using empty set", log.Err(err))
+		if !errors.Is(err, sql.ErrNotFound) {
+			logger.With().Warning("no proposals found for hare, using empty set", log.Err(err))
+		} else {
+			logger.With().Error("failed to get proposals for hare", log.Err(err))
 		}
 		return []types.ProposalID{}
 	}
