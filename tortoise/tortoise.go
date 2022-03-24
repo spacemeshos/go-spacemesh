@@ -440,7 +440,22 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Be
 // terminated layers.
 func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error {
 	defer t.evict(ctx)
-	return t.processLayer(ctx, t.logger.WithContext(ctx).WithFields(lid), lid)
+	if err := t.loadConsensusData(lid); err != nil {
+		return err
+	}
+	if t.processed.Before(lid) {
+		t.processed = lid
+	}
+	for count := t.verifying.counted.Add(1); !count.After(t.processed); count = count.Add(1) {
+		if _, exist := t.decided[count]; !exist && count.After(types.GetEffectiveGenesis()) {
+			t.logger.With().Info("gap in the layers received by tortoise", log.Stringer("undecided", count))
+			return nil
+		}
+		if err := t.processLayer(ctx, t.logger.WithContext(ctx).WithFields(count), count); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (t *turtle) switchModes(logger log.Log) {
@@ -467,15 +482,9 @@ func (t *turtle) processLayer(ctx context.Context, logger log.Log, lid types.Lay
 		return err
 	}
 
-	for count := t.verifying.counted.Add(1); count.Before(t.processed); count = count.Add(1) {
-		if _, exist := t.decided[count]; !exist && count.After(types.GetEffectiveGenesis()) {
-			logger.With().Info("gap in the layers received by tortoise", log.Stringer("undecided", count))
-			return nil
-		}
-		// TODO(dshulyak) it should be possible to count votes from every single ballot separately
-		// but may require changes to t.processed
-		t.verifying.countVotes(logger, lid, t.getTortoiseBallots(count))
-	}
+	// TODO(dshulyak) it should be possible to count votes from every single ballot separately
+	// but may require changes to t.processed
+	t.verifying.countVotes(logger, lid, t.getTortoiseBallots(lid))
 
 	previous := t.verified
 	for target := t.verified.Add(1); target.Before(t.processed); target = target.Add(1) {
@@ -581,11 +590,11 @@ func (t *turtle) loadConsensusData(lid types.LayerID) error {
 	}
 	t.onHareOutput(lid, output)
 
-	layer, err := t.bdp.LayerContextualValidity(lid)
+	validities, err := t.bdp.LayerContextualValidity(lid)
 	if err != nil {
 		return fmt.Errorf("contextual validity %s: %w", lid, err)
 	}
-	for _, validity := range layer {
+	for _, validity := range validities {
 		s := support
 		if !validity.Validity {
 			s = against
@@ -647,10 +656,6 @@ func (t *turtle) updateState(ctx context.Context, logger log.Log, lid types.Laye
 		if err := t.onBallot(ballot); err != nil {
 			t.logger.With().Warning("failed to add ballot to the state", log.Err(err), log.Inline(ballot))
 		}
-	}
-
-	if err := t.loadConsensusData(lid); err != nil {
-		return err
 	}
 	return nil
 }

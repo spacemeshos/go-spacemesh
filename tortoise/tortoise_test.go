@@ -1237,7 +1237,7 @@ func TestOutOfOrderLayersAreVerified(t *testing.T) {
 
 	ctx := context.Background()
 	cfg := defaultTestConfig()
-	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var (
 		last     types.LayerID
