@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spacemeshos/ed25519"
 
@@ -191,9 +192,10 @@ const (
 // MeshTransaction is stored in the mesh and included in the block.
 type MeshTransaction struct {
 	Transaction
-	LayerID LayerID
-	BlockID BlockID
-	State   TXState
+	LayerID  LayerID
+	BlockID  BlockID
+	State    TXState
+	Received time.Time
 }
 
 // InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).

@@ -14,11 +14,6 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
-var (
-	errBadNonce            = errors.New("bad nonce")
-	errInsufficientBalance = errors.New("insufficient balance")
-)
-
 // ConservativeState provides the conservative version of the SVM state by taking into accounts of
 // nonce and balances for pending transactions in un-applied blocks and mempool.
 type ConservativeState struct {

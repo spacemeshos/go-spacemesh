@@ -1,6 +1,10 @@
 package txs
 
-import "github.com/spacemeshos/go-spacemesh/common/types"
+import (
+	"time"
+
+	"github.com/spacemeshos/go-spacemesh/common/types"
+)
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
@@ -20,4 +24,24 @@ type svmState interface {
 	GetNonce(types.Address) uint64
 	Rewind(types.LayerID) (types.Hash32, error)
 	ApplyLayer(types.LayerID, []*types.Transaction, map[types.Address]uint64) ([]*types.Transaction, error)
+}
+
+type conStateCache interface {
+	getMempool() (map[types.Address][]*nanoTX, error)
+}
+
+type txProvider interface {
+	add(*types.Transaction, time.Time) error
+	has(types.TransactionID) bool
+	get(types.TransactionID) (*types.MeshTransaction, error)
+	getBlob(types.TransactionID) ([]byte, error)
+	getByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
+	addToProposal(types.LayerID, types.ProposalID, []types.TransactionID) error
+	addToBlock(types.LayerID, types.BlockID, []types.TransactionID) error
+	undoApply(types.LayerID) error
+	discard4Ever(types.TransactionID) error
+	applyLayer(types.LayerID, types.BlockID, []types.TransactionID, []types.TransactionID) error
+	setNextLayerBlock(types.TransactionID, types.LayerID) (types.LayerID, types.BlockID, error)
+	getAllPending() ([]*types.MeshTransaction, error)
+	getAcctPending(types.Address) ([]*types.MeshTransaction, error)
 }
