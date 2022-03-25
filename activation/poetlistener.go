@@ -35,6 +35,7 @@ func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ p2p.Peer, m
 	}
 
 	if l.poetDb.HasProof(ref) {
+		// don't spam the network
 		return pubsub.ValidationIgnore
 	}
 
