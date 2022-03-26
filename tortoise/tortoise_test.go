@@ -1891,7 +1891,7 @@ func TestComputeLocalOpinion(t *testing.T) {
 				tortoise.HandleIncomingLayer(ctx, lid)
 			}
 
-			err := tortoise.trtl.loadConsensusData(tc.lid)
+			err := tortoise.trtl.loadConsesusData(tc.lid)
 			require.NoError(t, err)
 
 			blocks, err := s.GetState(0).MeshDB.LayerBlockIds(tc.lid)

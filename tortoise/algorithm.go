@@ -174,7 +174,7 @@ type encodeConf struct {
 	last *types.LayerID
 }
 
-// EncodeVotesOpts is for configuring EncodeVotes options
+// EncodeVotesOpts is for configuring EncodeVotes options.
 type EncodeVotesOpts func(*encodeConf)
 
 // EncodeVotesWithLast changes last known layer that will be used for encoding votes.

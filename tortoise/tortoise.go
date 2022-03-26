@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sort"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/sql"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/metrics"
 )
@@ -177,14 +179,13 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 		ballotID  types.BallotID
 		ballotLID types.LayerID
 		votes     *types.Votes
-		last      = t.last
+		last      = t.last.Add(1)
 		err       error
 	)
 	if conf.last != nil {
 		last = *conf.last
 	}
 
-	logger.With().Info("failed to select good base ballot. reverting to the least bad choices", log.Err(err))
 	for lid := t.evicted.Add(1); !lid.After(t.processed); lid = lid.Add(1) {
 		for _, ballotID := range t.ballots[lid] {
 			weight := t.ballotWeight[ballotID]
@@ -231,6 +232,30 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 	metrics.LayerDistanceToBaseBallot.WithLabelValues().Observe(float64(t.last.Value - ballotLID.Value))
 
 	return votes, nil
+}
+
+func (t *turtle) getGoodBallot(logger log.Log) (types.BallotID, types.LayerID) {
+	var choices []types.BallotID
+
+	for lid := t.processed; lid.After(t.evicted); lid = lid.Sub(1) {
+		for _, ballotID := range t.ballots[lid] {
+			if t.ballotWeight[ballotID].isNil() {
+				continue
+			}
+			if rst := t.verifying.goodBallots[ballotID]; rst == good {
+				choices = append(choices, ballotID)
+			}
+		}
+		if len(choices) > 0 {
+			sort.Slice(choices, func(i, j int) bool {
+				return choices[i].Compare(choices[j])
+			})
+
+			t.logger.With().Info("considering good base ballot", choices[0], lid)
+			return choices[0], lid
+		}
+	}
+	return types.BallotID{}, types.LayerID{}
 }
 
 // firstDisagreement returns first layer where local opinion is different from ballot's opinion within sliding window.
@@ -440,16 +465,21 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Be
 // terminated layers.
 func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error {
 	defer t.evict(ctx)
-	if err := t.loadConsensusData(lid); err != nil {
-		return err
-	}
+
 	if t.processed.Before(lid) {
 		t.processed = lid
+	}
+	if err := t.loadConsesusData(lid); err != nil {
+		return err
 	}
 	for count := t.verifying.counted.Add(1); !count.After(t.processed); count = count.Add(1) {
 		if _, exist := t.decided[count]; !exist && count.After(types.GetEffectiveGenesis()) {
 			t.logger.With().Info("gap in the layers received by tortoise", log.Stringer("undecided", count))
 			return nil
+		}
+		// FIXME(dshulyak)
+		if err := t.loadConsesusData(lid); err != nil {
+			return err
 		}
 		if err := t.processLayer(ctx, t.logger.WithContext(ctx).WithFields(count), count); err != nil {
 			return err
@@ -583,13 +613,25 @@ func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
 	return tballots
 }
 
-func (t *turtle) loadConsensusData(lid types.LayerID) error {
+func (t *turtle) loadConsesusData(lid types.LayerID) error {
+	if err := t.loadHare(lid); err != nil {
+		return err
+	}
+	return t.loadContextualValidity(lid)
+}
+
+func (t *turtle) loadHare(lid types.LayerID) error {
 	output, err := t.bdp.GetHareConsensusOutput(lid)
-	if err != nil {
+	if err != nil && !errors.Is(err, sql.ErrNotFound) {
 		return fmt.Errorf("get hare output %s: %w", lid, err)
 	}
 	t.onHareOutput(lid, output)
+	return nil
+}
 
+func (t *turtle) loadContextualValidity(lid types.LayerID) error {
+	// validities will be available only during rerun or
+	// if they are synced from peers, which we don't do currently
 	validities, err := t.bdp.LayerContextualValidity(lid)
 	if err != nil {
 		return fmt.Errorf("contextual validity %s: %w", lid, err)
@@ -676,10 +718,10 @@ func (t *turtle) onHareOutput(lid types.LayerID, bid types.BlockID) {
 	if !lid.After(t.evicted) {
 		return
 	}
+	t.decided[lid] = struct{}{}
 	if bid != types.EmptyBlockID {
 		t.hareOutput[bid] = support
 	}
-	t.decided[lid] = struct{}{}
 }
 
 func (t *turtle) onBallot(ballot *types.Ballot) error {
@@ -786,7 +828,7 @@ func isUndecided(state *commonState, config Config, lid types.LayerID) bool {
 		limit = state.last.Sub(config.Zdist)
 	}
 	_, decided := state.decided[lid]
-	return !lid.Before(limit) && !decided
+	return !lid.Before(limit) || !decided
 }
 
 func getLocalVote(state *commonState, config Config, lid types.LayerID, block types.BlockID) (sign, voteReason) {
