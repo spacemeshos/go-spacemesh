@@ -246,123 +246,6 @@ jobs:
         else
           exit 1
         fi
-  systemtest-latenodes:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: late nodes system test
-        run: make dockertest-late-nodes
-  systemtest-mining:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 30 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '30s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: mining system test
-        run: make dockertest-mining
-  systemtest-blocks-remove-node:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 90 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '90s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: remove node test
-        run: make dockertest-blocks-remove-node
-  systemtest-blocks-add-node:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 150 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '150s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: blocks add node test
-        run: make dockertest-blocks-add-node
-  systemtest-p2p:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 210 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '210s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: p2p system test
-        run: make dockertest-p2p
-  systemtest-hare:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 330 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '330s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: hare system test
-        run: make dockertest-hare
-  systemtest-beacon:
-    runs-on: ubuntu-latest
-    # only run on push, not on pull_request
-    if: ${{ needs.filter-changes.outputs.nondocchanges == 'true' && github.event_name == 'push' }}
-    needs:
-      - filter-changes
-      - dockerpush
-    timeout-minutes: 80
-    steps:
-      - name: Sleep for 330 seconds
-        uses: jakejarvis/wait-action@master
-        with:
-          time: '330s'
-      - name: checkout
-        uses: actions/checkout@v2
-      - name: beacon system test
-        run: make dockertest-beacon
-
-
   # this summary job is a shortcut that obviates the need to list every individual job in bors.toml
   # all tests that are required to pass before a bors merge must be listed here!
   ci-stage2:
@@ -370,18 +253,11 @@ jobs:
     needs:
       - filter-changes
       - ci-stage1
-      - systemtest-latenodes
-      - systemtest-blocks-add-node
-      - systemtest-blocks-remove-node
-      - systemtest-mining
-      - systemtest-p2p
-      - systemtest-hare
-      - systemtest-beacon
       - systest
     runs-on: ubuntu-latest
     env:
       # short-circuit success if no non-doc files were modified
-      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || (needs.systest.result == 'success' && needs.systemtest-latenodes.result == 'success' && needs.systemtest-blocks-add-node.result == 'success' && needs.systemtest-blocks-remove-node.result == 'success' && needs.systemtest-mining.result == 'success' && needs.systemtest-p2p.result == 'success' && needs.systemtest-hare.result == 'success' && needs.systemtest-beacon.result == 'success')) && 'success' || 'failure' }}
+      status: ${{ (needs.filter-changes.outputs.nondocchanges == 'false' || needs.systest.result == 'success') && 'success' || 'failure' }}
     steps:
       # print a single, clean status update to slack
       - uses: act10ns/slack@v1
