@@ -152,7 +152,7 @@ func TestLayerPatterns(t *testing.T) {
 		)
 		for _, lid := range sim.GenLayers(s,
 			sim.WithSequence(5),
-			sim.WithSequence(2, sim.WithoutHareOutput()),
+			sim.WithSequence(2, sim.WithEmptyHareOutput()),
 		) {
 			last = lid
 			verified = tortoise.HandleIncomingLayer(ctx, lid)
@@ -175,7 +175,7 @@ func TestLayerPatterns(t *testing.T) {
 		ctx := context.Background()
 		cfg := defaultTestConfig()
 		cfg.LayerSize = size
-		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
+		tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 		var (
 			last     types.LayerID
@@ -183,9 +183,9 @@ func TestLayerPatterns(t *testing.T) {
 		)
 		for _, lid := range sim.GenLayers(s,
 			sim.WithSequence(5),
-			sim.WithSequence(1, sim.WithoutHareOutput()),
+			sim.WithSequence(1, sim.WithEmptyHareOutput()),
 			sim.WithSequence(2),
-			sim.WithSequence(2, sim.WithoutHareOutput()),
+			sim.WithSequence(2, sim.WithEmptyHareOutput()),
 			sim.WithSequence(30),
 		) {
 			last = lid
@@ -205,6 +205,7 @@ func TestAbstainsInMiddle(t *testing.T) {
 	ctx := context.Background()
 	cfg := defaultTestConfig()
 	cfg.LayerSize = size
+	cfg.Zdist = 3
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
 
 	var last, verified types.LayerID

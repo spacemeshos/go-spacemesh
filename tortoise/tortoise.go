@@ -94,7 +94,7 @@ func (t *turtle) init(ctx context.Context, genesisLayer *types.Layer) {
 	t.verified = genesis
 	t.historicallyVerified = genesis
 	t.evicted = genesis.Sub(1)
-	t.verifying.counted = genesis
+	t.minprocessed = genesis
 	t.full.counted = genesis
 	t.decided[genesis] = struct{}{}
 }
@@ -180,9 +180,8 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 		ballotID  types.BallotID
 		ballotLID types.LayerID
 		votes     *types.Votes
-		// FIXME(dshulyak) should be last + 1
-		last = t.processed.Add(1)
-		err  error
+		last      = t.last.Add(1)
+		err       error
 	)
 	if conf.last != nil {
 		last = *conf.last
@@ -479,24 +478,23 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Be
 // Internally tortoise will verify all layers before the last one if there are no gaps in
 // terminated layers.
 func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error {
-	t.logger.With().Debug("on layer terminated", lid)
-
+	t.logger.With().Info("on layer terminated", lid)
 	defer t.evict(ctx)
-
-	if t.processed.Before(lid) {
-		t.processed = lid
+	if err := t.updateLayer(t.logger, lid); err != nil {
+		return err
 	}
 	if err := t.loadConsesusData(lid); err != nil {
 		return err
 	}
-	for count := t.verifying.counted.Add(1); !count.After(t.processed); count = count.Add(1) {
-		if _, exist := t.decided[count]; !exist && count.After(types.GetEffectiveGenesis()) {
-			t.logger.With().Info("gap in the layers received by tortoise", log.Stringer("undecided", count))
+	for process := t.minprocessed.Add(1); !process.After(t.processed); process = process.Add(1) {
+		if isUndecided(&t.commonState, t.Config, process) {
+			t.logger.With().Info("gap in the layers received by tortoise", log.Stringer("undecided", process))
 			return nil
 		}
-		if err := t.processLayer(t.logger.WithContext(ctx).WithFields(count), count); err != nil {
+		if err := t.processLayer(t.logger.WithContext(ctx).WithFields(process), process); err != nil {
 			return err
 		}
+		t.minprocessed = process
 	}
 	return nil
 }
@@ -513,15 +511,12 @@ func (t *turtle) switchModes(logger log.Log) {
 }
 
 func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
-	logger.With().Info("process layer")
+	logger.With().Info("count layer")
 
-	if err := t.updateLayer(logger, lid); err != nil {
-		return err
-	}
 	logger = logger.WithFields(
 		log.Stringer("last_layer", t.last),
 	)
-	if err := t.updateState(logger, lid); err != nil {
+	if err := t.loadBlocksBallots(logger, lid); err != nil {
 		return err
 	}
 
@@ -692,9 +687,9 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 	return nil
 }
 
-// updateState is to update state that needs to be updated always. there should be no
+// loadBlocksBallots is to update state that needs to be updated always. there should be no
 // expensive long running computation in this method.
-func (t *turtle) updateState(logger log.Log, lid types.LayerID) error {
+func (t *turtle) loadBlocksBallots(logger log.Log, lid types.LayerID) error {
 	// TODO(dshulyak) loading state from db is only needed for rerun.
 	// but in general it won't hurt, so maybe refactor it in future.
 
@@ -840,13 +835,15 @@ func (t *turtle) layerCutoff() types.LayerID {
 }
 
 func isUndecided(state *commonState, config Config, lid types.LayerID) bool {
+	if _, exists := state.decided[lid]; exists {
+		return false
+	}
 	genesis := types.GetEffectiveGenesis()
 	limit := genesis
 	if state.last.After(genesis.Add(config.Zdist)) {
 		limit = state.last.Sub(config.Zdist)
 	}
-	_, decided := state.decided[lid]
-	return !lid.Before(limit) && !decided
+	return !lid.Before(limit)
 }
 
 func getLocalVote(state *commonState, config Config, lid types.LayerID, block types.BlockID) (sign, voteReason) {
