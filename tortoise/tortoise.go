@@ -519,7 +519,7 @@ func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
 	logger = logger.WithFields(
 		log.Stringer("last_layer", t.last),
 	)
-	if err := t.loadBlocksBallots(logger, lid); err != nil {
+	if err := t.loadBallots(logger, lid); err != nil {
 		return err
 	}
 
@@ -625,6 +625,14 @@ func (t *turtle) getTortoiseBallots(lid types.LayerID) []tortoiseBallot {
 }
 
 func (t *turtle) loadConsesusData(lid types.LayerID) error {
+	blocks, err := t.bdp.LayerBlockIds(lid)
+	if err != nil {
+		return fmt.Errorf("read blocks for layer %s: %w", lid, err)
+	}
+	for _, block := range blocks {
+		t.onBlock(lid, block)
+	}
+
 	if err := t.loadHare(lid); err != nil {
 		return err
 	}
@@ -690,23 +698,12 @@ func (t *turtle) updateLayer(logger log.Log, lid types.LayerID) error {
 	return nil
 }
 
-// loadBlocksBallots is to update state that needs to be updated always. there should be no
-// expensive long running computation in this method.
-func (t *turtle) loadBlocksBallots(logger log.Log, lid types.LayerID) error {
-	// TODO(dshulyak) loading state from db is only needed for rerun.
-	// but in general it won't hurt, so maybe refactor it in future.
-
-	blocks, err := t.bdp.LayerBlockIds(lid)
-	if err != nil {
-		return fmt.Errorf("read blocks for layer %s: %w", lid, err)
-	}
+// loadBallots from database.
+// must be loaded in order, as base ballot information needs to be in the state.
+func (t *turtle) loadBallots(logger log.Log, lid types.LayerID) error {
 	ballots, err := t.bdp.LayerBallots(lid)
 	if err != nil {
 		return fmt.Errorf("read ballots for layer %s: %w", lid, err)
-	}
-
-	for _, block := range blocks {
-		t.onBlock(lid, block)
 	}
 
 	for _, ballot := range ballots {
