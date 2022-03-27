@@ -36,14 +36,6 @@ func (a sign) String() string {
 
 type votes map[types.BlockID]sign
 
-func blockMapToArray(m map[types.BlockID]struct{}) []types.BlockID {
-	arr := make([]types.BlockID, 0, len(m))
-	for b := range m {
-		arr = append(arr, b)
-	}
-	return arr
-}
-
 func weightFromInt64(value int64) weight {
 	return weight{Rat: new(big.Rat).SetInt64(value)}
 }
@@ -132,7 +124,7 @@ type tortoiseBallot struct {
 }
 
 func persistContextualValidity(logger log.Log,
-	bdp blockDataProvider,
+	updater blockValidityUpdater,
 	from, to types.LayerID,
 	blocks map[types.LayerID][]types.BlockID,
 	opinion votes,
@@ -144,7 +136,7 @@ func persistContextualValidity(logger log.Log,
 			if sign == abstain {
 				logger.With().Panic("bug: layer should not be verified if there is an undecided block", lid, bid)
 			}
-			err = bdp.SaveContextualValidity(bid, lid, sign == support)
+			err = updater.UpdateBlockValidity(bid, lid, sign == support)
 			if err != nil {
 				err = fmt.Errorf("saving validity for %s: %w", bid, err)
 				return false

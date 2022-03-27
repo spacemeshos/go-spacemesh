@@ -325,18 +325,18 @@ func TestGetMeshTransaction(t *testing.T) {
 	lid := types.NewLayerID(10)
 	bid := types.RandomBlockID()
 
-	tcs.pool.removeFromMemPool(tx.ID())
+	tcs.pool.remove(tx.ID())
 	writeToDB(t, tcs.db, lid, bid, tx)
 	mtx, err = tcs.GetMeshTransaction(tx.ID())
 	require.NoError(t, err)
 	assert.Equal(t, types.PENDING, mtx.State)
 
-	require.NoError(t, tcs.pool.markApplied(tx.ID()))
+	require.NoError(t, tcs.markApplied(tx.ID()))
 	mtx, err = tcs.GetMeshTransaction(tx.ID())
 	require.NoError(t, err)
 	assert.Equal(t, types.APPLIED, mtx.State)
 
-	require.NoError(t, tcs.pool.markDeleted(tx.ID()))
+	require.NoError(t, tcs.markDeleted(tx.ID()))
 	mtx, err = tcs.GetMeshTransaction(tx.ID())
 	require.NoError(t, err)
 	assert.Equal(t, types.DELETED, mtx.State)
@@ -475,7 +475,6 @@ func TestTXetcherIncludesMemPool(t *testing.T) {
 	memids, memTXs := addBatchToMemPool(t, tcs.ConservativeState, numTX)
 	ids := append(dbids, memids...)
 	txs := append(dbTXs, memTXs...)
-
 	for i, id := range ids {
 		buf, err := tcs.Transactions().Get(id.Bytes())
 		require.NoError(t, err)

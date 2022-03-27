@@ -33,6 +33,31 @@ func TestHareOutput(t *testing.T) {
 	require.Equal(t, expected, output)
 }
 
+func TestAppliedBlock(t *testing.T) {
+	db := sql.InMemory()
+	lid := types.NewLayerID(10)
+
+	_, err := GetApplied(db, lid)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	// cause layer to be inserted
+	require.NoError(t, SetHareOutput(db, lid, types.BlockID{}))
+
+	_, err = GetApplied(db, lid)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+
+	require.NoError(t, SetApplied(db, lid, types.EmptyBlockID))
+	output, err := GetApplied(db, lid)
+	require.NoError(t, err)
+	require.Equal(t, types.EmptyBlockID, output)
+
+	expected := types.BlockID{1, 1, 1}
+	require.NoError(t, SetApplied(db, lid, expected))
+	output, err = GetApplied(db, lid)
+	require.NoError(t, err)
+	require.Equal(t, expected, output)
+}
+
 func TestStatus(t *testing.T) {
 	db := sql.InMemory()
 	lid := types.NewLayerID(10)

@@ -392,6 +392,25 @@ func TestProposal_KnownProposal(t *testing.T) {
 	assert.Equal(t, pubsub.ValidationIgnore, th.HandleProposal(context.TODO(), "", data))
 }
 
+func TestProposal_FailedToAddBallot(t *testing.T) {
+	th := createTestHandler(t)
+	p := createProposal(t)
+	data := encodeProposal(t, p)
+	th.mp.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
+	th.mm.EXPECT().HasBallot(p.Ballot.ID()).Return(false).Times(1)
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), p.Votes.Support).Return(nil).Times(1)
+	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
+			assert.Equal(t, p.Ballot.ID(), ballot.ID())
+			return true, nil
+		})
+	errUnknown := errors.New("unknown")
+	th.mm.EXPECT().AddBallot(&p.Ballot).Return(errUnknown).Times(1)
+	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
+}
+
 func TestProposal_DuplicateTXs(t *testing.T) {
 	th := createTestHandler(t)
 	defer th.ctrl.Finish()
@@ -418,6 +437,7 @@ func TestProposal_DuplicateTXs(t *testing.T) {
 			assert.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errDuplicateTX)
 }
 
@@ -436,6 +456,7 @@ func TestProposal_TXsNotAvailable(t *testing.T) {
 			assert.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(errUnknown).Times(1)
 	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
@@ -456,6 +477,7 @@ func TestProposal_FailedToAddProposal(t *testing.T) {
 			assert.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	errUnknown := errors.New("unknown")
 	th.mp.EXPECT().AddProposal(gomock.Any(), gomock.Any()).DoAndReturn(
@@ -466,9 +488,8 @@ func TestProposal_FailedToAddProposal(t *testing.T) {
 	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
 }
 
-func TestProposal_ValidProposal(t *testing.T) {
+func TestProposal_FailedToAddProposalTXs(t *testing.T) {
 	th := createTestHandler(t)
-	defer th.ctrl.Finish()
 	p := createProposal(t)
 	data := encodeProposal(t, p)
 	th.mp.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
@@ -481,12 +502,40 @@ func TestProposal_ValidProposal(t *testing.T) {
 			assert.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mp.EXPECT().AddProposal(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, proposal *types.Proposal) error {
 			assert.Equal(t, p, proposal)
 			return nil
 		}).Times(1)
+	errUnknown := errors.New("unknown")
+	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(errUnknown).Times(1)
+	assert.ErrorIs(t, th.HandleProposalData(context.TODO(), data), errUnknown)
+}
+
+func TestProposal_ValidProposal(t *testing.T) {
+	th := createTestHandler(t)
+	p := createProposal(t)
+	data := encodeProposal(t, p)
+	th.mp.EXPECT().HasProposal(p.ID()).Return(false).Times(1)
+	th.mm.EXPECT().HasBallot(p.Ballot.ID()).Return(false).Times(1)
+	th.mf.EXPECT().GetBallots(gomock.Any(), []types.BallotID{p.Votes.Base, p.RefBallot}).Return(nil).Times(1)
+	th.mf.EXPECT().GetAtxs(gomock.Any(), types.ATXIDList{p.AtxID}).Return(nil).Times(1)
+	th.mf.EXPECT().GetBlocks(gomock.Any(), p.Votes.Support).Return(nil).Times(1)
+	th.mv.EXPECT().CheckEligibility(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, ballot *types.Ballot) (bool, error) {
+			assert.Equal(t, p.Ballot.ID(), ballot.ID())
+			return true, nil
+		})
+	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
+	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
+	th.mp.EXPECT().AddProposal(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(_ context.Context, proposal *types.Proposal) error {
+			assert.Equal(t, p, proposal)
+			return nil
+		}).Times(1)
+	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
 	assert.NoError(t, th.HandleProposalData(context.TODO(), data))
 }
 
@@ -505,12 +554,14 @@ func TestMetrics(t *testing.T) {
 			assert.Equal(t, p.Ballot.ID(), ballot.ID())
 			return true, nil
 		})
+	th.mm.EXPECT().AddBallot(&p.Ballot).Return(nil).Times(1)
 	th.mf.EXPECT().GetTxs(gomock.Any(), p.TxIDs).Return(nil).Times(1)
 	th.mp.EXPECT().AddProposal(gomock.Any(), gomock.Any()).DoAndReturn(
 		func(_ context.Context, proposal *types.Proposal) error {
 			assert.Equal(t, p, proposal)
 			return nil
 		}).Times(1)
+	th.mm.EXPECT().AddTXsFromProposal(gomock.Any(), p.LayerIndex, p.ID(), p.TxIDs).Return(nil).Times(1)
 	assert.NoError(t, th.HandleProposalData(context.TODO(), data))
 	counts, err := testutil.GatherAndCount(prometheus.DefaultGatherer, "spacemesh_proposals_proposal_size")
 	require.NoError(t, err)

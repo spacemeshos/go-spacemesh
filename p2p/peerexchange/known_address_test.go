@@ -15,7 +15,8 @@ func TstKnownAddressChance(ka *knownAddress) float64 {
 }
 
 func tstNewKnownAddress(lastSeen time.Time, attempts int,
-	lastattempt, lastsuccess time.Time, tried bool, refs int) *knownAddress {
+	lastattempt, lastsuccess time.Time, tried bool, refs int,
+) *knownAddress {
 	return &knownAddress{
 		LastSeen:    lastSeen,
 		Attempts:    attempts,

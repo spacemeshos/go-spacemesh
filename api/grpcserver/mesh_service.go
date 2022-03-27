@@ -35,7 +35,8 @@ func (s MeshService) RegisterService(server *Server) {
 func NewMeshService(
 	msh api.MeshAPI, cstate api.ConservativeState, genTime api.GenesisTimeAPI,
 	layersPerEpoch uint32, networkID uint32, layerDurationSec int,
-	layerAvgSize int, txsPerBlock int) *MeshService {
+	layerAvgSize int, txsPerBlock int,
+) *MeshService {
 	return &MeshService{
 		mesh:             msh,
 		conState:         cstate,

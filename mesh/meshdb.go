@@ -20,14 +20,9 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/rewards"
 )
 
-const (
-	layerSize = 200
-)
-
 // DB represents a mesh database instance.
 type DB struct {
 	log.Log
-	blockCache blockCache
 
 	db *sql.Database
 
@@ -36,12 +31,11 @@ type DB struct {
 }
 
 // NewPersistentMeshDB creates an instance of a mesh database.
-func NewPersistentMeshDB(db *sql.Database, blockCacheSize int, logger log.Log) (*DB, error) {
+func NewPersistentMeshDB(db *sql.Database, logger log.Log) (*DB, error) {
 	mdb := &DB{
-		Log:        logger,
-		blockCache: newBlockCache(blockCacheSize * layerSize),
-		db:         db,
-		coinflips:  make(map[types.LayerID]bool),
+		Log:       logger,
+		db:        db,
+		coinflips: make(map[types.LayerID]bool),
 	}
 	gLayer := types.GenesisLayer()
 	for _, b := range gLayer.Ballots() {
@@ -78,10 +72,9 @@ func (m *DB) PersistentData() bool {
 // NewMemMeshDB is a mock used for testing.
 func NewMemMeshDB(logger log.Log) *DB {
 	mdb := &DB{
-		Log:        logger,
-		blockCache: newBlockCache(100 * layerSize),
-		db:         sql.InMemory(),
-		coinflips:  make(map[types.LayerID]bool),
+		Log:       logger,
+		db:        sql.InMemory(),
+		coinflips: make(map[types.LayerID]bool),
 	}
 	gLayer := types.GenesisLayer()
 	for _, b := range gLayer.Ballots() {
@@ -204,9 +197,6 @@ func (m *DB) HasBlock(bid types.BlockID) bool {
 
 // GetBlock returns the block specified by the block ID.
 func (m *DB) GetBlock(bid types.BlockID) (*types.Block, error) {
-	if b := m.blockCache.Get(bid); b != nil {
-		return b, nil
-	}
 	b, err := m.getBlock(bid)
 	if err != nil {
 		return nil, err
@@ -313,7 +303,6 @@ func (m *DB) writeBlock(b *types.Block) error {
 	if err := blocks.Add(m.db, b); err != nil {
 		return fmt.Errorf("could not add block %v to database: %w", b.ID(), err)
 	}
-	m.blockCache.put(b)
 	return nil
 }
 
@@ -351,23 +340,6 @@ func (m *DB) GetRewards(coinbase types.Address) ([]types.Reward, error) {
 // GetRewardsBySmesherID retrieves rewards by smesherID.
 func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) ([]types.Reward, error) {
 	return rewards.FilterBySmesher(m.db, smesherID.ToBytes())
-}
-
-// BlocksByValidity classifies a slice of blocks by validity.
-func (m *DB) BlocksByValidity(blocks []*types.Block) ([]*types.Block, []*types.Block) {
-	var validBlocks, invalidBlocks []*types.Block
-	for _, b := range blocks {
-		valid, err := m.ContextualValidity(b.ID())
-		if err != nil {
-			m.With().Warning("could not get contextual validity for block in list", b.ID(), log.Err(err))
-		}
-		if valid {
-			validBlocks = append(validBlocks, b)
-		} else {
-			invalidBlocks = append(invalidBlocks, b)
-		}
-	}
-	return validBlocks, invalidBlocks
 }
 
 // LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer.
@@ -410,27 +382,6 @@ func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.Layer
 			log.String("errors", fmt.Sprint(cvErrors)))
 	}
 	return validBlks, nil
-}
-
-func (m *DB) cacheWarmUpFromTo(from types.LayerID, to types.LayerID) error {
-	m.Info("warming up cache with layers %v to %v", from, to)
-	for i := from; i.Before(to); i = i.Add(1) {
-		layer, err := m.LayerBlockIds(i)
-		if err != nil {
-			return fmt.Errorf("could not get layer %v from database %v", layer, err)
-		}
-
-		for _, b := range layer {
-			block, blockErr := m.GetBlock(b)
-			if blockErr != nil {
-				return fmt.Errorf("could not get bl %v from database %v", b, blockErr)
-			}
-			m.blockCache.put(block)
-		}
-	}
-	m.Info("done warming up cache")
-
-	return nil
 }
 
 // newBlockFetcherDB returns reference to a BlockFetcherDB instance.

@@ -9,6 +9,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/tortoise/organizer"
@@ -70,7 +71,7 @@ type Tortoise struct {
 
 	// update will be set to non-nil after rerun completes, and must be set to nil once
 	// used to replace trtl.
-	update *rerunResult
+	update *turtle
 	trtl   *turtle
 }
 
@@ -99,7 +100,7 @@ func WithConfig(cfg Config) Opt {
 }
 
 // New creates Tortoise instance.
-func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGetter, opts ...Opt) *Tortoise {
+func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGetter, updater blockValidityUpdater, opts ...Opt) *Tortoise {
 	t := &Tortoise{
 		ctx:    context.Background(),
 		logger: log.NewNop(),
@@ -127,6 +128,7 @@ func New(mdb blockDataProvider, atxdb atxDataProvider, beacons system.BeaconGett
 		mdb,
 		atxdb,
 		beacons,
+		updater,
 		t.cfg,
 	)
 	t.trtl.init(t.ctx, types.GenesisLayer())
@@ -184,7 +186,7 @@ func (t *Tortoise) BaseBallot(ctx context.Context) (*types.Votes, error) {
 
 // HandleIncomingLayer processes all layer block votes
 // returns the old verified layer and new verified layer after taking into account the blocks votes.
-func (t *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
+func (t *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerID) types.LayerID {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -193,20 +195,21 @@ func (t *Tortoise) HandleIncomingLayer(ctx context.Context, layerID types.LayerI
 		logger = t.logger.WithContext(ctx).With()
 	)
 
-	reverted, observed := t.updateFromRerun(ctx)
-	if reverted {
-		// make sure state is reapplied from far enough back if there was a state reversion.
-		// this is the first changed layer. subtract one to indicate that the layer _prior_ was the old
-		// pBase, since we never reapply the state of oldPbase.
-		old = observed.Sub(1)
-	}
+	t.updateFromRerun(ctx)
 	t.org.Iterate(ctx, layerID, func(lid types.LayerID) {
 		if err := t.trtl.HandleIncomingLayer(ctx, lid); err != nil {
 			logger.Error("tortoise errored handling incoming layer", lid, log.Err(err))
 		}
 	})
 
-	return old, t.trtl.verified, reverted
+	for lid := old; !lid.After(t.trtl.verified); lid = lid.Add(1) {
+		events.ReportLayerUpdate(events.LayerUpdate{
+			LayerID: lid,
+			Status:  events.LayerStatusTypeConfirmed,
+		})
+	}
+
+	return t.trtl.verified
 }
 
 // OnBlock should be called every time new block is received.

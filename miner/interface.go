@@ -12,10 +12,6 @@ type proposalOracle interface {
 	GetProposalEligibility(types.LayerID, types.Beacon) (types.ATXID, []types.ATXID, []types.VotingEligibilityProof, error)
 }
 
-type proposalDB interface {
-	AddProposal(context.Context, *types.Proposal) error
-}
-
 type conservativeState interface {
 	SelectTXsForProposal(int) ([]types.TransactionID, []*types.Transaction, error)
 }
@@ -28,8 +24,4 @@ type activationDB interface {
 	GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch types.EpochID) (types.ATXID, error)
 	GetAtxHeader(types.ATXID) (*types.ActivationTxHeader, error)
 	GetEpochWeight(types.EpochID) (uint64, []types.ATXID, error)
-}
-
-type projector interface {
-	GetProjection(types.Address) (nonce, balance uint64, err error)
 }

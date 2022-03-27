@@ -52,43 +52,6 @@ func (mr *MockproposalOracleMockRecorder) GetProposalEligibility(arg0, arg1 inte
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProposalEligibility", reflect.TypeOf((*MockproposalOracle)(nil).GetProposalEligibility), arg0, arg1)
 }
 
-// MockproposalDB is a mock of proposalDB interface.
-type MockproposalDB struct {
-	ctrl     *gomock.Controller
-	recorder *MockproposalDBMockRecorder
-}
-
-// MockproposalDBMockRecorder is the mock recorder for MockproposalDB.
-type MockproposalDBMockRecorder struct {
-	mock *MockproposalDB
-}
-
-// NewMockproposalDB creates a new mock instance.
-func NewMockproposalDB(ctrl *gomock.Controller) *MockproposalDB {
-	mock := &MockproposalDB{ctrl: ctrl}
-	mock.recorder = &MockproposalDBMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockproposalDB) EXPECT() *MockproposalDBMockRecorder {
-	return m.recorder
-}
-
-// AddProposal mocks base method.
-func (m *MockproposalDB) AddProposal(arg0 context.Context, arg1 *types.Proposal) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "AddProposal", arg0, arg1)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// AddProposal indicates an expected call of AddProposal.
-func (mr *MockproposalDBMockRecorder) AddProposal(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddProposal", reflect.TypeOf((*MockproposalDB)(nil).AddProposal), arg0, arg1)
-}
-
 // MockconservativeState is a mock of conservativeState interface.
 type MockconservativeState struct {
 	ctrl     *gomock.Controller
@@ -233,43 +196,4 @@ func (m *MockactivationDB) GetNodeAtxIDForEpoch(nodeID types.NodeID, targetEpoch
 func (mr *MockactivationDBMockRecorder) GetNodeAtxIDForEpoch(nodeID, targetEpoch interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNodeAtxIDForEpoch", reflect.TypeOf((*MockactivationDB)(nil).GetNodeAtxIDForEpoch), nodeID, targetEpoch)
-}
-
-// Mockprojector is a mock of projector interface.
-type Mockprojector struct {
-	ctrl     *gomock.Controller
-	recorder *MockprojectorMockRecorder
-}
-
-// MockprojectorMockRecorder is the mock recorder for Mockprojector.
-type MockprojectorMockRecorder struct {
-	mock *Mockprojector
-}
-
-// NewMockprojector creates a new mock instance.
-func NewMockprojector(ctrl *gomock.Controller) *Mockprojector {
-	mock := &Mockprojector{ctrl: ctrl}
-	mock.recorder = &MockprojectorMockRecorder{mock}
-	return mock
-}
-
-// EXPECT returns an object that allows the caller to indicate expected use.
-func (m *Mockprojector) EXPECT() *MockprojectorMockRecorder {
-	return m.recorder
-}
-
-// GetProjection mocks base method.
-func (m *Mockprojector) GetProjection(arg0 types.Address) (uint64, uint64, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetProjection", arg0)
-	ret0, _ := ret[0].(uint64)
-	ret1, _ := ret[1].(uint64)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
-}
-
-// GetProjection indicates an expected call of GetProjection.
-func (mr *MockprojectorMockRecorder) GetProjection(arg0 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetProjection", reflect.TypeOf((*Mockprojector)(nil).GetProjection), arg0)
 }

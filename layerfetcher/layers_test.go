@@ -20,6 +20,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/p2p/server"
 	srvmocks "github.com/spacemeshos/go-spacemesh/p2p/server/mocks"
 	"github.com/spacemeshos/go-spacemesh/rand"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 func randPeer(tb testing.TB) p2p.Peer {
@@ -72,6 +73,7 @@ type testLogic struct {
 	mBallotH   *mocks.MockballotHandler
 	mBlocksH   *mocks.MockblockHandler
 	mProposalH *mocks.MockproposalHandler
+	mPoetH     *mocks.MockpoetDB
 	mFetcher   *fmocks.MockFetcher
 }
 
@@ -83,6 +85,7 @@ func createTestLogic(t *testing.T) *testLogic {
 		mBallotH:   mocks.NewMockballotHandler(ctrl),
 		mBlocksH:   mocks.NewMockblockHandler(ctrl),
 		mProposalH: mocks.NewMockproposalHandler(ctrl),
+		mPoetH:     mocks.NewMockpoetDB(ctrl),
 		mFetcher:   fmocks.NewMockFetcher(ctrl),
 	}
 	tl.Logic = &Logic{
@@ -93,6 +96,7 @@ func createTestLogic(t *testing.T) *testLogic {
 		ballotHandler:   tl.mBallotH,
 		blockHandler:    tl.mBlocksH,
 		proposalHandler: tl.mProposalH,
+		poetProofs:      tl.mPoetH,
 		fetcher:         tl.mFetcher,
 	}
 	return tl
@@ -863,4 +867,38 @@ func TestGetProposals(t *testing.T) {
 
 	l.mFetcher.EXPECT().GetHashes(hashes, fetch.ProposalDB, false).Return(results).Times(1)
 	assert.NoError(t, l.GetProposals(context.TODO(), proposalIDs))
+}
+
+func TestGetPoetProof(t *testing.T) {
+	l := createTestLogic(t)
+	proof := types.PoetProofMessage{}
+	h := types.RandomHash()
+
+	ch := make(chan fetch.HashDataPromiseResult, 1)
+	data, err := codec.Encode(proof)
+	require.NoError(t, err)
+	ch <- fetch.HashDataPromiseResult{
+		Hash: h,
+		Data: data,
+	}
+
+	l.mFetcher.EXPECT().GetHash(h, fetch.POETDB, false).Return(ch).Times(1)
+	l.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(nil).Times(1)
+	assert.NoError(t, l.GetPoetProof(context.TODO(), h))
+
+	ch <- fetch.HashDataPromiseResult{
+		Hash: h,
+		Data: data,
+	}
+	l.mFetcher.EXPECT().GetHash(h, fetch.POETDB, false).Return(ch).Times(1)
+	l.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(sql.ErrObjectExists).Times(1)
+	assert.NoError(t, l.GetPoetProof(context.TODO(), h))
+
+	ch <- fetch.HashDataPromiseResult{
+		Hash: h,
+		Data: data,
+	}
+	l.mFetcher.EXPECT().GetHash(h, fetch.POETDB, false).Return(ch).Times(1)
+	l.mPoetH.EXPECT().ValidateAndStoreMsg(data).Return(errors.New("unknown")).Times(1)
+	assert.Error(t, l.GetPoetProof(context.TODO(), h))
 }

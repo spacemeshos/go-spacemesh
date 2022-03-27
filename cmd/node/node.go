@@ -73,7 +73,6 @@ const (
 	PostLogger             = "post"
 	StateDbLogger          = "stateDbStore"
 	BeaconLogger           = "beacon"
-	PoetDbStoreLogger      = "poetDbStore"
 	StoreLogger            = "store"
 	PoetDbLogger           = "poetDb"
 	MeshDBLogger           = "meshDb"
@@ -462,7 +461,8 @@ func (app *App) initServices(ctx context.Context,
 	layerSize uint32,
 	poetClient activation.PoetProvingServiceClient,
 	vrfSigner *signing.VRFSigner,
-	layersPerEpoch uint32, clock TickProvider) error {
+	layersPerEpoch uint32, clock TickProvider,
+) error {
 	app.nodeID = nodeID
 
 	lg := app.log.Named(nodeID.ShortString()).WithFields(nodeID)
@@ -501,7 +501,7 @@ func (app *App) initServices(ctx context.Context,
 		return fmt.Errorf("failed to create %s: %w", dbStorepath, err)
 	}
 
-	mdb, err := mesh.NewPersistentMeshDB(sqlDB, app.Config.BlockCacheSize, app.addLogger(MeshDBLogger, lg))
+	mdb, err := mesh.NewPersistentMeshDB(sqlDB, app.addLogger(MeshDBLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create mesh DB: %w", err)
 	}
@@ -528,7 +528,6 @@ func (app *App) initServices(ctx context.Context,
 		beacon.WithConfig(app.Config.Beacon),
 		beacon.WithLogger(app.addLogger(BeaconLogger, lg)))
 
-	var msh *mesh.Mesh
 	var trtl *tortoise.Tortoise
 
 	processed, err := mdb.GetProcessedLayer()
@@ -546,23 +545,25 @@ func (app *App) initServices(ctx context.Context,
 	trtlCfg.MeshProcessed = processed
 	trtlCfg.MeshVerified = verified
 
-	trtl = tortoise.New(mdb, atxDB, beaconProtocol,
+	var updater blockValidityUpdater
+	trtl = tortoise.New(mdb, atxDB, beaconProtocol, &updater,
 		tortoise.WithContext(ctx),
 		tortoise.WithLogger(app.addLogger(TrtlLogger, lg)),
 		tortoise.WithConfig(trtlCfg),
 	)
 
+	var msh *mesh.Mesh
 	if mdb.PersistentData() {
 		msh = mesh.NewRecoveredMesh(mdb, atxDB, trtl, app.conState, app.addLogger(MeshLogger, lg))
-		go msh.CacheWarmUp(app.Config.LayerAvgSize)
 	} else {
 		msh = mesh.NewMesh(mdb, atxDB, trtl, app.conState, app.addLogger(MeshLogger, lg))
 		if err := state.SetupGenesis(app.Config.Genesis); err != nil {
 			return fmt.Errorf("setup genesis: %w", err)
 		}
 	}
+	updater.Mesh = msh
 
-	proposalDB, err := proposals.NewProposalDB(dbStorepath, msh, app.addLogger(ProposalDBLogger, lg))
+	proposalDB, err := proposals.NewProposalDB(sqlDB, app.addLogger(ProposalDBLogger, lg))
 	if err != nil {
 		return fmt.Errorf("create proposal DB: %w", err)
 	}
@@ -633,14 +634,13 @@ func (app *App) initServices(ctx context.Context,
 		clock.Subscribe(),
 		sgn,
 		vrfSigner,
+		sqlDB,
 		atxDB,
 		app.host,
-		proposalDB,
 		trtl,
 		beaconProtocol,
 		newSyncer,
 		app.conState,
-		miner.WithDBPath(dbStorepath),
 		miner.WithMinerID(nodeID),
 		miner.WithTxsPerProposal(app.Config.TxsPerBlock),
 		miner.WithLayerSize(layerSize),
@@ -940,7 +940,6 @@ func (app *App) stopServices() {
 
 	if app.proposalDB != nil {
 		app.log.Info("closing proposal db")
-		app.proposalDB.Close()
 	}
 
 	if app.mesh != nil {
@@ -1209,6 +1208,10 @@ func (app *App) Start() error {
 
 type layerFetcher struct {
 	system.Fetcher
+}
+
+type blockValidityUpdater struct {
+	*mesh.Mesh
 }
 
 func decodeLoggers(cfg config.LoggerConfig) (map[string]string, error) {

@@ -1,14 +1,17 @@
 package txs
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
+	"github.com/spacemeshos/go-spacemesh/codec"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/database"
 	"github.com/spacemeshos/go-spacemesh/events"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/sql"
+	"github.com/spacemeshos/go-spacemesh/sql/transactions"
 )
 
 var (
@@ -22,6 +25,7 @@ type ConservativeState struct {
 	svmState
 
 	logger log.Log
+	db     *sql.Database
 	pool   *txPool
 }
 
@@ -29,7 +33,8 @@ type ConservativeState struct {
 func NewConservativeState(state svmState, db *sql.Database, logger log.Log) *ConservativeState {
 	return &ConservativeState{
 		svmState: state,
-		pool:     newTxPool(db),
+		db:       db,
+		pool:     newTxPool(),
 		logger:   logger,
 	}
 }
@@ -40,13 +45,37 @@ func (cs *ConservativeState) getState(addr types.Address) (uint64, uint64) {
 
 // SelectTXsForProposal picks a specific number of random txs for miner to pack in a proposal.
 func (cs *ConservativeState) SelectTXsForProposal(numOfTxs int) ([]types.TransactionID, []*types.Transaction, error) {
-	return cs.pool.getMemPoolCandidates(numOfTxs, cs.getState)
+	return cs.pool.getCandidates(numOfTxs, cs.getMeshProjection)
 }
 
 // GetProjection returns the projected nonce and balance for the address with pending transactions
 // in un-applied blocks and mempool.
 func (cs *ConservativeState) GetProjection(addr types.Address) (uint64, uint64, error) {
-	return cs.pool.getProjection(addr, cs.getState, meshAndMempool)
+	nonce, balance, err := cs.getMeshProjection(addr)
+	if err != nil {
+		return 0, 0, fmt.Errorf("failed to get db projection: %w", err)
+	}
+	nonce, balance = cs.pool.getProjection(addr, nonce, balance)
+	return nonce, balance, nil
+}
+
+func (cs *ConservativeState) getMeshProjection(addr types.Address) (uint64, uint64, error) {
+	txs, err := transactions.FilterPending(cs.db, addr)
+	if err != nil {
+		return 0, 0, fmt.Errorf("db get pending txs: %w", err)
+	}
+
+	prevNonce, prevBalance := cs.getState(addr)
+	if len(txs) == 0 {
+		return prevNonce, prevBalance, nil
+	}
+
+	pending := newAccountPendingTxs()
+	for _, tx := range txs {
+		pending.Add(tx.LayerID, &tx.Transaction)
+	}
+	nonce, balance := pending.GetProjection(prevNonce, prevBalance)
+	return nonce, balance, nil
 }
 
 func (cs *ConservativeState) validateNonceAndBalance(tx *types.Transaction) error {
@@ -65,6 +94,15 @@ func (cs *ConservativeState) validateNonceAndBalance(tx *types.Transaction) erro
 	return nil
 }
 
+// HasTx returns true if we already have this transaction in db.
+func (cs ConservativeState) HasTx(txID types.TransactionID) bool {
+	if cs.pool.has(txID) {
+		return true
+	}
+	has, err := transactions.Has(cs.db, txID)
+	return err == nil && has
+}
+
 // AddTxToMemPool adds the provided transaction to the mempool after checking nonce and balance.
 func (cs *ConservativeState) AddTxToMemPool(tx *types.Transaction, checkValidity bool) error {
 	if checkValidity {
@@ -75,10 +113,10 @@ func (cs *ConservativeState) AddTxToMemPool(tx *types.Transaction, checkValidity
 		events.ReportNewTx(types.LayerID{}, tx)
 		events.ReportAccountUpdate(tx.Origin())
 		events.ReportAccountUpdate(tx.GetRecipient())
-	} else if err := cs.pool.markDeleted(tx.ID()); err != nil {
+	} else if err := cs.markDeleted(tx.ID()); err != nil {
 		return err
 	}
-	cs.pool.addToMemPool(tx.ID(), tx)
+	cs.pool.add(tx.ID(), tx)
 	return nil
 }
 
@@ -96,13 +134,13 @@ func (cs *ConservativeState) StoreTransactionsFromMemPool(layerID types.LayerID,
 		}
 		txs = append(txs, &tx.Transaction)
 	}
-	if err := cs.pool.writeForBlock(layerID, blockID, txs...); err != nil {
+	if err := cs.writeForBlock(layerID, blockID, txs...); err != nil {
 		return fmt.Errorf("write tx: %w", err)
 	}
 
 	// remove txs from pool
 	for _, id := range txIDs {
-		cs.pool.removeFromMemPool(id)
+		cs.pool.remove(id)
 	}
 	return nil
 }
@@ -125,11 +163,16 @@ func (cs *ConservativeState) ReinsertTxsToMemPool(ids []types.TransactionID) err
 
 // GetMeshTransaction retrieves a tx by its id.
 func (cs *ConservativeState) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
-	tx, err := cs.pool.getFromMemPool(id)
+	tx, err := cs.pool.get(id)
 	if err == nil {
 		return tx, nil
 	}
-	return cs.pool.getFromDB(id)
+
+	tx, err = transactions.Get(cs.db, id)
+	if err != nil {
+		return nil, errors.New("tx not in db")
+	}
+	return tx, nil
 }
 
 // GetTransactions retrieves a list of txs by their id's.
@@ -154,7 +197,7 @@ func (cs *ConservativeState) GetTransactions(ids []types.TransactionID) ([]*type
 // GetTransactionsByAddress retrieves txs for a single address in between layers [from, to].
 // Guarantees that transaction will appear exactly once, even if origin and recipient is the same, and in insertion order.
 func (cs *ConservativeState) GetTransactionsByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
-	return cs.pool.getFromDBByAddress(from, to, address)
+	return transactions.FilterByAddress(cs.db, from, to, address)
 }
 
 // ApplyLayer applies the transactions specified by the ids to the state.
@@ -175,19 +218,60 @@ func (cs *ConservativeState) ApplyLayer(lid types.LayerID, bid types.BlockID, tx
 		return failedTxs, fmt.Errorf("apply layer: %w", svmErr)
 	}
 
-	if err := cs.pool.writeForBlock(lid, bid, txs...); err != nil {
+	if err := cs.writeForBlock(lid, bid, txs...); err != nil {
 		cs.logger.With().Error("failed to update tx block ID in db", log.Err(err))
 		return nil, err
 	}
 	for _, tx := range txs {
-		if err := cs.pool.markApplied(tx.ID()); err != nil {
+		if err := cs.markApplied(tx.ID()); err != nil {
 			return nil, err
 		}
 	}
 	return nil, nil
 }
 
+func (cs *ConservativeState) markApplied(tid types.TransactionID) error {
+	return transactions.Applied(cs.db, tid)
+}
+
+func (cs *ConservativeState) markDeleted(tid types.TransactionID) error {
+	if err := transactions.MarkDeleted(cs.db, tid); err != nil && !errors.Is(err, sql.ErrNotFound) {
+		return err
+	}
+	return nil
+}
+
+// writeForBlock writes all transactions associated with a block atomically.
+func (cs *ConservativeState) writeForBlock(layerID types.LayerID, bid types.BlockID, txs ...*types.Transaction) error {
+	dbtx, err := cs.db.Tx(context.Background())
+	if err != nil {
+		return err
+	}
+	defer dbtx.Release()
+	for _, tx := range txs {
+		if err := transactions.Add(dbtx, layerID, bid, tx); err != nil {
+			return err
+		}
+	}
+	return dbtx.Commit()
+}
+
 // Transactions exports the transactions DB.
 func (cs *ConservativeState) Transactions() database.Getter {
-	return &txFetcher{t: cs.pool}
+	return &txFetcher{pool: cs.pool, db: cs.db}
+}
+
+type txFetcher struct {
+	pool *txPool
+	db   *sql.Database
+}
+
+// Get transaction blob, by transaction id.
+func (f *txFetcher) Get(hash []byte) ([]byte, error) {
+	id := types.TransactionID{}
+	copy(id[:], hash)
+	if tx, err := f.pool.get(id); err == nil && tx != nil {
+		return codec.Encode(tx)
+	}
+	return transactions.GetBlob(f.db, id)
 }

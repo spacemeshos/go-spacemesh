@@ -2,20 +2,17 @@ package activation
 
 import (
 	"context"
+	"errors"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
 	"github.com/spacemeshos/go-spacemesh/p2p"
 	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
+	"github.com/spacemeshos/go-spacemesh/sql"
 )
 
 // PoetProofProtocol is the name of the PoetProof gossip protocol.
 const PoetProofProtocol = "PoetProof"
-
-type poetValidatorPersistor interface {
-	Validate(proof types.PoetProof, poetID []byte, roundID string, signature []byte) error
-	storeProof(proofMessage *types.PoetProofMessage) error
-}
 
 // PoetListener handles PoET gossip messages.
 type PoetListener struct {
@@ -41,7 +38,11 @@ func (l *PoetListener) HandlePoetProofMessage(ctx context.Context, _ p2p.Peer, m
 		return pubsub.ValidationIgnore
 	}
 
-	if err := l.poetDb.storeProof(&proofMessage); err != nil {
+	if err := l.poetDb.StoreProof(&proofMessage); err != nil {
+		if errors.Is(err, sql.ErrObjectExists) {
+			// don't spam the network
+			return pubsub.ValidationIgnore
+		}
 		l.Log.Error("failed to store poet proof: %v", err)
 	}
 	return pubsub.ValidationAccept

@@ -62,6 +62,20 @@ func (mr *MockconservativeStateMockRecorder) AddressExists(addr interface{}) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddressExists", reflect.TypeOf((*MockconservativeState)(nil).AddressExists), addr)
 }
 
+// HasTx mocks base method.
+func (m *MockconservativeState) HasTx(arg0 types.TransactionID) bool {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "HasTx", arg0)
+	ret0, _ := ret[0].(bool)
+	return ret0
+}
+
+// HasTx indicates an expected call of HasTx.
+func (mr *MockconservativeStateMockRecorder) HasTx(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "HasTx", reflect.TypeOf((*MockconservativeState)(nil).HasTx), arg0)
+}
+
 // MocksvmState is a mock of svmState interface.
 type MocksvmState struct {
 	ctrl     *gomock.Controller

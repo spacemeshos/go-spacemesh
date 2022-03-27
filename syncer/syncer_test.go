@@ -114,8 +114,8 @@ func (mv *mockValidator) OnBlock(*types.Block) {}
 
 func (mv *mockValidator) OnBallot(*types.Ballot) {}
 
-func (mv *mockValidator) HandleIncomingLayer(_ context.Context, layerID types.LayerID) (types.LayerID, types.LayerID, bool) {
-	return layerID, layerID.Sub(1), false
+func (mv *mockValidator) HandleIncomingLayer(_ context.Context, layerID types.LayerID) types.LayerID {
+	return layerID.Sub(1)
 }
 
 func feedLayerResult(from, to types.LayerID, mf *mockFetcher, msh *mesh.Mesh) {
@@ -1169,13 +1169,11 @@ func TestSyncMissingLayer(t *testing.T) {
 	for lid := genesis.Add(1); lid.Before(last); lid = lid.Add(1) {
 		fetcher.EXPECT().PollLayerContent(gomock.Any(), lid).Return(rst)
 		m.SetZeroBlockLayer(lid)
-		tortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
-			Return(lid.Sub(1), lid, false)
+		tortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).Return(lid)
 		conState.EXPECT().ApplyLayer(block.LayerIndex, block.ID(), block.TxIDs, gomock.Any()).Return(nil, errMissingTXs)
 	}
 
-	tortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).
-		Return(last.Sub(1), last.Sub(1), false).Times(maxAttemptWithinRun - 1)
+	tortoise.EXPECT().HandleIncomingLayer(gomock.Any(), gomock.Any()).Return(last.Sub(1)).Times(maxAttemptWithinRun - 1)
 	fetcher.EXPECT().PollLayerContent(gomock.Any(), failed).Return(rst).Times(maxAttemptWithinRun - 1)
 
 	require.True(t, syncer.synchronize(context.TODO()))
