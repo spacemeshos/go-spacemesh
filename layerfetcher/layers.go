@@ -153,7 +153,8 @@ type DataHandlers struct {
 
 // NewLogic creates a new instance of layer fetching logic.
 func NewLogic(ctx context.Context, cfg Config, poet poetDB, atxIDs atxIDsDB, layers layerDB,
-	host *p2p.Host, handlers DataHandlers, dbStores fetch.LocalDataSource, log log.Log) *Logic {
+	host *p2p.Host, handlers DataHandlers, dbStores fetch.LocalDataSource, log log.Log,
+) *Logic {
 	l := &Logic{
 		log:             log,
 		fetcher:         fetch.NewFetch(ctx, cfg.Config, host, dbStores, log.WithName("fetch")),

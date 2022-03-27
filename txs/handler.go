@@ -16,6 +16,7 @@ const IncomingTxProtocol = "TxGossip"
 
 var (
 	errMalformedMsg      = errors.New("malformed tx")
+	errDuplicateTX       = errors.New("tx already exists")
 	errAddrNotExtracted  = errors.New("address not extracted")
 	errAddrNotFound      = errors.New("address not found")
 	errRejectedByMemPool = errors.New("rejected by mempool")
@@ -50,12 +51,16 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 		return errMalformedMsg
 	}
 
+	if th.state.HasTx(tx.ID()) {
+		return errDuplicateTX
+	}
+
 	if err = tx.CalcAndSetOrigin(); err != nil {
-		th.logger.WithContext(ctx).Error("failed to calculate tx origin", tx.ID(), log.Err(err))
+		th.logger.WithContext(ctx).With().Error("failed to calculate tx origin", tx.ID(), log.Err(err))
 		return errAddrNotExtracted
 	}
 
-	th.logger.WithContext(ctx).Info("got new tx",
+	th.logger.WithContext(ctx).With().Info("got new tx",
 		tx.ID(),
 		log.Uint64("nonce", tx.AccountNonce),
 		log.Uint64("amount", tx.Amount),
@@ -65,7 +70,7 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 		log.String("origin", tx.Origin().String()))
 
 	if !th.state.AddressExists(tx.Origin()) {
-		th.logger.WithContext(ctx).Error("tx origin does not exist",
+		th.logger.WithContext(ctx).With().Error("tx origin does not exist",
 			log.String("transaction", tx.String()),
 			tx.ID(),
 			log.String("origin", tx.Origin().Short()))
@@ -73,7 +78,7 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	}
 
 	if err := th.state.AddTxToMemPool(tx, true); err != nil {
-		th.logger.WithContext(ctx).Warning("failed to add tx to mempool", tx.ID(), log.Err(err))
+		th.logger.WithContext(ctx).With().Warning("failed to add tx to mempool", tx.ID(), log.Err(err))
 		return errRejectedByMemPool
 	}
 
@@ -89,15 +94,15 @@ func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) err
 	var tx types.Transaction
 	err := types.BytesToInterface(data, &tx)
 	if err != nil {
-		th.logger.WithContext(ctx).Error("failed to parse sync tx", log.Err(err))
+		th.logger.WithContext(ctx).With().Error("failed to parse sync tx", log.Err(err))
 		return errMalformedMsg
 	}
 	if err = tx.CalcAndSetOrigin(); err != nil {
-		th.logger.WithContext(ctx).Error("failed to calculate sync tx origin", tx.ID(), log.Err(err))
+		th.logger.WithContext(ctx).With().Error("failed to calculate sync tx origin", tx.ID(), log.Err(err))
 		return errAddrNotExtracted
 	}
 	if err := th.state.AddTxToMemPool(&tx, false); err != nil {
-		th.logger.WithContext(ctx).Error("failed to add sync tx to mempool", tx.ID(), log.Err(err))
+		th.logger.WithContext(ctx).With().Error("failed to add sync tx to mempool", tx.ID(), log.Err(err))
 		return fmt.Errorf("add sync tx to mempool: %w", err)
 	}
 	return nil

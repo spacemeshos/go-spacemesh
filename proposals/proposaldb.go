@@ -13,24 +13,11 @@ import (
 // DB holds all data for proposals.
 type DB struct {
 	logger log.Log
-	msh    meshDB
 	sqlDB  *sql.Database
 }
 
 // dbOpt for configuring DB.
 type dbOpt func(*DB)
-
-func withSQLDB(d *sql.Database) dbOpt {
-	return func(db *DB) {
-		db.sqlDB = d
-	}
-}
-
-func withMeshDB(msh meshDB) dbOpt {
-	return func(db *DB) {
-		db.msh = msh
-	}
-}
 
 func withLogger(l log.Log) dbOpt {
 	return func(db *DB) {
@@ -38,9 +25,10 @@ func withLogger(l log.Log) dbOpt {
 	}
 }
 
-func newDB(opts ...dbOpt) *DB {
+func newDB(sqlDB *sql.Database, opts ...dbOpt) *DB {
 	db := &DB{
 		logger: log.NewNop(),
+		sqlDB:  sqlDB,
 	}
 	for _, opt := range opts {
 		opt(db)
@@ -49,8 +37,8 @@ func newDB(opts ...dbOpt) *DB {
 }
 
 // NewProposalDB returns a new DB for proposals.
-func NewProposalDB(sqlDB *sql.Database, msh meshDB, logger log.Log) (*DB, error) {
-	return newDB(withSQLDB(sqlDB), withMeshDB(msh), withLogger(logger)), nil
+func NewProposalDB(sqlDB *sql.Database, logger log.Log) (*DB, error) {
+	return newDB(sqlDB, withLogger(logger)), nil
 }
 
 // HasProposal returns true if the database has the Proposal specified by the ProposalID and false otherwise.
@@ -61,18 +49,11 @@ func (db *DB) HasProposal(id types.ProposalID) bool {
 
 // AddProposal adds a proposal to the database.
 func (db *DB) AddProposal(ctx context.Context, p *types.Proposal) error {
-	if err := db.msh.AddBallot(&p.Ballot); err != nil {
-		return fmt.Errorf("proposal add ballot: %w", err)
-	}
-	if err := db.msh.AddTXsFromProposal(ctx, p.LayerIndex, p.ID(), p.TxIDs); err != nil {
-		return fmt.Errorf("proposal add TXs: %w", err)
-	}
-
 	if err := proposals.Add(db.sqlDB, p); err != nil {
 		return fmt.Errorf("could not add DBProposal %v to database: %w", p.ID(), err)
 	}
 
-	db.logger.With().Info("added proposal to database", log.Inline(p))
+	db.logger.WithContext(ctx).With().Info("added proposal to database", log.Inline(p))
 	return nil
 }
 
@@ -83,7 +64,7 @@ func (db *DB) GetProposal(id types.ProposalID) (*types.Proposal, error) {
 
 // GetProposals retrieves multiple proposals from the database.
 func (db *DB) GetProposals(pids []types.ProposalID) ([]*types.Proposal, error) {
-	proposals := make([]*types.Proposal, 0, len(pids))
+	result := make([]*types.Proposal, 0, len(pids))
 	var (
 		p   *types.Proposal
 		err error
@@ -92,9 +73,9 @@ func (db *DB) GetProposals(pids []types.ProposalID) ([]*types.Proposal, error) {
 		if p, err = db.GetProposal(pid); err != nil {
 			return nil, err
 		}
-		proposals = append(proposals, p)
+		result = append(result, p)
 	}
-	return proposals, nil
+	return result, nil
 }
 
 // Get Proposal encoded in byte using ProposalID hash.

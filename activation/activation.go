@@ -169,7 +169,8 @@ func WithContext(ctx context.Context) BuilderOption {
 // NewBuilder returns an atx builder that will start a routine that will attempt to create an atx upon each new layer.
 func NewBuilder(conf Config, nodeID types.NodeID, signer signer, db atxDBProvider, publisher pubsub.Publisher,
 	nipostBuilder nipostBuilder, postSetupProvider PostSetupProvider, layerClock layerClock,
-	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption) *Builder {
+	syncer syncer, store bytesStore, log log.Log, opts ...BuilderOption,
+) *Builder {
 	b := &Builder{
 		parentCtx:         context.Background(),
 		signer:            signer,

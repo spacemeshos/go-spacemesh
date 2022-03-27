@@ -33,7 +33,6 @@ var (
 	errExceptionsOverflow    = errors.New("too many exceptions")
 	errDuplicateTX           = errors.New("duplicate TxID in proposal")
 	errDuplicateATX          = errors.New("duplicate ATXID in active set")
-	errKnownBallot           = errors.New("known ballot")
 	errKnownProposal         = errors.New("known proposal")
 )
 
@@ -140,7 +139,7 @@ func (h *Handler) HandleProposal(ctx context.Context, _ p2p.Peer, msg []byte) pu
 	return pubsub.ValidationAccept
 }
 
-// HandleBallotData handles Ballot data from gossip and sync.
+// HandleBallotData handles Ballot data from sync.
 func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	newCtx := log.WithNewRequestID(ctx)
 	logger := h.logger.WithContext(newCtx)
@@ -159,14 +158,8 @@ func (h *Handler) HandleBallotData(ctx context.Context, data []byte) error {
 	}
 
 	logger = logger.WithFields(b.ID(), b.LayerIndex)
-	err := h.processBallot(ctx, &b, logger)
-	if err != nil && err != errKnownBallot {
+	if err := h.processBallot(ctx, &b, logger); err != nil {
 		return err
-	} else if err == errKnownBallot {
-		return nil
-	}
-	if err = h.mesh.AddBallot(&b); err != nil {
-		return fmt.Errorf("save ballot: %w", err)
 	}
 	return nil
 }
@@ -204,7 +197,7 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
 	}
 	logger.With().Info("new proposal", log.Inline(&p))
 
-	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil && err != errKnownBallot {
+	if err := h.processBallot(ctx, &p.Ballot, logger); err != nil {
 		logger.With().Warning("failed to process ballot", log.Err(err))
 		return err
 	}
@@ -214,28 +207,35 @@ func (h *Handler) handleProposalData(ctx context.Context, data []byte) error {
 		return err
 	}
 
-	h.logger.WithContext(ctx).With().Debug("proposal is syntactically valid")
-	reportProposalMetrics(&p)
+	logger.With().Debug("proposal is syntactically valid")
 
 	if err := h.proposalDB.AddProposal(ctx, &p); err != nil {
 		logger.With().Error("failed to save proposal", log.Err(err))
 		return fmt.Errorf("save proposal: %w", err)
 	}
 
+	if err := h.mesh.AddTXsFromProposal(ctx, p.LayerIndex, p.ID(), p.TxIDs); err != nil {
+		return fmt.Errorf("proposal add TXs: %w", err)
+	}
+
+	reportProposalMetrics(&p)
 	return nil
 }
 
 func (h *Handler) processBallot(ctx context.Context, b *types.Ballot, logger log.Log) error {
 	if h.mesh.HasBallot(b.ID()) {
-		logger.Info("known ballot")
-		return errKnownBallot
+		logger.Debug("known ballot", b.ID())
+		return nil
 	}
 
 	logger.With().Info("new ballot", log.Inline(b))
-
 	if err := h.checkBallotSyntacticValidity(ctx, b); err != nil {
 		logger.With().Error("ballot syntactically invalid", log.Err(err))
 		return fmt.Errorf("syntactic-check ballot: %w", err)
+	}
+
+	if err := h.mesh.AddBallot(b); err != nil {
+		return fmt.Errorf("save ballot: %w", err)
 	}
 
 	reportBallotMetrics(b)

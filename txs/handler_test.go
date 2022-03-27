@@ -25,6 +25,7 @@ func Test_HandleGossipTransaction_Success(t *testing.T) {
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, 1, signer)
 	origin := types.GenerateAddress(signer.PublicKey().Bytes())
+	cstate.EXPECT().HasTx(tx.ID()).Return(false).Times(1)
 	cstate.EXPECT().AddressExists(origin).Return(true).Times(1)
 	cstate.EXPECT().AddTxToMemPool(gomock.Any(), true).DoAndReturn(
 		func(got *types.Transaction, check bool) error {
@@ -67,16 +68,33 @@ func Test_handleTransaction_MalformedMsg(t *testing.T) {
 
 func Test_handleTransaction_BadSignature(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	th := NewTxHandler(mocks.NewMockconservativeState(ctrl), logtest.New(t))
+	cstate := mocks.NewMockconservativeState(ctrl)
+	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, 1, signer)
+	cstate.EXPECT().HasTx(gomock.Any()).Return(false).Times(1)
 	tx.Signature[63] = 224
 	msg, err := codec.Encode(tx)
 	require.NoError(t, err)
 
 	got := th.handleTransaction(context.TODO(), msg)
 	assert.ErrorIs(t, got, errAddrNotExtracted)
+}
+
+func Test_handleTransaction_DuplicateTX(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	cstate := mocks.NewMockconservativeState(ctrl)
+	th := NewTxHandler(cstate, logtest.New(t))
+
+	signer := signing.NewEdSigner()
+	tx := newTx(t, 3, 10, 1, signer)
+	msg, err := codec.Encode(tx)
+	require.NoError(t, err)
+
+	cstate.EXPECT().HasTx(tx.ID()).Return(true).Times(1)
+	got := th.handleTransaction(context.TODO(), msg)
+	assert.ErrorIs(t, got, errDuplicateTX)
 }
 
 func Test_handleTransaction_AddressNotFound(t *testing.T) {
@@ -86,6 +104,7 @@ func Test_handleTransaction_AddressNotFound(t *testing.T) {
 
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, 1, signer)
+	cstate.EXPECT().HasTx(tx.ID()).Return(false).Times(1)
 	origin := types.GenerateAddress(signer.PublicKey().Bytes())
 	cstate.EXPECT().AddressExists(origin).Return(false).Times(1)
 	msg, err := codec.Encode(tx)
@@ -102,6 +121,7 @@ func Test_handleTransaction_FailedMemPool(t *testing.T) {
 
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, 1, signer)
+	cstate.EXPECT().HasTx(tx.ID()).Return(false).Times(1)
 	origin := types.GenerateAddress(signer.PublicKey().Bytes())
 	cstate.EXPECT().AddressExists(origin).Return(true).Times(1)
 	errUnknown := errors.New("unknown")
@@ -142,7 +162,8 @@ func Test_HandleSyncTransaction_Success(t *testing.T) {
 
 func Test_HandleSyncTransaction_BadSignature(t *testing.T) {
 	ctrl := gomock.NewController(t)
-	th := NewTxHandler(mocks.NewMockconservativeState(ctrl), logtest.New(t))
+	cstate := mocks.NewMockconservativeState(ctrl)
+	th := NewTxHandler(cstate, logtest.New(t))
 
 	signer := signing.NewEdSigner()
 	tx := newTx(t, 3, 10, 1, signer)
