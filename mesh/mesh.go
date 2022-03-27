@@ -372,7 +372,7 @@ func (msh *Mesh) ProcessLayer(ctx context.Context, layerID types.LayerID) error 
 	from := msh.LatestLayerInState().Add(1)
 	to := layerID
 	if from == msh.MissingLayer() {
-		to = msh.maxProcessedLayer	
+		to = msh.maxProcessedLayer
 	}
 
 	if !to.Before(from) {

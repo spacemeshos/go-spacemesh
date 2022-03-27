@@ -195,6 +195,9 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 			// consistent with our local opinion.
 			// then we just need to encode our local opinion from layer of the ballot up to last processed as votes
 			votes, err = t.encodeVotes(ctx, ballotID, ballotLID, ballotLID, last, func(types.LayerID, types.BlockID) sign { return against })
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if votes == nil {
