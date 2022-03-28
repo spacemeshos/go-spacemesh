@@ -7,6 +7,7 @@ clusters ?= 1
 size ?= 10
 level ?= debug
 bootstrap ?= 5m
+node_selector ?=
 
 .PHONY: docker
 docker:
@@ -24,7 +25,7 @@ launch:
 	@kubectl run --image $(image_name) $(test_pod_name) \
 	--restart=Never \
 	--image-pull-policy=IfNotPresent -- \
-	tests -test.v -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) -size=$(size) -image=$(smesher_image) -level=$(level) -bootstrap=$(bootstrap)
+	tests -test.v -test.timeout=0 -test.run=$(test_name) -clusters=$(clusters) -size=$(size) -image=$(smesher_image) -level=$(level) -node-selector=$(node_selector) -bootstrap=$(bootstrap)
 
 .PHONY: watch
 watch:
