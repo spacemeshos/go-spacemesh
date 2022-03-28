@@ -315,18 +315,18 @@ func TestAddToMesh(t *testing.T) {
 	logger.With().Info("genesis is", l.Index(), types.BlockIdsField(types.ToBlockIDs(l.Blocks())))
 	logger.With().Info("genesis is", log.Object("block", l.Blocks()[0]))
 
-	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), atxdb, alg.BaseBallot, defaultTestLayerSize)
+	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), atxdb, alg.EncodeVotes, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
 
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
 
-	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), atxdb, alg.BaseBallot, defaultTestLayerSize)
+	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), atxdb, alg.EncodeVotes, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l2))
 	alg.HandleIncomingLayer(context.TODO(), l2.Index())
 
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 
-	l3a := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), atxdb, alg.BaseBallot, defaultTestLayerSize+1)
+	l3a := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), atxdb, alg.EncodeVotes, defaultTestLayerSize+1)
 
 	// this should fail as the blocks for this layer have not been added to the mesh yet
 	alg.HandleIncomingLayer(context.TODO(), l3a.Index())
@@ -336,13 +336,13 @@ func TestAddToMesh(t *testing.T) {
 	require.NoError(t, alg.rerun(context.TODO()))
 	alg.updateFromRerun(context.TODO())
 
-	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), atxdb, alg.BaseBallot, defaultTestLayerSize)
+	l4 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(4), atxdb, alg.EncodeVotes, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l4))
 	alg.HandleIncomingLayer(context.TODO(), l4.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(3).Uint32()), int(alg.LatestComplete().Uint32()), "wrong latest complete layer")
 }
 
-func TestBaseBallot(t *testing.T) {
+func TestEncodeVotes(t *testing.T) {
 	r := require.New(t)
 	mdb := getInMemMesh(t)
 	atxdb := getAtxDB()
@@ -351,7 +351,7 @@ func TestBaseBallot(t *testing.T) {
 
 	l0 := types.GenesisLayer()
 	expectBaseBallotLayer := func(layerID types.LayerID, numAgainst, numSupport, numNeutral int) {
-		votes, err := alg.BaseBallot(context.TODO())
+		votes, err := alg.EncodeVotes(context.TODO())
 		r.NoError(err)
 		// expect no exceptions
 		r.Len(votes.Support, numSupport)
@@ -367,22 +367,100 @@ func TestBaseBallot(t *testing.T) {
 	expectBaseBallotLayer(l0.Index(), 0, len(types.GenesisLayer().Blocks()), 0)
 
 	// add a couple of incoming layers and make sure the base ballot layer advances as well
-	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), atxdb, alg.BaseBallot, defaultTestLayerSize)
+	l1 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(1), atxdb, alg.EncodeVotes, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l1))
 	alg.HandleIncomingLayer(context.TODO(), l1.Index())
 	expectBaseBallotLayer(l1.Index(), 0, numValidBlock, 0)
 
-	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), atxdb, alg.BaseBallot, defaultTestLayerSize)
+	l2 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(2), atxdb, alg.EncodeVotes, defaultTestLayerSize)
 	require.NoError(t, addLayerToMesh(mdb, l2))
 	alg.HandleIncomingLayer(context.TODO(), l2.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 	expectBaseBallotLayer(l2.Index(), 0, numValidBlock, 0)
 
 	// add a layer that's not in the mesh and make sure it does not advance
-	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), atxdb, alg.BaseBallot, defaultTestLayerSize)
+	l3 := createTurtleLayer(t, types.GetEffectiveGenesis().Add(3), atxdb, alg.EncodeVotes, defaultTestLayerSize)
 	alg.HandleIncomingLayer(context.TODO(), l3.Index())
 	require.Equal(t, int(types.GetEffectiveGenesis().Add(1).Uint32()), int(alg.LatestComplete().Uint32()))
 	expectBaseBallotLayer(l2.Index(), 0, numValidBlock, 1)
+}
+
+func TestEncodeAbstainVotesForZdist(t *testing.T) {
+	const (
+		size  = 4
+		zdist = 3
+	)
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	cfg.Zdist = zdist
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+
+	var (
+		last     types.LayerID
+		verified types.LayerID
+	)
+	for _, lid := range sim.GenLayers(s,
+		sim.WithSequence(1),
+	) {
+		last = lid
+		verified = tortoise.HandleIncomingLayer(ctx, lid)
+	}
+	require.Equal(t, last.Sub(1), verified)
+
+	var start types.LayerID
+	for i := 1; i <= zdist; i++ {
+		current := last.Add(uint32(i))
+		votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithLast(current))
+		require.NoError(t, err)
+		require.Len(t, votes.Support, 1)
+		require.Len(t, votes.Against, 0)
+
+		if i > zdist+1 {
+			require.Len(t, votes.Abstain, zdist, "abstain is limited by zdist: %+v", votes.Abstain)
+			start = current.Sub(zdist)
+		} else {
+			require.Len(t, votes.Abstain, i-1, "abstain is less then zdist: %+v", votes.Abstain)
+			start = last.Add(1)
+		}
+		for j, lid := range votes.Abstain {
+			require.Equal(t, start.Add(uint32(j)), lid)
+		}
+	}
+}
+
+func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
+	const (
+		size = 4
+	)
+	s := sim.New(sim.WithLayerSize(size))
+	s.Setup()
+
+	ctx := context.Background()
+	cfg := defaultTestConfig()
+	cfg.LayerSize = size
+	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg), WithLogger(logtest.New(t)))
+
+	var (
+		last     types.LayerID
+		verified types.LayerID
+	)
+	for _, lid := range sim.GenLayers(s,
+		sim.WithSequence(1),
+		sim.WithSequence(1, sim.WithNextReorder(1)),
+	) {
+		last = lid
+		verified = tortoise.HandleIncomingLayer(ctx, lid)
+	}
+	require.Equal(t, last.Sub(3), verified)
+
+	votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithLast(last.Add(1)))
+	require.NoError(t, err)
+	require.Len(t, votes.Support, 2)
+	require.Equal(t, votes.Abstain, []types.LayerID{types.NewLayerID(9)})
 }
 
 func mockedBeacons(tb testing.TB) system.BeaconGetter {
@@ -573,8 +651,8 @@ func TestMultiTortoise(t *testing.T) {
 
 		makeAndProcessLayerMultiTortoise := func(layerID types.LayerID) {
 			// simulate producing blocks in parallel
-			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.EncodeVotes, atxdb1, 1)
+			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.EncodeVotes, atxdb2, 1)
 
 			// these will produce identical sets of blocks, so throw away half of each
 			// (we could probably get away with just using, say, A's blocks, but to be more thorough we also want
@@ -631,8 +709,8 @@ func TestMultiTortoise(t *testing.T) {
 
 		makeBallots := func(layerID types.LayerID) (ballotsA, ballotsB []*types.Ballot) {
 			// simulate producing blocks in parallel
-			ballotsA = generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-			ballotsB = generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			ballotsA = generateBallots(t, layerID, layerSize, layerSize, alg1.EncodeVotes, atxdb1, 1)
+			ballotsB = generateBallots(t, layerID, layerSize, layerSize, alg2.EncodeVotes, atxdb2, 1)
 
 			// majority > 90
 			ballotsA = ballotsA[:layerSize-1]
@@ -714,7 +792,7 @@ func TestMultiTortoise(t *testing.T) {
 			// these blocks will be nearly identical but they will have different base ballots, since the set of blocks
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
 			// an ongoing partition.
-			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.EncodeVotes, atxdb1, 1)
 			forkballotsA = append(forkballotsA, ballotsA...)
 			for _, ballot := range ballotsA {
 				r.NoError(mdb1.AddBallot(ballot))
@@ -725,7 +803,7 @@ func TestMultiTortoise(t *testing.T) {
 			forkblocksA = append(forkblocksA, blockA)
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.EncodeVotes, atxdb2, 1)
 			forkballotsB = append(forkballotsB, ballotsB...)
 			for _, ballot := range ballotsB {
 				r.NoError(mdb2.AddBallot(ballot))
@@ -743,7 +821,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		// finally, the minority tortoise heals and regains parity with the majority tortoise
 		layerID = layerID.Add(1)
-		ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+		ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.EncodeVotes, atxdb1, 1)
 		forkballotsA = append(forkballotsA, ballotsA...)
 		for _, ballot := range ballotsA {
 			r.NoError(mdb1.AddBallot(ballot))
@@ -754,7 +832,7 @@ func TestMultiTortoise(t *testing.T) {
 		forkblocksA = append(forkblocksA, blockA)
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-		ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+		ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.EncodeVotes, atxdb2, 1)
 		forkballotsB = append(forkballotsB, ballotsB...)
 		for _, ballot := range ballotsB {
 			r.NoError(mdb2.AddBallot(ballot))
@@ -844,8 +922,8 @@ func TestMultiTortoise(t *testing.T) {
 
 		makeBallots := func(layerID types.LayerID) (ballotsA, ballotsB []*types.Ballot) {
 			// simulate producing blocks in parallel
-			ballotsA = generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-			ballotsB = generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			ballotsA = generateBallots(t, layerID, layerSize, layerSize, alg1.EncodeVotes, atxdb1, 1)
+			ballotsB = generateBallots(t, layerID, layerSize, layerSize, alg2.EncodeVotes, atxdb2, 1)
 
 			// 50/50 split
 			ballotsA = ballotsA[:layerSize/2]
@@ -915,7 +993,7 @@ func TestMultiTortoise(t *testing.T) {
 			// these blocks will be nearly identical but they will have different base ballots, since the set of blocks
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
 			// an ongoing partition.
-			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.EncodeVotes, atxdb1, 1)
 			for _, ballot := range ballotsA {
 				r.NoError(mdb1.AddBallot(ballot))
 			}
@@ -924,7 +1002,7 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.EncodeVotes, atxdb2, 1)
 			for _, ballot := range ballotsB {
 				r.NoError(mdb2.AddBallot(ballot))
 			}
@@ -940,7 +1018,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		// finally, both nodes heal and get unstuck
 		layerID = layerID.Add(1)
-		ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+		ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.EncodeVotes, atxdb1, 1)
 		for _, ballot := range ballotsA {
 			r.NoError(mdb1.AddBallot(ballot))
 		}
@@ -949,7 +1027,7 @@ func TestMultiTortoise(t *testing.T) {
 		r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-		ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+		ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.EncodeVotes, atxdb2, 1)
 		for _, ballot := range ballotsB {
 			r.NoError(mdb2.AddBallot(ballot))
 		}
@@ -995,9 +1073,9 @@ func TestMultiTortoise(t *testing.T) {
 
 		makeBallots := func(layerID types.LayerID) (ballotsA, ballotsB, ballotsC []*types.Ballot) {
 			// simulate producing blocks in parallel
-			ballotsA = generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
-			ballotsB = generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
-			ballotsC = generateBallots(t, layerID, layerSize, layerSize, alg3.BaseBallot, atxdb3, 1)
+			ballotsA = generateBallots(t, layerID, layerSize, layerSize, alg1.EncodeVotes, atxdb1, 1)
+			ballotsB = generateBallots(t, layerID, layerSize, layerSize, alg2.EncodeVotes, atxdb2, 1)
+			ballotsC = generateBallots(t, layerID, layerSize, layerSize, alg3.EncodeVotes, atxdb3, 1)
 
 			// three-way split
 			ballotsA = ballotsA[:layerSize/3]
@@ -1083,7 +1161,7 @@ func TestMultiTortoise(t *testing.T) {
 			// these blocks will be nearly identical but they will have different base ballots, since the set of blocks
 			// for recent layers has been bifurcated, so we have to generate and store blocks separately to simulate
 			// an ongoing partition.
-			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+			ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.EncodeVotes, atxdb1, 1)
 			for _, block := range ballotsA {
 				r.NoError(mdb1.AddBallot(block))
 			}
@@ -1092,7 +1170,7 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
 			alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+			ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.EncodeVotes, atxdb2, 1)
 			for _, block := range ballotsB {
 				r.NoError(mdb2.AddBallot(block))
 			}
@@ -1101,7 +1179,7 @@ func TestMultiTortoise(t *testing.T) {
 			r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockB.ID()))
 			alg2.HandleIncomingLayer(context.TODO(), layerID)
 
-			ballotsC := generateBallots(t, layerID, layerSize, layerSize, alg3.BaseBallot, atxdb3, 1)
+			ballotsC := generateBallots(t, layerID, layerSize, layerSize, alg3.EncodeVotes, atxdb3, 1)
 			for _, block := range ballotsC {
 				r.NoError(mdb3.AddBallot(block))
 			}
@@ -1118,7 +1196,7 @@ func TestMultiTortoise(t *testing.T) {
 
 		// finally, all nodes heal and get unstuck
 		layerID = layerID.Add(1)
-		ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.BaseBallot, atxdb1, 1)
+		ballotsA := generateBallots(t, layerID, layerSize, layerSize, alg1.EncodeVotes, atxdb1, 1)
 		for _, block := range ballotsA {
 			r.NoError(mdb1.AddBallot(block))
 		}
@@ -1127,7 +1205,7 @@ func TestMultiTortoise(t *testing.T) {
 		r.NoError(mdb1.SaveHareConsensusOutput(context.TODO(), layerID, blockA.ID()))
 		alg1.HandleIncomingLayer(context.TODO(), layerID)
 
-		ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.BaseBallot, atxdb2, 1)
+		ballotsB := generateBallots(t, layerID, layerSize, layerSize, alg2.EncodeVotes, atxdb2, 1)
 		for _, block := range ballotsB {
 			r.NoError(mdb2.AddBallot(block))
 		}
@@ -1136,7 +1214,7 @@ func TestMultiTortoise(t *testing.T) {
 		r.NoError(mdb2.SaveHareConsensusOutput(context.TODO(), layerID, blockB.ID()))
 		alg2.HandleIncomingLayer(context.TODO(), layerID)
 
-		ballotsC := generateBallots(t, layerID, layerSize, layerSize, alg3.BaseBallot, atxdb3, 1)
+		ballotsC := generateBallots(t, layerID, layerSize, layerSize, alg3.EncodeVotes, atxdb3, 1)
 		for _, block := range ballotsC {
 			r.NoError(mdb3.AddBallot(block))
 		}
@@ -1313,7 +1391,7 @@ func benchmarkBaseBallot(b *testing.B, opts ...sim.NextOpt) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		tortoise.BaseBallot(ctx)
+		tortoise.EncodeVotes(ctx)
 	}
 }
 
@@ -1524,7 +1602,7 @@ func outOfWindowBaseBallot(n, window int) sim.VotesGenerator {
 // using for the network.
 func tortoiseVoting(tortoise *Tortoise) sim.VotesGenerator {
 	return func(rng *mrand.Rand, layers []*types.Layer, i int) sim.Voting {
-		votes, err := tortoise.BaseBallot(context.Background())
+		votes, err := tortoise.EncodeVotes(context.Background())
 		if err != nil {
 			panic(err)
 		}
@@ -1539,7 +1617,7 @@ func TestBaseBallotGenesis(t *testing.T) {
 	cfg := defaultTestConfig()
 	tortoise := tortoiseFromSimState(s.GetState(0), WithConfig(cfg))
 
-	votes, err := tortoise.BaseBallot(ctx)
+	votes, err := tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
 	require.Equal(t, votes.Support, []types.BlockID{types.GenesisBlockID})
 	require.Equal(t, types.GenesisBallotID, votes.Base)
@@ -1587,7 +1665,7 @@ func TestBaseBallotEvictedBlock(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(1), verified)
 	for i := 0; i < 10; i++ {
-		votes, err := tortoise.BaseBallot(ctx)
+		votes, err := tortoise.EncodeVotes(ctx)
 		require.NoError(t, err)
 		ensureBaseAndExceptionsFromLayer(t, last, votes, s.GetState(0).MeshDB)
 
@@ -1657,7 +1735,7 @@ func TestBaseBallotPrioritization(t *testing.T) {
 				tortoise.HandleIncomingLayer(ctx, lid)
 			}
 
-			votes, err := tortoise.BaseBallot(ctx)
+			votes, err := tortoise.EncodeVotes(ctx)
 			require.NoError(t, err)
 			ballot, err := s.GetState(0).MeshDB.GetBallot(votes.Base)
 			require.NoError(t, err)
@@ -1746,7 +1824,7 @@ func TestWeakCoinVoting(t *testing.T) {
 	// 5th layer after genesis verifies 4th
 	// and later layers can't verify previous as they are split
 	require.Equal(t, genesis.Add(4), verified)
-	votes, err := tortoise.BaseBallot(ctx)
+	votes, err := tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
 	// last ballot that is consistent with local opinion
 	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, votes.Base, genesis.Add(5), genesis.Add(5))
@@ -1804,7 +1882,7 @@ func TestVoteAgainstSupportedByBaseBallot(t *testing.T) {
 	delete(tortoise.trtl.ballots, genesis)
 	tortoise.trtl.verifying.goodBallots = map[types.BallotID]goodness{}
 
-	votes, err := tortoise.BaseBallot(ctx)
+	votes, err := tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
 	ensureBallotLayerWithin(t, s.GetState(0).MeshDB, votes.Base, last, last)
 
@@ -2397,7 +2475,7 @@ func TestMaliciousBallotsAreIgnored(t *testing.T) {
 	verified = tortoise.HandleIncomingLayer(ctx, s.Next())
 	require.Equal(t, verified, types.GetEffectiveGenesis())
 
-	votes, err := tortoise.BaseBallot(ctx)
+	votes, err := tortoise.EncodeVotes(ctx)
 	require.NoError(t, err)
 	require.Equal(t, types.GenesisBallotID, votes.Base)
 }

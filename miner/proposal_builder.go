@@ -23,6 +23,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/sql/ballots"
 	"github.com/spacemeshos/go-spacemesh/system"
 	"github.com/spacemeshos/go-spacemesh/timesync"
+	"github.com/spacemeshos/go-spacemesh/tortoise"
 )
 
 const (
@@ -50,7 +51,7 @@ type ProposalBuilder struct {
 	publisher          pubsub.Publisher
 	signer             *signing.EdSigner
 	conState           conservativeState
-	baseBallotProvider baseBallotProvider
+	baseBallotProvider votesEncoder
 	proposalOracle     proposalOracle
 	beaconProvider     system.BeaconGetter
 	syncer             system.SyncStateProvider
@@ -124,7 +125,7 @@ func NewProposalBuilder(
 	sqlDB *sql.Database,
 	atxDB activationDB,
 	publisher pubsub.Publisher,
-	bbp baseBallotProvider,
+	bbp votesEncoder,
 	beaconProvider system.BeaconGetter,
 	syncer system.SyncStateProvider,
 	conState conservativeState,
@@ -296,7 +297,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		return nil
 	}
 
-	votes, err := pb.baseBallotProvider.BaseBallot(ctx)
+	votes, err := pb.baseBallotProvider.EncodeVotes(ctx, tortoise.EncodeVotesWithLast(layerID))
 	if err != nil {
 		return fmt.Errorf("get base ballot: %w", err)
 	}

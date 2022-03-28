@@ -92,47 +92,47 @@ func (mr *MockconservativeStateMockRecorder) SelectTXsForProposal(arg0 interface
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectTXsForProposal", reflect.TypeOf((*MockconservativeState)(nil).SelectTXsForProposal), arg0)
 }
 
-// MockbaseBallotProvider is a mock of baseBallotProvider interface.
-type MockbaseBallotProvider struct {
+// MockvotesEncoder is a mock of votesEncoder interface.
+type MockvotesEncoder struct {
 	ctrl     *gomock.Controller
-	recorder *MockbaseBallotProviderMockRecorder
+	recorder *MockvotesEncoderMockRecorder
 }
 
-// MockbaseBallotProviderMockRecorder is the mock recorder for MockbaseBallotProvider.
-type MockbaseBallotProviderMockRecorder struct {
-	mock *MockbaseBallotProvider
+// MockvotesEncoderMockRecorder is the mock recorder for MockvotesEncoder.
+type MockvotesEncoderMockRecorder struct {
+	mock *MockvotesEncoder
 }
 
-// NewMockbaseBallotProvider creates a new mock instance.
-func NewMockbaseBallotProvider(ctrl *gomock.Controller) *MockbaseBallotProvider {
-	mock := &MockbaseBallotProvider{ctrl: ctrl}
-	mock.recorder = &MockbaseBallotProviderMockRecorder{mock}
+// NewMockvotesEncoder creates a new mock instance.
+func NewMockvotesEncoder(ctrl *gomock.Controller) *MockvotesEncoder {
+	mock := &MockvotesEncoder{ctrl: ctrl}
+	mock.recorder = &MockvotesEncoderMockRecorder{mock}
 	return mock
 }
 
 // EXPECT returns an object that allows the caller to indicate expected use.
-func (m *MockbaseBallotProvider) EXPECT() *MockbaseBallotProviderMockRecorder {
+func (m *MockvotesEncoder) EXPECT() *MockvotesEncoderMockRecorder {
 	return m.recorder
 }
 
-// BaseBallot mocks base method.
-func (m *MockbaseBallotProvider) BaseBallot(arg0 context.Context, arg1 ...tortoise.EncodeVotesOpts) (*types.Votes, error) {
+// EncodeVotes mocks base method.
+func (m *MockvotesEncoder) EncodeVotes(arg0 context.Context, arg1 ...tortoise.EncodeVotesOpts) (*types.Votes, error) {
 	m.ctrl.T.Helper()
 	varargs := []interface{}{arg0}
 	for _, a := range arg1 {
 		varargs = append(varargs, a)
 	}
-	ret := m.ctrl.Call(m, "BaseBallot", varargs...)
+	ret := m.ctrl.Call(m, "EncodeVotes", varargs...)
 	ret0, _ := ret[0].(*types.Votes)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// BaseBallot indicates an expected call of BaseBallot.
-func (mr *MockbaseBallotProviderMockRecorder) BaseBallot(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
+// EncodeVotes indicates an expected call of EncodeVotes.
+func (mr *MockvotesEncoderMockRecorder) EncodeVotes(arg0 interface{}, arg1 ...interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	varargs := append([]interface{}{arg0}, arg1...)
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "BaseBallot", reflect.TypeOf((*MockbaseBallotProvider)(nil).BaseBallot), varargs...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "EncodeVotes", reflect.TypeOf((*MockvotesEncoder)(nil).EncodeVotes), varargs...)
 }
 
 // MockactivationDB is a mock of activationDB interface.

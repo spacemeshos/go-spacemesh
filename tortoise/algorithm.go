@@ -189,8 +189,8 @@ func EncodeVotesWithLast(last types.LayerID) EncodeVotesOpts {
 	}
 }
 
-// BaseBallot chooses a base ballot and creates a differences list. needs the hare results for latest layers.
-func (t *Tortoise) BaseBallot(ctx context.Context, opts ...EncodeVotesOpts) (*types.Votes, error) {
+// EncodeVotes chooses a base ballot and creates a differences list. needs the hare results for latest layers.
+func (t *Tortoise) EncodeVotes(ctx context.Context, opts ...EncodeVotesOpts) (*types.Votes, error) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	conf := &encodeConf{}

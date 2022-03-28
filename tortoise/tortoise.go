@@ -336,7 +336,7 @@ func (t *turtle) encodeVotes(
 	for lid := startlid; lid.Before(last); lid = lid.Add(1) {
 		logger := logger.WithFields(log.Named("block_layer", lid))
 
-		if isUndecided(&t.commonState, t.Config, lid) {
+		if isUndecided(t.Config, t.decided, lid, last) {
 			votes.Abstain = append(votes.Abstain, lid)
 			continue
 		}
@@ -490,7 +490,7 @@ func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error
 		return err
 	}
 	for process := t.minprocessed.Add(1); !process.After(t.processed); process = process.Add(1) {
-		if isUndecided(&t.commonState, t.Config, process) {
+		if isUndecided(t.Config, t.decided, process, t.last) {
 			t.logger.With().Info("gap in the layers received by tortoise", log.Stringer("undecided", process))
 			return nil
 		}
@@ -834,14 +834,14 @@ func (t *turtle) layerCutoff() types.LayerID {
 	return t.last.Sub(t.Hdist)
 }
 
-func isUndecided(state *commonState, config Config, lid types.LayerID) bool {
-	if _, exists := state.decided[lid]; exists {
+func isUndecided(config Config, decided map[types.LayerID]struct{}, lid, last types.LayerID) bool {
+	if _, exists := decided[lid]; exists {
 		return false
 	}
 	genesis := types.GetEffectiveGenesis()
 	limit := genesis
-	if state.last.After(genesis.Add(config.Zdist)) {
-		limit = state.last.Sub(config.Zdist)
+	if last.After(genesis.Add(config.Zdist)) {
+		limit = last.Sub(config.Zdist)
 	}
 	return !lid.Before(limit)
 }
@@ -857,7 +857,7 @@ func getLocalVote(state *commonState, config Config, lid types.LayerID, block ty
 		if exist {
 			return vote, reasonHareOutput
 		}
-		if isUndecided(state, config, lid) {
+		if isUndecided(config, state.decided, lid, state.last) {
 			return abstain, reasonHareOutput
 		}
 		return against, reasonHareOutput

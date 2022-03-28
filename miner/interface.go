@@ -17,8 +17,8 @@ type conservativeState interface {
 	SelectTXsForProposal(int) ([]types.TransactionID, []*types.Transaction, error)
 }
 
-type baseBallotProvider interface {
-	BaseBallot(context.Context, ...tortoise.EncodeVotesOpts) (*types.Votes, error)
+type votesEncoder interface {
+	EncodeVotes(context.Context, ...tortoise.EncodeVotesOpts) (*types.Votes, error)
 }
 
 type activationDB interface {
