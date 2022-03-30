@@ -87,17 +87,7 @@ func AddCommands(cmd *cobra.Command) {
 
 	/** ======================== TIME Flags ========================== **/
 
-	cmd.PersistentFlags().DurationVar(&config.TIME.MaxAllowedDrift, "max-allowed-time-drift",
-		config.TIME.MaxAllowedDrift, "When to close the app until user resolves time sync problems")
-	cmd.PersistentFlags().IntVar(&config.TIME.NtpQueries, "ntp-queries",
-		config.TIME.NtpQueries, "Number of ntp queries to do")
-	cmd.PersistentFlags().DurationVar(&config.TIME.DefaultTimeoutLatency, "default-timeout-latency",
-		config.TIME.DefaultTimeoutLatency, "Default timeout to ntp query")
-	cmd.PersistentFlags().DurationVar(&config.TIME.RefreshNtpInterval, "refresh-ntp-interval",
-		config.TIME.RefreshNtpInterval, "Refresh intervals to ntp")
-	cmd.PersistentFlags().StringSliceVar(&config.TIME.NTPServers,
-		"ntp-servers", config.TIME.NTPServers, "A list of NTP servers to query (e.g., 'time.google.com'). Overrides the list in config. Must contain more servers than the number of ntp-queries.")
-	cmd.PersistentFlags().BoolVar(&config.TIME.Peersync.Disable, "disable", config.TIME.Peersync.Disable,
+	cmd.PersistentFlags().BoolVar(&config.TIME.Peersync.Disable, "peersync-disable", config.TIME.Peersync.Disable,
 		"disable verification that local time is in sync with peers")
 	cmd.PersistentFlags().DurationVar(&config.TIME.Peersync.RoundRetryInterval, "peersync-round-retry-interval",
 		config.TIME.Peersync.RoundRetryInterval, "when to retry a sync round after a failure")
