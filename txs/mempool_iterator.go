@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	"github.com/spacemeshos/go-spacemesh/log"
 )
 
 type item struct {
@@ -27,7 +28,7 @@ func (pq priorityQueue) Len() int { return len(pq) }
 // Less implements head.Interface.
 func (pq priorityQueue) Less(i, j int) bool {
 	// We want Pop to give us the highest, not lowest, fee, so we use greater than here.
-	return pq[i].fee > pq[j].fee || pq[i].received.Before(pq[j].received)
+	return pq[i].fee > pq[j].fee || (pq[i].fee == pq[j].fee && pq[i].received.Before(pq[j].received))
 }
 
 // Swap implements head.Interface.
@@ -65,53 +66,62 @@ func (pq *priorityQueue) update(it *item, tid types.TransactionID, fee uint64, r
 }
 
 // mempoolIterator holds the best transaction from the conservative state mempool.
+// not thread-safe.
 type mempoolIterator struct {
-	pq  priorityQueue
-	txs map[types.Address][]*nanoTX
+	logger  log.Log
+	txsLeft int
+	pq      priorityQueue
+	txs     map[types.Address][]*types.NanoTX
 }
 
 // newMempoolIterator builds and returns a mempoolIterator.
-func newMempoolIterator(cs conStateCache, numTXs int) (*mempoolIterator, error) {
-	txs, err := cs.getMempool()
+func newMempoolIterator(logger log.Log, cs conStateCache, numTXs int) (*mempoolIterator, error) {
+	txs, err := cs.GetMempool()
 	if err != nil {
 		return nil, err
 	}
 	mi := &mempoolIterator{
-		pq:  make(priorityQueue, 0, numTXs),
+		logger:  logger,
+		txsLeft: numTXs,
+		// each account can only have at most one transaction in the PQ
+		// TODO relax this
+		pq:  make(priorityQueue, 0, len(txs)),
 		txs: txs,
 	}
-	mi.buildPQ(numTXs)
+	logger.With().Info("received mempool txs", log.Int("num_accounts", len(txs)))
+	mi.buildPQ()
 	return mi, nil
 }
 
-func (mi *mempoolIterator) buildPQ(numTXs int) {
+func (mi *mempoolIterator) buildPQ() {
 	i := 0
 	for addr, ntxs := range mi.txs {
 		ntx := ntxs[0]
 		it := &item{
-			tid:      ntx.tid,
-			addr:     ntx.addr,
-			fee:      ntx.fee,
-			received: ntx.received,
+			tid:      ntx.Tid,
+			addr:     ntx.Principal,
+			fee:      ntx.Fee,
+			received: ntx.Received,
 			index:    i,
 		}
 		i++
 		mi.pq = append(mi.pq, it)
+		mi.logger.With().Debug("adding item to pq",
+			ntx.Tid,
+			ntx.Principal,
+			log.Uint64("fee", ntx.Fee),
+			log.Time("received", ntx.Received))
 
 		if len(ntxs) == 1 {
 			delete(mi.txs, addr)
 		} else {
 			mi.txs[addr] = ntxs[1:]
 		}
-
-		if i == numTXs {
-			break
-		}
 	}
 	heap.Init(&mi.pq)
 }
 
-func (mi *mempoolIterator) getNext(addr types.Address) *nanoTX {
+func (mi *mempoolIterator) getNext(addr types.Address) *types.NanoTX {
 	if _, ok := mi.txs[addr]; !ok {
 		return nil
 	}
@@ -124,21 +134,45 @@ func (mi *mempoolIterator) getNext(addr types.Address) *nanoTX {
 	return ntx
 }
 
-func (mi *mempoolIterator) Pop() types.TransactionID {
-	// the first item in priority queue is always the item to be pop with the heap
-	if len(mi.pq) == 0 {
+func (mi *mempoolIterator) pop() types.TransactionID {
+	if len(mi.pq) == 0 || mi.txsLeft == 0 {
 		return types.EmptyTransactionID
 	}
 
+	// the first item in priority queue is always the item to be pop with the heap
 	top := mi.pq[0]
+	mi.logger.With().Debug("popping tx",
+		top.tid,
+		top.addr,
+		log.Uint64("fee", top.fee),
+		log.Time("received", top.received))
 	tid := top.tid
 	next := mi.getNext(top.addr)
 	if next == nil {
+		mi.logger.With().Debug("addr txs exhausted", top.addr)
 		_ = heap.Pop(&mi.pq)
-		return tid
+	} else {
+		mi.logger.With().Debug("added tx for addr",
+			next.Tid,
+			next.Principal,
+			log.Uint64("fee", next.Fee),
+			log.Time("received", next.Received))
+		// updating the item (for the same address) in the heap is less expensive than a pop followed by a push.
+		mi.pq.update(top, next.Tid, next.Fee, next.Received)
 	}
-
-	// updating the item (for the same address) in the heap is less expensive than a pop followed by a push.
-	mi.pq.update(top, next.tid, next.fee, next.received)
+	mi.txsLeft--
 	return tid
+}
+
+// PopAll returns all the transaction in the mempoolIterator.
+func (mi *mempoolIterator) PopAll() []types.TransactionID {
+	result := make([]types.TransactionID, 0, mi.txsLeft)
+	for {
+		popped := mi.pop()
+		if popped == types.EmptyTransactionID {
+			break
+		}
+		result = append(result, popped)
+	}
+	return result
 }

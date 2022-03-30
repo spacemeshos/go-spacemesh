@@ -26,57 +26,18 @@ var (
 	errDupNonceApplied     = errors.New("multiple txs applied for the same nonce")
 )
 
-type nanoTX struct {
-	tid      types.TransactionID
-	addr     types.Address
-	fee      uint64
-	amount   uint64
-	nonce    uint64
-	received time.Time
-	block    types.BlockID
-	layer    types.LayerID
-}
-
-func newNanoTX(mtx *types.MeshTransaction) *nanoTX {
-	return &nanoTX{
-		tid:      mtx.ID(),
-		addr:     mtx.Origin(),
-		fee:      mtx.GetFee(),
-		amount:   mtx.Amount,
-		nonce:    mtx.AccountNonce,
-		received: mtx.Received,
-		block:    mtx.BlockID,
-		layer:    mtx.LayerID,
-	}
-}
-
-func (n *nanoTX) maxSpending() uint64 {
-	// TODO: create SVM methods to calculate these two fields
-	return n.fee + n.amount
-}
-
-func (n *nanoTX) better(other *nanoTX) bool {
-	return other == nil || n.fee > other.fee || n.fee == other.fee && n.received.Before(other.received)
-}
-
-func (n *nanoTX) updateLayerMaybe(lid types.LayerID) {
-	if n.layer == (types.LayerID{}) || lid.Before(n.layer) {
-		n.layer = lid
-	}
-}
-
 type sameNonceTXs struct {
-	best        *nanoTX
+	best        *types.NanoTX
 	postBalance uint64
-	all         map[types.TransactionID]*nanoTX
+	all         map[types.TransactionID]*types.NanoTX
 }
 
 func (s *sameNonceTXs) layer() types.LayerID {
-	return s.best.layer
+	return s.best.Layer
 }
 
-func (s *sameNonceTXs) txs() []*nanoTX {
-	ntxs := make([]*nanoTX, 0, len(s.all))
+func (s *sameNonceTXs) txs() []*types.NanoTX {
+	ntxs := make([]*types.NanoTX, 0, len(s.all))
 	for _, ntx := range s.all {
 		ntxs = append(ntxs, ntx)
 	}
@@ -89,12 +50,12 @@ func (s *sameNonceTXs) resetLayerForNonce(logger log.Log, tp txProvider, lastApp
 		if err != nil {
 			logger.With().Error("failed to reset layer for tx",
 				tid,
-				log.Uint64("nonce", ntx.nonce),
+				log.Uint64("nonce", ntx.Nonce),
 				log.Named("applied", lastApplied))
 			return err
 		}
-		ntx.layer = nextLayer
-		ntx.block = nextBlock
+		ntx.Layer = nextLayer
+		ntx.Block = nextBlock
 	}
 	return nil
 }
@@ -102,7 +63,7 @@ func (s *sameNonceTXs) resetLayerForNonce(logger log.Log, tp txProvider, lastApp
 type accountCache struct {
 	addr         types.Address
 	txsByNonce   []*sameNonceTXs
-	cachedTXs    map[types.TransactionID]*nanoTX // shared with the cache instance
+	cachedTXs    map[types.TransactionID]*types.NanoTX // shared with the cache instance
 	startNonce   uint64
 	availBalance uint64
 	hasGapInDB   bool // set to true when there is a nonce gap
@@ -112,35 +73,35 @@ func (ac *accountCache) nextNonce() uint64 {
 	return ac.startNonce + uint64(len(ac.txsByNonce))
 }
 
-func (ac *accountCache) accept(ntx *nanoTX, balance uint64) error {
-	offset := int(ntx.nonce - ac.startNonce)
+func (ac *accountCache) accept(ntx *types.NanoTX, balance uint64) error {
+	offset := int(ntx.Nonce - ac.startNonce)
 	if offset > len(ac.txsByNonce) {
 		return errBadNonce
 	}
 
-	ac.cachedTXs[ntx.tid] = ntx
+	ac.cachedTXs[ntx.Tid] = ntx
 	if offset == len(ac.txsByNonce) {
 		ac.txsByNonce = append(ac.txsByNonce, &sameNonceTXs{})
 	}
 	nonceTXs := ac.txsByNonce[offset]
-	nonceTXs.all[ntx.tid] = ntx
+	nonceTXs.all[ntx.Tid] = ntx
 	// find the best tx among competing txs
-	if ntx.better(nonceTXs.best) {
+	if ntx.Better(nonceTXs.best) {
 		nonceTXs.best = ntx
-		nonceTXs.postBalance = balance - ntx.maxSpending()
+		nonceTXs.postBalance = balance - ntx.MaxSpending()
 	}
 	return nil
 }
 
-func (ac *accountCache) discard(logger log.Log, tp txProvider, txs []*nanoTX, filter func(uint64) bool) error {
+func (ac *accountCache) discard(logger log.Log, tp txProvider, txs []*types.NanoTX, filter func(uint64) bool) error {
 	for _, ntx := range txs {
-		if filter == nil || filter(ntx.nonce) {
-			delete(ac.cachedTXs, ntx.tid)
-			logger.With().Debug("discard tx", ntx.addr, ntx.tid, log.Uint64("nonce", ntx.nonce))
-			if err := tp.discard4Ever(ntx.tid); err != nil {
+		if filter == nil || filter(ntx.Nonce) {
+			delete(ac.cachedTXs, ntx.Tid)
+			logger.With().Debug("discard tx", ntx.Principal, ntx.Tid, log.Uint64("nonce", ntx.Nonce))
+			if err := tp.discard4Ever(ntx.Tid); err != nil {
 				logger.With().Error("failed to discard tx",
-					ntx.tid,
-					log.Uint64("nonce", ntx.nonce),
+					ntx.Tid,
+					log.Uint64("nonce", ntx.Nonce),
 					log.Err(err))
 				return err
 			}
@@ -149,8 +110,8 @@ func (ac *accountCache) discard(logger log.Log, tp txProvider, txs []*nanoTX, fi
 	return nil
 }
 
-func (ac *accountCache) discardOldNonce(logger log.Log, tp txProvider, nonce2TXs map[uint64][]*nanoTX) error {
-	var all []*nanoTX
+func (ac *accountCache) discardOldNonce(logger log.Log, tp txProvider, nonce2TXs map[uint64][]*types.NanoTX) error {
+	var all []*types.NanoTX
 	for _, txs := range nonce2TXs {
 		all = append(all, txs...)
 	}
@@ -170,7 +131,7 @@ func nonceMarshaller(allNonce []uint64) log.ArrayMarshaler {
 	})
 }
 
-func (ac *accountCache) addBatch(logger log.Log, tp txProvider, nonce2TXs map[uint64][]*nanoTX) error {
+func (ac *accountCache) addBatch(logger log.Log, tp txProvider, nonce2TXs map[uint64][]*types.NanoTX) error {
 	var (
 		oldSize   = len(ac.cachedTXs)
 		oldNonce  = ac.nextNonce()
@@ -209,9 +170,9 @@ func (ac *accountCache) addBatch(logger log.Log, tp txProvider, nonce2TXs map[ui
 		for nonce, txs := range nonce2TXs {
 			for _, ntx := range txs {
 				logger.With().Error("unprocessed tx in batch",
-					ntx.tid,
+					ntx.Tid,
 					log.Named("intended", ac.addr),
-					log.Named("actual", ntx.addr),
+					log.Named("actual", ntx.Principal),
 					log.Uint64("nonce", nonce))
 			}
 		}
@@ -225,30 +186,30 @@ func (ac *accountCache) addBatch(logger log.Log, tp txProvider, nonce2TXs map[ui
 	return nil
 }
 
-func (ac *accountCache) addToExistingNonce(logger log.Log, tp txProvider, ntx *nanoTX) error {
-	if ntx.nonce < ac.startNonce {
+func (ac *accountCache) addToExistingNonce(logger log.Log, tp txProvider, ntx *types.NanoTX) error {
+	if ntx.Nonce < ac.startNonce {
 		return errBadNonce
 	}
-	offset64 := ntx.nonce - ac.startNonce
+	offset64 := ntx.Nonce - ac.startNonce
 	offset := int(offset64)
 	if offset64 != uint64(offset) {
 		return errBadNonce
 	}
 	nonceTXs := ac.txsByNonce[offset]
 
-	balance := nonceTXs.postBalance + nonceTXs.best.maxSpending()
-	if balance < ntx.maxSpending() {
+	balance := nonceTXs.postBalance + nonceTXs.best.MaxSpending()
+	if balance < ntx.MaxSpending() {
 		logger.With().Debug("insufficient balance, discarding tx",
-			ntx.tid,
-			ntx.addr,
-			log.Uint64("nonce", ntx.nonce),
+			ntx.Tid,
+			ntx.Principal,
+			log.Uint64("nonce", ntx.Nonce),
 			log.Uint64("cons_balance", balance),
-			log.Uint64("cons_spending", ntx.maxSpending()))
+			log.Uint64("cons_spending", ntx.MaxSpending()))
 		// TODO: do better
 		// this is too harsh. conservative balance does not factor into incoming fund.
 		// a transaction can still be valid.
-		return ac.discard(logger, tp, []*nanoTX{ntx}, nil)
-		// return tp.Discard(ntx.tid)
+		return ac.discard(logger, tp, []*types.NanoTX{ntx}, nil)
+		// return tp.Discard(ntx.Tid)
 	}
 
 	if err := ac.accept(ntx, balance); err != nil {
@@ -260,9 +221,9 @@ func (ac *accountCache) addToExistingNonce(logger log.Log, tp txProvider, ntx *n
 	lastOffset := offset
 	for i := offset + 1; i < len(ac.txsByNonce); i++ {
 		nonceTXs = ac.txsByNonce[i]
-		if nonceTXs.best.maxSpending() <= newBalance {
+		if nonceTXs.best.MaxSpending() <= newBalance {
 			lastOffset = i
-			nonceTXs.postBalance = newBalance - nonceTXs.best.maxSpending()
+			nonceTXs.postBalance = newBalance - nonceTXs.best.MaxSpending()
 		} else {
 			// TODO: do better here
 			// this is too harsh. conservative balance does not factor into incoming fund.
@@ -285,7 +246,7 @@ func (ac *accountCache) addToExistingNonce(logger log.Log, tp txProvider, ntx *n
 // - nonce already exists in the cache:
 //   add the tx to the nonce group and potentially become the best candidate in that nonce group
 func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction, received time.Time) error {
-	ntx := newNanoTX(&types.MeshTransaction{
+	ntx := types.NewNanoTX(&types.MeshTransaction{
 		Transaction: *tx,
 		Received:    received,
 		LayerID:     types.LayerID{},
@@ -298,7 +259,7 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 			tx.ID(),
 			log.Uint64("next_nonce", ac.startNonce),
 			log.Uint64("tx_nonce", tx.AccountNonce))
-		if err := ac.discard(logger, tp, []*nanoTX{ntx}, nil); err != nil {
+		if err := ac.discard(logger, tp, []*types.NanoTX{ntx}, nil); err != nil {
 			logger.With().Error("failed to discard bad-nonce tx", tx.ID(), log.Err(err))
 			return err
 		}
@@ -306,26 +267,26 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 	}
 
 	next := ac.nextNonce()
-	if ntx.nonce > next {
+	if ntx.Nonce > next {
 		logger.With().Debug("nonce too large. will be loaded later",
-			ntx.addr,
-			ntx.tid,
+			ntx.Principal,
+			ntx.Tid,
 			log.Uint64("next_nonce", ac.startNonce),
-			log.Uint64("tx_nonce", ntx.nonce))
+			log.Uint64("tx_nonce", ntx.Nonce))
 		ac.hasGapInDB = true
 		return errNonceTooBig
 	}
 
-	if ntx.nonce < next {
+	if ntx.Nonce < next {
 		return ac.addToExistingNonce(logger, tp, ntx)
 	}
 
 	// tx uses the next nonce
-	if ac.availBalance < ntx.maxSpending() {
+	if ac.availBalance < ntx.MaxSpending() {
 		// TODO: do better here
 		// this is too harsh. conservative balance does not factor into incoming fund.
 		// a transaction can still be valid.
-		if err := ac.discard(logger, tp, []*nanoTX{ntx}, nil); err != nil {
+		if err := ac.discard(logger, tp, []*types.NanoTX{ntx}, nil); err != nil {
 			logger.With().Error("failed to discard insufficient balance tx", tx.ID(), log.Err(err))
 			return err
 		}
@@ -352,18 +313,18 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 	return nil
 }
 
-func (ac *accountCache) getPendingByNonce(logger log.Log, tp txProvider) (map[uint64][]*nanoTX, error) {
+func (ac *accountCache) getPendingByNonce(logger log.Log, tp txProvider) (map[uint64][]*types.NanoTX, error) {
 	mtxs, err := tp.getAcctPending(ac.addr)
 	if err != nil {
 		logger.With().Error("failed to get more pending nonceTXs from db", ac.addr, log.Err(err))
 		return nil, err
 	}
-	byNonce := make(map[uint64][]*nanoTX)
+	byNonce := make(map[uint64][]*types.NanoTX)
 	for _, mtx := range mtxs {
 		if _, ok := byNonce[mtx.AccountNonce]; !ok {
-			byNonce[mtx.AccountNonce] = make([]*nanoTX, 0, maxTXsPerAcct)
+			byNonce[mtx.AccountNonce] = make([]*types.NanoTX, 0, maxTXsPerAcct)
 		}
-		byNonce[mtx.AccountNonce] = append(byNonce[mtx.AccountNonce], newNanoTX(mtx))
+		byNonce[mtx.AccountNonce] = append(byNonce[mtx.AccountNonce], types.NewNanoTX(mtx))
 	}
 	return byNonce, nil
 }
@@ -379,8 +340,8 @@ func (ac *accountCache) findMempoolOffset() int {
 	return -1
 }
 
-func (ac *accountCache) getMempool(logger log.Log) ([]*nanoTX, error) {
-	bests := make([]*nanoTX, 0, maxTXsPerAcct)
+func (ac *accountCache) getMempool(logger log.Log) ([]*types.NanoTX, error) {
+	bests := make([]*types.NanoTX, 0, maxTXsPerAcct)
 	offset := ac.findMempoolOffset()
 	if offset < 0 {
 		return nil, nil
@@ -388,10 +349,10 @@ func (ac *accountCache) getMempool(logger log.Log) ([]*nanoTX, error) {
 	for _, nonceTXs := range ac.txsByNonce[offset:] {
 		if nonceTXs.layer() != (types.LayerID{}) {
 			logger.With().Error("some proposals/blocks packed nonceTXs out of nonce order",
-				nonceTXs.best.tid,
-				nonceTXs.best.layer,
-				nonceTXs.best.block,
-				log.Uint64("nonce", nonceTXs.best.nonce))
+				nonceTXs.best.Tid,
+				nonceTXs.best.Layer,
+				nonceTXs.best.Block,
+				log.Uint64("nonce", nonceTXs.best.Nonce))
 		}
 		bests = append(bests, nonceTXs.best)
 	}
@@ -406,7 +367,7 @@ func (ac *accountCache) applyLayer(
 	tp txProvider,
 	lid types.LayerID,
 	bid types.BlockID,
-	appliedByNonce map[uint64]*nanoTX,
+	appliedByNonce map[uint64]*types.NanoTX,
 ) error {
 	nextNonce := ac.startNonce
 	var toApply, toDiscard []types.TransactionID
@@ -426,14 +387,14 @@ func (ac *accountCache) applyLayer(
 
 		nonceTXs := ac.txsByNonce[offset]
 		applied := appliedByNonce[nextNonce]
-		if _, ok := nonceTXs.all[applied.tid]; !ok {
-			logger.With().Error("applied tx not in account cache", ac.addr, applied.tid)
+		if _, ok := nonceTXs.all[applied.Tid]; !ok {
+			logger.With().Error("applied tx not in account cache", ac.addr, applied.Tid)
 			return errNotInAcctCache
 		}
-		delete(nonceTXs.all, applied.tid)
+		delete(nonceTXs.all, applied.Tid)
 		for tid := range nonceTXs.all {
 			delete(ac.cachedTXs, tid)
-			if tid == applied.tid {
+			if tid == applied.Tid {
 				toApply = append(toApply, tid)
 			} else {
 				toDiscard = append(toDiscard, tid)
@@ -474,16 +435,16 @@ func (ac *accountCache) resetAfterApply(logger log.Log, tp txProvider, nextNonce
 
 	balance := newBalance
 	for _, nonceTXs := range ac.txsByNonce {
-		if balance < nonceTXs.best.maxSpending() {
+		if balance < nonceTXs.best.MaxSpending() {
 			logger.With().Error("unexpected tx spending",
-				nonceTXs.best.tid,
-				log.Uint64("nonce", nonceTXs.best.nonce),
+				nonceTXs.best.Tid,
+				log.Uint64("nonce", nonceTXs.best.Nonce),
 				log.Uint64("balance", balance),
-				log.Uint64("spending", nonceTXs.best.maxSpending()))
+				log.Uint64("spending", nonceTXs.best.MaxSpending()))
 			return errBadBalanceInCache
 		}
 
-		balance -= nonceTXs.best.maxSpending()
+		balance -= nonceTXs.best.MaxSpending()
 		nonceTXs.postBalance = balance
 		if nonceTXs.layer().After(applied) {
 			continue
@@ -507,7 +468,7 @@ type cache struct {
 
 	mu        sync.Mutex
 	pending   map[types.Address]*accountCache
-	cachedTXs map[types.TransactionID]*nanoTX // shared with accountCache instances
+	cachedTXs map[types.TransactionID]*types.NanoTX // shared with accountCache instances
 }
 
 func newCache(tp txProvider, s svmState, logger log.Log) *cache {
@@ -516,21 +477,21 @@ func newCache(tp txProvider, s svmState, logger log.Log) *cache {
 		tp:        tp,
 		state:     s,
 		pending:   make(map[types.Address]*accountCache),
-		cachedTXs: make(map[types.TransactionID]*nanoTX),
+		cachedTXs: make(map[types.TransactionID]*types.NanoTX),
 	}
 }
 
-func groupTXsByPrincipal(mtxs []*types.MeshTransaction) map[types.Address]map[uint64][]*nanoTX {
-	byPrincipal := make(map[types.Address]map[uint64][]*nanoTX)
+func groupTXsByPrincipal(mtxs []*types.MeshTransaction) map[types.Address]map[uint64][]*types.NanoTX {
+	byPrincipal := make(map[types.Address]map[uint64][]*types.NanoTX)
 	for _, mtx := range mtxs {
 		principal := mtx.Origin()
 		if _, ok := byPrincipal[principal]; !ok {
-			byPrincipal[principal] = make(map[uint64][]*nanoTX)
+			byPrincipal[principal] = make(map[uint64][]*types.NanoTX)
 		}
 		if _, ok := byPrincipal[principal][mtx.AccountNonce]; !ok {
-			byPrincipal[principal][mtx.AccountNonce] = make([]*nanoTX, 0, maxTXsPerAcct)
+			byPrincipal[principal][mtx.AccountNonce] = make([]*types.NanoTX, 0, maxTXsPerAcct)
 		}
-		byPrincipal[principal][mtx.AccountNonce] = append(byPrincipal[principal][mtx.AccountNonce], newNanoTX(mtx))
+		byPrincipal[principal][mtx.AccountNonce] = append(byPrincipal[principal][mtx.AccountNonce], types.NewNanoTX(mtx))
 	}
 	return byPrincipal
 }
@@ -602,7 +563,7 @@ func (c *cache) AddToLayer(lid types.LayerID, tids []types.TransactionID) error 
 			c.logger.With().Warning("tx not in cache", tid)
 			return errNotInCache
 		}
-		c.cachedTXs[tid].updateLayerMaybe(lid)
+		c.cachedTXs[tid].UpdateLayerMaybe(lid)
 	}
 	return nil
 }
@@ -612,7 +573,7 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, tids []types.Tr
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	byPrincipal := make(map[types.Address]map[uint64]*nanoTX)
+	byPrincipal := make(map[types.Address]map[uint64]*types.NanoTX)
 	for _, tid := range tids {
 		if _, ok := c.cachedTXs[tid]; !ok {
 			// TODO: get from db. if not in db, fetch it form peers
@@ -620,14 +581,14 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, tids []types.Tr
 			return errNotInCache
 		}
 		ntx := c.cachedTXs[tid]
-		principal := ntx.addr
+		principal := ntx.Principal
 		if _, ok := byPrincipal[principal]; !ok {
-			byPrincipal[principal] = make(map[uint64]*nanoTX)
+			byPrincipal[principal] = make(map[uint64]*types.NanoTX)
 		}
-		if _, ok := byPrincipal[principal][ntx.nonce]; ok {
+		if _, ok := byPrincipal[principal][ntx.Nonce]; ok {
 			return errDupNonceApplied
 		}
-		byPrincipal[principal][ntx.nonce] = ntx
+		byPrincipal[principal][ntx.Nonce] = ntx
 	}
 
 	for principal, appliedTXs := range byPrincipal {
@@ -655,11 +616,11 @@ func (c *cache) GetProjection(addr types.Address) (uint64, uint64) {
 	return c.pending[addr].nextNonce(), c.pending[addr].availBalance
 }
 
-func (c *cache) getMempool() (map[types.Address][]*nanoTX, error) {
+func (c *cache) getMempool() (map[types.Address][]*types.NanoTX, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	all := make(map[types.Address][]*nanoTX)
+	all := make(map[types.Address][]*types.NanoTX)
 	for addr, accCache := range c.pending {
 		txs, err := accCache.getMempool(c.logger)
 		if err != nil {

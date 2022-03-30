@@ -27,7 +27,7 @@ type svmState interface {
 }
 
 type conStateCache interface {
-	getMempool() (map[types.Address][]*nanoTX, error)
+	GetMempool() (map[types.Address][]*types.NanoTX, error)
 }
 
 type txProvider interface {
