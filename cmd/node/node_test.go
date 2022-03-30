@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -1089,92 +1088,4 @@ func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string
 	}
 
 	return smApp, err
-}
-
-func TestShutdown(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-
-	// make sure previous goroutines have stopped
-	time.Sleep(10 * time.Second)
-
-	gCount := runtime.NumGoroutine()
-	r := require.New(t)
-	ctx, cancel := context.WithCancel(context.Background())
-
-	mesh, err := mocknet.WithNPeers(context.TODO(), 1)
-	r.NoError(err)
-	wrapped, err := p2p.Upgrade(mesh.Hosts()[0], p2p.WithContext(ctx))
-	r.NoError(err)
-	smApp := New(WithLog(logtest.New(t)))
-	smApp.host = wrapped
-	genesisTime := time.Now().Add(time.Second * 10)
-
-	smApp.Config.POST.BitsPerLabel = 8
-	smApp.Config.POST.LabelsPerUnit = 32
-	smApp.Config.POST.K2 = 4
-
-	smApp.Config.SMESHING.Start = true
-	smApp.Config.SMESHING.CoinbaseAccount = "0x123"
-	smApp.Config.SMESHING.Opts.DataDir = t.TempDir()
-	smApp.Config.SMESHING.Opts.ComputeProviderID = initialization.CPUProviderID()
-
-	smApp.Config.HARE.N = 5
-	smApp.Config.HARE.F = 2
-	smApp.Config.HARE.RoundDuration = 3
-	smApp.Config.HARE.WakeupDelta = 5
-	smApp.Config.HARE.ExpectedLeaders = 5
-	smApp.Config.GoldenATXID = "0x5678"
-	smApp.Config.LayerAvgSize = 5
-	smApp.Config.LayersPerEpoch = 3
-	smApp.Config.TxsPerBlock = 100
-	smApp.Config.Tortoise.Hdist = 5
-	smApp.Config.Tortoise.Zdist = 5
-	smApp.Config.GenesisTime = genesisTime.Format(time.RFC3339)
-	smApp.Config.LayerDurationSec = 20
-	smApp.Config.HareEligibility.ConfidenceParam = 3
-	smApp.Config.HareEligibility.EpochOffset = 0
-	smApp.Config.Beacon = beacon.NodeSimUnitTestConfig()
-
-	smApp.Config.FETCH.RequestTimeout = 1
-	smApp.Config.FETCH.BatchTimeout = 1
-	smApp.Config.FETCH.BatchSize = 5
-	smApp.Config.FETCH.MaxRetriesForPeer = 5
-
-	rolacle := eligibility.New(logtest.New(t))
-	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
-
-	edSgn := signing.NewEdSigner()
-	pub := edSgn.PublicKey()
-
-	poetHarness, err := activation.NewHTTPPoetHarness(false)
-	r.NoError(err, "failed creating poet client harness: %v", err)
-
-	vrfSigner, vrfPub, err := signing.NewVRFSigner(pub.Bytes())
-	r.NoError(err, "failed to create vrf signer")
-	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
-
-	hareOracle := newLocalOracle(rolacle, 5, nodeID)
-	hareOracle.Register(true, pub.String())
-
-	clock := timesync.NewClock(timesync.RealClock{}, 20*time.Second, genesisTime, logtest.New(t))
-	r.NoError(smApp.initServices(context.TODO(), nodeID, t.TempDir(), edSgn, false,
-		hareOracle, uint32(smApp.Config.LayerAvgSize),
-		poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock))
-	r.NoError(smApp.startServices(context.TODO()))
-	activateGRPCServer(smApp)
-
-	r.NoError(poetHarness.Teardown(true))
-	cancel()
-	smApp.stopServices()
-
-	time.Sleep(5 * time.Second)
-	gCount2 := runtime.NumGoroutine()
-
-	if !assert.Equal(t, gCount, gCount2) {
-		buf := make([]byte, 1<<16)
-		numbytes := runtime.Stack(buf, true)
-		t.Log(string(buf[:numbytes]))
-	}
 }
