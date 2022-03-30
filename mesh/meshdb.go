@@ -1,7 +1,6 @@
 package mesh
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -342,46 +341,9 @@ func (m *DB) GetRewardsBySmesherID(smesherID types.NodeID) ([]types.Reward, erro
 	return rewards.FilterBySmesher(m.db, smesherID.ToBytes())
 }
 
-// LayerContextuallyValidBlocks returns the set of contextually valid block IDs for the provided layer.
-func (m *DB) LayerContextuallyValidBlocks(ctx context.Context, layer types.LayerID) (map[types.BlockID]struct{}, error) {
-	logger := m.WithContext(ctx)
-	blockIds, err := m.LayerBlockIds(layer)
-	if err != nil {
-		return nil, err
-	}
-
-	validBlks := make(map[types.BlockID]struct{})
-
-	cvErrors := make(map[string][]types.BlockID)
-	cvErrorCount := 0
-
-	for _, b := range blockIds {
-		valid, err := m.ContextualValidity(b)
-		if err != nil {
-			logger.With().Warning("could not get contextual validity for block in layer", b, layer, log.Err(err))
-			cvErrors[err.Error()] = append(cvErrors[err.Error()], b)
-			cvErrorCount++
-		}
-
-		if !valid {
-			continue
-		}
-
-		validBlks[b] = struct{}{}
-	}
-
-	logger.With().Debug("count of contextually valid blocks in layer",
-		layer,
-		log.Int("count_valid", len(validBlks)),
-		log.Int("count_error", cvErrorCount),
-		log.Int("count_total", len(blockIds)))
-	if cvErrorCount != 0 {
-		logger.With().Error("errors occurred getting contextual validity of blocks in layer",
-			layer,
-			log.Int("count", cvErrorCount),
-			log.String("errors", fmt.Sprint(cvErrors)))
-	}
-	return validBlks, nil
+// LayerContextualValidity returns tuples with block id and contextual validity for all blocks in the layer.
+func (m *DB) LayerContextualValidity(lid types.LayerID) ([]types.BlockContextualValidity, error) {
+	return blocks.ContextualValidity(m.db, lid)
 }
 
 // newBlockFetcherDB returns reference to a BlockFetcherDB instance.
@@ -434,35 +396,4 @@ func (db *BallotFetcherDB) Get(hash []byte) ([]byte, error) {
 	}
 
 	return data, nil
-}
-
-// LayerIDs is a utility function that finds namespaced IDs saved in a database as a key.
-func LayerIDs(db database.Database, namespace string, lid types.LayerID, f func(id []byte) error) error {
-	var (
-		zero = false
-		n    int
-		buf  = new(bytes.Buffer)
-	)
-	buf.WriteString(namespace)
-	buf.Write(lid.Bytes())
-
-	it := db.Find(buf.Bytes())
-	defer it.Release()
-	for it.Next() {
-		if len(it.Key()) == buf.Len() {
-			zero = true
-			continue
-		}
-		if err := f(it.Key()[buf.Len():]); err != nil {
-			return err
-		}
-		n++
-	}
-	if it.Error() != nil {
-		return fmt.Errorf("iterator: %w", it.Error())
-	}
-	if zero || n > 0 {
-		return nil
-	}
-	return database.ErrNotFound
 }
