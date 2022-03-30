@@ -118,19 +118,11 @@ docker-local-build: go-spacemesh hare p2p harness
 .PHONY: docker-local-build
 endif
 
-test test-all test-no-app-test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
+test: UNIT_TESTS = $(shell go list ./...  | grep -v systest)
 
-test test-all: get-libs
+test: get-libs
 	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 $(UNIT_TESTS)
 .PHONY: test
-
-test-no-app-test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL)  go test -timeout 0 -p 1 -tags exclude_app_test $(UNIT_TESTS)
-.PHONY: test-no-app-test
-
-test-only-app-test: get-libs
-	$(ULIMIT) CGO_LDFLAGS="$(CGO_TEST_LDFLAGS)" TEST_LOG_LEVEL=$(TEST_LOG_LEVEL) go test -timeout 0 -p 1 -tags !exclude_app_test ./cmd/node
-.PHONY: test-only-app-test
 
 test-tidy:
 	# Working directory must be clean, or this test would be destructive
@@ -193,15 +185,6 @@ list-versions:
 dockerbuild-go:
 	docker build -t $(DOCKER_IMAGE) .
 .PHONY: dockerbuild-go
-
-dockerbuild-test:
-	docker build -f DockerFileTests \
-	             --build-arg GCLOUD_KEY="$(GCLOUD_KEY)" \
-	             --build-arg PROJECT_NAME="$(PROJECT_NAME)" \
-	             --build-arg CLUSTER_NAME="$(CLUSTER_NAME)" \
-	             --build-arg CLUSTER_ZONE="$(CLUSTER_ZONE)" \
-	             -t go-spacemesh-python:$(BRANCH) .
-.PHONY: dockerbuild-test
 
 dockerpush: dockerbuild-go dockerpush-only
 .PHONY: dockerpush

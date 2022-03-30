@@ -84,8 +84,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 	)
 
 	for lid := types.GetEffectiveGenesis().Add(1); !lid.After(last); lid = lid.Add(1) {
-		if err := consensus.HandleIncomingLayer(ctx, lid); err != nil {
-			logger.With().Error("tortoise rerun failed", log.Err(err))
+		if err := consensus.onLayerTerminated(ctx, lid); err != nil {
 			return err
 		}
 	}
@@ -100,7 +99,7 @@ func (t *Tortoise) rerun(ctx context.Context) error {
 
 func catchupToCurrent(ctx context.Context, current, updated *turtle) error {
 	for lid := updated.last.Add(1); !lid.After(current.last); lid = lid.Add(1) {
-		if err := updated.HandleIncomingLayer(ctx, lid); err != nil {
+		if err := updated.onLayerTerminated(ctx, lid); err != nil {
 			return err
 		}
 	}

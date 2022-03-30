@@ -101,6 +101,30 @@ type Votes struct {
 	Abstain []LayerID
 }
 
+// MarshalLogObject implements logging interface.
+func (v *Votes) MarshalLogObject(encoder log.ObjectEncoder) error {
+	encoder.AddString("base", v.Base.String())
+	encoder.AddArray("support", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, bid := range v.Support {
+			encoder.AppendString(bid.String())
+		}
+		return nil
+	}))
+	encoder.AddArray("against", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, bid := range v.Against {
+			encoder.AppendString(bid.String())
+		}
+		return nil
+	}))
+	encoder.AddArray("abstain", log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		for _, lid := range v.Abstain {
+			encoder.AppendString(lid.String())
+		}
+		return nil
+	}))
+	return nil
+}
+
 // EpochData contains information that cannot be changed mid-epoch.
 type EpochData struct {
 	// from the smesher's view, the set of ATXs eligible to vote and propose block content in this epoch
@@ -203,6 +227,7 @@ func (b *Ballot) MarshalLogObject(encoder log.ObjectEncoder) error {
 	encoder.AddString("ref_ballot", b.RefBallot.String())
 	encoder.AddInt("active_set_size", activeSetSize)
 	encoder.AddString("beacon", beacon.ShortString())
+	encoder.AddObject("votes", &b.Votes)
 	return nil
 }
 
