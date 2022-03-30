@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,7 @@ import (
 	"github.com/golang/protobuf/proto"
 	mocknet "github.com/libp2p/go-libp2p/p2p/net/mock"
 	pb "github.com/spacemeshos/api/release/go/spacemesh/v1"
+	"github.com/spacemeshos/post/initialization"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"github.com/stretchr/testify/assert"
@@ -33,6 +35,8 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/activation"
 	apiConfig "github.com/spacemeshos/go-spacemesh/api/config"
+	"github.com/spacemeshos/go-spacemesh/api/grpcserver"
+	"github.com/spacemeshos/go-spacemesh/beacon"
 	cmdp "github.com/spacemeshos/go-spacemesh/cmd"
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/common/util"
@@ -560,7 +564,7 @@ func TestSpacemeshApp_NodeService(t *testing.T) {
 	edSgn := signing.NewEdSigner()
 	h, err := p2p.Upgrade(mesh.Hosts()[0])
 	require.NoError(t, err)
-	app, err := InitSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339),
+	app, err := initSingleInstance(logger, *cfg, 0, time.Now().Add(1*time.Second).Format(time.RFC3339),
 		path, eligibility.New(logtest.New(t)),
 		poetHarness.HTTPPoetClient, clock, h, edSgn)
 	require.NoError(t, err)
@@ -958,4 +962,219 @@ func TestConfig_GenesisAccounts(t *testing.T) {
 			require.EqualValues(t, conf.Genesis.Accounts[key], value)
 		}
 	})
+}
+
+func getTestDefaultConfig() *config.Config {
+	cfg, err := LoadConfigFromFile()
+	if err != nil {
+		log.Error("cannot load config from file")
+		return nil
+	}
+	// is set to 0 to make sync start immediately when node starts
+	cfg.P2P.TargetOutbound = 0
+
+	cfg.POST = activation.DefaultPostConfig()
+	cfg.POST.MinNumUnits = 2
+	cfg.POST.MaxNumUnits = 4
+	cfg.POST.LabelsPerUnit = 32
+	cfg.POST.BitsPerLabel = 8
+	cfg.POST.K2 = 4
+
+	cfg.SMESHING = config.DefaultSmeshingConfig()
+	cfg.SMESHING.Start = true
+	cfg.SMESHING.Opts.NumUnits = cfg.POST.MinNumUnits + 1
+	cfg.SMESHING.Opts.NumFiles = 1
+	cfg.SMESHING.Opts.ComputeProviderID = initialization.CPUProviderID()
+
+	// note: these need to be set sufficiently low enough that turbohare finishes well before the LayerDurationSec
+	cfg.HARE.RoundDuration = 2
+	cfg.HARE.WakeupDelta = 1
+	cfg.HARE.N = 5
+	cfg.HARE.F = 2
+	cfg.HARE.ExpectedLeaders = 5
+	cfg.HARE.SuperHare = true
+	cfg.LayerAvgSize = 5
+	cfg.LayersPerEpoch = 3
+	cfg.TxsPerBlock = 100
+	cfg.Tortoise.Hdist = 5
+	cfg.Tortoise.Zdist = 5
+
+	cfg.LayerDurationSec = 20
+	cfg.HareEligibility.ConfidenceParam = 4
+	cfg.HareEligibility.EpochOffset = 0
+	cfg.SyncRequestTimeout = 500
+	cfg.SyncInterval = 2
+
+	cfg.FETCH.RequestTimeout = 10
+	cfg.FETCH.MaxRetriesForPeer = 5
+	cfg.FETCH.BatchSize = 5
+	cfg.FETCH.BatchTimeout = 5
+	cfg.GoldenATXID = "0x5678"
+
+	cfg.Beacon = beacon.NodeSimUnitTestConfig()
+
+	cfg.Genesis = apiConfig.DefaultTestGenesisConfig()
+
+	types.SetLayersPerEpoch(cfg.LayersPerEpoch)
+
+	return cfg
+}
+
+// activateGRPCServer starts a grpc server on the provided node.
+func activateGRPCServer(smApp *App) {
+	// Activate the API services used by app_test
+	smApp.Config.API.StartGatewayService = true
+	smApp.Config.API.StartGlobalStateService = true
+	smApp.Config.API.StartTransactionService = true
+	smApp.Config.API.GrpcServerPort = 9094
+	smApp.grpcAPIService = grpcserver.NewServerWithInterface(smApp.Config.API.GrpcServerPort, smApp.Config.API.GrpcServerInterface)
+	smApp.gatewaySvc = grpcserver.NewGatewayService(smApp.host)
+	smApp.globalstateSvc = grpcserver.NewGlobalStateService(smApp.mesh, smApp.conState)
+	smApp.txService = grpcserver.NewTransactionService(smApp.host, smApp.mesh, smApp.conState, smApp.syncer)
+	smApp.gatewaySvc.RegisterService(smApp.grpcAPIService)
+	smApp.globalstateSvc.RegisterService(smApp.grpcAPIService)
+	smApp.txService.RegisterService(smApp.grpcAPIService)
+	smApp.grpcAPIService.Start()
+}
+
+// gracefulShutdown stops the current services running in apps.
+func gracefulShutdown(apps []*App) {
+	log.Info("graceful shutdown begin")
+
+	var wg sync.WaitGroup
+	for _, app := range apps {
+		wg.Add(1)
+		go func(app *App) {
+			app.stopServices()
+			wg.Done()
+		}(app)
+	}
+	wg.Wait()
+
+	log.Info("graceful shutdown end")
+}
+
+// initSingleInstance initializes a node instance with given
+// configuration and parameters, it does not stop the instance.
+func initSingleInstance(lg log.Log, cfg config.Config, i int, genesisTime string, storePath string, rolacle *eligibility.FixedRolacle,
+	poetClient *activation.HTTPPoetClient, clock TickProvider, host *p2p.Host, edSgn *signing.EdSigner,
+) (*App, error) {
+	smApp := New(WithLog(lg))
+	smApp.Config = &cfg
+	smApp.Config.GenesisTime = genesisTime
+
+	smApp.Config.SMESHING.CoinbaseAccount = strconv.Itoa(i + 1)
+	smApp.Config.SMESHING.Opts.DataDir, _ = ioutil.TempDir("", "sm-app-test-post-datadir")
+
+	smApp.host = host
+	smApp.edSgn = edSgn
+
+	pub := edSgn.PublicKey()
+	vrfSigner, vrfPub, err := signing.NewVRFSigner(pub.Bytes())
+	if err != nil {
+		return nil, fmt.Errorf("create VRF signer: %w", err)
+	}
+
+	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
+
+	dbStorepath := storePath
+
+	hareOracle := newLocalOracle(rolacle, 5, nodeID)
+	hareOracle.Register(true, pub.String())
+
+	err = smApp.initServices(context.TODO(), nodeID, dbStorepath, edSgn, false, hareOracle,
+		uint32(smApp.Config.LayerAvgSize), poetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock)
+	if err != nil {
+		return nil, err
+	}
+
+	return smApp, err
+}
+
+func TestShutdown(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+
+	// make sure previous goroutines have stopped
+	time.Sleep(3 * time.Second)
+
+	gCount := runtime.NumGoroutine()
+	r := require.New(t)
+	ctx, cancel := context.WithCancel(context.Background())
+
+	mesh, err := mocknet.WithNPeers(context.TODO(), 1)
+	r.NoError(err)
+	wrapped, err := p2p.Upgrade(mesh.Hosts()[0], p2p.WithContext(ctx))
+	r.NoError(err)
+	smApp := New(WithLog(logtest.New(t)))
+	smApp.host = wrapped
+	genesisTime := time.Now().Add(time.Second * 10)
+
+	smApp.Config.POST.BitsPerLabel = 8
+	smApp.Config.POST.LabelsPerUnit = 32
+	smApp.Config.POST.K2 = 4
+
+	smApp.Config.SMESHING.Start = true
+	smApp.Config.SMESHING.CoinbaseAccount = "0x123"
+	smApp.Config.SMESHING.Opts.DataDir = t.TempDir()
+	smApp.Config.SMESHING.Opts.ComputeProviderID = initialization.CPUProviderID()
+
+	smApp.Config.HARE.N = 5
+	smApp.Config.HARE.F = 2
+	smApp.Config.HARE.RoundDuration = 3
+	smApp.Config.HARE.WakeupDelta = 5
+	smApp.Config.HARE.ExpectedLeaders = 5
+	smApp.Config.GoldenATXID = "0x5678"
+	smApp.Config.LayerAvgSize = 5
+	smApp.Config.LayersPerEpoch = 3
+	smApp.Config.TxsPerBlock = 100
+	smApp.Config.Tortoise.Hdist = 5
+	smApp.Config.Tortoise.Zdist = 5
+	smApp.Config.GenesisTime = genesisTime.Format(time.RFC3339)
+	smApp.Config.LayerDurationSec = 20
+	smApp.Config.HareEligibility.ConfidenceParam = 3
+	smApp.Config.HareEligibility.EpochOffset = 0
+	smApp.Config.Beacon = beacon.NodeSimUnitTestConfig()
+
+	smApp.Config.FETCH.RequestTimeout = 1
+	smApp.Config.FETCH.BatchTimeout = 1
+	smApp.Config.FETCH.BatchSize = 5
+	smApp.Config.FETCH.MaxRetriesForPeer = 5
+
+	rolacle := eligibility.New(logtest.New(t))
+	types.SetLayersPerEpoch(smApp.Config.LayersPerEpoch)
+
+	edSgn := signing.NewEdSigner()
+	pub := edSgn.PublicKey()
+
+	poetHarness, err := activation.NewHTTPPoetHarness(false)
+	r.NoError(err, "failed creating poet client harness: %v", err)
+
+	vrfSigner, vrfPub, err := signing.NewVRFSigner(pub.Bytes())
+	r.NoError(err, "failed to create vrf signer")
+	nodeID := types.NodeID{Key: pub.String(), VRFPublicKey: vrfPub}
+
+	hareOracle := newLocalOracle(rolacle, 5, nodeID)
+	hareOracle.Register(true, pub.String())
+
+	clock := timesync.NewClock(timesync.RealClock{}, 20*time.Second, genesisTime, logtest.New(t))
+	r.NoError(smApp.initServices(context.TODO(), nodeID, t.TempDir(), edSgn, false,
+		hareOracle, uint32(smApp.Config.LayerAvgSize),
+		poetHarness.HTTPPoetClient, vrfSigner, smApp.Config.LayersPerEpoch, clock))
+	r.NoError(smApp.startServices(context.TODO()))
+	activateGRPCServer(smApp)
+
+	r.NoError(poetHarness.Teardown(true))
+	cancel()
+	smApp.stopServices()
+
+	time.Sleep(5 * time.Second)
+	gCount2 := runtime.NumGoroutine()
+
+	if !assert.Equal(t, gCount, gCount2) {
+		buf := make([]byte, 1<<16)
+		numbytes := runtime.Stack(buf, true)
+		t.Log(string(buf[:numbytes]))
+	}
 }
