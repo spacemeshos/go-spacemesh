@@ -1097,7 +1097,7 @@ func TestShutdown(t *testing.T) {
 	}
 
 	// make sure previous goroutines have stopped
-	time.Sleep(3 * time.Second)
+	time.Sleep(10 * time.Second)
 
 	gCount := runtime.NumGoroutine()
 	r := require.New(t)
