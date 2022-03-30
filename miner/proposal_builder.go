@@ -297,7 +297,7 @@ func (pb *ProposalBuilder) handleLayer(ctx context.Context, layerID types.LayerI
 		return nil
 	}
 
-	votes, err := pb.baseBallotProvider.EncodeVotes(ctx, tortoise.EncodeVotesWithLast(layerID))
+	votes, err := pb.baseBallotProvider.EncodeVotes(ctx, tortoise.EncodeVotesWithCurrent(layerID))
 	if err != nil {
 		return fmt.Errorf("get base ballot: %w", err)
 	}

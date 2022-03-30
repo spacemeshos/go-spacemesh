@@ -183,8 +183,8 @@ func (t *turtle) EncodeVotes(ctx context.Context, conf *encodeConf) (*types.Vote
 		last      = t.last.Add(1)
 		err       error
 	)
-	if conf.last != nil {
-		last = *conf.last
+	if conf.current != nil {
+		last = *conf.current
 	}
 	// goodness of the ballot determined using hare output or tortoise output for old layers.
 	// if tortoise is full mode some ballot in old layer is undecided and we can't use it this optimization.
@@ -477,7 +477,7 @@ func (t *turtle) getBallotBeacon(ballot *types.Ballot, logger log.Log) (types.Be
 	return beacon, nil
 }
 
-// onLayerTerminated is expected to be called when ballots for layer were received by mesh.
+// onLayerTerminated is expected to be called when hare terminated for a layer.
 // Internally tortoise will verify all layers before the last one if there are no gaps in
 // terminated layers.
 func (t *turtle) onLayerTerminated(ctx context.Context, lid types.LayerID) error {
@@ -514,7 +514,7 @@ func (t *turtle) switchModes(logger log.Log) {
 }
 
 func (t *turtle) processLayer(logger log.Log, lid types.LayerID) error {
-	logger.With().Info("count layer")
+	logger.With().Info("process layer")
 
 	logger = logger.WithFields(
 		log.Stringer("last_layer", t.last),

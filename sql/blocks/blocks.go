@@ -99,7 +99,7 @@ func IsValid(db sql.Executor, id types.BlockID) (rst bool, err error) {
 			err = fmt.Errorf("%w block %s is undecided", sql.ErrNotFound, id)
 			return false
 		}
-		rst = stmt.ColumnInt(0) == 1
+		rst = stmt.ColumnInt(0) == valid
 		return true
 	}); err != nil {
 		return false, fmt.Errorf("select verified %s: %w", id, err)
@@ -133,7 +133,7 @@ func ContextualValidity(db sql.Executor, lid types.LayerID) ([]types.BlockContex
 	}, func(stmt *sql.Statement) bool {
 		validity := types.BlockContextualValidity{}
 		stmt.ColumnBytes(0, validity.ID[:])
-		validity.Validity = stmt.ColumnInt(1) == 1
+		validity.Validity = stmt.ColumnInt(1) == valid
 		rst = append(rst, validity)
 		return true
 	}); err != nil {

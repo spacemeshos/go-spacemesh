@@ -414,7 +414,7 @@ func TestEncodeAbstainVotesForZdist(t *testing.T) {
 	var start types.LayerID
 	for i := 1; i <= zdist; i++ {
 		current := last.Add(uint32(i))
-		votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithLast(current))
+		votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithCurrent(current))
 		require.NoError(t, err)
 		require.Len(t, votes.Support, 1)
 		require.Len(t, votes.Against, 0)
@@ -457,7 +457,7 @@ func TestEncodeAbstainVotesDelayedHare(t *testing.T) {
 	}
 	require.Equal(t, last.Sub(3), verified)
 
-	votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithLast(last.Add(1)))
+	votes, err := tortoise.EncodeVotes(context.Background(), EncodeVotesWithCurrent(last.Add(1)))
 	require.NoError(t, err)
 	require.Len(t, votes.Support, 2)
 	require.Equal(t, votes.Abstain, []types.LayerID{types.NewLayerID(9)})
