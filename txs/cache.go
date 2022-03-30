@@ -20,7 +20,7 @@ var (
 	errInsufficientBalance = errors.New("insufficient balance")
 	errNotInCache          = errors.New("not in cache")
 	errNotInAcctCache      = errors.New("not in account cache")
-	errNonceAppliedOOO     = errors.New("nonce applied out of order")
+	errNonceNotInOrder     = errors.New("nonce not applied in order")
 	errBadNonceInCache     = errors.New("cache contains incorrect nonce")
 	errBadBalanceInCache   = errors.New("cache contains incorrect balance")
 	errDupNonceApplied     = errors.New("multiple txs applied for the same nonce")
@@ -51,7 +51,7 @@ func (s *sameNonceTXs) resetLayerForNonce(logger log.Log, tp txProvider, lastApp
 			logger.With().Error("failed to reset layer for tx",
 				tid,
 				log.Uint64("nonce", ntx.Nonce),
-				log.Named("applied", lastApplied))
+				log.Stringer("applied", lastApplied))
 			return err
 		}
 		ntx.Layer = nextLayer
@@ -81,7 +81,7 @@ func (ac *accountCache) accept(ntx *types.NanoTX, balance uint64) error {
 
 	ac.cachedTXs[ntx.Tid] = ntx
 	if offset == len(ac.txsByNonce) {
-		ac.txsByNonce = append(ac.txsByNonce, &sameNonceTXs{})
+		ac.txsByNonce = append(ac.txsByNonce, &sameNonceTXs{best: ntx})
 	}
 	nonceTXs := ac.txsByNonce[offset]
 	nonceTXs.all[ntx.Tid] = ntx
@@ -121,9 +121,22 @@ func (ac *accountCache) discardOldNonce(logger log.Log, tp txProvider, nonce2TXs
 	return ac.discard(logger, tp, all, filter)
 }
 
-func nonceMarshaller(allNonce []uint64) log.ArrayMarshaler {
+func nonceMarshaller(any interface{}) log.ArrayMarshaler {
+	var allNonce []uint64
+	nonce2TX, ok := any.(map[uint64]*types.NanoTX)
+	if ok {
+		allNonce = make([]uint64, 0, len(nonce2TX))
+		for nonce := range nonce2TX {
+			allNonce = append(allNonce, nonce)
+		}
+	} else if nonce2TXs, ok := any.(map[uint64][]*types.NanoTX); ok {
+		allNonce = make([]uint64, 0, len(nonce2TXs))
+		for nonce := range nonce2TXs {
+			allNonce = append(allNonce, nonce)
+		}
+	}
+	sort.Slice(allNonce, func(i, j int) bool { return allNonce[i] < allNonce[j] })
 	return log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
-		sort.Slice(allNonce, func(i, j int) bool { return allNonce[i] < allNonce[j] })
 		for _, nonce := range allNonce {
 			encoder.AppendUint64(nonce)
 		}
@@ -140,14 +153,10 @@ func (ac *accountCache) addBatch(logger log.Log, tp txProvider, nonce2TXs map[ui
 	)
 	for len(nonce2TXs) > 0 {
 		if _, ok := nonce2TXs[nextNonce]; !ok {
-			allNonce := make([]uint64, 0, len(nonce2TXs))
-			for nonce := range nonce2TXs {
-				allNonce = append(allNonce, nonce)
-			}
 			logger.Debug("batch does not contain the next nonce",
 				ac.addr,
 				log.Uint64("expected_nonce", nextNonce),
-				log.Array("batch_nonce", nonceMarshaller(allNonce)))
+				log.Array("batch_nonce", nonceMarshaller(nonce2TXs)))
 			ac.hasGapInDB = true
 			break
 		}
@@ -171,8 +180,8 @@ func (ac *accountCache) addBatch(logger log.Log, tp txProvider, nonce2TXs map[ui
 			for _, ntx := range txs {
 				logger.With().Error("unprocessed tx in batch",
 					ntx.Tid,
-					log.Named("intended", ac.addr),
-					log.Named("actual", ntx.Principal),
+					log.Stringer("intended", ac.addr),
+					log.Stringer("actual", ntx.Principal),
 					log.Uint64("nonce", nonce))
 			}
 		}
@@ -209,7 +218,6 @@ func (ac *accountCache) addToExistingNonce(logger log.Log, tp txProvider, ntx *t
 		// this is too harsh. conservative balance does not factor into incoming fund.
 		// a transaction can still be valid.
 		return ac.discard(logger, tp, []*types.NanoTX{ntx}, nil)
-		// return tp.Discard(ntx.Tid)
 	}
 
 	if err := ac.accept(ntx, balance); err != nil {
@@ -374,15 +382,11 @@ func (ac *accountCache) applyLayer(
 	for len(appliedByNonce) > 0 {
 		offset := nextNonce - ac.startNonce
 		if _, ok := appliedByNonce[nextNonce]; !ok {
-			allNonce := make([]uint64, 0, len(appliedByNonce))
-			for nonce := range appliedByNonce {
-				allNonce = append(allNonce, nonce)
-			}
 			logger.Error("account was not applied in nonce order",
 				ac.addr,
 				log.Uint64("expected_nonce", nextNonce),
-				log.Array("applied_nonce", nonceMarshaller(allNonce)))
-			return errNonceAppliedOOO
+				log.Array("applied_nonce", nonceMarshaller(appliedByNonce)))
+			return errNonceNotInOrder
 		}
 
 		nonceTXs := ac.txsByNonce[offset]

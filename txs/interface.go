@@ -32,7 +32,7 @@ type conStateCache interface {
 
 type txProvider interface {
 	add(*types.Transaction, time.Time) error
-	has(types.TransactionID) bool
+	has(types.TransactionID) (bool, error)
 	get(types.TransactionID) (*types.MeshTransaction, error)
 	getBlob(types.TransactionID) ([]byte, error)
 	getByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)

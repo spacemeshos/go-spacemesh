@@ -25,9 +25,8 @@ func (s *store) add(tx *types.Transaction, received time.Time) error {
 	return nil
 }
 
-func (s *store) has(tid types.TransactionID) bool {
-	has, err := transactions.Has(s.db, tid)
-	return err == nil && has
+func (s *store) has(tid types.TransactionID) (bool, error) {
+	return transactions.Has(s.db, tid)
 }
 
 func (s *store) get(tid types.TransactionID) (*types.MeshTransaction, error) {
