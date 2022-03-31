@@ -9,6 +9,9 @@ import (
 type stringToString map[string]string
 
 func (s stringToString) Set(val string) error {
+	if len(val) == 0 {
+		return nil
+	}
 	ss := strings.Split(val, ",")
 	for _, pair := range ss {
 		parts := strings.SplitN(pair, "=", 2)

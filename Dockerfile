@@ -83,8 +83,6 @@ COPY . .
 
 # And compile the project
 RUN make build
-RUN make hare
-RUN make p2p
 RUN make harness
 
 #In this last stage, we start from a fresh Alpine image, to reduce the image size and not ship the Go compiler in our production artifacts.
