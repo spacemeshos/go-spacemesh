@@ -4,7 +4,7 @@ Systest
 Installation
 ---
 
-This testing setup can run on top of any k8s installation. For local i recommend minikube. See intrusctions below how to set it up.
+This testing setup can run on top of any k8s installation. The instructions below uses `minikube`.
 
 1. Install minikube
 
@@ -17,7 +17,7 @@ curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-
 sudo install minikube-linux-amd64 /usr/local/bin/minikube
 ```
 
-2. Grant permissions for default serviceaccount so that it will be allowed to create namespaces by client that runs in-cluster.
+2. Grant permissions for default `serviceaccount` so that it will be allowed to create namespaces by client that runs in-cluster.
 
 ```bash
 kubectl create clusterrolebinding serviceaccounts-cluster-admin \
@@ -26,13 +26,13 @@ kubectl create clusterrolebinding serviceaccounts-cluster-admin \
 
 3. Install chaos-mesh
 
-https://chaos-mesh.org/docs/quick-start/
+chaos-mesh is used for some tests. See https://chaos-mesh.org/docs/quick-start/ for more up-to-date instructions.
 
 ```bash
 curl -sSL https://mirrors.chaos-mesh.org/v2.1.2/install.sh | bash
 ```
 
-4. Install logging infra
+4. Install `loki` to use grafana dashboard.
 
 Follow instructions https://grafana.com/docs/loki/latest/installation/helm/.
 
@@ -40,7 +40,7 @@ Follow instructions https://grafana.com/docs/loki/latest/installation/helm/.
 helm upgrade --install loki grafana/loki-stack  --set grafana.enabled=true,prometheus.enabled=true,prometheus.alertmanager.persistentVolume.enabled=false,prometheus.server.persistentVolume.enabled=false,loki.persistence.enabled=true,loki.persistence.storageClassName=standard,loki.persistence.size=20Gi
 ```
 
-Get password with, username is `admin`:
+To log in grafana dashboard, use username `admin`, and get password with the following command:
 
 ```bash
 kubectl get secret loki-grafana -o jsonpath="{.data.admin-password}" | base64 --decode ; echo
@@ -52,14 +52,40 @@ Make dashboard available on `0.0.0.0:9000`:
 kubectl port-forward service/loki-grafana 9000:80
 ```
 
-1. Build test image for `tests` module with `make docker` .
+Build and Run
+---
 
-2. `make run test_name=TestSmeshing`
+1. Allow docker to pull images from local repository.
+```bash
+eval $(minikube docker-env)
+````
 
-The command will create a pod inside your k8s cluster named `systest`. After test completes it will cleanup after
-itself. If you want to interrupt the test run `make clean` - it will gracefully terminate the pod allowing it to cleanup the test setup.
+2. Build smesher image. Under the root directory of go-spacemesh:
+```bash
+make dockerbuild-go
+```
+note the image tag. e.g. `go-spacemesh-dev:develop-dirty`
+
+3. Build test image for `tests` module with `make docker`.
+```bash
+cd systest
+make docker
+```
+
+4. Run tests.
+```bash
+make run test_name=TestSmeshing smesher_image=go-spacemesh-dev:develop-dirty
+```
+
+The command will create a pod inside your k8s cluster named `systest`. After test completes it will clean up after
+itself. If you want to interrupt the test run `make clean` - it will gracefully terminate the pod allowing it to clean up the test setup.
 
 If logs were interrupted it is always possible to re-attach to them with `make attach`.
+
+Note
+---
+* If you are switching between remote and local k8s, you have to run `minikube start` before running the tests locally.
+* If you did `make clean`, you will have to install `loki` again for grafana to be installed.
 
 Testing approach
 ---

@@ -7,7 +7,7 @@ clusters ?= 1
 size ?= 10
 level ?= debug
 bootstrap ?= 5m
-node_selector ?= cloud.google.com/gke-nodepool=dmitry-ci-preemtible-1
+node_selector ?=
 
 .PHONY: docker
 docker:

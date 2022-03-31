@@ -146,16 +146,8 @@ func SortBlocks(blks []*Block) []*Block {
 	return blks
 }
 
-// DBBlock is a Block structure stored in DB to skip ID hashing.
-type DBBlock struct {
-	ID         BlockID
-	InnerBlock InnerBlock
-}
-
-// ToBlock creates a Block from data that is stored locally.
-func (dbb *DBBlock) ToBlock() *Block {
-	return &Block{
-		InnerBlock: dbb.InnerBlock,
-		blockID:    dbb.ID,
-	}
+// BlockContextualValidity tuple with block id and contextual validity.
+type BlockContextualValidity struct {
+	ID       BlockID
+	Validity bool
 }

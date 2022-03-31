@@ -372,17 +372,6 @@ func (app *App) Initialize() (err error) {
 
 	app.introduction()
 
-	drift, err := timesync.CheckSystemClockDrift()
-	if err != nil {
-		return &clockError{
-			err: err,
-			details: clockErrorDetails{
-				Drift: drift,
-			},
-		}
-	}
-
-	log.Info("System clock synchronized with ntp. drift: %s", drift)
 	return nil
 }
 
@@ -717,29 +706,6 @@ func (app *App) initServices(ctx context.Context,
 	return nil
 }
 
-// periodically checks that our clock is sync.
-func (app *App) checkTimeDrifts() {
-	checkTimeSync := time.NewTicker(app.Config.TIME.RefreshNtpInterval)
-	defer checkTimeSync.Stop() // close ticker
-
-	for {
-		select {
-		case <-app.term:
-			return
-
-		case <-checkTimeSync.C:
-			_, err := timesync.CheckSystemClockDrift()
-			if err != nil {
-				app.log.With().Error("unable to synchronize system time", log.Err(err))
-
-				cmdp.Cancel()()
-
-				return
-			}
-		}
-	}
-}
-
 // HareFactory returns a hare consensus algorithm according to the parameters in app.Config.Hare.SuperHare.
 func (app *App) HareFactory(
 	ctx context.Context,
@@ -811,7 +777,6 @@ func (app *App) startServices(ctx context.Context) error {
 	if app.ptimesync != nil {
 		app.ptimesync.Start()
 	}
-	go app.checkTimeDrifts()
 	return nil
 }
 
