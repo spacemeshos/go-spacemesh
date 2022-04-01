@@ -291,191 +291,207 @@ func (m *MocktxProvider) EXPECT() *MocktxProviderMockRecorder {
 	return m.recorder
 }
 
-// add mocks base method.
-func (m *MocktxProvider) add(arg0 *types.Transaction, arg1 time.Time) error {
+// Add mocks base method.
+func (m *MocktxProvider) Add(arg0 *types.Transaction, arg1 time.Time) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "add", arg0, arg1)
+	ret := m.ctrl.Call(m, "Add", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// add indicates an expected call of add.
-func (mr *MocktxProviderMockRecorder) add(arg0, arg1 interface{}) *gomock.Call {
+// Add indicates an expected call of Add.
+func (mr *MocktxProviderMockRecorder) Add(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "add", reflect.TypeOf((*MocktxProvider)(nil).add), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Add", reflect.TypeOf((*MocktxProvider)(nil).Add), arg0, arg1)
 }
 
-// addToBlock mocks base method.
-func (m *MocktxProvider) addToBlock(arg0 types.LayerID, arg1 types.BlockID, arg2 []types.TransactionID) error {
+// AddToBlock mocks base method.
+func (m *MocktxProvider) AddToBlock(arg0 types.LayerID, arg1 types.BlockID, arg2 []types.TransactionID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "addToBlock", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddToBlock", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// addToBlock indicates an expected call of addToBlock.
-func (mr *MocktxProviderMockRecorder) addToBlock(arg0, arg1, arg2 interface{}) *gomock.Call {
+// AddToBlock indicates an expected call of AddToBlock.
+func (mr *MocktxProviderMockRecorder) AddToBlock(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "addToBlock", reflect.TypeOf((*MocktxProvider)(nil).addToBlock), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToBlock", reflect.TypeOf((*MocktxProvider)(nil).AddToBlock), arg0, arg1, arg2)
 }
 
-// addToProposal mocks base method.
-func (m *MocktxProvider) addToProposal(arg0 types.LayerID, arg1 types.ProposalID, arg2 []types.TransactionID) error {
+// AddToProposal mocks base method.
+func (m *MocktxProvider) AddToProposal(arg0 types.LayerID, arg1 types.ProposalID, arg2 []types.TransactionID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "addToProposal", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "AddToProposal", arg0, arg1, arg2)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// addToProposal indicates an expected call of addToProposal.
-func (mr *MocktxProviderMockRecorder) addToProposal(arg0, arg1, arg2 interface{}) *gomock.Call {
+// AddToProposal indicates an expected call of AddToProposal.
+func (mr *MocktxProviderMockRecorder) AddToProposal(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "addToProposal", reflect.TypeOf((*MocktxProvider)(nil).addToProposal), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddToProposal", reflect.TypeOf((*MocktxProvider)(nil).AddToProposal), arg0, arg1, arg2)
 }
 
-// applyLayer mocks base method.
-func (m *MocktxProvider) applyLayer(arg0 types.LayerID, arg1 types.BlockID, arg2, arg3 []types.TransactionID) error {
+// ApplyLayer mocks base method.
+func (m *MocktxProvider) ApplyLayer(arg0 types.LayerID, arg1 types.BlockID, arg2 types.Address, arg3 map[uint64]types.TransactionID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "applyLayer", arg0, arg1, arg2, arg3)
+	ret := m.ctrl.Call(m, "ApplyLayer", arg0, arg1, arg2, arg3)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// applyLayer indicates an expected call of applyLayer.
-func (mr *MocktxProviderMockRecorder) applyLayer(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
+// ApplyLayer indicates an expected call of ApplyLayer.
+func (mr *MocktxProviderMockRecorder) ApplyLayer(arg0, arg1, arg2, arg3 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "applyLayer", reflect.TypeOf((*MocktxProvider)(nil).applyLayer), arg0, arg1, arg2, arg3)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ApplyLayer", reflect.TypeOf((*MocktxProvider)(nil).ApplyLayer), arg0, arg1, arg2, arg3)
 }
 
-// discard4Ever mocks base method.
-func (m *MocktxProvider) discard4Ever(arg0 types.TransactionID) error {
+// DiscardNonceBelow mocks base method.
+func (m *MocktxProvider) DiscardNonceBelow(arg0 types.Address, arg1 uint64) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "discard4Ever", arg0)
+	ret := m.ctrl.Call(m, "DiscardNonceBelow", arg0, arg1)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// discard4Ever indicates an expected call of discard4Ever.
-func (mr *MocktxProviderMockRecorder) discard4Ever(arg0 interface{}) *gomock.Call {
+// DiscardNonceBelow indicates an expected call of DiscardNonceBelow.
+func (mr *MocktxProviderMockRecorder) DiscardNonceBelow(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "discard4Ever", reflect.TypeOf((*MocktxProvider)(nil).discard4Ever), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DiscardNonceBelow", reflect.TypeOf((*MocktxProvider)(nil).DiscardNonceBelow), arg0, arg1)
 }
 
-// get mocks base method.
-func (m *MocktxProvider) get(arg0 types.TransactionID) (*types.MeshTransaction, error) {
+// Get mocks base method.
+func (m *MocktxProvider) Get(arg0 types.TransactionID) (*types.MeshTransaction, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "get", arg0)
+	ret := m.ctrl.Call(m, "Get", arg0)
 	ret0, _ := ret[0].(*types.MeshTransaction)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// get indicates an expected call of get.
-func (mr *MocktxProviderMockRecorder) get(arg0 interface{}) *gomock.Call {
+// Get indicates an expected call of Get.
+func (mr *MocktxProviderMockRecorder) Get(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "get", reflect.TypeOf((*MocktxProvider)(nil).get), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MocktxProvider)(nil).Get), arg0)
 }
 
-// getAcctPending mocks base method.
-func (m *MocktxProvider) getAcctPending(arg0 types.Address) ([]*types.MeshTransaction, error) {
+// GetAcctPendingAtNonce mocks base method.
+func (m *MocktxProvider) GetAcctPendingAtNonce(arg0 types.Address, arg1 uint64) ([]*types.MeshTransaction, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getAcctPending", arg0)
+	ret := m.ctrl.Call(m, "GetAcctPendingAtNonce", arg0, arg1)
 	ret0, _ := ret[0].([]*types.MeshTransaction)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// getAcctPending indicates an expected call of getAcctPending.
-func (mr *MocktxProviderMockRecorder) getAcctPending(arg0 interface{}) *gomock.Call {
+// GetAcctPendingAtNonce indicates an expected call of GetAcctPendingAtNonce.
+func (mr *MocktxProviderMockRecorder) GetAcctPendingAtNonce(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getAcctPending", reflect.TypeOf((*MocktxProvider)(nil).getAcctPending), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAcctPendingAtNonce", reflect.TypeOf((*MocktxProvider)(nil).GetAcctPendingAtNonce), arg0, arg1)
 }
 
-// getAllPending mocks base method.
-func (m *MocktxProvider) getAllPending() ([]*types.MeshTransaction, error) {
+// GetAcctPendingFromNonce mocks base method.
+func (m *MocktxProvider) GetAcctPendingFromNonce(arg0 types.Address, arg1 uint64) ([]*types.MeshTransaction, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getAllPending")
+	ret := m.ctrl.Call(m, "GetAcctPendingFromNonce", arg0, arg1)
 	ret0, _ := ret[0].([]*types.MeshTransaction)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// getAllPending indicates an expected call of getAllPending.
-func (mr *MocktxProviderMockRecorder) getAllPending() *gomock.Call {
+// GetAcctPendingFromNonce indicates an expected call of GetAcctPendingFromNonce.
+func (mr *MocktxProviderMockRecorder) GetAcctPendingFromNonce(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getAllPending", reflect.TypeOf((*MocktxProvider)(nil).getAllPending))
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAcctPendingFromNonce", reflect.TypeOf((*MocktxProvider)(nil).GetAcctPendingFromNonce), arg0, arg1)
 }
 
-// getBlob mocks base method.
-func (m *MocktxProvider) getBlob(arg0 types.TransactionID) ([]byte, error) {
+// GetAllPending mocks base method.
+func (m *MocktxProvider) GetAllPending() ([]*types.MeshTransaction, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getBlob", arg0)
+	ret := m.ctrl.Call(m, "GetAllPending")
+	ret0, _ := ret[0].([]*types.MeshTransaction)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAllPending indicates an expected call of GetAllPending.
+func (mr *MocktxProviderMockRecorder) GetAllPending() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAllPending", reflect.TypeOf((*MocktxProvider)(nil).GetAllPending))
+}
+
+// GetBlob mocks base method.
+func (m *MocktxProvider) GetBlob(arg0 types.TransactionID) ([]byte, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetBlob", arg0)
 	ret0, _ := ret[0].([]byte)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// getBlob indicates an expected call of getBlob.
-func (mr *MocktxProviderMockRecorder) getBlob(arg0 interface{}) *gomock.Call {
+// GetBlob indicates an expected call of GetBlob.
+func (mr *MocktxProviderMockRecorder) GetBlob(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getBlob", reflect.TypeOf((*MocktxProvider)(nil).getBlob), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetBlob", reflect.TypeOf((*MocktxProvider)(nil).GetBlob), arg0)
 }
 
-// getByAddress mocks base method.
-func (m *MocktxProvider) getByAddress(arg0, arg1 types.LayerID, arg2 types.Address) ([]*types.MeshTransaction, error) {
+// GetByAddress mocks base method.
+func (m *MocktxProvider) GetByAddress(arg0, arg1 types.LayerID, arg2 types.Address) ([]*types.MeshTransaction, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "getByAddress", arg0, arg1, arg2)
+	ret := m.ctrl.Call(m, "GetByAddress", arg0, arg1, arg2)
 	ret0, _ := ret[0].([]*types.MeshTransaction)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
-// getByAddress indicates an expected call of getByAddress.
-func (mr *MocktxProviderMockRecorder) getByAddress(arg0, arg1, arg2 interface{}) *gomock.Call {
+// GetByAddress indicates an expected call of GetByAddress.
+func (mr *MocktxProviderMockRecorder) GetByAddress(arg0, arg1, arg2 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "getByAddress", reflect.TypeOf((*MocktxProvider)(nil).getByAddress), arg0, arg1, arg2)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetByAddress", reflect.TypeOf((*MocktxProvider)(nil).GetByAddress), arg0, arg1, arg2)
 }
 
-// has mocks base method.
-func (m *MocktxProvider) has(arg0 types.TransactionID) bool {
+// Has mocks base method.
+func (m *MocktxProvider) Has(arg0 types.TransactionID) (bool, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "has", arg0)
+	ret := m.ctrl.Call(m, "Has", arg0)
 	ret0, _ := ret[0].(bool)
-	return ret0
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
-// has indicates an expected call of has.
-func (mr *MocktxProviderMockRecorder) has(arg0 interface{}) *gomock.Call {
+// Has indicates an expected call of Has.
+func (mr *MocktxProviderMockRecorder) Has(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "has", reflect.TypeOf((*MocktxProvider)(nil).has), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Has", reflect.TypeOf((*MocktxProvider)(nil).Has), arg0)
 }
 
-// setNextLayerBlock mocks base method.
-func (m *MocktxProvider) setNextLayerBlock(arg0 types.TransactionID, arg1 types.LayerID) (types.LayerID, types.BlockID, error) {
+// SetNextLayerBlock mocks base method.
+func (m *MocktxProvider) SetNextLayerBlock(arg0 types.TransactionID, arg1 types.LayerID) (types.LayerID, types.BlockID, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "setNextLayerBlock", arg0, arg1)
+	ret := m.ctrl.Call(m, "SetNextLayerBlock", arg0, arg1)
 	ret0, _ := ret[0].(types.LayerID)
 	ret1, _ := ret[1].(types.BlockID)
 	ret2, _ := ret[2].(error)
 	return ret0, ret1, ret2
 }
 
-// setNextLayerBlock indicates an expected call of setNextLayerBlock.
-func (mr *MocktxProviderMockRecorder) setNextLayerBlock(arg0, arg1 interface{}) *gomock.Call {
+// SetNextLayerBlock indicates an expected call of SetNextLayerBlock.
+func (mr *MocktxProviderMockRecorder) SetNextLayerBlock(arg0, arg1 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "setNextLayerBlock", reflect.TypeOf((*MocktxProvider)(nil).setNextLayerBlock), arg0, arg1)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetNextLayerBlock", reflect.TypeOf((*MocktxProvider)(nil).SetNextLayerBlock), arg0, arg1)
 }
 
-// undoApply mocks base method.
-func (m *MocktxProvider) undoApply(arg0 types.LayerID) error {
+// UndoLayers mocks base method.
+func (m *MocktxProvider) UndoLayers(arg0 types.LayerID) error {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "undoApply", arg0)
+	ret := m.ctrl.Call(m, "UndoLayers", arg0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// undoApply indicates an expected call of undoApply.
-func (mr *MocktxProviderMockRecorder) undoApply(arg0 interface{}) *gomock.Call {
+// UndoLayers indicates an expected call of UndoLayers.
+func (mr *MocktxProviderMockRecorder) UndoLayers(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "undoApply", reflect.TypeOf((*MocktxProvider)(nil).undoApply), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UndoLayers", reflect.TypeOf((*MocktxProvider)(nil).UndoLayers), arg0)
 }

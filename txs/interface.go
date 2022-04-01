@@ -31,17 +31,18 @@ type conStateCache interface {
 }
 
 type txProvider interface {
-	add(*types.Transaction, time.Time) error
-	has(types.TransactionID) (bool, error)
-	get(types.TransactionID) (*types.MeshTransaction, error)
-	getBlob(types.TransactionID) ([]byte, error)
-	getByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
-	addToProposal(types.LayerID, types.ProposalID, []types.TransactionID) error
-	addToBlock(types.LayerID, types.BlockID, []types.TransactionID) error
-	undoApply(types.LayerID) error
-	discard4Ever(types.TransactionID) error
-	applyLayer(types.LayerID, types.BlockID, []types.TransactionID, []types.TransactionID) error
-	setNextLayerBlock(types.TransactionID, types.LayerID) (types.LayerID, types.BlockID, error)
-	getAllPending() ([]*types.MeshTransaction, error)
-	getAcctPending(types.Address) ([]*types.MeshTransaction, error)
+	Add(*types.Transaction, time.Time) error
+	Has(types.TransactionID) (bool, error)
+	Get(types.TransactionID) (*types.MeshTransaction, error)
+	GetBlob(types.TransactionID) ([]byte, error)
+	GetByAddress(types.LayerID, types.LayerID, types.Address) ([]*types.MeshTransaction, error)
+	AddToProposal(types.LayerID, types.ProposalID, []types.TransactionID) error
+	AddToBlock(types.LayerID, types.BlockID, []types.TransactionID) error
+	UndoLayers(types.LayerID) error
+	ApplyLayer(types.LayerID, types.BlockID, types.Address, map[uint64]types.TransactionID) error
+	DiscardNonceBelow(types.Address, uint64) error
+	SetNextLayerBlock(types.TransactionID, types.LayerID) (types.LayerID, types.BlockID, error)
+	GetAllPending() ([]*types.MeshTransaction, error)
+	GetAcctPendingAtNonce(types.Address, uint64) ([]*types.MeshTransaction, error)
+	GetAcctPendingFromNonce(types.Address, uint64) ([]*types.MeshTransaction, error)
 }

@@ -21,65 +21,73 @@ func newStore(db *sql.Database, logger log.Log) *store {
 	}
 }
 
-func (s *store) add(tx *types.Transaction, received time.Time) error {
+// Add adds a transaction to the database.
+func (s *store) Add(tx *types.Transaction, received time.Time) error {
 	return nil
 }
 
-func (s *store) has(tid types.TransactionID) (bool, error) {
+// Has returns true if a transaction already exists in the database.
+func (s *store) Has(tid types.TransactionID) (bool, error) {
 	return transactions.Has(s.db, tid)
 }
 
-func (s *store) get(tid types.TransactionID) (*types.MeshTransaction, error) {
+// Get returns a transaction from the database.
+func (s *store) Get(tid types.TransactionID) (*types.MeshTransaction, error) {
 	return transactions.Get(s.db, tid)
 }
 
-func (s *store) getBlob(tid types.TransactionID) ([]byte, error) {
+// GetBlob returns a transaction as a byte array.
+func (s *store) GetBlob(tid types.TransactionID) ([]byte, error) {
 	return transactions.GetBlob(s.db, tid)
 }
 
-func (s *store) getByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
+// GetByAddress returns a list of transactions from `address` with layers in [from, to].
+func (s *store) GetByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
 	return transactions.FilterByAddress(s.db, from, to, address)
 }
 
-// addToProposal adds a transaction to a proposal in the database.
-func (s *store) addToProposal(lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
+// AddToProposal adds a transaction to a proposal in the database.
+func (s *store) AddToProposal(lid types.LayerID, pid types.ProposalID, tids []types.TransactionID) error {
 	return nil
 }
 
-// addToBlock adds a transaction to a block in the database.
-func (s *store) addToBlock(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
+// AddToBlock adds a transaction to a block in the database.
+func (s *store) AddToBlock(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
 	return nil
 }
 
-// applyLayer sets transactions to applied and discarded accordingly, and sets the layer at which the
+// ApplyLayer sets transactions to applied and discarded accordingly, and sets the layer at which the
 // transactions are applied/discarded.
-func (s *store) applyLayer(lid types.LayerID, bid types.BlockID, toApply, toDiscard []types.TransactionID) error {
+func (s *store) ApplyLayer(lid types.LayerID, bid types.BlockID, addr types.Address, appliedByNonce map[uint64]types.TransactionID) error {
 	return nil
 }
 
-// undoApply resets all transactions that were applied/discarded between `from` and the most recent layer.
-func (s *store) undoApply(from types.LayerID) error {
+// DiscardNonceBelow discards pending transactions with nonce lower than `nonce`.
+func (s *store) DiscardNonceBelow(addr types.Address, nonce uint64) error {
 	return nil
 }
 
-// discard4Ever marks the transaction discarded in the database without setting layer. as a result,
-// these transactions will not be reset when state is reverted.
-// this should be called on transactions that are rejected due to bad nonce or insufficient balance.
-func (s *store) discard4Ever(tid types.TransactionID) error {
+// UndoLayers resets all transactions that were applied/discarded between `from` and the most recent layer.
+func (s *store) UndoLayers(from types.LayerID) error {
 	return nil
 }
 
-// setNextLayerBlock sets and returns the next applicable layer/block for the transaction.
-func (s *store) setNextLayerBlock(tid types.TransactionID, lid types.LayerID) (types.LayerID, types.BlockID, error) {
+// SetNextLayerBlock sets and returns the next applicable layer/block for the transaction.
+func (s *store) SetNextLayerBlock(tid types.TransactionID, lid types.LayerID) (types.LayerID, types.BlockID, error) {
 	return types.LayerID{}, types.EmptyBlockID, nil
 }
 
-// getAllPending gets all pending transactions for all accounts from database.
-func (s *store) getAllPending() ([]*types.MeshTransaction, error) {
+// GetAllPending gets all pending transactions for all accounts from database.
+func (s *store) GetAllPending() ([]*types.MeshTransaction, error) {
 	return nil, nil
 }
 
-// getAcctPending gets all pending transactions for an account from database.
-func (s *store) getAcctPending(address types.Address) ([]*types.MeshTransaction, error) {
+// GetAcctPendingAtNonce gets all pending transactions with nonce == `nonce` for an account.
+func (s *store) GetAcctPendingAtNonce(addr types.Address, nonce uint64) ([]*types.MeshTransaction, error) {
+	return nil, nil
+}
+
+// GetAcctPendingFromNonce gets all pending transactions with nonce <= `from` for an account.
+func (s *store) GetAcctPendingFromNonce(addr types.Address, from uint64) ([]*types.MeshTransaction, error) {
 	return nil, nil
 }
