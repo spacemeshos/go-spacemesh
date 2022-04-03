@@ -255,8 +255,9 @@ func (n *NanoTX) Better(other *NanoTX) bool {
 }
 
 // UpdateLayerMaybe updates the layer of a transaction if it's lower than the current value.
-func (n *NanoTX) UpdateLayerMaybe(lid LayerID) {
+func (n *NanoTX) UpdateLayerMaybe(lid LayerID, bid BlockID) {
 	if n.Layer == (LayerID{}) || lid.Before(n.Layer) {
 		n.Layer = lid
+		n.Block = bid
 	}
 }

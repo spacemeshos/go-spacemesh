@@ -51,37 +51,14 @@ func (s *sameNonceTXs) maxSpending() uint64 {
 	return s.best.MaxSpending()
 }
 
-func resetLayerForNonce(logger log.Log, tp txProvider, addr types.Address, nonce uint64, lastApplied types.LayerID) ([]*types.NanoTX, error) {
-	mtxs, err := tp.GetAcctPendingAtNonce(addr, nonce)
-	if err != nil {
-		logger.With().Error("failed to get tx at nonce", addr, log.Uint64("nonce", nonce))
-		return nil, err
-	}
-
-	ntxs := make([]*types.NanoTX, 0, len(mtxs))
-	for _, mtx := range mtxs {
-		nextLayer, nextBlock, err := tp.SetNextLayerBlock(mtx.ID(), lastApplied)
-		if err != nil {
-			logger.With().Error("failed to reset layer",
-				mtx.ID(),
-				log.Uint64("nonce", nonce),
-				log.Stringer("applied", lastApplied))
-			return nil, err
-		}
-		mtx.LayerID = nextLayer
-		mtx.BlockID = nextBlock
-		ntxs = append(ntxs, types.NewNanoTX(mtx))
-	}
-	return ntxs, nil
-}
-
 type accountCache struct {
 	addr         types.Address
 	txsByNonce   []*sameNonceTXs
-	cachedTXs    map[types.TransactionID]*types.NanoTX // shared with the cache instance
 	startNonce   uint64
 	startBalance uint64
-	hasGapInDB   bool // set to true when there is a nonce gap
+	gapInDB      bool // set to true when there is a nonce gap
+
+	cachedTXs map[types.TransactionID]*types.NanoTX // shared with the cache instance
 }
 
 func (ac *accountCache) nextNonce() uint64 {
@@ -98,7 +75,7 @@ func (ac *accountCache) availBalance() uint64 {
 func (ac *accountCache) accept(logger log.Log, ntx *types.NanoTX, balance uint64) error {
 	idx := getNonceOffset(ac.startNonce, ntx.Nonce)
 	if idx < 0 {
-		logger.With().Debug("bad nonce",
+		logger.With().Error("bad nonce",
 			log.Uint64("acct_nonce", ac.startNonce),
 			log.Uint64("tx_nonce", ntx.Nonce))
 		return errBadNonce
@@ -123,6 +100,12 @@ func (ac *accountCache) accept(logger log.Log, ntx *types.NanoTX, balance uint64
 			best:        ntx,
 			postBalance: balance - ntx.MaxSpending(),
 		})
+		ac.cachedTXs[ntx.Tid] = ntx
+		logger.With().Debug("new nonce added",
+			ac.addr,
+			log.Uint64("nonce", ntx.Nonce),
+			log.Uint64("max_spending", ntx.MaxSpending()),
+			log.Uint64("post_balance", ac.availBalance()))
 		return nil
 	}
 
@@ -189,13 +172,14 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*types.N
 				ac.addr,
 				log.Uint64("nonce", nextNonce),
 				log.Array("batch", nonceMarshaller(nonce2TXs)))
-			ac.hasGapInDB = true
+			ac.gapInDB = true
 			break
 		}
 
 		best := findBest(nonce2TXs[nextNonce], balance)
 		if best == nil {
-			ac.hasGapInDB = true
+			logger.Debug("no transactions are feasible at nonce", ac.addr, log.Uint64("nonce", nextNonce))
+			ac.gapInDB = true
 			break
 		}
 		if err := ac.accept(logger, best, balance); err != nil {
@@ -271,7 +255,7 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 			tx.ID(),
 			log.Uint64("next_nonce", ac.startNonce),
 			log.Uint64("tx_nonce", tx.AccountNonce))
-		ac.hasGapInDB = true
+		ac.gapInDB = true
 		return errNonceTooBig
 	}
 
@@ -293,16 +277,16 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 
 	// adding a new nonce can bridge the nonce gap in db
 	// check DB for txs with higher nonce
-	if ac.hasGapInDB {
-		if err := ac.addPendingFromNonce(logger, tp, ac.nextNonce()); err != nil {
+	if ac.gapInDB {
+		if err := ac.addPendingFromNonce(logger, tp, ac.nextNonce(), types.LayerID{}); err != nil {
 			return err
 		}
-		ac.hasGapInDB = false
+		ac.gapInDB = false
 	}
 	return nil
 }
 
-func (ac *accountCache) addPendingFromNonce(logger log.Log, tp txProvider, nonce uint64) error {
+func (ac *accountCache) addPendingFromNonce(logger log.Log, tp txProvider, nonce uint64, applied types.LayerID) error {
 	mtxs, err := tp.GetAcctPendingFromNonce(ac.addr, nonce)
 	if err != nil {
 		logger.With().Error("failed to get more pending txs from db", ac.addr, log.Err(err))
@@ -311,6 +295,22 @@ func (ac *accountCache) addPendingFromNonce(logger log.Log, tp txProvider, nonce
 
 	if len(mtxs) == 0 {
 		return nil
+	}
+
+	if applied != (types.LayerID{}) {
+		// we just applied a layer, need to update layer/block for the pending txs
+		for i, mtx := range mtxs {
+			nextLayer, nextBlock, err := tp.SetNextLayerBlock(mtx.ID(), applied)
+			if err != nil {
+				logger.With().Error("failed to reset layer",
+					mtx.ID(),
+					log.Uint64("nonce", nonce),
+					log.Stringer("applied", applied))
+				return err
+			}
+			mtxs[i].LayerID = nextLayer
+			mtxs[i].BlockID = nextBlock
+		}
 	}
 
 	byPrincipal := groupTXsByPrincipal(logger, mtxs)
@@ -360,16 +360,11 @@ func (ac *accountCache) applyLayer(
 	bid types.BlockID,
 	appliedByNonce map[uint64]types.TransactionID,
 ) error {
-	var (
-		nextNonce = ac.startNonce
-		hesNext   bool
-		tid       types.TransactionID
-	)
+	nextNonce := ac.startNonce
 	for {
-		if tid, hesNext = appliedByNonce[nextNonce]; !hesNext {
+		if _, ok := appliedByNonce[nextNonce]; !ok {
 			break
 		}
-		delete(ac.cachedTXs, tid)
 		nextNonce++
 	}
 
@@ -389,6 +384,18 @@ func (ac *accountCache) applyLayer(
 			log.Uint64("cache_nonce", nextNonce),
 			log.Uint64("state_nonce", newNonce))
 		return errBadNonceInCache
+	}
+
+	offset := getNonceOffset(ac.startNonce, nextNonce)
+	if offset < 0 {
+		return errBadNonce
+	}
+	if offset > 1 && newBalance < ac.txsByNonce[offset-1].postBalance {
+		logger.With().Error("unexpected conservative balance",
+			log.Uint64("nonce", nextNonce),
+			log.Uint64("balance", newBalance),
+			log.Uint64("projected", ac.txsByNonce[0].postBalance))
+		return errBadBalanceInCache
 	}
 
 	if err := tp.ApplyLayer(lid, bid, ac.addr, appliedByNonce); err != nil {
@@ -414,47 +421,11 @@ func (ac *accountCache) applyLayer(
 // NOTE: this is the only point in time when we reconsider those previously rejected txs,
 // because applying a layer changes the conservative balance in the cache.
 func (ac *accountCache) resetAfterApply(logger log.Log, tp txProvider, nextNonce, newBalance uint64, applied types.LayerID) error {
-	offset := getNonceOffset(ac.startNonce, nextNonce)
-	if offset < 0 {
-		return errBadNonce
-	}
-	ac.txsByNonce = ac.txsByNonce[offset:]
+	ac.removeFromOffset(0)
+	ac.txsByNonce = make([]*sameNonceTXs, 0, maxTXsPerAcct)
 	ac.startNonce = nextNonce
-
-	// TODO test the case where ac.txsByNonce is empty but DB has more
-	// previously rejected txs with the next nonce
-	if len(ac.txsByNonce) > 0 && ac.txsByNonce[0].postBalance < newBalance {
-		logger.With().Error("unexpected conservative balance",
-			log.Uint64("balance", newBalance),
-			log.Uint64("projected", ac.txsByNonce[0].postBalance))
-		return errBadBalanceInCache
-	}
-
-	toRemove := len(ac.txsByNonce)
-	balance := newBalance
-	for i, nonceTXs := range ac.txsByNonce {
-		ntxs, err := resetLayerForNonce(logger, tp, ac.addr, nonceTXs.nonce(), applied)
-		if err != nil {
-			return err
-		}
-		newBest := findBest(ntxs, balance)
-		if newBest == nil {
-			toRemove = i
-			break
-		}
-		if err = ac.accept(logger, newBest, balance); err != nil {
-			return err
-		}
-		balance = ac.availBalance()
-	}
-
-	if toRemove < len(ac.txsByNonce) {
-		ac.removeFromOffset(toRemove)
-		return nil
-	}
-
-	// check if there are txs previously rejected due to insufficient balance
-	return ac.addPendingFromNonce(logger, tp, ac.nextNonce())
+	ac.startBalance = newBalance
+	return ac.addPendingFromNonce(logger, tp, ac.startNonce, applied)
 }
 
 func (ac *accountCache) removeFromOffset(offset int) {
@@ -465,7 +436,7 @@ func (ac *accountCache) removeFromOffset(offset int) {
 }
 
 func (ac *accountCache) shouldEvict() bool {
-	return len(ac.txsByNonce) == 0 && !ac.hasGapInDB
+	return len(ac.txsByNonce) == 0 && !ac.gapInDB
 }
 
 type cache struct {
@@ -565,11 +536,18 @@ func (c *cache) Add(tx *types.Transaction, received time.Time) error {
 	return nil
 }
 
-// AddToLayer associates the transactions to a layer.
+// Get gets a transaction from the cache.
+func (c *cache) Get(tid types.TransactionID) *types.NanoTX {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cachedTXs[tid]
+}
+
+// AddToLayer associates the transactions to a layer and optionally a block.
 // A transaction is tagged with a layer when it's included in a proposal/block.
 // If a transaction is included in multiple proposals/blocks in different layers,
 // the lowest layer is retained.
-func (c *cache) AddToLayer(lid types.LayerID, tids []types.TransactionID) error {
+func (c *cache) AddToLayer(lid types.LayerID, bid types.BlockID, tids []types.TransactionID) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -578,7 +556,7 @@ func (c *cache) AddToLayer(lid types.LayerID, tids []types.TransactionID) error 
 			// transaction is not considered best in its nonce group
 			return nil
 		}
-		c.cachedTXs[tid].UpdateLayerMaybe(lid)
+		c.cachedTXs[tid].UpdateLayerMaybe(lid, bid)
 	}
 	return nil
 }
