@@ -44,4 +44,5 @@ type txProvider interface {
 	SetNextLayerBlock(types.TransactionID, types.LayerID) (types.LayerID, types.BlockID, error)
 	GetAllPending() ([]*types.MeshTransaction, error)
 	GetAcctPendingFromNonce(types.Address, uint64) ([]*types.MeshTransaction, error)
+	LastAppliedLayer() (types.LayerID, error)
 }

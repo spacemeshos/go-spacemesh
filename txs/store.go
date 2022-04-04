@@ -21,6 +21,11 @@ func newStore(db *sql.Database, logger log.Log) *store {
 	}
 }
 
+// LastAppliedLayer gets the last applied layer in the database.
+func (s *store) LastAppliedLayer() (types.LayerID, error) {
+	return types.LayerID{}, nil
+}
+
 // Add adds a transaction to the database.
 func (s *store) Add(tx *types.Transaction, received time.Time) error {
 	return nil
@@ -67,7 +72,8 @@ func (s *store) DiscardNonceBelow(addr types.Address, nonce uint64) error {
 	return nil
 }
 
-// UndoLayers resets all transactions that were applied/discarded between `from` and the most recent layer.
+// UndoLayers resets all transactions that were applied/discarded between `from` and the most recent layer,
+// and reset their layers if they were included in a proposal/block.
 func (s *store) UndoLayers(from types.LayerID) error {
 	return nil
 }
@@ -79,11 +85,6 @@ func (s *store) SetNextLayerBlock(tid types.TransactionID, lid types.LayerID) (t
 
 // GetAllPending gets all pending transactions for all accounts from database.
 func (s *store) GetAllPending() ([]*types.MeshTransaction, error) {
-	return nil, nil
-}
-
-// GetAcctPendingAtNonce gets all pending transactions with nonce == `nonce` for an account.
-func (s *store) GetAcctPendingAtNonce(addr types.Address, nonce uint64) ([]*types.MeshTransaction, error) {
 	return nil, nil
 }
 

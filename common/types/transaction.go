@@ -132,6 +132,11 @@ func (t *Transaction) GetFee() uint64 {
 	return t.Fee
 }
 
+// Spending returns the total amount spent on by this transaction.
+func (t *Transaction) Spending() uint64 {
+	return t.Fee + t.Amount
+}
+
 // GetRecipient returns the transaction recipient.
 func (t *Transaction) GetRecipient() Address {
 	return t.Recipient

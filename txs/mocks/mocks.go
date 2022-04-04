@@ -376,21 +376,6 @@ func (mr *MocktxProviderMockRecorder) Get(arg0 interface{}) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Get", reflect.TypeOf((*MocktxProvider)(nil).Get), arg0)
 }
 
-// GetAcctPendingAtNonce mocks base method.
-func (m *MocktxProvider) GetAcctPendingAtNonce(arg0 types.Address, arg1 uint64) ([]*types.MeshTransaction, error) {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetAcctPendingAtNonce", arg0, arg1)
-	ret0, _ := ret[0].([]*types.MeshTransaction)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
-}
-
-// GetAcctPendingAtNonce indicates an expected call of GetAcctPendingAtNonce.
-func (mr *MocktxProviderMockRecorder) GetAcctPendingAtNonce(arg0, arg1 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAcctPendingAtNonce", reflect.TypeOf((*MocktxProvider)(nil).GetAcctPendingAtNonce), arg0, arg1)
-}
-
 // GetAcctPendingFromNonce mocks base method.
 func (m *MocktxProvider) GetAcctPendingFromNonce(arg0 types.Address, arg1 uint64) ([]*types.MeshTransaction, error) {
 	m.ctrl.T.Helper()
@@ -464,6 +449,21 @@ func (m *MocktxProvider) Has(arg0 types.TransactionID) (bool, error) {
 func (mr *MocktxProviderMockRecorder) Has(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Has", reflect.TypeOf((*MocktxProvider)(nil).Has), arg0)
+}
+
+// LastAppliedLayer mocks base method.
+func (m *MocktxProvider) LastAppliedLayer() (types.LayerID, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "LastAppliedLayer")
+	ret0, _ := ret[0].(types.LayerID)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// LastAppliedLayer indicates an expected call of LastAppliedLayer.
+func (mr *MocktxProviderMockRecorder) LastAppliedLayer() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "LastAppliedLayer", reflect.TypeOf((*MocktxProvider)(nil).LastAppliedLayer))
 }
 
 // SetNextLayerBlock mocks base method.
