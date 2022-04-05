@@ -548,6 +548,7 @@ func (c *cache) BuildFromScratch() error {
 	defer c.cleanupAccounts(toCleanup)
 
 	byPrincipal := groupTXsByPrincipal(c.logger, mtxs)
+	acctsAdded := 0
 	for principal, nonce2TXs := range byPrincipal {
 		c.createAcctIfNotPresent(principal)
 		if err = c.pending[principal].addBatch(c.logger, nonce2TXs); err != nil {
@@ -557,8 +558,11 @@ func (c *cache) BuildFromScratch() error {
 			c.logger.With().Warning("account has pending txs but none feasible",
 				principal,
 				log.Array("batch", nonceMarshaller(nonce2TXs)))
+		} else {
+			acctsAdded++
 		}
 	}
+	c.logger.Info("added pending tx for %d accounts", acctsAdded)
 	return nil
 }
 
