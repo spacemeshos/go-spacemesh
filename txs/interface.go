@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
+	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
@@ -27,7 +28,7 @@ type svmState interface {
 }
 
 type conStateCache interface {
-	GetMempool() (map[types.Address][]*types.NanoTX, error)
+	GetMempool() (map[types.Address][]*txtypes.NanoTX, error)
 }
 
 type txProvider interface {

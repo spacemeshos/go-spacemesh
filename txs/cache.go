@@ -8,6 +8,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
 const (
@@ -28,7 +29,7 @@ var (
 )
 
 type sameNonceTXs struct {
-	best        *types.NanoTX
+	best        *txtypes.NanoTX
 	postBalance uint64
 }
 
@@ -66,7 +67,7 @@ type accountCache struct {
 	// TTL with sub-nonce should make this problem obsolete.
 	moreInDB bool
 
-	cachedTXs map[types.TransactionID]*types.NanoTX // shared with the cache instance
+	cachedTXs map[types.TransactionID]*txtypes.NanoTX // shared with the cache instance
 }
 
 func (ac *accountCache) nextNonce() uint64 {
@@ -80,7 +81,7 @@ func (ac *accountCache) availBalance() uint64 {
 	return ac.txsByNonce[len(ac.txsByNonce)-1].postBalance
 }
 
-func (ac *accountCache) accept(logger log.Log, ntx *types.NanoTX, balance uint64) error {
+func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint64) error {
 	idx := getNonceOffset(ac.startNonce, ntx.Nonce)
 	if idx < 0 {
 		logger.With().Error("bad nonce",
@@ -162,7 +163,7 @@ func nonceMarshaller(any interface{}) log.ArrayMarshaler {
 		for nonce := range nonce2Tid {
 			allNonce = append(allNonce, nonce)
 		}
-	} else if nonce2TXs, ok := any.(map[uint64][]*types.NanoTX); ok {
+	} else if nonce2TXs, ok := any.(map[uint64][]*txtypes.NanoTX); ok {
 		allNonce = make([]uint64, 0, len(nonce2TXs))
 		for nonce := range nonce2TXs {
 			allNonce = append(allNonce, nonce)
@@ -177,7 +178,7 @@ func nonceMarshaller(any interface{}) log.ArrayMarshaler {
 	})
 }
 
-func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*types.NanoTX) error {
+func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes.NanoTX) error {
 	var (
 		oldNonce  = ac.nextNonce()
 		nextNonce = oldNonce
@@ -234,8 +235,8 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*types.N
 	return nil
 }
 
-func findBest(ntxs []*types.NanoTX, balance uint64) *types.NanoTX {
-	var best *types.NanoTX
+func findBest(ntxs []*txtypes.NanoTX, balance uint64) *txtypes.NanoTX {
+	var best *txtypes.NanoTX
 	for _, ntx := range ntxs {
 		if balance >= ntx.MaxSpending() &&
 			(best == nil || ntx.Better(best)) {
@@ -258,7 +259,7 @@ func getNonceOffset(start, end uint64) int {
 	return offset
 }
 
-func (ac *accountCache) addToExistingNonce(logger log.Log, ntx *types.NanoTX) error {
+func (ac *accountCache) addToExistingNonce(logger log.Log, ntx *txtypes.NanoTX) error {
 	idx := getNonceOffset(ac.startNonce, ntx.Nonce)
 	if idx < 0 {
 		return errBadNonce
@@ -296,7 +297,7 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 		return errNonceTooBig
 	}
 
-	ntx := types.NewNanoTX(&types.MeshTransaction{
+	ntx := txtypes.NewNanoTX(&types.MeshTransaction{
 		Transaction: *tx,
 		Received:    received,
 		LayerID:     types.LayerID{},
@@ -371,8 +372,8 @@ func (ac *accountCache) getMempoolOffset() int {
 	return -1
 }
 
-func (ac *accountCache) getMempool(logger log.Log) ([]*types.NanoTX, error) {
-	bests := make([]*types.NanoTX, 0, maxTXsPerAcct)
+func (ac *accountCache) getMempool(logger log.Log) ([]*txtypes.NanoTX, error) {
+	bests := make([]*txtypes.NanoTX, 0, maxTXsPerAcct)
 	offset := ac.getMempoolOffset()
 	if offset < 0 {
 		return nil, nil
@@ -487,7 +488,7 @@ type cache struct {
 	mu        sync.Mutex
 	applied   types.LayerID
 	pending   map[types.Address]*accountCache
-	cachedTXs map[types.TransactionID]*types.NanoTX // shared with accountCache instances
+	cachedTXs map[types.TransactionID]*txtypes.NanoTX // shared with accountCache instances
 }
 
 func newCache(tp txProvider, s stateFunc, logger log.Log) *cache {
@@ -496,22 +497,22 @@ func newCache(tp txProvider, s stateFunc, logger log.Log) *cache {
 		tp:        tp,
 		stateF:    s,
 		pending:   make(map[types.Address]*accountCache),
-		cachedTXs: make(map[types.TransactionID]*types.NanoTX),
+		cachedTXs: make(map[types.TransactionID]*txtypes.NanoTX),
 	}
 }
 
-func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[types.Address]map[uint64][]*types.NanoTX {
-	byPrincipal := make(map[types.Address]map[uint64][]*types.NanoTX)
+func groupTXsByPrincipal(logger log.Log, mtxs []*types.MeshTransaction) map[types.Address]map[uint64][]*txtypes.NanoTX {
+	byPrincipal := make(map[types.Address]map[uint64][]*txtypes.NanoTX)
 	for _, mtx := range mtxs {
 		principal := mtx.Origin()
 		if _, ok := byPrincipal[principal]; !ok {
-			byPrincipal[principal] = make(map[uint64][]*types.NanoTX)
+			byPrincipal[principal] = make(map[uint64][]*txtypes.NanoTX)
 		}
 		if _, ok := byPrincipal[principal][mtx.AccountNonce]; !ok {
-			byPrincipal[principal][mtx.AccountNonce] = make([]*types.NanoTX, 0, maxTXsPerNonce)
+			byPrincipal[principal][mtx.AccountNonce] = make([]*txtypes.NanoTX, 0, maxTXsPerNonce)
 		}
 		if len(byPrincipal[principal][mtx.AccountNonce]) < maxTXsPerNonce {
-			byPrincipal[principal][mtx.AccountNonce] = append(byPrincipal[principal][mtx.AccountNonce], types.NewNanoTX(mtx))
+			byPrincipal[principal][mtx.AccountNonce] = append(byPrincipal[principal][mtx.AccountNonce], txtypes.NewNanoTX(mtx))
 		} else {
 			logger.With().Warning("too many txs in same nonce. ignoring tx",
 				mtx.ID(),
@@ -610,7 +611,7 @@ func (c *cache) Add(tx *types.Transaction, received time.Time) error {
 }
 
 // Get gets a transaction from the cache.
-func (c *cache) Get(tid types.TransactionID) *types.NanoTX {
+func (c *cache) Get(tid types.TransactionID) *txtypes.NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.cachedTXs[tid]
@@ -729,11 +730,11 @@ func (c *cache) GetProjection(addr types.Address) (uint64, uint64) {
 }
 
 // GetMempool returns all the transactions that should be included in the next proposal.
-func (c *cache) GetMempool() (map[types.Address][]*types.NanoTX, error) {
+func (c *cache) GetMempool() (map[types.Address][]*txtypes.NanoTX, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	all := make(map[types.Address][]*types.NanoTX)
+	all := make(map[types.Address][]*txtypes.NanoTX)
 	for addr, accCache := range c.pending {
 		txs, err := accCache.getMempool(c.logger)
 		if err != nil {

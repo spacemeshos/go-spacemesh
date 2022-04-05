@@ -11,10 +11,11 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log/logtest"
 	"github.com/spacemeshos/go-spacemesh/txs/mocks"
+	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
-func makeNanoTX(addr types.Address, fee uint64, received time.Time) *types.NanoTX {
-	return &types.NanoTX{
+func makeNanoTX(addr types.Address, fee uint64, received time.Time) *txtypes.NanoTX {
+	return &txtypes.NanoTX{
 		Tid:       types.RandomTransactionID(),
 		Principal: addr,
 		Fee:       fee,
@@ -22,7 +23,7 @@ func makeNanoTX(addr types.Address, fee uint64, received time.Time) *types.NanoT
 	}
 }
 
-func makeMempool() (map[types.Address][]*types.NanoTX, []types.TransactionID) {
+func makeMempool() (map[types.Address][]*txtypes.NanoTX, []types.TransactionID) {
 	// acct:   [(fee, received) ....]
 	// acct_0: [(4, 3), (4, 4), (4, 5)]
 	// acct_1: [(2, 0), (2, 3)]
@@ -31,7 +32,7 @@ func makeMempool() (map[types.Address][]*types.NanoTX, []types.TransactionID) {
 	addr0 := types.Address{1, 2, 3}
 	addr1 := types.Address{2, 3, 4}
 	addr2 := types.Address{3, 4, 5}
-	mempool := map[types.Address][]*types.NanoTX{
+	mempool := map[types.Address][]*txtypes.NanoTX{
 		addr0: {
 			makeNanoTX(addr0, 4, now.Add(time.Second*1)),
 			makeNanoTX(addr0, 4, now.Add(time.Second*4)),

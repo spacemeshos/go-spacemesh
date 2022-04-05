@@ -10,6 +10,7 @@ import (
 
 	gomock "github.com/golang/mock/gomock"
 	types "github.com/spacemeshos/go-spacemesh/common/types"
+	types0 "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
 // MockconservativeState is a mock of conservativeState interface.
@@ -254,10 +255,10 @@ func (m *MockconStateCache) EXPECT() *MockconStateCacheMockRecorder {
 }
 
 // GetMempool mocks base method.
-func (m *MockconStateCache) GetMempool() (map[types.Address][]*types.NanoTX, error) {
+func (m *MockconStateCache) GetMempool() (map[types.Address][]*types0.NanoTX, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetMempool")
-	ret0, _ := ret[0].(map[types.Address][]*types.NanoTX)
+	ret0, _ := ret[0].(map[types.Address][]*types0.NanoTX)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

@@ -6,6 +6,7 @@ import (
 
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/log"
+	txtypes "github.com/spacemeshos/go-spacemesh/txs/types"
 )
 
 type item struct {
@@ -71,7 +72,7 @@ type mempoolIterator struct {
 	logger  log.Log
 	txsLeft int
 	pq      priorityQueue
-	txs     map[types.Address][]*types.NanoTX
+	txs     map[types.Address][]*txtypes.NanoTX
 }
 
 // newMempoolIterator builds and returns a mempoolIterator.
@@ -121,7 +122,7 @@ func (mi *mempoolIterator) buildPQ() {
 	heap.Init(&mi.pq)
 }
 
-func (mi *mempoolIterator) getNext(addr types.Address) *types.NanoTX {
+func (mi *mempoolIterator) getNext(addr types.Address) *txtypes.NanoTX {
 	if _, ok := mi.txs[addr]; !ok {
 		return nil
 	}
