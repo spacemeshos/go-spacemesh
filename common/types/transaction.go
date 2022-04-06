@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/spacemeshos/ed25519"
 
@@ -131,6 +132,11 @@ func (t *Transaction) GetFee() uint64 {
 	return t.Fee
 }
 
+// Spending returns the total amount spent on by this transaction.
+func (t *Transaction) Spending() uint64 {
+	return t.Fee + t.Amount
+}
+
 // GetRecipient returns the transaction recipient.
 func (t *Transaction) GetRecipient() Address {
 	return t.Recipient
@@ -191,9 +197,10 @@ const (
 // MeshTransaction is stored in the mesh and included in the block.
 type MeshTransaction struct {
 	Transaction
-	LayerID LayerID
-	BlockID BlockID
-	State   TXState
+	LayerID  LayerID
+	BlockID  BlockID
+	State    TXState
+	Received time.Time
 }
 
 // InnerTransaction includes all of a transaction's fields, except the signature (origin and id aren't stored).

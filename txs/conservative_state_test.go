@@ -21,7 +21,7 @@ import (
 
 const (
 	numTXsInProposal = 5
-	prevBalance      = uint64(1000)
+	defaultBalance   = uint64(1000)
 	amount           = uint64(10)
 	fee              = uint64(5)
 )
@@ -107,7 +107,7 @@ func TestSelectTXsForProposal(t *testing.T) {
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
-		tcs.mSVM.EXPECT().GetBalance(addr).Return(prevBalance).Times(1)
+		tcs.mSVM.EXPECT().GetBalance(addr).Return(defaultBalance).Times(1)
 		tcs.mSVM.EXPECT().GetNonce(addr).Return(uint64(0)).Times(1)
 		tx1 := newTx(t, 0, amount, fee, signer)
 		// all the TXs with nonce 0 are pending in database
@@ -130,7 +130,7 @@ func TestSelectTXsForProposal_ExhaustMemPool(t *testing.T) {
 	for i := 0; i < numTXs; i++ {
 		signer := signing.NewEdSigner()
 		addr := types.GenerateAddress(signer.PublicKey().Bytes())
-		tcs.mSVM.EXPECT().GetBalance(addr).Return(prevBalance).Times(1)
+		tcs.mSVM.EXPECT().GetBalance(addr).Return(defaultBalance).Times(1)
 		tcs.mSVM.EXPECT().GetNonce(addr).Return(uint64(0)).Times(1)
 		tx1 := newTx(t, 0, amount, fee, signer)
 		// all the TXs with nonce 0 are pending in database
@@ -153,7 +153,7 @@ func TestSelectTXsForProposal_SamePrincipal(t *testing.T) {
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
 	numTXs := numTXsInProposal * 2
 	numInDBs := numTXsInProposal
-	tcs.mSVM.EXPECT().GetBalance(addr).Return(prevBalance).Times(1)
+	tcs.mSVM.EXPECT().GetBalance(addr).Return(defaultBalance).Times(1)
 	tcs.mSVM.EXPECT().GetNonce(addr).Return(uint64(0)).Times(1)
 	for i := 0; i < numInDBs; i++ {
 		tx := newTx(t, uint64(i), amount, fee, signer)
@@ -184,9 +184,9 @@ func TestSelectTXsForProposal_TwoPrincipals(t *testing.T) {
 	addr1 := types.GenerateAddress(signer1.PublicKey().Bytes())
 	signer2 := signing.NewEdSigner()
 	addr2 := types.GenerateAddress(signer2.PublicKey().Bytes())
-	tcs.mSVM.EXPECT().GetBalance(addr1).Return(prevBalance * 100).Times(1)
+	tcs.mSVM.EXPECT().GetBalance(addr1).Return(defaultBalance * 100).Times(1)
 	tcs.mSVM.EXPECT().GetNonce(addr1).Return(uint64(0)).Times(1)
-	tcs.mSVM.EXPECT().GetBalance(addr2).Return(prevBalance * 100).Times(1)
+	tcs.mSVM.EXPECT().GetBalance(addr2).Return(defaultBalance * 100).Times(1)
 	tcs.mSVM.EXPECT().GetNonce(addr2).Return(uint64(0)).Times(1)
 	for i := 0; i < numInDBs; i++ {
 		tx := newTx(t, uint64(i), amount, fee, signer1)
@@ -230,12 +230,12 @@ func TestGetProjection(t *testing.T) {
 	writeToMemPool(t, tcs.ConservativeState, tx2)
 
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
-	tcs.mSVM.EXPECT().GetBalance(addr).Return(prevBalance).Times(1)
+	tcs.mSVM.EXPECT().GetBalance(addr).Return(defaultBalance).Times(1)
 	tcs.mSVM.EXPECT().GetNonce(addr).Return(nextNonce).Times(1)
 	nonce, balance, err := tcs.GetProjection(addr)
 	require.NoError(t, err)
 	assert.EqualValues(t, nextNonce+2, nonce)
-	assert.EqualValues(t, prevBalance-2*(amount+fee), balance)
+	assert.EqualValues(t, defaultBalance-2*(amount+fee), balance)
 }
 
 func TestAddTxToMempool(t *testing.T) {
@@ -253,7 +253,7 @@ func TestAddTxToMempool_CheckValidity(t *testing.T) {
 	tcs := createConservativeState(t)
 	signer := signing.NewEdSigner()
 	addr := types.GenerateAddress(signer.PublicKey().Bytes())
-	tcs.mSVM.EXPECT().GetBalance(addr).Return(prevBalance).Times(1)
+	tcs.mSVM.EXPECT().GetBalance(addr).Return(defaultBalance).Times(1)
 	tcs.mSVM.EXPECT().GetNonce(addr).Return(uint64(0)).Times(1)
 	tx := newTx(t, uint64(0), amount, fee, signer)
 	assert.NoError(t, tcs.AddTxToMemPool(tx, true))
