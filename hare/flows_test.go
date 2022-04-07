@@ -466,7 +466,7 @@ func Test_multipleCPs(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 	require.Eventually(t, func() bool {
 		for _, ps := range pubsubs {
-			if len(ps.ProtocolPeers(protoName)) != len(mesh.Hosts())-1 {
+			if len(ps.ProtocolPeers(ProtoName)) != len(mesh.Hosts())-1 {
 				return false
 			}
 		}
@@ -561,7 +561,7 @@ func Test_multipleCPsAndIterations(t *testing.T) {
 	require.NoError(t, mesh.ConnectAllButSelf())
 	require.Eventually(t, func() bool {
 		for _, ps := range pubsubs {
-			if len(ps.ProtocolPeers(protoName)) != len(mesh.Hosts())-1 {
+			if len(ps.ProtocolPeers(ProtoName)) != len(mesh.Hosts())-1 {
 				return false
 			}
 		}

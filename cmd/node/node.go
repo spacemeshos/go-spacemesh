@@ -160,6 +160,7 @@ type Service interface {
 // HareService is basic definition of hare algorithm service, providing consensus results for a layer.
 type HareService interface {
 	Service
+	GetHareMsgHandler() pubsub.GossipHandler
 }
 
 // TickProvider is an interface to a glopbal system clock that releases ticks on each layer.
@@ -675,6 +676,10 @@ func (app *App) initServices(ctx context.Context,
 	app.host.Register(activation.AtxProtocol, pubsub.ChainGossipHandler(syncHandler, atxDB.HandleGossipAtx))
 	app.host.Register(txs.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
+	hareGossipHandler := rabbit.GetHareMsgHandler()
+	if hareGossipHandler != nil {
+		app.host.Register(hare.ProtoName, pubsub.ChainGossipHandler(syncHandler, rabbit.GetHareMsgHandler()))
+	}
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
