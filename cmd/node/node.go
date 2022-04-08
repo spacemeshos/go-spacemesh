@@ -677,9 +677,10 @@ func (app *App) initServices(ctx context.Context,
 	app.host.Register(txs.IncomingTxProtocol, pubsub.ChainGossipHandler(syncHandler, txHandler.HandleGossipTransaction))
 	app.host.Register(activation.PoetProofProtocol, poetListener.HandlePoetProofMessage)
 	hareGossipHandler := rabbit.GetHareMsgHandler()
-	if hareGossipHandler != nil {
-		app.host.Register(hare.ProtoName, pubsub.ChainGossipHandler(syncHandler, rabbit.GetHareMsgHandler()))
+	if hareGossipHandler == nil {
+		app.log.Panic("hare message handler missing")
 	}
+	app.host.Register(hare.ProtoName, pubsub.ChainGossipHandler(syncHandler, hareGossipHandler))
 
 	app.proposalBuilder = proposalBuilder
 	app.proposalListener = proposalListener
