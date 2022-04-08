@@ -153,7 +153,7 @@ func createConsensusProcess(tb testing.TB, isHonest bool, cfg config.Config, ora
 	broker.mockSyncS.EXPECT().IsSynced(gomock.Any()).Return(true).AnyTimes()
 	broker.mockStateQ.EXPECT().IsIdentityActiveOnConsensusView(gomock.Any(), gomock.Any(), gomock.Any()).Return(true, nil).AnyTimes()
 	broker.Start(context.TODO())
-	network.Register(protoName, broker.HandleMessage)
+	network.Register(ProtoName, broker.HandleMessage)
 	output := make(chan TerminationOutput)
 	certs := make(chan CertificationOutput)
 	signing := signing2.NewEdSigner()

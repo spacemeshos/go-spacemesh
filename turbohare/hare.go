@@ -8,6 +8,8 @@ import (
 	"github.com/spacemeshos/go-spacemesh/common/types"
 	"github.com/spacemeshos/go-spacemesh/hare/config"
 	"github.com/spacemeshos/go-spacemesh/log"
+	"github.com/spacemeshos/go-spacemesh/p2p"
+	"github.com/spacemeshos/go-spacemesh/p2p/pubsub"
 )
 
 type meshProvider interface {
@@ -112,4 +114,11 @@ func (h *SuperHare) Start(ctx context.Context) error {
 // Close is a stup to support service API.
 func (h *SuperHare) Close() {
 	close(h.closeChannel)
+}
+
+// GetHareMsgHandler returns the gossip handler for hare protocol message.
+func (h *SuperHare) GetHareMsgHandler() pubsub.GossipHandler {
+	return func(context.Context, p2p.Peer, []byte) pubsub.ValidationResult {
+		return pubsub.ValidationAccept
+	}
 }
