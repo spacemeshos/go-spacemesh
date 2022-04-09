@@ -91,17 +91,14 @@ func (s TransactionService) getTransactionAndStatus(txID types.TransactionID) (*
 	switch tx.State {
 	case types.MEMPOOL:
 		state = pb.TransactionState_TRANSACTION_STATE_MEMPOOL
-	case types.PENDING:
+	case types.PROPOSAL, types.BLOCK:
 		state = pb.TransactionState_TRANSACTION_STATE_MESH
 	case types.APPLIED:
 		state = pb.TransactionState_TRANSACTION_STATE_PROCESSED
+	case types.DISCARDED:
+		state = pb.TransactionState_TRANSACTION_STATE_REJECTED
 	default:
-		nonce := s.conState.GetNonce(tx.Origin())
-		if nonce > tx.AccountNonce {
-			state = pb.TransactionState_TRANSACTION_STATE_REJECTED
-		} else {
-			state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
-		}
+		state = pb.TransactionState_TRANSACTION_STATE_UNSPECIFIED
 	}
 	return &tx.Transaction, state
 }

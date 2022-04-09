@@ -275,7 +275,7 @@ func (t *ConStateAPIMock) GetLayerApplied(txID types.TransactionID) *types.Layer
 func (t *ConStateAPIMock) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
 	tx, ok := t.returnTx[id]
 	if ok {
-		return &types.MeshTransaction{Transaction: *tx, State: types.PENDING}, nil
+		return &types.MeshTransaction{Transaction: *tx, State: types.BLOCK}, nil
 	}
 	tx, ok = t.poolByTxid[id]
 	if ok {
