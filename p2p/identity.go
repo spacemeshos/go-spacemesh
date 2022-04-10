@@ -42,7 +42,8 @@ func identityInfoFromDir(dir string) (*identityInfo, error) {
 	return &info, nil
 }
 
-func ensureIdentity(dir string) (crypto.PrivKey, error) {
+// EnsureIdentity generates an identity key file in given directory
+func EnsureIdentity(dir string) (crypto.PrivKey, error) {
 	// TODO add crc check
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("ensure that directory %s exist: %w", dir, err)

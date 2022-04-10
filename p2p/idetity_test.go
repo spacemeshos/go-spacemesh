@@ -10,7 +10,7 @@ import (
 
 func TestPersistedIdentity(t *testing.T) {
 	dir := t.TempDir()
-	_, err := ensureIdentity(dir)
+	_, err := EnsureIdentity(dir)
 	require.NoError(t, err)
 
 	info, err := identityInfoFromDir(dir)
