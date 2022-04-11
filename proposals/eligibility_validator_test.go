@@ -526,7 +526,8 @@ func TestCheckEligibility(t *testing.T) {
 		}
 		h.SetID(&b.AtxID)
 		tv.mdb.EXPECT().GetAtxHeader(b.AtxID).Return(h, nil).Times(1)
-		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b.ID(), beacon, h.GetWeight()).Times(1)
+		layerWeight := h.GetWeight() * uint64(len(b.EligibilityProofs)) / uint64(eligibleSlots)
+		tv.mbc.EXPECT().ReportBeaconFromBallot(epoch, b.ID(), beacon, layerWeight).Times(1)
 		eligible, err := tv.CheckEligibility(context.TODO(), b)
 		assert.NoError(t, err)
 		assert.True(t, eligible)

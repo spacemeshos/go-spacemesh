@@ -137,7 +137,8 @@ func (v *Validator) CheckEligibility(ctx context.Context, ballot *types.Ballot) 
 		beacon,
 	)
 
-	v.beacons.ReportBeaconFromBallot(epoch, ballot.ID(), beacon, weight)
+	layerWeight := weight * uint64(len(ballot.EligibilityProofs)) / uint64(numEligibleSlots)
+	v.beacons.ReportBeaconFromBallot(epoch, ballot.ID(), beacon, layerWeight)
 	return true, nil
 }
 
