@@ -51,6 +51,16 @@ func TestDB_AddProposal(t *testing.T) {
 	require.NoError(t, td.AddProposal(context.TODO(), p))
 }
 
+func TestDB_DelProposal(t *testing.T) {
+	td := createTestDB(t)
+	layerID := types.GetEffectiveGenesis().Add(10)
+	p := createProposalAndSaveBallot(t, td, layerID)
+	require.NoError(t, td.AddProposal(context.TODO(), p))
+	require.True(t, td.HasProposal(p.ID()))
+	require.NoError(t, td.DelProposal(context.TODO(), p.ID()))
+	require.False(t, td.HasProposal(p.ID()))
+}
+
 func TestDB_HasProposal(t *testing.T) {
 	td := createTestDB(t)
 	layerID := types.GetEffectiveGenesis().Add(10)

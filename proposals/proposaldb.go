@@ -57,6 +57,15 @@ func (db *DB) AddProposal(ctx context.Context, p *types.Proposal) error {
 	return nil
 }
 
+// DelProposal dels a proposal from the database
+func (db *DB) DelProposal(ctx context.Context, id types.ProposalID) error {
+	if err := proposals.Del(db.sqlDB, id); err != nil {
+		return fmt.Errorf("could not remove Proposal %v from database: %w", id, err)
+	}
+	db.logger.WithContext(ctx).With().Info("removed proposal from database", id)
+	return nil
+}
+
 // GetProposal retrieves a proposal from the database.
 func (db *DB) GetProposal(id types.ProposalID) (*types.Proposal, error) {
 	return proposals.Get(db.sqlDB, id)

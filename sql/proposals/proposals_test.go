@@ -83,3 +83,34 @@ func TestGet(t *testing.T) {
 	require.NoError(t, err)
 	require.EqualValues(t, proposal, got)
 }
+
+func TestDel(t *testing.T) {
+	db := sql.InMemory()
+	pub := []byte{1, 1}
+	ballot := types.NewExistingBallot(types.BallotID{1}, []byte{1, 1}, pub,
+		types.InnerBallot{})
+
+	require.NoError(t, ballots.Add(db, &ballot))
+	require.NoError(t, identities.SetMalicious(db, pub))
+	proposal := &types.Proposal{
+		InnerProposal: types.InnerProposal{
+			Ballot: ballot,
+			TxIDs:  []types.TransactionID{{3, 4}},
+		},
+		Signature: []byte{5, 6},
+	}
+
+	proposal.SetID(types.ProposalID{7, 8})
+	var (
+		has bool
+		err error
+	)
+	require.NoError(t, Add(db, proposal))
+	has, err = Has(db, proposal.ID())
+	require.NoError(t, err)
+	require.True(t, has)
+	require.NoError(t, Del(db, proposal.ID()))
+	has, err = Has(db, proposal.ID())
+	require.NoError(t, err)
+	require.False(t, has)
+}

@@ -159,6 +159,20 @@ func Add(db sql.Executor, proposal *types.Proposal) error {
 	return nil
 }
 
+// Del removes a proposal for a given ID.
+func Del(db sql.Executor, id types.ProposalID) error {
+	_, err := db.Exec(`
+		delete from proposals where proposals.id = ?1;`,
+		func(stmt *sql.Statement) {
+			stmt.BindBytes(1, id.Bytes())
+		}, nil)
+
+	if err != nil {
+		return fmt.Errorf("delete proposal ID %v: %w", id, err)
+	}
+	return nil
+}
+
 func decodeProposal(stmt *sql.Statement) (*types.Proposal, error) {
 	ballotID := types.BallotID{}
 	stmt.ColumnBytes(5, ballotID[:])
