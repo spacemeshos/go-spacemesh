@@ -57,8 +57,22 @@ func TestDB_DelProposal(t *testing.T) {
 	p := createProposalAndSaveBallot(t, td, layerID)
 	require.NoError(t, td.AddProposal(context.TODO(), p))
 	require.True(t, td.HasProposal(p.ID()))
-	require.NoError(t, td.DelProposal(context.TODO(), p.ID()))
+	require.NoError(t, td.DelProposal(p.ID()))
 	require.False(t, td.HasProposal(p.ID()))
+}
+
+func TestDB_DelProposals(t *testing.T) {
+	td := createTestDB(t)
+	layerID := types.GetEffectiveGenesis().Add(10)
+	p1 := createProposalAndSaveBallot(t, td, layerID)
+	p2 := createProposalAndSaveBallot(t, td, layerID)
+	require.NoError(t, td.AddProposal(context.TODO(), p1))
+	require.NoError(t, td.AddProposal(context.TODO(), p2))
+	pids := []types.ProposalID{p1.ID(), p2.ID()}
+	require.NoError(t, td.DelProposals(pids))
+	require.False(t, td.HasProposal(p1.ID()))
+	require.False(t, td.HasProposal(p2.ID()))
+
 }
 
 func TestDB_HasProposal(t *testing.T) {

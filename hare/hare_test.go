@@ -155,6 +155,11 @@ func TestHare_collectOutputAndGetResult(t *testing.T) {
 			assert.ElementsMatch(t, proposalIDs, pids)
 			return proposals, nil
 		}).Times(1)
+	h.mockProposalDB.EXPECT().DelProposals(gomock.Any()).DoAndReturn(
+		func(pids []types.ProposalID) error {
+			assert.ElementsMatch(t, proposalIDs, pids)
+			return nil
+		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, proposals).Return(block, nil).Times(1)
 	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
 	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyrID, block.ID()).Times(1)
@@ -199,6 +204,11 @@ func TestHare_collectOutputGetResult_TerminateTooLate(t *testing.T) {
 		func(pids []types.ProposalID) ([]*types.Proposal, error) {
 			assert.ElementsMatch(t, proposalIDs, pids)
 			return proposals, nil
+		}).Times(1)
+	h.mockProposalDB.EXPECT().DelProposals(gomock.Any()).DoAndReturn(
+		func(pids []types.ProposalID) error {
+			assert.ElementsMatch(t, proposalIDs, pids)
+			return nil
 		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, proposals).Return(block, nil).Times(1)
 	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
@@ -276,6 +286,11 @@ func TestHare_onTick(t *testing.T) {
 		func(pids []types.ProposalID) ([]*types.Proposal, error) {
 			assert.ElementsMatch(t, types.ToProposalIDs(proposals), pids)
 			return proposals, nil
+		}).Times(1)
+	h.mockProposalDB.EXPECT().DelProposals(gomock.Any()).DoAndReturn(
+		func(pids []types.ProposalID) error {
+			assert.ElementsMatch(t, types.ToProposalIDs(proposals), pids)
+			return nil
 		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, proposals).Return(block, nil).Times(1)
 	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
@@ -365,6 +380,11 @@ func TestHare_onTick_BeaconFromRefBallot(t *testing.T) {
 			assert.ElementsMatch(t, types.ToProposalIDs(proposals), pids)
 			return proposals, nil
 		}).Times(1)
+	h.mockProposalDB.EXPECT().DelProposals(gomock.Any()).DoAndReturn(
+		func(pids []types.ProposalID) error {
+			assert.ElementsMatch(t, types.ToProposalIDs(proposals), pids)
+			return nil
+		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, proposals).Return(block, nil).Times(1)
 	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
 	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), lyrID, block.ID()).Times(1)
@@ -409,6 +429,7 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 
 	lyrID := types.GetEffectiveGenesis().Add(1)
 	beacon := types.RandomBeacon()
+	time.Sleep(1 * time.Millisecond)
 	epochBeacon := types.RandomBeacon()
 	proposals := []*types.Proposal{
 		randomProposal(lyrID, epochBeacon),
@@ -433,6 +454,11 @@ func TestHare_onTick_SomeBadBallots(t *testing.T) {
 		func(pids []types.ProposalID) ([]*types.Proposal, error) {
 			assert.ElementsMatch(t, types.ToProposalIDs(goodProposals), pids)
 			return goodProposals, nil
+		}).Times(1)
+	h.mockProposalDB.EXPECT().DelProposals(gomock.Any()).DoAndReturn(
+		func(pids []types.ProposalID) error {
+			assert.ElementsMatch(t, types.ToProposalIDs(goodProposals), pids)
+			return nil
 		}).Times(1)
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), lyrID, goodProposals).Return(block, nil).Times(1)
 	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
@@ -478,6 +504,7 @@ func TestHare_onTick_NoGoodBallots(t *testing.T) {
 
 	lyrID := types.GetEffectiveGenesis().Add(1)
 	beacon := types.RandomBeacon()
+	time.Sleep(1 * time.Millisecond)
 	epochBeacon := types.RandomBeacon()
 	proposals := []*types.Proposal{
 		randomProposal(lyrID, beacon),
@@ -668,6 +695,13 @@ func TestHare_WeakCoin(t *testing.T) {
 			assert.ElementsMatch(t, types.ToProposalIDs(proposals), pids)
 			return proposals, nil
 		}).Times(1)
+
+	h.mockProposalDB.EXPECT().DelProposals(gomock.Any()).DoAndReturn(
+		func(pids []types.ProposalID) error {
+			assert.ElementsMatch(t, types.ToProposalIDs(proposals), pids)
+			return nil
+		}).AnyTimes()
+
 	h.mockBlockGen.EXPECT().GenerateBlock(gomock.Any(), layerID, proposals).Return(block, nil).Times(1)
 	h.mockMeshDB.EXPECT().AddBlockWithTXs(gomock.Any(), block).Return(nil).Times(1)
 	h.mockMeshDB.EXPECT().ProcessLayerPerHareOutput(gomock.Any(), layerID, block.ID()).DoAndReturn(

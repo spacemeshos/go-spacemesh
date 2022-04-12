@@ -31,6 +31,7 @@ type meshProvider interface {
 type proposalProvider interface {
 	LayerProposals(types.LayerID) ([]*types.Proposal, error)
 	GetProposals([]types.ProposalID) ([]*types.Proposal, error)
+	DelProposals([]types.ProposalID) error
 }
 
 type blockGenerator interface {

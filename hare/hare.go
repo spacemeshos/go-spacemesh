@@ -241,6 +241,9 @@ func (h *Hare) collectOutput(ctx context.Context, output TerminationOutput) erro
 			return fmt.Errorf("hare save block: %w", err)
 		} else {
 			hareOutput = block.ID()
+			if err = h.pdb.DelProposals(pids); err != nil {
+				h.WithContext(ctx).With().Warning("failed to remove proposals from database", log.Err(err))
+			}
 		}
 	}
 	if err := h.mesh.ProcessLayerPerHareOutput(ctx, layerID, hareOutput); err != nil {

@@ -243,6 +243,20 @@ func (m *MockproposalProvider) EXPECT() *MockproposalProviderMockRecorder {
 	return m.recorder
 }
 
+// DelProposals mocks base method.
+func (m *MockproposalProvider) DelProposals(arg0 []types.ProposalID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DelProposals", arg0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DelProposals indicates an expected call of DelProposals.
+func (mr *MockproposalProviderMockRecorder) DelProposals(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DelProposals", reflect.TypeOf((*MockproposalProvider)(nil).DelProposals), arg0)
+}
+
 // GetProposals mocks base method.
 func (m *MockproposalProvider) GetProposals(arg0 []types.ProposalID) ([]*types.Proposal, error) {
 	m.ctrl.T.Helper()

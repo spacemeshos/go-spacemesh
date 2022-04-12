@@ -58,11 +58,24 @@ func (db *DB) AddProposal(ctx context.Context, p *types.Proposal) error {
 }
 
 // DelProposal dels a proposal from the database
-func (db *DB) DelProposal(ctx context.Context, id types.ProposalID) error {
+func (db *DB) DelProposal(id types.ProposalID) error {
 	if err := proposals.Del(db.sqlDB, id); err != nil {
 		return fmt.Errorf("could not remove Proposal %v from database: %w", id, err)
 	}
-	db.logger.WithContext(ctx).With().Info("removed proposal from database", id)
+
+	return nil
+}
+
+// DelProposals dels give set proposals from the database
+func (db *DB) DelProposals(pids []types.ProposalID) error {
+	var (
+		err error
+	)
+	for _, pid := range pids {
+		if err = db.DelProposal(pid); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
