@@ -313,6 +313,8 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 	var (
 		vQueue chan types.LayerID
 		vDone  chan struct{}
+		// for notify to rerun validate
+		vRerun chan types.LayerID
 		// number of attempts to start a validation goroutine
 		attempt = 0
 		// whether the data sync succeed. validation failure is not checked by design.
@@ -340,6 +342,18 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 					return false
 				}
 			}
+			select {
+			case rerunLayerID, ok := <-vRerun:
+				if ok {
+					logger.With().Debug("rerun validate from layer", rerunLayerID)
+					close(vQueue)
+					vQueue, vDone, vRerun = s.startValidating(ctx, s.run, attempt)
+					for l := rerunLayerID; l.Before(layerID); l = l.Add(1) {
+						vQueue <- l
+					}
+				}
+			default:
+			}
 			vQueue <- layerID
 			logger.With().Debug("finished data sync", layerID)
 		}
@@ -358,7 +372,7 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			logger.Info("all data synced but unable to advance processed layer after max attempts")
 			break
 		}
-		vQueue, vDone = s.startValidating(ctx, s.run, attempt)
+		vQueue, vDone, vRerun = s.startValidating(ctx, s.run, attempt)
 		success = attemptFunc()
 		close(vQueue)
 		select {
@@ -367,7 +381,6 @@ func (s *Syncer) synchronize(ctx context.Context) bool {
 			return false
 		}
 	}
-
 	s.setStateAfterSync(ctx, success)
 	logger.With().Info(fmt.Sprintf("finished sync run #%v", s.run),
 		log.Bool("success", success),
@@ -444,7 +457,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
 	if s.isClosed() {
 		return errors.New("shutdown")
 	}
-
 	s.logger.WithContext(ctx).With().Info("polling layer content", layerID)
 	if err := s.getLayerFromPeers(ctx, layerID); err != nil {
 		return err
@@ -453,7 +465,6 @@ func (s *Syncer) syncLayer(ctx context.Context, layerID types.LayerID) error {
 	if err := s.getATXs(ctx, layerID); err != nil {
 		return err
 	}
-
 	return nil
 }
 
@@ -509,11 +520,11 @@ func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
 		return false
 	}
 
-	epoch := layerID.GetEpoch()
-	if _, err := s.beacons.GetBeacon(epoch); err != nil {
-		s.logger.With().Info("skip validating layer: beacon not available", layerID, epoch)
-		return false
-	}
+	//epoch := layerID.GetEpoch()
+	//if _, err := s.beacons.GetBeacon(epoch); err != nil {
+	//	s.logger.With().Info("skip validating layer: beacon not available", layerID, epoch)
+	//	return false
+	//}
 
 	return true
 }
@@ -521,7 +532,7 @@ func (s *Syncer) shouldValidate(layerID types.LayerID) bool {
 // start a dedicated process to validate layers one by one.
 // it is caller's responsibility to close the returned "queue" channel to signal end of workload.
 // "done" channel will be closed once all workload in "queue" is completed.
-func (s *Syncer) startValidating(ctx context.Context, run uint64, attempt int) (chan types.LayerID, chan struct{}) {
+func (s *Syncer) startValidating(ctx context.Context, run uint64, attempt int) (chan types.LayerID, chan struct{}, chan types.LayerID) {
 	logger := s.logger.WithContext(ctx).WithName("validation")
 
 	// start a dedicated process for validation.
@@ -529,7 +540,8 @@ func (s *Syncer) startValidating(ctx context.Context, run uint64, attempt int) (
 	// i.e. if validation for the last layer is still running
 	queue := make(chan types.LayerID, s.ticker.GetCurrentLayer().Uint32())
 	done := make(chan struct{})
-
+	rerun := make(chan types.LayerID, 1)
+	var err error
 	s.eg.Go(func() error {
 		logger.Debug("validation started for run #%v attempt #%v", run, attempt)
 		for layerID := range queue {
@@ -541,15 +553,22 @@ func (s *Syncer) startValidating(ctx context.Context, run uint64, attempt int) (
 				// continuing with later layers
 				break
 			}
-			if err := s.validateLayer(ctx, layerID); err != nil {
+			epoch := layerID.GetEpoch()
+			if _, err = s.beacons.GetBeacon(epoch); err != nil {
+				s.logger.With().Info("skip validating layer: beacon not available", layerID, epoch)
+				rerun <- layerID
+				break
+			}
+			if err = s.validateLayer(ctx, layerID); err != nil {
 				break
 			}
 		}
 		close(done)
+		close(rerun)
 		logger.Debug("validation done for run #%v attempt #%v", run, attempt)
 		return nil
 	})
-	return queue, done
+	return queue, done, rerun
 }
 
 func (s *Syncer) validateLayer(ctx context.Context, layerID types.LayerID) error {

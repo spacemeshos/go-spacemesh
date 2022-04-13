@@ -461,6 +461,89 @@ func TestSynchronize_BeaconDelay(t *testing.T) {
 	assert.True(t, syncer.IsSynced(context.TODO()))
 }
 
+func TestSynchronize_BeaconDelayRerun(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	lg := logtest.New(t).WithName("syncer")
+	ticker := newMockLayerTicker()
+	mf := newMockFetcher()
+	mm := newMemMesh(t, lg)
+	syncer := newSyncerWithoutSyncTimer(context.TODO(), t, conf, ticker, mm, mf, lg)
+	startWithSyncedState(t, syncer)
+
+	patrol := mocks.NewMocklayerPatrol(ctrl)
+	syncer.patrol = patrol
+	validator := mocks.NewMocklayerValidator(ctrl)
+	syncer.validator = validator
+	beacons := smocks.NewMockBeaconGetter(ctrl)
+	syncer.beacons = beacons
+
+	gLayer := types.GetEffectiveGenesis()
+	lyr := gLayer.Add(10)
+	for l := gLayer.Add(1); !l.After(gLayer.Add(3)); l = l.Add(1) {
+		l := l
+		beacons.EXPECT().GetBeacon(l.GetEpoch()).Return(types.BytesToBeacon(l.GetEpoch().ToBytes()), nil).Times(1)
+		patrol.EXPECT().IsHareInCharge(l).Return(false).Times(1)
+		validator.EXPECT().ProcessLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, layerID types.LayerID) error {
+				assert.Equal(t, l, layerID)
+				// cause mesh's processed layer to advance
+				mm.ProcessLayerPerHareOutput(ctx, l, types.EmptyBlockID)
+				return nil
+			}).Times(1)
+	}
+	// 9th layer give error beacon ,for test rerun logic
+	patrol.EXPECT().IsHareInCharge(gLayer.Add(4)).Return(false).Times(1)
+	beacons.EXPECT().GetBeacon(gLayer.Add(4).GetEpoch()).Return(types.EmptyBeacon, database.ErrNotFound).Times(1)
+	// beacon ok when rerun
+	patrol.EXPECT().IsHareInCharge(gLayer.Add(4)).Return(false).Times(1)
+	beacons.EXPECT().GetBeacon(gLayer.Add(4).GetEpoch()).Return(types.BytesToBeacon(gLayer.Add(4).GetEpoch().ToBytes()), nil).Times(1)
+	validator.EXPECT().ProcessLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+		func(ctx context.Context, layerID types.LayerID) error {
+			assert.Equal(t, gLayer.Add(4), layerID)
+			// cause mesh's processed layer to advance
+			mm.ProcessLayerPerHareOutput(ctx, gLayer.Add(4), types.EmptyBlockID)
+			return nil
+		}).Times(1)
+
+	for l := gLayer.Add(5); !l.After(gLayer.Add(10)); l = l.Add(1) {
+		l := l
+		beacons.EXPECT().GetBeacon(l.GetEpoch()).Return(types.BytesToBeacon(l.GetEpoch().ToBytes()), nil).Times(1)
+		patrol.EXPECT().IsHareInCharge(l).Return(false).Times(1)
+		validator.EXPECT().ProcessLayer(gomock.Any(), gomock.Any()).DoAndReturn(
+			func(ctx context.Context, layerID types.LayerID) error {
+				assert.Equal(t, l, layerID)
+				// cause mesh's processed layer to advance
+				mm.ProcessLayerPerHareOutput(ctx, l, types.EmptyBlockID)
+				return nil
+			}).Times(1)
+	}
+
+	ticker.advanceToLayer(lyr.Add(1))
+	syncer.Start(context.TODO())
+	t.Cleanup(func() {
+		syncer.Close()
+	})
+
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		assert.True(t, syncer.synchronize(context.TODO()))
+		wg.Done()
+	}()
+	// allow synchronize to finish by two step for beacon ready to rerun
+	feedLayerResult(gLayer.Add(1), gLayer.Add(5), mf, mm)
+	time.Sleep(time.Duration(1) * time.Second)
+	feedLayerResult(gLayer.Add(5), lyr, mf, mm)
+
+	wg.Wait()
+
+	assert.True(t, syncer.stateOnTarget())
+	assert.True(t, syncer.ListenToGossip())
+	assert.True(t, syncer.getSyncState() == gossipSync)
+}
+
 func TestSynchronize_OnlyValidateSomeLayers(t *testing.T) {
 	lg := logtest.New(t).WithName("syncer")
 	ticker := newMockLayerTicker()
@@ -536,7 +619,6 @@ func TestSynchronize_HareValidateLayersTooDelayed(t *testing.T) {
 	b := types.GenLayerBlock(latestLyr, nil)
 	err := mm.AddBlockWithTXs(context.TODO(), b)
 	require.NoError(t, err)
-
 	patrol.EXPECT().IsHareInCharge(gLayer.Add(1)).Return(true).Times(1)
 	patrol.EXPECT().IsHareInCharge(gLayer.Add(2)).Return(true).Times(maxAttemptWithinRun)
 	// the 1st layer after genesis, despite having hare started consensus protocol for it,
