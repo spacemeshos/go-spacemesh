@@ -53,14 +53,34 @@ CREATE TABLE transactions
 (
     id          CHAR(32) PRIMARY KEY,
     tx          BLOB,
-    layer       INT NOT NULL,
+    layer       INT,
     block       CHAR(20),
     origin      CHAR(20),
     destination CHAR(20),
-    status      INT
+    nonce       UNSIGNED LONG INT,
+    timestamp   INT NOT NULL,
+    applied     SMALL INT DEFAULT 0
 ) WITHOUT ROWID;
+CREATE INDEX transaction_by_applied ON transactions (applied);
+CREATE INDEX transaction_by_origin_nonce ON transactions (origin, nonce);
 CREATE INDEX transaction_by_origin ON transactions (origin, layer);
 CREATE INDEX transaction_by_destination ON transactions (destination, layer);
+
+CREATE TABLE proposal_transactions
+(
+    tid     CHAR(32),
+    pid     CHAR(32),
+    layer   INT NOT NULL,
+    PRIMARY KEY (tid, pid)
+) WITHOUT ROWID;
+
+CREATE TABLE block_transactions
+(
+    tid     CHAR(32),
+    bid     CHAR(32),
+    layer   INT NOT NULL,
+    PRIMARY KEY (tid, bid)
+) WITHOUT ROWID;
 
 CREATE TABLE beacons
 (
