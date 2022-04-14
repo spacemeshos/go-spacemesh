@@ -309,9 +309,12 @@ func (pd *ProtocolDriver) findMostWeightedBeaconForEpoch(epoch types.EpochID) ty
 		// it should determine the beacon value despite not reaching beacon-sync-num-blocks
 		if l, err := layers.GetByStatus(pd.db, layers.Processed); err == nil {
 			if l.Uint32() < uint32(epoch)*types.GetLayersPerEpoch() {
-				logger.Debug("not enough ballots to determine beacon")
+				logger.Debug("not enough ballots to determine beacon and not synced epoch")
 				return types.EmptyBeacon
 			}
+		} else {
+			logger.Debug("not enough ballots to determine beacon")
+			return types.EmptyBeacon
 		}
 	}
 
