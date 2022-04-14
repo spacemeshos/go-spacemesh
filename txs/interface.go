@@ -10,9 +10,9 @@ import (
 //go:generate mockgen -package=mocks -destination=./mocks/mocks.go -source=./interface.go
 
 type conservativeState interface {
-	HasTx(types.TransactionID) bool
-	AddressExists(addr types.Address) bool
-	AddTxToMemPool(tx *types.Transaction, checkValidity bool) error
+	HasTx(types.TransactionID) (bool, error)
+	AddressExists(types.Address) bool
+	AddToCache(*types.Transaction, bool) error
 }
 
 type svmState interface {

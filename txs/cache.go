@@ -2,6 +2,7 @@ package txs
 
 import (
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -486,7 +487,6 @@ type cache struct {
 	stateF stateFunc
 
 	mu        sync.Mutex
-	applied   types.LayerID
 	pending   map[types.Address]*accountCache
 	cachedTXs map[types.TransactionID]*txtypes.NanoTX // shared with accountCache instances
 }
@@ -529,12 +529,6 @@ func (c *cache) BuildFromScratch() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	lastApplied, err := c.tp.LastAppliedLayer()
-	if err != nil {
-		c.logger.Error("failed to get last applied layer", log.Err(err))
-		return err
-	}
-	c.applied = lastApplied
 	c.pending = make(map[types.Address]*accountCache)
 	mtxs, err := c.tp.GetAllPending()
 	if err != nil {
@@ -584,7 +578,7 @@ func (c *cache) createAcctIfNotPresent(addr types.Address) {
 	}
 }
 
-func (c *cache) HasPendingTX(addr types.Address) bool {
+func (c *cache) AcctHasPendingTX(addr types.Address) bool {
 	return c.pending[addr] != nil
 }
 
@@ -596,7 +590,6 @@ func (c *cache) cleanupAccounts(accounts map[types.Address]struct{}) {
 	}
 }
 
-// Add adds a transaction to the cache.
 func (c *cache) Add(tx *types.Transaction, received time.Time) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -615,6 +608,25 @@ func (c *cache) Get(tid types.TransactionID) *txtypes.NanoTX {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	return c.cachedTXs[tid]
+}
+
+// HasTx returns true if transaction exists in the cache.
+func (c *cache) HasTx(tid types.TransactionID) (bool, error) {
+	if c.has(tid) {
+		return true, nil
+	}
+
+	has, err := c.tp.Has(tid)
+	if err != nil {
+		return false, fmt.Errorf("has tx: %w", err)
+	}
+	return has, nil
+}
+
+func (c *cache) has(tid types.TransactionID) bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.cachedTXs[tid] != nil
 }
 
 // LinkTXsWithProposal associates the transactions to a proposal.
@@ -660,15 +672,12 @@ func (c *cache) updateLayer(lid types.LayerID, bid types.BlockID, tids []types.T
 
 // ApplyLayer retires the applied transactions from the cache and updates the balances.
 func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []*types.Transaction) error {
+	if err := c.CheckApplyOrder(lid); err != nil {
+		return err
+	}
+
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	if lid != c.applied.Add(1) {
-		c.logger.With().Error("layer not applied in order",
-			log.Stringer("expected", c.applied.Add(1)),
-			log.Stringer("applied", lid))
-		return errLayerNotInOrder
-	}
 
 	toCleanup := make(map[types.Address]struct{})
 	for _, tx := range txs {
@@ -699,7 +708,6 @@ func (c *cache) ApplyLayer(lid types.LayerID, bid types.BlockID, txs []*types.Tr
 			return err
 		}
 	}
-	c.applied = lid
 	return nil
 }
 
@@ -746,4 +754,55 @@ func (c *cache) GetMempool() (map[types.Address][]*txtypes.NanoTX, error) {
 		}
 	}
 	return all, nil
+}
+
+// AddToDB adds a transaction to the database.
+func (c *cache) AddToDB(tx *types.Transaction, received time.Time) error {
+	return c.tp.Add(tx, received)
+}
+
+// GetMeshTransaction retrieves a tx by its id.
+func (c *cache) GetMeshTransaction(id types.TransactionID) (*types.MeshTransaction, error) {
+	return c.tp.Get(id)
+}
+
+// GetMeshTransactions retrieves a list of txs by their id's.
+func (c *cache) GetMeshTransactions(ids []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
+	missing := make(map[types.TransactionID]struct{})
+	mtxs := make([]*types.MeshTransaction, 0, len(ids))
+	for _, tid := range ids {
+		var (
+			mtx *types.MeshTransaction
+			err error
+		)
+		if mtx, err = c.GetMeshTransaction(tid); err != nil {
+			c.logger.With().Warning("could not get tx", tid, log.Err(err))
+			missing[tid] = struct{}{}
+		} else {
+			mtxs = append(mtxs, mtx)
+		}
+	}
+	return mtxs, missing
+}
+
+// GetTransactionsByAddress retrieves txs for a single address in between layers [from, to].
+// Guarantees that transaction will appear exactly once, even if origin and recipient is the same, and in insertion order.
+func (c *cache) GetTransactionsByAddress(from, to types.LayerID, address types.Address) ([]*types.MeshTransaction, error) {
+	return c.tp.GetByAddress(from, to, address)
+}
+
+// CheckApplyOrder returns an error if layers were not applied in order.
+func (c *cache) CheckApplyOrder(toApply types.LayerID) error {
+	lastApplied, err := c.tp.LastAppliedLayer()
+	if err != nil {
+		c.logger.With().Error("failed to get last applied layer", log.Err(err))
+		return fmt.Errorf("cache get last applied %w", err)
+	}
+	if toApply != lastApplied.Add(1) {
+		c.logger.With().Error("layer not applied in order",
+			log.Stringer("expected", lastApplied.Add(1)),
+			log.Stringer("to_apply", toApply))
+		return errLayerNotInOrder
+	}
+	return nil
 }
