@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"math/big"
 	"testing"
 	"time"
@@ -505,7 +506,7 @@ func TestBeacon_findMostWeightedBeaconForEpoch(t *testing.T) {
 	assert.Equal(t, beacon2, got)
 }
 
-func TestBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testing.T) {
+func TestBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks_NotSync(t *testing.T) {
 	t.Parallel()
 
 	types.SetLayersPerEpoch(3)
@@ -528,15 +529,46 @@ func TestBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks(t *testing.T) {
 		},
 	}
 	epoch := types.EpochID(3)
-	pd := &ProtocolDriver{
-		logger:             logtest.New(t).WithName("Beacon"),
-		config:             UnitTestConfig(),
-		beacons:            make(map[types.EpochID]types.Beacon),
-		beaconsFromBallots: map[types.EpochID]map[types.Beacon]*ballotWeight{epoch: beaconsFromBlocks},
-	}
-	pd.config.BeaconSyncNumBallots = 5
-	got := pd.findMostWeightedBeaconForEpoch(epoch)
+	tpd := setUpProtocolDriver(t)
+	tpd.beaconsFromBallots = map[types.EpochID]map[types.Beacon]*ballotWeight{epoch: beaconsFromBlocks}
+	tpd.beacons = make(map[types.EpochID]types.Beacon)
+	tpd.logger = logtest.New(t).WithName("Beacon")
+	tpd.config.BeaconSyncNumBallots = 5
+	got := tpd.findMostWeightedBeaconForEpoch(epoch)
 	assert.Equal(t, types.EmptyBeacon, got)
+}
+
+func TestBeacon_findMostWeightedBeaconForEpoch_NotEnoughBlocks_ButSync(t *testing.T) {
+	t.Parallel()
+
+	types.SetLayersPerEpoch(3)
+	beacon1 := types.RandomBeacon()
+	beacon2 := types.RandomBeacon()
+	beacon3 := types.RandomBeacon()
+
+	beaconsFromBlocks := map[types.Beacon]*ballotWeight{
+		beacon1: {
+			ballots: map[types.BallotID]struct{}{types.RandomBallotID(): {}, types.RandomBallotID(): {}},
+			weight:  200,
+		},
+		beacon2: {
+			ballots: map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			weight:  201,
+		},
+		beacon3: {
+			ballots: map[types.BallotID]struct{}{types.RandomBallotID(): {}},
+			weight:  200,
+		},
+	}
+	epoch := types.EpochID(3)
+	tpd := setUpProtocolDriver(t)
+	tpd.beaconsFromBallots = map[types.EpochID]map[types.Beacon]*ballotWeight{epoch: beaconsFromBlocks}
+	tpd.beacons = make(map[types.EpochID]types.Beacon)
+	tpd.logger = logtest.New(t).WithName("Beacon")
+	tpd.config.BeaconSyncNumBallots = 5
+	layers.SetStatus(tpd.db, types.LayerID{10}, layers.Processed)
+	got := tpd.findMostWeightedBeaconForEpoch(epoch)
+	assert.NotEqual(t, types.EmptyBeacon, got)
 }
 
 func TestBeacon_findMostWeightedBeaconForEpoch_NoBeacon(t *testing.T) {
@@ -549,6 +581,7 @@ func TestBeacon_findMostWeightedBeaconForEpoch_NoBeacon(t *testing.T) {
 		beacons:            make(map[types.EpochID]types.Beacon),
 		beaconsFromBallots: make(map[types.EpochID]map[types.Beacon]*ballotWeight),
 	}
+
 	epoch := types.EpochID(3)
 	got := pd.findMostWeightedBeaconForEpoch(epoch)
 	assert.Equal(t, types.EmptyBeacon, got)

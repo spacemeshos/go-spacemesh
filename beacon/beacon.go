@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"github.com/spacemeshos/go-spacemesh/sql/layers"
 	"math/big"
 	"strings"
 	"sync"
@@ -304,8 +305,14 @@ func (pd *ProtocolDriver) findMostWeightedBeaconForEpoch(epoch types.EpochID) ty
 	logger := pd.logger.WithFields(epoch, log.Int("num_ballots", numBallots))
 
 	if uint32(numBallots) < pd.config.BeaconSyncNumBallots {
-		logger.Debug("not enough ballots to determine beacon")
-		return types.EmptyBeacon
+		// when the node has seen all blocks from an epoch(i.e all layers in the epoch is data-synced),
+		// it should determine the beacon value despite not reaching beacon-sync-num-blocks
+		if l, err := layers.GetByStatus(pd.db, layers.Processed); err == nil {
+			if l.Uint32() < uint32(epoch)*types.GetLayersPerEpoch() {
+				logger.Debug("not enough ballots to determine beacon")
+				return types.EmptyBeacon
+			}
+		}
 	}
 
 	logger.With().Info("beacon determined for epoch",
