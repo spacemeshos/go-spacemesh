@@ -124,17 +124,17 @@ func (m *MocktxProvider) EXPECT() *MocktxProviderMockRecorder {
 	return m.recorder
 }
 
-// GetTransactions mocks base method.
-func (m *MocktxProvider) GetTransactions(arg0 []types.TransactionID) ([]*types.Transaction, map[types.TransactionID]struct{}) {
+// GetMeshTransactions mocks base method.
+func (m *MocktxProvider) GetMeshTransactions(arg0 []types.TransactionID) ([]*types.MeshTransaction, map[types.TransactionID]struct{}) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetTransactions", arg0)
-	ret0, _ := ret[0].([]*types.Transaction)
+	ret := m.ctrl.Call(m, "GetMeshTransactions", arg0)
+	ret0, _ := ret[0].([]*types.MeshTransaction)
 	ret1, _ := ret[1].(map[types.TransactionID]struct{})
 	return ret0, ret1
 }
 
-// GetTransactions indicates an expected call of GetTransactions.
-func (mr *MocktxProviderMockRecorder) GetTransactions(arg0 interface{}) *gomock.Call {
+// GetMeshTransactions indicates an expected call of GetMeshTransactions.
+func (mr *MocktxProviderMockRecorder) GetMeshTransactions(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTransactions", reflect.TypeOf((*MocktxProvider)(nil).GetTransactions), arg0)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMeshTransactions", reflect.TypeOf((*MocktxProvider)(nil).GetMeshTransactions), arg0)
 }

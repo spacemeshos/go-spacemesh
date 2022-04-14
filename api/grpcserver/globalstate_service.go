@@ -46,10 +46,7 @@ func (s GlobalStateService) GlobalStateHash(context.Context, *pb.GlobalStateHash
 func (s GlobalStateService) getAccount(addr types.Address) (acct *pb.Account, err error) {
 	balanceActual := s.conState.GetBalance(addr)
 	counterActual := s.conState.GetNonce(addr)
-	counterProjected, balanceProjected, err := s.conState.GetProjection(addr)
-	if err != nil {
-		return nil, err
-	}
+	counterProjected, balanceProjected := s.conState.GetProjection(addr)
 	return &pb.Account{
 		AccountId: &pb.AccountId{Address: addr.Bytes()},
 		StateCurrent: &pb.AccountState{

@@ -245,8 +245,8 @@ func (t *ConStateAPIMock) Put(id types.TransactionID, tx *types.Transaction) {
 
 // Return a mock estimated nonce and balance that's different than the default, mimicking transactions that are
 // unconfirmed or in the mempool that will update state.
-func (t *ConStateAPIMock) GetProjection(types.Address) (uint64, uint64, error) {
-	return accountCounter + 1, accountBalance + 1, nil
+func (t *ConStateAPIMock) GetProjection(types.Address) (uint64, uint64) {
+	return accountCounter + 1, accountBalance + 1
 }
 
 func (t *ConStateAPIMock) GetAllAccounts() (res *types.MultipleAccountsState, err error) {
@@ -300,11 +300,11 @@ func (t *ConStateAPIMock) GetTransactionsByAddress(from, to types.LayerID, accou
 	return txs, nil
 }
 
-func (t *ConStateAPIMock) GetTransactions(txids []types.TransactionID) (txs []*types.Transaction, missing map[types.TransactionID]struct{}) {
+func (t *ConStateAPIMock) GetMeshTransactions(txids []types.TransactionID) (txs []*types.MeshTransaction, missing map[types.TransactionID]struct{}) {
 	for _, txid := range txids {
 		for _, tx := range t.returnTx {
 			if tx.ID() == txid {
-				txs = append(txs, tx)
+				txs = append(txs, &types.MeshTransaction{Transaction: *tx})
 			}
 		}
 	}
@@ -3085,7 +3085,7 @@ func TestEventsReceived(t *testing.T) {
 	lg := logtest.New(t).WithName("svm")
 	svm := svm.New(database.NewMemDatabase(), appliedTxsMock{}, lg)
 	conState := txs.NewConservativeState(svm, sql.InMemory(), logtest.New(t).WithName("conState"))
-	conState.AddTxToMemPool(globalTx, true)
+	conState.AddToCache(globalTx, true)
 	time.Sleep(100 * time.Millisecond)
 
 	rewards := map[types.Address]uint64{

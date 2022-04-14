@@ -15,11 +15,11 @@ import (
 const IncomingTxProtocol = "TxGossip"
 
 var (
-	errMalformedMsg      = errors.New("malformed tx")
-	errDuplicateTX       = errors.New("tx already exists")
-	errAddrNotExtracted  = errors.New("address not extracted")
-	errAddrNotFound      = errors.New("address not found")
-	errRejectedByMemPool = errors.New("rejected by mempool")
+	errMalformedMsg     = errors.New("malformed tx")
+	errDuplicateTX      = errors.New("tx already exists")
+	errAddrNotExtracted = errors.New("address not extracted")
+	errAddrNotFound     = errors.New("address not found")
+	errRejectedByCache  = errors.New("rejected by conservative cache")
 )
 
 // TxHandler handles the transactions received via gossip or sync.
@@ -51,7 +51,10 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 		return errMalformedMsg
 	}
 
-	if th.state.HasTx(tx.ID()) {
+	if exists, err := th.state.HasTx(tx.ID()); err != nil {
+		th.logger.WithContext(ctx).With().Error("failed to check tx exists", log.Err(err))
+		return fmt.Errorf("has tx: %w", err)
+	} else if exists {
 		return errDuplicateTX
 	}
 
@@ -77,9 +80,9 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 		return errAddrNotFound
 	}
 
-	if err := th.state.AddTxToMemPool(tx, true); err != nil {
-		th.logger.WithContext(ctx).With().Warning("failed to add tx to mempool", tx.ID(), log.Err(err))
-		return errRejectedByMemPool
+	if err = th.state.AddToCache(tx, true); err != nil {
+		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache", tx.ID(), log.Err(err))
+		return errRejectedByCache
 	}
 
 	return nil
@@ -101,9 +104,14 @@ func (th *TxHandler) HandleSyncTransaction(ctx context.Context, data []byte) err
 		th.logger.WithContext(ctx).With().Error("failed to calculate sync tx origin", tx.ID(), log.Err(err))
 		return errAddrNotExtracted
 	}
-	if err := th.state.AddTxToMemPool(&tx, false); err != nil {
-		th.logger.WithContext(ctx).With().Error("failed to add sync tx to mempool", tx.ID(), log.Err(err))
-		return fmt.Errorf("add sync tx to mempool: %w", err)
+	exists, err := th.state.HasTx(tx.ID())
+	if err != nil {
+		th.logger.WithContext(ctx).With().Error("failed to check sync tx exists", log.Err(err))
+		return fmt.Errorf("has sync tx: %w", err)
+	}
+	if err = th.state.AddToCache(&tx, !exists); err != nil {
+		th.logger.WithContext(ctx).With().Warning("failed to add sync tx to conservative cache", tx.ID(), log.Err(err))
+		return errRejectedByCache
 	}
 	return nil
 }

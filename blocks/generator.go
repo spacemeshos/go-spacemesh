@@ -100,10 +100,14 @@ func (g *Generator) extractOrderedUniqueTXs(layerID types.LayerID, proposals []*
 		}
 	}
 	types.SortTransactionIDs(txIDs)
-	txs, missing := g.txs.GetTransactions(txIDs)
+	mtxs, missing := g.txs.GetMeshTransactions(txIDs)
 	if len(missing) > 0 {
 		g.logger.Error("could not find transactions %v from layer %v", missing, layerID)
 		return nil, nil, errTXNotFound
+	}
+	txs := make([]*types.Transaction, 0, len(mtxs))
+	for _, mtx := range mtxs {
+		txs = append(txs, &mtx.Transaction)
 	}
 	return txIDs, txs, nil
 }
