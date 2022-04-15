@@ -54,7 +54,7 @@ func New(logger log.Log, h host.Host, config Config) (*Discovery, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse bootstrap node: %w", err)
 		}
-		bootnodes = append(bootnodes, info)
+		bootnodes = append(bootnodes, info...)
 	}
 	best, err := bestHostAddress(h)
 	if err != nil {

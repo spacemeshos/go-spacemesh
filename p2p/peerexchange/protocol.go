@@ -11,6 +11,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/libp2p/go-libp2p-core/peer"
 	ma "github.com/multiformats/go-multiaddr"
+	madns "github.com/multiformats/go-multiaddr-dns"
 	manet "github.com/multiformats/go-multiaddr/net"
 	"go.uber.org/atomic"
 
@@ -76,7 +77,12 @@ func (p *peerExchange) handler(stream network.Stream) {
 			logger.Error("failed to parse created address", log.String("address", raw), log.Err(err))
 			return
 		}
-		p.book.AddAddress(info, info)
+		if len(info) == 0 {
+			logger.Error("created address parsered to empty list", log.String("address", raw))
+			return
+		}
+		// we use ip for address, so no dns search in addresses, we can just take the first one
+		p.book.AddAddress(info[0], info[0])
 	}
 	results := p.book.AddressCache()
 
@@ -144,33 +150,48 @@ func (p *peerExchange) Request(ctx context.Context, pid peer.ID) ([]*addrInfo, e
 
 	infos := make([]*addrInfo, 0, len(addrs))
 	for _, raw := range addrs {
-		info, err := parseAddrInfo(raw)
+		addrList, err := parseAddrInfo(raw)
 		if err != nil {
 			return nil, fmt.Errorf("failed parsing: %w", err)
 		}
-		if info.ID == p.h.ID() {
-			return nil, fmt.Errorf("peer shouldn't reply with address for our id")
+		for _, addr := range addrList {
+			if addr.ID == p.h.ID() {
+				return nil, fmt.Errorf("peer shouldn't reply with address for our id")
+			}
+			infos = append(infos, addr)
 		}
-		infos = append(infos, info)
 	}
 	return infos, nil
 }
 
 // parseAddrInfo parses required info from string in multiaddr format.
-func parseAddrInfo(raw string) (*addrInfo, error) {
+func parseAddrInfo(raw string) ([]*addrInfo, error) {
 	addr, err := ma.NewMultiaddr(raw)
 	if err != nil {
 		return nil, fmt.Errorf("received invalid address %v: %w", raw, err)
 	}
-	ip, err := manet.ToIP(addr)
+
+	res, err := madns.NewResolver()
 	if err != nil {
-		return nil, fmt.Errorf("address without ip %v: %w", raw, err)
+		return nil, fmt.Errorf("failed to create resolver: %w", err)
 	}
-	_, pid := peer.SplitAddr(addr)
-	if len(pid) == 0 {
-		return nil, fmt.Errorf("address without peer id %v", raw)
+	addrList, err := res.Resolve(context.Background(), addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve address %v: %w", raw, err)
 	}
-	return &addrInfo{ID: pid, IP: ip, RawAddr: raw, addr: addr}, nil
+	result := make([]*addrInfo, 0, len(addrList))
+	for i := range addrList {
+		ip, err := manet.ToIP(addrList[i])
+		if err != nil {
+			return nil, fmt.Errorf("address without ip %v: %w", raw, err)
+		}
+		_, pid := peer.SplitAddr(addrList[i])
+		if len(pid) == 0 {
+			return nil, fmt.Errorf("address without peer id %v", raw)
+		}
+		result = append(result, &addrInfo{ID: pid, IP: ip, RawAddr: raw, addr: addr})
+	}
+	return result, nil
 }
 
 // addrInfo stores relevant information for discovery.
