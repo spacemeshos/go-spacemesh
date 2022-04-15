@@ -77,6 +77,9 @@ func NewMesh(db *DB, atxDb AtxDB, trtl tortoise, state conservativeState, logger
 				msh.With().Panic("failed to set zero-block for genesis layer", i, log.Err(err))
 			}
 		}
+		if err := layers.SetApplied(msh.db, i, types.EmptyBlockID); err != nil {
+			msh.With().Panic("failed to set applied layer", i, log.Err(err))
+		}
 		if err := msh.persistLayerHashes(context.Background(), i, []types.BlockID{types.EmptyBlockID}); err != nil {
 			msh.With().Panic("failed to persist hashes for layer", i, log.Err(err))
 		}
