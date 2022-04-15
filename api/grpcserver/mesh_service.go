@@ -322,7 +322,7 @@ func (s MeshService) readLayer(ctx context.Context, layerID types.LayerID, layer
 			return nil, status.Errorf(codes.Internal, "error retrieving tx data")
 		}
 
-		var pbTxs []*pb.Transaction
+		pbTxs := make([]*pb.Transaction, 0, len(mtxs))
 		for _, t := range mtxs {
 			pbTxs = append(pbTxs, convertTransaction(&t.Transaction))
 		}
