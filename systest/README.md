@@ -76,7 +76,7 @@ make docker
 
 4. Run tests.
 ```bash
-make run test_name=TestSmeshing smesher_image=go-spacemesh-dev:develop-dirty
+make run test_name=TestSmeshing smesher_image=<image built with `make dockerbuild-go`> e.g. `smesher_image=go-spacemesh-dev:develop-dirty`
 ```
 
 The command will create a pod inside your k8s cluster named `systest`. After test completes it will clean up after
