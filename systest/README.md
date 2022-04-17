@@ -29,14 +29,16 @@ kubectl create clusterrolebinding serviceaccounts-cluster-admin \
 chaos-mesh is used for some tests. See https://chaos-mesh.org/docs/quick-start/ for more up-to-date instructions.
 
 ```bash
-curl -sSL https://mirrors.chaos-mesh.org/v2.1.2/install.sh | bash
+curl -sSL https://mirrors.chaos-mesh.org/v2.1.4/install.sh | bash
 ```
 
 4. Install `loki` to use grafana dashboard.
 
-Follow instructions https://grafana.com/docs/loki/latest/installation/helm/.
+Please follow instructions on https://grafana.com/docs/loki/latest/installation/microservices-helm/ :
 
 ```bash
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
 helm upgrade --install loki grafana/loki-stack  --set grafana.enabled=true,prometheus.enabled=true,prometheus.alertmanager.persistentVolume.enabled=false,prometheus.server.persistentVolume.enabled=false,loki.persistence.enabled=true,loki.persistence.storageClassName=standard,loki.persistence.size=20Gi
 ```
 
