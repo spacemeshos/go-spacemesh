@@ -14,26 +14,33 @@ import (
 )
 
 func TestShortTimeskew(t *testing.T) {
-	tctx := testcontext.New(t)
+	const (
+		enableSkew = 10
+		stopSkew   = enableSkew + 3
+		stopTest   = stopSkew + 2
+		skewOffset = "-3s" // hare round is 2s
+	)
+	tctx := testcontext.New(t, testcontext.Labels("sanity"))
 	cl, err := cluster.Default(tctx, cluster.WithKeys(10))
 	require.NoError(t, err)
 
 	failed := int(0.2 * float64(tctx.ClusterSize))
 	eg, ctx := errgroup.WithContext(tctx)
-	scheduleChaos(ctx, eg, cl.Client(0), 14, 17, func(ctx context.Context) (chaos.Teardown, error) {
+	client := cl.Client(0)
+	scheduleChaos(ctx, eg, client, enableSkew, stopSkew, func(ctx context.Context) (chaos.Teardown, error) {
 		names := []string{}
 		for i := 1; i <= failed; i++ {
 			names = append(names, cl.Client(cl.Total()-i).Name)
 		}
-		return chaos.Timeskew(tctx, "skew5s", "-5s", names...)
+		return chaos.Timeskew(tctx, "skew", skewOffset, names...)
 	})
-	watchLayers(ctx, eg, cl.Client(0), func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
+	watchLayers(ctx, eg, client, func(layer *spacemeshv1.LayerStreamResponse) (bool, error) {
 		if layer.Layer.Status == spacemeshv1.Layer_LAYER_STATUS_CONFIRMED {
 			tctx.Log.Debugw("confirmed layer",
 				"layer", layer.Layer.Number.Number,
 				"hash", prettyHex(layer.Layer.Hash),
 			)
-			if layer.Layer.Number.Number == 20 {
+			if layer.Layer.Number.Number == stopTest {
 				return false, nil
 			}
 		}
