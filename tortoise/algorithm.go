@@ -217,7 +217,7 @@ func (t *Tortoise) HandleIncomingLayer(ctx context.Context, lid types.LayerID) t
 		return t.trtl.verified
 	}
 
-	for lid := old; !lid.After(t.trtl.verified); lid = lid.Add(1) {
+	for lid := old.Add(1); !lid.After(t.trtl.verified); lid = lid.Add(1) {
 		events.ReportLayerUpdate(events.LayerUpdate{
 			LayerID: lid,
 			Status:  events.LayerStatusTypeConfirmed,
