@@ -17,7 +17,7 @@ func TestShortTimeskew(t *testing.T) {
 	const (
 		enableSkew = 10
 		stopSkew   = enableSkew + 3
-		stopTest   = stopSkew + 3
+		stopTest   = stopSkew + 5
 		skewOffset = "-3s" // hare round is 2s
 	)
 	tctx := testcontext.New(t, testcontext.Labels("sanity"))
