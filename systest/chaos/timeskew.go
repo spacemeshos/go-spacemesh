@@ -7,7 +7,7 @@ import (
 	"github.com/spacemeshos/go-spacemesh/systest/testcontext"
 )
 
-// Timeskew adjusts CLOCK_REALTIME for the specified offset on the pods.
+// Timeskew adjusts CLOCK_REALTIME on the specified pods by the offset.
 func Timeskew(cctx *testcontext.Context, name string, offset string, pods ...string) (Teardown, error) {
 	tc := chaosv1alpha1.TimeChaos{}
 	tc.Name = name

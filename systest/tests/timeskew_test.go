@@ -35,6 +35,10 @@ func TestShortTimeskew(t *testing.T) {
 		return chaos.Timeskew(tctx, "skew", skewOffset, names...)
 	})
 
+	// hare round is 2s, including time when nodes wait for proposals
+	// those nodes where clock is adjusted won't be able to reach consensus,
+	// because they rounds time will not intersect with the rest of the cluster
+	//
 	// there are two possible failure scenarios:
 	// in 1st 20% of the skewed nodes are not leaders, and they will simply cast abstain
 	// votes for layer 11 and 12. it may delay layer confirmation, by no more than one layer
