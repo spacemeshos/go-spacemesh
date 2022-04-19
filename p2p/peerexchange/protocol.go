@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/host"
@@ -162,13 +163,16 @@ func parseAddrInfo(raw string) (*addrInfo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("received invalid address %v: %w", raw, err)
 	}
-	ip, err := manet.ToIP(addr)
-	if err != nil {
-		return nil, fmt.Errorf("address without ip %v: %w", raw, err)
-	}
 	_, pid := peer.SplitAddr(addr)
 	if len(pid) == 0 {
 		return nil, fmt.Errorf("address without peer id %v", raw)
+	}
+	if strings.HasPrefix(raw, "/dns") {
+		return &addrInfo{ID: pid, RawAddr: raw, addr: addr}, nil
+	}
+	ip, err := manet.ToIP(addr)
+	if err != nil {
+		return nil, fmt.Errorf("address without ip %v: %w", raw, err)
 	}
 	return &addrInfo{ID: pid, IP: ip, RawAddr: raw, addr: addr}, nil
 }
