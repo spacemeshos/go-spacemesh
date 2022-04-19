@@ -57,12 +57,12 @@ func TestAppliedBlock(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, expected, output)
 
-	require.NoError(t, UnsetApplied(db, lid))
+	require.NoError(t, UnsetAppliedFrom(db, lid))
 	_, err = GetApplied(db, lid)
 	require.ErrorIs(t, err, sql.ErrNotFound)
 }
 
-func TestGetLastApplied(t *testing.T) {
+func TestUnsetAppliedFrom(t *testing.T) {
 	db := sql.InMemory()
 	lid := types.NewLayerID(10)
 	last := lid.Add(99)
@@ -72,10 +72,10 @@ func TestGetLastApplied(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, i, got)
 	}
-	require.NoError(t, UnsetApplied(db, last))
+	require.NoError(t, UnsetAppliedFrom(db, lid.Add(1)))
 	got, err := GetLastApplied(db)
 	require.NoError(t, err)
-	require.Equal(t, last.Sub(1), got)
+	require.Equal(t, lid, got)
 }
 
 func TestStatus(t *testing.T) {

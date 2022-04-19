@@ -535,16 +535,14 @@ func (msh *Mesh) pushLayer(ctx context.Context, layerID, latestVerified types.La
 
 // revertState reverts to state as of a previous layer.
 func (msh *Mesh) revertState(logger log.Log, revertTo types.LayerID) error {
-	latest := msh.LatestLayerInState()
 	root, err := msh.conState.RevertState(revertTo)
 	if err != nil {
 		return fmt.Errorf("revert state to layer %v: %w", revertTo, err)
 	}
 	logger.With().Info("successfully reverted state", log.Stringer("state_root", root))
-	for i := revertTo.Add(1); !i.After(latest); i = i.Add(1) {
-		if err = layers.UnsetApplied(msh.db, i); err != nil {
-			return fmt.Errorf("unset applied for layer %v: %w", i, err)
-		}
+	if err = layers.UnsetAppliedFrom(msh.db, revertTo.Add(1)); err != nil {
+		logger.With().Error("failed to unset applied layer", log.Err(err))
+		return fmt.Errorf("unset applied from layer %v: %w", revertTo.Add(1), err)
 	}
 	return nil
 }
