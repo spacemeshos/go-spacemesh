@@ -156,21 +156,21 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint
 }
 
 func nonceMarshaller(any interface{}) log.ArrayMarshaler {
-	var allNonce []uint64
-	nonce2Tid, ok := any.(map[uint64]types.TransactionID)
-	if ok {
-		allNonce = make([]uint64, 0, len(nonce2Tid))
-		for nonce := range nonce2Tid {
-			allNonce = append(allNonce, nonce)
-		}
-	} else if nonce2TXs, ok := any.(map[uint64][]*txtypes.NanoTX); ok {
-		allNonce = make([]uint64, 0, len(nonce2TXs))
-		for nonce := range nonce2TXs {
-			allNonce = append(allNonce, nonce)
-		}
-	}
-	sort.Slice(allNonce, func(i, j int) bool { return allNonce[i] < allNonce[j] })
 	return log.ArrayMarshalerFunc(func(encoder log.ArrayEncoder) error {
+		var allNonce []uint64
+		nonce2Tid, ok := any.(map[uint64]types.TransactionID)
+		if ok {
+			allNonce = make([]uint64, 0, len(nonce2Tid))
+			for nonce := range nonce2Tid {
+				allNonce = append(allNonce, nonce)
+			}
+		} else if nonce2TXs, ok := any.(map[uint64][]*txtypes.NanoTX); ok {
+			allNonce = make([]uint64, 0, len(nonce2TXs))
+			for nonce := range nonce2TXs {
+				allNonce = append(allNonce, nonce)
+			}
+		}
+		sort.Slice(allNonce, func(i, j int) bool { return allNonce[i] < allNonce[j] })
 		for _, nonce := range allNonce {
 			encoder.AppendUint64(nonce)
 		}
