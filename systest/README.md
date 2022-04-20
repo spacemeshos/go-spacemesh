@@ -128,7 +128,7 @@ boot-0   1/1     Running   0          9m20s
 boot-1   1/1     Running   0          9m20s
 poet     0/1     Pending   0          9m13s
 ```
-and
+please see more details with
 ```
 ➜  ~ kubectl describe pods poet -n test-oyzd
 Name:         poet
