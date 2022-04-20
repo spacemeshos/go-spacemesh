@@ -1,7 +1,8 @@
 test_name ?= TestSmeshing
 version_info ?= $(shell git rev-parse --short HEAD)
-image_name ?= spacemeshos/systest:$(version_info)
-smesher_image ?= spacemeshos/go-spacemesh-dev:$(version_info)
+org ?= spacemeshos
+image_name ?= $(org)/systest:$(version_info)
+smesher_image ?= $(org)/go-spacemesh-dev:$(version_info)
 test_pod_name ?= systest-$(version_info)
 clusters ?= 1
 size ?= 10
