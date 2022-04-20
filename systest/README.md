@@ -128,9 +128,9 @@ boot-0   1/1     Running   0          9m20s
 boot-1   1/1     Running   0          9m20s
 poet     0/1     Pending   0          9m13s
 ```
-please see more details with
+then please see more details with
 ```
-➜  ~ kubectl describe pods poet -n test-oyzd
+➜  ~ kubectl describe pods poet -n test-adno
 Name:         poet
 Namespace:    test-adno
 ...
@@ -140,7 +140,7 @@ Events:
   ----     ------            ----                ----               -------
   Warning  FailedScheduling  69s (x11 over 11m)  default-scheduler  0/1 nodes are available: 1 Insufficient cpu, 1 Insufficient memory.
 ```
-most likely you have insufficient CPU or memory and need to make `size` smaller in your `make run` command.
+Most likely you have insufficient CPU or memory and need to make `size` smaller in your `make run` command.
 This is related to minikube setup though and shouldn't be an issue for Kubernetes cluster running in the cloud.
 
 Note
