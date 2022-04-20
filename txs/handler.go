@@ -81,7 +81,10 @@ func (th *TxHandler) handleTransaction(ctx context.Context, msg []byte) error {
 	}
 
 	if err = th.state.AddToCache(tx, true); err != nil {
-		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache", tx.ID(), log.Err(err))
+		th.logger.WithContext(ctx).With().Warning("failed to add tx to conservative cache",
+			tx.Origin(),
+			tx.ID(),
+			log.Err(err))
 		return errRejectedByCache
 	}
 

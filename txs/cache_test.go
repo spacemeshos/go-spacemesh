@@ -385,7 +385,7 @@ func TestCache_Account_NonceTooSmall_AllPendingTXs(t *testing.T) {
 
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
-	require.False(t, tc.AcctHasPendingTX(ta.principal))
+	require.False(t, tc.MoreInDB(ta.principal))
 }
 
 func TestCache_Account_InsufficientBalance_AllPendingTXs(t *testing.T) {
@@ -406,7 +406,7 @@ func TestCache_Account_InsufficientBalance_AllPendingTXs(t *testing.T) {
 
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
-	require.True(t, tc.AcctHasPendingTX(ta.principal))
+	require.True(t, tc.MoreInDB(ta.principal))
 }
 
 func TestCache_Account_Add_TooManyTXs(t *testing.T) {
@@ -469,6 +469,7 @@ func TestCache_Account_Add_SuperiorReplacesInferior_EvictLaterNonce(t *testing.T
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, 0)
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(better)}}
 	checkMempool(t, tc.cache, expectedMempool)
+	require.True(t, tc.cache.MoreInDB(ta.principal))
 }
 
 func TestCache_Account_Add_NonceTooSmall(t *testing.T) {
@@ -480,7 +481,7 @@ func TestCache_Account_Add_NonceTooSmall(t *testing.T) {
 	checkNoTX(t, tc.cache, tx.ID())
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
-	require.False(t, tc.AcctHasPendingTX(ta.principal))
+	require.False(t, tc.MoreInDB(ta.principal))
 }
 
 func TestCache_Account_Add_NonceTooBig(t *testing.T) {
@@ -493,7 +494,7 @@ func TestCache_Account_Add_NonceTooBig(t *testing.T) {
 	checkNoTX(t, tc.cache, mtxs[1].ID())
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
-	require.True(t, tc.AcctHasPendingTX(ta.principal))
+	require.True(t, tc.MoreInDB(ta.principal))
 
 	// now add the tx that bridge the nonce gap
 	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce+1).Return([]*types.MeshTransaction{mtxs[1]}, nil)
@@ -519,7 +520,7 @@ func TestCache_Account_Add_InsufficientBalance_NewNonce(t *testing.T) {
 	checkNoTX(t, tc.cache, tx.ID())
 	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
 	checkMempool(t, tc.cache, nil)
-	require.True(t, tc.AcctHasPendingTX(ta.principal))
+	require.True(t, tc.MoreInDB(ta.principal))
 }
 
 func TestCache_Account_Add_InsufficientBalance_ExistingNonce(t *testing.T) {
@@ -539,6 +540,65 @@ func TestCache_Account_Add_InsufficientBalance_ExistingNonce(t *testing.T) {
 	checkProjection(t, tc.cache, ta.principal, ta.nonce+1, ta.balance-mtx.Spending())
 	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtx)}}
 	checkMempool(t, tc.cache, expectedMempool)
+}
+
+func TestCache_Account_Add_OutOfOrder(t *testing.T) {
+	tc, ta := createSingleAccountTestCache(t)
+	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+2)
+
+	// txs were received via gossip in this order: mtxs[2], mtxs[0], mtxs[1]
+	require.ErrorIs(t, tc.Add(&mtxs[2].Transaction, mtxs[2].Received), errNonceTooBig)
+	checkNoTX(t, tc.cache, mtxs[2].ID())
+	require.True(t, tc.cache.MoreInDB(ta.principal))
+	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
+
+	pending := []*types.MeshTransaction{mtxs[2]}
+	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, mtxs[0].AccountNonce+1).Return(pending, nil)
+	require.NoError(t, tc.Add(&mtxs[0].Transaction, mtxs[0].Received))
+	checkTX(t, tc.cache, mtxs[0])
+	checkNoTX(t, tc.cache, mtxs[2].ID())
+	require.True(t, tc.cache.MoreInDB(ta.principal))
+	checkProjection(t, tc.cache, ta.principal, mtxs[0].AccountNonce+1, ta.balance-mtxs[0].Spending())
+	expectedMempool := map[types.Address][]*txtypes.NanoTX{ta.principal: {txtypes.NewNanoTX(mtxs[0])}}
+	checkMempool(t, tc.cache, expectedMempool)
+
+	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, mtxs[1].AccountNonce+1).Return(pending, nil)
+	require.NoError(t, tc.Add(&mtxs[1].Transaction, mtxs[1].Received))
+	checkTX(t, tc.cache, mtxs[1])
+	checkTX(t, tc.cache, mtxs[2])
+	require.False(t, tc.cache.MoreInDB(ta.principal))
+	newBalance := ta.balance
+	for _, mtx := range mtxs {
+		newBalance -= mtx.Spending()
+	}
+	checkProjection(t, tc.cache, ta.principal, ta.nonce+uint64(len(mtxs)), newBalance)
+	expectedMempool = map[types.Address][]*txtypes.NanoTX{ta.principal: toNanoTXs(mtxs)}
+	checkMempool(t, tc.cache, expectedMempool)
+}
+
+func TestCache_Account_AppliedTXsNotInCache(t *testing.T) {
+	tc, ta := createSingleAccountTestCache(t)
+	mtxs := generatePendingTXs(t, ta.signer, ta.nonce, ta.nonce+2)
+	// only add the first TX to cache
+	newNextNonce, newBalance := buildSingleAccountCache(t, tc, ta, mtxs[:1])
+
+	applied := []*types.Transaction{&mtxs[0].Transaction, &mtxs[1].Transaction, &mtxs[2].Transaction}
+	appliedByNonce := map[uint64]types.TransactionID{
+		mtxs[0].AccountNonce: mtxs[0].ID(),
+		mtxs[1].AccountNonce: mtxs[1].ID(),
+		mtxs[2].AccountNonce: mtxs[2].ID(),
+	}
+	ta.nonce = newNextNonce + 2
+	ta.balance = newBalance - mtxs[1].Spending() - mtxs[2].Spending()
+	lid := types.NewLayerID(97)
+	bid := types.BlockID{1, 2, 3}
+	tc.mockTP.EXPECT().LastAppliedLayer().Return(lid.Sub(1), nil)
+	tc.mockTP.EXPECT().ApplyLayer(lid, bid, ta.principal, appliedByNonce)
+	tc.mockTP.EXPECT().DiscardNonceBelow(ta.principal, mtxs[0].AccountNonce)
+	tc.mockTP.EXPECT().GetAcctPendingFromNonce(ta.principal, ta.nonce).Return(nil, nil)
+	require.NoError(t, tc.ApplyLayer(lid, bid, applied))
+	checkProjection(t, tc.cache, ta.principal, ta.nonce, ta.balance)
+	checkMempool(t, tc.cache, nil)
 }
 
 func TestCache_Account_BalanceRelaxedAfterApply(t *testing.T) {
@@ -652,7 +712,7 @@ func TestCache_Account_EvictedAfterApply(t *testing.T) {
 	require.NoError(t, tc.ApplyLayer(lid, bid, applied))
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
 	checkMempool(t, tc.cache, nil)
-	require.False(t, tc.AcctHasPendingTX(ta.principal))
+	require.False(t, tc.MoreInDB(ta.principal))
 }
 
 func TestCache_Account_NotEvictedAfterApplyDueToNonceGap(t *testing.T) {
@@ -680,7 +740,7 @@ func TestCache_Account_NotEvictedAfterApplyDueToNonceGap(t *testing.T) {
 	require.NoError(t, tc.ApplyLayer(lid, bid, applied))
 	checkProjection(t, tc.cache, ta.principal, newNextNonce, newBalance)
 	checkMempool(t, tc.cache, nil)
-	require.True(t, tc.AcctHasPendingTX(ta.principal))
+	require.True(t, tc.MoreInDB(ta.principal))
 }
 
 func TestCache_Account_TXsAppliedOutOfOrder(t *testing.T) {

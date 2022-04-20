@@ -86,6 +86,7 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint
 	idx := getNonceOffset(ac.startNonce, ntx.Nonce)
 	if idx < 0 {
 		logger.With().Error("bad nonce",
+			ac.addr,
 			log.Uint64("acct_nonce", ac.startNonce),
 			log.Uint64("tx_nonce", ntx.Nonce))
 		return errBadNonce
@@ -94,6 +95,7 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint
 	if balance < ntx.MaxSpending() {
 		ac.moreInDB = idx == len(ac.txsByNonce)
 		logger.With().Debug("insufficient balance",
+			ac.addr,
 			ntx.Tid,
 			ntx.Principal,
 			log.Uint64("nonce", ntx.Nonce),
@@ -148,6 +150,7 @@ func (ac *accountCache) accept(logger log.Log, ntx *txtypes.NanoTX, balance uint
 		ac.txsByNonce[i].postBalance = newBalance
 	}
 	if toRemove < len(ac.txsByNonce) {
+		ac.moreInDB = true
 		logger.With().Debug("nonce made infeasible by new better transaction",
 			ac.addr,
 			log.Uint64("from_nonce", ac.startNonce+uint64(toRemove)))
@@ -213,7 +216,9 @@ func (ac *accountCache) addBatch(logger log.Log, nonce2TXs map[uint64][]*txtypes
 		balance = ac.availBalance()
 	}
 
-	if len(nonce2TXs) > 0 {
+	if len(nonce2TXs) == 0 {
+		ac.moreInDB = false
+	} else {
 		for nonce := range nonce2TXs {
 			if nonce >= nextNonce {
 				logger.With().Debug("transactions detected in higher nonce",
@@ -320,7 +325,6 @@ func (ac *accountCache) add(logger log.Log, tp txProvider, tx *types.Transaction
 		if err := ac.addPendingFromNonce(logger, tp, ac.nextNonce(), types.LayerID{}); err != nil {
 			return err
 		}
-		ac.moreInDB = false
 	}
 	return nil
 }
@@ -333,6 +337,7 @@ func (ac *accountCache) addPendingFromNonce(logger log.Log, tp txProvider, nonce
 	}
 
 	if len(mtxs) == 0 {
+		ac.moreInDB = false
 		return nil
 	}
 
@@ -430,11 +435,18 @@ func (ac *accountCache) applyLayer(
 	if offset < 0 {
 		return errBadNonce
 	}
-	if offset > 1 && newBalance < ac.txsByNonce[offset-1].postBalance {
+	if offset > len(ac.txsByNonce) {
+		// some applied nonce are not in cache
+		logger.With().Warning("applied nonce not in cache",
+			ac.addr,
+			log.Uint64("cache_nonce", ac.nextNonce()-1),
+			log.Array("applied_nonce", nonceMarshaller(appliedByNonce)))
+	} else if offset > 1 && newBalance < ac.txsByNonce[offset-1].postBalance {
 		logger.With().Error("unexpected conservative balance",
+			ac.addr,
 			log.Uint64("nonce", nextNonce),
 			log.Uint64("balance", newBalance),
-			log.Uint64("projected", ac.txsByNonce[0].postBalance))
+			log.Uint64("projected", ac.txsByNonce[offset-1].postBalance))
 		return errBadBalanceInCache
 	}
 
@@ -578,8 +590,12 @@ func (c *cache) createAcctIfNotPresent(addr types.Address) {
 	}
 }
 
-func (c *cache) AcctHasPendingTX(addr types.Address) bool {
-	return c.pending[addr] != nil
+func (c *cache) MoreInDB(addr types.Address) bool {
+	acct, ok := c.pending[addr]
+	if !ok {
+		return false
+	}
+	return acct.moreInDB
 }
 
 func (c *cache) cleanupAccounts(accounts map[types.Address]struct{}) {
