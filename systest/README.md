@@ -120,7 +120,7 @@ smesher-7    1/1     Running   0          39s
 smesher-8    1/1     Running   0          39s
 smesher-9    1/1     Running   0          39s
 ```
-and if you do - please see more details with:
+and if you do:
 ```
 ➜  ~ kubectl get pods -n test-adno
 NAME     READY   STATUS    RESTARTS   AGE
