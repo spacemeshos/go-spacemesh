@@ -92,6 +92,8 @@ func TestAddNodes(t *testing.T) {
 	for epoch := uint64(epochBeforeJoin) + 1; epoch <= lastEpoch; epoch++ {
 		require.Len(t, unique[epoch], cl.Total(), "epoch=%d", epoch)
 	}
+
+	require.False(t, true)
 }
 
 func TestFailedNodes(t *testing.T) {
