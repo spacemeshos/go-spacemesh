@@ -56,6 +56,26 @@ func TestAppliedBlock(t *testing.T) {
 	output, err = GetApplied(db, lid)
 	require.NoError(t, err)
 	require.Equal(t, expected, output)
+
+	require.NoError(t, UnsetAppliedFrom(db, lid))
+	_, err = GetApplied(db, lid)
+	require.ErrorIs(t, err, sql.ErrNotFound)
+}
+
+func TestUnsetAppliedFrom(t *testing.T) {
+	db := sql.InMemory()
+	lid := types.NewLayerID(10)
+	last := lid.Add(99)
+	for i := lid; !i.After(last); i = i.Add(1) {
+		require.NoError(t, SetApplied(db, i, types.EmptyBlockID))
+		got, err := GetLastApplied(db)
+		require.NoError(t, err)
+		require.Equal(t, i, got)
+	}
+	require.NoError(t, UnsetAppliedFrom(db, lid.Add(1)))
+	got, err := GetLastApplied(db)
+	require.NoError(t, err)
+	require.Equal(t, lid, got)
 }
 
 func TestStatus(t *testing.T) {

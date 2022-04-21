@@ -77,13 +77,12 @@ func (m *MockconservativeState) EXPECT() *MockconservativeStateMockRecorder {
 }
 
 // SelectTXsForProposal mocks base method.
-func (m *MockconservativeState) SelectTXsForProposal(arg0 int) ([]types.TransactionID, []*types.Transaction, error) {
+func (m *MockconservativeState) SelectTXsForProposal(arg0 int) ([]types.TransactionID, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "SelectTXsForProposal", arg0)
 	ret0, _ := ret[0].([]types.TransactionID)
-	ret1, _ := ret[1].([]*types.Transaction)
-	ret2, _ := ret[2].(error)
-	return ret0, ret1, ret2
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
 }
 
 // SelectTXsForProposal indicates an expected call of SelectTXsForProposal.
