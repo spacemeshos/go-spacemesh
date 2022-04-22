@@ -189,7 +189,7 @@ func deployNodes(ctx *testcontext.Context, name string, replicas int, flags []De
 						WithResources(corev1.ResourceRequirements().WithRequests(
 							v1.ResourceList{
 								v1.ResourceCPU:    resource.MustParse("0.5"),
-								v1.ResourceMemory: resource.MustParse("1Gi"),
+								v1.ResourceMemory: resource.MustParse("200Mi"),
 							},
 						)).
 						WithEnv(
