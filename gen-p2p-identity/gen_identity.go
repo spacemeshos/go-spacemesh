@@ -2,8 +2,9 @@ package main
 
 import (
 	"fmt"
-	"github.com/spacemeshos/go-spacemesh/p2p"
 	"os"
+
+	"github.com/spacemeshos/go-spacemesh/p2p"
 )
 
 func main() {
